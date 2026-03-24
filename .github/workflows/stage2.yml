@@ -546,7 +546,7 @@ jobs:
       # artifacts from a different workflow run (even with run-id parameter).
       - name: Download staging artifact
         if: github.event_name == 'workflow_run' && github.event.workflow_run.event != 'pull_request' && needs.check-stage1.outputs.is_production == 'false'
-        uses: dawidd6/action-download-artifact@v6
+        uses: dawidd6/action-download-artifact@v19
         with:
           name: stg-base-url
           run_id: ${{ github.event.workflow_run.id }}
@@ -555,7 +555,7 @@ jobs:
 
       - name: Download production artifact
         if: github.event_name == 'workflow_run' && github.event.workflow_run.event != 'pull_request' && needs.check-stage1.outputs.is_production == 'true'
-        uses: dawidd6/action-download-artifact@v6
+        uses: dawidd6/action-download-artifact@v19
         with:
           name: prod-base-url
           run_id: ${{ github.event.workflow_run.id }}
