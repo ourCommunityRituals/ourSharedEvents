@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<!--
+  Display Surface - EventAngle TV/Kiosk Display
+
+  Story 4.1: This file is a redirect to the Worker-served display page.
+  The actual display.html is served from the Cloudflare Worker.
+
+  Access via:
+    - /display
+    - /tv
+    - /kiosk
+    - /screen
+
+  @see worker/src/handlers/staticAssets.ts
+  @see worker/templates/display.html
+-->
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="refresh" content="0; url=/display">
+  <title>TV Display - EventAngle</title>
+</head>
+<body>
+  <p>Redirecting to <a href="/display">TV Display</a>...</p>
+</body>
+</html>

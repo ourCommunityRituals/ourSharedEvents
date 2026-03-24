@@ -1,0 +1,142 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zeventbook.com/schemas/analytics-response.schema.json",
+  "title": "Analytics Response",
+  "description": "API response schema for analytics endpoints (getSharedAnalytics, getSponsorAnalytics, getReport). Story 3.1 - API Response Schema Validation.",
+  "$comment": "Version 1.0 - Created 2025-12-11. Used by analytics/reporting endpoints.",
+  "type": "object",
+  "oneOf": [
+    { "$ref": "#/$defs/SuccessAnalyticsResponse" },
+    { "$ref": "#/$defs/ErrorResponse" }
+  ],
+  "$defs": {
+    "SuccessAnalyticsResponse": {
+      "type": "object",
+      "required": ["ok", "value"],
+      "properties": {
+        "ok": {
+          "type": "boolean",
+          "const": true
+        },
+        "value": {
+          "$ref": "#/$defs/AnalyticsValue"
+        },
+        "etag": {
+          "type": "string",
+          "description": "Cache validation tag"
+        }
+      },
+      "additionalProperties": false
+    },
+    "AnalyticsValue": {
+      "type": "object",
+      "description": "Analytics data payload - see shared-analytics.schema.json for full SharedAnalytics structure",
+      "required": ["lastUpdatedISO"],
+      "properties": {
+        "lastUpdatedISO": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}(T\\d{2}:\\d{2}:\\d{2}(\\.\\d{3})?Z)?$",
+          "description": "Last data refresh timestamp"
+        },
+        "summary": {
+          "type": "object",
+          "description": "Aggregate metrics summary",
+          "properties": {
+            "totalImpressions": { "type": "integer", "minimum": 0 },
+            "totalClicks": { "type": "integer", "minimum": 0 },
+            "totalQrScans": { "type": "integer", "minimum": 0 },
+            "totalSignups": { "type": "integer", "minimum": 0 },
+            "uniqueEvents": { "type": "integer", "minimum": 0 },
+            "uniqueSponsors": { "type": "integer", "minimum": 0 }
+          }
+        },
+        "surfaces": {
+          "type": "array",
+          "description": "Metrics breakdown by surface",
+          "items": {
+            "type": "object",
+            "required": ["id", "label", "impressions", "clicks", "qrScans"],
+            "properties": {
+              "id": { "type": "string" },
+              "label": { "type": "string" },
+              "impressions": { "type": "integer", "minimum": 0 },
+              "clicks": { "type": "integer", "minimum": 0 },
+              "qrScans": { "type": "integer", "minimum": 0 }
+            }
+          }
+        },
+        "sponsors": {
+          "type": ["array", "null"],
+          "description": "Optional sponsor metrics breakdown"
+        },
+        "events": {
+          "type": ["array", "null"],
+          "description": "Optional event metrics breakdown"
+        },
+        "totals": {
+          "type": "object",
+          "description": "Legacy format totals (for getReport endpoint)",
+          "properties": {
+            "impressions": { "type": "integer", "minimum": 0 },
+            "clicks": { "type": "integer", "minimum": 0 },
+            "dwellSec": { "type": "integer", "minimum": 0 }
+          }
+        },
+        "bySurface": {
+          "type": "object",
+          "description": "Legacy format surface breakdown (for getReport endpoint)"
+        },
+        "bySponsor": {
+          "type": "object",
+          "description": "Legacy format sponsor breakdown (for getReport endpoint)"
+        },
+        "byToken": {
+          "type": "object",
+          "description": "Legacy format token breakdown (for getReport endpoint)"
+        }
+      }
+    },
+    "ErrorResponse": {
+      "type": "object",
+      "required": ["ok", "code", "message"],
+      "properties": {
+        "ok": {
+          "type": "boolean",
+          "const": false
+        },
+        "code": {
+          "type": "string",
+          "enum": ["BAD_INPUT", "NOT_FOUND", "RATE_LIMITED", "INTERNAL", "CONTRACT", "FEATURE_DISABLED", "UNAUTHORIZED"]
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1
+        },
+        "corrId": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "examples": [
+    {
+      "ok": true,
+      "value": {
+        "lastUpdatedISO": "2025-12-11T10:00:00.000Z",
+        "summary": {
+          "totalImpressions": 1000,
+          "totalClicks": 50,
+          "totalQrScans": 25,
+          "totalSignups": 10,
+          "uniqueEvents": 5,
+          "uniqueSponsors": 3
+        },
+        "surfaces": [
+          { "id": "public", "label": "Public Page", "impressions": 500, "clicks": 25, "qrScans": 15 },
+          { "id": "display", "label": "TV Display", "impressions": 500, "clicks": 25, "qrScans": 10 }
+        ]
+      }
+    }
+  ]
+}

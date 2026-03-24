@@ -1,0 +1,256 @@
+# Nightly E2E Tests for Production (Story 3.4)
+#
+# Purpose: Run read-only E2E tests against production on a schedule
+# to catch issues in the live environment without affecting deployments.
+#
+# Schedule: Runs nightly at 2:00 AM UTC (can also be triggered manually)
+#
+# Tests run (READ-ONLY ONLY - no data modification):
+#   - API smoke tests (status, events listing, QR validation)
+#   - UI smoke tests (all surfaces load correctly)
+#   - System health checks
+#   - Cross-surface navigation
+#
+# Does NOT run:
+#   - Event creation/modification tests
+#   - Sponsor CRUD tests
+#   - Any test that creates or modifies data
+#
+# @see docs/DEPLOYMENT.md for pipeline documentation
+
+name: E2E Nightly Production
+
+on:
+  schedule:
+    # Run at 2:00 AM UTC every day
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      run_full_suite:
+        description: 'Run full E2E suite (including read-only journeys)'
+        required: false
+        default: 'false'
+        type: boolean
+
+env:
+  BASE_URL: 'https://www.eventangle.com'
+  ENVIRONMENT: 'production'
+  CI: true
+  BRAND_ID: 'root'
+
+jobs:
+  # ============================================================================
+  # PRODUCTION HEALTH CHECK
+  # ============================================================================
+  health-check:
+    name: 🏥 Production Health Check
+    runs-on: ubuntu-latest
+    outputs:
+      is_healthy: ${{ steps.health.outputs.is_healthy }}
+
+    steps:
+      - name: Check production availability
+        id: health
+        run: |
+          echo "Checking production health at: $BASE_URL"
+
+          # Check /status endpoint
+          STATUS_RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" "$BASE_URL/api/status?brand=root" || echo "000")
+
+          if [ "$STATUS_RESPONSE" == "200" ]; then
+            echo "✅ Production is healthy (HTTP $STATUS_RESPONSE)"
+            echo "is_healthy=true" >> $GITHUB_OUTPUT
+          else
+            echo "❌ Production health check failed (HTTP $STATUS_RESPONSE)"
+            echo "is_healthy=false" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+
+  # ============================================================================
+  # API SMOKE TESTS (READ-ONLY)
+  # ============================================================================
+  api-smoke:
+    name: 🔥 API Smoke Tests (Production)
+    runs-on: ubuntu-latest
+    needs: health-check
+    if: needs.health-check.outputs.is_healthy == 'true'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install chromium --with-deps
+
+      - name: Run API smoke tests
+        id: api-tests
+        run: |
+          echo "Running API smoke tests against production: $BASE_URL"
+          npm run test:api:smoke
+        continue-on-error: true
+
+      - name: Upload API smoke results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: nightly-api-smoke-results
+          path: |
+            playwright-report-smoke/
+            .test-results/smoke-*.json
+          retention-days: 7
+
+      - name: Check API test result
+        if: steps.api-tests.outcome == 'failure'
+        run: |
+          echo "::error::Nightly API smoke tests failed against production"
+          exit 1
+
+  # ============================================================================
+  # UI SMOKE TESTS (READ-ONLY)
+  # ============================================================================
+  ui-smoke:
+    name: 🖥️ UI Smoke Tests (Production)
+    runs-on: ubuntu-latest
+    needs: [health-check, api-smoke]
+    if: needs.health-check.outputs.is_healthy == 'true'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install chromium --with-deps
+
+      - name: Run UI smoke tests
+        id: ui-tests
+        run: |
+          echo "Running UI smoke tests against production: $BASE_URL"
+          npm run test:ui:smoke
+        continue-on-error: true
+
+      - name: Upload UI smoke results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: nightly-ui-smoke-results
+          path: |
+            playwright-report-ui-smoke/
+            .test-results/ui-smoke-*.json
+            test-results/
+          retention-days: 7
+
+      - name: Upload failure artifacts
+        uses: actions/upload-artifact@v4
+        if: steps.ui-tests.outcome == 'failure'
+        with:
+          name: nightly-failure-debug-${{ github.run_number }}
+          path: |
+            test-results/**/trace.zip
+            test-results/**/*.webm
+            test-results/**/*.png
+          retention-days: 14
+
+      - name: Check UI test result
+        if: steps.ui-tests.outcome == 'failure'
+        run: |
+          echo "::error::Nightly UI smoke tests failed against production"
+          exit 1
+
+  # ============================================================================
+  # NIGHTLY SUMMARY
+  # ============================================================================
+  summary:
+    name: 📊 Nightly Summary
+    runs-on: ubuntu-latest
+    needs: [health-check, api-smoke, ui-smoke]
+    if: always()
+
+    steps:
+      - name: Create nightly summary
+        run: |
+          echo "# 🌙 Nightly E2E Production Tests" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Date:** $(date -u '+%Y-%m-%d %H:%M UTC')" >> $GITHUB_STEP_SUMMARY
+          echo "**Target:** $BASE_URL" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          HEALTH="${{ needs.health-check.result }}"
+          API="${{ needs.api-smoke.result }}"
+          UI="${{ needs.ui-smoke.result }}"
+
+          if [ "$HEALTH" == "success" ] && [ "$API" == "success" ] && [ "$UI" == "success" ]; then
+            echo "## ✅ All Tests Passed" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Production is healthy and all smoke tests passed." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "## ❌ Tests Failed" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "One or more nightly tests failed. Review artifacts for details." >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Test | Result |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Health Check | \`$HEALTH\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| API Smoke | \`$API\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| UI Smoke | \`$UI\` |" >> $GITHUB_STEP_SUMMARY
+
+  # ============================================================================
+  # FAILURE NOTIFICATION
+  # ============================================================================
+  notify-failure:
+    name: 📢 Notify Nightly Failure
+    runs-on: ubuntu-latest
+    needs: [health-check, api-smoke, ui-smoke, summary]
+    if: |
+      always() &&
+      (needs.health-check.result == 'failure' ||
+       needs.api-smoke.result == 'failure' ||
+       needs.ui-smoke.result == 'failure')
+
+    steps:
+      - name: Send Slack notification
+        if: env.SLACK_WEBHOOK_URL != ''
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          if [ -z "$SLACK_WEBHOOK_URL" ]; then
+            echo "SLACK_WEBHOOK_URL not configured, skipping"
+            exit 0
+          fi
+
+          curl -X POST -H 'Content-type: application/json' \
+            --data '{
+              "text": "🌙 Nightly Production E2E Tests Failed",
+              "attachments": [{
+                "color": "#FFA500",
+                "fields": [
+                  {"title": "Environment", "value": "Production", "short": true},
+                  {"title": "URL", "value": "'"$BASE_URL"'", "short": true}
+                ],
+                "actions": [{
+                  "type": "button",
+                  "text": "View Results",
+                  "url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                }]
+              }]
+            }' \
+            "$SLACK_WEBHOOK_URL" || echo "Slack notification failed"

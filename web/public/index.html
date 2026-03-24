@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<!--
+  Public Surface - EventAngle Public Event Listing
+
+  Story 4.1: This file is a redirect to the Worker-served public page.
+  The actual public.html is served from the Cloudflare Worker.
+
+  Access via:
+    - /public
+    - /events
+    - /schedule
+    - /calendar
+    - / (root)
+
+  @see worker/src/handlers/staticAssets.ts
+  @see worker/templates/public.html
+-->
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="refresh" content="0; url=/public">
+  <title>Events - EventAngle</title>
+</head>
+<body>
+  <p>Redirecting to <a href="/public">Public Events</a>...</p>
+</body>
+</html>

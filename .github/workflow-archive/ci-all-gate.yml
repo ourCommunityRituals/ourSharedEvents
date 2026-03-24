@@ -1,0 +1,115 @@
+# DEPRECATED WORKFLOW (ARCHIVED)
+# This workflow is kept for historical reference only.
+# Do NOT re-enable without updating it to the current CI/CD architecture.
+
+name: OLD – CI All Gate
+
+on:
+  # Run on all PRs to main or release branches
+  pull_request:
+    branches:
+      - main
+      - 'release/**'
+      - 'release/*'
+
+  # Run on push to feature branches (fast feedback)
+  push:
+    branches-ignore:
+      - main  # Stage 1 handles main branch deployments
+
+  # Allow manual trigger
+  workflow_dispatch:
+
+# Prevent duplicate runs: cancel in-progress runs for the same PR/branch
+concurrency:
+  group: ci-all-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ============================================================================
+  # SINGLE CI GATE: npm run ci:all
+  # ============================================================================
+  # This is the unified CI gate that runs all contract guards:
+  #   1. MVP Surfaces (check-surfaces.js)
+  #   2. RPC Inventory (check-rpc-inventory.js)
+  #   3. API vs Schemas (check-apis-vs-schemas.js)
+  #   4. Event Schema (test-event-schema.js)
+  #   5. Service Tests (test-services.js)
+  #   6. URL Routing (test-url-routing.js) - skipped without BASE_URL
+  #   7. Dead Exports (check-dead-code.js)
+  #   8. Schema Fields (check-schema-fields.js)
+  #   9. Analytics Schema (test-analytics-schema.js)
+  # ============================================================================
+
+  ci-all-gate:
+    name: CI All Gate
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run CI All Gate
+        id: ci-all
+        run: |
+          echo "Running unified CI gate (npm run ci:all)..."
+          echo ""
+          echo "This gate runs ALL contract guards:"
+          echo "  1. MVP Surfaces - Only 5 surfaces allowed"
+          echo "  2. RPC Inventory - API inventory must match reality"
+          echo "  3. API vs Schemas - All api_* need schemas"
+          echo "  4. Event Schema - Schema consistency"
+          echo "  5. Service Tests - form/sponsor/security tests"
+          echo "  6. URL Routing - Skipped (no BASE_URL)"
+          echo "  7. Dead Exports - No zombie api_* functions"
+          echo "  8. Schema Fields - Surfaces use schema fields only"
+          echo "  9. Analytics Schema - Analytics consistency"
+          echo ""
+          npm run ci:all
+
+      - name: Create CI summary
+        if: always()
+        run: |
+          echo "## CI All Gate Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ "${{ steps.ci-all.outcome }}" == "success" ]; then
+            echo "### PASSED" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "All contract guards passed:" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### FAILED" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "One or more contract guards failed:" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Guard | Description |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|-------------|" >> $GITHUB_STEP_SUMMARY
+          echo "| MVP Surfaces | Only 5 surfaces: admin, public, display, poster, report |" >> $GITHUB_STEP_SUMMARY
+          echo "| RPC Inventory | API inventory comment matches actual usage |" >> $GITHUB_STEP_SUMMARY
+          echo "| API vs Schemas | All api_* functions have corresponding schemas |" >> $GITHUB_STEP_SUMMARY
+          echo "| Event Schema | Event schema consistency validated |" >> $GITHUB_STEP_SUMMARY
+          echo "| Service Tests | form-service, sponsor-service, security-middleware |" >> $GITHUB_STEP_SUMMARY
+          echo "| Dead Exports | No unused api_* functions in Code.gs |" >> $GITHUB_STEP_SUMMARY
+          echo "| Schema Fields | HTML surfaces only reference schema-defined fields |" >> $GITHUB_STEP_SUMMARY
+          echo "| Analytics Schema | Analytics schema consistency |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ "${{ steps.ci-all.outcome }}" == "success" ]; then
+            echo "Ready to merge!" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Fix failing guards before merging.**" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Run locally: \`npm run ci:all:verbose\`" >> $GITHUB_STEP_SUMMARY
+          fi

@@ -1,0 +1,89 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zeventbook.com/schemas/save-response.schema.json",
+  "title": "Save Response",
+  "description": "API response schema for create/update endpoints (saveEvent, updateEventData, create). Story 3.1 - API Response Schema Validation.",
+  "$comment": "Version 1.0 - Created 2025-12-11. Used by POST mutation endpoints.",
+  "type": "object",
+  "oneOf": [
+    { "$ref": "#/$defs/SuccessSaveResponse" },
+    { "$ref": "#/$defs/ErrorResponse" }
+  ],
+  "$defs": {
+    "SuccessSaveResponse": {
+      "type": "object",
+      "required": ["ok", "value"],
+      "properties": {
+        "ok": {
+          "type": "boolean",
+          "const": true
+        },
+        "value": {
+          "type": "object",
+          "description": "Saved entity with updated fields",
+          "required": ["id"],
+          "properties": {
+            "id": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Entity unique identifier (may be newly generated)"
+            },
+            "createdAtISO": {
+              "type": "string",
+              "description": "Creation timestamp (for new entities)"
+            },
+            "updatedAtISO": {
+              "type": "string",
+              "description": "Last update timestamp"
+            }
+          }
+        },
+        "etag": {
+          "type": "string",
+          "minLength": 1,
+          "description": "New cache validation tag after save"
+        }
+      },
+      "additionalProperties": false
+    },
+    "ErrorResponse": {
+      "type": "object",
+      "required": ["ok", "code", "message"],
+      "properties": {
+        "ok": {
+          "type": "boolean",
+          "const": false
+        },
+        "code": {
+          "type": "string",
+          "enum": ["BAD_INPUT", "NOT_FOUND", "RATE_LIMITED", "INTERNAL", "CONTRACT", "FEATURE_DISABLED", "UNAUTHORIZED"]
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1
+        },
+        "corrId": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "examples": [
+    {
+      "ok": true,
+      "value": {
+        "id": "EVT_new123",
+        "slug": "new-event",
+        "name": "New Event",
+        "createdAtISO": "2025-12-11T10:00:00.000Z",
+        "updatedAtISO": "2025-12-11T10:00:00.000Z"
+      }
+    },
+    {
+      "ok": false,
+      "code": "BAD_INPUT",
+      "message": "Event name is required"
+    }
+  ]
+}

@@ -1,0 +1,780 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <title><?= appTitle ?> · Create Event</title>
+  <?!= include('Styles'); ?>
+  <?!= include('DesignAdapter'); ?>
+  <?!= include('NUSDK'); ?>
+  <?!= include('DemoMode'); ?>
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+  <meta name="referrer" content="no-referrer"/>
+  <style>
+    /* Wizard-specific styles */
+    .wizard-container {
+      max-width: 800px;
+      margin: 0 auto;
+    }
+
+    .wizard-progress {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 32px;
+      position: relative;
+    }
+
+    .wizard-progress::before {
+      content: '';
+      position: absolute;
+      top: 20px;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: #e2e8f0;
+      z-index: 0;
+    }
+
+    .progress-line {
+      position: absolute;
+      top: 20px;
+      left: 0;
+      height: 2px;
+      background: #2563eb;
+      z-index: 1;
+      transition: width 0.3s ease;
+    }
+
+    .wizard-step {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      flex: 1;
+      position: relative;
+      z-index: 2;
+    }
+
+    .step-number {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: white;
+      border: 2px solid #e2e8f0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 600;
+      color: #94a3b8;
+      transition: all 0.3s ease;
+      margin-bottom: 8px;
+    }
+
+    .wizard-step.active .step-number {
+      background: #2563eb;
+      border-color: #2563eb;
+      color: white;
+      transform: scale(1.1);
+    }
+
+    .wizard-step.completed .step-number {
+      background: #10b981;
+      border-color: #10b981;
+      color: white;
+    }
+
+    .wizard-step.completed .step-number::before {
+      content: '✓';
+    }
+
+    .step-label {
+      font-size: 13px;
+      color: #94a3b8;
+      font-weight: 500;
+      text-align: center;
+    }
+
+    .wizard-step.active .step-label {
+      color: #2563eb;
+      font-weight: 600;
+    }
+
+    .wizard-step.completed .step-label {
+      color: #10b981;
+    }
+
+    .wizard-content {
+      min-height: 400px;
+    }
+
+    .step-content {
+      display: none;
+      animation: fadeIn 0.3s ease;
+    }
+
+    .step-content.active {
+      display: block;
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .wizard-navigation {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 32px;
+      gap: 12px;
+    }
+
+    .wizard-navigation .btn-secondary {
+      min-width: 120px;
+    }
+
+    .wizard-navigation .btn-primary {
+      min-width: 120px;
+    }
+
+    .step-header {
+      margin-bottom: 24px;
+    }
+
+    .step-header h2 {
+      color: #1e293b;
+      margin-bottom: 8px;
+    }
+
+    .step-header p {
+      color: #64748b;
+      font-size: 15px;
+    }
+
+    .mode-switch {
+      text-align: center;
+      margin-top: 24px;
+      padding-top: 24px;
+      border-top: 1px solid #e2e8f0;
+    }
+
+    .mode-switch a {
+      color: #2563eb;
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 500;
+    }
+
+    .mode-switch a:hover {
+      text-decoration: underline;
+    }
+
+    .review-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .review-item {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .review-item h4 {
+      color: #64748b;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 8px;
+    }
+
+    .review-item p {
+      color: #1e293b;
+      font-size: 15px;
+      font-weight: 500;
+    }
+
+    .optional-hint {
+      font-size: 13px;
+      color: #94a3b8;
+      margin-top: 4px;
+      font-style: italic;
+    }
+
+    .success-message {
+      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+      color: white;
+      padding: 24px;
+      border-radius: 12px;
+      text-align: center;
+      margin-bottom: 24px;
+    }
+
+    .success-message h3 {
+      font-size: 1.5rem;
+      margin-bottom: 8px;
+    }
+
+    .success-message p {
+      opacity: 0.9;
+      font-size: 15px;
+    }
+
+    .links-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 16px;
+      margin-top: 24px;
+    }
+
+    .link-card {
+      background: white;
+      border: 2px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 16px;
+      text-align: center;
+      transition: all 0.2s ease;
+    }
+
+    .link-card:hover {
+      border-color: #2563eb;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(37, 99, 235, 0.1);
+    }
+
+    .link-card h4 {
+      color: #1e293b;
+      margin-bottom: 8px;
+      font-size: 14px;
+    }
+
+    .link-card a {
+      color: #2563eb;
+      font-size: 13px;
+      word-break: break-all;
+      text-decoration: none;
+    }
+
+    .link-card a:hover {
+      text-decoration: underline;
+    }
+
+    .enhancement-options {
+      background: #fef3c7;
+      border: 2px solid #fbbf24;
+      border-radius: 12px;
+      padding: 20px;
+      margin-top: 24px;
+    }
+
+    .enhancement-options h3 {
+      color: #92400e;
+      margin-bottom: 12px;
+      font-size: 1.1rem;
+    }
+
+    .enhancement-list {
+      list-style: none;
+      padding: 0;
+      margin: 16px 0;
+    }
+
+    .enhancement-list li {
+      padding: 8px 0;
+      color: #78350f;
+      font-size: 14px;
+    }
+
+    .enhancement-list li::before {
+      content: '✨ ';
+      margin-right: 8px;
+    }
+
+    @media (max-width: 640px) {
+      .wizard-progress {
+        margin-bottom: 24px;
+      }
+
+      .step-label {
+        font-size: 11px;
+      }
+
+      .step-number {
+        width: 36px;
+        height: 36px;
+        font-size: 14px;
+      }
+
+      .wizard-navigation {
+        flex-direction: column-reverse;
+      }
+
+      .wizard-navigation .btn-secondary,
+      .wizard-navigation .btn-primary {
+        width: 100%;
+      }
+    }
+  </style>
+</head>
+<body>
+  <?!= include('Header'); ?>
+  <?!= include('HeaderInit'); ?>
+
+  <main class="container">
+    <div class="wizard-container">
+      <section class="card">
+        <!-- Wizard Progress Indicator -->
+        <div class="wizard-progress">
+          <div class="progress-line" id="progressLine"></div>
+          <div class="wizard-step active" data-step="1">
+            <div class="step-number">1</div>
+            <div class="step-label">Core Details</div>
+          </div>
+          <div class="wizard-step" data-step="2">
+            <div class="step-number">2</div>
+            <div class="step-label">Description</div>
+          </div>
+          <div class="wizard-step" data-step="3">
+            <div class="step-number">3</div>
+            <div class="step-label">Review & Publish</div>
+          </div>
+        </div>
+
+        <form id="wizardForm" class="wizard-content">
+
+          <!-- Step 1: Core Details -->
+          <div class="step-content active" data-step="1">
+            <div class="step-header">
+              <h2>Core Event Details</h2>
+              <p>Let's start with the essential information about your event</p>
+            </div>
+
+            <div class="form-group">
+              <label>Event Name *</label>
+              <input id="name" type="text" required placeholder="e.g., Summer Music Festival 2025">
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label>Date *</label>
+                <input id="dateISO" type="date" required>
+              </div>
+              <div class="form-group">
+                <label>Time</label>
+                <input id="timeISO" type="time" placeholder="Event start time">
+                <small class="optional-hint">Optional - leave blank if time is TBD</small>
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label>Location</label>
+                <input id="location" type="text" placeholder="e.g., Central Park Amphitheater">
+                <small class="optional-hint">Venue name or address</small>
+              </div>
+              <div class="form-group">
+                <label>Organization</label>
+                <input id="entity" type="text" placeholder="e.g., Community Events Corp">
+                <small class="optional-hint">Organizing company or department</small>
+              </div>
+            </div>
+          </div>
+
+          <!-- Step 2: Description & Media -->
+          <div class="step-content" data-step="2">
+            <div class="step-header">
+              <h2>Description & Media</h2>
+              <p>Help attendees learn more about your event</p>
+            </div>
+
+            <div class="form-group">
+              <label>Event Summary *</label>
+              <textarea id="summary" rows="4" required placeholder="Brief description of your event (2-3 sentences)"></textarea>
+              <small class="muted">This will appear on your event's public page</small>
+            </div>
+
+            <div class="form-group">
+              <label>Event Image URL *</label>
+              <input id="imageUrl" type="url" required placeholder="https://example.com/event-image.jpg">
+              <small class="muted">Link to your event poster or promotional image</small>
+            </div>
+
+            <div class="form-group">
+              <label>Additional Information Link</label>
+              <input id="summaryLink" type="url" placeholder="https://example.com/event-details">
+              <small class="optional-hint">Optional - link to your website or Facebook event</small>
+            </div>
+
+            <div class="form-group">
+              <label>Video URL</label>
+              <input id="videoUrl" type="url" placeholder="https://youtube.com/watch?v=...">
+              <small class="optional-hint">Optional - YouTube or Vimeo link</small>
+            </div>
+          </div>
+
+          <!-- Step 3: Review & Publish -->
+          <div class="step-content" data-step="3">
+            <div class="step-header">
+              <h2>Review Your Event</h2>
+              <p>Double-check everything looks good before publishing</p>
+            </div>
+
+            <div id="reviewContent" class="review-grid">
+              <!-- Will be populated by JavaScript -->
+            </div>
+
+            <div id="successSection" style="display: none;">
+              <div class="success-message">
+                <h3>🎉 Event Created Successfully!</h3>
+                <p>Your event is now live and ready to share</p>
+              </div>
+
+              <h3>Your Event Links</h3>
+              <div class="links-grid">
+                <div class="link-card">
+                  <h4>📱 Public Page</h4>
+                  <a id="lnkPublic" href="#" target="_blank" rel="noopener"></a>
+                  <button class="btn-secondary" onclick="copyLink('lnkPublic')" style="margin-top: 12px; width: 100%;">Copy Link</button>
+                </div>
+                <div class="link-card">
+                  <h4>📺 TV Display</h4>
+                  <a id="lnkDisplay" href="#" target="_blank" rel="noopener"></a>
+                  <button class="btn-secondary" onclick="copyLink('lnkDisplay')" style="margin-top: 12px; width: 100%;">Copy Link</button>
+                </div>
+                <div class="link-card">
+                  <h4>🖨️ Poster</h4>
+                  <a id="lnkPoster" href="#" target="_blank" rel="noopener"></a>
+                  <button class="btn-secondary" onclick="copyLink('lnkPoster')" style="margin-top: 12px; width: 100%;">Copy Link</button>
+                </div>
+                <div class="link-card">
+                  <h4>📊 Analytics</h4>
+                  <a id="lnkReport" href="#" target="_blank" rel="noopener"></a>
+                  <button class="btn-secondary" onclick="copyLink('lnkReport')" style="margin-top: 12px; width: 100%;">Copy Link</button>
+                </div>
+              </div>
+
+              <div class="enhancement-options">
+                <h3>✨ Want to enhance your event?</h3>
+                <p style="color: #78350f; margin-bottom: 12px;">You can add these features anytime:</p>
+                <ul class="enhancement-list">
+                  <li>Add sponsors to show their logos on your poster and displays</li>
+                  <li>Set up registration forms to track attendees</li>
+                  <li>Add photo galleries and additional videos</li>
+                  <li>Configure TV display rotation and sponsor placement</li>
+                </ul>
+                <div class="button-group" style="margin-top: 16px;">
+                  <button class="btn-primary" type="button" onclick="enhanceEvent()">Enhance Event Now</button>
+                  <button class="btn-secondary" type="button" onclick="createAnother()">Create Another Event</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </form>
+
+        <!-- Wizard Navigation -->
+        <div class="wizard-navigation" id="wizardNav">
+          <button type="button" class="btn-secondary" id="prevBtn" onclick="previousStep()" style="display: none;">
+            ← Previous
+          </button>
+          <div style="flex: 1;"></div>
+          <button type="button" class="btn-primary" id="nextBtn" onclick="nextStep()">
+            Next →
+          </button>
+          <button type="button" class="btn-success" id="publishBtn" onclick="publishEvent()" style="display: none;">
+            🚀 Publish Event
+          </button>
+        </div>
+
+        <div class="mode-switch">
+          <a href="?page=admin&mode=advanced">⚡ Switch to Advanced Mode (for power users)</a>
+        </div>
+
+      </section>
+    </div>
+  </main>
+
+  <div id="overlay" class="loading-overlay"><div class="spinner"></div><p>Creating your event…</p></div>
+
+  <script>
+    const BRAND = '<?= brandId ?>';
+    const SCOPE = '<?= scope ?>';
+    let currentStep = 1;
+    let eventId = null;
+    let eventLinks = null;
+
+    // Initialize wizard
+    updateWizardUI();
+
+    function nextStep() {
+      // Validate current step
+      if (!validateStep(currentStep)) {
+        return;
+      }
+
+      if (currentStep < 3) {
+        currentStep++;
+        updateWizardUI();
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    }
+
+    function previousStep() {
+      if (currentStep > 1) {
+        currentStep--;
+        updateWizardUI();
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    }
+
+    function updateWizardUI() {
+      // Update step indicators
+      document.querySelectorAll('.wizard-step').forEach(step => {
+        const stepNum = parseInt(step.getAttribute('data-step'));
+        step.classList.remove('active', 'completed');
+
+        if (stepNum === currentStep) {
+          step.classList.add('active');
+        } else if (stepNum < currentStep) {
+          step.classList.add('completed');
+        }
+      });
+
+      // Update progress line
+      const progressPercent = ((currentStep - 1) / 2) * 100;
+      document.getElementById('progressLine').style.width = progressPercent + '%';
+
+      // Update step content
+      document.querySelectorAll('.step-content').forEach(content => {
+        const stepNum = parseInt(content.getAttribute('data-step'));
+        content.classList.toggle('active', stepNum === currentStep);
+      });
+
+      // Update navigation buttons
+      document.getElementById('prevBtn').style.display = currentStep > 1 ? 'block' : 'none';
+      document.getElementById('nextBtn').style.display = currentStep < 3 ? 'block' : 'none';
+      document.getElementById('publishBtn').style.display = currentStep === 3 && !eventId ? 'block' : 'none';
+      document.getElementById('wizardNav').style.display = eventId ? 'none' : 'flex';
+
+      // If on review step, populate review content
+      if (currentStep === 3 && !eventId) {
+        populateReview();
+      }
+    }
+
+    function validateStep(step) {
+      if (step === 1) {
+        const name = document.getElementById('name').value.trim();
+        const date = document.getElementById('dateISO').value;
+
+        if (!name) {
+          alert('Please enter an event name');
+          document.getElementById('name').focus();
+          return false;
+        }
+
+        if (!date) {
+          alert('Please select an event date');
+          document.getElementById('dateISO').focus();
+          return false;
+        }
+
+        return true;
+      }
+
+      if (step === 2) {
+        const summary = document.getElementById('summary').value.trim();
+        const imageUrl = document.getElementById('imageUrl').value.trim();
+
+        if (!summary) {
+          alert('Please enter a brief event summary');
+          document.getElementById('summary').focus();
+          return false;
+        }
+
+        if (!imageUrl) {
+          alert('Please provide an image URL for your event');
+          document.getElementById('imageUrl').focus();
+          return false;
+        }
+
+        // Basic URL validation
+        if (imageUrl && !isValidUrl(imageUrl)) {
+          alert('Please enter a valid URL for the event image (starting with http:// or https://)');
+          document.getElementById('imageUrl').focus();
+          return false;
+        }
+
+        return true;
+      }
+
+      return true;
+    }
+
+    function isValidUrl(string) {
+      try {
+        const url = new URL(string);
+        return url.protocol === 'http:' || url.protocol === 'https:';
+      } catch (_) {
+        return false;
+      }
+    }
+
+    function populateReview() {
+      const reviewData = [
+        { label: 'Event Name', value: document.getElementById('name').value },
+        { label: 'Date', value: formatDate(document.getElementById('dateISO').value) },
+        { label: 'Time', value: document.getElementById('timeISO').value || 'Not specified' },
+        { label: 'Location', value: document.getElementById('location').value || 'Not specified' },
+        { label: 'Organization', value: document.getElementById('entity').value || 'Not specified' },
+        { label: 'Summary', value: document.getElementById('summary').value },
+        { label: 'Image URL', value: document.getElementById('imageUrl').value },
+      ];
+
+      const summaryLink = document.getElementById('summaryLink').value;
+      if (summaryLink) {
+        reviewData.push({ label: 'Info Link', value: summaryLink });
+      }
+
+      const videoUrl = document.getElementById('videoUrl').value;
+      if (videoUrl) {
+        reviewData.push({ label: 'Video URL', value: videoUrl });
+      }
+
+      const html = reviewData.map(item => `
+        <div class="review-item">
+          <h4>${item.label}</h4>
+          <p>${NU.esc(item.value)}</p>
+        </div>
+      `).join('');
+
+      document.getElementById('reviewContent').innerHTML = html;
+    }
+
+    function formatDate(dateStr) {
+      if (!dateStr) return '';
+      const date = new Date(dateStr + 'T00:00:00');
+      return date.toLocaleDateString('en-US', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      });
+    }
+
+    async function publishEvent() {
+      overlay(true);
+
+      const data = {
+        name: document.getElementById('name').value.trim(),
+        dateISO: document.getElementById('dateISO').value,
+        summary: document.getElementById('summary').value.trim(),
+        imageUrl: document.getElementById('imageUrl').value.trim()
+      };
+
+      // Optional fields
+      const optional = ['timeISO', 'location', 'entity', 'summaryLink', 'videoUrl'];
+      optional.forEach(field => {
+        const elem = document.getElementById(field);
+        const val = elem ? elem.value.trim() : '';
+        if (val) data[field] = val;
+      });
+
+      const res = await NU.rpc('api_create', {
+        brandId: BRAND,
+        scope: SCOPE,
+        templateId: 'event',
+        adminKey: getAdminKey(),
+        idemKey: (typeof crypto !== 'undefined' && crypto.randomUUID)
+          ? crypto.randomUUID()
+          : `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        data
+      });
+
+      overlay(false);
+
+      if (!res.ok) {
+        alert(`Error creating event: ${res.message}`);
+        return;
+      }
+
+      // Event created successfully
+      eventId = res.value.id;
+      eventLinks = res.value.links;
+
+      // Show success section
+      document.getElementById('reviewContent').style.display = 'none';
+      document.getElementById('successSection').style.display = 'block';
+
+      // Populate links
+      setLink('lnkPublic', eventLinks.publicUrl);
+      setLink('lnkDisplay', eventLinks.displayUrl);
+      setLink('lnkPoster', eventLinks.posterUrl);
+      setLink('lnkReport', eventLinks.reportUrl);
+
+      updateWizardUI();
+    }
+
+    function setLink(id, url) {
+      const a = document.getElementById(id);
+      a.textContent = url;
+      a.href = url;
+    }
+
+    async function copyLink(id) {
+      const url = document.getElementById(id).textContent;
+      try {
+        await navigator.clipboard.writeText(url);
+        alert('Link copied to clipboard!');
+      } catch (err) {
+        // Fallback for older browsers
+        const input = document.createElement('input');
+        input.value = url;
+        document.body.appendChild(input);
+        input.select();
+        document.execCommand('copy');
+        document.body.removeChild(input);
+        alert('Link copied!');
+      }
+    }
+
+    function enhanceEvent() {
+      if (eventId) {
+        window.location.href = `?page=admin&mode=advanced&id=${eventId}`;
+      }
+    }
+
+    function createAnother() {
+      window.location.reload();
+    }
+
+    function overlay(on) {
+      document.getElementById('overlay').style.display = on ? 'flex' : 'none';
+    }
+
+    function getAdminKey() {
+      const k = sessionStorage.getItem('ADMIN_KEY:' + BRAND) || prompt('Admin key for ' + BRAND);
+      if (k) sessionStorage.setItem('ADMIN_KEY:' + BRAND, k);
+      return k || '';
+    }
+
+    // Allow Enter key to advance to next step (except in textareas)
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA' && !eventId) {
+        e.preventDefault();
+        if (currentStep < 3) {
+          nextStep();
+        } else if (currentStep === 3) {
+          publishEvent();
+        }
+      }
+    });
+  </script>
+</body>
+</html>

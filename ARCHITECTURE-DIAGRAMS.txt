@@ -1,0 +1,563 @@
+================================================================================
+MVP-EVENT-TOOLKIT: ARCHITECTURE DIAGRAMS & VISUAL MAPPINGS
+================================================================================
+
+1. SYSTEM ARCHITECTURE OVERVIEW
+================================================================================
+
+                    ┌─────────────────────────────────────────┐
+                    │      WEB BROWSERS / CLIENTS            │
+                    │                                         │
+      ┌─────────────┼─────────────┬─────────────┬────────────┤
+      │             │             │             │            │
+   PUBLIC.html   ADMIN.html   DISPLAY.html   POSTER.html   REPORT.html
+   (Events)      (Manager)    (TV/Kiosk)     (Print)      (Analytics)
+      │             │             │             │            │
+      └─────────────┴─────────────┴─────────────┴────────────┘
+                    │
+            NU.rpc() / google.script.run
+            (Batch event logging via setInterval)
+                    │
+                    ▼
+      ┌─────────────────────────────────────┐
+      │  Google Apps Script Backend         │
+      │  ┌───────────────────────────────┐  │
+      │  │ doGet(e) - HTTP GET routing   │  │
+      │  │ doPost(e) - HTTP POST routing │  │
+      │  └───────────────────────────────┘  │
+      │                                      │
+      │  ┌───────────────────────────────┐  │
+      │  │ 17 API Functions              │  │
+      │  │ - api_create/update/list/get  │  │
+      │  │ - api_logEvents/getReport     │  │
+      │  │ - api_createShortlink         │  │
+      │  │ - api_createFormFromTemplate  │  │
+      │  └───────────────────────────────┘  │
+      │                                      │
+      │  ┌───────────────────────────────┐  │
+      │  │ Config.gs (7KB)               │  │
+      │  │ - TENANTS[]                   │  │
+      │  │ - TEMPLATES[]                 │  │
+      │  │ - FORM_TEMPLATES[]            │  │
+      │  └───────────────────────────────┘  │
+      │                                      │
+      │  ┌───────────────────────────────┐  │
+      │  │ SharedReporting.gs (15KB)     │  │
+      │  │ - api_getSharedAnalytics()    │  │
+      │  │ - Aggregation functions       │  │
+      │  └───────────────────────────────┘  │
+      │                                      │
+      └──────────────┬──────────────────────┘
+                     │
+      ┌──────────────▼──────────────────┐
+      │   Google Sheets Data Store      │
+      │                                 │
+      │ EVENTS (rows)                   │
+      │ ├─ id (UUID)                    │
+      │ ├─ brandId                     │
+      │ ├─ templateId                   │
+      │ ├─ dataJSON {                   │
+      │ │   name, dateISO, location,    │
+      │ │   sponsors[],                 │
+      │ │   display: { mode, urls }     │
+      │ │ }                             │
+      │ ├─ createdAt                    │
+      │ └─ slug                         │
+      │                                 │
+      │ ANALYTICS (events log)          │
+      │ ├─ timestamp                    │
+      │ ├─ eventId                      │
+      │ ├─ surface (public/display)     │
+      │ ├─ metric (impression/click)    │
+      │ ├─ sponsorId                    │
+      │ └─ value (dwell seconds)        │
+      │                                 │
+      │ SHORTLINKS (redirects)          │
+      │ ├─ token                        │
+      │ ├─ targetUrl                    │
+      │ ├─ eventId                      │
+      │ ├─ sponsorId                    │
+      │ └─ surface                      │
+      │                                 │
+      │ DIAG (debug logs)               │
+      │ ├─ ts                           │
+      │ ├─ level                        │
+      │ ├─ where                        │
+      │ ├─ msg                          │
+      │ └─ meta (JSON)                  │
+      │                                 │
+      └─────────────────────────────────┘
+
+
+2. CONFIGURATION INHERITANCE & TEMPLATE FLOW
+================================================================================
+
+    Config.gs (Build-Time Constant)
+    ├─ TENANTS[] (4 tenants)
+    │  ├─ id: 'root' | 'abc' | 'cbc' | 'cbl'
+    │  ├─ scopesAllowed: ['events', 'sponsors']
+    │  └─ store.spreadsheetId: Reference to data
+    │
+    └─ TEMPLATES[] (2 templates)
+       ├─ event: 13 fields
+       └─ sponsor: 8 fields
+
+
+    User Request: GET /?page=admin&brand=root&scope=events
+           │
+           ▼
+    doGet(e) in Code.gs
+      1. findTenantByHost_() → {id, name, scopesAllowed, ...}
+      2. assertScopeAllowed_(tenant, 'events') ✓
+      3. pageFile_('admin') → 'Admin'
+      4. HtmlService.createTemplateFromFile('Admin')
+           │
+           ├─ tpl.appTitle = 'Zeventbook · events'
+           ├─ tpl.brandId = 'root'
+           ├─ tpl.scope = 'events'
+           ├─ tpl.execUrl = 'https://script.google.com/...'
+           └─ tpl.ZEB = {BUILD_ID, CONTRACT_VER, ...}
+           │
+           └─ evaluate() → HTML string
+              │
+              ▼
+           Admin.html Browser
+      const TENANT = 'root'
+      const SCOPE = 'events'
+      const EXEC_URL = 'https://...'
+      
+      NU.rpc('api_create', {
+        brandId: TENANT,     ← From template injection
+        scope: SCOPE,         ← From template injection
+        data: {...}
+      })
+
+
+3. EVENT CREATION FLOW
+================================================================================
+
+Admin User: Clicks "Create Event"
+      │
+      ├─ Form submit listener (Admin.html:330)
+      ├─ Collect: name, dateISO, optional fields
+      ├─ Validate: Required fields present
+      │
+      └─ NU.rpc('api_create', {
+           brandId: 'root',
+           scope: 'events',
+           templateId: 'event',
+           adminKey: prompt(),              ← First time only
+           idemKey: crypto.randomUUID(),    ← Idempotency
+           data: { name, dateISO, ... }
+         })
+              │
+              ▼
+         doPost(e) in Code.gs:150
+         handleRestApiPost_() → api_create()
+              │
+              ├─ gate_(brandId, adminKey)         ✓ Auth check
+              ├─ assertScopeAllowed_()             ✓ Scope check
+              ├─ schemaCheck(TEMPLATES['event'])   ✓ Validate schema
+              ├─ Idempotency cache check
+              ├─ Sanitize inputs
+              ├─ Generate UUID for id
+              ├─ Generate slug from name
+              ├─ getStoreSheet_(tenant, 'events') → Get EVENTS sheet
+              │
+              ├─ appendRow([id, brandId, 'event', JSON.stringify(data), now, slug])
+              │
+              ├─ Generate links:
+              │  ├─ publicUrl: ?p=events&id=UUID
+              │  ├─ posterUrl: ?page=poster&id=UUID
+              │  ├─ displayUrl: ?page=display&id=UUID&tv=1
+              │  └─ reportUrl: ?page=report&id=UUID
+              │
+              └─ diag_('info', 'api_create', 'created', {...})
+                 │
+                 └─ Return Ok({id, links})
+                    │
+                    ▼
+                 Browser: Promise resolves
+                 currentEventId = res.value.id
+                 showEventCard(res.value)
+                    │
+                    └─ Display links for sharing
+
+
+4. ANALYTICS DATA FLOW
+================================================================================
+
+┌─ PUBLIC.html (User browsing event)
+│  ├─ renderDetail() is called
+│  ├─ renderSponsorBanner(ev) filters sponsors
+│  │  └─ logEvent({eventId, surface:'public', metric:'impression', sponsorId})
+│  │
+│  ├─ User clicks sponsor link
+│  │  └─ logEvent({eventId, surface:'public', metric:'click', sponsorId})
+│  │
+│  ├─ logBatch[] accumulates events
+│  │  ├─ When length >= 4: flush()
+│  │  ├─ Every 5 seconds: flush() [setInterval]
+│  │  └─ On beforeunload: flush()
+│  │
+│  └─ flush() sends to backend:
+│     NU.rpc('api_logEvents', {items: [{eventId, surface, metric, ...}]})
+│
+├─ DISPLAY.html (TV carousel)
+│  ├─ boot() calls api_get()
+│  ├─ renderSponsorTop/Side() logs impressions
+│  ├─ startDynamicMode() rotates URLs
+│  │  └─ For each URL: logEvent({metric:'impression', 'dwellSec'})
+│  │
+│  └─ flush() every 6 seconds
+│
+└─ Backend Processing
+   ├─ api_logEvents() receives batch
+   │  ├─ _ensureAnalyticsSheet_() creates ANALYTICS if missing
+   │  ├─ For each item: appendRow([timestamp, eventId, surface, metric, ...])
+   │  └─ Return Ok({count})
+   │
+   └─ api_getReport({eventId})
+      ├─ Read ANALYTICS sheet
+      ├─ Filter by eventId
+      ├─ Aggregate:
+      │  ├─ totals: {impressions, clicks, dwellSec}
+      │  ├─ bySurface: {public, display, ...}
+      │  ├─ bySponsor: {sponsorId → {impressions, clicks, ctr}}
+      │  └─ byToken: {shortlink_token → metrics}
+      │
+      └─ Return aggregated metrics
+
+
+5. SPONSOR PLACEMENT & RENDERING
+================================================================================
+
+Configuration Phase (Admin.html):
+  │
+  ├─ configureDisplay()
+  │  ├─ loadDisplayConfig() → api_get(eventId)
+  │  ├─ renderSponsors(data.sponsors[])
+  │  │  └─ For each sponsor: show name, url, img, placement checkboxes
+  │  │     (posterTop, tvTop, tvSide, mobileBanner)
+  │  │
+  │  └─ saveDisplayConfig()
+  │     └─ api_updateEventData({sponsors: [...]})
+  │        └─ Spreadsheet: data.sponsors = new array
+  │
+  └─ Sponsor data stored in event row
+     data = {
+       name: "...",
+       sponsors: [
+         {
+           id: "uuid",
+           name: "Company",
+           url: "https://...",
+           img: "https://...",
+           placements: {
+             posterTop: true,
+             tvTop: false,
+             tvSide: true,
+             mobileBanner: false
+           }
+         },
+         ...
+       ]
+     }
+
+Display Phase (Multiple Surfaces):
+
+  PUBLIC.html (Mobile/Web)
+  │
+  ├─ api_get(eventId) → ev.data.sponsors
+  ├─ renderSponsorBanner(ev):
+  │  └─ Filter: sponsor.placements.mobileBanner == true
+  │  └─ Show first sponsor only (MVP)
+  │  └─ Log impression
+  │  └─ If has URL: log click on link
+  │
+  └─ Display at top of event detail
+
+
+  DISPLAY.html (TV/Kiosk)
+  │
+  ├─ api_get(eventId) → ev.data.sponsors
+  ├─ renderSponsorTop(ev):
+  │  └─ Filter: sponsor.placements.tvTop == true
+  │  └─ Show logos in top banner
+  │  └─ Log impressions for each
+  │
+  ├─ renderSponsorSide(ev):
+  │  └─ Filter: sponsor.placements.tvSide == true
+  │  └─ Show in right sidebar
+  │  └─ Log impressions for each
+  │
+  └─ Display throughout carousel rotation
+
+
+  POSTER.html (Print/QR)
+  │
+  ├─ api_get(eventId) → ev.data.sponsors
+  └─ renderSponsorStrip(ev):
+     └─ Filter: sponsor.placements.posterTop == true
+     └─ Show logos in header strip
+     └─ No analytics (print)
+
+
+6. MULTI-TENANT ISOLATION
+================================================================================
+
+Tenant Lookup:
+
+  GET /?brand=root  OR
+  GET via hostname: zeventbook.io
+
+           │
+           ▼
+    findTenantByHost_(e.headers.host)
+           │
+           ├─ Extract hostname from request header
+           ├─ Search TENANTS[].hostnames[]
+           └─ Fallback: findTenant_('root')
+
+
+Isolation Mechanism:
+
+  Each API call includes brandId:
+  ├─ api_list({brandId, scope})
+  │  └─ getStoreSheet_(tenant, scope)
+  │     └─ Opens tenant's spreadsheet
+  │        └─ Filters rows by brandId column
+  │
+  ├─ api_create({brandId, adminKey, ...})
+  │  ├─ gate_(brandId, adminKey)  ← Verify secret
+  │  ├─ getStoreSheet_(tenant, scope)
+  │  └─ appendRow with brandId column
+  │
+  └─ api_updateEventData({brandId, adminKey, ...})
+     ├─ gate_(brandId, adminKey)
+     ├─ Find row: r[0]==id && r[1]==brandId  ← DUAL KEY
+     └─ Update only matching row
+
+
+Authentication:
+
+  TENANTS = [
+    { id: 'root', adminSecret: 'HASH_root', ... },
+    { id: 'abc',  adminSecret: 'HASH_abc',  ... },
+    ...
+  ]
+
+  gate_(brandId, adminKey):
+    ├─ tenant = findTenant_(brandId)
+    ├─ if (adminKey !== tenant.adminSecret) → Err
+    ├─ Rate limit check: CacheService.getScriptCache()
+    └─ Return Ok({tenant})
+
+
+7. FILE INCLUDE STRUCTURE & DEPENDENCIES
+================================================================================
+
+Frontend Components:
+
+  NUSDK.html (Shared Utilities)
+    ├─ window.NU.rpc(method, payload)
+    │  └─ Wrapper for google.script.run
+    │  └─ Returns Promise
+    │  └─ Handles success/failure
+    │
+    ├─ window.NU.swr(method, payload, {staleMs, onUpdate})
+    │  └─ Stale-While-Revalidate pattern
+    │  └─ Caches in localStorage with etag
+    │  └─ Calls onUpdate with cached data
+    │  └─ Refetches in background
+    │
+    └─ window.NU.esc(s)
+       └─ HTML escape function
+       └─ Prevents XSS
+
+  Styles.html (Global CSS)
+    ├─ Reset: box-sizing, margin, padding
+    ├─ Base: font-family, line-height, colors
+    ├─ Layout: .container, .card, .form-*
+    ├─ Components: .btn-*, .stat-*, .metric-*
+    └─ Responsive: @media (max-width: 640px)
+
+  DesignAdapter.html
+    └─ Theme adaptation (minimal/stub)
+
+  Header.html (Template Component)
+    ├─ Logo from tenant config
+    ├─ App title
+    └─ Build info badge
+
+
+Page Includes:
+
+  Admin.html:
+    ├─ <?!= include('Styles'); ?>
+    ├─ <?!= include('DesignAdapter'); ?>
+    ├─ <?!= include('NUSDK'); ?>
+    └─ <?!= include('Header'); ?>
+
+  Public.html:
+    └─ <?!= include('Styles'); ?>
+
+  Display.html:
+    └─ <?!= include('Styles'); ?>
+
+  Poster.html:
+    ├─ <?!= include('Styles'); ?>
+    └─ <?!= include('DesignAdapter'); ?>
+
+  Diagnostics.html:
+    ├─ <?!= include('Styles'); ?>
+    ├─ <?!= include('DesignAdapter'); ?>
+    ├─ <?!= include('NUSDK'); ?>
+    └─ <?!= include('Header'); ?>
+
+
+8. DATA CONSISTENCY & INTEGRITY
+================================================================================
+
+Event ID Uniqueness:
+  └─ Utilities.getUuid() → 36-char UUID
+     └─ Append to EVENTS sheet
+     └─ Uniqueness guaranteed by UUID standard
+
+Event Retrieval:
+  api_get({brandId, scope, id}):
+    ├─ getStoreSheet_() → Load sheet
+    ├─ Find row: r[0]==id && r[1]==brandId
+    │  └─ DUAL KEY: prevent cross-tenant reads
+    ├─ Parse dataJSON
+    └─ Return {id, data, links, createdAt}
+
+Event Updates:
+  api_updateEventData({brandId, scope, id, data}):
+    ├─ Find row by id + brandId
+    ├─ Parse existing data
+    ├─ Merge: Object.assign({}, existing, data)
+    ├─ Update column 4 (dataJSON)
+    └─ Return updated event
+
+Sponsor Data:
+  └─ Stored as nested array in event.data.sponsors
+  └─ No separate SPONSOR sheet (denormalized)
+  └─ Sponsor IDs: UUID.substring(0,8) or `sp-${Date.now()}`
+
+Analytics Append-Only:
+  └─ api_logEvents() only appends rows
+  └─ No updates, no deletes
+  └─ Retention: DIAG_MAX=3000, DIAG_PER_DAY=800
+  └─ Aggregation: api_getReport() computes on-the-fly
+
+
+9. ERROR HANDLING & RECOVERY
+================================================================================
+
+Backend Error Pattern:
+
+  All handlers wrapped in runSafe():
+    try {
+      // ... business logic
+      return Ok({value})
+    } catch(e) {
+      diag_('error', 'function_name', 'message', {error: e})
+      return Err(ERR_CODE, 'message')
+    }
+
+  Response envelope:
+    {
+      ok: true|false,
+      value: {...} or null,
+      code: 'BAD_INPUT'|'NOT_FOUND'|'RATE_LIMITED'|'INTERNAL'|'CONTRACT',
+      message: 'Human readable'
+    }
+
+Frontend Error Handling:
+
+  Public.html: Minimal error handling
+    ├─ If api_list() fails → Show "Could not load events"
+    └─ If api_get() fails → Show "Event not found"
+
+  Admin.html: Prompt users
+    ├─ If api_create() fails → alert(res.message)
+    └─ If api_updateEventData() fails → alert(res.message)
+
+  Display.html: Graceful degradation
+    ├─ If api_get() fails → startPublicMode() [fallback]
+    ├─ If iframe loads fail → showFallback()
+    └─ If carousel item blocked → Skip to next
+
+  No global error tracking (opportunity for improvement)
+
+
+10. CRITICAL PATHS & FAILURE POINTS
+================================================================================
+
+Path: Event Manager Creates Event & Adds Sponsors
+  Prerequisites:
+    ├─ Admin.html accessible
+    ├─ Admin key known (or prompt)
+    └─ Spreadsheet quota available
+
+  Steps:
+    1. Load Admin.html
+    2. Submit form → api_create()
+    3. Click "Configure Display & Sponsors"
+    4. Add sponsor entries (name, logo, placements)
+    5. Click "Save" → api_updateEventData()
+    6. Share links (copy to clipboard)
+
+  Failure Points:
+    ├─ Admin key not saved → Reprompt
+    ├─ Spreadsheet quota exceeded → Display error
+    ├─ Network timeout → UI hangs (no timeout wrapper)
+    └─ Race condition: multiple admins edit same event
+
+
+Path: Attendee Views Event on Mobile (Public.html)
+  1. Load Public.html?id=UUID
+  2. api_get(UUID) → renderDetail()
+  3. renderSponsorBanner() → logEvent(impression)
+  4. User clicks "Register" → Opens external URL
+  5. User returns, scrolls, reads more → logEvent(dwell)
+  6. Before leaving page → flush() sends batch
+  7. Background: api_logEvents() processes analytics
+
+  Failure Points:
+    ├─ Event not found → Show "Not found"
+    ├─ registerUrl broken → 404 in external site
+    ├─ Analytics flush fails → Batch lost (no retry)
+    └─ Network offline → No analytics tracking
+
+
+Path: TV Display Carousel (Display.html)
+  Prerequisites:
+    ├─ Display.html?id=UUID accessed
+    ├─ event.data.display.mode == 'dynamic'
+    └─ event.data.display.urls configured
+
+  Steps:
+    1. Load Display.html
+    2. boot() calls api_get(eventId)
+    3. renderSponsorTop/Side() displays logos
+    4. startDynamicMode(urls) starts carousel
+    5. For each URL:
+       ├─ loadIframe(url)
+       ├─ Log impression + dwell
+       ├─ Wait N seconds
+       └─ Rotate to next
+    6. Loop forever (24/7 operation)
+
+  Failure Points:
+    ├─ Blocked embeds (Instagram) → Silent skip
+    ├─ Iframe timeout (4s) → Fallback + skip
+    ├─ Missing URLs → Fall back to public mode
+    ├─ Memory leak in long-running carousel
+    └─ Carousel not responsive to config changes
+
+
+================================================================================
+End of Architecture Diagrams
+================================================================================

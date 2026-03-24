@@ -1,0 +1,155 @@
+{
+  "info": {
+    "name": "📋 TRIANGLE: Before Event APIs",
+    "description": "API endpoints for the Before Event phase - Pre-Event Preparation\n\nThis collection covers:\n- Event creation\n- Sponsor management\n- Shortlink generation\n- Form template configuration\n\nTriangle Phase: Before Event (Green #10b981)\nUser Roles: Event Manager (primary), Sponsor (secondary)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "version": "1.0.0"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "https://script.google.com/macros/s/YOUR_DEPLOYMENT_ID/exec",
+      "type": "string"
+    },
+    {
+      "key": "admin_key",
+      "value": "CHANGE_ME_root",
+      "type": "string"
+    },
+    {
+      "key": "brand_id",
+      "value": "root",
+      "type": "string"
+    },
+    {
+      "key": "event_id",
+      "value": "",
+      "type": "string",
+      "description": "Populated after event creation"
+    }
+  ],
+  "item": [
+    {
+      "name": "Event Creation",
+      "item": [
+        {
+          "name": "Create Event - Basic",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response has ok=true', function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.ok).to.eql(true);",
+                  "});",
+                  "",
+                  "pm.test('Response includes event ID', function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.value).to.have.property('id');",
+                  "    pm.collectionVariables.set('event_id', jsonData.value.id);",
+                  "});",
+                  "",
+                  "pm.test('Response includes all required links', function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.value.links).to.have.property('publicUrl');",
+                  "    pm.expect(jsonData.value.links).to.have.property('posterUrl');",
+                  "    pm.expect(jsonData.value.links).to.have.property('displayUrl');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"action\": \"create\",\n  \"adminKey\": \"{{admin_key}}\",\n  \"brand\": \"{{brand_id}}\",\n  \"scope\": \"events\",\n  \"templateId\": \"event\",\n  \"data\": {\n    \"name\": \"Test Event {{$timestamp}}\",\n    \"dateISO\": \"2025-12-31\",\n    \"location\": \"Test Venue\",\n    \"description\": \"This is a test event created via Postman\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}",
+              "host": ["{{base_url}}"]
+            },
+            "description": "Create a basic event with minimal required fields"
+          }
+        },
+        {
+          "name": "Create Event - With Sponsors",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"action\": \"create\",\n  \"adminKey\": \"{{admin_key}}\",\n  \"brand\": \"{{brand_id}}\",\n  \"scope\": \"events\",\n  \"templateId\": \"event\",\n  \"data\": {\n    \"name\": \"Sponsored Event {{$timestamp}}\",\n    \"dateISO\": \"2025-12-31\",\n    \"location\": \"Sponsored Venue\",\n    \"description\": \"Event with sponsor configuration\",\n    \"sponsors\": [\n      {\n        \"name\": \"Platinum Corp\",\n        \"tier\": \"platinum\",\n        \"logo\": \"https://via.placeholder.com/300x100/FFD700/000000?text=Platinum\"\n      },\n      {\n        \"name\": \"Gold Industries\",\n        \"tier\": \"gold\",\n        \"logo\": \"https://via.placeholder.com/300x100/C0C0C0/000000?text=Gold\"\n      }\n    ]\n  }\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}",
+              "host": ["{{base_url}}"]
+            },
+            "description": "Create an event with sponsor configuration"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Shortlink Generation",
+      "item": [
+        {
+          "name": "Create Shortlink",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Response has token', function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.value).to.have.property('token');",
+                  "});",
+                  "",
+                  "pm.test('Response has shortlink URL', function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.value).to.have.property('shortlink');",
+                  "    pm.expect(jsonData.value.shortlink).to.include('p=r&t=');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"action\": \"createShortlink\",\n  \"adminKey\": \"{{admin_key}}\",\n  \"brand\": \"{{brand_id}}\",\n  \"targetUrl\": \"https://docs.google.com/forms/d/e/SAMPLE/viewform\",\n  \"label\": \"Registration Form\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}",
+              "host": ["{{base_url}}"]
+            },
+            "description": "Generate a shortlink for event promotion"
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,233 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zeventbook.com/schemas/shared-analytics.schema.json",
+  "title": "SharedAnalytics",
+  "description": "MVP Analytics Response Contract v1.1 (MVP-frozen) - Single Source of Truth for SharedReport.html",
+  "type": "object",
+  "required": ["lastUpdatedISO", "summary", "surfaces"],
+  "additionalProperties": false,
+  "properties": {
+    "lastUpdatedISO": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}(T\\d{2}:\\d{2}:\\d{2}(\\.\\d{3})?Z)?$",
+      "description": "MVP REQUIRED - Last data refresh timestamp (ISO 8601)"
+    },
+    "summary": {
+      "$ref": "#/$defs/Summary"
+    },
+    "surfaces": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/SurfaceMetrics" },
+      "description": "MVP REQUIRED - Breakdown by surface"
+    },
+    "sponsors": {
+      "type": ["array", "null"],
+      "items": { "$ref": "#/$defs/SponsorMetrics" },
+      "description": "MVP OPTIONAL - Breakdown by sponsor (organizer view)"
+    },
+    "events": {
+      "type": ["array", "null"],
+      "items": { "$ref": "#/$defs/EventMetrics" },
+      "description": "MVP OPTIONAL - Breakdown by event"
+    },
+    "topSponsors": {
+      "type": ["array", "null"],
+      "items": { "$ref": "#/$defs/SponsorMetrics" },
+      "maxItems": 3,
+      "description": "MVP OPTIONAL - Top 3 sponsors by clicks for highlight card"
+    }
+  },
+  "$defs": {
+    "Summary": {
+      "type": "object",
+      "description": "MVP REQUIRED - Aggregate metrics across all dimensions",
+      "required": ["totalImpressions", "totalClicks", "totalQrScans", "totalSignups", "uniqueEvents", "uniqueSponsors"],
+      "additionalProperties": false,
+      "properties": {
+        "totalImpressions": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "MVP REQUIRED - Total page views across all surfaces"
+        },
+        "totalClicks": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "MVP REQUIRED - Total sponsor link/CTA clicks"
+        },
+        "totalQrScans": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "MVP REQUIRED - Total QR code scans (public + signup)"
+        },
+        "totalSignups": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "MVP REQUIRED - Total form submissions / registrations"
+        },
+        "uniqueEvents": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "MVP REQUIRED - Count of distinct events with activity"
+        },
+        "uniqueSponsors": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "MVP REQUIRED - Count of distinct sponsors with activity"
+        }
+      }
+    },
+    "SurfaceMetrics": {
+      "type": "object",
+      "description": "MVP REQUIRED - Metrics for a single surface",
+      "required": ["id", "label", "impressions", "clicks", "qrScans"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "enum": ["poster", "display", "public", "signup"],
+          "description": "Surface identifier"
+        },
+        "label": {
+          "type": "string",
+          "description": "Human-readable surface name (e.g., 'Poster')"
+        },
+        "impressions": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "clicks": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "qrScans": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "engagementRate": {
+          "type": ["number", "null"],
+          "minimum": 0,
+          "description": "Optional - Derived as (clicks / impressions * 100) if missing"
+        }
+      }
+    },
+    "SponsorMetrics": {
+      "type": "object",
+      "description": "MVP OPTIONAL - Metrics for a single sponsor",
+      "required": ["id", "name", "impressions", "clicks", "ctr"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Sponsor identifier (matches sponsor.schema.json)"
+        },
+        "sponsorId": {
+          "type": ["string", "null"],
+          "description": "Sponsor identifier (alias for id, used in sponsor pane)"
+        },
+        "name": {
+          "type": "string",
+          "description": "Human-readable sponsor name"
+        },
+        "impressions": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "clicks": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "ctr": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Click-through rate as percentage (e.g., 2.5)"
+        },
+        "summary": {
+          "type": ["object", "null"],
+          "description": "Sponsor-level aggregate metrics (for sponsor pane view)",
+          "properties": {
+            "impressions": { "type": "integer", "minimum": 0 },
+            "qrScans": { "type": "integer", "minimum": 0 },
+            "costPerScan": { "type": "number", "minimum": 0 }
+          }
+        },
+        "placements": {
+          "type": ["array", "null"],
+          "description": "Sponsor placement breakdown by surface",
+          "items": {
+            "type": "object",
+            "required": ["surface", "count"],
+            "properties": {
+              "surface": { "type": "string", "description": "Surface name (poster, display, etc.)" },
+              "count": { "type": "integer", "minimum": 0, "description": "Number of placements on this surface" }
+            }
+          }
+        }
+      }
+    },
+    "EventMetrics": {
+      "type": "object",
+      "description": "MVP OPTIONAL - Metrics for a single event",
+      "required": ["id", "name", "impressions", "clicks", "ctr", "signupsCount"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Event identifier (matches event.schema.json)"
+        },
+        "eventId": {
+          "type": ["string", "null"],
+          "description": "Event identifier (alias for id, used in event pane)"
+        },
+        "name": {
+          "type": "string",
+          "description": "Human-readable event name"
+        },
+        "impressions": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "clicks": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "ctr": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Click-through rate as percentage (e.g., 2.5)"
+        },
+        "signupsCount": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of form signups for this event (sourced from Form/Sheet)"
+        },
+        "summary": {
+          "type": ["object", "null"],
+          "description": "Event-level participation metrics (for event pane view)",
+          "properties": {
+            "signups": { "type": "integer", "minimum": 0 },
+            "matches": { "type": "integer", "minimum": 0 },
+            "durationMinutes": { "type": "integer", "minimum": 0 }
+          }
+        },
+        "traffic": {
+          "type": ["object", "null"],
+          "description": "Event traffic metrics",
+          "properties": {
+            "pageViews": { "type": "integer", "minimum": 0 },
+            "uniqueVisitors": { "type": "integer", "minimum": 0 }
+          }
+        },
+        "qr": {
+          "type": ["object", "null"],
+          "description": "QR code metrics for the event",
+          "properties": {
+            "scans": { "type": "integer", "minimum": 0, "description": "Total QR code scans" },
+            "verifiedOnly": { "type": "boolean", "description": "Whether only verified scans are counted" }
+          }
+        }
+      }
+    }
+  }
+}

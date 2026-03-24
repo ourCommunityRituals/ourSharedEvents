@@ -1,0 +1,99 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zeventbook.com/schemas/sponsor.schema.json",
+  "title": "Sponsor",
+  "description": "Sponsor entity for event sponsorship display with multi-placement support",
+  "type": "object",
+  "required": ["id", "name", "logoUrl"],
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[a-zA-Z0-9_-]+$",
+      "description": "Unique sponsor identifier"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "description": "Sponsor display name"
+    },
+    "logoUrl": {
+      "type": "string",
+      "format": "uri",
+      "pattern": "^https?://.+",
+      "description": "URL to sponsor logo image"
+    },
+    "linkUrl": {
+      "type": ["string", "null"],
+      "format": "uri",
+      "pattern": "^https?://.+",
+      "description": "Optional click-through URL for sponsor"
+    },
+    "placement": {
+      "type": "string",
+      "enum": ["poster", "display", "public", "tv-banner"],
+      "description": "[Legacy] Single placement location - use 'placements' object for multi-placement"
+    },
+    "placements": {
+      "type": "object",
+      "description": "Multi-placement configuration - enables sponsor on multiple surfaces",
+      "properties": {
+        "posterTop": {
+          "type": "boolean",
+          "description": "Show on poster top banner"
+        },
+        "tvTop": {
+          "type": "boolean",
+          "description": "Show on TV display top banner"
+        },
+        "tvSide": {
+          "type": "boolean",
+          "description": "Show on TV display side panel"
+        },
+        "mobileBanner": {
+          "type": "boolean",
+          "description": "Show on mobile/public banner"
+        }
+      },
+      "additionalProperties": false
+    },
+    "clickToken": {
+      "type": ["string", "null"],
+      "maxLength": 256,
+      "description": "Tracking token for click attribution"
+    },
+    "impressionToken": {
+      "type": ["string", "null"],
+      "maxLength": 256,
+      "description": "Tracking token for impression attribution"
+    },
+    "tier": {
+      "type": "string",
+      "enum": ["title", "platinum", "gold", "silver", "bronze", "primary"],
+      "description": "Optional sponsorship tier for display priority"
+    }
+  },
+  "anyOf": [
+    { "required": ["placement"] },
+    { "required": ["placements"] }
+  ],
+  "$defs": {
+    "SponsorContract": {
+      "description": "Canonical sponsor contract fields enforced by validateSponsorContract",
+      "type": "object",
+      "required": ["id", "name"],
+      "properties": {
+        "id": { "$ref": "#/properties/id" },
+        "name": { "$ref": "#/properties/name" },
+        "logoUrl": { "$ref": "#/properties/logoUrl" },
+        "linkUrl": { "$ref": "#/properties/linkUrl" },
+        "placements": { "$ref": "#/properties/placements" },
+        "clickToken": { "$ref": "#/properties/clickToken" },
+        "impressionToken": { "$ref": "#/properties/impressionToken" }
+      }
+    }
+  }
+}

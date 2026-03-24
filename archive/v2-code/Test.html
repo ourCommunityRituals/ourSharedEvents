@@ -1,0 +1,319 @@
+<!--
+================================================================================
+EXPERIMENTAL - v2+ (Not MVP)
+================================================================================
+Page: Test.html
+Purpose: Triangle Framework testing dashboard for developers
+Status: NOT included in MVP focus group testing
+
+This page is for development testing and is not part of the core MVP surfaces.
+================================================================================
+-->
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <title><?= appTitle ?> · Triangle Framework Dashboard</title>
+  <?!= include('Header'); ?>
+  <?!= include('HeaderInit'); ?>
+  <?!= include('NUSDK'); ?>
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+  <meta name="referrer" content="no-referrer"/>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 2rem;
+      margin: 0;
+    }
+    .dashboard-container {
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+    .dashboard-header {
+      text-align: center;
+      color: white;
+      margin-bottom: 3rem;
+    }
+    .dashboard-header h1 {
+      font-size: 3rem;
+      margin: 0 0 0.5rem 0;
+      text-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    }
+    .dashboard-header p {
+      font-size: 1.25rem;
+      opacity: 0.9;
+    }
+    .workflow-section {
+      background: white;
+      border-radius: 16px;
+      padding: 2rem;
+      margin-bottom: 2rem;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+    }
+    .workflow-section h2 {
+      margin: 0 0 0.5rem 0;
+      font-size: 1.75rem;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+    .workflow-section .subtitle {
+      font-size: 0.875rem;
+      color: #666;
+      margin-bottom: 1.5rem;
+    }
+    .workflow-section.before { border-left: 6px solid #10b981; }
+    .workflow-section.during { border-left: 6px solid #f59e0b; }
+    .workflow-section.after { border-left: 6px solid #8b5cf6; }
+    .workflow-section.all { border-left: 6px solid #3b82f6; }
+
+    .nav-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 1rem;
+    }
+    .nav-card {
+      padding: 1.5rem;
+      border: 2px solid #e5e7eb;
+      border-radius: 12px;
+      text-decoration: none;
+      color: inherit;
+      transition: all 0.2s;
+      background: white;
+      display: block;
+    }
+    .nav-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 8px 16px rgba(0,0,0,0.1);
+      border-color: #667eea;
+    }
+    .nav-card h3 {
+      margin: 0 0 0.5rem 0;
+      font-size: 1.125rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .nav-card .icon {
+      font-size: 1.5rem;
+    }
+    .nav-card .description {
+      font-size: 0.875rem;
+      color: #666;
+      line-height: 1.5;
+    }
+    .nav-card .badge {
+      display: inline-block;
+      padding: 0.25rem 0.75rem;
+      background: #f3f4f6;
+      border-radius: 12px;
+      font-size: 0.75rem;
+      font-weight: bold;
+      margin-top: 0.75rem;
+      color: #666;
+    }
+    .nav-card.primary .badge {
+      background: #dbeafe;
+      color: #1e40af;
+    }
+    .phase-indicator {
+      font-size: 2.5rem;
+      opacity: 0.2;
+      margin-right: 0.5rem;
+    }
+    .build-info {
+      text-align: center;
+      color: white;
+      margin-top: 2rem;
+      font-size: 0.875rem;
+      opacity: 0.7;
+    }
+  </style>
+</head>
+<body>
+  <div class="dashboard-container">
+    <!-- Header -->
+    <div class="dashboard-header">
+      <h1>🔺 Triangle Framework Dashboard</h1>
+      <p>Event Lifecycle Management: Before → During → After</p>
+    </div>
+
+    <!-- BEFORE EVENT -->
+    <div class="workflow-section before">
+      <h2>
+        <span class="phase-indicator">📋</span>
+        Before Event
+      </h2>
+      <div class="subtitle">Setup, planning, and promotion phase</div>
+
+      <div class="nav-grid">
+        <a href="?page=sponsor&brand=<?= brandId ?>" class="nav-card">
+          <h3><span class="icon">🏢</span> Sponsors</h3>
+          <div class="description">Manage sponsor relationships and configurations</div>
+          <span class="badge">Setup</span>
+        </a>
+
+        <a href="?page=wizard&brand=<?= brandId ?>" class="nav-card primary">
+          <h3><span class="icon">➕</span> Create Event</h3>
+          <div class="description">Create new events with simple 3-step wizard</div>
+          <span class="badge">Primary Action</span>
+        </a>
+
+        <a href="?page=admin&brand=<?= brandId ?>#events-list" class="nav-card">
+          <h3><span class="icon">📅</span> Events</h3>
+          <div class="description">View and manage all events</div>
+          <span class="badge">Management</span>
+        </a>
+
+        <a href="?page=signup&brand=<?= brandId ?>" class="nav-card">
+          <h3><span class="icon">📝</span> Sign-Up Forms</h3>
+          <div class="description">Create attendee registration forms</div>
+          <span class="badge">Registration</span>
+        </a>
+
+        <a href="?page=poster&brand=<?= brandId ?>" class="nav-card">
+          <h3><span class="icon">🖼️</span> Posters</h3>
+          <div class="description">Generate promotional posters with maps</div>
+          <span class="badge">Marketing</span>
+        </a>
+
+        <a href="?page=display&brand=<?= brandId ?>" class="nav-card">
+          <h3><span class="icon">📺</span> Display (Preview)</h3>
+          <div class="description">Preview TV/display mode for venue screens</div>
+          <span class="badge">Preview</span>
+        </a>
+
+        <a href="?p=events&brand=<?= brandId ?>" class="nav-card">
+          <h3><span class="icon">🌐</span> Public Page (Preview)</h3>
+          <div class="description">Preview public event listings</div>
+          <span class="badge">Preview</span>
+        </a>
+
+        <a href="?page=admin&brand=<?= brandId ?>#event-links" class="nav-card">
+          <h3><span class="icon">🔗</span> Links Generator</h3>
+          <div class="description">Generate shareable links for all pages</div>
+          <span class="badge">Distribution</span>
+        </a>
+      </div>
+    </div>
+
+    <!-- DURING EVENT -->
+    <div class="workflow-section during">
+      <h2>
+        <span class="phase-indicator">▶️</span>
+        During Event
+      </h2>
+      <div class="subtitle">Live event execution and display</div>
+
+      <div class="nav-grid">
+        <a href="?page=admin&brand=<?= brandId ?>#event-links" class="nav-card primary">
+          <h3><span class="icon">🔗</span> Quick Links</h3>
+          <div class="description">Access all event-specific URLs quickly</div>
+          <span class="badge">Quick Access</span>
+        </a>
+
+        <a href="?page=admin&mode=advanced&brand=<?= brandId ?>" class="nav-card">
+          <h3><span class="icon">⚙️</span> Admin Control</h3>
+          <div class="description">Make live updates and adjustments</div>
+          <span class="badge">Advanced</span>
+        </a>
+
+        <a href="?page=display&brand=<?= brandId ?>&tv=1" class="nav-card primary">
+          <h3><span class="icon">📺</span> Display (TV Mode)</h3>
+          <div class="description">Full-screen display for venue TVs (1080p/4K)</div>
+          <span class="badge">Live Display</span>
+        </a>
+
+        <a href="?p=events&brand=<?= brandId ?>" class="nav-card primary">
+          <h3><span class="icon">📱</span> Public Page (Live)</h3>
+          <div class="description">Mobile-first page for attendees</div>
+          <span class="badge">Attendee View</span>
+        </a>
+      </div>
+    </div>
+
+    <!-- AFTER EVENT -->
+    <div class="workflow-section after">
+      <h2>
+        <span class="phase-indicator">📊</span>
+        After Event
+      </h2>
+      <div class="subtitle">Analytics, reporting, and planning next events</div>
+
+      <div class="nav-grid">
+        <a href="?page=report&brand=<?= brandId ?>" class="nav-card primary">
+          <h3><span class="icon">📊</span> Shared Analytics</h3>
+          <div class="description">Event & sponsor impressions, CTR, ROI metrics</div>
+          <span class="badge">Single Source of Truth</span>
+        </a>
+
+        <a href="?page=admin&brand=<?= brandId ?>#upcoming" class="nav-card">
+          <h3><span class="icon">🔜</span> Next Events</h3>
+          <div class="description">Plan and schedule upcoming events</div>
+          <span class="badge">Coming Soon</span>
+        </a>
+
+        <a href="?page=poster&brand=<?= brandId ?>#upcoming" class="nav-card">
+          <h3><span class="icon">🖼️</span> Next Posters</h3>
+          <div class="description">Prepare posters for future events</div>
+          <span class="badge">Coming Soon</span>
+        </a>
+      </div>
+    </div>
+
+    <!-- ALL (ALWAYS AVAILABLE) -->
+    <div class="workflow-section all">
+      <h2>
+        <span class="phase-indicator">⚡</span>
+        All (Always Available)
+      </h2>
+      <div class="subtitle">System tools, documentation, and diagnostics</div>
+
+      <div class="nav-grid">
+        <a href="?page=config&brand=<?= brandId ?>" class="nav-card">
+          <h3><span class="icon">⚙️</span> Config Editor</h3>
+          <div class="description">Configure app settings and brand configuration</div>
+          <span class="badge">System</span>
+        </a>
+
+        <a href="?page=diagnostics&brand=<?= brandId ?>" class="nav-card">
+          <h3><span class="icon">🔍</span> Diagnostics</h3>
+          <div class="description">System health checks and troubleshooting</div>
+          <span class="badge">System</span>
+        </a>
+
+        <a href="?page=test&brand=<?= brandId ?>" class="nav-card primary">
+          <h3><span class="icon">🧪</span> Test Dashboard</h3>
+          <div class="description">Run smoke, page, and flow tests</div>
+          <span class="badge">You Are Here</span>
+        </a>
+
+        <a href="?page=api&brand=<?= brandId ?>" class="nav-card">
+          <h3><span class="icon">📖</span> API Documentation</h3>
+          <div class="description">API reference and integration guides</div>
+          <span class="badge">Docs</span>
+        </a>
+
+        <a href="https://docs.claude.com/en/docs/claude-code" target="_blank" class="nav-card">
+          <h3><span class="icon">📚</span> App Documentation</h3>
+          <div class="description">User guides and tutorials (external)</div>
+          <span class="badge">External</span>
+        </a>
+
+        <a href="?p=status&brand=<?= brandId ?>" class="nav-card">
+          <h3><span class="icon">💚</span> Status API</h3>
+          <div class="description">Build version and system status</div>
+          <span class="badge">API</span>
+        </a>
+      </div>
+    </div>
+
+    <!-- Build Info -->
+    <div class="build-info">
+      Build: triangle-extended-v1.3 | Brand: <?= brandId ?> | Framework: TRIANGLE
+    </div>
+  </div>
+</body>
+</html>

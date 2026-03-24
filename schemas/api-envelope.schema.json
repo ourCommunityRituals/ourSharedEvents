@@ -1,0 +1,111 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zeventbook.com/schemas/api-envelope.schema.json",
+  "title": "API Envelope",
+  "description": "Standard Ok/Err envelope wrapper for all non-flat API responses. Story 3.1 - API Response Schema Validation.",
+  "$comment": "Version 1.0 - Created 2025-12-11 for automated schema validation in CI pipeline.",
+  "oneOf": [
+    { "$ref": "#/$defs/SuccessEnvelope" },
+    { "$ref": "#/$defs/ErrorEnvelope" },
+    { "$ref": "#/$defs/NotModifiedEnvelope" }
+  ],
+  "$defs": {
+    "SuccessEnvelope": {
+      "type": "object",
+      "description": "Success envelope with value payload",
+      "required": ["ok", "value"],
+      "properties": {
+        "ok": {
+          "type": "boolean",
+          "const": true,
+          "description": "Success indicator - must be true for success responses"
+        },
+        "value": {
+          "description": "Response payload - type varies by endpoint"
+        },
+        "etag": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "description": "Optional cache validation tag for SWR support"
+        }
+      },
+      "additionalProperties": false
+    },
+    "ErrorEnvelope": {
+      "type": "object",
+      "description": "Error envelope with code and message",
+      "required": ["ok", "code", "message"],
+      "properties": {
+        "ok": {
+          "type": "boolean",
+          "const": false,
+          "description": "Success indicator - must be false for error responses"
+        },
+        "code": {
+          "$ref": "#/$defs/ErrorCode"
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000,
+          "description": "Human-readable error message"
+        },
+        "corrId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[a-zA-Z0-9_-]+$",
+          "description": "Optional correlation ID for request tracing"
+        }
+      },
+      "additionalProperties": false
+    },
+    "NotModifiedEnvelope": {
+      "type": "object",
+      "description": "304-equivalent response when content unchanged (etag match)",
+      "required": ["ok", "notModified"],
+      "properties": {
+        "ok": {
+          "type": "boolean",
+          "const": true
+        },
+        "notModified": {
+          "type": "boolean",
+          "const": true,
+          "description": "Indicates content unchanged since last request"
+        },
+        "etag": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "description": "Current etag for the resource"
+        }
+      },
+      "additionalProperties": false
+    },
+    "ErrorCode": {
+      "type": "string",
+      "enum": ["BAD_INPUT", "NOT_FOUND", "RATE_LIMITED", "INTERNAL", "CONTRACT", "FEATURE_DISABLED", "UNAUTHORIZED"],
+      "description": "Standardized error codes matching Code.gs ERROR_CODES"
+    }
+  },
+  "examples": [
+    {
+      "ok": true,
+      "value": { "id": "EVT_123", "name": "Test Event" },
+      "etag": "W/\"abc123\""
+    },
+    {
+      "ok": false,
+      "code": "NOT_FOUND",
+      "message": "Event not found: EVT_invalid",
+      "corrId": "req-12345"
+    },
+    {
+      "ok": true,
+      "notModified": true,
+      "etag": "W/\"abc123\""
+    }
+  ]
+}

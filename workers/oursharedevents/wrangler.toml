@@ -1,0 +1,65 @@
+# ============================================
+# OurSharedEvents – Cloudflare Worker
+# Domain: oursharedevents.com
+# ============================================
+#
+# Prerequisites (do once in Cloudflare dashboard):
+#   1. Add oursharedevents.com as a zone (Websites → Add a site)
+#   2. Set nameservers at your registrar to Cloudflare's assigned NS
+#   3. Add DNS A records (see CLOUDFLARE-SETUP.md)
+#
+# Deploy staging:
+#   cd workers/oursharedevents && wrangler deploy --env staging
+#
+# Deploy production:
+#   cd workers/oursharedevents && wrangler deploy --env production
+#
+# Local dev:
+#   cd workers/oursharedevents && wrangler dev
+# ============================================
+
+name = "oursharedevents"
+main = "src/index.ts"
+compatibility_date = "2024-01-01"
+
+# ── Default (local dev / workers.dev) ─────────────────────────────
+[vars]
+WORKER_ENV = "development"
+WORKER_BUILD_VERSION = "dev-local"
+
+# ── Staging: stg.oursharedevents.com ─────────────────────────────
+[env.staging]
+name = "oursharedevents-staging"
+routes = [
+  { pattern = "stg.oursharedevents.com/*", zone_name = "oursharedevents.com" }
+]
+
+[env.staging.vars]
+WORKER_ENV = "staging"
+WORKER_BUILD_VERSION = "stg-2026.03.22"
+# Allow Bearer token fallback in staging (for local testing without CF Access)
+ALLOW_ADMIN_KEY_FALLBACK = "true"
+
+# Required secrets for staging (set with wrangler secret put … --env staging):
+#   ADMIN_KEY
+#   SHEETS_SPREADSHEET_ID
+#   GOOGLE_SA_CLIENT_EMAIL
+#   GOOGLE_SA_PRIVATE_KEY_PEM
+
+# ── Production: oursharedevents.com ──────────────────────────────
+[env.production]
+name = "oursharedevents-prod"
+routes = [
+  { pattern = "oursharedevents.com/*",     zone_name = "oursharedevents.com" },
+  { pattern = "www.oursharedevents.com/*", zone_name = "oursharedevents.com" }
+]
+
+[env.production.vars]
+WORKER_ENV = "production"
+WORKER_BUILD_VERSION = "prod-2026.03.22"
+
+# Required secrets for production (set with wrangler secret put … --env production):
+#   ADMIN_TOKEN
+#   SHEETS_SPREADSHEET_ID
+#   GOOGLE_SA_CLIENT_EMAIL
+#   GOOGLE_SA_PRIVATE_KEY_PEM

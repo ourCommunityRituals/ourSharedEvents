@@ -1,0 +1,312 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zeventbook.com/schemas/sponsor-portfolio-v2.schema.json",
+  "title": "SponsorPortfolioV2",
+  "description": "V2 Sponsor Portfolio Analytics Contract - Multi-event portfolio mode for cross-brand sponsor ROI tracking",
+  "version": "2.0.0",
+
+  "$defs": {
+    "PortfolioMode": {
+      "type": "string",
+      "enum": ["single-brand", "multi-event-portfolio"],
+      "description": "Report mode: single-brand (default) or multi-event-portfolio (cross-brand aggregation)"
+    },
+
+    "BrandInfo": {
+      "type": "object",
+      "required": ["id", "name"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Brand identifier"
+        },
+        "name": {
+          "type": "string",
+          "description": "Human-readable brand name"
+        },
+        "isParent": {
+          "type": "boolean",
+          "description": "True if this is a parent organization"
+        }
+      }
+    },
+
+    "PortfolioSponsor": {
+      "type": "object",
+      "required": ["id", "name", "brands", "metrics"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Unique sponsor identifier"
+        },
+        "name": {
+          "type": "string",
+          "description": "Sponsor display name"
+        },
+        "logoUrl": {
+          "type": ["string", "null"],
+          "description": "Sponsor logo URL (https)"
+        },
+        "brands": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/BrandInfo" },
+          "description": "Brands this sponsor is associated with"
+        },
+        "metrics": { "$ref": "#/$defs/SponsorMetrics" }
+      }
+    },
+
+    "SponsorMetrics": {
+      "type": "object",
+      "required": ["impressions", "clicks", "ctr"],
+      "additionalProperties": false,
+      "properties": {
+        "impressions": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Total impressions across portfolio"
+        },
+        "clicks": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Total clicks across portfolio"
+        },
+        "ctr": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Click-through rate as percentage"
+        },
+        "qrScans": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Total QR scans across portfolio"
+        },
+        "engagementScore": {
+          "type": ["number", "null"],
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Engagement score (0-100)"
+        }
+      }
+    },
+
+    "BrandMetrics": {
+      "type": "object",
+      "required": ["brandId", "brandName", "events", "impressions", "clicks", "ctr"],
+      "additionalProperties": false,
+      "properties": {
+        "brandId": {
+          "type": "string",
+          "description": "Brand identifier"
+        },
+        "brandName": {
+          "type": "string",
+          "description": "Human-readable brand name"
+        },
+        "events": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of events for this brand"
+        },
+        "impressions": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "clicks": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "ctr": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Click-through rate as percentage"
+        },
+        "qrScans": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "signups": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+
+    "EventPerformance": {
+      "type": "object",
+      "required": ["id", "name", "brandId", "impressions", "clicks", "ctr"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Event identifier"
+        },
+        "name": {
+          "type": "string",
+          "description": "Event display name"
+        },
+        "brandId": {
+          "type": "string",
+          "description": "Brand this event belongs to"
+        },
+        "brandName": {
+          "type": "string",
+          "description": "Human-readable brand name"
+        },
+        "impressions": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "clicks": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "ctr": {
+          "type": "number",
+          "minimum": 0
+        },
+        "signupsCount": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+
+    "PortfolioSummary": {
+      "type": "object",
+      "required": ["totalEvents", "totalImpressions", "totalClicks", "totalSponsors"],
+      "additionalProperties": false,
+      "properties": {
+        "totalEvents": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Total events across portfolio"
+        },
+        "totalImpressions": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "totalClicks": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "totalQrScans": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "totalSignups": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "totalSponsors": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "activeSponsors": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Sponsors with at least one impression"
+        },
+        "portfolioCTR": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Overall CTR across portfolio"
+        }
+      }
+    },
+
+    "ROIMetrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "[V2+] Financial ROI metrics when sponsor provides cost data",
+      "properties": {
+        "totalCost": {
+          "type": ["number", "null"],
+          "minimum": 0,
+          "description": "Total sponsorship cost"
+        },
+        "costPerClick": {
+          "type": ["number", "null"],
+          "minimum": 0,
+          "description": "Actual cost per click"
+        },
+        "cpm": {
+          "type": ["number", "null"],
+          "minimum": 0,
+          "description": "Cost per mille (1000 impressions)"
+        },
+        "estimatedROI": {
+          "type": ["number", "null"],
+          "description": "Estimated ROI percentage"
+        }
+      }
+    }
+  },
+
+  "type": "object",
+  "required": ["mode", "lastUpdatedISO", "portfolio", "summary"],
+  "additionalProperties": false,
+  "properties": {
+    "mode": {
+      "$ref": "#/$defs/PortfolioMode",
+      "description": "Report mode for this response"
+    },
+    "lastUpdatedISO": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}(T\\d{2}:\\d{2}:\\d{2}(\\.\\d{3})?Z)?$",
+      "description": "Last data refresh timestamp (ISO 8601)"
+    },
+    "portfolio": {
+      "type": "object",
+      "required": ["parent"],
+      "additionalProperties": false,
+      "properties": {
+        "parent": {
+          "$ref": "#/$defs/BrandInfo",
+          "description": "Parent organization"
+        },
+        "children": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/BrandInfo" },
+          "description": "Child brands included in portfolio"
+        }
+      }
+    },
+    "summary": {
+      "$ref": "#/$defs/PortfolioSummary",
+      "description": "Aggregated metrics across portfolio"
+    },
+    "byBrand": {
+      "type": "object",
+      "additionalProperties": { "$ref": "#/$defs/BrandMetrics" },
+      "description": "Metrics broken down by brand ID"
+    },
+    "sponsors": {
+      "type": ["array", "null"],
+      "items": { "$ref": "#/$defs/PortfolioSponsor" },
+      "description": "All sponsors across portfolio (deduplicated)"
+    },
+    "topPerformingEvents": {
+      "type": ["array", "null"],
+      "items": { "$ref": "#/$defs/EventPerformance" },
+      "maxItems": 10,
+      "description": "Top performing events by impressions"
+    },
+    "roi": {
+      "oneOf": [
+        { "$ref": "#/$defs/ROIMetrics" },
+        { "type": "null" }
+      ],
+      "description": "[V2+] ROI metrics when cost data available"
+    },
+    "generatedAt": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}(T\\d{2}:\\d{2}:\\d{2}(\\.\\d{3})?Z)?$",
+      "description": "Report generation timestamp"
+    }
+  }
+}

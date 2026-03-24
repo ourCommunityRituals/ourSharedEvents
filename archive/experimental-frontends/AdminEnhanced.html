@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <title><?= appTitle ?> · Admin (Enhanced)</title>
+  <?!= include('Styles'); ?>
+  <?!= include('DesignAdapter'); ?>
+  <?!= include('NUSDK'); ?>
+  <?!= include('DemoMode'); ?>
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+  <meta name="referrer" content="no-referrer"/>
+
+  <!-- Include component libraries -->
+  <style>
+    /* Enhanced admin-specific styles */
+    .admin-container {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+
+    .admin-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 24px;
+      padding-bottom: 16px;
+      border-bottom: 2px solid #e2e8f0;
+    }
+
+    .admin-title {
+      font-size: 2rem;
+      font-weight: 700;
+      color: #1e293b;
+      margin: 0;
+    }
+
+    .mode-toggle {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .mode-badge {
+      background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+      color: white;
+      padding: 8px 16px;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    /* Keyboard shortcuts help */
+    .shortcuts-help {
+      position: fixed;
+      bottom: 80px;
+      right: 20px;
+      background: white;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 12px 16px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+      font-size: 12px;
+      color: #64748b;
+      z-index: 999;
+      opacity: 0;
+      transform: translateY(10px);
+      transition: all 0.3s ease;
+      pointer-events: none;
+    }
+
+    .shortcuts-help.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .shortcuts-help kbd {
+      background: #f1f5f9;
+      border: 1px solid #cbd5e1;
+      border-radius: 3px;
+      padding: 2px 6px;
+      font-family: monospace;
+      font-size: 11px;
+    }
+
+    /* Compact form mode */
+    .compact-mode .card {
+      padding: 16px;
+    }
+
+    .compact-mode .card-header h2 {
+      font-size: 1.25rem;
+    }
+
+    /* Accessibility improvements */
+    .skip-to-content {
+      position: absolute;
+      top: -40px;
+      left: 0;
+      background: #2563eb;
+      color: white;
+      padding: 8px 16px;
+      text-decoration: none;
+      z-index: 100;
+    }
+
+    .skip-to-content:focus {
+      top: 0;
+    }
+  </style>
+</head>
+<body>
+  <!-- Skip to content link for accessibility -->
+  <a href="#main-content" class="skip-to-content">Skip to main content</a>
+
+  <?!= include('Header'); ?>
+  <?!= include('HeaderInit'); ?>
+
+  <main id="main-content" class="admin-container" role="main">
+
+    <!-- Admin Header -->
+    <header class="admin-header">
+      <h1 class="admin-title">Event Admin Dashboard</h1>
+      <div class="mode-toggle">
+        <span class="mode-badge">Enhanced Mode</span>
+        <div class="history-controls">
+          <button class="history-btn" id="undoBtn" onclick="handleUndo()" disabled aria-label="Undo last change">
+            ↶ Undo <kbd>Ctrl+Z</kbd>
+          </button>
+          <button class="history-btn" id="redoBtn" onclick="handleRedo()" disabled aria-label="Redo last change">
+            ↷ Redo <kbd>Ctrl+Y</kbd>
+          </button>
+        </div>
+        <a href="?page=admin" style="color: #2563eb; text-decoration: none; font-size: 14px; font-weight: 500;">
+          ← Classic Mode
+        </a>
+        <a href="?page=wizard" style="color: #2563eb; text-decoration: none; font-size: 14px; font-weight: 500;">
+          🧙 Wizard Mode
+        </a>
+      </div>
+    </header>
+
+    <!-- Include component templates -->
+    <?!= include('components/StateManager'); ?>
+    <?!= include('components/DashboardCard'); ?>
+    <?!= include('components/QRRegenerator'); ?>
+
+    <!-- Event Creation Card -->
+    <section class="card" role="region" aria-label="Create New Event">
+      <div class="card-header">
+        <h2>Create Event</h2>
+        <p class="card-subtitle">Start by creating a new event or load an existing one</p>
+      </div>
+
+      <form id="createForm" aria-label="Event creation form">
+        <!-- Core Event Details -->
+        <fieldset style="border: none; padding: 0; margin: 0;">
+          <legend class="sr-only">Core Event Details</legend>
+
+          <div class="form-group">
+            <label for="name">Event Name <span aria-label="required">*</span></label>
+            <input id="name" type="text" required aria-required="true" placeholder="Enter event name">
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="dateISO">Date <span aria-label="required">*</span></label>
+              <input id="dateISO" type="date" required aria-required="true">
+            </div>
+            <div class="form-group">
+              <label for="timeISO">Time</label>
+              <input id="timeISO" type="time">
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="location">Location</label>
+              <input id="location" type="text" placeholder="Venue name or address">
+            </div>
+            <div class="form-group">
+              <label for="entity">Organization</label>
+              <input id="entity" type="text" placeholder="Organizing company">
+            </div>
+          </div>
+        </fieldset>
+
+        <!-- Summary Section -->
+        <fieldset style="border: none; padding: 0; margin: 0; margin-top: 24px;">
+          <legend><h3>Summary & Media</h3></legend>
+
+          <div class="form-group">
+            <label for="summary">Event Summary</label>
+            <textarea id="summary" placeholder="Brief event description" rows="3"></textarea>
+          </div>
+
+          <div class="form-group">
+            <label for="imageUrl">Event Image URL</label>
+            <input id="imageUrl" type="url" placeholder="https://example.com/image.jpg">
+          </div>
+
+          <div class="form-group">
+            <label for="videoUrl">Video URL</label>
+            <input id="videoUrl" type="url" placeholder="YouTube or Vimeo link">
+          </div>
+        </fieldset>
+
+        <div class="button-group">
+          <button class="btn-primary" type="submit">Create Event</button>
+          <button class="btn-secondary" type="button" onclick="clearForm()">Clear</button>
+          <? if (demoMode && ZEB.DEMO_MODE.showPrefillButton) { ?>
+          <button class="demo-prefill-btn" type="button" onclick="window.demoFillSampleEvent && window.demoFillSampleEvent()">
+            ✨ Fill Sample Data
+          </button>
+          <? } ?>
+        </div>
+      </form>
+    </section>
+
+    <!-- Event Management Cards (shown after event is created/loaded) -->
+    <section id="eventCard" class="card" style="display:none;" role="region" aria-label="Event Management">
+      <h2>Event Links</h2>
+      <div class="events-grid">
+        <div class="event-card">
+          <h3>📱 Public (Mobile)</h3>
+          <p><a id="lnkPublic" target="_blank" rel="noopener"></a></p>
+          <button class="btn-secondary" onclick="copy('lnkPublic')">Copy Link</button>
+        </div>
+        <div class="event-card">
+          <h3>📺 Display (TV)</h3>
+          <p><a id="lnkDisplay" target="_blank" rel="noopener"></a></p>
+          <button class="btn-secondary" onclick="copy('lnkDisplay')">Copy Link</button>
+        </div>
+        <div class="event-card">
+          <h3>🖨️ Poster</h3>
+          <p><a id="lnkPoster" target="_blank" rel="noopener"></a></p>
+          <button class="btn-secondary" onclick="copy('lnkPoster')">Copy Link</button>
+        </div>
+        <div class="event-card">
+          <h3>📊 Analytics</h3>
+          <p><a id="lnkReport" target="_blank" rel="noopener"></a></p>
+          <button class="btn-secondary" onclick="copy('lnkReport')">Copy Link</button>
+        </div>
+      </div>
+
+      <div class="button-group">
+        <button class="btn-primary" onclick="showQRCodes()">🔄 Manage QR Codes</button>
+        <button class="btn-secondary" onclick="configureSponsors()">💼 Configure Sponsors</button>
+        <button class="btn-secondary" onclick="configureSignup()">📝 Sign-Up Forms</button>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Loading overlay -->
+  <div id="overlay" class="loading-overlay">
+    <div class="spinner"></div>
+    <p>Working…</p>
+  </div>
+
+  <!-- Auto-save indicator -->
+  <div id="autosaveIndicator" class="autosave-indicator" role="status" aria-live="polite">
+    <span class="autosave-spinner"></span>
+    <span id="autosaveText">Saving...</span>
+  </div>
+
+  <!-- Keyboard shortcuts help -->
+  <div id="shortcutsHelp" class="shortcuts-help" role="tooltip">
+    <strong>Keyboard Shortcuts:</strong><br>
+    <kbd>Ctrl+Z</kbd> Undo · <kbd>Ctrl+Y</kbd> Redo · <kbd>Ctrl+S</kbd> Save · <kbd>?</kbd> Help
+  </div>
+
+  <script>
+    const BRAND = '<?= brandId ?>';
+    const SCOPE = '<?= scope ?>';
+    let currentEventId = null;
+    let stateManager = null;
+
+    // Initialize state manager
+    function initStateManager() {
+      stateManager = new EventStateManager({
+        brandId: BRAND,
+        scope: SCOPE,
+        autoSave: true,
+        autoSaveInterval: 30000 // 30 seconds
+      });
+
+      // Subscribe to state changes
+      stateManager.subscribe((event, state) => {
+        console.log('State event:', event.type, state);
+
+        // Update UI based on state changes
+        switch (event.type) {
+          case 'DRAFT_UPDATE':
+            updateUndoRedoButtons();
+            break;
+
+          case 'AUTO_SAVE_SUCCESS':
+            showAutosaveIndicator('Saved', 'success');
+            break;
+
+          case 'AUTO_SAVE_ERROR':
+            showAutosaveIndicator('Error saving', 'error');
+            break;
+
+          case 'EVENT_LOADED':
+            showEventCard(event.event);
+            break;
+        }
+      });
+
+      // Load saved draft if exists
+      const draft = stateManager.getDraft();
+      if (Object.keys(draft).length > 0) {
+        populateFormFromDraft(draft);
+      }
+    }
+
+    // Update form fields from draft
+    function populateFormFromDraft(draft) {
+      const fields = ['name', 'dateISO', 'timeISO', 'location', 'entity', 'summary', 'imageUrl', 'videoUrl'];
+
+      fields.forEach(field => {
+        const elem = document.getElementById(field);
+        if (elem && draft[field]) {
+          elem.value = draft[field];
+        }
+      });
+    }
+
+    // Auto-update draft on form changes
+    function setupFormAutoSave() {
+      const form = document.getElementById('createForm');
+      const inputs = form.querySelectorAll('input, textarea, select');
+
+      inputs.forEach(input => {
+        input.addEventListener('input', () => {
+          if (stateManager) {
+            const draft = {};
+            const fields = ['name', 'dateISO', 'timeISO', 'location', 'entity', 'summary', 'imageUrl', 'videoUrl'];
+
+            fields.forEach(field => {
+              const elem = document.getElementById(field);
+              if (elem && elem.value) {
+                draft[field] = elem.value;
+              }
+            });
+
+            stateManager.updateDraft(draft);
+          }
+        });
+      });
+    }
+
+    // Create Event
+    document.getElementById('createForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      overlay(true);
+
+      const data = {
+        name: document.getElementById('name').value.trim(),
+        dateISO: document.getElementById('dateISO').value
+      };
+
+      // Optional fields
+      const optional = ['timeISO', 'location', 'entity', 'summary', 'imageUrl', 'videoUrl'];
+
+      optional.forEach(field => {
+        const elem = document.getElementById(field);
+        const val = elem ? elem.value.trim() : '';
+        if (val) data[field] = val;
+      });
+
+      const res = await NU.rpc('api_create', {
+        brandId: BRAND,
+        scope: SCOPE,
+        templateId: 'event',
+        adminKey: getAdminKey(),
+        idemKey: crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        data
+      });
+
+      overlay(false);
+
+      if (!res.ok) {
+        alert(`Error: ${res.message}`);
+        return;
+      }
+
+      currentEventId = res.value.id;
+
+      // Update state manager
+      if (stateManager) {
+        stateManager.setCurrentEvent(res.value);
+        stateManager.clearDraft(); // Clear draft after successful creation
+      }
+
+      showEventCard(res.value);
+    });
+
+    function showEventCard(event) {
+      const { publicUrl, posterUrl, displayUrl, reportUrl } = event.links;
+
+      setLink('lnkPublic', publicUrl);
+      setLink('lnkDisplay', displayUrl);
+      setLink('lnkPoster', posterUrl);
+      setLink('lnkReport', reportUrl);
+
+      document.getElementById('eventCard').style.display = 'block';
+
+      // Initialize dashboard with event data
+      if (window.DashboardCard) {
+        DashboardCard.init(event);
+      }
+
+      // Initialize QR regenerator
+      if (window.QRRegenerator) {
+        QRRegenerator.init(event);
+      }
+    }
+
+    function setLink(id, url) {
+      const a = document.getElementById(id);
+      a.textContent = url;
+      a.href = url;
+    }
+
+    async function copy(id) {
+      const url = document.getElementById(id).textContent;
+      await navigator.clipboard.writeText(url);
+      showNotification('Link copied!', 'success');
+    }
+
+    function clearForm() {
+      document.getElementById('createForm').reset();
+      document.getElementById('eventCard').style.display = 'none';
+      if (window.DashboardCard) DashboardCard.hide();
+      if (window.QRRegenerator) QRRegenerator.hide();
+      currentEventId = null;
+
+      if (stateManager) {
+        stateManager.clearDraft();
+      }
+    }
+
+    function showQRCodes() {
+      if (window.QRRegenerator) {
+        QRRegenerator.show();
+        // Scroll to QR section
+        document.getElementById('qrRegeneratorCard').scrollIntoView({ behavior: 'smooth' });
+      }
+    }
+
+    function configureSponsors() {
+      // Implementation for sponsor configuration
+      alert('Sponsor configuration coming soon!');
+    }
+
+    function configureSignup() {
+      // Implementation for signup forms
+      alert('Sign-up forms configuration coming soon!');
+    }
+
+    // Undo/Redo handlers
+    function handleUndo() {
+      if (stateManager && stateManager.undo()) {
+        const draft = stateManager.getDraft();
+        populateFormFromDraft(draft);
+        showNotification('Undo successful', 'info');
+      }
+    }
+
+    function handleRedo() {
+      if (stateManager && stateManager.redo()) {
+        const draft = stateManager.getDraft();
+        populateFormFromDraft(draft);
+        showNotification('Redo successful', 'info');
+      }
+    }
+
+    function updateUndoRedoButtons() {
+      if (!stateManager) return;
+
+      const undoBtn = document.getElementById('undoBtn');
+      const redoBtn = document.getElementById('redoBtn');
+
+      if (undoBtn) {
+        undoBtn.disabled = !stateManager.canUndo();
+      }
+
+      if (redoBtn) {
+        redoBtn.disabled = !stateManager.canRedo();
+      }
+    }
+
+    // Auto-save indicator
+    function showAutosaveIndicator(text, status) {
+      const indicator = document.getElementById('autosaveIndicator');
+      const textEl = document.getElementById('autosaveText');
+
+      if (!indicator || !textEl) return;
+
+      indicator.className = `autosave-indicator visible ${status}`;
+      textEl.textContent = text;
+
+      setTimeout(() => {
+        indicator.classList.remove('visible');
+      }, 3000);
+    }
+
+    // Notification system
+    function showNotification(message, type = 'info') {
+      // Simple alert for now - can be enhanced with a toast system
+      console.log(`[${type}] ${message}`);
+      // Could use a proper toast library here
+    }
+
+    // Keyboard shortcuts
+    document.addEventListener('keydown', (e) => {
+      // Ctrl+Z - Undo
+      if (e.ctrlKey && e.key === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        handleUndo();
+      }
+
+      // Ctrl+Y or Ctrl+Shift+Z - Redo
+      if ((e.ctrlKey && e.key === 'y') || (e.ctrlKey && e.shiftKey && e.key === 'z')) {
+        e.preventDefault();
+        handleRedo();
+      }
+
+      // Ctrl+S - Manual save
+      if (e.ctrlKey && e.key === 's') {
+        e.preventDefault();
+        if (stateManager) {
+          stateManager.autoSave();
+          showNotification('Saving...', 'info');
+        }
+      }
+
+      // ? - Show keyboard shortcuts
+      if (e.key === '?' && !e.ctrlKey && !e.altKey) {
+        e.preventDefault();
+        const help = document.getElementById('shortcutsHelp');
+        if (help) {
+          help.classList.toggle('visible');
+          setTimeout(() => {
+            help.classList.remove('visible');
+          }, 5000);
+        }
+      }
+    });
+
+    // Helpers
+    function overlay(on) {
+      document.getElementById('overlay').style.display = on ? 'flex' : 'none';
+    }
+
+    function getAdminKey() {
+      const k = sessionStorage.getItem('ADMIN_KEY:' + BRAND) || prompt('Admin key for ' + BRAND);
+      if (k) sessionStorage.setItem('ADMIN_KEY:' + BRAND, k);
+      return k || '';
+    }
+
+    // Initialize on page load
+    window.addEventListener('DOMContentLoaded', () => {
+      initStateManager();
+      setupFormAutoSave();
+      updateUndoRedoButtons();
+    });
+  </script>
+</body>
+</html>

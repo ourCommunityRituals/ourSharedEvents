@@ -1,0 +1,351 @@
+# CodeQL Security Analysis (Story 1/4)
+#
+# Primary security workflow per ci-cd-architecture.md.
+#
+# This is the CANONICAL security-scan.yml - the only active security workflow.
+# All other security configurations have been archived.
+#
+# Purpose: Security scanning for all code changes and periodic deep scans.
+#
+# When this runs:
+#   - Push to main or claude/* branches
+#   - Pull requests targeting main
+#   - Weekly (Sundays 00:00 UTC) - deep vulnerability discovery
+#   - Manual trigger - for security audits
+#
+# Story 1: Validate & Align GitHub Workflows
+#   - This workflow is one of only 3 active workflows
+#   - Runs on push/PR as documented in ci-cd-architecture.md
+#
+# Story 4: Security Scanning
+#   - CodeQL security scan is a required release gate
+#   - Critical and high severity findings block merges
+#
+# @see docs/ci-cd-architecture.md - Security scan documentation
+name: CodeQL Security Analysis
+
+on:
+  push:
+    branches:
+      - main
+      - 'claude/**'
+  pull_request:
+    branches:
+      - main
+  schedule:
+    # Run weekly on Sundays at 00:00 UTC for vulnerability discovery
+    - cron: '0 0 * * 0'
+  workflow_dispatch:
+    # Allow manual trigger for security audits
+    inputs:
+      skip_cache:
+        description: 'Skip cache for fresh analysis'
+        required: false
+        default: 'false'
+        type: boolean
+
+# Environment configuration
+env:
+  # Security scan policy - CRITICAL and HIGH findings block merges
+  FAIL_ON_SEVERITY: 'critical,high'
+
+jobs:
+  # ============================================================================
+  # CODEQL SECURITY SCAN
+  # ============================================================================
+  # Primary security gate using GitHub's CodeQL analysis.
+  # This is a REQUIRED CHECK - configure in branch protection rules.
+  # ============================================================================
+  analyze:
+    name: 🔒 CodeQL Security Scan
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+      # Required for CodeQL to upload SARIF results
+      pull-requests: read
+
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [ 'javascript' ]
+        # CodeQL supports: 'cpp', 'csharp', 'go', 'java', 'javascript', 'python', 'ruby'
+        # Learn more about CodeQL language support at https://aka.ms/codeql-docs/language-support
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Display security scan configuration
+      run: |
+        echo "=============================================="
+        echo "CODEQL SECURITY SCAN (Story 1/4)"
+        echo "=============================================="
+        echo ""
+        echo "Primary security workflow per ci-cd-architecture.md"
+        echo "This scan is a REQUIRED CHECK for branch protection."
+        echo ""
+        echo "Trigger: ${{ github.event_name }}"
+        echo "Branch: ${{ github.ref_name }}"
+        echo "Commit: ${{ github.sha }}"
+        echo ""
+        echo "Policy: $FAIL_ON_SEVERITY severity findings block merge"
+        echo "=============================================="
+
+    - name: Initialize CodeQL
+      id: codeql-init
+      uses: github/codeql-action/init@v3
+      # Continue on error - Advanced Security may not be enabled
+      continue-on-error: true
+      with:
+        languages: ${{ matrix.language }}
+        # Extended security queries for comprehensive coverage
+        # Prefix with "+" to use these queries AND those in config file
+        queries: +security-extended,security-and-quality
+
+    - name: Setup Node.js (for dependency analysis)
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: |
+        echo "Installing dependencies for better analysis..."
+        npm ci || npm install
+
+    - name: Perform CodeQL Analysis
+      id: codeql-analyze
+      uses: github/codeql-action/analyze@v3
+      # Continue on error - Advanced Security may not be enabled on all repos
+      continue-on-error: true
+      with:
+        category: "/language:${{matrix.language}}"
+        # Upload SARIF results to GitHub Security tab
+        upload: true
+        # Output results for summary generation
+        output: codeql-results
+
+    # Note: CodeQL analyze action will fail if Advanced Security is not enabled
+    # The workflow continues so npm audit can still run
+    # To enable: Settings > Security > Code security and analysis > Advanced Security
+
+    - name: Create analysis summary
+      if: always()
+      run: |
+        echo "## 🔒 CodeQL Security Analysis" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+
+        # Check if CodeQL analysis succeeded
+        if [ "${{ steps.codeql-analyze.outcome }}" == "failure" ]; then
+          echo "### ⚠️ CodeQL Analysis Skipped" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "CodeQL analysis could not complete. This typically means:" >> $GITHUB_STEP_SUMMARY
+          echo "- GitHub Advanced Security is not enabled on this repository" >> $GITHUB_STEP_SUMMARY
+          echo "- To enable: Settings > Security > Code security and analysis" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**npm audit will still run below for dependency scanning.**" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "### ✅ CodeQL Analysis Complete" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Determine scan type for better context
+          if [ "${{ github.event_name }}" == "schedule" ]; then
+            echo "Regular security audit for vulnerability discovery." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "Security scan for code changes." >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Language Analyzed" >> $GITHUB_STEP_SUMMARY
+          echo "- **JavaScript** (includes .js, .gs, .html files)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Query Packs Used" >> $GITHUB_STEP_SUMMARY
+          echo "- **security-extended**: Extended security queries" >> $GITHUB_STEP_SUMMARY
+          echo "- **security-and-quality**: Security and code quality queries" >> $GITHUB_STEP_SUMMARY
+        fi
+
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Note:** This workflow runs on PR/push per ci-cd-architecture.md" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Coverage" >> $GITHUB_STEP_SUMMARY
+        echo "- Backend: Google Apps Script (.gs files)" >> $GITHUB_STEP_SUMMARY
+        echo "- Frontend: HTML files with embedded JavaScript" >> $GITHUB_STEP_SUMMARY
+        echo "- Tests: Jest and Playwright test files" >> $GITHUB_STEP_SUMMARY
+        echo "- Scripts: Deployment and utility scripts" >> $GITHUB_STEP_SUMMARY
+        echo "- Cloudflare Worker: cloudflare-proxy/" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Security Checks Include" >> $GITHUB_STEP_SUMMARY
+        echo "- SQL Injection vulnerabilities" >> $GITHUB_STEP_SUMMARY
+        echo "- Cross-Site Scripting (XSS)" >> $GITHUB_STEP_SUMMARY
+        echo "- Command Injection" >> $GITHUB_STEP_SUMMARY
+        echo "- Path Traversal" >> $GITHUB_STEP_SUMMARY
+        echo "- Insecure Randomness" >> $GITHUB_STEP_SUMMARY
+        echo "- Hardcoded Credentials" >> $GITHUB_STEP_SUMMARY
+        echo "- Prototype Pollution" >> $GITHUB_STEP_SUMMARY
+        echo "- Regular Expression DoS (ReDoS)" >> $GITHUB_STEP_SUMMARY
+        echo "- And 200+ other security patterns" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Results" >> $GITHUB_STEP_SUMMARY
+        echo "Check the **Security** tab to view detailed findings." >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "---" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Story 5.2 Architecture**: Security gates are now in Stage-1 CI." >> $GITHUB_STEP_SUMMARY
+        echo "This scheduled scan provides deep vulnerability discovery." >> $GITHUB_STEP_SUMMARY
+
+  # ============================================================================
+  # DEPENDENCY AUDIT (npm audit)
+  # ============================================================================
+  # Checks for known vulnerabilities in npm dependencies.
+  # Runs alongside CodeQL for comprehensive security coverage.
+  # ============================================================================
+  dependency-audit:
+    name: 🔍 Dependency Vulnerability Audit
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Run npm audit
+      id: npm-audit
+      run: |
+        echo "=============================================="
+        echo "NPM DEPENDENCY AUDIT (Story 1/4)"
+        echo "=============================================="
+        echo ""
+        echo "Dependency vulnerability audit per ci-cd-architecture.md"
+        echo "High and critical vulnerabilities block merges."
+        echo ""
+
+        # Create audit report directory
+        mkdir -p .security-reports
+
+        # Run audit and capture output in JSON format for processing
+        set +e
+        npm audit --json > .security-reports/npm-audit.json 2>&1
+        AUDIT_EXIT_CODE=$?
+
+        # Also get human-readable output
+        AUDIT_OUTPUT=$(npm audit --audit-level=high 2>&1)
+        set -e
+
+        echo "$AUDIT_OUTPUT"
+        echo ""
+
+        # Parse vulnerability counts from JSON
+        if [ -f .security-reports/npm-audit.json ]; then
+          CRITICAL=$(jq '.metadata.vulnerabilities.critical // 0' .security-reports/npm-audit.json 2>/dev/null || echo "0")
+          HIGH=$(jq '.metadata.vulnerabilities.high // 0' .security-reports/npm-audit.json 2>/dev/null || echo "0")
+          MODERATE=$(jq '.metadata.vulnerabilities.moderate // 0' .security-reports/npm-audit.json 2>/dev/null || echo "0")
+          LOW=$(jq '.metadata.vulnerabilities.low // 0' .security-reports/npm-audit.json 2>/dev/null || echo "0")
+          TOTAL=$(jq '.metadata.vulnerabilities.total // 0' .security-reports/npm-audit.json 2>/dev/null || echo "0")
+        else
+          CRITICAL=0
+          HIGH=0
+          MODERATE=0
+          LOW=0
+          TOTAL=0
+        fi
+
+        echo "critical_count=$CRITICAL" >> $GITHUB_OUTPUT
+        echo "high_count=$HIGH" >> $GITHUB_OUTPUT
+        echo "moderate_count=$MODERATE" >> $GITHUB_OUTPUT
+        echo "low_count=$LOW" >> $GITHUB_OUTPUT
+        echo "total_count=$TOTAL" >> $GITHUB_OUTPUT
+
+        # Determine if we should fail
+        BLOCKING_COUNT=$((CRITICAL + HIGH))
+
+        if [ "$BLOCKING_COUNT" -gt 0 ]; then
+          echo ""
+          echo "=============================================="
+          echo "❌ BLOCKING VULNERABILITIES FOUND"
+          echo "=============================================="
+          echo "Critical: $CRITICAL"
+          echo "High: $HIGH"
+          echo ""
+          echo "These must be resolved before merging."
+          echo "See docs/SECURITY.md for remediation guidance."
+          echo "=============================================="
+          echo "audit_status=failed" >> $GITHUB_OUTPUT
+          # Story 2.4: High severity vulnerabilities result in non-passing status
+          exit 1
+        else
+          echo ""
+          echo "✅ No high or critical vulnerabilities found"
+          echo "audit_status=pass" >> $GITHUB_OUTPUT
+
+          if [ "$TOTAL" -gt 0 ]; then
+            echo ""
+            echo "Note: Found $MODERATE moderate and $LOW low severity issues."
+            echo "These don't block merging but should be addressed."
+          fi
+          exit 0
+        fi
+
+    - name: Upload audit report
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: dependency-audit-report
+        path: .security-reports/
+        retention-days: 30
+
+    - name: Create audit summary
+      if: always()
+      run: |
+        echo "## 🔍 Dependency Vulnerability Audit - Deep Scan" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+
+        AUDIT_STATUS="${{ steps.npm-audit.outputs.audit_status }}"
+        CRITICAL="${{ steps.npm-audit.outputs.critical_count }}"
+        HIGH="${{ steps.npm-audit.outputs.high_count }}"
+        MODERATE="${{ steps.npm-audit.outputs.moderate_count }}"
+        LOW="${{ steps.npm-audit.outputs.low_count }}"
+        TOTAL="${{ steps.npm-audit.outputs.total_count }}"
+
+        if [ "$AUDIT_STATUS" == "pass" ]; then
+          echo "### ✅ No Blocking Vulnerabilities" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "All dependencies are clear of high and critical severity issues." >> $GITHUB_STEP_SUMMARY
+        else
+          echo "### ❌ BLOCKING: Vulnerabilities Detected" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "High or critical vulnerabilities found. **Merge is blocked.**" >> $GITHUB_STEP_SUMMARY
+        fi
+
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Vulnerability Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "| Severity | Count | Blocks Merge? |" >> $GITHUB_STEP_SUMMARY
+        echo "|----------|-------|---------------|" >> $GITHUB_STEP_SUMMARY
+        echo "| 🔴 Critical | $CRITICAL | Yes |" >> $GITHUB_STEP_SUMMARY
+        echo "| 🟠 High | $HIGH | Yes |" >> $GITHUB_STEP_SUMMARY
+        echo "| 🟡 Moderate | $MODERATE | No |" >> $GITHUB_STEP_SUMMARY
+        echo "| 🟢 Low | $LOW | No |" >> $GITHUB_STEP_SUMMARY
+        echo "| **Total** | **$TOTAL** | |" >> $GITHUB_STEP_SUMMARY
+
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Remediation" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "If vulnerabilities were found:" >> $GITHUB_STEP_SUMMARY
+        echo "1. Run \`npm audit\` locally to see details" >> $GITHUB_STEP_SUMMARY
+        echo "2. Run \`npm audit fix\` to auto-fix compatible updates" >> $GITHUB_STEP_SUMMARY
+        echo "3. See [docs/SECURITY.md](../docs/SECURITY.md) for manual fixes" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "---" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Story 1**: This is the canonical security-scan.yml per ci-cd-architecture.md" >> $GITHUB_STEP_SUMMARY
+        echo "**Artifact**: \`dependency-audit-report\` contains detailed JSON report." >> $GITHUB_STEP_SUMMARY

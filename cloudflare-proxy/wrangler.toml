@@ -1,0 +1,268 @@
+# Cloudflare Workers Configuration
+# https://developers.cloudflare.com/workers/wrangler/configuration/
+
+name = "zeventbooks"
+main = "worker.js"
+compatibility_date = "2024-01-01"
+
+# ===========================================
+# Text Rules for Embedded Templates
+# ===========================================
+# Import HTML templates as text strings for embedding in the Worker.
+# This eliminates the need for KV storage for templates.
+[[rules]]
+type = "Text"
+globs = ["**/*.html"]
+fallthrough = true
+
+# Account ID - Set via environment or wrangler login
+# account_id = "your-account-id"
+
+# ============================================
+# Environment Variables - Standardized Naming
+# ============================================
+# Deployment IDs are updated by CI/CD after each Apps Script deployment
+#
+# Naming Convention:
+#   STAGING_* - Staging environment (stg.zeventbooks.io)
+#   PROD_*    - Production environment (www.zeventbooks.io)
+#
+# Variable Types:
+#   *_SCRIPT_ID        - Apps Script project ID (permanent, for clasp)
+#   *_DEPLOYMENT_ID    - Web app deployment ID (changes with each deploy)
+#   *_WEB_APP_URL      - Executable URL (runtime URL)
+#   *_GAS_EDIT_URL     - Project editor URL (for development)
+#
+# Production Script ID: 1YO4apLOQoAIh208AcAqWO3pWtx_O3yas_QC4z-pkurgMem9UgYOsp86l
+# Staging Script ID: 1gHiPuj7eXNk09dDyk17SJ6QsCJg7LMqXBRrkowljL3z2TaAKFIvBLhHJ
+#
+# Other Variables:
+# ERROR_LOG_ENDPOINT - (Optional) URL for external error logging (POST JSON)
+# UPSTREAM_TIMEOUT_MS - (Optional) Timeout for upstream requests (default: 30000ms)
+#
+# ============================================
+# SECRETS - Worker-Native API (Story 6)
+# ============================================
+# These secrets enable direct Google Sheets API access from the Worker,
+# bypassing GAS entirely. Set via: wrangler secret put <NAME> --env <env>
+#
+# Required for /api/v2/* endpoints:
+#   GOOGLE_CLIENT_EMAIL  - Service account email (e.g., worker@project.iam.gserviceaccount.com)
+#   GOOGLE_PRIVATE_KEY   - Service account private key (PEM format, with newlines)
+#   SHEETS_SPREADSHEET_ID - Google Sheets spreadsheet ID
+#   ADMIN_TOKEN          - Bearer token for admin authentication
+#
+# Setup commands:
+#   wrangler secret put GOOGLE_CLIENT_EMAIL --env staging
+#   wrangler secret put GOOGLE_PRIVATE_KEY --env staging
+#   wrangler secret put SHEETS_SPREADSHEET_ID --env staging
+#   wrangler secret put ADMIN_TOKEN --env staging
+#
+# Note: GOOGLE_PRIVATE_KEY should be the full PEM content including
+# -----BEGIN PRIVATE KEY----- and -----END PRIVATE KEY-----
+# When using wrangler secret put, paste the entire key including newlines.
+#
+# ============================================
+# SHARED VARS (Story 4 - Wrangler Hardening)
+# ============================================
+# These values are shared across environments.
+# Environment-specific vars are in [env.*.vars] sections.
+#
+# Optional vars (uncomment to enable):
+# ERROR_LOG_ENDPOINT = "https://your-logging-endpoint.com/errors"
+# UPSTREAM_TIMEOUT_MS = "30000"
+# ============================================
+
+# ============================================
+# Production - FULL SITE (zeventbooks.io)
+# ============================================
+# This serves EVERYTHING through Cloudflare:
+# - HTML pages (admin, public, display, etc.)
+# - API responses (status, events, sponsors)
+# - All brands (root, abc, cbc, cbl)
+[env.production]
+name = "zeventbooks-prod"
+# SEC-4.1: www.zeventbooks.io/* removed - redirected at edge via Cloudflare Redirect Rule
+# See docs/RUNBOOK-SEC-4.1-CANONICAL-HOST.md for configuration details
+routes = [
+  # Main domain - serves full site (canonical host)
+  { pattern = "zeventbooks.io/*", zone_name = "zeventbooks.io" },
+  # API subdomain (optional, same worker)
+  { pattern = "api.zeventbooks.io/*", zone_name = "zeventbooks.io" }
+]
+
+[env.production.vars]
+# Story 2: Explicit environment identifier for consistent detection
+WORKER_ENV = "production"
+# Story 5.2: Worker versioning - Updated for full DNS cutover
+WORKER_BUILD_VERSION = "prod-2025.12.13-story5.2"
+# Story 2: Debug level for observability (production uses 'error' for minimal logging)
+DEBUG_LEVEL = "error"
+# ============================================
+# Story 5.2: Full DNS Cutover - Worker-Only Mode
+# ============================================
+# BACKEND_MODE controls which backend handles requests:
+#   - 'worker' : All routes use Worker-native backend (CURRENT - DEFAULT)
+#   - 'gas'    : DEPRECATED - Emergency rollback only
+#   - 'mixed'  : DEPRECATED - No longer needed
+#
+# Story 5.2 Status:
+#   - ALL traffic routes through Cloudflare Worker
+#   - Shortlinks use Worker-native Sheets API (no GAS proxy)
+#   - NO script.google.com backend calls exist anywhere
+#
+# To rollback to GAS (NOT RECOMMENDED):
+#   1. Uncomment the GAS vars below
+#   2. Set BACKEND_MODE = "gas"
+#   3. Redeploy: wrangler deploy --env production
+# ============================================
+BACKEND_MODE = "worker"
+# ============================================
+# SEC-IAC-06: Audit Logging Configuration
+# ============================================
+# Audit logs are appended to a Google Sheets sheet for immutable storage.
+# Future: BigQuery integration for long-term analytics and RAG utilization.
+#
+# AUDIT_ENABLED - Set to "false" to disable audit logging (default: true)
+# AUDIT_SHEET_NAME - Sheet name for audit logs (default: AUDIT_LOGS)
+# ============================================
+AUDIT_ENABLED = "true"
+AUDIT_SHEET_NAME = "AUDIT_LOGS"
+# ============================================
+# DEPRECATED GAS VARS (Story 5.2 / Story 2.1)
+# ============================================
+# Story 2.1: GAS URLs removed from codebase.
+# Worker-only mode is now the only supported backend.
+# See deploy-manifest.json for historical deployment IDs.
+# ============================================
+
+# KV Namespace for HTML templates (production)
+# Created via: wrangler kv:namespace create "TEMPLATES_KV" --env production
+# NOTE: Uncomment and replace ID after creating the namespace:
+#   wrangler kv:namespace create "TEMPLATES_KV" --env production
+# Then update the id below with the output namespace ID
+# [[env.production.kv_namespaces]]
+# binding = "TEMPLATES_KV"
+# id = "REPLACE_WITH_PRODUCTION_KV_NAMESPACE_ID"
+
+# ============================================
+# Staging Environment (stg.zeventbooks.io)
+# ============================================
+# Dedicated staging environment for:
+# - Destructive tests, schema experiments, load tests
+# - Pre-production validation
+# - Safe sandbox for development testing
+#
+# SETUP INSTRUCTIONS:
+# 1. Create staging GAS project (see STAGING_SETUP.md)
+# 2. Deploy GAS: npm run deploy:staging
+# 3. Configure: npm run staging:configure -- --deployment-id=YOUR_ID
+# 4. Set up DNS (choose one):
+#    a) Automated: export CLOUDFLARE_API_TOKEN=xxx && npm run staging:dns
+#    b) Manual: Add A record for stg.zeventbooks.io -> 192.0.2.1 (proxied)
+# 5. Deploy worker: npm run deploy:staging:worker
+# 6. Verify: npm run staging:verify
+#
+# Quick one-command setup (after setting CLOUDFLARE_API_TOKEN):
+#   npm run staging:setup
+#
+# Deploy: wrangler deploy --env staging
+# Status: npm run staging:status
+# ============================================
+[env.staging]
+name = "zeventbooks-staging"
+routes = [
+  # Main staging domain - serves full site (HTML + API)
+  { pattern = "stg.zeventbooks.io/*", zone_name = "zeventbooks.io" },
+  # API staging subdomain - same worker, API focus
+  { pattern = "api-stg.zeventbooks.io/*", zone_name = "zeventbooks.io" }
+]
+
+[env.staging.vars]
+# ============================================
+# STAGING DEPLOYMENT CONFIGURATION
+# ============================================
+# Story 5.2: Full DNS Cutover - Staging now uses Worker-only mode
+# GAS is no longer used for any routes in staging or production.
+#
+# DEPRECATED: The following GAS-related vars are kept for emergency rollback only:
+#   STAGING_DEPLOYMENT_ID  - No longer used
+#   STAGING_WEB_APP_URL    - No longer used
+#   GAS_DEPLOYMENT_BASE_URL - No longer used
+# ============================================
+WORKER_ENV = "staging"
+# ============================================
+# Story 5.2: Full DNS Cutover - Worker-Only Mode
+# ============================================
+# BACKEND_MODE controls which backend handles requests:
+#   - 'worker' : All routes use Worker-native backend (CURRENT - DEFAULT)
+#   - 'gas'    : DEPRECATED - Emergency rollback only
+#   - 'mixed'  : DEPRECATED - No longer needed
+#
+# Story 5.2 Status:
+#   - All traffic routes through Cloudflare Worker
+#   - Shortlinks use Worker-native Sheets API
+#   - No script.google.com backend calls exist
+# ============================================
+BACKEND_MODE = "worker"
+# Story 5.2: Worker versioning - Updated for full DNS cutover
+WORKER_BUILD_VERSION = "stg-2025.12.13-story5.2"
+# ============================================
+# DEPRECATED GAS VARS (Story 5.2 / Story 2.1)
+# ============================================
+# Story 2.1: GAS URLs removed from codebase.
+# Worker-only mode is now the only supported backend.
+# See deploy-manifest.json for historical deployment IDs.
+# ============================================
+# Enable debug endpoints (/__debug/template/*) for staging only
+# SECURITY: This should NEVER be enabled in production
+ENABLE_DEBUG_ENDPOINTS = "true"
+# Story 5: Debug level for observability
+# Staging uses 'debug' for full visibility, production uses 'error'
+DEBUG_LEVEL = "debug"
+# ============================================
+# SEC-IAC-06: Audit Logging Configuration
+# ============================================
+# Audit logs are appended to a Google Sheets sheet for immutable storage.
+# Future: BigQuery integration for long-term analytics and RAG utilization.
+# ============================================
+AUDIT_ENABLED = "true"
+AUDIT_SHEET_NAME = "AUDIT_LOGS"
+
+# KV Namespace for HTML templates (staging)
+# Created via: wrangler kv:namespace create "TEMPLATES_KV" --env staging
+# NOTE: Uncomment and replace ID after creating the namespace:
+#   wrangler kv:namespace create "TEMPLATES_KV" --env staging
+# Then update the id below with the output namespace ID
+# [[env.staging.kv_namespaces]]
+# binding = "TEMPLATES_KV"
+# id = "REPLACE_WITH_STAGING_KV_NAMESPACE_ID"
+
+# ============================================
+# REMOVED ENVIRONMENT SECTIONS (Story 4 - Wrangler Hardening)
+# ============================================
+# The following environment sections were removed as they are obsolete:
+#
+# 1. [env.api-only] - REMOVED
+#    Reason: Redundant with [env.production] which already includes api.zeventbooks.io/*
+#    All API routes are handled by the production worker via wildcard routes.
+#
+# 2. [env.events] - REMOVED
+#    Reason: Legacy GAS-specific route patterns. Story 5.2 implemented worker-only
+#    mode, making per-path routing to GAS unnecessary. The production worker now
+#    handles all routes via zeventbooks.io/* wildcard.
+#
+# Migration note: If you need path-specific routing in the future, use Cloudflare
+# Page Rules or Workers Routes API rather than multiple environment sections.
+# ============================================
+
+# ============================================
+# Development (workers.dev subdomain)
+# ============================================
+# Default deployment uses workers.dev:
+# https://eventangle.YOUR_SUBDOMAIN.workers.dev
+#
+# Test URLs:
+# - https://eventangle.YOUR_SUBDOMAIN.workers.dev?page=admin&brand=root
+# - https://eventangle.YOUR_SUBDOMAIN.workers.dev?p=status&brand=root
+# - https://eventangle.YOUR_SUBDOMAIN.workers.dev?page=display&brand=root

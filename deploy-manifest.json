@@ -1,0 +1,235 @@
+{
+  "$schema": "./schemas/deploy-manifest.schema.json",
+  "_comment": "Centralized Deployment Manifest - Single Source of Truth for Environment Configuration",
+  "_version": "2.0.0",
+  "_lastUpdated": "2025-12-13",
+  "_story": "Story 5.3: Decommission Apps Script Project",
+  "_architecture": "Worker-only (GAS backend archived)",
+
+  "environments": {
+    "staging": {
+      "name": "Staging",
+      "description": "Safe sandbox for testing and pre-production validation - Cloudflare Worker only",
+
+      "appsScript": {
+        "_status": "ARCHIVED",
+        "_archivedDate": "2025-12-13",
+        "_story": "Story 5.3: Decommission Apps Script Project",
+        "_note": "GAS backend has been archived. All traffic now served by Cloudflare Workers. See archive/gas/README.md for restoration instructions.",
+        "_security": "Script IDs and deployment IDs redacted from version control. Retrieve from Cloudflare/GAS dashboard or team password manager.",
+        "scriptId": "REDACTED",
+        "deploymentId": "REDACTED",
+        "webAppUrl": "REDACTED",
+        "editUrl": "REDACTED"
+      },
+
+      "cloudflare": {
+        "workerName": "zeventbooks-staging",
+        "routes": [
+          "stg.zeventbooks.io/*",
+          "api-stg.zeventbooks.io/*"
+        ],
+        "zoneName": "zeventbooks.io",
+        "_note": "Primary backend - all traffic served by Cloudflare Worker"
+      },
+
+      "urls": {
+        "baseUrl": "https://stg.zeventbooks.io",
+        "apiUrl": "https://api-stg.zeventbooks.io"
+      },
+
+      "flags": {
+        "workerEnv": "staging",
+        "debugLevel": "debug",
+        "enableDebugEndpoints": true
+      },
+
+      "featureFlags": {
+        "_comment": "Feature flags for staging: testing features ON by default, production features match prod",
+
+        "mvpFeatures": {
+          "_comment": "Core MVP features - must match production (always enabled)",
+          "EVENTS": true,
+          "SPONSORS": true,
+          "ANALYTICS": true,
+          "FORMS": true,
+          "SHORTLINKS": true,
+          "PORTFOLIO_ANALYTICS": true
+        },
+
+        "testingFeatures": {
+          "_comment": "Testing/development features - ON in staging, OFF in production",
+          "DEMO_MODE_ENABLED": true,
+          "DEBUG_PANEL": true,
+          "API_TIMING_LOGS": true,
+          "ERROR_DETAILS": true,
+          "SAMPLE_DATA_PREFILL": true,
+          "FEATURE_HIGHLIGHTING": true,
+          "CONSOLE_LOGGING": true
+        },
+
+        "v2Features": {
+          "_comment": "V2 deferred features - OFF in both environments until explicitly enabled",
+          "TEMPLATE_MANAGEMENT_V2": false,
+          "PORTFOLIO_V2": false
+        },
+
+        "experimentalFeatures": {
+          "_comment": "Experimental features for staging validation only - OFF in production",
+          "NEW_UI_COMPONENTS": true,
+          "ENHANCED_VALIDATION": true,
+          "PERFORMANCE_MONITORING": true
+        }
+      }
+    },
+
+    "production": {
+      "name": "Production",
+      "description": "Customer-facing production environment - Cloudflare Worker only",
+
+      "appsScript": {
+        "_status": "ARCHIVED",
+        "_archivedDate": "2025-12-13",
+        "_story": "Story 5.3: Decommission Apps Script Project",
+        "_note": "GAS backend has been archived. All traffic now served by Cloudflare Workers. See archive/gas/README.md for restoration instructions.",
+        "_security": "Script IDs and deployment IDs redacted from version control. Retrieve from Cloudflare/GAS dashboard or team password manager.",
+        "scriptId": "REDACTED",
+        "deploymentId": "REDACTED",
+        "webAppUrl": "REDACTED",
+        "editUrl": "REDACTED"
+      },
+
+      "cloudflare": {
+        "workerName": "zeventbooks-prod",
+        "routes": [
+          "zeventbooks.io/*",
+          "www.zeventbooks.io/*",
+          "api.zeventbooks.io/*"
+        ],
+        "zoneName": "zeventbooks.io",
+        "_note": "Primary backend - all traffic served by Cloudflare Worker"
+      },
+
+      "urls": {
+        "baseUrl": "https://www.zeventbooks.io",
+        "apiUrl": "https://api.zeventbooks.io"
+      },
+
+      "flags": {
+        "workerEnv": "production",
+        "debugLevel": "error",
+        "enableDebugEndpoints": false
+      },
+
+      "featureFlags": {
+        "_comment": "Feature flags for production: conservative defaults, testing features OFF",
+
+        "mvpFeatures": {
+          "_comment": "Core MVP features - always enabled in production",
+          "EVENTS": true,
+          "SPONSORS": true,
+          "ANALYTICS": true,
+          "FORMS": true,
+          "SHORTLINKS": true,
+          "PORTFOLIO_ANALYTICS": true
+        },
+
+        "testingFeatures": {
+          "_comment": "Testing/development features - OFF in production for security and performance",
+          "DEMO_MODE_ENABLED": false,
+          "DEBUG_PANEL": false,
+          "API_TIMING_LOGS": false,
+          "ERROR_DETAILS": false,
+          "SAMPLE_DATA_PREFILL": false,
+          "FEATURE_HIGHLIGHTING": false,
+          "CONSOLE_LOGGING": false
+        },
+
+        "v2Features": {
+          "_comment": "V2 deferred features - OFF until explicitly approved for production release",
+          "TEMPLATE_MANAGEMENT_V2": false,
+          "PORTFOLIO_V2": false
+        },
+
+        "experimentalFeatures": {
+          "_comment": "Experimental features - always OFF in production",
+          "NEW_UI_COMPONENTS": false,
+          "ENHANCED_VALIDATION": false,
+          "PERFORMANCE_MONITORING": false
+        }
+      }
+    }
+  },
+
+  "ourSharedEvents": {
+    "_comment": "OurSharedEvents – Phase 1 Cloudflare Worker (Google Sheets backend)",
+    "_worker": "workers/oursharedevents",
+
+    "staging": {
+      "name": "OurSharedEvents Staging",
+      "description": "Phase 1 staging – stg.oursharedevents.com",
+      "cloudflare": {
+        "workerName": "oursharedevents-staging",
+        "routes": ["stg.oursharedevents.com/*"],
+        "zoneName": "oursharedevents.com"
+      },
+      "urls": {
+        "baseUrl": "https://stg.oursharedevents.com",
+        "healthUrl": "https://stg.oursharedevents.com/health",
+        "eventsApiUrl": "https://stg.oursharedevents.com/api/v2/events"
+      },
+      "secrets": ["GOOGLE_SA_CLIENT_EMAIL", "GOOGLE_SA_PRIVATE_KEY_PEM", "SHEETS_SPREADSHEET_ID", "ADMIN_KEY"],
+      "flags": {
+        "workerEnv": "staging",
+        "allowAdminKeyFallback": true
+      }
+    },
+
+    "production": {
+      "name": "OurSharedEvents Production",
+      "description": "Phase 1 production – oursharedevents.com",
+      "cloudflare": {
+        "workerName": "oursharedevents-prod",
+        "routes": ["oursharedevents.com/*", "www.oursharedevents.com/*"],
+        "zoneName": "oursharedevents.com"
+      },
+      "urls": {
+        "baseUrl": "https://oursharedevents.com",
+        "healthUrl": "https://oursharedevents.com/health",
+        "eventsApiUrl": "https://oursharedevents.com/api/v2/events"
+      },
+      "secrets": ["GOOGLE_SA_CLIENT_EMAIL", "GOOGLE_SA_PRIVATE_KEY_PEM", "SHEETS_SPREADSHEET_ID", "ADMIN_KEY"],
+      "flags": {
+        "workerEnv": "production",
+        "allowAdminKeyFallback": false
+      }
+    }
+  },
+
+  "defaults": {
+    "testEnvironment": "staging",
+    "deploymentBranch": "main",
+    "tagPattern": "v*.*.*"
+  },
+
+  "brands": {
+    "_comment": "Brand-specific URLs follow pattern: {baseUrl}/{brandId}/{page}",
+    "validBrands": ["root", "abc", "cbc", "cbl"],
+    "defaultBrand": "root"
+  },
+
+  "validation": {
+    "scriptIdPattern": "^[a-zA-Z0-9_-]{40,60}$",
+    "deploymentIdPattern": "^AKfycb[a-zA-Z0-9_-]+$",
+    "deploymentIdMinLength": 50
+  },
+
+  "gasRetirement": {
+    "_comment": "Story 5.3: GAS backend retirement tracking",
+    "status": "ARCHIVED",
+    "archivedDate": "2025-12-13",
+    "archiveLocation": "archive/gas/",
+    "restorationGuide": "archive/gas/README.md",
+    "reason": "Migration to Cloudflare Workers complete - all APIs now Worker-native"
+  }
+}

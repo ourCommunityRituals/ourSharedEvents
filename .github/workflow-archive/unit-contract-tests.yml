@@ -1,0 +1,264 @@
+# DEPRECATED WORKFLOW (ARCHIVED)
+# This workflow is kept for historical reference only.
+# Do NOT re-enable without updating it to the current CI/CD architecture.
+
+name: OLD – Unit & Contract Tests
+
+on:
+  # Run on feature branch pushes for fast feedback (not main - handled by Stage 1)
+  push:
+    branches-ignore:
+      - main  # Stage 1 handles main branch
+  # Note: PRs are handled by Stage 1 which includes these tests
+  # This workflow provides fast feedback on feature branches only
+
+  # Allow manual trigger
+  workflow_dispatch:
+
+# Prevent duplicate runs: cancel in-progress runs for the same branch
+concurrency:
+  group: unit-tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit-and-contract-tests:
+    name: 🧪 Unit & Contract Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run unit tests
+        id: unit-tests
+        continue-on-error: true
+        run: |
+          echo "🧪 Running unit tests..."
+          npm run test:unit -- --coverage --coverageReporters=text --coverageReporters=json-summary
+
+      - name: Run contract tests
+        id: contract-tests
+        continue-on-error: true
+        run: |
+          echo "📋 Running contract tests..."
+          echo ""
+          echo "🔒 Schema Consistency Tests (MVP Gate):"
+          echo "   - schema-consistency.contract.test.js"
+          echo "   - templates.fixtures.js (shared fixtures)"
+          echo ""
+          npm run test:contract
+
+      - name: Run MVP guards
+        id: mvp-guards
+        continue-on-error: true
+        run: |
+          echo "🛡️ Running MVP Guards (Surface + Dead Export + V2 File Checks)..."
+          echo ""
+          echo "MVP Surface Check: Only 5 surfaces allowed (admin, public, display, poster, report)"
+          node scripts/check-surfaces.js
+          echo ""
+          echo "Dead Export Check: No unused api_* functions in Code.gs"
+          node scripts/check-dead-code.js --fail-on-dead
+          echo ""
+          echo "V2 File Check: No V2 files allowed in src/mvp"
+          node scripts/check-v2-files.js
+
+      - name: Generate coverage report
+        if: always()
+        run: |
+          echo "📊 Test Coverage Summary"
+          echo "======================="
+
+          if [ -f coverage/coverage-summary.json ]; then
+            echo "Coverage data found, parsing..."
+            node -e "
+              const coverage = require('./coverage/coverage-summary.json');
+              const total = coverage.total;
+              console.log('');
+              console.log('Lines:      ' + total.lines.pct);
+              console.log('Statements: ' + total.statements.pct);
+              console.log('Functions:  ' + total.functions.pct);
+              console.log('Branches:   ' + total.branches.pct);
+              console.log('');
+
+              // Note: Coverage is 'Unknown' for .gs files (Google Apps Script)
+              // These are unit/contract tests with mocks, not code coverage tests
+              // We validate test quality by test count and pass/fail status
+              if (total.lines.pct === 'Unknown') {
+                console.log('ℹ️  Coverage data not applicable (testing with mocks)');
+                console.log('✅ Test validation based on test results, not code coverage');
+              } else {
+                // If we have actual coverage numbers, check thresholds
+                const passed =
+                  total.lines.pct >= 60 &&
+                  total.statements.pct >= 60 &&
+                  total.functions.pct >= 50 &&
+                  total.branches.pct >= 50;
+
+                if (!passed) {
+                  console.log('❌ Coverage below thresholds!');
+                  console.log('Required: lines 60%, statements 60%, functions 50%, branches 50%');
+                  process.exit(1);
+                } else {
+                  console.log('✅ Coverage meets thresholds');
+                }
+              }
+            "
+          else
+            echo "⚠️  No coverage data generated"
+          fi
+
+      - name: Upload coverage reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-reports
+          path: coverage/
+          retention-days: 7
+
+      - name: Check test results
+        if: always()
+        run: |
+          echo "📊 Test Results Summary"
+          echo "======================="
+          echo ""
+          echo "Unit Tests:     ${{ steps.unit-tests.outcome }}"
+          echo "Contract Tests: ${{ steps.contract-tests.outcome }}"
+          echo "MVP Guards:     ${{ steps.mvp-guards.outcome }}"
+          echo ""
+
+          # Fail if any tests failed
+          if [[ "${{ steps.unit-tests.outcome }}" == "failure" ]] || \
+             [[ "${{ steps.contract-tests.outcome }}" == "failure" ]] || \
+             [[ "${{ steps.mvp-guards.outcome }}" == "failure" ]]; then
+            echo "❌ Some tests failed"
+            exit 1
+          else
+            echo "✅ All tests passed"
+          fi
+
+      - name: Create test summary
+        if: always()
+        run: |
+          echo "## 🧪 Unit & Contract Tests" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Test Suite | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|------------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Unit Tests | ${{ steps.unit-tests.outcome == 'success' && '✅ PASS' || '❌ FAIL' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Contract Tests | ${{ steps.contract-tests.outcome == 'success' && '✅ PASS' || '❌ FAIL' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| MVP Guards | ${{ steps.mvp-guards.outcome == 'success' && '✅ PASS' || '❌ FAIL' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ -f coverage/coverage-summary.json ]; then
+            echo "### 📊 Coverage Summary" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+            node -e "
+              const coverage = require('./coverage/coverage-summary.json');
+              const total = coverage.total;
+              if (total.lines.pct === 'Unknown') {
+                console.log('Coverage: Not applicable (unit/contract tests with mocks)');
+                console.log('Quality validation: Test pass/fail status');
+              } else {
+                console.log('Lines:      ' + total.lines.pct + '%');
+                console.log('Statements: ' + total.statements.pct + '%');
+                console.log('Functions:  ' + total.functions.pct + '%');
+                console.log('Branches:   ' + total.branches.pct + '%');
+              }
+            " >> $GITHUB_STEP_SUMMARY
+            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "### 🎯 Test Files Executed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Unit Tests:**" >> $GITHUB_STEP_SUMMARY
+          echo "- \`tests/unit/backend.test.js\`" >> $GITHUB_STEP_SUMMARY
+          echo "- \`tests/unit/security.test.js\`" >> $GITHUB_STEP_SUMMARY
+          echo "- \`tests/unit/validation.test.js\`" >> $GITHUB_STEP_SUMMARY
+          echo "- \`tests/unit/rate-limiting.test.js\`" >> $GITHUB_STEP_SUMMARY
+          echo "- \`tests/unit/forms.test.js\`" >> $GITHUB_STEP_SUMMARY
+          echo "- \`tests/unit/multi-brand.test.js\`" >> $GITHUB_STEP_SUMMARY
+          echo "- \`tests/unit/concurrency.test.js\`" >> $GITHUB_STEP_SUMMARY
+          echo "- \`tests/unit/error-handling.test.js\`" >> $GITHUB_STEP_SUMMARY
+          echo "- \`tests/unit/config.test.js\` ✨ NEW" >> $GITHUB_STEP_SUMMARY
+          echo "- \`tests/unit/shared-reporting.test.js\` ✨ NEW" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Contract Tests:**" >> $GITHUB_STEP_SUMMARY
+          echo "- \`tests/contract/api.contract.test.js\`" >> $GITHUB_STEP_SUMMARY
+          echo "- \`tests/contract/jwt-security.contract.test.js\`" >> $GITHUB_STEP_SUMMARY
+          echo "- \`tests/contract/all-endpoints.contract.test.js\`" >> $GITHUB_STEP_SUMMARY
+          echo "- \`tests/contract/schema-consistency.contract.test.js\` 🔒 **Schema Gate**" >> $GITHUB_STEP_SUMMARY
+          echo "- \`tests/contract/template-flows.contract.test.js\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Shared Fixtures:**" >> $GITHUB_STEP_SUMMARY
+          echo "- \`tests/shared/fixtures/templates.fixtures.js\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [[ "${{ steps.unit-tests.outcome }}" == "success" ]] && \
+             [[ "${{ steps.contract-tests.outcome }}" == "success" ]] && \
+             [[ "${{ steps.mvp-guards.outcome }}" == "success" ]]; then
+            echo "### ✅ All Tests Passed!" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Code quality checks passed. Ready to proceed with E2E testing." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### ❌ Tests Failed" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Please fix failing tests before proceeding." >> $GITHUB_STEP_SUMMARY
+          fi
+
+  # Security: Ensure security tests continue to run
+  security-validation:
+    name: 🔒 Security Test Validation
+    runs-on: ubuntu-latest
+    needs: unit-and-contract-tests
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run security-specific tests
+        run: |
+          echo "🔒 Running security test suite..."
+          echo ""
+
+          # Run security unit tests
+          npm run test:unit -- tests/unit/security.test.js --verbose
+
+          echo ""
+          echo "✅ Security tests passed - XSS, CSRF, JWT, Rate Limiting validated"
+
+      - name: Create security summary
+        run: |
+          echo "## 🔒 Security Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "All security-focused unit tests passed:" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ XSS Prevention (HTML entity escaping)" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ SQL Injection Prevention (input sanitization)" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ CSRF Protection (token generation/validation)" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ JWT Security (algorithm verification, nbf claim)" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Rate Limiting (per-brand limits)" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ URL Validation (protocol checking, private IP blocking)" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Admin Secret Management (Config.gs)" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Brand Isolation (findBrandByHost_ security)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Security Coverage:** All critical security functions tested" >> $GITHUB_STEP_SUMMARY

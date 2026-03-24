@@ -1,0 +1,744 @@
+<!--
+================================================================================
+GlobalErrorHandler.html - Global Error Handling for MVP Surfaces
+================================================================================
+Story 4.3: Graceful Error Handling in UI
+
+RESPONSIBILITY: This file provides global error handling for client-side JavaScript.
+- Catches uncaught exceptions (window.onerror)
+- Catches unhandled promise rejections (unhandledrejection)
+- Provides error boundary wrapper for async operations
+- Shows user-friendly error dialogs
+- Implements retry logic with exponential backoff
+- Logs errors for developer diagnostics
+
+WINDOW ADDITIONS:
+- window.GlobalErrorHandler - Main error handler object
+
+Dependencies: NUSDK.html (for NU._log), SharedUtils.html (for showToast)
+Used by: Admin.html, Public.html, Display.html, Poster.html, SharedReport.html
+
+USAGE:
+  // Wrap async operations with error boundary
+  await GlobalErrorHandler.withErrorBoundary(async () => {
+    const res = await NU.rpc('api_getData', payload);
+    if (!res.ok) throw res;
+    return res.value;
+  }, {
+    context: 'loading events',
+    onError: (err) => SharedUtils.StateRenderer.showFromError(container, err),
+    retry: true
+  });
+
+  // Manual error reporting
+  GlobalErrorHandler.reportError(error, { context: 'user action', userId: '123' });
+
+  // Show error dialog
+  GlobalErrorHandler.showErrorDialog({
+    title: 'Unable to Save',
+    message: 'Your changes could not be saved. Please try again.',
+    onRetry: () => saveData()
+  });
+
+================================================================================
+-->
+<script>
+(function() {
+  'use strict';
+
+  // =============================================================================
+  // Configuration
+  // =============================================================================
+  const CONFIG = {
+    // Maximum errors to log before throttling (prevent log spam)
+    maxErrorsPerMinute: 10,
+    // Error throttle window in ms
+    throttleWindow: 60000,
+    // Default retry attempts
+    defaultRetryAttempts: 3,
+    // Base delay for exponential backoff (ms)
+    baseRetryDelay: 1000,
+    // Maximum retry delay (ms)
+    maxRetryDelay: 16000,
+    // Errors to ignore (browser extensions, etc.)
+    ignoredErrorPatterns: [
+      /script error/i,
+      /extension/i,
+      /chrome-extension/i,
+      /moz-extension/i,
+      /ResizeObserver loop/i,
+      /Loading chunk/i
+    ],
+    // Auto-dismiss toast errors after this many ms (0 = don't auto-dismiss)
+    toastDuration: 5000
+  };
+
+  // =============================================================================
+  // Error Tracking State
+  // =============================================================================
+  const errorState = {
+    errorCount: 0,
+    lastErrorReset: Date.now(),
+    recentErrors: [], // Rolling buffer of recent errors for diagnostics
+    maxRecentErrors: 50,
+    isDialogOpen: false
+  };
+
+  // =============================================================================
+  // Helper Functions
+  // =============================================================================
+
+  /**
+   * Check if error should be ignored (browser extensions, etc.)
+   * @param {string} message - Error message
+   * @param {string} source - Error source URL
+   * @returns {boolean} True if error should be ignored
+   */
+  function shouldIgnoreError(message, source) {
+    const combined = `${message || ''} ${source || ''}`;
+    return CONFIG.ignoredErrorPatterns.some(pattern => pattern.test(combined));
+  }
+
+  /**
+   * Check if we're being throttled due to too many errors
+   * @returns {boolean} True if throttled
+   */
+  function isThrottled() {
+    const now = Date.now();
+    if (now - errorState.lastErrorReset > CONFIG.throttleWindow) {
+      errorState.errorCount = 0;
+      errorState.lastErrorReset = now;
+    }
+    return errorState.errorCount >= CONFIG.maxErrorsPerMinute;
+  }
+
+  /**
+   * Sanitize error message for user display (remove internal details)
+   * @param {string} message - Raw error message
+   * @returns {string} Sanitized message
+   */
+  function sanitizeMessage(message) {
+    if (!message) return 'An unexpected error occurred';
+
+    // Remove file paths, line numbers, stack traces
+    let sanitized = String(message)
+      .replace(/at\s+[\w.]+\s+\([^)]+\)/g, '') // Remove stack trace lines
+      .replace(/https?:\/\/[^\s]+/g, '[url]')   // Remove URLs
+      .replace(/:\d+:\d+/g, '')                  // Remove line:col numbers
+      .replace(/\s+/g, ' ')                      // Normalize whitespace
+      .trim();
+
+    // If message is too technical, use generic message
+    if (sanitized.length > 200 || /\{.*\}/.test(sanitized) || /\[.*\]/.test(sanitized)) {
+      return 'An unexpected error occurred';
+    }
+
+    return sanitized || 'An unexpected error occurred';
+  }
+
+  /**
+   * Extract error details for logging (internal use only)
+   * @param {Error|string|Object} error - Error to extract details from
+   * @returns {Object} Error details
+   */
+  function extractErrorDetails(error) {
+    if (!error) {
+      return { message: 'Unknown error', code: 'UNKNOWN', stack: null };
+    }
+
+    if (typeof error === 'string') {
+      return { message: error, code: 'STRING_ERROR', stack: null };
+    }
+
+    return {
+      message: error.message || error.msg || String(error),
+      code: error.code || 'UNKNOWN',
+      corrId: error.corrId || null,
+      stack: error.stack || null,
+      name: error.name || 'Error'
+    };
+  }
+
+  /**
+   * Log error to NUSDK rolling buffer
+   * @param {Object} errorDetails - Error details
+   * @param {Object} context - Additional context
+   */
+  function logError(errorDetails, context = {}) {
+    // Check throttling
+    if (isThrottled()) {
+      console.warn('[GlobalErrorHandler] Error logging throttled due to high error rate');
+      return;
+    }
+
+    errorState.errorCount++;
+
+    const entry = {
+      timestamp: new Date().toISOString(),
+      type: 'global_error',
+      ...errorDetails,
+      context,
+      userAgent: navigator.userAgent,
+      url: window.location.href
+    };
+
+    // Add to recent errors buffer
+    errorState.recentErrors.push(entry);
+    if (errorState.recentErrors.length > errorState.maxRecentErrors) {
+      errorState.recentErrors.shift();
+    }
+
+    // Log via NUSDK if available
+    if (window.NU && typeof window.NU._log === 'function') {
+      window.NU._log('error', 'global_error', entry);
+    } else {
+      console.error('[GlobalErrorHandler]', entry);
+    }
+  }
+
+  // =============================================================================
+  // Error Dialog UI
+  // =============================================================================
+
+  /**
+   * Inject error dialog styles (once)
+   */
+  function injectDialogStyles() {
+    if (document.getElementById('global-error-dialog-styles')) return;
+
+    const style = document.createElement('style');
+    style.id = 'global-error-dialog-styles';
+    style.textContent = `
+      .global-error-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 10000;
+        animation: fade-in 0.2s ease;
+      }
+
+      .global-error-dialog {
+        background: #fff;
+        border-radius: 16px;
+        padding: 32px;
+        max-width: 420px;
+        width: 90%;
+        text-align: center;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        animation: slide-up 0.3s ease;
+      }
+
+      .global-error-icon {
+        font-size: 48px;
+        margin-bottom: 16px;
+      }
+
+      .global-error-title {
+        font-size: 1.5rem;
+        font-weight: 600;
+        color: #1e293b;
+        margin: 0 0 12px;
+      }
+
+      .global-error-message {
+        font-size: 1rem;
+        color: #64748b;
+        margin: 0 0 24px;
+        line-height: 1.5;
+      }
+
+      .global-error-details {
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        padding: 12px;
+        font-family: monospace;
+        font-size: 0.8rem;
+        color: #64748b;
+        margin-bottom: 24px;
+        text-align: left;
+        word-break: break-word;
+      }
+
+      .global-error-actions {
+        display: flex;
+        gap: 12px;
+        justify-content: center;
+        flex-wrap: wrap;
+      }
+
+      .global-error-btn {
+        padding: 12px 24px;
+        border-radius: 8px;
+        font-size: 1rem;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s;
+        border: none;
+      }
+
+      .global-error-btn-primary {
+        background: #2563eb;
+        color: #fff;
+      }
+
+      .global-error-btn-primary:hover {
+        background: #1d4ed8;
+      }
+
+      .global-error-btn-secondary {
+        background: #f1f5f9;
+        color: #475569;
+      }
+
+      .global-error-btn-secondary:hover {
+        background: #e2e8f0;
+      }
+
+      .global-error-support {
+        margin-top: 16px;
+        font-size: 0.85rem;
+        color: #94a3b8;
+      }
+
+      .global-error-support a {
+        color: #2563eb;
+        text-decoration: none;
+      }
+
+      .global-error-support a:hover {
+        text-decoration: underline;
+      }
+
+      @keyframes fade-in {
+        from { opacity: 0; }
+        to { opacity: 1; }
+      }
+
+      @keyframes slide-up {
+        from { transform: translateY(20px); opacity: 0; }
+        to { transform: translateY(0); opacity: 1; }
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  /**
+   * Show error dialog to user
+   * @param {Object} options - Dialog options
+   */
+  function showErrorDialog(options = {}) {
+    const {
+      title = 'Oops, Something Went Wrong',
+      message = 'We encountered an unexpected error. Please try again.',
+      icon = '😕',
+      showRetry = true,
+      showDismiss = true,
+      showDetails = false,
+      details = null,
+      corrId = null,
+      onRetry = null,
+      onDismiss = null,
+      supportEmail = null
+    } = options;
+
+    // Don't show multiple dialogs
+    if (errorState.isDialogOpen) return;
+    errorState.isDialogOpen = true;
+
+    injectDialogStyles();
+
+    const overlay = document.createElement('div');
+    overlay.className = 'global-error-overlay';
+    overlay.setAttribute('role', 'dialog');
+    overlay.setAttribute('aria-modal', 'true');
+    overlay.setAttribute('aria-labelledby', 'error-dialog-title');
+
+    let detailsHtml = '';
+    if (showDetails && (details || corrId)) {
+      const detailText = corrId ? `Reference: ${corrId}` : details;
+      detailsHtml = `<div class="global-error-details">${escapeHtml(detailText)}</div>`;
+    }
+
+    let actionsHtml = '';
+    if (showRetry) {
+      actionsHtml += '<button class="global-error-btn global-error-btn-primary" data-action="retry">Try Again</button>';
+    }
+    if (showDismiss) {
+      actionsHtml += '<button class="global-error-btn global-error-btn-secondary" data-action="dismiss">Dismiss</button>';
+    }
+
+    let supportHtml = '';
+    if (supportEmail || corrId) {
+      supportHtml = '<div class="global-error-support">';
+      if (corrId) {
+        supportHtml += `Reference: <code>${escapeHtml(corrId)}</code>`;
+      }
+      if (supportEmail) {
+        supportHtml += corrId ? '<br>' : '';
+        supportHtml += `Need help? <a href="mailto:${escapeHtml(supportEmail)}">Contact support</a>`;
+      }
+      supportHtml += '</div>';
+    }
+
+    overlay.innerHTML = `
+      <div class="global-error-dialog">
+        <div class="global-error-icon">${icon}</div>
+        <h2 class="global-error-title" id="error-dialog-title">${escapeHtml(title)}</h2>
+        <p class="global-error-message">${escapeHtml(message)}</p>
+        ${detailsHtml}
+        <div class="global-error-actions">${actionsHtml}</div>
+        ${supportHtml}
+      </div>
+    `;
+
+    // Handle button clicks
+    overlay.addEventListener('click', (e) => {
+      const action = e.target.dataset.action;
+      if (action === 'retry') {
+        closeDialog();
+        if (onRetry) onRetry();
+      } else if (action === 'dismiss' || e.target === overlay) {
+        closeDialog();
+        if (onDismiss) onDismiss();
+      }
+    });
+
+    // Handle escape key
+    const handleEscape = (e) => {
+      if (e.key === 'Escape') {
+        closeDialog();
+        if (onDismiss) onDismiss();
+      }
+    };
+    document.addEventListener('keydown', handleEscape);
+
+    function closeDialog() {
+      errorState.isDialogOpen = false;
+      document.removeEventListener('keydown', handleEscape);
+      overlay.remove();
+    }
+
+    document.body.appendChild(overlay);
+
+    // Focus the first button for accessibility
+    const firstBtn = overlay.querySelector('button');
+    if (firstBtn) firstBtn.focus();
+  }
+
+  /**
+   * Show error toast (non-modal notification)
+   * @param {string} message - Error message
+   * @param {Object} options - Toast options
+   */
+  function showErrorToast(message, options = {}) {
+    const { duration = CONFIG.toastDuration } = options;
+
+    // Use SharedUtils.showToast if available
+    if (window.SharedUtils && typeof window.SharedUtils.showToast === 'function') {
+      window.SharedUtils.showToast(sanitizeMessage(message), 'error', duration);
+    } else {
+      // Fallback to console
+      console.error('[GlobalErrorHandler Toast]', message);
+    }
+  }
+
+  /**
+   * Escape HTML for safe display
+   * @param {string} str - String to escape
+   * @returns {string} Escaped string
+   */
+  function escapeHtml(str) {
+    if (window.NU && typeof window.NU.esc === 'function') {
+      return window.NU.esc(str);
+    }
+    if (!str) return '';
+    return String(str).replace(/[&<>"']/g, m => ({
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#39;'
+    }[m]));
+  }
+
+  // =============================================================================
+  // Retry Logic
+  // =============================================================================
+
+  /**
+   * Execute with retry and exponential backoff
+   * @param {Function} fn - Async function to execute
+   * @param {Object} options - Retry options
+   * @returns {Promise<any>} Result of fn
+   */
+  async function withRetry(fn, options = {}) {
+    const {
+      attempts = CONFIG.defaultRetryAttempts,
+      baseDelay = CONFIG.baseRetryDelay,
+      maxDelay = CONFIG.maxRetryDelay,
+      shouldRetry = (err) => err?.code === 'NETWORK_ERROR' || err?.code === 'TIMEOUT',
+      onRetryAttempt = null
+    } = options;
+
+    let lastError;
+
+    for (let attempt = 1; attempt <= attempts; attempt++) {
+      try {
+        return await fn();
+      } catch (err) {
+        lastError = err;
+
+        // Check if we should retry
+        if (attempt === attempts || !shouldRetry(err)) {
+          throw err;
+        }
+
+        // Calculate delay with exponential backoff + jitter
+        const delay = Math.min(
+          baseDelay * Math.pow(2, attempt - 1) + Math.random() * 1000,
+          maxDelay
+        );
+
+        if (onRetryAttempt) {
+          onRetryAttempt(attempt, attempts, delay, err);
+        }
+
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+
+    throw lastError;
+  }
+
+  // =============================================================================
+  // Error Boundary Wrapper
+  // =============================================================================
+
+  /**
+   * Wrap async operations with error boundary
+   * @param {Function} fn - Async function to execute
+   * @param {Object} options - Error boundary options
+   * @returns {Promise<any>} Result of fn or null on error
+   */
+  async function withErrorBoundary(fn, options = {}) {
+    const {
+      context = 'operation',
+      onError = null,
+      showToast = true,
+      showDialog = false,
+      retry = false,
+      retryOptions = {},
+      fallbackValue = null,
+      rethrow = false
+    } = options;
+
+    try {
+      if (retry) {
+        return await withRetry(fn, retryOptions);
+      }
+      return await fn();
+
+    } catch (err) {
+      const errorDetails = extractErrorDetails(err);
+
+      // Log the error
+      logError(errorDetails, { context, retry });
+
+      // Notify via callback
+      if (onError) {
+        onError(err);
+      }
+
+      // Show UI notification
+      if (showDialog) {
+        showErrorDialog({
+          title: 'Unable to Complete Action',
+          message: `We couldn't complete ${context}. Please try again.`,
+          corrId: errorDetails.corrId,
+          onRetry: retry ? () => withErrorBoundary(fn, options) : null
+        });
+      } else if (showToast) {
+        showErrorToast(`Unable to ${context}. Please try again.`);
+      }
+
+      if (rethrow) {
+        throw err;
+      }
+
+      return fallbackValue;
+    }
+  }
+
+  // =============================================================================
+  // Global Error Handlers
+  // =============================================================================
+
+  /**
+   * Global error handler for uncaught exceptions
+   */
+  function handleGlobalError(message, source, lineno, colno, error) {
+    // Check if we should ignore this error
+    if (shouldIgnoreError(message, source)) {
+      return false; // Let browser handle it
+    }
+
+    const errorDetails = {
+      message: String(message),
+      source,
+      lineno,
+      colno,
+      stack: error?.stack || null
+    };
+
+    logError(errorDetails, { handler: 'window.onerror' });
+
+    // Don't show UI for minor errors that don't affect functionality
+    // Only show for critical errors that break the page
+    if (error && error.name !== 'SyntaxError') {
+      showErrorToast('Something went wrong. Please refresh if the page isn\'t working correctly.');
+    }
+
+    return false; // Let error propagate to console for debugging
+  }
+
+  /**
+   * Global handler for unhandled promise rejections
+   */
+  function handleUnhandledRejection(event) {
+    const error = event.reason;
+
+    // Check if we should ignore this error
+    const message = error?.message || String(error);
+    if (shouldIgnoreError(message, '')) {
+      return;
+    }
+
+    const errorDetails = extractErrorDetails(error);
+    logError(errorDetails, { handler: 'unhandledrejection' });
+
+    // Show toast for unhandled rejections
+    showErrorToast('An unexpected error occurred. Please try again.');
+  }
+
+  // =============================================================================
+  // Install Global Handlers
+  // =============================================================================
+
+  // Only install if not already installed
+  if (!window.__GLOBAL_ERROR_HANDLER_INSTALLED__) {
+    window.__GLOBAL_ERROR_HANDLER_INSTALLED__ = true;
+
+    // Install window.onerror
+    const originalOnError = window.onerror;
+    window.onerror = function(message, source, lineno, colno, error) {
+      handleGlobalError(message, source, lineno, colno, error);
+      if (originalOnError) {
+        return originalOnError.call(this, message, source, lineno, colno, error);
+      }
+      return false;
+    };
+
+    // Install unhandledrejection handler
+    window.addEventListener('unhandledrejection', handleUnhandledRejection);
+
+    // Log initialization
+    if (window.NU && typeof window.NU._log === 'function') {
+      window.NU._log('debug', 'init', { module: 'GlobalErrorHandler', version: '1.0.0' });
+    }
+  }
+
+  // =============================================================================
+  // Public API
+  // =============================================================================
+
+  window.GlobalErrorHandler = {
+    /**
+     * Version
+     */
+    VERSION: '1.0.0',
+
+    /**
+     * Wrap async operations with error boundary
+     * @param {Function} fn - Async function to execute
+     * @param {Object} options - Error boundary options
+     * @returns {Promise<any>} Result of fn or fallbackValue on error
+     */
+    withErrorBoundary,
+
+    /**
+     * Execute with retry and exponential backoff
+     * @param {Function} fn - Async function to execute
+     * @param {Object} options - Retry options
+     * @returns {Promise<any>} Result of fn
+     */
+    withRetry,
+
+    /**
+     * Show error dialog to user
+     * @param {Object} options - Dialog options
+     */
+    showErrorDialog,
+
+    /**
+     * Show error toast notification
+     * @param {string} message - Error message
+     * @param {Object} options - Toast options
+     */
+    showErrorToast,
+
+    /**
+     * Report an error manually
+     * @param {Error|string|Object} error - Error to report
+     * @param {Object} context - Additional context
+     */
+    reportError(error, context = {}) {
+      const errorDetails = extractErrorDetails(error);
+      logError(errorDetails, context);
+    },
+
+    /**
+     * Get recent errors for diagnostics
+     * @returns {Array} Recent error entries
+     */
+    getRecentErrors() {
+      return [...errorState.recentErrors];
+    },
+
+    /**
+     * Clear recent errors
+     */
+    clearRecentErrors() {
+      errorState.recentErrors.length = 0;
+    },
+
+    /**
+     * Get error statistics
+     * @returns {Object} Error statistics
+     */
+    getStats() {
+      return {
+        totalRecentErrors: errorState.recentErrors.length,
+        errorsThisMinute: errorState.errorCount,
+        isThrottled: isThrottled(),
+        lastErrorReset: new Date(errorState.lastErrorReset).toISOString()
+      };
+    },
+
+    /**
+     * Configure error handler
+     * @param {Object} options - Configuration options
+     */
+    configure(options = {}) {
+      Object.assign(CONFIG, options);
+    }
+  };
+
+})();
+</script>

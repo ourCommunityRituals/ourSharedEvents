@@ -1,0 +1,642 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zeventbook.com/schemas/event.schema.json",
+  "title": "Event",
+  "description": "Event Contract v1.0 FROZEN - MVP Single Source of Truth. Breaking changes require migration.",
+  "$comment": "v1.0 frozen 2025-11-30. Treat all changes as migrations, not tweaks. See EVENT_CONTRACT.md.",
+  "type": "object",
+  "required": [
+    "id",
+    "slug",
+    "name",
+    "startDateISO",
+    "venue",
+    "links",
+    "qr",
+    "ctas",
+    "settings",
+    "createdAtISO",
+    "updatedAtISO"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[a-zA-Z0-9_-]+$",
+      "description": "MVP REQUIRED - UUID, system-generated"
+    },
+    "slug": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[a-z0-9-]+$",
+      "description": "MVP REQUIRED - URL-safe identifier"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "description": "MVP REQUIRED - Event display name"
+    },
+    "startDateISO": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "description": "MVP REQUIRED - Event date in YYYY-MM-DD format"
+    },
+    "venue": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "description": "MVP REQUIRED - Venue name/location"
+    },
+    "templateId": {
+      "type": ["string", "null"],
+      "maxLength": 64,
+      "pattern": "^[a-z_]+$",
+      "description": "MVP OPTIONAL - Template ID used to create this event"
+    },
+    "links": {
+      "$ref": "#/$defs/Links"
+    },
+    "qr": {
+      "$ref": "#/$defs/QRCodes"
+    },
+    "schedule": {
+      "type": ["array", "null"],
+      "items": { "$ref": "#/$defs/ScheduleRow" },
+      "description": "MVP OPTIONAL - Event schedule items"
+    },
+    "standings": {
+      "type": ["array", "null"],
+      "items": { "$ref": "#/$defs/StandingRow" },
+      "description": "MVP OPTIONAL - Team/player standings"
+    },
+    "bracket": {
+      "oneOf": [
+        { "$ref": "#/$defs/BracketTree" },
+        { "type": "null" }
+      ],
+      "description": "MVP OPTIONAL - Tournament bracket (V2-ready)"
+    },
+    "ctas": {
+      "$ref": "#/$defs/CTAs"
+    },
+    "sponsors": {
+      "type": ["array", "null"],
+      "items": { "$ref": "#/$defs/Sponsor" },
+      "description": "V2 OPTIONAL - Sponsor logos with placement"
+    },
+    "media": {
+      "oneOf": [
+        { "$ref": "#/$defs/Media" },
+        { "type": "null" }
+      ],
+      "description": "V2 OPTIONAL - Video, map, gallery URLs"
+    },
+    "externalData": {
+      "oneOf": [
+        { "$ref": "#/$defs/ExternalData" },
+        { "type": "null" }
+      ],
+      "description": "V2 OPTIONAL - External data source URLs"
+    },
+    "checkinUrl": {
+      "type": ["string", "null"],
+      "pattern": "^https?://.+",
+      "description": "V2 OPTIONAL - Check-in form URL"
+    },
+    "walkinUrl": {
+      "type": ["string", "null"],
+      "pattern": "^https?://.+",
+      "description": "V2 OPTIONAL - Walk-in registration form URL"
+    },
+    "surveyUrl": {
+      "type": ["string", "null"],
+      "pattern": "^https?://.+",
+      "description": "V2 OPTIONAL - Post-event survey form URL"
+    },
+    "display": {
+      "oneOf": [
+        { "$ref": "#/$defs/DisplayConfig" },
+        { "type": "null" }
+      ],
+      "description": "V2 OPTIONAL - Display surface configuration"
+    },
+    "analytics": {
+      "oneOf": [
+        { "$ref": "#/$defs/Analytics" },
+        { "type": "null" }
+      ],
+      "description": "RESERVED - Event analytics data"
+    },
+    "payments": {
+      "oneOf": [
+        { "$ref": "#/$defs/Payments" },
+        { "type": "null" }
+      ],
+      "description": "RESERVED - Stripe payment integration"
+    },
+    "settings": {
+      "$ref": "#/$defs/Settings"
+    },
+    "createdAtISO": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}(T\\d{2}:\\d{2}:\\d{2}(\\.\\d{3})?Z)?$",
+      "description": "MVP REQUIRED - Creation timestamp (ISO 8601)"
+    },
+    "updatedAtISO": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}(T\\d{2}:\\d{2}:\\d{2}(\\.\\d{3})?Z)?$",
+      "description": "MVP REQUIRED - Last update timestamp (ISO 8601)"
+    }
+  },
+  "$defs": {
+    "Links": {
+      "type": "object",
+      "description": "MVP REQUIRED - All surfaces must use THESE, never rebuild URLs",
+      "required": ["publicUrl", "displayUrl", "posterUrl", "signupUrl"],
+      "additionalProperties": false,
+      "properties": {
+        "publicUrl": {
+          "type": "string",
+          "description": "MVP REQUIRED - Public.html URL"
+        },
+        "displayUrl": {
+          "type": "string",
+          "description": "MVP REQUIRED - Display.html URL"
+        },
+        "posterUrl": {
+          "type": "string",
+          "description": "MVP REQUIRED - Poster.html URL"
+        },
+        "signupUrl": {
+          "type": "string",
+          "description": "MVP REQUIRED - Form or signup page URL"
+        },
+        "sharedReportUrl": {
+          "type": ["string", "null"],
+          "description": "V2 OPTIONAL - Shared analytics report URL"
+        }
+      }
+    },
+    "QRCodes": {
+      "type": "object",
+      "description": "MVP REQUIRED - Base64-encoded PNG QR codes",
+      "required": ["public", "signup"],
+      "additionalProperties": false,
+      "properties": {
+        "public": {
+          "type": "string",
+          "description": "MVP REQUIRED - QR code linking to publicUrl (base64 PNG)"
+        },
+        "signup": {
+          "type": "string",
+          "description": "MVP REQUIRED - QR code linking to signupUrl (base64 PNG)"
+        }
+      }
+    },
+    "ScheduleRow": {
+      "type": "object",
+      "required": ["time", "title"],
+      "additionalProperties": false,
+      "properties": {
+        "time": {
+          "type": "string",
+          "description": "Display time (e.g., '10:00 AM')"
+        },
+        "title": {
+          "type": "string",
+          "description": "Schedule item title"
+        },
+        "description": {
+          "type": ["string", "null"],
+          "description": "Optional details"
+        }
+      }
+    },
+    "StandingRow": {
+      "type": "object",
+      "required": ["rank", "team", "wins", "losses"],
+      "additionalProperties": false,
+      "properties": {
+        "rank": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "team": {
+          "type": "string"
+        },
+        "wins": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "losses": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "points": {
+          "type": ["integer", "null"],
+          "minimum": 0
+        }
+      }
+    },
+    "BracketTree": {
+      "type": "object",
+      "required": ["rounds"],
+      "additionalProperties": false,
+      "properties": {
+        "rounds": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/BracketRound" }
+        }
+      }
+    },
+    "BracketRound": {
+      "type": "object",
+      "required": ["name", "matches"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Round name (e.g., 'Quarterfinals')"
+        },
+        "matches": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/BracketMatch" }
+        }
+      }
+    },
+    "BracketMatch": {
+      "type": "object",
+      "required": ["id"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "team1": {
+          "type": ["string", "null"]
+        },
+        "team2": {
+          "type": ["string", "null"]
+        },
+        "score1": {
+          "type": ["integer", "null"],
+          "minimum": 0
+        },
+        "score2": {
+          "type": ["integer", "null"],
+          "minimum": 0
+        },
+        "winner": {
+          "type": ["string", "null"]
+        }
+      }
+    },
+    "CTA": {
+      "type": "object",
+      "required": ["label", "url"],
+      "additionalProperties": false,
+      "properties": {
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 50
+        },
+        "url": {
+          "type": "string"
+        }
+      }
+    },
+    "CTAs": {
+      "type": "object",
+      "description": "MVP REQUIRED - Call-to-action buttons",
+      "required": ["primary"],
+      "additionalProperties": false,
+      "properties": {
+        "primary": {
+          "$ref": "#/$defs/CTA",
+          "description": "MVP REQUIRED - Primary CTA button"
+        },
+        "secondary": {
+          "oneOf": [
+            { "$ref": "#/$defs/CTA" },
+            { "type": "null" }
+          ],
+          "description": "V2 OPTIONAL - Secondary CTA button"
+        }
+      }
+    },
+    "Sponsor": {
+      "type": "object",
+      "description": "V2 sponsor entity with multi-placement support",
+      "required": ["id", "name", "logoUrl"],
+      "additionalProperties": false,
+      "anyOf": [
+        { "required": ["placement"] },
+        { "required": ["placements"] }
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_-]+$"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "logoUrl": {
+          "type": "string",
+          "pattern": "^https?://.+"
+        },
+        "linkUrl": {
+          "type": ["string", "null"],
+          "pattern": "^https?://.+"
+        },
+        "placement": {
+          "type": "string",
+          "enum": ["poster", "display", "public", "tv-banner"],
+          "description": "[Legacy] Single placement location - use 'placements' object for multi-placement"
+        },
+        "placements": {
+          "type": "object",
+          "description": "Multi-placement configuration - enables sponsor on multiple surfaces",
+          "properties": {
+            "posterTop": { "type": "boolean" },
+            "tvTop": { "type": "boolean" },
+            "tvSide": { "type": "boolean" },
+            "mobileBanner": { "type": "boolean" }
+          },
+          "additionalProperties": false
+        },
+        "clickToken": {
+          "type": ["string", "null"],
+          "maxLength": 256,
+          "description": "Tracking token for click attribution"
+        },
+        "impressionToken": {
+          "type": ["string", "null"],
+          "maxLength": 256,
+          "description": "Tracking token for impression attribution"
+        },
+        "tier": {
+          "type": "string",
+          "enum": ["title", "platinum", "gold", "silver", "bronze", "primary"],
+          "description": "Optional sponsorship tier for display priority"
+        }
+      }
+    },
+    "Media": {
+      "type": "object",
+      "description": "V2 OPTIONAL - Media attachments",
+      "additionalProperties": false,
+      "properties": {
+        "videoUrl": {
+          "type": ["string", "null"],
+          "pattern": "^https?://.+"
+        },
+        "mapUrl": {
+          "type": ["string", "null"],
+          "pattern": "^https?://.+"
+        },
+        "gallery": {
+          "type": ["array", "null"],
+          "items": {
+            "type": "string",
+            "pattern": "^https?://.+"
+          }
+        }
+      }
+    },
+    "ExternalData": {
+      "type": "object",
+      "description": "V2 OPTIONAL - External data source URLs (ABC/CBC integration)",
+      "additionalProperties": false,
+      "properties": {
+        "scheduleUrl": {
+          "type": ["string", "null"],
+          "pattern": "^https?://.+"
+        },
+        "standingsUrl": {
+          "type": ["string", "null"],
+          "pattern": "^https?://.+"
+        },
+        "bracketUrl": {
+          "type": ["string", "null"],
+          "pattern": "^https?://.+"
+        }
+      }
+    },
+    "Analytics": {
+      "type": "object",
+      "description": "RESERVED - Event analytics (your moat)",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "eventViews": {
+          "type": ["integer", "null"],
+          "minimum": 0
+        },
+        "publicPageViews": {
+          "type": ["integer", "null"],
+          "minimum": 0
+        },
+        "displayViews": {
+          "type": ["integer", "null"],
+          "minimum": 0
+        },
+        "signupStarts": {
+          "type": ["integer", "null"],
+          "minimum": 0
+        },
+        "signupCompletes": {
+          "type": ["integer", "null"],
+          "minimum": 0
+        },
+        "qrScans": {
+          "type": ["integer", "null"],
+          "minimum": 0
+        }
+      }
+    },
+    "Payments": {
+      "type": "object",
+      "description": "RESERVED - Stripe payment integration",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "provider": {
+          "type": "string",
+          "const": "stripe"
+        },
+        "price": {
+          "type": "number",
+          "minimum": 0
+        },
+        "currency": {
+          "type": "string",
+          "pattern": "^[A-Z]{3}$"
+        },
+        "checkoutUrl": {
+          "type": ["string", "null"],
+          "pattern": "^https?://.+"
+        }
+      }
+    },
+    "Settings": {
+      "type": "object",
+      "description": "MVP REQUIRED - Admin visibility flags for all surfaces",
+      "required": ["showSchedule", "showStandings", "showBracket"],
+      "additionalProperties": false,
+      "properties": {
+        "showSchedule": {
+          "type": "boolean",
+          "description": "MVP REQUIRED - Show schedule section"
+        },
+        "showStandings": {
+          "type": "boolean",
+          "description": "MVP REQUIRED - Show standings section"
+        },
+        "showBracket": {
+          "type": "boolean",
+          "description": "MVP OPTIONAL - Show bracket section"
+        },
+        "showSponsors": {
+          "type": "boolean",
+          "description": "MVP OPTIONAL - Show sponsors section (V2 content)"
+        },
+        "showVideo": {
+          "type": "boolean",
+          "description": "MVP OPTIONAL - Show video section on public page (Feature 4: Template-Aware Toggle, default: true)"
+        },
+        "showMap": {
+          "type": "boolean",
+          "description": "MVP OPTIONAL - Show map button on public page (Feature 4: Template-Aware Toggle, default: true)"
+        },
+        "showGallery": {
+          "type": "boolean",
+          "description": "MVP OPTIONAL - Show gallery section on public page (Feature 4: Template-Aware Toggle, default: true)"
+        },
+        "showSponsorBanner": {
+          "type": "boolean",
+          "description": "MVP OPTIONAL - Show sponsor banner on public page (default: true)"
+        },
+        "showSponsorStrip": {
+          "type": "boolean",
+          "description": "MVP OPTIONAL - Show sponsor strip on display surface (default: true)"
+        },
+        "showLeagueStrip": {
+          "type": "boolean",
+          "description": "MVP OPTIONAL - Show external links strip on display (default: true)"
+        },
+        "showQRSection": {
+          "type": "boolean",
+          "description": "MVP OPTIONAL - Show QR code section on public page (default: true)"
+        },
+        "displayRotation": {
+          "oneOf": [
+            { "$ref": "#/$defs/DisplayRotation" },
+            { "type": "null" }
+          ],
+          "description": "V2 OPTIONAL - Display rotation configuration for TV mode panes"
+        }
+      }
+    },
+    "DisplayRotation": {
+      "type": "object",
+      "description": "V2 OPTIONAL - Configuration for rotating display panes on TV surface",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Whether rotation mode is active (default: false, uses public embed)"
+        },
+        "panes": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/DisplayPane" },
+          "description": "Ordered list of panes to rotate through"
+        },
+        "defaultDwellMs": {
+          "type": "integer",
+          "minimum": 3000,
+          "maximum": 120000,
+          "description": "Default time (ms) each pane displays before rotating (3s-120s)"
+        }
+      }
+    },
+    "DisplayPane": {
+      "type": "object",
+      "description": "V2 OPTIONAL - A single pane in the display rotation",
+      "required": ["type"],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["public", "schedule", "standings", "sponsors", "custom"],
+          "description": "Pane type: public (embed), schedule, standings, sponsors (carousel), custom (URL)"
+        },
+        "dwellMs": {
+          "type": ["integer", "null"],
+          "minimum": 3000,
+          "maximum": 120000,
+          "description": "Override dwell time for this pane (ms)"
+        },
+        "url": {
+          "type": ["string", "null"],
+          "pattern": "^https?://.+",
+          "description": "Custom URL for 'custom' pane type"
+        },
+        "title": {
+          "type": ["string", "null"],
+          "maxLength": 100,
+          "description": "Optional title overlay for the pane"
+        }
+      }
+    },
+    "DisplayConfig": {
+      "type": "object",
+      "description": "V2 OPTIONAL - Display surface configuration for TV mode",
+      "additionalProperties": false,
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": ["public", "dynamic"],
+          "description": "Display mode: public (embed public page) or dynamic (URL rotation)"
+        },
+        "urls": {
+          "type": ["array", "null"],
+          "items": { "$ref": "#/$defs/DisplayUrl" },
+          "description": "URLs to rotate through in dynamic mode"
+        }
+      }
+    },
+    "DisplayUrl": {
+      "type": "object",
+      "description": "V2 OPTIONAL - A URL entry for display rotation",
+      "required": ["url"],
+      "additionalProperties": false,
+      "properties": {
+        "url": {
+          "type": "string",
+          "pattern": "^https?://.+",
+          "description": "URL to display"
+        },
+        "seconds": {
+          "type": "integer",
+          "minimum": 5,
+          "maximum": 300,
+          "description": "Duration in seconds to display this URL (default: 10)"
+        }
+      }
+    }
+  }
+}

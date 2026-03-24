@@ -1,0 +1,447 @@
+<style>
+  /* ===== Tooltip Component System ===== */
+  /*
+    Provides inline help and feature explanations throughout the application.
+    Improves user education without cluttering the interface.
+  */
+
+  .tooltip-trigger {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2, 0.5rem);
+  }
+
+  .help-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    border-radius: var(--radius-full, 9999px);
+    background: var(--color-gray-300, #cbd5e1);
+    color: white;
+    font-size: var(--font-size-xs, 0.75rem);
+    font-weight: var(--font-weight-bold, 700);
+    cursor: help;
+    transition: all var(--transition-base, 0.2s);
+    flex-shrink: 0;
+    user-select: none;
+  }
+
+  .help-icon:hover {
+    background: var(--color-primary, #2563eb);
+    transform: scale(1.1);
+  }
+
+  .help-icon:focus {
+    outline: 2px solid var(--color-primary, #2563eb);
+    outline-offset: 2px;
+  }
+
+  /* Tooltip content */
+  .tooltip {
+    position: absolute;
+    z-index: var(--z-index-dropdown, 10);
+    background: var(--color-gray-800, #1e293b);
+    color: white;
+    padding: var(--space-3, 0.75rem) var(--space-4, 1rem);
+    border-radius: var(--radius-sm, 6px);
+    font-size: var(--font-size-sm, 0.875rem);
+    line-height: var(--line-height-base, 1.6);
+    max-width: 280px;
+    box-shadow: var(--shadow-lg, 0 10px 15px rgba(0, 0, 0, 0.1));
+    pointer-events: none;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity var(--transition-base, 0.2s),
+                visibility var(--transition-base, 0.2s),
+                transform var(--transition-base, 0.2s);
+    white-space: normal;
+    word-wrap: break-word;
+  }
+
+  .tooltip.show {
+    opacity: 1;
+    visibility: visible;
+  }
+
+  /* Tooltip arrow */
+  .tooltip::before {
+    content: '';
+    position: absolute;
+    width: 0;
+    height: 0;
+    border: 6px solid transparent;
+  }
+
+  /* Position variants */
+  .tooltip.top {
+    bottom: calc(100% + var(--space-2, 0.5rem));
+    left: 50%;
+    transform: translateX(-50%) translateY(4px);
+  }
+
+  .tooltip.top.show {
+    transform: translateX(-50%) translateY(0);
+  }
+
+  .tooltip.top::before {
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border-top-color: var(--color-gray-800, #1e293b);
+  }
+
+  .tooltip.bottom {
+    top: calc(100% + var(--space-2, 0.5rem));
+    left: 50%;
+    transform: translateX(-50%) translateY(-4px);
+  }
+
+  .tooltip.bottom.show {
+    transform: translateX(-50%) translateY(0);
+  }
+
+  .tooltip.bottom::before {
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border-bottom-color: var(--color-gray-800, #1e293b);
+  }
+
+  .tooltip.left {
+    right: calc(100% + var(--space-2, 0.5rem));
+    top: 50%;
+    transform: translateY(-50%) translateX(4px);
+  }
+
+  .tooltip.left.show {
+    transform: translateY(-50%) translateX(0);
+  }
+
+  .tooltip.left::before {
+    left: 100%;
+    top: 50%;
+    transform: translateY(-50%);
+    border-left-color: var(--color-gray-800, #1e293b);
+  }
+
+  .tooltip.right {
+    left: calc(100% + var(--space-2, 0.5rem));
+    top: 50%;
+    transform: translateY(-50%) translateX(-4px);
+  }
+
+  .tooltip.right.show {
+    transform: translateY(-50%) translateX(0);
+  }
+
+  .tooltip.right::before {
+    right: 100%;
+    top: 50%;
+    transform: translateY(-50%);
+    border-right-color: var(--color-gray-800, #1e293b);
+  }
+
+  /* Inline help - smaller, less intrusive */
+  .inline-help {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2, 0.5rem);
+    padding: var(--space-2, 0.5rem) var(--space-3, 0.75rem);
+    background: var(--color-primary-pale, #dbeafe);
+    color: var(--color-gray-700, #334155);
+    border-radius: var(--radius-sm, 6px);
+    font-size: var(--font-size-sm, 0.875rem);
+    margin: var(--space-3, 0.75rem) 0;
+    border-left: 3px solid var(--color-primary, #2563eb);
+  }
+
+  .inline-help-icon {
+    font-size: var(--font-size-base, 1rem);
+    flex-shrink: 0;
+  }
+
+  .inline-help.warning {
+    background: #fef3c7;
+    border-left-color: var(--color-warning, #f59e0b);
+    color: var(--color-gray-800, #1e293b);
+  }
+
+  .inline-help.success {
+    background: var(--color-success-pale, #d1fae5);
+    border-left-color: var(--color-success, #10b981);
+    color: var(--color-gray-800, #1e293b);
+  }
+
+  /* Feature explanation card - for more detailed help */
+  .feature-card {
+    background: white;
+    border: 2px solid var(--color-gray-200, #e2e8f0);
+    border-radius: var(--radius-md, 12px);
+    padding: var(--space-5, 1.25rem);
+    margin: var(--space-4, 1rem) 0;
+  }
+
+  .feature-card-header {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3, 0.75rem);
+    margin-bottom: var(--space-3, 0.75rem);
+  }
+
+  .feature-card-icon {
+    font-size: var(--font-size-2xl, 1.5rem);
+  }
+
+  .feature-card-title {
+    font-size: var(--font-size-lg, 1.125rem);
+    font-weight: var(--font-weight-semibold, 600);
+    color: var(--color-gray-800, #1e293b);
+    margin: 0;
+  }
+
+  .feature-card-body {
+    font-size: var(--font-size-sm, 0.875rem);
+    color: var(--color-gray-600, #475569);
+    line-height: var(--line-height-base, 1.6);
+  }
+
+  .feature-card-body ul {
+    margin: var(--space-2, 0.5rem) 0;
+    padding-left: var(--space-5, 1.25rem);
+  }
+
+  .feature-card-body li {
+    margin: var(--space-1, 0.25rem) 0;
+  }
+
+  /* Keyboard shortcut hint */
+  .kbd {
+    display: inline-block;
+    padding: 2px 6px;
+    background: var(--color-gray-100, #f1f5f9);
+    border: 1px solid var(--color-gray-300, #cbd5e1);
+    border-radius: 4px;
+    font-family: var(--font-family-mono);
+    font-size: var(--font-size-xs, 0.75rem);
+    font-weight: var(--font-weight-semibold, 600);
+    color: var(--color-gray-700, #334155);
+    box-shadow: 0 1px 0 var(--color-gray-400, #94a3b8);
+  }
+
+  /* Mobile optimizations */
+  @media (max-width: 640px) {
+    .tooltip {
+      max-width: 240px;
+      font-size: var(--font-size-xs, 0.75rem);
+      padding: var(--space-2, 0.5rem) var(--space-3, 0.75rem);
+    }
+
+    .feature-card {
+      padding: var(--space-4, 1rem);
+    }
+  }
+
+  /* Reduced motion support */
+  @media (prefers-reduced-motion: reduce) {
+    .tooltip,
+    .help-icon {
+      transition: none;
+    }
+  }
+</style>
+
+<script>
+  /* ===== Tooltip Component JavaScript ===== */
+
+  /**
+   * Initialize tooltips on the page
+   * Call this after DOM is loaded or after adding new tooltips
+   */
+  function initTooltips() {
+    const tooltipTriggers = document.querySelectorAll('[data-tooltip]');
+
+    tooltipTriggers.forEach(trigger => {
+      const tooltipText = trigger.getAttribute('data-tooltip');
+      const position = trigger.getAttribute('data-tooltip-position') || 'top';
+
+      // Create tooltip element if it doesn't exist
+      let tooltip = trigger.querySelector('.tooltip');
+      if (!tooltip) {
+        tooltip = document.createElement('div');
+        tooltip.className = `tooltip ${position}`;
+        tooltip.textContent = tooltipText;
+        tooltip.setAttribute('role', 'tooltip');
+        trigger.style.position = 'relative';
+        trigger.appendChild(tooltip);
+      }
+
+      // Show on hover
+      trigger.addEventListener('mouseenter', () => {
+        tooltip.classList.add('show');
+      });
+
+      trigger.addEventListener('mouseleave', () => {
+        tooltip.classList.remove('show');
+      });
+
+      // Show on focus (keyboard accessibility)
+      trigger.addEventListener('focus', () => {
+        tooltip.classList.add('show');
+      });
+
+      trigger.addEventListener('blur', () => {
+        tooltip.classList.remove('show');
+      });
+
+      // Hide on click (mobile)
+      trigger.addEventListener('click', (e) => {
+        if (window.innerWidth <= 640) {
+          e.preventDefault();
+          tooltip.classList.toggle('show');
+        }
+      });
+    });
+  }
+
+  /**
+   * Create a help icon with tooltip
+   * @param {string} tooltipText - Text to show in tooltip
+   * @param {string} position - Position of tooltip (top, bottom, left, right)
+   * @returns {HTMLElement} The help icon element
+   */
+  function createHelpIcon(tooltipText, position = 'top') {
+    const container = document.createElement('span');
+    container.className = 'tooltip-trigger';
+    container.setAttribute('data-tooltip', tooltipText);
+    container.setAttribute('data-tooltip-position', position);
+    container.setAttribute('tabindex', '0');
+    container.setAttribute('role', 'button');
+    container.setAttribute('aria-label', `Help: ${tooltipText}`);
+
+    const icon = document.createElement('span');
+    icon.className = 'help-icon';
+    icon.textContent = '?';
+    icon.setAttribute('aria-hidden', 'true');
+
+    container.appendChild(icon);
+
+    return container;
+  }
+
+  /**
+   * Add help icon next to a label
+   * @param {HTMLElement} labelElement - The label element
+   * @param {string} helpText - Help text to display
+   */
+  function addHelpToLabel(labelElement, helpText) {
+    const helpIcon = createHelpIcon(helpText);
+    labelElement.appendChild(helpIcon);
+    initTooltips();
+  }
+
+  /**
+   * Show inline help message
+   * @param {HTMLElement} container - Container to add help to
+   * @param {string} message - Help message
+   * @param {string} type - Type: 'info', 'warning', 'success'
+   */
+  function showInlineHelp(container, message, type = 'info') {
+    const help = document.createElement('div');
+    help.className = `inline-help ${type}`;
+
+    const icons = {
+      info: '💡',
+      warning: '⚠️',
+      success: '✅'
+    };
+
+    help.innerHTML = `
+      <span class="inline-help-icon">${icons[type] || icons.info}</span>
+      <span>${escapeHtml(message)}</span>
+    `;
+
+    container.appendChild(help);
+  }
+
+  /**
+   * Helper to escape HTML
+   */
+  function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  }
+
+  // Auto-initialize tooltips when DOM is ready
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initTooltips);
+  } else {
+    initTooltips();
+  }
+</script>
+
+<!-- ===== Common Tooltip Examples ===== -->
+<!--
+  These can be used as reference for implementing tooltips throughout the app.
+-->
+
+<template id="tooltip-examples">
+  <!-- Example 1: Label with help icon -->
+  <div class="form-group">
+    <label>
+      Dynamic Mode
+      <span class="tooltip-trigger" data-tooltip="Rotates slides automatically every few seconds" data-tooltip-position="top" tabindex="0">
+        <span class="help-icon" aria-hidden="true">?</span>
+      </span>
+    </label>
+    <select>
+      <option>Enabled</option>
+      <option>Disabled</option>
+    </select>
+  </div>
+
+  <!-- Example 2: Inline help -->
+  <div class="inline-help">
+    <span class="inline-help-icon">💡</span>
+    <span>Tip: Sponsor analytics are shared with sponsors using the same metrics you see here.</span>
+  </div>
+
+  <!-- Example 3: Feature explanation card -->
+  <div class="feature-card">
+    <div class="feature-card-header">
+      <span class="feature-card-icon">🎯</span>
+      <h4 class="feature-card-title">About Sponsor Placements</h4>
+    </div>
+    <div class="feature-card-body">
+      <p>Sponsors can appear in different placements across your event surfaces:</p>
+      <ul>
+        <li><strong>Poster Top:</strong> Appears at the top of printed event posters</li>
+        <li><strong>TV Top:</strong> Displays prominently on kiosk/TV screens</li>
+        <li><strong>TV Side:</strong> Side banner for TV display mode</li>
+        <li><strong>Mobile Banner:</strong> Shows on mobile event pages</li>
+      </ul>
+      <p>Analytics track impressions and clicks for each placement separately.</p>
+    </div>
+  </div>
+
+  <!-- Example 4: Keyboard shortcut -->
+  <div class="inline-help">
+    <span class="inline-help-icon">⌨️</span>
+    <span>Press <kbd>Ctrl</kbd> + <kbd>S</kbd> to save your changes</span>
+  </div>
+
+  <!-- Example 5: Warning inline help -->
+  <div class="inline-help warning">
+    <span class="inline-help-icon">⚠️</span>
+    <span>Changes will be visible immediately on all public surfaces.</span>
+  </div>
+
+  <!-- Example 6: Success inline help -->
+  <div class="inline-help success">
+    <span class="inline-help-icon">✅</span>
+    <span>Your event is now published and visible to attendees!</span>
+  </div>
+</template>

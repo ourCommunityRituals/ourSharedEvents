@@ -1,0 +1,386 @@
+{
+  "info": {
+    "name": "MVP Event Toolkit API",
+    "description": "Complete API collection for MVP Event Toolkit - Multi-brand event management with sponsor tracking",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "mvp-event-toolkit"
+  },
+  "item": [
+    {
+      "name": "System",
+      "item": [
+        {
+          "name": "Status Check",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 200', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response has correct structure', function() {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('ok', true);",
+                  "    pm.expect(jsonData.value).to.have.property('build');",
+                  "    pm.expect(jsonData.value).to.have.property('brand');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}?p=status&brand={{brandId}}",
+              "host": ["{{baseUrl}}"],
+              "query": [
+                {"key": "p", "value": "status"},
+                {"key": "brand", "value": "{{brandId}}"}
+              ]
+            }
+          }
+        },
+        {
+          "name": "Run Diagnostics",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"brandId\": \"{{brandId}}\", \"adminKey\": \"{{adminKey}}\"}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}?action=runDiagnostics",
+              "host": ["{{baseUrl}}"],
+              "query": [{"key": "action", "value": "runDiagnostics"}]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Events",
+      "item": [
+        {
+          "name": "Create Event",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Event created successfully', function() {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.ok).to.be.true;",
+                  "    pm.expect(jsonData.value).to.have.property('id');",
+                  "    pm.environment.set('testEventId', jsonData.value.id);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"brandId\": \"{{brandId}}\",\n  \"scope\": \"events\",\n  \"templateId\": \"event\",\n  \"adminKey\": \"{{adminKey}}\",\n  \"data\": {\n    \"name\": \"Test Event {{$timestamp}}\",\n    \"dateISO\": \"2025-12-01\",\n    \"location\": \"Test Venue\",\n    \"summary\": \"A test event for API testing\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}?action=create",
+              "host": ["{{baseUrl}}"],
+              "query": [{"key": "action", "value": "create"}]
+            }
+          }
+        },
+        {
+          "name": "Get Event",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}?p=api&action=get&brandId={{brandId}}&scope=events&id={{testEventId}}",
+              "host": ["{{baseUrl}}"],
+              "query": [
+                {"key": "p", "value": "api"},
+                {"key": "action", "value": "get"},
+                {"key": "brandId", "value": "{{brandId}}"},
+                {"key": "scope", "value": "events"},
+                {"key": "id", "value": "{{testEventId}}"}
+              ]
+            }
+          }
+        },
+        {
+          "name": "List Events",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}?p=api&action=list&brandId={{brandId}}&scope=events",
+              "host": ["{{baseUrl}}"],
+              "query": [
+                {"key": "p", "value": "api"},
+                {"key": "action", "value": "list"},
+                {"key": "brandId", "value": "{{brandId}}"},
+                {"key": "scope", "value": "events"}
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update Event",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"brandId\": \"{{brandId}}\",\n  \"scope\": \"events\",\n  \"id\": \"{{testEventId}}\",\n  \"adminKey\": \"{{adminKey}}\",\n  \"data\": {\n    \"summary\": \"Updated summary\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}?action=update",
+              "host": ["{{baseUrl}}"],
+              "query": [{"key": "action", "value": "update"}]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Forms Templates",
+      "item": [
+        {
+          "name": "List Form Templates",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Templates returned successfully', function() {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.ok).to.be.true;",
+                  "    pm.expect(jsonData.value.templates).to.be.an('array');",
+                  "    pm.expect(jsonData.value.templates).to.have.lengthOf(3);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}?action=listFormTemplates",
+              "host": ["{{baseUrl}}"],
+              "query": [{"key": "action", "value": "listFormTemplates"}]
+            }
+          }
+        },
+        {
+          "name": "Create Form from Template (Check-In)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Form created successfully', function() {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.ok).to.be.true;",
+                  "    pm.expect(jsonData.value).to.have.property('formId');",
+                  "    pm.expect(jsonData.value).to.have.property('publishedUrl');",
+                  "    pm.expect(jsonData.value).to.have.property('editUrl');",
+                  "    pm.expect(jsonData.value).to.have.property('responseSheetUrl');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"brandId\": \"{{brandId}}\",\n  \"adminKey\": \"{{adminKey}}\",\n  \"templateType\": \"check-in\",\n  \"eventName\": \"Test Event\",\n  \"eventId\": \"{{testEventId}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}?action=createFormFromTemplate",
+              "host": ["{{baseUrl}}"],
+              "query": [{"key": "action", "value": "createFormFromTemplate"}]
+            }
+          }
+        },
+        {
+          "name": "Create Form from Template (Walk-In)",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"brandId\": \"{{brandId}}\",\n  \"adminKey\": \"{{adminKey}}\",\n  \"templateType\": \"walk-in\",\n  \"eventName\": \"Test Event\",\n  \"eventId\": \"{{testEventId}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}?action=createFormFromTemplate",
+              "host": ["{{baseUrl}}"],
+              "query": [{"key": "action", "value": "createFormFromTemplate"}]
+            }
+          }
+        },
+        {
+          "name": "Create Form from Template (Survey)",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"brandId\": \"{{brandId}}\",\n  \"adminKey\": \"{{adminKey}}\",\n  \"templateType\": \"survey\",\n  \"eventName\": \"Test Event\",\n  \"eventId\": \"{{testEventId}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}?action=createFormFromTemplate",
+              "host": ["{{baseUrl}}"],
+              "query": [{"key": "action", "value": "createFormFromTemplate"}]
+            }
+          }
+        },
+        {
+          "name": "Generate Form Shortlink",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Shortlink created successfully', function() {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.ok).to.be.true;",
+                  "    pm.expect(jsonData.value).to.have.property('shortlink');",
+                  "    pm.expect(jsonData.value).to.have.property('token');",
+                  "    pm.environment.set('shortlinkToken', jsonData.value.token);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"brandId\": \"{{brandId}}\",\n  \"adminKey\": \"{{adminKey}}\",\n  \"formUrl\": \"https://docs.google.com/forms/d/e/TEST_FORM_ID/viewform\",\n  \"formType\": \"check-in\",\n  \"eventId\": \"{{testEventId}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}?action=generateFormShortlink",
+              "host": ["{{baseUrl}}"],
+              "query": [{"key": "action", "value": "generateFormShortlink"}]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Shortlinks",
+      "item": [
+        {
+          "name": "Create Shortlink",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Shortlink created', function() {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.ok).to.be.true;",
+                  "    pm.expect(jsonData.value).to.have.property('token');",
+                  "    pm.expect(jsonData.value).to.have.property('shortlink');",
+                  "    pm.environment.set('shortlinkToken', jsonData.value.token);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"brandId\": \"{{brandId}}\",\n  \"adminKey\": \"{{adminKey}}\",\n  \"targetUrl\": \"https://example.com/target\",\n  \"eventId\": \"{{testEventId}}\",\n  \"surface\": \"test\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}?action=createShortlink",
+              "host": ["{{baseUrl}}"],
+              "query": [{"key": "action", "value": "createShortlink"}]
+            }
+          }
+        },
+        {
+          "name": "Redirect via Shortlink",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}?p=r&t={{shortlinkToken}}",
+              "host": ["{{baseUrl}}"],
+              "query": [
+                {"key": "p", "value": "r"},
+                {"key": "t", "value": "{{shortlinkToken}}"}
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Analytics",
+      "item": [
+        {
+          "name": "Get Report",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"brandId\": \"{{brandId}}\",\n  \"adminKey\": \"{{adminKey}}\",\n  \"eventId\": \"{{testEventId}}\",\n  \"startDate\": \"2025-01-01\",\n  \"endDate\": \"2025-12-31\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}?action=getReport",
+              "host": ["{{baseUrl}}"],
+              "query": [{"key": "action", "value": "getReport"}]
+            }
+          }
+        },
+        {
+          "name": "Log Events",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"items\": [\n    {\n      \"type\": \"impression\",\n      \"eventId\": \"{{testEventId}}\",\n      \"sponsorId\": \"sponsor123\",\n      \"surface\": \"tv\",\n      \"timestamp\": \"{{$timestamp}}\"\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}?action=logEvents",
+              "host": ["{{baseUrl}}"],
+              "query": [{"key": "action", "value": "logEvents"}]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "{{baseUrl}}"
+    }
+  ]
+}

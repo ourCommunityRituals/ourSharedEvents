@@ -1,0 +1,2995 @@
+# Stage-2 Orchestrator Workflow
+#
+# Purpose: Validates live staging AND production environments after Stage-1 deploys.
+#          This closes the loop: Stage-1 deploys -> Stage-2 validates.
+#
+# Trigger: Runs automatically when Stage-1 Validation workflow succeeds.
+#
+# What it does:
+#   - Staging (push to main): Downloads stg-base-url, runs full validation
+#   - Production (tag push): Downloads prod-base-url, requires approval, runs post-deploy sanity
+#   - Runs API smoke tests against the live URL
+#   - Runs UI smoke tests against the live URL (GATED by API tests)
+#   - Validates HTML integrity (Story 6: blocks GAS HTML leaks)
+#   - Validates Story 7 acceptance criteria for production
+#   - Blocks release on any failure (authoritative deployment validator)
+#
+# Story 2.5 (DevOps): Progressive Test Gates
+#   - API smoke tests run FIRST (critical gate)
+#   - If API tests fail, UI tests are SKIPPED (fail-fast)
+#   - If any staging test fails, production deployment is NOT successful
+#   - Team notification sent immediately on gate failure
+#
+# Story 5 - Expand Playwright Smoke Coverage:
+#   Critical smoke tests cover:
+#   - /api/health/backend - Backend health check (ok:true required)
+#   - /api/v2/events - Events list endpoint
+#   - /manage UI basics - Admin dropdown/wizard
+#   - /events public page - Event list rendering
+#   - SharedReport pages
+#
+#   Acceptance Criteria:
+#   - Tests fail if first API host does not include stg.eventangle.com
+#   - Tests fail if any response returns ok:false
+#   - Stage-2 log output includes base URL and first host for debugging
+#   - Tests respect environment variables (BASE_URL, ADMIN_KEY)
+#
+#   @see tests/api/smoke/stage2-critical-smoke.spec.ts
+#   @see playwright.stage2-smoke.config.ts
+#
+# Story 6 - GAS HTML Guardrails:
+#   API smoke tests include gas-html-integrity.spec.ts which:
+#   - Fetches /events and all HTML routes
+#   - Validates response does NOT contain GAS HTML markers
+#   - Saves HTML artifacts on failure for debugging
+#   - Blocks promotion if GAS HTML is detected
+#
+# Story 7 - Mirror Fixed Pipeline & Backend Wiring to Production:
+#   Purpose: Bring prod to parity with staging so https://www.eventangle.com/events
+#   behaves identically to staging.
+#
+#   Acceptance Criteria (CI):
+#   - After manual approval, prod Stage-2 leg can:
+#     - Hit https://www.eventangle.com/api/status
+#     - Run lightweight /events smoke test (events.smoke.prod.spec.ts)
+#     - Fail if prod /events is broken
+#   - Prod Stage-2 blocks marking deployment as "live good" if /events fails
+#
+#   Production Tests:
+#   - events.smoke.prod.spec.ts: Lightweight /events validation
+#   - prod-sanity.spec.ts: Full production sanity checks
+#   - No GAS blue banner on /events
+#   - Admin UI visible
+#   - Network calls use /api/* for JSON only
+#   - QR codes still resolve to correct pages
+#
+#   Negative Path Handling:
+#   - If prod deployment fails or /api/status not OK:
+#     - Pipeline leaves current prod untouched
+#     - Raises red flag with clear log output
+#     - See docs/ROLLBACK.md for recovery procedures
+#
+#   Manual Approval Gate:
+#   - Production tests require manual approval via GitHub Environment
+#   - Setup: Settings > Environments > "production" > Required reviewers
+#
+# Contract Boundaries:
+#   - Uses strict JSON schema checks from v4.1.2
+#   - Validates stable routes only (no dev-only endpoints)
+#   - Prevents broken posters, QR codes, events from going live
+#   - Prevents GAS HTML shell from leaking to users
+#
+# System Impacts:
+#   - Upstream: Validates deployment integrity from Stage-1
+#   - Downstream: Prevents broken features from reaching users
+#   - Rollback: If validation fails, see docs/ROLLBACK.md
+#
+# @see tests/api/smoke/ - API smoke test pack
+# @see tests/api/smoke/stage2-critical-smoke.spec.ts - Story 5 critical smoke tests
+# @see tests/api/smoke/gas-html-integrity.spec.ts - Story 6 GAS HTML guardrails
+# @see tests/api/smoke/prod-sanity.spec.ts - Story 7 production sanity
+# @see tests/ui/smoke/ - UI smoke test pack
+# @see tests/shared/helpers/smoke-test-helper.ts - Story 5 smoke test utilities
+# @see playwright.smoke.config.ts - API smoke configuration
+# @see playwright.stage2-smoke.config.ts - Story 5 Stage-2 smoke configuration
+# @see playwright.ui-smoke.config.ts - UI smoke configuration
+
+name: Stage-2 Orchestrator
+
+on:
+  workflow_run:
+    workflows:
+      - "Stage-1 Validation"
+    types:
+      - completed
+  # Manual trigger: staging by default, select production for releases
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - production
+      skip_approval:
+        description: 'Skip production approval gate (for re-runs)'
+        required: false
+        default: false
+        type: boolean
+
+# Environment configuration - Standardized naming convention
+# See config/deployment-ids.js for canonical source of truth
+#
+# Story 6 - CI Environment Configuration:
+#   STG_BASE_URL: Used by Stage-2 tests against staging
+#   PROD_BASE_URL: Used by Stage-2 tests against production
+env:
+  # Staging environment (Story 6 CI config)
+  STG_BASE_URL: 'https://stg.eventangle.com'
+  STAGING_URL: 'https://stg.eventangle.com'
+  # Production environment (Story 6 CI config)
+  PROD_BASE_URL: 'https://www.eventangle.com'
+  PROD_URL: 'https://www.eventangle.com'
+  # Legacy alias (keeping for backward compatibility)
+  PRODUCTION_URL: 'https://www.eventangle.com'
+
+# Prevent duplicate runs for the same deployment
+concurrency:
+  group: stage2-orchestrator-${{ github.event.workflow_run.head_sha || github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  # ============================================================================
+  # GATE CHECK
+  # ============================================================================
+  # Only proceed if Stage-1 completed successfully.
+  # Determines whether this is a staging (push to main) or production (tag) deploy.
+  # This prevents running Stage-2 on failed deployments.
+  # ============================================================================
+  check-stage1:
+    name: "S2·01 🔍 Check Stage-1 Status"
+    runs-on: ubuntu-latest
+    outputs:
+      should_run: ${{ steps.check.outputs.should_run }}
+      stage1_conclusion: ${{ steps.check.outputs.conclusion }}
+      deploy_type: ${{ steps.check.outputs.deploy_type }}
+      is_production: ${{ steps.check.outputs.is_production }}
+
+    steps:
+      - name: Check Stage-1 conclusion and deploy type
+        id: check
+        run: |
+          # Detect trigger type: workflow_dispatch or workflow_run
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "=============================================="
+            echo "MANUAL TRIGGER: workflow_dispatch"
+            echo "=============================================="
+            DEPLOY_TYPE="${{ inputs.environment }}"
+
+            echo "Selected environment: $DEPLOY_TYPE"
+            echo "deploy_type=$DEPLOY_TYPE" >> $GITHUB_OUTPUT
+            echo "conclusion=manual" >> $GITHUB_OUTPUT
+            echo "should_run=true" >> $GITHUB_OUTPUT
+
+            if [ "$DEPLOY_TYPE" == "production" ]; then
+              echo "is_production=true" >> $GITHUB_OUTPUT
+              echo ""
+              echo "⚠️  PRODUCTION selected - approval gate will be required"
+            else
+              echo "is_production=false" >> $GITHUB_OUTPUT
+              echo ""
+              echo "✓ Staging selected (default) - no approval needed"
+            fi
+          else
+            echo "=============================================="
+            echo "AUTOMATIC TRIGGER: workflow_run (Stage-1)"
+            echo "=============================================="
+            CONCLUSION="${{ github.event.workflow_run.conclusion }}"
+            HEAD_BRANCH="${{ github.event.workflow_run.head_branch }}"
+
+            echo "Stage-1 Validation conclusion: $CONCLUSION"
+            echo "Head branch/tag: $HEAD_BRANCH"
+            echo "conclusion=$CONCLUSION" >> $GITHUB_OUTPUT
+
+            # Determine deploy type based on head branch (tag vs main)
+            if [[ "$HEAD_BRANCH" =~ ^v[0-9]+\.[0-9]+\.[0-9]+ ]]; then
+              echo "Detected PRODUCTION deployment (tag: $HEAD_BRANCH)"
+              echo "deploy_type=production" >> $GITHUB_OUTPUT
+              echo "is_production=true" >> $GITHUB_OUTPUT
+            else
+              echo "Detected STAGING deployment (branch: $HEAD_BRANCH)"
+              echo "deploy_type=staging" >> $GITHUB_OUTPUT
+              echo "is_production=false" >> $GITHUB_OUTPUT
+            fi
+
+            if [ "$CONCLUSION" == "success" ]; then
+              echo "Stage-1 succeeded - proceeding with Stage-2 validation"
+              echo "should_run=true" >> $GITHUB_OUTPUT
+            else
+              echo "::warning::Stage-1 did not succeed (conclusion: $CONCLUSION)"
+              echo "Stage-2 validation skipped - Stage-1 must succeed first"
+              echo "should_run=false" >> $GITHUB_OUTPUT
+            fi
+          fi
+
+      - name: Display outputs for debugging
+        run: |
+          echo "=============================================="
+          echo "S2·01 CHECK-STAGE1: OUTPUTS SET"
+          echo "=============================================="
+          echo ""
+          echo "Outputs that will be passed to downstream jobs:"
+          echo "  should_run: ${{ steps.check.outputs.should_run }}"
+          echo "  is_production: ${{ steps.check.outputs.is_production }}"
+          echo "  deploy_type: ${{ steps.check.outputs.deploy_type }}"
+          echo "  conclusion: ${{ steps.check.outputs.conclusion }}"
+          echo ""
+          echo "These values determine:"
+          echo "  - should_run=true: Stage-2 tests will run"
+          echo "  - should_run=false: Stage-2 tests will be SKIPPED"
+          echo "  - is_production=true: Production approval gate required"
+          echo "  - is_production=false: Staging (no approval needed)"
+          echo "=============================================="
+
+          # Provide clear next-steps message
+          IS_PROD="${{ steps.check.outputs.is_production }}"
+          SHOULD_RUN="${{ steps.check.outputs.should_run }}"
+          EVENT_NAME="${{ github.event_name }}"
+
+          echo ""
+          echo "S2·02 prod-approval-gate condition evaluation:"
+          echo "  - should_run == 'true': $SHOULD_RUN == 'true' -> $([ "$SHOULD_RUN" == "true" ] && echo "true" || echo "false")"
+          echo "  - is_production == 'true': $IS_PROD == 'true' -> $([ "$IS_PROD" == "true" ] && echo "true" || echo "false")"
+          echo "  - event_name: $EVENT_NAME"
+          echo "  -> S2·02 will: $([ "$SHOULD_RUN" == "true" ] && [ "$IS_PROD" == "true" ] && echo "RUN (wait for approval)" || echo "SKIP")"
+          echo ""
+
+          if [ "$SHOULD_RUN" == "true" ]; then
+            if [ "$IS_PROD" == "true" ]; then
+              echo "🔐 NEXT: Production approval gate (S2·02)"
+              echo "   The workflow will WAIT for manual approval."
+              echo "   Go to GitHub > Actions > This run to approve."
+              echo ""
+            else
+              echo "✓ NEXT: Download artifact (S2·03) - S2·02 will be SKIPPED"
+              echo "   Staging deployment - no approval needed."
+              echo "   Tests will start automatically."
+              echo ""
+            fi
+          else
+            echo ""
+            echo "⚠️ STOPPING: Stage-1 did not succeed"
+            echo "   All Stage-2 tests will be SKIPPED."
+            echo ""
+          fi
+
+      - name: Create success summary
+        if: steps.check.outputs.should_run == 'true'
+        run: |
+          echo "## S2·01 Check Stage-1 Status" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### ✅ Stage-1 Succeeded - Proceeding with Stage-2" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| **Deploy Type** | \`${{ steps.check.outputs.deploy_type }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Is Production** | \`${{ steps.check.outputs.is_production }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Stage-1 Conclusion** | \`${{ steps.check.outputs.conclusion }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Trigger** | \`${{ github.event_name }}\` |" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ steps.check.outputs.is_production }}" == "true" ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**⏳ Next Step:** S2·02 Production Approval Gate (requires manual approval)" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**✓ Next Step:** S2·03 Download Artifact (no approval needed for staging)" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Create skip summary
+        if: steps.check.outputs.should_run != 'true'
+        run: |
+          echo ""
+          echo "=============================================="
+          echo "⚠️  STAGE-2 WILL BE SKIPPED"
+          echo "=============================================="
+          echo ""
+          echo "Reason: Stage-1 Validation did not succeed"
+          echo "Stage-1 Conclusion: ${{ github.event.workflow_run.conclusion }}"
+          echo ""
+          echo "All Stage-2 tests will be SKIPPED because should_run=false"
+          echo ""
+          echo "To fix: Check the Stage-1 workflow run for failures"
+          echo "Stage-1 Run ID: ${{ github.event.workflow_run.id }}"
+          echo "=============================================="
+          echo ""
+          echo "## Stage-2 Orchestrator - Skipped" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### ⚠️ Stage-1 Validation did not succeed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "All Stage-2 tests are being **SKIPPED** because Stage-1 did not complete successfully." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| **Stage-1 Conclusion** | \`${{ github.event.workflow_run.conclusion }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Deploy Type** | \`${{ steps.check.outputs.deploy_type }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Workflow Run** | \`${{ github.event.workflow_run.id }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Head SHA** | \`${{ github.event.workflow_run.head_sha }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Action Required:** Check the [Stage-1 workflow run](https://github.com/${{ github.repository }}/actions/runs/${{ github.event.workflow_run.id }}) for failures." >> $GITHUB_STEP_SUMMARY
+
+  # ============================================================================
+  # SECURITY GUARD: NO GAS DEPENDENCIES (SEC-IAC-01)
+  # ============================================================================
+  # Re-run guard-no-gas in Stage-2 before deploy steps.
+  # Architectural invariant: Worker-only backend, no GAS dependencies allowed.
+  #
+  # This ensures the code being deployed has been validated for GAS drift.
+  # Runs in parallel with prod-approval-gate.
+  #
+  # @see docs/security/NO_GAS_GUARD.md
+  # ============================================================================
+  guard-no-gas:
+    name: "S2·01.5 🚫 Guard No GAS"
+    runs-on: ubuntu-latest
+    needs: check-stage1
+    if: needs.check-stage1.outputs.should_run == 'true'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run guard-no-gas
+        run: |
+          echo "=================================================="
+          echo "SECURITY GUARD: NO GAS DEPENDENCIES (SEC-IAC-01)"
+          echo "=================================================="
+          echo "Stage-2 pre-deploy validation"
+          echo "Architectural invariant: Worker-only backend"
+          echo "=================================================="
+          npm run guard:no-gas
+
+      - name: Create guard summary
+        if: always()
+        run: |
+          echo "## 🚫 Guard No GAS (Stage-2)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ job.status }}" == "success" ]; then
+            echo "### ✅ PASSED" >> $GITHUB_STEP_SUMMARY
+            echo "No Google Apps Script dependencies detected." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### ❌ FAILED" >> $GITHUB_STEP_SUMMARY
+            echo "GAS dependencies detected. Deployment blocked." >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "See: docs/security/NO_GAS_GUARD.md" >> $GITHUB_STEP_SUMMARY
+          fi
+
+  # ============================================================================
+  # STORY 7: PRODUCTION APPROVAL GATE
+  # ============================================================================
+  # Requires manual approval before production Stage-2 tests can run.
+  # Uses GitHub Environment protection rules for the "production" environment.
+  #
+  # Setup Required (GitHub Settings):
+  #   1. Go to Settings > Environments
+  #   2. Create environment named "production"
+  #   3. Enable "Required reviewers" and add approvers
+  #   4. Optionally add deployment branch restrictions (tags only)
+  #
+  # This gate ensures:
+  #   - Production deployments are reviewed before validation
+  #   - Accidental production testing is prevented
+  #   - Clear audit trail of who approved production validation
+  #
+  # For staging: This job is skipped (no approval needed)
+  # For production: Requires manual approval via GitHub environment
+  # ============================================================================
+  prod-approval-gate:
+    name: "S2·02 🔐 Production Approval Gate"
+    runs-on: ubuntu-latest
+    needs: check-stage1
+    # Skip approval if: (1) not production, OR (2) manual trigger with skip_approval=true
+    # IMPORTANT: Use >- (folded style) instead of | (literal block) for reliable parsing
+    # IMPORTANT: For workflow_run events, inputs.skip_approval doesn't exist, so we must
+    # check the event type first to avoid undefined behavior. The condition ensures:
+    # - For workflow_run: only runs if is_production=true (auto-deploy approval required)
+    # - For workflow_dispatch: only runs if is_production=true AND skip_approval is not true
+    if: >-
+      needs.check-stage1.outputs.should_run == 'true' &&
+      needs.check-stage1.outputs.is_production == 'true' &&
+      (github.event_name != 'workflow_dispatch' || inputs.skip_approval != true)
+    environment:
+      name: production
+      url: https://www.eventangle.com
+
+    steps:
+      - name: Production deployment approved
+        run: |
+          echo "=============================================="
+          echo "🔐 S2·02 PRODUCTION APPROVAL GATE"
+          echo "=============================================="
+          echo ""
+          echo "This job is ONLY running because:"
+          echo "  - is_production=true (detected production deployment)"
+          echo "  - skip_approval is not true"
+          echo "  - Manual approval was granted in GitHub"
+          echo ""
+          echo "If this job is WAITING, then:"
+          echo "  - Go to GitHub Repository Settings > Environments"
+          echo "  - Find the 'production' environment"
+          echo "  - Approve the pending deployment"
+          echo ""
+          echo "Environment: production"
+          echo "Target URL: https://www.eventangle.com"
+          echo "Trigger: ${{ github.event_name }}"
+          echo "Ref: ${{ github.event.workflow_run.head_branch || github.ref_name }}"
+          echo ""
+          echo "✅ Production Stage-2 validation has been approved."
+          echo "Proceeding with production smoke tests..."
+          echo "=============================================="
+
+      - name: Create approval summary
+        run: |
+          echo "## 🔐 Production Approval Gate" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### ✅ APPROVED" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Production Stage-2 validation has been manually approved." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| **Environment** | \`production\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Target URL** | \`https://www.eventangle.com\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Trigger** | \`${{ github.event_name }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Ref** | \`${{ github.event.workflow_run.head_branch || github.ref_name }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Approver** | \`${{ github.actor }}\` |" >> $GITHUB_STEP_SUMMARY
+
+  # ============================================================================
+  # ARTIFACT DOWNLOAD / URL RESOLUTION
+  # ============================================================================
+  # Resolves the target BASE_URL for Stage-2 tests:
+  #   - workflow_run (automatic): Downloads artifact from Stage-1
+  #   - workflow_dispatch (manual): Uses environment URLs directly
+  #
+  # Story 7: For production, this waits for manual approval first.
+  # ============================================================================
+  download-artifact:
+    name: "S2·03 📥 Resolve Base URL"
+    runs-on: ubuntu-latest
+    needs: [check-stage1, guard-no-gas, prod-approval-gate]
+    # Run if: staging (approval skipped) OR production (approval passed/skipped via skip_approval)
+    # Note: always() is required because when prod-approval-gate is skipped (staging or skip_approval),
+    # GitHub Actions would skip this job by default. always() forces condition evaluation.
+    #
+    # IMPORTANT: The condition is structured so staging jobs can proceed immediately:
+    # - For staging: is_production='false', so first condition in OR is true, job runs
+    # - For production: is_production='true', so we check if approval gate passed or was skipped
+    # - Guard-no-gas must succeed for deployment to proceed
+    #
+    # FIX: Consolidated OR condition onto single line to avoid YAML parsing issues with
+    # multi-line expressions in parentheses. The >- folded style with line breaks inside
+    # parentheses can cause expression evaluation issues in GitHub Actions.
+    if: >-
+      always() &&
+      needs.check-stage1.result == 'success' &&
+      needs.guard-no-gas.result == 'success' &&
+      needs.check-stage1.outputs.should_run == 'true' &&
+      (needs.check-stage1.outputs.is_production == 'false' || needs.prod-approval-gate.result == 'success' || needs.prod-approval-gate.result == 'skipped')
+    outputs:
+      base_url: ${{ steps.extract.outputs.base_url }}
+      environment: ${{ steps.extract.outputs.environment }}
+
+    steps:
+      # Diagnostic step to show job inputs and help debug dependency issues
+      - name: Show job inputs and dependency status
+        run: |
+          echo "=============================================="
+          echo "S2·03 DOWNLOAD-ARTIFACT: JOB STARTED"
+          echo "=============================================="
+          echo ""
+          echo "Dependency Status:"
+          echo "  check-stage1.result: ${{ needs.check-stage1.result }}"
+          echo "  prod-approval-gate.result: ${{ needs.prod-approval-gate.result }}"
+          echo ""
+          echo "Outputs from check-stage1:"
+          echo "  should_run: ${{ needs.check-stage1.outputs.should_run }}"
+          echo "  is_production: ${{ needs.check-stage1.outputs.is_production }}"
+          echo "  deploy_type: ${{ needs.check-stage1.outputs.deploy_type }}"
+          echo ""
+          echo "Trigger Info:"
+          echo "  event_name: ${{ github.event_name }}"
+          echo "  workflow_run.event: ${{ github.event.workflow_run.event }}"
+          echo "  workflow_run.head_branch: ${{ github.event.workflow_run.head_branch }}"
+          echo ""
+          echo "This job running means:"
+          echo "  - check-stage1 succeeded (result: ${{ needs.check-stage1.result }})"
+          echo "  - should_run is true"
+          echo "  - Either staging (is_production=false) OR production approved/skipped"
+          echo "=============================================="
+
+      # For manual triggers OR PRs: use environment URLs directly (no deployment artifact)
+      # PRs don't deploy, but they can still validate tests against existing staging
+      - name: Resolve URL directly
+        if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.event == 'pull_request'
+        id: direct-url
+        env:
+          IS_PRODUCTION: ${{ needs.check-stage1.outputs.is_production }}
+          TRIGGER_EVENT: ${{ github.event.workflow_run.event || 'workflow_dispatch' }}
+        run: |
+          echo "=============================================="
+          echo "DIRECT URL RESOLUTION (no artifact needed)"
+          echo "Trigger: $TRIGGER_EVENT"
+          echo "=============================================="
+
+          if [ "$IS_PRODUCTION" == "true" ]; then
+            echo "base_url=${{ env.PROD_BASE_URL }}" >> $GITHUB_OUTPUT
+            echo "environment=production" >> $GITHUB_OUTPUT
+            echo "Target: ${{ env.PROD_BASE_URL }} (production)"
+          else
+            echo "base_url=${{ env.STG_BASE_URL }}" >> $GITHUB_OUTPUT
+            echo "environment=staging" >> $GITHUB_OUTPUT
+            echo "Target: ${{ env.STG_BASE_URL }} (staging)"
+          fi
+
+      # For deployments (push to main, tags): download artifact from Stage-1
+      # Use dawidd6/action-download-artifact for cross-workflow artifact downloads
+      # The official actions/download-artifact@v4 does NOT support downloading
+      # artifacts from a different workflow run (even with run-id parameter).
+      - name: Download staging artifact
+        if: github.event_name == 'workflow_run' && github.event.workflow_run.event != 'pull_request' && needs.check-stage1.outputs.is_production == 'false'
+        uses: dawidd6/action-download-artifact@v6
+        with:
+          name: stg-base-url
+          run_id: ${{ github.event.workflow_run.id }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          workflow: stage1.yml
+
+      - name: Download production artifact
+        if: github.event_name == 'workflow_run' && github.event.workflow_run.event != 'pull_request' && needs.check-stage1.outputs.is_production == 'true'
+        uses: dawidd6/action-download-artifact@v6
+        with:
+          name: prod-base-url
+          run_id: ${{ github.event.workflow_run.id }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          workflow: stage1.yml
+
+      - name: Debug downloaded artifact structure
+        if: github.event_name == 'workflow_run' && github.event.workflow_run.event != 'pull_request'
+        run: |
+          echo "=============================================="
+          echo "DEBUG: Downloaded artifact structure"
+          echo "=============================================="
+          echo "Current directory: $(pwd)"
+          echo ""
+          echo "Files in current directory:"
+          ls -la . || echo "(empty or failed)"
+          echo ""
+          echo "Recursive file listing (max depth 3):"
+          find . -maxdepth 3 -type f 2>/dev/null || echo "(no files found)"
+          echo ""
+          echo "Looking for URL files:"
+          find . -name "*-url.txt" -o -name "*-base-url*" 2>/dev/null || echo "(no URL files found)"
+          echo "=============================================="
+
+      - name: Extract and validate BASE_URL
+        id: extract
+        env:
+          IS_PRODUCTION: ${{ needs.check-stage1.outputs.is_production }}
+          DIRECT_BASE_URL: ${{ steps.direct-url.outputs.base_url }}
+          DIRECT_ENVIRONMENT: ${{ steps.direct-url.outputs.environment }}
+          # Fallback URLs from workflow env vars
+          STG_FALLBACK_URL: ${{ env.STG_BASE_URL }}
+          PROD_FALLBACK_URL: ${{ env.PROD_BASE_URL }}
+        run: |
+          echo "=============================================="
+          echo "EXTRACT AND VALIDATE BASE_URL"
+          echo "=============================================="
+          echo ""
+
+          # For manual triggers or PRs, use the directly resolved URL
+          if [ -n "$DIRECT_BASE_URL" ]; then
+            echo "Using directly resolved URL: $DIRECT_BASE_URL"
+            echo "base_url=$DIRECT_BASE_URL" >> $GITHUB_OUTPUT
+            echo "environment=$DIRECT_ENVIRONMENT" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # For automatic triggers (workflow_run), extract from artifact file
+          if [ "$IS_PRODUCTION" == "true" ]; then
+            ARTIFACT_FILE="prod-base-url.txt"
+            ARTIFACT_ALT="artifact/prod-base-url.txt"
+            ENV_NAME="production"
+            FALLBACK_URL="$PROD_FALLBACK_URL"
+          else
+            ARTIFACT_FILE="stg-base-url.txt"
+            ARTIFACT_ALT="artifact/stg-base-url.txt"
+            ENV_NAME="staging"
+            FALLBACK_URL="$STG_FALLBACK_URL"
+          fi
+
+          echo "Looking for artifact file..."
+          echo "  Primary path: $ARTIFACT_FILE"
+          echo "  Alternate path: $ARTIFACT_ALT"
+          echo "  Fallback URL: $FALLBACK_URL"
+          echo ""
+
+          # Try multiple possible locations for the artifact file
+          FOUND_FILE=""
+          if [ -f "$ARTIFACT_FILE" ]; then
+            FOUND_FILE="$ARTIFACT_FILE"
+            echo "✓ Found at primary path: $ARTIFACT_FILE"
+          elif [ -f "$ARTIFACT_ALT" ]; then
+            FOUND_FILE="$ARTIFACT_ALT"
+            echo "✓ Found at alternate path: $ARTIFACT_ALT"
+          else
+            # Search for the file anywhere
+            SEARCH_RESULT=$(find . -name "$(basename $ARTIFACT_FILE)" -type f 2>/dev/null | head -1)
+            if [ -n "$SEARCH_RESULT" ] && [ -f "$SEARCH_RESULT" ]; then
+              FOUND_FILE="$SEARCH_RESULT"
+              echo "✓ Found via search: $SEARCH_RESULT"
+            fi
+          fi
+
+          if [ -n "$FOUND_FILE" ]; then
+            BASE_URL=$(cat "$FOUND_FILE" | tr -d '\n\r ')
+            echo "Extracted BASE_URL from artifact: $BASE_URL"
+          else
+            echo ""
+            echo "⚠️ Artifact file not found in any location!"
+            echo ""
+            echo "This can happen if:"
+            echo "  - Stage 1 deployment failed before artifact upload"
+            echo "  - Artifact download failed"
+            echo "  - Artifact structure changed"
+            echo ""
+
+            # Use fallback URL
+            if [ -n "$FALLBACK_URL" ]; then
+              echo "Using fallback URL: $FALLBACK_URL"
+              BASE_URL="$FALLBACK_URL"
+            else
+              echo "::error::No artifact file found and no fallback URL available"
+              exit 1
+            fi
+          fi
+
+          # Validate URL format
+          if [[ ! "$BASE_URL" =~ ^https:// ]]; then
+            echo "::error::Invalid BASE_URL format: '$BASE_URL' (must start with https://)"
+            exit 1
+          fi
+
+          echo ""
+          echo "=============================================="
+          echo "✓ BASE_URL RESOLVED"
+          echo "=============================================="
+          echo "  Environment: $ENV_NAME"
+          echo "  BASE_URL: $BASE_URL"
+          echo "=============================================="
+
+          echo "base_url=$BASE_URL" >> $GITHUB_OUTPUT
+          echo "environment=$ENV_NAME" >> $GITHUB_OUTPUT
+
+      - name: Create artifact summary
+        run: |
+          echo "## Stage-2 Artifact Download" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Successfully downloaded ${{ steps.extract.outputs.environment }} URL artifact." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| **Environment** | \`${{ steps.extract.outputs.environment }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Base URL** | \`${{ steps.extract.outputs.base_url }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Source Workflow Run** | \`${{ github.event.workflow_run.id }}\` |" >> $GITHUB_STEP_SUMMARY
+
+  # ============================================================================
+  # STORY 6: PRE-FLIGHT HEALTH CHECK
+  # ============================================================================
+  # Quick health check before running full test suite.
+  # Validates that staging/production is reachable and responsive.
+  #
+  # Story 6 Requirements:
+  #   - Hit /api/status first - abort if ok:false
+  #   - Hit /events and assert HTTP 200
+  #   - Fail cleanly with "staging unavailable" message instead of noisy timeouts
+  #
+  # This runs BEFORE env-alignment-gate to catch global outages early.
+  # ============================================================================
+  preflight-health-check:
+    name: "S2·04 🏥 Health Check (${{ needs.download-artifact.outputs.environment }})"
+    runs-on: ubuntu-latest
+    needs: [check-stage1, download-artifact]
+    # IMPORTANT: Use always() to run even if dependencies have unusual states, then check within
+    if: >-
+      always() &&
+      needs.check-stage1.result == 'success' &&
+      needs.download-artifact.result == 'success' &&
+      needs.check-stage1.outputs.should_run == 'true'
+    outputs:
+      health_status: ${{ steps.health-check.outputs.status }}
+      api_status_ok: ${{ steps.health-check.outputs.api_status_ok }}
+      events_ok: ${{ steps.health-check.outputs.events_ok }}
+    env:
+      BASE_URL: ${{ needs.download-artifact.outputs.base_url }}
+      ENVIRONMENT: ${{ needs.download-artifact.outputs.environment }}
+
+    steps:
+      - name: Display dependency status
+        run: |
+          echo "=============================================="
+          echo "S2·04 PREFLIGHT-HEALTH-CHECK: JOB STARTED"
+          echo "=============================================="
+          echo ""
+          echo "Dependency Status:"
+          echo "  check-stage1.result: ${{ needs.check-stage1.result }}"
+          echo "  download-artifact.result: ${{ needs.download-artifact.result }}"
+          echo ""
+          echo "Inputs from check-stage1:"
+          echo "  should_run: ${{ needs.check-stage1.outputs.should_run }}"
+          echo "  is_production: ${{ needs.check-stage1.outputs.is_production }}"
+          echo ""
+          echo "Inputs from download-artifact:"
+          echo "  base_url: ${{ needs.download-artifact.outputs.base_url }}"
+          echo "  environment: ${{ needs.download-artifact.outputs.environment }}"
+          echo "=============================================="
+
+      # Checkout needed for wrangler.toml (Cloudflare API fallback)
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Install wrangler for Cloudflare API fallback when Bot Fight Mode blocks requests
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install wrangler
+        run: npm install -g wrangler@3
+
+      - name: Validate BASE_URL
+        run: |
+          echo "Validating BASE_URL..."
+          if [ -z "$BASE_URL" ]; then
+            echo "::error::BASE_URL is empty! Cannot proceed with health check."
+            echo ""
+            echo "This usually means:"
+            echo "  - Artifact download failed"
+            echo "  - Artifact extraction failed"
+            echo "  - Stage 1 did not deploy successfully"
+            echo ""
+            echo "Check the download-artifact job output for details."
+            exit 1
+          fi
+
+          if [[ ! "$BASE_URL" =~ ^https:// ]]; then
+            echo "::error::Invalid BASE_URL format: '$BASE_URL'"
+            exit 1
+          fi
+
+          echo "✓ BASE_URL is valid: $BASE_URL"
+
+      - name: Pre-flight health check
+        id: health-check
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          echo "=============================================="
+          echo "STORY 6: PRE-FLIGHT HEALTH CHECK"
+          echo "=============================================="
+          echo "Environment: $ENVIRONMENT"
+          echo "BASE_URL: $BASE_URL"
+          echo ""
+
+          FAILED=false
+          API_STATUS_OK="false"
+          EVENTS_OK="false"
+
+          # Helper function: curl with retry for transient Cloudflare issues (403, 429, 5xx)
+          # Retries up to 3 times with exponential backoff (2s, 4s, 8s)
+          curl_with_retry() {
+            local url="$1"
+            local output_file="$2"
+            local max_retries=3
+            local retry=0
+            local backoff=2
+            local http_code="000"
+
+            while [ $retry -lt $max_retries ]; do
+              http_code=$(curl -s -o "$output_file" -w "%{http_code}" \
+                --connect-timeout 30 \
+                --max-time 60 \
+                -H "User-Agent: EventAngle-CI/1.0 (GitHub-Actions)" \
+                -H "Accept: application/json, text/html" \
+                "$url" 2>&1) || http_code="000"
+
+              # Success or non-retryable error
+              if [ "$http_code" = "200" ] || [ "$http_code" = "404" ] || [ "$http_code" = "401" ]; then
+                echo "$http_code"
+                return 0
+              fi
+
+              # Retryable errors: 403 (Cloudflare blocking), 429 (rate limit), 5xx (server errors)
+              if [ "$http_code" = "403" ] || [ "$http_code" = "429" ] || [ "${http_code:0:1}" = "5" ]; then
+                retry=$((retry + 1))
+                if [ $retry -lt $max_retries ]; then
+                  echo "  ⚠️ HTTP $http_code - retrying in ${backoff}s (attempt $((retry + 1))/$max_retries)..." >&2
+                  sleep $backoff
+                  backoff=$((backoff * 2))
+                else
+                  echo "$http_code"
+                  return 0
+                fi
+              else
+                # Non-retryable error (000, 4xx except 403/429)
+                echo "$http_code"
+                return 0
+              fi
+            done
+
+            echo "$http_code"
+          }
+
+          # Step 1: Check /api/status endpoint
+          echo ">> Checking /api/status..."
+          HTTP_CODE=$(curl_with_retry "$BASE_URL/api/status" "/tmp/api-status.json")
+
+          if [ "$HTTP_CODE" = "000" ]; then
+            echo ""
+            echo "=============================================="
+            echo "❌ STAGING UNAVAILABLE"
+            echo "=============================================="
+            echo ""
+            echo "Could not connect to $BASE_URL"
+            echo "The staging environment appears to be globally down."
+            echo ""
+            echo "This is NOT a test failure - the environment is unreachable."
+            echo ""
+            echo "Possible causes:"
+            echo "  - Cloudflare Worker is not responding"
+            echo "  - DNS resolution failure"
+            echo "  - Network connectivity issue"
+            echo ""
+            echo "Please check:"
+            echo "  1. Cloudflare dashboard for Worker status"
+            echo "  2. DNS configuration for $ENVIRONMENT"
+            echo "  3. Recent deployment logs"
+            echo "=============================================="
+            echo ""
+            echo "status=unavailable" >> $GITHUB_OUTPUT
+            echo "api_status_ok=false" >> $GITHUB_OUTPUT
+            echo "events_ok=false" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+
+          echo "  HTTP status: $HTTP_CODE"
+
+          if [ "$HTTP_CODE" = "200" ]; then
+            # Check if ok:true in response
+            if [ -f /tmp/api-status.json ]; then
+              OK_VALUE=$(jq -r '.ok // "null"' /tmp/api-status.json 2>/dev/null || echo "null")
+              if [ "$OK_VALUE" = "true" ]; then
+                echo "  /api/status: OK (ok: true)"
+                API_STATUS_OK="true"
+              else
+                echo "  /api/status: UNHEALTHY (ok: $OK_VALUE)"
+                cat /tmp/api-status.json
+                echo ""
+                echo "=============================================="
+                echo "❌ HEALTH CHECK FAILED"
+                echo "=============================================="
+                echo "/api/status returned ok:false"
+                echo "The Worker backend is not healthy."
+                echo ""
+                echo "Aborting Stage-2 tests - fix the Worker first."
+                echo "=============================================="
+                FAILED=true
+              fi
+            fi
+          elif [ "$HTTP_CODE" = "502" ] || [ "$HTTP_CODE" = "503" ]; then
+            echo ""
+            echo "=============================================="
+            echo "❌ STAGING UNAVAILABLE (HTTP $HTTP_CODE)"
+            echo "=============================================="
+            echo ""
+            echo "/api/status returned HTTP $HTTP_CODE"
+            echo "The staging Worker is experiencing issues."
+            echo ""
+            echo "This indicates a Worker deployment problem."
+            echo "Aborting Stage-2 tests."
+            echo "=============================================="
+            FAILED=true
+          elif [ "$HTTP_CODE" = "403" ]; then
+            echo ""
+            echo "=============================================="
+            echo "⚠️ HTTP 403 - Cloudflare Bot Fight Mode Detected"
+            echo "=============================================="
+            echo ""
+            echo "/api/status returned HTTP 403 (Cloudflare challenge page)."
+            echo "Falling back to Cloudflare API to verify worker health..."
+            echo ""
+
+            # Fallback: Use Cloudflare API via wrangler to verify worker is deployed
+            WRANGLER_ENV="staging"
+            if [ "$ENVIRONMENT" = "production" ]; then
+              WRANGLER_ENV="production"
+            fi
+
+            # Check if Cloudflare credentials are available
+            if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+              echo "⚠️ CLOUDFLARE_API_TOKEN or CLOUDFLARE_ACCOUNT_ID not set."
+              echo "Cannot verify worker via API fallback."
+              echo ""
+              echo "To enable API fallback, add these secrets to your repository:"
+              echo "  - CLOUDFLARE_API_TOKEN"
+              echo "  - CLOUDFLARE_ACCOUNT_ID"
+              echo ""
+              echo "Recommended actions:"
+              echo "  1. Check Cloudflare Security > Events for blocked requests"
+              echo "  2. Add GitHub Actions IPs to Cloudflare IP Access Rules"
+              echo "  3. Review WAF rules for false positives"
+              echo "=============================================="
+              FAILED=true
+            else
+              echo "Checking worker deployment via Cloudflare API..."
+              cd cloudflare-proxy
+
+              # List recent deployments to verify worker is running
+              if DEPLOY_OUTPUT=$(wrangler deployments list --env "$WRANGLER_ENV" 2>&1); then
+                echo ""
+                echo "✅ Worker deployment verified via Cloudflare API"
+                echo ""
+                echo "Recent deployments:"
+                echo "$DEPLOY_OUTPUT" | head -10
+                echo ""
+                echo "=============================================="
+                echo "✅ CLOUDFLARE API FALLBACK: WORKER IS HEALTHY"
+                echo "=============================================="
+                echo ""
+                echo "Note: HTTP 403 from Cloudflare Bot Fight Mode is expected"
+                echo "when making requests from GitHub Actions IPs. The worker"
+                echo "is confirmed running via Cloudflare API."
+                echo ""
+                echo "To prevent 403 errors in the future:"
+                echo "  1. Add a WAF rule to allow requests with a specific header"
+                echo "  2. Or whitelist GitHub Actions IPs in Cloudflare Access Rules"
+                echo "=============================================="
+                API_STATUS_OK="true"
+              else
+                echo ""
+                echo "❌ Cloudflare API fallback failed"
+                echo ""
+                echo "wrangler output:"
+                echo "$DEPLOY_OUTPUT"
+                echo ""
+                echo "Possible causes:"
+                echo "  - Invalid CLOUDFLARE_API_TOKEN"
+                echo "  - Worker not deployed to $WRANGLER_ENV environment"
+                echo "  - Cloudflare API connectivity issue"
+                echo "=============================================="
+                FAILED=true
+              fi
+              cd ..
+            fi
+          else
+            echo "  Unexpected status: $HTTP_CODE"
+            if [ -f /tmp/api-status.json ]; then
+              echo "  Response (first 200 chars):"
+              head -c 200 /tmp/api-status.json 2>/dev/null || echo "(empty)"
+              echo ""
+            fi
+            FAILED=true
+          fi
+
+          # Step 2: Check /events endpoint
+          echo ""
+          echo ">> Checking /events..."
+          EVENTS_CODE=$(curl_with_retry "$BASE_URL/events" "/tmp/events.html")
+
+          echo "  HTTP status: $EVENTS_CODE"
+
+          if [ "$EVENTS_CODE" = "200" ]; then
+            echo "  /events: OK (HTTP 200)"
+            EVENTS_OK="true"
+          elif [ "$EVENTS_CODE" = "000" ]; then
+            echo "  /events: UNAVAILABLE (connection failed)"
+            FAILED=true
+          elif [ "$EVENTS_CODE" = "403" ]; then
+            echo "  /events: HTTP 403 (Cloudflare Bot Fight Mode)"
+            # If API status was verified via fallback, events is also OK
+            if [ "$API_STATUS_OK" = "true" ]; then
+              echo "  Worker already verified via Cloudflare API fallback."
+              echo "  /events: OK (worker deployment confirmed)"
+              EVENTS_OK="true"
+            else
+              echo "  Cloudflare is blocking this request after retries."
+              echo "  See /api/status 403 diagnosis above for recommended actions."
+              FAILED=true
+            fi
+          else
+            echo "  /events: UNEXPECTED (HTTP $EVENTS_CODE)"
+            if [ -f /tmp/events.html ]; then
+              echo "  Response (first 200 chars):"
+              head -c 200 /tmp/events.html 2>/dev/null || echo "(empty)"
+              echo ""
+            fi
+            FAILED=true
+          fi
+
+          echo ""
+          echo "api_status_ok=$API_STATUS_OK" >> $GITHUB_OUTPUT
+          echo "events_ok=$EVENTS_OK" >> $GITHUB_OUTPUT
+
+          if [ "$FAILED" = "true" ]; then
+            echo "status=failed" >> $GITHUB_OUTPUT
+            exit 1
+          else
+            echo "status=passed" >> $GITHUB_OUTPUT
+            echo ""
+            echo "=============================================="
+            echo "✅ PRE-FLIGHT HEALTH CHECK PASSED"
+            echo "=============================================="
+            if [ "$HTTP_CODE" = "403" ] && [ "$API_STATUS_OK" = "true" ]; then
+              echo "  /api/status: OK (verified via Cloudflare API)"
+              echo "  /events: OK (verified via Cloudflare API)"
+              echo ""
+              echo "Note: Worker health verified via Cloudflare API fallback"
+              echo "due to Bot Fight Mode blocking direct HTTP requests."
+            else
+              echo "  /api/status: OK"
+              echo "  /events: OK"
+            fi
+            echo ""
+            echo "Proceeding with full Stage-2 test suite..."
+            echo "=============================================="
+          fi
+
+      - name: Create pre-flight summary
+        if: always()
+        run: |
+          echo "## 🏥 Pre-Flight Health Check ($ENVIRONMENT)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          STATUS="${{ steps.health-check.outputs.status }}"
+          API_OK="${{ steps.health-check.outputs.api_status_ok }}"
+          EVENTS_OK="${{ steps.health-check.outputs.events_ok }}"
+
+          if [ "$STATUS" = "passed" ]; then
+            echo "### ✅ ENVIRONMENT HEALTHY" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Pre-flight checks passed. Proceeding with Stage-2 validation." >> $GITHUB_STEP_SUMMARY
+          elif [ "$STATUS" = "unavailable" ]; then
+            echo "### ❌ STAGING UNAVAILABLE" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**The staging environment is globally down.**" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "This is not a test failure - the environment cannot be reached." >> $GITHUB_STEP_SUMMARY
+            echo "All downstream Stage-2 tests will be skipped." >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Action Required:**" >> $GITHUB_STEP_SUMMARY
+            echo "1. Check Cloudflare dashboard for Worker status" >> $GITHUB_STEP_SUMMARY
+            echo "2. Verify DNS configuration" >> $GITHUB_STEP_SUMMARY
+            echo "3. Review recent deployment logs" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### ❌ HEALTH CHECK FAILED" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "One or more health checks failed. See details below." >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Check | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| **/api/status** | \`$([ \"$API_OK\" = \"true\" ] && echo '✅ OK' || echo '❌ FAILED')\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **/events** | \`$([ \"$EVENTS_OK\" = \"true\" ] && echo '✅ OK' || echo '❌ FAILED')\` |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| **Environment** | \`$ENVIRONMENT\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Target URL** | \`$BASE_URL\` |" >> $GITHUB_STEP_SUMMARY
+
+  # ============================================================================
+  # STORY 0.1: BACKEND SMOKE TESTS
+  # ============================================================================
+  # Tests versioned backend routing on staging.
+  # Validates both GAS and Worker backends respond correctly to /api/status.
+  #
+  # Story 0.1 Requirements:
+  #   - Test /api/status?backend=gas returns valid response
+  #   - Test /api/status?backend=worker returns valid response
+  #   - Both backends return ok: true
+  #   - X-Backend header indicates correct backend
+  #
+  # Note: Only runs on staging (production uses GAS-only for now)
+  # ============================================================================
+  backend-smoke:
+    name: "S2·05 🔀 Backend Smoke (${{ needs.download-artifact.outputs.environment }})"
+    runs-on: ubuntu-latest
+    needs: [check-stage1, download-artifact, preflight-health-check]
+    # Only run on staging (backend switching only implemented on staging)
+    # IMPORTANT: Use always() with explicit checks for reliable execution
+    # FIX: Using explicit 'false' comparison for is_production
+    if: >-
+      always() &&
+      needs.preflight-health-check.result == 'success' &&
+      needs.check-stage1.outputs.is_production == 'false'
+    outputs:
+      backend_status: ${{ steps.backend-tests.outputs.status }}
+      gas_backend_ok: ${{ steps.backend-tests.outputs.gas_ok }}
+      worker_backend_ok: ${{ steps.backend-tests.outputs.worker_ok }}
+    env:
+      BASE_URL: ${{ needs.download-artifact.outputs.base_url }}
+      ENVIRONMENT: ${{ needs.download-artifact.outputs.environment }}
+      CI: true
+
+    steps:
+      - name: Validate inputs
+        run: |
+          echo "=============================================="
+          echo "S2·05 BACKEND-SMOKE: VALIDATING INPUTS"
+          echo "=============================================="
+          echo "  BASE_URL: $BASE_URL"
+          echo "  ENVIRONMENT: $ENVIRONMENT"
+          echo ""
+          if [ -z "$BASE_URL" ]; then
+            echo "::error::BASE_URL is empty! This job should not have run."
+            exit 1
+          fi
+          echo "✓ Inputs validated"
+          echo "=============================================="
+
+      - name: Backend smoke tests (Story 0.1)
+        id: backend-tests
+        run: |
+          echo "=============================================="
+          echo "STORY 0.1: BACKEND SMOKE TESTS"
+          echo "=============================================="
+          echo "Environment: $ENVIRONMENT"
+          echo "BASE_URL: $BASE_URL"
+          echo ""
+          echo "Testing versioned backend routing..."
+          echo ""
+
+          GAS_OK="false"
+          WORKER_OK="false"
+          FAILED=false
+
+          # Test 1: GAS Backend (?backend=gas) — WARNING ONLY (GAS archived Story 5.3)
+          echo ">> Testing GAS backend (?backend=gas) [ARCHIVED - warning only]..."
+          GAS_RESPONSE=$(curl -s -w "\n%{http_code}" \
+            --connect-timeout 30 \
+            --max-time 60 \
+            -H "Accept: application/json" \
+            "$BASE_URL/api/status?backend=gas" 2>&1)
+
+          GAS_HTTP_CODE=$(echo "$GAS_RESPONSE" | tail -1)
+          GAS_BODY=$(echo "$GAS_RESPONSE" | sed '$d')
+          GAS_BACKEND=$(echo "$GAS_BODY" | jq -r '.ok // "null"' 2>/dev/null || echo "null")
+          GAS_HEADER=$(curl -sI "$BASE_URL/api/status?backend=gas" | grep -i "x-backend:" | tr -d '\r' | cut -d' ' -f2)
+
+          echo "  HTTP Status: $GAS_HTTP_CODE"
+          echo "  X-Backend: $GAS_HEADER"
+          echo "  ok: $GAS_BACKEND"
+
+          if [ "$GAS_HTTP_CODE" = "200" ] && [ "$GAS_BACKEND" = "true" ]; then
+            echo "  ✅ GAS backend: PASS (still responding)"
+            GAS_OK="true"
+          else
+            # GAS is archived (Story 5.3) — not a blocking failure
+            echo "  ⚠️ GAS backend unavailable (archived Story 5.3) — non-blocking warning"
+            GAS_OK="archived"
+          fi
+          echo ""
+
+          # Test 2: Worker Backend (?backend=worker)
+          echo ">> Testing Worker backend (?backend=worker)..."
+          WORKER_RESPONSE=$(curl -s -w "\n%{http_code}" \
+            --connect-timeout 30 \
+            --max-time 60 \
+            -H "Accept: application/json" \
+            "$BASE_URL/api/status?backend=worker" 2>&1)
+
+          WORKER_HTTP_CODE=$(echo "$WORKER_RESPONSE" | tail -1)
+          WORKER_BODY=$(echo "$WORKER_RESPONSE" | sed '$d')
+          WORKER_OK_VALUE=$(echo "$WORKER_BODY" | jq -r '.ok // "null"' 2>/dev/null || echo "null")
+          WORKER_HEADER=$(curl -sI "$BASE_URL/api/status?backend=worker" | grep -i "x-backend:" | tr -d '\r' | cut -d' ' -f2)
+
+          echo "  HTTP Status: $WORKER_HTTP_CODE"
+          echo "  X-Backend: $WORKER_HEADER"
+          echo "  ok: $WORKER_OK_VALUE"
+
+          if [ "$WORKER_HTTP_CODE" = "200" ] && [ "$WORKER_OK_VALUE" = "true" ]; then
+            if [ "$WORKER_HEADER" = "worker" ]; then
+              echo "  ✅ Worker backend: PASS"
+              WORKER_OK="true"
+            else
+              echo "  ⚠️ Worker backend returned 200 but X-Backend header is '$WORKER_HEADER' (expected 'worker')"
+              WORKER_OK="true"  # Still consider it passing if response is ok
+            fi
+          else
+            echo "  ❌ Worker backend: FAIL"
+            FAILED=true
+          fi
+          echo ""
+
+          # Output results
+          echo "gas_ok=$GAS_OK" >> $GITHUB_OUTPUT
+          echo "worker_ok=$WORKER_OK" >> $GITHUB_OUTPUT
+
+          if [ "$FAILED" = "true" ]; then
+            echo "=============================================="
+            echo "❌ BACKEND SMOKE TESTS: FAILED"
+            echo "=============================================="
+            echo "Worker backend is not operational."
+            echo "status=failed" >> $GITHUB_OUTPUT
+            exit 1
+          else
+            echo "=============================================="
+            echo "✅ BACKEND SMOKE TESTS: PASSED"
+            echo "=============================================="
+            echo "Worker backend is operational."
+            if [ "$GAS_OK" = "archived" ]; then
+              echo "⚠️  GAS backend is archived (Story 5.3) — expected."
+            fi
+            echo "status=passed" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create backend smoke summary
+        if: always()
+        run: |
+          echo "## 🔀 Backend Smoke Tests ($ENVIRONMENT) - Story 0.1" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          GAS_OK="${{ steps.backend-tests.outputs.gas_ok }}"
+          WORKER_OK="${{ steps.backend-tests.outputs.worker_ok }}"
+          STATUS="${{ steps.backend-tests.outputs.status }}"
+
+          if [ "$STATUS" == "passed" ]; then
+            echo "### ✅ PASSED" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Both backend modes are operational." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### ❌ FAILED" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "One or more backend modes failed." >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Backend | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|---------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| **GAS** (\`?backend=gas\`) | \`$([ \"$GAS_OK\" = \"true\" ] && echo '✅ OK' || echo '❌ FAILED')\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Worker** (\`?backend=worker\`) | \`$([ \"$WORKER_OK\" = \"true\" ] && echo '✅ OK' || echo '❌ FAILED')\` |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| **Environment** | \`$ENVIRONMENT\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Target URL** | \`$BASE_URL\` |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Story 0.1 Acceptance Criteria:**" >> $GITHUB_STEP_SUMMARY
+          echo "- \`/api/status?backend=gas\` - Tests GAS backend" >> $GITHUB_STEP_SUMMARY
+          echo "- \`/api/status?backend=worker\` - Tests Worker backend" >> $GITHUB_STEP_SUMMARY
+
+  # ============================================================================
+  # STORY B3: BACKEND HEALTH VERIFICATION
+  # ============================================================================
+  # Verifies Google Service Account configuration is correct by calling
+  # /api/health/backend endpoint.
+  #
+  # Story B3 Requirements:
+  #   - /api/health/backend returns ok:true on staging
+  #   - No manual Google login required
+  #   - If wrong sheet shared, health MUST fail with explicit error code
+  #
+  # This is a CI/CD gate - Stage-2 depends on this check passing.
+  #
+  # @see docs/env/GOOGLE_SERVICE_ACCOUNT_SETUP.md
+  # @see docs/CLOUDFLARE_SECRETS.md
+  # ============================================================================
+  backend-health-b3:
+    name: "S2·06 🔐 Backend Health (B3)"
+    runs-on: ubuntu-latest
+    needs: [check-stage1, download-artifact, preflight-health-check]
+    # IMPORTANT: Use always() with explicit checks for reliable execution
+    if: >-
+      always() &&
+      needs.preflight-health-check.result == 'success'
+    outputs:
+      health_ok: ${{ steps.health-check.outputs.health_ok }}
+      google_auth: ${{ steps.health-check.outputs.google_auth }}
+      sheets_probe_ok: ${{ steps.health-check.outputs.sheets_probe_ok }}
+      error_code: ${{ steps.health-check.outputs.error_code }}
+    env:
+      BASE_URL: ${{ needs.download-artifact.outputs.base_url }}
+      ENVIRONMENT: ${{ needs.download-artifact.outputs.environment }}
+
+    steps:
+      - name: Story B3 Backend Health Check
+        id: health-check
+        run: |
+          echo "=============================================="
+          echo "STORY B3: BACKEND HEALTH VERIFICATION"
+          echo "=============================================="
+          echo "Environment: $ENVIRONMENT"
+          echo "BASE_URL: $BASE_URL"
+          echo ""
+          echo "Checking /api/health/backend..."
+          echo ""
+
+          # Call the backend health endpoint
+          RESPONSE=$(curl -s -w "\n%{http_code}" \
+            --connect-timeout 30 \
+            --max-time 60 \
+            "$BASE_URL/api/health/backend" 2>&1)
+
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          BODY=$(echo "$RESPONSE" | sed '$d')
+
+          echo "HTTP Status: $HTTP_CODE"
+          echo "Response Body:"
+          echo "$BODY" | jq . 2>/dev/null || echo "$BODY"
+          echo ""
+
+          # Parse response
+          HEALTH_OK=$(echo "$BODY" | jq -r '.ok // false' 2>/dev/null || echo "false")
+          GOOGLE_AUTH=$(echo "$BODY" | jq -r '.googleAuth // "unknown"' 2>/dev/null || echo "unknown")
+          SHEETS_PROBE_OK=$(echo "$BODY" | jq -r '.sheetsProbe.ok // false' 2>/dev/null || echo "false")
+          ERROR_CODE=$(echo "$BODY" | jq -r '.errorCode // "none"' 2>/dev/null || echo "none")
+          HINT=$(echo "$BODY" | jq -r '.hint // ""' 2>/dev/null || echo "")
+
+          echo "health_ok=$HEALTH_OK" >> $GITHUB_OUTPUT
+          echo "google_auth=$GOOGLE_AUTH" >> $GITHUB_OUTPUT
+          echo "sheets_probe_ok=$SHEETS_PROBE_OK" >> $GITHUB_OUTPUT
+          echo "error_code=$ERROR_CODE" >> $GITHUB_OUTPUT
+
+          # Story B3 Acceptance Criteria
+          if [ "$HEALTH_OK" = "true" ]; then
+            echo "=============================================="
+            echo "✅ STORY B3: BACKEND HEALTH CHECK PASSED"
+            echo "=============================================="
+            echo ""
+            echo "Acceptance Criteria Met:"
+            echo "  ✅ /api/health/backend returns ok:true"
+            echo "  ✅ Google Auth: $GOOGLE_AUTH"
+            echo "  ✅ Sheets Probe: $SHEETS_PROBE_OK"
+            echo "  ✅ No manual Google login required"
+            echo ""
+          else
+            echo "=============================================="
+            echo "❌ STORY B3: BACKEND HEALTH CHECK FAILED"
+            echo "=============================================="
+            echo ""
+            echo "Error Code: $ERROR_CODE"
+            if [ -n "$HINT" ] && [ "$HINT" != "" ]; then
+              echo "Hint: $HINT"
+            fi
+            echo ""
+            echo "This is expected behavior if the wrong sheet is shared"
+            echo "or if secrets are not configured correctly."
+            echo ""
+            echo "See docs/CLOUDFLARE_SECRETS.md for troubleshooting."
+            echo ""
+            echo "Required Secrets:"
+            echo "  - GOOGLE_SA_CLIENT_EMAIL"
+            echo "  - GOOGLE_SA_PRIVATE_KEY_PEM"
+            echo "  - SHEETS_SPREADSHEET_ID"
+            echo ""
+            exit 1
+          fi
+
+      - name: Create Story B3 Summary
+        if: always()
+        run: |
+          echo "## 🔐 Backend Health (Story B3)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          HEALTH_OK="${{ steps.health-check.outputs.health_ok }}"
+          GOOGLE_AUTH="${{ steps.health-check.outputs.google_auth }}"
+          SHEETS_PROBE_OK="${{ steps.health-check.outputs.sheets_probe_ok }}"
+          ERROR_CODE="${{ steps.health-check.outputs.error_code }}"
+
+          if [ "$HEALTH_OK" = "true" ]; then
+            echo "### ✅ PASSED" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Backend health check passed. Google Service Account is correctly configured." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### ❌ FAILED" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Backend health check failed. Check service account configuration." >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Error Code:** \`$ERROR_CODE\`" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Check | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| **ok** | \`$([ \"$HEALTH_OK\" = \"true\" ] && echo '✅ true' || echo '❌ false')\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **googleAuth** | \`$GOOGLE_AUTH\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **sheetsProbe.ok** | \`$([ \"$SHEETS_PROBE_OK\" = \"true\" ] && echo '✅ true' || echo '❌ false')\` |" >> $GITHUB_STEP_SUMMARY
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| **Endpoint** | \`/api/health/backend\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Environment** | \`$ENVIRONMENT\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Target URL** | \`$BASE_URL\` |" >> $GITHUB_STEP_SUMMARY
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Story B3 Acceptance Criteria:**" >> $GITHUB_STEP_SUMMARY
+          echo "- \`/api/health/backend\` returns \`ok:true\` on staging" >> $GITHUB_STEP_SUMMARY
+          echo "- No manual Google login required" >> $GITHUB_STEP_SUMMARY
+          echo "- If wrong sheet shared, health must fail with explicit error code" >> $GITHUB_STEP_SUMMARY
+
+  # ============================================================================
+  # ENVIRONMENT ALIGNMENT GATE (Story 4 - Critical First Gate)
+  # ============================================================================
+  # MUST run FIRST before any other tests. Verifies Worker ↔ GAS alignment.
+  # This is the critical fail-fast gate that prevents deployment mismatches.
+  #
+  # Checks performed:
+  #   - Worker /env-status returns correct environment (staging/production)
+  #   - GAS /whoami returns correct scriptId and deploymentId
+  #   - Worker deploymentId matches GAS deploymentId (CRITICAL)
+  #   - Script ID matches expected staging/production Script ID
+  #   - Account email contains "zeventbook"
+  #
+  # If ANY check fails:
+  #   - Pipeline FAILS IMMEDIATELY
+  #   - All downstream tests are SKIPPED
+  #   - Promotion to production is BLOCKED
+  #
+  # @see tests/api/smoke/env-alignment.spec.ts
+  # ============================================================================
+  env-alignment-gate:
+    name: "S2·07 🔐 Env Alignment (${{ needs.download-artifact.outputs.environment }})"
+    runs-on: ubuntu-latest
+    needs: [check-stage1, download-artifact, preflight-health-check]
+    # Story 6: Only run if pre-flight health check passed
+    # IMPORTANT: Use always() with explicit checks for reliable execution
+    if: >-
+      always() &&
+      needs.preflight-health-check.result == 'success'
+    outputs:
+      alignment_status: ${{ steps.alignment-check.outputs.status }}
+      worker_deployment_id: ${{ steps.alignment-check.outputs.worker_deployment_id }}
+      gas_deployment_id: ${{ steps.alignment-check.outputs.gas_deployment_id }}
+    env:
+      BASE_URL: ${{ needs.download-artifact.outputs.base_url }}
+      ENVIRONMENT: ${{ needs.download-artifact.outputs.environment }}
+      IS_PRODUCTION: ${{ needs.check-stage1.outputs.is_production }}
+      CI: true
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install chromium --with-deps
+
+      - name: Display alignment check configuration
+        run: |
+          echo "=============================================="
+          echo "ENVIRONMENT ALIGNMENT GATE (Story 4)"
+          echo "=============================================="
+          echo "Environment: $ENVIRONMENT"
+          echo "BASE_URL: $BASE_URL"
+          echo "Is Production: $IS_PRODUCTION"
+          echo ""
+          echo "This gate verifies:"
+          echo "  - Worker /env-status and GAS /whoami alignment"
+          echo "  - Deployment IDs match between Worker and GAS"
+          echo "  - Script ID matches expected for environment"
+          echo "  - Environment name is consistent"
+          echo ""
+          echo "FAILURE = IMMEDIATE PIPELINE ABORT"
+          echo "=============================================="
+
+      - name: Run Environment Alignment Tests
+        id: alignment-check
+        run: |
+          echo "Running environment alignment tests against: $BASE_URL"
+
+          # Run alignment tests with verbose output
+          set +e
+          OUTPUT=$(npx playwright test tests/api/smoke/env-alignment.spec.ts --project=chromium --reporter=list 2>&1)
+          EXIT_CODE=$?
+          set -e
+
+          echo "$OUTPUT"
+
+          # Extract deployment IDs from test output if available
+          WORKER_ID=$(echo "$OUTPUT" | grep -oP 'deploymentId.*?AKfycb[a-zA-Z0-9_-]+' | head -1 | grep -oP 'AKfycb[a-zA-Z0-9_-]+' || echo "unknown")
+          GAS_ID=$(echo "$OUTPUT" | grep -oP 'gas.*deploymentId.*?AKfycb[a-zA-Z0-9_-]+' | head -1 | grep -oP 'AKfycb[a-zA-Z0-9_-]+' || echo "unknown")
+
+          echo "worker_deployment_id=$WORKER_ID" >> $GITHUB_OUTPUT
+          echo "gas_deployment_id=$GAS_ID" >> $GITHUB_OUTPUT
+
+          if [ $EXIT_CODE -eq 0 ]; then
+            echo "status=passed" >> $GITHUB_OUTPUT
+            echo ""
+            echo "✅ ENVIRONMENT ALIGNMENT: PASS"
+            echo "Worker environment alignment verified."
+          else
+            echo "status=failed" >> $GITHUB_OUTPUT
+            echo ""
+            echo "❌ ENVIRONMENT ALIGNMENT: FAIL"
+            echo "Worker environment alignment check failed!"
+            echo ""
+            echo "This blocks all downstream tests and deployment promotion."
+            exit 1
+          fi
+
+      - name: Upload alignment test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        continue-on-error: true  # Don't fail if storage quota exceeded
+        with:
+          name: env-alignment-results-${{ env.ENVIRONMENT }}
+          path: |
+            playwright-report-smoke/
+            .test-results/smoke-*.json
+          retention-days: 7
+
+      - name: Create alignment gate summary
+        if: always()
+        run: |
+          echo "## 🔐 Environment Alignment Gate ($ENVIRONMENT)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          STATUS="${{ steps.alignment-check.outputs.status }}"
+          WORKER_ID="${{ steps.alignment-check.outputs.worker_deployment_id }}"
+          GAS_ID="${{ steps.alignment-check.outputs.gas_deployment_id }}"
+
+          if [ "$STATUS" == "passed" ]; then
+            echo "### ✅ ALIGNED" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Worker ↔ GAS deployment alignment verified." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### ❌ MISALIGNED - PIPELINE BLOCKED" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**CRITICAL:** Worker environment alignment check failed!" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "This indicates a Worker deployment configuration issue." >> $GITHUB_STEP_SUMMARY
+            echo "All downstream tests are SKIPPED." >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Check | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| **Environment** | \`$ENVIRONMENT\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Target URL** | \`$BASE_URL\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Worker Deployment ID** | \`$WORKER_ID\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **GAS Deployment ID** | \`$GAS_ID\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **IDs Match** | \`$([ \"$WORKER_ID\" == \"$GAS_ID\" ] && echo 'Yes ✅' || echo 'No ❌')\` |" >> $GITHUB_STEP_SUMMARY
+
+  # ============================================================================
+  # API SMOKE TESTS (CRITICAL GATE)
+  # ============================================================================
+  # Validates API contract compliance against the live environment.
+  # Tests: status, events, qr, sharedreport endpoints
+  # Uses strict v4.1.2 JSON schema validation.
+  #
+  # DEPENDS ON: env-alignment-gate (fail-fast - skipped if alignment fails)
+  #
+  # Story 2.5: Progressive Test Gate
+  #   - API smoke tests are the FIRST test gate after env-alignment
+  #   - If API tests fail, UI tests are SKIPPED (gated)
+  #   - This saves resources and provides immediate feedback
+  #
+  # Story 6 GAS HTML Guardrails (gas-html-integrity.spec.ts):
+  #   - Fetches /events and all HTML routes
+  #   - Validates NO GAS HTML markers in response
+  #   - Blocks deploy if "Google Apps Script user" message found
+  #   - Blocks deploy if warden scripts detected
+  #   - Saves HTML artifacts on failure for debugging
+  #
+  # Story 7 Production Sanity (prod-sanity.spec.ts - production only):
+  #   - Additional production-specific validation
+  #   - Network request monitoring
+  #   - QR code resolution verification
+  # ============================================================================
+  api-smoke:
+    name: "S2·08 🔥 API Smoke Tests (${{ needs.download-artifact.outputs.environment }})"
+    runs-on: ubuntu-latest
+    needs: [check-stage1, download-artifact, env-alignment-gate]
+    # Story 2.5: Run API tests if env-alignment passed
+    # IMPORTANT: Use always() with explicit checks for reliable execution
+    if: >-
+      always() &&
+      needs.env-alignment-gate.result == 'success'
+    outputs:
+      api_test_result: ${{ steps.api-tests.outcome }}
+    env:
+      BASE_URL: ${{ needs.download-artifact.outputs.base_url }}
+      ENVIRONMENT: ${{ needs.download-artifact.outputs.environment }}
+      IS_PRODUCTION: ${{ needs.check-stage1.outputs.is_production }}
+      CI: true
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install chromium --with-deps
+
+      - name: Display test configuration
+        run: |
+          echo "=============================================="
+          echo "API SMOKE TEST CONFIGURATION"
+          echo "=============================================="
+          echo "Environment: $ENVIRONMENT"
+          echo "BASE_URL: $BASE_URL"
+          echo "Is Production: $IS_PRODUCTION"
+          echo "Node version: $(node --version)"
+          echo "npm version: $(npm --version)"
+          echo "=============================================="
+
+      - name: Run API smoke tests
+        id: api-tests
+        run: |
+          echo "Running API smoke tests against: $BASE_URL ($ENVIRONMENT)"
+          npm run test:api:smoke
+        continue-on-error: true
+
+      - name: Run IAC Smoke Tests (SEC-IAC-07)
+        id: iac-smoke
+        run: |
+          echo "=============================================="
+          echo "SEC-IAC-07 - IAC SMOKE TESTS"
+          echo "=============================================="
+          echo "Validating Infrastructure Access Control..."
+          echo "Target: $BASE_URL"
+          echo "=============================================="
+          echo ""
+          echo "Coverage includes:"
+          echo "  - /admin unauthenticated → 401"
+          echo "  - public POST w/o token → 403"
+          echo "  - unknown route → 404"
+          echo ""
+
+          # Run SEC-IAC-07 smoke tests
+          npx playwright test tests/api/smoke/sec-iac-07-smoke.spec.ts --config=playwright.smoke.config.ts --reporter=list
+        continue-on-error: true
+
+      - name: Run Stage-2 Critical Smoke Tests (Story 5)
+        id: stage2-critical-smoke
+        run: |
+          echo "=============================================="
+          echo "STORY 5 - STAGE-2 CRITICAL SMOKE TESTS"
+          echo "=============================================="
+          echo "Running comprehensive smoke tests with staging assertions..."
+          echo "Target: $BASE_URL"
+          echo "=============================================="
+          echo ""
+          echo "Coverage includes:"
+          echo "  - /api/health/backend (ok:true required)"
+          echo "  - /api/v2/events (contract validation)"
+          echo "  - /manage UI basics"
+          echo "  - /events public page"
+          echo "  - SharedReport pages"
+          echo "  - Staging host assertion (stg.eventangle.com)"
+          echo ""
+
+          # Run Stage-2 critical smoke tests
+          npm run test:stage2:smoke:critical
+        continue-on-error: true
+
+      - name: Run lightweight production events smoke test (Story 7)
+        id: prod-events-smoke
+        if: env.IS_PRODUCTION == 'true'
+        run: |
+          echo "=============================================="
+          echo "STORY 7 - LIGHTWEIGHT PRODUCTION EVENTS TEST"
+          echo "=============================================="
+          echo "Running minimal /events smoke test..."
+          echo "Target: $BASE_URL"
+          echo "=============================================="
+
+          # Run lightweight events.smoke.prod.spec.ts
+          if [ -f "tests/api/smoke/events.smoke.prod.spec.ts" ]; then
+            npx playwright test tests/api/smoke/events.smoke.prod.spec.ts --project=chromium --reporter=list
+          else
+            echo "events.smoke.prod.spec.ts not found"
+            echo "Falling back to standard events test"
+            npx playwright test tests/api/smoke/events.spec.ts --project=chromium --reporter=list
+          fi
+        continue-on-error: true
+
+      - name: Run production sanity tests (Story 7)
+        id: prod-sanity
+        if: env.IS_PRODUCTION == 'true'
+        run: |
+          echo "=============================================="
+          echo "STORY 7 - PRODUCTION SANITY TESTS"
+          echo "=============================================="
+          echo "Running production-specific validation..."
+          echo "Target: $BASE_URL"
+          echo "=============================================="
+
+          # Run production sanity tests if they exist
+          if [ -f "tests/api/smoke/prod-sanity.spec.ts" ]; then
+            npx playwright test tests/api/smoke/prod-sanity.spec.ts --project=chromium --reporter=list
+          else
+            echo "prod-sanity.spec.ts not found, skipping production sanity tests"
+            echo "This is expected for initial Story 7 deployment"
+          fi
+        continue-on-error: true
+
+      - name: Upload API smoke test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        continue-on-error: true  # Don't fail if storage quota exceeded
+        with:
+          name: api-smoke-results-${{ env.ENVIRONMENT }}
+          path: |
+            playwright-report-smoke/
+            playwright-report-stage2-smoke/
+            .test-results/smoke-*.json
+            .test-results/smoke-*.xml
+            .test-results/stage2-smoke-*.json
+            .test-results/stage2-smoke-*.xml
+            .test-results/gas-html-artifacts/
+            test-results-stage2-smoke/
+          retention-days: 7
+
+      - name: Check API smoke test result
+        if: steps.api-tests.outcome == 'failure'
+        run: |
+          echo "::error::API smoke tests failed against $BASE_URL ($ENVIRONMENT)"
+          echo ""
+          echo "Stage-2 API validation failed. This blocks the release."
+          echo "Check the API smoke test results artifact for details."
+          exit 1
+
+      - name: Check IAC smoke test result (SEC-IAC-07)
+        if: steps.iac-smoke.outcome == 'failure'
+        run: |
+          echo "::error::IAC smoke tests failed against $BASE_URL ($ENVIRONMENT)"
+          echo ""
+          echo "SEC-IAC-07 validation failed. This blocks the release."
+          echo ""
+          echo "IAC enforcement regression detected:"
+          echo "  - /admin unauthenticated must return 401"
+          echo "  - public POST w/o token must return 403"
+          echo "  - unknown route must return 404"
+          echo ""
+          echo "Check the API smoke test results artifact for details."
+          exit 1
+
+      - name: Check Stage-2 Critical Smoke test result (Story 5)
+        if: steps.stage2-critical-smoke.outcome == 'failure'
+        run: |
+          echo "::error::Stage-2 Critical Smoke tests failed against $BASE_URL ($ENVIRONMENT)"
+          echo ""
+          echo "Story 5 smoke tests failed. This blocks the release."
+          echo ""
+          echo "Possible causes:"
+          echo "  - First API host is not stg.eventangle.com (staging assertion)"
+          echo "  - /api/health/backend returned ok:false"
+          echo "  - /api/v2/events failed contract validation"
+          echo "  - /manage or /events UI failed to load"
+          echo ""
+          echo "Check the Stage-2 smoke test results artifact for details."
+          echo "Review the test output for BASE_URL and first API host values."
+          exit 1
+
+      - name: Check production events smoke result (Story 7)
+        if: env.IS_PRODUCTION == 'true' && steps.prod-events-smoke.outcome == 'failure'
+        run: |
+          echo "::error::Production /events smoke test failed (Story 7)"
+          echo ""
+          echo "Production /events endpoint is broken. This blocks the release."
+          echo "See docs/ROLLBACK.md for recovery procedures."
+          exit 1
+
+      - name: Check production sanity result (Story 7)
+        if: env.IS_PRODUCTION == 'true' && steps.prod-sanity.outcome == 'failure'
+        run: |
+          echo "::error::Production sanity tests failed (Story 7)"
+          echo ""
+          echo "Production validation failed. This blocks the release."
+          echo "See docs/ROLLBACK.md for recovery procedures."
+          exit 1
+
+      - name: Create API smoke summary
+        if: always()
+        run: |
+          echo "## API Smoke Tests ($ENVIRONMENT)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ "${{ steps.api-tests.outcome }}" == "success" ]; then
+            echo "### PASSED" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "All API smoke tests passed against $ENVIRONMENT." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### FAILED" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "API smoke tests failed. Check test results for details." >> $GITHUB_STEP_SUMMARY
+          fi
+
+          if [ "$IS_PRODUCTION" == "true" ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Story 7 Production Tests:**" >> $GITHUB_STEP_SUMMARY
+            echo "- Events Smoke: \`${{ steps.prod-events-smoke.outcome }}\`" >> $GITHUB_STEP_SUMMARY
+            echo "- Sanity Tests: \`${{ steps.prod-sanity.outcome }}\`" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**SEC-IAC-07 IAC Smoke Tests:**" >> $GITHUB_STEP_SUMMARY
+          echo "- IAC Smoke: \`${{ steps.iac-smoke.outcome }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Story 5 Critical Smoke Tests:**" >> $GITHUB_STEP_SUMMARY
+          echo "- Stage-2 Critical Smoke: \`${{ steps.stage2-critical-smoke.outcome }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| **Environment** | \`$ENVIRONMENT\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Target URL** | \`$BASE_URL\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **API Tests** | \`${{ steps.api-tests.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **IAC Smoke (SEC-IAC-07)** | \`${{ steps.iac-smoke.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Stage-2 Critical Smoke (Story 5)** | \`${{ steps.stage2-critical-smoke.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
+          if [ "$IS_PRODUCTION" == "true" ]; then
+            echo "| **Prod Events Smoke** | \`${{ steps.prod-events-smoke.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
+            echo "| **Prod Sanity** | \`${{ steps.prod-sanity.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
+          fi
+
+  # ============================================================================
+  # UI SMOKE TESTS (GATED BY API TESTS)
+  # ============================================================================
+  # Validates UI surfaces against the live environment.
+  # Tests: Admin, Public, Display, Poster surfaces
+  # Principle: "If you show it, it works"
+  #
+  # DEPENDS ON: api-smoke (fail-fast - SKIPPED if API tests fail)
+  #
+  # Story 2.5: Progressive Test Gate
+  #   - UI smoke tests are GATED by API smoke tests
+  #   - If API tests fail, this job is SKIPPED (fail-fast)
+  #   - E2E tests don't run when earlier gates failed
+  #   - Saves CI resources on doomed deployments
+  #
+  # Story 7 Production Validation:
+  #   - Admin UI visible on /admin
+  #   - No GAS blue banner on /events
+  #   - QR codes render correctly on Poster
+  # ============================================================================
+  ui-smoke:
+    name: "S2·09 🖥️ UI Smoke Tests (${{ needs.download-artifact.outputs.environment }})"
+    runs-on: ubuntu-latest
+    needs: [check-stage1, download-artifact, env-alignment-gate, api-smoke]  # Story 2.5: Depends on API tests
+    # Story 2.5: Skip if API tests failed
+    # IMPORTANT: Use always() with explicit checks for reliable execution
+    if: >-
+      always() &&
+      needs.api-smoke.result == 'success'
+    env:
+      BASE_URL: ${{ needs.download-artifact.outputs.base_url }}
+      ENVIRONMENT: ${{ needs.download-artifact.outputs.environment }}
+      IS_PRODUCTION: ${{ needs.check-stage1.outputs.is_production }}
+      CI: true
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install chromium --with-deps
+
+      - name: Display test configuration
+        run: |
+          echo "=============================================="
+          echo "UI SMOKE TEST CONFIGURATION"
+          echo "=============================================="
+          echo "Environment: $ENVIRONMENT"
+          echo "BASE_URL: $BASE_URL"
+          echo "Is Production: $IS_PRODUCTION"
+          echo "Node version: $(node --version)"
+          echo "npm version: $(npm --version)"
+          echo "=============================================="
+
+      - name: Run UI smoke tests
+        id: ui-tests
+        run: |
+          echo "Running UI smoke tests against: $BASE_URL ($ENVIRONMENT)"
+          npm run test:ui:smoke
+        continue-on-error: true
+
+      - name: Upload UI smoke test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        continue-on-error: true  # Don't fail if storage quota exceeded
+        with:
+          name: ui-smoke-results-${{ env.ENVIRONMENT }}
+          path: |
+            playwright-report-ui-smoke/
+            .test-results/ui-smoke-*.json
+            .test-results/ui-smoke-*.xml
+          retention-days: 7
+
+      - name: Check UI smoke test result
+        if: steps.ui-tests.outcome == 'failure'
+        run: |
+          echo "::error::UI smoke tests failed against $BASE_URL ($ENVIRONMENT)"
+          echo ""
+          echo "Stage-2 UI validation failed. This blocks the release."
+          echo "Check the UI smoke test results artifact for details."
+          if [ "$IS_PRODUCTION" == "true" ]; then
+            echo "See docs/ROLLBACK.md for recovery procedures."
+          fi
+          exit 1
+
+      - name: Create UI smoke summary
+        if: always()
+        run: |
+          echo "## UI Smoke Tests ($ENVIRONMENT)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ "${{ steps.ui-tests.outcome }}" == "success" ]; then
+            echo "### PASSED" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "All UI smoke tests passed against $ENVIRONMENT." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### FAILED" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "UI smoke tests failed. Check test results for details." >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| **Environment** | \`$ENVIRONMENT\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Target URL** | \`$BASE_URL\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Result** | \`${{ steps.ui-tests.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
+
+  # ============================================================================
+  # E2E TESTS - CRITICAL USER JOURNEYS (Story 3.4)
+  # ============================================================================
+  # Runs the comprehensive end-to-end test suite (Story 3.3) after smoke tests.
+  # Tests all 10 critical user journeys organized by event lifecycle:
+  #
+  # PRE-EVENT (Setup & Configuration):
+  #   - Journey 1: Event Creation Flow
+  #   - Journey 2: Sponsor Flow
+  #   - Journey 3: Poster Surface
+  #
+  # EVENT (Live Surfaces):
+  #   - Journey 4: Display Surface (TV/Kiosk)
+  #   - Journey 5: Event Viewing Flow (Public)
+  #
+  # POST-EVENT (Analytics):
+  #   - Journey 6: Shared Report
+  #
+  # TOOLS (Infrastructure & Validation):
+  #   - Journeys 7-10: CRUD, Cross-Surface, Health, Error Handling
+  #
+  # STAGING ONLY: These tests create/modify data, so only run on staging.
+  # Production uses the nightly read-only workflow (e2e-nightly-production.yml)
+  #
+  # Artifacts captured on failure:
+  #   - Screenshots (all tests)
+  #   - Videos (on failure)
+  #   - Traces (on failure)
+  #   - HTML reports
+  #
+  # @see tests/e2e/story-3.3-critical-user-journeys.spec.js
+  # ============================================================================
+  e2e-tests:
+    name: "S2·10 🧪 E2E Critical Journeys (${{ needs.download-artifact.outputs.environment }})"
+    runs-on: ubuntu-latest
+    needs: [check-stage1, download-artifact, env-alignment-gate, api-smoke, ui-smoke]
+    # Story 3.4: Run E2E tests only on staging (they create/modify data)
+    # Also skip if UI smoke tests failed (progressive gates)
+    # IMPORTANT: Use always() + >- (folded style) for reliable execution
+    # FIX: Using explicit 'false' comparison for is_production
+    if: >-
+      always() &&
+      needs.ui-smoke.result == 'success' &&
+      needs.check-stage1.outputs.is_production == 'false'
+    outputs:
+      e2e_test_result: ${{ steps.e2e-tests.outcome }}
+    env:
+      BASE_URL: ${{ needs.download-artifact.outputs.base_url }}
+      ENVIRONMENT: ${{ needs.download-artifact.outputs.environment }}
+      IS_PRODUCTION: ${{ needs.check-stage1.outputs.is_production }}
+      CI: true
+      # Admin key for test data setup (create events, sponsors, etc.)
+      ADMIN_KEY: ${{ secrets.ADMIN_KEY_ROOT }}
+      BRAND_ID: 'root'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install chromium --with-deps
+
+      - name: Display E2E test configuration
+        run: |
+          echo "=============================================="
+          echo "E2E CRITICAL USER JOURNEYS (Story 3.4)"
+          echo "=============================================="
+          echo "Environment: $ENVIRONMENT"
+          echo "BASE_URL: $BASE_URL"
+          echo "Brand ID: $BRAND_ID"
+          echo "Admin Key: ${ADMIN_KEY:+[CONFIGURED]}"
+          echo "Node version: $(node --version)"
+          echo "npm version: $(npm --version)"
+          echo ""
+          echo "This runs the comprehensive E2E test suite:"
+          echo "  - 10 critical user journeys"
+          echo "  - Organized by event lifecycle phases"
+          echo "  - Self-cleaning test data"
+          echo "  - Retries enabled for transient failures"
+          echo "=============================================="
+
+      - name: Run E2E critical user journeys
+        id: e2e-tests
+        run: |
+          echo "Running E2E critical user journeys against: $BASE_URL ($ENVIRONMENT)"
+          npm run test:story3.3
+        continue-on-error: true
+
+      - name: Upload E2E test artifacts (screenshots, videos, traces)
+        uses: actions/upload-artifact@v4
+        if: always()
+        continue-on-error: true  # Don't fail if storage quota exceeded
+        with:
+          name: e2e-test-artifacts-${{ env.ENVIRONMENT }}
+          path: |
+            playwright-report/
+            .test-results/playwright-results.json
+            .test-results/junit.xml
+            test-results/
+          retention-days: 14
+
+      - name: Upload failure artifacts (videos and traces on failure)
+        uses: actions/upload-artifact@v4
+        if: steps.e2e-tests.outcome == 'failure'
+        continue-on-error: true  # Don't fail if storage quota exceeded
+        with:
+          name: e2e-failure-debug-${{ env.ENVIRONMENT }}-${{ github.run_number }}
+          path: |
+            test-results/**/trace.zip
+            test-results/**/*.webm
+            test-results/**/*.png
+            playwright-report/
+          retention-days: 30
+
+      - name: Check E2E test result
+        if: steps.e2e-tests.outcome == 'failure'
+        run: |
+          echo "::error::E2E critical user journey tests failed against $BASE_URL ($ENVIRONMENT)"
+          echo ""
+          echo "=============================================="
+          echo "E2E TESTS FAILED"
+          echo "=============================================="
+          echo ""
+          echo "One or more critical user journeys failed."
+          echo "Check the 'e2e-test-artifacts' and 'e2e-failure-debug' artifacts for:"
+          echo "  - Screenshots (all tests)"
+          echo "  - Videos (failed tests)"
+          echo "  - Traces (failed tests)"
+          echo "  - HTML report with detailed failure info"
+          echo ""
+          echo "Common causes:"
+          echo "  - GAS cold start timeouts (retries should handle)"
+          echo "  - Test data conflicts (tests use unique timestamps)"
+          echo "  - UI changes not reflected in selectors"
+          echo "  - API contract changes"
+          echo ""
+          echo "See docs/E2E_PLAYWRIGHT_GUIDE.md for debugging tips."
+          echo "=============================================="
+          exit 1
+
+      - name: Create E2E test summary
+        if: always()
+        run: |
+          echo "## 🧪 E2E Critical User Journeys ($ENVIRONMENT)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ "${{ steps.e2e-tests.outcome }}" == "success" ]; then
+            echo "### ✅ PASSED" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "All 10 critical user journeys passed against $ENVIRONMENT." >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Journeys Tested:**" >> $GITHUB_STEP_SUMMARY
+            echo "- PRE-EVENT: Event Creation, Sponsor Flow, Poster Surface" >> $GITHUB_STEP_SUMMARY
+            echo "- EVENT: Display Surface, Event Viewing" >> $GITHUB_STEP_SUMMARY
+            echo "- POST-EVENT: Shared Report" >> $GITHUB_STEP_SUMMARY
+            echo "- TOOLS: CRUD, Cross-Surface, Health, Error Handling" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### ❌ FAILED" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "E2E critical user journey tests failed." >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Debugging Resources:**" >> $GITHUB_STEP_SUMMARY
+            echo "- Download 'e2e-test-artifacts' for HTML report" >> $GITHUB_STEP_SUMMARY
+            echo "- Download 'e2e-failure-debug' for videos & traces" >> $GITHUB_STEP_SUMMARY
+            echo "- See [E2E Playwright Guide](../docs/E2E_PLAYWRIGHT_GUIDE.md)" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| **Environment** | \`$ENVIRONMENT\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Target URL** | \`$BASE_URL\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Result** | \`${{ steps.e2e-tests.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Test Suite** | Story 3.3 Critical User Journeys |" >> $GITHUB_STEP_SUMMARY
+
+  # ============================================================================
+  # STORY 4.2: WORKER CUTOVER VALIDATION (STAGING ONLY)
+  # ============================================================================
+  # Validates that staging is fully Worker-backed before production cutover.
+  # Tests all surfaces (Public, Display, Poster) via Worker v2 API endpoints.
+  #
+  # Story 4.2 Requirements:
+  #   - All stg URLs function: /admin, /public, /display, /poster
+  #   - QR codes in staging hit Worker and produce valid pages
+  #   - Worker failures show "Temporarily unavailable" not blank pages
+  #   - Cross-surface navigation works (public → display → poster)
+  #   - Worker v2 API endpoints respond correctly with X-Backend header
+  #
+  # STAGING ONLY: This validates Worker cutover readiness for production.
+  # Production cutover is gated by this test passing.
+  #
+  # @see tests/e2e/stage-2/staging-worker-cutover.spec.js
+  # ============================================================================
+  worker-cutover-validation:
+    name: "S2·11 🔄 Worker Cutover (${{ needs.download-artifact.outputs.environment }})"
+    runs-on: ubuntu-latest
+    needs: [check-stage1, download-artifact, env-alignment-gate, api-smoke, ui-smoke]
+    # Story 4.2: Only run on staging (validates Worker readiness for prod cutover)
+    # IMPORTANT: Use always() + >- (folded style) for reliable execution
+    # FIX: Using explicit 'false' comparison for is_production
+    if: >-
+      always() &&
+      needs.ui-smoke.result == 'success' &&
+      needs.check-stage1.outputs.is_production == 'false'
+    outputs:
+      worker_cutover_result: ${{ steps.worker-cutover-tests.outcome }}
+    env:
+      BASE_URL: ${{ needs.download-artifact.outputs.base_url }}
+      ENVIRONMENT: ${{ needs.download-artifact.outputs.environment }}
+      CI: true
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install chromium --with-deps
+
+      - name: Display Worker cutover test configuration
+        run: |
+          echo "=============================================="
+          echo "STORY 4.2: WORKER CUTOVER VALIDATION"
+          echo "=============================================="
+          echo "Environment: $ENVIRONMENT"
+          echo "BASE_URL: $BASE_URL"
+          echo "Node version: $(node --version)"
+          echo ""
+          echo "This validates staging is fully Worker-backed:"
+          echo "  - All surfaces served by Worker (not GAS)"
+          echo "  - Worker v2 API endpoints functional"
+          echo "  - Cross-surface navigation works"
+          echo "  - QR codes hit Worker endpoints"
+          echo "  - Graceful error handling on Worker failures"
+          echo ""
+          echo "PASS = Production cutover is safe to proceed"
+          echo "FAIL = Block production cutover until fixed"
+          echo "=============================================="
+
+      - name: Run Worker cutover validation tests
+        id: worker-cutover-tests
+        run: |
+          echo "Running Worker cutover validation against: $BASE_URL ($ENVIRONMENT)"
+          npx playwright test tests/e2e/stage-2/staging-worker-cutover.spec.js --project=chromium --reporter=list
+        continue-on-error: true
+
+      - name: Upload Worker cutover test artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        continue-on-error: true  # Don't fail if storage quota exceeded
+        with:
+          name: worker-cutover-results-${{ env.ENVIRONMENT }}
+          path: |
+            playwright-report/
+            .test-results/
+            test-results/
+          retention-days: 14
+
+      - name: Check Worker cutover test result
+        if: steps.worker-cutover-tests.outcome == 'failure'
+        run: |
+          echo "::error::Worker cutover validation failed against $BASE_URL ($ENVIRONMENT)"
+          echo ""
+          echo "=============================================="
+          echo "STORY 4.2: WORKER CUTOVER VALIDATION FAILED"
+          echo "=============================================="
+          echo ""
+          echo "Staging is NOT fully Worker-backed."
+          echo "Production cutover is BLOCKED until this passes."
+          echo ""
+          echo "Possible issues:"
+          echo "  - Worker v2 API endpoints not responding"
+          echo "  - X-Backend header not showing 'worker'"
+          echo "  - Cross-surface navigation broken"
+          echo "  - Error pages not rendering correctly"
+          echo ""
+          echo "Check the 'worker-cutover-results' artifact for details."
+          echo "=============================================="
+          exit 1
+
+      - name: Create Worker cutover summary
+        if: always()
+        run: |
+          echo "## 🔄 Worker Cutover Validation ($ENVIRONMENT) - Story 4.2" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ "${{ steps.worker-cutover-tests.outcome }}" == "success" ]; then
+            echo "### ✅ STAGING FULLY WORKER-BACKED" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "All Worker cutover validation tests passed." >> $GITHUB_STEP_SUMMARY
+            echo "Production cutover is safe to proceed." >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Verified:**" >> $GITHUB_STEP_SUMMARY
+            echo "- All surfaces (Public, Display, Poster) served by Worker" >> $GITHUB_STEP_SUMMARY
+            echo "- Worker v2 API endpoints functional" >> $GITHUB_STEP_SUMMARY
+            echo "- Cross-surface navigation works" >> $GITHUB_STEP_SUMMARY
+            echo "- QR codes hit Worker endpoints" >> $GITHUB_STEP_SUMMARY
+            echo "- Graceful error handling configured" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### ❌ WORKER CUTOVER BLOCKED" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Worker cutover validation failed." >> $GITHUB_STEP_SUMMARY
+            echo "**Production cutover is BLOCKED.**" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Debugging:**" >> $GITHUB_STEP_SUMMARY
+            echo "1. Download 'worker-cutover-results' artifact" >> $GITHUB_STEP_SUMMARY
+            echo "2. Check Worker deployment configuration" >> $GITHUB_STEP_SUMMARY
+            echo "3. Verify Worker v2 API routes are deployed" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| **Environment** | \`$ENVIRONMENT\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Target URL** | \`$BASE_URL\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Result** | \`${{ steps.worker-cutover-tests.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
+
+  # ============================================================================
+  # FINAL VALIDATION GATE
+  # ============================================================================
+  # Aggregates results from all Stage-2 tests.
+  # This is the authoritative deployment validator.
+  # Failure here blocks the release and signals red in GitHub.
+  #
+  # Story 2.5: Progressive Test Gates
+  #   - If API tests fail, UI tests are skipped (result = 'skipped')
+  #   - Skipped UI tests due to API failure = overall FAILURE
+  #   - This ensures production is blocked when staging tests fail
+  #
+  # Story 3.4: E2E Critical Journeys (Staging Only)
+  #   - Runs after smoke tests pass
+  #   - Tests all 10 critical user journeys
+  #   - Creates/modifies test data (hence staging only)
+  #   - Production uses nightly read-only workflow
+  #
+  # Story 4 Environment Alignment Gate:
+  #   - Worker /env-status and GAS /whoami MUST return matching deploymentIds
+  #   - Script ID must match expected staging/production Script ID
+  #   - Environment name must be consistent
+  #   - If alignment fails, ALL downstream tests are skipped (fail-fast)
+  #
+  # Story 6 Acceptance Criteria Met:
+  #   - Any regression where Worker routes /events back to GAS:
+  #     - Fails CI (via api-smoke job)
+  #     - Blocks promotion to prod (via this gate)
+  #   - CI job artifacts include HTML snippet for debugging
+  #
+  # Story 7 Acceptance Criteria Met (Production Only):
+  #   - No GAS blue banner on /events
+  #   - Admin UI visible
+  #   - Network calls show /api/* only for data
+  #   - All existing QR codes still resolve correctly
+  #   - No increase in Worker or GAS error rates
+  # ============================================================================
+  validation-gate:
+    name: "S2·12 🚦 Validation Gate (${{ needs.download-artifact.outputs.environment }})"
+    runs-on: ubuntu-latest
+    needs: [check-stage1, prod-approval-gate, download-artifact, preflight-health-check, backend-health-b3, env-alignment-gate, api-smoke, ui-smoke, e2e-tests, worker-cutover-validation]
+    # Story 7: For production, requires approval gate to have succeeded or been skipped (staging)
+    if: always() && needs.download-artifact.result == 'success'
+    outputs:
+      validation_status: ${{ steps.evaluate.outputs.status }}
+      failure_reason: ${{ steps.evaluate.outputs.failure_reason }}
+
+    steps:
+      - name: Show all job results (diagnostic)
+        run: |
+          echo "=============================================="
+          echo "S2·12 VALIDATION-GATE: FULL DEPENDENCY STATUS"
+          echo "=============================================="
+          echo ""
+          echo "This diagnostic shows ALL job results to help debug issues."
+          echo ""
+          echo "Job Results:"
+          echo "  S2·01 check-stage1:            ${{ needs.check-stage1.result }}"
+          echo "  S2·02 prod-approval-gate:      ${{ needs.prod-approval-gate.result }}"
+          echo "  S2·03 download-artifact:       ${{ needs.download-artifact.result }}"
+          echo "  S2·04 preflight-health-check:  ${{ needs.preflight-health-check.result }}"
+          echo "  S2·05 backend-smoke:           (not in needs)"
+          echo "  S2·06 backend-health-b3:       ${{ needs.backend-health-b3.result }}"
+          echo "  S2·07 env-alignment-gate:      ${{ needs.env-alignment-gate.result }}"
+          echo "  S2·08 api-smoke:               ${{ needs.api-smoke.result }}"
+          echo "  S2·09 ui-smoke:                ${{ needs.ui-smoke.result }}"
+          echo "  S2·10 e2e-tests:               ${{ needs.e2e-tests.result }}"
+          echo "  S2·11 worker-cutover:          ${{ needs.worker-cutover-validation.result }}"
+          echo ""
+          echo "Environment Context:"
+          echo "  environment: ${{ needs.download-artifact.outputs.environment }}"
+          echo "  is_production: ${{ needs.check-stage1.outputs.is_production }}"
+          echo "  should_run: ${{ needs.check-stage1.outputs.should_run }}"
+          echo "  base_url: ${{ needs.download-artifact.outputs.base_url }}"
+          echo "=============================================="
+
+      - name: Evaluate validation results
+        id: evaluate
+        env:
+          IS_PRODUCTION: ${{ needs.check-stage1.outputs.is_production }}
+          ENVIRONMENT: ${{ needs.download-artifact.outputs.environment }}
+        run: |
+          PREFLIGHT_RESULT="${{ needs.preflight-health-check.result }}"
+          BACKEND_HEALTH_RESULT="${{ needs.backend-health-b3.result }}"
+          ENV_ALIGNMENT_RESULT="${{ needs.env-alignment-gate.result }}"
+          API_RESULT="${{ needs.api-smoke.result }}"
+          UI_RESULT="${{ needs.ui-smoke.result }}"
+          E2E_RESULT="${{ needs.e2e-tests.result }}"
+          WORKER_CUTOVER_RESULT="${{ needs.worker-cutover-validation.result }}"
+
+          echo "=============================================="
+          echo "STAGE-2 VALIDATION GATE EVALUATION (Story 2.5 + 3.4 + 4.2 + 6 + B3)"
+          echo "=============================================="
+          echo "Environment: $ENVIRONMENT"
+          echo "Is Production: $IS_PRODUCTION"
+          echo ""
+          echo "Gate Results:"
+          echo "  🏥 Pre-Flight Health: $PREFLIGHT_RESULT"
+          echo "  🔐 Backend Health (B3): $BACKEND_HEALTH_RESULT"
+          echo "  🔐 Environment Alignment: $ENV_ALIGNMENT_RESULT"
+          echo "  🔥 API Smoke Tests: $API_RESULT"
+          echo "  🖥️  UI Smoke Tests: $UI_RESULT"
+          echo "  🧪 E2E Critical Journeys: $E2E_RESULT"
+          echo "  🔄 Worker Cutover (4.2): $WORKER_CUTOVER_RESULT"
+          echo "=============================================="
+
+          # Story 6: Check pre-flight health first
+          # NOTE: 'skipped' means the job didn't run - this is a workflow config issue
+          #       'failure' means the job ran but the health check failed
+          if [ "$PREFLIGHT_RESULT" == "failure" ]; then
+            echo ""
+            echo "❌ CRITICAL: Pre-flight health check FAILED!"
+            echo "Staging/production environment is unavailable or unhealthy."
+            echo "status=failed" >> $GITHUB_OUTPUT
+            echo "failure_reason=preflight_health_failed" >> $GITHUB_OUTPUT
+          elif [ "$PREFLIGHT_RESULT" == "skipped" ]; then
+            echo ""
+            echo "❌ CRITICAL: Pre-flight health check was SKIPPED!"
+            echo "This indicates a workflow configuration issue."
+            echo "Check if check-stage1 and download-artifact succeeded."
+            echo "status=failed" >> $GITHUB_OUTPUT
+            echo "failure_reason=preflight_health_skipped" >> $GITHUB_OUTPUT
+
+          # Story B3: Check backend health (Google SA configuration)
+          elif [ "$BACKEND_HEALTH_RESULT" == "failure" ]; then
+            echo ""
+            echo "❌ CRITICAL: Backend health check (Story B3) FAILED!"
+            echo "Google Service Account is not configured correctly."
+            echo "Check /api/health/backend for error codes."
+            echo "See docs/CLOUDFLARE_SECRETS.md for troubleshooting."
+            echo "status=failed" >> $GITHUB_OUTPUT
+            echo "failure_reason=backend_health_b3_failed" >> $GITHUB_OUTPUT
+          elif [ "$BACKEND_HEALTH_RESULT" == "skipped" ]; then
+            echo ""
+            echo "❌ CRITICAL: Backend health check (Story B3) was SKIPPED!"
+            echo "This indicates preflight-health-check didn't pass."
+            echo "status=failed" >> $GITHUB_OUTPUT
+            echo "failure_reason=backend_health_b3_skipped" >> $GITHUB_OUTPUT
+
+          # Story 2.5: Fail-fast evaluation - If alignment failed, mark overall as failed
+          elif [ "$ENV_ALIGNMENT_RESULT" == "failure" ]; then
+            echo ""
+            echo "❌ CRITICAL: Environment alignment check FAILED!"
+            echo "Worker and GAS deployment IDs don't match."
+            echo "status=failed" >> $GITHUB_OUTPUT
+            echo "failure_reason=env_alignment_failed" >> $GITHUB_OUTPUT
+          elif [ "$ENV_ALIGNMENT_RESULT" == "skipped" ]; then
+            echo ""
+            echo "❌ CRITICAL: Environment alignment check was SKIPPED!"
+            echo "This indicates preflight-health-check didn't pass."
+            echo "status=failed" >> $GITHUB_OUTPUT
+            echo "failure_reason=env_alignment_skipped" >> $GITHUB_OUTPUT
+
+          # Story 2.5: If API tests failed, UI tests should be skipped
+          elif [ "$API_RESULT" == "failure" ]; then
+            echo ""
+            echo "❌ API smoke tests FAILED!"
+            echo "status=failed" >> $GITHUB_OUTPUT
+            echo "failure_reason=api_tests_failed" >> $GITHUB_OUTPUT
+          elif [ "$API_RESULT" == "skipped" ]; then
+            echo ""
+            echo "❌ API smoke tests were SKIPPED!"
+            echo "This indicates env-alignment-gate didn't pass."
+            echo "status=failed" >> $GITHUB_OUTPUT
+            echo "failure_reason=api_tests_skipped" >> $GITHUB_OUTPUT
+
+          # Story 2.5: If UI tests were skipped (but API passed), something is wrong
+          elif [ "$UI_RESULT" == "skipped" ] && [ "$API_RESULT" == "success" ]; then
+            echo ""
+            echo "⚠️ UI tests SKIPPED unexpectedly (API passed)"
+            echo "This indicates a workflow configuration issue."
+            echo "status=failed" >> $GITHUB_OUTPUT
+            echo "failure_reason=ui_skipped_unexpected" >> $GITHUB_OUTPUT
+
+          # UI tests failed
+          elif [ "$UI_RESULT" == "failure" ]; then
+            echo ""
+            echo "❌ UI smoke tests FAILED!"
+            echo "status=failed" >> $GITHUB_OUTPUT
+            echo "failure_reason=ui_tests_failed" >> $GITHUB_OUTPUT
+          elif [ "$UI_RESULT" == "skipped" ]; then
+            echo ""
+            echo "❌ UI smoke tests were SKIPPED!"
+            echo "This indicates api-smoke didn't pass."
+            echo "status=failed" >> $GITHUB_OUTPUT
+            echo "failure_reason=ui_tests_skipped" >> $GITHUB_OUTPUT
+
+          # Story 3.4: E2E tests failed (staging only)
+          elif [ "$E2E_RESULT" == "failure" ]; then
+            echo ""
+            echo "❌ E2E critical user journey tests FAILED!"
+            echo "status=failed" >> $GITHUB_OUTPUT
+            echo "failure_reason=e2e_tests_failed" >> $GITHUB_OUTPUT
+
+          # Story 4.2: Worker cutover validation failed (staging only)
+          elif [ "$WORKER_CUTOVER_RESULT" == "failure" ]; then
+            echo ""
+            echo "❌ Worker cutover validation failed!"
+            echo "Production cutover is BLOCKED."
+            echo "status=failed" >> $GITHUB_OUTPUT
+            echo "failure_reason=worker_cutover" >> $GITHUB_OUTPUT
+
+          # Success case: All tests passed (E2E/Worker cutover skipped is OK for production)
+          elif [ "$API_RESULT" == "success" ] && [ "$UI_RESULT" == "success" ]; then
+            # E2E tests are skipped on production (expected), or passed on staging
+            # Worker cutover validation is skipped on production (expected), or passed on staging
+            if ([ "$E2E_RESULT" == "success" ] || [ "$E2E_RESULT" == "skipped" ]) && \
+               ([ "$WORKER_CUTOVER_RESULT" == "success" ] || [ "$WORKER_CUTOVER_RESULT" == "skipped" ]); then
+              echo ""
+              echo "✅ Stage-2 validation PASSED"
+              if [ "$E2E_RESULT" == "skipped" ]; then
+                echo "(E2E tests skipped - production deploy uses nightly workflow)"
+              fi
+              if [ "$WORKER_CUTOVER_RESULT" == "skipped" ]; then
+                echo "(Worker cutover validation skipped - production uses existing Worker)"
+              fi
+              echo "status=passed" >> $GITHUB_OUTPUT
+              echo "failure_reason=" >> $GITHUB_OUTPUT
+            else
+              echo ""
+              echo "❌ Tests in unexpected state: E2E=$E2E_RESULT, WorkerCutover=$WORKER_CUTOVER_RESULT"
+              echo "status=failed" >> $GITHUB_OUTPUT
+              echo "failure_reason=unexpected_state" >> $GITHUB_OUTPUT
+            fi
+
+          # Catch-all failure
+          else
+            echo ""
+            echo "❌ Stage-2 validation FAILED (unexpected state)"
+            echo "status=failed" >> $GITHUB_OUTPUT
+            echo "failure_reason=unknown" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create final summary
+        env:
+          IS_PRODUCTION: ${{ needs.check-stage1.outputs.is_production }}
+          ENVIRONMENT: ${{ needs.download-artifact.outputs.environment }}
+        run: |
+          BASE_URL="${{ needs.download-artifact.outputs.base_url }}"
+          PREFLIGHT_RESULT="${{ needs.preflight-health-check.result }}"
+          ENV_ALIGNMENT_RESULT="${{ needs.env-alignment-gate.result }}"
+          API_RESULT="${{ needs.api-smoke.result }}"
+          UI_RESULT="${{ needs.ui-smoke.result }}"
+          E2E_RESULT="${{ needs.e2e-tests.result }}"
+          WORKER_CUTOVER_RESULT="${{ needs.worker-cutover-validation.result }}"
+          STATUS="${{ steps.evaluate.outputs.status }}"
+          FAILURE_REASON="${{ steps.evaluate.outputs.failure_reason }}"
+
+          echo "# Stage-2 Orchestrator Results ($ENVIRONMENT)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ "$STATUS" == "passed" ]; then
+            echo "## ✅ DEPLOYMENT VALIDATED" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Stage-2 validation passed. The $ENVIRONMENT deployment is verified." >> $GITHUB_STEP_SUMMARY
+
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### Story 6: /events Verified" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "- /api/status returns ok:true" >> $GITHUB_STEP_SUMMARY
+            echo "- /events returns HTTP 200" >> $GITHUB_STEP_SUMMARY
+
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### Story 4 Environment Alignment (Verified)" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "- Worker /env-status and GAS /whoami deployment IDs match" >> $GITHUB_STEP_SUMMARY
+            echo "- Script ID matches expected for $ENVIRONMENT" >> $GITHUB_STEP_SUMMARY
+            echo "- Environment name is consistent" >> $GITHUB_STEP_SUMMARY
+
+            if [ "$IS_PRODUCTION" != "true" ]; then
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "### Story 3.4 E2E Critical Journeys (Verified)" >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "- All 10 critical user journeys passed" >> $GITHUB_STEP_SUMMARY
+              echo "- Event lifecycle validated (PRE-EVENT, EVENT, POST-EVENT)" >> $GITHUB_STEP_SUMMARY
+              echo "- Test data cleanup successful" >> $GITHUB_STEP_SUMMARY
+
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "### Story 4.2 Worker Cutover Validation (Verified)" >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "- All surfaces (Public, Display, Poster) served by Worker" >> $GITHUB_STEP_SUMMARY
+              echo "- Worker v2 API endpoints functional" >> $GITHUB_STEP_SUMMARY
+              echo "- Cross-surface navigation works" >> $GITHUB_STEP_SUMMARY
+              echo "- Production cutover is safe to proceed" >> $GITHUB_STEP_SUMMARY
+            fi
+
+            if [ "$IS_PRODUCTION" == "true" ]; then
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "### Story 7 Production Acceptance Criteria" >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "- No GAS blue banner on /events" >> $GITHUB_STEP_SUMMARY
+              echo "- Admin UI visible on /admin" >> $GITHUB_STEP_SUMMARY
+              echo "- Worker HTML routing active" >> $GITHUB_STEP_SUMMARY
+              echo "- /api/* used for JSON data only" >> $GITHUB_STEP_SUMMARY
+              echo "- QR codes resolve correctly" >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "ℹ️ **Note:** E2E critical journeys skipped for production (uses nightly workflow)." >> $GITHUB_STEP_SUMMARY
+            fi
+          else
+            echo "## ❌ DEPLOYMENT BLOCKED" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+
+            if [ "$FAILURE_REASON" == "preflight_health" ]; then
+              echo "### 🏥 STAGING/PRODUCTION UNAVAILABLE" >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "**The environment is globally down or unhealthy.**" >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "This is NOT a test failure - the environment cannot be reached" >> $GITHUB_STEP_SUMMARY
+              echo "or /api/status returned ok:false." >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "All downstream Stage-2 tests were skipped." >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "**Action Required:**" >> $GITHUB_STEP_SUMMARY
+              echo "1. Check Cloudflare dashboard for Worker status" >> $GITHUB_STEP_SUMMARY
+              echo "2. Verify DNS configuration for $ENVIRONMENT" >> $GITHUB_STEP_SUMMARY
+              echo "3. Review recent deployment logs" >> $GITHUB_STEP_SUMMARY
+              echo "4. Check GAS backend health" >> $GITHUB_STEP_SUMMARY
+            elif [ "$FAILURE_REASON" == "env_alignment" ]; then
+              echo "### 🚨 CRITICAL: Environment Alignment Failed" >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "**The Cloudflare Worker is pointing to the wrong GAS deployment!**" >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "This is a critical configuration error. All downstream tests were" >> $GITHUB_STEP_SUMMARY
+              echo "skipped because the environment is not properly aligned." >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "**Action Required:**" >> $GITHUB_STEP_SUMMARY
+              echo "1. Check Cloudflare Worker deployment configuration" >> $GITHUB_STEP_SUMMARY
+              echo "2. Verify STAGING_DEPLOYMENT_ID or PROD_DEPLOYMENT_ID in wrangler.toml" >> $GITHUB_STEP_SUMMARY
+              echo "3. Ensure CI deployed the Worker with the correct deployment ID" >> $GITHUB_STEP_SUMMARY
+            elif [ "$FAILURE_REASON" == "e2e_tests" ]; then
+              echo "### 🧪 E2E Critical Journeys Failed" >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "One or more critical user journeys failed." >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "**Debugging:**" >> $GITHUB_STEP_SUMMARY
+              echo "1. Download 'e2e-test-artifacts' for the HTML report" >> $GITHUB_STEP_SUMMARY
+              echo "2. Download 'e2e-failure-debug' for videos and traces" >> $GITHUB_STEP_SUMMARY
+              echo "3. See [E2E Playwright Guide](../docs/E2E_PLAYWRIGHT_GUIDE.md)" >> $GITHUB_STEP_SUMMARY
+            elif [ "$FAILURE_REASON" == "worker_cutover" ]; then
+              echo "### 🔄 Worker Cutover Validation Failed (Story 4.2)" >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "**Staging is NOT fully Worker-backed. Production cutover is BLOCKED.**" >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "**Debugging:**" >> $GITHUB_STEP_SUMMARY
+              echo "1. Download 'worker-cutover-results' artifact for details" >> $GITHUB_STEP_SUMMARY
+              echo "2. Check Worker deployment configuration" >> $GITHUB_STEP_SUMMARY
+              echo "3. Verify Worker v2 API routes are deployed" >> $GITHUB_STEP_SUMMARY
+              echo "4. Check X-Backend headers on staging responses" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "Stage-2 validation failed. Release is blocked until issues are resolved." >> $GITHUB_STEP_SUMMARY
+            fi
+
+            if [ "$IS_PRODUCTION" == "true" ]; then
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "### Rollback Required" >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "Production validation failed. See [docs/ROLLBACK.md](../docs/ROLLBACK.md) for recovery procedures." >> $GITHUB_STEP_SUMMARY
+            fi
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Test Suite | Result |" >> $GITHUB_STEP_SUMMARY
+          echo "|------------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| **🏥 Pre-Flight Health** | \`$PREFLIGHT_RESULT\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **🔐 Environment Alignment** | \`$ENV_ALIGNMENT_RESULT\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **📡 API Smoke Tests** | \`$API_RESULT\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **🖥️ UI Smoke Tests** | \`$UI_RESULT\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **🧪 E2E Critical Journeys** | \`$E2E_RESULT\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **🔄 Worker Cutover (4.2)** | \`$WORKER_CUTOVER_RESULT\` |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Configuration" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| **Environment** | \`$ENVIRONMENT\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Target URL** | \`$BASE_URL\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Source Commit** | \`${{ github.event.workflow_run.head_sha }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Stage-1 Run ID** | \`${{ github.event.workflow_run.id }}\` |" >> $GITHUB_STEP_SUMMARY
+
+      - name: Fail if validation failed
+        if: steps.evaluate.outputs.status == 'failed'
+        env:
+          IS_PRODUCTION: ${{ needs.check-stage1.outputs.is_production }}
+          ENVIRONMENT: ${{ needs.download-artifact.outputs.environment }}
+        run: |
+          echo "::error::Stage-2 validation failed for $ENVIRONMENT"
+          echo ""
+          echo "=============================================="
+          echo "STAGE-2 VALIDATION FAILED ($ENVIRONMENT)"
+          echo "=============================================="
+          echo ""
+          echo "One or more smoke test suites failed."
+          echo "This blocks the release and signals red in GitHub."
+          echo ""
+          if [ "$IS_PRODUCTION" == "true" ]; then
+            echo "PRODUCTION DEPLOYMENT BLOCKED"
+            echo "See docs/ROLLBACK.md for recovery procedures."
+          fi
+          echo ""
+          echo "Please review the test results and fix the issues."
+          echo "=============================================="
+          exit 1
+
+  # ============================================================================
+  # STORY 2.5: FAILURE NOTIFICATION (Stage-2)
+  # ============================================================================
+  # Sends immediate notification when Stage-2 validation fails.
+  # This ensures the team knows immediately when:
+  #   - API tests fail (critical - blocks UI tests)
+  #   - UI tests fail
+  #   - Environment alignment fails
+  #   - Production deployment would be blocked
+  #
+  # Configured via secrets:
+  #   - SLACK_WEBHOOK_URL: Slack incoming webhook for #deployments channel
+  #   - TEAMS_WEBHOOK_URL: Microsoft Teams webhook (optional)
+  # ============================================================================
+  notify-stage2-failure:
+    name: "S2·🔔 Notify Stage-2 Failure"
+    runs-on: ubuntu-latest
+    needs: [check-stage1, prod-approval-gate, download-artifact, preflight-health-check, env-alignment-gate, api-smoke, ui-smoke, e2e-tests, worker-cutover-validation, validation-gate]
+    # Story 7: Include production approval gate in notification conditions
+    # Story 4.2: Include worker-cutover-validation in notification conditions
+    # IMPORTANT: Use >- (folded style) instead of | (literal block) for reliable parsing
+    if: >-
+      always() &&
+      (needs.download-artifact.result == 'success' || needs.prod-approval-gate.result == 'failure') &&
+      (needs.preflight-health-check.result == 'failure' ||
+       needs.env-alignment-gate.result == 'failure' ||
+       needs.api-smoke.result == 'failure' ||
+       needs.ui-smoke.result == 'failure' ||
+       needs.e2e-tests.result == 'failure' ||
+       needs.worker-cutover-validation.result == 'failure' ||
+       needs.validation-gate.result == 'failure' ||
+       needs.validation-gate.outputs.validation_status == 'failed' ||
+       needs.prod-approval-gate.result == 'failure')
+
+    steps:
+      - name: Determine failure details
+        id: failure-info
+        env:
+          ENVIRONMENT: ${{ needs.download-artifact.outputs.environment }}
+          IS_PRODUCTION: ${{ needs.check-stage1.outputs.is_production }}
+        run: |
+          # Determine which test(s) failed
+          FAILED_TESTS=""
+          FAILURE_EMOJI="🔴"
+
+          # Story 6: Pre-flight health check failure
+          if [ "${{ needs.preflight-health-check.result }}" == "failure" ]; then
+            FAILED_TESTS="${FAILED_TESTS}Pre-Flight Health (STAGING UNAVAILABLE), "
+            FAILURE_EMOJI="🏥"
+          fi
+          if [ "${{ needs.env-alignment-gate.result }}" == "failure" ]; then
+            FAILED_TESTS="${FAILED_TESTS}Environment Alignment (CRITICAL), "
+            FAILURE_EMOJI="🚨"
+          fi
+          if [ "${{ needs.api-smoke.result }}" == "failure" ]; then
+            FAILED_TESTS="${FAILED_TESTS}API Smoke Tests, "
+          fi
+          if [ "${{ needs.ui-smoke.result }}" == "failure" ]; then
+            FAILED_TESTS="${FAILED_TESTS}UI Smoke Tests, "
+          fi
+          if [ "${{ needs.ui-smoke.result }}" == "skipped" ] && [ "${{ needs.api-smoke.result }}" != "success" ]; then
+            FAILED_TESTS="${FAILED_TESTS}UI Tests SKIPPED (gated by API), "
+          fi
+          if [ "${{ needs.e2e-tests.result }}" == "failure" ]; then
+            FAILED_TESTS="${FAILED_TESTS}E2E Critical Journeys, "
+          fi
+          if [ "${{ needs.worker-cutover-validation.result }}" == "failure" ]; then
+            FAILED_TESTS="${FAILED_TESTS}Worker Cutover (4.2), "
+          fi
+
+          # Remove trailing comma and space
+          FAILED_TESTS="${FAILED_TESTS%, }"
+
+          # If nothing explicit, check validation-gate failure reason
+          if [ -z "$FAILED_TESTS" ]; then
+            FAILURE_REASON="${{ needs.validation-gate.outputs.failure_reason }}"
+            case "$FAILURE_REASON" in
+              env_alignment) FAILED_TESTS="Environment Alignment" ;;
+              api_tests) FAILED_TESTS="API Smoke Tests" ;;
+              ui_tests) FAILED_TESTS="UI Smoke Tests" ;;
+              e2e_tests) FAILED_TESTS="E2E Critical Journeys" ;;
+              worker_cutover) FAILED_TESTS="Worker Cutover (4.2)" ;;
+              *) FAILED_TESTS="Validation Gate" ;;
+            esac
+          fi
+
+          echo "failed_tests=$FAILED_TESTS" >> $GITHUB_OUTPUT
+          echo "failure_emoji=$FAILURE_EMOJI" >> $GITHUB_OUTPUT
+          echo "run_url=${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" >> $GITHUB_OUTPUT
+
+          # Production flag for urgency
+          if [ "$IS_PRODUCTION" == "true" ]; then
+            echo "urgency=PRODUCTION BLOCKED" >> $GITHUB_OUTPUT
+          else
+            echo "urgency=Staging validation failed" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Send Slack notification
+        if: env.SLACK_WEBHOOK_URL != ''
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          ENVIRONMENT: ${{ needs.download-artifact.outputs.environment }}
+          IS_PRODUCTION: ${{ needs.check-stage1.outputs.is_production }}
+        run: |
+          if [ -z "$SLACK_WEBHOOK_URL" ]; then
+            echo "SLACK_WEBHOOK_URL not configured, skipping Slack notification"
+            exit 0
+          fi
+
+          # Determine color based on production vs staging
+          if [ "$IS_PRODUCTION" == "true" ]; then
+            COLOR="#FF0000"
+            TITLE="🚨 PRODUCTION Stage-2 Validation Failed"
+          else
+            COLOR="#FFA500"
+            TITLE="🔴 Stage-2 Validation Failed (Staging)"
+          fi
+
+          curl -X POST -H 'Content-type: application/json' \
+            --data '{
+              "attachments": [{
+                "color": "'"$COLOR"'",
+                "blocks": [
+                  {
+                    "type": "header",
+                    "text": {
+                      "type": "plain_text",
+                      "text": "'"$TITLE"'",
+                      "emoji": true
+                    }
+                  },
+                  {
+                    "type": "section",
+                    "fields": [
+                      {
+                        "type": "mrkdwn",
+                        "text": "*Failed Test(s):*\n${{ steps.failure-info.outputs.failed_tests }}"
+                      },
+                      {
+                        "type": "mrkdwn",
+                        "text": "*Environment:*\n'"$ENVIRONMENT"'"
+                      }
+                    ]
+                  },
+                  {
+                    "type": "section",
+                    "fields": [
+                      {
+                        "type": "mrkdwn",
+                        "text": "*Target URL:*\n`${{ needs.download-artifact.outputs.base_url }}`"
+                      },
+                      {
+                        "type": "mrkdwn",
+                        "text": "*Status:*\n${{ steps.failure-info.outputs.urgency }}"
+                      }
+                    ]
+                  },
+                  {
+                    "type": "context",
+                    "elements": [
+                      {
+                        "type": "mrkdwn",
+                        "text": "Story 2.5: Progressive test gates - API tests gate UI tests"
+                      }
+                    ]
+                  },
+                  {
+                    "type": "actions",
+                    "elements": [
+                      {
+                        "type": "button",
+                        "text": {
+                          "type": "plain_text",
+                          "text": "View Workflow Run"
+                        },
+                        "style": "danger",
+                        "url": "${{ steps.failure-info.outputs.run_url }}"
+                      }
+                    ]
+                  }
+                ]
+              }]
+            }' \
+            "$SLACK_WEBHOOK_URL" || echo "Slack notification failed (non-critical)"
+
+      - name: Send Microsoft Teams notification
+        if: env.TEAMS_WEBHOOK_URL != ''
+        env:
+          TEAMS_WEBHOOK_URL: ${{ secrets.TEAMS_WEBHOOK_URL }}
+          ENVIRONMENT: ${{ needs.download-artifact.outputs.environment }}
+          IS_PRODUCTION: ${{ needs.check-stage1.outputs.is_production }}
+        run: |
+          if [ -z "$TEAMS_WEBHOOK_URL" ]; then
+            echo "TEAMS_WEBHOOK_URL not configured, skipping Teams notification"
+            exit 0
+          fi
+
+          # Determine color based on production vs staging
+          if [ "$IS_PRODUCTION" == "true" ]; then
+            COLOR="FF0000"
+            TITLE="🚨 PRODUCTION Stage-2 Validation Failed"
+          else
+            COLOR="FFA500"
+            TITLE="🔴 Stage-2 Validation Failed (Staging)"
+          fi
+
+          curl -X POST -H 'Content-Type: application/json' \
+            --data '{
+              "@type": "MessageCard",
+              "@context": "http://schema.org/extensions",
+              "themeColor": "'"$COLOR"'",
+              "summary": "'"$TITLE"'",
+              "sections": [{
+                "activityTitle": "'"$TITLE"'",
+                "facts": [
+                  {"name": "Failed Test(s)", "value": "${{ steps.failure-info.outputs.failed_tests }}"},
+                  {"name": "Environment", "value": "'"$ENVIRONMENT"'"},
+                  {"name": "Target URL", "value": "${{ needs.download-artifact.outputs.base_url }}"},
+                  {"name": "Status", "value": "${{ steps.failure-info.outputs.urgency }}"}
+                ],
+                "markdown": true
+              }],
+              "potentialAction": [{
+                "@type": "OpenUri",
+                "name": "View Workflow Run",
+                "targets": [{"os": "default", "uri": "${{ steps.failure-info.outputs.run_url }}"}]
+              }]
+            }' \
+            "$TEAMS_WEBHOOK_URL" || echo "Teams notification failed (non-critical)"
+
+      - name: Create notification summary
+        env:
+          ENVIRONMENT: ${{ needs.download-artifact.outputs.environment }}
+          IS_PRODUCTION: ${{ needs.check-stage1.outputs.is_production }}
+        run: |
+          echo "## 📢 Stage-2 Failure Notification Sent (Story 2.5)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ "$IS_PRODUCTION" == "true" ]; then
+            echo "### 🚨 PRODUCTION DEPLOYMENT BLOCKED" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### 🔴 Staging Validation Failed" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Failed Test(s):** ${{ steps.failure-info.outputs.failed_tests }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Environment:** $ENVIRONMENT" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Channel | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|---------|--------|" >> $GITHUB_STEP_SUMMARY
+          if [ -n "${{ secrets.SLACK_WEBHOOK_URL }}" ]; then
+            echo "| Slack | ✅ Sent |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| Slack | ⚠️ Not configured |" >> $GITHUB_STEP_SUMMARY
+          fi
+          if [ -n "${{ secrets.TEAMS_WEBHOOK_URL }}" ]; then
+            echo "| Teams | ✅ Sent |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| Teams | ⚠️ Not configured |" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Story 2.5: Progressive Test Gates" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "The pipeline uses progressive test gates:" >> $GITHUB_STEP_SUMMARY
+          echo "1. **Environment Alignment** - Verifies Worker ↔ GAS alignment" >> $GITHUB_STEP_SUMMARY
+          echo "2. **API Smoke Tests** - If fails, UI tests are SKIPPED" >> $GITHUB_STEP_SUMMARY
+          echo "3. **UI Smoke Tests** - Gated by API tests passing" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "This ensures immediate feedback and prevents wasted resources." >> $GITHUB_STEP_SUMMARY

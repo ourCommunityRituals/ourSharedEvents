@@ -1,0 +1,518 @@
+# Production Parity Check - Story 6.1
+#
+# EPIC 6 - Decommission GAS
+# Story 6.1: Confirm Prod Worker Parity & DNS Cutover
+#
+# Purpose / Value:
+#   Verify that production Worker has full parity with staging before DNS cutover.
+#   This runs the same Stage-2 smoke test suite against production to confirm
+#   Worker-only routing is ready.
+#
+# Flow:
+#   1. Manual trigger (workflow_dispatch) with optional skip confirmation
+#   2. Run health checks against production
+#   3. Run API smoke tests (same as Stage-2)
+#   4. Run UI smoke tests (same as Stage-2)
+#   5. Report parity status
+#
+# Prerequisites:
+#   - Production Worker must be deployed
+#   - Stage-2 smoke tests must pass on staging
+#   - BACKEND_MODE should be 'worker' in production (or ready to switch)
+#
+# Usage:
+#   This workflow is run manually before the DNS cutover to verify
+#   production is ready for Worker-only traffic.
+
+name: Prod Parity Check
+
+on:
+  workflow_dispatch:
+    inputs:
+      skip_confirmation:
+        description: 'Skip manual confirmation before running tests'
+        required: false
+        default: 'false'
+        type: boolean
+      run_extended_tests:
+        description: 'Run extended test suite (longer, more thorough)'
+        required: false
+        default: 'false'
+        type: boolean
+
+# Only one parity check at a time
+concurrency:
+  group: prod-parity-check
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: '18'
+  PROD_BASE_URL: 'https://www.eventangle.com'
+  STG_BASE_URL: 'https://stg.eventangle.com'
+  # Test event for UI smoke tests
+  TEST_EVENT_TAG: 'smoke-test-event'
+
+jobs:
+  # ==========================================================================
+  # CONFIRMATION: Verify operator intent
+  # ==========================================================================
+  confirm-intent:
+    name: Confirm Parity Check Intent
+    runs-on: ubuntu-latest
+    outputs:
+      proceed: ${{ steps.confirm.outputs.proceed }}
+
+    steps:
+      - name: Display warning
+        run: |
+          echo "=============================================="
+          echo "PRODUCTION PARITY CHECK"
+          echo "=============================================="
+          echo ""
+          echo "This workflow will run smoke tests against PRODUCTION."
+          echo "Target: ${{ env.PROD_BASE_URL }}"
+          echo ""
+          echo "This is a READ-ONLY operation - no changes will be made."
+          echo ""
+          echo "Skip confirmation: ${{ inputs.skip_confirmation }}"
+          echo ""
+
+      - name: Confirm proceed
+        id: confirm
+        run: |
+          if [ "${{ inputs.skip_confirmation }}" = "true" ]; then
+            echo "Confirmation skipped by user request"
+            echo "proceed=true" >> $GITHUB_OUTPUT
+          else
+            echo "Manual confirmation received (workflow was dispatched)"
+            echo "proceed=true" >> $GITHUB_OUTPUT
+          fi
+
+  # ==========================================================================
+  # STAGING BASELINE: Verify staging is healthy first
+  # ==========================================================================
+  staging-baseline:
+    name: Staging Baseline Check
+    runs-on: ubuntu-latest
+    needs: confirm-intent
+    if: needs.confirm-intent.outputs.proceed == 'true'
+    outputs:
+      staging_healthy: ${{ steps.check.outputs.healthy }}
+
+    steps:
+      - name: Check staging health
+        id: check
+        run: |
+          echo "=============================================="
+          echo "STAGING BASELINE CHECK"
+          echo "=============================================="
+          echo "Verifying staging is healthy before checking production parity"
+          echo ""
+
+          HTTP_CODE=$(curl -s -o /tmp/stg-status.json -w "%{http_code}" \
+            --connect-timeout 30 \
+            --max-time 60 \
+            "${{ env.STG_BASE_URL }}/api/status" 2>&1) || HTTP_CODE="000"
+
+          echo "Staging HTTP Status: $HTTP_CODE"
+
+          if [ "$HTTP_CODE" = "200" ]; then
+            OK_VALUE=$(jq -r '.ok // "null"' /tmp/stg-status.json 2>/dev/null || echo "null")
+            if [ "$OK_VALUE" = "true" ]; then
+              echo "healthy=true" >> $GITHUB_OUTPUT
+              echo ""
+              echo "Staging is healthy - proceeding with production parity check"
+            else
+              echo "healthy=false" >> $GITHUB_OUTPUT
+              echo "::warning::Staging /api/status returned ok:$OK_VALUE"
+              echo "Cannot verify parity if staging baseline is unhealthy"
+            fi
+          else
+            echo "healthy=false" >> $GITHUB_OUTPUT
+            echo "::warning::Staging returned HTTP $HTTP_CODE"
+          fi
+
+      - name: Create baseline summary
+        if: always()
+        run: |
+          echo "## Staging Baseline Check" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ steps.check.outputs.healthy }}" = "true" ]; then
+            echo "### HEALTHY" >> $GITHUB_STEP_SUMMARY
+            echo "Staging baseline verified. Proceeding with production parity check." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### UNHEALTHY" >> $GITHUB_STEP_SUMMARY
+            echo "Staging is not healthy. Fix staging first before checking production parity." >> $GITHUB_STEP_SUMMARY
+          fi
+
+  # ==========================================================================
+  # PRODUCTION HEALTH: Check production Worker health
+  # ==========================================================================
+  production-health:
+    name: Production Health Check
+    runs-on: ubuntu-latest
+    needs: [confirm-intent, staging-baseline]
+    if: needs.staging-baseline.outputs.staging_healthy == 'true'
+    outputs:
+      prod_healthy: ${{ steps.health.outputs.healthy }}
+      worker_version: ${{ steps.health.outputs.worker_version }}
+      backend_mode: ${{ steps.health.outputs.backend_mode }}
+
+    steps:
+      - name: Check production health
+        id: health
+        run: |
+          echo "=============================================="
+          echo "PRODUCTION HEALTH CHECK"
+          echo "=============================================="
+          echo "Target: ${{ env.PROD_BASE_URL }}"
+          echo ""
+
+          # Check /api/status
+          HTTP_CODE=$(curl -s -o /tmp/prod-status.json -w "%{http_code}" \
+            -H "Accept: application/json" \
+            --connect-timeout 30 \
+            --max-time 60 \
+            "${{ env.PROD_BASE_URL }}/api/status" 2>&1) || HTTP_CODE="000"
+
+          echo "Production HTTP Status: $HTTP_CODE"
+
+          if [ "$HTTP_CODE" = "200" ]; then
+            OK_VALUE=$(jq -r '.ok // "null"' /tmp/prod-status.json 2>/dev/null || echo "null")
+            WORKER_VERSION=$(jq -r '.workerVersion // "unknown"' /tmp/prod-status.json 2>/dev/null || echo "unknown")
+            BACKEND_MODE=$(jq -r '.backendMode // "unknown"' /tmp/prod-status.json 2>/dev/null || echo "unknown")
+
+            echo "ok: $OK_VALUE"
+            echo "workerVersion: $WORKER_VERSION"
+            echo "backendMode: $BACKEND_MODE"
+
+            if [ "$OK_VALUE" = "true" ]; then
+              echo "healthy=true" >> $GITHUB_OUTPUT
+              echo "worker_version=$WORKER_VERSION" >> $GITHUB_OUTPUT
+              echo "backend_mode=$BACKEND_MODE" >> $GITHUB_OUTPUT
+              echo ""
+              echo "Production is healthy"
+            else
+              echo "healthy=false" >> $GITHUB_OUTPUT
+              echo "::error::Production /api/status returned ok:$OK_VALUE"
+            fi
+          else
+            echo "healthy=false" >> $GITHUB_OUTPUT
+            echo "::error::Production returned HTTP $HTTP_CODE"
+          fi
+
+      - name: Check Worker headers
+        if: steps.health.outputs.healthy == 'true'
+        run: |
+          echo ""
+          echo "Checking Worker headers on /events..."
+
+          HEADERS=$(curl -s -I "${{ env.PROD_BASE_URL }}/events" 2>/dev/null | grep -iE "x-proxied-by|x-worker|x-backend" || echo "No Worker headers found")
+
+          echo "$HEADERS"
+
+          if echo "$HEADERS" | grep -qi "eventangle"; then
+            echo ""
+            echo "Worker headers confirmed - traffic is routed through Worker"
+          else
+            echo "::warning::Worker headers not found - traffic may not be routed through Worker"
+          fi
+
+      - name: Check for GAS HTML leak
+        if: steps.health.outputs.healthy == 'true'
+        run: |
+          echo ""
+          echo "Checking for GAS HTML leak (blue banner)..."
+
+          GAS_LEAK=$(curl -s "${{ env.PROD_BASE_URL }}/events" 2>/dev/null | grep -c "Google Apps Script user" || echo "0")
+
+          if [ "$GAS_LEAK" = "0" ]; then
+            echo "No GAS HTML leak detected"
+          else
+            echo "::warning::GAS HTML leak detected! Blue banner may be visible."
+          fi
+
+      - name: Create health summary
+        if: always()
+        run: |
+          echo "## Production Health Check" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ steps.health.outputs.healthy }}" = "true" ]; then
+            echo "### HEALTHY" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
+            echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+            echo "| **Worker Version** | \`${{ steps.health.outputs.worker_version }}\` |" >> $GITHUB_STEP_SUMMARY
+            echo "| **Backend Mode** | \`${{ steps.health.outputs.backend_mode }}\` |" >> $GITHUB_STEP_SUMMARY
+            echo "| **URL** | \`${{ env.PROD_BASE_URL }}\` |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### UNHEALTHY" >> $GITHUB_STEP_SUMMARY
+            echo "Production health check failed." >> $GITHUB_STEP_SUMMARY
+          fi
+
+  # ==========================================================================
+  # API PARITY: Run API smoke tests against production
+  # ==========================================================================
+  api-parity-tests:
+    name: API Parity Tests
+    runs-on: ubuntu-latest
+    needs: [staging-baseline, production-health]
+    if: needs.production-health.outputs.prod_healthy == 'true'
+    outputs:
+      api_passed: ${{ steps.api-tests.outputs.passed }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install chromium
+
+      - name: Run API parity tests
+        id: api-tests
+        env:
+          BASE_URL: ${{ env.PROD_BASE_URL }}
+          CI: true
+        run: |
+          echo "=============================================="
+          echo "API PARITY TESTS (Production)"
+          echo "=============================================="
+          echo "Target: $BASE_URL"
+          echo ""
+
+          # Run the same API smoke tests used in Stage-2
+          if npm run test:api:smoke; then
+            echo "passed=true" >> $GITHUB_OUTPUT
+            echo ""
+            echo "=============================================="
+            echo "API PARITY TESTS: PASSED"
+            echo "=============================================="
+          else
+            echo "passed=false" >> $GITHUB_OUTPUT
+            echo "::error::API parity tests failed on production"
+            exit 1
+          fi
+
+      - name: Upload API test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: prod-api-parity-results
+          path: |
+            playwright-report-smoke/
+            .test-results/smoke-results.json
+          retention-days: 7
+          if-no-files-found: ignore
+
+      - name: Create API parity summary
+        if: always()
+        run: |
+          echo "## API Parity Tests (Production)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ steps.api-tests.outputs.passed }}" = "true" ]; then
+            echo "### PASSED" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Production API endpoints match staging behavior:" >> $GITHUB_STEP_SUMMARY
+            echo "- /api/status" >> $GITHUB_STEP_SUMMARY
+            echo "- /api/events" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### FAILED" >> $GITHUB_STEP_SUMMARY
+            echo "Production API does not match staging. Parity not confirmed." >> $GITHUB_STEP_SUMMARY
+          fi
+
+  # ==========================================================================
+  # UI PARITY: Run UI smoke tests against production
+  # ==========================================================================
+  ui-parity-tests:
+    name: UI Parity Tests (Playwright)
+    runs-on: ubuntu-latest
+    needs: [staging-baseline, api-parity-tests]
+    if: needs.api-parity-tests.outputs.api_passed == 'true'
+    outputs:
+      ui_passed: ${{ steps.ui-tests.outputs.passed }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install chromium
+
+      - name: Run UI parity tests
+        id: ui-tests
+        env:
+          BASE_URL: ${{ env.PROD_BASE_URL }}
+          TEST_BRAND: root
+          CI: true
+        run: |
+          echo "=============================================="
+          echo "UI PARITY TESTS (Production)"
+          echo "=============================================="
+          echo "Target: $BASE_URL"
+          echo "Brand: $TEST_BRAND"
+          echo ""
+          echo "Testing surfaces:"
+          echo "  - Admin page"
+          echo "  - Public page"
+          echo "  - Display page"
+          echo "  - Poster page"
+          echo ""
+
+          # Run the same UI smoke tests used in Stage-2
+          if npm run test:ui:smoke; then
+            echo "passed=true" >> $GITHUB_OUTPUT
+            echo ""
+            echo "=============================================="
+            echo "UI PARITY TESTS: PASSED"
+            echo "=============================================="
+          else
+            echo "passed=false" >> $GITHUB_OUTPUT
+            echo "::error::UI parity tests failed on production"
+            exit 1
+          fi
+
+      - name: Upload UI test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: prod-ui-parity-results
+          path: |
+            playwright-report-ui-smoke/
+            .test-results/ui-smoke-results.json
+          retention-days: 7
+          if-no-files-found: ignore
+
+      - name: Create UI parity summary
+        if: always()
+        run: |
+          echo "## UI Parity Tests (Production)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ steps.ui-tests.outputs.passed }}" = "true" ]; then
+            echo "### PASSED" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Production UI matches staging behavior:" >> $GITHUB_STEP_SUMMARY
+            echo "- Admin page" >> $GITHUB_STEP_SUMMARY
+            echo "- Public page" >> $GITHUB_STEP_SUMMARY
+            echo "- Display page" >> $GITHUB_STEP_SUMMARY
+            echo "- Poster page" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### FAILED" >> $GITHUB_STEP_SUMMARY
+            echo "Production UI does not match staging. Parity not confirmed." >> $GITHUB_STEP_SUMMARY
+          fi
+
+  # ==========================================================================
+  # PARITY SUMMARY: Overall parity status
+  # ==========================================================================
+  parity-summary:
+    name: Parity Summary
+    runs-on: ubuntu-latest
+    needs: [staging-baseline, production-health, api-parity-tests, ui-parity-tests]
+    if: always()
+    outputs:
+      parity_confirmed: ${{ steps.summary.outputs.parity_confirmed }}
+
+    steps:
+      - name: Calculate parity status
+        id: summary
+        run: |
+          echo "=============================================="
+          echo "PRODUCTION PARITY SUMMARY"
+          echo "=============================================="
+          echo ""
+
+          STAGING="${{ needs.staging-baseline.result }}"
+          HEALTH="${{ needs.production-health.result }}"
+          API="${{ needs.api-parity-tests.result }}"
+          UI="${{ needs.ui-parity-tests.result }}"
+
+          echo "Staging Baseline: $STAGING"
+          echo "Production Health: $HEALTH"
+          echo "API Parity: $API"
+          echo "UI Parity: $UI"
+          echo ""
+
+          if [ "$STAGING" = "success" ] && [ "$HEALTH" = "success" ] && [ "$API" = "success" ] && [ "$UI" = "success" ]; then
+            echo "parity_confirmed=true" >> $GITHUB_OUTPUT
+            echo "=============================================="
+            echo "PARITY CONFIRMED"
+            echo "=============================================="
+            echo ""
+            echo "Production Worker has FULL PARITY with staging."
+            echo "DNS cutover to Worker-only can proceed."
+          else
+            echo "parity_confirmed=false" >> $GITHUB_OUTPUT
+            echo "=============================================="
+            echo "PARITY NOT CONFIRMED"
+            echo "=============================================="
+            echo ""
+            echo "Production does not have full parity with staging."
+            echo "DNS cutover should NOT proceed until parity is confirmed."
+          fi
+
+      - name: Create final summary
+        run: |
+          echo "# Production Parity Check Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Story 6.1**: Confirm Prod Worker Parity & DNS Cutover" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Check | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Staging Baseline | \`${{ needs.staging-baseline.result == 'success' && 'PASSED' || 'FAILED' }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Production Health | \`${{ needs.production-health.result == 'success' && 'PASSED' || 'FAILED' }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| API Parity | \`${{ needs.api-parity-tests.result == 'success' && 'PASSED' || needs.api-parity-tests.result == 'skipped' && 'SKIPPED' || 'FAILED' }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| UI Parity | \`${{ needs.ui-parity-tests.result == 'success' && 'PASSED' || needs.ui-parity-tests.result == 'skipped' && 'SKIPPED' || 'FAILED' }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ "${{ steps.summary.outputs.parity_confirmed }}" = "true" ]; then
+            echo "## PARITY CONFIRMED" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Production Worker has full parity with staging." >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### Next Steps for DNS Cutover" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "1. Update \`BACKEND_MODE\` to \`worker\` in production wrangler.toml" >> $GITHUB_STEP_SUMMARY
+            echo "2. Deploy the updated Worker configuration" >> $GITHUB_STEP_SUMMARY
+            echo "3. Verify DNS routes to Worker-only (no GAS fallback)" >> $GITHUB_STEP_SUMMARY
+            echo "4. Monitor for any issues and use rollback if needed" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "See \`docs/DNS_CUTOVER.md\` for detailed instructions." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "## PARITY NOT CONFIRMED" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Production does not have full parity with staging." >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Do NOT proceed with DNS cutover until parity is confirmed.**" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### Troubleshooting" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "1. Check which tests failed in the artifacts" >> $GITHUB_STEP_SUMMARY
+            echo "2. Compare production and staging configurations" >> $GITHUB_STEP_SUMMARY
+            echo "3. Verify secrets are configured for production" >> $GITHUB_STEP_SUMMARY
+            echo "4. Re-run the parity check after fixing issues" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "---" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Production URL**: ${{ env.PROD_BASE_URL }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Staging URL**: ${{ env.STG_BASE_URL }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Worker Version**: \`${{ needs.production-health.outputs.worker_version || 'unknown' }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Backend Mode**: \`${{ needs.production-health.outputs.backend_mode || 'unknown' }}\`" >> $GITHUB_STEP_SUMMARY

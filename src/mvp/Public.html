@@ -1,0 +1,2125 @@
+<!--
+================================================================================
+MVP SURFACE - Focus Group Critical
+================================================================================
+Page: Public.html
+Purpose: Public-facing event listing and registration page
+Status: HARDENED for MVP v1.0
+
+SCHEMA CONTRACT: /schemas/event.schema.json
+
+═══════════════════════════════════════════════════════════════════════════════
+READS FROM EVENT SCHEMA:
+═══════════════════════════════════════════════════════════════════════════════
+  Identity (MVP Required):
+    - event.id, event.name, event.startDateISO, event.venue
+
+  CTAs (MVP Required):
+    - event.ctas.primary.label, event.ctas.primary.url
+    - event.ctas.secondary.label, event.ctas.secondary.url
+
+  Settings (MVP Required - section visibility):
+    - event.settings.showSchedule, showStandings, showBracket, showSponsors
+    - event.settings.showVideo, showMap, showGallery (Feature 4: Template-Aware)
+    - event.settings.showSponsorBanner → Sponsor banner visibility (default: true)
+
+  Data Sections (MVP Optional):
+    - event.schedule[].time, title, description
+    - event.standings[].rank, team, wins, losses, points
+    - event.bracket.rounds[].name, matches[]
+
+  Sponsors (V2 Optional):
+    - event.sponsors[].id, name, logoUrl, linkUrl, placement
+
+  Media (V2 Optional):
+    - event.media.videoUrl, mapUrl, gallery[]
+
+  External Data (V2 Optional):
+    - event.externalData.scheduleUrl, standingsUrl, bracketUrl
+
+  Payments (Reserved):
+    - event.payments.enabled, checkoutUrl, price, currency
+
+═══════════════════════════════════════════════════════════════════════════════
+SECTION GATES (each optional section requires explicit schema field check):
+═══════════════════════════════════════════════════════════════════════════════
+  Content Sections (Feature 4: Template-Aware Toggles):
+  Video:     if (settings.showVideo && media?.videoUrl) → render video embed
+  Map:       if (settings.showMap && (media?.mapUrl OR venue)) → render map link
+  Gallery:   if (settings.showGallery && media?.gallery?.length) → render photo gallery
+
+  Data Sections:
+  Schedule:  if (settings.showSchedule && (schedule?.length || externalData.scheduleUrl))
+  Standings: if (settings.showStandings && (standings?.length || externalData.standingsUrl))
+  Bracket:   if (settings.showBracket && (bracket?.rounds?.length || externalData.bracketUrl))
+  Sponsors:  if (settings.showSponsors && settings.showSponsorBanner !== false
+             && sponsors?.some(s => s.placement === 'public'))
+  Payments:  if (payments?.enabled && payments.checkoutUrl) → show checkout CTA
+
+  NO freelancing: sections only render when their schema field exists AND is enabled.
+
+DO NOT add fields without updating:
+  - /schemas/event.schema.json (source of truth)
+  - src/mvp/Code.gs (_buildEventContract_)
+
+Related MVP Surfaces: Admin, Poster, Display, Sponsor, SharedReport
+================================================================================
+-->
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <title><?= appTitle ?> · Public</title>
+  <?!= include('Styles'); ?>
+  <?!= include('NUSDK'); ?>
+  <?!= include('SharedUtils'); ?>
+  <?!= include('GlobalErrorHandler'); ?>
+  <?!= include('SponsorUtils'); ?>
+  <?!= include('FooterComponent'); ?>
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+  <meta name="referrer" content="no-referrer"/>
+  <style>
+    .card{ background:#fff; border-radius:var(--radius-md, 12px); padding:var(--card-padding-tablet, 20px); margin-bottom:var(--card-padding-tablet, 20px); box-shadow:var(--shadow-base, 0 1px 3px rgba(0,0,0,0.1)); }
+    .card h2{ margin:0 0 16px; color:var(--color-gray-800, #1e293b); }
+    .events-grid{ display:grid; grid-template-columns:repeat(auto-fill, minmax(280px, 1fr)); gap:16px; }
+    .event-card{ background:var(--color-gray-50, #f8fafc); border:1px solid var(--color-gray-200, #e2e8f0); border-radius:var(--radius-md, 12px); padding:var(--card-padding-mobile, 16px); transition:all var(--transition-base, 0.2s); }
+    .event-card:hover{ transform:translateY(-2px); box-shadow:var(--shadow-md, 0 4px 12px rgba(0,0,0,0.1)); border-color:var(--color-primary, #2563eb); }
+    .event-card h3{ margin:0 0 8px; color:var(--color-gray-800, #1e293b); }
+    .event-card p{ margin:4px 0; color:var(--color-gray-500, #64748b); font-size:var(--font-size-sm, 14px); }
+
+    /* Enhanced Sponsor Banner */
+    .sponsor-banner{
+      background:linear-gradient(135deg, var(--color-gray-50, #f8fafc) 0%, var(--color-gray-200, #e2e8f0) 100%);
+      border:2px solid var(--color-gray-200, #e2e8f0); border-radius:var(--radius-md, 12px); padding:var(--card-padding-tablet, 20px);
+      margin-bottom:var(--space-6, 24px); text-align:center; display:flex; align-items:center;
+      justify-content:center; gap:16px; flex-wrap:wrap;
+      box-shadow: var(--shadow-sm, 0 2px 8px rgba(0,0,0,0.05));
+    }
+    .sponsor-banner img{
+      max-height:var(--sponsor-logo-height, 60px); max-width:var(--sponsor-logo-max-width, 220px); object-fit:contain;
+      transition: transform var(--transition-base, 0.2s ease);
+    }
+    .sponsor-banner img:hover {
+      transform: scale(1.05);
+    }
+    .sponsor-banner strong{
+      color:var(--color-gray-800, #1e293b); font-size:1.1em; font-weight:var(--font-weight-semibold, 600);
+      text-transform: uppercase; letter-spacing: 0.5px;
+    }
+    .sponsor-banner a {
+      text-decoration: none;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .sponsor-indicator {
+      position: absolute;
+      right: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: rgba(0,0,0,0.6);
+      color: #fff;
+      font-size: 11px;
+      padding: 4px 8px;
+      border-radius: 12px;
+      font-weight: 500;
+    }
+    .sponsor-banner {
+      position: relative;
+      transition: opacity 0.3s ease;
+    }
+
+    /* Event Detail View */
+    .event-detail {
+      max-width: 800px;
+      margin: 0 auto;
+    }
+    .event-header {
+      text-align: center;
+      margin-bottom: var(--space-6, 24px);
+    }
+    .event-header h1 {
+      color: var(--color-primary, #2563eb);
+      font-size: 2.2rem;
+      margin-bottom: 12px;
+      line-height: 1.2;
+    }
+    .event-meta {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 16px;
+      margin: 12px 0;
+      color: var(--color-gray-600, #475569);
+      font-size: 1rem;
+    }
+    .event-meta-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .event-meta-item strong {
+      color: var(--color-gray-800, #1e293b);
+    }
+    .event-image {
+      width: 100%;
+      max-width: 100%;
+      height: auto;
+      border-radius: 12px;
+      margin: 24px 0;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+    .event-video {
+      width: 100%;
+      max-width: 100%;
+      aspect-ratio: 16/9;
+      border-radius: 12px;
+      margin: 24px 0;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+    .event-section {
+      margin: 32px 0;
+    }
+    .event-section h2 {
+      color: var(--color-gray-800, #1e293b);
+      font-size: 1.5rem;
+      margin-bottom: 12px;
+      border-bottom: 2px solid var(--color-gray-200, #e2e8f0);
+      padding-bottom: 8px;
+    }
+    .event-section p {
+      color: var(--color-gray-600, #475569);
+      line-height: 1.7;
+      margin: 12px 0;
+    }
+    .event-section a {
+      color: var(--color-primary, #2563eb);
+      text-decoration: none;
+      font-weight: var(--font-weight-medium, 500);
+    }
+    .event-section a:hover {
+      text-decoration: underline;
+    }
+    .gallery {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 12px;
+      margin: 16px 0;
+    }
+    .gallery img {
+      width: 100%;
+      height: 200px;
+      object-fit: cover;
+      border-radius: 8px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+      transition: transform 0.2s;
+    }
+    .gallery img:hover {
+      transform: scale(1.05);
+    }
+    /* Schedule section */
+    .schedule-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .schedule-item {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 8px 16px;
+      padding: 12px;
+      background: var(--color-gray-50, #f8fafc);
+      border-radius: var(--radius-base, 8px);
+      border-left: 3px solid var(--color-primary, #2563eb);
+    }
+    .schedule-time {
+      font-weight: var(--font-weight-semibold, 600);
+      color: var(--color-primary, #2563eb);
+      white-space: nowrap;
+    }
+    .schedule-title {
+      font-weight: var(--font-weight-semibold, 600);
+      color: var(--color-gray-800, #1e293b);
+    }
+    .schedule-desc {
+      grid-column: 2;
+      color: var(--color-gray-500, #64748b);
+      font-size: 0.9rem;
+    }
+    /* Fundraising progress */
+    .fundraising-progress {
+      margin: 16px 0;
+    }
+    .fundraising-progress .progress-bar {
+      height: 24px;
+      background: var(--color-gray-200, #e2e8f0);
+      border-radius: var(--radius-md, 12px);
+      overflow: hidden;
+    }
+    .fundraising-progress .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--color-success, #10b981), var(--color-success-dark, #059669));
+      border-radius: var(--radius-md, 12px);
+      transition: width 0.5s ease;
+    }
+    .fundraising-progress .progress-text {
+      text-align: center;
+      margin-top: 8px;
+      font-weight: var(--font-weight-semibold, 600);
+      color: var(--color-success-dark, #059669);
+    }
+    /* Data tables (standings, etc.) */
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9rem;
+    }
+    .data-table th, .data-table td {
+      padding: 12px;
+      text-align: left;
+      border-bottom: 1px solid var(--color-gray-200, #e2e8f0);
+    }
+    .data-table th {
+      background: var(--color-gray-50, #f8fafc);
+      font-weight: var(--font-weight-semibold, 600);
+      color: var(--color-gray-600, #475569);
+      font-size: 0.8rem;
+      text-transform: uppercase;
+    }
+    .data-table tbody tr:hover {
+      background: var(--color-gray-50, #f8fafc);
+    }
+    .standings-table .rank {
+      display: inline-block;
+      width: 24px;
+      height: 24px;
+      line-height: 24px;
+      text-align: center;
+      background: var(--color-gray-200, #e2e8f0);
+      border-radius: 50%;
+      font-weight: var(--font-weight-semibold, 600);
+      font-size: 0.75rem;
+      margin-right: 8px;
+    }
+    .standings-table .top-rank .rank {
+      background: var(--color-warning-bg, #fef3c7);
+      color: var(--color-warning-dark, #92400e);
+    }
+    .standings-table .top-rank:first-child .rank {
+      background: var(--color-warning-light, #fcd34d);
+      color: var(--color-warning-darker, #78350f);
+    }
+    /* Vendor grid */
+    .vendor-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 16px;
+    }
+    .vendor-card {
+      padding: var(--card-padding-mobile, 16px);
+      background: var(--color-gray-50, #f8fafc);
+      border: 1px solid var(--color-gray-200, #e2e8f0);
+      border-radius: var(--radius-md, 12px);
+    }
+    .vendor-card h4 {
+      margin: 0 0 8px 0;
+      color: var(--color-gray-800, #1e293b);
+    }
+    .vendor-card p {
+      margin: 0 0 12px 0;
+      color: var(--color-gray-500, #64748b);
+      font-size: 0.9rem;
+    }
+    .vendor-card a {
+      color: var(--color-primary, #2563eb);
+      text-decoration: none;
+      font-weight: var(--font-weight-medium, 500);
+    }
+    /* Bracket/Tournament styling */
+    .bracket-container {
+      overflow-x: auto;
+    }
+    .bracket-rounds {
+      display: flex;
+      gap: 24px;
+      min-width: max-content;
+      padding: 12px 0;
+    }
+    .bracket-round {
+      min-width: 200px;
+    }
+    .round-title {
+      font-size: 0.85rem;
+      color: var(--color-gray-500, #64748b);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin: 0 0 12px 0;
+      padding-bottom: 8px;
+      border-bottom: 2px solid var(--color-gray-200, #e2e8f0);
+    }
+    .bracket-matches {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .bracket-match-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .match-num {
+      font-size: 0.75rem;
+      color: var(--color-gray-400, #94a3b8);
+      font-weight: var(--font-weight-semibold, 600);
+      min-width: 28px;
+    }
+    .bracket-match {
+      background: var(--color-gray-50, #f8fafc);
+      border: 1px solid var(--color-gray-200, #e2e8f0);
+      border-radius: var(--radius-base, 8px);
+      padding: 12px;
+      margin-bottom: 12px;
+      flex: 1;
+    }
+    .match-team {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 12px;
+      background: white;
+      border-radius: var(--radius-sm, 6px);
+      margin: 4px 0;
+    }
+    .match-team.winner {
+      background: var(--color-success-bg, #dcfce7);
+      border-left: 3px solid var(--color-success, #22c55e);
+    }
+    .team-name {
+      font-weight: var(--font-weight-medium, 500);
+      color: var(--color-gray-800, #1e293b);
+    }
+    .team-score {
+      font-weight: var(--font-weight-bold, 700);
+      color: var(--color-primary, #2563eb);
+      font-size: 1.1rem;
+    }
+    .match-vs {
+      text-align: center;
+      font-size: 0.7rem;
+      color: var(--color-gray-400, #94a3b8);
+      text-transform: uppercase;
+      margin: 2px 0;
+    }
+    /* Loading placeholder */
+    .loading-placeholder {
+      padding: var(--space-6, 24px);
+      text-align: center;
+      color: var(--color-gray-500, #64748b);
+      background: var(--color-gray-50, #f8fafc);
+      border-radius: var(--radius-base, 8px);
+      animation: pulse 1.5s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+    .action-buttons {
+      display: flex;
+      gap: 12px;
+      margin: 24px 0;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    /* Mobile: Sticky bottom buttons for one-handed use */
+    @media (max-width: 640px) {
+      body {
+        padding-bottom: 80px; /* Space for sticky buttons */
+      }
+
+      /* Container padding for mobile */
+      .container {
+        padding: 12px;
+      }
+
+      /* Card mobile adjustments */
+      .card {
+        padding: 16px;
+        margin-bottom: 16px;
+        border-radius: 8px;
+      }
+
+      .events-grid{ grid-template-columns:1fr; gap:12px; }
+      .event-card {
+        padding: 14px;
+      }
+
+      /* Sponsor banner mobile */
+      .sponsor-banner{
+        flex-direction:column;
+        padding:14px;
+        gap:12px;
+        margin-bottom: 16px;
+        border-radius: 8px;
+      }
+      .sponsor-banner img{
+        max-height:var(--sponsor-logo-height-sm, 50px);
+        max-width: 160px;
+      }
+      .sponsor-banner strong {
+        font-size: 1rem;
+      }
+
+      /* Event header mobile */
+      .event-header h1 {
+        font-size: 1.6rem;
+        line-height: 1.3;
+        word-wrap: break-word;
+      }
+      .event-meta {
+        font-size: 0.9rem;
+        gap: 10px;
+        flex-direction: column;
+        align-items: center;
+      }
+      .event-meta-item {
+        text-align: center;
+      }
+
+      /* Gallery mobile */
+      .gallery { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
+      .gallery img { height: 140px; }
+
+      /* Sticky action buttons at bottom for thumb reach */
+      .action-buttons {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background: white;
+        padding: 12px 16px;
+        padding-bottom: max(12px, env(safe-area-inset-bottom));
+        margin: 0;
+        box-shadow: 0 -4px 12px rgba(0,0,0,0.15);
+        z-index: 100;
+        border-top: 1px solid var(--color-gray-200, #e2e8f0);
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .action-buttons .btn-primary,
+      .action-buttons .btn-secondary {
+        width: 100%;
+        margin: 0;
+        padding: 14px 16px;
+        font-size: 1rem;
+        min-height: 48px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .event-image,
+      .event-video {
+        margin: 16px 0;
+        border-radius: 8px;
+      }
+
+      .event-section {
+        margin: 20px 0;
+      }
+
+      .event-section h2 {
+        font-size: 1.2rem;
+        margin-bottom: 10px;
+      }
+
+      /* Schedule mobile */
+      .schedule-item {
+        grid-template-columns: 1fr;
+        gap: 4px;
+        padding: 10px 12px;
+      }
+      .schedule-time {
+        font-size: 0.85rem;
+      }
+      .schedule-desc {
+        grid-column: 1;
+      }
+
+      /* Data tables mobile */
+      .data-table th, .data-table td {
+        padding: 10px 8px;
+        font-size: 0.85rem;
+      }
+
+      /* Bracket mobile - allow horizontal scroll */
+      .bracket-container {
+        -webkit-overflow-scrolling: touch;
+        padding-bottom: 8px;
+      }
+      .bracket-round {
+        min-width: 180px;
+      }
+
+      /* Toast mobile positioning */
+      .toast {
+        bottom: 120px;
+        left: 16px;
+        right: 16px;
+        transform: translateY(100px);
+      }
+      .toast.show {
+        transform: translateY(0);
+      }
+    }
+
+    /* Very small screens (iPhone SE, etc.) */
+    @media (max-width: 375px) {
+      .container {
+        padding: 8px;
+      }
+
+      .event-header h1 {
+        font-size: 1.4rem;
+      }
+
+      .action-buttons .btn-primary,
+      .action-buttons .btn-secondary {
+        font-size: 0.9rem;
+        padding: 12px 14px;
+      }
+    }
+
+    /* === MVP Essential Additions === */
+
+    /* Loading Skeletons */
+    .skeleton {
+      background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.5s infinite;
+      border-radius: 8px;
+    }
+    @keyframes shimmer {
+      0% { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+    .skeleton-title { height: 2.5rem; width: 70%; margin: 0 auto 16px; }
+    .skeleton-meta { height: 1.2rem; width: 50%; margin: 8px auto; }
+    .skeleton-image { height: 300px; width: 100%; margin: 24px 0; }
+    .skeleton-button { height: 44px; width: 140px; display: inline-block; margin: 8px; }
+    .skeleton-text { height: 1rem; width: 100%; margin: 8px 0; }
+    .skeleton-text.short { width: 60%; }
+
+    /* Utility Action Bar (Maps, Calendar, Share) */
+    .utility-buttons {
+      display: flex;
+      gap: 8px;
+      justify-content: center;
+      flex-wrap: wrap;
+      margin: 16px 0;
+    }
+    .btn-utility {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 10px 16px;
+      background: #f1f5f9;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      color: #475569;
+      font-size: 0.875rem;
+      font-weight: 500;
+      text-decoration: none;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-utility:hover {
+      background: #e2e8f0;
+      color: #1e293b;
+      border-color: #cbd5e1;
+    }
+    .btn-utility:active {
+      transform: scale(0.98);
+    }
+
+    /* Calendar Dropdown */
+    .calendar-dropdown {
+      position: relative;
+      display: inline-block;
+    }
+    .calendar-menu {
+      position: absolute;
+      top: 100%;
+      left: 50%;
+      transform: translateX(-50%);
+      background: white;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      padding: 8px 0;
+      min-width: 180px;
+      z-index: 200;
+      display: none;
+    }
+    .calendar-dropdown.open .calendar-menu {
+      display: block;
+    }
+    .calendar-menu a {
+      display: block;
+      padding: 10px 16px;
+      color: #475569;
+      text-decoration: none;
+      font-size: 0.875rem;
+    }
+    .calendar-menu a:hover {
+      background: #f1f5f9;
+      color: #1e293b;
+    }
+
+    /* Toast Notification */
+    .toast {
+      position: fixed;
+      bottom: 100px;
+      left: 50%;
+      transform: translateX(-50%) translateY(100px);
+      background: #1e293b;
+      color: white;
+      padding: 12px 24px;
+      border-radius: 8px;
+      font-size: 0.875rem;
+      font-weight: 500;
+      opacity: 0;
+      transition: all 0.3s ease;
+      z-index: 300;
+    }
+    .toast.show {
+      transform: translateX(-50%) translateY(0);
+      opacity: 1;
+    }
+
+    /* .site-footer - Now centralized in FooterComponent.html (D-005) */
+
+    /* Better Empty States */
+    .empty-state {
+      text-align: center;
+      padding: 48px 24px;
+      color: #64748b;
+    }
+    .empty-state-icon {
+      font-size: 3rem;
+      margin-bottom: 16px;
+      opacity: 0.5;
+    }
+    .empty-state h3 {
+      color: #475569;
+      margin-bottom: 8px;
+      font-size: 1.25rem;
+    }
+    .empty-state p {
+      margin-bottom: 16px;
+      line-height: 1.6;
+    }
+
+    /* Error State */
+    .error-state {
+      text-align: center;
+      padding: 48px 24px;
+      background: #fef2f2;
+      border-radius: 12px;
+      border: 1px solid #fecaca;
+    }
+    .error-state-icon {
+      font-size: 2.5rem;
+      margin-bottom: 12px;
+    }
+    .error-state h3 {
+      color: #dc2626;
+      margin-bottom: 8px;
+    }
+    .error-state p {
+      color: #b91c1c;
+      margin-bottom: 16px;
+    }
+    /* .btn-retry - Base in Styles.html, danger override for error context */
+    .error-state .btn-retry {
+      background: var(--color-danger, #dc2626);
+    }
+    .error-state .btn-retry:hover {
+      background: var(--color-danger-dark, #b91c1c);
+    }
+
+    /* Mobile adjustments for utility buttons */
+    @media (max-width: 640px) {
+      .utility-buttons {
+        flex-direction: column;
+        align-items: stretch;
+        padding: 0 16px;
+      }
+      .btn-utility {
+        justify-content: center;
+      }
+      .calendar-menu {
+        left: 0;
+        right: 0;
+        transform: none;
+        width: auto;
+      }
+      .site-footer {
+        padding-bottom: 100px; /* Space for sticky buttons */
+      }
+    }
+
+    /* Status Badges */
+    .status-badge {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 16px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .status-badge.active {
+      background: #dcfce7;
+      color: #166534;
+    }
+    .status-badge.upcoming {
+      background: #dbeafe;
+      color: #1e40af;
+    }
+    .status-badge.ended {
+      background: #f1f5f9;
+      color: #64748b;
+    }
+    .status-badge.cancelled {
+      background: #fef2f2;
+      color: #dc2626;
+    }
+
+    /* League Info Card */
+    .league-info-card {
+      background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+      border-radius: 12px;
+      padding: 24px;
+    }
+    .league-links {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 20px;
+    }
+    .league-link-btn {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      padding: 16px 24px;
+      background: white;
+      border: 2px solid #e2e8f0;
+      border-radius: 12px;
+      text-decoration: none;
+      color: #1e293b;
+      transition: all 0.2s;
+      min-width: 120px;
+    }
+    .league-link-btn:hover {
+      border-color: #2563eb;
+      box-shadow: 0 4px 12px rgba(37, 99, 235, 0.15);
+      transform: translateY(-2px);
+    }
+    .league-link-icon {
+      font-size: 1.5rem;
+    }
+    .league-link-label {
+      font-size: 0.875rem;
+      font-weight: 600;
+    }
+    .league-data-section {
+      margin-top: 16px;
+      padding-top: 16px;
+      border-top: 1px solid #e2e8f0;
+    }
+
+    /* Sponsor tier badge */
+    .sponsor-tier {
+      display: inline-block;
+      padding: 2px 8px;
+      background: #fef3c7;
+      color: #92400e;
+      font-size: 0.7rem;
+      font-weight: 600;
+      border-radius: 10px;
+      text-transform: uppercase;
+      margin-left: 8px;
+    }
+
+    /* Feature 3: Primary Sponsor - Bigger Rendering */
+    .sponsor-primary img,
+    .sponsor-logo.sponsor-primary {
+      max-height: calc(var(--sponsor-logo-height, 60px) * 1.5) !important;
+      max-width: calc(var(--sponsor-logo-max-width, 220px) * 1.3) !important;
+    }
+    .sponsor-primary strong {
+      font-size: 1.4em;
+    }
+    .sponsor-item.sponsor-primary {
+      order: -1; /* Primary sponsors appear first */
+      padding: 8px 16px;
+      background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+      border-radius: var(--radius-base, 8px);
+      box-shadow: 0 2px 8px rgba(245, 158, 11, 0.2);
+    }
+    .sponsor-tier-badge {
+      display: inline-block;
+      padding: 2px 6px;
+      background: #f59e0b;
+      color: white;
+      font-size: 0.6rem;
+      font-weight: 700;
+      border-radius: 8px;
+      text-transform: uppercase;
+      margin-left: 6px;
+      vertical-align: middle;
+    }
+
+    @media (max-width: 640px) {
+      .league-links {
+        flex-direction: column;
+      }
+      .league-link-btn {
+        flex-direction: row;
+        justify-content: flex-start;
+        gap: 12px;
+        padding: 12px 16px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- Story 1.2: data-testid="events-root" marker for CI smoke tests -->
+  <div class="container" data-testid="events-root">
+    <h1><?= appTitle ?></h1>
+    <div id="sponsorBanner" hidden></div>
+    <section class="card">
+      <h2>Events</h2>
+      <div id="list" class="events-grid">
+        <!-- Skeleton loader shown during fetch -->
+        <div class="skeleton-loader">
+          <div class="skeleton skeleton-title"></div>
+          <div class="skeleton skeleton-meta"></div>
+          <div class="skeleton skeleton-meta" style="width: 40%;"></div>
+          <div style="text-align: center; margin: 16px 0;">
+            <div class="skeleton skeleton-button"></div>
+            <div class="skeleton skeleton-button"></div>
+          </div>
+          <div class="skeleton skeleton-image"></div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- Toast notification -->
+  <div id="toast" class="toast"></div>
+
+  <!-- Trust Footer -->
+  <footer class="site-footer">
+    <p>Powered by <a href="https://eventangle.com" target="_blank" rel="noopener">EventAngle</a></p>
+  </footer>
+
+  <script>
+    const BRAND = '<?= brandId ?>';
+    const SCOPE = '<?= scope ?>';
+    const EXEC_URL = '<?= execUrl ?>';
+    const url = new URL(location.href);
+    const ID = url.searchParams.get('id');
+
+    // Use shared utilities from SponsorUtils
+    const { esc, logEvent, initLogging } = window.SponsorUtils;
+    initLogging();
+
+    // =============================================================================
+    // Story 2.2: Worker Endpoint Configuration
+    // Public bundle now fetched from Worker instead of GAS
+    // =============================================================================
+
+    /**
+     * Get Worker base URL for API calls
+     * Uses current origin for same-domain Worker deployment
+     */
+    function getWorkerBaseUrl() {
+      return window.location.origin;
+    }
+
+    /**
+     * Fetch public bundle from Worker endpoint
+     * GET /api/v2/events/:id/bundle/public?brand=:brand
+     *
+     * @param {string} eventId - Event ID or slug
+     * @param {string} brandId - Brand identifier
+     * @param {object} options - { ifNoneMatch?: string } for conditional requests
+     * @returns {Promise<{ok: boolean, value?: object, code?: string, message?: string}>}
+     */
+    async function fetchPublicBundleFromWorker(eventId, brandId, options = {}) {
+      const baseUrl = getWorkerBaseUrl();
+      const endpoint = `${baseUrl}/api/v2/events/${encodeURIComponent(eventId)}/bundle/public`;
+      const url = new URL(endpoint);
+      url.searchParams.set('brand', brandId);
+
+      const headers = {
+        'Accept': 'application/json'
+      };
+
+      // Support conditional requests (ETag)
+      if (options.ifNoneMatch) {
+        headers['If-None-Match'] = options.ifNoneMatch;
+      }
+
+      try {
+        const response = await fetch(url.toString(), {
+          method: 'GET',
+          headers,
+          credentials: 'same-origin'
+        });
+
+        // Handle 304 Not Modified
+        if (response.status === 304) {
+          return {
+            ok: true,
+            notModified: true,
+            etag: response.headers.get('ETag')
+          };
+        }
+
+        // Parse JSON response
+        const data = await response.json();
+
+        // Pass through response (Worker returns standard envelope)
+        return data;
+
+      } catch (error) {
+        console.error('Worker fetch failed:', error);
+        return {
+          ok: false,
+          code: 'NETWORK_ERROR',
+          message: 'Unable to connect to server. Please check your connection.'
+        };
+      }
+    }
+
+    /**
+     * Fetch events list from Worker endpoint
+     * GET /api/v2/events?brand=:brand
+     *
+     * @param {string} brandId - Brand identifier
+     * @returns {Promise<{ok: boolean, value?: object, code?: string, message?: string}>}
+     */
+    async function fetchEventsListFromWorker(brandId) {
+      const baseUrl = getWorkerBaseUrl();
+      const endpoint = `${baseUrl}/api/v2/events`;
+      const url = new URL(endpoint);
+      url.searchParams.set('brand', brandId);
+
+      try {
+        const response = await fetch(url.toString(), {
+          method: 'GET',
+          headers: { 'Accept': 'application/json' },
+          credentials: 'same-origin'
+        });
+
+        const data = await response.json();
+        return data;
+
+      } catch (error) {
+        console.error('Worker fetch failed:', error);
+        return {
+          ok: false,
+          code: 'NETWORK_ERROR',
+          message: 'Unable to connect to server. Please check your connection.'
+        };
+      }
+    }
+
+    // === MVP Essential Utilities ===
+
+    // Toast notification
+    function showToast(message, duration = 3000) {
+      const toast = document.getElementById('toast');
+      toast.textContent = message;
+      toast.classList.add('show');
+      setTimeout(() => toast.classList.remove('show'), duration);
+    }
+
+    // === League & Broadcast Link Analytics ===
+    // Logs external link clicks with sponsor attribution context
+    let currentEventId = null; // Set when event is loaded
+    let currentRenderedSponsorIds = []; // Track sponsors visible on page for attribution
+
+    function onLeagueLinkClick(e) {
+      const linkType = e.currentTarget.dataset.linkType;
+      if (!linkType || !currentEventId) return;
+
+      // S13: Use safeLogClick - fire and forget, never throws
+      // Include sessionId and visibleSponsorIds for sponsor/BBN attribution
+      NU.safeLogClick({
+        eventId: currentEventId,
+        linkType: linkType,
+        surface: 'public',
+        sessionId: window.SponsorUtils?.getSessionId?.() || '',
+        visibleSponsorIds: currentRenderedSponsorIds
+      });
+    }
+
+    // === Google Sheets "Bring Your Own Data" ===
+
+    // Detect if URL is a Google Sheets URL and extract sheet ID
+    function parseGoogleSheetUrl(url) {
+      if (!url) return null;
+      const match = url.match(/docs\.google\.com\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/);
+      if (match) {
+        return { sheetId: match[1], originalUrl: url };
+      }
+      return null;
+    }
+
+    // Convert Google Sheets URL to CSV export URL
+    function getSheetCsvUrl(sheetId, sheetName = '') {
+      let csvUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv`;
+      if (sheetName) csvUrl += `&sheet=${encodeURIComponent(sheetName)}`;
+      return csvUrl;
+    }
+
+    // Fetch and parse CSV data from Google Sheets
+    async function fetchSheetData(url) {
+      const sheetInfo = parseGoogleSheetUrl(url);
+      if (!sheetInfo) return null; // Not a Google Sheet, fallback to link
+
+      try {
+        const csvUrl = getSheetCsvUrl(sheetInfo.sheetId);
+        const response = await fetch(csvUrl);
+        if (!response.ok) return null;
+
+        const csvText = await response.text();
+        return parseCSV(csvText);
+      } catch (e) {
+        console.warn('Failed to fetch sheet data:', e);
+        return null; // Fallback to link on error
+      }
+    }
+
+    // Simple CSV parser (handles quoted fields)
+    function parseCSV(csv) {
+      const lines = csv.split('\n').filter(line => line.trim());
+      if (lines.length === 0) return { headers: [], rows: [] };
+
+      const parseRow = (line) => {
+        const result = [];
+        let current = '';
+        let inQuotes = false;
+        for (let i = 0; i < line.length; i++) {
+          const char = line[i];
+          if (char === '"') {
+            inQuotes = !inQuotes;
+          } else if (char === ',' && !inQuotes) {
+            result.push(current.trim());
+            current = '';
+          } else {
+            current += char;
+          }
+        }
+        result.push(current.trim());
+        return result;
+      };
+
+      const headers = parseRow(lines[0]);
+      const rows = lines.slice(1).map(parseRow);
+      return { headers, rows };
+    }
+
+    // Render standings table from sheet data
+    function renderStandingsTable(data) {
+      if (!data || !data.rows || !data.rows.length) return '<p class="muted">No standings data available.</p>';
+
+      let html = '<table class="data-table standings-table">';
+      html += '<thead><tr>';
+      data.headers.forEach((h, i) => {
+        html += `<th>${esc(h)}</th>`;
+      });
+      html += '</tr></thead><tbody>';
+
+      data.rows.forEach((row, idx) => {
+        html += `<tr class="${idx < 3 ? 'top-rank' : ''}">`;
+        row.forEach((cell, i) => {
+          if (i === 0) {
+            html += `<td><span class="rank">${idx + 1}</span> ${esc(cell)}</td>`;
+          } else {
+            html += `<td>${esc(cell)}</td>`;
+          }
+        });
+        html += '</tr>';
+      });
+
+      html += '</tbody></table>';
+      return html;
+    }
+
+    // Render schedule/agenda from sheet data
+    function renderScheduleTable(data) {
+      if (!data || !data.rows || !data.rows.length) return '<p class="muted">No schedule data available.</p>';
+
+      let html = '<div class="schedule-list">';
+      data.rows.forEach(row => {
+        const [time, title, description] = row;
+        html += '<div class="schedule-item">';
+        if (time) html += `<span class="schedule-time">${esc(time)}</span>`;
+        if (title) html += `<span class="schedule-title">${esc(title)}</span>`;
+        if (description) html += `<span class="schedule-desc">${esc(description)}</span>`;
+        html += '</div>';
+      });
+      html += '</div>';
+      return html;
+    }
+
+    // Render vendor list from sheet data
+    function renderVendorList(data) {
+      if (!data || !data.rows || !data.rows.length) return '<p class="muted">No vendor data available.</p>';
+
+      let html = '<div class="vendor-grid">';
+      data.rows.forEach(row => {
+        const [name, description, url] = row;
+        html += '<div class="vendor-card">';
+        html += `<h4>${esc(name || 'Vendor')}</h4>`;
+        if (description) html += `<p>${esc(description)}</p>`;
+        if (url) html += `<a href="${esc(url)}" target="_blank" rel="noopener">Visit →</a>`;
+        html += '</div>';
+      });
+      html += '</div>';
+      return html;
+    }
+
+    // Render bracket/tournament from sheet data
+    // Supports formats: Round, Match, Team1, Score1, Team2, Score2 -OR- Team1, Team2, Winner, Score
+    function renderBracketTable(data) {
+      if (!data || !data.rows || !data.rows.length) return '<p class="muted">No bracket data available.</p>';
+
+      // Detect format based on headers
+      const headers = data.headers.map(h => h.toLowerCase());
+      const hasRound = headers.some(h => h.includes('round'));
+
+      let html = '<div class="bracket-container">';
+
+      if (hasRound) {
+        // Group by round for tournament bracket view
+        const rounds = {};
+        data.rows.forEach(row => {
+          const round = row[0] || 'Round 1';
+          if (!rounds[round]) rounds[round] = [];
+          rounds[round].push(row.slice(1)); // Rest of columns are match data
+        });
+
+        html += '<div class="bracket-rounds">';
+        Object.keys(rounds).forEach(round => {
+          html += `<div class="bracket-round">`;
+          html += `<h4 class="round-title">${esc(round)}</h4>`;
+          rounds[round].forEach(match => {
+            html += renderBracketMatch(match, headers.slice(1));
+          });
+          html += '</div>';
+        });
+        html += '</div>';
+      } else {
+        // Simple match list format
+        html += '<div class="bracket-matches">';
+        data.rows.forEach((row, idx) => {
+          html += `<div class="bracket-match-row">`;
+          html += `<span class="match-num">#${idx + 1}</span>`;
+          html += renderBracketMatch(row, headers);
+          html += '</div>';
+        });
+        html += '</div>';
+      }
+
+      html += '</div>';
+      return html;
+    }
+
+    // Render a single bracket match
+    function renderBracketMatch(row, headers) {
+      // Try to identify team columns and scores
+      const team1 = row[0] || '—';
+      const team2 = row[headers.indexOf('team2') > -1 ? headers.indexOf('team2') : 2] || row[2] || '—';
+      const score1 = row[1] || '';
+      const score2 = row[3] || '';
+      const winner = row[headers.indexOf('winner') > -1 ? headers.indexOf('winner') : row.length - 1] || '';
+
+      let html = '<div class="bracket-match">';
+      html += `<div class="match-team ${winner && winner.toLowerCase() === team1.toLowerCase() ? 'winner' : ''}">`;
+      html += `<span class="team-name">${esc(team1)}</span>`;
+      if (score1) html += `<span class="team-score">${esc(score1)}</span>`;
+      html += '</div>';
+      html += '<div class="match-vs">vs</div>';
+      html += `<div class="match-team ${winner && winner.toLowerCase() === team2.toLowerCase() ? 'winner' : ''}">`;
+      html += `<span class="team-name">${esc(team2)}</span>`;
+      if (score2) html += `<span class="team-score">${esc(score2)}</span>`;
+      html += '</div>';
+      html += '</div>';
+      return html;
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // V2 COMMENTED OUT - getCTAUrl references many non-schema fields
+    // MVP relies on event.ctas.primary.url / event.ctas.secondary.url
+    // V2 FEATURE – NOT MVP: Remove this legacy function after Admin CTA refactor
+    // ═══════════════════════════════════════════════════════════════
+    // function getCTAUrl(data, label) {
+    //   const labelLower = label.toLowerCase();
+    //   // Map common CTA labels to data fields
+    //   if (labelLower.includes('register') || labelLower.includes('rsvp')) return data.registerUrl || data.signupUrl;
+    //   if (labelLower.includes('sign up')) return data.signupUrl || data.registerUrl;
+    //   if (labelLower.includes('donate')) return data.donationUrl;
+    //   if (labelLower.includes('ticket')) return data.ticketUrl || data.registerUrl;
+    //   if (labelLower.includes('registry')) return data.registryUrl;
+    //   if (labelLower.includes('schedule') || labelLower.includes('itinerary')) return data.scheduleUrl;
+    //   if (labelLower.includes('standing')) return data.standingsUrl;
+    //   if (labelLower.includes('bracket')) return data.bracketUrl;
+    //   if (labelLower.includes('photo') || labelLower.includes('album')) return data.albumUrl;
+    //   if (labelLower.includes('download')) return data.downloadUrl;
+    //   if (labelLower.includes('vendor')) return data.vendorListUrl;
+    //   if (labelLower.includes('calendar')) return buildGoogleCalendarUrl(data);
+    //   if (labelLower.includes('direction') || labelLower.includes('map')) return buildMapsUrl(data.location);
+    //   if (labelLower.includes('rule')) return data.rulesUrl;
+    //   if (labelLower.includes('roster') || labelLower.includes('team')) return data.rosterUrl;
+    //   // Fallback to generic URLs
+    //   return data.registerUrl || data.signupUrl || data.summaryLink;
+    // }
+
+    // Build Google Maps URL from location string
+    function buildMapsUrl(location) {
+      if (!location) return null;
+      const encoded = encodeURIComponent(location);
+      return `https://www.google.com/maps/search/?api=1&query=${encoded}`;
+    }
+
+    /**
+     * Format price from cents to display string
+     * PAYMENTS SEAM: Stripe uses smallest currency unit (cents)
+     * @param {number} price - Price in smallest currency unit (e.g., 1500 = $15.00)
+     * @param {string} currency - Currency code (e.g., 'USD')
+     * @returns {string} Formatted price string (e.g., '$15.00')
+     */
+    function formatPrice(price, currency) {
+      if (!price || !currency) return '';
+      try {
+        // Convert from cents to dollars
+        const amount = price / 100;
+        return new Intl.NumberFormat('en-US', {
+          style: 'currency',
+          currency: currency.toUpperCase()
+        }).format(amount);
+      } catch (e) {
+        // Fallback for unsupported currencies
+        return `${currency} ${(price / 100).toFixed(2)}`;
+      }
+    }
+
+    /**
+     * Build Google Calendar URL
+     * EVENT_CONTRACT.md v2.0: Uses canonical fields
+     * - data.name (from event.name)
+     * - data.dateISO (from event.startDateISO)
+     * - data.venue (from event.venue)
+     */
+    function buildGoogleCalendarUrl(data) {
+      if (!data.name || !data.dateISO) return null;
+      const params = new URLSearchParams();
+      params.set('action', 'TEMPLATE');
+      params.set('text', data.name);
+
+      // Format date: YYYYMMDD (MVP v2.0 has date only, no time)
+      const startDate = data.dateISO.replace(/-/g, '');
+      params.set('dates', `${startDate}/${startDate}`);
+
+      // MVP-frozen: Use only canonical venue field (no legacy fallback)
+      if (data.venue) {
+        params.set('location', data.venue);
+      }
+
+      return `https://calendar.google.com/calendar/render?${params.toString()}`;
+    }
+
+    /**
+     * Generate ICS file content for Apple/Outlook
+     * EVENT_CONTRACT.md v2.0: Uses canonical fields
+     * - data.name (from event.name)
+     * - data.dateISO (from event.startDateISO)
+     * - data.venue (from event.venue)
+     */
+    function generateICS(data) {
+      if (!data.name || !data.dateISO) return null;
+
+      // Format date: YYYYMMDD (MVP v2.0 has date only, no time)
+      const start = data.dateISO.replace(/-/g, '');
+      const end = start;
+
+      // MVP-frozen: Use only canonical venue field (no legacy fallback)
+      const venueStr = data.venue || '';
+
+      const ics = [
+        'BEGIN:VCALENDAR',
+        'VERSION:2.0',
+        'PRODID:-//EventAngle//Event//EN',
+        'BEGIN:VEVENT',
+        `DTSTART;VALUE=DATE:${start}`,
+        `DTEND;VALUE=DATE:${end}`,
+        `SUMMARY:${data.name.replace(/[,;\\]/g, ' ')}`,
+        venueStr ? `LOCATION:${venueStr.replace(/[,;\\]/g, ' ')}` : '',
+        `UID:${Date.now()}@eventangle.com`,
+        'END:VEVENT',
+        'END:VCALENDAR'
+      ].filter(Boolean).join('\r\n');
+
+      return ics;
+    }
+
+    // Download ICS file
+    function downloadICS(data) {
+      const ics = generateICS(data);
+      if (!ics) return;
+
+      const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${(data.name || 'event').replace(/[^a-z0-9]/gi, '-')}.ics`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      showToast('Calendar file downloaded');
+    }
+
+    // Share event (Web Share API with clipboard fallback)
+    async function shareEvent(data) {
+      const shareData = {
+        title: data.name || 'Event',
+        text: `Check out this event: ${data.name}`,
+        url: window.location.href
+      };
+
+      if (navigator.share && navigator.canShare && navigator.canShare(shareData)) {
+        try {
+          await navigator.share(shareData);
+        } catch (err) {
+          if (err.name !== 'AbortError') {
+            copyToClipboard();
+          }
+        }
+      } else {
+        copyToClipboard();
+      }
+    }
+
+    // Copy link to clipboard
+    function copyToClipboard() {
+      navigator.clipboard.writeText(window.location.href).then(() => {
+        showToast('Link copied to clipboard');
+      }).catch(() => {
+        // Fallback for older browsers
+        const input = document.createElement('input');
+        input.value = window.location.href;
+        document.body.appendChild(input);
+        input.select();
+        document.execCommand('copy');
+        document.body.removeChild(input);
+        showToast('Link copied to clipboard');
+      });
+    }
+
+    // Toggle calendar dropdown
+    function toggleCalendarDropdown(e) {
+      e.stopPropagation();
+      const dropdown = e.target.closest('.calendar-dropdown');
+      dropdown.classList.toggle('open');
+
+      // Close when clicking outside
+      const closeDropdown = () => {
+        dropdown.classList.remove('open');
+        document.removeEventListener('click', closeDropdown);
+      };
+      if (dropdown.classList.contains('open')) {
+        setTimeout(() => document.addEventListener('click', closeDropdown), 0);
+      }
+    }
+
+    // Store current event data for utility functions
+    let currentEventData = null;
+
+    // NOTE: Legacy renderSponsorBanner* functions removed in E-003
+    // All sponsor rendering now uses SponsorUtils.SponsorRenderer
+
+    /**
+     * Render event list view
+     * SCHEMA: /schemas/event.schema.json
+     * Uses: event.name, event.startDateISO, event.venue
+     */
+    async function renderList(items) {
+      const root = document.getElementById('list');
+      root.innerHTML = '';
+      if (!items || !items.length) {
+        // S12: Use shared StateRenderer for consistent empty state
+        SharedUtils.StateRenderer.showNoData(root, { context: 'events' });
+        return;
+      }
+      for (const event of items) {
+        // Schema fields: name, startDateISO, venue
+        const name = event.name || '(untitled)';
+        const startDateISO = event.startDateISO || '';
+        const venue = event.venue || '';
+
+        // Format date for display
+        let dateDisplay = '';
+        if (startDateISO) {
+          const date = new Date(startDateISO + 'T00:00:00');
+          dateDisplay = date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+        }
+
+        // Status badge based on date
+        let statusBadge = '';
+        if (startDateISO) {
+          const eventDate = new Date(startDateISO + 'T00:00:00');
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          if (eventDate.getTime() === today.getTime()) {
+            statusBadge = '<span class="status-badge active" style="font-size:0.65rem;padding:2px 6px;">Today</span>';
+          }
+        }
+
+        const d = document.createElement('div');
+        d.className = 'event-card';
+        d.innerHTML = `
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+            <h3 style="flex:1;">${esc(name)}</h3>
+            ${statusBadge}
+          </div>
+          ${dateDisplay ? `<p>📅 ${esc(dateDisplay)}</p>` : ''}
+          ${venue ? `<p>📍 ${esc(venue)}</p>` : ''}
+          <div style="margin-top:12px;">
+            <a class="btn secondary" href="${EXEC_URL}?p=events&brand=${BRAND}&id=${event.id}">View Details →</a>
+          </div>
+        `;
+        root.appendChild(d);
+      }
+    }
+
+    /**
+     * Render event detail view
+     * API: api_getPublicBundle → { event, config, lifecyclePhase }
+     * SCHEMA: /schemas/event.schema.json
+     *
+     * See file header for complete field mapping.
+     * @param {Object} lifecyclePhase - { phase: string, label: string, isLive: boolean } from bundle
+     */
+    async function renderDetail(event, config = {}, lifecyclePhase = null) {
+      const root = document.getElementById('list');
+
+      // === SCHEMA FIELDS (MVP REQUIRED) ===
+      const eventId = event.id;
+      const eventName = event.name;
+      const startDateISO = event.startDateISO;
+      const venue = event.venue;
+      const ctas = event.ctas || { primary: { label: 'Sign Up', url: '' }, secondary: null };
+      const settings = event.settings || { showSchedule: false, showStandings: false, showBracket: false, showSponsors: false };
+      const links = event.links || {};
+
+      // === SCHEMA FIELDS (MVP OPTIONAL) ===
+      const schedule = event.schedule || [];
+      const standings = event.standings || [];
+      const bracket = event.bracket || null;
+
+      // === SCHEMA FIELDS (V2 OPTIONAL) ===
+      const sponsors = event.sponsors || [];
+      const media = event.media || {};
+      const externalData = event.externalData || {};
+
+      // === PAYMENTS SEAM (Reserved - Stripe integration) ===
+      const payments = event.payments || { enabled: false, provider: 'stripe', checkoutUrl: null };
+
+      // Set currentEventId for analytics tracking
+      currentEventId = eventId;
+
+      // Build data object for utility functions (calendar, maps, share)
+      const data = {
+        name: eventName,
+        dateISO: startDateISO,
+        venue: venue,
+        ctas: ctas,
+        links: links,
+        settings: settings
+      };
+      currentEventData = data;
+
+      // === SETTINGS-BASED VISIBILITY ===
+      // /schemas/event.schema.json Settings: showSchedule, showStandings, showBracket, showSponsors
+      // Feature 4: Template-Aware Section Toggles - added showVideo, showMap, showGallery
+      const sectionEnabled = (key) => {
+        switch (key) {
+          case 'schedule': return settings.showSchedule === true;
+          case 'standings': return settings.showStandings === true;
+          case 'bracket': return settings.showBracket === true;
+          case 'sponsors': return settings.showSponsors === true;
+          // Feature 4: Template-Aware Content Sections
+          case 'video': return settings.showVideo !== false; // Default true for backwards compat
+          case 'map': return settings.showMap !== false;     // Default true for backwards compat
+          case 'gallery': return settings.showGallery !== false; // Default true for backwards compat
+          default: return false; // Unknown keys are not schema-valid
+        }
+      };
+
+      // === SPONSOR BANNER (V2 Optional) ===
+      // Schema: event.sponsors[].placement MUST be 'public' - no fallback
+      // Feature: Gated by settings.showSponsors (master) AND settings.showSponsorBanner (default: true)
+      const sponsorBanner = document.getElementById('sponsorBanner');
+      if (sectionEnabled('sponsors') && (settings.showSponsorBanner !== false) && sponsors.length > 0) {
+        // Use centralized SponsorRenderer with placement filter (E-003 centralization)
+        const { SponsorRenderer } = window.SponsorUtils;
+        const carousel = SponsorRenderer.renderCarousel({
+          container: sponsorBanner,
+          sponsors: sponsors,
+          placement: 'public',  // Filter to public placement only
+          eventId: eventId,
+          surface: 'public',
+          showTier: true,
+          rotationMs: 5000,
+          onRender: ids => { currentRenderedSponsorIds = ids; }
+        });
+        // Store stop function for cleanup if needed
+        window._sponsorCarouselStop = carousel.stop;
+        // Hide if no sponsors matched placement filter
+        if (!carousel.sponsors.length) {
+          sponsorBanner.innerHTML = '';
+          sponsorBanner.hidden = true;
+        }
+      } else {
+        // Reserved: Sponsor bar exists but hidden when no sponsors
+        sponsorBanner.innerHTML = '';
+        sponsorBanner.hidden = true;
+      }
+
+      // Build event detail HTML
+      let html = '<div class="event-detail">';
+
+      // Header with name and meta
+      html += '<div class="event-header">';
+
+      // Use lifecycle phase from bundle (single source of truth) for consistent display
+      // Falls back to local computation if bundle doesn't include lifecyclePhase
+      let phase = lifecyclePhase;
+      if (!phase && startDateISO) {
+        // Fallback: compute locally (same algorithm as backend)
+        const eventDate = new Date(startDateISO + 'T00:00:00');
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const eventDay = new Date(eventDate);
+        eventDay.setHours(0, 0, 0, 0);
+
+        if (eventDay.getTime() === today.getTime()) {
+          phase = { phase: 'event-day', label: 'Event Day - Live', isLive: true };
+        } else if (eventDay > today) {
+          phase = { phase: 'pre-event', label: 'Pre-Event Preparation', isLive: false };
+        } else {
+          phase = { phase: 'post-event', label: 'Post-Event Analytics', isLive: false };
+        }
+      }
+
+      // Display lifecycle phase indicator (same style as Admin and Display)
+      let lifecycleIndicator = '';
+      if (phase) {
+        lifecycleIndicator = `<span class="phase-indicator ${esc(phase.phase)}" data-testid="lifecycle-indicator" data-phase="${esc(phase.phase)}">${esc(phase.label)}</span>`;
+      }
+
+      html += `<div style="margin-bottom: 12px;">${lifecycleIndicator}</div>`;
+
+      // EVENT_CONTRACT.md v2.0: event.name (MVP Required)
+      html += `<h1>${esc(eventName || '(untitled)')}</h1>`;
+
+      // Meta information - event.startDateISO + event.venue (MVP Required)
+      html += '<div class="event-meta">';
+      if (startDateISO) {
+        const date = new Date(startDateISO + 'T00:00:00');
+        html += `<div class="event-meta-item"><strong>📅</strong> ${date.toLocaleDateString('en-US', {
+          weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+        })}</div>`;
+      }
+      if (venue) {
+        html += `<div class="event-meta-item"><strong>📍</strong> ${esc(venue)}</div>`;
+      }
+      html += '</div>';
+      html += '</div>';
+
+      // === ACTION ROW (event.ctas.primary / event.ctas.secondary) ===
+      html += '<div class="action-buttons">';
+
+      // Primary CTA (MVP Required) - trust event.ctas.primary
+      // PAYMENTS SEAM: If payments.enabled && payments.checkoutUrl, override with checkout link
+      if (payments.enabled && payments.checkoutUrl) {
+        // Stripe checkout flow - use payment icon and checkout URL
+        const priceLabel = payments.price && payments.currency
+          ? ` - ${formatPrice(payments.price, payments.currency)}`
+          : '';
+        html += `<a class="btn-primary" href="${esc(payments.checkoutUrl)}" target="_blank" rel="noopener">💳 ${esc(ctas.primary?.label || 'Buy Tickets')}${priceLabel}</a>`;
+      } else if (ctas.primary?.url) {
+        html += `<a class="btn-primary" href="${esc(ctas.primary.url)}" target="_blank" rel="noopener">📝 ${esc(ctas.primary.label || 'Sign Up')}</a>`;
+      } else if (ctas.primary?.label) {
+        // CTA has label but no URL - show disabled state
+        html += `<span class="btn-primary" style="opacity: 0.5; cursor: not-allowed;">📝 ${esc(ctas.primary.label)}</span>`;
+      }
+
+      // Secondary CTA (optional) - trust event.ctas.secondary
+      if (ctas.secondary?.url && ctas.secondary?.label) {
+        html += `<a class="btn-secondary" href="${esc(ctas.secondary.url)}" target="_blank" rel="noopener">${esc(ctas.secondary.label)}</a>`;
+      }
+
+      // Back to all events - use links.publicUrl base or fallback
+      html += `<a class="btn-secondary" href="${EXEC_URL}?p=events&brand=${BRAND}">← All Events</a>`;
+      html += '</div>';
+
+      // === UTILITY BUTTONS: Maps, Calendar, Share ===
+      html += '<div class="utility-buttons">';
+
+      // Open in Maps - use media.mapUrl or build from venue
+      // Feature 4: Gated by settings.showMap (template-aware toggle)
+      if (sectionEnabled('map')) {
+        if (media.mapUrl) {
+          // Direct map URL from event.media.mapUrl (V2 Optional)
+          html += `<a class="btn-utility" href="${esc(media.mapUrl)}" target="_blank" rel="noopener">📍 Open in Maps</a>`;
+        } else if (venue) {
+          // Build Google Maps search URL from event.venue (MVP Required)
+          const mapsUrl = buildMapsUrl(venue);
+          html += `<a class="btn-utility" href="${esc(mapsUrl)}" target="_blank" rel="noopener">📍 Open in Maps</a>`;
+        }
+      }
+
+      // Add to Calendar (Google URL + .ics) - uses event.startDateISO
+      if (startDateISO) {
+        const gcalUrl = buildGoogleCalendarUrl(data);
+        html += `
+          <div class="calendar-dropdown">
+            <button class="btn-utility" onclick="toggleCalendarDropdown(event)">📅 Add to Calendar</button>
+            <div class="calendar-menu">
+              <a href="${esc(gcalUrl || '#')}" target="_blank" rel="noopener">📆 Google Calendar</a>
+              <a href="#" onclick="event.preventDefault(); downloadICS(currentEventData);">📱 Apple / Outlook (.ics)</a>
+            </div>
+          </div>
+        `;
+      }
+
+      // Share / Copy Link - uses current page URL
+      html += `<button class="btn-utility" onclick="shareEvent(currentEventData)">🔗 Share / Copy Link</button>`;
+
+      html += '</div>';
+
+      // ═══════════════════════════════════════════════════════════════
+      // V2 COMMENTED OUT - imageUrl NOT IN /schemas/event.schema.json
+      // V2 FEATURE – NOT MVP: Add event.media.heroImageUrl to schema when ready
+      // ═══════════════════════════════════════════════════════════════
+      // if (data.imageUrl) {
+      //   html += `<img src="${esc(data.imageUrl)}" alt="${esc(data.name || 'Event')}" class="event-image">`;
+      // }
+
+      // ═══════════════════════════════════════════════════════════════
+      // V2 COMMENTED OUT - summary/summaryLink NOT IN /schemas/event.schema.json
+      // V2 FEATURE – NOT MVP: Add event.description field to schema when ready
+      // ═══════════════════════════════════════════════════════════════
+      // if (data.summary || data.summaryLink) {
+      //   html += '<div class="event-section">';
+      //   html += '<h2>About This Event</h2>';
+      //   if (data.summary) {
+      //     html += `<p>${esc(data.summary)}</p>`;
+      //   }
+      //   if (data.summaryLink) {
+      //     html += `<p><a href="${esc(data.summaryLink)}" target="_blank" rel="noopener">Learn more →</a></p>`;
+      //   }
+      //   html += '</div>';
+      // }
+
+      // Video Section - uses event.media.videoUrl (V2 OPTIONAL per /schemas/event.schema.json)
+      // Feature 4: Gated by settings.showVideo (template-aware toggle)
+      if (sectionEnabled('video') && media.videoUrl) {
+        html += '<div class="event-section">';
+        html += '<h2>Video</h2>';
+
+        // Validate and sanitize video URL with strict regex
+        const videoUrl = String(media.videoUrl);
+        let embedUrl = null;
+        let isValidVideo = false;
+
+        // YouTube validation with strict regex
+        const youtubeRegex = /^https?:\/\/(www\.)?(youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11}).*$/;
+        const youtubeMatch = videoUrl.match(youtubeRegex);
+        if (youtubeMatch) {
+          const videoId = youtubeMatch[3];
+          // Additional validation: ensure videoId is exactly 11 chars and alphanumeric
+          if (videoId && videoId.length === 11 && /^[a-zA-Z0-9_-]+$/.test(videoId)) {
+            embedUrl = `https://www.youtube.com/embed/${esc(videoId)}`;
+            isValidVideo = true;
+          }
+        }
+
+        // Vimeo validation with strict regex
+        if (!isValidVideo) {
+          const vimeoRegex = /^https?:\/\/(www\.)?vimeo\.com\/(\d+).*$/;
+          const vimeoMatch = videoUrl.match(vimeoRegex);
+          if (vimeoMatch) {
+            const videoId = vimeoMatch[2];
+            // Additional validation: ensure videoId is numeric
+            if (videoId && /^\d+$/.test(videoId)) {
+              embedUrl = `https://player.vimeo.com/video/${esc(videoId)}`;
+              isValidVideo = true;
+            }
+          }
+        }
+
+        if (isValidVideo && embedUrl) {
+          html += `<iframe src="${embedUrl}" class="event-video" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>`;
+        } else {
+          // Fallback to link for invalid or unsupported videos
+          html += `<p><a href="${esc(videoUrl)}" target="_blank" rel="noopener">Watch Video →</a></p>`;
+        }
+        html += '</div>';
+      }
+
+      // Gallery Section - uses event.media.gallery (V2 OPTIONAL per /schemas/event.schema.json)
+      // Feature 4: Gated by settings.showGallery (template-aware toggle)
+      // media.gallery is an array of URLs, not comma-separated string
+      if (sectionEnabled('gallery') && media.gallery && Array.isArray(media.gallery) && media.gallery.length > 0) {
+        html += '<div class="event-section">';
+        html += '<h2>Gallery</h2>';
+        html += '<div class="gallery">';
+        media.gallery.forEach(url => {
+          html += `<img src="${esc(url)}" alt="Event photo" loading="lazy">`;
+        });
+        html += '</div>';
+        html += '</div>';
+      }
+
+      // Schedule Section - uses event.schedule (MVP Optional) + event.settings.showSchedule
+      // Week 3 MVP: Show section with TBD placeholder when enabled but empty
+      if (sectionEnabled('schedule')) {
+        html += '<div class="event-section">';
+        html += '<h2>Schedule</h2>';
+        if (schedule.length > 0) {
+          // Render from event.schedule[] per schema
+          html += '<div class="schedule-list">';
+          schedule.forEach(item => {
+            html += `<div class="schedule-item">`;
+            if (item.time) html += `<span class="schedule-time">${esc(item.time)}</span>`;
+            if (item.title) html += `<span class="schedule-title">${esc(item.title)}</span>`;
+            if (item.description) html += `<span class="schedule-desc">${esc(item.description)}</span>`;
+            html += `</div>`;
+          });
+          html += '</div>';
+        } else if (externalData.scheduleUrl) {
+          // External data URL from event.externalData.scheduleUrl (V2 Optional)
+          html += `<div id="schedule-container" data-url="${esc(externalData.scheduleUrl)}">
+            <div class="loading-placeholder">Loading schedule...</div>
+          </div>`;
+        } else {
+          // TBD placeholder when schedule is enabled but no data yet
+          html += '<div class="empty-state" style="padding: 24px;">';
+          html += '<p style="color: var(--color-gray-500); font-style: italic;">Schedule to be announced</p>';
+          html += '</div>';
+        }
+        html += '</div>';
+      }
+
+      // ═══════════════════════════════════════════════════════════════
+      // V2 COMMENTED OUT - albumUrl/downloadUrl NOT IN /schemas/event.schema.json
+      // V2 FEATURE – NOT MVP: Add to media schema when template-specific features are ready
+      // ═══════════════════════════════════════════════════════════════
+      // Template-specific sections
+      // Photo Album (photo_gallery, wedding, shower templates)
+      // if (data.albumUrl) {
+      //   html += '<div class="event-section">';
+      //   html += '<h2>Photo Album</h2>';
+      //   html += `<p><a class="btn-primary" href="${esc(data.albumUrl)}" target="_blank" rel="noopener">📸 View Photo Album</a></p>`;
+      //   if (data.downloadUrl) {
+      //     html += `<p><a class="btn-secondary" href="${esc(data.downloadUrl)}" target="_blank" rel="noopener">⬇️ Download All Photos</a></p>`;
+      //   }
+      //   html += '</div>';
+      // }
+
+      // ═══════════════════════════════════════════════════════════════
+      // V2 COMMENTED OUT - registryUrl NOT IN /schemas/event.schema.json
+      // V2 FEATURE – NOT MVP: Add to event schema when gift registry feature is ready
+      // ═══════════════════════════════════════════════════════════════
+      // Registry (wedding, shower templates)
+      // if (data.registryUrl) {
+      //   html += '<div class="event-section">';
+      //   html += '<h2>Gift Registry</h2>';
+      //   html += `<p><a class="btn-primary" href="${esc(data.registryUrl)}" target="_blank" rel="noopener">🎁 View Registry</a></p>`;
+      //   html += '</div>';
+      // }
+
+      // === STANDINGS SECTION - uses event.standings (MVP Optional) + event.settings.showStandings ===
+      // Week 3 MVP: Show section with TBD placeholder when enabled but empty
+      if (sectionEnabled('standings')) {
+        html += '<div class="event-section">';
+        html += '<h2>Standings</h2>';
+        if (standings.length > 0) {
+          // Render from event.standings[] per schema
+          html += '<table class="data-table standings-table">';
+          html += '<thead><tr><th>Team</th><th>W</th><th>L</th><th>Pts</th></tr></thead>';
+          html += '<tbody>';
+          standings.forEach((row, idx) => {
+            html += `<tr class="${idx < 3 ? 'top-rank' : ''}">`;
+            html += `<td><span class="rank">${row.rank || idx + 1}</span> ${esc(row.team || '')}</td>`;
+            html += `<td>${row.wins || 0}</td>`;
+            html += `<td>${row.losses || 0}</td>`;
+            html += `<td>${row.points || 0}</td>`;
+            html += '</tr>';
+          });
+          html += '</tbody></table>';
+        } else if (externalData.standingsUrl) {
+          // External data URL from event.externalData.standingsUrl (V2 Optional)
+          html += `<div id="standings-container" data-url="${esc(externalData.standingsUrl)}">
+            <div class="loading-placeholder">Loading standings...</div>
+          </div>`;
+        } else {
+          // TBD placeholder when standings is enabled but no data yet
+          html += '<div class="empty-state" style="padding: 24px;">';
+          html += '<p style="color: var(--color-gray-500); font-style: italic;">Standings to be announced</p>';
+          html += '</div>';
+        }
+        html += '</div>';
+      }
+
+      // === BRACKET SECTION - uses event.bracket (MVP Optional) + event.settings.showBracket ===
+      // Week 3 MVP: Show section with TBD placeholder when enabled but empty
+      if (sectionEnabled('bracket')) {
+        html += '<div class="event-section">';
+        html += '<h2>Bracket</h2>';
+        if (bracket && bracket.rounds && bracket.rounds.length > 0) {
+          // Render from event.bracket per schema
+          html += '<div class="bracket-container"><div class="bracket-rounds">';
+          bracket.rounds.forEach(round => {
+            html += `<div class="bracket-round">`;
+            html += `<h4 class="round-title">${esc(round.name || 'Round')}</h4>`;
+            html += '<div class="bracket-matches">';
+            (round.matches || []).forEach(match => {
+              html += '<div class="bracket-match">';
+              html += `<div class="match-team ${match.winner === match.team1 ? 'winner' : ''}">`;
+              html += `<span class="team-name">${esc(match.team1 || 'TBD')}</span>`;
+              if (match.score1 !== undefined) html += `<span class="team-score">${match.score1}</span>`;
+              html += '</div>';
+              html += '<div class="match-vs">vs</div>';
+              html += `<div class="match-team ${match.winner === match.team2 ? 'winner' : ''}">`;
+              html += `<span class="team-name">${esc(match.team2 || 'TBD')}</span>`;
+              if (match.score2 !== undefined) html += `<span class="team-score">${match.score2}</span>`;
+              html += '</div>';
+              html += '</div>';
+            });
+            html += '</div></div>';
+          });
+          html += '</div></div>';
+        } else if (externalData.bracketUrl) {
+          // External data URL from event.externalData.bracketUrl (V2 Optional)
+          html += `<div id="bracket-container" data-url="${esc(externalData.bracketUrl)}">
+            <div class="loading-placeholder">Loading bracket...</div>
+          </div>`;
+        } else {
+          // TBD placeholder when bracket is enabled but no data yet
+          html += '<div class="empty-state" style="padding: 24px;">';
+          html += '<p style="color: var(--color-gray-500); font-style: italic;">Bracket to be announced</p>';
+          html += '</div>';
+        }
+        html += '</div>';
+      }
+
+      // ═══════════════════════════════════════════════════════════════
+      // V2 COMMENTED OUT - vendorListUrl NOT IN /schemas/event.schema.json
+      // V2 FEATURE – NOT MVP: Add externalData.vendorsUrl to schema when vendor feature is ready
+      // ═══════════════════════════════════════════════════════════════
+      // Vendor List (farmers_market template) - supports Google Sheets BYOD
+      // if (data.vendorListUrl) {
+      //   html += '<div class="event-section">';
+      //   html += '<h2>Vendors</h2>';
+      //   html += `<div id="vendors-container" data-url="${esc(data.vendorListUrl)}">
+      //     <div class="loading-placeholder">Loading vendors...</div>
+      //   </div>`;
+      //   html += '</div>';
+      // }
+
+      // ═══════════════════════════════════════════════════════════════
+      // V2 COMMENTED OUT - goalAmount/raisedAmount/donationUrl NOT IN /schemas/event.schema.json
+      // V2 FEATURE – NOT MVP: Add fundraising object to schema when donation feature is ready
+      // ═══════════════════════════════════════════════════════════════
+      // Donation Progress (fundraiser template)
+      // if (data.goalAmount && data.raisedAmount !== undefined) {
+      //   const progress = Math.min(100, Math.round((data.raisedAmount / data.goalAmount) * 100));
+      //   html += '<div class="event-section">';
+      //   html += '<h2>Fundraising Progress</h2>';
+      //   html += `<div class="fundraising-progress">`;
+      //   html += `<div class="progress-bar"><div class="progress-fill" style="width: ${progress}%"></div></div>`;
+      //   html += `<p class="progress-text">$${data.raisedAmount.toLocaleString()} raised of $${data.goalAmount.toLocaleString()} goal (${progress}%)</p>`;
+      //   html += `</div>`;
+      //   if (data.donationUrl) {
+      //     html += `<p><a class="btn-primary" href="${esc(data.donationUrl)}" target="_blank" rel="noopener">💝 Donate Now</a></p>`;
+      //   }
+      //   html += '</div>';
+      // }
+
+      // ═══════════════════════════════════════════════════════════════
+      // V2 COMMENTED OUT - bio/bioLink/notes NOT IN /schemas/event.schema.json
+      // V2 FEATURE – NOT MVP: Add description field to schema when rich text support is ready
+      // ═══════════════════════════════════════════════════════════════
+      // Bio/Notes Section (respects sections.notes) - uses custom label from template
+      // if (data.bio || data.bioLink || data.notes) {
+      //   html += '<div class="event-section">';
+      //   html += `<h2>More Information</h2>`;
+      //   if (data.notes) {
+      //     html += `<p>${esc(data.notes)}</p>`;
+      //   }
+      //   if (data.bio) {
+      //     html += `<p>${esc(data.bio)}</p>`;
+      //   }
+      //   if (data.bioLink) {
+      //     html += `<p><a href="${esc(data.bioLink)}" target="_blank" rel="noopener">Read more →</a></p>`;
+      //   }
+      //   html += '</div>';
+      // }
+
+      // ═══════════════════════════════════════════════════════════════
+      // V2 COMMENTED OUT - feedbackUrl NOT IN /schemas/event.schema.json
+      // V2 FEATURE – NOT MVP: Add links.feedbackUrl to schema when feedback feature is ready
+      // ═══════════════════════════════════════════════════════════════
+      // Feedback Survey
+      // if (data.feedbackUrl) {
+      //   html += '<div class="event-section">';
+      //   html += '<h2>Feedback</h2>';
+      //   html += `<p><a class="btn-primary" href="${esc(data.feedbackUrl)}" target="_blank" rel="noopener">📋 Share Your Feedback</a></p>`;
+      //   html += '</div>';
+      // }
+
+      html += '</div>';
+
+      root.innerHTML = html;
+
+      // Populate Google Sheets data asynchronously (BYOD)
+      populateSheetData();
+    }
+
+    // Fetch and populate all sheet data containers
+    async function populateSheetData() {
+      const containers = [
+        { id: 'schedule-container', renderer: renderScheduleTable },
+        { id: 'standings-container', renderer: renderStandingsTable },
+        { id: 'bracket-container', renderer: renderBracketTable },
+        { id: 'vendors-container', renderer: renderVendorList }
+      ];
+
+      for (const { id, renderer } of containers) {
+        const container = document.getElementById(id);
+        if (!container) continue;
+
+        const url = container.dataset.url;
+        const sheetData = await fetchSheetData(url);
+
+        if (sheetData && sheetData.rows.length > 0) {
+          // Google Sheet data fetched - render styled
+          container.innerHTML = renderer(sheetData);
+        } else {
+          // Not a Google Sheet or fetch failed - show link fallback
+          container.innerHTML = `<p><a class="btn-secondary" href="${esc(url)}" target="_blank" rel="noopener">View Full Data →</a></p>`;
+        }
+      }
+    }
+
+    // S12/S13: Error state renderer using shared StateRenderer for consistent UX
+    // Accepts either a type string or error object from safeRpc
+    function showError(typeOrError = 'load') {
+      const root = document.getElementById('list');
+      const backUrl = `${EXEC_URL}?p=events&brand=${BRAND}`;
+
+      // S13: Handle error objects from safeRpc (has code/message properties)
+      if (typeOrError && typeof typeOrError === 'object' && typeOrError.code) {
+        // Use showFromError which handles SERVICE_UNAVAILABLE, TIMEOUT, etc.
+        SharedUtils.StateRenderer.showFromError(root, typeOrError, {
+          onRetry: () => location.reload(),
+          backUrl
+        });
+      } else if (typeOrError === 'notfound') {
+        SharedUtils.StateRenderer.showEventNotFound(root, { backUrl });
+      } else if (typeOrError === 'nodata') {
+        SharedUtils.StateRenderer.showNoData(root, { context: 'content', backUrl });
+      } else {
+        SharedUtils.StateRenderer.showError(root, {
+          title: 'Something Went Wrong',
+          message: 'We couldn\'t load the events right now. This might be a temporary issue.',
+          hint: 'Please try again in a moment.',
+          onRetry: () => location.reload()
+        });
+      }
+    }
+
+    // Load event data
+    // SCHEMA: /schemas/event.schema.json via Worker /api/v2/events/:id/bundle/public
+    // Story 2.2/5.3: Uses Worker v2 endpoint (GAS retired)
+    if (ID) {
+      (async () => {
+        // Story 2.2: Fetch from Worker endpoint (no GAS calls)
+        const res = await fetchPublicBundleFromWorker(ID, BRAND);
+
+        // Handle API errors with proper classification
+        if (!res.ok) {
+          console.error('API error:', res.code, res.message);
+          showError(res);
+          return;
+        }
+
+        try {
+          if (res.value && res.value.event) {
+            // getPublicBundle returns { event: Event, config: { ... }, lifecyclePhase: { phase, label, isLive } }
+            const bundle = res.value;
+
+            // === LOG PUBLIC VIEW METRIC (uses SponsorUtils.logEvent which is fire-and-forget) ===
+            logEvent({ eventId: bundle.event.id, surface: 'public', metric: 'view', value: 1 });
+
+            renderDetail(bundle.event, bundle.config, bundle.lifecyclePhase);
+          } else if (res.value && !res.value.event) {
+            // API returned ok but no event data
+            showError('nodata');
+          } else {
+            showError('notfound');
+          }
+        } catch (renderErr) {
+          console.error('Render error:', renderErr);
+          showError('load');
+        }
+      })();
+    } else {
+      // List view - Story 2.2: Now uses Worker endpoint instead of GAS api_list
+      (async () => {
+        const res = await fetchEventsListFromWorker(BRAND);
+
+        // Handle API errors with proper classification
+        if (!res.ok) {
+          console.error('API error:', res.code, res.message);
+          showError(res);
+          return;
+        }
+
+        try {
+          if (res.value) {
+            renderList(res.value.items || []);
+          } else {
+            showError('load');
+          }
+        } catch (renderErr) {
+          console.error('Render error:', renderErr);
+          showError('load');
+        }
+      })();
+    }
+  </script>
+</body>
+</html>

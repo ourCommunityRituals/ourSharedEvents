@@ -1,0 +1,582 @@
+<style>
+  /* ===== Image Optimization Component ===== */
+  /*
+    Provides lazy loading, responsive images, and performance optimizations
+    for posters, displays, and web pages.
+  */
+
+  /* Lazy load placeholder */
+  img[loading="lazy"] {
+    background: var(--color-gray-100, #f1f5f9);
+    min-height: 100px;
+  }
+
+  /* Image container for aspect ratio preservation */
+  .img-container {
+    position: relative;
+    overflow: hidden;
+    background: var(--color-gray-100, #f1f5f9);
+  }
+
+  /* Common aspect ratios */
+  .img-container.aspect-16-9 {
+    aspect-ratio: 16 / 9;
+  }
+
+  .img-container.aspect-4-3 {
+    aspect-ratio: 4 / 3;
+  }
+
+  .img-container.aspect-1-1 {
+    aspect-ratio: 1 / 1;
+  }
+
+  .img-container.aspect-3-2 {
+    aspect-ratio: 3 / 2;
+  }
+
+  .img-container img {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  /* Responsive image */
+  .responsive-img {
+    width: 100%;
+    height: auto;
+    display: block;
+  }
+
+  /* Loading skeleton animation */
+  .img-skeleton {
+    background: linear-gradient(
+      90deg,
+      var(--color-gray-100, #f1f5f9) 25%,
+      var(--color-gray-200, #e2e8f0) 50%,
+      var(--color-gray-100, #f1f5f9) 75%
+    );
+    background-size: 200% 100%;
+    animation: skeleton-loading 1.5s ease-in-out infinite;
+  }
+
+  @keyframes skeleton-loading {
+    0% {
+      background-position: 200% 0;
+    }
+    100% {
+      background-position: -200% 0;
+    }
+  }
+
+  /* Image fade-in on load */
+  .img-fade-in {
+    opacity: 0;
+    transition: opacity var(--transition-slow, 0.3s) ease-in;
+  }
+
+  .img-fade-in.loaded {
+    opacity: 1;
+  }
+
+  /* Progressive image loading (blur-up) */
+  .progressive-img-container {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .progressive-img-placeholder {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    filter: blur(20px);
+    transform: scale(1.1);
+    transition: opacity var(--transition-slow, 0.3s);
+  }
+
+  .progressive-img-placeholder.loaded {
+    opacity: 0;
+  }
+
+  .progressive-img-full {
+    opacity: 0;
+    transition: opacity var(--transition-slow, 0.3s);
+  }
+
+  .progressive-img-full.loaded {
+    opacity: 1;
+  }
+
+  /* Image optimization for different surfaces */
+
+  /* Sponsor logos */
+  .sponsor-img {
+    max-width: 100%;
+    height: auto;
+    object-fit: contain;
+    background: transparent;
+  }
+
+  /* Event banners */
+  .event-banner-img {
+    width: 100%;
+    height: auto;
+    object-fit: cover;
+    max-height: 400px;
+  }
+
+  /* Poster images */
+  .poster-img {
+    width: 100%;
+    height: auto;
+    object-fit: contain;
+    background: white;
+  }
+
+  /* Display/TV images */
+  .display-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  /* Error state for broken images */
+  img.error,
+  img[data-error="true"] {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--color-gray-100, #f1f5f9);
+    color: var(--color-gray-500, #64748b);
+    font-size: var(--font-size-sm, 0.875rem);
+    min-height: 100px;
+  }
+
+  img.error::before,
+  img[data-error="true"]::before {
+    content: '🖼️ Image unavailable';
+  }
+
+  /* Performance: Reduce image quality for non-critical images */
+  .img-low-priority {
+    image-rendering: auto;
+  }
+
+  /* Print optimization */
+  @media print {
+    /* Reduce image file size for printing */
+    img {
+      max-width: 100%;
+      page-break-inside: avoid;
+    }
+
+    /* Hide decorative images */
+    img[role="presentation"],
+    .decorative-img {
+      display: none;
+    }
+  }
+
+  /* Dark mode image adjustments */
+  @media (prefers-color-scheme: dark) {
+    .img-container,
+    img[loading="lazy"] {
+      background: var(--color-gray-800, #1e293b);
+    }
+
+    /* Reduce brightness of images in dark mode */
+    img.auto-adjust {
+      filter: brightness(0.8) contrast(1.1);
+    }
+  }
+
+  /* Reduced motion: disable fade effects */
+  @media (prefers-reduced-motion: reduce) {
+    .img-fade-in,
+    .progressive-img-placeholder,
+    .progressive-img-full {
+      transition: none;
+    }
+  }
+</style>
+
+<script>
+  /* ===== Image Optimization JavaScript ===== */
+
+  /**
+   * Image loading strategies
+   */
+  const LOADING_STRATEGIES = {
+    LAZY: 'lazy',
+    EAGER: 'eager',
+    AUTO: 'auto'
+  };
+
+  /**
+   * Create optimized image element
+   * @param {Object} options - Image options
+   * @returns {HTMLImageElement} Optimized image element
+   */
+  function createOptimizedImage(options) {
+    const {
+      src,
+      alt = '',
+      width = null,
+      height = null,
+      loading = LOADING_STRATEGIES.LAZY,
+      className = '',
+      aspectRatio = null,
+      placeholder = null,
+      onLoad = null,
+      onError = null,
+      decoding = 'async',
+      fetchPriority = 'auto'
+    } = options;
+
+    const img = document.createElement('img');
+
+    // Required attributes
+    img.src = src;
+    img.alt = alt;
+
+    // Performance attributes
+    img.loading = loading;
+    img.decoding = decoding;
+    if (fetchPriority !== 'auto') {
+      img.fetchPriority = fetchPriority;
+    }
+
+    // Dimensions
+    if (width) img.width = width;
+    if (height) img.height = height;
+
+    // Class
+    if (className) img.className = className;
+
+    // Fade-in effect
+    if (loading === LOADING_STRATEGIES.LAZY) {
+      img.classList.add('img-fade-in');
+    }
+
+    // Event handlers
+    img.addEventListener('load', function() {
+      this.classList.add('loaded');
+      if (onLoad) onLoad(this);
+    });
+
+    img.addEventListener('error', function() {
+      this.setAttribute('data-error', 'true');
+      this.alt = alt || 'Image failed to load';
+      if (onError) onError(this);
+    });
+
+    return img;
+  }
+
+  /**
+   * Create progressive image with blur-up effect
+   * @param {Object} options - Image options
+   * @returns {HTMLElement} Container with progressive image
+   */
+  function createProgressiveImage(options) {
+    const {
+      src,
+      placeholderSrc,
+      alt = '',
+      aspectRatio = '16-9',
+      className = ''
+    } = options;
+
+    const container = document.createElement('div');
+    container.className = `progressive-img-container img-container aspect-${aspectRatio} ${className}`;
+
+    // Low-quality placeholder
+    if (placeholderSrc) {
+      const placeholder = document.createElement('img');
+      placeholder.src = placeholderSrc;
+      placeholder.className = 'progressive-img-placeholder';
+      placeholder.alt = '';
+      placeholder.setAttribute('aria-hidden', 'true');
+      container.appendChild(placeholder);
+    } else {
+      // Skeleton loader if no placeholder
+      const skeleton = document.createElement('div');
+      skeleton.className = 'img-skeleton';
+      skeleton.style.width = '100%';
+      skeleton.style.height = '100%';
+      container.appendChild(skeleton);
+    }
+
+    // Full-quality image
+    const fullImg = document.createElement('img');
+    fullImg.src = src;
+    fullImg.alt = alt;
+    fullImg.className = 'progressive-img-full';
+    fullImg.loading = 'lazy';
+    fullImg.decoding = 'async';
+
+    fullImg.addEventListener('load', function() {
+      this.classList.add('loaded');
+      const placeholder = container.querySelector('.progressive-img-placeholder, .img-skeleton');
+      if (placeholder) {
+        setTimeout(() => placeholder.remove(), 300);
+      }
+    });
+
+    container.appendChild(fullImg);
+
+    return container;
+  }
+
+  /**
+   * Generate responsive srcset for an image
+   * @param {string} baseUrl - Base image URL
+   * @param {Array} sizes - Array of widths [320, 640, 1024, etc.]
+   * @returns {string} srcset attribute value
+   */
+  function generateSrcSet(baseUrl, sizes = [320, 640, 960, 1280, 1920]) {
+    // Assumes image service that supports width parameter
+    // Adjust based on your image CDN (e.g., imgix, cloudinary, etc.)
+    return sizes
+      .map(size => {
+        const url = `${baseUrl}?w=${size}&q=80`;
+        return `${url} ${size}w`;
+      })
+      .join(', ');
+  }
+
+  /**
+   * Generate sizes attribute based on breakpoints
+   * @param {Object} breakpoints - Breakpoint configuration
+   * @returns {string} sizes attribute value
+   */
+  function generateSizes(breakpoints = {}) {
+    const defaultBreakpoints = {
+      sm: { maxWidth: 640, imageWidth: '100vw' },
+      md: { maxWidth: 768, imageWidth: '100vw' },
+      lg: { maxWidth: 1024, imageWidth: '50vw' },
+      xl: { imageWidth: '33vw' }
+    };
+
+    const config = { ...defaultBreakpoints, ...breakpoints };
+
+    const parts = [];
+
+    Object.values(config).forEach(bp => {
+      if (bp.maxWidth) {
+        parts.push(`(max-width: ${bp.maxWidth}px) ${bp.imageWidth}`);
+      } else {
+        parts.push(bp.imageWidth);
+      }
+    });
+
+    return parts.join(', ');
+  }
+
+  /**
+   * Lazy load images when they enter viewport
+   * @param {string} selector - CSS selector for images to lazy load
+   */
+  function initLazyLoading(selector = 'img[data-lazy]') {
+    // Check for native lazy loading support
+    if ('loading' in HTMLImageElement.prototype) {
+      // Browser supports native lazy loading
+      document.querySelectorAll(selector).forEach(img => {
+        img.src = img.dataset.src || img.src;
+        img.loading = 'lazy';
+        img.removeAttribute('data-lazy');
+      });
+      return;
+    }
+
+    // Fallback to Intersection Observer
+    const imageObserver = new IntersectionObserver((entries, observer) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          const img = entry.target;
+          img.src = img.dataset.src || img.src;
+          img.classList.add('img-fade-in');
+
+          img.addEventListener('load', () => {
+            img.classList.add('loaded');
+          });
+
+          img.removeAttribute('data-lazy');
+          observer.unobserve(img);
+        }
+      });
+    }, {
+      rootMargin: '50px' // Start loading 50px before entering viewport
+    });
+
+    document.querySelectorAll(selector).forEach(img => {
+      imageObserver.observe(img);
+    });
+  }
+
+  /**
+   * Optimize sponsor logos
+   * @param {string} containerSelector - Selector for sponsor container
+   */
+  function optimizeSponsorLogos(containerSelector = '.sponsor-banner') {
+    const containers = document.querySelectorAll(containerSelector);
+
+    containers.forEach(container => {
+      const logos = container.querySelectorAll('img');
+
+      logos.forEach(logo => {
+        // Add optimized classes
+        logo.classList.add('sponsor-img');
+        logo.loading = 'lazy';
+        logo.decoding = 'async';
+
+        // Ensure alt text
+        if (!logo.alt) {
+          const sponsorName = logo.dataset.sponsorName || 'Sponsor';
+          logo.alt = `${sponsorName} logo`;
+        }
+
+        // Add error handling
+        logo.addEventListener('error', function() {
+          this.style.display = 'none';
+          console.warn('Failed to load sponsor logo:', this.src);
+        });
+      });
+    });
+  }
+
+  /**
+   * Preload critical images
+   * @param {Array} urls - Array of image URLs to preload
+   */
+  function preloadImages(urls) {
+    urls.forEach(url => {
+      const link = document.createElement('link');
+      link.rel = 'preload';
+      link.as = 'image';
+      link.href = url;
+      document.head.appendChild(link);
+    });
+  }
+
+  /**
+   * Get optimized image URL (for external CDN services)
+   * @param {string} url - Original image URL
+   * @param {Object} options - Optimization options
+   * @returns {string} Optimized URL
+   */
+  function getOptimizedImageUrl(url, options = {}) {
+    const {
+      width = null,
+      height = null,
+      quality = 80,
+      format = 'auto'
+    } = options;
+
+    // Example for imgix, cloudinary, etc.
+    // Adjust based on your image service
+    const params = new URLSearchParams();
+
+    if (width) params.append('w', width);
+    if (height) params.append('h', height);
+    params.append('q', quality);
+    if (format !== 'auto') params.append('fm', format);
+
+    return `${url}?${params.toString()}`;
+  }
+
+  /**
+   * Initialize image optimizations on page load
+   */
+  function initImageOptimizations() {
+    // Initialize lazy loading
+    initLazyLoading('img[data-lazy]');
+
+    // Optimize sponsor logos
+    optimizeSponsorLogos();
+
+    // Add loading and error handlers to all images
+    document.querySelectorAll('img:not([loading])').forEach(img => {
+      img.loading = 'lazy';
+      img.decoding = 'async';
+    });
+  }
+
+  // Auto-initialize
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initImageOptimizations);
+  } else {
+    initImageOptimizations();
+  }
+</script>
+
+<!-- ===== Example Usage Templates ===== -->
+
+<template id="optimized-image-examples">
+  <!-- Example 1: Basic lazy-loaded image -->
+  <img
+    src="placeholder.jpg"
+    data-src="full-image.jpg"
+    data-lazy
+    alt="Event banner"
+    width="1200"
+    height="600"
+    class="responsive-img"
+  >
+
+  <!-- Example 2: Progressive image with blur-up -->
+  <div class="progressive-img-container img-container aspect-16-9">
+    <img
+      src="low-quality-placeholder.jpg"
+      class="progressive-img-placeholder"
+      alt=""
+      aria-hidden="true"
+    >
+    <img
+      src="high-quality-image.jpg"
+      class="progressive-img-full"
+      alt="Event photo"
+      loading="lazy"
+    >
+  </div>
+
+  <!-- Example 3: Responsive image with srcset -->
+  <img
+    srcset="image-320.jpg 320w,
+            image-640.jpg 640w,
+            image-960.jpg 960w,
+            image-1280.jpg 1280w"
+    sizes="(max-width: 640px) 100vw,
+           (max-width: 1024px) 50vw,
+           33vw"
+    src="image-640.jpg"
+    alt="Responsive event image"
+    loading="lazy"
+    class="responsive-img"
+  >
+
+  <!-- Example 4: Sponsor logo with optimization -->
+  <img
+    src="sponsor-logo.png"
+    alt="Sponsor Company logo"
+    class="sponsor-img"
+    loading="lazy"
+    decoding="async"
+    data-sponsor-name="Sponsor Company"
+  >
+
+  <!-- Example 5: Critical image (eager loading) -->
+  <img
+    src="hero-image.jpg"
+    alt="Event hero image"
+    loading="eager"
+    fetchpriority="high"
+    class="event-banner-img"
+  >
+</template>

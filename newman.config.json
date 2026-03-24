@@ -1,0 +1,22 @@
+{
+  "collection": "postman/collections/mvp-event-toolkit-api.json",
+  "environment": "postman/environments/mvp-event-toolkit-dev.json",
+  "reporters": ["cli", "json", "htmlextra"],
+  "reporter": {
+    "htmlextra": {
+      "export": "./newman-reports/report.html"
+    },
+    "json": {
+      "export": "./newman-reports/report.json"
+    }
+  },
+  "insecure": false,
+  "timeout": 30000,
+  "timeoutRequest": 10000,
+  "timeoutScript": 5000,
+  "delayRequest": 500,
+  "ignoreRedirects": false,
+  "bail": false,
+  "suppressExitCode": false,
+  "color": "on"
+}

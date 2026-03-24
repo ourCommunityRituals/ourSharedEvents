@@ -1,0 +1,112 @@
+{
+  "_comment": "Allowlist for guard-no-gas. Only documentation/spec references are permitted.",
+  "_format": "{ \"relative/file/path\": [\"token1\", \"token2\"] } or use [\"*\"] to allow all patterns in a file",
+  "_warning": "Adding production code to this allowlist is a violation of the MVP architecture. Only add references in documentation.",
+  "_note": "See scripts/banned-origins.allow.txt for the comprehensive allowlist used by the banned-origins guard.",
+
+  "scripts/guard-no-gas.js": ["*"],
+  "scripts/guard-no-gas.test.js": ["*"],
+  "docs/security/NO_GAS_GUARD.md": ["*"],
+
+  "_section_ci_workflows": "CI workflow files - legacy GAS deployment still in use",
+  ".github/workflows/stage1.yml": ["*"],
+  ".github/workflows/stage2.yml": ["*"],
+
+  "_section_archived": "Archived workflows (historical reference only)",
+  ".github/workflow-archive/qa-rollback.yml": ["*"],
+  ".github/workflow-archive/validate-environment.yml": ["*"],
+  ".github/workflows/archive/stage1-ci.yml": ["*"],
+
+  "_section_security_scripts": "Other security guard scripts that reference patterns",
+  "scripts/check-banned-origins.mjs": ["*"],
+  "scripts/banned-origins.allow.txt": ["*"],
+
+  "_section_clasp_config": "Clasp CLI configuration files (GAS deployment tooling)",
+  ".clasp.json": ["*"],
+  ".clasp-staging.json": ["*"],
+  ".clasp-production.json": ["*"],
+
+  "_section_deployment_docs": "Deployment documentation files",
+  "APPS_SCRIPT_PROJECT.md": ["*"],
+  ".github-secrets-required.json": ["*"],
+  "deploy-manifest.json": ["*"],
+  ".devcontainer/README.md": ["*"],
+  ".env.example": ["*"],
+
+  "_section_security_reports": "Security audit reports (historical)",
+  ".security-reports/AUDIT_REPORT_2025-12-10.md": ["*"],
+
+  "_section_worker_infrastructure": "Cloudflare Worker infrastructure - JSDoc examples and NO-GAS comments",
+  "cloudflare-proxy/worker.js": ["*"],
+  "cloudflare-proxy/wrangler.toml": ["*"],
+  "cloudflare-proxy/src/config/backendConfig.js": ["*"],
+  "cloudflare-proxy/templates/admin.html": ["*"],
+  "cloudflare-proxy/templates/display.html": ["*"],
+  "cloudflare-proxy/templates/poster.html": ["*"],
+  "cloudflare-proxy/templates/public.html": ["*"],
+  "cloudflare-proxy/templates/report.html": ["*"],
+
+  "_section_config": "Configuration files with GAS URL construction (for deployment tooling)",
+  "config/deployment-ids.js": ["*"],
+  "config/environments.js": ["*"],
+  "openapi.yaml": ["*"],
+
+  "_section_eslint": "ESLint config with GAS globals (for linting GAS files in src/mvp)",
+  "eslint.config.js": ["*"],
+
+  "_section_package": "Package files with clasp dependency",
+  "package.json": ["clasp"],
+  "package-lock.json": ["clasp"],
+
+  "_section_deployment_scripts": "Deployment scripts that use clasp/GAS tooling",
+  "scripts/deploy-apps-script.js": ["*"],
+  "scripts/deploy-cli.js": ["*"],
+  "scripts/deploy-staging.js": ["*"],
+  "scripts/diagnose-apps-script-access.js": ["*"],
+  "scripts/diagnose-apps-script-api.js": ["*"],
+  "scripts/fix-deployment-permissions.js": ["*"],
+  "scripts/get-deployment-url.js": ["*"],
+  "scripts/setup-clasp-environment.js": ["*"],
+  "scripts/verify-clasp-ownership.js": ["*"],
+  "scripts/compare-environments.js": ["*"],
+  "scripts/health-check.js": ["*"],
+
+  "_section_guard_files": "Guard scripts that reference patterns for detection",
+  "scripts/guard-no-gas.allowlist.json": ["*"],
+  "scripts/check-dead-code.js": ["*"],
+  "scripts/check-surfaces.js": ["*"],
+  "scripts/check-events-gas-marker.js": ["*"],
+
+  "_section_legacy_gas_files": "Legacy GAS files (src/mvp) - still deployed via clasp",
+  "fetch-admin-keys.js": ["*"],
+
+  "_section_test_fixtures": "Test fixtures and schemas with example data",
+  "postman/environments/mvp-event-toolkit-dev.json": ["*"],
+  "postman/environments/mvp-event-toolkit-local.json": ["*"],
+  "schemas/checkpermissions.schema.json": ["*"],
+  "schemas/setupcheck.schema.json": ["*"],
+
+  "_section_remaining_scripts": "Additional deployment/test scripts",
+  "scripts/setup-staging.js": ["*"],
+  "scripts/test-event-schema.js": ["*"],
+  "scripts/test-url-routing.js": ["*"],
+  "scripts/update-manifest.js": ["*"],
+  "scripts/validate-ci-secrets.js": ["*"],
+  "scripts/verify-secrets.js": ["*"],
+  "scripts/warmup-deployment.js": ["*"],
+  "test-deployment.js": ["*"],
+
+  "_section_frontend_apiclient": "Frontend apiClient with JSDoc comments explaining NO-GAS",
+  "src/frontend/apiClient/admin.ts": ["script.google.com"],
+  "src/frontend/apiClient/display.ts": ["script.google.com"],
+  "src/frontend/apiClient/env.ts": ["script.google.com"],
+  "src/frontend/apiClient/poster.ts": ["script.google.com"],
+  "src/frontend/apiClient/public.ts": ["script.google.com"],
+
+  "_section_mvp_templates": "MVP HTML templates with JSDoc examples",
+  "src/mvp/NUSDK.html": ["*"],
+
+  "_section_worker": "Worker files with JSDoc comments explaining NO-GAS",
+  "worker/src/router.ts": ["doGet"],
+  "worker/wrangler.toml": ["*"]
+}

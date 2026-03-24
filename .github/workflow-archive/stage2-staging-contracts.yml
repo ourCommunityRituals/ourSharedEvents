@@ -1,0 +1,76 @@
+# DEPRECATED WORKFLOW (ARCHIVED)
+# This workflow is kept for historical reference only.
+# Do NOT re-enable without updating it to the current CI/CD architecture.
+
+name: OLD – Stage 2 - Staging Contract & Matrix Tests
+
+# ============================================================================
+# ⚠️  STAGING ONLY - NEVER HITS PROD ⚠️
+# ============================================================================
+# This is the "beat the crap out of staging" pipeline.
+# All tests run exclusively against STAGING_URL (https://stg.eventangle.com).
+# This workflow is intentionally isolated from production to enable aggressive
+# testing without risk.
+#
+# What this workflow does:
+#   - Deploys to Apps Script + Cloudflare staging
+#   - Runs post-deploy contract tests (events-list, event-details, etc.)
+#   - Runs matrix tests via TestRunner (bundle endpoints, brand configs, sponsors)
+#   - Runs golden test (Triangle Happy Path)
+#
+# Safe to run frequently - staging only.
+# ============================================================================
+
+on:
+  # Manual trigger - primary use case for controlled testing
+  workflow_dispatch:
+    inputs:
+      skip_deploy:
+        description: 'Skip deployment (test existing staging deployment)'
+        required: false
+        type: boolean
+        default: false
+      verbose:
+        description: 'Enable verbose output'
+        required: false
+        type: boolean
+        default: false
+
+  # Auto-trigger after Stage 1 succeeds on main (optional - can be disabled)
+  # Comment out this section if you want manual-only triggering
+  workflow_run:
+    workflows: ["Stage 1 - Build & Deploy"]
+    types: [completed]
+    branches:
+      - main
+
+# Only one staging test at a time
+concurrency:
+  group: stage2-staging
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: '18'
+  # Never hits prod; staging only.
+  STAGING_URL: 'https://stg.eventangle.com'
+
+jobs:
+  # NOTE: This is an archived/deprecated workflow.
+  # The full implementation has been removed for brevity.
+  # See the active stage2.yml workflow for the current implementation.
+
+  placeholder:
+    name: 📦 Archived Workflow
+    runs-on: ubuntu-latest
+    steps:
+      - name: Notice
+        run: |
+          echo "=============================================="
+          echo "⚠️  DEPRECATED WORKFLOW"
+          echo "=============================================="
+          echo ""
+          echo "This workflow has been archived."
+          echo "Please use the active stage2.yml workflow instead."
+          echo ""
+          echo "=============================================="
+          exit 1

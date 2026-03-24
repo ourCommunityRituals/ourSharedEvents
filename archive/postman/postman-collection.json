@@ -1,0 +1,307 @@
+{
+  "info": {
+    "name": "MVP Event Toolkit - REST API",
+    "description": "Complete REST API for MVP Event Toolkit - Build custom frontends in React, Vue, mobile apps, etc.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "version": "1.0.0"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "https://script.google.com/macros/s/YOUR_DEPLOYMENT_ID/exec",
+      "type": "string"
+    },
+    {
+      "key": "admin_key",
+      "value": "YOUR_ADMIN_SECRET",
+      "type": "string"
+    },
+    {
+      "key": "brand_id",
+      "value": "root",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Public Endpoints (No Auth)",
+      "item": [
+        {
+          "name": "Status - Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}?action=status",
+              "host": ["{{base_url}}"],
+              "query": [
+                {
+                  "key": "action",
+                  "value": "status",
+                  "description": "Health check endpoint"
+                }
+              ]
+            },
+            "description": "Check if the API is running and database is connected"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Configuration",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}?action=config&brand={{brand_id}}&scope=events",
+              "host": ["{{base_url}}"],
+              "query": [
+                {
+                  "key": "action",
+                  "value": "config"
+                },
+                {
+                  "key": "brand",
+                  "value": "{{brand_id}}"
+                },
+                {
+                  "key": "scope",
+                  "value": "events"
+                }
+              ]
+            },
+            "description": "Get brand configuration and available templates"
+          },
+          "response": []
+        },
+        {
+          "name": "List Events",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}?action=list&brand={{brand_id}}&scope=events",
+              "host": ["{{base_url}}"],
+              "query": [
+                {
+                  "key": "action",
+                  "value": "list"
+                },
+                {
+                  "key": "brand",
+                  "value": "{{brand_id}}"
+                },
+                {
+                  "key": "scope",
+                  "value": "events"
+                },
+                {
+                  "key": "etag",
+                  "value": "",
+                  "description": "Optional: for SWR/caching",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "List all events for a brand. Supports SWR with etag parameter."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Single Event",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}?action=get&brand={{brand_id}}&scope=events&id=EVENT_ID",
+              "host": ["{{base_url}}"],
+              "query": [
+                {
+                  "key": "action",
+                  "value": "get"
+                },
+                {
+                  "key": "brand",
+                  "value": "{{brand_id}}"
+                },
+                {
+                  "key": "scope",
+                  "value": "events"
+                },
+                {
+                  "key": "id",
+                  "value": "EVENT_ID",
+                  "description": "Event ID from list response"
+                }
+              ]
+            },
+            "description": "Get a single event by ID with all links (publicUrl, posterUrl, displayUrl)"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Admin Endpoints (Require Auth)",
+      "item": [
+        {
+          "name": "Create Event",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"action\": \"create\",\n  \"brandId\": \"{{brand_id}}\",\n  \"adminKey\": \"{{admin_key}}\",\n  \"scope\": \"events\",\n  \"templateId\": \"Event\",\n  \"data\": {\n    \"eventName\": \"Summer Concert Series\",\n    \"eventDate\": \"2025-07-15\",\n    \"eventTime\": \"19:00\",\n    \"locationName\": \"Central Park Amphitheater\",\n    \"locationAddr\": \"123 Park Ave\",\n    \"locationCity\": \"New York\",\n    \"locationState\": \"NY\",\n    \"locationZip\": \"10001\",\n    \"contact\": \"events@example.com\",\n    \"description\": \"Join us for an evening of live music!\",\n    \"registrationUrl\": \"https://example.com/register\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}",
+              "host": ["{{base_url}}"]
+            },
+            "description": "Create a new event. Returns event ID and all URLs (public, poster, display)"
+          },
+          "response": []
+        },
+        {
+          "name": "Update Event",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"action\": \"update\",\n  \"brandId\": \"{{brand_id}}\",\n  \"adminKey\": \"{{admin_key}}\",\n  \"scope\": \"events\",\n  \"id\": \"EVENT_ID\",\n  \"data\": {\n    \"eventName\": \"Updated Event Name\",\n    \"eventDate\": \"2025-07-20\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}",
+              "host": ["{{base_url}}"]
+            },
+            "description": "Update an existing event. Only include fields you want to change."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Analytics Report",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"action\": \"getReport\",\n  \"brandId\": \"{{brand_id}}\",\n  \"adminKey\": \"{{admin_key}}\",\n  \"eventId\": \"EVENT_ID\",\n  \"startDate\": \"2025-01-01\",\n  \"endDate\": \"2025-12-31\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}",
+              "host": ["{{base_url}}"]
+            },
+            "description": "Get analytics report for an event. Includes totals, breakdowns by surface, sponsor, and token."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Shortlink",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"action\": \"createShortlink\",\n  \"brandId\": \"{{brand_id}}\",\n  \"adminKey\": \"{{admin_key}}\",\n  \"targetUrl\": \"https://sponsor-website.com\",\n  \"eventId\": \"EVENT_ID\",\n  \"sponsorId\": \"SPONSOR_1\",\n  \"surface\": \"public\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}",
+              "host": ["{{base_url}}"]
+            },
+            "description": "Create a trackable shortlink for sponsor URLs. Returns token and shortlink URL."
+          },
+          "response": []
+        },
+        {
+          "name": "Log Analytics Events",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"action\": \"logEvents\",\n  \"items\": [\n    {\n      \"eventId\": \"EVENT_ID\",\n      \"surface\": \"public\",\n      \"metric\": \"view\",\n      \"sponsorId\": \"\",\n      \"value\": 1,\n      \"token\": \"\"\n    },\n    {\n      \"eventId\": \"EVENT_ID\",\n      \"surface\": \"public\",\n      \"metric\": \"click\",\n      \"sponsorId\": \"SPONSOR_1\",\n      \"value\": 1,\n      \"token\": \"abc123\"\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}",
+              "host": ["{{base_url}}"]
+            },
+            "description": "Batch log analytics events. Metrics: view, click, dwell, impression"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Legacy Endpoints",
+      "item": [
+        {
+          "name": "Shortlink Redirect",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}?page=r&t=TOKEN",
+              "host": ["{{base_url}}"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "r"
+                },
+                {
+                  "key": "t",
+                  "value": "TOKEN",
+                  "description": "Shortlink token from createShortlink"
+                }
+              ]
+            },
+            "description": "Redirect to target URL and log analytics"
+          },
+          "response": []
+        },
+        {
+          "name": "Status (Legacy)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}?page=status",
+              "host": ["{{base_url}}"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "status"
+                }
+              ]
+            },
+            "description": "Legacy status endpoint (use ?action=status instead)"
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}

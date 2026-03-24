@@ -1,0 +1,476 @@
+name: Stage 2 - Sequential Progressive Testing
+
+on:
+  # Auto-trigger when Stage 1 completes successfully
+  workflow_run:
+    workflows: ["Stage 1 - Build & Deploy"]
+    types: [completed]
+    branches: [main]
+
+  # Keep manual trigger as fallback
+  workflow_dispatch:
+    inputs:
+      deployment_url:
+        description: 'Deployment URL to test (leave empty to use Stage 1 output)'
+        required: false
+        type: string
+        default: ''
+
+jobs:
+  # ============================================================================
+  # SETUP: Extract deployment URL from Stage 1
+  # ============================================================================
+
+  setup:
+    name: 🔧 Setup & Extract Deployment URL
+    runs-on: ubuntu-latest
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    outputs:
+      deployment_url: ${{ steps.get-url.outputs.url }}
+      skip_tests: ${{ steps.check.outputs.skip }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check if Stage 1 failed
+        id: check
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_run" ]] && \
+             [[ "${{ github.event.workflow_run.conclusion }}" != "success" ]]; then
+            echo "⚠️ Stage 1 did not succeed. Skipping Stage 2."
+            echo "skip=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          echo "skip=false" >> $GITHUB_OUTPUT
+
+      - name: Get deployment URL
+        id: get-url
+        run: |
+          # If manually triggered with URL, use that
+          if [[ -n "${{ inputs.deployment_url }}" ]]; then
+            echo "🎯 Using manual deployment URL"
+            echo "url=${{ inputs.deployment_url }}" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # Otherwise, extract from Stage 1 workflow run
+          echo "🔍 Extracting deployment URL from Stage 1..."
+
+          # Download Stage 1 artifacts to get deployment info
+          gh run download ${{ github.event.workflow_run.id }} \
+            --name deployment-info || true
+
+          # If artifact exists, read URL from it
+          if [[ -f deployment-url.txt ]]; then
+            DEPLOYMENT_URL=$(cat deployment-url.txt)
+            echo "✅ Found deployment URL: $DEPLOYMENT_URL"
+            echo "url=$DEPLOYMENT_URL" >> $GITHUB_OUTPUT
+          else
+            echo "⚠️ No deployment URL found from Stage 1"
+            echo "Using default Apps Script URL"
+            echo "url=https://script.google.com/macros/s/AKfycbz-RVTCdsQsI913wN3TkPtUP8F8EhSjyFAlWIpLVRgzV6WJ-isDyG-ntaV1VjBNaWZLdw/exec" >> $GITHUB_OUTPUT
+          fi
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Display URL
+        run: |
+          echo "📋 Deployment URL for testing:"
+          echo "${{ steps.get-url.outputs.url }}"
+
+  # ============================================================================
+  # STAGE 2A: API TESTS (Always Run First)
+  # ============================================================================
+
+  api-tests:
+    name: 🔥 API Tests (Critical)
+    runs-on: ubuntu-latest
+    needs: setup
+    if: needs.setup.outputs.skip_tests != 'true'
+    outputs:
+      result: ${{ steps.test.outputs.result }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Run API tests
+        id: test
+        continue-on-error: true
+        env:
+          GOOGLE_SCRIPT_URL: ${{ needs.setup.outputs.deployment_url }}
+          ADMIN_KEY: ${{ secrets.ADMIN_KEY_ROOT }}
+        run: |
+          echo "🔥 Running API tests against Apps Script"
+          echo "URL: $GOOGLE_SCRIPT_URL"
+          
+          npm run test:api
+          TEST_EXIT=$?
+          
+          if [ $TEST_EXIT -eq 0 ]; then
+            echo "result=success" >> $GITHUB_OUTPUT
+            exit 0
+          else
+            echo "result=failure" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+
+      - name: Upload API test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-api-report
+          path: playwright-report/
+          retention-days: 7
+
+  # ============================================================================
+  # GATE 1: Check API Test Results
+  # ============================================================================
+
+  gate-1-api-results:
+    name: 🚦 Gate 1 - Check API Results
+    runs-on: ubuntu-latest
+    needs: [setup, api-tests]
+    if: always() && needs.setup.outputs.skip_tests != 'true'
+    outputs:
+      should_run_smoke: ${{ steps.gate.outputs.should_run }}
+      api_passed: ${{ steps.gate.outputs.api_passed }}
+    steps:
+      - name: Evaluate API test results
+        id: gate
+        run: |
+          echo "🚦 Gate 1: Evaluating API Test Results"
+          echo "========================================="
+          
+          API_RESULT="${{ needs.api-tests.result }}"
+          
+          echo "API Tests Result: $API_RESULT"
+          echo ""
+          
+          if [[ "$API_RESULT" == "success" ]]; then
+            echo "✅ API tests PASSED"
+            echo "✅ Proceeding to Smoke Tests"
+            echo "should_run=true" >> $GITHUB_OUTPUT
+            echo "api_passed=true" >> $GITHUB_OUTPUT
+          else
+            echo "❌ API tests FAILED"
+            echo "🛑 BLOCKING: Skipping Smoke Tests and Expensive Tests"
+            echo "   Fix API issues before running further tests"
+            echo "should_run=false" >> $GITHUB_OUTPUT
+            echo "api_passed=false" >> $GITHUB_OUTPUT
+          fi
+
+  # ============================================================================
+  # STAGE 2B: SMOKE TESTS (Only if API tests passed)
+  # ============================================================================
+
+  smoke-tests:
+    name: 🔥 Smoke Tests (Critical)
+    runs-on: ubuntu-latest
+    needs: [setup, gate-1-api-results]
+    if: needs.gate-1-api-results.outputs.should_run_smoke == 'true'
+    outputs:
+      result: ${{ steps.test.outputs.result }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Run Smoke tests
+        id: test
+        continue-on-error: true
+        env:
+          GOOGLE_SCRIPT_URL: ${{ needs.setup.outputs.deployment_url }}
+          ADMIN_KEY: ${{ secrets.ADMIN_KEY_ROOT }}
+        run: |
+          echo "🔥 Running Smoke tests against Apps Script"
+          echo "URL: $GOOGLE_SCRIPT_URL"
+          
+          npm run test:smoke
+          TEST_EXIT=$?
+          
+          if [ $TEST_EXIT -eq 0 ]; then
+            echo "result=success" >> $GITHUB_OUTPUT
+            exit 0
+          else
+            echo "result=failure" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+
+      - name: Upload Smoke test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-smoke-report
+          path: playwright-report/
+          retention-days: 7
+
+  # ============================================================================
+  # GATE 2: Check Smoke Test Results
+  # ============================================================================
+
+  gate-2-smoke-results:
+    name: 🚦 Gate 2 - Check Smoke Results
+    runs-on: ubuntu-latest
+    needs: [setup, gate-1-api-results, smoke-tests]
+    if: always() && needs.setup.outputs.skip_tests != 'true' && needs.gate-1-api-results.outputs.should_run_smoke == 'true'
+    outputs:
+      should_run_expensive: ${{ steps.gate.outputs.should_run }}
+      smoke_passed: ${{ steps.gate.outputs.smoke_passed }}
+    steps:
+      - name: Evaluate Smoke test results
+        id: gate
+        run: |
+          echo "🚦 Gate 2: Evaluating Smoke Test Results"
+          echo "=========================================="
+          
+          SMOKE_RESULT="${{ needs.smoke-tests.result }}"
+          
+          echo "Smoke Tests Result: $SMOKE_RESULT"
+          echo ""
+          
+          if [[ "$SMOKE_RESULT" == "success" ]]; then
+            echo "✅ Smoke tests PASSED"
+            echo "✅ Proceeding to Expensive Tests (Flow + Page)"
+            echo "should_run=true" >> $GITHUB_OUTPUT
+            echo "smoke_passed=true" >> $GITHUB_OUTPUT
+          else
+            echo "❌ Smoke tests FAILED"
+            echo "🛑 BLOCKING: Skipping Expensive Tests"
+            echo "   Fix Smoke test issues before running expensive tests"
+            echo "should_run=false" >> $GITHUB_OUTPUT
+            echo "smoke_passed=false" >> $GITHUB_OUTPUT
+          fi
+
+  # ============================================================================
+  # STAGE 2C: EXPENSIVE TESTS (Only if Smoke tests passed)
+  # ============================================================================
+
+  expensive-tests:
+    name: 💰 Expensive - ${{ matrix.suite }}
+    runs-on: ubuntu-latest
+    needs: [setup, gate-2-smoke-results]
+    if: needs.gate-2-smoke-results.outputs.should_run_expensive == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        suite:
+          - flows
+          - pages
+    outputs:
+      flows_result: ${{ steps.set-result.outputs.flows_result }}
+      pages_result: ${{ steps.set-result.outputs.pages_result }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Run ${{ matrix.suite }} tests
+        id: test
+        continue-on-error: true
+        env:
+          GOOGLE_SCRIPT_URL: ${{ needs.setup.outputs.deployment_url }}
+          ADMIN_KEY: ${{ secrets.ADMIN_KEY_ROOT }}
+        run: |
+          echo "💰 Running ${{ matrix.suite }} tests against Apps Script"
+          echo "URL: $GOOGLE_SCRIPT_URL"
+          
+          if [ "${{ matrix.suite }}" == "flows" ]; then
+            npm run test:flows
+          else
+            npm run test:pages
+          fi
+
+      - name: Set result output
+        id: set-result
+        if: always()
+        run: |
+          if [ "${{ matrix.suite }}" == "flows" ]; then
+            if [ "${{ steps.test.outcome }}" == "success" ]; then
+              echo "flows_result=success" >> $GITHUB_OUTPUT
+            else
+              echo "flows_result=failure" >> $GITHUB_OUTPUT
+            fi
+          else
+            if [ "${{ steps.test.outcome }}" == "success" ]; then
+              echo "pages_result=success" >> $GITHUB_OUTPUT
+            else
+              echo "pages_result=failure" >> $GITHUB_OUTPUT
+            fi
+          fi
+
+      - name: Upload ${{ matrix.suite }} test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-${{ matrix.suite }}-report
+          path: playwright-report/
+          retention-days: 7
+
+  # ============================================================================
+  # FINAL QUALITY GATE & REPORTING
+  # ============================================================================
+
+  quality-gate:
+    name: 🎯 Quality Gate - Final Validation
+    runs-on: ubuntu-latest
+    needs: [setup, api-tests, gate-1-api-results, smoke-tests, gate-2-smoke-results, expensive-tests]
+    if: always() && needs.setup.outputs.skip_tests != 'true'
+    outputs:
+      qa_approved: ${{ steps.gate.outputs.approved }}
+    steps:
+      - name: Check all tests passed
+        id: gate
+        run: |
+          echo "📊 Stage 2 Quality Gate Summary (Sequential Progressive)"
+          echo "=========================================================="
+          echo ""
+          echo "Deployment URL: ${{ needs.setup.outputs.deployment_url }}"
+          echo ""
+          echo "Test Results (Sequential):"
+          echo "  🔥 API Tests (Critical):     ${{ needs.api-tests.result }}"
+          echo "  🚦 Gate 1 Decision:          ${{ needs.gate-1-api-results.outputs.should_run_smoke }}"
+          
+          if [[ "${{ needs.gate-1-api-results.outputs.should_run_smoke }}" == "true" ]]; then
+            echo "  🔥 Smoke Tests (Critical):   ${{ needs.smoke-tests.result }}"
+            echo "  🚦 Gate 2 Decision:          ${{ needs.gate-2-smoke-results.outputs.should_run_expensive }}"
+          else
+            echo "  🔥 Smoke Tests:              ⏭️ SKIPPED (API failed)"
+            echo "  🚦 Gate 2 Decision:          N/A"
+          fi
+          
+          if [[ "${{ needs.gate-2-smoke-results.outputs.should_run_expensive }}" == "true" ]]; then
+            echo "  💰 Flow Tests (Expensive):   ${{ needs.expensive-tests.result }}"
+            echo "  💰 Page Tests (Expensive):   ${{ needs.expensive-tests.result }}"
+          else
+            echo "  💰 Expensive Tests:          ⏭️ SKIPPED (Smoke failed or not run)"
+          fi
+          echo ""
+          echo "=========================================================="
+          
+          # Determine overall quality gate
+          API_PASSED="${{ needs.gate-1-api-results.outputs.api_passed }}"
+          SMOKE_PASSED="${{ needs.gate-2-smoke-results.outputs.smoke_passed }}"
+          EXPENSIVE_RESULT="${{ needs.expensive-tests.result }}"
+          
+          # Quality gate passes if:
+          # 1. API tests passed AND
+          # 2. Smoke tests passed (or were skipped due to API failure) AND
+          # 3. Expensive tests passed (or were skipped due to Smoke failure)
+          
+          if [[ "$API_PASSED" != "true" ]]; then
+            echo "❌ QUALITY GATE FAILED: API tests failed"
+            echo "approved=false" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+          
+          if [[ "$SMOKE_PASSED" != "true" ]]; then
+            echo "❌ QUALITY GATE FAILED: Smoke tests failed"
+            echo "approved=false" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+          
+          # Check expensive tests only if they ran
+          if [[ "${{ needs.gate-2-smoke-results.outputs.should_run_expensive }}" == "true" ]]; then
+            if [[ "$EXPENSIVE_RESULT" != "success" ]]; then
+              echo "❌ QUALITY GATE FAILED: Expensive tests failed"
+              echo "approved=false" >> $GITHUB_OUTPUT
+              exit 1
+            fi
+          fi
+          
+          echo ""
+          echo "✅ QUALITY GATE PASSED!"
+          echo "All tests in the progressive sequence passed."
+          echo "approved=true" >> $GITHUB_OUTPUT
+
+      - name: Create quality gate summary
+        if: always()
+        run: |
+          echo "## 🎯 Stage 2 Quality Gate Results (Sequential Progressive)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📋 Sequential Test Strategy" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Strategy:** Progressive failure gates to minimize wasted test time" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "1. ✅ **API Tests** (always run first)" >> $GITHUB_STEP_SUMMARY
+          echo "2. 🚦 **Gate 1**: Only proceed if API tests pass" >> $GITHUB_STEP_SUMMARY
+          echo "3. ✅ **Smoke Tests** (run if API passed)" >> $GITHUB_STEP_SUMMARY
+          echo "4. 🚦 **Gate 2**: Only proceed if Smoke tests pass" >> $GITHUB_STEP_SUMMARY
+          echo "5. ✅ **Expensive Tests** (Flow + Page, run if Smoke passed)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📊 Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Stage | Test Suite | Result | Gate Decision |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|------------|--------|---------------|" >> $GITHUB_STEP_SUMMARY
+          echo "| 1️⃣ | 🔥 API Tests | ${{ needs.api-tests.result == 'success' && '✅ PASS' || '❌ FAIL' }} | - |" >> $GITHUB_STEP_SUMMARY
+          echo "| 🚦 | Gate 1 | - | ${{ needs.gate-1-api-results.outputs.should_run_smoke == 'true' && '✅ Proceed to Smoke' || '🛑 Block Smoke' }} |" >> $GITHUB_STEP_SUMMARY
+          
+          if [[ "${{ needs.gate-1-api-results.outputs.should_run_smoke }}" == "true" ]]; then
+            echo "| 2️⃣ | 🔥 Smoke Tests | ${{ needs.smoke-tests.result == 'success' && '✅ PASS' || '❌ FAIL' }} | - |" >> $GITHUB_STEP_SUMMARY
+            echo "| 🚦 | Gate 2 | - | ${{ needs.gate-2-smoke-results.outputs.should_run_expensive == 'true' && '✅ Proceed to Expensive' || '🛑 Block Expensive' }} |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| 2️⃣ | 🔥 Smoke Tests | ⏭️ SKIPPED | API failed |" >> $GITHUB_STEP_SUMMARY
+            echo "| 🚦 | Gate 2 | - | N/A |" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          if [[ "${{ needs.gate-2-smoke-results.outputs.should_run_expensive }}" == "true" ]]; then
+            echo "| 3️⃣ | 💰 Flow Tests | ${{ needs.expensive-tests.result == 'success' && '✅ PASS' || '❌ FAIL' }} | - |" >> $GITHUB_STEP_SUMMARY
+            echo "| 3️⃣ | 💰 Page Tests | ${{ needs.expensive-tests.result == 'success' && '✅ PASS' || '❌ FAIL' }} | - |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| 3️⃣ | 💰 Expensive Tests | ⏭️ SKIPPED | Smoke failed or not run |" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 🎯 Final Result" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [[ "${{ steps.gate.outputs.approved }}" == "true" ]]; then
+            echo "**✅ QUALITY GATE PASSED**" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "All sequential tests passed! Deployment validated." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "**❌ QUALITY GATE FAILED**" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "One or more tests in the sequence failed. Review test reports." >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Deployment URL:** \`${{ needs.setup.outputs.deployment_url }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Benefits of Sequential Progressive Testing:**" >> $GITHUB_STEP_SUMMARY
+          echo "- ⚡ Fail fast - stop at first failure" >> $GITHUB_STEP_SUMMARY
+          echo "- 💰 Save test time - skip expensive tests if critical tests fail" >> $GITHUB_STEP_SUMMARY
+          echo "- 🎯 Clear feedback - know exactly which stage failed" >> $GITHUB_STEP_SUMMARY
+          echo "- 🤖 Fully automated - no manual intervention" >> $GITHUB_STEP_SUMMARY

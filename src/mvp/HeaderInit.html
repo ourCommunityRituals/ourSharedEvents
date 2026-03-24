@@ -1,0 +1,31 @@
+<script>
+// Initialize header with template-injected values
+// This script must be included in the main template, not via include()
+// so that the template tags below are properly evaluated
+(function() {
+  const appTitle = '<?= appTitle ?>';
+  const buildId = '<?= ZEB.BUILD_ID ?>';
+  const brandId = '<?= brand?.id || "root" ?>';
+  const logoUrl = '<?= brand?.logoUrl || "" ?>';
+
+  // Populate header elements
+  const titleEl = document.getElementById('headerTitle');
+  const buildEl = document.getElementById('headerBuild');
+  const logoEl = document.getElementById('headerLogo');
+
+  if (titleEl) titleEl.textContent = appTitle;
+  // Display both build ID and brand ID for canonical status reference
+  if (buildEl) buildEl.textContent = 'Build: ' + buildId + ' · Brand: ' + brandId;
+  if (logoEl) {
+    if (logoUrl && logoUrl.startsWith('http')) {
+      // Only set logo if we have a valid HTTP/HTTPS URL
+      logoEl.src = logoUrl;
+      logoEl.alt = appTitle;
+      logoEl.style.display = '';
+    } else {
+      // Hide logo if no valid URL is provided
+      logoEl.style.display = 'none';
+    }
+  }
+})();
+</script>

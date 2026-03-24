@@ -1,0 +1,322 @@
+# API Version Compatibility Check (Story 3.2)
+#
+# Purpose: Compare staging and production API responses to detect contract drift.
+# Ensures staging truly replicates production behavior and Cloudflare worker
+# is transparent (not modifying responses).
+#
+# Story 3.2 (Developer): API version check or compatibility test
+#   - Compares staging and production API responses for critical endpoints
+#   - Flags structural differences (fields present in one but not the other)
+#   - Runs nightly and can be triggered manually
+#   - Reports discrepancies to the team via GitHub issue creation
+#
+# Acceptance Criteria:
+#   - Script compares staging (api-stg.eventangle.com) and production (api.eventangle.com)
+#   - Flags any discrepancy (fields present in one and not the other)
+#   - CI pipeline runs this comparison on a schedule (nightly)
+#   - CI pipeline can run this comparison on-demand (manual trigger)
+#   - Summary report generated when mismatches occur
+#
+# Endpoints Compared:
+#   - /exec?p=status (flat format - system health)
+#   - /exec?p=statusmvp (flat format - MVP analytics health)
+#   - /exec?p=getEventTemplates (envelope format - templates list)
+#
+# @see tests/contract/api-version-compatibility.contract.test.js
+# @see scripts/compare-api-versions.mjs
+# @see API_CONTRACT.md
+
+name: API Version Check
+
+on:
+  # Scheduled: Run nightly at 2 AM UTC
+  schedule:
+    - cron: '0 2 * * *'
+
+  # Manual trigger with optional parameters
+  workflow_dispatch:
+    inputs:
+      create_issue:
+        description: 'Create GitHub issue on mismatch'
+        required: false
+        default: 'true'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+      endpoints:
+        description: 'Comma-separated endpoint names (leave empty for all)'
+        required: false
+        default: ''
+        type: string
+      notify_slack:
+        description: 'Send Slack notification on mismatch'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+
+  # Also run after production deployments (when stage2 completes for prod)
+  workflow_run:
+    workflows: ["Stage-2 Environment Validation"]
+    types:
+      - completed
+    branches:
+      - main
+
+# Prevent concurrent runs
+concurrency:
+  group: api-version-check-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '20'
+
+jobs:
+  # ============================================================================
+  # API VERSION COMPARISON
+  # ============================================================================
+  compare:
+    name: Compare Staging vs Production APIs
+    runs-on: ubuntu-latest
+
+    # Only run workflow_run trigger if it was successful
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
+
+    outputs:
+      status: ${{ steps.compare.outputs.status }}
+      mismatches: ${{ steps.compare.outputs.mismatches }}
+      report_path: ${{ steps.compare.outputs.report_path }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run API version comparison
+        id: compare
+        run: |
+          # Determine endpoints to compare
+          ENDPOINTS_ARG=""
+          if [ -n "${{ inputs.endpoints }}" ]; then
+            ENDPOINTS_ARG="--endpoints ${{ inputs.endpoints }}"
+          fi
+
+          # Run comparison and capture output
+          set +e  # Don't exit on error
+          node scripts/compare-api-versions.mjs \
+            --json \
+            --output api-version-report.json \
+            $ENDPOINTS_ARG
+          EXIT_CODE=$?
+          set -e
+
+          # Parse report for outputs
+          if [ -f api-version-report.json ]; then
+            STATUS=$(jq -r '.status' api-version-report.json)
+            MISMATCHES=$(jq -r '.summary.contractMismatches' api-version-report.json)
+            echo "status=$STATUS" >> $GITHUB_OUTPUT
+            echo "mismatches=$MISMATCHES" >> $GITHUB_OUTPUT
+            echo "report_path=api-version-report.json" >> $GITHUB_OUTPUT
+          else
+            echo "status=error" >> $GITHUB_OUTPUT
+            echo "mismatches=0" >> $GITHUB_OUTPUT
+            echo "report_path=" >> $GITHUB_OUTPUT
+          fi
+
+          # Also generate Markdown report for human readability
+          node scripts/compare-api-versions.mjs \
+            --markdown \
+            --output api-version-report.md \
+            --quiet \
+            $ENDPOINTS_ARG || true
+
+          # Generate console report for logs
+          echo "## API Version Comparison Report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ -f api-version-report.md ]; then
+            cat api-version-report.md >> $GITHUB_STEP_SUMMARY
+          else
+            echo "Report generation failed. Exit code: $EXIT_CODE" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          # Exit with original code to reflect actual status
+          exit $EXIT_CODE
+        continue-on-error: true
+
+      - name: Upload JSON report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: api-version-report-json
+          path: api-version-report.json
+          retention-days: 30
+
+      - name: Upload Markdown report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: api-version-report-md
+          path: api-version-report.md
+          retention-days: 30
+
+  # ============================================================================
+  # CREATE ISSUE ON MISMATCH
+  # ============================================================================
+  create-issue:
+    name: Create Issue on Mismatch
+    runs-on: ubuntu-latest
+    needs: compare
+
+    # Only create issue if mismatches detected and not disabled
+    if: |
+      needs.compare.outputs.mismatches != '0' &&
+      (github.event.inputs.create_issue != 'false' || github.event_name == 'schedule')
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download report
+        uses: actions/download-artifact@v4
+        with:
+          name: api-version-report-md
+
+      - name: Create GitHub Issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+
+            // Read the Markdown report
+            let reportContent = 'Report not available';
+            try {
+              reportContent = fs.readFileSync('api-version-report.md', 'utf8');
+            } catch (e) {
+              console.log('Could not read report:', e.message);
+            }
+
+            // Create issue title with timestamp
+            const date = new Date().toISOString().split('T')[0];
+            const title = `API Contract Mismatch Detected - ${date}`;
+
+            // Check for existing open issue
+            const existingIssues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'api-contract-mismatch',
+              per_page: 1
+            });
+
+            const body = `## API Contract Mismatch Alert
+
+            **Story 3.2**: Automated API version compatibility check detected differences between staging and production APIs.
+
+            ### Report Summary
+            - **Status**: ${{ needs.compare.outputs.status }}
+            - **Mismatches**: ${{ needs.compare.outputs.mismatches }}
+            - **Workflow Run**: [#${context.runNumber}](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})
+
+            ### Full Report
+
+            ${reportContent}
+
+            ### Next Steps
+
+            1. Review the differences listed above
+            2. Determine if this is expected (new feature in staging) or unexpected (contract drift)
+            3. If unexpected:
+               - Fix the staging or production API to match
+               - Verify Cloudflare worker is not modifying responses
+            4. Close this issue when resolved
+
+            ---
+            *This issue was automatically created by the API Version Check workflow.*
+            `;
+
+            if (existingIssues.data.length > 0) {
+              // Update existing issue
+              const issue = existingIssues.data[0];
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                body: `## New Mismatch Detected - ${date}\n\n${body}`
+              });
+              console.log(`Updated existing issue #${issue.number}`);
+            } else {
+              // Create new issue
+              const result = await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: title,
+                body: body,
+                labels: ['api-contract-mismatch', 'automated', 'story-3.2']
+              });
+              console.log(`Created issue #${result.data.number}`);
+            }
+
+  # ============================================================================
+  # NOTIFY ON SUCCESS (Optional)
+  # ============================================================================
+  notify-success:
+    name: Notify on Success
+    runs-on: ubuntu-latest
+    needs: compare
+
+    # Only notify on successful scheduled runs
+    if: |
+      needs.compare.outputs.status == 'pass' &&
+      github.event_name == 'schedule'
+
+    steps:
+      - name: Log success
+        run: |
+          echo "API Version Check passed successfully"
+          echo "All contracts are identical between staging and production"
+
+  # ============================================================================
+  # RUN UNIT TESTS
+  # ============================================================================
+  unit-tests:
+    name: API Version Comparison Unit Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run unit tests
+        run: |
+          npm run test:story3.2
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results
+          path: |
+            coverage/
+            junit.xml
+          retention-days: 7

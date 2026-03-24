@@ -1,0 +1,2632 @@
+<!--
+================================================================================
+MVP SURFACE - Focus Group Critical
+================================================================================
+Page: SharedReport.html
+Purpose: Shareable analytics dashboard for stakeholders and sponsors
+Status: UPDATED for Story F6 - SharedAnalytics Bundle Contract
+
+SCHEMA CONTRACT: /schemas/shared-analytics.schema.json (v1.1 frozen)
+
+STORY F6 ADDITIONS:
+  - 3-Pane UI: Event | Sponsor | Customer tabs
+  - New API: GET /api/v2/sharedreport?eventId=...
+  - Integrity banner when data is incomplete
+  - Each tab renders even if others incomplete
+
+═══════════════════════════════════════════════════════════════════════════════
+READS FROM SHAREDANALYTICS SCHEMA (via api_getSharedAnalytics):
+═══════════════════════════════════════════════════════════════════════════════
+  Root (MVP Required):
+    - lastUpdatedISO           → Last updated timestamp display
+    - summary                  → Key metrics cards
+    - surfaces[]               → Surface performance table
+
+  Root (MVP Optional):
+    - sponsors[]               → Sponsor performance table
+    - events[]                 → Event performance table (if present)
+    - topSponsors[]            → Top Sponsors highlight card
+
+  Summary Fields (MVP Required):
+    - summary.totalImpressions → "Total Impressions" metric card
+    - summary.totalClicks      → "Total Clicks" metric card
+    - summary.totalQrScans     → "QR Scans" metric card
+    - summary.totalSignups     → "Signups" metric card
+    - summary.uniqueEvents     → "Active Events" metric card
+    - summary.uniqueSponsors   → "Active Sponsors" metric card
+
+  SurfaceMetrics[] (MVP Required):
+    - surface.id               → Surface identifier
+    - surface.label            → Display name
+    - surface.impressions      → Table column
+    - surface.clicks           → Table column
+    - surface.qrScans          → Table column
+    - surface.engagementRate   → Badge (derived if missing)
+
+  SponsorMetrics[] (MVP Optional):
+    - sponsor.id               → Row key
+    - sponsor.name             → Display name
+    - sponsor.impressions      → Table column
+    - sponsor.clicks           → Table column
+    - sponsor.ctr              → CTR badge
+
+  EventMetrics[] (MVP Optional):
+    - event.id                 → Row key
+    - event.name               → Display name + rank badge
+    - event.impressions        → Table column + Top callout
+    - event.clicks             → Table column
+    - event.signupsCount       → Signups column (from Form/Sheet)
+    - event.ctr                → CTR badge + Top callout
+
+═══════════════════════════════════════════════════════════════════════════════
+SECTION GATES (schema-backed visibility):
+═══════════════════════════════════════════════════════════════════════════════
+  Sponsor Funnel:     Always shown (summary is required) → renderSponsorFunnelCard()
+                      Shows empty state if no data (Story 11)
+  Metrics Grid:       Always shown (summary is required)
+  Surface Table:      Always shown (surfaces[] is required)
+  Sponsor Table:      if (sponsors?.length) → renderSponsorPerformance()
+  Event Table:        if (events?.length) → renderEventPerformance()
+  Top Callouts:       if (events?.length || sponsors?.length) → renderTopCallouts()
+  Top Sponsors Card:  if (topSponsors?.length) → renderTopSponsorsCard()
+
+  NO freelancing: JS only accesses fields defined in shared-analytics.schema.json
+
+API ENDPOINTS (3 MVP canonical - Story 6):
+  - api_getSharedAnalytics({ brandId }) → SharedAnalytics
+  - api_getSponsorAnalytics({ brandId, sponsorId, eventId? }) → SharedAnalytics (scoped)
+  - api_getSponsorReportQr({ sponsorId, brandId? }) → { url, qrB64, verified }
+
+V2-ONLY ENDPOINTS (not called - features removed from MVP surface):
+  - api_getPortfolioAnalyticsV2 - Multi-event portfolio mode
+  - api_exportSharedReport - Export feature
+
+DO NOT modify contracts without updating:
+  - /schemas/shared-analytics.schema.json (source of truth)
+  - NUSDK.html (API client)
+================================================================================
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <title><?= appTitle ?> · Shared Analytics</title>
+  <?!= include('Header'); ?>
+  <?!= include('HeaderInit'); ?>
+  <?!= include('NUSDK'); ?>
+  <?!= include('DesignTokens'); ?>
+  <?!= include('Styles'); ?>
+  <?!= include('SharedUtils'); ?>
+  <?!= include('GlobalErrorHandler'); ?>
+  <?!= include('FooterComponent'); ?>
+  <?!= include('SpinnerComponent'); ?>
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+  <meta name="referrer" content="no-referrer"/>
+  <style>
+    /* SharedReport-specific styles (extends Styles.html) */
+
+    /* Report Header - uses page-header-card pattern with gradient */
+    .report-header {
+      background: linear-gradient(135deg, var(--color-primary, #2563eb) 0%, var(--color-primary-dark, #1d4ed8) 100%);
+      color: white;
+      padding: 2rem;
+      border-radius: var(--radius-md, 12px);
+      margin-bottom: 1.5rem;
+      box-shadow: var(--shadow-md, 0 4px 6px rgba(0, 0, 0, 0.1));
+    }
+
+    .report-header h1 {
+      font-size: 1.75rem;
+      margin-bottom: 0.5rem;
+      font-weight: 700;
+    }
+
+    .report-header .subtitle {
+      opacity: 0.9;
+      font-size: var(--font-size-sm, 0.875rem); /* D-AUDIT: Using design token */
+    }
+
+    .report-header .report-context {
+      opacity: 0.85;
+      font-size: var(--font-size-xs, 0.75rem);
+      margin-top: 0.5rem;
+      max-width: 500px;
+    }
+
+    /* Override metrics-grid for 6-column layout (3x2) on desktop */
+    @media (min-width: 1024px) {
+      .metrics-grid {
+        grid-template-columns: repeat(3, 1fr);
+      }
+    }
+
+    /* Section card extends .card from Styles.html */
+    .section-card {
+      background: white;
+      border-radius: var(--radius-md, 12px);
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+      box-shadow: var(--shadow-base, 0 1px 3px rgba(0,0,0,0.1));
+      border: 1px solid var(--color-gray-200, #e2e8f0);
+      border-left: 4px solid var(--color-primary, #2563eb);
+    }
+
+    .section-card h2 {
+      font-size: 1.25rem;
+      margin-bottom: 0.5rem;
+      color: var(--color-gray-800, #1e293b);
+      font-weight: 600;
+    }
+
+    .section-card .section-help {
+      font-size: var(--font-size-sm, 0.875rem);
+      color: var(--color-gray-500, #64748b);
+      margin-bottom: 1rem;
+      line-height: 1.5;
+    }
+
+    /* Data Table - extends base table styles */
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: var(--font-size-sm, 0.875rem); /* D-AUDIT: Using design token */
+    }
+
+    .data-table thead {
+      background: var(--color-gray-100, #f1f5f9);
+    }
+
+    .data-table th {
+      padding: 0.75rem 1rem;
+      text-align: left;
+      font-weight: 600;
+      color: var(--color-gray-600, #475569);
+      font-size: var(--font-size-xs, 0.75rem); /* D-AUDIT: Using design token */
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      border-bottom: 2px solid var(--color-gray-200, #e2e8f0);
+    }
+
+    .data-table td {
+      padding: 1rem;
+      border-bottom: 1px solid var(--color-gray-100, #f1f5f9);
+    }
+
+    .data-table tbody tr:hover {
+      background: var(--color-gray-50, #f8fafc);
+    }
+
+    /* Surface/Placement description in table */
+    .surface-desc {
+      display: block;
+      font-size: var(--font-size-xs, 0.75rem);
+      color: var(--color-gray-500, #64748b);
+      font-weight: normal;
+      margin-top: 2px;
+    }
+
+    /* Sponsor table enhancements for tablet/laptop readability */
+    .data-table.sponsor-table td {
+      padding: 1rem 1.25rem;
+    }
+
+    .data-table.sponsor-table th {
+      padding: 0.875rem 1.25rem;
+    }
+
+    /* Tablet-specific table improvements */
+    @media (min-width: 641px) and (max-width: 1024px) {
+      .data-table th,
+      .data-table td {
+        padding: 0.875rem;
+        font-size: 0.9rem;
+      }
+
+      .data-table.sponsor-table td,
+      .data-table.sponsor-table th {
+        padding: 1rem;
+      }
+    }
+
+    /* Tooltip styles for column headers */
+    .th-with-tooltip {
+      position: relative;
+      cursor: help;
+    }
+
+    .th-with-tooltip::after {
+      content: attr(data-tooltip);
+      position: absolute;
+      bottom: 100%;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--color-gray-800, #1e293b);
+      color: white;
+      padding: 6px 10px;
+      border-radius: 6px;
+      font-size: 0.7rem;
+      font-weight: normal;
+      text-transform: none;
+      letter-spacing: normal;
+      white-space: nowrap;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.2s, visibility 0.2s;
+      z-index: 10;
+      pointer-events: none;
+    }
+
+    .th-with-tooltip:hover::after {
+      opacity: 1;
+      visibility: visible;
+    }
+
+    /* Hide tooltips on mobile (touch devices) */
+    @media (max-width: 640px) {
+      .th-with-tooltip::after {
+        display: none;
+      }
+    }
+
+    /* Mobile: Stack table */
+    @media (max-width: 640px) {
+      .data-table thead { display: none; }
+      .data-table, .data-table tbody, .data-table tr, .data-table td {
+        display: block;
+        width: 100%;
+      }
+      .data-table tr {
+        margin-bottom: 1rem;
+        background: white;
+        border: 1px solid var(--color-gray-200, #e2e8f0);
+        border-radius: var(--radius-base, 8px);
+        padding: 0.75rem;
+      }
+      .data-table td {
+        padding: 0.5rem 0;
+        border: none;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .data-table td::before {
+        content: attr(data-label);
+        font-weight: 600;
+        color: var(--color-gray-500, #64748b);
+        text-transform: uppercase;
+        font-size: var(--font-size-xs, 0.75rem); /* D-AUDIT: Using design token */
+      }
+    }
+
+    /* Badges - compact variants */
+    .badge {
+      display: inline-block;
+      padding: 0.25rem 0.75rem;
+      border-radius: var(--radius-full, 9999px);
+      font-size: var(--font-size-xs, 0.75rem); /* D-AUDIT: Using design token */
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+
+    .badge.high { background: var(--color-danger-pale, #fef2f2); color: var(--color-danger, #dc2626); }
+    .badge.medium, .badge.warning { background: var(--color-warning-pale, #fef3c7); color: var(--color-warning-dark, #d97706); }
+    .badge.success { background: var(--color-success-pale, #d1fae5); color: var(--color-success, #10b981); }
+    .badge.info { background: var(--color-primary-pale, #dbeafe); color: var(--color-primary, #2563eb); }
+
+    /* Chart Placeholder */
+    .chart-container {
+      height: 300px;
+      background: var(--color-gray-50, #f8fafc);
+      border: 2px dashed var(--color-gray-300, #cbd5e1);
+      border-radius: var(--radius-base, 8px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--color-gray-400, #94a3b8);
+      font-size: var(--font-size-sm, 0.875rem); /* D-AUDIT: Using design token */
+    }
+
+    /* Action Bar */
+    .action-bar {
+      display: flex;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+      margin-bottom: 1.5rem;
+    }
+
+    /* Recommendations - alert-style cards */
+    .recommendation {
+      padding: 1rem;
+      border-radius: var(--radius-base, 8px);
+      margin-bottom: 0.75rem;
+      display: flex;
+      gap: 1rem;
+      align-items: flex-start;
+    }
+
+    .recommendation.high { background: #fef2f2; border-left: 4px solid var(--color-danger, #dc2626); }
+    .recommendation.medium { background: #fef3c7; border-left: 4px solid var(--color-warning, #f59e0b); }
+    .recommendation.success { background: #ecfdf5; border-left: 4px solid var(--color-success, #10b981); }
+    .recommendation.info { background: #eff6ff; border-left: 4px solid var(--color-primary, #2563eb); }
+
+    .recommendation-icon { font-size: var(--font-size-2xl, 1.5rem); } /* D-AUDIT: Using design token */
+    .recommendation-content { flex: 1; }
+    .recommendation-content .title {
+      font-weight: 600;
+      margin-bottom: 0.25rem;
+      text-transform: uppercase;
+      font-size: var(--font-size-xs, 0.75rem); /* D-AUDIT: Using design token */
+      letter-spacing: 0.05em;
+    }
+
+    /* Loading state - uses .loading-state from Styles.html but custom spinner */
+    .loading {
+      text-align: center;
+      padding: 3rem 1rem;
+    }
+
+    /* Metrics grid override for this page */
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+    }
+
+    @media (min-width: 640px) {
+      .metrics-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+
+    @media (min-width: 1024px) {
+      .metrics-grid { grid-template-columns: repeat(3, 1fr); }
+    }
+
+    /* Metric card overrides for SharedReport */
+    .metrics-grid .metric-card .label {
+      font-size: var(--font-size-xs, 0.75rem); /* D-AUDIT: Using design token */
+      color: var(--color-gray-500, #64748b);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 0.5rem;
+      font-weight: 600;
+    }
+
+    .metrics-grid .metric-card .value {
+      font-size: var(--font-size-4xl, 2.25rem); /* D-AUDIT: Aligned to type scale from 2rem */
+      font-weight: 700;
+      color: var(--color-gray-900, #0f172a);
+      margin-bottom: 0.25rem;
+    }
+
+    .metrics-grid .metric-card .trend {
+      font-size: var(--font-size-sm, 0.875rem); /* D-AUDIT: Using design token */
+      color: var(--color-success, #10b981);
+      display: flex;
+      align-items: center;
+      gap: 0.25rem;
+    }
+
+    .metrics-grid .metric-card .trend.negative {
+      color: var(--color-danger, #ef4444);
+    }
+
+    .metrics-grid .metric-card .sublabel {
+      font-size: var(--font-size-xs, 0.75rem);
+      color: var(--color-gray-400, #94a3b8);
+      margin-top: 0.25rem;
+    }
+
+    /* === MVP Essential: Empty/Error States === */
+    .empty-state, .error-state {
+      text-align: center;
+      padding: 48px 24px;
+      max-width: 500px;
+      margin: 40px auto;
+    }
+    .empty-state-icon, .error-state-icon {
+      font-size: 3rem;
+      margin-bottom: 16px;
+      opacity: 0.6;
+    }
+    .empty-state h3, .error-state h3 {
+      color: var(--color-gray-700, #374151);
+      margin-bottom: 8px;
+      font-size: 1.25rem;
+    }
+    .empty-state p, .error-state p {
+      color: var(--color-gray-500, #6b7280);
+      margin-bottom: 16px;
+      line-height: 1.6;
+    }
+    .error-state {
+      background: #fef2f2;
+      border-radius: var(--radius-md, 12px);
+      border: 1px solid #fecaca;
+    }
+    .error-state h3 { color: #dc2626; }
+    .error-state p { color: #b91c1c; }
+    /* .btn-retry - Now centralized in Styles.html (C-001) */
+    /* .site-footer - Now centralized in FooterComponent.html (D-005) */
+
+    /* Feature 5: Top Event / Top Sponsor Callout Cards */
+    .top-callout {
+      background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+      border: 2px solid #f59e0b;
+      border-radius: var(--radius-md, 12px);
+      padding: 20px;
+      text-align: center;
+      box-shadow: 0 4px 12px rgba(245, 158, 11, 0.2);
+    }
+    .top-callout.event {
+      background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+      border-color: #3b82f6;
+      box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2);
+    }
+    .top-callout .callout-icon {
+      font-size: 2rem;
+      margin-bottom: 8px;
+    }
+    .top-callout .callout-label {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #92400e;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+    .top-callout.event .callout-label {
+      color: #1e40af;
+    }
+    .top-callout .callout-name {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: #1e293b;
+      margin-bottom: 8px;
+    }
+    .top-callout .callout-stats {
+      display: flex;
+      justify-content: center;
+      gap: 16px;
+      font-size: 0.875rem;
+      color: #64748b;
+    }
+    .top-callout .callout-stats strong {
+      color: #1e293b;
+    }
+    @media (max-width: 640px) {
+      #topCallouts { grid-template-columns: 1fr !important; }
+    }
+
+    /* ===== Mobile-First SharedReport Enhancements ===== */
+    @media (max-width: 640px) {
+      /* Container mobile padding */
+      .container {
+        padding: 12px;
+      }
+
+      /* Report header mobile */
+      .report-header {
+        padding: 1.25rem;
+        border-radius: 8px;
+        margin-bottom: 1rem;
+      }
+
+      .report-header h1 {
+        font-size: 1.3rem;
+        line-height: 1.3;
+        word-wrap: break-word;
+      }
+
+      .report-header .subtitle {
+        font-size: 0.8rem;
+        line-height: 1.4;
+      }
+
+      .report-header .report-context {
+        font-size: 0.7rem;
+        margin-top: 0.5rem;
+        line-height: 1.5;
+      }
+
+      /* Action bar mobile */
+      .action-bar {
+        flex-direction: column;
+        gap: 8px;
+        margin-bottom: 1rem;
+      }
+
+      .action-bar .btn {
+        width: 100%;
+        justify-content: center;
+        padding: 14px 16px;
+        min-height: 48px;
+      }
+
+      /* Metrics grid mobile */
+      .metrics-grid {
+        gap: 10px;
+        margin-bottom: 1rem;
+      }
+
+      .metrics-grid .metric-card {
+        padding: 14px;
+      }
+
+      .metrics-grid .metric-card .label {
+        font-size: 0.7rem;
+      }
+
+      .metrics-grid .metric-card .value {
+        font-size: 1.75rem;
+      }
+
+      /* Section cards mobile */
+      .section-card {
+        padding: 14px;
+        margin-bottom: 1rem;
+        border-radius: 8px;
+      }
+
+      .section-card h2 {
+        font-size: 1.1rem;
+        margin-bottom: 0.5rem;
+      }
+
+      .section-card .section-help {
+        font-size: 0.75rem;
+        margin-bottom: 0.75rem;
+        line-height: 1.4;
+      }
+
+      /* Metric sublabels mobile */
+      .metrics-grid .metric-card .sublabel {
+        font-size: 0.65rem;
+      }
+
+      /* Surface descriptions mobile */
+      .surface-desc {
+        font-size: 0.65rem;
+        margin-top: 4px;
+      }
+
+      /* Top callouts mobile */
+      .top-callout {
+        padding: 14px;
+        border-radius: 10px;
+      }
+
+      .top-callout .callout-icon {
+        font-size: 1.5rem;
+      }
+
+      .top-callout .callout-name {
+        font-size: 1rem;
+      }
+
+      .top-callout .callout-stats {
+        flex-direction: column;
+        gap: 6px;
+        font-size: 0.8rem;
+      }
+
+      /* Top sponsors card mobile */
+      .top-sponsors-card {
+        padding: 14px;
+        border-radius: 10px;
+        margin-bottom: 1rem;
+      }
+
+      .top-sponsors-card h3 {
+        font-size: 0.9rem;
+        margin-bottom: 12px;
+      }
+
+      .top-sponsors-list {
+        gap: 10px;
+      }
+
+      .top-sponsor-item {
+        padding: 10px 12px;
+        border-radius: 6px;
+      }
+
+      .top-sponsor-rank {
+        font-size: 1.1rem;
+        margin-right: 10px;
+      }
+
+      .top-sponsor-name {
+        font-size: 0.9rem;
+      }
+
+      .top-sponsor-metric {
+        font-size: 0.8rem;
+      }
+
+      /* Empty/Error states mobile */
+      .empty-state, .error-state {
+        padding: 32px 16px;
+        margin: 24px auto;
+      }
+
+      .empty-state-icon, .error-state-icon {
+        font-size: 2.5rem;
+      }
+
+      .empty-state h3, .error-state h3 {
+        font-size: 1.1rem;
+      }
+
+      .error-state .btn-retry {
+        width: 100%;
+        padding: 14px 16px;
+      }
+
+      /* Badges mobile */
+      .badge {
+        padding: 0.2rem 0.5rem;
+        font-size: 0.65rem;
+      }
+
+      /* Modal mobile */
+      #sponsorQrModal > div {
+        max-width: 90%;
+        margin: 16px;
+      }
+
+      /* Footer mobile */
+      .site-footer {
+        padding: 16px;
+        margin-top: 24px;
+      }
+    }
+
+    /* Very small screens (iPhone SE, etc.) */
+    @media (max-width: 375px) {
+      .container {
+        padding: 8px;
+      }
+
+      .report-header {
+        padding: 1rem;
+      }
+
+      .report-header h1 {
+        font-size: 1.15rem;
+      }
+
+      .metrics-grid .metric-card .value {
+        font-size: 1.5rem;
+      }
+
+      .section-card {
+        padding: 12px;
+      }
+
+      .section-card h2 {
+        font-size: 1rem;
+      }
+    }
+
+    /* Top Sponsors Card - Highlights top performers by clicks */
+    .top-sponsors-card {
+      background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
+      border: 2px solid var(--color-success, #10b981);
+      border-radius: var(--radius-md, 12px);
+      padding: 20px;
+      margin-bottom: 1.5rem;
+      box-shadow: 0 4px 12px rgba(16, 185, 129, 0.15);
+    }
+    .top-sponsors-card h3 {
+      font-size: 1rem;
+      font-weight: 600;
+      color: #065f46;
+      margin: 0 0 16px 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .top-sponsors-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .top-sponsor-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: white;
+      border-radius: var(--radius-base, 8px);
+      padding: 12px 16px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+    }
+    .top-sponsor-rank {
+      font-size: 1.25rem;
+      margin-right: 12px;
+    }
+    .top-sponsor-name {
+      flex: 1;
+      font-weight: 600;
+      color: var(--color-gray-800, #1e293b);
+    }
+    .top-sponsor-metric {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: var(--font-size-sm, 0.875rem);
+      color: var(--color-gray-600, #475569);
+    }
+    .top-sponsor-metric .clicks-value {
+      font-weight: 700;
+      color: var(--color-success, #10b981);
+    }
+    .top-sponsor-metric .ctr-badge {
+      background: var(--color-success-pale, #d1fae5);
+      color: #065f46;
+      padding: 2px 8px;
+      border-radius: var(--radius-full, 9999px);
+      font-size: var(--font-size-xs, 0.75rem);
+      font-weight: 600;
+    }
+    @media (max-width: 640px) {
+      .top-sponsor-item {
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      .top-sponsor-metric {
+        width: 100%;
+        justify-content: flex-end;
+      }
+    }
+
+    /* Sponsor Funnel Card - Story 11: At-a-glance funnel metrics for sponsors */
+    .sponsor-funnel-card {
+      background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+      border: 2px solid var(--color-primary, #2563eb);
+      border-radius: var(--radius-md, 12px);
+      padding: 20px;
+      margin-bottom: 1.5rem;
+      box-shadow: 0 4px 12px rgba(37, 99, 235, 0.15);
+    }
+    .sponsor-funnel-card h3 {
+      font-size: 1rem;
+      font-weight: 600;
+      color: #1e40af;
+      margin: 0 0 16px 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .sponsor-funnel-card .funnel-subtitle {
+      font-size: 0.75rem;
+      color: #3b82f6;
+      font-weight: normal;
+      margin-left: auto;
+    }
+    .funnel-stages {
+      display: flex;
+      align-items: stretch;
+      gap: 0;
+      position: relative;
+    }
+    .funnel-stage {
+      flex: 1;
+      background: white;
+      padding: 16px 12px;
+      text-align: center;
+      position: relative;
+      border: 1px solid #e2e8f0;
+      min-width: 0;
+    }
+    .funnel-stage:first-child {
+      border-radius: 8px 0 0 8px;
+    }
+    .funnel-stage:last-child {
+      border-radius: 0 8px 8px 0;
+    }
+    .funnel-stage:not(:last-child)::after {
+      content: '→';
+      position: absolute;
+      right: -12px;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 1.25rem;
+      color: #3b82f6;
+      z-index: 1;
+      background: white;
+      width: 24px;
+      text-align: center;
+    }
+    .funnel-stage .stage-label {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #64748b;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+    .funnel-stage .stage-value {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: #1e293b;
+      line-height: 1.2;
+    }
+    .funnel-stage .stage-rate {
+      font-size: 0.7rem;
+      color: #10b981;
+      font-weight: 600;
+      margin-top: 4px;
+    }
+    .funnel-stage .stage-rate.neutral {
+      color: #64748b;
+    }
+    /* Funnel summary row */
+    .funnel-summary {
+      display: flex;
+      justify-content: center;
+      gap: 24px;
+      margin-top: 16px;
+      padding-top: 12px;
+      border-top: 1px dashed #bfdbfe;
+    }
+    .funnel-summary-item {
+      text-align: center;
+    }
+    .funnel-summary-item .summary-label {
+      font-size: 0.65rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #64748b;
+      margin-bottom: 2px;
+    }
+    .funnel-summary-item .summary-value {
+      font-size: 1rem;
+      font-weight: 700;
+      color: #1e40af;
+    }
+    /* Funnel empty state */
+    .funnel-empty-state {
+      text-align: center;
+      padding: 24px 16px;
+      color: #64748b;
+    }
+    .funnel-empty-state .empty-icon {
+      font-size: 2rem;
+      margin-bottom: 8px;
+      opacity: 0.5;
+    }
+    .funnel-empty-state p {
+      margin: 0;
+      font-size: 0.875rem;
+    }
+    /* Funnel card mobile responsive */
+    @media (max-width: 640px) {
+      .sponsor-funnel-card {
+        padding: 14px;
+        border-radius: 10px;
+        margin-bottom: 1rem;
+      }
+      .sponsor-funnel-card h3 {
+        font-size: 0.9rem;
+        margin-bottom: 12px;
+        flex-wrap: wrap;
+      }
+      .sponsor-funnel-card .funnel-subtitle {
+        width: 100%;
+        margin-left: 0;
+        margin-top: 4px;
+      }
+      .funnel-stages {
+        flex-direction: column;
+        gap: 8px;
+      }
+      .funnel-stage {
+        border-radius: 8px !important;
+        padding: 12px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        text-align: left;
+      }
+      .funnel-stage:not(:last-child)::after {
+        content: '↓';
+        position: static;
+        transform: none;
+        order: -1;
+        display: none;
+      }
+      .funnel-stage .stage-label {
+        margin-bottom: 0;
+        font-size: 0.75rem;
+      }
+      .funnel-stage .stage-value {
+        font-size: 1.25rem;
+      }
+      .funnel-stage .stage-rate {
+        margin-top: 0;
+        margin-left: 8px;
+        font-size: 0.75rem;
+      }
+      .funnel-stage .mobile-right {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .funnel-summary {
+        flex-wrap: wrap;
+        gap: 16px;
+      }
+      .funnel-summary-item .summary-value {
+        font-size: 0.9rem;
+      }
+    }
+    /* Very small screens */
+    @media (max-width: 375px) {
+      .sponsor-funnel-card {
+        padding: 12px;
+      }
+      .funnel-stage {
+        padding: 10px;
+      }
+      .funnel-stage .stage-value {
+        font-size: 1.1rem;
+      }
+      .funnel-summary {
+        gap: 12px;
+      }
+    }
+
+    /* ===== Collapsible Detail Sections (Story 12) ===== */
+    .detail-section .section-toggle {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+      background: none;
+      border: none;
+      padding: 0;
+      cursor: pointer;
+      text-align: left;
+      margin-bottom: 0.5rem;
+    }
+    .detail-section .section-toggle h2 {
+      margin: 0;
+      pointer-events: none;
+    }
+    .detail-section .section-toggle .toggle-icon {
+      font-size: 0.75rem;
+      color: var(--color-gray-400, #94a3b8);
+      transition: transform 0.2s ease;
+      margin-left: 8px;
+    }
+    .detail-section .section-toggle:hover .toggle-icon {
+      color: var(--color-primary, #2563eb);
+    }
+    .detail-section .section-toggle:focus {
+      outline: 2px solid var(--color-primary, #2563eb);
+      outline-offset: 2px;
+      border-radius: 4px;
+    }
+    /* Collapsed state */
+    .detail-section.collapsed .section-content {
+      display: none;
+    }
+    .detail-section.collapsed .toggle-icon {
+      transform: rotate(-90deg);
+    }
+    .detail-section.collapsed .section-help {
+      display: none;
+    }
+    /* Expanded state - add subtle indicator */
+    .detail-section:not(.collapsed) {
+      border-left-color: var(--color-success, #10b981);
+    }
+    .detail-section:not(.collapsed) .toggle-icon {
+      transform: rotate(0deg);
+      color: var(--color-success, #10b981);
+    }
+    /* Collapsed preview hint */
+    .detail-section.collapsed::after {
+      content: 'Tap to show details';
+      display: block;
+      font-size: 0.75rem;
+      color: var(--color-gray-400, #94a3b8);
+      text-align: center;
+      padding: 8px 0;
+      font-style: italic;
+    }
+
+    /* ===== Story F6: 3-Pane Tab Navigation ===== */
+    .tab-container {
+      margin-bottom: 1.5rem;
+    }
+
+    .tab-nav {
+      display: flex;
+      border-bottom: 2px solid var(--color-gray-200, #e2e8f0);
+      margin-bottom: 1rem;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .tab-btn {
+      padding: 0.75rem 1.5rem;
+      border: none;
+      background: none;
+      font-size: var(--font-size-sm, 0.875rem);
+      font-weight: 600;
+      color: var(--color-gray-500, #64748b);
+      cursor: pointer;
+      border-bottom: 3px solid transparent;
+      margin-bottom: -2px;
+      white-space: nowrap;
+      transition: all 0.2s ease;
+    }
+
+    .tab-btn:hover {
+      color: var(--color-primary, #2563eb);
+    }
+
+    .tab-btn.active {
+      color: var(--color-primary, #2563eb);
+      border-bottom-color: var(--color-primary, #2563eb);
+    }
+
+    .tab-btn .tab-icon {
+      margin-right: 0.5rem;
+    }
+
+    .tab-panel {
+      display: none;
+    }
+
+    .tab-panel.active {
+      display: block;
+    }
+
+    /* Integrity Banner */
+    .integrity-banner {
+      padding: 0.75rem 1rem;
+      border-radius: var(--radius-base, 8px);
+      margin-bottom: 1rem;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      font-size: var(--font-size-sm, 0.875rem);
+    }
+
+    .integrity-banner.complete {
+      background: var(--color-success-pale, #d1fae5);
+      border: 1px solid var(--color-success, #10b981);
+      color: #065f46;
+    }
+
+    .integrity-banner.incomplete {
+      background: var(--color-warning-pale, #fef3c7);
+      border: 1px solid var(--color-warning, #f59e0b);
+      color: #92400e;
+    }
+
+    .integrity-banner.stale {
+      background: #fef2f2;
+      border: 1px solid var(--color-danger, #ef4444);
+      color: #991b1b;
+    }
+
+    .integrity-banner .integrity-icon {
+      font-size: 1.25rem;
+    }
+
+    .integrity-banner .integrity-notes {
+      font-size: var(--font-size-xs, 0.75rem);
+      opacity: 0.9;
+      margin-top: 0.25rem;
+    }
+
+    /* Tab pane content cards */
+    .pane-card {
+      background: white;
+      border-radius: var(--radius-md, 12px);
+      padding: 1.25rem;
+      margin-bottom: 1rem;
+      box-shadow: var(--shadow-base, 0 1px 3px rgba(0,0,0,0.1));
+      border: 1px solid var(--color-gray-200, #e2e8f0);
+    }
+
+    .pane-card h3 {
+      font-size: 1rem;
+      font-weight: 600;
+      color: var(--color-gray-800, #1e293b);
+      margin: 0 0 1rem 0;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    /* Metric rows for tab panels */
+    .metric-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 0.75rem 0;
+      border-bottom: 1px solid var(--color-gray-100, #f1f5f9);
+    }
+
+    .metric-row:last-child {
+      border-bottom: none;
+    }
+
+    .metric-row .metric-label {
+      color: var(--color-gray-600, #475569);
+      font-size: var(--font-size-sm, 0.875rem);
+    }
+
+    .metric-row .metric-value {
+      font-weight: 600;
+      color: var(--color-gray-900, #0f172a);
+      font-size: var(--font-size-sm, 0.875rem);
+    }
+
+    /* Customer geo tags */
+    .geo-tags {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+
+    .geo-tag {
+      background: var(--color-primary-pale, #dbeafe);
+      color: var(--color-primary, #2563eb);
+      padding: 0.25rem 0.75rem;
+      border-radius: var(--radius-full, 9999px);
+      font-size: var(--font-size-xs, 0.75rem);
+      font-weight: 600;
+    }
+
+    /* Placement chips */
+    .placement-chips {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+      margin-top: 0.5rem;
+    }
+
+    .placement-chip {
+      background: var(--color-gray-100, #f1f5f9);
+      color: var(--color-gray-700, #374151);
+      padding: 0.375rem 0.75rem;
+      border-radius: var(--radius-base, 8px);
+      font-size: var(--font-size-xs, 0.75rem);
+      display: flex;
+      align-items: center;
+      gap: 0.375rem;
+    }
+
+    .placement-chip .chip-count {
+      background: var(--color-primary, #2563eb);
+      color: white;
+      padding: 0.125rem 0.375rem;
+      border-radius: var(--radius-full, 9999px);
+      font-size: 0.65rem;
+      font-weight: 600;
+    }
+
+    /* Mobile tabs */
+    @media (max-width: 640px) {
+      .tab-btn {
+        padding: 0.625rem 1rem;
+        font-size: 0.8rem;
+      }
+
+      .tab-btn .tab-icon {
+        margin-right: 0.25rem;
+      }
+
+      .pane-card {
+        padding: 1rem;
+      }
+
+      .metric-row {
+        flex-direction: column;
+        gap: 0.25rem;
+      }
+
+      .metric-row .metric-value {
+        text-align: left;
+      }
+    }
+
+    /* ===== Table Scroll Wrapper for Mobile ===== */
+    .table-scroll-wrapper {
+      width: 100%;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+    /* Show scroll indicator on mobile */
+    @media (max-width: 640px) {
+      .table-scroll-wrapper {
+        margin: 0 -14px;
+        padding: 0 14px;
+        width: calc(100% + 28px);
+      }
+      /* Restore normal table display on mobile for card-style layout */
+      .table-scroll-wrapper .data-table {
+        min-width: auto;
+      }
+    }
+    /* Desktop/tablet: allow horizontal scroll if table overflows */
+    @media (min-width: 641px) {
+      .table-scroll-wrapper .data-table {
+        min-width: 500px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <div class="report-header">
+      <h1 id="reportTitle">📊 Your Sponsorship Performance</h1>
+      <p class="subtitle" id="reportSubtitle">See how your brand is performing across events</p>
+      <p class="subtitle report-context" id="reportContext">Track impressions, clicks, and engagement from all your sponsored placements in one place.</p>
+      <p class="subtitle" id="lastUpdated">Loading...</p>
+    </div>
+
+    <!-- Action Bar (MVP: Refresh only) -->
+    <div class="action-bar">
+      <button id="refreshBtn" class="btn btn-primary" onclick="loadReport()">
+        <span class="btn-text">🔄 Refresh Data</span>
+      </button>
+      <!-- V2 features removed from MVP: Export, Filters, Portfolio Mode -->
+    </div>
+
+    <!-- Loading State -->
+    <div id="loading" class="loading">
+      <div class="spinner"></div>
+      <p>Loading analytics data...</p>
+    </div>
+
+    <!-- Key Metrics -->
+    <div id="metrics" style="display:none;">
+      <!-- Story F6: Integrity Banner -->
+      <div id="integrityBanner"></div>
+
+      <!-- Story F6: 3-Pane Tab Navigation -->
+      <div class="tab-container" id="tabContainer">
+        <div class="tab-nav" role="tablist">
+          <button class="tab-btn active" role="tab" aria-selected="true" data-tab="event" onclick="switchTab('event')">
+            <span class="tab-icon">🎉</span>Event
+          </button>
+          <button class="tab-btn" role="tab" aria-selected="false" data-tab="sponsor" onclick="switchTab('sponsor')">
+            <span class="tab-icon">🏢</span>Sponsor
+          </button>
+          <button class="tab-btn" role="tab" aria-selected="false" data-tab="customer" onclick="switchTab('customer')">
+            <span class="tab-icon">👥</span>Customer
+          </button>
+        </div>
+
+        <!-- Event Tab Panel -->
+        <div class="tab-panel active" id="eventPanel" role="tabpanel">
+          <div id="eventPaneContent"></div>
+        </div>
+
+        <!-- Sponsor Tab Panel -->
+        <div class="tab-panel" id="sponsorPanel" role="tabpanel">
+          <div id="sponsorPaneContent"></div>
+        </div>
+
+        <!-- Customer Tab Panel -->
+        <div class="tab-panel" id="customerPanel" role="tabpanel">
+          <div id="customerPaneContent"></div>
+        </div>
+      </div>
+
+      <!-- Legacy sections (hidden by default, shown for backwards compatibility) -->
+      <div id="legacyMetrics" style="display:none;">
+        <!-- Sponsor Funnel Card - Story 11: At-a-glance funnel for sponsors -->
+        <div id="sponsorFunnelCard"></div>
+
+        <div class="metrics-grid" id="metricsGrid"></div>
+
+        <!-- Top Sponsors Card - Highlights top 3 sponsors by clicks -->
+        <div id="topSponsorsCard" style="display:none;"></div>
+
+        <!-- Feature 5: Top Event / Top Sponsor Callouts -->
+        <div id="topCallouts" class="metrics-grid" style="grid-template-columns: repeat(2, 1fr); gap: 16px; margin-bottom: 24px;"></div>
+
+        <!-- Surface Performance (Ad Placements) - Collapsible detail section -->
+        <div class="section-card detail-section collapsed" id="surfacePerformanceCard">
+          <button class="section-toggle" onclick="toggleDetailSection('surfacePerformanceCard')" aria-expanded="false">
+            <h2>🌐 Where seen</h2>
+            <span class="toggle-icon">▼</span>
+          </button>
+          <p class="section-help">Which placements got the most engagement — posters, screens, pages, or forms.</p>
+          <div class="section-content">
+            <div class="table-scroll-wrapper">
+              <div id="surfacePerformance"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Sponsor Performance - Collapsible detail section -->
+        <div class="section-card detail-section collapsed" id="sponsorPerformanceCard">
+          <button class="section-toggle" onclick="toggleDetailSection('sponsorPerformanceCard')" aria-expanded="false">
+            <h2>🏢 By sponsor</h2>
+            <span class="toggle-icon">▼</span>
+          </button>
+          <p class="section-help" id="sponsorHelpText">See how each sponsor is performing. Click Rate shows what percentage of viewers clicked.</p>
+          <div class="section-content">
+            <div class="table-scroll-wrapper">
+              <div id="sponsorPerformance"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Event Performance - Collapsible detail section -->
+        <div class="section-card detail-section collapsed" id="eventPerformanceCard" style="display:none;">
+          <button class="section-toggle" onclick="toggleDetailSection('eventPerformanceCard')" aria-expanded="false">
+            <h2>🎉 By event</h2>
+            <span class="toggle-icon">▼</span>
+          </button>
+          <p class="section-help">See which events drove the most engagement and signups.</p>
+          <div class="section-content">
+            <div class="table-scroll-wrapper">
+              <div id="eventPerformance"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- V2 HIDDEN: ROI, Daily Trends, Recommendations require backend work -->
+      <!-- Sections removed to keep MVP honest -->
+    </div>
+
+    <!-- S12: Error State container (dynamically rendered by StateRenderer) -->
+    <div id="errorState" style="display:none;"></div>
+  </div>
+
+  <!-- Trust Footer -->
+  <footer class="site-footer">
+    <p>Powered by <a href="https://eventangle.com" target="_blank" rel="noopener">EventAngle</a></p>
+  </footer>
+
+  <script>
+    const BRAND_ID = '<?= brandId ?>';
+
+    // URL parameters control whether this is a sponsor-scoped view (MVP)
+    const urlParams = new URLSearchParams(window.location.search);
+    const IS_SPONSOR_VIEW = urlParams.get('sponsor') === 'true';
+    const SPONSOR_ID = urlParams.get('sponsorId') || '';
+    const EVENT_ID = urlParams.get('eventId') || '';
+
+    // Story F6: Check if using new SharedAnalytics bundle endpoint
+    const USE_V2_BUNDLE = urlParams.has('eventId') && !IS_SPONSOR_VIEW;
+
+    // Store current bundle for tab switching
+    let currentBundle = null;
+
+    // Update header based on view type (MVP: sponsor view or organizer view)
+    function updateHeaderForView(sponsorName) {
+      const titleEl = document.getElementById('reportTitle');
+      const subtitleEl = document.getElementById('reportSubtitle');
+      const contextEl = document.getElementById('reportContext');
+
+      if (IS_SPONSOR_VIEW) {
+        // Sponsor-specific view: personalized and welcoming
+        if (titleEl) {
+          titleEl.textContent = '📊 Your Sponsorship Report';
+        }
+        if (subtitleEl) {
+          subtitleEl.textContent = '';
+          if (sponsorName) {
+            subtitleEl.appendChild(document.createTextNode('Performance metrics for '));
+            const strong = document.createElement('strong');
+            strong.textContent = sponsorName;
+            subtitleEl.appendChild(strong);
+          } else if (SPONSOR_ID) {
+            subtitleEl.textContent = 'Performance metrics for ' + SPONSOR_ID;
+          } else {
+            subtitleEl.textContent = 'See how your brand is performing';
+          }
+        }
+        if (contextEl) {
+          contextEl.textContent = 'This report shows how attendees are engaging with your sponsored content across all event touchpoints.';
+        }
+      } else {
+        // Organizer view: overview of all sponsors
+        if (titleEl) {
+          titleEl.textContent = '📊 Sponsor Performance Dashboard';
+        }
+        if (subtitleEl) {
+          subtitleEl.textContent = 'Track how sponsors are performing across your events';
+        }
+        if (contextEl) {
+          contextEl.textContent = 'Monitor impressions, clicks, and engagement for all sponsor placements. Share individual reports with sponsors via QR code.';
+        }
+      }
+    }
+
+    // Backwards compatibility alias
+    function updateHeaderForSponsorView(sponsorName) {
+      updateHeaderForView(sponsorName);
+    }
+
+    // Initialize header on page load
+    updateHeaderForView(null);
+
+    /**
+     * Expected API contract (envelope omitted) - MVP SharedAnalytics shape:
+     *
+     * Shared report (organizer):
+     * {
+     *   lastUpdatedISO: string,
+     *   summary: {
+     *     totalImpressions: number,
+     *     totalClicks: number,
+     *     totalQrScans: number,
+     *     totalSignups: number,
+     *     uniqueEvents: number,
+     *     uniqueSponsors: number
+     *   },
+     *   surfaces: [
+     *     { id, label, impressions, clicks, qrScans, engagementRate }
+     *   ],
+     *   sponsors?: [
+     *     { id, name, impressions, clicks, ctr }
+     *   ],
+     *   events?: [
+     *     { id, name, impressions, clicks, ctr, signupsCount }
+     *   ]
+     * }
+     *
+     * Sponsor view:
+     * - Same shape, but summary/surfaces are scoped to that sponsor.
+     */
+    async function loadReport() {
+      toggleLoading(true);
+
+      // Story F6: Use V2 bundle endpoint if eventId is provided
+      if (USE_V2_BUNDLE && EVENT_ID) {
+        try {
+          const response = await fetch('/api/v2/sharedreport?eventId=' + encodeURIComponent(EVENT_ID));
+          const result = await response.json();
+
+          if (!result.ok) {
+            console.error('SharedReport V2 load error', result.code, result.message);
+            showError(result);
+            return;
+          }
+
+          // Store bundle for tab switching
+          currentBundle = result.bundle;
+          renderV2Bundle(result.bundle);
+          toggleLoading(false);
+          return;
+        } catch (e) {
+          console.error('SharedReport V2 fetch error', e);
+          showError({ message: 'Network error - please try again' });
+          return;
+        }
+      }
+
+      // Legacy path: use RPC endpoints
+      let rpcName, payload;
+
+      // MVP endpoints: api_getSponsorAnalytics (sponsor view) or api_getSharedAnalytics (organizer view)
+      if (IS_SPONSOR_VIEW && SPONSOR_ID) {
+        rpcName = 'api_getSponsorAnalytics';
+        payload = { brandId: BRAND_ID, sponsorId: SPONSOR_ID, eventId: EVENT_ID || null };
+      } else {
+        rpcName = 'api_getSharedAnalytics';
+        payload = { brandId: BRAND_ID };
+      }
+
+      // S13: Use safeRpc for graceful error handling
+      const result = await NU.safeRpc(rpcName, payload);
+
+      if (!result || !result.ok) {
+        console.error('SharedReport load error', result.code, result.message);
+        // S13: Pass error object for proper classification (SERVICE_UNAVAILABLE, TIMEOUT, etc.)
+        showError(result);
+        return;
+      }
+
+      renderReport(result.value || {});
+      toggleLoading(false);
+    }
+
+    // ========================================================================
+    // Story F6: 3-Pane Tab Navigation Functions
+    // ========================================================================
+
+    /**
+     * Switch between tabs (Event | Sponsor | Customer)
+     */
+    function switchTab(tabName) {
+      // Update tab button states
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        const isActive = btn.dataset.tab === tabName;
+        btn.classList.toggle('active', isActive);
+        btn.setAttribute('aria-selected', isActive ? 'true' : 'false');
+      });
+
+      // Update tab panel visibility
+      document.querySelectorAll('.tab-panel').forEach(panel => {
+        panel.classList.remove('active');
+      });
+
+      const activePanel = document.getElementById(tabName + 'Panel');
+      if (activePanel) {
+        activePanel.classList.add('active');
+      }
+    }
+
+    /**
+     * Render V2 SharedAnalytics bundle with 3-pane UI
+     */
+    function renderV2Bundle(bundle) {
+      if (!bundle) return;
+
+      // Show tab container, hide legacy sections
+      document.getElementById('tabContainer').style.display = 'block';
+      document.getElementById('legacyMetrics').style.display = 'none';
+
+      // Render integrity banner
+      renderIntegrityBanner(bundle.integrity, bundle.window);
+
+      // Render each tab panel
+      renderEventPane(bundle.event);
+      renderSponsorPane(bundle.sponsor);
+      // Story F7: Pass eventId and integrity for Customer Summary export block
+      renderCustomerPane(bundle.customer, EVENT_ID, bundle.integrity);
+
+      // Update last updated timestamp
+      if (bundle.generatedAt) {
+        document.getElementById('lastUpdated').textContent =
+          'Last updated: ' + new Date(bundle.generatedAt).toLocaleString();
+      }
+
+      // Update header for event view
+      if (bundle.event && bundle.event.name) {
+        document.getElementById('reportTitle').textContent = '📊 ' + escapeHtml(bundle.event.name) + ' Report';
+        document.getElementById('reportSubtitle').textContent = 'Post-event analytics summary';
+        document.getElementById('reportContext').textContent =
+          'Comprehensive metrics for event, sponsor, and customer engagement.';
+      }
+    }
+
+    /**
+     * Render integrity banner
+     */
+    function renderIntegrityBanner(integrity, window) {
+      const container = document.getElementById('integrityBanner');
+      if (!container) return;
+
+      if (!integrity) {
+        container.innerHTML = '';
+        return;
+      }
+
+      const statusClass = integrity.stale ? 'stale' : (integrity.complete ? 'complete' : 'incomplete');
+      const icon = integrity.stale ? '⚠️' : (integrity.complete ? '✅' : '⏳');
+      const message = integrity.stale
+        ? 'Data may be outdated'
+        : (integrity.complete ? 'All data sources available' : 'Some data may be incomplete');
+
+      let notesHtml = '';
+      if (integrity.notes && integrity.notes.length > 0) {
+        notesHtml = '<div class="integrity-notes">' + integrity.notes.map(n => escapeHtml(n)).join(' • ') + '</div>';
+      }
+
+      let windowHtml = '';
+      if (window && window.start && window.end) {
+        windowHtml = '<span style="margin-left: auto; font-size: 0.75rem; opacity: 0.8;">' +
+          escapeHtml(window.start) + ' to ' + escapeHtml(window.end) + '</span>';
+      }
+
+      container.innerHTML = `
+        <div class="integrity-banner ${statusClass}">
+          <span class="integrity-icon">${icon}</span>
+          <div style="flex: 1;">
+            <strong>${message}</strong>
+            ${notesHtml}
+          </div>
+          ${windowHtml}
+        </div>
+      `;
+    }
+
+    /**
+     * Render Event tab panel
+     */
+    function renderEventPane(event) {
+      const container = document.getElementById('eventPaneContent');
+      if (!container) return;
+
+      if (!event || !event.eventId) {
+        container.innerHTML = `
+          <div class="pane-card">
+            <div style="text-align: center; padding: 2rem; color: #64748b;">
+              <div style="font-size: 2rem; margin-bottom: 0.5rem; opacity: 0.5;">🎉</div>
+              <p style="margin: 0;">No event data available</p>
+            </div>
+          </div>
+        `;
+        return;
+      }
+
+      const summary = event.summary || {};
+      const traffic = event.traffic || {};
+      const qr = event.qr || {};
+
+      container.innerHTML = `
+        <div class="pane-card">
+          <h3>📋 Event Summary</h3>
+          <div class="metric-row">
+            <span class="metric-label">Event Name</span>
+            <span class="metric-value">${escapeHtml(event.name)}</span>
+          </div>
+          <div class="metric-row">
+            <span class="metric-label">Event ID</span>
+            <span class="metric-value" style="font-family: monospace; font-size: 0.8rem;">${escapeHtml(event.eventId)}</span>
+          </div>
+        </div>
+
+        <div class="pane-card">
+          <h3>📊 Participation</h3>
+          <div class="metric-row">
+            <span class="metric-label">Signups</span>
+            <span class="metric-value">${(summary.signups || 0).toLocaleString()}</span>
+          </div>
+          <div class="metric-row">
+            <span class="metric-label">Matches Played</span>
+            <span class="metric-value">${(summary.matches || 0).toLocaleString()}</span>
+          </div>
+          <div class="metric-row">
+            <span class="metric-label">Duration</span>
+            <span class="metric-value">${(summary.durationMinutes || 0)} min</span>
+          </div>
+        </div>
+
+        <div class="pane-card">
+          <h3>👁️ Traffic</h3>
+          <div class="metric-row">
+            <span class="metric-label">Page Views</span>
+            <span class="metric-value">${(traffic.pageViews || 0).toLocaleString()}</span>
+          </div>
+          <div class="metric-row">
+            <span class="metric-label">Unique Visitors</span>
+            <span class="metric-value">${(traffic.uniqueVisitors || 0).toLocaleString()}</span>
+          </div>
+        </div>
+
+        <div class="pane-card">
+          <h3>📱 QR Codes</h3>
+          <div class="metric-row">
+            <span class="metric-label">Total Scans</span>
+            <span class="metric-value">${(qr.scans || 0).toLocaleString()}</span>
+          </div>
+          <div class="metric-row">
+            <span class="metric-label">Verified Only</span>
+            <span class="metric-value">${qr.verifiedOnly ? '✓ Yes' : '✗ No'}</span>
+          </div>
+        </div>
+      `;
+    }
+
+    /**
+     * Render Sponsor tab panel
+     */
+    function renderSponsorPane(sponsor) {
+      const container = document.getElementById('sponsorPaneContent');
+      if (!container) return;
+
+      if (!sponsor || sponsor.sponsorId === 'none') {
+        container.innerHTML = `
+          <div class="pane-card">
+            <div style="text-align: center; padding: 2rem; color: #64748b;">
+              <div style="font-size: 2rem; margin-bottom: 0.5rem; opacity: 0.5;">🏢</div>
+              <p style="margin: 0;">No sponsor data available</p>
+            </div>
+          </div>
+        `;
+        return;
+      }
+
+      const summary = sponsor.summary || {};
+      const placements = sponsor.placements || [];
+
+      let placementsHtml = '';
+      if (placements.length > 0) {
+        placementsHtml = '<div class="placement-chips">' +
+          placements.map(p => `
+            <span class="placement-chip">
+              ${escapeHtml(p.surface)}
+              <span class="chip-count">${p.count}</span>
+            </span>
+          `).join('') + '</div>';
+      } else {
+        placementsHtml = '<span style="color: #94a3b8; font-size: 0.875rem;">No placements</span>';
+      }
+
+      container.innerHTML = `
+        <div class="pane-card">
+          <h3>🏢 Sponsor Info</h3>
+          <div class="metric-row">
+            <span class="metric-label">Sponsor Name</span>
+            <span class="metric-value">${escapeHtml(sponsor.name)}</span>
+          </div>
+          <div class="metric-row">
+            <span class="metric-label">Sponsor ID</span>
+            <span class="metric-value" style="font-family: monospace; font-size: 0.8rem;">${escapeHtml(sponsor.sponsorId)}</span>
+          </div>
+        </div>
+
+        <div class="pane-card">
+          <h3>📈 Performance</h3>
+          <div class="metric-row">
+            <span class="metric-label">Impressions</span>
+            <span class="metric-value">${(summary.impressions || 0).toLocaleString()}</span>
+          </div>
+          <div class="metric-row">
+            <span class="metric-label">QR Scans</span>
+            <span class="metric-value">${(summary.qrScans || 0).toLocaleString()}</span>
+          </div>
+          <div class="metric-row">
+            <span class="metric-label">Cost Per Scan</span>
+            <span class="metric-value">$${(summary.costPerScan || 0).toFixed(2)}</span>
+          </div>
+        </div>
+
+        <div class="pane-card">
+          <h3>📍 Placements</h3>
+          ${placementsHtml}
+        </div>
+      `;
+    }
+
+    /**
+     * Render Customer tab panel (aggregate only - no PII)
+     * Story F7: Added Customer Summary export block
+     * @param {Object} customer - Customer analytics data
+     * @param {string} eventId - Event ID for JSON endpoint link
+     * @param {Object} integrity - Data integrity metadata
+     */
+    function renderCustomerPane(customer, eventId, integrity) {
+      const container = document.getElementById('customerPaneContent');
+      if (!container) return;
+
+      if (!customer) {
+        container.innerHTML = `
+          <div class="pane-card">
+            <div style="text-align: center; padding: 2rem; color: #64748b;">
+              <div style="font-size: 2rem; margin-bottom: 0.5rem; opacity: 0.5;">👥</div>
+              <p style="margin: 0;">No customer data available</p>
+            </div>
+          </div>
+        `;
+        return;
+      }
+
+      const summary = customer.summary || {};
+      const outcomes = customer.outcomes || {};
+      const geo = summary.geo || {};
+      const notes = customer.notes || [];
+
+      // Render geo tags
+      let geoHtml = '';
+      if (geo.topZip3 && geo.topZip3.length > 0) {
+        geoHtml = '<div class="geo-tags">' +
+          geo.topZip3.map(z => `<span class="geo-tag">${escapeHtml(z)}</span>`).join('') + '</div>';
+      } else {
+        geoHtml = '<span style="color: #94a3b8; font-size: 0.875rem;">No geo data</span>';
+      }
+
+      // Render notes
+      let notesHtml = '';
+      if (notes.length > 0) {
+        notesHtml = `
+          <div class="pane-card" style="background: #f8fafc; border-left: 4px solid #3b82f6;">
+            <h3 style="color: #1e40af;">ℹ️ Important Notes</h3>
+            <ul style="margin: 0; padding-left: 1.25rem; color: #475569; font-size: 0.875rem;">
+              ${notes.map(n => '<li>' + escapeHtml(n) + '</li>').join('')}
+            </ul>
+          </div>
+        `;
+      }
+
+      // Story F7: Build Customer Summary export block
+      const uniquePeople = summary.uniquePeople || 0;
+      const returningRate = ((summary.returningRate || 0) * 100).toFixed(1);
+      const peakHour = summary.peakHourLocal || '--:--';
+      const rsvpToAttendRate = ((outcomes.rsvpToAttendRate || 0) * 100).toFixed(1);
+      const scanToSignupRate = ((outcomes.scanToSignupRate || 0) * 100).toFixed(1);
+      const topZips = geo.topZip3 && geo.topZip3.length > 0 ? geo.topZip3.join(', ') : 'N/A';
+
+      // Templated narrative summary
+      const narrativeSummary = uniquePeople > 0
+        ? `This event attracted <strong>${uniquePeople.toLocaleString()}</strong> unique attendees with a <strong>${returningRate}%</strong> returning visitor rate. Peak activity occurred at <strong>${escapeHtml(peakHour)}</strong> local time. Of those who RSVP'd, <strong>${rsvpToAttendRate}%</strong> attended, and <strong>${scanToSignupRate}%</strong> of QR scans converted to signups.`
+        : 'No attendee data has been recorded for this event yet.';
+
+      // Data integrity line
+      const integrityStatus = integrity
+        ? (integrity.stale ? '⚠️ Data may be outdated' : (integrity.complete ? '✅ All data sources complete' : '⏳ Some data may be incomplete'))
+        : '⏳ Integrity status unknown';
+
+      // JSON endpoint URL
+      const jsonEndpointUrl = eventId ? `/api/v2/sharedreport?eventId=${encodeURIComponent(eventId)}` : null;
+
+      // Build Customer Summary export block HTML
+      const customerSummaryHtml = `
+        <div class="pane-card" id="customerSummaryExport" data-testid="customer-summary-export">
+          <h3>📋 Customer Summary (Export)</h3>
+          <p style="color: #475569; font-size: 0.875rem; line-height: 1.6; margin-bottom: 1rem;">
+            ${narrativeSummary}
+          </p>
+          <div style="background: #f1f5f9; border-radius: 6px; padding: 1rem; margin-bottom: 1rem;">
+            <div style="font-size: 0.75rem; color: #64748b; margin-bottom: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600;">Key Metrics</div>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0.75rem; font-size: 0.875rem;">
+              <div><span style="color: #64748b;">Unique People:</span> <strong>${uniquePeople.toLocaleString()}</strong></div>
+              <div><span style="color: #64748b;">Returning Rate:</span> <strong>${returningRate}%</strong></div>
+              <div><span style="color: #64748b;">Peak Hour:</span> <strong>${escapeHtml(peakHour)}</strong></div>
+              <div><span style="color: #64748b;">RSVP→Attend:</span> <strong>${rsvpToAttendRate}%</strong></div>
+              <div><span style="color: #64748b;">Scan→Signup:</span> <strong>${scanToSignupRate}%</strong></div>
+              <div><span style="color: #64748b;">Top Regions:</span> <strong>${escapeHtml(topZips)}</strong></div>
+            </div>
+          </div>
+          <div style="display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; font-size: 0.8125rem; color: #64748b; border-top: 1px solid #e2e8f0; padding-top: 1rem;">
+            <span data-testid="customer-summary-integrity">${integrityStatus}</span>
+            ${jsonEndpointUrl ? `<a href="${jsonEndpointUrl}" target="_blank" rel="noopener noreferrer" style="color: #3b82f6; text-decoration: none; display: inline-flex; align-items: center; gap: 0.25rem;" data-testid="customer-summary-json-link">📄 Raw JSON <span style="font-size: 0.75rem;">↗</span></a>` : ''}
+          </div>
+        </div>
+      `;
+
+      container.innerHTML = `
+        ${notesHtml}
+
+        <div class="pane-card">
+          <h3>👥 Audience Summary</h3>
+          <div class="metric-row">
+            <span class="metric-label">Unique People</span>
+            <span class="metric-value">${(summary.uniquePeople || 0).toLocaleString()}</span>
+          </div>
+          <div class="metric-row">
+            <span class="metric-label">Returning Rate</span>
+            <span class="metric-value">${((summary.returningRate || 0) * 100).toFixed(1)}%</span>
+          </div>
+          <div class="metric-row">
+            <span class="metric-label">Peak Hour (Local)</span>
+            <span class="metric-value">${escapeHtml(summary.peakHourLocal || '--:--')}</span>
+          </div>
+        </div>
+
+        <div class="pane-card">
+          <h3>📍 Geographic Distribution</h3>
+          <div style="margin-top: 0.5rem;">
+            <div style="font-size: 0.75rem; color: #64748b; margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 0.05em;">Top ZIP-3 Prefixes</div>
+            ${geoHtml}
+          </div>
+        </div>
+
+        <div class="pane-card">
+          <h3>🎯 Conversion Outcomes</h3>
+          <div class="metric-row">
+            <span class="metric-label">RSVP → Attend Rate</span>
+            <span class="metric-value">${((outcomes.rsvpToAttendRate || 0) * 100).toFixed(1)}%</span>
+          </div>
+          <div class="metric-row">
+            <span class="metric-label">Scan → Signup Rate</span>
+            <span class="metric-value">${((outcomes.scanToSignupRate || 0) * 100).toFixed(1)}%</span>
+          </div>
+        </div>
+
+        ${customerSummaryHtml}
+      `;
+    }
+
+    function toggleLoading(isLoading) {
+      document.getElementById('loading').style.display = isLoading ? 'block' : 'none';
+      document.getElementById('metrics').style.display = isLoading ? 'none' : 'block';
+      document.getElementById('errorState').style.display = 'none';
+    }
+
+    // S12/S13: Use shared StateRenderer for consistent error handling
+    // Accepts either a message string or an error object from safeRpc
+    function showError(messageOrError) {
+      document.getElementById('loading').style.display = 'none';
+      document.getElementById('metrics').style.display = 'none';
+
+      const errorContainer = document.getElementById('errorState');
+      const { StateRenderer } = SharedUtils;
+
+      // S13: Handle error objects from safeRpc (has code/message properties)
+      const message = messageOrError?.message || String(messageOrError || '');
+
+      // Handle portfolio-specific messages (already user-friendly)
+      if (message && String(message).toLowerCase().includes('portfolio')) {
+        StateRenderer.showError(errorContainer, {
+          title: 'Unable to Load Report',
+          message: message,
+          hint: 'Please try again in a moment.',
+          onRetry: loadReport
+        });
+      } else {
+        // S13: Use StateRenderer's auto-detection which handles SERVICE_UNAVAILABLE, TIMEOUT, etc.
+        // Pass the full error object for proper classification
+        StateRenderer.showFromError(errorContainer, messageOrError, {
+          onRetry: loadReport
+        });
+      }
+
+      errorContainer.style.display = 'block';
+    }
+
+    /**
+     * Toggle collapsible detail section
+     * @param {string} sectionId - The ID of the section to toggle
+     */
+    function toggleDetailSection(sectionId) {
+      const section = document.getElementById(sectionId);
+      if (!section) return;
+
+      const isCollapsed = section.classList.contains('collapsed');
+      const toggleBtn = section.querySelector('.section-toggle');
+
+      if (isCollapsed) {
+        section.classList.remove('collapsed');
+        if (toggleBtn) toggleBtn.setAttribute('aria-expanded', 'true');
+      } else {
+        section.classList.add('collapsed');
+        if (toggleBtn) toggleBtn.setAttribute('aria-expanded', 'false');
+      }
+    }
+
+    /**
+     * Expand all detail sections (useful for printing or full view)
+     */
+    function expandAllDetailSections() {
+      document.querySelectorAll('.detail-section.collapsed').forEach(section => {
+        section.classList.remove('collapsed');
+        const toggleBtn = section.querySelector('.section-toggle');
+        if (toggleBtn) toggleBtn.setAttribute('aria-expanded', 'true');
+      });
+    }
+
+    // Feature 5: Render Top Event / Top Sponsor Callouts (by highest CTR)
+    function renderTopCallouts(events, sponsors) {
+      const container = document.getElementById('topCallouts');
+      let html = '';
+
+      // Top Sponsor (by CTR) - show first per spec order
+      if (sponsors && sponsors.length > 0) {
+        const topSponsor = sponsors.reduce((a, b) => (b.ctr || 0) > (a.ctr || 0) ? b : a);
+        html += `
+          <div class="top-callout">
+            <div class="callout-icon">⭐</div>
+            <div class="callout-label">Top Sponsor</div>
+            <div class="callout-name">${escapeHtml(topSponsor.name || topSponsor.id || 'Sponsor')} — ${(topSponsor.ctr || 0).toFixed(1)}% CTR</div>
+          </div>
+        `;
+      }
+
+      // Top Event (by CTR)
+      if (events && events.length > 0) {
+        const topEvent = events.reduce((a, b) => (b.ctr || 0) > (a.ctr || 0) ? b : a);
+        html += `
+          <div class="top-callout event">
+            <div class="callout-icon">🏆</div>
+            <div class="callout-label">Top Event</div>
+            <div class="callout-name">${escapeHtml(topEvent.name || topEvent.id || 'Event')} — ${(topEvent.ctr || 0).toFixed(1)}% CTR</div>
+          </div>
+        `;
+      }
+
+      container.innerHTML = html;
+      container.style.display = html ? '' : 'none';
+    }
+
+    // Render Top Sponsors Card - highlights top 3 sponsors by clicks
+    function renderTopSponsorsCard(topSponsors) {
+      const container = document.getElementById('topSponsorsCard');
+
+      if (!topSponsors || !topSponsors.length) {
+        container.style.display = 'none';
+        return;
+      }
+
+      const rankEmojis = ['🥇', '🥈', '🥉'];
+      const items = topSponsors.slice(0, 3).map(function(sponsor, index) {
+        return `
+          <div class="top-sponsor-item">
+            <span class="top-sponsor-rank">${rankEmojis[index] || '#' + (index + 1)}</span>
+            <span class="top-sponsor-name">${escapeHtml(sponsor.name || sponsor.id || 'Sponsor')}</span>
+            <span class="top-sponsor-metric">
+              <span class="clicks-value">${(sponsor.clicks || 0).toLocaleString()} clicks</span>
+              <span class="ctr-badge">${(sponsor.ctr || 0).toFixed(1)}% CTR</span>
+            </span>
+          </div>
+        `;
+      }).join('');
+
+      container.innerHTML = `
+        <div class="top-sponsors-card">
+          <h3>🏆 Top Sponsors</h3>
+          <div class="top-sponsors-list">
+            ${items}
+          </div>
+        </div>
+      `;
+      container.style.display = 'block';
+    }
+
+    /**
+     * Story 11: Render Sponsor Funnel Card
+     * Shows at-a-glance funnel metrics: Impressions → QR Scans → Clicks → Signups
+     * with conversion rates between stages.
+     *
+     * @param {Object} summary - The summary object from SharedAnalytics
+     */
+    function renderSponsorFunnelCard(summary) {
+      const container = document.getElementById('sponsorFunnelCard');
+      if (!container) return;
+
+      // Extract values with safe defaults
+      const impressions = summary.totalImpressions || 0;
+      const qrScans = summary.totalQrScans || 0;
+      const clicks = summary.totalClicks || 0;
+      const signups = summary.totalSignups || 0;
+
+      // Check if there's any data at all
+      const hasData = impressions > 0 || qrScans > 0 || clicks > 0 || signups > 0;
+
+      if (!hasData) {
+        // Empty state - clear message, not blanks or NaN
+        container.innerHTML = `
+          <div class="sponsor-funnel-card">
+            <h3>📊 Engagement Funnel</h3>
+            <div class="funnel-empty-state">
+              <div class="empty-icon">📭</div>
+              <p>No engagement data yet. Once attendees start interacting with your content, you'll see your funnel metrics here.</p>
+            </div>
+          </div>
+        `;
+        return;
+      }
+
+      // Calculate conversion rates (safe division - avoid NaN)
+      // Scan Rate: QR scans as % of impressions
+      const scanRate = impressions > 0 ? (qrScans / impressions * 100) : 0;
+      // Click Rate (CTR): clicks as % of impressions
+      const clickRate = impressions > 0 ? (clicks / impressions * 100) : 0;
+      // Total interactions for conversion calc
+      const totalInteractions = qrScans + clicks;
+      // Conversion Rate: signups as % of total interactions (people who engaged)
+      const conversionRate = totalInteractions > 0 ? (signups / totalInteractions * 100) : 0;
+      // Overall funnel rate: signups as % of impressions
+      const overallRate = impressions > 0 ? (signups / impressions * 100) : 0;
+
+      // Format rate display - show % or "—" if zero impressions
+      function formatRate(rate, label) {
+        if (impressions === 0) return '<span class="stage-rate neutral">—</span>';
+        return '<span class="stage-rate">' + rate.toFixed(1) + '% ' + label + '</span>';
+      }
+
+      // Determine subtitle based on view
+      const subtitle = IS_SPONSOR_VIEW
+        ? 'Your engagement journey'
+        : 'Sponsor engagement overview';
+
+      container.innerHTML = `
+        <div class="sponsor-funnel-card">
+          <h3>
+            📊 Engagement Funnel
+            <span class="funnel-subtitle">${subtitle}</span>
+          </h3>
+          <div class="funnel-stages">
+            <div class="funnel-stage">
+              <div class="stage-label">Impressions</div>
+              <div class="stage-value">${impressions.toLocaleString()}</div>
+              <div class="stage-rate neutral">Top of funnel</div>
+            </div>
+            <div class="funnel-stage">
+              <div class="stage-label">QR Scans</div>
+              <div class="stage-value">${qrScans.toLocaleString()}</div>
+              ${formatRate(scanRate, 'scan rate')}
+            </div>
+            <div class="funnel-stage">
+              <div class="stage-label">Clicks</div>
+              <div class="stage-value">${clicks.toLocaleString()}</div>
+              ${formatRate(clickRate, 'CTR')}
+            </div>
+            <div class="funnel-stage">
+              <div class="stage-label">Signups</div>
+              <div class="stage-value">${signups.toLocaleString()}</div>
+              ${totalInteractions > 0 ? '<span class="stage-rate">' + conversionRate.toFixed(1) + '% conversion</span>' : '<span class="stage-rate neutral">—</span>'}
+            </div>
+          </div>
+          <div class="funnel-summary">
+            <div class="funnel-summary-item">
+              <div class="summary-label">Overall CTR</div>
+              <div class="summary-value">${impressions > 0 ? clickRate.toFixed(2) : '0.00'}%</div>
+            </div>
+            <div class="funnel-summary-item">
+              <div class="summary-label">Total Interactions</div>
+              <div class="summary-value">${totalInteractions.toLocaleString()}</div>
+            </div>
+            <div class="funnel-summary-item">
+              <div class="summary-label">Funnel Rate</div>
+              <div class="summary-value">${impressions > 0 ? overallRate.toFixed(2) : '0.00'}%</div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderReport(data) {
+      // Defensive defaults
+      const summary = data.summary || {};
+      const surfaces = Array.isArray(data.surfaces) ? data.surfaces : [];
+      const sponsors = Array.isArray(data.sponsors) ? data.sponsors : [];
+      const events = Array.isArray(data.events) ? data.events : [];
+      const topSponsors = Array.isArray(data.topSponsors) ? data.topSponsors : [];
+
+      // Update header with sponsor name if in sponsor view
+      if (IS_SPONSOR_VIEW && sponsors.length > 0) {
+        const sponsorName = sponsors[0].name || SPONSOR_ID;
+        updateHeaderForSponsorView(sponsorName);
+      }
+
+      // Story 11: Render funnel card at the top for sponsor-first view
+      renderSponsorFunnelCard(summary);
+
+      renderSummaryMetrics(summary);
+
+      // Render Top Sponsors Card (organizer view only, appears after metrics grid)
+      if (!IS_SPONSOR_VIEW) {
+        renderTopSponsorsCard(topSponsors);
+      }
+
+      renderSurfacePerformance(surfaces);
+
+      // Feature 5: Render top callouts
+      renderTopCallouts(events, sponsors);
+
+      if (IS_SPONSOR_VIEW) {
+        // In sponsor mode, focus on sponsor + event breakdown
+        if (sponsors.length) {
+          renderSponsorPerformance(sponsors);
+        }
+        if (events.length) {
+          document.getElementById('eventPerformanceCard').style.display = 'block';
+          renderEventPerformance(events);
+        }
+      } else {
+        // Organizer view: show sponsors + events if present
+        if (sponsors.length) {
+          renderSponsorPerformance(sponsors);
+        }
+        if (events.length) {
+          document.getElementById('eventPerformanceCard').style.display = 'block';
+          renderEventPerformance(events);
+        }
+      }
+
+      // Last updated label
+      const lastUpdated = data.lastUpdatedISO || data.lastUpdated || null;
+      if (lastUpdated) {
+        document.getElementById('lastUpdated').textContent =
+          'Last updated: ' + new Date(lastUpdated).toLocaleString();
+      } else {
+        document.getElementById('lastUpdated').textContent = 'Last updated: not available';
+      }
+    }
+
+    function renderSummaryMetrics(summary) {
+      const grid = document.getElementById('metricsGrid');
+      grid.innerHTML = '';
+
+      // Use sponsor-friendly labels with helpful subtitles
+      // Sponsors first - gives immediate context on who's being tracked
+      const metricCards = [
+        {
+          label: 'Sponsors',
+          sublabel: 'Active sponsors',
+          value: summary.uniqueSponsors || 0
+        },
+        {
+          label: 'Total Views',
+          sublabel: 'Times your content was seen',
+          value: (summary.totalImpressions || 0).toLocaleString()
+        },
+        {
+          label: 'Total Clicks',
+          sublabel: 'Clicks on sponsor links',
+          value: (summary.totalClicks || 0).toLocaleString()
+        },
+        {
+          label: 'QR Scans',
+          sublabel: 'QR codes scanned',
+          value: (summary.totalQrScans || 0).toLocaleString()
+        },
+        {
+          label: 'Signups',
+          sublabel: 'Form submissions',
+          value: (summary.totalSignups || 0).toLocaleString()
+        },
+        {
+          label: 'Events',
+          sublabel: 'Active events',
+          value: summary.uniqueEvents || 0
+        }
+      ];
+
+      metricCards.forEach(metric => {
+        const card = document.createElement('div');
+        card.className = 'metric-card';
+        card.innerHTML = `
+          <div class="label">${metric.label}</div>
+          <div class="value">${metric.value}</div>
+          ${metric.sublabel ? '<div class="sublabel">' + metric.sublabel + '</div>' : ''}
+        `;
+        grid.appendChild(card);
+      });
+    }
+
+    // Map surface IDs to user-friendly descriptions
+    const SURFACE_DESCRIPTIONS = {
+      'poster': 'Physical posters at the event venue',
+      'display': 'Digital screens and displays',
+      'public': 'Public event pages online',
+      'signup': 'Registration and signup forms'
+    };
+
+    function renderSurfacePerformance(surfaces) {
+      const container = document.getElementById('surfacePerformance');
+
+      if (!surfaces.length) {
+        container.innerHTML = `
+          <div style="text-align: center; padding: 24px; color: #64748b;">
+            <div style="font-size: 1.5rem; margin-bottom: 8px; opacity: 0.5;">📊</div>
+            <p style="margin: 0; font-weight: 500; color: #475569;">No Placement Data Yet</p>
+            <p style="margin: 8px 0 0; font-size: 0.85rem;">Placement performance data will appear here once sponsor content has been viewed.</p>
+          </div>
+        `;
+        return;
+      }
+
+      const rows = surfaces.map(surface => {
+        const impressions = surface.impressions || 0;
+        const clicks = surface.clicks || 0;
+        const qrScans = surface.qrScans || 0;
+        const rate = typeof surface.engagementRate === 'number'
+          ? surface.engagementRate
+          : (impressions > 0 ? (clicks + qrScans) * 100 / impressions : 0);
+        const label = surface.label || surface.id || 'Unknown';
+        const description = SURFACE_DESCRIPTIONS[surface.id] || '';
+
+        const badgeClass =
+          rate >= 5 ? 'success' :
+          rate >= 2 ? 'info' : 'warning';
+
+        return `
+          <tr>
+            <td data-label="Placement">
+              <strong>${escapeHtml(label)}</strong>
+              ${description ? '<span class="surface-desc">' + escapeHtml(description) + '</span>' : ''}
+            </td>
+            <td data-label="Views">${impressions.toLocaleString()}</td>
+            <td data-label="Clicks">${clicks.toLocaleString()}</td>
+            <td data-label="Scans">${qrScans.toLocaleString()}</td>
+            <td data-label="Rate">
+              <span class="badge ${badgeClass}">${rate.toFixed(1)}%</span>
+            </td>
+          </tr>
+        `;
+      }).join('');
+
+      container.innerHTML = `
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th class="th-with-tooltip" data-tooltip="Where sponsor content appears">Placement</th>
+              <th class="th-with-tooltip" data-tooltip="Times content was displayed">Views</th>
+              <th class="th-with-tooltip" data-tooltip="Clicks on sponsor links">Clicks</th>
+              <th class="th-with-tooltip" data-tooltip="QR codes scanned">Scans</th>
+              <th class="th-with-tooltip" data-tooltip="% who interacted">Rate</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows}
+          </tbody>
+        </table>
+      `;
+    }
+
+    function renderSponsorPerformance(sponsors) {
+      const container = document.getElementById('sponsorPerformance');
+
+      // Update help text based on view (human-readable language)
+      const helpText = document.getElementById('sponsorHelpText');
+      if (helpText) {
+        if (IS_SPONSOR_VIEW) {
+          helpText.textContent = 'Your performance across all placements. Click Rate shows what percentage of viewers clicked your content.';
+        } else {
+          helpText.textContent = 'See how each sponsor is performing. Tap "Share Report" to give sponsors access to their own analytics.';
+        }
+      }
+
+      if (!sponsors.length) {
+        container.innerHTML = `
+          <div style="text-align: center; padding: 24px; color: #64748b;">
+            <div style="font-size: 1.5rem; margin-bottom: 8px; opacity: 0.5;">🏢</div>
+            <p style="margin: 0; font-weight: 500; color: #475569;">No Sponsor Activity Yet</p>
+            <p style="margin: 8px 0 0; font-size: 0.85rem;">Sponsor performance data will appear here once sponsors have been added and their content has been viewed.</p>
+          </div>
+        `;
+        return;
+      }
+
+      // Show QR column only in organizer view (not sponsor view)
+      const showQrColumn = !IS_SPONSOR_VIEW;
+
+      const rows = sponsors.map((sponsor, index) => {
+        const ctr = sponsor.ctr || 0;
+        const badgeClass =
+          ctr >= 2 ? 'success' :
+          ctr >= 1 ? 'info' : 'warning';
+
+        const qrCell = showQrColumn
+          ? `<td data-label="Share" style="text-align:center;">
+               <button class="btn-secondary sponsor-qr-btn" data-sponsor-id="${escapeHtml(sponsor.id || '')}" data-sponsor-name="${escapeHtml(sponsor.name || sponsor.id || 'Sponsor')}" style="padding:6px 12px;font-size:0.75rem;">Share Report</button>
+             </td>`
+          : '';
+
+        return `
+          <tr>
+            <td data-label="Sponsor">
+              <strong>${escapeHtml(sponsor.name || sponsor.id || ('Sponsor #' + (index + 1)))}</strong>
+            </td>
+            <td data-label="Views">${(sponsor.impressions || 0).toLocaleString()}</td>
+            <td data-label="Clicks">${(sponsor.clicks || 0).toLocaleString()}</td>
+            <td data-label="Rate">
+              <span class="badge ${badgeClass}">${ctr.toFixed(2)}%</span>
+            </td>
+            ${qrCell}
+          </tr>
+        `;
+      }).join('');
+
+      const qrHeader = showQrColumn ? '<th class="th-with-tooltip" data-tooltip="Generate QR code to share report with sponsor">Share</th>' : '';
+
+      container.innerHTML = `
+        <table class="data-table sponsor-table">
+          <thead>
+            <tr>
+              <th>Sponsor</th>
+              <th class="th-with-tooltip" data-tooltip="Times content was displayed">Views</th>
+              <th class="th-with-tooltip" data-tooltip="Clicks on content">Clicks</th>
+              <th class="th-with-tooltip" data-tooltip="Clicks ÷ views">Rate</th>
+              ${qrHeader}
+            </tr>
+          </thead>
+          <tbody>
+            ${rows}
+          </tbody>
+        </table>
+      `;
+
+      // Wire up QR buttons if in organizer view
+      if (showQrColumn) {
+        wireSponsorQrButtons(container);
+      }
+    }
+
+    /**
+     * Escape HTML to prevent XSS
+     * @param {string} str - String to escape
+     * @returns {string} Escaped string
+     */
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    /**
+     * Wire QR button click handlers
+     * @param {HTMLElement} container - Container element
+     */
+    function wireSponsorQrButtons(container) {
+      container.querySelectorAll('.sponsor-qr-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+          const sponsorId = this.dataset.sponsorId;
+          const sponsorName = this.dataset.sponsorName;
+          if (!sponsorId) return;
+          fetchAndShowSponsorQr(sponsorId, sponsorName);
+        });
+      });
+    }
+
+    /**
+     * Fetch and display QR code for a sponsor's report
+     * @param {string} sponsorId - The sponsor ID
+     * @param {string} sponsorName - The sponsor name for display
+     */
+    async function fetchAndShowSponsorQr(sponsorId, sponsorName) {
+      // Show loading modal
+      showSponsorQrModal(sponsorName, null, true);
+
+      try {
+        const result = await NU.rpc('api_getSponsorReportQr', {
+          sponsorId: sponsorId,
+          brandId: BRAND_ID
+        });
+
+        if (!result || !result.ok) {
+          showSponsorQrModal(sponsorName, null, false, result?.message || 'Failed to generate QR code');
+          return;
+        }
+
+        // Respect invariant: no QR for unverified URLs
+        if (!result.value.verified || !result.value.qrB64) {
+          showSponsorQrModal(sponsorName, null, false, 'QR code unavailable - URL not verified');
+          return;
+        }
+
+        // Show QR code
+        showSponsorQrModal(sponsorName, result.value.qrB64, false, null, result.value.url);
+
+      } catch (e) {
+        console.error('Failed to fetch sponsor QR:', e);
+        showSponsorQrModal(sponsorName, null, false, 'Network error - please try again');
+      }
+    }
+
+    /**
+     * Display modal with sponsor QR code
+     * @param {string} sponsorName - Sponsor name for title
+     * @param {string|null} qrB64 - Base64 encoded QR image (null if loading/error)
+     * @param {boolean} loading - Show loading spinner
+     * @param {string|null} error - Error message to display
+     * @param {string|null} url - The URL the QR encodes (for display)
+     */
+    function showSponsorQrModal(sponsorName, qrB64, loading, error, url) {
+      // Remove existing modal if any
+      const existing = document.getElementById('sponsorQrModal');
+      if (existing) existing.remove();
+
+      let content = '';
+      if (loading) {
+        content = '<div style="padding:40px;text-align:center;"><span class="spinner"></span><p style="margin-top:12px;color:#64748b;">Loading QR code...</p></div>';
+      } else if (error) {
+        content = '<div style="padding:40px;text-align:center;color:#ef4444;"><p>' + escapeHtml(error) + '</p></div>';
+      } else if (qrB64) {
+        content = `
+          <div style="text-align:center;padding:20px;">
+            <img src="data:image/png;base64,${qrB64}" alt="Sponsor report QR" style="max-width:200px;height:auto;border:1px solid #e2e8f0;border-radius:8px;">
+            <p style="margin-top:12px;font-size:0.75rem;color:#64748b;word-break:break-all;">${escapeHtml(url || '')}</p>
+            <p style="margin-top:8px;font-size:0.7rem;color:#94a3b8;">Scan to view sponsor analytics</p>
+          </div>
+        `;
+      }
+
+      const modal = document.createElement('div');
+      modal.id = 'sponsorQrModal';
+      modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:9999;';
+      modal.innerHTML = `
+        <div style="background:white;border-radius:12px;max-width:320px;width:90%;box-shadow:0 25px 50px -12px rgba(0,0,0,0.25);">
+          <div style="padding:16px 20px;border-bottom:1px solid #e2e8f0;display:flex;justify-content:space-between;align-items:center;">
+            <h3 style="margin:0;font-size:1rem;font-weight:600;">${escapeHtml(sponsorName)} QR</h3>
+            <button onclick="closeSponsorQrModal()" style="background:none;border:none;cursor:pointer;font-size:1.25rem;color:#64748b;padding:0;line-height:1;">&times;</button>
+          </div>
+          ${content}
+        </div>
+      `;
+
+      // Close on backdrop click
+      modal.addEventListener('click', function(e) {
+        if (e.target === modal) closeSponsorQrModal();
+      });
+
+      document.body.appendChild(modal);
+    }
+
+    /**
+     * Close the sponsor QR modal
+     */
+    function closeSponsorQrModal() {
+      const modal = document.getElementById('sponsorQrModal');
+      if (modal) modal.remove();
+    }
+
+    function renderEventPerformance(events) {
+      const container = document.getElementById('eventPerformance');
+
+      if (!events.length) {
+        container.innerHTML = `
+          <div style="text-align: center; padding: 24px; color: #64748b;">
+            <div style="font-size: 1.5rem; margin-bottom: 8px; opacity: 0.5;">🎉</div>
+            <p style="margin: 0; font-weight: 500; color: #475569;">No Event Analytics Yet</p>
+            <p style="margin: 8px 0 0; font-size: 0.85rem;">Event performance data will appear here once events have been created and attendees have started engaging.</p>
+          </div>
+        `;
+        return;
+      }
+
+      const rows = events.map((ev, index) => {
+        const ctr = ev.ctr || 0;
+        const badgeClass =
+          ctr >= 2 ? 'success' :
+          ctr >= 1 ? 'info' : 'warning';
+
+        const rank =
+          index === 0 ? '🥇' :
+          index === 1 ? '🥈' :
+          index === 2 ? '🥉' : '#' + (index + 1);
+
+        const signups = ev.signupsCount || 0;
+
+        return `
+          <tr>
+            <td data-label="Event">
+              <div style="display:flex;align-items:center;gap:8px;">
+                <span style="font-size:1.1rem;">${rank}</span>
+                <strong>${escapeHtml(ev.name || ev.id)}</strong>
+              </div>
+            </td>
+            <td data-label="Views">${(ev.impressions || 0).toLocaleString()}</td>
+            <td data-label="Clicks">${(ev.clicks || 0).toLocaleString()}</td>
+            <td data-label="Signups">${signups.toLocaleString()}</td>
+            <td data-label="Rate">
+              <span class="badge ${badgeClass}">${ctr.toFixed(2)}%</span>
+            </td>
+          </tr>
+        `;
+      }).join('');
+
+      container.innerHTML = `
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Event</th>
+              <th class="th-with-tooltip" data-tooltip="Times content was displayed">Views</th>
+              <th class="th-with-tooltip" data-tooltip="Clicks on content">Clicks</th>
+              <th class="th-with-tooltip" data-tooltip="Form submissions">Signups</th>
+              <th class="th-with-tooltip" data-tooltip="Clicks ÷ views">Rate</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows}
+          </tbody>
+        </table>
+      `;
+    }
+
+    /**
+     * Expand first detail section on desktop for better UX
+     * On mobile (<=640px), keep all sections collapsed to reduce scroll
+     */
+    function initMobileCollapse() {
+      const isMobile = window.innerWidth <= 640;
+      if (!isMobile) {
+        // On desktop/tablet, expand the first detail section by default
+        const firstSection = document.getElementById('surfacePerformanceCard');
+        if (firstSection && firstSection.classList.contains('collapsed')) {
+          firstSection.classList.remove('collapsed');
+          const toggleBtn = firstSection.querySelector('.section-toggle');
+          if (toggleBtn) toggleBtn.setAttribute('aria-expanded', 'true');
+        }
+      }
+      // On mobile, all sections stay collapsed (already set in HTML)
+    }
+
+    window.addEventListener('load', function() {
+      loadReport();
+      initMobileCollapse();
+    });
+  </script>
+</body>
+</html>

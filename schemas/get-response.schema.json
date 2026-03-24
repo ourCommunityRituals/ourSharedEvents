@@ -1,0 +1,99 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zeventbook.com/schemas/get-response.schema.json",
+  "title": "Get Response",
+  "description": "API response schema for single entity GET endpoints (api_get for events, sponsors). Story 3.1 - API Response Schema Validation.",
+  "$comment": "Version 1.0 - Created 2025-12-11. Used by ?action=get endpoints.",
+  "type": "object",
+  "oneOf": [
+    { "$ref": "#/$defs/SuccessGetResponse" },
+    { "$ref": "#/$defs/ErrorResponse" },
+    { "$ref": "#/$defs/NotModifiedResponse" }
+  ],
+  "$defs": {
+    "SuccessGetResponse": {
+      "type": "object",
+      "required": ["ok", "value"],
+      "properties": {
+        "ok": {
+          "type": "boolean",
+          "const": true
+        },
+        "value": {
+          "type": "object",
+          "description": "Single entity - structure varies by scope (event, sponsor, etc.)",
+          "required": ["id"],
+          "properties": {
+            "id": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Entity unique identifier"
+            }
+          }
+        },
+        "etag": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Cache validation tag"
+        }
+      },
+      "additionalProperties": false
+    },
+    "ErrorResponse": {
+      "type": "object",
+      "required": ["ok", "code", "message"],
+      "properties": {
+        "ok": {
+          "type": "boolean",
+          "const": false
+        },
+        "code": {
+          "type": "string",
+          "enum": ["BAD_INPUT", "NOT_FOUND", "RATE_LIMITED", "INTERNAL", "CONTRACT", "FEATURE_DISABLED", "UNAUTHORIZED"]
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1
+        },
+        "corrId": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "NotModifiedResponse": {
+      "type": "object",
+      "required": ["ok", "notModified"],
+      "properties": {
+        "ok": {
+          "type": "boolean",
+          "const": true
+        },
+        "notModified": {
+          "type": "boolean",
+          "const": true
+        },
+        "etag": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "examples": [
+    {
+      "ok": true,
+      "value": {
+        "id": "EVT_123",
+        "slug": "summer-tournament",
+        "name": "Summer Tournament 2025"
+      },
+      "etag": "W/\"evt-abc123\""
+    },
+    {
+      "ok": false,
+      "code": "NOT_FOUND",
+      "message": "Event not found: EVT_invalid"
+    }
+  ]
+}

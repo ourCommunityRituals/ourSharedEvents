@@ -1,0 +1,335 @@
+<!--
+================================================================================
+MODULE: AdminForms.html
+PURPOSE: Sign-up forms and Google Forms template integration for Admin dashboard
+INCLUDED BY: Admin.html
+DEPENDENCIES: NUSDK.html (NU.rpc), SharedUtils.html (showToast, esc), AdminDisplay.html (saveEventPartial, getAdminKey), AdminEvents.html (overlay, updateChecklistStatus, fetchAdminBundleFromWorker)
+================================================================================
+Story 4.1: Extracted from Admin.html for modularization and maintainability.
+Story 2.3: Read operations now use Worker via fetchAdminBundleFromWorker
+Story 5.3: All APIs migrated to /api/v2/* endpoints (GAS retired)
+
+Functions exposed to global scope:
+  Sign-up Configuration:
+  - configureSignup()            → Open signup config panel
+  - loadSignupForms()            → Load signup forms from Worker
+  - saveAllSignupForms()         → Save signup forms to API
+  - closeSignupConfig()          → Close signup config panel
+
+  Google Forms Templates:
+  - openFormsTemplates()         → Open forms templates panel
+  - closeFormsTemplates()        → Close forms templates panel
+  - createFormTemplate(type)     → Create form from template (GAS)
+  - copyFormLink(inputId)        → Copy form link to clipboard
+================================================================================
+-->
+<script>
+(function() {
+  'use strict';
+
+  // ==========================================================================
+  // SIGN-UP CONFIGURATION
+  // ==========================================================================
+
+  /**
+   * Open sign-up configuration panel.
+   */
+  function configureSignup() {
+    const card = document.getElementById('signupCard');
+    if (card) {
+      card.style.display = '';
+    }
+    loadSignupForms();
+  }
+
+  /**
+   * Load sign-up form URLs from admin bundle or Worker.
+   *
+   * Story 2.3/5.3: Uses cached admin bundle data if available,
+   * otherwise fetches from Worker /api/v2/events/:id/bundle/admin (GAS retired)
+   */
+  async function loadSignupForms() {
+    const BRAND = window.BRAND || 'root';
+    const currentEventId = window.currentEventId;
+
+    if (!currentEventId) return;
+
+    if (typeof window.overlay === 'function') {
+      window.overlay(true);
+    }
+
+    // Story 2.3: Try to use cached admin bundle data first
+    let event = null;
+    if (window.currentAdminBundle && window.currentAdminBundle.event) {
+      event = window.currentAdminBundle.event;
+      console.log('[AdminForms] Using cached admin bundle for signup forms');
+    } else if (typeof window.fetchAdminBundleFromWorker === 'function') {
+      // Fetch from Worker if not cached
+      const res = await window.fetchAdminBundleFromWorker(currentEventId, BRAND);
+      if (res.ok && res.value) {
+        event = res.value.event;
+        console.log('[AdminForms] Fetched admin bundle from Worker for signup forms');
+      }
+    }
+
+    if (typeof window.overlay === 'function') {
+      window.overlay(false);
+    }
+
+    if (event) {
+      // Extract form URLs from event data
+      const links = event.links || {};
+      const ctas = event.ctas || {};
+
+      const registerUrl = document.getElementById('registerUrl');
+      const checkinUrl = document.getElementById('checkinUrl');
+      const walkinUrl = document.getElementById('walkinUrl');
+      const surveyUrl = document.getElementById('surveyUrl');
+
+      // Use signupUrl as register URL if available
+      if (registerUrl) registerUrl.value = links.signupUrl || ctas.primary?.url || '';
+      if (checkinUrl) checkinUrl.value = event.checkinUrl || '';
+      if (walkinUrl) walkinUrl.value = event.walkinUrl || '';
+      if (surveyUrl) surveyUrl.value = event.surveyUrl || '';
+    }
+  }
+
+  /**
+   * Save all sign-up form URLs to API.
+   * Uses canonical api_saveEvent via saveEventPartial (ZEVENT-003).
+   */
+  async function saveAllSignupForms() {
+    const currentEventId = window.currentEventId;
+    if (!currentEventId) return;
+
+    const data = {
+      registerUrl: document.getElementById('registerUrl')?.value.trim() || '',
+      checkinUrl: document.getElementById('checkinUrl')?.value.trim() || '',
+      walkinUrl: document.getElementById('walkinUrl')?.value.trim() || '',
+      surveyUrl: document.getElementById('surveyUrl')?.value.trim() || ''
+    };
+
+    if (typeof window.overlay === 'function') {
+      window.overlay(true);
+    }
+
+    // Use saveEventPartial from AdminDisplay.html
+    const res = await window.saveEventPartial(currentEventId, { data });
+
+    if (typeof window.overlay === 'function') {
+      window.overlay(false);
+    }
+
+    if (res.ok) {
+      if (window.SharedUtils) {
+        SharedUtils.showToast('Sign-up forms saved!', 'success');
+      }
+      closeSignupConfig();
+
+      // Update checklist status with new form URLs
+      if (window.currentEventData) {
+        window.currentEventData.data = window.currentEventData.data || {};
+        Object.assign(window.currentEventData.data, data);
+        if (typeof window.updateChecklistStatus === 'function') {
+          window.updateChecklistStatus(window.currentEventData);
+        }
+      }
+    } else {
+      if (window.SharedUtils) {
+        SharedUtils.showToast(`Error: ${res.message}`, 'error');
+      }
+    }
+  }
+
+  /**
+   * Close sign-up configuration panel.
+   */
+  function closeSignupConfig() {
+    const card = document.getElementById('signupCard');
+    if (card) {
+      card.style.display = 'none';
+    }
+  }
+
+  // ==========================================================================
+  // GOOGLE FORMS TEMPLATES
+  // ==========================================================================
+
+  /**
+   * Open forms templates panel.
+   */
+  function openFormsTemplates() {
+    const card = document.getElementById('formsCard');
+    if (card) {
+      card.style.display = '';
+    }
+  }
+
+  /**
+   * Close forms templates panel.
+   */
+  function closeFormsTemplates() {
+    const card = document.getElementById('formsCard');
+    if (card) {
+      card.style.display = 'none';
+    }
+  }
+
+  /**
+   * Create a Google Form from template.
+   * @param {string} templateType - Type of form (check-in, walk-in, survey)
+   *
+   * Story 2.3: Uses cached admin bundle for event name, then calls GAS for form creation
+   */
+  async function createFormTemplate(templateType) {
+    const BRAND = window.BRAND || 'root';
+    const currentEventId = window.currentEventId;
+
+    if (!currentEventId) {
+      if (window.SharedUtils) {
+        SharedUtils.showToast('Please select or create an event first.', 'warning');
+      }
+      return;
+    }
+
+    const displayMap = {
+      'check-in': 'checkin-form-display',
+      'walk-in': 'walkin-form-display',
+      'survey': 'survey-form-display'
+    };
+
+    const displayId = displayMap[templateType];
+    if (!displayId) return;
+
+    const displayDiv = document.getElementById(displayId);
+    if (displayDiv) {
+      displayDiv.innerHTML = '<p class="muted">Creating form...</p>';
+    }
+
+    if (typeof window.overlay === 'function') {
+      window.overlay(true);
+    }
+
+    // Story 2.3: Get event name from cached admin bundle
+    let eventName = 'Event';
+    if (window.currentAdminBundle && window.currentAdminBundle.event) {
+      eventName = window.currentAdminBundle.event.name || 'Event';
+      console.log('[AdminForms] Using cached event name:', eventName);
+    } else if (typeof window.fetchAdminBundleFromWorker === 'function') {
+      // Fetch from Worker if not cached
+      const eventRes = await window.fetchAdminBundleFromWorker(currentEventId, BRAND);
+      if (eventRes.ok && eventRes.value?.event?.name) {
+        eventName = eventRes.value.event.name;
+        console.log('[AdminForms] Fetched event name from Worker:', eventName);
+      }
+    }
+
+    // Get admin key using helper from AdminDisplay.html
+    const adminKey = typeof window.getAdminKey === 'function' ? window.getAdminKey() : '';
+
+    // Create form from template
+    const formRes = await NU.rpc('api_createFormFromTemplate', {
+      brandId: BRAND,
+      adminKey: adminKey,
+      templateType,
+      eventName,
+      eventId: currentEventId
+    });
+
+    if (!formRes.ok) {
+      if (typeof window.overlay === 'function') {
+        window.overlay(false);
+      }
+      // Use consistent inline error styling
+      if (displayDiv && window.SharedUtils) {
+        displayDiv.innerHTML = `<div class="error-card"><p>${SharedUtils.esc(formRes.message || 'Failed to create form')}</p></div>`;
+      }
+      return;
+    }
+
+    const { publishedUrl, editUrl, responseSheetUrl } = formRes.value;
+
+    // Generate shortlink for the published form
+    const shortlinkRes = await NU.rpc('api_generateFormShortlink', {
+      brandId: BRAND,
+      adminKey: adminKey,
+      formUrl: publishedUrl,
+      formType: templateType,
+      eventId: currentEventId
+    });
+
+    if (typeof window.overlay === 'function') {
+      window.overlay(false);
+    }
+
+    const shortlink = shortlinkRes.ok ? shortlinkRes.value.shortlink : publishedUrl;
+
+    // Display form links with copy buttons
+    if (displayDiv) {
+      displayDiv.innerHTML = `
+        <div style="background: #f1f5f9; padding: 12px; border-radius: 4px; margin-top: 8px;">
+          <div style="margin-bottom: 8px;">
+            <strong>Shortlink:</strong><br>
+            <input type="text" id="${templateType}-shortlink" value="${shortlink}" readonly
+                   style="width: 100%; margin-top: 4px; font-size: 12px;">
+            <button class="btn-secondary" onclick="copyFormLink('${templateType}-shortlink')"
+                    style="margin-top: 4px; width: 100%;">
+              Copy Shortlink
+            </button>
+          </div>
+          <div style="margin-top: 12px;">
+            <a href="${editUrl}" target="_blank" rel="noopener" class="btn-secondary"
+               style="display: inline-block; margin-right: 8px;">
+              Edit Form
+            </a>
+            <a href="${responseSheetUrl}" target="_blank" rel="noopener" class="btn-secondary"
+               style="display: inline-block;">
+              View Responses
+            </a>
+          </div>
+          <div style="margin-top: 8px; font-size: 12px; color: #64748b;">
+            Form created successfully! Share the shortlink with attendees.
+          </div>
+        </div>
+      `;
+    }
+  }
+
+  /**
+   * Copy form link to clipboard.
+   * @param {string} inputId - ID of input element containing link
+   */
+  function copyFormLink(inputId) {
+    const input = document.getElementById(inputId);
+    if (input) {
+      input.select();
+      input.setSelectionRange(0, 99999); // For mobile devices
+      document.execCommand('copy');
+
+      // Visual feedback
+      const originalValue = input.value;
+      input.value = 'Copied!';
+      setTimeout(() => {
+        input.value = originalValue;
+      }, 1000);
+    }
+  }
+
+  // ==========================================================================
+  // EXPOSE FUNCTIONS TO GLOBAL SCOPE
+  // ==========================================================================
+
+  // Sign-up configuration
+  window.configureSignup = configureSignup;
+  window.loadSignupForms = loadSignupForms;
+  window.saveAllSignupForms = saveAllSignupForms;
+  window.closeSignupConfig = closeSignupConfig;
+
+  // Google Forms templates
+  window.openFormsTemplates = openFormsTemplates;
+  window.closeFormsTemplates = closeFormsTemplates;
+  window.createFormTemplate = createFormTemplate;
+  window.copyFormLink = copyFormLink;
+
+})();
+</script>

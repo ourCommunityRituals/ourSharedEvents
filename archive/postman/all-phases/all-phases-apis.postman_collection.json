@@ -1,0 +1,154 @@
+{
+  "info": {
+    "name": "⚡ TRIANGLE: All Phases APIs",
+    "description": "API endpoints that are always available across all Triangle phases\n\nThis collection covers:\n- System status and health checks\n- Configuration management\n- Diagnostics\n- Authentication\n\nTriangle Phase: All Phases (Blue #3b82f6)\nUser Roles: All users (Event Manager, Sponsor, Consumer)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "version": "1.0.0"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "https://script.google.com/macros/s/YOUR_DEPLOYMENT_ID/exec",
+      "type": "string"
+    },
+    {
+      "key": "admin_key",
+      "value": "CHANGE_ME_root",
+      "type": "string"
+    },
+    {
+      "key": "brand_id",
+      "value": "root",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "System Status",
+      "item": [
+        {
+          "name": "Health Check",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response has ok=true', function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.ok).to.eql(true);",
+                  "});",
+                  "",
+                  "pm.test('Response includes build info', function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.value).to.have.property('build');",
+                  "    pm.expect(jsonData.value).to.have.property('contract');",
+                  "});",
+                  "",
+                  "pm.test('Database is connected', function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.value.db.ok).to.eql(true);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}?action=status",
+              "host": ["{{base_url}}"],
+              "query": [
+                {
+                  "key": "action",
+                  "value": "status"
+                }
+              ]
+            },
+            "description": "Check if API is running and database is connected"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Configuration",
+      "item": [
+        {
+          "name": "Get Configuration",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Response includes brand info', function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.value).to.have.property('brand');",
+                  "});",
+                  "",
+                  "pm.test('Response includes templates', function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.value).to.have.property('templates');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}?action=config&brand={{brand_id}}&scope=events",
+              "host": ["{{base_url}}"],
+              "query": [
+                {
+                  "key": "action",
+                  "value": "config"
+                },
+                {
+                  "key": "brand",
+                  "value": "{{brand_id}}"
+                },
+                {
+                  "key": "scope",
+                  "value": "events"
+                }
+              ]
+            },
+            "description": "Get brand configuration and available templates"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Diagnostics",
+      "item": [
+        {
+          "name": "Run Diagnostics",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}?action=diagnostics&brand={{brand_id}}",
+              "host": ["{{base_url}}"],
+              "query": [
+                {
+                  "key": "action",
+                  "value": "diagnostics"
+                },
+                {
+                  "key": "brand",
+                  "value": "{{brand_id}}"
+                }
+              ]
+            },
+            "description": "Run system diagnostics and health checks"
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+function getAdminKeys() {
+  const props = PropertiesService.getScriptProperties();
+  const brands = ['ROOT', 'ABC', 'CBC', 'CBL'];
+  
+  Logger.log('=== Admin Keys ===');
+  brands.forEach(brand => {
+    const key = `ADMIN_SECRET_${brand}`;
+    const value = props.getProperty(key);
+    Logger.log(`${key}: ${value || 'NOT SET'}`);
+  });
+}

@@ -1,0 +1,195 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zeventbook.com/schemas/bundle-response.schema.json",
+  "title": "Bundle Response",
+  "description": "API response schema for bundle endpoints (getPublicBundle, getDisplayBundle, getPosterBundle, getAdminBundle). Story 3.1 - API Response Schema Validation.",
+  "$comment": "Version 1.0 - Created 2025-12-11. Bundles combine event data with brand configuration for surface rendering.",
+  "type": "object",
+  "oneOf": [
+    { "$ref": "#/$defs/SuccessBundleResponse" },
+    { "$ref": "#/$defs/ErrorResponse" },
+    { "$ref": "#/$defs/NotModifiedResponse" }
+  ],
+  "$defs": {
+    "SuccessBundleResponse": {
+      "type": "object",
+      "required": ["ok", "value"],
+      "properties": {
+        "ok": {
+          "type": "boolean",
+          "const": true
+        },
+        "value": {
+          "$ref": "#/$defs/BundleValue"
+        },
+        "etag": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Cache validation tag for SWR support"
+        }
+      },
+      "additionalProperties": false
+    },
+    "BundleValue": {
+      "type": "object",
+      "description": "Bundle payload with event and brand configuration",
+      "required": ["event", "config"],
+      "properties": {
+        "event": {
+          "type": "object",
+          "description": "Event data - structure defined by event.schema.json",
+          "required": ["id", "slug", "name"],
+          "properties": {
+            "id": { "type": "string" },
+            "slug": { "type": "string" },
+            "name": { "type": "string" },
+            "startDateISO": { "type": "string" },
+            "venue": { "type": "string" },
+            "links": { "type": "object" },
+            "qr": { "type": "object" },
+            "ctas": { "type": "object" },
+            "settings": { "type": "object" },
+            "createdAtISO": { "type": "string" },
+            "updatedAtISO": { "type": "string" }
+          }
+        },
+        "config": {
+          "$ref": "#/$defs/BrandConfig"
+        }
+      },
+      "additionalProperties": false
+    },
+    "BrandConfig": {
+      "type": "object",
+      "description": "Brand configuration for multi-tenant support",
+      "required": ["brandId", "brandName", "appTitle"],
+      "properties": {
+        "brandId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 32,
+          "pattern": "^[a-z0-9_-]+$",
+          "description": "Unique brand identifier (e.g., 'root', 'abc', 'cbc')"
+        },
+        "brandName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100,
+          "description": "Human-readable brand name"
+        },
+        "appTitle": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100,
+          "description": "Application title for the brand"
+        },
+        "logoUrl": {
+          "type": ["string", "null"],
+          "description": "Optional brand logo URL"
+        },
+        "primaryColor": {
+          "type": ["string", "null"],
+          "pattern": "^#[0-9a-fA-F]{6}$",
+          "description": "Optional primary brand color (hex)"
+        },
+        "secondaryColor": {
+          "type": ["string", "null"],
+          "pattern": "^#[0-9a-fA-F]{6}$",
+          "description": "Optional secondary brand color (hex)"
+        },
+        "features": {
+          "type": "object",
+          "description": "Feature flags for the brand",
+          "properties": {
+            "sponsors": { "type": "boolean" },
+            "analytics": { "type": "boolean" },
+            "templates": { "type": "boolean" }
+          },
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": true
+    },
+    "ErrorResponse": {
+      "type": "object",
+      "required": ["ok", "code", "message"],
+      "properties": {
+        "ok": {
+          "type": "boolean",
+          "const": false
+        },
+        "code": {
+          "type": "string",
+          "enum": ["BAD_INPUT", "NOT_FOUND", "RATE_LIMITED", "INTERNAL", "CONTRACT", "FEATURE_DISABLED", "UNAUTHORIZED"]
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1
+        },
+        "corrId": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "NotModifiedResponse": {
+      "type": "object",
+      "required": ["ok", "notModified"],
+      "properties": {
+        "ok": {
+          "type": "boolean",
+          "const": true
+        },
+        "notModified": {
+          "type": "boolean",
+          "const": true
+        },
+        "etag": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "examples": [
+    {
+      "ok": true,
+      "value": {
+        "event": {
+          "id": "EVT_123",
+          "slug": "summer-tournament",
+          "name": "Summer Tournament 2025",
+          "startDateISO": "2025-07-15",
+          "venue": "Main Arena",
+          "links": {
+            "publicUrl": "https://example.com/e/summer-tournament",
+            "displayUrl": "https://example.com/d/summer-tournament",
+            "posterUrl": "https://example.com/p/summer-tournament",
+            "signupUrl": "https://forms.google.com/abc"
+          },
+          "qr": {
+            "public": "data:image/png;base64,...",
+            "signup": "data:image/png;base64,..."
+          },
+          "ctas": {
+            "primary": { "label": "Sign Up", "url": "https://forms.google.com/abc" }
+          },
+          "settings": {
+            "showSchedule": true,
+            "showStandings": true,
+            "showBracket": false,
+            "showSponsors": true
+          },
+          "createdAtISO": "2025-06-01T10:00:00.000Z",
+          "updatedAtISO": "2025-06-15T14:30:00.000Z"
+        },
+        "config": {
+          "brandId": "root",
+          "brandName": "Event Toolkit",
+          "appTitle": "Events"
+        }
+      },
+      "etag": "W/\"bundle-xyz789\""
+    }
+  ]
+}

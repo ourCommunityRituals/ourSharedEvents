@@ -1,0 +1,125 @@
+# DEPRECATED WORKFLOW (ARCHIVED)
+# This workflow is kept for historical reference only.
+# Do NOT re-enable without updating it to the current CI/CD architecture.
+
+name: OLD – Stage 1 - Build & Deploy
+
+on:
+  push:
+    branches:
+      - main           # Deploy to STAGING on main push
+      - 'release/**'   # Deploy to STAGING on release branches
+      - 'release/*'
+  pull_request:
+    branches: [ main ]  # Validate PRs (no deploy)
+
+  # Manual trigger with environment selection
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
+        default: staging
+      skip_tests:
+        description: 'Skip quality gate tests (emergency deploy only)'
+        required: false
+        type: boolean
+        default: false
+
+# Prevent duplicate runs: cancel in-progress runs for the same PR/branch
+concurrency:
+  group: stage1-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+# Environment configuration
+env:
+  # Script IDs - zeventbook@gmail.com owned
+  STAGING_SCRIPT_ID: '1gHiPuj7eXNk09dDyk17SJ6QsCJg7LMqXBRrkowljL3z2TaAKFIvBLhHJ'
+  PRODUCTION_SCRIPT_ID: '1YO4apLOQoAIh208AcAqWO3pWtx_O3yas_QC4z-pkurgMem9UgYOsp86l'
+  # URLs
+  STAGING_URL: 'https://stg.eventangle.com'
+  PRODUCTION_URL: 'https://eventangle.com'
+
+jobs:
+  # ============================================================================
+  # ENVIRONMENT DETERMINATION
+  # ============================================================================
+  # Determines target environment: staging (default) or production (opt-in)
+  # - Push to main/release → STAGING
+  # - workflow_dispatch → User choice (default: staging)
+  # ============================================================================
+  determine-environment:
+    name: 🎯 Determine Target Environment
+    runs-on: ubuntu-latest
+    outputs:
+      environment: ${{ steps.env.outputs.environment }}
+      script_id: ${{ steps.env.outputs.script_id }}
+      base_url: ${{ steps.env.outputs.base_url }}
+      is_production: ${{ steps.env.outputs.is_production }}
+    steps:
+      - name: Determine environment
+        id: env
+        run: |
+          echo "=================================================="
+          echo "🎯 Environment Selection"
+          echo "=================================================="
+          echo ""
+
+          # Default to staging
+          ENVIRONMENT="staging"
+          SCRIPT_ID="${{ env.STAGING_SCRIPT_ID }}"
+          BASE_URL="${{ env.STAGING_URL }}"
+          IS_PRODUCTION="false"
+
+          # Check if this is a manual trigger with production selected
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            if [[ "${{ inputs.environment }}" == "production" ]]; then
+              ENVIRONMENT="production"
+              SCRIPT_ID="${{ env.PRODUCTION_SCRIPT_ID }}"
+              BASE_URL="${{ env.PRODUCTION_URL }}"
+              IS_PRODUCTION="true"
+              echo "⚠️  PRODUCTION DEPLOYMENT REQUESTED"
+              echo "   This will deploy to the live production environment!"
+            else
+              echo "📋 Manual trigger: STAGING selected"
+            fi
+          else
+            echo "📋 Automatic trigger: defaulting to STAGING"
+          fi
+
+          echo ""
+          echo "Environment: $ENVIRONMENT"
+          echo "Script ID: $SCRIPT_ID"
+          echo "Base URL: $BASE_URL"
+          echo ""
+          echo "=================================================="
+
+          echo "environment=$ENVIRONMENT" >> $GITHUB_OUTPUT
+          echo "script_id=$SCRIPT_ID" >> $GITHUB_OUTPUT
+          echo "base_url=$BASE_URL" >> $GITHUB_OUTPUT
+          echo "is_production=$IS_PRODUCTION" >> $GITHUB_OUTPUT
+
+  # NOTE: This is an archived/deprecated workflow.
+  # The full implementation has been removed for brevity.
+  # See the active stage1.yml workflow for the current implementation.
+
+  placeholder:
+    name: 📦 Archived Workflow
+    runs-on: ubuntu-latest
+    needs: determine-environment
+    steps:
+      - name: Notice
+        run: |
+          echo "=============================================="
+          echo "⚠️  DEPRECATED WORKFLOW"
+          echo "=============================================="
+          echo ""
+          echo "This workflow has been archived."
+          echo "Please use the active stage1.yml workflow instead."
+          echo ""
+          echo "=============================================="
+          exit 1

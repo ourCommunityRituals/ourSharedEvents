@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://eventangle.com/schemas/status-mvp.schema.json",
+  "title": "MVP Status Response",
+  "description": "MVP status endpoint response contract with analytics health checks. Returns 'green' status only when all analytics systems are operational.",
+  "type": "object",
+  "required": ["ok", "buildId", "brandId", "time", "analyticsSheetHealthy", "sharedAnalyticsContractOk"],
+  "additionalProperties": false,
+  "properties": {
+    "ok": {
+      "type": "boolean",
+      "description": "Overall health status. True only if ALL checks pass (service operational AND analytics healthy)."
+    },
+    "buildId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^[a-zA-Z0-9._-]+$",
+      "description": "Build identifier (e.g., 'mvp-v19'). Used for deployment verification and cache busting.",
+      "examples": ["mvp-v19", "mvp-v20"]
+    },
+    "brandId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 32,
+      "pattern": "^[a-z0-9_-]+$",
+      "description": "Brand identifier for multi-tenant support (e.g., 'root', 'abc', 'cbc', 'cbl').",
+      "examples": ["root", "abc", "cbc", "cbl"]
+    },
+    "time": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Server timestamp in ISO 8601 format."
+    },
+    "analyticsSheetHealthy": {
+      "type": "boolean",
+      "description": "True if the ANALYTICS sheet exists and is accessible with valid header structure."
+    },
+    "sharedAnalyticsContractOk": {
+      "type": "boolean",
+      "description": "True if the SharedAnalytics contract schema (SC_SHARED_ANALYTICS) is properly configured with all required fields."
+    },
+    "message": {
+      "type": "string",
+      "maxLength": 500,
+      "description": "Optional message when ok=false, explaining which health checks failed."
+    }
+  },
+  "examples": [
+    {
+      "ok": true,
+      "buildId": "mvp-v19",
+      "brandId": "root",
+      "time": "2025-11-28T12:00:00.000Z",
+      "analyticsSheetHealthy": true,
+      "sharedAnalyticsContractOk": true
+    },
+    {
+      "ok": false,
+      "buildId": "mvp-v19",
+      "brandId": "root",
+      "time": "2025-11-28T12:00:00.000Z",
+      "analyticsSheetHealthy": false,
+      "sharedAnalyticsContractOk": true,
+      "message": "Analytics: ANALYTICS sheet has invalid header structure"
+    },
+    {
+      "ok": false,
+      "buildId": "mvp-v19",
+      "brandId": "unknown",
+      "time": "2025-11-28T12:00:00.000Z",
+      "analyticsSheetHealthy": false,
+      "sharedAnalyticsContractOk": false,
+      "message": "Brand not found: invalid"
+    }
+  ]
+}

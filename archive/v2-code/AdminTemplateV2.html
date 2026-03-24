@@ -1,0 +1,1119 @@
+<!--
+================================================================================
+V2 SURFACE - Template Management UI (Hidden from early bar pilots)
+================================================================================
+Page: AdminTemplateV2.html
+Purpose: Template editing panel for SEM staff and bar owners
+Status: V2 Feature - Gated by TEMPLATE_MANAGEMENT_V2 feature flag
+
+FEATURE FLAG: TEMPLATE_MANAGEMENT_V2 (disabled by default)
+
+SCOPE NOTES:
+  - Do not expose this in early bar pilots
+  - Allow bar owners and SEM staff to tweak templates
+  - Template changes propagate via TemplateService and event.schema.json
+
+SCHEMA COMPLIANCE: Templates MUST only produce fields defined in
+/schemas/event.schema.json. Validation enforces this.
+
+CRUD OPERATIONS:
+  - List all templates (built-in + custom)
+  - View template details
+  - Create new custom template
+  - Edit custom templates (built-in templates are read-only)
+  - Clone templates (create custom from built-in)
+  - Delete custom templates
+
+Related Services: TemplateManagementService.gs, TemplateService.gs
+================================================================================
+-->
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <title><?= appTitle ?> · Template Management</title>
+  <?!= include('Styles'); ?>
+  <?!= include('DesignAdapter'); ?>
+  <?!= include('NUSDK'); ?>
+  <?!= include('SharedUtils'); ?>
+  <?!= include('CollapsibleSections'); ?>
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+  <meta name="referrer" content="no-referrer"/>
+
+  <style>
+    /* === Template Management Styles === */
+    .template-mgmt-container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: var(--spacing-4);
+    }
+
+    .template-mgmt-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: var(--spacing-6);
+      padding-bottom: var(--spacing-4);
+      border-bottom: 1px solid var(--color-border);
+    }
+
+    .template-mgmt-header h1 {
+      font-size: var(--font-size-2xl);
+      font-weight: 600;
+      color: var(--color-text);
+      margin: 0;
+    }
+
+    .feature-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--spacing-1);
+      padding: var(--spacing-1) var(--spacing-2);
+      background: var(--color-warning-bg, #fef3c7);
+      color: var(--color-warning-text, #92400e);
+      border-radius: var(--radius-sm);
+      font-size: var(--font-size-xs);
+      font-weight: 500;
+    }
+
+    /* Template Grid */
+    .template-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: var(--spacing-4);
+      margin-bottom: var(--spacing-6);
+    }
+
+    .template-card {
+      background: var(--color-surface);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-lg);
+      padding: var(--spacing-4);
+      transition: all 0.2s ease;
+      cursor: pointer;
+      position: relative;
+    }
+
+    .template-card:hover {
+      border-color: var(--color-primary);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    }
+
+    .template-card.selected {
+      border-color: var(--color-primary);
+      box-shadow: 0 0 0 3px var(--color-primary-light);
+    }
+
+    .template-card-header {
+      display: flex;
+      align-items: flex-start;
+      gap: var(--spacing-3);
+      margin-bottom: var(--spacing-3);
+    }
+
+    .template-icon {
+      font-size: 2rem;
+      line-height: 1;
+    }
+
+    .template-info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .template-info h3 {
+      font-size: var(--font-size-base);
+      font-weight: 600;
+      color: var(--color-text);
+      margin: 0 0 var(--spacing-1) 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .template-info p {
+      font-size: var(--font-size-sm);
+      color: var(--color-text-muted);
+      margin: 0;
+      line-height: 1.4;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .template-badge {
+      position: absolute;
+      top: var(--spacing-2);
+      right: var(--spacing-2);
+      padding: var(--spacing-0-5) var(--spacing-2);
+      border-radius: var(--radius-full);
+      font-size: var(--font-size-xs);
+      font-weight: 500;
+    }
+
+    .template-badge.built-in {
+      background: var(--color-muted-bg, #f3f4f6);
+      color: var(--color-text-muted);
+    }
+
+    .template-badge.custom {
+      background: var(--color-success-bg, #d1fae5);
+      color: var(--color-success-text, #065f46);
+    }
+
+    .template-sections {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--spacing-1);
+      margin-top: var(--spacing-3);
+    }
+
+    .section-pill {
+      padding: var(--spacing-0-5) var(--spacing-2);
+      background: var(--color-muted-bg, #f3f4f6);
+      border-radius: var(--radius-full);
+      font-size: var(--font-size-xs);
+      color: var(--color-text-muted);
+    }
+
+    .section-pill.enabled {
+      background: var(--color-primary-light, #dbeafe);
+      color: var(--color-primary-dark, #1e40af);
+    }
+
+    /* Template Actions */
+    .template-actions {
+      display: flex;
+      gap: var(--spacing-2);
+      margin-top: var(--spacing-4);
+      padding-top: var(--spacing-3);
+      border-top: 1px solid var(--color-border);
+    }
+
+    .template-actions button {
+      flex: 1;
+      padding: var(--spacing-2);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
+      background: var(--color-surface);
+      color: var(--color-text);
+      font-size: var(--font-size-sm);
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .template-actions button:hover {
+      background: var(--color-muted-bg);
+    }
+
+    .template-actions button.primary {
+      background: var(--color-primary);
+      border-color: var(--color-primary);
+      color: white;
+    }
+
+    .template-actions button.primary:hover {
+      background: var(--color-primary-dark);
+    }
+
+    .template-actions button.danger {
+      color: var(--color-error);
+      border-color: var(--color-error);
+    }
+
+    .template-actions button.danger:hover {
+      background: var(--color-error-bg);
+    }
+
+    /* Editor Modal */
+    .editor-modal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 1000;
+      background: rgba(0, 0, 0, 0.5);
+      align-items: center;
+      justify-content: center;
+      padding: var(--spacing-4);
+    }
+
+    .editor-modal.active {
+      display: flex;
+    }
+
+    .editor-content {
+      background: var(--color-surface);
+      border-radius: var(--radius-xl);
+      width: 100%;
+      max-width: 700px;
+      max-height: 90vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .editor-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: var(--spacing-4) var(--spacing-5);
+      border-bottom: 1px solid var(--color-border);
+    }
+
+    .editor-header h2 {
+      font-size: var(--font-size-lg);
+      font-weight: 600;
+      margin: 0;
+    }
+
+    .editor-close {
+      width: 32px;
+      height: 32px;
+      border: none;
+      background: transparent;
+      cursor: pointer;
+      border-radius: var(--radius-md);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.25rem;
+      color: var(--color-text-muted);
+    }
+
+    .editor-close:hover {
+      background: var(--color-muted-bg);
+    }
+
+    .editor-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: var(--spacing-5);
+    }
+
+    .editor-footer {
+      display: flex;
+      justify-content: flex-end;
+      gap: var(--spacing-3);
+      padding: var(--spacing-4) var(--spacing-5);
+      border-top: 1px solid var(--color-border);
+      background: var(--color-muted-bg, #f9fafb);
+    }
+
+    /* Form Elements */
+    .form-group {
+      margin-bottom: var(--spacing-4);
+    }
+
+    .form-group label {
+      display: block;
+      font-size: var(--font-size-sm);
+      font-weight: 500;
+      color: var(--color-text);
+      margin-bottom: var(--spacing-1);
+    }
+
+    .form-group .help-text {
+      display: block;
+      font-size: var(--font-size-xs);
+      color: var(--color-text-muted);
+      margin-top: var(--spacing-1);
+    }
+
+    .form-group input[type="text"],
+    .form-group textarea {
+      width: 100%;
+      padding: var(--spacing-2) var(--spacing-3);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
+      font-size: var(--font-size-base);
+      background: var(--color-surface);
+      color: var(--color-text);
+    }
+
+    .form-group input:focus,
+    .form-group textarea:focus {
+      outline: none;
+      border-color: var(--color-primary);
+      box-shadow: 0 0 0 3px var(--color-primary-light);
+    }
+
+    .form-group textarea {
+      min-height: 80px;
+      resize: vertical;
+    }
+
+    .form-group.error input,
+    .form-group.error textarea {
+      border-color: var(--color-error);
+    }
+
+    .form-group .error-message {
+      color: var(--color-error);
+      font-size: var(--font-size-xs);
+      margin-top: var(--spacing-1);
+    }
+
+    /* Section Toggles */
+    .section-toggles {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+      gap: var(--spacing-2);
+    }
+
+    .section-toggle {
+      display: flex;
+      align-items: center;
+      gap: var(--spacing-2);
+      padding: var(--spacing-2) var(--spacing-3);
+      background: var(--color-muted-bg);
+      border-radius: var(--radius-md);
+      cursor: pointer;
+    }
+
+    .section-toggle input {
+      width: 16px;
+      height: 16px;
+      accent-color: var(--color-primary);
+    }
+
+    .section-toggle span {
+      font-size: var(--font-size-sm);
+    }
+
+    /* CTA Tags Input */
+    .cta-input-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--spacing-2);
+      padding: var(--spacing-2);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
+      background: var(--color-surface);
+      min-height: 44px;
+    }
+
+    .cta-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--spacing-1);
+      padding: var(--spacing-1) var(--spacing-2);
+      background: var(--color-primary-light);
+      color: var(--color-primary-dark);
+      border-radius: var(--radius-full);
+      font-size: var(--font-size-sm);
+    }
+
+    .cta-tag button {
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 0;
+      width: 16px;
+      height: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+      color: inherit;
+    }
+
+    .cta-tag button:hover {
+      background: var(--color-primary);
+      color: white;
+    }
+
+    .cta-input-container input {
+      flex: 1;
+      min-width: 100px;
+      border: none;
+      outline: none;
+      background: transparent;
+      font-size: var(--font-size-sm);
+    }
+
+    /* Preview Panel */
+    .preview-panel {
+      background: var(--color-muted-bg);
+      border-radius: var(--radius-lg);
+      padding: var(--spacing-4);
+      margin-top: var(--spacing-4);
+    }
+
+    .preview-panel h4 {
+      font-size: var(--font-size-sm);
+      font-weight: 600;
+      color: var(--color-text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin: 0 0 var(--spacing-3) 0;
+    }
+
+    .preview-template-card {
+      background: var(--color-surface);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
+      padding: var(--spacing-3);
+    }
+
+    /* Action Buttons */
+    .btn {
+      padding: var(--spacing-2) var(--spacing-4);
+      border-radius: var(--radius-md);
+      font-size: var(--font-size-sm);
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      border: 1px solid transparent;
+    }
+
+    .btn-primary {
+      background: var(--color-primary);
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: var(--color-primary-dark);
+    }
+
+    .btn-secondary {
+      background: var(--color-surface);
+      border-color: var(--color-border);
+      color: var(--color-text);
+    }
+
+    .btn-secondary:hover {
+      background: var(--color-muted-bg);
+    }
+
+    /* Empty State */
+    .empty-state {
+      text-align: center;
+      padding: var(--spacing-8);
+      color: var(--color-text-muted);
+    }
+
+    .empty-state-icon {
+      font-size: 3rem;
+      margin-bottom: var(--spacing-4);
+      opacity: 0.5;
+    }
+
+    /* Loading State */
+    .loading-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(255, 255, 255, 0.8);
+      z-index: 2000;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .loading-overlay.active {
+      display: flex;
+    }
+
+    /* Tabs */
+    .tab-bar {
+      display: flex;
+      gap: var(--spacing-1);
+      margin-bottom: var(--spacing-4);
+      border-bottom: 1px solid var(--color-border);
+    }
+
+    .tab-btn {
+      padding: var(--spacing-2) var(--spacing-4);
+      border: none;
+      background: transparent;
+      color: var(--color-text-muted);
+      font-size: var(--font-size-sm);
+      font-weight: 500;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -1px;
+    }
+
+    .tab-btn:hover {
+      color: var(--color-text);
+    }
+
+    .tab-btn.active {
+      color: var(--color-primary);
+      border-bottom-color: var(--color-primary);
+    }
+
+    /* Back Link */
+    .back-link {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--spacing-1);
+      color: var(--color-primary);
+      text-decoration: none;
+      font-size: var(--font-size-sm);
+      margin-bottom: var(--spacing-4);
+    }
+
+    .back-link:hover {
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+  <?!= include('Header'); ?>
+
+  <div class="template-mgmt-container">
+    <!-- Back to Admin -->
+    <a href="?page=admin&brand=<?= brandId ?>" class="back-link">
+      <span>&larr;</span> Back to Admin
+    </a>
+
+    <!-- Header -->
+    <div class="template-mgmt-header">
+      <div>
+        <h1>Template Management</h1>
+        <span class="feature-badge">V2 Feature</span>
+      </div>
+      <button class="btn btn-primary" onclick="openEditor()">
+        + New Template
+      </button>
+    </div>
+
+    <!-- Tab Bar -->
+    <div class="tab-bar">
+      <button class="tab-btn active" data-tab="all" onclick="filterTemplates('all')">
+        All Templates
+      </button>
+      <button class="tab-btn" data-tab="built-in" onclick="filterTemplates('built-in')">
+        Built-in
+      </button>
+      <button class="tab-btn" data-tab="custom" onclick="filterTemplates('custom')">
+        Custom
+      </button>
+    </div>
+
+    <!-- Template Grid -->
+    <div id="templateGrid" class="template-grid">
+      <!-- Templates will be rendered here -->
+    </div>
+
+    <!-- Empty State -->
+    <div id="emptyState" class="empty-state" style="display: none;">
+      <div class="empty-state-icon">&#128195;</div>
+      <h3>No templates found</h3>
+      <p>Create a new template or switch tabs to view built-in templates.</p>
+    </div>
+  </div>
+
+  <!-- Editor Modal -->
+  <div id="editorModal" class="editor-modal">
+    <div class="editor-content">
+      <div class="editor-header">
+        <h2 id="editorTitle">New Template</h2>
+        <button class="editor-close" onclick="closeEditor()">&times;</button>
+      </div>
+
+      <div class="editor-body">
+        <form id="templateForm" onsubmit="return false;">
+          <!-- Basic Info -->
+          <div class="form-group">
+            <label for="templateId">Template ID *</label>
+            <input type="text" id="templateId" name="id" placeholder="my_custom_template" />
+            <span class="help-text">Lowercase letters and underscores only. Cannot be changed after creation.</span>
+          </div>
+
+          <div class="form-group">
+            <label for="templateLabel">Display Name *</label>
+            <input type="text" id="templateLabel" name="label" placeholder="My Custom Template" />
+            <span class="help-text">Human-readable name shown in the template picker.</span>
+          </div>
+
+          <div class="form-group">
+            <label for="templateDescription">Description</label>
+            <textarea id="templateDescription" name="description" placeholder="When to use this template..."></textarea>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 2fr; gap: var(--spacing-4);">
+            <div class="form-group">
+              <label for="templateIcon">Icon</label>
+              <input type="text" id="templateIcon" name="icon" placeholder="&#128195;" maxlength="10" />
+              <span class="help-text">Emoji or symbol</span>
+            </div>
+
+            <div class="form-group">
+              <label for="templateExample">Example Event Name</label>
+              <input type="text" id="templateExample" name="exampleName" placeholder="Saturday Night Trivia" />
+            </div>
+          </div>
+
+          <!-- Section Toggles -->
+          <div class="form-group">
+            <label>Default Sections</label>
+            <div class="section-toggles">
+              <label class="section-toggle">
+                <input type="checkbox" name="sections.video" id="sectionVideo" />
+                <span>Video</span>
+              </label>
+              <label class="section-toggle">
+                <input type="checkbox" name="sections.map" id="sectionMap" />
+                <span>Map</span>
+              </label>
+              <label class="section-toggle">
+                <input type="checkbox" name="sections.schedule" id="sectionSchedule" />
+                <span>Schedule</span>
+              </label>
+              <label class="section-toggle">
+                <input type="checkbox" name="sections.sponsors" id="sectionSponsors" />
+                <span>Sponsors</span>
+              </label>
+              <label class="section-toggle">
+                <input type="checkbox" name="sections.gallery" id="sectionGallery" />
+                <span>Gallery</span>
+              </label>
+            </div>
+            <span class="help-text">Which sections are enabled by default for events using this template.</span>
+          </div>
+
+          <!-- Default CTAs -->
+          <div class="form-group">
+            <label>Default CTA Labels</label>
+            <div id="ctaContainer" class="cta-input-container">
+              <input type="text" id="ctaInput" placeholder="Type and press Enter" onkeydown="handleCtaKeydown(event)" />
+            </div>
+            <span class="help-text">Suggested call-to-action button labels. Press Enter to add.</span>
+          </div>
+
+          <!-- Preview -->
+          <div class="preview-panel">
+            <h4>Preview</h4>
+            <div id="previewCard" class="preview-template-card">
+              <div class="template-card-header">
+                <span class="template-icon" id="previewIcon">&#128195;</span>
+                <div class="template-info">
+                  <h3 id="previewLabel">Template Name</h3>
+                  <p id="previewDescription">Template description will appear here</p>
+                </div>
+              </div>
+              <div id="previewSections" class="template-sections"></div>
+            </div>
+          </div>
+        </form>
+      </div>
+
+      <div class="editor-footer">
+        <button class="btn btn-secondary" onclick="closeEditor()">Cancel</button>
+        <button class="btn btn-primary" id="saveBtn" onclick="saveTemplate()">Create Template</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Clone Modal -->
+  <div id="cloneModal" class="editor-modal">
+    <div class="editor-content" style="max-width: 400px;">
+      <div class="editor-header">
+        <h2>Clone Template</h2>
+        <button class="editor-close" onclick="closeCloneModal()">&times;</button>
+      </div>
+
+      <div class="editor-body">
+        <p style="margin-bottom: var(--spacing-4); color: var(--color-text-muted);">
+          Create a new custom template based on <strong id="cloneSourceName"></strong>.
+        </p>
+
+        <div class="form-group">
+          <label for="cloneNewId">New Template ID *</label>
+          <input type="text" id="cloneNewId" placeholder="my_custom_template" />
+        </div>
+
+        <div class="form-group">
+          <label for="cloneNewLabel">New Display Name *</label>
+          <input type="text" id="cloneNewLabel" placeholder="My Custom Template" />
+        </div>
+      </div>
+
+      <div class="editor-footer">
+        <button class="btn btn-secondary" onclick="closeCloneModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="confirmClone()">Clone Template</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Loading Overlay -->
+  <div id="loadingOverlay" class="loading-overlay">
+    <?!= include('SpinnerComponent'); ?>
+  </div>
+
+  <?!= include('FooterComponent'); ?>
+
+  <script>
+    // === State ===
+    const BRAND = '<?= brandId ?>';
+    let templates = [];
+    let currentFilter = 'all';
+    let editingTemplateId = null;
+    let cloneSourceId = null;
+    let ctaLabels = [];
+
+    // === Initialize ===
+    document.addEventListener('DOMContentLoaded', () => {
+      loadTemplates();
+      setupPreviewUpdates();
+    });
+
+    // === API Calls ===
+    async function loadTemplates() {
+      showLoading(true);
+      try {
+        const res = await NU.rpc('api_listTemplatesV2', { brandId: BRAND });
+        if (res.ok) {
+          templates = res.value.templates;
+          renderTemplates();
+        } else {
+          SharedUtils.showToast(`Error: ${res.message}`, 'error');
+        }
+      } catch (err) {
+        console.error('Failed to load templates:', err);
+        SharedUtils.showToast('Failed to load templates', 'error');
+      }
+      showLoading(false);
+    }
+
+    async function saveTemplate() {
+      // Gather form data
+      const id = document.getElementById('templateId').value.trim();
+      const label = document.getElementById('templateLabel').value.trim();
+      const description = document.getElementById('templateDescription').value.trim();
+      const icon = document.getElementById('templateIcon').value.trim();
+      const exampleName = document.getElementById('templateExample').value.trim();
+
+      // Validate required fields
+      if (!id) {
+        SharedUtils.showToast('Template ID is required', 'warning');
+        return;
+      }
+      if (!label) {
+        SharedUtils.showToast('Display Name is required', 'warning');
+        return;
+      }
+
+      // Gather sections
+      const sections = {
+        video: document.getElementById('sectionVideo').checked,
+        map: document.getElementById('sectionMap').checked,
+        schedule: document.getElementById('sectionSchedule').checked,
+        sponsors: document.getElementById('sectionSponsors').checked,
+        gallery: document.getElementById('sectionGallery').checked
+      };
+
+      const template = {
+        id,
+        label,
+        description,
+        icon,
+        exampleName,
+        sections,
+        defaultCtas: [...ctaLabels]
+      };
+
+      showLoading(true);
+      try {
+        let res;
+        if (editingTemplateId) {
+          // Update existing template
+          res = await NU.rpc('api_updateTemplateV2', {
+            brandId: BRAND,
+            templateId: editingTemplateId,
+            updates: template
+          });
+        } else {
+          // Create new template
+          res = await NU.rpc('api_createTemplateV2', {
+            brandId: BRAND,
+            template: template
+          });
+        }
+
+        if (res.ok) {
+          SharedUtils.showToast(editingTemplateId ? 'Template updated!' : 'Template created!', 'success');
+          closeEditor();
+          await loadTemplates();
+        } else {
+          SharedUtils.showToast(`Error: ${res.message}`, 'error');
+        }
+      } catch (err) {
+        console.error('Failed to save template:', err);
+        SharedUtils.showToast('Failed to save template', 'error');
+      }
+      showLoading(false);
+    }
+
+    async function deleteTemplate(templateId) {
+      if (!confirm(`Are you sure you want to delete this template?\n\nThis action cannot be undone.`)) {
+        return;
+      }
+
+      showLoading(true);
+      try {
+        const res = await NU.rpc('api_deleteTemplateV2', {
+          brandId: BRAND,
+          templateId: templateId
+        });
+
+        if (res.ok) {
+          SharedUtils.showToast('Template deleted', 'success');
+          await loadTemplates();
+        } else {
+          SharedUtils.showToast(`Error: ${res.message}`, 'error');
+        }
+      } catch (err) {
+        console.error('Failed to delete template:', err);
+        SharedUtils.showToast('Failed to delete template', 'error');
+      }
+      showLoading(false);
+    }
+
+    async function confirmClone() {
+      const newId = document.getElementById('cloneNewId').value.trim();
+      const newLabel = document.getElementById('cloneNewLabel').value.trim();
+
+      if (!newId) {
+        SharedUtils.showToast('New Template ID is required', 'warning');
+        return;
+      }
+      if (!newLabel) {
+        SharedUtils.showToast('New Display Name is required', 'warning');
+        return;
+      }
+
+      showLoading(true);
+      try {
+        const res = await NU.rpc('api_cloneTemplateV2', {
+          brandId: BRAND,
+          sourceTemplateId: cloneSourceId,
+          newTemplateId: newId,
+          newLabel: newLabel
+        });
+
+        if (res.ok) {
+          SharedUtils.showToast('Template cloned!', 'success');
+          closeCloneModal();
+          await loadTemplates();
+        } else {
+          SharedUtils.showToast(`Error: ${res.message}`, 'error');
+        }
+      } catch (err) {
+        console.error('Failed to clone template:', err);
+        SharedUtils.showToast('Failed to clone template', 'error');
+      }
+      showLoading(false);
+    }
+
+    // === Rendering ===
+    function renderTemplates() {
+      const filtered = templates.filter(t => {
+        if (currentFilter === 'all') return true;
+        return t.source === currentFilter;
+      });
+
+      const grid = document.getElementById('templateGrid');
+      const emptyState = document.getElementById('emptyState');
+
+      if (filtered.length === 0) {
+        grid.innerHTML = '';
+        emptyState.style.display = 'block';
+        return;
+      }
+
+      emptyState.style.display = 'none';
+      grid.innerHTML = filtered.map(t => renderTemplateCard(t)).join('');
+    }
+
+    function renderTemplateCard(template) {
+      const sections = template.sections || {};
+      const enabledSections = Object.entries(sections)
+        .filter(([k, v]) => v && k !== 'notes')
+        .map(([k]) => k);
+
+      return `
+        <div class="template-card" data-id="${template.id}">
+          <span class="template-badge ${template.source}">${template.source === 'built-in' ? 'Built-in' : 'Custom'}</span>
+          <div class="template-card-header">
+            <span class="template-icon">${template.icon || '&#128195;'}</span>
+            <div class="template-info">
+              <h3>${escapeHtml(template.label || template.id)}</h3>
+              <p>${escapeHtml(template.description || 'No description')}</p>
+            </div>
+          </div>
+          <div class="template-sections">
+            ${['video', 'map', 'schedule', 'sponsors', 'gallery'].map(s => `
+              <span class="section-pill ${sections[s] ? 'enabled' : ''}">${s}</span>
+            `).join('')}
+          </div>
+          <div class="template-actions">
+            ${template.editable ? `
+              <button onclick="editTemplate('${template.id}')">Edit</button>
+              <button class="danger" onclick="deleteTemplate('${template.id}')">Delete</button>
+            ` : `
+              <button onclick="openCloneModal('${template.id}', '${escapeHtml(template.label)}')">Clone</button>
+            `}
+          </div>
+        </div>
+      `;
+    }
+
+    // === Editor ===
+    function openEditor(templateId = null) {
+      editingTemplateId = templateId;
+      ctaLabels = [];
+
+      if (templateId) {
+        // Load template data for editing
+        const template = templates.find(t => t.id === templateId);
+        if (!template) return;
+
+        document.getElementById('editorTitle').textContent = 'Edit Template';
+        document.getElementById('saveBtn').textContent = 'Save Changes';
+        document.getElementById('templateId').value = template.id;
+        document.getElementById('templateId').disabled = true;
+        document.getElementById('templateLabel').value = template.label || '';
+        document.getElementById('templateDescription').value = template.description || '';
+        document.getElementById('templateIcon').value = template.icon || '';
+        document.getElementById('templateExample').value = template.exampleName || '';
+
+        // Sections
+        const sections = template.sections || {};
+        document.getElementById('sectionVideo').checked = !!sections.video;
+        document.getElementById('sectionMap').checked = !!sections.map;
+        document.getElementById('sectionSchedule').checked = !!sections.schedule;
+        document.getElementById('sectionSponsors').checked = !!sections.sponsors;
+        document.getElementById('sectionGallery').checked = !!sections.gallery;
+
+        // CTAs
+        ctaLabels = template.defaultCtas || [];
+        renderCtaTags();
+      } else {
+        // New template
+        document.getElementById('editorTitle').textContent = 'New Template';
+        document.getElementById('saveBtn').textContent = 'Create Template';
+        document.getElementById('templateForm').reset();
+        document.getElementById('templateId').disabled = false;
+        renderCtaTags();
+      }
+
+      updatePreview();
+      document.getElementById('editorModal').classList.add('active');
+    }
+
+    function closeEditor() {
+      document.getElementById('editorModal').classList.remove('active');
+      editingTemplateId = null;
+    }
+
+    function editTemplate(templateId) {
+      openEditor(templateId);
+    }
+
+    // === Clone Modal ===
+    function openCloneModal(sourceId, sourceLabel) {
+      cloneSourceId = sourceId;
+      document.getElementById('cloneSourceName').textContent = sourceLabel;
+      document.getElementById('cloneNewId').value = sourceId + '_copy';
+      document.getElementById('cloneNewLabel').value = 'Copy of ' + sourceLabel;
+      document.getElementById('cloneModal').classList.add('active');
+    }
+
+    function closeCloneModal() {
+      document.getElementById('cloneModal').classList.remove('active');
+      cloneSourceId = null;
+    }
+
+    // === Tab Filtering ===
+    function filterTemplates(filter) {
+      currentFilter = filter;
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.tab === filter);
+      });
+      renderTemplates();
+    }
+
+    // === CTA Tags ===
+    function handleCtaKeydown(event) {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        const input = event.target;
+        const value = input.value.trim();
+        if (value && !ctaLabels.includes(value) && ctaLabels.length < 5) {
+          ctaLabels.push(value);
+          input.value = '';
+          renderCtaTags();
+          updatePreview();
+        }
+      }
+    }
+
+    function removeCta(index) {
+      ctaLabels.splice(index, 1);
+      renderCtaTags();
+      updatePreview();
+    }
+
+    function renderCtaTags() {
+      const container = document.getElementById('ctaContainer');
+      const input = document.getElementById('ctaInput');
+
+      // Clear existing tags
+      container.querySelectorAll('.cta-tag').forEach(el => el.remove());
+
+      // Add tags before input
+      ctaLabels.forEach((label, index) => {
+        const tag = document.createElement('span');
+        tag.className = 'cta-tag';
+        tag.innerHTML = `${escapeHtml(label)}<button type="button" onclick="removeCta(${index})">&times;</button>`;
+        container.insertBefore(tag, input);
+      });
+    }
+
+    // === Preview ===
+    function setupPreviewUpdates() {
+      const fields = ['templateLabel', 'templateDescription', 'templateIcon'];
+      fields.forEach(id => {
+        document.getElementById(id).addEventListener('input', updatePreview);
+      });
+
+      document.querySelectorAll('.section-toggle input').forEach(el => {
+        el.addEventListener('change', updatePreview);
+      });
+    }
+
+    function updatePreview() {
+      const icon = document.getElementById('templateIcon').value || '&#128195;';
+      const label = document.getElementById('templateLabel').value || 'Template Name';
+      const desc = document.getElementById('templateDescription').value || 'Template description will appear here';
+
+      document.getElementById('previewIcon').innerHTML = icon;
+      document.getElementById('previewLabel').textContent = label;
+      document.getElementById('previewDescription').textContent = desc;
+
+      // Sections preview
+      const sectionNames = ['video', 'map', 'schedule', 'sponsors', 'gallery'];
+      const sectionHtml = sectionNames.map(s => {
+        const checked = document.getElementById('section' + s.charAt(0).toUpperCase() + s.slice(1)).checked;
+        return `<span class="section-pill ${checked ? 'enabled' : ''}">${s}</span>`;
+      }).join('');
+      document.getElementById('previewSections').innerHTML = sectionHtml;
+    }
+
+    // === Utilities ===
+    function showLoading(show) {
+      document.getElementById('loadingOverlay').classList.toggle('active', show);
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      const div = document.createElement('div');
+      div.textContent = str;
+      return div.innerHTML;
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,177 @@
+# DEPRECATED WORKFLOW (ARCHIVED)
+# This workflow is kept for historical reference only.
+# Do NOT re-enable without updating it to the current CI/CD architecture.
+
+name: OLD – QA Rollback
+
+on:
+  workflow_dispatch:
+    inputs:
+      deployment_id:
+        description: 'Deployment ID to rollback to (leave empty to rollback to previous)'
+        required: false
+        type: string
+      reason:
+        description: 'Reason for rollback'
+        required: true
+        type: string
+
+jobs:
+  rollback:
+    name: 🔄 Rollback QA Environment
+    runs-on: ubuntu-latest
+    environment:
+      name: qa
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate QA configuration
+        id: validate
+        run: |
+          if [[ -z "${{ secrets.QA_OAUTH_CREDENTIALS }}" ]] || [[ -z "${{ secrets.QA_SCRIPT_ID }}" ]]; then
+            echo "❌ QA environment not configured"
+            echo "Please configure QA_OAUTH_CREDENTIALS and QA_SCRIPT_ID secrets"
+            exit 1
+          fi
+          echo "✅ QA configuration validated"
+
+      - name: List available deployments
+        env:
+          CLASPRC_JSON: ${{ secrets.QA_OAUTH_CREDENTIALS }}
+          QA_SCRIPT_ID: ${{ secrets.QA_SCRIPT_ID }}
+        run: |
+          echo "📋 Listing available QA deployments..."
+
+          # Setup clasp
+          echo "$CLASPRC_JSON" > ~/.clasprc.json
+          cat > .clasp.json <<EOF
+          {"scriptId":"$QA_SCRIPT_ID"}
+          EOF
+
+          # List deployments
+          npx clasp deployments
+
+      - name: Perform rollback
+        id: rollback
+        env:
+          CLASPRC_JSON: ${{ secrets.QA_OAUTH_CREDENTIALS }}
+          QA_SCRIPT_ID: ${{ secrets.QA_SCRIPT_ID }}
+          ROLLBACK_DEPLOYMENT_ID: ${{ inputs.deployment_id }}
+        run: |
+          echo "🔄 Performing QA rollback..."
+          echo "Reason: ${{ inputs.reason }}"
+
+          # Setup clasp
+          echo "$CLASPRC_JSON" > ~/.clasprc.json
+          cat > .clasp.json <<EOF
+          {"scriptId":"$QA_SCRIPT_ID"}
+          EOF
+
+          # Determine which deployment to rollback to
+          if [ -n "$ROLLBACK_DEPLOYMENT_ID" ]; then
+            echo "📍 Rolling back to specific deployment: $ROLLBACK_DEPLOYMENT_ID"
+            DEPLOYMENT_ID_TO_USE="$ROLLBACK_DEPLOYMENT_ID"
+          else
+            echo "📍 Finding previous deployment..."
+            # Get list of deployments
+            DEPLOYMENTS=$(npx clasp deployments 2>&1)
+            echo "$DEPLOYMENTS"
+
+            # Extract second-to-last deployment ID (previous stable)
+            DEPLOYMENT_ID_TO_USE=$(echo "$DEPLOYMENTS" | grep -oP 'AKfycb[a-zA-Z0-9_-]+' | sed -n '2p')
+
+            if [ -z "$DEPLOYMENT_ID_TO_USE" ]; then
+              echo "❌ Could not find previous deployment to rollback to"
+              echo "Please specify deployment_id manually"
+              exit 1
+            fi
+
+            echo "Found previous deployment: $DEPLOYMENT_ID_TO_USE"
+          fi
+
+          # Get current code from Git (stable version)
+          echo "📥 Checking out last stable code..."
+          # Note: This assumes main branch has stable code
+          # For more sophisticated rollback, you'd checkout specific commit/tag
+
+          # Push stable code
+          echo "📦 Pushing stable code to QA..."
+          npx clasp push --force
+
+          # Update the deployment
+          echo "🔄 Updating QA deployment to rollback..."
+          npx clasp deploy -i "$DEPLOYMENT_ID_TO_USE" -d "Rollback: ${{ inputs.reason }} ($(date -Iseconds))"
+
+          # Construct URL
+          QA_URL="https://script.google.com/macros/s/${DEPLOYMENT_ID_TO_USE}/exec"
+          echo "qa_url=$QA_URL" >> $GITHUB_OUTPUT
+          echo "deployment_id=$DEPLOYMENT_ID_TO_USE" >> $GITHUB_OUTPUT
+
+      - name: Verify rollback
+        env:
+          QA_URL: ${{ steps.rollback.outputs.qa_url }}
+        run: |
+          echo "🏥 Verifying rollback..."
+          sleep 10
+
+          # Test status endpoint
+          RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" "${QA_URL}?p=api&action=status&brandId=root" || echo "000")
+
+          if [ "$RESPONSE" == "200" ]; then
+            echo "✅ Rollback verified - QA is responding"
+          else
+            echo "⚠️ Rollback verification warning - got HTTP $RESPONSE"
+            echo "This may be normal if rate limits are hit"
+          fi
+
+      - name: Create rollback summary
+        if: always()
+        run: |
+          echo "## 🔄 QA Rollback Complete" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Rollback Details" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Reason:** ${{ inputs.reason }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Rollback URL:** \`${{ steps.rollback.outputs.qa_url }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Deployment ID:** \`${{ steps.rollback.outputs.deployment_id }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Verify Rollback" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Test the QA environment to ensure rollback was successful:" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- [Status API](${{ steps.rollback.outputs.qa_url }}?p=api&action=status&brandId=root)" >> $GITHUB_STEP_SUMMARY
+          echo "- [Public Page](${{ steps.rollback.outputs.qa_url }}?p=events&brand=root)" >> $GITHUB_STEP_SUMMARY
+          echo "- [Admin Page](${{ steps.rollback.outputs.qa_url }}?page=admin&brand=root)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Next Steps" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "1. ✅ Verify QA functionality" >> $GITHUB_STEP_SUMMARY
+          echo "2. 🔍 Investigate root cause of issue" >> $GITHUB_STEP_SUMMARY
+          echo "3. 🛠️ Fix issue and re-deploy" >> $GITHUB_STEP_SUMMARY
+          echo "4. ✅ Re-run quality gates" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+      - name: Notify rollback
+        run: |
+          echo "📢 Rollback Notification"
+          echo "========================"
+          echo ""
+          echo "QA environment has been rolled back"
+          echo "Reason: ${{ inputs.reason }}"
+          echo "Rolled back by: ${{ github.actor }}"
+          echo "Time: $(date -Iseconds)"
+          echo ""
+          echo "QA URL: ${{ steps.rollback.outputs.qa_url }}"
+          echo ""
+          echo "Please investigate the issue and re-deploy when ready."

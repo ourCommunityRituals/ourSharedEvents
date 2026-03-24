@@ -1,0 +1,325 @@
+# DEPRECATED WORKFLOW (ARCHIVED)
+# This workflow is kept for historical reference only.
+# Do NOT re-enable without updating it to the current CI/CD architecture.
+
+name: OLD – Validate Environment
+
+# This workflow validates that the CI/CD environment is properly configured.
+# It runs early in the pipeline to fail fast if secrets are missing.
+
+on:
+  # Run on PRs to validate environment before merge
+  pull_request:
+    branches: [main]
+    paths:
+      - '.clasp*.json'
+      - '.github/workflows/**'
+      - 'scripts/setup-*.js'
+      - 'scripts/validate-*.js'
+      - 'scripts/deploy-*.js'
+
+  # Run on push to main to validate after config changes
+  push:
+    branches: [main]
+    paths:
+      - '.clasp*.json'
+      - '.github/workflows/**'
+
+  # Manual trigger for debugging
+  workflow_dispatch:
+    inputs:
+      validate_stage1:
+        description: 'Validate Stage 1 (deployment) secrets'
+        type: boolean
+        default: true
+      validate_stage2:
+        description: 'Validate Stage 2 (testing) secrets'
+        type: boolean
+        default: true
+      test_clasp:
+        description: 'Test clasp authentication'
+        type: boolean
+        default: false
+
+jobs:
+  # ============================================================================
+  # VALIDATE CONFIGURATION FILES
+  # ============================================================================
+  validate-config:
+    name: 🔍 Validate Configuration
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check .clasp.json exists
+        run: |
+          if [ ! -f ".clasp.json" ]; then
+            echo "❌ .clasp.json not found"
+            exit 1
+          fi
+          echo "✅ .clasp.json exists"
+
+          # Validate JSON syntax
+          if ! jq empty .clasp.json 2>/dev/null; then
+            echo "❌ .clasp.json is not valid JSON"
+            exit 1
+          fi
+          echo "✅ .clasp.json is valid JSON"
+
+          # Check scriptId exists
+          SCRIPT_ID=$(jq -r '.scriptId // empty' .clasp.json)
+          if [ -z "$SCRIPT_ID" ]; then
+            echo "❌ .clasp.json missing scriptId"
+            exit 1
+          fi
+          echo "✅ Production Script ID: ${SCRIPT_ID:0:20}..."
+
+      - name: Check .clasp-staging.json
+        run: |
+          if [ ! -f ".clasp-staging.json" ]; then
+            echo "⚠️ .clasp-staging.json not found (staging not configured)"
+            exit 0
+          fi
+          echo "✅ .clasp-staging.json exists"
+
+          # Validate JSON syntax
+          if ! jq empty .clasp-staging.json 2>/dev/null; then
+            echo "❌ .clasp-staging.json is not valid JSON"
+            exit 1
+          fi
+          echo "✅ .clasp-staging.json is valid JSON"
+
+          # Check scriptId
+          SCRIPT_ID=$(jq -r '.scriptId // empty' .clasp-staging.json)
+          if [ -z "$SCRIPT_ID" ] || [[ "$SCRIPT_ID" == *"PLACEHOLDER"* ]] || [[ "$SCRIPT_ID" == *"REPLACE"* ]]; then
+            echo "⚠️ Staging Script ID not configured"
+            echo "   Update .clasp-staging.json with actual Script ID"
+          else
+            echo "✅ Staging Script ID: ${SCRIPT_ID:0:20}..."
+          fi
+
+      - name: Check appsscript.json
+        run: |
+          if [ ! -f "src/mvp/appsscript.json" ]; then
+            echo "❌ src/mvp/appsscript.json not found"
+            exit 1
+          fi
+          echo "✅ appsscript.json exists"
+
+          # Validate JSON
+          if ! jq empty src/mvp/appsscript.json 2>/dev/null; then
+            echo "❌ appsscript.json is not valid JSON"
+            exit 1
+          fi
+          echo "✅ appsscript.json is valid JSON"
+
+  # ============================================================================
+  # VALIDATE SECRETS (Stage 1 - Deployment)
+  # ============================================================================
+  validate-stage1-secrets:
+    name: 🔐 Validate Stage 1 Secrets
+    runs-on: ubuntu-latest
+    if: github.event.inputs.validate_stage1 != 'false'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Check OAUTH_CREDENTIALS
+        env:
+          OAUTH_CREDENTIALS: ${{ secrets.OAUTH_CREDENTIALS }}
+        run: |
+          echo "🔍 Checking OAUTH_CREDENTIALS..."
+
+          if [ -z "$OAUTH_CREDENTIALS" ]; then
+            echo "❌ OAUTH_CREDENTIALS secret not set"
+            echo ""
+            echo "📖 To fix:"
+            echo "   1. Run locally: clasp login (as zeventbook@gmail.com)"
+            echo "   2. Copy ~/.clasprc.json contents"
+            echo "   3. Add as OAUTH_CREDENTIALS secret in GitHub"
+            exit 1
+          fi
+
+          # Validate JSON structure
+          if ! echo "$OAUTH_CREDENTIALS" | jq -e '.tokens.default.access_token or .token.access_token' > /dev/null 2>&1; then
+            echo "❌ OAUTH_CREDENTIALS has invalid format"
+            echo "   Expected JSON with tokens.default.access_token or token.access_token"
+            exit 1
+          fi
+
+          # Check for refresh_token
+          if ! echo "$OAUTH_CREDENTIALS" | jq -e '.tokens.default.refresh_token or .token.refresh_token' > /dev/null 2>&1; then
+            echo "⚠️ No refresh_token found - token may expire"
+          fi
+
+          echo "✅ OAUTH_CREDENTIALS is valid"
+
+      - name: Check DEPLOYMENT_ID (optional)
+        env:
+          DEPLOYMENT_ID: ${{ secrets.DEPLOYMENT_ID }}
+        run: |
+          if [ -z "$DEPLOYMENT_ID" ]; then
+            echo "ℹ️ DEPLOYMENT_ID not set (optional - will create new deployment)"
+          else
+            if [[ "$DEPLOYMENT_ID" == AKfycb* ]]; then
+              echo "✅ DEPLOYMENT_ID: ${DEPLOYMENT_ID:0:20}..."
+            else
+              echo "⚠️ DEPLOYMENT_ID has unexpected format"
+            fi
+          fi
+
+      - name: Check Cloudflare secrets (optional)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "ℹ️ Cloudflare secrets not configured (optional)"
+            echo "   Worker updates will be skipped"
+          else
+            echo "✅ Cloudflare secrets configured"
+          fi
+
+  # ============================================================================
+  # VALIDATE SECRETS (Stage 2 - Testing)
+  # ============================================================================
+  validate-stage2-secrets:
+    name: 🔐 Validate Stage 2 Secrets
+    runs-on: ubuntu-latest
+    if: github.event.inputs.validate_stage2 != 'false'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check admin keys
+        env:
+          ADMIN_KEY_ROOT: ${{ secrets.ADMIN_KEY_ROOT }}
+          ADMIN_KEY_ABC: ${{ secrets.ADMIN_KEY_ABC }}
+          ADMIN_KEY_CBC: ${{ secrets.ADMIN_KEY_CBC }}
+          ADMIN_KEY_CBL: ${{ secrets.ADMIN_KEY_CBL }}
+        run: |
+          echo "🔍 Checking admin keys..."
+
+          HAS_ROOT=false
+          if [ -n "$ADMIN_KEY_ROOT" ]; then
+            echo "✅ ADMIN_KEY_ROOT configured"
+            HAS_ROOT=true
+          else
+            echo "⚠️ ADMIN_KEY_ROOT not set"
+          fi
+
+          [ -n "$ADMIN_KEY_ABC" ] && echo "✅ ADMIN_KEY_ABC configured" || echo "ℹ️ ADMIN_KEY_ABC not set (optional)"
+          [ -n "$ADMIN_KEY_CBC" ] && echo "✅ ADMIN_KEY_CBC configured" || echo "ℹ️ ADMIN_KEY_CBC not set (optional)"
+          [ -n "$ADMIN_KEY_CBL" ] && echo "✅ ADMIN_KEY_CBL configured" || echo "ℹ️ ADMIN_KEY_CBL not set (optional)"
+
+          if [ "$HAS_ROOT" = false ]; then
+            echo ""
+            echo "⚠️ At least ADMIN_KEY_ROOT should be configured for E2E tests"
+          fi
+
+      - name: Check spreadsheet IDs
+        env:
+          SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID }}
+          SPREADSHEET_ID_ROOT: ${{ secrets.SPREADSHEET_ID_ROOT }}
+        run: |
+          echo "🔍 Checking spreadsheet IDs..."
+
+          if [ -n "$SPREADSHEET_ID" ] || [ -n "$SPREADSHEET_ID_ROOT" ]; then
+            echo "✅ Spreadsheet ID(s) configured"
+          else
+            echo "ℹ️ No spreadsheet IDs configured (optional for some tests)"
+          fi
+
+  # ============================================================================
+  # TEST CLASP AUTHENTICATION (Optional)
+  # ============================================================================
+  test-clasp-auth:
+    name: 🔑 Test Clasp Authentication
+    runs-on: ubuntu-latest
+    if: github.event.inputs.test_clasp == 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install clasp
+        run: npm install -g @google/clasp@2.4.2
+
+      - name: Configure clasp credentials
+        env:
+          OAUTH_CREDENTIALS: ${{ secrets.OAUTH_CREDENTIALS }}
+        run: |
+          if [ -z "$OAUTH_CREDENTIALS" ]; then
+            echo "❌ Cannot test - OAUTH_CREDENTIALS not set"
+            exit 1
+          fi
+
+          echo "$OAUTH_CREDENTIALS" > ~/.clasprc.json
+          chmod 600 ~/.clasprc.json
+
+      - name: Test clasp list
+        run: |
+          echo "🔍 Testing clasp API access..."
+
+          if clasp list; then
+            echo "✅ Clasp authentication working"
+          else
+            echo "❌ Clasp authentication failed"
+            echo ""
+            echo "Token may be expired or revoked. Regenerate credentials:"
+            echo "   1. clasp login (as zeventbook@gmail.com)"
+            echo "   2. Update OAUTH_CREDENTIALS secret"
+            exit 1
+          fi
+
+      - name: Test clasp status
+        run: |
+          echo "🔍 Testing project access..."
+
+          if clasp status; then
+            echo "✅ Project access working"
+          else
+            echo "⚠️ Could not get project status"
+          fi
+
+  # ============================================================================
+  # SUMMARY
+  # ============================================================================
+  summary:
+    name: 📋 Environment Summary
+    runs-on: ubuntu-latest
+    needs: [validate-config, validate-stage1-secrets, validate-stage2-secrets]
+    if: always()
+    steps:
+      - name: Create summary
+        run: |
+          echo "## 🔧 Environment Validation Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          echo "| Check | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Configuration Files | ${{ needs.validate-config.result == 'success' && '✅ PASS' || '❌ FAIL' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Stage 1 Secrets | ${{ needs.validate-stage1-secrets.result == 'success' && '✅ PASS' || needs.validate-stage1-secrets.result == 'skipped' && '⏭️ SKIPPED' || '❌ FAIL' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Stage 2 Secrets | ${{ needs.validate-stage2-secrets.result == 'success' && '✅ PASS' || needs.validate-stage2-secrets.result == 'skipped' && '⏭️ SKIPPED' || '⚠️ WARN' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Overall status
+          if [[ "${{ needs.validate-config.result }}" == "success" ]] && [[ "${{ needs.validate-stage1-secrets.result }}" == "success" ]]; then
+            echo "### ✅ Environment is properly configured for CI/CD" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### ⚠️ Some configuration issues detected" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Check the job logs above for details and fix instructions." >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "---" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Documentation:** [APPS_SCRIPT_PROJECT.md](../blob/main/APPS_SCRIPT_PROJECT.md)" >> $GITHUB_STEP_SUMMARY

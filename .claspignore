@@ -1,0 +1,30 @@
+# Ignore everything by default
+**
+
+# Include root-level .gs and .html files
+!*.gs
+!*.html
+
+# Include appsscript.json
+!appsscript.json
+
+# Include service modules
+!services/
+!services/**/*.gs
+
+# Include contracts
+!contracts/
+!contracts/**/*.gs
+
+# Explicitly ignore these directories
+.git/**
+node_modules/**
+scripts/**
+tests/**
+docs/**
+.github/**
+
+# Ignore JS and JSON except appsscript.json
+*.js
+*.json
+!appsscript.json

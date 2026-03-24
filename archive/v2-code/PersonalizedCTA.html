@@ -1,0 +1,569 @@
+<!--
+================================================================================
+EXPERIMENTAL - v2+ (Not MVP)
+================================================================================
+Component: PersonalizedCTA.html
+Purpose: Dynamic CTA component based on event status
+Status: NOT included in MVP focus group testing
+================================================================================
+-->
+<style>
+  /* ===== Personalized Call-to-Action Component ===== */
+  /*
+    Dynamically adjusts CTA based on event status to encourage timely engagement.
+    Statuses: upcoming, happening-now, ending-soon, ended, replay-available
+  */
+
+  .dynamic-cta {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .cta-button {
+    width: 100%;
+    padding: var(--space-5, 1.25rem) var(--space-6, 1.5rem);
+    border: none;
+    border-radius: var(--radius-base, 8px);
+    font-size: var(--font-size-lg, 1.125rem);
+    font-weight: var(--font-weight-semibold, 600);
+    cursor: pointer;
+    transition: all var(--transition-base, 0.2s);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2, 0.5rem);
+    text-decoration: none;
+    min-height: var(--touch-target-comfortable, 48px);
+    position: relative;
+  }
+
+  .cta-button::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+    transition: left 0.5s;
+  }
+
+  .cta-button:hover::before {
+    left: 100%;
+  }
+
+  .cta-icon {
+    font-size: var(--font-size-xl, 1.25rem);
+    line-height: 1;
+  }
+
+  .cta-text {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-1, 0.25rem);
+  }
+
+  .cta-primary-text {
+    font-size: var(--font-size-lg, 1.125rem);
+    font-weight: var(--font-weight-semibold, 600);
+  }
+
+  .cta-secondary-text {
+    font-size: var(--font-size-sm, 0.875rem);
+    opacity: 0.9;
+  }
+
+  /* Status-specific styles */
+  .cta-button.upcoming {
+    background: linear-gradient(135deg, var(--color-primary, #2563eb) 0%, var(--color-primary-dark, #1d4ed8) 100%);
+    color: white;
+    box-shadow: var(--shadow-primary, 0 4px 12px rgba(37, 99, 235, 0.3));
+  }
+
+  .cta-button.upcoming:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(37, 99, 235, 0.4);
+  }
+
+  .cta-button.happening-now {
+    background: linear-gradient(135deg, var(--color-success, #10b981) 0%, var(--color-success-dark, #059669) 100%);
+    color: white;
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+    animation: pulse-glow 2s ease-in-out infinite;
+  }
+
+  @keyframes pulse-glow {
+    0%, 100% {
+      box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+    }
+    50% {
+      box-shadow: 0 4px 20px rgba(16, 185, 129, 0.5);
+    }
+  }
+
+  .cta-button.ending-soon {
+    background: linear-gradient(135deg, var(--color-warning, #f59e0b) 0%, var(--color-warning-dark, #d97706) 100%);
+    color: white;
+    box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
+    animation: urgency-pulse 1.5s ease-in-out infinite;
+  }
+
+  @keyframes urgency-pulse {
+    0%, 100% {
+      transform: scale(1);
+    }
+    50% {
+      transform: scale(1.02);
+    }
+  }
+
+  .cta-button.ended {
+    background: var(--color-gray-500, #64748b);
+    color: white;
+    cursor: default;
+  }
+
+  .cta-button.ended:hover {
+    transform: none;
+  }
+
+  .cta-button.replay {
+    background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+    color: white;
+    box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+  }
+
+  .cta-button.replay:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(139, 92, 246, 0.4);
+  }
+
+  /* Countdown timer */
+  .cta-countdown {
+    margin-top: var(--space-3, 0.75rem);
+    padding: var(--space-3, 0.75rem);
+    background: var(--color-gray-50, #f8fafc);
+    border-radius: var(--radius-sm, 6px);
+    text-align: center;
+    font-size: var(--font-size-sm, 0.875rem);
+    color: var(--color-gray-600, #475569);
+    border: 1px solid var(--color-gray-200, #e2e8f0);
+  }
+
+  .countdown-label {
+    font-weight: var(--font-weight-medium, 500);
+    color: var(--color-gray-700, #334155);
+    margin-bottom: var(--space-2, 0.5rem);
+  }
+
+  .countdown-time {
+    display: flex;
+    gap: var(--space-3, 0.75rem);
+    justify-content: center;
+    align-items: center;
+    font-family: var(--font-family-mono);
+    font-weight: var(--font-weight-bold, 700);
+    color: var(--color-primary, #2563eb);
+    font-size: var(--font-size-xl, 1.25rem);
+  }
+
+  .countdown-segment {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-1, 0.25rem);
+  }
+
+  .countdown-value {
+    min-width: 2ch;
+  }
+
+  .countdown-unit {
+    font-size: var(--font-size-xs, 0.75rem);
+    font-weight: var(--font-weight-normal, 400);
+    color: var(--color-gray-500, #64748b);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  /* Live indicator */
+  .live-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2, 0.5rem);
+    padding: var(--space-2, 0.5rem) var(--space-3, 0.75rem);
+    background: rgba(220, 38, 38, 0.1);
+    border: 1px solid rgba(220, 38, 38, 0.3);
+    border-radius: var(--radius-full, 9999px);
+    font-size: var(--font-size-sm, 0.875rem);
+    font-weight: var(--font-weight-semibold, 600);
+    color: #dc2626;
+    margin-bottom: var(--space-3, 0.75rem);
+  }
+
+  .live-dot {
+    width: 8px;
+    height: 8px;
+    background: #dc2626;
+    border-radius: 50%;
+    animation: live-pulse 2s ease-in-out infinite;
+  }
+
+  @keyframes live-pulse {
+    0%, 100% {
+      opacity: 1;
+      transform: scale(1);
+    }
+    50% {
+      opacity: 0.5;
+      transform: scale(0.8);
+    }
+  }
+
+  /* Mobile optimizations */
+  @media (max-width: 640px) {
+    .cta-primary-text {
+      font-size: var(--font-size-base, 1rem);
+    }
+
+    .cta-secondary-text {
+      font-size: var(--font-size-xs, 0.75rem);
+    }
+
+    .countdown-time {
+      font-size: var(--font-size-lg, 1.125rem);
+      gap: var(--space-2, 0.5rem);
+    }
+  }
+
+  /* Reduced motion */
+  @media (prefers-reduced-motion: reduce) {
+    .cta-button.happening-now,
+    .cta-button.ending-soon {
+      animation: none;
+    }
+
+    .live-dot {
+      animation: none;
+    }
+  }
+</style>
+
+<script>
+  /* ===== Personalized CTA JavaScript ===== */
+
+  /**
+   * Event phases based on timing
+   */
+  const EVENT_PHASES = {
+    UPCOMING: 'upcoming',
+    HAPPENING_NOW: 'happening-now',
+    ENDING_SOON: 'ending-soon',
+    ENDED: 'ended',
+    REPLAY: 'replay'
+  };
+
+  /**
+   * Get event phase based on start/end times
+   * @param {string|Date} startDateTime - Event start date/time
+   * @param {string|Date} endDateTime - Event end date/time
+   * @param {boolean} hasReplay - Whether replay is available
+   * @returns {string} Event phase
+   */
+  function getEventPhase(startDateTime, endDateTime, hasReplay = false) {
+    const now = new Date();
+    const start = new Date(startDateTime);
+    const end = new Date(endDateTime);
+
+    // Event has ended
+    if (now > end) {
+      return hasReplay ? EVENT_PHASES.REPLAY : EVENT_PHASES.ENDED;
+    }
+
+    // Event is happening now
+    if (now >= start && now <= end) {
+      // Check if ending within 30 minutes
+      const minutesUntilEnd = (end - now) / (1000 * 60);
+      if (minutesUntilEnd <= 30) {
+        return EVENT_PHASES.ENDING_SOON;
+      }
+      return EVENT_PHASES.HAPPENING_NOW;
+    }
+
+    // Event is upcoming
+    return EVENT_PHASES.UPCOMING;
+  }
+
+  /**
+   * Get CTA configuration based on event phase
+   * @param {string} phase - Event phase
+   * @param {Object} eventData - Event data
+   * @returns {Object} CTA configuration
+   */
+  function getCTAConfig(phase, eventData) {
+    const configs = {
+      [EVENT_PHASES.UPCOMING]: {
+        icon: '📅',
+        primaryText: 'Sign Up Now',
+        secondaryText: `Don't miss out on ${eventData.name}`,
+        className: 'upcoming',
+        action: 'register',
+        showCountdown: true
+      },
+      [EVENT_PHASES.HAPPENING_NOW]: {
+        icon: '🔴',
+        primaryText: 'Join Now',
+        secondaryText: 'Event is happening right now!',
+        className: 'happening-now',
+        action: 'join',
+        showLive: true
+      },
+      [EVENT_PHASES.ENDING_SOON]: {
+        icon: '⚡',
+        primaryText: 'Join Before It Ends',
+        secondaryText: 'Only minutes remaining!',
+        className: 'ending-soon',
+        action: 'join',
+        showLive: true,
+        showCountdown: true
+      },
+      [EVENT_PHASES.ENDED]: {
+        icon: '✓',
+        primaryText: 'Event Has Ended',
+        secondaryText: 'Thank you for your interest',
+        className: 'ended',
+        action: null
+      },
+      [EVENT_PHASES.REPLAY]: {
+        icon: '▶️',
+        primaryText: 'Watch Replay',
+        secondaryText: 'View the recorded session',
+        className: 'replay',
+        action: 'replay'
+      }
+    };
+
+    return configs[phase] || configs[EVENT_PHASES.UPCOMING];
+  }
+
+  /**
+   * Render personalized CTA button
+   * @param {HTMLElement} container - Container element
+   * @param {Object} eventData - Event data with startDateTime, endDateTime, etc.
+   */
+  function renderPersonalizedCTA(container, eventData) {
+    const phase = getEventPhase(
+      eventData.startDateTime,
+      eventData.endDateTime,
+      eventData.hasReplay
+    );
+
+    const config = getCTAConfig(phase, eventData);
+
+    let html = '<div class="dynamic-cta">';
+
+    // Live indicator for active events
+    if (config.showLive) {
+      html += `
+        <div class="live-indicator">
+          <span class="live-dot"></span>
+          <span>LIVE NOW</span>
+        </div>
+      `;
+    }
+
+    // CTA Button
+    const isClickable = config.action !== null;
+    const tag = isClickable ? 'button' : 'div';
+    const actionAttr = isClickable ? `onclick="handleCTAClick('${config.action}', ${JSON.stringify(eventData).replace(/"/g, '&quot;')})"` : '';
+
+    html += `
+      <${tag} class="cta-button ${config.className}" ${actionAttr} ${isClickable ? '' : 'disabled'}>
+        <span class="cta-icon">${config.icon}</span>
+        <span class="cta-text">
+          <span class="cta-primary-text">${escapeHtml(config.primaryText)}</span>
+          <span class="cta-secondary-text">${escapeHtml(config.secondaryText)}</span>
+        </span>
+      </${tag}>
+    `;
+
+    // Countdown timer
+    if (config.showCountdown) {
+      const targetTime = phase === EVENT_PHASES.ENDING_SOON
+        ? eventData.endDateTime
+        : eventData.startDateTime;
+
+      html += `
+        <div class="cta-countdown">
+          <div class="countdown-label">
+            ${phase === EVENT_PHASES.ENDING_SOON ? 'Time Remaining' : 'Starts In'}
+          </div>
+          <div class="countdown-time" data-target="${targetTime}" data-countdown="true">
+            <span class="countdown-segment">
+              <span class="countdown-value" data-unit="days">--</span>
+              <span class="countdown-unit">Days</span>
+            </span>
+            <span>:</span>
+            <span class="countdown-segment">
+              <span class="countdown-value" data-unit="hours">--</span>
+              <span class="countdown-unit">Hrs</span>
+            </span>
+            <span>:</span>
+            <span class="countdown-segment">
+              <span class="countdown-value" data-unit="minutes">--</span>
+              <span class="countdown-unit">Min</span>
+            </span>
+            <span>:</span>
+            <span class="countdown-segment">
+              <span class="countdown-value" data-unit="seconds">--</span>
+              <span class="countdown-unit">Sec</span>
+            </span>
+          </div>
+        </div>
+      `;
+    }
+
+    html += '</div>';
+
+    container.innerHTML = html;
+
+    // Start countdown timers
+    if (config.showCountdown) {
+      startCountdown(container.querySelector('[data-countdown="true"]'));
+    }
+
+    // Auto-refresh CTA when phase changes
+    schedulePhaseUpdate(container, eventData);
+  }
+
+  /**
+   * Handle CTA click based on action type
+   */
+  function handleCTAClick(action, eventData) {
+    switch (action) {
+      case 'register':
+        // Navigate to registration form or show modal
+        if (eventData.registrationUrl) {
+          window.location.href = eventData.registrationUrl;
+        } else {
+          showRegistrationForm(eventData);
+        }
+        break;
+
+      case 'join':
+        // Navigate to live event
+        if (eventData.liveUrl) {
+          window.location.href = eventData.liveUrl;
+        }
+        break;
+
+      case 'replay':
+        // Navigate to replay
+        if (eventData.replayUrl) {
+          window.location.href = eventData.replayUrl;
+        }
+        break;
+    }
+  }
+
+  /**
+   * Start countdown timer
+   */
+  function startCountdown(element) {
+    if (!element) return;
+
+    const targetTime = new Date(element.dataset.target);
+
+    function update() {
+      const now = new Date();
+      const diff = targetTime - now;
+
+      if (diff <= 0) {
+        // Reload page to update CTA when time expires
+        location.reload();
+        return;
+      }
+
+      const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+      const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+      const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+      const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+
+      element.querySelector('[data-unit="days"]').textContent = String(days).padStart(2, '0');
+      element.querySelector('[data-unit="hours"]').textContent = String(hours).padStart(2, '0');
+      element.querySelector('[data-unit="minutes"]').textContent = String(minutes).padStart(2, '0');
+      element.querySelector('[data-unit="seconds"]').textContent = String(seconds).padStart(2, '0');
+    }
+
+    update();
+    setInterval(update, 1000);
+  }
+
+  /**
+   * Schedule CTA update when phase changes
+   */
+  function schedulePhaseUpdate(container, eventData) {
+    const now = new Date();
+    const start = new Date(eventData.startDateTime);
+    const end = new Date(eventData.endDateTime);
+    const endingSoonTime = new Date(end - 30 * 60 * 1000); // 30 min before end
+
+    // Calculate next phase change
+    let nextUpdate = null;
+
+    if (now < start) {
+      nextUpdate = start;
+    } else if (now < endingSoonTime) {
+      nextUpdate = endingSoonTime;
+    } else if (now < end) {
+      nextUpdate = end;
+    }
+
+    if (nextUpdate) {
+      const delay = nextUpdate - now;
+      setTimeout(() => {
+        renderPersonalizedCTA(container, eventData);
+      }, delay);
+    }
+  }
+
+  /**
+   * Escape HTML
+   */
+  function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  }
+
+  /**
+   * Show registration form (placeholder)
+   */
+  function showRegistrationForm(eventData) {
+    alert('Registration form would appear here for: ' + eventData.name);
+  }
+</script>
+
+<!-- ===== Example Usage Template ===== -->
+<template id="personalized-cta-example">
+  <div id="event-cta-container"></div>
+
+  <script>
+    // Example: Render CTA for an event
+    const exampleEvent = {
+      name: 'Tech Conference 2025',
+      startDateTime: '2025-12-01T09:00:00',
+      endDateTime: '2025-12-01T17:00:00',
+      hasReplay: true,
+      registrationUrl: '/register',
+      liveUrl: '/live',
+      replayUrl: '/replay'
+    };
+
+    renderPersonalizedCTA(
+      document.getElementById('event-cta-container'),
+      exampleEvent
+    );
+  </script>
+</template>

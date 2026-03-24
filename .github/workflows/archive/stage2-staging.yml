@@ -1,0 +1,904 @@
+# Story C5 - Stage-2 Staging: Health + Create-Event Smoke Gate
+# Story D4 - Replace Admin Key with Cloudflare Access
+# Story D5 - Stage-2 Lifecycle Smoke Pack (Hard Gate)
+# Story E5 - Stage-2 Asset Integrity Gate (Hard Gate)
+#
+# Purpose / Value:
+#   Every staging deploy either proves the product works or it doesn't ship.
+#   This workflow validates the staging environment post-deploy with:
+#   1. Health check (curl + jq validation)
+#   2. Create event smoke test (Playwright)
+#   3. List verification (assert created event appears)
+#   4. Lifecycle smoke test (Hard Gate) - Story D5
+#   5. Asset integrity gate (Hard Gate) - Story E5
+#
+# Acceptance Criteria:
+#   Stage-2 fails fast if:
+#   - Health check fails (/api/health/backend .ok != true)
+#   - Create event fails (POST /api/v2/admin/events)
+#   - List missing created event (GET /api/v2/events)
+#   - Lifecycle smoke test fails (ANY step fails -> deploy FAILS)
+#   - Asset integrity gate fails (ANY step fails -> deploy FAILS) - Story E5
+#
+# Required Secrets (Story D4 - Cloudflare Access Service Token):
+#   - CF_ACCESS_CLIENT_ID: Cloudflare Access Service Token Client ID
+#   - CF_ACCESS_CLIENT_SECRET: Cloudflare Access Service Token Secret
+#
+# See: Story C5 - CI Stage-2: Health + Create-Event Smoke Gate
+# See: Story D4 - Replace Admin Key with Cloudflare Access
+# See: Story D5 - Stage-2 Lifecycle Smoke Pack (Hard Gate)
+# See: Story E5 - Stage-2 Asset Integrity Gate
+
+name: Stage-2 Staging Health Gate
+
+on:
+  workflow_run:
+    workflows:
+      - "Stage-1 CI"
+    types:
+      - completed
+  workflow_dispatch:
+    inputs:
+      skip_create_event_test:
+        description: 'Skip create event smoke test (health only)'
+        required: false
+        default: 'false'
+        type: boolean
+
+# Prevent duplicate runs for the same deployment
+concurrency:
+  group: stage2-staging-${{ github.event.workflow_run.head_sha || github.run_id }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '18'
+  STG_BASE_URL: 'https://stg.eventangle.com'
+
+jobs:
+  # ==========================================================================
+  # GATE CHECK: Verify Stage-1 succeeded or manual dispatch
+  # ==========================================================================
+  check-trigger:
+    name: Check Trigger Conditions
+    runs-on: ubuntu-latest
+    outputs:
+      should_run: ${{ steps.check.outputs.should_run }}
+      skip_create_test: ${{ steps.check.outputs.skip_create_test }}
+
+    steps:
+      - name: Check trigger conditions
+        id: check
+        run: |
+          # Handle manual dispatch
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "Manual dispatch - proceeding with Stage-2 staging gate"
+            echo "should_run=true" >> $GITHUB_OUTPUT
+            echo "skip_create_test=${{ github.event.inputs.skip_create_event_test }}" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # Handle workflow_run trigger
+          CONCLUSION="${{ github.event.workflow_run.conclusion }}"
+          TRIGGER_EVENT="${{ github.event.workflow_run.event }}"
+          HEAD_BRANCH="${{ github.event.workflow_run.head_branch }}"
+
+          echo "Stage-1 CI conclusion: $CONCLUSION"
+          echo "Stage-1 trigger event: $TRIGGER_EVENT"
+          echo "Stage-1 head branch: $HEAD_BRANCH"
+
+          # Stage-2 should only run if Stage-1 succeeded on push to main
+          if [ "$CONCLUSION" != "success" ]; then
+            echo "::warning::Stage-1 CI did not succeed (conclusion: $CONCLUSION)"
+            echo "should_run=false" >> $GITHUB_OUTPUT
+          elif [ "$TRIGGER_EVENT" != "push" ]; then
+            echo "::notice::Stage-1 was triggered by '$TRIGGER_EVENT' (not push)"
+            echo "should_run=false" >> $GITHUB_OUTPUT
+          elif [ "$HEAD_BRANCH" != "main" ]; then
+            echo "::notice::Stage-1 ran on branch '$HEAD_BRANCH' (not main)"
+            echo "should_run=false" >> $GITHUB_OUTPUT
+          else
+            echo "Stage-1 CI succeeded with push to main - proceeding"
+            echo "should_run=true" >> $GITHUB_OUTPUT
+          fi
+          echo "skip_create_test=false" >> $GITHUB_OUTPUT
+
+      - name: Create skip summary
+        if: steps.check.outputs.should_run != 'true'
+        run: |
+          echo "## Stage-2 Staging Gate - Skipped" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Stage-2 only runs after Stage-1 deploys to staging (push to main)." >> $GITHUB_STEP_SUMMARY
+
+  # ==========================================================================
+  # HEALTH GATE: curl health backend + jq validation
+  # DevOps requirement: jq -e '.ok == true'
+  # ==========================================================================
+  health-gate:
+    name: Health Check Gate (curl + jq)
+    runs-on: ubuntu-latest
+    needs: check-trigger
+    if: needs.check-trigger.outputs.should_run == 'true'
+    outputs:
+      health_ok: ${{ steps.health.outputs.health_ok }}
+
+    steps:
+      - name: Wait for edge propagation
+        run: |
+          echo "Waiting 15s for staging edge propagation..."
+          sleep 15
+
+      - name: Health check with curl + jq gate
+        id: health
+        run: |
+          echo "=============================================="
+          echo "STORY C5: Health Check Gate"
+          echo "=============================================="
+          echo "Target: ${{ env.STG_BASE_URL }}/api/health/backend"
+          echo ""
+
+          # Fetch health endpoint
+          HTTP_CODE=$(curl -s -o /tmp/health.json -w "%{http_code}" \
+            --connect-timeout 30 \
+            --max-time 60 \
+            "${{ env.STG_BASE_URL }}/api/health/backend" 2>&1) || HTTP_CODE="000"
+
+          echo "HTTP Status: $HTTP_CODE"
+          echo ""
+
+          if [ -f /tmp/health.json ]; then
+            echo "Response:"
+            cat /tmp/health.json | jq '.' 2>/dev/null || cat /tmp/health.json
+            echo ""
+          fi
+
+          # GATE: jq -e '.ok == true' (per DevOps requirement)
+          if [ "$HTTP_CODE" = "200" ]; then
+            if jq -e '.ok == true' /tmp/health.json > /dev/null 2>&1; then
+              echo "health_ok=true" >> $GITHUB_OUTPUT
+              echo ""
+              echo "=============================================="
+              echo "HEALTH GATE: PASSED (.ok == true)"
+              echo "=============================================="
+            else
+              echo "health_ok=false" >> $GITHUB_OUTPUT
+              echo ""
+              echo "=============================================="
+              echo "HEALTH GATE: FAILED (.ok != true)"
+              echo "=============================================="
+              echo "::error::Health check failed: .ok != true"
+              exit 1
+            fi
+          else
+            echo "health_ok=false" >> $GITHUB_OUTPUT
+            echo ""
+            echo "=============================================="
+            echo "HEALTH GATE: FAILED (HTTP $HTTP_CODE)"
+            echo "=============================================="
+            echo "::error::Health endpoint returned HTTP $HTTP_CODE"
+            exit 1
+          fi
+
+      - name: Create health summary
+        if: always()
+        run: |
+          echo "## Story C5: Health Check Gate" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          HEALTH_OK="${{ steps.health.outputs.health_ok }}"
+
+          echo "| Check | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| \`curl /api/health/backend\` | HTTP Response |" >> $GITHUB_STEP_SUMMARY
+          echo "| \`jq -e '.ok == true'\` | $( [ \"$HEALTH_OK\" = \"true\" ] && echo 'PASSED' || echo '**FAILED**' ) |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ "$HEALTH_OK" = "true" ]; then
+            echo "### PASSED" >> $GITHUB_STEP_SUMMARY
+            echo "Backend health check passed. Proceeding to create event smoke test." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### FAILED - Pipeline Stopped" >> $GITHUB_STEP_SUMMARY
+            echo "Health check failed. Create event smoke test will not run." >> $GITHUB_STEP_SUMMARY
+          fi
+
+  # ==========================================================================
+  # CREATE EVENT SMOKE GATE: Playwright test
+  # SDET requirement: POST create event, GET list, assert presence
+  # ==========================================================================
+  create-event-gate:
+    name: Create Event Smoke Gate (Playwright)
+    runs-on: ubuntu-latest
+    needs: [check-trigger, health-gate]
+    if: |
+      needs.health-gate.outputs.health_ok == 'true' &&
+      needs.check-trigger.outputs.skip_create_test != 'true'
+    outputs:
+      smoke_passed: ${{ steps.smoke.outputs.passed }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install chromium
+
+      - name: Run create event smoke gate test
+        id: smoke
+        env:
+          # Story D4: Use Cloudflare Access Service Token for CI/CD auth
+          BASE_URL: ${{ env.STG_BASE_URL }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+          CI: true
+        run: |
+          echo "=============================================="
+          echo "STORY C5: Create Event Smoke Gate"
+          echo "STORY D4: Using Cloudflare Access Service Token"
+          echo "=============================================="
+          echo "Target: $BASE_URL"
+          echo "CF_ACCESS_CLIENT_ID: [REDACTED - $([ -n "$CF_ACCESS_CLIENT_ID" ] && echo 'configured' || echo 'NOT CONFIGURED')]"
+          echo "CF_ACCESS_CLIENT_SECRET: [REDACTED - $([ -n "$CF_ACCESS_CLIENT_SECRET" ] && echo 'configured' || echo 'NOT CONFIGURED')]"
+          echo ""
+          echo "Test flow:"
+          echo "  1. POST /api/v2/admin/events (create event via CF Access)"
+          echo "  2. GET /api/v2/events (list events)"
+          echo "  3. Assert created event appears in list"
+          echo ""
+
+          # Run the Story C5 create event gate test
+          if npx playwright test --config=playwright.smoke.config.ts storyC5-createEventGate.spec.ts; then
+            echo "passed=true" >> $GITHUB_OUTPUT
+            echo ""
+            echo "=============================================="
+            echo "CREATE EVENT SMOKE GATE: PASSED"
+            echo "=============================================="
+          else
+            echo "passed=false" >> $GITHUB_OUTPUT
+            echo ""
+            echo "=============================================="
+            echo "CREATE EVENT SMOKE GATE: FAILED"
+            echo "=============================================="
+            echo "::error::Create event smoke test failed"
+            exit 1
+          fi
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: create-event-gate-results
+          path: |
+            playwright-report-smoke/
+            .test-results/smoke-results.json
+          retention-days: 7
+          if-no-files-found: ignore
+
+      - name: Create smoke test summary
+        if: always()
+        run: |
+          echo "## Story C5: Create Event Smoke Gate" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          PASSED="${{ steps.smoke.outputs.passed }}"
+
+          echo "| Test | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| POST /api/v2/admin/events | Create event via Cloudflare Access Service Token |" >> $GITHUB_STEP_SUMMARY
+          echo "| GET /api/v2/events | List events |" >> $GITHUB_STEP_SUMMARY
+          echo "| Assert presence | Verify created event in list |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ "$PASSED" = "true" ]; then
+            echo "### PASSED" >> $GITHUB_STEP_SUMMARY
+            echo "Create event smoke test passed. Event was created and verified in list." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### FAILED - Pipeline Stopped" >> $GITHUB_STEP_SUMMARY
+            echo "Create event smoke test failed. Check test artifacts for details." >> $GITHUB_STEP_SUMMARY
+          fi
+
+  # ==========================================================================
+  # LIFECYCLE SMOKE GATE: Story D5 - Complete lifecycle flow (Hard Gate)
+  # Required Flow (IN ORDER):
+  #   1. Health check
+  #   2. Create event
+  #   3. Update event
+  #   4. Set default
+  #   5. Archive
+  #   6. Verify hidden
+  #   7. Unarchive
+  #   8. Verify visible
+  # CI Gate Rule: If ANY step fails -> deploy FAILS
+  # ==========================================================================
+  lifecycle-gate:
+    name: Lifecycle Smoke Gate (Hard Gate)
+    runs-on: ubuntu-latest
+    needs: [check-trigger, health-gate, create-event-gate]
+    if: |
+      needs.health-gate.outputs.health_ok == 'true' &&
+      needs.create-event-gate.outputs.smoke_passed == 'true' &&
+      needs.check-trigger.outputs.skip_create_test != 'true'
+    outputs:
+      lifecycle_passed: ${{ steps.lifecycle.outputs.passed }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install chromium
+
+      - name: Run lifecycle smoke gate test (Hard Gate)
+        id: lifecycle
+        env:
+          # Story D4: Use Cloudflare Access Service Token for CI/CD auth
+          BASE_URL: ${{ env.STG_BASE_URL }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+          CI: true
+        run: |
+          echo "=============================================="
+          echo "STORY D5: Lifecycle Smoke Pack (Hard Gate)"
+          echo "=============================================="
+          echo "Target: $BASE_URL"
+          echo "CF_ACCESS_CLIENT_ID: [REDACTED - $([ -n "$CF_ACCESS_CLIENT_ID" ] && echo 'configured' || echo 'NOT CONFIGURED')]"
+          echo "CF_ACCESS_CLIENT_SECRET: [REDACTED - $([ -n "$CF_ACCESS_CLIENT_SECRET" ] && echo 'configured' || echo 'NOT CONFIGURED')]"
+          echo ""
+          echo "Required Flow (IN ORDER):"
+          echo "  1. Health check"
+          echo "  2. Create event"
+          echo "  3. Update event"
+          echo "  4. Set default"
+          echo "  5. Archive"
+          echo "  6. Verify hidden"
+          echo "  7. Unarchive"
+          echo "  8. Verify visible"
+          echo ""
+          echo "CI Gate Rule: If ANY step fails -> deploy FAILS"
+          echo ""
+
+          # Run the Story D5 lifecycle gate test
+          if npx playwright test tests/smoke/lifecycle.spec.ts --config=playwright.smoke.config.ts; then
+            echo "passed=true" >> $GITHUB_OUTPUT
+            echo ""
+            echo "=============================================="
+            echo "LIFECYCLE SMOKE GATE: PASSED"
+            echo "=============================================="
+          else
+            echo "passed=false" >> $GITHUB_OUTPUT
+            echo ""
+            echo "=============================================="
+            echo "LIFECYCLE SMOKE GATE: FAILED"
+            echo "=============================================="
+            echo "::error::Lifecycle smoke test failed - deploy blocked"
+            exit 1
+          fi
+
+      - name: Upload lifecycle test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lifecycle-gate-results
+          path: |
+            playwright-report-smoke/
+            .test-results/smoke-results.json
+          retention-days: 7
+          if-no-files-found: ignore
+
+      - name: Create lifecycle test summary
+        if: always()
+        run: |
+          echo "## Story D5: Lifecycle Smoke Gate (Hard Gate)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          PASSED="${{ steps.lifecycle.outputs.passed }}"
+
+          echo "| Step | Operation | Gate Rule |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|-----------|-----------|" >> $GITHUB_STEP_SUMMARY
+          echo "| 1 | Health check | HARD GATE |" >> $GITHUB_STEP_SUMMARY
+          echo "| 2 | Create event | HARD GATE |" >> $GITHUB_STEP_SUMMARY
+          echo "| 3 | Update event | HARD GATE |" >> $GITHUB_STEP_SUMMARY
+          echo "| 4 | Set default | HARD GATE |" >> $GITHUB_STEP_SUMMARY
+          echo "| 5 | Archive | HARD GATE |" >> $GITHUB_STEP_SUMMARY
+          echo "| 6 | Verify hidden | HARD GATE |" >> $GITHUB_STEP_SUMMARY
+          echo "| 7 | Unarchive | HARD GATE |" >> $GITHUB_STEP_SUMMARY
+          echo "| 8 | Verify visible | HARD GATE |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ "$PASSED" = "true" ]; then
+            echo "### PASSED" >> $GITHUB_STEP_SUMMARY
+            echo "Complete lifecycle flow verified. All 8 steps passed." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### FAILED - Deploy Blocked" >> $GITHUB_STEP_SUMMARY
+            echo "Lifecycle smoke test failed. Check test artifacts for:" >> $GITHUB_STEP_SUMMARY
+            echo "- endpoint" >> $GITHUB_STEP_SUMMARY
+            echo "- status" >> $GITHUB_STEP_SUMMARY
+            echo "- error code" >> $GITHUB_STEP_SUMMARY
+            echo "- requestId" >> $GITHUB_STEP_SUMMARY
+          fi
+
+  # ==========================================================================
+  # ASSET INTEGRITY GATE: Story E5 - Asset state enforcement (Hard Gate)
+  # Required Flow (IN ORDER):
+  #   1. Create unverified event (READY state)
+  #   2. Verify publicBundle returns 403
+  #   3. Verify displayBundle returns 403
+  #   4. Verify posterBundle returns 403
+  #   5. Verify QR (transition to ACTIVE)
+  #   6. Verify all bundles return 200
+  #   7. Cleanup (archive)
+  # CI Gate Rule: If ANY step fails -> deploy FAILS
+  # ==========================================================================
+  asset-integrity-gate:
+    name: Asset Integrity Gate (Hard Gate)
+    runs-on: ubuntu-latest
+    needs: [check-trigger, health-gate, create-event-gate, lifecycle-gate]
+    if: |
+      needs.health-gate.outputs.health_ok == 'true' &&
+      needs.create-event-gate.outputs.smoke_passed == 'true' &&
+      needs.lifecycle-gate.outputs.lifecycle_passed == 'true' &&
+      needs.check-trigger.outputs.skip_create_test != 'true'
+    outputs:
+      asset_integrity_passed: ${{ steps.asset_integrity.outputs.passed }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install chromium
+
+      - name: Run asset integrity gate test (Hard Gate)
+        id: asset_integrity
+        env:
+          BASE_URL: ${{ env.STG_BASE_URL }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+          CI: true
+        run: |
+          echo "=============================================="
+          echo "STORY E5: Asset Integrity Gate (Hard Gate)"
+          echo "=============================================="
+          echo "Target: $BASE_URL"
+          echo "CF_ACCESS_CLIENT_ID: [REDACTED - $([ -n "$CF_ACCESS_CLIENT_ID" ] && echo 'configured' || echo 'NOT CONFIGURED')]"
+          echo "CF_ACCESS_CLIENT_SECRET: [REDACTED - $([ -n "$CF_ACCESS_CLIENT_SECRET" ] && echo 'configured' || echo 'NOT CONFIGURED')]"
+          echo ""
+          echo "Gate Validation Flow:"
+          echo "  1. Create unverified event (READY state)"
+          echo "  2. Verify publicBundle returns 403"
+          echo "  3. Verify displayBundle returns 403"
+          echo "  4. Verify posterBundle returns 403"
+          echo "  5. Verify QR (transition to ACTIVE)"
+          echo "  6. Verify all bundles return 200"
+          echo "  7. Cleanup (archive)"
+          echo ""
+          echo "CI Gate Rule: If ANY step fails -> deploy FAILS"
+          echo ""
+          echo "Required Assertions:"
+          echo "  - Public endpoint never returns QR unless verified:true"
+          echo "  - Public endpoint never returns ACTIVE when missing required fields"
+          echo "  - Display endpoint never includes non-ACTIVE events"
+          echo "  - Poster endpoint never renders QR for non-ACTIVE"
+          echo ""
+
+          # Run the Story E5 asset integrity gate tests (both gate flow and assertions)
+          if npx playwright test tests/smoke/asset-integrity-gate.spec.ts tests/smoke/asset-integrity.spec.ts --config=playwright.smoke.config.ts; then
+            echo "passed=true" >> $GITHUB_OUTPUT
+            echo ""
+            echo "=============================================="
+            echo "ASSET INTEGRITY GATE: PASSED"
+            echo "=============================================="
+          else
+            echo "passed=false" >> $GITHUB_OUTPUT
+            echo ""
+            echo "=============================================="
+            echo "ASSET INTEGRITY GATE: FAILED"
+            echo "=============================================="
+            echo "::error::Asset integrity gate failed - deploy blocked"
+            exit 1
+          fi
+
+      - name: Upload asset integrity test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: asset-integrity-gate-results
+          path: |
+            playwright-report-smoke/
+            .test-results/smoke-results.json
+          retention-days: 7
+          if-no-files-found: ignore
+
+      - name: Create asset integrity test summary
+        if: always()
+        run: |
+          echo "## Story E5: Asset Integrity Gate (Hard Gate)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          PASSED="${{ steps.asset_integrity.outputs.passed }}"
+
+          echo "| Step | Validation | Gate Rule |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|------------|-----------|" >> $GITHUB_STEP_SUMMARY
+          echo "| 1 | Create unverified event | HARD GATE |" >> $GITHUB_STEP_SUMMARY
+          echo "| 2 | publicBundle returns 403 | HARD GATE |" >> $GITHUB_STEP_SUMMARY
+          echo "| 3 | displayBundle returns 403 | HARD GATE |" >> $GITHUB_STEP_SUMMARY
+          echo "| 4 | posterBundle returns 403 | HARD GATE |" >> $GITHUB_STEP_SUMMARY
+          echo "| 5 | Verify QR (ACTIVE) | HARD GATE |" >> $GITHUB_STEP_SUMMARY
+          echo "| 6 | All bundles return 200 | HARD GATE |" >> $GITHUB_STEP_SUMMARY
+          echo "| 7 | Cleanup (archive) | HARD GATE |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          echo "### Required Assertions" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Assertion | Description | Gate Rule |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----------|-------------|-----------|" >> $GITHUB_STEP_SUMMARY
+          echo "| A1 | Public endpoint never returns QR unless verified:true | HARD GATE |" >> $GITHUB_STEP_SUMMARY
+          echo "| A2 | Public endpoint never returns ACTIVE when missing required fields | HARD GATE |" >> $GITHUB_STEP_SUMMARY
+          echo "| A3 | Display endpoint never includes non-ACTIVE events | HARD GATE |" >> $GITHUB_STEP_SUMMARY
+          echo "| A4 | Poster endpoint never renders QR for non-ACTIVE | HARD GATE |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ "$PASSED" = "true" ]; then
+            echo "### PASSED" >> $GITHUB_STEP_SUMMARY
+            echo "Asset state enforcement verified. All surfaces correctly block non-ACTIVE events." >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**CI blocks:** broken posters, unsafe QRs, empty public screens" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### FAILED - Deploy Blocked" >> $GITHUB_STEP_SUMMARY
+            echo "Asset integrity gate failed. Check test artifacts for:" >> $GITHUB_STEP_SUMMARY
+            echo "- endpoint" >> $GITHUB_STEP_SUMMARY
+            echo "- assetState" >> $GITHUB_STEP_SUMMARY
+            echo "- requestId" >> $GITHUB_STEP_SUMMARY
+          fi
+
+  # ==========================================================================
+  # SPONSOR & ANALYTICS GATE: Story F5 - Sponsor + Analytics Smoke Pack (Hard Gate)
+  # Required Flow:
+  #   1. Create event
+  #   2. Attach sponsor (validate sponsor endpoints)
+  #   3. Generate analytics (validate analytics endpoint)
+  #   4. Load sponsor page
+  #   5. Validate integrity flags
+  #   6. Validate gating behavior
+  # CI Gate Rule: Any sponsor/analytics regression -> deploy FAILS
+  # ==========================================================================
+  sponsor-analytics-gate:
+    name: Sponsor & Analytics Gate (Hard Gate)
+    runs-on: ubuntu-latest
+    needs: [check-trigger, health-gate, create-event-gate, lifecycle-gate, asset-integrity-gate]
+    if: |
+      needs.health-gate.outputs.health_ok == 'true' &&
+      needs.create-event-gate.outputs.smoke_passed == 'true' &&
+      needs.lifecycle-gate.outputs.lifecycle_passed == 'true' &&
+      needs.asset-integrity-gate.outputs.asset_integrity_passed == 'true' &&
+      needs.check-trigger.outputs.skip_create_test != 'true'
+    outputs:
+      sponsor_analytics_passed: ${{ steps.sponsor_analytics.outputs.passed }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install chromium
+
+      - name: Run sponsor & analytics smoke gate test (Hard Gate)
+        id: sponsor_analytics
+        env:
+          BASE_URL: ${{ env.STG_BASE_URL }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+          CI: true
+        run: |
+          echo "=============================================="
+          echo "STORY F5: Sponsor & Analytics Smoke Pack (Hard Gate)"
+          echo "=============================================="
+          echo "Target: $BASE_URL"
+          echo "CF_ACCESS_CLIENT_ID: [REDACTED - $([ -n "$CF_ACCESS_CLIENT_ID" ] && echo 'configured' || echo 'NOT CONFIGURED')]"
+          echo "CF_ACCESS_CLIENT_SECRET: [REDACTED - $([ -n "$CF_ACCESS_CLIENT_SECRET" ] && echo 'configured' || echo 'NOT CONFIGURED')]"
+          echo ""
+          echo "Required Smoke Flow:"
+          echo "  1. Create event"
+          echo "  2. Attach sponsor (validate endpoints)"
+          echo "  3. Generate analytics"
+          echo "  4. Load sponsor page"
+          echo "  5. Validate integrity flags"
+          echo "  6. Validate gating behavior"
+          echo ""
+          echo "CI Gate Rule: Any sponsor/analytics regression -> deploy FAILS"
+          echo ""
+          echo "CI Logs Include:"
+          echo "  - endpoint"
+          echo "  - integrity status"
+          echo "  - requestId"
+          echo ""
+
+          # Run the Story F5 sponsor & analytics gate test
+          if npx playwright test tests/api/smoke/storyF5-sponsor-analytics.spec.ts --config=playwright.smoke.config.ts; then
+            echo "passed=true" >> $GITHUB_OUTPUT
+            echo ""
+            echo "=============================================="
+            echo "SPONSOR & ANALYTICS GATE: PASSED"
+            echo "=============================================="
+          else
+            echo "passed=false" >> $GITHUB_OUTPUT
+            echo ""
+            echo "=============================================="
+            echo "SPONSOR & ANALYTICS GATE: FAILED"
+            echo "=============================================="
+            echo "::error::Sponsor & analytics smoke test failed - deploy blocked"
+            exit 1
+          fi
+
+      - name: Upload sponsor analytics test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sponsor-analytics-gate-results
+          path: |
+            playwright-report-smoke/
+            .test-results/smoke-results.json
+          retention-days: 7
+          if-no-files-found: ignore
+
+      - name: Create sponsor analytics test summary
+        if: always()
+        run: |
+          echo "## Story F5: Sponsor & Analytics Smoke Pack (Hard Gate)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          PASSED="${{ steps.sponsor_analytics.outputs.passed }}"
+
+          echo "| Step | Validation | Gate Rule |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|------------|-----------|" >> $GITHUB_STEP_SUMMARY
+          echo "| 1 | Create event | HARD GATE |" >> $GITHUB_STEP_SUMMARY
+          echo "| 2 | Attach sponsor (validate endpoints) | HARD GATE |" >> $GITHUB_STEP_SUMMARY
+          echo "| 3 | Generate analytics | HARD GATE |" >> $GITHUB_STEP_SUMMARY
+          echo "| 4 | Load sponsor page | HARD GATE |" >> $GITHUB_STEP_SUMMARY
+          echo "| 5 | Validate integrity flags | HARD GATE |" >> $GITHUB_STEP_SUMMARY
+          echo "| 6 | Validate gating behavior | HARD GATE |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          echo "### CI Log Requirements" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Field | Description |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|-------------|" >> $GITHUB_STEP_SUMMARY
+          echo "| endpoint | API endpoint tested |" >> $GITHUB_STEP_SUMMARY
+          echo "| integrity status | Analytics integrity status (COMPLETE/INCOMPLETE/STALE/UNAVAILABLE) |" >> $GITHUB_STEP_SUMMARY
+          echo "| requestId | Request trace ID for debugging |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ "$PASSED" = "true" ]; then
+            echo "### PASSED" >> $GITHUB_STEP_SUMMARY
+            echo "Sponsor & analytics surfaces validated. No regressions detected." >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Verified Contracts:**" >> $GITHUB_STEP_SUMMARY
+            echo "- Story F1: Sponsor Object Contract" >> $GITHUB_STEP_SUMMARY
+            echo "- Story F2: Analytics Integrity Enforcement" >> $GITHUB_STEP_SUMMARY
+            echo "- Story F3: Sponsor Page Gating" >> $GITHUB_STEP_SUMMARY
+            echo "- Story F4: Monetization Hooks (Inert)" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### FAILED - Deploy Blocked" >> $GITHUB_STEP_SUMMARY
+            echo "Sponsor or analytics regression detected. Check test artifacts for:" >> $GITHUB_STEP_SUMMARY
+            echo "- endpoint" >> $GITHUB_STEP_SUMMARY
+            echo "- integrity status" >> $GITHUB_STEP_SUMMARY
+            echo "- requestId" >> $GITHUB_STEP_SUMMARY
+          fi
+
+  # ==========================================================================
+  # GATE SUMMARY: Final pass/fail status
+  # Architect requirement: CI is the contract gate
+  # ==========================================================================
+  gate-summary:
+    name: Stage-2 Gate Summary
+    runs-on: ubuntu-latest
+    needs: [check-trigger, health-gate, create-event-gate, lifecycle-gate, asset-integrity-gate, sponsor-analytics-gate]
+    if: always() && needs.check-trigger.outputs.should_run == 'true'
+
+    steps:
+      - name: Calculate final gate status
+        id: final
+        run: |
+          echo "=============================================="
+          echo "STORY C5 + D5 + E5 + F5: Stage-2 Staging Gate Summary"
+          echo "=============================================="
+          echo ""
+
+          HEALTH="${{ needs.health-gate.result }}"
+          SMOKE="${{ needs.create-event-gate.result }}"
+          LIFECYCLE="${{ needs.lifecycle-gate.result }}"
+          ASSET_INTEGRITY="${{ needs.asset-integrity-gate.result }}"
+          SPONSOR_ANALYTICS="${{ needs.sponsor-analytics-gate.result }}"
+          SKIP_CREATE="${{ needs.check-trigger.outputs.skip_create_test }}"
+
+          echo "Health Gate: $HEALTH"
+          echo "Create Event Gate: $SMOKE (skip=$SKIP_CREATE)"
+          echo "Lifecycle Gate (Hard Gate): $LIFECYCLE"
+          echo "Asset Integrity Gate (Hard Gate): $ASSET_INTEGRITY"
+          echo "Sponsor & Analytics Gate (Hard Gate): $SPONSOR_ANALYTICS"
+          echo ""
+
+          # Determine overall status
+          if [ "$HEALTH" != "success" ]; then
+            echo "gate_passed=false" >> $GITHUB_OUTPUT
+            echo "failure_reason=health" >> $GITHUB_OUTPUT
+            echo "=============================================="
+            echo "STAGE-2 GATE: FAILED (Health check failed)"
+            echo "=============================================="
+            exit 1
+          elif [ "$SKIP_CREATE" = "true" ]; then
+            echo "gate_passed=true" >> $GITHUB_OUTPUT
+            echo "failure_reason=none" >> $GITHUB_OUTPUT
+            echo "=============================================="
+            echo "STAGE-2 GATE: PASSED (Health only, create skipped)"
+            echo "=============================================="
+          elif [ "$SMOKE" != "success" ]; then
+            echo "gate_passed=false" >> $GITHUB_OUTPUT
+            echo "failure_reason=create_event" >> $GITHUB_OUTPUT
+            echo "=============================================="
+            echo "STAGE-2 GATE: FAILED (Create event test failed)"
+            echo "=============================================="
+            exit 1
+          elif [ "$LIFECYCLE" != "success" ] && [ "$LIFECYCLE" != "skipped" ]; then
+            echo "gate_passed=false" >> $GITHUB_OUTPUT
+            echo "failure_reason=lifecycle" >> $GITHUB_OUTPUT
+            echo "=============================================="
+            echo "STAGE-2 GATE: FAILED (Lifecycle smoke test failed - Hard Gate)"
+            echo "=============================================="
+            exit 1
+          elif [ "$ASSET_INTEGRITY" != "success" ] && [ "$ASSET_INTEGRITY" != "skipped" ]; then
+            echo "gate_passed=false" >> $GITHUB_OUTPUT
+            echo "failure_reason=asset_integrity" >> $GITHUB_OUTPUT
+            echo "=============================================="
+            echo "STAGE-2 GATE: FAILED (Asset integrity gate failed - Hard Gate)"
+            echo "=============================================="
+            exit 1
+          elif [ "$SPONSOR_ANALYTICS" != "success" ] && [ "$SPONSOR_ANALYTICS" != "skipped" ]; then
+            echo "gate_passed=false" >> $GITHUB_OUTPUT
+            echo "failure_reason=sponsor_analytics" >> $GITHUB_OUTPUT
+            echo "=============================================="
+            echo "STAGE-2 GATE: FAILED (Sponsor & analytics gate failed - Hard Gate)"
+            echo "=============================================="
+            exit 1
+          else
+            echo "gate_passed=true" >> $GITHUB_OUTPUT
+            echo "failure_reason=none" >> $GITHUB_OUTPUT
+            echo "=============================================="
+            echo "STAGE-2 GATE: PASSED"
+            echo "=============================================="
+          fi
+
+      - name: Create final summary
+        if: always()
+        run: |
+          echo "# Story C5 + D5 + E5 + F5: Stage-2 Staging Gate" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Purpose**: Every staging deploy either proves the product works or it doesn't ship." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          HEALTH="${{ needs.health-gate.result }}"
+          SMOKE="${{ needs.create-event-gate.result }}"
+          LIFECYCLE="${{ needs.lifecycle-gate.result }}"
+          ASSET_INTEGRITY="${{ needs.asset-integrity-gate.result }}"
+          SPONSOR_ANALYTICS="${{ needs.sponsor-analytics-gate.result }}"
+          SKIP_CREATE="${{ needs.check-trigger.outputs.skip_create_test }}"
+
+          echo "| Gate | Status | Type |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|--------|------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Health Check (\`jq -e '.ok == true'\`) | $( [ \"$HEALTH\" = \"success\" ] && echo 'PASSED' || echo '**FAILED**' ) | Gate |" >> $GITHUB_STEP_SUMMARY
+
+          if [ "$SKIP_CREATE" = "true" ]; then
+            echo "| Create Event Smoke Test | SKIPPED | Gate |" >> $GITHUB_STEP_SUMMARY
+            echo "| Lifecycle Smoke Pack | SKIPPED | Hard Gate |" >> $GITHUB_STEP_SUMMARY
+            echo "| Asset Integrity (Story E5) | SKIPPED | Hard Gate |" >> $GITHUB_STEP_SUMMARY
+            echo "| Sponsor & Analytics (Story F5) | SKIPPED | Hard Gate |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| Create Event Smoke Test | $( [ \"$SMOKE\" = \"success\" ] && echo 'PASSED' || echo '**FAILED**' ) | Gate |" >> $GITHUB_STEP_SUMMARY
+            echo "| Lifecycle Smoke Pack (Story D5) | $( [ \"$LIFECYCLE\" = \"success\" ] && echo 'PASSED' || [ \"$LIFECYCLE\" = \"skipped\" ] && echo 'SKIPPED' || echo '**FAILED**' ) | **Hard Gate** |" >> $GITHUB_STEP_SUMMARY
+            echo "| Asset Integrity (Story E5) | $( [ \"$ASSET_INTEGRITY\" = \"success\" ] && echo 'PASSED' || [ \"$ASSET_INTEGRITY\" = \"skipped\" ] && echo 'SKIPPED' || echo '**FAILED**' ) | **Hard Gate** |" >> $GITHUB_STEP_SUMMARY
+            echo "| Sponsor & Analytics (Story F5) | $( [ \"$SPONSOR_ANALYTICS\" = \"success\" ] && echo 'PASSED' || [ \"$SPONSOR_ANALYTICS\" = \"skipped\" ] && echo 'SKIPPED' || echo '**FAILED**' ) | **Hard Gate** |" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Check all gates passed
+          ALL_PASSED="true"
+          if [ "$HEALTH" != "success" ]; then
+            ALL_PASSED="false"
+          elif [ "$SKIP_CREATE" != "true" ] && [ "$SMOKE" != "success" ]; then
+            ALL_PASSED="false"
+          elif [ "$SKIP_CREATE" != "true" ] && [ "$LIFECYCLE" != "success" ] && [ "$LIFECYCLE" != "skipped" ]; then
+            ALL_PASSED="false"
+          elif [ "$SKIP_CREATE" != "true" ] && [ "$ASSET_INTEGRITY" != "success" ] && [ "$ASSET_INTEGRITY" != "skipped" ]; then
+            ALL_PASSED="false"
+          elif [ "$SKIP_CREATE" != "true" ] && [ "$SPONSOR_ANALYTICS" != "success" ] && [ "$SPONSOR_ANALYTICS" != "skipped" ]; then
+            ALL_PASSED="false"
+          fi
+
+          if [ "$ALL_PASSED" = "true" ]; then
+            echo "## GATE PASSED" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Staging deployment validated. Ready for production promotion." >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### Lifecycle Flow Verified (Story D5)" >> $GITHUB_STEP_SUMMARY
+            echo "1. Health check" >> $GITHUB_STEP_SUMMARY
+            echo "2. Create event" >> $GITHUB_STEP_SUMMARY
+            echo "3. Update event" >> $GITHUB_STEP_SUMMARY
+            echo "4. Set default" >> $GITHUB_STEP_SUMMARY
+            echo "5. Archive" >> $GITHUB_STEP_SUMMARY
+            echo "6. Verify hidden" >> $GITHUB_STEP_SUMMARY
+            echo "7. Unarchive" >> $GITHUB_STEP_SUMMARY
+            echo "8. Verify visible" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### Asset Integrity Verified (Story E5)" >> $GITHUB_STEP_SUMMARY
+            echo "- Non-ACTIVE events blocked on public/display/poster" >> $GITHUB_STEP_SUMMARY
+            echo "- ACTIVE events allowed on all surfaces" >> $GITHUB_STEP_SUMMARY
+            echo "- Asset state enforcement working correctly" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### Sponsor & Analytics Verified (Story F5)" >> $GITHUB_STEP_SUMMARY
+            echo "- Sponsor endpoints respond with valid pageStatus" >> $GITHUB_STEP_SUMMARY
+            echo "- Analytics endpoints return valid integrity flags" >> $GITHUB_STEP_SUMMARY
+            echo "- Sponsor page gating enforced (metricsVisible correlates with status)" >> $GITHUB_STEP_SUMMARY
+            echo "- Monetization hooks remain inert (no billing logic)" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**CI Blocks:** broken posters, unsafe QRs, empty public screens, sponsor/analytics regressions" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Assertions Verified:**" >> $GITHUB_STEP_SUMMARY
+            echo "- Public endpoint never returns QR unless verified:true" >> $GITHUB_STEP_SUMMARY
+            echo "- Public endpoint never returns ACTIVE when missing required fields" >> $GITHUB_STEP_SUMMARY
+            echo "- Display endpoint never includes non-ACTIVE events" >> $GITHUB_STEP_SUMMARY
+            echo "- Poster endpoint never renders QR for non-ACTIVE" >> $GITHUB_STEP_SUMMARY
+            echo "- Sponsor page never shows metrics unless status=ACTIVE" >> $GITHUB_STEP_SUMMARY
+            echo "- Analytics integrity status is always valid" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "## GATE FAILED" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Staging deployment validation failed. Production promotion blocked." >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Staging URL**: ${{ env.STG_BASE_URL }}" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### CI Log Details" >> $GITHUB_STEP_SUMMARY
+            echo "Check test artifacts for:" >> $GITHUB_STEP_SUMMARY
+            echo "- endpoint" >> $GITHUB_STEP_SUMMARY
+            echo "- status" >> $GITHUB_STEP_SUMMARY
+            echo "- error code" >> $GITHUB_STEP_SUMMARY
+            echo "- requestId" >> $GITHUB_STEP_SUMMARY
+            echo "- assetState" >> $GITHUB_STEP_SUMMARY
+            echo "- integrityStatus (Story F5)" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Debug the issue in staging before retrying." >> $GITHUB_STEP_SUMMARY
+          fi

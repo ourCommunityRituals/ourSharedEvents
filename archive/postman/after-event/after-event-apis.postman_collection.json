@@ -1,0 +1,165 @@
+{
+  "info": {
+    "name": "📊 TRIANGLE: After Event APIs",
+    "description": "API endpoints for the After Event phase - Post-Event Analytics\n\nThis collection covers:\n- Analytics event logging\n- Report generation\n- Sponsor ROI metrics\n- Export operations\n\nTriangle Phase: After Event (Purple #8b5cf6)\nUser Roles: Event Manager, Sponsor",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "version": "1.0.0"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "https://script.google.com/macros/s/YOUR_DEPLOYMENT_ID/exec",
+      "type": "string"
+    },
+    {
+      "key": "admin_key",
+      "value": "CHANGE_ME_root",
+      "type": "string"
+    },
+    {
+      "key": "brand_id",
+      "value": "root",
+      "type": "string"
+    },
+    {
+      "key": "event_id",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Analytics Logging",
+      "item": [
+        {
+          "name": "Log Analytics Events - Batch",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response includes count', function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.value).to.have.property('count');",
+                  "    pm.expect(jsonData.value.count).to.be.a('number');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"action\": \"logEvents\",\n  \"brand\": \"{{brand_id}}\",\n  \"events\": [\n    {\n      \"eventType\": \"impression\",\n      \"surface\": \"display\",\n      \"sponsorId\": \"platinum-corp\",\n      \"timestamp\": \"{{$isoTimestamp}}\"\n    },\n    {\n      \"eventType\": \"click\",\n      \"surface\": \"display\",\n      \"sponsorId\": \"platinum-corp\",\n      \"timestamp\": \"{{$isoTimestamp}}\"\n    },\n    {\n      \"eventType\": \"impression\",\n      \"surface\": \"public\",\n      \"sponsorId\": \"gold-industries\",\n      \"timestamp\": \"{{$isoTimestamp}}\"\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}",
+              "host": ["{{base_url}}"]
+            },
+            "description": "Log multiple analytics events in a batch"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Reports",
+      "item": [
+        {
+          "name": "Get Event Report",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Response includes totals', function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.value).to.have.property('totals');",
+                  "    pm.expect(jsonData.value.totals).to.have.property('impressions');",
+                  "    pm.expect(jsonData.value.totals).to.have.property('clicks');",
+                  "    pm.expect(jsonData.value.totals).to.have.property('dwellSec');",
+                  "});",
+                  "",
+                  "pm.test('Response includes surface breakdown', function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.value).to.have.property('bySurface');",
+                  "});",
+                  "",
+                  "pm.test('Response includes sponsor metrics', function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.value).to.have.property('bySponsor');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}?action=getReport&brand={{brand_id}}&id={{event_id}}",
+              "host": ["{{base_url}}"],
+              "query": [
+                {
+                  "key": "action",
+                  "value": "getReport"
+                },
+                {
+                  "key": "brand",
+                  "value": "{{brand_id}}"
+                },
+                {
+                  "key": "id",
+                  "value": "{{event_id}}",
+                  "description": "Event ID for report"
+                }
+              ]
+            },
+            "description": "Get comprehensive analytics report for an event"
+          }
+        },
+        {
+          "name": "Get Sponsor Report",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}?action=getReport&brand={{brand_id}}&id={{event_id}}&sponsorId=platinum-corp",
+              "host": ["{{base_url}}"],
+              "query": [
+                {
+                  "key": "action",
+                  "value": "getReport"
+                },
+                {
+                  "key": "brand",
+                  "value": "{{brand_id}}"
+                },
+                {
+                  "key": "id",
+                  "value": "{{event_id}}"
+                },
+                {
+                  "key": "sponsorId",
+                  "value": "platinum-corp",
+                  "description": "Filter by sponsor ID"
+                }
+              ]
+            },
+            "description": "Get analytics report filtered by sponsor"
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,452 @@
+<!--
+================================================================================
+V2 SURFACE - Team Randomizer
+================================================================================
+Page: Randomizer.html
+Purpose: Quick team picker - add names, click Go, get random teams
+Status: V2 Feature (standalone utility)
+
+Usage: ?p=randomizer or /teams or /picker
+================================================================================
+-->
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <title><?= appTitle ?> · Team Picker</title>
+  <?!= include('Styles'); ?>
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+  <meta name="referrer" content="no-referrer"/>
+  <style>
+    .randomizer-container {
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+
+    .page-header {
+      text-align: center;
+      margin-bottom: 24px;
+    }
+
+    .page-header h1 {
+      color: var(--color-primary, #2563eb);
+      font-size: 2rem;
+      margin-bottom: 8px;
+    }
+
+    .page-header p {
+      color: var(--color-gray-500, #64748b);
+      font-size: 1rem;
+    }
+
+    /* Input Section */
+    .input-section {
+      background: white;
+      border-radius: var(--radius-md, 12px);
+      padding: 24px;
+      margin-bottom: 20px;
+      box-shadow: var(--shadow-base, 0 1px 3px rgba(0,0,0,0.1));
+    }
+
+    .input-section label {
+      display: block;
+      font-weight: 600;
+      margin-bottom: 8px;
+      color: var(--color-gray-800, #1e293b);
+    }
+
+    .input-section textarea {
+      width: 100%;
+      min-height: 200px;
+      padding: 12px;
+      border: 2px solid var(--color-gray-200, #e2e8f0);
+      border-radius: var(--radius-sm, 8px);
+      font-size: 1rem;
+      font-family: inherit;
+      resize: vertical;
+      transition: border-color 0.2s;
+    }
+
+    .input-section textarea:focus {
+      outline: none;
+      border-color: var(--color-primary, #2563eb);
+    }
+
+    .input-section textarea::placeholder {
+      color: var(--color-gray-400, #94a3b8);
+    }
+
+    .input-hint {
+      font-size: 0.85rem;
+      color: var(--color-gray-500, #64748b);
+      margin-top: 8px;
+    }
+
+    /* Go Button */
+    .go-button {
+      display: block;
+      width: 100%;
+      padding: 16px 32px;
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: white;
+      background: linear-gradient(135deg, var(--color-primary, #2563eb) 0%, #1d4ed8 100%);
+      border: none;
+      border-radius: var(--radius-md, 12px);
+      cursor: pointer;
+      transition: all 0.2s;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .go-button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
+    }
+
+    .go-button:active {
+      transform: translateY(0);
+    }
+
+    .go-button:disabled {
+      background: var(--color-gray-300, #cbd5e1);
+      cursor: not-allowed;
+      transform: none;
+      box-shadow: none;
+    }
+
+    /* Results Section */
+    .results-section {
+      display: none;
+      margin-top: 24px;
+    }
+
+    .results-section.visible {
+      display: block;
+      animation: fadeIn 0.3s ease;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .teams-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    @media (max-width: 500px) {
+      .teams-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .team-card {
+      background: white;
+      border-radius: var(--radius-md, 12px);
+      padding: 20px;
+      box-shadow: var(--shadow-base, 0 1px 3px rgba(0,0,0,0.1));
+      border-top: 4px solid;
+    }
+
+    .team-card.orange {
+      border-top-color: #f97316;
+    }
+
+    .team-card.blue {
+      border-top-color: #3b82f6;
+    }
+
+    .team-card h3 {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 0 0 16px;
+      font-size: 1.25rem;
+    }
+
+    .team-card.orange h3 {
+      color: #ea580c;
+    }
+
+    .team-card.blue h3 {
+      color: #2563eb;
+    }
+
+    .team-icon {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+    }
+
+    .team-icon.orange {
+      background: linear-gradient(135deg, #fb923c 0%, #f97316 100%);
+    }
+
+    .team-icon.blue {
+      background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%);
+    }
+
+    .team-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+
+    .team-list li {
+      padding: 10px 12px;
+      margin-bottom: 8px;
+      background: var(--color-gray-50, #f8fafc);
+      border-radius: var(--radius-sm, 8px);
+      font-size: 1rem;
+      border-left: 3px solid;
+    }
+
+    .team-card.orange .team-list li {
+      border-left-color: #fb923c;
+    }
+
+    .team-card.blue .team-list li {
+      border-left-color: #60a5fa;
+    }
+
+    .team-count {
+      font-size: 0.85rem;
+      color: var(--color-gray-500, #64748b);
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px solid var(--color-gray-200, #e2e8f0);
+    }
+
+    /* Action Buttons */
+    .action-buttons {
+      display: flex;
+      gap: 12px;
+      margin-top: 20px;
+    }
+
+    .action-btn {
+      flex: 1;
+      padding: 12px 20px;
+      font-size: 1rem;
+      font-weight: 600;
+      border: none;
+      border-radius: var(--radius-sm, 8px);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .action-btn.reshuffle {
+      background: var(--color-gray-100, #f1f5f9);
+      color: var(--color-gray-700, #334155);
+    }
+
+    .action-btn.reshuffle:hover {
+      background: var(--color-gray-200, #e2e8f0);
+    }
+
+    .action-btn.reset {
+      background: transparent;
+      color: var(--color-gray-500, #64748b);
+      border: 2px solid var(--color-gray-200, #e2e8f0);
+    }
+
+    .action-btn.reset:hover {
+      border-color: var(--color-gray-300, #cbd5e1);
+      color: var(--color-gray-700, #334155);
+    }
+
+    /* Error State */
+    .error-message {
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      color: #dc2626;
+      padding: 12px 16px;
+      border-radius: var(--radius-sm, 8px);
+      margin-bottom: 16px;
+      display: none;
+    }
+
+    .error-message.visible {
+      display: block;
+    }
+  </style>
+</head>
+<body>
+  <div class="randomizer-container">
+    <header class="page-header">
+      <h1>Team Picker</h1>
+      <p>Add player names, click Go, get random teams!</p>
+    </header>
+
+    <div class="input-section">
+      <label for="names-input">Player Names</label>
+      <textarea
+        id="names-input"
+        placeholder="Enter names, one per line:
+
+John
+Sarah
+Mike
+Emma
+Alex
+Chris
+Taylor
+Jordan"
+      ></textarea>
+      <p class="input-hint">Enter one name per line. Minimum 2 players required.</p>
+    </div>
+
+    <div id="error-msg" class="error-message"></div>
+
+    <button id="go-btn" class="go-button" onclick="randomizeTeams()">
+      Go!
+    </button>
+
+    <div id="results" class="results-section">
+      <div class="teams-grid">
+        <div class="team-card orange">
+          <h3><span class="team-icon orange"></span> Team Orange</h3>
+          <ul id="team-orange" class="team-list"></ul>
+          <p id="count-orange" class="team-count"></p>
+        </div>
+        <div class="team-card blue">
+          <h3><span class="team-icon blue"></span> Team Blue</h3>
+          <ul id="team-blue" class="team-list"></ul>
+          <p id="count-blue" class="team-count"></p>
+        </div>
+      </div>
+
+      <div class="action-buttons">
+        <button class="action-btn reshuffle" onclick="randomizeTeams()">
+          Reshuffle
+        </button>
+        <button class="action-btn reset" onclick="resetAll()">
+          Start Over
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /**
+     * Fisher-Yates shuffle algorithm for unbiased randomization
+     */
+    function shuffle(array) {
+      const result = [...array];
+      for (let i = result.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [result[i], result[j]] = [result[j], result[i]];
+      }
+      return result;
+    }
+
+    /**
+     * Parse names from textarea input
+     */
+    function parseNames() {
+      const input = document.getElementById('names-input').value;
+      return input
+        .split('\n')
+        .map(name => name.trim())
+        .filter(name => name.length > 0);
+    }
+
+    /**
+     * Show error message
+     */
+    function showError(message) {
+      const errorEl = document.getElementById('error-msg');
+      errorEl.textContent = message;
+      errorEl.classList.add('visible');
+    }
+
+    /**
+     * Hide error message
+     */
+    function hideError() {
+      document.getElementById('error-msg').classList.remove('visible');
+    }
+
+    /**
+     * Escape HTML to prevent XSS
+     */
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    /**
+     * Main randomization function
+     */
+    function randomizeTeams() {
+      hideError();
+
+      const names = parseNames();
+
+      // Validate minimum players
+      if (names.length < 2) {
+        showError('Please enter at least 2 player names.');
+        return;
+      }
+
+      // Shuffle names
+      const shuffled = shuffle(names);
+
+      // Split into two teams
+      const midpoint = Math.ceil(shuffled.length / 2);
+      const teamOrange = shuffled.slice(0, midpoint);
+      const teamBlue = shuffled.slice(midpoint);
+
+      // Render Team Orange
+      const orangeList = document.getElementById('team-orange');
+      orangeList.innerHTML = teamOrange
+        .map(name => `<li>${escapeHtml(name)}</li>`)
+        .join('');
+      document.getElementById('count-orange').textContent =
+        `${teamOrange.length} player${teamOrange.length !== 1 ? 's' : ''}`;
+
+      // Render Team Blue
+      const blueList = document.getElementById('team-blue');
+      blueList.innerHTML = teamBlue
+        .map(name => `<li>${escapeHtml(name)}</li>`)
+        .join('');
+      document.getElementById('count-blue').textContent =
+        `${teamBlue.length} player${teamBlue.length !== 1 ? 's' : ''}`;
+
+      // Show results
+      document.getElementById('results').classList.add('visible');
+
+      // Scroll to results on mobile
+      document.getElementById('results').scrollIntoView({
+        behavior: 'smooth',
+        block: 'start'
+      });
+    }
+
+    /**
+     * Reset everything
+     */
+    function resetAll() {
+      document.getElementById('names-input').value = '';
+      document.getElementById('results').classList.remove('visible');
+      document.getElementById('team-orange').innerHTML = '';
+      document.getElementById('team-blue').innerHTML = '';
+      hideError();
+      document.getElementById('names-input').focus();
+    }
+
+    // Allow Enter key in textarea, but Ctrl+Enter to submit
+    document.getElementById('names-input').addEventListener('keydown', function(e) {
+      if (e.ctrlKey && e.key === 'Enter') {
+        e.preventDefault();
+        randomizeTeams();
+      }
+    });
+  </script>
+</body>
+</html>

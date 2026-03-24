@@ -1,0 +1,126 @@
+%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#4A90D9', 'primaryTextColor': '#fff', 'primaryBorderColor': '#2E5C8A', 'lineColor': '#5A6F7C', 'secondaryColor': '#E8F4FD', 'tertiaryColor': '#F5F5F5'}}}%%
+
+flowchart TB
+    subgraph Surfaces["Frontend Surfaces"]
+        direction TB
+        Public["Public<br/>/public, /events"]
+        Admin["Admin<br/>/admin, /manage"]
+        Display["Display<br/>/display, /tv"]
+        Poster["Poster<br/>/poster"]
+        Report["Report<br/>/report, /analytics"]
+        Sponsor["Sponsor<br/>/sponsor"]
+    end
+
+    subgraph Edge["Cloudflare Edge"]
+        direction TB
+        RedirectRule["SEC-4.1 Redirect<br/>www → apex"]
+        WorkerRoute["Worker Routes<br/>*.eventangle.com/*"]
+    end
+
+    subgraph Worker["Cloudflare Worker"]
+        direction TB
+        Router["router.ts<br/>Route Matching"]
+        AuthGuard["auth/admin.ts<br/>V2 Admin Guard"]
+
+        subgraph Handlers["API Handlers"]
+            HealthH["health/*<br/>Status & Backend"]
+            EventsH["eventsV2.ts<br/>Events List"]
+            BundlesH["*Bundle.ts<br/>Public/Admin/Display/Poster"]
+            AdminH["v2Admin*.ts<br/>Create/Update/Archive"]
+            SponsorH["sponsorPage.ts<br/>Sponsor Portal"]
+            ReportH["sharedReport.ts<br/>Analytics"]
+        end
+
+        subgraph Domain["Domain Logic"]
+            AssetState["assetState.ts<br/>DRAFT→READY→ACTIVE"]
+            QRVerify["qr.ts<br/>Verification Gate"]
+            Analytics["sharedAnalytics.ts<br/>Metrics"]
+        end
+    end
+
+    subgraph DataStore["Data Stores"]
+        direction TB
+        Sheets["Google Sheets<br/>Events, Sponsors, Analytics"]
+        Cache["Cloudflare Cache<br/>ETag + SWR"]
+    end
+
+    subgraph CICD["CI/CD Pipeline"]
+        direction TB
+        Stage1["Stage-1<br/>Validation + Deploy"]
+        Stage2["Stage-2<br/>Smoke Tests"]
+        Security["Security Scan<br/>CodeQL + npm audit"]
+    end
+
+    subgraph Tests["Test Suites"]
+        direction TB
+        UnitTests["Unit Tests<br/>57 files"]
+        ContractTests["Contract Tests<br/>37 files"]
+        SmokeTests["Smoke Tests<br/>API + UI"]
+        E2ETests["E2E Tests<br/>79 files"]
+    end
+
+    %% Surface → Worker connections
+    Public --> Router
+    Admin --> Router
+    Display --> Router
+    Poster --> Router
+    Report --> Router
+    Sponsor --> Router
+
+    %% Edge → Worker
+    RedirectRule --> WorkerRoute
+    WorkerRoute --> Router
+
+    %% Router → Handlers
+    Router --> AuthGuard
+    Router --> HealthH
+    Router --> EventsH
+    Router --> BundlesH
+    Router --> SponsorH
+    Router --> ReportH
+    AuthGuard --> AdminH
+
+    %% Handlers → Domain
+    BundlesH --> AssetState
+    BundlesH --> QRVerify
+    AdminH --> AssetState
+    AdminH --> QRVerify
+    ReportH --> Analytics
+
+    %% Handlers → Data Store
+    HealthH --> Sheets
+    EventsH --> Sheets
+    EventsH --> Cache
+    BundlesH --> Sheets
+    BundlesH --> Cache
+    AdminH --> Sheets
+    SponsorH --> Sheets
+    ReportH --> Sheets
+
+    %% CI/CD connections
+    Stage1 --> Stage2
+    Stage1 --> Security
+    Stage1 --> UnitTests
+    Stage1 --> ContractTests
+    Stage2 --> SmokeTests
+    Stage2 --> E2ETests
+    SmokeTests --> Router
+
+    %% Styling
+    classDef surface fill:#4A90D9,stroke:#2E5C8A,color:#fff
+    classDef edge fill:#6B8E23,stroke:#4A6F1A,color:#fff
+    classDef worker fill:#FF8C00,stroke:#CC7000,color:#fff
+    classDef handler fill:#FFB347,stroke:#CC8F39,color:#333
+    classDef domain fill:#DDA0DD,stroke:#B77AB7,color:#333
+    classDef datastore fill:#87CEEB,stroke:#5F9EA0,color:#333
+    classDef cicd fill:#98FB98,stroke:#6BBF6B,color:#333
+    classDef test fill:#E6E6FA,stroke:#9999CC,color:#333
+
+    class Public,Admin,Display,Poster,Report,Sponsor surface
+    class RedirectRule,WorkerRoute edge
+    class Router,AuthGuard worker
+    class HealthH,EventsH,BundlesH,AdminH,SponsorH,ReportH handler
+    class AssetState,QRVerify,Analytics domain
+    class Sheets,Cache datastore
+    class Stage1,Stage2,Security cicd
+    class UnitTests,ContractTests,SmokeTests,E2ETests test

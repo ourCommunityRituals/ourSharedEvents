@@ -1,0 +1,339 @@
+<!--
+  Admin API Client Configuration
+
+  Story 3.1 - Define Admin Auth Model for Worker API
+
+  This module provides client-side configuration for making authenticated
+  requests to admin API endpoints. It handles:
+  - Admin token storage and retrieval
+  - Bearer token header injection
+  - Token validation and refresh prompts
+
+  Usage:
+    1. Include this file in Admin.html (before other scripts)
+    2. Use AdminApiClient.getToken() to retrieve the token
+    3. Use AdminApiClient.fetch() for authenticated requests
+
+  Token Storage:
+    - Phase 1: Uses sessionStorage (current implementation)
+    - Phase 2: Will use secure config injection at build time
+
+  Security Notes:
+    - Token is stored per-brand in sessionStorage
+    - Token is cleared on session end (browser close)
+    - Consider migration to HttpOnly cookies for production
+-->
+
+<script>
+/**
+ * Admin API Client
+ *
+ * Centralized authentication for admin API calls.
+ * Supports both Worker API (Bearer token) and legacy GAS (adminKey body param).
+ *
+ * @see Story 3.1 - Define Admin Auth Model for Worker API
+ */
+(function(global) {
+  'use strict';
+
+  // ==========================================================================
+  // Configuration
+  // ==========================================================================
+
+  /**
+   * API base URLs by environment
+   * Detected at runtime based on hostname
+   */
+  const API_CONFIG = {
+    production: 'https://api.eventangle.com',
+    staging: 'https://api-stg.eventangle.com',
+    development: '' // Same origin
+  };
+
+  /**
+   * Storage key prefix for admin tokens
+   */
+  const TOKEN_STORAGE_PREFIX = 'ADMIN_TOKEN:';
+
+  /**
+   * Legacy storage key prefix (for backward compatibility)
+   */
+  const LEGACY_KEY_PREFIX = 'ADMIN_KEY:';
+
+  // ==========================================================================
+  // Environment Detection
+  // ==========================================================================
+
+  /**
+   * Detect current environment from hostname
+   *
+   * @returns {'production'|'staging'|'development'}
+   */
+  function detectEnvironment() {
+    const hostname = window.location.hostname;
+
+    if (hostname === 'eventangle.com' || hostname === 'www.eventangle.com') {
+      return 'production';
+    }
+
+    if (hostname === 'stg.eventangle.com' || hostname === 'api-stg.eventangle.com') {
+      return 'staging';
+    }
+
+    return 'development';
+  }
+
+  /**
+   * Get API base URL for current environment
+   *
+   * @returns {string}
+   */
+  function getApiBaseUrl() {
+    const env = detectEnvironment();
+    return API_CONFIG[env] || '';
+  }
+
+  // ==========================================================================
+  // Token Management
+  // ==========================================================================
+
+  /**
+   * Get storage key for admin token
+   *
+   * @param {string} brandId - Brand identifier
+   * @returns {string}
+   */
+  function getStorageKey(brandId) {
+    return TOKEN_STORAGE_PREFIX + brandId;
+  }
+
+  /**
+   * Get legacy storage key (ADMIN_KEY:)
+   *
+   * @param {string} brandId - Brand identifier
+   * @returns {string}
+   */
+  function getLegacyStorageKey(brandId) {
+    return LEGACY_KEY_PREFIX + brandId;
+  }
+
+  /**
+   * Retrieve admin token from storage
+   *
+   * First checks for new ADMIN_TOKEN: key, then falls back to ADMIN_KEY: for migration.
+   *
+   * @param {string} brandId - Brand identifier
+   * @returns {string|null}
+   */
+  function getToken(brandId) {
+    // Try new storage key first
+    let token = sessionStorage.getItem(getStorageKey(brandId));
+
+    if (token) {
+      return token;
+    }
+
+    // Fall back to legacy key for migration
+    token = sessionStorage.getItem(getLegacyStorageKey(brandId));
+
+    if (token) {
+      // Migrate to new key
+      sessionStorage.setItem(getStorageKey(brandId), token);
+      return token;
+    }
+
+    return null;
+  }
+
+  /**
+   * Store admin token
+   *
+   * @param {string} brandId - Brand identifier
+   * @param {string} token - Admin token
+   */
+  function setToken(brandId, token) {
+    sessionStorage.setItem(getStorageKey(brandId), token);
+    // Also set legacy key for backward compatibility
+    sessionStorage.setItem(getLegacyStorageKey(brandId), token);
+  }
+
+  /**
+   * Clear admin token from storage
+   *
+   * @param {string} brandId - Brand identifier
+   */
+  function clearToken(brandId) {
+    sessionStorage.removeItem(getStorageKey(brandId));
+    sessionStorage.removeItem(getLegacyStorageKey(brandId));
+  }
+
+  /**
+   * Prompt user for admin token
+   *
+   * @param {string} brandId - Brand identifier
+   * @param {string} [message] - Optional custom message
+   * @returns {string|null}
+   */
+  function promptForToken(brandId, message) {
+    const defaultMessage = 'Enter admin key for ' + brandId + ':';
+    const token = prompt(message || defaultMessage);
+
+    if (token && token.trim()) {
+      setToken(brandId, token.trim());
+      return token.trim();
+    }
+
+    return null;
+  }
+
+  /**
+   * Get admin token, prompting if not available
+   *
+   * @param {string} brandId - Brand identifier
+   * @returns {string|null}
+   */
+  function requireToken(brandId) {
+    let token = getToken(brandId);
+
+    if (!token) {
+      token = promptForToken(brandId);
+    }
+
+    return token;
+  }
+
+  // ==========================================================================
+  // API Request Helpers
+  // ==========================================================================
+
+  /**
+   * Create headers with Bearer token authentication
+   *
+   * @param {string} token - Admin token
+   * @param {Object} [additionalHeaders] - Additional headers to include
+   * @returns {Headers}
+   */
+  function createAuthHeaders(token, additionalHeaders) {
+    const headers = new Headers(additionalHeaders || {});
+    headers.set('Authorization', 'Bearer ' + token);
+    headers.set('Content-Type', 'application/json');
+    return headers;
+  }
+
+  /**
+   * Make authenticated fetch request to admin API
+   *
+   * @param {string} path - API path (e.g., '/api/admin/events')
+   * @param {Object} options - Fetch options
+   * @param {string} options.brandId - Brand identifier for token lookup
+   * @param {string} [options.method='GET'] - HTTP method
+   * @param {Object} [options.body] - Request body (will be JSON stringified)
+   * @param {Object} [options.headers] - Additional headers
+   * @returns {Promise<Response>}
+   */
+  async function authenticatedFetch(path, options) {
+    const brandId = options.brandId;
+
+    if (!brandId) {
+      throw new Error('AdminApiClient: brandId is required');
+    }
+
+    const token = requireToken(brandId);
+
+    if (!token) {
+      throw new Error('AdminApiClient: No admin token available');
+    }
+
+    const baseUrl = getApiBaseUrl();
+    const url = baseUrl + path;
+
+    const fetchOptions = {
+      method: options.method || 'GET',
+      headers: createAuthHeaders(token, options.headers),
+    };
+
+    if (options.body) {
+      fetchOptions.body = JSON.stringify(options.body);
+    }
+
+    const response = await fetch(url, fetchOptions);
+
+    // Handle 401 - clear token and prompt for new one
+    if (response.status === 401) {
+      clearToken(brandId);
+      console.warn('[AdminApiClient] Token rejected (401), cleared from storage');
+    }
+
+    return response;
+  }
+
+  /**
+   * Make authenticated fetch and parse JSON response
+   *
+   * @param {string} path - API path
+   * @param {Object} options - Fetch options (see authenticatedFetch)
+   * @returns {Promise<Object>}
+   */
+  async function authenticatedFetchJson(path, options) {
+    const response = await authenticatedFetch(path, options);
+    return response.json();
+  }
+
+  // ==========================================================================
+  // Legacy Support (getAdminKey compatibility)
+  // ==========================================================================
+
+  /**
+   * Legacy getAdminKey function for backward compatibility
+   *
+   * This matches the existing getAdminKey() pattern in Admin.html.
+   * New code should use AdminApiClient.requireToken() instead.
+   *
+   * @param {string} brandId - Brand identifier
+   * @returns {string}
+   */
+  function getAdminKey(brandId) {
+    return requireToken(brandId) || '';
+  }
+
+  // ==========================================================================
+  // Export
+  // ==========================================================================
+
+  /**
+   * AdminApiClient public API
+   */
+  global.AdminApiClient = {
+    // Token management
+    getToken: getToken,
+    setToken: setToken,
+    clearToken: clearToken,
+    promptForToken: promptForToken,
+    requireToken: requireToken,
+
+    // API requests
+    fetch: authenticatedFetch,
+    fetchJson: authenticatedFetchJson,
+    createAuthHeaders: createAuthHeaders,
+
+    // Environment
+    detectEnvironment: detectEnvironment,
+    getApiBaseUrl: getApiBaseUrl,
+
+    // Legacy compatibility
+    getAdminKey: getAdminKey,
+
+    // Configuration
+    config: {
+      API_CONFIG: API_CONFIG,
+      TOKEN_STORAGE_PREFIX: TOKEN_STORAGE_PREFIX
+    }
+  };
+
+  // Log initialization
+  if (detectEnvironment() !== 'production') {
+    console.log('[AdminApiClient] Initialized for environment:', detectEnvironment());
+  }
+
+})(typeof window !== 'undefined' ? window : this);
+</script>

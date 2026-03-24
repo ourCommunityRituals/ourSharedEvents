@@ -1,0 +1,140 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zeventbook.com/schemas/list-response.schema.json",
+  "title": "List Response",
+  "description": "API response schema for list endpoints (api_list, api_getEvents). Story 3.1 - API Response Schema Validation.",
+  "$comment": "Version 1.0 - Created 2025-12-11. Used by ?action=list and equivalent endpoints.",
+  "type": "object",
+  "oneOf": [
+    { "$ref": "#/$defs/SuccessListResponse" },
+    { "$ref": "#/$defs/ErrorResponse" },
+    { "$ref": "#/$defs/NotModifiedResponse" }
+  ],
+  "$defs": {
+    "SuccessListResponse": {
+      "type": "object",
+      "required": ["ok", "value"],
+      "properties": {
+        "ok": {
+          "type": "boolean",
+          "const": true
+        },
+        "value": {
+          "$ref": "#/$defs/ListValue"
+        },
+        "etag": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Cache validation tag"
+        }
+      },
+      "additionalProperties": false
+    },
+    "ListValue": {
+      "type": "object",
+      "description": "List response payload with items and pagination",
+      "required": ["items", "pagination"],
+      "properties": {
+        "items": {
+          "type": "array",
+          "description": "Array of items (events, sponsors, etc.)"
+        },
+        "pagination": {
+          "$ref": "#/$defs/Pagination"
+        }
+      },
+      "additionalProperties": false
+    },
+    "Pagination": {
+      "type": "object",
+      "description": "Pagination metadata for list responses",
+      "required": ["total", "limit", "offset", "hasMore"],
+      "properties": {
+        "total": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Total number of items across all pages"
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "description": "Maximum items per page"
+        },
+        "offset": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Current offset position"
+        },
+        "hasMore": {
+          "type": "boolean",
+          "description": "Whether more items exist beyond current page"
+        }
+      },
+      "additionalProperties": false
+    },
+    "ErrorResponse": {
+      "type": "object",
+      "required": ["ok", "code", "message"],
+      "properties": {
+        "ok": {
+          "type": "boolean",
+          "const": false
+        },
+        "code": {
+          "type": "string",
+          "enum": ["BAD_INPUT", "NOT_FOUND", "RATE_LIMITED", "INTERNAL", "CONTRACT", "FEATURE_DISABLED", "UNAUTHORIZED"]
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1
+        },
+        "corrId": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "NotModifiedResponse": {
+      "type": "object",
+      "required": ["ok", "notModified"],
+      "properties": {
+        "ok": {
+          "type": "boolean",
+          "const": true
+        },
+        "notModified": {
+          "type": "boolean",
+          "const": true
+        },
+        "etag": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "examples": [
+    {
+      "ok": true,
+      "value": {
+        "items": [
+          { "id": "EVT_001", "name": "Event 1" },
+          { "id": "EVT_002", "name": "Event 2" }
+        ],
+        "pagination": {
+          "total": 50,
+          "limit": 20,
+          "offset": 0,
+          "hasMore": true
+        }
+      },
+      "etag": "W/\"list-abc123\""
+    },
+    {
+      "ok": false,
+      "code": "BAD_INPUT",
+      "message": "Invalid brand parameter"
+    }
+  ]
+}

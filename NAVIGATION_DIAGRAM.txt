@@ -1,0 +1,538 @@
+╔════════════════════════════════════════════════════════════════════════════════════════╗
+║                  MVP-EVENT-TOOLKIT: NAVIGATION FLOW DIAGRAM                            ║
+║                          Last Updated: 2025-11-30 (S10)                                ║
+╚════════════════════════════════════════════════════════════════════════════════════════╝
+
+================================================================================
+SECTION 1: INTEGRATION FLOW (Nav Diagram v1)
+================================================================================
+
+This section documents the complete data flow through the MVP Event Toolkit.
+Reference: docs/ARCHITECTURE.md, docs/INTEGRATION-FLOWS.md
+
+┌────────────────────────────────────────────────────────────────────────────────────────┐
+│                           MASTER INTEGRATION DIAGRAM                                    │
+├────────────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                        │
+│   ┌──────────────────────────────────────────────────────────────────────────────┐    │
+│   │                         [MVP] ADMIN SURFACE                                   │    │
+│   │                           Admin.html                                          │    │
+│   │   ┌─────────────────────────────────────────────────────────────────────────┐│    │
+│   │   │ WRITES:                                                                 ││    │
+│   │   │  • api_create         → Creates event in EVENTS sheet                   ││    │
+│   │   │  • api_updateEventData→ Updates event data (Load-Merge-Save)            ││    │
+│   │   │  • api_saveEvent      → Contract-first write (V2-ready)                 ││    │
+│   │   │                                                                         ││    │
+│   │   │ READS:                                                                  ││    │
+│   │   │  • api_getEventTemplates → Fetch MVP templates                          ││    │
+│   │   │  • api_get              → Single event retrieval                        ││    │
+│   │   │                                                                         ││    │
+│   │   │ FORMS:                                                                  ││    │
+│   │   │  • api_createFormFromTemplate → Google Form (check-in/walk-in/survey)   ││    │
+│   │   │  • api_generateFormShortlink  → Trackable shortlink (?p=r&t=TOKEN)      ││    │
+│   │   └─────────────────────────────────────────────────────────────────────────┘│    │
+│   │                              │                                                │    │
+│   │         Generates links:     │                                                │    │
+│   │         publicUrl ───────────┼───────────────────────────────────────────────────► │
+│   │         displayUrl ──────────┼───────────────────────────────────────────────────► │
+│   │         posterUrl ───────────┼───────────────────────────────────────────────────► │
+│   │         sharedReportUrl ─────┼───────────────────────────────────────────────────► │
+│   └──────────────────────────────┼────────────────────────────────────────────────┘    │
+│                                  │                                                      │
+│                                  ▼                                                      │
+│   ╔══════════════════════════════════════════════════════════════════════════════╗    │
+│   ║                      GOOGLE SHEETS (Event Store)                             ║    │
+│   ╠══════════════════════════════════════════════════════════════════════════════╣    │
+│   ║                                                                              ║    │
+│   ║  EVENTS Sheet                     ANALYTICS Sheet                            ║    │
+│   ║  ┌──────────────────────┐         ┌──────────────────────────────────────┐   ║    │
+│   ║  │ id (UUID)            │         │ timestamp                            │   ║    │
+│   ║  │ brandId              │         │ eventId                              │   ║    │
+│   ║  │ templateId           │         │ surface (public/display/poster)      │   ║    │
+│   ║  │ dataJSON {           │         │ metric (view/impression/click/scan)  │   ║    │
+│   ║  │   name, startDateISO,│         │ sponsorId (nullable)                 │   ║    │
+│   ║  │   venue, sponsors[], │         │ value                                │   ║    │
+│   ║  │   ctas, settings,    │         │ token                                │   ║    │
+│   ║  │   media, schedule... │         │ userAgent                            │   ║    │
+│   ║  │ }                    │         │ sessionId                            │   ║    │
+│   ║  │ createdAt            │         │ visibleSponsorIds                    │   ║    │
+│   ║  │ slug                 │         └──────────────────────────────────────┘   ║    │
+│   ║  └──────────────────────┘                                                    ║    │
+│   ║                                   SHORTLINKS Sheet                           ║    │
+│   ║                                   ┌──────────────────────────────────────┐   ║    │
+│   ║                                   │ token, targetUrl, eventId            │   ║    │
+│   ║                                   │ sponsorId, surface, createdAt, brandId│  ║    │
+│   ║                                   └──────────────────────────────────────┘   ║    │
+│   ╚══════════════════════════════════════════════════════════════════════════════╝    │
+│                                  │                                                      │
+└──────────────────────────────────┼──────────────────────────────────────────────────────┘
+                                   │
+            ┌──────────────────────┼──────────────────────┬──────────────────────┐
+            │                      │                      │                      │
+            ▼                      ▼                      ▼                      ▼
+┌────────────────────┐ ┌────────────────────┐ ┌────────────────────┐ ┌────────────────────┐
+│  [MVP] PUBLIC      │ │  [MVP] DISPLAY     │ │  [MVP] POSTER      │ │  [MVP] SHAREDREPORT│
+│  Surface           │ │  Surface           │ │  Surface           │ │  Surface           │
+│  Public.html       │ │  Display.html      │ │  Poster.html       │ │  SharedReport.html │
+├────────────────────┤ ├────────────────────┤ ├────────────────────┤ ├────────────────────┤
+│ BUNDLE API:        │ │ BUNDLE API:        │ │ BUNDLE API:        │ │ ANALYTICS APIs:    │
+│ api_getPublicBundle│ │ api_getDisplayBundle│ │ api_getPosterBundle│ │ api_getShared-     │
+│                    │ │                    │ │                    │ │   Analytics        │
+│ Returns:           │ │ Returns:           │ │ Returns:           │ │ api_getSponsor-    │
+│ • event (full)     │ │ • event (full)     │ │ • event (full)     │ │   Analytics        │
+│ • config (brand)   │ │ • rotation {}      │ │ • qrCodes {}       │ │ api_getSponsor-    │
+│                    │ │ • layout {}        │ │ • print {}         │ │   ReportQr         │
+├────────────────────┤ ├────────────────────┤ ├────────────────────┤ ├────────────────────┤
+│ ALSO CALLS:        │ │ ALSO CALLS:        │ │                    │ │ Returns:           │
+│ • api_list         │ │ • api_logExternal- │ │                    │ │ • summary {}       │
+│ • api_logExternal- │ │     Click          │ │                    │ │ • surfaces []      │
+│     Click          │ │                    │ │                    │ │ • sponsors []      │
+├────────────────────┤ ├────────────────────┤ ├────────────────────┤ │ • events []        │
+│ LOGS ANALYTICS:    │ │ LOGS ANALYTICS:    │ │ LOGS ANALYTICS:    │ │ • topSponsors []   │
+│ • view             │ │ • view             │ │ • view             │ └────────────────────┘
+│ • impression       │ │ • impression       │ │ • impression       │
+│ • click            │ │ • click            │ │ • click            │
+│                    │ │ • dwellSec         │ │ • print            │
+│                    │ │ • pane_view        │ │                    │
+└────────────────────┘ └────────────────────┘ └────────────────────┘
+
+
+================================================================================
+SECTION 2: ANALYTICS LOGGING FLOW
+================================================================================
+
+All surfaces log metrics via batched api_logEvents calls:
+
+┌──────────────────────────────────────────────────────────────────────────────────────┐
+│                          CTA / SCAN LOGGING ENDPOINTS                                │
+├──────────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                      │
+│  SURFACE               ACTION                  LOGGING API           METRIC          │
+│  ─────────────────────────────────────────────────────────────────────────────────  │
+│                                                                                      │
+│  [MVP] Public.html                                                                   │
+│    ├─ Page load         ────────────────────► api_logEvents ─────► view              │
+│    ├─ Sponsor shown     ────────────────────► api_logEvents ─────► impression        │
+│    ├─ Sponsor clicked   ────────────────────► api_logEvents ─────► click             │
+│    └─ External link     ────────────────────► api_logExternalClick ► external_click  │
+│                                                                                      │
+│  [MVP] Display.html                                                                  │
+│    ├─ Page load         ────────────────────► api_logEvents ─────► view              │
+│    ├─ Sponsor rotation  ────────────────────► api_logEvents ─────► impression        │
+│    ├─ Side pane view    ────────────────────► api_logEvents ─────► pane_view         │
+│    ├─ URL dwell time    ────────────────────► api_logEvents ─────► dwellSec          │
+│    └─ Blocked embed     ────────────────────► api_logEvents ─────► blocked_embed     │
+│                                                                                      │
+│  [MVP] Poster.html                                                                   │
+│    ├─ Page load         ────────────────────► api_logEvents ─────► view              │
+│    ├─ Sponsor shown     ────────────────────► api_logEvents ─────► impression        │
+│    └─ Print action      ────────────────────► api_logEvents ─────► print             │
+│                                                                                      │
+│  Shortlink Redirect                                                                  │
+│    └─ ?p=r&t=TOKEN      ────────────────────► api_logEvents ─────► qr_scan           │
+│                                                                                      │
+│  Batching: Events batch (size 5) and flush every 5s or on page unload               │
+│                                                                                      │
+└──────────────────────────────────────────────────────────────────────────────────────┘
+
+
+================================================================================
+SECTION 3: SHAREDREPORT ANALYTICS CONSUMPTION
+================================================================================
+
+SharedReport.html reads aggregated analytics from SharedReporting.gs:
+
+┌──────────────────────────────────────────────────────────────────────────────────────┐
+│                    SHAREDREPORT ANALYTICS ENDPOINTS                                  │
+├──────────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                      │
+│  ENDPOINT                        PURPOSE                         VIEW TYPE          │
+│  ─────────────────────────────────────────────────────────────────────────────────  │
+│                                                                                      │
+│  [MVP] api_getSharedAnalytics    Organizer dashboard view        ?page=report        │
+│        ├─ brandId (required)                                                         │
+│        ├─ eventId (optional)     Filter to single event                              │
+│        └─ sponsorId (optional)   Filter to single sponsor                            │
+│                                                                                      │
+│        Returns SharedAnalytics:                                                      │
+│        {                                                                             │
+│          lastUpdatedISO,                                                             │
+│          summary: { totalImpressions, totalClicks, totalQrScans,                     │
+│                     totalSignups, uniqueEvents, uniqueSponsors },                    │
+│          surfaces: [{ id, label, impressions, clicks, qrScans, engagementRate }],    │
+│          sponsors: [{ id, name, impressions, clicks, ctr }] | null,                  │
+│          events: [{ id, name, impressions, clicks, ctr, signupsCount }] | null,      │
+│          topSponsors: [{ id, name, impressions, clicks, ctr }] | null                │
+│        }                                                                             │
+│                                                                                      │
+│  ─────────────────────────────────────────────────────────────────────────────────  │
+│                                                                                      │
+│  [MVP] api_getSponsorAnalytics   Sponsor-scoped view             ?page=report&       │
+│        ├─ brandId (required)                                      sponsor=true&      │
+│        ├─ sponsorId (required)                                    sponsorId=XXX      │
+│        └─ eventId (optional)                                                         │
+│                                                                                      │
+│        Returns: Same SharedAnalytics shape, scoped to sponsor                        │
+│        Note: sponsors[] array is null in sponsor view                                │
+│                                                                                      │
+│  ─────────────────────────────────────────────────────────────────────────────────  │
+│                                                                                      │
+│  [MVP] api_getSponsorReportQr    Generate sponsor QR code        Admin + SharedReport│
+│        ├─ sponsorId (required)                                                       │
+│        └─ brandId (optional)                                                         │
+│                                                                                      │
+│        Returns: { url, qrB64 (base64 PNG), verified }                                │
+│                                                                                      │
+└──────────────────────────────────────────────────────────────────────────────────────┘
+
+
+================================================================================
+SECTION 4: MVP vs V2 PATH SEPARATION
+================================================================================
+
+┌──────────────────────────────────────────────────────────────────────────────────────┐
+│                              MVP PATHS (ACTIVE)                                      │
+├──────────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                      │
+│  SURFACES (5 total - LOCKED for focus group):                                        │
+│  ├─ Admin.html          Event management control room                                │
+│  ├─ Public.html         Mobile-first public event page                               │
+│  ├─ Display.html        TV/kiosk display with sponsor rotation                       │
+│  ├─ Poster.html         Print-ready poster with QR codes                             │
+│  └─ SharedReport.html   Analytics dashboard (shareable)                              │
+│                                                                                      │
+│  BUNDLE APIs (Read-only event+config):                                               │
+│  ├─ api_getPublicBundle   → event + config                                           │
+│  ├─ api_getDisplayBundle  → event + rotation + layout                                │
+│  └─ api_getPosterBundle   → event + qrCodes + print                                  │
+│                                                                                      │
+│  CRUD APIs:                                                                          │
+│  ├─ api_create            → Create event                                             │
+│  ├─ api_updateEventData   → Update event                                             │
+│  ├─ api_saveEvent         → Contract-first write                                     │
+│  ├─ api_get               → Single event                                             │
+│  ├─ api_list              → Paginated event list                                     │
+│  └─ api_getEventTemplates → MVP templates only                                       │
+│                                                                                      │
+│  ANALYTICS APIs:                                                                     │
+│  ├─ api_logEvents         → Batch metrics                                            │
+│  ├─ api_logExternalClick  → External link tracking                                   │
+│  ├─ api_getSharedAnalytics→ Organizer view                                           │
+│  ├─ api_getSponsorAnalytics→ Sponsor view                                            │
+│  └─ api_getSponsorReportQr→ QR code generation                                       │
+│                                                                                      │
+│  FORM APIs:                                                                          │
+│  ├─ api_createFormFromTemplate → check-in, walk-in, survey                           │
+│  └─ api_generateFormShortlink  → Trackable form links                                │
+│                                                                                      │
+│  TEMPLATES (MVP tier only - TEMPLATE_TIER.MVP):                                      │
+│  ├─ bar_night       → Bar/Restaurant events                                          │
+│  ├─ rec_league      → Recreational sports                                            │
+│  ├─ school          → School/campus events                                           │
+│  ├─ fundraiser      → Charity/benefit events                                         │
+│  └─ custom          → Generic event template                                         │
+│                                                                                      │
+└──────────────────────────────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────────────────────────────┐
+│                      V2-ONLY PATHS (BLOCKED/DEFERRED)                                │
+├──────────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                      │
+│  ╔═══════════════════════════════════════════════════════════════════════════════╗  │
+│  ║  PORTFOLIO ANALYTICS (Requires: FEATURE_FLAGS.PORTFOLIO_V2 = true)            ║  │
+│  ╠═══════════════════════════════════════════════════════════════════════════════╣  │
+│  ║                                                                               ║  │
+│  ║  api_getPortfolioAnalyticsV2                                                  ║  │
+│  ║    └─ Multi-event portfolio mode for cross-brand aggregation                 ║  │
+│  ║    └─ File: archive/v2-code/SponsorPortfolioV2.gs                             ║  │
+│  ║                                                                               ║  │
+│  ║  api_getPortfolioSummaryV2                                                    ║  │
+│  ║    └─ High-level portfolio metrics for parent organizations                  ║  │
+│  ║                                                                               ║  │
+│  ║  api_getPortfolioSponsorReportV2                                              ║  │
+│  ║    └─ Consolidated sponsor report across portfolio brands                    ║  │
+│  ║                                                                               ║  │
+│  ║  api_getPortfolioSponsorsV2                                                   ║  │
+│  ║    └─ List sponsors across portfolio for UI dropdown/selection               ║  │
+│  ║                                                                               ║  │
+│  ╚═══════════════════════════════════════════════════════════════════════════════╝  │
+│                                                                                      │
+│  ╔═══════════════════════════════════════════════════════════════════════════════╗  │
+│  ║  EXPORT FEATURES (Requires: FEATURE_FLAGS.PORTFOLIO_V2 = true)                ║  │
+│  ╠═══════════════════════════════════════════════════════════════════════════════╣  │
+│  ║                                                                               ║  │
+│  ║  api_exportSharedReport                                                       ║  │
+│  ║    └─ Export analytics to CSV/JSON/PDF                                        ║  │
+│  ║    └─ Button hidden in SharedReport.html (display:none)                       ║  │
+│  ║    └─ File: src/mvp/SharedReporting.gs (guarded)                              ║  │
+│  ║                                                                               ║  │
+│  ║  api_exportReport                                                             ║  │
+│  ║    └─ Advanced spreadsheet export matrix                                      ║  │
+│  ║    └─ File: src/mvp/Code.gs                                                   ║  │
+│  ║                                                                               ║  │
+│  ║  api_generateSharedReport                                                     ║  │
+│  ║    └─ Report generation with AI recommendations                               ║  │
+│  ║    └─ Returns Err: "use api_getSharedAnalytics for MVP"                       ║  │
+│  ║                                                                               ║  │
+│  ╚═══════════════════════════════════════════════════════════════════════════════╝  │
+│                                                                                      │
+│  ╔═══════════════════════════════════════════════════════════════════════════════╗  │
+│  ║  V2 SURFACES (BLOCKED - Router rejects)                                       ║  │
+│  ╠═══════════════════════════════════════════════════════════════════════════════╣  │
+│  ║                                                                               ║  │
+│  ║  Blocked pages (return hard error, not silent fallback):                      ║  │
+│  ║  ├─ templates-v2      → Advanced template editor                              ║  │
+│  ║  ├─ randomizer        → Team randomizer tool                                  ║  │
+│  ║  ├─ teams             → Team management                                       ║  │
+│  ║  ├─ picker            → Name picker/lottery                                   ║  │
+│  ║  ├─ portfolio         → Portfolio dashboard (parent orgs)                     ║  │
+│  ║  └─ portfolio-dashboard → Multi-brand portfolio view                          ║  │
+│  ║                                                                               ║  │
+│  ║  Error message: "V2 surface is not available in MVP deployment"               ║  │
+│  ║                                                                               ║  │
+│  ╚═══════════════════════════════════════════════════════════════════════════════╝  │
+│                                                                                      │
+│  ╔═══════════════════════════════════════════════════════════════════════════════╗  │
+│  ║  V2 TEMPLATES (TEMPLATE_TIER.V2 - hidden from Admin)                          ║  │
+│  ╠═══════════════════════════════════════════════════════════════════════════════╣  │
+│  ║                                                                               ║  │
+│  ║  Professional & Corporate:                                                    ║  │
+│  ║  ├─ networking_event  → Business networking                                   ║  │
+│  ║  ├─ conference        → Multi-day conference                                  ║  │
+│  ║  └─ trade_show        → Trade show/expo                                       ║  │
+│  ║                                                                               ║  │
+│  ║  Social & Celebration:                                                        ║  │
+│  ║  ├─ wedding           → Wedding events (gallery-heavy)                        ║  │
+│  ║  ├─ birthday_party    → Birthday celebrations                                 ║  │
+│  ║  ├─ reunion           → Family/class reunions                                 ║  │
+│  ║  └─ anniversary       → Anniversary events                                    ║  │
+│  ║                                                                               ║  │
+│  ║  Community & Faith:                                                           ║  │
+│  ║  ├─ church_event      → Religious gatherings                                  ║  │
+│  ║  ├─ community_fair    → Local fairs/festivals                                 ║  │
+│  ║  ├─ volunteer         → Volunteer coordination                                ║  │
+│  ║  ├─ memorial          → Memorial services                                     ║  │
+│  ║  └─ worship_service   → Regular worship                                       ║  │
+│  ║                                                                               ║  │
+│  ║  Bar Games (League tier):                                                     ║  │
+│  ║  ├─ pool_league       → Pool/billiards leagues                                ║  │
+│  ║  ├─ darts_league      → Darts tournaments                                     ║  │
+│  ║  ├─ cornhole_league   → Cornhole/bean bag                                     ║  │
+│  ║  └─ poker_night       → Poker tournaments                                     ║  │
+│  ║                                                                               ║  │
+│  ║  Access: Admin.html?includeV2=true (admin override only)                      ║  │
+│  ║                                                                               ║  │
+│  ╚═══════════════════════════════════════════════════════════════════════════════╝  │
+│                                                                                      │
+│  ╔═══════════════════════════════════════════════════════════════════════════════╗  │
+│  ║  DEFERRED SERVICES (Feature-flagged OFF)                                      ║  │
+│  ╠═══════════════════════════════════════════════════════════════════════════════╣  │
+│  ║                                                                               ║  │
+│  ║  i18nService.gs (ZEB.FEATURES.I18N = false)                                   ║  │
+│  ║  ├─ Multi-language support                                                    ║  │
+│  ║  ├─ Locale detection (URL, preferences, Accept-Language)                      ║  │
+│  ║  └─ Date/number/currency formatting                                           ║  │
+│  ║                                                                               ║  │
+│  ║  WebhookService.gs (ZEB.FEATURES.WEBHOOKS = false)                            ║  │
+│  ║  ├─ Zapier/Slack integrations                                                 ║  │
+│  ║  ├─ Event notifications (event.created, event.updated)                        ║  │
+│  ║  ├─ Sponsor alerts (sponsor.ctr.low, sponsor.ctr.high)                        ║  │
+│  ║  └─ Analytics reports                                                         ║  │
+│  ║                                                                               ║  │
+│  ╚═══════════════════════════════════════════════════════════════════════════════╝  │
+│                                                                                      │
+└──────────────────────────────────────────────────────────────────────────────────────┘
+
+
+================================================================================
+SECTION 5: ENTRY POINTS (Main URLs)
+================================================================================
+
+┌────────────────────────────────────────────────────────────────────────────────────────┐
+│                              ENTRY POINTS (Main URLs)                                  │
+├────────────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                        │
+│  [MVP] Base URL                      [MVP] Admin                                       │
+│  ?p=events&brand=root                ?page=admin&brand=root                           │
+│  ↓                                     ↓                                               │
+│  PUBLIC.HTML (Default)                ADMIN.HTML (Control Center)                     │
+│  Event Listing & Details              Event Creation & Configuration                  │
+│                                       Event Lifecycle Dashboard                       │
+│                                                                                        │
+│  [MVP] Display                       [MVP] Poster                                      │
+│  ?page=display&brand=root&id=XXX     ?page=poster&brand=root&id=XXX                   │
+│  ↓                                     ↓                                               │
+│  DISPLAY.HTML                         POSTER.HTML                                     │
+│  TV/Kiosk sponsor rotation            Print-ready with QR codes                       │
+│                                                                                        │
+│  [MVP] SharedReport                  Special Routes                                   │
+│  ?page=report&brand=root&id=XXX      ?page=docs     (ApiDocs.html)                   │
+│  ↓                                     ?p=status      (JSON health check)             │
+│  SHAREDREPORT.HTML                    ?p=r&t=TOKEN   (Shortlink redirect)            │
+│  Analytics dashboard                                                                   │
+│                                                                                        │
+│  Test Hub                                                                              │
+│  ?page=test&brand=root                                                                │
+│  ↓                                                                                     │
+│  TEST.HTML (Testing Navigation)                                                        │
+│                                                                                        │
+└────────────────────────────────────────────────────────────────────────────────────────┘
+
+
+================================================================================
+SECTION 6: ROUTER PRIORITY (Code.gs: doGet)
+================================================================================
+
+┌────────────────────────────────────────────────────────────────────────────────────────┐
+│                         ROUTER PRIORITY (Code.gs: doGet)                              │
+├────────────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                        │
+│  ?action=* (REST API)  ──→  handleRestApiGet_() [JSON response]                      │
+│       ↓ No                                                                             │
+│  ?page=r|redirect      ──→  handleRedirect_() [Shortlink tracking]                   │
+│       ↓ No                                                                             │
+│  ?page=docs|api        ──→  ApiDocs.html [API Documentation]                         │
+│       ↓ No                                                                             │
+│  ?page=status          ──→  JSON Status Endpoint [Health check]                       │
+│       ↓ No                                                                             │
+│  V2 surface check      ──→  HARD ERROR if blocked V2 surface                         │
+│       ↓ No                                                                             │
+│  Validate scope (?p=)  ──→  Redirect if invalid                                       │
+│       ↓                                                                                 │
+│  [MVP] ?page=admin     ──→  Admin.html                                                │
+│  [MVP] ?page=poster    ──→  Poster.html                                               │
+│  [MVP] ?page=test      ──→  Test.html                                                 │
+│  [MVP] ?page=display   ──→  Display.html                                              │
+│  [MVP] ?page=report    ──→  SharedReport.html                                         │
+│  [MVP] ?page=analytics ──→  SharedReport.html                                         │
+│       ↓ DEFAULT                                                                        │
+│  ──→  Public.html [Event listing/detail]                                              │
+│                                                                                        │
+└────────────────────────────────────────────────────────────────────────────────────────┘
+
+
+================================================================================
+SECTION 7: USER JOURNEYS (Triangle Framework Mapping)
+================================================================================
+
+┌────────────────────────────────────────────────────────────────────────────────────────┐
+│                     USER JOURNEYS (Triangle Framework Mapping)                         │
+├────────────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                        │
+│ ╔════════════════════════════════════════════════════════════════════════════════╗   │
+│ ║  BEFORE EVENT (Pre-Event Phase / Preparation)                                  ║   │
+│ ╠════════════════════════════════════════════════════════════════════════════════╣   │
+│ ║                                                                                ║   │
+│ ║  ADMIN:                          PUBLIC:                                       ║   │
+│ ║  • Create event (api_create)     • View event details (api_getPublicBundle)   ║   │
+│ ║  • Configure sponsors            • Register/sign-up                           ║   │
+│ ║  • Set display mode              • Share event link                           ║   │
+│ ║  • Upload posters/media          • View sponsors                              ║   │
+│ ║                                  • Read event summary                          ║   │
+│ ║  POSTER:                                                                       ║   │
+│ ║  • Print promotional poster      DISPLAY:                                      ║   │
+│ ║  • Share QR codes                • (Typically offline before event)            ║   │
+│ ║  • Show sponsor logos                                                          ║   │
+│ ║                                                                                ║   │
+│ ╚════════════════════════════════════════════════════════════════════════════════╝   │
+│                                                                                        │
+│ ╔════════════════════════════════════════════════════════════════════════════════╗   │
+│ ║  DURING EVENT (Event Day / Active)                                             ║   │
+│ ╠════════════════════════════════════════════════════════════════════════════════╣   │
+│ ║                                                                                ║   │
+│ ║  DISPLAY (TV Screens):           PUBLIC (Mobile Check-in):                     ║   │
+│ ║  • Sponsor carousel (rotation)   • Check-in form                               ║   │
+│ ║  • Featured content              • Walk-in registration                        ║   │
+│ ║  • Side sponsor panel            • Event navigation                            ║   │
+│ ║  • Analytics tracking            • Live event updates                          ║   │
+│ ║  (impressions, clicks, dwell)    • Sponsor engagement → api_logEvents          ║   │
+│ ║                                                                                ║   │
+│ ║  ADMIN:                                                                         ║   │
+│ ║  • Monitor real-time analytics   (Dashboard updates during event)              ║   │
+│ ║  • Adjust display content                                                      ║   │
+│ ║  • Manage sponsor visibility                                                   ║   │
+│ ║                                                                                ║   │
+│ ╚════════════════════════════════════════════════════════════════════════════════╝   │
+│                                                                                        │
+│ ╔════════════════════════════════════════════════════════════════════════════════╗   │
+│ ║  AFTER EVENT (Post-Event Phase / Analytics)                                    ║   │
+│ ╠════════════════════════════════════════════════════════════════════════════════╣   │
+│ ║                                                                                ║   │
+│ ║  ADMIN:                          SHAREDREPORT (Shared Analytics):               ║   │
+│ ║  • View post-event dashboard     • api_getSharedAnalytics (organizer view)      ║   │
+│ ║  • Access analytics              • api_getSponsorAnalytics (sponsor view)       ║   │
+│ ║  • Share report links            • Surface-specific breakdowns                  ║   │
+│ ║  • Archive event                 • Sponsor performance metrics (CTR)            ║   │
+│ ║                                  • api_getSponsorReportQr (QR codes)            ║   │
+│ ║  PUBLIC (Survey):                                                               ║   │
+│ ║  • Post-event survey link        (if configured)                                ║   │
+│ ║  • Attendee feedback             (trackable, redirected to external form)       ║   │
+│ ║                                                                                ║   │
+│ ╚════════════════════════════════════════════════════════════════════════════════╝   │
+│                                                                                        │
+└────────────────────────────────────────────────────────────────────────────────────────┘
+
+
+================================================================================
+SECTION 8: FILE STRUCTURE SUMMARY
+================================================================================
+
+┌────────────────────────────────────────────────────────────────────────────────────────┐
+│                              FILE STRUCTURE SUMMARY                                    │
+├────────────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                        │
+│  SERVER-SIDE (src/mvp/*.gs):                                                          │
+│  ├── Code.gs              Router + REST API endpoints (doGet/doPost)                  │
+│  ├── Config.gs            Brands, feature flags, display config                       │
+│  ├── TemplateService.gs   Event templates (MVP + V2 tiers)                            │
+│  ├── ApiSchemas.gs        JSON Schema validation for contracts                        │
+│  ├── EventService.gs      Event CRUD with LockService                                 │
+│  ├── FormService.gs       Google Forms creation                                       │
+│  ├── SponsorService.gs    Sponsor management and ROI                                  │
+│  ├── SharedReporting.gs   SharedAnalytics response builder                            │
+│  ├── AnalyticsService.gs  Metrics logging and aggregation                             │
+│  └── SecurityMiddleware.gs Auth, rate limiting, CSRF                                  │
+│                                                                                        │
+│  [MVP] CLIENT-SIDE (src/mvp/*.html - 5 surfaces):                                     │
+│  ├── Admin.html           Event creation & management dashboard                       │
+│  ├── Public.html          Public event listing & detail                               │
+│  ├── Display.html         TV/kiosk display with sponsor rotation                      │
+│  ├── Poster.html          Printable poster with QR codes                              │
+│  └── SharedReport.html    Analytics dashboard (shareable)                             │
+│                                                                                        │
+│  SHARED COMPONENTS (src/mvp/*.html):                                                  │
+│  ├── NUSDK.html           RPC client SDK (NU.rpc, NU.swr, NU.esc)                     │
+│  ├── Styles.html          Global CSS design system                                    │
+│  ├── DesignAdapter.html   Brand theming adapter                                       │
+│  ├── Header.html          Logo & title bar component                                  │
+│  ├── SponsorUtils.html    Shared sponsor rendering & logging                          │
+│  └── SharedUtils.html     Utility functions                                           │
+│                                                                                        │
+│  [V2] ARCHIVED CODE (archive/v2-code/):                                               │
+│  ├── SponsorPortfolioV2.gs Multi-brand portfolio analytics                            │
+│  ├── i18nService.gs       Internationalization (deferred)                             │
+│  └── WebhookService.gs    External integrations (deferred)                            │
+│                                                                                        │
+└────────────────────────────────────────────────────────────────────────────────────────┘
+
+
+================================================================================
+QUICK REFERENCE: API SURFACE MAPPING
+================================================================================
+
+│ Surface         │ Bundle API               │ Analytics APIs            │
+├─────────────────┼──────────────────────────┼───────────────────────────┤
+│ Admin.html      │ (multiple CRUD)          │ (writes via surfaces)     │
+│ Public.html     │ api_getPublicBundle      │ api_logEvents             │
+│ Display.html    │ api_getDisplayBundle     │ api_logEvents             │
+│ Poster.html     │ api_getPosterBundle      │ api_logEvents             │
+│ SharedReport    │ (reads analytics)        │ api_getSharedAnalytics    │
+│                 │                          │ api_getSponsorAnalytics   │
+│                 │                          │ api_getSponsorReportQr    │
+└─────────────────┴──────────────────────────┴───────────────────────────┘
+
+
+================================================================================
+END OF NAVIGATION DIAGRAM
+See also: docs/ARCHITECTURE.md, docs/INTEGRATION-FLOWS.md, docs/integration-map.md
+================================================================================

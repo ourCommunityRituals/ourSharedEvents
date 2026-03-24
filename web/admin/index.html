@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<!--
+  Admin Surface - EventAngle Event Management Dashboard
+
+  Story 4.1: This file is a redirect to the Worker-served admin page.
+  The actual admin.html is served from the Cloudflare Worker.
+
+  Access via:
+    - /admin
+    - /manage
+    - /dashboard
+    - /create
+
+  @see worker/src/handlers/staticAssets.ts
+  @see worker/templates/admin.html
+-->
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="refresh" content="0; url=/admin">
+  <title>Admin - EventAngle</title>
+</head>
+<body>
+  <p>Redirecting to <a href="/admin">Admin Dashboard</a>...</p>
+</body>
+</html>

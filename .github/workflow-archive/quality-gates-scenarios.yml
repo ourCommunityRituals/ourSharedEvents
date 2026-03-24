@@ -1,0 +1,324 @@
+# DEPRECATED WORKFLOW (ARCHIVED)
+# This workflow is kept for historical reference only.
+# Do NOT re-enable without updating it to the current CI/CD architecture.
+
+name: OLD – Quality Gates - Agile Test Automation
+
+on:
+  # REMOVED: claude/** branches - E2E scenarios require deployed backend
+  # Feature branches should use unit-contract-tests.yml for fast feedback
+  # Scenarios run after Stage 1 deploys via stage2-testing.yml
+
+  # Only run scenarios after Stage 1 deployment completes
+  workflow_run:
+    workflows: ["Stage 1 - Build & Deploy"]
+    types: [completed]
+    branches: [main]
+
+  schedule:
+    # Run daily at 6 AM UTC to catch regressions
+    - cron: '0 6 * * *'
+
+  workflow_dispatch:
+    inputs:
+      scenario:
+        description: 'Which scenario to run (1, 2, 3, or all)'
+        required: false
+        default: 'all'
+
+jobs:
+  # Quality Gate 1: Unit & Contract Tests
+  quality-gate-unit:
+    name: 'QG1: Unit & Contract Tests'
+    runs-on: ubuntu-latest
+    # Only run if Stage 1 deployment succeeded (when triggered by workflow_run)
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'schedule' ||
+      github.event.workflow_run.conclusion == 'success'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run Unit Tests
+        run: npm run test:unit
+
+      - name: Run Contract Tests
+        run: npm run test:contract
+
+      - name: Upload Unit Test Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-results
+          path: coverage/
+
+  # Quality Gate 2: Scenario 1 - First-Time Admin
+  quality-gate-scenario-1:
+    name: 'QG2: Scenario 1 - First-Time Admin'
+    runs-on: ubuntu-latest
+    needs: quality-gate-unit
+    if: ${{ !failure() }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium webkit
+
+      - name: Run Scenario 1 Tests
+        run: |
+          echo "🎯 Testing against canonical URL: https://www.eventangle.com/events"
+          npm run test:scenario:1
+        env:
+          # Canonical EventAngle production URL
+          BASE_URL: https://www.eventangle.com
+          ADMIN_KEY: ${{ secrets.ADMIN_KEY_ROOT }}
+          BRAND_ID: root
+
+      - name: Upload Scenario 1 Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: scenario-1-results
+          path: |
+            playwright-report/
+            .test-results/
+
+      - name: Comment PR with Results
+        if: github.event_name == 'pull_request' && always()
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const fs = require('fs');
+            const resultPath = '.test-results/playwright-results.json';
+            if (fs.existsSync(resultPath)) {
+              const results = JSON.parse(fs.readFileSync(resultPath, 'utf8'));
+              const passed = results.stats?.expected || 0;
+              const failed = results.stats?.unexpected || 0;
+
+              github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: `## 🧪 Scenario 1: First-Time Admin\n\n✅ Passed: ${passed}\n❌ Failed: ${failed}`
+              });
+            }
+
+  # Quality Gate 3: Scenario 2 - Mobile User
+  quality-gate-scenario-2:
+    name: 'QG3: Scenario 2 - Mobile User'
+    runs-on: ubuntu-latest
+    needs: quality-gate-scenario-1
+    if: ${{ !failure() }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium webkit
+
+      - name: Run Scenario 2 Tests
+        run: |
+          echo "🎯 Testing against canonical URL: https://www.eventangle.com/events"
+          npm run test:scenario:2
+        env:
+          # Canonical EventAngle production URL
+          BASE_URL: https://www.eventangle.com
+          ADMIN_KEY: ${{ secrets.ADMIN_KEY_ROOT }}
+
+      - name: Upload Scenario 2 Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: scenario-2-results
+          path: |
+            playwright-report/
+            .test-results/
+
+  # Quality Gate 4: Scenario 3 - TV Display
+  quality-gate-scenario-3:
+    name: 'QG4: Scenario 3 - TV Display'
+    runs-on: ubuntu-latest
+    needs: quality-gate-scenario-2
+    if: ${{ !failure() }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium webkit
+
+      - name: Run Scenario 3 Tests
+        run: |
+          echo "🎯 Testing against canonical URL: https://www.eventangle.com/events"
+          npm run test:scenario:3
+        env:
+          # Canonical EventAngle production URL
+          BASE_URL: https://www.eventangle.com
+          ADMIN_KEY: ${{ secrets.ADMIN_KEY_ROOT }}
+
+      - name: Upload Scenario 3 Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: scenario-3-results
+          path: |
+            playwright-report/
+            .test-results/
+
+  # Quality Gate 5: Bug Discovery & Reporting
+  quality-gate-bug-discovery:
+    name: 'QG5: Bug Discovery & Analysis'
+    runs-on: ubuntu-latest
+    needs: [quality-gate-scenario-1, quality-gate-scenario-2, quality-gate-scenario-3]
+    if: always()
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Download All Test Results
+        uses: actions/download-artifact@v4
+
+      - name: Generate Bug Report
+        run: |
+          echo "# 🐛 Bug Discovery Report" > bug-report.md
+          echo "" >> bug-report.md
+          echo "**Run:** ${{ github.run_number }}" >> bug-report.md
+          echo "**Date:** $(date)" >> bug-report.md
+          echo "" >> bug-report.md
+
+          if [ -f .test-results/scenarios/bug-tracker.json ]; then
+            echo "## Bugs Found" >> bug-report.md
+            cat .test-results/scenarios/bug-tracker.json >> bug-report.md
+          else
+            echo "No bugs tracked" >> bug-report.md
+          fi
+
+      - name: Upload Bug Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: bug-discovery-report
+          path: bug-report.md
+
+      - name: Create Issue for New Bugs
+        if: failure()
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const fs = require('fs');
+            if (fs.existsSync('bug-report.md')) {
+              const bugReport = fs.readFileSync('bug-report.md', 'utf8');
+
+              github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: `🐛 Automated Bug Discovery - Run #${{ github.run_number }}`,
+                body: bugReport,
+                labels: ['bug', 'automated-testing', 'needs-triage']
+              });
+            }
+
+  # Quality Gate 6: Performance & Accessibility
+  quality-gate-performance:
+    name: 'QG6: Performance & Accessibility'
+    runs-on: ubuntu-latest
+    needs: quality-gate-unit
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Run Performance Tests
+        run: |
+          echo "🎯 Testing against canonical URL: https://www.eventangle.com/events"
+          npm run test:scenario:2  # Mobile performance tests
+        env:
+          # Canonical EventAngle production URL
+          BASE_URL: https://www.eventangle.com
+          ADMIN_KEY: ${{ secrets.ADMIN_KEY_ROOT }}
+
+      - name: Check Performance Budgets
+        run: |
+          echo "Checking performance budgets..."
+          # Add lighthouse or performance budget checks here
+
+  # Final Quality Gate: All Scenarios
+  quality-gate-final:
+    name: '✅ Final Quality Gate'
+    runs-on: ubuntu-latest
+    needs: [quality-gate-scenario-1, quality-gate-scenario-2, quality-gate-scenario-3, quality-gate-performance]
+    if: always()
+    steps:
+      - name: Check All Gates Passed
+        run: |
+          echo "Quality Gate Status:"
+          echo "  Scenario 1: ${{ needs.quality-gate-scenario-1.result }}"
+          echo "  Scenario 2: ${{ needs.quality-gate-scenario-2.result }}"
+          echo "  Scenario 3: ${{ needs.quality-gate-scenario-3.result }}"
+          echo "  Performance: ${{ needs.quality-gate-performance.result }}"
+
+          if [[ "${{ needs.quality-gate-scenario-1.result }}" == "success" ]] && \
+             [[ "${{ needs.quality-gate-scenario-2.result }}" == "success" ]] && \
+             [[ "${{ needs.quality-gate-scenario-3.result }}" == "success" ]] && \
+             [[ "${{ needs.quality-gate-performance.result }}" == "success" ]]; then
+            echo "✅ All quality gates PASSED!"
+            exit 0
+          else
+            echo "❌ Some quality gates FAILED"
+            exit 1
+          fi
+
+      - name: Update Deployment Status
+        if: success()
+        run: echo "Ready for deployment ✅"

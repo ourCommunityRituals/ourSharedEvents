@@ -1,0 +1,319 @@
+# OurSharedEvents – CI/CD Pipeline
+#
+# Deploys workers/oursharedevents to Cloudflare and runs existing
+# Playwright API + E2E smoke tests against the new domain.
+#
+# Trigger Matrix:
+#   | Event          | TypeCheck | Deploy Staging | E2E Staging | Deploy Prod |
+#   |----------------|-----------|----------------|-------------|-------------|
+#   | PR to main     | ✅        | ❌             | ❌          | ❌          |
+#   | Push to main   | ✅        | ✅             | ✅          | ❌          |
+#   | Tag vX.Y.Z     | ✅        | ❌             | ❌          | ✅          |
+#   | workflow_dispatch | ✅     | optional       | optional    | optional    |
+#
+# Required GitHub Secrets:
+#   - CLOUDFLARE_API_TOKEN      (Cloudflare API token with Workers:Edit permission)
+#   - CLOUDFLARE_ACCOUNT_ID     (Cloudflare account ID)
+#   - ADMIN_KEY                 (Bearer token for /admin routes)
+#
+# Wrangler secrets (set once via wrangler CLI, not GitHub secrets):
+#   wrangler secret put GOOGLE_SA_CLIENT_EMAIL    --env staging
+#   wrangler secret put GOOGLE_SA_PRIVATE_KEY_PEM --env staging
+#   wrangler secret put SHEETS_SPREADSHEET_ID     --env staging
+#   wrangler secret put ADMIN_KEY                 --env staging
+#   # Repeat for --env production
+
+name: OurSharedEvents CI/CD
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'workers/oursharedevents/**'
+      - '.github/workflows/oursharedevents-ci.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'workers/oursharedevents/**'
+      - '.github/workflows/oursharedevents-ci.yml'
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      deploy_staging:
+        description: 'Deploy to staging'
+        required: false
+        default: 'false'
+        type: boolean
+      deploy_production:
+        description: 'Deploy to production (type PRODUCTION to confirm)'
+        required: false
+        type: string
+
+concurrency:
+  group: oursharedevents-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  STG_BASE_URL: 'https://stg.oursharedevents.com'
+  PROD_BASE_URL: 'https://oursharedevents.com'
+  WORKER_DIR: 'workers/oursharedevents'
+
+jobs:
+  # ============================================================================
+  # QUALITY GATE: TypeScript compile check
+  # ============================================================================
+  typecheck:
+    name: '01 TypeCheck Worker'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: '${{ env.WORKER_DIR }}/package.json'
+
+      - name: Install worker dependencies
+        run: npm ci
+        working-directory: ${{ env.WORKER_DIR }}
+
+      - name: TypeScript type check
+        run: npx tsc --noEmit
+        working-directory: ${{ env.WORKER_DIR }}
+
+  # ============================================================================
+  # DEPLOY: Staging (push to main)
+  # ============================================================================
+  deploy-staging:
+    name: '02 Deploy → Staging'
+    runs-on: ubuntu-latest
+    needs: typecheck
+    if: |
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_staging == 'true')
+    environment:
+      name: staging
+      url: ${{ env.STG_BASE_URL }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: '${{ env.WORKER_DIR }}/package.json'
+
+      - name: Install worker dependencies
+        run: npm ci
+        working-directory: ${{ env.WORKER_DIR }}
+
+      - name: Deploy to staging
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx wrangler deploy --env staging
+        working-directory: ${{ env.WORKER_DIR }}
+
+      - name: Wait for worker propagation
+        run: sleep 10
+
+      - name: Health check staging
+        run: |
+          echo "Checking https://stg.oursharedevents.com/health ..."
+          HTTP=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 "$STG_BASE_URL/health")
+          if [ "$HTTP" != "200" ]; then
+            echo "::error::Health check failed – HTTP $HTTP"
+            exit 1
+          fi
+          echo "Health check passed (HTTP $HTTP)"
+
+  # ============================================================================
+  # E2E: API + UI smoke tests against staging (runs after staging deploy)
+  # ============================================================================
+  e2e-staging:
+    name: '03 E2E → Staging'
+    runs-on: ubuntu-latest
+    needs: deploy-staging
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install root dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install chromium --with-deps
+
+      - name: API smoke tests
+        id: api-tests
+        env:
+          BASE_URL: ${{ env.STG_BASE_URL }}
+          ADMIN_KEY: ${{ secrets.ADMIN_KEY }}
+        run: npm run test:api:smoke
+        timeout-minutes: 10
+        continue-on-error: true
+
+      - name: UI smoke tests
+        id: ui-tests
+        env:
+          BASE_URL: ${{ env.STG_BASE_URL }}
+          ADMIN_KEY: ${{ secrets.ADMIN_KEY }}
+        run: npm run test:ui:smoke
+        timeout-minutes: 15
+        continue-on-error: true
+
+      - name: Upload test artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e2e-staging-${{ github.run_number }}
+          path: |
+            playwright-report-smoke/
+            playwright-report-ui-smoke/
+            .test-results/
+            test-results/
+          retention-days: 14
+
+      - name: Fail if tests failed
+        if: steps.api-tests.outcome == 'failure' || steps.ui-tests.outcome == 'failure'
+        run: |
+          echo "::error::E2E staging tests failed — API: ${{ steps.api-tests.outcome }}, UI: ${{ steps.ui-tests.outcome }}"
+          exit 1
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "## OurSharedEvents E2E – Staging" >> $GITHUB_STEP_SUMMARY
+          echo "| Suite | Result |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| API Smoke | \`${{ steps.api-tests.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| UI Smoke  | \`${{ steps.ui-tests.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**URL:** $STG_BASE_URL" >> $GITHUB_STEP_SUMMARY
+
+  # ============================================================================
+  # DEPLOY: Production (on tag vX.Y.Z only)
+  # ============================================================================
+  deploy-production:
+    name: '04 Deploy → Production'
+    runs-on: ubuntu-latest
+    needs: typecheck
+    if: |
+      (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_production == 'PRODUCTION')
+    environment:
+      name: production
+      url: ${{ env.PROD_BASE_URL }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: '${{ env.WORKER_DIR }}/package.json'
+
+      - name: Install worker dependencies
+        run: npm ci
+        working-directory: ${{ env.WORKER_DIR }}
+
+      - name: Deploy to production
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx wrangler deploy --env production
+        working-directory: ${{ env.WORKER_DIR }}
+
+      - name: Wait for worker propagation
+        run: sleep 10
+
+      - name: Health check production
+        run: |
+          echo "Checking https://oursharedevents.com/health ..."
+          HTTP=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 "$PROD_BASE_URL/health")
+          if [ "$HTTP" != "200" ]; then
+            echo "::error::Production health check failed – HTTP $HTTP"
+            exit 1
+          fi
+          echo "Health check passed (HTTP $HTTP)"
+
+  # ============================================================================
+  # E2E: Smoke tests against production (post-deploy verification)
+  # ============================================================================
+  e2e-production:
+    name: '05 E2E → Production'
+    runs-on: ubuntu-latest
+    needs: deploy-production
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install root dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install chromium --with-deps
+
+      - name: API smoke tests
+        id: api-tests
+        env:
+          BASE_URL: ${{ env.PROD_BASE_URL }}
+          ADMIN_KEY: ${{ secrets.ADMIN_KEY }}
+        run: npm run test:api:smoke
+        timeout-minutes: 10
+        continue-on-error: true
+
+      - name: UI smoke tests
+        id: ui-tests
+        env:
+          BASE_URL: ${{ env.PROD_BASE_URL }}
+          ADMIN_KEY: ${{ secrets.ADMIN_KEY }}
+        run: npm run test:ui:smoke
+        timeout-minutes: 15
+        continue-on-error: true
+
+      - name: Upload test artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e2e-production-${{ github.run_number }}
+          path: |
+            playwright-report-smoke/
+            playwright-report-ui-smoke/
+            .test-results/
+            test-results/
+          retention-days: 30
+
+      - name: Fail if tests failed
+        if: steps.api-tests.outcome == 'failure' || steps.ui-tests.outcome == 'failure'
+        run: |
+          echo "::error::E2E production tests failed — API: ${{ steps.api-tests.outcome }}, UI: ${{ steps.ui-tests.outcome }}"
+          exit 1
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "## OurSharedEvents E2E – Production" >> $GITHUB_STEP_SUMMARY
+          echo "| Suite | Result |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| API Smoke | \`${{ steps.api-tests.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| UI Smoke  | \`${{ steps.ui-tests.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**URL:** $PROD_BASE_URL" >> $GITHUB_STEP_SUMMARY

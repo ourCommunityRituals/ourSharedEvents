@@ -1,0 +1,461 @@
+<!--
+  Client-Side State Management Component
+
+  Provides:
+  - Event draft state management
+  - Auto-save functionality
+  - Optimistic UI updates
+  - Local storage persistence
+  - Undo/redo capabilities
+-->
+<script>
+(function() {
+  'use strict';
+
+  /**
+   * EventStateManager - Manages event draft state with auto-save
+   */
+  class EventStateManager {
+    constructor(options = {}) {
+      this.brandId = options.brandId;
+      this.scope = options.scope;
+      this.autoSaveInterval = options.autoSaveInterval || 30000; // 30 seconds
+      this.storageKey = `eventDraft_${this.brandId}_${this.scope}`;
+
+      this.state = {
+        currentEvent: null,
+        draft: {},
+        isDirty: false,
+        lastSaved: null,
+        history: [],
+        historyIndex: -1
+      };
+
+      this.listeners = [];
+      this.autoSaveTimer = null;
+
+      // Load persisted state
+      this.loadFromStorage();
+
+      // Start auto-save
+      if (options.autoSave !== false) {
+        this.startAutoSave();
+      }
+    }
+
+    /**
+     * Get current state
+     */
+    getState() {
+      return { ...this.state };
+    }
+
+    /**
+     * Get current draft
+     */
+    getDraft() {
+      return { ...this.state.draft };
+    }
+
+    /**
+     * Update draft with partial data
+     */
+    updateDraft(updates, options = {}) {
+      const oldDraft = { ...this.state.draft };
+      const newDraft = { ...oldDraft, ...updates };
+
+      this.state.draft = newDraft;
+      this.state.isDirty = true;
+
+      // Add to history for undo/redo
+      if (!options.skipHistory) {
+        this.addToHistory(newDraft);
+      }
+
+      // Persist to storage
+      this.saveToStorage();
+
+      // Notify listeners
+      this.notify({
+        type: 'DRAFT_UPDATE',
+        draft: newDraft,
+        updates,
+        previousDraft: oldDraft
+      });
+
+      // Trigger auto-save if enabled
+      if (options.autoSave !== false) {
+        this.scheduleAutoSave();
+      }
+
+      return newDraft;
+    }
+
+    /**
+     * Set current event
+     */
+    setCurrentEvent(event) {
+      this.state.currentEvent = event;
+      this.state.draft = event?.data || {};
+      this.state.isDirty = false;
+
+      this.saveToStorage();
+
+      this.notify({
+        type: 'EVENT_LOADED',
+        event
+      });
+    }
+
+    /**
+     * Clear draft
+     */
+    clearDraft() {
+      this.state.draft = {};
+      this.state.isDirty = false;
+      this.state.history = [];
+      this.state.historyIndex = -1;
+
+      this.saveToStorage();
+
+      this.notify({
+        type: 'DRAFT_CLEARED'
+      });
+    }
+
+    /**
+     * Add to history for undo/redo
+     */
+    addToHistory(draft) {
+      // Remove any history after current index
+      this.state.history = this.state.history.slice(0, this.state.historyIndex + 1);
+
+      // Add new state
+      this.state.history.push({ ...draft });
+      this.state.historyIndex++;
+
+      // Limit history size
+      const maxHistory = 50;
+      if (this.state.history.length > maxHistory) {
+        this.state.history = this.state.history.slice(-maxHistory);
+        this.state.historyIndex = this.state.history.length - 1;
+      }
+    }
+
+    /**
+     * Undo last change
+     */
+    undo() {
+      if (!this.canUndo()) return false;
+
+      this.state.historyIndex--;
+      this.state.draft = { ...this.state.history[this.state.historyIndex] };
+      this.state.isDirty = true;
+
+      this.saveToStorage();
+
+      this.notify({
+        type: 'DRAFT_UNDO',
+        draft: this.state.draft
+      });
+
+      return true;
+    }
+
+    /**
+     * Redo last undone change
+     */
+    redo() {
+      if (!this.canRedo()) return false;
+
+      this.state.historyIndex++;
+      this.state.draft = { ...this.state.history[this.state.historyIndex] };
+      this.state.isDirty = true;
+
+      this.saveToStorage();
+
+      this.notify({
+        type: 'DRAFT_REDO',
+        draft: this.state.draft
+      });
+
+      return true;
+    }
+
+    /**
+     * Check if can undo
+     */
+    canUndo() {
+      return this.state.historyIndex > 0;
+    }
+
+    /**
+     * Check if can redo
+     */
+    canRedo() {
+      return this.state.historyIndex < this.state.history.length - 1;
+    }
+
+    /**
+     * Auto-save draft to server
+     */
+    async autoSave() {
+      if (!this.state.isDirty || !this.state.currentEvent) {
+        return;
+      }
+
+      try {
+        const response = await NU.rpc('api_updateEventData', {
+          brandId: this.brandId,
+          scope: this.scope,
+          id: this.state.currentEvent.id,
+          adminKey: this.getAdminKey(),
+          data: this.state.draft
+        });
+
+        if (response.ok) {
+          this.state.isDirty = false;
+          this.state.lastSaved = new Date();
+
+          this.saveToStorage();
+
+          this.notify({
+            type: 'AUTO_SAVE_SUCCESS',
+            timestamp: this.state.lastSaved
+          });
+        } else {
+          this.notify({
+            type: 'AUTO_SAVE_ERROR',
+            error: response.message
+          });
+        }
+      } catch (error) {
+        this.notify({
+          type: 'AUTO_SAVE_ERROR',
+          error: error.message
+        });
+      }
+    }
+
+    /**
+     * Schedule auto-save
+     */
+    scheduleAutoSave() {
+      if (this.autoSaveTimer) {
+        clearTimeout(this.autoSaveTimer);
+      }
+
+      this.autoSaveTimer = setTimeout(() => {
+        this.autoSave();
+      }, this.autoSaveInterval);
+    }
+
+    /**
+     * Start auto-save timer
+     */
+    startAutoSave() {
+      this.scheduleAutoSave();
+    }
+
+    /**
+     * Stop auto-save timer
+     */
+    stopAutoSave() {
+      if (this.autoSaveTimer) {
+        clearTimeout(this.autoSaveTimer);
+        this.autoSaveTimer = null;
+      }
+    }
+
+    /**
+     * Save state to local storage
+     */
+    saveToStorage() {
+      try {
+        const serialized = JSON.stringify({
+          draft: this.state.draft,
+          currentEvent: this.state.currentEvent,
+          isDirty: this.state.isDirty,
+          lastSaved: this.state.lastSaved,
+          history: this.state.history,
+          historyIndex: this.state.historyIndex
+        });
+
+        localStorage.setItem(this.storageKey, serialized);
+      } catch (error) {
+        console.error('Failed to save state to storage:', error);
+      }
+    }
+
+    /**
+     * Load state from local storage
+     */
+    loadFromStorage() {
+      try {
+        const serialized = localStorage.getItem(this.storageKey);
+
+        if (serialized) {
+          const loaded = JSON.parse(serialized);
+
+          this.state.draft = loaded.draft || {};
+          this.state.currentEvent = loaded.currentEvent || null;
+          this.state.isDirty = loaded.isDirty || false;
+          this.state.lastSaved = loaded.lastSaved ? new Date(loaded.lastSaved) : null;
+          this.state.history = loaded.history || [];
+          this.state.historyIndex = loaded.historyIndex ?? -1;
+        }
+      } catch (error) {
+        console.error('Failed to load state from storage:', error);
+      }
+    }
+
+    /**
+     * Clear storage
+     */
+    clearStorage() {
+      try {
+        localStorage.removeItem(this.storageKey);
+      } catch (error) {
+        console.error('Failed to clear storage:', error);
+      }
+    }
+
+    /**
+     * Subscribe to state changes
+     */
+    subscribe(listener) {
+      this.listeners.push(listener);
+
+      // Return unsubscribe function
+      return () => {
+        this.listeners = this.listeners.filter(l => l !== listener);
+      };
+    }
+
+    /**
+     * Notify all listeners
+     */
+    notify(event) {
+      this.listeners.forEach(listener => {
+        try {
+          listener(event, this.state);
+        } catch (error) {
+          console.error('Listener error:', error);
+        }
+      });
+    }
+
+    /**
+     * Get admin key from session storage
+     */
+    getAdminKey() {
+      return sessionStorage.getItem('ADMIN_KEY:' + this.brandId) || '';
+    }
+
+    /**
+     * Destroy state manager
+     */
+    destroy() {
+      this.stopAutoSave();
+      this.listeners = [];
+      this.clearStorage();
+    }
+  }
+
+  // Export to global scope
+  window.EventStateManager = EventStateManager;
+})();
+</script>
+
+<style>
+/* Auto-save indicator */
+.autosave-indicator {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 12px 16px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #64748b;
+  opacity: 0;
+  transform: translateY(10px);
+  transition: all 0.3s ease;
+  pointer-events: none;
+  z-index: 1000;
+}
+
+.autosave-indicator.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.autosave-indicator.saving {
+  color: #2563eb;
+  border-color: #2563eb;
+}
+
+.autosave-indicator.success {
+  color: #10b981;
+  border-color: #10b981;
+}
+
+.autosave-indicator.error {
+  color: #ef4444;
+  border-color: #ef4444;
+}
+
+.autosave-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Undo/Redo buttons */
+.history-controls {
+  display: flex;
+  gap: 4px;
+}
+
+.history-btn {
+  padding: 6px 12px;
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  color: #64748b;
+  transition: all 0.2s ease;
+}
+
+.history-btn:hover:not(:disabled) {
+  background: #f8fafc;
+  color: #2563eb;
+  border-color: #2563eb;
+}
+
+.history-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.history-btn kbd {
+  font-size: 11px;
+  background: #f1f5f9;
+  padding: 2px 4px;
+  border-radius: 3px;
+  margin-left: 4px;
+}
+</style>

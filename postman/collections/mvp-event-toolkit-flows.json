@@ -1,0 +1,603 @@
+{
+  "info": {
+    "name": "MVP Event Toolkit - Complete User Flows",
+    "description": "End-to-end user journeys with linked tests that pass data between requests",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "mvp-event-toolkit-flows"
+  },
+  "item": [
+    {
+      "name": "Complete Event Organizer Flow",
+      "description": "Full journey: Create event → Create forms → Generate shortlinks → View analytics",
+      "item": [
+        {
+          "name": "1. Setup - Verify System Status",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('System is online', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.ok).to.be.true;",
+                  "});",
+                  "",
+                  "pm.test('Build version is correct', function() {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.value.build).to.equal('triangle-extended-v1.3');",
+                  "});",
+                  "",
+                  "console.log('✓ System online and ready');"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}?p=status&brand={{brandId}}",
+              "host": ["{{baseUrl}}"],
+              "query": [
+                {"key": "p", "value": "status"},
+                {"key": "brand", "value": "{{brandId}}"}
+              ]
+            }
+          }
+        },
+        {
+          "name": "2. Create Event",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "// Generate unique event name with timestamp",
+                  "const timestamp = Date.now();",
+                  "pm.environment.set('eventTimestamp', timestamp);",
+                  "",
+                  "// Set event date to future",
+                  "const futureDate = new Date();",
+                  "futureDate.setDate(futureDate.getDate() + 30);",
+                  "const eventDate = futureDate.toISOString().split('T')[0];",
+                  "pm.environment.set('eventDate', eventDate);",
+                  "",
+                  "console.log('Creating event for date:', eventDate);"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Event created successfully', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.ok).to.be.true;",
+                  "    pm.expect(jsonData.value).to.have.property('id');",
+                  "    pm.expect(jsonData.value).to.have.property('links');",
+                  "});",
+                  "",
+                  "// Save event ID for subsequent requests",
+                  "var jsonData = pm.response.json();",
+                  "pm.environment.set('flowEventId', jsonData.value.id);",
+                  "pm.environment.set('flowEventName', 'Flow Test Event ' + pm.environment.get('eventTimestamp'));",
+                  "",
+                  "// Save generated links",
+                  "if (jsonData.value.links) {",
+                  "    pm.environment.set('publicUrl', jsonData.value.links.publicUrl);",
+                  "    pm.environment.set('adminUrl', jsonData.value.links.adminUrl);",
+                  "}",
+                  "",
+                  "console.log('✓ Event created with ID:', jsonData.value.id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"brandId\": \"{{brandId}}\",\n  \"scope\": \"events\",\n  \"templateId\": \"event\",\n  \"adminKey\": \"{{adminKey}}\",\n  \"data\": {\n    \"name\": \"Flow Test Event {{eventTimestamp}}\",\n    \"dateISO\": \"{{eventDate}}\",\n    \"location\": \"Test Venue - Newman Flow\",\n    \"summary\": \"Automated flow test event for Forms integration\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}?action=create",
+              "host": ["{{baseUrl}}"],
+              "query": [{"key": "action", "value": "create"}]
+            }
+          }
+        },
+        {
+          "name": "3. Verify Event Was Created",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Event exists and has correct data', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.ok).to.be.true;",
+                  "    pm.expect(jsonData.value.data.name).to.include('Flow Test Event');",
+                  "});",
+                  "",
+                  "console.log('✓ Event verified');"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}?p=api&action=get&brandId={{brandId}}&scope=events&id={{flowEventId}}",
+              "host": ["{{baseUrl}}"],
+              "query": [
+                {"key": "p", "value": "api"},
+                {"key": "action", "value": "get"},
+                {"key": "brandId", "value": "{{brandId}}"},
+                {"key": "scope", "value": "events"},
+                {"key": "id", "value": "{{flowEventId}}"}
+              ]
+            }
+          }
+        },
+        {
+          "name": "4. List Available Form Templates",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Templates returned', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.ok).to.be.true;",
+                  "    pm.expect(jsonData.value.templates).to.be.an('array');",
+                  "    pm.expect(jsonData.value.templates).to.have.lengthOf(3);",
+                  "});",
+                  "",
+                  "pm.test('Check-in template exists', function() {",
+                  "    var jsonData = pm.response.json();",
+                  "    const checkInTemplate = jsonData.value.templates.find(t => t.id === 'check-in');",
+                  "    pm.expect(checkInTemplate).to.exist;",
+                  "    pm.expect(checkInTemplate.label).to.equal('Check-In Form');",
+                  "});",
+                  "",
+                  "console.log('✓ Form templates available: check-in, walk-in, survey');"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}?action=listFormTemplates",
+              "host": ["{{baseUrl}}"],
+              "query": [{"key": "action", "value": "listFormTemplates"}]
+            }
+          }
+        },
+        {
+          "name": "5. Create Check-In Form",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Check-in form created', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.ok).to.be.true;",
+                  "    pm.expect(jsonData.value).to.have.property('formId');",
+                  "    pm.expect(jsonData.value).to.have.property('publishedUrl');",
+                  "    pm.expect(jsonData.value).to.have.property('editUrl');",
+                  "    pm.expect(jsonData.value).to.have.property('responseSheetUrl');",
+                  "});",
+                  "",
+                  "// Save form data for next steps",
+                  "var jsonData = pm.response.json();",
+                  "pm.environment.set('checkinFormId', jsonData.value.formId);",
+                  "pm.environment.set('checkinFormUrl', jsonData.value.publishedUrl);",
+                  "pm.environment.set('checkinEditUrl', jsonData.value.editUrl);",
+                  "",
+                  "console.log('✓ Check-in form created:', jsonData.value.formId);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"brandId\": \"{{brandId}}\",\n  \"adminKey\": \"{{adminKey}}\",\n  \"templateType\": \"check-in\",\n  \"eventName\": \"{{flowEventName}}\",\n  \"eventId\": \"{{flowEventId}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}?action=createFormFromTemplate",
+              "host": ["{{baseUrl}}"],
+              "query": [{"key": "action", "value": "createFormFromTemplate"}]
+            }
+          }
+        },
+        {
+          "name": "6. Create Walk-In Form",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Walk-in form created', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.ok).to.be.true;",
+                  "    pm.expect(jsonData.value).to.have.property('formId');",
+                  "});",
+                  "",
+                  "var jsonData = pm.response.json();",
+                  "pm.environment.set('walkinFormId', jsonData.value.formId);",
+                  "pm.environment.set('walkinFormUrl', jsonData.value.publishedUrl);",
+                  "",
+                  "console.log('✓ Walk-in form created:', jsonData.value.formId);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"brandId\": \"{{brandId}}\",\n  \"adminKey\": \"{{adminKey}}\",\n  \"templateType\": \"walk-in\",\n  \"eventName\": \"{{flowEventName}}\",\n  \"eventId\": \"{{flowEventId}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}?action=createFormFromTemplate",
+              "host": ["{{baseUrl}}"],
+              "query": [{"key": "action", "value": "createFormFromTemplate"}]
+            }
+          }
+        },
+        {
+          "name": "7. Create Survey Form",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Survey form created', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.ok).to.be.true;",
+                  "    pm.expect(jsonData.value).to.have.property('formId');",
+                  "});",
+                  "",
+                  "var jsonData = pm.response.json();",
+                  "pm.environment.set('surveyFormId', jsonData.value.formId);",
+                  "pm.environment.set('surveyFormUrl', jsonData.value.publishedUrl);",
+                  "",
+                  "console.log('✓ Survey form created:', jsonData.value.formId);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"brandId\": \"{{brandId}}\",\n  \"adminKey\": \"{{adminKey}}\",\n  \"templateType\": \"survey\",\n  \"eventName\": \"{{flowEventName}}\",\n  \"eventId\": \"{{flowEventId}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}?action=createFormFromTemplate",
+              "host": ["{{baseUrl}}"],
+              "query": [{"key": "action", "value": "createFormFromTemplate"}]
+            }
+          }
+        },
+        {
+          "name": "8. Generate Shortlink for Check-In Form",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Shortlink created for check-in form', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.ok).to.be.true;",
+                  "    pm.expect(jsonData.value).to.have.property('shortlink');",
+                  "    pm.expect(jsonData.value).to.have.property('token');",
+                  "    pm.expect(jsonData.value.shortlink).to.include('?p=r&t=');",
+                  "});",
+                  "",
+                  "var jsonData = pm.response.json();",
+                  "pm.environment.set('checkinShortlink', jsonData.value.shortlink);",
+                  "pm.environment.set('checkinToken', jsonData.value.token);",
+                  "",
+                  "console.log('✓ Shortlink generated:', jsonData.value.shortlink);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"brandId\": \"{{brandId}}\",\n  \"adminKey\": \"{{adminKey}}\",\n  \"formUrl\": \"{{checkinFormUrl}}\",\n  \"formType\": \"check-in\",\n  \"eventId\": \"{{flowEventId}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}?action=generateFormShortlink",
+              "host": ["{{baseUrl}}"],
+              "query": [{"key": "action", "value": "generateFormShortlink"}]
+            }
+          }
+        },
+        {
+          "name": "9. Generate Shortlink for Walk-In Form",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Shortlink created for walk-in form', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.ok).to.be.true;",
+                  "});",
+                  "",
+                  "var jsonData = pm.response.json();",
+                  "pm.environment.set('walkinShortlink', jsonData.value.shortlink);",
+                  "pm.environment.set('walkinToken', jsonData.value.token);",
+                  "",
+                  "console.log('✓ Walk-in shortlink generated');"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"brandId\": \"{{brandId}}\",\n  \"adminKey\": \"{{adminKey}}\",\n  \"formUrl\": \"{{walkinFormUrl}}\",\n  \"formType\": \"walk-in\",\n  \"eventId\": \"{{flowEventId}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}?action=generateFormShortlink",
+              "host": ["{{baseUrl}}"],
+              "query": [{"key": "action", "value": "generateFormShortlink"}]
+            }
+          }
+        },
+        {
+          "name": "10. Generate Shortlink for Survey Form",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Shortlink created for survey form', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.ok).to.be.true;",
+                  "});",
+                  "",
+                  "var jsonData = pm.response.json();",
+                  "pm.environment.set('surveyShortlink', jsonData.value.shortlink);",
+                  "pm.environment.set('surveyToken', jsonData.value.token);",
+                  "",
+                  "console.log('✓ Survey shortlink generated');"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"brandId\": \"{{brandId}}\",\n  \"adminKey\": \"{{adminKey}}\",\n  \"formUrl\": \"{{surveyFormUrl}}\",\n  \"formType\": \"survey\",\n  \"eventId\": \"{{flowEventId}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}?action=generateFormShortlink",
+              "host": ["{{baseUrl}}"],
+              "query": [{"key": "action", "value": "generateFormShortlink"}]
+            }
+          }
+        },
+        {
+          "name": "11. Verify Shortlink Redirect Works",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Shortlink redirects (302 or 200)', function() {",
+                  "    // Either 302 redirect or 200 with redirect page",
+                  "    pm.expect([200, 302]).to.include(pm.response.code);",
+                  "});",
+                  "",
+                  "console.log('✓ Shortlink redirect verified');"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}?p=r&t={{checkinToken}}",
+              "host": ["{{baseUrl}}"],
+              "query": [
+                {"key": "p", "value": "r"},
+                {"key": "t", "value": "{{checkinToken}}"}
+              ]
+            }
+          }
+        },
+        {
+          "name": "12. Log Analytics Event",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Analytics event logged', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.ok).to.be.true;",
+                  "});",
+                  "",
+                  "console.log('✓ Analytics event logged');"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"items\": [\n    {\n      \"type\": \"impression\",\n      \"eventId\": \"{{flowEventId}}\",\n      \"surface\": \"form-check-in\",\n      \"timestamp\": \"{{$timestamp}}\"\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}?action=logEvents",
+              "host": ["{{baseUrl}}"],
+              "query": [{"key": "action", "value": "logEvents"}]
+            }
+          }
+        },
+        {
+          "name": "13. Get Event Analytics Report",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "// Set date range for report",
+                  "const today = new Date();",
+                  "const thirtyDaysAgo = new Date(today);",
+                  "thirtyDaysAgo.setDate(today.getDate() - 30);",
+                  "const sixtyDaysFromNow = new Date(today);",
+                  "sixtyDaysFromNow.setDate(today.getDate() + 60);",
+                  "",
+                  "pm.environment.set('reportStartDate', thirtyDaysAgo.toISOString().split('T')[0]);",
+                  "pm.environment.set('reportEndDate', sixtyDaysFromNow.toISOString().split('T')[0]);"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Report generated', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.ok).to.be.true;",
+                  "});",
+                  "",
+                  "console.log('✓ Analytics report retrieved');"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"brandId\": \"{{brandId}}\",\n  \"adminKey\": \"{{adminKey}}\",\n  \"eventId\": \"{{flowEventId}}\",\n  \"startDate\": \"{{reportStartDate}}\",\n  \"endDate\": \"{{reportEndDate}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}?action=getReport",
+              "host": ["{{baseUrl}}"],
+              "query": [{"key": "action", "value": "getReport"}]
+            }
+          }
+        },
+        {
+          "name": "14. Flow Summary",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "console.log('');",
+                  "console.log('═══════════════════════════════════════════════');",
+                  "console.log('  COMPLETE EVENT ORGANIZER FLOW - SUCCESS ✓');",
+                  "console.log('═══════════════════════════════════════════════');",
+                  "console.log('');",
+                  "console.log('Event Created:');",
+                  "console.log('  ID:', pm.environment.get('flowEventId'));",
+                  "console.log('  Name:', pm.environment.get('flowEventName'));",
+                  "console.log('');",
+                  "console.log('Forms Created:');",
+                  "console.log('  Check-In:', pm.environment.get('checkinFormId'));",
+                  "console.log('  Walk-In:', pm.environment.get('walkinFormId'));",
+                  "console.log('  Survey:', pm.environment.get('surveyFormId'));",
+                  "console.log('');",
+                  "console.log('Shortlinks Generated:');",
+                  "console.log('  Check-In:', pm.environment.get('checkinShortlink'));",
+                  "console.log('  Walk-In:', pm.environment.get('walkinShortlink'));",
+                  "console.log('  Survey:', pm.environment.get('surveyShortlink'));",
+                  "console.log('');",
+                  "console.log('All 14 steps completed successfully!');",
+                  "console.log('═══════════════════════════════════════════════');",
+                  "",
+                  "pm.test('Flow completed successfully', function() {",
+                  "    pm.expect(pm.environment.get('flowEventId')).to.exist;",
+                  "    pm.expect(pm.environment.get('checkinFormId')).to.exist;",
+                  "    pm.expect(pm.environment.get('walkinFormId')).to.exist;",
+                  "    pm.expect(pm.environment.get('surveyFormId')).to.exist;",
+                  "    pm.expect(pm.environment.get('checkinShortlink')).to.exist;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}?p=status&brand={{brandId}}",
+              "host": ["{{baseUrl}}"],
+              "query": [
+                {"key": "p", "value": "status"},
+                {"key": "brand", "value": "{{brandId}}"}
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "{{baseUrl}}"
+    }
+  ]
+}

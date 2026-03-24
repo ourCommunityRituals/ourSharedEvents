@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Test History Dashboard - MVP Event Toolkit</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f5f5f5;
+      color: #333;
+    }
+    .header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 2rem;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+    .container { max-width: 1400px; margin: 0 auto; padding: 2rem; }
+    .controls {
+      background: white;
+      padding: 1.5rem;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      margin-bottom: 2rem;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+    .btn {
+      padding: 0.5rem 1.5rem;
+      background: #667eea;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 1.5rem;
+      margin-bottom: 2rem;
+    }
+    .stat-card {
+      background: white;
+      padding: 1.5rem;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    .stat-card .value { font-size: 2rem; font-weight: bold; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 1rem; text-align: left; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>🧪 Test History Dashboard</h1>
+    <p>Real-time test results tracking</p>
+  </div>
+  <div class="container">
+    <div class="controls">
+      <select id="dateRange">
+        <option value="1">Last 24h</option>
+        <option value="7">Last 7 days</option>
+        <option value="30" selected>Last 30 days</option>
+      </select>
+      <select id="suiteFilter">
+        <option value="">All Suites</option>
+        <option value="api">API</option>
+        <option value="smoke">Smoke</option>
+        <option value="unit">Unit</option>
+      </select>
+      <button class="btn" onclick="loadData()">Refresh</button>
+      <label><input type="checkbox" id="autoRefresh"> Auto-refresh (30s)</label>
+    </div>
+    <div class="stats-grid" id="statsGrid"></div>
+    <div id="tableContainer"></div>
+  </div>
+  <script>
+    async function loadData() {
+      try {
+        const res = await fetch('.test-results/test-history.json');
+        const db = await res.json();
+        renderData(db.runs || []);
+      } catch (e) {
+        document.getElementById('statsGrid').innerHTML = '<p>No test data yet. Run: npm run test:quick</p>';
+      }
+    }
+    function renderData(runs) {
+      const total = runs.reduce((s,r) => s + r.totalTests, 0);
+      const passed = runs.reduce((s,r) => s + r.passed, 0);
+      const failed = runs.reduce((s,r) => s + r.failed, 0);
+      document.getElementById('statsGrid').innerHTML = `
+        <div class="stat-card"><h3>Total Tests</h3><div class="value">${total}</div></div>
+        <div class="stat-card"><h3>Passed</h3><div class="value" style="color:#48bb78">${passed}</div></div>
+        <div class="stat-card"><h3>Failed</h3><div class="value" style="color:#f56565">${failed}</div></div>
+      `;
+      document.getElementById('tableContainer').innerHTML = `
+        <table>
+          <thead><tr><th>Suite</th><th>Date</th><th>Tests</th><th>Status</th></tr></thead>
+          <tbody>${runs.slice(0,20).map(r => `
+            <tr>
+              <td>${r.suite}</td>
+              <td>${new Date(r.startTime).toLocaleString()}</td>
+              <td>${r.passed}/${r.totalTests}</td>
+              <td>${r.failed > 0 ? '❌ FAIL' : '✅ PASS'}</td>
+            </tr>
+          `).join('')}</tbody>
+        </table>
+      `;
+    }
+    document.addEventListener('DOMContentLoaded', loadData);
+    document.getElementById('autoRefresh').onchange = (e) => {
+      if(e.target.checked) setInterval(loadData, 30000);
+    };
+  </script>
+</body>
+</html>

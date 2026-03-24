@@ -1,0 +1,302 @@
+<!--
+================================================================================
+MODULE: AdminTemplates.html
+PURPOSE: Template picker system for Admin dashboard - event type selection
+INCLUDED BY: Admin.html
+DEPENDENCIES: NUSDK.html (NU.rpc, NU.esc)
+================================================================================
+Story 4.1: Extracted from Admin.html for modularization and maintainability.
+Story 2.3: Templates now loaded from Worker admin bundle via AdminEvents.html
+         Falls back to static defaults if bundle not available
+
+Functions exposed to global scope:
+  - loadTemplates()              → Load templates from admin bundle or defaults
+  - renderTemplatePicker()       → Render template grid
+  - selectTemplate(templateId)   → Select a template
+  - updateTemplatePanelVisibility(id) → Show/hide template-specific panels
+
+State exposed to global scope:
+  - availableTemplates[]         → Loaded templates
+  - templateGroups[]             → Template categories/groups
+  - defaultTemplateId            → Default template ID
+================================================================================
+-->
+<script>
+(function() {
+  'use strict';
+
+  // Module state - exposed to global scope for Admin.html access
+  window.availableTemplates = [];
+  window.templateGroups = [];
+  window.defaultTemplateId = 'custom';
+
+  // Track current template sections for modification detection
+  let currentTemplateSections = null;
+
+  // Static template definitions for fallback
+  // Story 2.3: These are used when admin bundle hasn't loaded yet
+  const STATIC_TEMPLATES = [
+    { id: 'event', label: 'Standard Event', description: 'Basic event template' },
+    { id: 'tournament', label: 'Tournament', description: 'Bracket-style tournament' },
+    { id: 'league', label: 'League', description: 'League with standings' },
+    { id: 'rec_league', label: 'Recreational League', description: 'Casual league format' }
+  ];
+
+  /**
+   * Load templates from admin bundle or static defaults.
+   * Called on page load.
+   *
+   * Story 2.3: Templates are now included in the admin bundle
+   * (fetched by AdminEvents.html). This function checks if templates
+   * are already available from the bundle, otherwise uses static defaults.
+   * No GAS api_getEventTemplates call is made.
+   */
+  async function loadTemplates() {
+    const BRAND = window.BRAND || 'root';
+
+    try {
+      console.log('[Templates] Loading templates for brand:', BRAND);
+
+      // Story 2.3: Check if templates are available from admin bundle
+      // (loaded by loadSelectedEvent in AdminEvents.html)
+      if (window.currentAdminBundle && window.currentAdminBundle.templates) {
+        window.availableTemplates = window.currentAdminBundle.templates;
+        window.defaultTemplateId = window.currentAdminBundle.brandConfig?.defaultTemplateId || 'event';
+        console.log('[Templates] Using templates from admin bundle:', window.availableTemplates.length, 'templates');
+      } else if (window.availableTemplates && window.availableTemplates.length > 0) {
+        // Templates already loaded (e.g., from previous bundle)
+        console.log('[Templates] Using cached templates:', window.availableTemplates.length, 'templates');
+      } else {
+        // Use static defaults (no GAS call - Story 2.3)
+        window.availableTemplates = STATIC_TEMPLATES;
+        window.defaultTemplateId = 'event';
+        console.log('[Templates] Using static default templates');
+      }
+
+      // Groups are optional - use empty array if not available
+      window.templateGroups = [];
+
+      console.log('[Templates] Loaded', window.availableTemplates.length, 'templates, default:', window.defaultTemplateId);
+      renderTemplatePicker();
+      // Select default template
+      selectTemplate(window.defaultTemplateId);
+
+    } catch (e) {
+      console.error('[Templates] Exception loading templates:', e);
+      // Fallback to static templates
+      window.availableTemplates = STATIC_TEMPLATES;
+      window.defaultTemplateId = 'event';
+      renderTemplatePicker();
+      selectTemplate(window.defaultTemplateId);
+    }
+  }
+
+  /**
+   * Render the template picker grid.
+   * Supports grouped templates (Stage-Gate UI) or flat grid.
+   */
+  function renderTemplatePicker() {
+    const picker = document.getElementById('templatePicker');
+    if (!picker) return;
+
+    if (!window.availableTemplates.length) {
+      picker.innerHTML = '<p class="muted">No templates available.</p>';
+      return;
+    }
+
+    const sectionIcons = { video: '🎬', map: '📍', schedule: '📅', sponsors: '🤝', notes: '📝', gallery: '🖼️' };
+
+    // Render grouped templates if groups are available
+    if (window.templateGroups.length > 0) {
+      picker.innerHTML = window.templateGroups.map(group => {
+        const groupTemplates = group.templates.map(t => renderTemplateCard(t, sectionIcons)).join('');
+        return `
+          <div class="template-group" data-group-id="${NU.esc(group.id)}">
+            <div class="template-group-header">
+              <span class="template-group-icon">${group.icon || '📁'}</span>
+              <span class="template-group-label">${NU.esc(group.label || group.id)}</span>
+              <span class="template-group-desc">${NU.esc(group.description || '')}</span>
+            </div>
+            <div class="template-group-grid">${groupTemplates}</div>
+          </div>
+        `;
+      }).join('');
+    } else {
+      // Fallback to flat grid (backward compatibility)
+      picker.innerHTML = `<div class="template-grid">${window.availableTemplates.map(t => renderTemplateCard(t, sectionIcons)).join('')}</div>`;
+    }
+  }
+
+  /**
+   * Render a single template card.
+   * @private
+   */
+  function renderTemplateCard(t, sectionIcons) {
+    const isRecommended = t.id === window.defaultTemplateId;
+    const sectionPreview = Object.keys(sectionIcons).map(key => {
+      const on = t.sections && t.sections[key];
+      return `<span class="${on ? '' : 'off'}">${sectionIcons[key]}</span>`;
+    }).join('');
+
+    return `
+      <div class="template-card" data-template-id="${NU.esc(t.id)}" onclick="selectTemplate('${NU.esc(t.id)}')">
+        ${isRecommended ? '<span class="recommended-badge">Recommended</span>' : ''}
+        <div class="template-icon">${t.icon || '📋'}</div>
+        <div class="template-name">${NU.esc(t.label || t.id)}</div>
+        <div class="template-desc">${NU.esc(t.description || '')}</div>
+        <div class="template-sections">${sectionPreview}</div>
+      </div>
+    `;
+  }
+
+  /**
+   * Select a template and apply its defaults.
+   */
+  function selectTemplate(templateId) {
+    // Update hidden input
+    const templateInput = document.getElementById('templateId');
+    if (templateInput) {
+      templateInput.value = templateId;
+    }
+
+    // Update visual selection
+    document.querySelectorAll('.template-card').forEach(card => {
+      card.classList.toggle('selected', card.dataset.templateId === templateId);
+    });
+
+    // Find template and apply section defaults
+    const tpl = window.availableTemplates.find(t => t.id === templateId);
+    if (tpl && tpl.sections) {
+      currentTemplateSections = { ...tpl.sections };
+      applySectionDefaults(tpl.sections);
+      checkSectionsModified(); // Reset notice
+    }
+
+    // Feature 4: Apply template-specific defaults (standings, bracket for league templates)
+    applyTemplateSpecificDefaults(templateId);
+
+    // Update template-filtered panel visibility
+    updateTemplatePanelVisibility(templateId);
+  }
+
+  /**
+   * Show/hide panels based on data-template-filter attribute.
+   * Panels with data-template-filter="rec_league,custom" only show for those templates.
+   */
+  function updateTemplatePanelVisibility(templateId) {
+    document.querySelectorAll('[data-template-filter]').forEach(panel => {
+      const allowedTemplates = panel.dataset.templateFilter.split(',').map(t => t.trim());
+      const shouldShow = allowedTemplates.includes(templateId);
+      panel.style.display = shouldShow ? '' : 'none';
+    });
+  }
+
+  /**
+   * Check if sections have been modified from template defaults.
+   * Shows/hides modification notice.
+   */
+  function checkSectionsModified() {
+    if (!currentTemplateSections) return;
+    const current = getSectionsFromForm();
+    const modified = Object.keys(currentTemplateSections).some(
+      key => current[key] !== currentTemplateSections[key]
+    );
+    const notice = document.getElementById('sectionsModifiedNotice');
+    if (notice) {
+      notice.classList.toggle('visible', modified);
+    }
+  }
+
+  /**
+   * Apply template section defaults to form checkboxes.
+   * Feature 4: Template-Aware Section Toggles
+   * @private
+   */
+  function applySectionDefaults(sections) {
+    // Legacy section checkboxes (v2SectionsTogglePanel - hidden in MVP)
+    const legacySectionMap = {
+      video: 'sectionVideo',
+      map: 'sectionMap',
+      schedule: 'sectionSchedule',
+      sponsors: 'sectionSponsors',
+      notes: 'sectionNotes',
+      gallery: 'sectionGallery'
+    };
+    Object.keys(legacySectionMap).forEach(key => {
+      const checkbox = document.getElementById(legacySectionMap[key]);
+      if (checkbox && Object.prototype.hasOwnProperty.call(sections, key)) {
+        checkbox.checked = !!sections[key];
+      }
+    });
+
+    // Display Settings checkboxes (template-aware toggles - Feature 4)
+    const settingsMap = {
+      video: 'showVideo',
+      map: 'showMap',
+      gallery: 'showGallery',
+      schedule: 'showSchedule',
+      sponsors: 'showSponsors'
+    };
+    Object.keys(settingsMap).forEach(key => {
+      const checkbox = document.getElementById(settingsMap[key]);
+      if (checkbox && Object.prototype.hasOwnProperty.call(sections, key)) {
+        checkbox.checked = !!sections[key];
+      }
+    });
+  }
+
+  /**
+   * Apply template-specific defaults for standings and bracket.
+   * Called from selectTemplate() after applySectionDefaults().
+   * @private
+   */
+  function applyTemplateSpecificDefaults(templateId) {
+    // League templates default to showing standings
+    const leagueTemplates = ['rec_league', 'darts', 'bags', 'pinball'];
+    const showStandingsCheckbox = document.getElementById('showStandings');
+    if (showStandingsCheckbox) {
+      showStandingsCheckbox.checked = leagueTemplates.includes(templateId);
+    }
+
+    // Tournament templates default to showing bracket
+    const bracketTemplates = ['rec_league', 'bags'];
+    const showBracketCheckbox = document.getElementById('showBracket');
+    if (showBracketCheckbox) {
+      showBracketCheckbox.checked = bracketTemplates.includes(templateId);
+    }
+  }
+
+  /**
+   * Get current section states from form checkboxes.
+   * @private
+   */
+  function getSectionsFromForm() {
+    return {
+      video: document.getElementById('sectionVideo')?.checked ?? false,
+      map: document.getElementById('sectionMap')?.checked ?? false,
+      schedule: document.getElementById('sectionSchedule')?.checked ?? false,
+      sponsors: document.getElementById('sectionSponsors')?.checked ?? false,
+      notes: document.getElementById('sectionNotes')?.checked ?? false,
+      gallery: document.getElementById('sectionGallery')?.checked ?? false
+    };
+  }
+
+  // Expose functions to global scope for HTML onclick handlers
+  window.loadTemplates = loadTemplates;
+  window.renderTemplatePicker = renderTemplatePicker;
+  window.selectTemplate = selectTemplate;
+  window.updateTemplatePanelVisibility = updateTemplatePanelVisibility;
+  window.checkSectionsModified = checkSectionsModified;
+
+  // Add change listeners to section checkboxes when DOM is ready
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('#sectionsGrid input[type="checkbox"]').forEach(cb => {
+      cb.addEventListener('change', checkSectionsModified);
+    });
+  });
+
+  // Load templates when page loads
+  document.addEventListener('DOMContentLoaded', loadTemplates);
+
+})();
+</script>

@@ -1,0 +1,61 @@
+# Clasp (Apps Script deployment)
+# All clasp config files contain real Google Apps Script project IDs
+# and must not be committed to version control.
+.clasp.json
+.clasp.json.archived
+.clasp.tmp
+.clasp-staging.json
+.clasp-staging.json.archived
+.clasp-production.json
+.clasp-production.json.archived
+.clasprc.json
+.clasp-creds.json
+
+# Node modules
+node_modules/
+yarn.lock
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Test coverage
+coverage/
+.nyc_output/
+
+# Test reports
+newman-reports/
+playwright-report/
+playwright-report-*/
+test-results/
+.test-results/
+.test-data/
+test-dashboard/
+
+# Test history database (keep local, contains all historical test runs)
+.test-results/test-history.json
+
+# Build outputs
+dist/
+build/
+
+# Deployment history (local only)
+.deployment-history.json

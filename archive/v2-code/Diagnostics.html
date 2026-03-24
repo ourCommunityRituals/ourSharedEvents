@@ -1,0 +1,405 @@
+<!--
+================================================================================
+EXPERIMENTAL - v2+ (Not MVP)
+================================================================================
+Page: Diagnostics.html
+Purpose: System diagnostics and health checks for administrators
+Status: NOT included in MVP focus group testing
+
+This page is for admin debugging and is not part of the core MVP surfaces.
+================================================================================
+-->
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <title><?= appTitle ?> · Diagnostics</title>
+  <?!= include('Styles'); ?>
+  <?!= include('DesignAdapter'); ?>
+  <?!= include('NUSDK'); ?>
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+  <meta name="referrer" content="no-referrer"/>
+  <style>
+    .test-card {
+      margin-bottom: 16px;
+      padding: 16px;
+      border: 2px solid #e2e8f0;
+      border-radius: 8px;
+      background: #f8fafc;
+    }
+    .test-card.running {
+      border-color: #3b82f6;
+      background: #eff6ff;
+    }
+    .test-card.passed {
+      border-color: #10b981;
+      background: #d1fae5;
+    }
+    .test-card.failed {
+      border-color: #ef4444;
+      background: #fee2e2;
+    }
+    .test-card h3 {
+      margin: 0 0 8px 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .test-status {
+      font-size: 1.2em;
+    }
+    .test-result {
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      background: white;
+      padding: 12px;
+      border-radius: 6px;
+      margin-top: 8px;
+      max-height: 300px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+    .summary {
+      padding: 20px;
+      background: #f8fafc;
+      border-radius: 8px;
+      margin-bottom: 24px;
+      text-align: center;
+    }
+    .summary h2 {
+      margin: 0 0 12px 0;
+      color: #1e293b;
+    }
+    .summary .stats {
+      display: flex;
+      justify-content: center;
+      gap: 24px;
+      margin-top: 12px;
+    }
+    .summary .stat {
+      font-size: 1.2rem;
+    }
+    .summary .stat strong {
+      font-size: 1.8rem;
+      display: block;
+    }
+  </style>
+</head>
+<body>
+  <?!= include('Header'); ?>
+  <?!= include('HeaderInit'); ?>
+
+  <main class="container">
+    <section class="card">
+      <h2>System Diagnostics</h2>
+      <p class="muted">Running automated tests to verify system functionality</p>
+
+      <div class="summary" id="summary">
+        <h2>Test Results</h2>
+        <div class="stats">
+          <div class="stat" style="color: #10b981;">
+            <strong id="passedCount">0</strong>
+            Passed
+          </div>
+          <div class="stat" style="color: #ef4444;">
+            <strong id="failedCount">0</strong>
+            Failed
+          </div>
+          <div class="stat" style="color: #64748b;">
+            <strong id="totalCount">0</strong>
+            Total
+          </div>
+        </div>
+      </div>
+
+      <div class="button-group">
+        <button class="btn-primary" onclick="runAllTests()">Run All Tests</button>
+        <button class="btn-secondary" onclick="clearResults()">Clear Results</button>
+      </div>
+
+      <div id="testResults"></div>
+    </section>
+  </main>
+
+  <div id="overlay" class="loading-overlay">
+    <div class="spinner"></div>
+    <p>Running diagnostics...</p>
+  </div>
+
+  <script>
+    const BRAND = '<?= brandId ?>';
+    const SCOPE = '<?= scope ?>';
+
+    let testsPassed = 0;
+    let testsFailed = 0;
+
+    function getAdminKey() {
+      const k = sessionStorage.getItem('ADMIN_KEY:' + BRAND) || prompt('Admin key for ' + BRAND);
+      if (k) sessionStorage.setItem('ADMIN_KEY:' + BRAND, k);
+      return k || '';
+    }
+
+    function updateSummary() {
+      document.getElementById('passedCount').textContent = testsPassed;
+      document.getElementById('failedCount').textContent = testsFailed;
+      document.getElementById('totalCount').textContent = testsPassed + testsFailed;
+    }
+
+    function createTestCard(name, description) {
+      const card = document.createElement('div');
+      card.className = 'test-card running';
+      card.innerHTML = `
+        <h3>
+          <span class="test-status">⏳</span>
+          ${NU.esc(name)}
+        </h3>
+        <p class="muted">${NU.esc(description)}</p>
+        <div class="test-result" style="display:none;"></div>
+      `;
+      document.getElementById('testResults').appendChild(card);
+      return card;
+    }
+
+    function passTest(card, result) {
+      card.className = 'test-card passed';
+      card.querySelector('.test-status').textContent = '✅';
+      const resultDiv = card.querySelector('.test-result');
+      resultDiv.textContent = typeof result === 'string' ? result : JSON.stringify(result, null, 2);
+      resultDiv.style.display = 'block';
+      testsPassed++;
+      updateSummary();
+    }
+
+    function failTest(card, error) {
+      card.className = 'test-card failed';
+      card.querySelector('.test-status').textContent = '❌';
+      const resultDiv = card.querySelector('.test-result');
+      resultDiv.textContent = typeof error === 'string' ? error : JSON.stringify(error, null, 2);
+      resultDiv.style.display = 'block';
+      testsFailed++;
+      updateSummary();
+    }
+
+    async function test_SystemStatus() {
+      const card = createTestCard('System Status', 'Check if API is responding');
+      try {
+        const res = await NU.rpc('api_status', {});
+        if (res.ok) {
+          passTest(card, `Status: ${res.message}\nBuild: ${ZEB?.BUILD_ID || 'unknown'}\nTimestamp: ${new Date().toISOString()}`);
+        } else {
+          failTest(card, res.message || 'Status check failed');
+        }
+      } catch (err) {
+        failTest(card, err.message || err);
+      }
+    }
+
+    async function test_ConfigValidation() {
+      const card = createTestCard('Config Validation', 'Verify brand and template configuration');
+      try {
+        const brands = ['root', 'abc', 'cbc', 'cbl'];
+        const templates = ['event', 'sponsor'];
+
+        let result = 'Brands: ' + brands.join(', ') + '\n';
+        result += 'Templates: ' + templates.join(', ') + '\n';
+        result += 'Current Brand: ' + BRAND + '\n';
+        result += 'Current Scope: ' + SCOPE;
+
+        passTest(card, result);
+      } catch (err) {
+        failTest(card, err.message || err);
+      }
+    }
+
+    async function test_CreateEvent() {
+      const card = createTestCard('Create Event', 'Test event creation with full data model');
+      try {
+        const res = await NU.rpc('api_create', {
+          brandId: BRAND,
+          scope: 'events',
+          templateId: 'event',
+          adminKey: getAdminKey(),
+          idemKey: 'diag-test-' + Date.now(),
+          data: {
+            name: 'Diagnostics Test Event',
+            dateISO: '2025-12-31',
+            timeISO: '18:00',
+            location: 'Test Venue',
+            entity: 'Test Organization',
+            summary: 'This is a test event created by diagnostics'
+          }
+        });
+
+        if (res.ok) {
+          passTest(card, `Event created successfully!\nID: ${res.value?.id}\nName: ${res.value?.data?.name}`);
+        } else {
+          failTest(card, res.message || 'Failed to create event');
+        }
+      } catch (err) {
+        failTest(card, err.message || err);
+      }
+    }
+
+    async function test_ListEvents() {
+      const card = createTestCard('List Events', 'Test event listing');
+      try {
+        const res = await NU.rpc('api_list', {
+          brandId: BRAND,
+          scope: 'events'
+        });
+
+        if (res.ok) {
+          const count = res.value?.items?.length || 0;
+          passTest(card, `Found ${count} event(s)\n${JSON.stringify(res.value?.items?.slice(0, 3) || [], null, 2)}`);
+        } else {
+          failTest(card, res.message || 'Failed to list events');
+        }
+      } catch (err) {
+        failTest(card, err.message || err);
+      }
+    }
+
+    async function test_Analytics() {
+      const card = createTestCard('Analytics Logging', 'Test event logging');
+      try {
+        const res = await NU.rpc('api_logEvents', {
+          items: [
+            {
+              eventId: 'diag-test',
+              surface: 'diagnostics',
+              metric: 'test_run',
+              value: 1,
+              ua: navigator.userAgent,
+              ts: Date.now()
+            }
+          ]
+        });
+
+        if (res.ok) {
+          passTest(card, 'Analytics event logged successfully');
+        } else {
+          failTest(card, res.message || 'Failed to log analytics');
+        }
+      } catch (err) {
+        failTest(card, err.message || err);
+      }
+    }
+
+    async function test_ContractValidation() {
+      const card = createTestCard('Contract Validation', 'Test runtime contract checking');
+      try {
+        // Try to create event with missing required field
+        const res = await NU.rpc('api_create', {
+          brandId: BRAND,
+          scope: 'events',
+          templateId: 'event',
+          adminKey: getAdminKey(),
+          idemKey: 'diag-contract-' + Date.now(),
+          data: {
+            dateISO: '2025-12-31'
+            // Missing required 'name' field
+          }
+        });
+
+        if (!res.ok && res.message.includes('name')) {
+          passTest(card, 'Contract validation working: rejected event without name\n' + res.message);
+        } else {
+          failTest(card, 'Contract validation not working as expected');
+        }
+      } catch (err) {
+        failTest(card, err.message || err);
+      }
+    }
+
+    async function test_URLGeneration() {
+      const card = createTestCard('URL Generation', 'Test publicUrl, posterUrl, displayUrl generation');
+      try {
+        // Create a test event
+        const createRes = await NU.rpc('api_create', {
+          brandId: TENANT,
+          scope: 'events',
+          templateId: 'event',
+          adminKey: getAdminKey(),
+          idemKey: 'diag-url-' + Date.now(),
+          data: {
+            name: 'URL Test Event',
+            dateISO: '2025-12-31'
+          }
+        });
+
+        if (createRes.ok) {
+          const links = createRes.value?.links || {};
+          let result = 'URLs generated:\n';
+          result += `Public: ${links.publicUrl || 'MISSING'}\n`;
+          result += `Poster: ${links.posterUrl || 'MISSING'}\n`;
+          result += `Display: ${links.displayUrl || 'MISSING'}`;
+
+          if (links.publicUrl && links.posterUrl && links.displayUrl) {
+            passTest(card, result);
+          } else {
+            failTest(card, 'Some URLs are missing:\n' + result);
+          }
+        } else {
+          failTest(card, 'Failed to create test event: ' + createRes.message);
+        }
+      } catch (err) {
+        failTest(card, err.message || err);
+      }
+    }
+
+    async function runAllTests() {
+      document.getElementById('testResults').innerHTML = '';
+      testsPassed = 0;
+      testsFailed = 0;
+      updateSummary();
+
+      document.getElementById('overlay').style.display = 'flex';
+
+      try {
+        await test_SystemStatus();
+        await new Promise(r => setTimeout(r, 500));
+
+        await test_ConfigValidation();
+        await new Promise(r => setTimeout(r, 500));
+
+        await test_ListEvents();
+        await new Promise(r => setTimeout(r, 500));
+
+        await test_CreateEvent();
+        await new Promise(r => setTimeout(r, 500));
+
+        await test_URLGeneration();
+        await new Promise(r => setTimeout(r, 500));
+
+        await test_Analytics();
+        await new Promise(r => setTimeout(r, 500));
+
+        await test_ContractValidation();
+        await new Promise(r => setTimeout(r, 500));
+      } finally {
+        document.getElementById('overlay').style.display = 'none';
+      }
+
+      // Show final summary
+      if (testsFailed === 0) {
+        alert(`All ${testsPassed} tests passed! ✅`);
+      } else {
+        alert(`Tests completed: ${testsPassed} passed, ${testsFailed} failed`);
+      }
+    }
+
+    function clearResults() {
+      document.getElementById('testResults').innerHTML = '';
+      testsPassed = 0;
+      testsFailed = 0;
+      updateSummary();
+    }
+
+    // Auto-run tests on load
+    window.addEventListener('load', () => {
+      setTimeout(runAllTests, 1000);
+    });
+  </script>
+</body>
+</html>

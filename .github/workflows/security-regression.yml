@@ -1,0 +1,291 @@
+# Security Regression Gate (SEC-10.1)
+#
+# Enforces NS-1..NS-4 and QR-0 security requirements via automated checks.
+# Any violation fails CI to prevent security regressions from being merged.
+#
+# Checks Performed:
+#   NS-1: www → canonical redirect
+#   NS-2: Privileged routes require auth
+#   NS-3: /health returns boring OK
+#   NS-4: Rate limit enforcement
+#   NS-5: Origin bypass protection (optional)
+#   QR-0: QR payloads must include verified flag
+#
+# When this runs:
+#   - Pull requests targeting main
+#   - Push to main branch
+#   - Push to claude/* branches
+#   - Nightly on default branch (cron)
+#   - Manual trigger
+#
+# @see scripts/security/security_regression.sh
+# @see PROMPTSPEC-SEC-10.1
+name: Security Regression Gate
+
+on:
+  push:
+    branches:
+      - main
+      - 'claude/**'
+  pull_request:
+    branches:
+      - main
+  schedule:
+    # Run nightly at 02:00 UTC on default branch
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      target_url:
+        description: 'Target URL to test (defaults to staging)'
+        required: false
+        type: string
+      skip_rate_limit:
+        description: 'Skip rate limit check (faster)'
+        required: false
+        default: 'true'
+        type: boolean
+      skip_origin_bypass:
+        description: 'Skip origin bypass check'
+        required: false
+        default: 'false'
+        type: boolean
+
+# Environment configuration
+env:
+  # Default staging URL for PR testing
+  # Production URL used for nightly runs on main branch
+  STAGING_URL: ${{ vars.STAGING_URL || 'https://stg.eventangle.com' }}
+  PRODUCTION_URL: ${{ vars.PRODUCTION_URL || 'https://www.eventangle.com' }}
+
+jobs:
+  # ============================================================================
+  # SECURITY REGRESSION CHECKS
+  # ============================================================================
+  # Runs security regression script against target environment.
+  # This is a REQUIRED CHECK - configure in branch protection rules.
+  # ============================================================================
+  security-regression:
+    name: Security Regression Gate
+    runs-on: ubuntu-latest
+
+    # Allow failures on scheduled runs to not block development
+    continue-on-error: ${{ github.event_name == 'schedule' }}
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Display configuration
+      run: |
+        echo "=============================================="
+        echo "SECURITY REGRESSION GATE (SEC-10.1)"
+        echo "=============================================="
+        echo ""
+        echo "Enforces NS-1..NS-4 and QR-0 security requirements."
+        echo "Any violation will fail CI."
+        echo ""
+        echo "Trigger: ${{ github.event_name }}"
+        echo "Branch: ${{ github.ref_name }}"
+        echo "Commit: ${{ github.sha }}"
+        echo ""
+
+        # Determine target URL
+        if [ "${{ github.event_name }}" == "workflow_dispatch" ] && [ -n "${{ inputs.target_url }}" ]; then
+          TARGET_URL="${{ inputs.target_url }}"
+          echo "Target: $TARGET_URL (manual override)"
+        elif [ "${{ github.event_name }}" == "schedule" ]; then
+          TARGET_URL="${{ env.PRODUCTION_URL }}"
+          echo "Target: $TARGET_URL (nightly production check)"
+        elif [ "${{ github.ref_name }}" == "main" ] && [ "${{ github.event_name }}" == "push" ]; then
+          TARGET_URL="${{ env.PRODUCTION_URL }}"
+          echo "Target: $TARGET_URL (main branch - production)"
+        else
+          TARGET_URL="${{ env.STAGING_URL }}"
+          echo "Target: $TARGET_URL (staging)"
+        fi
+
+        echo ""
+        echo "=============================================="
+
+        # Export for later steps
+        echo "TARGET_URL=$TARGET_URL" >> $GITHUB_ENV
+
+    - name: Make script executable
+      run: chmod +x scripts/security/security_regression.sh
+
+    - name: Run security regression checks
+      id: security-check
+      env:
+        # Skip rate limit check in CI by default (faster, avoids false positives)
+        SKIP_RATE_LIMIT: ${{ inputs.skip_rate_limit || 'true' }}
+        # Origin bypass check can be skipped if not configured
+        SKIP_ORIGIN_BYPASS: ${{ inputs.skip_origin_bypass || 'false' }}
+        # Staging is behind Cloudflare Access
+        BEHIND_CF_ACCESS: ${{ contains(env.TARGET_URL, 'stg.') && 'true' || 'false' }}
+        # CF Access service token (if configured in repository secrets)
+        CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+        CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+        # Use a known test event or skip QR tests if not available
+        TEST_EVENT_ID: ${{ vars.TEST_EVENT_ID || 'test-event' }}
+      run: |
+        echo "Running security regression checks..."
+        echo ""
+        echo "BEHIND_CF_ACCESS=$BEHIND_CF_ACCESS"
+        echo ""
+
+        # Run the security regression script
+        ./scripts/security/security_regression.sh "$TARGET_URL"
+
+    - name: Create check summary
+      if: always()
+      run: |
+        echo "## Security Regression Gate (SEC-10.1)" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+
+        if [ "${{ steps.security-check.outcome }}" == "success" ]; then
+          echo "### Result: PASS" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "All security regression checks passed." >> $GITHUB_STEP_SUMMARY
+        else
+          echo "### Result: FAIL" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Security regression detected. This PR cannot be merged.**" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Review the job output above for specific failures." >> $GITHUB_STEP_SUMMARY
+        fi
+
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Checks Performed" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "| Check | Description |" >> $GITHUB_STEP_SUMMARY
+        echo "|-------|-------------|" >> $GITHUB_STEP_SUMMARY
+        echo "| NS-1 | www canonical redirect |" >> $GITHUB_STEP_SUMMARY
+        echo "| NS-2 | Privileged routes require auth |" >> $GITHUB_STEP_SUMMARY
+        echo "| NS-3 | Health endpoint returns boring OK |" >> $GITHUB_STEP_SUMMARY
+        echo "| NS-4 | Rate limiting enforcement |" >> $GITHUB_STEP_SUMMARY
+        echo "| NS-5 | Origin bypass protection |" >> $GITHUB_STEP_SUMMARY
+        echo "| QR-0 | QR payloads include verified flag |" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Configuration" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "- **Target URL:** ${{ env.TARGET_URL }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Skip Rate Limit:** ${{ inputs.skip_rate_limit || 'true' }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Skip Origin Bypass:** ${{ inputs.skip_origin_bypass || 'false' }}" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "---" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**PROMPTSPEC-SEC-10.1**: Security Regression Gate" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "See [scripts/security/security_regression.sh](../scripts/security/security_regression.sh) for implementation details." >> $GITHUB_STEP_SUMMARY
+
+  # ============================================================================
+  # QR-0 CONTRACT VERIFICATION
+  # ============================================================================
+  # Additional focused check on QR-0 requirement.
+  # Ensures any endpoint returning QR codes includes the verified flag.
+  # ============================================================================
+  qr-contract-check:
+    name: QR-0 Contract Verification
+    runs-on: ubuntu-latest
+    needs: security-regression
+    # Only run if main security checks pass
+    if: ${{ success() || github.event_name == 'schedule' }}
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+
+    - name: Verify QR-0 contract in source code
+      run: |
+        echo "=============================================="
+        echo "QR-0 CONTRACT VERIFICATION"
+        echo "=============================================="
+        echo ""
+        echo "Verifying that QR-returning handlers include qrVerified field..."
+        echo ""
+
+        # Check that bundle handlers include qrVerified in their response
+        QR_HANDLERS=(
+          "worker/src/handlers/posterBundle.ts"
+          "worker/src/handlers/displayBundle.ts"
+          "worker/src/handlers/publicBundle.ts"
+        )
+
+        CONTRACT_VIOLATIONS=0
+
+        for handler in "${QR_HANDLERS[@]}"; do
+          if [ -f "$handler" ]; then
+            echo "Checking: $handler"
+
+            # Check if handler references qrVerified or assetState (Story E requirements)
+            if grep -q "qrVerified\|assetState\|assertRenderable" "$handler"; then
+              echo "  QR contract markers found"
+            else
+              echo "  WARNING: No QR contract markers found"
+              # Only warn, don't fail - the runtime check is authoritative
+            fi
+          else
+            echo "  Handler not found: $handler"
+          fi
+        done
+
+        # Check mapper for qrVerified field
+        MAPPER="worker/src/mappers/publicBundleMapper.ts"
+        if [ -f "$MAPPER" ]; then
+          echo ""
+          echo "Checking mapper: $MAPPER"
+          if grep -q "qrVerified" "$MAPPER"; then
+            echo "  qrVerified field defined in mapper"
+          else
+            echo "  ERROR: qrVerified field NOT found in mapper"
+            echo ""
+            echo "QR-0 CONTRACT VIOLATION:"
+            echo "  The publicBundleMapper must include qrVerified field"
+            echo "  when QR codes are present in the response."
+            echo ""
+            CONTRACT_VIOLATIONS=$((CONTRACT_VIOLATIONS + 1))
+          fi
+        fi
+
+        echo ""
+        if [ $CONTRACT_VIOLATIONS -gt 0 ]; then
+          echo "=============================================="
+          echo "QR-0 CONTRACT: VIOLATIONS DETECTED"
+          echo "=============================================="
+          echo ""
+          echo "Fix the QR-0 contract violations above."
+          echo "All QR-returning endpoints must include qrVerified flag."
+          exit 1
+        else
+          echo "=============================================="
+          echo "QR-0 CONTRACT: VERIFIED"
+          echo "=============================================="
+        fi
+
+    - name: Create QR contract summary
+      if: always()
+      run: |
+        echo "## QR-0 Contract Verification" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Contract Requirement" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "Any endpoint returning a poster/display payload that includes QR codes" >> $GITHUB_STEP_SUMMARY
+        echo "**must** also include a \`qrVerified\` flag indicating verification status." >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Why This Matters" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "- Unverified QR codes could link to incorrect/malicious destinations" >> $GITHUB_STEP_SUMMARY
+        echo "- ACTIVE events must have \`qrVerified=true\` (fail closed)" >> $GITHUB_STEP_SUMMARY
+        echo "- This prevents rendering unverified QR codes on public surfaces" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Files Checked" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "- \`worker/src/handlers/posterBundle.ts\`" >> $GITHUB_STEP_SUMMARY
+        echo "- \`worker/src/handlers/displayBundle.ts\`" >> $GITHUB_STEP_SUMMARY
+        echo "- \`worker/src/handlers/publicBundle.ts\`" >> $GITHUB_STEP_SUMMARY
+        echo "- \`worker/src/mappers/publicBundleMapper.ts\`" >> $GITHUB_STEP_SUMMARY

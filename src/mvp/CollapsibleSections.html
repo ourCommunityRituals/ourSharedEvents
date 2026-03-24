@@ -1,0 +1,189 @@
+<!-- Collapsible Sections Component -->
+<!-- Include this file in any page that needs collapsible sections -->
+<!-- Usage: include('CollapsibleSections') -->
+
+<style>
+  /* Collapsible Section Styles */
+  .collapsible-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    padding: 12px 16px;
+    background: #f8fafc;
+    border-radius: 8px;
+    margin-bottom: 16px;
+    transition: background-color 0.2s;
+    user-select: none;
+  }
+
+  .collapsible-header:hover {
+    background: #f1f5f9;
+  }
+
+  .collapsible-header h2,
+  .collapsible-header h3 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: #1e293b;
+  }
+
+  .collapsible-header h2 {
+    font-size: 18px;
+  }
+
+  .collapsible-icon {
+    transition: transform 0.3s ease;
+    color: #64748b;
+    font-size: 20px;
+    font-weight: bold;
+    line-height: 1;
+  }
+
+  .collapsible-header.collapsed .collapsible-icon {
+    transform: rotate(-90deg);
+  }
+
+  .collapsible-content {
+    overflow: hidden;
+    transition: max-height 0.3s ease, opacity 0.3s ease;
+    max-height: 5000px;
+    opacity: 1;
+  }
+
+  .collapsible-content.collapsed {
+    max-height: 0;
+    opacity: 0;
+    margin-bottom: 0;
+  }
+
+  .subsection {
+    margin-bottom: 20px;
+  }
+
+  .subsection-header {
+    font-size: 14px;
+    font-weight: 600;
+    color: #475569;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid #e2e8f0;
+  }
+
+  /* Accessibility: Focus styles */
+  .collapsible-header:focus {
+    outline: 2px solid #2563eb;
+    outline-offset: 2px;
+  }
+
+  /* Mobile: Ensure touch targets are large enough */
+  @media (max-width: 640px) {
+    .collapsible-header {
+      min-height: 44px; /* iOS minimum touch target */
+      padding: 14px 16px;
+    }
+  }
+</style>
+
+<script>
+  /**
+   * Toggle collapsible section
+   * @param {HTMLElement} header - The collapsible header element
+   */
+  function toggleSection(header) {
+    header.classList.toggle('collapsed');
+    const content = header.nextElementSibling;
+    if (content && content.classList.contains('collapsible-content')) {
+      content.classList.toggle('collapsed');
+    }
+
+    // Update ARIA attributes for accessibility
+    const isExpanded = !header.classList.contains('collapsed');
+    header.setAttribute('aria-expanded', isExpanded.toString());
+  }
+
+  /**
+   * Collapse all sections on the page
+   */
+  function collapseAllSections() {
+    document.querySelectorAll('.collapsible-header').forEach(header => {
+      if (!header.classList.contains('collapsed')) {
+        toggleSection(header);
+      }
+    });
+  }
+
+  /**
+   * Expand all sections on the page
+   */
+  function expandAllSections() {
+    document.querySelectorAll('.collapsible-header.collapsed').forEach(header => {
+      toggleSection(header);
+    });
+  }
+
+  /**
+   * Expand a specific section by ID
+   * @param {string} sectionId - The ID of the section header to expand
+   */
+  function expandSectionById(sectionId) {
+    const header = document.getElementById(sectionId);
+    if (header && header.classList.contains('collapsed')) {
+      toggleSection(header);
+    }
+  }
+
+  /**
+   * Collapse a specific section by ID
+   * @param {string} sectionId - The ID of the section header to collapse
+   */
+  function collapseSectionById(sectionId) {
+    const header = document.getElementById(sectionId);
+    if (header && !header.classList.contains('collapsed')) {
+      toggleSection(header);
+    }
+  }
+
+  /**
+   * Initialize ARIA attributes for all collapsible sections
+   * Call this after DOM is loaded
+   */
+  function initializeCollapsibleSections() {
+    document.querySelectorAll('.collapsible-header').forEach((header, index) => {
+      // Add ARIA attributes
+      header.setAttribute('role', 'button');
+      header.setAttribute('aria-expanded', 'true'); // Default: expanded
+      header.setAttribute('tabindex', '0');
+
+      // Generate ID if not present
+      if (!header.id) {
+        header.id = `collapsible-header-${index}`;
+      }
+
+      // Link to content
+      const content = header.nextElementSibling;
+      if (content && content.classList.contains('collapsible-content')) {
+        if (!content.id) {
+          content.id = `collapsible-content-${index}`;
+        }
+        header.setAttribute('aria-controls', content.id);
+      }
+
+      // Add keyboard support
+      header.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          toggleSection(header);
+        }
+      });
+    });
+  }
+
+  // Initialize on DOM ready
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initializeCollapsibleSections);
+  } else {
+    initializeCollapsibleSections();
+  }
+</script>

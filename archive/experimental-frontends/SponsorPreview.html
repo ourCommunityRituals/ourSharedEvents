@@ -1,0 +1,650 @@
+<!--
+================================================================================
+EXPERIMENTAL - v2+ (Not MVP)
+================================================================================
+Component: SponsorPreview.html
+Purpose: Preview sponsor ads across different surfaces
+Status: NOT included in MVP focus group testing
+================================================================================
+-->
+<style>
+  /* ===== Sponsor Preview Mode Component ===== */
+  /*
+    Allows organizers to preview how their event and sponsor ads
+    will look across different surfaces before publishing.
+    High-value feature that builds confidence and encourages upsells.
+  */
+
+  .preview-modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.8);
+    z-index: var(--z-index-modal, 1000);
+    overflow-y: auto;
+    padding: var(--space-4, 1rem);
+  }
+
+  .preview-modal.active {
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding-top: var(--space-8, 2rem);
+    padding-bottom: var(--space-8, 2rem);
+  }
+
+  .preview-container {
+    background: white;
+    border-radius: var(--radius-md, 12px);
+    width: 100%;
+    max-width: 1400px;
+    box-shadow: var(--shadow-xl, 0 20px 25px rgba(0, 0, 0, 0.1));
+    position: relative;
+    animation: slideUp 0.3s ease-out;
+  }
+
+  @keyframes slideUp {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .preview-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--space-5, 1.25rem) var(--space-6, 1.5rem);
+    border-bottom: 2px solid var(--color-gray-200, #e2e8f0);
+    background: var(--color-gray-50, #f8fafc);
+    border-radius: var(--radius-md, 12px) var(--radius-md, 12px) 0 0;
+  }
+
+  .preview-title {
+    font-size: var(--font-size-xl, 1.25rem);
+    font-weight: var(--font-weight-semibold, 600);
+    color: var(--color-gray-800, #1e293b);
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: var(--space-2, 0.5rem);
+  }
+
+  .preview-close {
+    background: none;
+    border: none;
+    font-size: var(--font-size-2xl, 1.5rem);
+    color: var(--color-gray-500, #64748b);
+    cursor: pointer;
+    padding: var(--space-2, 0.5rem);
+    line-height: 1;
+    transition: all var(--transition-base, 0.2s);
+    border-radius: var(--radius-sm, 6px);
+  }
+
+  .preview-close:hover {
+    background: var(--color-gray-200, #e2e8f0);
+    color: var(--color-gray-700, #334155);
+  }
+
+  .preview-tabs {
+    display: flex;
+    gap: var(--space-2, 0.5rem);
+    padding: var(--space-4, 1rem) var(--space-6, 1.5rem);
+    background: white;
+    border-bottom: 1px solid var(--color-gray-200, #e2e8f0);
+    overflow-x: auto;
+  }
+
+  .preview-tab {
+    padding: var(--space-3, 0.75rem) var(--space-5, 1.25rem);
+    background: transparent;
+    border: 2px solid transparent;
+    border-radius: var(--radius-sm, 6px);
+    font-size: var(--font-size-sm, 0.875rem);
+    font-weight: var(--font-weight-medium, 500);
+    color: var(--color-gray-600, #475569);
+    cursor: pointer;
+    transition: all var(--transition-base, 0.2s);
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    gap: var(--space-2, 0.5rem);
+  }
+
+  .preview-tab:hover {
+    background: var(--color-gray-100, #f1f5f9);
+    color: var(--color-gray-800, #1e293b);
+  }
+
+  .preview-tab.active {
+    background: var(--color-primary, #2563eb);
+    color: white;
+    border-color: var(--color-primary, #2563eb);
+  }
+
+  .preview-tab-icon {
+    font-size: var(--font-size-lg, 1.125rem);
+  }
+
+  .preview-content {
+    padding: var(--space-6, 1.5rem);
+    min-height: 500px;
+  }
+
+  .preview-panel {
+    display: none;
+  }
+
+  .preview-panel.active {
+    display: block;
+    animation: fadeIn 0.3s ease-in;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  .preview-description {
+    background: var(--color-primary-pale, #dbeafe);
+    padding: var(--space-4, 1rem);
+    border-radius: var(--radius-sm, 6px);
+    margin-bottom: var(--space-6, 1.5rem);
+    font-size: var(--font-size-sm, 0.875rem);
+    color: var(--color-gray-700, #334155);
+    border-left: 3px solid var(--color-primary, #2563eb);
+  }
+
+  .preview-viewport {
+    background: var(--color-gray-100, #f1f5f9);
+    border-radius: var(--radius-sm, 6px);
+    padding: var(--space-8, 2rem);
+    min-height: 400px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    overflow: auto;
+  }
+
+  /* Simulated device frames */
+  .preview-device {
+    background: white;
+    box-shadow: var(--shadow-lg, 0 10px 15px rgba(0, 0, 0, 0.1));
+    border-radius: var(--radius-sm, 6px);
+    overflow: hidden;
+  }
+
+  .preview-device.mobile {
+    max-width: 375px;
+    width: 100%;
+  }
+
+  .preview-device.tablet {
+    max-width: 768px;
+    width: 100%;
+  }
+
+  .preview-device.desktop {
+    max-width: 1200px;
+    width: 100%;
+  }
+
+  .preview-device.poster {
+    max-width: 800px;
+    width: 100%;
+    aspect-ratio: 8.5 / 11;
+  }
+
+  .preview-device.tv {
+    max-width: 1920px;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    background: #000;
+  }
+
+  /* Sponsor preview elements */
+  .preview-sponsor-banner {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-4, 1rem);
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-5, 1.25rem);
+    background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+    border-radius: var(--radius-sm, 6px);
+    min-height: 80px;
+  }
+
+  .preview-sponsor-logo {
+    max-height: 60px;
+    width: auto;
+    object-fit: contain;
+    filter: grayscale(0);
+    transition: all var(--transition-base, 0.2s);
+  }
+
+  .preview-sponsor-logo:hover {
+    transform: scale(1.05);
+  }
+
+  .preview-sponsor-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 120px;
+    height: 60px;
+    background: var(--color-gray-200, #e2e8f0);
+    border: 2px dashed var(--color-gray-400, #94a3b8);
+    border-radius: var(--radius-sm, 6px);
+    color: var(--color-gray-500, #64748b);
+    font-size: var(--font-size-xs, 0.75rem);
+    text-align: center;
+    padding: var(--space-2, 0.5rem);
+  }
+
+  .preview-event-card {
+    background: white;
+    border-radius: var(--radius-md, 12px);
+    overflow: hidden;
+    box-shadow: var(--shadow-base, 0 1px 3px rgba(0, 0, 0, 0.1));
+  }
+
+  .preview-event-header {
+    padding: var(--space-6, 1.5rem);
+    background: var(--color-primary, #2563eb);
+    color: white;
+  }
+
+  .preview-event-title {
+    font-size: var(--font-size-2xl, 1.5rem);
+    font-weight: var(--font-weight-bold, 700);
+    margin: 0 0 var(--space-2, 0.5rem) 0;
+  }
+
+  .preview-event-meta {
+    font-size: var(--font-size-sm, 0.875rem);
+    opacity: 0.9;
+  }
+
+  .preview-event-body {
+    padding: var(--space-6, 1.5rem);
+  }
+
+  .preview-controls {
+    display: flex;
+    gap: var(--space-3, 0.75rem);
+    padding: var(--space-4, 1rem) var(--space-6, 1.5rem);
+    background: var(--color-gray-50, #f8fafc);
+    border-top: 1px solid var(--color-gray-200, #e2e8f0);
+    justify-content: flex-end;
+  }
+
+  /* Mobile optimizations */
+  @media (max-width: 768px) {
+    .preview-modal {
+      padding: 0;
+    }
+
+    .preview-modal.active {
+      padding-top: 0;
+      padding-bottom: 0;
+    }
+
+    .preview-container {
+      max-width: 100%;
+      min-height: 100vh;
+      border-radius: 0;
+    }
+
+    .preview-header {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+
+    .preview-tabs {
+      position: sticky;
+      top: 61px;
+      z-index: 9;
+    }
+
+    .preview-viewport {
+      padding: var(--space-4, 1rem);
+    }
+
+    .preview-device.desktop,
+    .preview-device.tv {
+      transform: scale(0.5);
+      transform-origin: top center;
+    }
+  }
+</style>
+
+<script>
+  /* ===== Sponsor Preview JavaScript ===== */
+
+  /**
+   * Open preview modal
+   * @param {Object} eventData - Event data to preview
+   * @param {Array} sponsors - Array of sponsor objects
+   */
+  function openSponsorPreview(eventData, sponsors = []) {
+    const modal = document.getElementById('sponsor-preview-modal');
+    if (!modal) {
+      console.error('Preview modal not found');
+      return;
+    }
+
+    // Store data for preview panels
+    window.previewData = { event: eventData, sponsors };
+
+    // Populate all preview panels
+    updatePreviewPanels();
+
+    // Show modal
+    modal.classList.add('active');
+    document.body.style.overflow = 'hidden';
+  }
+
+  /**
+   * Close preview modal
+   */
+  function closeSponsorPreview() {
+    const modal = document.getElementById('sponsor-preview-modal');
+    if (modal) {
+      modal.classList.remove('active');
+      document.body.style.overflow = '';
+    }
+  }
+
+  /**
+   * Switch preview tab
+   * @param {string} tabId - ID of tab to show
+   */
+  function switchPreviewTab(tabId) {
+    // Update tabs
+    document.querySelectorAll('.preview-tab').forEach(tab => {
+      tab.classList.toggle('active', tab.dataset.tab === tabId);
+    });
+
+    // Update panels
+    document.querySelectorAll('.preview-panel').forEach(panel => {
+      panel.classList.toggle('active', panel.id === `preview-${tabId}`);
+    });
+  }
+
+  /**
+   * Update all preview panels with current data
+   */
+  function updatePreviewPanels() {
+    if (!window.previewData) return;
+
+    const { event, sponsors } = window.previewData;
+
+    // Update poster preview
+    updatePosterPreview(event, sponsors);
+
+    // Update display preview
+    updateDisplayPreview(event, sponsors);
+
+    // Update public preview
+    updatePublicPreview(event, sponsors);
+
+    // Update mobile preview
+    updateMobilePreview(event, sponsors);
+  }
+
+  /**
+   * Update poster preview
+   */
+  function updatePosterPreview(event, sponsors) {
+    const container = document.getElementById('poster-preview-content');
+    if (!container) return;
+
+    const posterSponsors = sponsors.filter(s => s.placements?.posterTop);
+
+    container.innerHTML = `
+      <div class="preview-device poster">
+        <div class="preview-event-card">
+          <div class="preview-event-header">
+            <h3 class="preview-event-title">${escapeHtml(event.name || 'Event Name')}</h3>
+            <div class="preview-event-meta">
+              📅 ${escapeHtml(event.startDate || 'Date')} | 📍 ${escapeHtml(event.location || 'Location')}
+            </div>
+          </div>
+          <div class="preview-event-body">
+            <p>${escapeHtml(event.description || 'Event description will appear here.')}</p>
+            ${posterSponsors.length > 0 ? `
+              <div style="margin-top: 2rem;">
+                <h4 style="text-align: center; color: #64748b; margin-bottom: 1rem;">Our Sponsors</h4>
+                <div class="preview-sponsor-banner">
+                  ${posterSponsors.map(s => renderSponsorLogo(s)).join('')}
+                </div>
+              </div>
+            ` : ''}
+            <div style="margin-top: 2rem; text-align: center;">
+              <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=example"
+                   alt="QR Code" style="max-width: 200px;">
+              <p style="margin-top: 0.5rem; color: #64748b; font-size: 0.875rem;">Scan to register</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  /**
+   * Update display (TV) preview
+   */
+  function updateDisplayPreview(event, sponsors) {
+    const container = document.getElementById('display-preview-content');
+    if (!container) return;
+
+    const displaySponsors = sponsors.filter(s => s.placements?.tvTop || s.placements?.tvSide);
+
+    container.innerHTML = `
+      <div class="preview-device tv">
+        <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 3rem; text-align: center; position: relative;">
+          <h1 style="font-size: 3rem; margin-bottom: 1rem;">${escapeHtml(event.name || 'Event Name')}</h1>
+          <p style="font-size: 1.5rem; opacity: 0.95;">${escapeHtml(event.startDate || 'Date')} | ${escapeHtml(event.location || 'Location')}</p>
+          ${displaySponsors.length > 0 ? `
+            <div style="position: absolute; top: 1rem; right: 1rem; left: 1rem;">
+              <div class="preview-sponsor-banner" style="background: rgba(255,255,255,0.95);">
+                ${displaySponsors.slice(0, 4).map(s => renderSponsorLogo(s)).join('')}
+              </div>
+            </div>
+          ` : ''}
+        </div>
+      </div>
+    `;
+  }
+
+  /**
+   * Update public page preview
+   */
+  function updatePublicPreview(event, sponsors) {
+    const container = document.getElementById('public-preview-content');
+    if (!container) return;
+
+    const publicSponsors = sponsors.filter(s => s.placements?.mobileBanner);
+
+    container.innerHTML = `
+      <div class="preview-device desktop">
+        <div style="background: #f8fafc; padding: 2rem;">
+          <div class="preview-event-card">
+            <div class="preview-event-header">
+              <h2 class="preview-event-title">${escapeHtml(event.name || 'Event Name')}</h2>
+              <div class="preview-event-meta">
+                📅 ${escapeHtml(event.startDate || 'Date')} at ${escapeHtml(event.startTime || 'Time')}
+              </div>
+            </div>
+            <div class="preview-event-body">
+              <p>${escapeHtml(event.description || 'Event description will appear here.')}</p>
+              <button class="btn-primary" style="margin-top: 1.5rem; width: 100%;">Sign Up Now</button>
+              ${publicSponsors.length > 0 ? `
+                <div style="margin-top: 2rem;">
+                  <p style="text-align: center; color: #64748b; font-size: 0.875rem; margin-bottom: 1rem;">Sponsored by</p>
+                  <div class="preview-sponsor-banner">
+                    ${publicSponsors.map(s => renderSponsorLogo(s)).join('')}
+                  </div>
+                </div>
+              ` : ''}
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  /**
+   * Update mobile preview
+   */
+  function updateMobilePreview(event, sponsors) {
+    const container = document.getElementById('mobile-preview-content');
+    if (!container) return;
+
+    const mobileSponsors = sponsors.filter(s => s.placements?.mobileBanner);
+
+    container.innerHTML = `
+      <div class="preview-device mobile">
+        <div style="background: #f8fafc; padding: 1rem; min-height: 600px;">
+          <div class="preview-event-card">
+            <div class="preview-event-header">
+              <h3 class="preview-event-title" style="font-size: 1.25rem;">${escapeHtml(event.name || 'Event Name')}</h3>
+            </div>
+            <div class="preview-event-body">
+              <p style="font-size: 0.875rem;">${escapeHtml(event.description?.substring(0, 150) || 'Event description...')}...</p>
+              <button class="btn-primary" style="margin-top: 1rem; width: 100%; font-size: 0.875rem;">Register Now</button>
+              ${mobileSponsors.length > 0 ? `
+                <div style="margin-top: 1.5rem;">
+                  <div class="preview-sponsor-banner" style="padding: 0.75rem;">
+                    ${mobileSponsors.slice(0, 2).map(s => renderSponsorLogo(s, 40)).join('')}
+                  </div>
+                </div>
+              ` : ''}
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  /**
+   * Render sponsor logo or placeholder
+   */
+  function renderSponsorLogo(sponsor, maxHeight = 60) {
+    if (sponsor.logoUrl) {
+      return `<img src="${escapeHtml(sponsor.logoUrl)}"
+                   alt="${escapeHtml(sponsor.name)}"
+                   class="preview-sponsor-logo"
+                   style="max-height: ${maxHeight}px;">`;
+    } else {
+      return `<div class="preview-sponsor-placeholder" style="height: ${maxHeight}px;">
+                ${escapeHtml(sponsor.name || 'Logo')}
+              </div>`;
+    }
+  }
+
+  /**
+   * Escape HTML to prevent XSS
+   */
+  function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  }
+
+  // Close modal on escape key
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      closeSponsorPreview();
+    }
+  });
+</script>
+
+<!-- ===== Sponsor Preview Modal Template ===== -->
+<div id="sponsor-preview-modal" class="preview-modal">
+  <div class="preview-container">
+    <div class="preview-header">
+      <h2 class="preview-title">
+        <span>👁️</span>
+        <span>Preview Across Surfaces</span>
+      </h2>
+      <button class="preview-close" onclick="closeSponsorPreview()" aria-label="Close preview">
+        ✕
+      </button>
+    </div>
+
+    <div class="preview-tabs">
+      <button class="preview-tab active" data-tab="poster" onclick="switchPreviewTab('poster')">
+        <span class="preview-tab-icon">📄</span>
+        <span>Poster</span>
+      </button>
+      <button class="preview-tab" data-tab="display" onclick="switchPreviewTab('display')">
+        <span class="preview-tab-icon">📺</span>
+        <span>TV Display</span>
+      </button>
+      <button class="preview-tab" data-tab="public" onclick="switchPreviewTab('public')">
+        <span class="preview-tab-icon">🌐</span>
+        <span>Public Page</span>
+      </button>
+      <button class="preview-tab" data-tab="mobile" onclick="switchPreviewTab('mobile')">
+        <span class="preview-tab-icon">📱</span>
+        <span>Mobile</span>
+      </button>
+    </div>
+
+    <div class="preview-content">
+      <div id="preview-poster" class="preview-panel active">
+        <div class="preview-description">
+          <strong>Poster View:</strong> This is how your event will appear on printed materials with QR codes and sponsor logos.
+        </div>
+        <div class="preview-viewport" id="poster-preview-content">
+          <!-- Dynamically populated -->
+        </div>
+      </div>
+
+      <div id="preview-display" class="preview-panel">
+        <div class="preview-description">
+          <strong>TV Display:</strong> Full-screen view optimized for kiosks and large displays with sponsor overlays.
+        </div>
+        <div class="preview-viewport" id="display-preview-content">
+          <!-- Dynamically populated -->
+        </div>
+      </div>
+
+      <div id="preview-public" class="preview-panel">
+        <div class="preview-description">
+          <strong>Public Page:</strong> Desktop view of your public event listing with sponsor banners and call-to-action.
+        </div>
+        <div class="preview-viewport" id="public-preview-content">
+          <!-- Dynamically populated -->
+        </div>
+      </div>
+
+      <div id="preview-mobile" class="preview-panel">
+        <div class="preview-description">
+          <strong>Mobile View:</strong> How attendees will see your event on smartphones with optimized layout and sponsor placement.
+        </div>
+        <div class="preview-viewport" id="mobile-preview-content">
+          <!-- Dynamically populated -->
+        </div>
+      </div>
+    </div>
+
+    <div class="preview-controls">
+      <button class="btn-secondary" onclick="closeSponsorPreview()">Close</button>
+      <button class="btn-primary" onclick="closeSponsorPreview()">Looks Good!</button>
+    </div>
+  </div>
+</div>

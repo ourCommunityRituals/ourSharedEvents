@@ -1,0 +1,405 @@
+<? if (demoMode) { ?>
+<!-- ============================================================================
+     DEMO MODE - Activated via ?demo=true or ?test=true
+     Use cases: Development, UAT, stakeholder demos, screenshots/videos
+     ============================================================================ -->
+
+<style>
+  /* Demo Mode Badge */
+  .demo-badge {
+    position: fixed;
+    top: 10px;
+    right: 10px;
+    background: linear-gradient(135deg, <?= ZEB.DEMO_MODE.badgeColor ?> 0%, #764ba2 100%);
+    color: white;
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: bold;
+    z-index: 10000;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    animation: demo-pulse 2s infinite;
+    cursor: pointer;
+    user-select: none;
+  }
+
+  .demo-badge:hover {
+    transform: scale(1.05);
+    box-shadow: 0 6px 16px rgba(0,0,0,0.3);
+  }
+
+  @keyframes demo-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.8; }
+  }
+
+  /* Debug Panel */
+  <? if (ZEB.DEMO_MODE.showDebugPanel) { ?>
+  .demo-debug-panel {
+    position: fixed;
+    bottom: 0;
+    right: 0;
+    width: 350px;
+    max-height: 250px;
+    background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+    color: #e2e8f0;
+    padding: 12px;
+    font-size: 11px;
+    font-family: 'Monaco', 'Consolas', monospace;
+    overflow-y: auto;
+    z-index: 9999;
+    border-top-left-radius: 8px;
+    box-shadow: 0 -4px 20px rgba(0,0,0,0.5);
+    transition: all 0.3s ease;
+  }
+
+  .demo-debug-panel.collapsed {
+    max-height: 40px;
+    overflow: hidden;
+  }
+
+  .demo-debug-header {
+    font-weight: bold;
+    margin-bottom: 8px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #334155;
+  }
+
+  .demo-debug-toggle {
+    font-size: 14px;
+    cursor: pointer;
+    user-select: none;
+  }
+
+  .demo-debug-content {
+    font-size: 10px;
+    line-height: 1.4;
+  }
+
+  .demo-api-log {
+    padding: 4px 0;
+    border-bottom: 1px solid #334155;
+  }
+
+  .demo-api-log:last-child {
+    border-bottom: none;
+  }
+
+  .demo-api-success {
+    color: #10b981;
+  }
+
+  .demo-api-error {
+    color: #ef4444;
+  }
+
+  .demo-api-timing {
+    color: #60a5fa;
+  }
+  <? } ?>
+
+  /* New Feature Highlights */
+  <? if (ZEB.DEMO_MODE.highlightNewFeatures) { ?>
+  .demo-new-feature {
+    position: relative;
+    animation: demo-glow 1.5s ease-in-out infinite;
+  }
+
+  @keyframes demo-glow {
+    0%, 100% { box-shadow: 0 0 5px #10b981, 0 0 10px #10b981; }
+    50% { box-shadow: 0 0 10px #10b981, 0 0 20px #10b981; }
+  }
+
+  .demo-new-badge {
+    display: inline-block;
+    background: #10b981;
+    color: white;
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    margin-left: 8px;
+    font-weight: bold;
+  }
+  <? } ?>
+
+  /* Help Tooltips */
+  <? if (ZEB.DEMO_MODE.showHelpTooltips) { ?>
+  .demo-help-tooltip {
+    display: inline-block;
+    margin-left: 8px;
+    color: #3b82f6;
+    cursor: help;
+    font-size: 14px;
+    position: relative;
+  }
+
+  .demo-help-tooltip:hover::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #1e293b;
+    color: white;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    white-space: nowrap;
+    z-index: 10001;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    margin-bottom: 5px;
+  }
+  <? } ?>
+
+  /* Prefill Button */
+  <? if (ZEB.DEMO_MODE.showPrefillButton) { ?>
+  .demo-prefill-btn {
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
+    transition: all 0.2s ease;
+    margin-left: 8px;
+  }
+
+  .demo-prefill-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
+  }
+
+  .demo-prefill-btn:active {
+    transform: translateY(0);
+  }
+  <? } ?>
+
+  /* Watermark (for screenshots/videos) */
+  <? if (ZEB.DEMO_MODE.showWatermark) { ?>
+  .demo-watermark {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.6);
+    color: rgba(255, 255, 255, 0.8);
+    padding: 4px 12px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: bold;
+    z-index: 9998;
+    pointer-events: none;
+    letter-spacing: 1px;
+  }
+  <? } ?>
+</style>
+
+<!-- Demo Mode Badge -->
+<? if (ZEB.DEMO_MODE.showBadge) { ?>
+<div class="demo-badge" onclick="window.demoToggleDebug && window.demoToggleDebug()" title="Click to toggle debug panel">
+  <?= ZEB.DEMO_MODE.badgeText ?>
+</div>
+<? } ?>
+
+<!-- Debug Panel -->
+<? if (ZEB.DEMO_MODE.showDebugPanel) { ?>
+<div class="demo-debug-panel" id="demoDebugPanel">
+  <div class="demo-debug-header" onclick="window.demoToggleDebug && window.demoToggleDebug()">
+    <span>🔧 Debug Info</span>
+    <span class="demo-debug-toggle" id="demoDebugToggle">▼</span>
+  </div>
+  <div class="demo-debug-content" id="demoDebugContent">
+    <div style="margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid #334155;">
+      <strong>Environment:</strong><br>
+      Brand: <span style="color: #60a5fa;"><?= brandId ?></span><br>
+      Build: <span style="color: #60a5fa;"><?= ZEB.BUILD_ID ?></span><br>
+      Mode: <span style="color: #10b981;">Demo/Test</span><br>
+      Page: <span style="color: #60a5fa;" id="demoCurrentPage">Loading...</span>
+    </div>
+    <div id="demoApiLogs">
+      <strong>API Call Log:</strong><br>
+      <em style="color: #94a3b8;">Waiting for API calls...</em>
+    </div>
+  </div>
+</div>
+<? } ?>
+
+<!-- Watermark -->
+<? if (ZEB.DEMO_MODE.showWatermark) { ?>
+<div class="demo-watermark">
+  DEMO - SAMPLE DATA
+</div>
+<? } ?>
+
+<!-- Demo Mode JavaScript -->
+<script>
+(function() {
+  'use strict';
+
+  // Demo mode configuration from backend
+  window.DEMO_CONFIG = {
+    showBadge: <?!= JSON.stringify(Boolean(ZEB.DEMO_MODE.showBadge)) ?>,
+    showDebugPanel: <?!= JSON.stringify(Boolean(ZEB.DEMO_MODE.showDebugPanel)) ?>,
+    showApiTiming: <?!= JSON.stringify(Boolean(ZEB.DEMO_MODE.showApiTiming)) ?>,
+    showErrorDetails: <?!= JSON.stringify(Boolean(ZEB.DEMO_MODE.showErrorDetails)) ?>,
+    enableConsoleLogging: <?!= JSON.stringify(Boolean(ZEB.DEMO_MODE.enableConsoleLogging)) ?>,
+    enablePrefill: <?!= JSON.stringify(Boolean(ZEB.DEMO_MODE.enablePrefill)) ?>,
+    sampleEvent: <?!= JSON.stringify(ZEB.DEMO_MODE.sampleEvent) ?>,
+    sampleSponsor: <?!= JSON.stringify(ZEB.DEMO_MODE.sampleSponsor) ?>
+  };
+
+  console.log('🧪 DEMO MODE ACTIVATED');
+  console.log('Demo Config:', window.DEMO_CONFIG);
+
+  // Track debug panel state
+  let debugCollapsed = false;
+
+  // Toggle debug panel
+  window.demoToggleDebug = function() {
+    const panel = document.getElementById('demoDebugPanel');
+    const toggle = document.getElementById('demoDebugToggle');
+    if (!panel || !toggle) return;
+
+    debugCollapsed = !debugCollapsed;
+    panel.classList.toggle('collapsed', debugCollapsed);
+    toggle.textContent = debugCollapsed ? '▶' : '▼';
+  };
+
+  // Enhanced API timing wrapper
+  <? if (ZEB.DEMO_MODE.showApiTiming) { ?>
+  if (window.NU && window.NU.rpc) {
+    const originalRpc = window.NU.rpc;
+    let apiCallCount = 0;
+
+    window.NU.rpc = async function(method, payload) {
+      const callId = ++apiCallCount;
+      const startTime = performance.now();
+
+      if (window.DEMO_CONFIG.enableConsoleLogging) {
+        console.log(`[API ${callId}] ${method}`, payload);
+      }
+
+      try {
+        const result = await originalRpc.call(this, method, payload);
+        const duration = (performance.now() - startTime).toFixed(0);
+
+        // Log to debug panel
+        const logsDiv = document.getElementById('demoApiLogs');
+        if (logsDiv) {
+          const logEntry = document.createElement('div');
+          logEntry.className = 'demo-api-log demo-api-success';
+          logEntry.innerHTML = `
+            <span class="demo-api-timing">${duration}ms</span>
+            <span style="color: #10b981;">✓</span> ${method}
+          `;
+          logsDiv.appendChild(logEntry);
+
+          // Keep only last 5 logs
+          while (logsDiv.children.length > 6) { // 6 = header + 5 logs
+            logsDiv.removeChild(logsDiv.children[1]); // Keep header
+          }
+        }
+
+        if (window.DEMO_CONFIG.enableConsoleLogging) {
+          console.log(`[API ${callId}] ✓ ${duration}ms`, result);
+        }
+
+        return result;
+      } catch (error) {
+        const duration = (performance.now() - startTime).toFixed(0);
+
+        // Log error to debug panel
+        const logsDiv = document.getElementById('demoApiLogs');
+        if (logsDiv) {
+          const logEntry = document.createElement('div');
+          logEntry.className = 'demo-api-log demo-api-error';
+          logEntry.innerHTML = `
+            <span class="demo-api-timing">${duration}ms</span>
+            <span style="color: #ef4444;">✗</span> ${method}
+          `;
+          logsDiv.appendChild(logEntry);
+        }
+
+        if (window.DEMO_CONFIG.enableConsoleLogging) {
+          console.error(`[API ${callId}] ✗ ${duration}ms`, error);
+        }
+
+        throw error;
+      }
+    };
+  }
+  <? } ?>
+
+  // Sample data prefill function (global, can be called from any page)
+  window.demoFillSampleEvent = function() {
+    const sample = window.DEMO_CONFIG.sampleEvent;
+    if (!sample) return;
+
+    Object.keys(sample).forEach(key => {
+      const el = document.getElementById(key);
+      if (el) {
+        el.value = sample[key];
+        if (window.DEMO_CONFIG.enableConsoleLogging) {
+          console.log(`Prefilled ${key}:`, sample[key]);
+        }
+      }
+    });
+
+    console.log('✅ Sample event data prefilled');
+  };
+
+  window.demoFillSampleSponsor = function() {
+    const sample = window.DEMO_CONFIG.sampleSponsor;
+    if (!sample) return;
+
+    Object.keys(sample).forEach(key => {
+      const el = document.getElementById(key);
+      if (el) {
+        el.value = sample[key];
+      }
+    });
+
+    console.log('✅ Sample sponsor data prefilled');
+  };
+
+  // Update current page in debug panel
+  document.addEventListener('DOMContentLoaded', function() {
+    const pageEl = document.getElementById('demoCurrentPage');
+    if (pageEl) {
+      const pageName = document.title.split('·').pop().trim();
+      pageEl.textContent = pageName;
+    }
+  });
+
+  // Keyboard shortcut: Ctrl+Shift+D to toggle debug panel
+  document.addEventListener('keydown', function(e) {
+    if (e.ctrlKey && e.shiftKey && e.key === 'D') {
+      e.preventDefault();
+      window.demoToggleDebug && window.demoToggleDebug();
+    }
+  });
+
+  // Enhanced error logging
+  <? if (ZEB.DEMO_MODE.showErrorDetails) { ?>
+  window.addEventListener('error', function(e) {
+    console.error('🔴 Error caught in demo mode:', {
+      message: e.message,
+      filename: e.filename,
+      lineno: e.lineno,
+      colno: e.colno,
+      error: e.error
+    });
+  });
+  <? } ?>
+
+})();
+</script>
+
+<? } // End if (demoMode) ?>

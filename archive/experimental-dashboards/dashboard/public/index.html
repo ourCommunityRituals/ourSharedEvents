@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DevOps Environment Monitor - MVP Event Toolkit</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🔍 DevOps Environment Monitor</h1>
+            <p class="subtitle">Real-time monitoring of all environmental layers</p>
+            <div class="refresh-info">
+                <span id="last-update">Last updated: Never</span>
+                <span class="separator">|</span>
+                <span id="next-refresh">Next refresh in: 30s</span>
+                <button id="manual-refresh" class="btn-icon" title="Refresh Now">🔄</button>
+            </div>
+        </header>
+
+        <div class="sync-overview">
+            <h2>Synchronization Status</h2>
+            <div class="sync-flow">
+                <div class="sync-node" data-layer="local">
+                    <div class="node-status" id="status-local"></div>
+                    <span>Local</span>
+                </div>
+                <div class="sync-arrow" id="arrow-local-github">→</div>
+                <div class="sync-node" data-layer="github">
+                    <div class="node-status" id="status-github"></div>
+                    <span>GitHub</span>
+                </div>
+                <div class="sync-arrow" id="arrow-github-actions">→</div>
+                <div class="sync-node" data-layer="actions">
+                    <div class="node-status" id="status-actions"></div>
+                    <span>Actions</span>
+                </div>
+                <div class="sync-arrow" id="arrow-actions-deploy">→</div>
+                <div class="sync-node" data-layer="deploy">
+                    <div class="node-status" id="status-deploy"></div>
+                    <span>Deploy</span>
+                </div>
+                <div class="sync-arrow" id="arrow-deploy-test">→</div>
+                <div class="sync-node" data-layer="test">
+                    <div class="node-status" id="status-test"></div>
+                    <span>Tests</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="layers-grid">
+            <!-- Local Environment Layer -->
+            <div class="layer-card" id="layer-local">
+                <div class="layer-header">
+                    <h3>💻 Local Environment</h3>
+                    <div class="status-badge" id="badge-local">Unknown</div>
+                </div>
+                <div class="layer-content">
+                    <div class="info-section">
+                        <div class="info-item">
+                            <label>Branch:</label>
+                            <span id="local-branch">-</span>
+                        </div>
+                        <div class="info-item">
+                            <label>Uncommitted Changes:</label>
+                            <span id="local-uncommitted">-</span>
+                        </div>
+                        <div class="info-item">
+                            <label>Unpushed Commits:</label>
+                            <span id="local-unpushed">-</span>
+                        </div>
+                        <div class="info-item">
+                            <label>Node Modules:</label>
+                            <span id="local-node-modules">-</span>
+                        </div>
+                        <div class="info-item">
+                            <label>Environment:</label>
+                            <span id="local-env-file">-</span>
+                        </div>
+                    </div>
+                    <div class="actions">
+                        <button class="btn-action" data-command="git status" title="Check git status">
+                            Status
+                        </button>
+                        <button class="btn-action btn-primary" data-command="git add -A && git commit -m 'Update' && git push" title="Stage, commit and push all changes">
+                            Sync to GitHub
+                        </button>
+                        <button class="btn-action" data-command="npm install" title="Install/update dependencies">
+                            Update Dependencies
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- GitHub Repository Layer -->
+            <div class="layer-card" id="layer-github">
+                <div class="layer-header">
+                    <h3>🐙 GitHub Repository</h3>
+                    <div class="status-badge" id="badge-github">Unknown</div>
+                </div>
+                <div class="layer-content">
+                    <div class="info-section">
+                        <div class="info-item">
+                            <label>Main Branch:</label>
+                            <span id="github-main-commit">-</span>
+                        </div>
+                        <div class="info-item">
+                            <label>Current Branch:</label>
+                            <span id="github-current-branch">-</span>
+                        </div>
+                        <div class="info-item">
+                            <label>Last Commit:</label>
+                            <span id="github-last-commit">-</span>
+                        </div>
+                        <div class="info-item">
+                            <label>Open PRs:</label>
+                            <span id="github-prs">-</span>
+                        </div>
+                        <div class="info-item">
+                            <label>URL:</label>
+                            <a id="github-url" href="#" target="_blank">View Repository</a>
+                        </div>
+                    </div>
+                    <div class="actions">
+                        <button class="btn-action" data-command="git fetch --all" title="Fetch latest changes from remote">
+                            Fetch
+                        </button>
+                        <button class="btn-action" data-command="git pull origin main" title="Pull latest changes from main branch">
+                            Pull Main
+                        </button>
+                        <button class="btn-action btn-primary" data-command="git push origin HEAD" title="Push current branch to remote">
+                            Push Branch
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- GitHub Actions / CI Layer -->
+            <div class="layer-card" id="layer-actions">
+                <div class="layer-header">
+                    <h3>⚙️ GitHub Actions / CI</h3>
+                    <div class="status-badge" id="badge-actions">Unknown</div>
+                </div>
+                <div class="layer-content">
+                    <div class="info-section">
+                        <div class="info-item">
+                            <label>Stage 1 (Deploy):</label>
+                            <span id="actions-stage1">-</span>
+                        </div>
+                        <div class="info-item">
+                            <label>Stage 2 (Testing):</label>
+                            <span id="actions-stage2">-</span>
+                        </div>
+                        <div class="info-item">
+                            <label>CodeQL Analysis:</label>
+                            <span id="actions-codeql">-</span>
+                        </div>
+                        <div class="info-item">
+                            <label>Last Run:</label>
+                            <span id="actions-last-run">-</span>
+                        </div>
+                        <div class="info-item">
+                            <label>URL:</label>
+                            <a id="actions-url" href="#" target="_blank">View Workflows</a>
+                        </div>
+                    </div>
+                    <div class="actions">
+                        <button class="btn-action" data-command="gh workflow list" title="List all workflows">
+                            List Workflows
+                        </button>
+                        <button class="btn-action" data-command="gh run list --limit 5" title="View recent workflow runs">
+                            Recent Runs
+                        </button>
+                        <button class="btn-action btn-primary" data-command="gh workflow run stage1-deploy.yml" title="Trigger Stage 1 deployment workflow">
+                            Trigger Deploy
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Google Apps Script (Production) Layer -->
+            <div class="layer-card" id="layer-apps-script">
+                <div class="layer-header">
+                    <h3>📜 Google Apps Script (Production)</h3>
+                    <div class="status-badge" id="badge-apps-script">Unknown</div>
+                </div>
+                <div class="layer-content">
+                    <div class="info-section">
+                        <div class="info-item">
+                            <label>Script ID:</label>
+                            <span id="apps-script-id">-</span>
+                        </div>
+                        <div class="info-item">
+                            <label>Deployment ID:</label>
+                            <span id="apps-script-deployment-id">-</span>
+                        </div>
+                        <div class="info-item">
+                            <label>Health Check:</label>
+                            <span id="apps-script-health">-</span>
+                        </div>
+                        <div class="info-item">
+                            <label>Last Deploy:</label>
+                            <span id="apps-script-last-deploy">-</span>
+                        </div>
+                        <div class="info-item">
+                            <label>URL:</label>
+                            <a id="apps-script-url" href="#" target="_blank">Open Apps Script</a>
+                        </div>
+                    </div>
+                    <div class="actions">
+                        <button class="btn-action" data-command="clasp open" title="Open Apps Script project in browser">
+                            Open Editor
+                        </button>
+                        <button class="btn-action" data-command="clasp pull" title="Pull latest code from Apps Script">
+                            Pull from Apps Script
+                        </button>
+                        <button class="btn-action btn-primary" data-command="clasp push && clasp deploy" title="Push code and deploy to Apps Script">
+                            Deploy to Apps Script
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- QA Environment Layer -->
+            <div class="layer-card" id="layer-qa">
+                <div class="layer-header">
+                    <h3>🧪 QA Environment</h3>
+                    <div class="status-badge" id="badge-qa">Unknown</div>
+                </div>
+                <div class="layer-content">
+                    <div class="info-section">
+                        <div class="info-item">
+                            <label>QA Script ID:</label>
+                            <span id="qa-script-id">-</span>
+                        </div>
+                        <div class="info-item">
+                            <label>QA Deployment:</label>
+                            <span id="qa-deployment-id">-</span>
+                        </div>
+                        <div class="info-item">
+                            <label>Health Check:</label>
+                            <span id="qa-health">-</span>
+                        </div>
+                        <div class="info-item">
+                            <label>Last Deploy:</label>
+                            <span id="qa-last-deploy">-</span>
+                        </div>
+                        <div class="info-item">
+                            <label>URL:</label>
+                            <a id="qa-url" href="#" target="_blank">Open QA</a>
+                        </div>
+                    </div>
+                    <div class="actions">
+                        <button class="btn-action" data-command="npm run test:qa" title="Run tests against QA environment">
+                            Test QA
+                        </button>
+                        <button class="btn-action btn-primary" data-command="gh workflow run stage2-testing.yml" title="Trigger QA deployment workflow">
+                            Deploy to QA
+                        </button>
+                        <button class="btn-action btn-danger" data-command="gh workflow run qa-rollback.yml" title="Rollback QA deployment">
+                            Rollback QA
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Clasp Sync Layer -->
+            <div class="layer-card" id="layer-clasp">
+                <div class="layer-header">
+                    <h3>🔄 Clasp Sync</h3>
+                    <div class="status-badge" id="badge-clasp">Unknown</div>
+                </div>
+                <div class="layer-content">
+                    <div class="info-section">
+                        <div class="info-item">
+                            <label>Clasp Version:</label>
+                            <span id="clasp-version">-</span>
+                        </div>
+                        <div class="info-item">
+                            <label>Local vs Remote:</label>
+                            <span id="clasp-sync">-</span>
+                        </div>
+                        <div class="info-item">
+                            <label>Auth Status:</label>
+                            <span id="clasp-auth">-</span>
+                        </div>
+                        <div class="info-item">
+                            <label>.clasprc.json:</label>
+                            <span id="clasp-config">-</span>
+                        </div>
+                    </div>
+                    <div class="actions">
+                        <button class="btn-action" data-command="clasp login --status" title="Check clasp authentication status">
+                            Check Auth
+                        </button>
+                        <button class="btn-action" data-command="clasp pull" title="Pull latest from Apps Script">
+                            Pull
+                        </button>
+                        <button class="btn-action btn-primary" data-command="clasp push" title="Push local changes to Apps Script">
+                            Push
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Testing Layer -->
+            <div class="layer-card" id="layer-testing">
+                <div class="layer-header">
+                    <h3>🧪 Testing Status</h3>
+                    <div class="status-badge" id="badge-testing">Unknown</div>
+                </div>
+                <div class="layer-content">
+                    <div class="info-section">
+                        <div class="info-item">
+                            <label>Jest (Unit):</label>
+                            <span id="test-jest">-</span>
+                        </div>
+                        <div class="info-item">
+                            <label>Playwright (E2E):</label>
+                            <span id="test-playwright">-</span>
+                        </div>
+                        <div class="info-item">
+                            <label>Coverage:</label>
+                            <span id="test-coverage">-</span>
+                        </div>
+                        <div class="info-item">
+                            <label>Last Test Run:</label>
+                            <span id="test-last-run">-</span>
+                        </div>
+                        <div class="info-item">
+                            <label>Test Reports:</label>
+                            <a id="test-reports" href="#" target="_blank">View Reports</a>
+                        </div>
+                    </div>
+                    <div class="actions">
+                        <button class="btn-action" data-command="npm run test:unit" title="Run Jest unit tests">
+                            Run Unit Tests
+                        </button>
+                        <button class="btn-action" data-command="npm run test:smoke" title="Run smoke tests">
+                            Run Smoke Tests
+                        </button>
+                        <button class="btn-action btn-primary" data-command="npm run test:e2e" title="Run full E2E test suite">
+                            Run E2E Tests
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Hostinger Deployment Layer -->
+            <div class="layer-card" id="layer-hostinger">
+                <div class="layer-header">
+                    <h3>🌐 Hostinger Deployment</h3>
+                    <div class="status-badge" id="badge-hostinger">Unknown</div>
+                </div>
+                <div class="layer-content">
+                    <div class="info-section">
+                        <div class="info-item">
+                            <label>Domain:</label>
+                            <span id="hostinger-domain">zeventbooks.com</span>
+                        </div>
+                        <div class="info-item">
+                            <label>Proxy Status:</label>
+                            <span id="hostinger-proxy">-</span>
+                        </div>
+                        <div class="info-item">
+                            <label>Health Check:</label>
+                            <span id="hostinger-health">-</span>
+                        </div>
+                        <div class="info-item">
+                            <label>Last Deploy:</label>
+                            <span id="hostinger-last-deploy">-</span>
+                        </div>
+                        <div class="info-item">
+                            <label>URL:</label>
+                            <a id="hostinger-url" href="https://zeventbooks.com" target="_blank">Visit Site</a>
+                        </div>
+                    </div>
+                    <div class="actions">
+                        <button class="btn-action" data-command="npm run test:hostinger" title="Test Hostinger deployment">
+                            Test Deployment
+                        </button>
+                        <button class="btn-action btn-primary" data-command="# FTP deploy via GitHub Actions" title="Deploy to Hostinger via GitHub Actions">
+                            Deploy via Actions
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="command-output-section">
+            <div class="command-output-header">
+                <h3>Command Output</h3>
+                <button id="clear-output" class="btn-icon" title="Clear output">🗑️</button>
+            </div>
+            <div id="command-output" class="command-output">
+                <p class="output-placeholder">Click any action button to see command output here...</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

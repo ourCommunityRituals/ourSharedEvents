@@ -1,0 +1,642 @@
+<style>
+  /* ===== Accessibility Utilities ===== */
+  /*
+    Ensures WCAG 2.1 AA compliance with high contrast, keyboard navigation,
+    screen reader support, and reduced motion support.
+  */
+
+  /* ===== Focus Indicators ===== */
+
+  /* Custom focus ring for better visibility */
+  *:focus {
+    outline: var(--focus-ring-width, 3px) solid var(--focus-ring-color, var(--color-primary, #2563eb));
+    outline-offset: var(--focus-ring-offset, 2px);
+  }
+
+  /* Remove default outline only when custom is applied */
+  *:focus:not(:focus-visible) {
+    outline: none;
+  }
+
+  /* Enhanced focus for interactive elements */
+  button:focus-visible,
+  a:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible,
+  [tabindex]:focus-visible {
+    outline: 3px solid var(--color-primary, #2563eb);
+    outline-offset: 2px;
+    box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.1);
+  }
+
+  /* ===== Screen Reader Only Content ===== */
+
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  /* Allow screen reader content to be focusable when navigated to via keyboard */
+  .sr-only-focusable:focus,
+  .sr-only-focusable:active {
+    position: static;
+    width: auto;
+    height: auto;
+    margin: 0;
+    overflow: visible;
+    clip: auto;
+    white-space: normal;
+  }
+
+  /* ===== Skip Links ===== */
+
+  .skip-link {
+    position: absolute;
+    top: -40px;
+    left: 0;
+    background: var(--color-primary, #2563eb);
+    color: white;
+    padding: var(--space-3, 0.75rem) var(--space-4, 1rem);
+    text-decoration: none;
+    font-weight: var(--font-weight-semibold, 600);
+    z-index: var(--z-index-modal, 1000);
+    border-radius: 0 0 var(--radius-sm, 6px) 0;
+  }
+
+  .skip-link:focus {
+    top: 0;
+  }
+
+  /* ===== High Contrast Mode Support ===== */
+
+  @media (prefers-contrast: high) {
+    /* Increase border visibility */
+    .card,
+    .event-card,
+    .metric-card,
+    input,
+    select,
+    textarea {
+      border-width: 2px;
+      border-color: currentColor;
+    }
+
+    /* Stronger shadows */
+    .card,
+    .event-card {
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    }
+
+    /* Remove background gradients */
+    .stat-card,
+    .cta-button,
+    .sponsor-banner {
+      background: var(--color-primary, #2563eb);
+    }
+  }
+
+  /* ===== Reduced Motion Support ===== */
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+
+  /* ===== Color Blind Friendly Patterns ===== */
+
+  /* Add patterns to color-coded elements for color blind users */
+  .status-badge.active::before,
+  .phase-indicator.event-day::before {
+    background: repeating-linear-gradient(
+      45deg,
+      currentColor,
+      currentColor 2px,
+      transparent 2px,
+      transparent 4px
+    );
+  }
+
+  /* ===== Keyboard Navigation Helpers ===== */
+
+  /* Visible keyboard focus for cards */
+  .event-card:focus-within,
+  .metric-card:focus-within {
+    outline: 3px solid var(--color-primary, #2563eb);
+    outline-offset: 2px;
+  }
+
+  /* Tab navigation helper */
+  .tab-button[aria-selected="true"] {
+    position: relative;
+  }
+
+  .tab-button[aria-selected="true"]::after {
+    content: '';
+    position: absolute;
+    bottom: -2px;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: var(--color-primary, #2563eb);
+  }
+
+  /* ===== ARIA Live Regions ===== */
+
+  .live-region {
+    position: absolute;
+    left: -10000px;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+  }
+
+  /* ===== Touch Target Size (WCAG 2.5.5) ===== */
+
+  /* Ensure minimum 44x44px touch targets */
+  button,
+  a,
+  input[type="checkbox"],
+  input[type="radio"],
+  select {
+    min-height: var(--touch-target-min, 44px);
+    min-width: var(--touch-target-min, 44px);
+  }
+
+  /* Exception for inline text links */
+  p a,
+  li a {
+    min-height: auto;
+    min-width: auto;
+  }
+
+  /* ===== Form Accessibility ===== */
+
+  /* Required field indicator */
+  label.required::after {
+    content: ' *';
+    color: var(--color-danger, #ef4444);
+    font-weight: var(--font-weight-bold, 700);
+  }
+
+  /* Error state */
+  input:invalid,
+  select:invalid,
+  textarea:invalid {
+    border-color: var(--color-danger, #ef4444);
+  }
+
+  input[aria-invalid="true"],
+  select[aria-invalid="true"],
+  textarea[aria-invalid="true"] {
+    border-color: var(--color-danger, #ef4444);
+    border-width: 2px;
+  }
+
+  .error-message {
+    color: var(--color-danger, #ef4444);
+    font-size: var(--font-size-sm, 0.875rem);
+    margin-top: var(--space-1, 0.25rem);
+    display: flex;
+    align-items: center;
+    gap: var(--space-2, 0.5rem);
+  }
+
+  .error-message::before {
+    content: '⚠';
+    font-size: var(--font-size-base, 1rem);
+  }
+
+  /* Success state */
+  input[aria-invalid="false"],
+  select[aria-invalid="false"],
+  textarea[aria-invalid="false"] {
+    border-color: var(--color-success, #10b981);
+  }
+
+  /* ===== Table Accessibility ===== */
+
+  table {
+    border-collapse: collapse;
+    width: 100%;
+  }
+
+  th {
+    text-align: left;
+    font-weight: var(--font-weight-semibold, 600);
+    background: var(--color-gray-50, #f8fafc);
+    padding: var(--space-3, 0.75rem);
+    border-bottom: 2px solid var(--color-gray-300, #cbd5e1);
+  }
+
+  td {
+    padding: var(--space-3, 0.75rem);
+    border-bottom: 1px solid var(--color-gray-200, #e2e8f0);
+  }
+
+  /* Highlight row on keyboard focus */
+  tr:focus-within {
+    background: var(--color-primary-pale, #dbeafe);
+    outline: 2px solid var(--color-primary, #2563eb);
+  }
+
+  /* ===== Modal Accessibility ===== */
+
+  .modal[aria-hidden="true"] {
+    display: none;
+  }
+
+  .modal[aria-hidden="false"] {
+    display: flex;
+  }
+
+  /* Prevent background scrolling when modal is open */
+  body.modal-open {
+    overflow: hidden;
+  }
+
+  /* ===== Image Accessibility ===== */
+
+  /* Ensure decorative images are hidden from screen readers */
+  img[alt=""],
+  img[role="presentation"] {
+    /* These should have empty alt or role=presentation in HTML */
+  }
+
+  /* Warning for missing alt text (dev mode) */
+  img:not([alt]) {
+    outline: 3px solid red;
+  }
+
+  /* ===== Loading States ===== */
+
+  [aria-busy="true"] {
+    position: relative;
+    pointer-events: none;
+    opacity: 0.6;
+  }
+
+  [aria-busy="true"]::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 20px;
+    height: 20px;
+    margin: -10px 0 0 -10px;
+    border: 3px solid var(--color-gray-300, #cbd5e1);
+    border-top-color: var(--color-primary, #2563eb);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  /* ===== Print Accessibility ===== */
+
+  @media print {
+    /* Ensure links are visible */
+    a[href]::after {
+      content: " (" attr(href) ")";
+      font-size: 0.8em;
+      color: var(--color-gray-600, #475569);
+    }
+
+    /* Don't print decorative images */
+    img[role="presentation"],
+    img[alt=""] {
+      display: none;
+    }
+
+    /* Ensure good contrast */
+    * {
+      background: white !important;
+      color: black !important;
+    }
+  }
+</style>
+
+<script>
+  /* ===== Accessibility JavaScript Utilities ===== */
+
+  /**
+   * Announce message to screen readers
+   * @param {string} message - Message to announce
+   * @param {string} priority - 'polite' or 'assertive'
+   */
+  function announceToScreenReader(message, priority = 'polite') {
+    const liveRegion = document.getElementById('aria-live-region') ||
+      createLiveRegion(priority);
+
+    liveRegion.textContent = message;
+
+    // Clear after announcement
+    setTimeout(() => {
+      liveRegion.textContent = '';
+    }, 1000);
+  }
+
+  /**
+   * Create ARIA live region if it doesn't exist
+   */
+  function createLiveRegion(priority = 'polite') {
+    const region = document.createElement('div');
+    region.id = 'aria-live-region';
+    region.className = 'live-region';
+    region.setAttribute('aria-live', priority);
+    region.setAttribute('aria-atomic', 'true');
+    document.body.appendChild(region);
+    return region;
+  }
+
+  /**
+   * Trap focus within a modal
+   * @param {HTMLElement} modal - Modal element
+   */
+  function trapFocus(modal) {
+    const focusableElements = modal.querySelectorAll(
+      'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])'
+    );
+
+    const firstFocusable = focusableElements[0];
+    const lastFocusable = focusableElements[focusableElements.length - 1];
+
+    // Store previously focused element
+    const previouslyFocused = document.activeElement;
+
+    // Focus first element
+    firstFocusable?.focus();
+
+    function handleTabKey(e) {
+      if (e.key !== 'Tab') return;
+
+      if (e.shiftKey) {
+        // Shift + Tab
+        if (document.activeElement === firstFocusable) {
+          e.preventDefault();
+          lastFocusable?.focus();
+        }
+      } else {
+        // Tab
+        if (document.activeElement === lastFocusable) {
+          e.preventDefault();
+          firstFocusable?.focus();
+        }
+      }
+    }
+
+    modal.addEventListener('keydown', handleTabKey);
+
+    // Return cleanup function
+    return () => {
+      modal.removeEventListener('keydown', handleTabKey);
+      previouslyFocused?.focus();
+    };
+  }
+
+  /**
+   * Make an element accessible for screen readers
+   * @param {HTMLElement} element - Element to enhance
+   * @param {Object} options - Accessibility options
+   */
+  function makeAccessible(element, options = {}) {
+    const {
+      role = null,
+      label = null,
+      describedBy = null,
+      hidden = false,
+      live = null,
+      busy = false
+    } = options;
+
+    if (role) element.setAttribute('role', role);
+    if (label) element.setAttribute('aria-label', label);
+    if (describedBy) element.setAttribute('aria-describedby', describedBy);
+    if (hidden) element.setAttribute('aria-hidden', 'true');
+    if (live) element.setAttribute('aria-live', live);
+    if (busy) element.setAttribute('aria-busy', 'true');
+  }
+
+  /**
+   * Check color contrast ratio
+   * @param {string} foreground - Foreground color (hex)
+   * @param {string} background - Background color (hex)
+   * @returns {number} Contrast ratio
+   */
+  function getContrastRatio(foreground, background) {
+    const getLuminance = (color) => {
+      const rgb = parseInt(color.slice(1), 16);
+      const r = ((rgb >> 16) & 0xff) / 255;
+      const g = ((rgb >> 8) & 0xff) / 255;
+      const b = ((rgb >> 0) & 0xff) / 255;
+
+      const [rL, gL, bL] = [r, g, b].map(c =>
+        c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4)
+      );
+
+      return 0.2126 * rL + 0.7152 * gL + 0.0722 * bL;
+    };
+
+    const l1 = getLuminance(foreground);
+    const l2 = getLuminance(background);
+
+    const lighter = Math.max(l1, l2);
+    const darker = Math.min(l1, l2);
+
+    return (lighter + 0.05) / (darker + 0.05);
+  }
+
+  /**
+   * Validate form accessibility
+   * @param {HTMLFormElement} form - Form to validate
+   * @returns {Object} Validation results
+   */
+  function validateFormAccessibility(form) {
+    const issues = [];
+
+    // Check all inputs have labels
+    const inputs = form.querySelectorAll('input, select, textarea');
+    inputs.forEach(input => {
+      const id = input.id;
+      const label = form.querySelector(`label[for="${id}"]`);
+      const ariaLabel = input.getAttribute('aria-label');
+
+      if (!label && !ariaLabel) {
+        issues.push({
+          element: input,
+          issue: 'Input missing label',
+          severity: 'error'
+        });
+      }
+    });
+
+    // Check required fields are marked
+    const required = form.querySelectorAll('[required]');
+    required.forEach(input => {
+      const ariaRequired = input.getAttribute('aria-required');
+      if (!ariaRequired) {
+        issues.push({
+          element: input,
+          issue: 'Required field missing aria-required',
+          severity: 'warning'
+        });
+      }
+    });
+
+    return {
+      isAccessible: issues.filter(i => i.severity === 'error').length === 0,
+      issues
+    };
+  }
+
+  /**
+   * Add keyboard navigation to a custom component
+   * @param {HTMLElement} container - Container element
+   * @param {string} itemSelector - Selector for navigable items
+   */
+  function addKeyboardNavigation(container, itemSelector) {
+    const items = container.querySelectorAll(itemSelector);
+
+    items.forEach((item, index) => {
+      // Make focusable if not already
+      if (!item.hasAttribute('tabindex')) {
+        item.setAttribute('tabindex', index === 0 ? '0' : '-1');
+      }
+
+      item.addEventListener('keydown', (e) => {
+        let targetIndex = index;
+
+        switch (e.key) {
+          case 'ArrowDown':
+          case 'ArrowRight':
+            e.preventDefault();
+            targetIndex = (index + 1) % items.length;
+            break;
+
+          case 'ArrowUp':
+          case 'ArrowLeft':
+            e.preventDefault();
+            targetIndex = (index - 1 + items.length) % items.length;
+            break;
+
+          case 'Home':
+            e.preventDefault();
+            targetIndex = 0;
+            break;
+
+          case 'End':
+            e.preventDefault();
+            targetIndex = items.length - 1;
+            break;
+
+          default:
+            return;
+        }
+
+        // Update tabindex
+        items.forEach((i, idx) => {
+          i.setAttribute('tabindex', idx === targetIndex ? '0' : '-1');
+        });
+
+        // Focus target
+        items[targetIndex].focus();
+      });
+    });
+  }
+
+  /**
+   * Initialize accessibility features on page load
+   */
+  function initAccessibility() {
+    // Create live region
+    createLiveRegion();
+
+    // Add skip links if they don't exist
+    if (!document.querySelector('.skip-link')) {
+      const skipLink = document.createElement('a');
+      skipLink.href = '#main-content';
+      skipLink.className = 'skip-link';
+      skipLink.textContent = 'Skip to main content';
+      document.body.insertBefore(skipLink, document.body.firstChild);
+    }
+
+    // Ensure main content has ID
+    const main = document.querySelector('main') || document.querySelector('[role="main"]');
+    if (main && !main.id) {
+      main.id = 'main-content';
+    }
+
+    // Log contrast issues in development
+    if (window.location.hostname === 'localhost') {
+      checkContrastIssues();
+    }
+  }
+
+  /**
+   * Check for contrast issues (dev mode)
+   */
+  function checkContrastIssues() {
+    const elements = document.querySelectorAll('*');
+    const issues = [];
+
+    elements.forEach(el => {
+      const style = window.getComputedStyle(el);
+      const fg = rgbToHex(style.color);
+      const bg = rgbToHex(style.backgroundColor);
+
+      if (fg && bg && fg !== bg) {
+        const ratio = getContrastRatio(fg, bg);
+        const fontSize = parseFloat(style.fontSize);
+
+        const minRatio = fontSize >= 18 ? 3 : 4.5;
+
+        if (ratio < minRatio) {
+          issues.push({
+            element: el,
+            ratio: ratio.toFixed(2),
+            required: minRatio
+          });
+        }
+      }
+    });
+
+    if (issues.length > 0) {
+      console.warn('Contrast issues found:', issues);
+    }
+  }
+
+  /**
+   * Convert RGB to Hex
+   */
+  function rgbToHex(rgb) {
+    const match = rgb.match(/^rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+    if (!match) return null;
+
+    const hex = (x) => ('0' + parseInt(x).toString(16)).slice(-2);
+    return '#' + hex(match[1]) + hex(match[2]) + hex(match[3]);
+  }
+
+  // Auto-initialize
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initAccessibility);
+  } else {
+    initAccessibility();
+  }
+</script>
+
+<!-- ===== Global ARIA Live Region ===== -->
+<div id="aria-live-region" class="live-region" aria-live="polite" aria-atomic="true"></div>
+
+<!-- ===== Skip Link (will be auto-added by JS if not present) ===== -->
+<a href="#main-content" class="skip-link">Skip to main content</a>

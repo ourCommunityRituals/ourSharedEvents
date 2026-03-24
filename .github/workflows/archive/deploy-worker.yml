@@ -1,0 +1,115 @@
+# Deploy Cloudflare Worker
+#
+# SECURITY: This workflow follows SEC-7.2 CI Deploy Hardening policy.
+# See: docs/security/CI_DEPLOY_HARDENING.md
+#
+# LEAST PRIVILEGE REQUIREMENTS:
+# - CF_DEPLOY_TOKEN must be scoped to Workers only (no DNS, Access, WAF)
+# - Token verification tests: docs/security/CI_DEPLOY_HARDENING.md Section 7
+# - A compromised token CANNOT alter DNS or Cloudflare Access policies
+#
+# TOKEN ROTATION:
+# - Rotate CF_DEPLOY_TOKEN every 90 days
+# - Emergency revoke procedure: docs/security/CI_DEPLOY_HARDENING.md Section 6
+
+name: Deploy Cloudflare Worker
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - production
+
+# SEC-7.2: Limit workflow permissions to minimum required
+permissions:
+  contents: read  # Only read access to repository
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    # SEC-7.2: Use GitHub Environments for deployment protection
+    # Configure environment protection rules in repository settings:
+    # - staging: auto-deploy, main branch only
+    # - production: require approval, main branch only
+    environment: ${{ inputs.environment }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # SEC-7.2: Verify token has correct scope before deployment
+      # This catches over-scoped tokens that could modify DNS/Access
+      - name: Verify token scope (security check)
+        env:
+          CF_TOKEN: ${{ secrets.CF_DEPLOY_TOKEN }}
+          CF_ZONE_ID: ${{ vars.CF_ZONE_ID }}
+        run: |
+          # Test that token CANNOT access DNS (should return 403)
+          DNS_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            -X GET "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records?per_page=1" \
+            -H "Authorization: Bearer $CF_TOKEN")
+
+          if [ "$DNS_STATUS" != "403" ]; then
+            echo "::error::SECURITY: Deploy token has DNS access (expected 403, got $DNS_STATUS)"
+            echo "::error::Token is over-scoped! See SEC-7.2 for correct scope."
+            exit 1
+          fi
+          echo "Token scope verified: DNS access blocked (correct)"
+
+      # SEC-7.2: Use pinned action version for supply chain security
+      - name: Deploy Worker
+        uses: cloudflare/wrangler-action@v3
+        with:
+          # SEC-7.2: Token must be scoped per CF_API_TOKENS_POLICY.md
+          # Required permissions: Workers Scripts (Edit), Workers Routes (Edit)
+          # Prohibited permissions: DNS, Access, SSL/TLS, WAF, Account Members
+          apiToken: ${{ secrets.CF_DEPLOY_TOKEN }}
+          # Use vars (not secrets) for non-sensitive account ID
+          accountId: ${{ vars.CF_ACCOUNT_ID }}
+          workingDirectory: cloudflare-proxy
+          command: deploy --env ${{ inputs.environment }}
+
+      - name: Verify deployment
+        run: |
+          sleep 5
+          if [ "${{ inputs.environment }}" == "staging" ]; then
+            curl -sf "https://stg.eventangle.com/?page=status" || echo "Health check pending"
+          else
+            curl -sf "https://eventangle.com/?page=status" || echo "Health check pending"
+          fi
+
+# SEC-7.2 HARDENING NOTES:
+# ========================
+#
+# 1. PROTECTED BRANCHES
+#    - Configure branch protection on 'main' with required reviews
+#    - Require status checks before merge
+#    - Disable force pushes and deletions
+#
+# 2. DEPLOY TOKEN SCOPE (CF_DEPLOY_TOKEN)
+#    Required permissions:
+#      - Workers Scripts: Edit (Account)
+#      - Workers Routes: Edit (Zone: eventangle.com)
+#      - Workers KV Storage: Edit (if using KV)
+#      - Account Settings: Read
+#
+#    MUST NOT have:
+#      - DNS: Edit (prevents DNS hijacking)
+#      - Access: Edit (prevents Access bypass)
+#      - SSL/TLS: Edit (prevents MITM)
+#      - WAF: Edit (prevents WAF bypass)
+#      - Account Members: Edit (prevents privilege escalation)
+#
+# 3. TOKEN ROTATION
+#    - Rotate every 90 days (see SEC-7.2 Section 5)
+#    - On exposure: revoke immediately (see SEC-7.2 Section 6)
+#
+# 4. CODEOWNERS
+#    - Protect .github/workflows/ with CODEOWNERS
+#    - Require security team review for workflow changes

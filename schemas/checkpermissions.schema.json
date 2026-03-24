@@ -1,0 +1,273 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://eventangle.com/schemas/checkpermissions.schema.json",
+  "title": "CheckPermissions Response",
+  "description": "Permission verification response from api_checkPermissions() with detailed diagnostics and recommendations.",
+  "type": "object",
+  "required": ["ok"],
+  "additionalProperties": false,
+  "oneOf": [
+    {
+      "properties": {
+        "ok": { "const": true },
+        "value": { "$ref": "#/$defs/CheckPermissionsValue" }
+      },
+      "required": ["ok", "value"]
+    },
+    {
+      "properties": {
+        "ok": { "const": false },
+        "code": { "$ref": "#/$defs/ErrorCode" },
+        "message": { "type": "string", "minLength": 1 }
+      },
+      "required": ["ok", "code", "message"]
+    }
+  ],
+  "$defs": {
+    "CheckPermissionsValue": {
+      "type": "object",
+      "required": ["status", "message", "details"],
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["ok", "error"],
+          "description": "Overall permission status"
+        },
+        "message": {
+          "type": "string",
+          "description": "Human-readable summary message"
+        },
+        "details": {
+          "$ref": "#/$defs/PermissionDetails"
+        },
+        "nextSteps": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Next actions when permissions are ok"
+        },
+        "recommendations": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Fix recommendations when permissions have issues"
+        },
+        "helpUrl": {
+          "type": "string",
+          "description": "Link to deployment guide documentation"
+        }
+      }
+    },
+    "PermissionDetails": {
+      "type": "object",
+      "required": ["brand", "deployment", "spreadsheet", "oauth"],
+      "additionalProperties": true,
+      "properties": {
+        "brand": {
+          "$ref": "#/$defs/BrandInfo"
+        },
+        "deployment": {
+          "$ref": "#/$defs/DeploymentInfo"
+        },
+        "spreadsheet": {
+          "$ref": "#/$defs/SpreadsheetInfo"
+        },
+        "oauth": {
+          "$ref": "#/$defs/OAuthInfo"
+        },
+        "recommendations": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Recommendations accumulated during checks"
+        }
+      }
+    },
+    "BrandInfo": {
+      "type": "object",
+      "required": ["id", "name", "spreadsheetId"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Brand identifier"
+        },
+        "name": {
+          "type": "string",
+          "description": "Brand display name"
+        },
+        "spreadsheetId": {
+          "type": "string",
+          "description": "Configured spreadsheet ID or 'not configured'"
+        }
+      }
+    },
+    "DeploymentInfo": {
+      "type": "object",
+      "required": ["configured"],
+      "additionalProperties": false,
+      "properties": {
+        "url": {
+          "type": "string",
+          "description": "Deployment URL"
+        },
+        "configured": {
+          "type": "boolean",
+          "description": "Whether deployment is configured"
+        },
+        "error": {
+          "type": "string",
+          "description": "Error message if deployment check failed"
+        }
+      }
+    },
+    "SpreadsheetInfo": {
+      "type": "object",
+      "required": ["accessible", "message"],
+      "additionalProperties": false,
+      "properties": {
+        "accessible": {
+          "type": "boolean",
+          "description": "Whether spreadsheet is accessible"
+        },
+        "name": {
+          "type": "string",
+          "description": "Spreadsheet name (if accessible)"
+        },
+        "id": {
+          "type": "string",
+          "description": "Spreadsheet ID (if accessible)"
+        },
+        "message": {
+          "type": "string",
+          "description": "Status message"
+        },
+        "error": {
+          "type": "string",
+          "description": "Error message if access failed"
+        }
+      }
+    },
+    "OAuthInfo": {
+      "type": "object",
+      "required": ["scopes", "allGranted"],
+      "additionalProperties": false,
+      "properties": {
+        "scopes": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/ScopeTest" },
+          "description": "Individual scope test results"
+        },
+        "allGranted": {
+          "type": "boolean",
+          "description": "Whether all required scopes are granted"
+        }
+      }
+    },
+    "ScopeTest": {
+      "type": "object",
+      "required": ["scope", "granted"],
+      "additionalProperties": false,
+      "properties": {
+        "scope": {
+          "type": "string",
+          "enum": ["spreadsheets", "external_request"],
+          "description": "OAuth scope being tested"
+        },
+        "granted": {
+          "type": "boolean",
+          "description": "Whether scope is granted"
+        },
+        "error": {
+          "type": "string",
+          "description": "Error message if scope test failed"
+        }
+      }
+    },
+    "ErrorCode": {
+      "type": "string",
+      "enum": ["NOT_FOUND", "INTERNAL", "UNAUTHORIZED", "BAD_REQUEST"],
+      "description": "Standard error codes"
+    }
+  },
+  "examples": [
+    {
+      "ok": true,
+      "value": {
+        "status": "ok",
+        "message": "All permissions are properly configured!",
+        "details": {
+          "brand": {
+            "id": "root",
+            "name": "Default Brand",
+            "spreadsheetId": "1abc123def456"
+          },
+          "deployment": {
+            "url": "https://script.google.com/macros/s/xxx/exec",
+            "configured": true
+          },
+          "spreadsheet": {
+            "accessible": true,
+            "name": "Events Database",
+            "id": "1abc123def456",
+            "message": "Spreadsheet access granted"
+          },
+          "oauth": {
+            "scopes": [
+              { "scope": "spreadsheets", "granted": true },
+              { "scope": "external_request", "granted": true }
+            ],
+            "allGranted": true
+          },
+          "recommendations": []
+        },
+        "nextSteps": [
+          "Your deployment is ready to use",
+          "Test the API: https://script.google.com/macros/s/xxx/exec?page=status&brand=root"
+        ]
+      }
+    },
+    {
+      "ok": true,
+      "value": {
+        "status": "error",
+        "message": "Permission issues detected",
+        "details": {
+          "brand": {
+            "id": "root",
+            "name": "Default Brand",
+            "spreadsheetId": "1abc123def456"
+          },
+          "deployment": {
+            "configured": false,
+            "error": "Could not get deployment URL"
+          },
+          "spreadsheet": {
+            "accessible": false,
+            "message": "Permission denied",
+            "error": "You do not have permission to access this spreadsheet"
+          },
+          "oauth": {
+            "scopes": [
+              { "scope": "spreadsheets", "granted": false, "error": "Spreadsheet access not authorized" },
+              { "scope": "external_request", "granted": true }
+            ],
+            "allGranted": false
+          },
+          "recommendations": [
+            "Deploy the script as a web app",
+            "The deployment needs to be authorized to access spreadsheets"
+          ]
+        },
+        "recommendations": [
+          "Deploy the script as a web app",
+          "The deployment needs to be authorized to access spreadsheets"
+        ],
+        "helpUrl": "See APPS_SCRIPT_DEPLOYMENT_GUIDE.md for detailed instructions"
+      }
+    },
+    {
+      "ok": false,
+      "code": "NOT_FOUND",
+      "message": "Brand not found: invalid"
+    }
+  ]
+}

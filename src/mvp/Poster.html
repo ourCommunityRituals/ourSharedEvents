@@ -1,0 +1,832 @@
+<!--
+================================================================================
+MVP SURFACE - Focus Group Critical
+================================================================================
+Page: Poster.html
+Purpose: Printable event poster with QR codes and sponsor branding
+Status: HARDENED for MVP v1.0
+
+SCHEMA CONTRACT: /schemas/event.schema.json
+
+═══════════════════════════════════════════════════════════════════════════════
+READS FROM EVENT SCHEMA (via api_getPosterBundle):
+═══════════════════════════════════════════════════════════════════════════════
+  Identity (MVP Required):
+    - event.id              → Analytics tracking
+    - event.name            → #eventName heading
+    - event.startDateISO    → #eventDate (formatted)
+    - event.venue           → #eventLocation
+
+  Links (MVP Required):
+    - event.links.publicUrl → QR code label text
+    - event.links.signupUrl → QR code label text
+
+  QR Codes (MVP Required):
+    - event.qr.public       → Public page QR (base64 PNG)
+    - event.qr.signup       → Sign-up QR (base64 PNG)
+
+  CTAs (MVP Required):
+    - event.ctas.primary.label → Sign-up QR title text
+
+  Settings (V2 Optional):
+    - event.settings.showSponsors   → Master sponsor toggle
+    - event.settings.showQRSection  → QR codes section visibility (default: true)
+
+  Sponsors (V2 Optional):
+    - event.sponsors[].id, name, logoUrl, linkUrl, placement
+    - Filter: placement === 'poster'
+
+═══════════════════════════════════════════════════════════════════════════════
+SECTION GATES (schema-backed visibility):
+═══════════════════════════════════════════════════════════════════════════════
+  Sponsor Strip: if (settings.showSponsors && sponsors.some(s => s.placement === 'poster'))
+  QR Codes:      if (settings.showQRSection !== false)
+                 && (qr.public) → Public QR; if (qr.signup) → Signup QR
+
+  INVARIANT: "NO QR UNLESS VERIFIED URL"
+  Backend (_buildEventContract_ in Code.gs) enforces QR codes are ONLY
+  generated for validated URLs. Poster trusts event.qr.* as pre-verified.
+  DO NOT generate QR codes client-side from raw URL strings.
+
+DO NOT add fields without updating:
+  - /schemas/event.schema.json (source of truth)
+  - src/mvp/Code.gs (_buildEventContract_)
+
+Related MVP Surfaces: Admin, Display, Public, Sponsor, SharedReport
+================================================================================
+-->
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <title><?= appTitle ?> · Poster</title>
+  <?!= include('DesignTokens'); ?>
+  <?!= include('Styles'); ?>
+  <?!= include('DesignAdapter'); ?>
+  <?!= include('NUSDK'); ?>
+  <?!= include('SharedUtils'); ?>
+  <?!= include('GlobalErrorHandler'); ?>
+  <?!= include('SponsorUtils'); ?>
+  <?!= include('FooterComponent'); ?>
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+  <meta name="referrer" content="no-referrer"/>
+  <style>
+    /* Poster-specific styles - uses design tokens from DesignAdapter */
+    [hidden] { display:none !important; }
+    body { background: #fff; }
+    .poster-container {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 40px 20px;
+      background: #fff;
+    }
+
+    /* Enhanced Sponsor Strip */
+    .sponsor-strip {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 24px;
+      padding: 20px;
+      border-bottom: 3px solid var(--color-primary, #2563eb);
+      margin-bottom: 40px;
+      background: var(--gradient-sponsor-bg, linear-gradient(135deg, #f8fafc 0%, #e2e8f0 50%, #f8fafc 100%));
+      box-shadow: var(--shadow-sm, 0 2px 8px rgba(0,0,0,0.05));
+    }
+    .sponsor-strip img {
+      max-height: var(--poster-sponsor-logo-height, 70px);
+      object-fit: contain;
+    }
+    .sponsor-strip strong {
+      color: var(--color-gray-800, #1e293b);
+      font-size: 1.3em;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    /* Enhanced Event Details */
+    .event-details {
+      text-align: center;
+      margin-bottom: 40px;
+      padding: 24px;
+      background: linear-gradient(135deg, var(--color-gray-50, #f8fafc) 0%, #ffffff 100%);
+      border-radius: var(--radius-md, 12px);
+    }
+    .event-details h1 {
+      color: var(--color-primary, #2563eb);
+      font-size: 2.8rem;
+      margin-bottom: 20px;
+      line-height: 1.2;
+      text-shadow: 0 2px 4px rgba(37, 99, 235, 0.1);
+    }
+    .event-meta {
+      font-size: 1.3rem;
+      color: var(--color-gray-600, #475569);
+      margin: 12px 0;
+      line-height: 1.8;
+    }
+    .event-meta strong {
+      color: var(--color-gray-800, #1e293b);
+      font-weight: 700;
+    }
+    /* V2 REMOVED: .event-image and .event-summary CSS deleted - not in schema */
+
+    /* Enhanced QR Codes */
+    .qr-section {
+      margin-top: 48px;
+      padding: 32px 0;
+      border-top: 3px solid #e2e8f0;
+    }
+    .qr-section h2 {
+      text-align: center;
+      color: #1e293b;
+      font-size: 2rem;
+      margin-bottom: 32px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    .qr-section h2::before {
+      content: "📱 ";
+      font-size: 1.5em;
+    }
+    .qr-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 28px;
+      margin: 24px 0;
+    }
+    .qr-code {
+      text-align: center;
+      padding: 24px;
+      background: linear-gradient(135deg, #f8fafc 0%, #ffffff 100%);
+      border-radius: 16px;
+      border: 3px solid #e2e8f0;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+      transition: all 0.3s ease;
+    }
+    .qr-code:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 8px 20px rgba(37, 99, 235, 0.15);
+      border-color: #2563eb;
+    }
+    .qr-code h3 {
+      margin: 0 0 8px;
+      color: #2563eb;
+      font-size: 1.3rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .qr-code h4 {
+      margin: 0 0 16px;
+      color: #64748b;
+      font-size: 0.95rem;
+      font-weight: 500;
+    }
+    .qr-code img {
+      width: 100%;
+      max-width: 220px;
+      height: auto;
+      margin: 16px auto;
+      display: block;
+      border-radius: 8px;
+      border: 2px solid #e2e8f0;
+      padding: 8px;
+      background: white;
+    }
+    .qr-code p {
+      margin-top: 12px;
+      color: #94a3b8;
+      font-size: 10px;
+      word-break: break-all;
+      line-height: 1.4;
+    }
+
+    /* Print Styles - Optimized for printing */
+    /* PR-001, PR-002: Enhanced print safety margins and areas */
+    @media print {
+      @page {
+        margin: 0.5in;
+        size: letter portrait;  /* Explicit paper size */
+      }
+
+      body {
+        background: #fff;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+
+      .poster-container {
+        padding: 0;  /* @page margin handles outer spacing */
+        max-width: 100%;
+      }
+
+      /* PR-002: Safe area for sponsor strip */
+      .sponsor-strip {
+        border: 0;
+        padding: 12px 0.25in;  /* Inset from edge for print safety */
+        box-shadow: none;
+        background: #fff;
+        margin: 0 -0.25in;
+        width: calc(100% + 0.5in);
+      }
+
+      .event-details {
+        background: #fff;
+        padding: 16px 0;
+      }
+
+      /* PR-003: Prevent title overflow on print */
+      .event-details h1 {
+        font-size: clamp(1.5rem, 6vw, 2.5rem);
+        word-wrap: break-word;
+        overflow-wrap: break-word;
+        hyphens: auto;
+      }
+
+      .qr-grid {
+        gap: 16px;
+        page-break-inside: avoid;
+      }
+
+      .qr-code {
+        box-shadow: none;
+        page-break-inside: avoid;
+        border-width: 2px;
+      }
+
+      .qr-code:hover {
+        transform: none;
+      }
+
+      .qr-section {
+        page-break-inside: avoid;
+      }
+
+      .qr-section h2::before {
+        content: "";
+      }
+
+      /* Hide interactive elements in print */
+      .btn-retry,
+      .site-footer a {
+        text-decoration: none;
+        color: inherit;
+      }
+    }
+
+    /* Narrow print media (e.g., A5, receipt printers) */
+    @media print and (max-width: 6in) {
+      .qr-grid {
+        grid-template-columns: 1fr 1fr;
+      }
+
+      .event-details h1 {
+        font-size: 1.5rem;
+      }
+
+      .sponsor-strip img {
+        max-height: 48px;
+      }
+    }
+
+    /* Responsive - Mobile and tablet */
+    @media (max-width: 768px) {
+      body {
+        overflow-x: hidden;
+      }
+
+      .poster-container {
+        padding: 16px 12px;
+        max-width: 100%;
+      }
+
+      .sponsor-strip {
+        padding: 14px 12px;
+        gap: 12px;
+        margin-bottom: 24px;
+        border-radius: 8px;
+        flex-direction: row;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        justify-content: flex-start;
+      }
+
+      .sponsor-strip img {
+        max-height: 48px;
+        flex-shrink: 0;
+      }
+
+      .sponsor-strip strong {
+        font-size: 1rem;
+        white-space: nowrap;
+      }
+
+      .event-details {
+        padding: 16px 12px;
+        margin-bottom: 24px;
+        border-radius: 8px;
+      }
+
+      .event-details h1 {
+        font-size: 1.6rem;
+        line-height: 1.3;
+        word-wrap: break-word;
+        overflow-wrap: break-word;
+      }
+
+      .event-meta {
+        font-size: 1rem;
+        line-height: 1.6;
+      }
+
+      .qr-section {
+        margin-top: 24px;
+        padding: 20px 0;
+      }
+
+      .qr-section h2 {
+        font-size: 1.3rem;
+        margin-bottom: 20px;
+      }
+
+      .qr-section h2::before {
+        font-size: 1.2em;
+      }
+
+      .qr-grid {
+        grid-template-columns: 1fr;
+        gap: 16px;
+      }
+
+      .qr-code {
+        padding: 16px;
+        border-radius: 12px;
+      }
+
+      .qr-code h3 {
+        font-size: 1rem;
+      }
+
+      .qr-code h4 {
+        font-size: 0.85rem;
+        margin-bottom: 12px;
+      }
+
+      .qr-code img {
+        max-width: 180px;
+        margin: 12px auto;
+        padding: 6px;
+      }
+
+      .qr-code p {
+        font-size: 9px;
+        line-height: 1.3;
+      }
+
+      .poster-watermark {
+        margin-top: 20px;
+        padding: 12px 0;
+      }
+
+      .watermark-text {
+        font-size: 0.75rem;
+      }
+
+      .site-footer {
+        padding: 16px;
+        margin-top: 0;
+      }
+    }
+
+    /* Very small screens (iPhone SE, etc.) */
+    @media (max-width: 375px) {
+      .poster-container {
+        padding: 12px 8px;
+      }
+
+      .event-details h1 {
+        font-size: 1.4rem;
+      }
+
+      .event-meta {
+        font-size: 0.9rem;
+      }
+
+      .qr-section h2 {
+        font-size: 1.1rem;
+      }
+
+      .qr-code {
+        padding: 14px;
+      }
+
+      .qr-code img {
+        max-width: 160px;
+      }
+
+      .sponsor-strip img {
+        max-height: 40px;
+      }
+    }
+
+    /* Tablet landscape - two QR codes side by side */
+    @media (min-width: 500px) and (max-width: 768px) {
+      .qr-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 16px;
+      }
+    }
+
+    /* === MVP Essential: Empty/Error States === */
+    .empty-state, .error-state {
+      text-align: center;
+      padding: 48px 24px;
+      max-width: 400px;
+      margin: 60px auto;
+    }
+    .empty-state-icon, .error-state-icon {
+      font-size: 3rem;
+      margin-bottom: 16px;
+      opacity: 0.6;
+    }
+    .empty-state h3, .error-state h3 {
+      color: #475569;
+      margin-bottom: 8px;
+      font-size: 1.25rem;
+    }
+    .empty-state p, .error-state p {
+      color: #64748b;
+      margin-bottom: 16px;
+      line-height: 1.6;
+    }
+    .error-state {
+      background: #fef2f2;
+      border-radius: 12px;
+      border: 1px solid #fecaca;
+    }
+    .error-state h3 { color: #dc2626; }
+    .error-state p { color: #b91c1c; }
+    /* .btn-retry - Now centralized in Styles.html (C-001) */
+    /* .site-footer - Now centralized in FooterComponent.html (D-005) */
+
+    /* Feature 6: Poster Auto-Branding Watermark */
+    .poster-watermark {
+      text-align: center;
+      margin-top: 32px;
+      padding: 16px 0;
+      border-top: 2px solid #e2e8f0;
+    }
+    .watermark-text {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: #94a3b8;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+    }
+    .watermark-text::before {
+      content: "📐";
+      font-size: 1.1rem;
+    }
+    /* Print-friendly watermark */
+    @media print {
+      .poster-watermark {
+        margin-top: 24px;
+        padding: 12px 0;
+        border-top-width: 1px;
+      }
+      .watermark-text {
+        font-size: 0.75rem;
+        color: #64748b;
+      }
+      .watermark-text::before {
+        content: "";
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="poster-container">
+    <!-- Sponsor Strip (Top) -->
+    <div id="sponsorStrip" class="sponsor-strip" hidden></div>
+
+    <!-- Event Details - Schema fields: name, startDateISO, venue -->
+    <div class="event-details">
+      <h1 id="eventName">Event Name</h1>
+      <div class="event-meta">
+        <div id="eventDate"></div>
+        <div id="eventLocation"></div>
+      </div>
+    </div>
+    <!-- V2 REMOVED: eventTime, eventEntity, eventImage, eventSummary - not in schema -->
+
+    <!--
+    =========================================================================
+    QR CODES SECTION - MVP SCOPE LOCK (3-QR LIMIT)
+    =========================================================================
+    RULE: Poster renders EXACTLY 3 QR display slots (no more, no less).
+
+    Backend may define unlimited QR flows, but this UI enforces a hard limit.
+    DO NOT add a 4th QR slot. See docs/MVP_SCOPE.md for full rules.
+
+    Current slots (priority order):
+      1. Sign Up QR    - event.qr.signup (primary CTA)
+      2. Event Page QR - event.qr.public
+      3. Reserved      - event.qr.display (v2, currently empty)
+
+    If fewer than 3 QRs exist: show placeholder for empty slots
+    If more than 3 QRs exist: only render first 3, hide extras
+
+    CSS grid is set to: grid-template-columns: repeat(3, 1fr)
+    =========================================================================
+    -->
+    <section class="qr-section">
+      <h2>Scan to Connect</h2>
+      <div id="qrGrid" class="qr-grid"></div>
+    </section>
+
+    <!-- Feature 6: Auto-Branding Watermark -->
+    <div class="poster-watermark">
+      <span class="watermark-text">Powered by EventAngle</span>
+    </div>
+  </div>
+
+  <!-- Trust Footer -->
+  <footer class="site-footer">
+    <p>Powered by <a href="https://eventangle.com" target="_blank" rel="noopener">EventAngle</a></p>
+  </footer>
+
+  <script>
+    const BRAND = '<?= brandId ?>';
+    const SCOPE = '<?= scope ?>';
+    const ID = new URL(location.href).searchParams.get('id');
+
+    // Use shared utilities from SponsorUtils
+    const { esc, logEvent, initLogging } = window.SponsorUtils;
+    initLogging();
+
+    // === EVENT_CONTRACT.md v2.0 Support ===
+    // Use centralized sectionEnabled from SharedUtils (D-008)
+    const sectionEnabled = window.SharedUtils?.sectionEnabled || function(settings, key) {
+      if (!settings) return false;
+      switch (key) {
+        case 'schedule': return settings.showSchedule === true;
+        case 'standings': return settings.showStandings === true;
+        case 'bracket': return settings.showBracket === true;
+        case 'sponsors': return settings.showSponsors === true;
+        default: return false;
+      }
+    };
+
+    // NOTE: Legacy renderSponsorStrip* functions removed in E-003
+    // All sponsor rendering now uses SponsorUtils.SponsorRenderer
+
+    /**
+     * Render event details section
+     * SCHEMA: /schemas/event.schema.json
+     *
+     * Fields used (ALL from schema):
+     * - event.name (MVP Required)
+     * - event.startDateISO (MVP Required)
+     * - event.venue (MVP Required)
+     */
+    function renderEventDetails(event) {
+      // === SCHEMA FIELDS ONLY ===
+      const name = event.name || 'Event Name';
+      const startDateISO = event.startDateISO || '';
+      const venue = event.venue || '';
+
+      // Event Name → #eventName
+      document.getElementById('eventName').textContent = name;
+
+      // Date → #eventDate (parsed from startDateISO)
+      const dateEl = document.getElementById('eventDate');
+      if (startDateISO) {
+        const date = new Date(startDateISO + 'T00:00:00');
+        if (!isNaN(date.getTime())) {
+          dateEl.innerHTML = `<strong>Date:</strong> ${date.toLocaleDateString('en-US', {
+            weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+          })}`;
+        }
+      }
+
+      // Venue → #eventLocation
+      const locEl = document.getElementById('eventLocation');
+      if (venue) {
+        locEl.innerHTML = `<strong>Location:</strong> ${esc(venue)}`;
+      }
+    }
+
+    /**
+     * Render QR codes section
+     * SCHEMA: /schemas/event.schema.json
+     *
+     * =========================================================================
+     * MVP SCOPE LOCK: 3-QR DISPLAY SLOT LIMIT
+     * =========================================================================
+     * This function enforces a HARD LIMIT of 3 QR display slots on the poster.
+     * DO NOT add a 4th QR slot. See docs/MVP_SCOPE.md for full rules.
+     *
+     * Slot allocation (priority order):
+     *   Slot 1: Sign Up QR    (event.qr.signup)
+     *   Slot 2: Event Page QR (event.qr.public)
+     *   Slot 3: Reserved      (event.qr.display - v2)
+     *
+     * Backend may define unlimited QR flows, but poster ONLY renders 3.
+     * =========================================================================
+     *
+     * Fields used (ALL from schema):
+     * - event.qr.public (MVP Required) - Base64 PNG data URI
+     * - event.qr.signup (MVP Required) - Base64 PNG data URI
+     * - event.links.publicUrl (MVP Required) - URL text below QR
+     * - event.links.signupUrl (MVP Required) - URL text below QR
+     * - event.ctas.primary.label (MVP Required) - Sign-up button label
+     *
+     * QR codes MUST come from event.qr.* - no manual generation.
+     */
+    function renderQRCodes(event) {
+      const el = document.getElementById('qrGrid');
+      el.innerHTML = '';
+
+      // === SCHEMA FIELDS ===
+      const qr = event.qr || {};
+      const links = event.links || {};
+      const ctas = event.ctas || { primary: { label: 'Sign Up', url: '' } };
+
+      // QR Code 1: Sign Up - MUST use event.qr.signup (no manual generation)
+      const signupQR = qr.signup;
+      const signupUrl = links.signupUrl || '';
+      const signupLabel = ctas.primary?.label || 'Sign Up';
+
+      if (signupQR) {
+        // Only render if server-generated QR is present
+        el.innerHTML += `
+          <div class="qr-code">
+            <h3>${esc(signupLabel)}</h3>
+            <h4>Register Now</h4>
+            <img alt="Sign Up QR Code" src="${signupQR}">
+            <p>${esc(signupUrl)}</p>
+          </div>
+        `;
+      }
+
+      // QR Code 2: Public Event Page - MUST use event.qr.public (no manual generation)
+      const publicQR = qr.public;
+      const publicUrl = links.publicUrl || '';
+
+      if (publicQR) {
+        // Only render if server-generated QR is present
+        el.innerHTML += `
+          <div class="qr-code">
+            <h3>Event Page</h3>
+            <h4>View Details</h4>
+            <img alt="Public Page QR Code" src="${publicQR}">
+            <p>${esc(publicUrl)}</p>
+          </div>
+        `;
+      }
+
+      // If no QR codes available
+      if (el.innerHTML === '') {
+        el.innerHTML = `
+          <div style="text-align:center; color:#64748b; grid-column: 1 / -1; padding: 24px;">
+            <div style="font-size: 2rem; margin-bottom: 12px; opacity: 0.5;">📱</div>
+            <p style="margin: 0 0 8px; font-weight: 600; color: #475569;">No QR Codes Available Yet</p>
+            <p style="margin: 0; font-size: 0.9rem; color: #94a3b8;">QR codes will appear here once a sign-up URL has been configured for this event.</p>
+          </div>
+        `;
+      }
+    }
+
+    /**
+     * Render poster from event data
+     * SCHEMA: /schemas/event.schema.json
+     *
+     * Fields used (ALL from schema):
+     * - event.name, event.startDateISO, event.venue (MVP Required)
+     * - event.qr.public, event.qr.signup (MVP Required)
+     * - event.links.publicUrl, event.links.signupUrl (MVP Required)
+     * - event.settings.showSponsors (V2 Optional)
+     * - event.settings.showQRSection (default: true) - QR section visibility
+     * - event.sponsors[] with placement === 'poster' (V2 Optional)
+     */
+    function renderPoster(event) {
+      if (!event) {
+        // S12: Use shared StateRenderer for consistent empty state
+        SharedUtils.StateRenderer.showEventNotFound(document.querySelector('.poster-container'));
+        return;
+      }
+
+      // Log poster view
+      logEvent({ eventId: event.id, surface: 'poster', metric: 'view', value: 1 });
+
+      // === SCHEMA FIELDS ===
+      const settings = event.settings || { showSponsors: false };
+      const sponsors = event.sponsors || [];
+
+      // === SPONSOR STRIP (V2 Optional) ===
+      // Schema: event.sponsors[].placement MUST be 'poster' - no fallback
+      const sponsorStrip = document.getElementById('sponsorStrip');
+      if (settings.showSponsors && sponsors.length > 0) {
+        // Use centralized SponsorRenderer with placement filter (E-003 centralization)
+        const { SponsorRenderer } = window.SponsorUtils;
+        const renderedSponsors = SponsorRenderer.renderStrip({
+          container: sponsorStrip,
+          sponsors: sponsors,
+          placement: 'poster',  // Filter to poster placement only
+          eventId: event.id,
+          surface: 'poster',
+          showLinks: false, // Poster is print-friendly, no clickable links
+          showTier: false
+        });
+        // Hide if no sponsors matched placement filter
+        if (!renderedSponsors.length) {
+          sponsorStrip.innerHTML = '';
+          sponsorStrip.hidden = true;
+        }
+      } else {
+        sponsorStrip.innerHTML = '';
+        sponsorStrip.hidden = true;
+      }
+
+      // Render event details and QR codes
+      renderEventDetails(event);
+
+      // === QR SECTION (MVP Required, gated by showQRSection setting) ===
+      // Feature: settings.showQRSection (default: true) gates entire QR section
+      const qrSection = document.querySelector('.qr-section');
+      if (settings.showQRSection !== false) {
+        renderQRCodes(event);
+        qrSection.hidden = false;
+      } else {
+        qrSection.hidden = true;
+      }
+
+      // Track print events
+      window.addEventListener('beforeprint', () => {
+        logEvent({ eventId: event.id, surface: 'poster', metric: 'print', value: 1 });
+      });
+    }
+
+    /**
+     * Boot Poster.html
+     * API: api_getPosterBundle → { event, qrCodes, print }
+     * SCHEMA: /schemas/event.schema.json
+     */
+    async function boot() {
+      const container = document.querySelector('.poster-container');
+
+      // S12: Check for missing event ID
+      if (!ID) {
+        SharedUtils.StateRenderer.showEmpty(container, {
+          icon: '🔍',
+          title: 'No Event Specified',
+          message: 'This poster link is missing an event ID. Please check the URL and try again.'
+        });
+        return;
+      }
+
+      // S13: Use safeRpc for graceful error handling
+      const res = await NU.safeRpc('api_getPosterBundle', { brandId: BRAND, scope: SCOPE, id: ID });
+
+      // S13: Handle API errors with showFromError (handles SERVICE_UNAVAILABLE, TIMEOUT, etc.)
+      if (!res.ok) {
+        console.error('Poster API error:', res.code, res.message);
+        SharedUtils.StateRenderer.showFromError(container, res, {
+          onRetry: () => location.reload()
+        });
+        return;
+      }
+
+      try {
+        if (res.value && res.value.event) {
+          // getPosterBundle returns { event: Event, qrCodes: {...} }
+          renderPoster(res.value.event);
+        } else if (res.value) {
+          // Backward compat: direct event object
+          renderPoster(res.value);
+        } else {
+          renderPoster(null);
+        }
+      } catch (renderErr) {
+        // S12: Render error - use shared StateRenderer
+        console.error('Poster render error:', renderErr);
+        SharedUtils.StateRenderer.showError(container, {
+          title: 'Display Error',
+          message: 'We encountered an issue displaying this poster.',
+          onRetry: () => location.reload()
+        });
+      }
+    }
+
+    // Boot on load
+    boot();
+  </script>
+</body>
+</html>

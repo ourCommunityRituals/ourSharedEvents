@@ -1,0 +1,761 @@
+<!--
+================================================================================
+EXPERIMENTAL - v2+ (Not MVP)
+================================================================================
+Page: ConfigHtml.html
+Purpose: System configuration interface for administrators
+Status: NOT included in MVP focus group testing
+
+This page is for advanced configuration and is not part of the core MVP surfaces.
+================================================================================
+-->
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <title><?= appTitle ?> · System Configuration</title>
+  <?!= include('Header'); ?>
+  <?!= include('HeaderInit'); ?>
+  <?!= include('NUSDK'); ?>
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+  <meta name="referrer" content="no-referrer"/>
+  <?!= include('Styles'); ?>
+  <style>
+    body {
+      background: linear-gradient(135deg, #3b82f6 0%, #1e40af 100%);
+      min-height: 100vh;
+      padding: 2rem 1rem;
+    }
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+    .page-header {
+      background: white;
+      border-radius: 16px;
+      padding: 2rem;
+      margin-bottom: 2rem;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+    }
+    .page-header h1 {
+      margin: 0 0 0.5rem 0;
+      font-size: 2rem;
+      color: #1f2937;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+    .page-header .subtitle {
+      color: #6b7280;
+      font-size: 1rem;
+    }
+    .nav-breadcrumb {
+      margin-bottom: 1rem;
+    }
+    .nav-breadcrumb a {
+      color: #3b82f6;
+      text-decoration: none;
+    }
+    .nav-breadcrumb a:hover {
+      text-decoration: underline;
+    }
+    .section {
+      background: white;
+      border-radius: 16px;
+      padding: 2rem;
+      margin-bottom: 2rem;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+    }
+    .section h2 {
+      margin: 0 0 1.5rem 0;
+      font-size: 1.5rem;
+      color: #1f2937;
+      border-bottom: 2px solid #e5e7eb;
+      padding-bottom: 0.75rem;
+    }
+    .config-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 1.5rem;
+      margin-top: 1.5rem;
+    }
+    .config-card {
+      background: #f9fafb;
+      border: 2px solid #e5e7eb;
+      border-radius: 12px;
+      padding: 1.5rem;
+      transition: all 0.2s;
+    }
+    .config-card:hover {
+      border-color: #3b82f6;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+    .config-card h3 {
+      margin: 0 0 1rem 0;
+      font-size: 1.25rem;
+      color: #1f2937;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .config-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.75rem;
+      background: white;
+      border-radius: 8px;
+      margin-bottom: 0.75rem;
+      border: 1px solid #e5e7eb;
+    }
+    .config-item:last-child {
+      margin-bottom: 0;
+    }
+    .config-label {
+      font-weight: 600;
+      color: #374151;
+      font-size: 0.875rem;
+    }
+    .config-value {
+      color: #6b7280;
+      font-size: 0.875rem;
+      font-family: 'Monaco', 'Courier New', monospace;
+      background: #f3f4f6;
+      padding: 0.25rem 0.5rem;
+      border-radius: 4px;
+    }
+    .warning-box {
+      background: #fef3c7;
+      border-left: 4px solid #f59e0b;
+      padding: 1.5rem;
+      border-radius: 8px;
+      margin: 1.5rem 0;
+    }
+    .warning-box h3 {
+      margin: 0 0 0.5rem 0;
+      color: #92400e;
+      font-size: 1.125rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .warning-box p {
+      margin: 0;
+      color: #78350f;
+    }
+    .info-box {
+      background: #dbeafe;
+      border-left: 4px solid #3b82f6;
+      padding: 1.5rem;
+      border-radius: 8px;
+      margin: 1.5rem 0;
+    }
+    .info-box h3 {
+      margin: 0 0 0.5rem 0;
+      color: #1e40af;
+      font-size: 1.125rem;
+    }
+    .info-box ul {
+      margin: 0.5rem 0 0 1.5rem;
+      color: #1f2937;
+    }
+    .info-box ul li {
+      margin: 0.5rem 0;
+    }
+    .btn-secondary {
+      background: #6b7280;
+      color: white;
+      padding: 0.75rem 1.5rem;
+      border-radius: 8px;
+      text-decoration: none;
+      display: inline-block;
+      font-weight: 600;
+      transition: all 0.2s;
+      border: none;
+      cursor: pointer;
+    }
+    .btn-secondary:hover {
+      background: #4b5563;
+    }
+    .brand-badge {
+      display: inline-block;
+      padding: 0.25rem 0.75rem;
+      background: #dbeafe;
+      color: #1e40af;
+      border-radius: 12px;
+      font-size: 0.75rem;
+      font-weight: bold;
+      margin-left: 0.5rem;
+    }
+    code {
+      background: #f3f4f6;
+      padding: 0.25rem 0.5rem;
+      border-radius: 4px;
+      font-size: 0.875rem;
+      color: #1f2937;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <div class="page-header">
+      <div class="nav-breadcrumb">
+        <a href="?page=test&brand=<?= brandId ?>">← Back to Dashboard</a>
+      </div>
+      <h1>
+        <span>⚙️</span>
+        System Configuration
+      </h1>
+      <div class="subtitle">View application settings, brand configuration, and system information</div>
+    </div>
+
+    <!-- Warning Box -->
+    <div class="warning-box">
+      <h3><span>⚠️</span> Configuration Management</h3>
+      <p>
+        Configuration editing is currently managed via the <code>Config.gs</code> file in the Google Apps Script editor.
+        This page provides a read-only view of the current configuration for reference and diagnostics.
+      </p>
+    </div>
+
+    <!-- Application Info Section -->
+    <div class="section">
+      <h2>📦 Application Information</h2>
+      <div class="config-grid">
+        <div class="config-card">
+          <h3>🏷️ Build Info</h3>
+          <div class="config-item">
+            <span class="config-label">App Title</span>
+            <span class="config-value"><?= appTitle ?></span>
+          </div>
+          <div class="config-item">
+            <span class="config-label">Build ID</span>
+            <span class="config-value"><?= ZEB.BUILD_ID ?></span>
+          </div>
+          <div class="config-item">
+            <span class="config-label">Contract Version</span>
+            <span class="config-value"><?= ZEB.CONTRACT_VER ?></span>
+          </div>
+        </div>
+
+        <div class="config-card">
+          <h3>🌐 Current Session</h3>
+          <div class="config-item">
+            <span class="config-label">Brand ID</span>
+            <span class="config-value"><?= brandId ?></span>
+          </div>
+          <div class="config-item">
+            <span class="config-label">Scope</span>
+            <span class="config-value"><?= scope ?></span>
+          </div>
+          <div class="config-item">
+            <span class="config-label">Exec URL</span>
+            <span class="config-value" style="font-size: 0.75rem; overflow: hidden; text-overflow: ellipsis;">
+              <?= execUrl.substring(0, 40) ?>...
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Brand Configuration Section -->
+    <div class="section">
+      <h2>🏢 Brand Configuration</h2>
+      <p style="color: #6b7280; margin-bottom: 1.5rem;">
+        Multi-brand architecture allows multiple organizations to use the same platform with isolated data and custom branding.
+        Currently viewing configuration for: <strong><?= appTitle ?></strong><span class="brand-badge"><?= brandId ?></span>
+      </p>
+
+      <div class="info-box">
+        <h3>📋 Configured Brands</h3>
+        <ul>
+          <li><strong>root</strong> - Zeventbook (Primary brand)</li>
+          <li><strong>abc</strong> - American Bocce Co. (Parent organization)</li>
+          <li><strong>cbc</strong> - Chicago Bocce Club (Child of ABC)</li>
+          <li><strong>cbl</strong> - Chicago Bocce League (Child of ABC)</li>
+        </ul>
+        <p style="margin-top: 1rem; color: #6b7280; font-size: 0.875rem;">
+          Each brand has its own configuration including hostnames, logos, admin credentials, and allowed scopes.
+          Brand data is stored in dedicated Google Sheets for data isolation.
+        </p>
+      </div>
+    </div>
+
+    <!-- Brand Portfolio Section (Parent Organizations Only) -->
+    <? if (typeof brand !== 'undefined' && brand.type === 'parent') { ?>
+    <div class="section">
+      <h2>🔗 Brand Portfolio</h2>
+      <p style="color: #6b7280; margin-bottom: 1.5rem;">
+        As a parent organization, you can manage relationships with child brands and configure which children are included in portfolio analytics.
+      </p>
+
+      <div class="config-grid" id="portfolioRelationshipsList">
+        <!-- Will be populated by JavaScript -->
+      </div>
+
+      <div class="info-box" style="margin-top: 1.5rem;">
+        <h3>💡 How to Manage Brand Portfolio</h3>
+        <p style="color: #1f2937; margin-top: 0.5rem;">
+          To include or exclude a child organization from portfolio reports:
+        </p>
+        <ol style="margin: 0.75rem 0 0 1.5rem; color: #1f2937; line-height: 1.8;">
+          <li>Open Google Apps Script Editor (Extensions → Apps Script)</li>
+          <li>Navigate to <code>Config.gs</code></li>
+          <li>Find the child brand configuration (e.g., 'cbc' or 'cbl')</li>
+          <li>Set <code>includeInPortfolioReports: true</code> or <code>false</code></li>
+          <li>Save and deploy to see changes</li>
+        </ol>
+      </div>
+    </div>
+
+    <!-- Portfolio Analytics Dashboard (Parent Organizations Only) -->
+    <div class="section" id="portfolioAnalyticsSection">
+      <h2>📊 Portfolio Analytics</h2>
+      <p style="color: #6b7280; margin-bottom: 1.5rem;">
+        Consolidated sponsor performance metrics across all brands in your network
+      </p>
+
+      <div class="config-grid" style="margin-bottom: 2rem;">
+        <div class="config-card">
+          <h3>📈 Portfolio Summary</h3>
+          <div class="config-item">
+            <span class="config-label">Total Events</span>
+            <span class="config-value" id="portfolioTotalEvents">-</span>
+          </div>
+          <div class="config-item">
+            <span class="config-label">Total Sponsors</span>
+            <span class="config-value" id="portfolioTotalSponsors">-</span>
+          </div>
+          <div class="config-item">
+            <span class="config-label">Active Sponsors</span>
+            <span class="config-value" id="portfolioActiveSponsors">-</span>
+          </div>
+          <div class="config-item">
+            <span class="config-label">Total Impressions</span>
+            <span class="config-value" id="portfolioTotalImpressions">-</span>
+          </div>
+        </div>
+
+        <div class="config-card">
+          <h3>🏢 Brand Performance</h3>
+          <div id="portfolioBrandsList">
+            <!-- Will be populated by JavaScript -->
+          </div>
+        </div>
+      </div>
+
+      <h3 style="margin-top: 1.5rem; color: #1f2937;">Sponsor Reports</h3>
+      <p style="color: #6b7280; margin-bottom: 1rem;">View consolidated sponsor performance across all brands</p>
+
+      <div style="max-width: 400px; margin-bottom: 1.5rem;">
+        <label style="display: block; font-weight: 600; margin-bottom: 0.5rem; color: #374151;">Select Sponsor</label>
+        <select id="portfolioSponsorSelect" onchange="loadPortfolioSponsorReport()"
+                style="width: 100%; padding: 0.75rem; border: 2px solid #e5e7eb; border-radius: 8px; font-size: 0.875rem;">
+          <option value="">-- Select a sponsor --</option>
+        </select>
+      </div>
+
+      <div id="portfolioSponsorReport" style="display:none;">
+        <div style="background: #f9fafb; border: 2px solid #e5e7eb; border-radius: 12px; padding: 1.5rem;">
+          <h3 id="reportSponsorName" style="margin: 0 0 1.5rem 0; color: #1f2937; font-size: 1.25rem;">Sponsor Report</h3>
+
+          <div class="config-grid" style="margin-bottom: 1.5rem;">
+            <div class="config-item">
+              <span class="config-label">Total Events</span>
+              <span class="config-value" id="reportTotalEvents">-</span>
+            </div>
+            <div class="config-item">
+              <span class="config-label">Total Impressions</span>
+              <span class="config-value" id="reportTotalImpressions">-</span>
+            </div>
+            <div class="config-item">
+              <span class="config-label">Total Clicks</span>
+              <span class="config-value" id="reportTotalClicks">-</span>
+            </div>
+            <div class="config-item">
+              <span class="config-label">Portfolio CTR</span>
+              <span class="config-value" id="reportPortfolioCTR">-</span>
+            </div>
+          </div>
+
+          <h4 style="margin: 1.5rem 0 1rem 0; color: #1f2937;">Performance by Brand</h4>
+          <div id="reportByBrand">
+            <!-- Will be populated by JavaScript -->
+          </div>
+
+          <h4 style="margin: 1.5rem 0 1rem 0; color: #1f2937;">Top Performing Events</h4>
+          <div id="reportTopEvents">
+            <!-- Will be populated by JavaScript -->
+          </div>
+        </div>
+      </div>
+
+      <div style="display: flex; gap: 1rem; margin-top: 2rem;">
+        <button class="btn-secondary" onclick="refreshPortfolioSummary()">
+          🔄 Refresh Data
+        </button>
+        <button class="btn-secondary" onclick="exportPortfolioReport()">
+          📥 Export Report
+        </button>
+      </div>
+    </div>
+    <? } ?>
+
+    <!-- Configuration Guide Section -->
+    <div class="section">
+      <h2>📖 Configuration Guide</h2>
+
+      <h3 style="margin-top: 1.5rem; color: #1f2937;">How to Edit Configuration</h3>
+      <ol style="color: #6b7280; line-height: 1.8; margin-left: 1.5rem;">
+        <li>Open Google Apps Script Editor (Extensions → Apps Script)</li>
+        <li>Navigate to <code>Config.gs</code> file</li>
+        <li>Edit the <code>BRANDS</code> array or <code>ZEB</code> object</li>
+        <li>Save and deploy as a new version</li>
+        <li>Refresh this page to see changes</li>
+      </ol>
+
+      <h3 style="margin-top: 2rem; color: #1f2937;">Available Configuration Options</h3>
+      <div style="margin-top: 1rem;">
+        <div class="config-item" style="margin-bottom: 1rem;">
+          <div>
+            <div class="config-label">ZEB.APP_TITLE</div>
+            <div style="font-size: 0.75rem; color: #6b7280; margin-top: 0.25rem;">Application name displayed across the platform</div>
+          </div>
+        </div>
+        <div class="config-item" style="margin-bottom: 1rem;">
+          <div>
+            <div class="config-label">ZEB.BUILD_ID</div>
+            <div style="font-size: 0.75rem; color: #6b7280; margin-top: 0.25rem;">Build version identifier for tracking deployments</div>
+          </div>
+        </div>
+        <div class="config-item" style="margin-bottom: 1rem;">
+          <div>
+            <div class="config-label">BRANDS[].id</div>
+            <div style="font-size: 0.75rem; color: #6b7280; margin-top: 0.25rem;">Unique brand identifier used in URLs</div>
+          </div>
+        </div>
+        <div class="config-item" style="margin-bottom: 1rem;">
+          <div>
+            <div class="config-label">BRANDS[].name</div>
+            <div style="font-size: 0.75rem; color: #6b7280; margin-top: 0.25rem;">Display name for the brand organization</div>
+          </div>
+        </div>
+        <div class="config-item" style="margin-bottom: 1rem;">
+          <div>
+            <div class="config-label">BRANDS[].hostnames</div>
+            <div style="font-size: 0.75rem; color: #6b7280; margin-top: 0.25rem;">Custom domain mapping for brand-specific URLs</div>
+          </div>
+        </div>
+        <div class="config-item" style="margin-bottom: 1rem;">
+          <div>
+            <div class="config-label">BRANDS[].scopesAllowed</div>
+            <div style="font-size: 0.75rem; color: #6b7280; margin-top: 0.25rem;">Allowed scopes: events, leagues, tournaments, sponsors</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Quick Actions Section -->
+    <div class="section">
+      <h2>🔧 Quick Actions</h2>
+      <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+        <a href="?page=diagnostics&brand=<?= brandId ?>" class="btn-secondary">
+          🔍 Run Diagnostics
+        </a>
+        <a href="?page=api&brand=<?= brandId ?>" class="btn-secondary">
+          📖 View API Docs
+        </a>
+        <a href="?p=status&brand=<?= brandId ?>" class="btn-secondary">
+          💚 Check System Status
+        </a>
+        <a href="<?= execUrl ?>" target="_blank" class="btn-secondary">
+          🚀 Open Script Editor
+        </a>
+      </div>
+    </div>
+
+    <!-- Back to Dashboard Button -->
+    <div style="text-align: center; margin-top: 2rem;">
+      <a href="?page=test&brand=<?= brandId ?>" class="btn-secondary">
+        ← Back to Triangle Dashboard
+      </a>
+    </div>
+  </div>
+
+  <script>
+    const BRAND = '<?= brandId ?>';
+    let portfolioSponsorsCache = [];
+
+    // Brand Portfolio Management
+    async function loadPortfolioRelationships() {
+      const relationshipsList = document.getElementById('portfolioRelationshipsList');
+      if (!relationshipsList) return;
+
+      // Get brand configuration (this would come from an API in a real implementation)
+      // For now, show static configuration based on what we know from Config.gs
+      const children = [
+        { id: 'cbc', name: 'Chicago Bocce Club', includeInPortfolioReports: true },
+        { id: 'cbl', name: 'Chicago Bocce League', includeInPortfolioReports: true }
+      ];
+
+      relationshipsList.innerHTML = '';
+
+      children.forEach(child => {
+        const card = document.createElement('div');
+        card.className = 'config-card';
+
+        const statusColor = child.includeInPortfolioReports ? '#10b981' : '#ef4444';
+        const statusText = child.includeInPortfolioReports ? '✓ Included' : '✗ Excluded';
+
+        card.innerHTML = `
+          <h3>${escapeHtml(child.name)}</h3>
+          <div class="config-item">
+            <span class="config-label">Brand ID</span>
+            <span class="config-value">${child.id}</span>
+          </div>
+          <div class="config-item">
+            <span class="config-label">Portfolio Reports</span>
+            <span class="config-value" style="background: ${statusColor}; color: white; font-weight: 600;">
+              ${statusText}
+            </span>
+          </div>
+          <div class="config-item">
+            <span class="config-label">Relationship</span>
+            <span class="config-value">Child Brand</span>
+          </div>
+        `;
+
+        relationshipsList.appendChild(card);
+      });
+    }
+
+    // Portfolio Analytics Functions
+    async function refreshPortfolioSummary() {
+      const analyticsSection = document.getElementById('portfolioAnalyticsSection');
+      if (!analyticsSection) return;
+
+      // Show loading state
+      document.getElementById('portfolioTotalEvents').textContent = '...';
+      document.getElementById('portfolioTotalSponsors').textContent = '...';
+      document.getElementById('portfolioActiveSponsors').textContent = '...';
+      document.getElementById('portfolioTotalImpressions').textContent = '...';
+
+      try {
+        const summaryRes = await NU.rpc('api_getPortfolioSummary', {
+          brandId: BRAND,
+          adminKey: getAdminKey()
+        });
+
+        if (!summaryRes.ok) {
+          alert(`Error loading network summary: ${summaryRes.message}`);
+          return;
+        }
+
+        const summary = summaryRes.value;
+
+        // Update stats
+        document.getElementById('portfolioTotalEvents').textContent = summary.metrics.totalEvents.toLocaleString();
+        document.getElementById('portfolioTotalSponsors').textContent = summary.metrics.totalSponsors.toLocaleString();
+        document.getElementById('portfolioActiveSponsors').textContent = summary.metrics.activeSponsors.toLocaleString();
+        document.getElementById('portfolioTotalImpressions').textContent = summary.metrics.totalImpressions.toLocaleString();
+
+        // Render brands list
+        const brandsList = document.getElementById('portfolioBrandsList');
+        brandsList.innerHTML = '';
+
+        // Parent brand
+        const parentBrand = summary.byBrand[summary.portfolio.parent.id];
+        const parentDiv = document.createElement('div');
+        parentDiv.className = 'config-item';
+        parentDiv.style.borderLeft = '4px solid #2563eb';
+        parentDiv.innerHTML = `
+          <div>
+            <div class="config-label">${escapeHtml(summary.portfolio.parent.name)} (Parent)</div>
+            <div style="font-size: 0.75rem; color: #6b7280; margin-top: 0.25rem;">
+              ${parentBrand.events} events · ${parentBrand.sponsors} sponsors
+            </div>
+          </div>
+        `;
+        brandsList.appendChild(parentDiv);
+
+        // Child brands
+        summary.portfolio.children.forEach(child => {
+          const childBrand = summary.byBrand[child.id];
+          const childDiv = document.createElement('div');
+          childDiv.className = 'config-item';
+          childDiv.innerHTML = `
+            <div>
+              <div class="config-label">${escapeHtml(child.name)}</div>
+              <div style="font-size: 0.75rem; color: #6b7280; margin-top: 0.25rem;">
+                ${childBrand.events} events · ${childBrand.sponsors} sponsors
+              </div>
+            </div>
+          `;
+          brandsList.appendChild(childDiv);
+        });
+
+        // Load network sponsors for dropdown
+        await loadPortfolioSponsors();
+
+      } catch (error) {
+        console.error('Error loading network summary:', error);
+        alert('Error loading network data');
+      }
+    }
+
+    async function loadPortfolioSponsors() {
+      const selectEl = document.getElementById('portfolioSponsorSelect');
+      if (!selectEl) return;
+
+      const sponsorsRes = await NU.rpc('api_getPortfolioSponsors', {
+        brandId: TENANT,
+        adminKey: getAdminKey()
+      });
+
+      if (!sponsorsRes.ok) {
+        console.error('Error loading sponsors:', sponsorsRes.message);
+        return;
+      }
+
+      portfolioSponsorsCache = sponsorsRes.value.sponsors;
+
+      // Clear and populate dropdown
+      selectEl.innerHTML = '<option value="">-- Select a sponsor --</option>';
+      portfolioSponsorsCache.forEach(sponsor => {
+        const option = document.createElement('option');
+        option.value = sponsor.id;
+        option.textContent = `${sponsor.name} (${sponsor.brands.length} brands)`;
+        selectEl.appendChild(option);
+      });
+    }
+
+    async function loadPortfolioSponsorReport() {
+      const selectEl = document.getElementById('portfolioSponsorSelect');
+      const sponsorId = selectEl.value;
+
+      const reportDiv = document.getElementById('portfolioSponsorReport');
+      if (!sponsorId) {
+        reportDiv.style.display = 'none';
+        return;
+      }
+
+      try {
+        const reportRes = await NU.rpc('api_getPortfolioSponsorReport', {
+          brandId: BRAND,
+          adminKey: getAdminKey(),
+          sponsorId: sponsorId,
+          options: {}
+        });
+
+        if (!reportRes.ok) {
+          alert(`Error loading sponsor report: ${reportRes.message}`);
+          return;
+        }
+
+        const report = reportRes.value;
+
+        // Update report header
+        document.getElementById('reportSponsorName').textContent =
+          `${report.sponsor.name || 'Sponsor'} - Network Report`;
+
+        // Update stats
+        document.getElementById('reportTotalEvents').textContent = report.portfolioSummary.totalEvents;
+        document.getElementById('reportTotalImpressions').textContent =
+          report.portfolioSummary.totalImpressions.toLocaleString();
+        document.getElementById('reportTotalClicks').textContent =
+          report.portfolioSummary.totalClicks.toLocaleString();
+        document.getElementById('reportPortfolioCTR').textContent =
+          report.portfolioSummary.networkCTR + '%';
+
+        // Render by-brand breakdown
+        const byBrandDiv = document.getElementById('reportByBrand');
+        byBrandDiv.innerHTML = '';
+
+        Object.keys(report.byBrand).forEach(brandId => {
+          const brand = report.byBrand[brandId];
+          const brandCard = document.createElement('div');
+          brandCard.className = 'config-item';
+          brandCard.style.marginBottom = '8px';
+          brandCard.innerHTML = `
+            <div>
+              <div class="config-label">${escapeHtml(brand.name)}</div>
+              <div style="font-size: 0.75rem; color: #6b7280; margin-top: 0.25rem;">
+                ${brand.impressions.toLocaleString()} impressions · ${brand.clicks.toLocaleString()} clicks · ${brand.events} events · ${brand.ctr}% CTR
+              </div>
+            </div>
+          `;
+          byBrandDiv.appendChild(brandCard);
+        });
+
+        // Render top performing events
+        const topEventsDiv = document.getElementById('reportTopEvents');
+        topEventsDiv.innerHTML = '';
+
+        if (report.topPerformingEvents.length === 0) {
+          topEventsDiv.innerHTML = '<p style="color: #6b7280; font-style: italic;">No events found for this sponsor</p>';
+        } else {
+          report.topPerformingEvents.forEach((event, idx) => {
+            const eventCard = document.createElement('div');
+            eventCard.className = 'config-item';
+            eventCard.style.marginBottom = '8px';
+            eventCard.innerHTML = `
+              <div>
+                <div class="config-label">${idx + 1}. ${escapeHtml(event.name)}</div>
+                <div style="font-size: 0.75rem; color: #6b7280; margin-top: 0.25rem;">
+                  ${escapeHtml(event.brandName)} · ${event.date} · ${event.impressions.toLocaleString()} views · ${event.clicks} clicks · ${event.ctr}% CTR
+                </div>
+              </div>
+            `;
+            topEventsDiv.appendChild(eventCard);
+          });
+        }
+
+        reportDiv.style.display = 'block';
+      } catch (error) {
+        console.error('Error loading sponsor report:', error);
+        alert('Error loading sponsor report');
+      }
+    }
+
+    function exportPortfolioReport() {
+      const selectEl = document.getElementById('portfolioSponsorSelect');
+      const sponsorId = selectEl.value;
+
+      if (!sponsorId) {
+        alert('Please select a sponsor first');
+        return;
+      }
+
+      alert('Export functionality coming soon! This will generate a PDF report with all network sponsor metrics.');
+    }
+
+    // Helper Functions
+    function getAdminKey() {
+      const k = sessionStorage.getItem('ADMIN_KEY:' + BRAND) || prompt('Admin key for ' + BRAND);
+      if (k) sessionStorage.setItem('ADMIN_KEY:' + BRAND, k);
+      return k || '';
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    // Auto-load on page load for parent tenants
+    document.addEventListener('DOMContentLoaded', function() {
+      const relationshipsList = document.getElementById('portfolioRelationshipsList');
+      const analyticsSection = document.getElementById('portfolioAnalyticsSection');
+
+      if (relationshipsList) {
+        loadPortfolioRelationships();
+      }
+
+      if (analyticsSection) {
+        refreshPortfolioSummary();
+      }
+    });
+  </script>
+</body>
+</html>

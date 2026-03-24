@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zeventbook.com/schemas/sponsor-report-qr.schema.json",
+  "title": "SponsorReportQr",
+  "description": "MVP Sponsor Report QR Response Contract v1.0 - QR code for sponsor-scoped SharedReport access",
+  "type": "object",
+  "required": ["url", "qrB64", "verified"],
+  "additionalProperties": false,
+  "properties": {
+    "url": {
+      "type": "string",
+      "description": "Sponsor report URL with sponsorId parameter (e.g., ?page=report&sponsor=true&sponsorId=<ID>)"
+    },
+    "qrB64": {
+      "type": "string",
+      "description": "Base64-encoded PNG QR code image (without data:image/png;base64, prefix). Empty string if URL could not be verified."
+    },
+    "verified": {
+      "type": "boolean",
+      "description": "True if QR was generated for a verified deployment URL; false if deployment URL was unavailable"
+    }
+  },
+  "$defs": {
+    "SponsorReportQrRequest": {
+      "type": "object",
+      "description": "Request payload for api_getSponsorReportQr",
+      "required": ["sponsorId"],
+      "additionalProperties": false,
+      "properties": {
+        "sponsorId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Sponsor identifier to generate QR for"
+        },
+        "brandId": {
+          "type": "string",
+          "description": "Optional: Brand ID for admin context"
+        },
+        "adminKey": {
+          "type": "string",
+          "description": "Optional: Admin key for authentication (allows generating QR for any sponsor)"
+        }
+      }
+    }
+  }
+}

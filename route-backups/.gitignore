@@ -1,0 +1,7 @@
+# Backup files (contain sensitive route data)
+*.json
+*.txt
+
+# Keep this file and README
+!.gitignore
+!README.md

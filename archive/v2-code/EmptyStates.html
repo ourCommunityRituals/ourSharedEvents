@@ -1,0 +1,348 @@
+<style>
+  /* ===== Enhanced Empty States Component ===== */
+  /*
+    Provides clear placeholders with explanations and call-to-actions
+    when no data exists. Improves user education and engagement.
+  */
+
+  .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: var(--space-12, 3rem) var(--space-6, 1.5rem);
+    background: var(--color-gray-50, #f8fafc);
+    border-radius: var(--radius-md, 12px);
+    border: 2px dashed var(--color-gray-200, #e2e8f0);
+    margin: var(--space-6, 1.5rem) 0;
+    min-height: 280px;
+  }
+
+  .empty-state-icon {
+    font-size: var(--font-size-5xl, 3rem);
+    line-height: 1;
+    margin-bottom: var(--space-4, 1rem);
+    opacity: 0.8;
+  }
+
+  /* Icon variations for different contexts */
+  .empty-state-icon.pulse {
+    animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 0.8; transform: scale(1); }
+    50% { opacity: 0.5; transform: scale(0.95); }
+  }
+
+  .empty-state-heading {
+    font-size: var(--font-size-xl, 1.25rem);
+    font-weight: var(--font-weight-semibold, 600);
+    color: var(--color-gray-700, #334155);
+    margin-bottom: var(--space-3, 0.75rem);
+    margin-top: 0;
+  }
+
+  .empty-state-description {
+    font-size: var(--font-size-base, 1rem);
+    color: var(--color-gray-500, #64748b);
+    margin-bottom: var(--space-6, 1.5rem);
+    max-width: 480px;
+    line-height: var(--line-height-base, 1.6);
+  }
+
+  .empty-state-actions {
+    display: flex;
+    gap: var(--space-3, 0.75rem);
+    flex-wrap: wrap;
+    justify-content: center;
+    margin-top: var(--space-4, 1rem);
+  }
+
+  /* Compact variant for smaller areas */
+  .empty-state.compact {
+    min-height: 180px;
+    padding: var(--space-8, 2rem) var(--space-4, 1rem);
+  }
+
+  .empty-state.compact .empty-state-icon {
+    font-size: var(--font-size-3xl, 1.875rem);
+    margin-bottom: var(--space-2, 0.5rem);
+  }
+
+  .empty-state.compact .empty-state-heading {
+    font-size: var(--font-size-lg, 1.125rem);
+    margin-bottom: var(--space-2, 0.5rem);
+  }
+
+  .empty-state.compact .empty-state-description {
+    font-size: var(--font-size-sm, 0.875rem);
+    margin-bottom: var(--space-4, 1rem);
+  }
+
+  /* Feature spotlight variant - for introducing new features */
+  .empty-state.spotlight {
+    background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+    border: 2px solid var(--color-primary-light, #3b82f6);
+    border-style: solid;
+  }
+
+  .empty-state.spotlight .empty-state-icon {
+    color: var(--color-primary, #2563eb);
+  }
+
+  .empty-state.spotlight .empty-state-heading {
+    color: var(--color-primary-dark, #1d4ed8);
+  }
+
+  /* Help text below empty state */
+  .empty-state-help {
+    margin-top: var(--space-4, 1rem);
+    padding: var(--space-4, 1rem);
+    background: var(--color-primary-pale, #dbeafe);
+    border-radius: var(--radius-sm, 6px);
+    font-size: var(--font-size-sm, 0.875rem);
+    color: var(--color-gray-700, #334155);
+    max-width: 520px;
+  }
+
+  .empty-state-help strong {
+    color: var(--color-primary-dark, #1d4ed8);
+    font-weight: var(--font-weight-semibold, 600);
+  }
+
+  /* Loading skeleton for empty states */
+  .empty-state-skeleton {
+    background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
+    background-size: 200% 100%;
+    animation: loading 1.5s ease-in-out infinite;
+    border-radius: var(--radius-sm, 6px);
+  }
+
+  @keyframes loading {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+
+  /* Mobile optimizations */
+  @media (max-width: 640px) {
+    .empty-state {
+      padding: var(--space-8, 2rem) var(--space-4, 1rem);
+      min-height: 240px;
+    }
+
+    .empty-state-icon {
+      font-size: var(--font-size-4xl, 2.25rem);
+    }
+
+    .empty-state-heading {
+      font-size: var(--font-size-lg, 1.125rem);
+    }
+
+    .empty-state-description {
+      font-size: var(--font-size-sm, 0.875rem);
+    }
+
+    .empty-state-actions {
+      flex-direction: column;
+      width: 100%;
+    }
+
+    .empty-state-actions .btn-primary,
+    .empty-state-actions .btn-secondary {
+      width: 100%;
+    }
+  }
+</style>
+
+<script>
+  /* ===== Empty State Component JavaScript ===== */
+
+  /**
+   * Creates a standardized empty state element
+   * @param {Object} options - Configuration options
+   * @param {string} options.icon - Emoji or icon to display
+   * @param {string} options.heading - Main heading text
+   * @param {string} options.description - Descriptive text
+   * @param {Array} options.actions - Array of action button configs {text, onClick, variant}
+   * @param {string} options.help - Optional help text to display below
+   * @param {string} options.variant - 'default', 'compact', or 'spotlight'
+   * @returns {HTMLElement} The empty state element
+   */
+  function createEmptyState(options) {
+    const {
+      icon = '📭',
+      heading = 'No Data Yet',
+      description = 'Get started by adding your first item.',
+      actions = [],
+      help = '',
+      variant = 'default'
+    } = options;
+
+    const container = document.createElement('div');
+    container.className = `empty-state ${variant}`;
+    container.setAttribute('role', 'status');
+    container.setAttribute('aria-label', heading);
+
+    let html = `
+      <div class="empty-state-icon pulse">${icon}</div>
+      <h3 class="empty-state-heading">${escapeHtml(heading)}</h3>
+      <p class="empty-state-description">${escapeHtml(description)}</p>
+    `;
+
+    if (actions.length > 0) {
+      html += '<div class="empty-state-actions">';
+      actions.forEach(action => {
+        const variant = action.variant || 'primary';
+        const btnClass = `btn-${variant}`;
+        html += `<button class="${btnClass}" data-action="${escapeHtml(action.id || '')}">${escapeHtml(action.text)}</button>`;
+      });
+      html += '</div>';
+    }
+
+    if (help) {
+      html += `<div class="empty-state-help">${help}</div>`;
+    }
+
+    container.innerHTML = html;
+
+    // Attach click handlers
+    actions.forEach(action => {
+      if (action.onClick) {
+        const button = container.querySelector(`[data-action="${action.id || ''}"]`);
+        if (button) {
+          button.addEventListener('click', action.onClick);
+        }
+      }
+    });
+
+    return container;
+  }
+
+  /**
+   * Helper to escape HTML to prevent XSS
+   * Uses NU.esc() from NUSDK if available, falls back to DOM method
+   */
+  function escapeHtml(text) {
+    if (typeof NU !== 'undefined' && NU.esc) {
+      return NU.esc(text);
+    }
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  }
+
+  /**
+   * Show/hide empty state based on data availability
+   * @param {HTMLElement} container - Container to check
+   * @param {Array} data - Data array to check
+   * @param {Object} emptyStateOptions - Options for createEmptyState
+   */
+  function toggleEmptyState(container, data, emptyStateOptions) {
+    const existingEmpty = container.querySelector('.empty-state');
+
+    if (!data || data.length === 0) {
+      if (!existingEmpty) {
+        const emptyState = createEmptyState(emptyStateOptions);
+        container.appendChild(emptyState);
+      }
+    } else {
+      if (existingEmpty) {
+        existingEmpty.remove();
+      }
+    }
+  }
+</script>
+
+<!-- ===== Common Empty State Templates ===== -->
+<!--
+  These can be copied and customized in each page as needed.
+  Each template is self-contained and can be shown/hidden based on data state.
+-->
+
+<!-- Template: No Sponsors -->
+<template id="empty-state-sponsors">
+  <div class="empty-state spotlight">
+    <div class="empty-state-icon">🎯</div>
+    <h3 class="empty-state-heading">Ready to Add Sponsors?</h3>
+    <p class="empty-state-description">
+      Sponsors help support your events and gain valuable exposure.
+      Add your first sponsor to get started with tracking impressions and engagement.
+    </p>
+    <div class="empty-state-actions">
+      <button class="btn-primary" onclick="document.getElementById('sponsorForm')?.scrollIntoView({behavior: 'smooth'})">
+        Add First Sponsor
+      </button>
+      <button class="btn-secondary" onclick="showSponsorHelp()">
+        Learn More
+      </button>
+    </div>
+    <div class="empty-state-help">
+      <strong>💡 Tip:</strong> Sponsors can view their own analytics dashboard with the same metrics you see!
+    </div>
+  </div>
+</template>
+
+<!-- Template: No Events -->
+<template id="empty-state-events">
+  <div class="empty-state">
+    <div class="empty-state-icon pulse">📅</div>
+    <h3 class="empty-state-heading">No Events Yet</h3>
+    <p class="empty-state-description">
+      Create your first event to start managing registrations, displaying event information, and tracking engagement.
+    </p>
+    <div class="empty-state-actions">
+      <button class="btn-primary" onclick="location.href='#create-event'">
+        Create Your First Event
+      </button>
+    </div>
+  </div>
+</template>
+
+<!-- Template: No Analytics Data -->
+<template id="empty-state-analytics">
+  <div class="empty-state compact">
+    <div class="empty-state-icon">📊</div>
+    <h3 class="empty-state-heading">No Analytics Data Yet</h3>
+    <p class="empty-state-description">
+      Analytics will appear here once visitors interact with your event pages. Check back soon!
+    </p>
+  </div>
+</template>
+
+<!-- Template: No Videos/Embeds -->
+<template id="empty-state-videos">
+  <div class="empty-state compact">
+    <div class="empty-state-icon">🎥</div>
+    <h3 class="empty-state-heading">No Videos Added</h3>
+    <p class="empty-state-description">
+      Add YouTube or other embeddable content to showcase during your event display.
+    </p>
+    <div class="empty-state-help">
+      <strong>💡 Dynamic mode tip:</strong> Videos rotate automatically every few seconds when multiple items are added.
+    </div>
+  </div>
+</template>
+
+<!-- Template: Search No Results -->
+<template id="empty-state-no-results">
+  <div class="empty-state compact">
+    <div class="empty-state-icon">🔍</div>
+    <h3 class="empty-state-heading">No Results Found</h3>
+    <p class="empty-state-description">
+      Try adjusting your search terms or filters.
+    </p>
+  </div>
+</template>
+
+<!-- Template: Feature Coming Soon -->
+<template id="empty-state-coming-soon">
+  <div class="empty-state spotlight">
+    <div class="empty-state-icon">🚀</div>
+    <h3 class="empty-state-heading">Coming Soon</h3>
+    <p class="empty-state-description">
+      This feature is currently under development. Stay tuned for updates!
+    </p>
+  </div>
+</template>

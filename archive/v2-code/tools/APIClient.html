@@ -1,0 +1,595 @@
+<script>
+// DEV HARNESS ONLY - not an MVP surface.
+// Used by engineers to poke NUSDK/API. Do NOT link this from Header/Footer.
+
+/**
+ * APIClient - Standardized API client for CRUD operations
+ * Wraps NU.rpc for consistent API calls across all front-end pages
+ *
+ * NOTE: Internal dev tool. Not a user-facing MVP surface.
+ *
+ * Dependencies: NUSDK.html
+ * Used by: Admin.html (MVP surface)
+ *
+ * API Methods:
+ * - api_create: Create new resource
+ * - api_list: List resources
+ * - api_get: Get single resource
+ * - api_update: Update resource
+ * - api_delete: Delete resource
+ *
+ * @version 1.0.0
+ */
+window.APIClient = (function() {
+  'use strict';
+
+  // Default configuration
+  let defaultConfig = {
+    brandId: null,
+    adminKey: null,
+    onError: null,
+    onSuccess: null,
+    showErrorUI: true  // Show user-facing error notifications by default
+  };
+
+  /**
+   * Display user-facing error notification
+   * Uses the alert component pattern from Styles.html
+   * @param {Error} error - Error object to display
+   */
+  function showErrorNotification(error) {
+    // Create error container if it doesn't exist
+    let container = document.getElementById('api-error-container');
+    if (!container) {
+      container = document.createElement('div');
+      container.id = 'api-error-container';
+      container.setAttribute('role', 'alert');
+      container.setAttribute('aria-live', 'polite');
+      container.style.cssText = `
+        position: fixed;
+        top: 16px;
+        right: 16px;
+        z-index: 10000;
+        max-width: 400px;
+        width: calc(100% - 32px);
+      `;
+      document.body.appendChild(container);
+    }
+
+    // Create error alert using existing alert-error class
+    const alertId = 'api-error-' + Date.now();
+    const alert = document.createElement('div');
+    alert.id = alertId;
+    alert.className = 'alert alert-error';
+    alert.innerHTML = `
+      <span>${escapeHtml(getUserFriendlyMessage(error))}</span>
+      <button class="alert-dismiss" aria-label="Dismiss error" onclick="document.getElementById('${alertId}').remove()">×</button>
+    `;
+
+    container.appendChild(alert);
+
+    // Auto-dismiss after 8 seconds
+    setTimeout(() => {
+      const el = document.getElementById(alertId);
+      if (el) {
+        el.classList.add('alert-fade-out');
+        setTimeout(() => el.remove(), 300);
+      }
+    }, 8000);
+  }
+
+  /**
+   * Convert technical error to user-friendly message
+   * @param {Error} error - Error object
+   * @returns {string} User-friendly message
+   */
+  function getUserFriendlyMessage(error) {
+    const code = error.code || 'UNKNOWN';
+    const baseMessage = error.message || 'An error occurred';
+
+    // Map common error codes to user-friendly messages
+    const friendlyMessages = {
+      'AUTH_REQUIRED': 'Please sign in to continue.',
+      'AUTH_INVALID': 'Your session has expired. Please sign in again.',
+      'NOT_FOUND': 'The requested item was not found.',
+      'FORBIDDEN': 'You don\'t have permission to perform this action.',
+      'VALIDATION': 'Please check your input and try again.',
+      'RATE_LIMIT': 'Too many requests. Please wait a moment and try again.',
+      'SERVER_ERROR': 'Something went wrong on our end. Please try again.',
+      'NETWORK': 'Unable to connect. Please check your internet connection.',
+      'UNKNOWN': baseMessage
+    };
+
+    return friendlyMessages[code] || baseMessage;
+  }
+
+  /**
+   * Escape HTML to prevent XSS
+   * @param {string} str - String to escape
+   * @returns {string} Escaped string
+   */
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  /**
+   * Initialize APIClient with default configuration
+   * @param {Object} config - Configuration object
+   * @param {string} config.brandId - Default brand ID for all requests
+   * @param {string} config.adminKey - Default admin key for authenticated requests
+   * @param {Function} config.onError - Global error handler
+   * @param {Function} config.onSuccess - Global success handler
+   */
+  function init(config = {}) {
+    defaultConfig = { ...defaultConfig, ...config };
+  }
+
+  /**
+   * Get current configuration
+   * @returns {Object} Current configuration
+   */
+  function getConfig() {
+    return { ...defaultConfig };
+  }
+
+  /**
+   * Set admin key (useful after authentication)
+   * @param {string} key - Admin key
+   */
+  function setAdminKey(key) {
+    defaultConfig.adminKey = key;
+  }
+
+  /**
+   * Set brand ID
+   * @param {string} brandId - Brand ID
+   */
+  function setBrandId(brandId) {
+    defaultConfig.brandId = brandId;
+  }
+
+  // === Core Request Handler ===
+
+  /**
+   * Make an API request using NU.rpc
+   * @param {string} method - API method name (e.g., 'api_create')
+   * @param {Object} payload - Request payload
+   * @returns {Promise<Object>} API response
+   */
+  async function request(method, payload) {
+    if (!window.NU || typeof window.NU.rpc !== 'function') {
+      throw new Error('APIClient requires NUSDK to be loaded');
+    }
+
+    const response = await NU.rpc(method, payload);
+
+    if (response && response.ok) {
+      if (defaultConfig.onSuccess) {
+        defaultConfig.onSuccess(response);
+      }
+      return response;
+    }
+
+    const error = new Error(response?.message || response?.err || 'API request failed');
+    error.code = response?.code || 'UNKNOWN';
+    error.response = response;
+
+    // Show user-facing error notification by default
+    if (defaultConfig.showErrorUI) {
+      showErrorNotification(error);
+    }
+
+    // Call custom error handler if provided
+    if (defaultConfig.onError) {
+      defaultConfig.onError(error);
+    }
+
+    throw error;
+  }
+
+  // === CRUD Operations ===
+
+  /**
+   * Create a new resource
+   * @param {string} scope - Resource scope ('sponsors', 'events', etc.)
+   * @param {Object} data - Resource data
+   * @param {Object} options - Additional options
+   * @param {string} options.brandId - Brand ID (overrides default)
+   * @param {string} options.adminKey - Admin key (overrides default)
+   * @param {string} options.templateId - Template ID for resource creation
+   * @returns {Promise<Object>} Created resource
+   */
+  async function create(scope, data, options = {}) {
+    const payload = {
+      brandId: options.brandId || defaultConfig.brandId,
+      scope,
+      data,
+      adminKey: options.adminKey || defaultConfig.adminKey
+    };
+
+    if (options.templateId) {
+      payload.templateId = options.templateId;
+    }
+
+    const response = await request('api_create', payload);
+    return response.value;
+  }
+
+  /**
+   * List resources
+   * @param {string} scope - Resource scope ('sponsors', 'events', etc.)
+   * @param {Object} options - Additional options
+   * @param {string} options.brandId - Brand ID (overrides default)
+   * @param {Object} options.filter - Filter criteria
+   * @returns {Promise<Array>} List of resources
+   */
+  async function list(scope, options = {}) {
+    const payload = {
+      brandId: options.brandId || defaultConfig.brandId,
+      scope
+    };
+
+    if (options.filter) {
+      payload.filter = options.filter;
+    }
+
+    const response = await request('api_list', payload);
+    return response.value?.items || response.value || [];
+  }
+
+  /**
+   * Get a single resource by ID
+   * @param {string} scope - Resource scope
+   * @param {string} id - Resource ID
+   * @param {Object} options - Additional options
+   * @param {string} options.brandId - Brand ID (overrides default)
+   * @returns {Promise<Object>} Resource data
+   */
+  async function get(scope, id, options = {}) {
+    const payload = {
+      brandId: options.brandId || defaultConfig.brandId,
+      scope,
+      id
+    };
+
+    const response = await request('api_get', payload);
+    return response.value;
+  }
+
+  /**
+   * Update a resource
+   * @param {string} scope - Resource scope
+   * @param {string} id - Resource ID
+   * @param {Object} data - Updated data
+   * @param {Object} options - Additional options
+   * @param {string} options.brandId - Brand ID (overrides default)
+   * @param {string} options.adminKey - Admin key (overrides default)
+   * @returns {Promise<Object>} Updated resource
+   */
+  async function update(scope, id, data, options = {}) {
+    const payload = {
+      brandId: options.brandId || defaultConfig.brandId,
+      scope,
+      id,
+      data,
+      adminKey: options.adminKey || defaultConfig.adminKey
+    };
+
+    const response = await request('api_update', payload);
+    return response.value;
+  }
+
+  /**
+   * Delete a resource
+   * @param {string} scope - Resource scope
+   * @param {string} id - Resource ID
+   * @param {Object} options - Additional options
+   * @param {string} options.brandId - Brand ID (overrides default)
+   * @param {string} options.adminKey - Admin key (overrides default)
+   * @returns {Promise<boolean>} True if deleted
+   */
+  async function remove(scope, id, options = {}) {
+    const payload = {
+      brandId: options.brandId || defaultConfig.brandId,
+      scope,
+      id,
+      adminKey: options.adminKey || defaultConfig.adminKey
+    };
+
+    await request('api_delete', payload);
+    return true;
+  }
+
+  // === Specialized Methods ===
+
+  /**
+   * Get event data
+   * @param {string} eventId - Event ID
+   * @param {Object} options - Additional options
+   * @returns {Promise<Object>} Event data
+   */
+  async function getEvent(eventId, options = {}) {
+    return get('events', eventId, options);
+  }
+
+  /**
+   * Update event data
+   * @param {string} eventId - Event ID
+   * @param {Object} data - Event data to update
+   * @param {Object} options - Additional options
+   * @returns {Promise<Object>} Updated event
+   */
+  async function updateEvent(eventId, data, options = {}) {
+    const payload = {
+      brandId: options.brandId || defaultConfig.brandId,
+      eventId,
+      data,
+      adminKey: options.adminKey || defaultConfig.adminKey
+    };
+
+    const response = await request('api_updateEventData', payload);
+    return response.value;
+  }
+
+  /**
+   * Get public bundle (for Public.html, Display.html, Poster.html)
+   * @param {string} eventId - Event ID
+   * @param {Object} options - Additional options
+   * @returns {Promise<Object>} Public bundle data
+   */
+  async function getPublicBundle(eventId, options = {}) {
+    const payload = {
+      brandId: options.brandId || defaultConfig.brandId,
+      eventId
+    };
+
+    if (options.ifNoneMatch) {
+      payload.ifNoneMatch = options.ifNoneMatch;
+    }
+
+    const response = await request('api_getPublicBundle', payload);
+    return response;
+  }
+
+  /**
+   * Get admin bundle (for Admin.html - optimized bundle with event + config)
+   * Returns: event, brandConfig, templates, diagnostics, allSponsors
+   * @param {string} eventId - Event ID
+   * @param {Object} options - Additional options
+   * @returns {Promise<Object>} Admin bundle data (AdminEventBundle)
+   */
+  async function getAdminBundle(eventId, options = {}) {
+    const payload = {
+      brandId: options.brandId || defaultConfig.brandId,
+      adminKey: options.adminKey || defaultConfig.adminKey,
+      scope: options.scope || 'events',
+      id: eventId
+    };
+
+    if (options.ifNoneMatch) {
+      payload.ifNoneMatch = options.ifNoneMatch;
+    }
+
+    const response = await request('api_getAdminBundle', payload);
+    return response;
+  }
+
+  /**
+   * Get display bundle (for Display.html TV mode)
+   * Returns: event, rotation config, layout config
+   * All config computed from Config + Template + Brand (no extra DB fields)
+   * @param {string} eventId - Event ID
+   * @param {Object} options - Additional options
+   * @returns {Promise<Object>} Display bundle data (DisplayBundle)
+   */
+  async function getDisplayBundle(eventId, options = {}) {
+    const payload = {
+      brandId: options.brandId || defaultConfig.brandId,
+      scope: options.scope || 'events',
+      id: eventId
+    };
+
+    if (options.ifNoneMatch) {
+      payload.ifNoneMatch = options.ifNoneMatch;
+    }
+
+    const response = await request('api_getDisplayBundle', payload);
+    return response;
+  }
+
+  /**
+   * Get poster bundle (for Poster.html - print-friendly)
+   * Returns: event, qrCodes { public, signup }, print { dateLine, venueLine }
+   * QR codes point to trackable URLs (shortlinks) for analytics
+   * @param {string} eventId - Event ID
+   * @param {Object} options - Additional options
+   * @returns {Promise<Object>} Poster bundle data (PosterBundle)
+   */
+  async function getPosterBundle(eventId, options = {}) {
+    const payload = {
+      brandId: options.brandId || defaultConfig.brandId,
+      scope: options.scope || 'events',
+      id: eventId
+    };
+
+    if (options.ifNoneMatch) {
+      payload.ifNoneMatch = options.ifNoneMatch;
+    }
+
+    const response = await request('api_getPosterBundle', payload);
+    return response;
+  }
+
+  /**
+   * Get sponsor bundle for sponsor portal
+   * Returns thin event view + sponsors with analytics metrics
+   * Metrics (impressions, clicks, ctr) come from ANALYTICS sheet
+   * @param {string} eventId - Event ID
+   * @param {Object} options - brandId, scope, ifNoneMatch
+   * @returns {Promise<Object>} SponsorBundle with event and sponsors with metrics
+   */
+  async function getSponsorBundle(eventId, options = {}) {
+    const payload = {
+      brandId: options.brandId || defaultConfig.brandId,
+      scope: options.scope || 'events',
+      id: eventId
+    };
+
+    if (options.ifNoneMatch) {
+      payload.ifNoneMatch = options.ifNoneMatch;
+    }
+
+    const response = await request('api_getSponsorBundle', payload);
+    return response;
+  }
+
+  /**
+   * Get shared report bundle for analytics dashboard
+   * Returns thin event view + aggregated metrics from ANALYTICS sheet
+   * Metrics include views, clicks, sponsor stats, and league stats
+   * @param {string} eventId - Event ID
+   * @param {Object} options - brandId, scope, ifNoneMatch
+   * @returns {Promise<Object>} SharedReportBundle with event and metrics
+   */
+  async function getSharedReportBundle(eventId, options = {}) {
+    const payload = {
+      brandId: options.brandId || defaultConfig.brandId,
+      scope: options.scope || 'events',
+      id: eventId
+    };
+
+    if (options.ifNoneMatch) {
+      payload.ifNoneMatch = options.ifNoneMatch;
+    }
+
+    const response = await request('api_getSharedReportBundle', payload);
+    return response;
+  }
+
+  /**
+   * Generate form shortlink
+   * @param {string} formUrl - Form URL
+   * @param {Object} options - Additional options
+   * @returns {Promise<Object>} Shortlink data
+   */
+  async function generateFormShortlink(formUrl, options = {}) {
+    const payload = {
+      brandId: options.brandId || defaultConfig.brandId,
+      formUrl,
+      adminKey: options.adminKey || defaultConfig.adminKey
+    };
+
+    const response = await request('api_generateFormShortlink', payload);
+    return response.value;
+  }
+
+  /**
+   * Create form from template
+   * @param {string} templateType - Template type
+   * @param {Object} options - Additional options
+   * @returns {Promise<Object>} Created form data
+   */
+  async function createFormFromTemplate(templateType, options = {}) {
+    const payload = {
+      brandId: options.brandId || defaultConfig.brandId,
+      templateType,
+      adminKey: options.adminKey || defaultConfig.adminKey
+    };
+
+    const response = await request('api_createFormFromTemplate', payload);
+    return response.value;
+  }
+
+  // === Analytics Methods ===
+
+  /**
+   * Get shared analytics data
+   * @param {Object} options - Query options
+   * @returns {Promise<Object>} Analytics data
+   */
+  async function getSharedAnalytics(options = {}) {
+    const payload = {
+      brandId: options.brandId || defaultConfig.brandId,
+      ...options
+    };
+
+    const response = await request('api_getSharedAnalytics', payload);
+    return response.value;
+  }
+
+  /**
+   * Get sponsor analytics
+   * @param {string} sponsorId - Sponsor ID
+   * @param {Object} options - Query options
+   * @returns {Promise<Object>} Sponsor analytics
+   */
+  async function getSponsorAnalytics(sponsorId, options = {}) {
+    const payload = {
+      brandId: options.brandId || defaultConfig.brandId,
+      sponsorId,
+      ...options
+    };
+
+    const response = await request('api_getSponsorAnalytics', payload);
+    return response.value;
+  }
+
+  /**
+   * Get sponsor ROI data
+   * @param {string} sponsorId - Sponsor ID
+   * @param {Object} options - Query options
+   * @returns {Promise<Object>} ROI data
+   */
+  async function getSponsorROI(sponsorId, options = {}) {
+    const payload = {
+      brandId: options.brandId || defaultConfig.brandId,
+      sponsorId,
+      ...options
+    };
+
+    const response = await request('api_getSponsorROI', payload);
+    return response.value;
+  }
+
+  // === Public API ===
+  return {
+    // Configuration
+    init,
+    getConfig,
+    setAdminKey,
+    setBrandId,
+
+    // Core request
+    request,
+
+    // CRUD operations
+    create,
+    list,
+    get,
+    update,
+    remove,  // 'delete' is reserved word
+
+    // Specialized methods
+    getEvent,
+    updateEvent,
+    getPublicBundle,
+    getAdminBundle,
+    getDisplayBundle,
+    getPosterBundle,
+    getSponsorBundle,
+    getSharedReportBundle,
+    generateFormShortlink,
+    createFormFromTemplate,
+
+    // Analytics
+    getSharedAnalytics,
+    getSponsorAnalytics,
+    getSponsorROI,
+
+    // Error handling
+    showError: showErrorNotification
+  };
+})();
+</script>

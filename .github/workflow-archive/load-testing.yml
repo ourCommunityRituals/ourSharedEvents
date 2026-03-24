@@ -1,0 +1,228 @@
+# DEPRECATED WORKFLOW (ARCHIVED)
+# This workflow is kept for historical reference only.
+# Do NOT re-enable without updating it to the current CI/CD architecture.
+
+name: OLD – Load Testing
+
+on:
+  # Manual trigger only (don't run automatically to avoid hitting rate limits)
+  workflow_dispatch:
+    inputs:
+      test_type:
+        description: 'Type of load test to run'
+        required: true
+        default: 'smoke'
+        type: choice
+        options:
+          - smoke
+          - average
+          - stress
+          - spike
+          - all
+      base_url:
+        description: 'Base URL to test (leave empty for production)'
+        required: false
+        type: string
+      admin_key_required:
+        description: 'Requires ADMIN_KEY for write operations'
+        required: false
+        default: true
+        type: boolean
+
+  # Can also be triggered by other workflows
+  workflow_call:
+    inputs:
+      test_type:
+        description: 'Type of load test to run'
+        required: true
+        type: string
+      base_url:
+        description: 'Base URL to test'
+        required: false
+        type: string
+
+jobs:
+  load-test:
+    name: 🔥 Load Test (${{ inputs.test_type }})
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install k6
+        run: |
+          echo "📦 Installing k6..."
+          sudo gpg -k
+          sudo gpg --no-default-keyring --keyring /usr/share/keyrings/k6-archive-keyring.gpg --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys C5AD17C747E3415A3642D57D77C6C491D6AC1D69
+          echo "deb [signed-by=/usr/share/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main" | sudo tee /etc/apt/sources.list.d/k6.list
+          sudo apt-get update
+          sudo apt-get install k6
+          k6 version
+
+      - name: Determine BASE_URL
+        id: config
+        run: |
+          if [ -n "${{ inputs.base_url }}" ]; then
+            echo "base_url=${{ inputs.base_url }}" >> $GITHUB_OUTPUT
+          else
+            echo "base_url=${{ secrets.DEPLOYMENT_URL }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Run smoke load test
+        if: inputs.test_type == 'smoke' || inputs.test_type == 'all'
+        env:
+          BASE_URL: ${{ steps.config.outputs.base_url }}
+          ADMIN_KEY: ${{ secrets.ADMIN_KEY }}
+          BRAND_ID: root
+          ENVIRONMENT: ${{ github.ref_name == 'main' && 'production' || 'staging' }}
+        run: |
+          echo "🧪 Running smoke load test..."
+          echo "Base URL: $BASE_URL"
+          echo "Environment: $ENVIRONMENT"
+          k6 run tests/load/smoke-load.js \
+            --out json=results/smoke-load-results.json \
+            --summary-export=results/smoke-load-summary.json
+
+      - name: Run average load test
+        if: inputs.test_type == 'average' || inputs.test_type == 'all'
+        env:
+          BASE_URL: ${{ steps.config.outputs.base_url }}
+          ADMIN_KEY: ${{ secrets.ADMIN_KEY }}
+          BRAND_ID: root
+          ENVIRONMENT: ${{ github.ref_name == 'main' && 'production' || 'staging' }}
+        run: |
+          echo "📊 Running average load test..."
+          k6 run tests/load/average-load.js \
+            --out json=results/average-load-results.json \
+            --summary-export=results/average-load-summary.json
+
+      - name: Run stress load test
+        if: inputs.test_type == 'stress'
+        env:
+          BASE_URL: ${{ steps.config.outputs.base_url }}
+          ADMIN_KEY: ${{ secrets.ADMIN_KEY }}
+          BRAND_ID: root
+          ENVIRONMENT: ${{ github.ref_name == 'main' && 'production' || 'staging' }}
+        run: |
+          echo "💪 Running stress load test..."
+          k6 run tests/load/stress-load.js \
+            --out json=results/stress-load-results.json \
+            --summary-export=results/stress-load-summary.json
+
+      - name: Run spike load test
+        if: inputs.test_type == 'spike'
+        env:
+          BASE_URL: ${{ steps.config.outputs.base_url }}
+          ADMIN_KEY: ${{ secrets.ADMIN_KEY }}
+          BRAND_ID: root
+          ENVIRONMENT: ${{ github.ref_name == 'main' && 'production' || 'staging' }}
+        run: |
+          echo "⚡ Running spike load test..."
+          k6 run tests/load/spike-load.js \
+            --out json=results/spike-load-results.json \
+            --summary-export=results/spike-load-summary.json
+
+      - name: Upload load test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: load-test-results-${{ inputs.test_type }}-${{ github.run_number }}
+          path: results/
+          retention-days: 30
+
+      - name: Create load test summary
+        if: always()
+        run: |
+          echo "## 🔥 Load Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Test Configuration" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Test Type:** \`${{ inputs.test_type }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Base URL:** \`${{ steps.config.outputs.base_url }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Environment:** \`${{ github.ref_name == 'main' && 'production' || 'staging' }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Timestamp:** $(date -Iseconds)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Test Descriptions" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ "${{ inputs.test_type }}" == "smoke" ] || [ "${{ inputs.test_type }}" == "all" ]; then
+            echo "#### 🧪 Smoke Load Test" >> $GITHUB_STEP_SUMMARY
+            echo "- **VUs:** 1 virtual user" >> $GITHUB_STEP_SUMMARY
+            echo "- **Duration:** 30 seconds" >> $GITHUB_STEP_SUMMARY
+            echo "- **Purpose:** Baseline test to verify all endpoints work" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          if [ "${{ inputs.test_type }}" == "average" ] || [ "${{ inputs.test_type }}" == "all" ]; then
+            echo "#### 📊 Average Load Test" >> $GITHUB_STEP_SUMMARY
+            echo "- **VUs:** 10 concurrent users" >> $GITHUB_STEP_SUMMARY
+            echo "- **Duration:** 2 minutes" >> $GITHUB_STEP_SUMMARY
+            echo "- **Purpose:** Simulate normal/average usage patterns" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          if [ "${{ inputs.test_type }}" == "stress" ]; then
+            echo "#### 💪 Stress Load Test" >> $GITHUB_STEP_SUMMARY
+            echo "- **VUs:** Ramp 0 → 50 → 0 users" >> $GITHUB_STEP_SUMMARY
+            echo "- **Duration:** 4 minutes total" >> $GITHUB_STEP_SUMMARY
+            echo "- **Purpose:** Test system under sustained heavy load" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          if [ "${{ inputs.test_type }}" == "spike" ]; then
+            echo "#### ⚡ Spike Load Test" >> $GITHUB_STEP_SUMMARY
+            echo "- **VUs:** Spike 1 → 100 → 1 users" >> $GITHUB_STEP_SUMMARY
+            echo "- **Duration:** ~80 seconds" >> $GITHUB_STEP_SUMMARY
+            echo "- **Purpose:** Test resilience to sudden traffic spikes" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "### Results Files" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Detailed results available in workflow artifacts:" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ -d "results" ]; then
+            for file in results/*-summary.json; do
+              if [ -f "$file" ]; then
+                echo "- \`$(basename $file)\`" >> $GITHUB_STEP_SUMMARY
+              fi
+            done
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Quick Metrics" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Try to extract key metrics from summary files
+          if [ -f "results/${{ inputs.test_type }}-load-summary.json" ]; then
+            echo "\`\`\`json" >> $GITHUB_STEP_SUMMARY
+            cat "results/${{ inputs.test_type }}-load-summary.json" | head -50 >> $GITHUB_STEP_SUMMARY
+            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Next Steps" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "1. Download artifacts to analyze detailed metrics" >> $GITHUB_STEP_SUMMARY
+          echo "2. Review response times and error rates" >> $GITHUB_STEP_SUMMARY
+          echo "3. Compare with previous test runs" >> $GITHUB_STEP_SUMMARY
+          echo "4. Adjust performance targets if needed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "---" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "💡 **Tip:** Run load tests against QA environment before production" >> $GITHUB_STEP_SUMMARY
+
+      - name: Check load test thresholds
+        run: |
+          echo "✅ Load test completed"
+          echo ""
+          echo "📊 Review the summary and artifacts for detailed metrics"
+          echo ""
+          echo "⚠️  Note: k6 thresholds are defined in each test file"
+          echo "    If thresholds fail, the test will exit with error code"
+
+      - name: Create results directory
+        if: always()
+        run: mkdir -p results

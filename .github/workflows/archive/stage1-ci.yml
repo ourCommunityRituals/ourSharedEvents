@@ -1,0 +1,859 @@
+# Stage-1 CI: Security → Validate → Build → Deploy (Staging)
+#
+# EPIC 5 - Story 5.1: Stage-1 Staging-First Pipeline
+# Story 5.2: Security-First Quality Gates
+#
+# Purpose / Value:
+#   Every main branch change passes a secure, predictable path into staging.
+#   Security is the FIRST gate - no code proceeds without passing security checks.
+#
+# Quality Gates (Sequential):
+#   GATE 1: Security (MUST PASS)
+#     - CodeQL Security Scan (critical/high block)
+#     - Dependency Vulnerability Audit (critical/high block)
+#
+#   GATE 2: Validation (requires GATE 1)
+#     - Lint / Format Check
+#     - Unit Tests
+#     - Contract Tests
+#     - Sheets Connectivity Test
+#     - Template Bundle Check
+#
+#   GATE 3: Build (requires GATE 2)
+#     - Build Worker
+#
+#   GATE 4: Deploy (requires GATE 3, main branch only)
+#     - Deploy to Staging
+#
+# Acceptance Criteria:
+#   - Security failures → entire pipeline stops
+#   - Validation failures → no build, no deploy
+#   - Build failures → no deploy
+#   - On success, stg.eventangle.com is updated
+#   - PR validation runs gates 1-3 without deployment
+#
+# Required Secrets:
+#   - CLOUDFLARE_API_TOKEN: Cloudflare API token for Worker deployment
+#   - GOOGLE_CLIENT_EMAIL: Service account email for Sheets connectivity
+#   - GOOGLE_PRIVATE_KEY: Service account private key (PEM format)
+#   - STAGING_SHEETS_SPREADSHEET_ID: Staging spreadsheet ID for connectivity test
+
+name: Stage-1 CI
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      skip_deploy:
+        description: 'Skip deployment (validation only)'
+        required: false
+        default: 'false'
+        type: boolean
+      force_deploy:
+        description: 'Force deployment even on PR (use with caution)'
+        required: false
+        default: 'false'
+        type: boolean
+
+# Prevent duplicate runs: cancel in-progress runs for the same branch
+concurrency:
+  group: stage1-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '20'
+  STG_BASE_URL: 'https://stg.eventangle.com'
+  # Security policy - Critical and high severity block merges
+  FAIL_ON_SEVERITY: 'critical,high'
+
+jobs:
+  # ============================================================================
+  # GATE 1: SECURITY (Story 5.2 - Security First)
+  # ============================================================================
+  # Security checks MUST pass before any other jobs run.
+  # This is the non-negotiable first gate of the pipeline.
+  # ============================================================================
+
+  # --------------------------------------------------------------------------
+  # JOB 1.1: CodeQL Security Scan
+  # --------------------------------------------------------------------------
+  codeql-security:
+    name: 🔒 CodeQL Security Scan
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+      pull-requests: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Display security gate info
+        run: |
+          echo "=============================================="
+          echo "GATE 1: SECURITY - CodeQL Scan"
+          echo "=============================================="
+          echo ""
+          echo "This is a REQUIRED security gate."
+          echo "Critical and high severity findings BLOCK the pipeline."
+          echo ""
+          echo "Trigger: ${{ github.event_name }}"
+          echo "Branch: ${{ github.ref_name }}"
+          echo "=============================================="
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: javascript
+          queries: +security-extended,security-and-quality
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci || npm install
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:javascript"
+          upload: true
+
+      - name: Create summary
+        if: always()
+        run: |
+          echo "## 🔒 CodeQL Security Scan" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ job.status }}" == "success" ]; then
+            echo "### ✅ PASSED - No blocking vulnerabilities" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### ❌ FAILED - Security vulnerabilities detected" >> $GITHUB_STEP_SUMMARY
+            echo "Check the Security tab for details." >> $GITHUB_STEP_SUMMARY
+          fi
+
+  # --------------------------------------------------------------------------
+  # JOB 1.2: Dependency Vulnerability Audit
+  # --------------------------------------------------------------------------
+  dependency-audit:
+    name: 🔍 Dependency Vulnerability Audit
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run npm audit
+        id: npm-audit
+        run: |
+          echo "=============================================="
+          echo "GATE 1: SECURITY - Dependency Audit"
+          echo "=============================================="
+          echo ""
+          echo "Policy: High and critical vulnerabilities BLOCK the pipeline."
+          echo ""
+
+          mkdir -p .security-reports
+
+          set +e
+          npm audit --json > .security-reports/npm-audit.json 2>&1
+          set -e
+
+          if [ -f .security-reports/npm-audit.json ]; then
+            CRITICAL=$(jq '.metadata.vulnerabilities.critical // 0' .security-reports/npm-audit.json 2>/dev/null || echo "0")
+            HIGH=$(jq '.metadata.vulnerabilities.high // 0' .security-reports/npm-audit.json 2>/dev/null || echo "0")
+            MODERATE=$(jq '.metadata.vulnerabilities.moderate // 0' .security-reports/npm-audit.json 2>/dev/null || echo "0")
+            LOW=$(jq '.metadata.vulnerabilities.low // 0' .security-reports/npm-audit.json 2>/dev/null || echo "0")
+          else
+            CRITICAL=0
+            HIGH=0
+            MODERATE=0
+            LOW=0
+          fi
+
+          echo "critical_count=$CRITICAL" >> $GITHUB_OUTPUT
+          echo "high_count=$HIGH" >> $GITHUB_OUTPUT
+
+          BLOCKING=$((CRITICAL + HIGH))
+
+          if [ "$BLOCKING" -gt 0 ]; then
+            echo "❌ BLOCKING: $CRITICAL critical, $HIGH high vulnerabilities"
+            echo "audit_status=failed" >> $GITHUB_OUTPUT
+            exit 1
+          else
+            echo "✅ No blocking vulnerabilities (found $MODERATE moderate, $LOW low)"
+            echo "audit_status=pass" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Upload audit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-audit-report
+          path: .security-reports/
+          retention-days: 30
+
+      - name: Create summary
+        if: always()
+        run: |
+          echo "## 🔍 Dependency Vulnerability Audit" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          CRITICAL="${{ steps.npm-audit.outputs.critical_count }}"
+          HIGH="${{ steps.npm-audit.outputs.high_count }}"
+          if [ "${{ steps.npm-audit.outputs.audit_status }}" == "pass" ]; then
+            echo "### ✅ PASSED - No blocking vulnerabilities" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### ❌ FAILED - $CRITICAL critical, $HIGH high vulnerabilities" >> $GITHUB_STEP_SUMMARY
+            echo "Run \`npm audit\` locally and fix before proceeding." >> $GITHUB_STEP_SUMMARY
+          fi
+
+  # ============================================================================
+  # GATE 2: VALIDATION (requires GATE 1 - Security)
+  # ============================================================================
+  # Validation jobs only run if ALL security checks pass.
+  # ============================================================================
+
+  # --------------------------------------------------------------------------
+  # JOB 2.0: Install (runs after security passes)
+  # --------------------------------------------------------------------------
+  install:
+    name: 📦 Checkout + Install
+    runs-on: ubuntu-latest
+    needs: [codeql-security, dependency-audit]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Cache node_modules
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: node-modules-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+
+  # --------------------------------------------------------------------------
+  # JOB 2.1: Lint / Format Check
+  # --------------------------------------------------------------------------
+  lint:
+    name: 🔍 Lint / Format Check
+    runs-on: ubuntu-latest
+    needs: [install]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Restore node_modules
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: node-modules-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+
+      - name: Install dependencies (fallback)
+        run: npm ci
+        if: steps.cache.outputs.cache-hit != 'true'
+
+      - name: Run ESLint
+        run: |
+          echo "=================================================="
+          echo "GATE 2: VALIDATION - Lint / Format Check"
+          echo "=================================================="
+          npm run lint
+
+      - name: Create summary
+        if: always()
+        run: |
+          echo "## 🔍 Lint / Format Check" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ job.status }}" == "success" ]; then
+            echo "### ✅ PASSED" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### ❌ FAILED" >> $GITHUB_STEP_SUMMARY
+          fi
+
+  # --------------------------------------------------------------------------
+  # JOB 2.1b: GAS URL Ban Check (Story 2.1)
+  # --------------------------------------------------------------------------
+  # Hard gate: Prevents shipping code that references script.google.com
+  # --------------------------------------------------------------------------
+  banned-origins:
+    name: 🚫 GAS URL Ban Check
+    runs-on: ubuntu-latest
+    needs: [lint]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Check for banned GAS origins
+        run: |
+          echo "=================================================="
+          echo "GATE 2: VALIDATION - GAS URL Ban Check (Story 2.1)"
+          echo "=================================================="
+          node scripts/check-banned-origins.mjs
+
+      - name: Create summary
+        if: always()
+        run: |
+          echo "## 🚫 GAS URL Ban Check" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ job.status }}" == "success" ]; then
+            echo "### ✅ PASSED - No banned GAS URLs found" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### ❌ FAILED - Banned GAS URLs detected" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Code referencing script.google.com is not allowed." >> $GITHUB_STEP_SUMMARY
+            echo "Run \`npm run check:banned-origins\` locally to see details." >> $GITHUB_STEP_SUMMARY
+          fi
+
+  # --------------------------------------------------------------------------
+  # JOB 2.2: Unit Tests
+  # --------------------------------------------------------------------------
+  unit-tests:
+    name: 🧪 Unit Tests
+    runs-on: ubuntu-latest
+    needs: [lint, banned-origins]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Restore node_modules
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: node-modules-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+
+      - name: Install dependencies (fallback)
+        run: npm ci
+        if: steps.cache.outputs.cache-hit != 'true'
+
+      - name: Run unit tests
+        run: |
+          echo "=================================================="
+          echo "GATE 2: VALIDATION - Unit Tests"
+          echo "=================================================="
+          npm run test:unit
+
+      - name: Create summary
+        if: always()
+        run: |
+          echo "## 🧪 Unit Tests" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ job.status }}" == "success" ]; then
+            echo "### ✅ PASSED" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### ❌ FAILED" >> $GITHUB_STEP_SUMMARY
+          fi
+
+  # --------------------------------------------------------------------------
+  # JOB 2.3: Contract Tests
+  # --------------------------------------------------------------------------
+  contract-tests:
+    name: 📜 Contract Tests
+    runs-on: ubuntu-latest
+    needs: [lint]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Restore node_modules
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: node-modules-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+
+      - name: Install dependencies (fallback)
+        run: npm ci
+        if: steps.cache.outputs.cache-hit != 'true'
+
+      - name: Run contract tests
+        run: |
+          echo "=================================================="
+          echo "GATE 2: VALIDATION - Contract Tests"
+          echo "=================================================="
+          npm run test:contract
+
+      - name: Create summary
+        if: always()
+        run: |
+          echo "## 📜 Contract Tests" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ job.status }}" == "success" ]; then
+            echo "### ✅ PASSED" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### ❌ FAILED" >> $GITHUB_STEP_SUMMARY
+          fi
+
+  # --------------------------------------------------------------------------
+  # JOB 2.4: Sheets Connectivity Test
+  # --------------------------------------------------------------------------
+  sheets-connectivity:
+    name: 📊 Sheets Connectivity Test
+    runs-on: ubuntu-latest
+    needs: [lint]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Restore node_modules
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: node-modules-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+
+      - name: Install dependencies (fallback)
+        run: npm ci
+        if: steps.cache.outputs.cache-hit != 'true'
+
+      - name: Validate Sheets secrets
+        run: |
+          ERRORS=0
+          if [ -z "${{ secrets.GOOGLE_CLIENT_EMAIL }}" ]; then
+            echo "::error::Missing: GOOGLE_CLIENT_EMAIL"
+            ERRORS=$((ERRORS + 1))
+          fi
+          if [ -z "${{ secrets.GOOGLE_PRIVATE_KEY }}" ]; then
+            echo "::error::Missing: GOOGLE_PRIVATE_KEY"
+            ERRORS=$((ERRORS + 1))
+          fi
+          if [ -z "${{ secrets.STAGING_SHEETS_SPREADSHEET_ID }}" ]; then
+            echo "::error::Missing: STAGING_SHEETS_SPREADSHEET_ID"
+            ERRORS=$((ERRORS + 1))
+          fi
+          if [ $ERRORS -gt 0 ]; then
+            exit 1
+          fi
+
+      - name: Run Sheets connectivity test
+        env:
+          GOOGLE_CLIENT_EMAIL: ${{ secrets.GOOGLE_CLIENT_EMAIL }}
+          GOOGLE_PRIVATE_KEY: ${{ secrets.GOOGLE_PRIVATE_KEY }}
+          SHEETS_SPREADSHEET_ID: ${{ secrets.STAGING_SHEETS_SPREADSHEET_ID }}
+        run: |
+          echo "=================================================="
+          echo "GATE 2: VALIDATION - Sheets Connectivity"
+          echo "=================================================="
+          npm run test:story1.1
+
+      - name: Create summary
+        if: always()
+        run: |
+          echo "## 📊 Sheets Connectivity Test" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ job.status }}" == "success" ]; then
+            echo "### ✅ PASSED" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### ❌ FAILED" >> $GITHUB_STEP_SUMMARY
+          fi
+
+  # --------------------------------------------------------------------------
+  # JOB 2.5: Template Bundle Check
+  # --------------------------------------------------------------------------
+  template-bundle:
+    name: 📦 Template Bundle Check
+    runs-on: ubuntu-latest
+    needs: [lint]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Restore node_modules
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: node-modules-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+
+      - name: Install dependencies (fallback)
+        run: npm ci
+        if: steps.cache.outputs.cache-hit != 'true'
+
+      - name: Verify template bundling
+        run: |
+          echo "=================================================="
+          echo "GATE 2: VALIDATION - Template Bundle Check"
+          echo "=================================================="
+          npm run bundle:templates:check
+
+      - name: Create summary
+        if: always()
+        run: |
+          echo "## 📦 Template Bundle Check" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ job.status }}" == "success" ]; then
+            echo "### ✅ PASSED" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### ❌ FAILED" >> $GITHUB_STEP_SUMMARY
+          fi
+
+  # ============================================================================
+  # GATE 3: BUILD (requires GATE 2 - Validation)
+  # ============================================================================
+
+  # --------------------------------------------------------------------------
+  # JOB 3.1: Build Worker
+  # --------------------------------------------------------------------------
+  build-worker:
+    name: 🔨 Build Worker
+    runs-on: ubuntu-latest
+    needs: [unit-tests, contract-tests, sheets-connectivity, template-bundle]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Restore node_modules
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: node-modules-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+
+      - name: Install dependencies (fallback)
+        run: npm ci
+        if: steps.cache.outputs.cache-hit != 'true'
+
+      - name: Install Wrangler
+        run: npm install -g wrangler@3
+
+      - name: Build Worker
+        working-directory: cloudflare-proxy
+        run: |
+          echo "=================================================="
+          echo "GATE 3: BUILD - Worker Build"
+          echo "=================================================="
+          wrangler deploy --dry-run --outdir=dist --env staging
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: worker-build
+          path: cloudflare-proxy/dist/
+          retention-days: 1
+          if-no-files-found: ignore
+
+      - name: Create summary
+        if: always()
+        run: |
+          echo "## 🔨 Build Worker" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ job.status }}" == "success" ]; then
+            echo "### ✅ PASSED" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### ❌ FAILED" >> $GITHUB_STEP_SUMMARY
+          fi
+
+  # ============================================================================
+  # GATE 4: DEPLOY (requires GATE 3 - Build, main branch only)
+  # ============================================================================
+
+  # --------------------------------------------------------------------------
+  # JOB 4.1: Deploy to Staging
+  # --------------------------------------------------------------------------
+  deploy-staging:
+    name: 🚀 Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: [build-worker]
+    if: |
+      github.event.inputs.skip_deploy != 'true' &&
+      (github.event_name == 'push' || github.event.inputs.force_deploy == 'true')
+    environment:
+      name: staging
+      url: https://stg.eventangle.com
+    outputs:
+      deployed: ${{ steps.deploy.outcome == 'success' }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Restore node_modules
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: node-modules-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+
+      - name: Install dependencies (fallback)
+        run: npm ci
+        if: steps.cache.outputs.cache-hit != 'true'
+
+      - name: Validate Cloudflare secrets
+        run: |
+          if [ -z "${{ secrets.CLOUDFLARE_API_TOKEN }}" ]; then
+            echo "::error::Missing: CLOUDFLARE_API_TOKEN"
+            exit 1
+          fi
+          if [ -z "${{ secrets.CLOUDFLARE_ACCOUNT_ID }}" ]; then
+            echo "::error::Missing: CLOUDFLARE_ACCOUNT_ID"
+            exit 1
+          fi
+
+      # Story B1: Validate Google Service Account secrets for backend auth
+      - name: Validate Google Service Account secrets (Story B1)
+        run: |
+          echo "=================================================="
+          echo "Story B1: Validating Google SA secrets for staging"
+          echo "=================================================="
+          ERRORS=0
+
+          # Check new naming convention (preferred)
+          if [ -z "${{ secrets.GOOGLE_SA_CLIENT_EMAIL }}" ]; then
+            # Fall back to legacy naming
+            if [ -z "${{ secrets.GOOGLE_CLIENT_EMAIL }}" ]; then
+              echo "::error::Missing: GOOGLE_SA_CLIENT_EMAIL (or legacy GOOGLE_CLIENT_EMAIL)"
+              ERRORS=$((ERRORS + 1))
+            else
+              echo "::warning::Using legacy GOOGLE_CLIENT_EMAIL. Consider migrating to GOOGLE_SA_CLIENT_EMAIL."
+            fi
+          fi
+
+          if [ -z "${{ secrets.GOOGLE_SA_PRIVATE_KEY_PEM }}" ]; then
+            # Fall back to legacy naming
+            if [ -z "${{ secrets.GOOGLE_PRIVATE_KEY }}" ]; then
+              echo "::error::Missing: GOOGLE_SA_PRIVATE_KEY_PEM (or legacy GOOGLE_PRIVATE_KEY)"
+              ERRORS=$((ERRORS + 1))
+            else
+              echo "::warning::Using legacy GOOGLE_PRIVATE_KEY. Consider migrating to GOOGLE_SA_PRIVATE_KEY_PEM."
+            fi
+          fi
+
+          if [ $ERRORS -gt 0 ]; then
+            echo ""
+            echo "Story B1 requires these secrets for backend auth:"
+            echo "  - GOOGLE_SA_CLIENT_EMAIL: Service account email"
+            echo "  - GOOGLE_SA_PRIVATE_KEY_PEM: PEM-formatted private key"
+            echo ""
+            echo "See: docs/CLOUDFLARE_SECRETS.md"
+            exit 1
+          fi
+          echo "✅ Google SA secrets validated"
+
+      # Story C1: Validate ADMIN_KEY secret for admin auth
+      - name: Validate ADMIN_KEY secret (Story C1)
+        run: |
+          echo "=================================================="
+          echo "Story C1: Validating ADMIN_KEY for staging"
+          echo "=================================================="
+
+          # Check for ADMIN_KEY (preferred) or ADMIN_TOKEN (fallback)
+          if [ -z "${{ secrets.ADMIN_KEY }}" ]; then
+            if [ -z "${{ secrets.ADMIN_TOKEN }}" ]; then
+              echo "::error::Missing: ADMIN_KEY (or legacy ADMIN_TOKEN)"
+              echo ""
+              echo "Story C1 requires ADMIN_KEY for protecting admin endpoints:"
+              echo "  - POST /api/v2/admin/events"
+              echo ""
+              echo "Add the secret using:"
+              echo "  gh secret set ADMIN_KEY --env staging"
+              echo ""
+              echo "Or via Cloudflare dashboard:"
+              echo "  wrangler secret put ADMIN_KEY --env staging"
+              echo ""
+              echo "See: docs/CLOUDFLARE_SECRETS.md"
+              exit 1
+            else
+              echo "::warning::Using legacy ADMIN_TOKEN. Consider migrating to ADMIN_KEY."
+            fi
+          fi
+          echo "✅ ADMIN_KEY secret validated (presence check only)"
+
+      - name: Install Wrangler
+        run: npm install -g wrangler@3
+
+      - name: Deploy Worker to Staging
+        id: deploy
+        working-directory: cloudflare-proxy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          echo "=================================================="
+          echo "GATE 4: DEPLOY - Staging"
+          echo "=================================================="
+          wrangler deploy --env staging
+          echo "✅ Deployed to https://stg.eventangle.com"
+
+      - name: Verify deployment
+        run: |
+          sleep 10
+          RESPONSE=$(curl -s -w "\n%{http_code}" "${{ env.STG_BASE_URL }}/api/status" || echo "FAILED")
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+          if [ "$HTTP_CODE" = "200" ]; then
+            echo "✅ Staging verification passed"
+          else
+            echo "::warning::Staging returned HTTP $HTTP_CODE"
+          fi
+
+      # Mini-Release B: Post-deploy health gate for backend auth
+      - name: Post-deploy backend health gate
+        run: |
+          echo "=================================================="
+          echo "POST-DEPLOY GATE: Backend Health Check"
+          echo "=================================================="
+          echo "Checking: ${{ env.STG_BASE_URL }}/api/health/backend"
+          echo ""
+
+          # Wait for edge propagation
+          sleep 5
+
+          # Fail if health check doesn't return ok:true
+          if ! curl -fsS "${{ env.STG_BASE_URL }}/api/health/backend" | jq -e '.ok == true'; then
+            echo ""
+            echo "::error::Backend health check failed - .ok != true"
+            echo "Fetching full response for diagnostics:"
+            curl -sS "${{ env.STG_BASE_URL }}/api/health/backend" | jq '.' || true
+            exit 1
+          fi
+
+          echo ""
+          echo "✅ Backend health gate passed (.ok == true)"
+
+      - name: Create summary
+        if: always()
+        run: |
+          echo "## 🚀 Deploy to Staging" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ job.status }}" == "success" ]; then
+            echo "### ✅ DEPLOYED" >> $GITHUB_STEP_SUMMARY
+            echo "**URL:** https://stg.eventangle.com" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### ❌ FAILED" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Upload staging URL
+        run: |
+          mkdir -p artifacts
+          echo "https://stg.eventangle.com" > artifacts/stg-base-url.txt
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: stg-base-url
+          path: artifacts/stg-base-url.txt
+          retention-days: 1
+
+  # ============================================================================
+  # PIPELINE SUMMARY
+  # ============================================================================
+  pipeline-summary:
+    name: 📋 Pipeline Summary
+    runs-on: ubuntu-latest
+    needs: [codeql-security, dependency-audit, lint, banned-origins, unit-tests, contract-tests, sheets-connectivity, template-bundle, build-worker, deploy-staging]
+    if: always()
+
+    steps:
+      - name: Create pipeline summary
+        run: |
+          echo "# 🔄 Stage-1 CI Pipeline Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Security-First Quality Gates (Story 5.2)**" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Gate Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 🔒 GATE 1: Security" >> $GITHUB_STEP_SUMMARY
+          echo "| Check | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| 🔒 CodeQL Security Scan | ${{ needs.codeql-security.result == 'success' && '✅ Passed' || needs.codeql-security.result == 'skipped' && '⏭️ Skipped' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 🔍 Dependency Audit | ${{ needs.dependency-audit.result == 'success' && '✅ Passed' || needs.dependency-audit.result == 'skipped' && '⏭️ Skipped' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### ✅ GATE 2: Validation" >> $GITHUB_STEP_SUMMARY
+          echo "| Check | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| 🔍 Lint / Format | ${{ needs.lint.result == 'success' && '✅ Passed' || needs.lint.result == 'skipped' && '⏭️ Skipped' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 🚫 GAS URL Ban | ${{ needs.banned-origins.result == 'success' && '✅ Passed' || needs.banned-origins.result == 'skipped' && '⏭️ Skipped' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 🧪 Unit Tests | ${{ needs.unit-tests.result == 'success' && '✅ Passed' || needs.unit-tests.result == 'skipped' && '⏭️ Skipped' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 📜 Contract Tests | ${{ needs.contract-tests.result == 'success' && '✅ Passed' || needs.contract-tests.result == 'skipped' && '⏭️ Skipped' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 📊 Sheets Connectivity | ${{ needs.sheets-connectivity.result == 'success' && '✅ Passed' || needs.sheets-connectivity.result == 'skipped' && '⏭️ Skipped' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 📦 Template Bundle | ${{ needs.template-bundle.result == 'success' && '✅ Passed' || needs.template-bundle.result == 'skipped' && '⏭️ Skipped' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 🔨 GATE 3: Build" >> $GITHUB_STEP_SUMMARY
+          echo "| Check | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| 🔨 Build Worker | ${{ needs.build-worker.result == 'success' && '✅ Passed' || needs.build-worker.result == 'skipped' && '⏭️ Skipped' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 🚀 GATE 4: Deploy" >> $GITHUB_STEP_SUMMARY
+          echo "| Check | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| 🚀 Deploy to Staging | ${{ needs.deploy-staging.result == 'success' && '✅ Deployed' || needs.deploy-staging.result == 'skipped' && '⏭️ Skipped (PR)' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Security gate status
+          if [ "${{ needs.codeql-security.result }}" != "success" ] || [ "${{ needs.dependency-audit.result }}" != "success" ]; then
+            echo "## ❌ SECURITY GATE FAILED" >> $GITHUB_STEP_SUMMARY
+            echo "Pipeline blocked at Gate 1. Fix security issues before proceeding." >> $GITHUB_STEP_SUMMARY
+          elif [ "${{ needs.deploy-staging.result }}" == "success" ]; then
+            echo "## ✅ All Gates Passed - Deployed to Staging" >> $GITHUB_STEP_SUMMARY
+            echo "**URL:** https://stg.eventangle.com" >> $GITHUB_STEP_SUMMARY
+          elif [ "${{ github.event_name }}" == "pull_request" ]; then
+            echo "## ✅ PR Validation Complete" >> $GITHUB_STEP_SUMMARY
+            echo "All quality gates passed. Deployment will occur on merge." >> $GITHUB_STEP_SUMMARY
+          fi

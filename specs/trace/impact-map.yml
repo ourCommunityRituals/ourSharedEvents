@@ -1,0 +1,317 @@
+# Impact Map - File Pattern to Spec ID Mapping
+# Generated: 2026-01-04
+# Purpose: Map codebase file patterns to specification IDs for traceability
+#
+# Spec ID Naming Convention:
+#   EA-<DOMAIN>-<CAPABILITY>
+#   Domain: ADMIN, PUBLIC, DISPLAY, POSTER, REPORT, SPONSOR, API, AUTH, QR, CACHE, CICD
+#
+# Usage:
+#   - When a file matching a pattern changes, the associated specIds may need review
+#   - Loop 2 will generate detailed specs for each ID
+#   - Use for change impact analysis and regression test targeting
+
+rules:
+  # ============================================
+  # Frontend Surfaces
+  # ============================================
+
+  - match: "cloudflare-proxy/templates/admin.html"
+    specIds:
+      - "EA-ADMIN-7CARD-LAYOUT"
+      - "EA-ADMIN-EVENT-CRUD"
+      - "EA-ADMIN-QR-MANAGEMENT"
+    notes: "Admin dashboard with 7-card flow-first design"
+
+  - match: "cloudflare-proxy/templates/public.html"
+    specIds:
+      - "EA-PUBLIC-EVENT-VIEW"
+      - "EA-PUBLIC-CTA-RENDER"
+      - "EA-PUBLIC-SPONSOR-DISPLAY"
+    notes: "Public event page for customers"
+
+  - match: "cloudflare-proxy/templates/display.html"
+    specIds:
+      - "EA-DISPLAY-TV-MODE"
+      - "EA-DISPLAY-ROTATION"
+      - "EA-DISPLAY-SPONSOR-STRIP"
+    notes: "TV/Kiosk display surface"
+
+  - match: "cloudflare-proxy/templates/poster.html"
+    specIds:
+      - "EA-POSTER-QR-RENDER"
+      - "EA-POSTER-PRINT-LAYOUT"
+      - "EA-POSTER-SPONSOR-PLACEMENT"
+    notes: "Printable poster with QR codes"
+
+  - match: "cloudflare-proxy/templates/report.html"
+    specIds:
+      - "EA-REPORT-ANALYTICS-VIEW"
+      - "EA-REPORT-SPONSOR-FUNNEL"
+      - "EA-REPORT-METRICS-GRID"
+    notes: "Shared analytics dashboard"
+
+  - match: "cloudflare-proxy/templates/sponsor.html"
+    specIds:
+      - "EA-SPONSOR-PORTAL-STATE"
+      - "EA-SPONSOR-METRICS-DISPLAY"
+    notes: "Sponsor performance portal"
+
+  # ============================================
+  # Worker Routing & Handlers
+  # ============================================
+
+  - match: "worker/src/router.ts"
+    specIds:
+      - "EA-API-ROUTING"
+      - "EA-API-BRAND-DETECTION"
+      - "EA-AUTH-GUARD-MIDDLEWARE"
+    notes: "Central worker router - changes affect all API endpoints"
+
+  - match: "worker/src/handlers/publicBundle.ts"
+    specIds:
+      - "EA-API-PUBLIC-BUNDLE"
+      - "EA-CACHE-ETAG-PUBLIC"
+      - "EA-QR-RENDER-GATE"
+    notes: "Public bundle endpoint with ETag caching"
+
+  - match: "worker/src/handlers/adminBundle.ts"
+    specIds:
+      - "EA-API-ADMIN-BUNDLE"
+      - "EA-AUTH-ADMIN-REQUIRED"
+    notes: "Admin bundle endpoint requiring authentication"
+
+  - match: "worker/src/handlers/displayBundle.ts"
+    specIds:
+      - "EA-API-DISPLAY-BUNDLE"
+      - "EA-DISPLAY-ASSET-GATE"
+    notes: "Display bundle with asset state enforcement"
+
+  - match: "worker/src/handlers/posterBundle.ts"
+    specIds:
+      - "EA-API-POSTER-BUNDLE"
+      - "EA-POSTER-QR-VERIFIED-ONLY"
+    notes: "Poster bundle - QR only for ACTIVE events"
+
+  - match: "worker/src/handlers/eventsV2.ts"
+    specIds:
+      - "EA-API-EVENTS-LIST-V2"
+      - "EA-CACHE-EVENTS-LIST"
+    notes: "Events list V2 endpoint"
+
+  - match: "worker/src/handlers/v2AdminCreateEvent.ts"
+    specIds:
+      - "EA-ADMIN-EVENT-CREATE"
+      - "EA-AUTH-V2-ADMIN"
+    notes: "V2 event creation endpoint"
+
+  - match: "worker/src/handlers/v2AdminUpdateEvent.ts"
+    specIds:
+      - "EA-ADMIN-EVENT-UPDATE"
+      - "EA-AUTH-V2-ADMIN"
+    notes: "V2 event update endpoint"
+
+  - match: "worker/src/handlers/v2AdminArchiveEvent.ts"
+    specIds:
+      - "EA-ADMIN-EVENT-ARCHIVE"
+      - "EA-ADMIN-EVENT-UNARCHIVE"
+    notes: "Archive/unarchive lifecycle management"
+
+  - match: "worker/src/handlers/v2AdminDefaultEvent.ts"
+    specIds:
+      - "EA-ADMIN-DEFAULT-EVENT"
+    notes: "Set default event per brand"
+
+  - match: "worker/src/handlers/v2AdminVerifyQr.ts"
+    specIds:
+      - "EA-QR-VERIFY-ENDPOINT"
+      - "EA-QR-UNVERIFY-ENDPOINT"
+      - "EA-QR-ASSET-STATE-TRANSITION"
+    notes: "QR verification workflow - critical invariant"
+
+  - match: "worker/src/handlers/sharedReport.ts"
+    specIds:
+      - "EA-REPORT-SHARED-ANALYTICS"
+    notes: "Shared analytics report endpoint"
+
+  - match: "worker/src/handlers/sponsorPage.ts"
+    specIds:
+      - "EA-SPONSOR-PAGE-STATUS"
+      - "EA-SPONSOR-METRICS"
+    notes: "Sponsor portal with page status logic"
+
+  - match: "worker/src/handlers/monetizationHooks.ts"
+    specIds:
+      - "EA-MONETIZATION-INERT"
+      - "EA-MONETIZATION-BILLABLE"
+    notes: "Monetization hooks - read-only, no side effects"
+
+  # ============================================
+  # Domain Logic
+  # ============================================
+
+  - match: "worker/src/domain/qr.ts"
+    specIds:
+      - "EA-QR-INVARIANT"
+      - "EA-QR-VERIFICATION-LOGIC"
+      - "EA-QR-URL-VALIDATION"
+    notes: "CRITICAL: QR verification invariant enforcement"
+
+  - match: "worker/src/domain/assetState.ts"
+    specIds:
+      - "EA-ASSET-STATE-MACHINE"
+      - "EA-ASSET-RENDERABLE-CHECK"
+      - "EA-ASSET-SURFACE-PERMISSIONS"
+    notes: "Asset state lifecycle: DRAFT→READY→ACTIVE→ARCHIVED"
+
+  - match: "worker/src/domain/sharedAnalytics.ts"
+    specIds:
+      - "EA-ANALYTICS-AGGREGATION"
+      - "EA-ANALYTICS-METRICS"
+    notes: "Analytics domain logic"
+
+  # ============================================
+  # Authentication
+  # ============================================
+
+  - match: "worker/src/auth/**"
+    specIds:
+      - "EA-AUTH-ADMIN-TOKEN"
+      - "EA-AUTH-CF-ACCESS"
+      - "EA-AUTH-GUARD-ROUTES"
+    notes: "Authentication layer - all admin routes gated"
+
+  # ============================================
+  # Google Integration
+  # ============================================
+
+  - match: "worker/src/google/**"
+    specIds:
+      - "EA-GOOGLE-OAUTH"
+      - "EA-GOOGLE-SHEETS-READ"
+      - "EA-GOOGLE-SHEETS-WRITE"
+    notes: "Google Sheets API integration"
+
+  - match: "worker/src/sheets/**"
+    specIds:
+      - "EA-SHEETS-CLIENT"
+      - "EA-SHEETS-ANALYTICS-WRITER"
+    notes: "Sheets data access layer"
+
+  # ============================================
+  # Frontend API Client
+  # ============================================
+
+  - match: "src/frontend/apiClient/**"
+    specIds:
+      - "EA-CLIENT-BASE"
+      - "EA-CLIENT-SWR"
+      - "EA-CLIENT-RETRY"
+    notes: "TypeScript API client layer"
+
+  - match: "web/shared/apiClient.js"
+    specIds:
+      - "EA-CLIENT-SHARED-MODULE"
+      - "EA-CLIENT-CACHE-LOCAL"
+    notes: "Shared API client for all surfaces"
+
+  # ============================================
+  # Schemas
+  # ============================================
+
+  - match: "schemas/**"
+    specIds:
+      - "EA-SCHEMA-EVENT"
+      - "EA-SCHEMA-SPONSOR"
+      - "EA-SCHEMA-BUNDLE"
+      - "EA-SCHEMA-ANALYTICS"
+    notes: "JSON schemas - changes require contract test updates"
+
+  # ============================================
+  # CI/CD
+  # ============================================
+
+  - match: ".github/workflows/stage1.yml"
+    specIds:
+      - "EA-CICD-STAGE1-VALIDATION"
+      - "EA-CICD-QUALITY-GATES"
+      - "EA-CICD-DEPLOY-STAGING"
+    notes: "Stage-1 validation and deployment"
+
+  - match: ".github/workflows/stage2.yml"
+    specIds:
+      - "EA-CICD-STAGE2-SMOKE"
+      - "EA-CICD-ENV-VALIDATION"
+      - "EA-CICD-FAIL-FAST"
+    notes: "Stage-2 post-deploy environment validation"
+
+  - match: ".github/workflows/security-scan.yml"
+    specIds:
+      - "EA-CICD-SECURITY-CODEQL"
+      - "EA-CICD-NPM-AUDIT"
+    notes: "Security scanning workflow"
+
+  # ============================================
+  # Tests
+  # ============================================
+
+  - match: "tests/smoke/qr-verification.spec.ts"
+    specIds:
+      - "EA-TEST-QR-INVARIANT"
+    notes: "QR invariant verification tests - critical"
+
+  - match: "tests/smoke/asset-integrity.spec.ts"
+    specIds:
+      - "EA-TEST-ASSET-STATE"
+    notes: "Asset state enforcement tests"
+
+  - match: "tests/contract/**"
+    specIds:
+      - "EA-TEST-API-CONTRACTS"
+      - "EA-TEST-SCHEMA-SYNC"
+    notes: "Contract tests for API compliance"
+
+  - match: "tests/unit/**"
+    specIds:
+      - "EA-TEST-UNIT-COVERAGE"
+    notes: "Unit tests - 80% coverage threshold"
+
+  # ============================================
+  # Configuration
+  # ============================================
+
+  - match: "wrangler.toml"
+    specIds:
+      - "EA-CONFIG-WORKER-STAGING"
+    notes: "Staging worker configuration"
+
+  - match: "cloudflare-proxy/wrangler.toml"
+    specIds:
+      - "EA-CONFIG-WORKER-PRODUCTION"
+      - "EA-CONFIG-SEC-4-1-REDIRECT"
+    notes: "Production worker configuration"
+
+  - match: "deploy-manifest.json"
+    specIds:
+      - "EA-CONFIG-DEPLOY-MANIFEST"
+      - "EA-CONFIG-FEATURE-FLAGS"
+    notes: "Deployment manifest with feature flags"
+
+# ============================================
+# Spec ID Registry (for Loop 2)
+# ============================================
+#
+# Priority 1 (Critical Path):
+#   - EA-QR-INVARIANT: Never display QR unless verified
+#   - EA-ASSET-STATE-MACHINE: State transitions
+#   - EA-AUTH-GUARD-ROUTES: Admin route protection
+#
+# Priority 2 (Core Functionality):
+#   - EA-ADMIN-7CARD-LAYOUT: Admin dashboard flow
+#   - EA-API-*-BUNDLE: Bundle endpoints
+#   - EA-CICD-*: Pipeline integrity
+#
+# Priority 3 (Supporting):
+#   - EA-CACHE-*: Caching behavior
+#   - EA-CLIENT-*: API client layer
+#   - EA-TEST-*: Test coverage

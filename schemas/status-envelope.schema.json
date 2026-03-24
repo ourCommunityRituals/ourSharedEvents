@@ -1,0 +1,102 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://eventangle.com/schemas/status-envelope.schema.json",
+  "title": "Status Envelope Response",
+  "description": "Envelope-wrapped status response from api_status() with database connectivity info. Use status.schema.json for api_statusPure() flat responses.",
+  "type": "object",
+  "required": ["ok"],
+  "additionalProperties": false,
+  "oneOf": [
+    {
+      "properties": {
+        "ok": { "const": true },
+        "value": { "$ref": "#/$defs/StatusValue" }
+      },
+      "required": ["ok", "value"]
+    },
+    {
+      "properties": {
+        "ok": { "const": false },
+        "code": { "$ref": "#/$defs/ErrorCode" },
+        "message": { "type": "string", "minLength": 1 }
+      },
+      "required": ["ok", "code", "message"]
+    }
+  ],
+  "$defs": {
+    "StatusValue": {
+      "type": "object",
+      "required": ["build", "contract", "brand", "time", "db"],
+      "additionalProperties": false,
+      "properties": {
+        "build": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[a-zA-Z0-9._-]+$",
+          "description": "Build identifier (e.g., 'triangle-extended-v1.5')"
+        },
+        "contract": {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+\\.\\d+$",
+          "description": "API contract version (semver format)"
+        },
+        "brand": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 32,
+          "pattern": "^[a-z0-9_-]+$",
+          "description": "Brand identifier"
+        },
+        "time": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp in ISO 8601 format"
+        },
+        "db": {
+          "$ref": "#/$defs/DatabaseStatus"
+        }
+      }
+    },
+    "DatabaseStatus": {
+      "type": "object",
+      "required": ["ok", "id"],
+      "additionalProperties": false,
+      "properties": {
+        "ok": {
+          "type": "boolean",
+          "description": "Whether database is accessible"
+        },
+        "id": {
+          "type": "string",
+          "description": "Spreadsheet ID"
+        }
+      }
+    },
+    "ErrorCode": {
+      "type": "string",
+      "enum": ["NOT_FOUND", "INTERNAL", "UNAUTHORIZED", "BAD_REQUEST"],
+      "description": "Standard error codes"
+    }
+  },
+  "examples": [
+    {
+      "ok": true,
+      "value": {
+        "build": "triangle-extended-v1.5",
+        "contract": "1.0.3",
+        "brand": "root",
+        "time": "2025-11-28T12:00:00.000Z",
+        "db": {
+          "ok": true,
+          "id": "1abc123def456"
+        }
+      }
+    },
+    {
+      "ok": false,
+      "code": "NOT_FOUND",
+      "message": "Brand not found: invalid"
+    }
+  ]
+}

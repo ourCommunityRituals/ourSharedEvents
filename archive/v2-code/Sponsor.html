@@ -1,0 +1,498 @@
+<!--
+================================================================================
+MVP SURFACE - Focus Group Critical
+================================================================================
+Page: Sponsor.html
+Purpose: Sponsor management dashboard for event organizers
+Status: LOCKED for MVP v1.0
+
+DO NOT modify this file's contracts without updating:
+  - NUSDK.html (API client)
+  - tests/e2e/* (end-to-end tests)
+  - tests/unit/* (unit tests)
+
+Related MVP Surfaces: Admin, Poster, Display, Public, SharedReport
+================================================================================
+-->
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <title><?= appTitle ?> · Sponsor Management</title>
+  <?!= include('Header'); ?>
+  <?!= include('HeaderInit'); ?>
+  <?!= include('NUSDK'); ?>
+  <?!= include('SharedUtils'); ?>
+  <?!= include('APIClient'); ?>
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+  <meta name="referrer" content="no-referrer"/>
+  <?!= include('DesignTokens'); ?>
+  <?!= include('Styles'); ?>
+  <style>
+    /* Page-specific styles - uses design tokens from Styles.html */
+    body {
+      background: linear-gradient(135deg, var(--color-primary, #2563eb) 0%, var(--color-primary-dark, #1d4ed8) 100%);
+      min-height: 100vh;
+      padding: 2rem 1rem;
+    }
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    /* Use primary color for accents (consistent with other surfaces) */
+    .nav-breadcrumb a {
+      color: var(--color-primary, #2563eb);
+    }
+    .entity-card:hover {
+      border-color: var(--color-primary, #2563eb);
+    }
+    /* Sponsor link styling */
+    .sponsor-link {
+      color: var(--color-primary, #2563eb);
+      text-decoration: none;
+    }
+    .sponsor-link:hover {
+      text-decoration: underline;
+    }
+    /* Sponsor logo in card */
+    .sponsor-logo-img {
+      width: 100%;
+      height: 150px;
+      object-fit: contain;
+      background: white;
+      border-radius: 8px;
+      margin-bottom: 1rem;
+      border: 1px solid #e5e7eb;
+    }
+    /* Auth modal */
+    #auth-prompt {
+      background: rgba(0,0,0,0.5);
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+    #auth-prompt .auth-modal {
+      background: white;
+      border-radius: 16px;
+      padding: 2rem;
+      max-width: 400px;
+      width: 90%;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    }
+    #auth-prompt h2 {
+      margin: 0 0 1rem 0;
+      color: #1f2937;
+    }
+    /* Focus-visible for keyboard accessibility (C-003) */
+    #auth-prompt .btn:focus-visible,
+    #auth-prompt button:focus-visible {
+      outline: 3px solid var(--color-primary, #2563eb);
+      outline-offset: 2px;
+      box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.2);
+    }
+    #auth-prompt input:focus-visible {
+      outline: none;
+      border-color: var(--color-primary, #2563eb);
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+    }
+  </style>
+</head>
+<body>
+  <!-- Authentication Prompt (shown if no admin key) -->
+  <div id="auth-prompt" style="display: none;">
+    <div class="auth-modal">
+      <h2>🔐 Admin Authentication Required</h2>
+      <p>Enter your admin key to manage sponsors:</p>
+      <div class="form-group">
+        <input type="password" id="admin-key-input" placeholder="Enter admin key" autocomplete="off" aria-describedby="admin-key-help" />
+      </div>
+      <button class="btn btn-primary btn-full" onclick="authenticateAdmin()">
+        Unlock Sponsor Management
+      </button>
+      <p id="admin-key-help" style="margin-top: 1rem; font-size: 0.875rem; color: #6b7280;">
+        Don't have an admin key? Contact your system administrator.
+      </p>
+    </div>
+  </div>
+
+  <div class="container" id="main-content" style="display: none;">
+    <!-- Header -->
+    <div class="page-header-card">
+      <div class="nav-breadcrumb">
+        <a href="?page=test&brand=<?= brandId ?>">← Back to Dashboard</a>
+      </div>
+      <h1>
+        <span>🏢</span>
+        Sponsor Management
+      </h1>
+      <div class="subtitle">Manage sponsor relationships, logos, and placements</div>
+    </div>
+
+    <!-- Alert Container -->
+    <div id="alert-container"></div>
+
+    <!-- Analytics Section -->
+    <div class="page-section">
+      <h2>Sponsor Analytics</h2>
+      <div class="analytics-grid">
+        <div class="analytics-card">
+          <div class="value" id="total-sponsors">0</div>
+          <div class="label">Total Sponsors</div>
+        </div>
+        <div class="analytics-card">
+          <div class="value" id="platinum-count">0</div>
+          <div class="label">Platinum Tier</div>
+        </div>
+        <div class="analytics-card">
+          <div class="value" id="gold-count">0</div>
+          <div class="label">Gold Tier</div>
+        </div>
+        <div class="analytics-card">
+          <div class="value" id="active-sponsors">0</div>
+          <div class="label">Active</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Add New Sponsor Section -->
+    <div class="page-section">
+      <h2>Add New Sponsor</h2>
+      <form id="add-sponsor-form">
+        <div class="form-group">
+          <label for="sponsor-name">Sponsor Name *</label>
+          <input type="text" id="sponsor-name" name="name" placeholder="e.g., Acme Corporation" required />
+        </div>
+
+        <div class="form-group">
+          <label for="sponsor-logo">Logo URL</label>
+          <input type="url" id="sponsor-logo" name="logo" placeholder="https://example.com/logo.png" />
+        </div>
+
+        <div class="form-group">
+          <label for="sponsor-website">Website URL *</label>
+          <input type="url" id="sponsor-website" name="website" placeholder="https://example.com" required />
+        </div>
+
+        <div class="form-group">
+          <label for="sponsor-tier">Sponsorship Tier</label>
+          <select id="sponsor-tier" name="tier">
+            <option value="platinum">Platinum</option>
+            <option value="gold" selected>Gold</option>
+            <option value="silver">Silver</option>
+            <option value="bronze">Bronze</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="sponsor-description">Description (Optional)</label>
+          <textarea id="sponsor-description" name="description" rows="3" placeholder="Brief description of the sponsor"></textarea>
+        </div>
+
+        <button type="submit" class="btn btn-primary">
+          <span id="add-btn-text">Add Sponsor</span>
+          <span id="add-btn-loading" style="display: none;">Adding...</span>
+        </button>
+      </form>
+    </div>
+
+    <!-- Existing Sponsors Section -->
+    <div class="page-section">
+      <h2>Active Sponsors</h2>
+      <div id="loading-sponsors" class="loading-state">
+        <div>Loading sponsors...</div>
+      </div>
+      <div id="empty-sponsors" class="empty-state" style="display: none;">
+        <div class="empty-state-icon">📭</div>
+        <h3>No Sponsors Yet</h3>
+        <p>Add your first sponsor using the form above to get started.</p>
+      </div>
+      <div class="entity-grid" id="sponsor-list"></div>
+    </div>
+
+    <!-- Back to Dashboard Button -->
+    <div style="text-align: center; margin-top: 2rem;">
+      <a href="?page=test&brand=<?= brandId ?>" class="btn btn-secondary">
+        ← Back to Triangle Dashboard
+      </a>
+    </div>
+  </div>
+
+  <script>
+    // Global state
+    let adminKey = null;
+    const brandId = '<?= brandId ?>';
+    let sponsors = [];
+
+    // Initialize on page load
+    window.addEventListener('DOMContentLoaded', function() {
+      // Check if admin key is stored in session
+      adminKey = sessionStorage.getItem('adminKey');
+
+      if (adminKey) {
+        showMainContent();
+        loadSponsors();
+      } else {
+        showAuthPrompt();
+      }
+
+      // Setup form handler
+      document.getElementById('add-sponsor-form').addEventListener('submit', handleAddSponsor);
+    });
+
+    function showAuthPrompt() {
+      document.getElementById('auth-prompt').style.display = 'flex';
+      document.getElementById('main-content').style.display = 'none';
+
+      // Allow Enter key to submit
+      document.getElementById('admin-key-input').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+          authenticateAdmin();
+        }
+      });
+    }
+
+    function showMainContent() {
+      document.getElementById('auth-prompt').style.display = 'none';
+      document.getElementById('main-content').style.display = 'block';
+    }
+
+    function authenticateAdmin() {
+      const input = document.getElementById('admin-key-input');
+      const key = input.value.trim();
+
+      if (!key) {
+        showAlert('Please enter an admin key', 'error');
+        return;
+      }
+
+      adminKey = key;
+      sessionStorage.setItem('adminKey', key);
+
+      showMainContent();
+      loadSponsors();
+    }
+
+    // Use SharedUtils.showAlert for consistent alert handling
+    function showAlert(message, type = 'info') {
+      SharedUtils.showAlert(message, type);
+    }
+
+    async function loadSponsors() {
+      const loadingEl = document.getElementById('loading-sponsors');
+      const emptyEl = document.getElementById('empty-sponsors');
+      const listEl = document.getElementById('sponsor-list');
+
+      loadingEl.style.display = 'block';
+      emptyEl.style.display = 'none';
+      listEl.innerHTML = '';
+
+      try {
+        const response = await fetch(`?p=api&action=list&brandId=${brandId}&scope=sponsors`);
+        const data = await response.json();
+
+        if (data.ok && data.value && data.value.items) {
+          sponsors = data.value.items;
+
+          if (sponsors.length === 0) {
+            loadingEl.style.display = 'none';
+            emptyEl.style.display = 'block';
+          } else {
+            renderSponsors(sponsors);
+            updateAnalytics(sponsors);
+            loadingEl.style.display = 'none';
+          }
+        } else {
+          throw new Error(data.err || 'Failed to load sponsors');
+        }
+      } catch (error) {
+        console.error('Error loading sponsors:', error);
+        showAlert('Failed to load sponsors: ' + error.message, 'error');
+        loadingEl.style.display = 'none';
+      }
+    }
+
+    function renderSponsors(sponsors) {
+      const listEl = document.getElementById('sponsor-list');
+      listEl.innerHTML = '';
+
+      sponsors.forEach(sponsor => {
+        const card = createSponsorCard(sponsor);
+        listEl.appendChild(card);
+      });
+    }
+
+    function createSponsorCard(sponsor) {
+      const card = document.createElement('div');
+      card.className = 'entity-card';
+      // Use NU.esc from NUSDK for XSS prevention
+      card.innerHTML = `
+        <h3>${NU.esc(sponsor.name)}</h3>
+        ${sponsor.tier ? `<span class="tier-badge tier-${NU.esc(sponsor.tier)}">${NU.esc(sponsor.tier)}</span>` : ''}
+        ${sponsor.logo ? `<img src="${NU.esc(sponsor.logo)}" alt="${NU.esc(sponsor.name)} logo" class="sponsor-logo-img" onerror="this.style.display='none'">` : ''}
+        <div class="entity-card-info">
+          ${sponsor.website ? `🌐 <a href="${NU.esc(sponsor.website)}" target="_blank" rel="noopener" class="sponsor-link">${NU.esc(sponsor.website)}</a>` : ''}
+        </div>
+        ${sponsor.description ? `<div class="entity-card-info">${NU.esc(sponsor.description)}</div>` : ''}
+        <div class="entity-card-info" style="font-size: 0.75rem; color: #9ca3af;">
+          ID: ${NU.esc(sponsor.id)}
+        </div>
+        <div class="entity-card-actions">
+          <button class="btn-secondary btn-sm" onclick="editSponsor('${NU.esc(sponsor.id)}')">
+            ✏️ Edit
+          </button>
+          <button class="btn-danger btn-sm" onclick="deleteSponsor('${NU.esc(sponsor.id)}', '${NU.esc(sponsor.name)}')">
+            🗑️ Delete
+          </button>
+        </div>
+      `;
+      return card;
+    }
+
+    function updateAnalytics(sponsors) {
+      document.getElementById('total-sponsors').textContent = sponsors.length;
+      document.getElementById('platinum-count').textContent = sponsors.filter(s => s.tier === 'platinum').length;
+      document.getElementById('gold-count').textContent = sponsors.filter(s => s.tier === 'gold').length;
+      document.getElementById('active-sponsors').textContent = sponsors.filter(s => !s.archived).length;
+    }
+
+    async function handleAddSponsor(e) {
+      e.preventDefault();
+
+      const form = e.target;
+      const submitBtn = form.querySelector('button[type="submit"]');
+      const btnText = document.getElementById('add-btn-text');
+      const btnLoading = document.getElementById('add-btn-loading');
+
+      // Disable form
+      submitBtn.disabled = true;
+      btnText.style.display = 'none';
+      btnLoading.style.display = 'inline';
+
+      try {
+        const formData = new FormData(form);
+        const sponsorData = {
+          name: formData.get('name'),
+          website: formData.get('website'),
+          tier: formData.get('tier'),
+          entity: 'sponsor'
+        };
+
+        // Optional fields
+        if (formData.get('logo')) sponsorData.logo = formData.get('logo');
+        if (formData.get('description')) sponsorData.description = formData.get('description');
+
+        const response = await google.script.run
+          .withSuccessHandler(function(result) {
+            if (result.ok) {
+              showAlert('Sponsor added successfully!', 'success');
+              form.reset();
+              loadSponsors();
+            } else {
+              throw new Error(result.err || 'Failed to create sponsor');
+            }
+
+            // Re-enable form
+            submitBtn.disabled = false;
+            btnText.style.display = 'inline';
+            btnLoading.style.display = 'none';
+          })
+          .withFailureHandler(function(error) {
+            showAlert('Error: ' + error.message, 'error');
+
+            // Re-enable form
+            submitBtn.disabled = false;
+            btnText.style.display = 'inline';
+            btnLoading.style.display = 'none';
+          })
+          .api_create({
+            brandId: brandId,
+            scope: 'sponsors',
+            templateId: 'sponsor',
+            adminKey: adminKey,
+            data: sponsorData
+          });
+
+      } catch (error) {
+        showAlert('Error adding sponsor: ' + error.message, 'error');
+
+        // Re-enable form
+        submitBtn.disabled = false;
+        btnText.style.display = 'inline';
+        btnLoading.style.display = 'none';
+      }
+    }
+
+    async function editSponsor(sponsorId) {
+      const sponsor = sponsors.find(s => s.id === sponsorId);
+      if (!sponsor) {
+        showAlert('Sponsor not found', 'error');
+        return;
+      }
+
+      const newName = prompt('Edit Sponsor Name:', sponsor.name);
+      if (!newName || newName === sponsor.name) return;
+
+      try {
+        const response = await google.script.run
+          .withSuccessHandler(function(result) {
+            if (result.ok) {
+              showAlert('Sponsor updated successfully!', 'success');
+              loadSponsors();
+            } else {
+              throw new Error(result.err || 'Failed to update sponsor');
+            }
+          })
+          .withFailureHandler(function(error) {
+            showAlert('Error updating sponsor: ' + error.message, 'error');
+          })
+          .api_update({
+            brandId: brandId,
+            scope: 'sponsors',
+            id: sponsorId,
+            adminKey: adminKey,
+            data: { name: newName }
+          });
+      } catch (error) {
+        showAlert('Error: ' + error.message, 'error');
+      }
+    }
+
+    async function deleteSponsor(sponsorId, sponsorName) {
+      if (!confirm(`Are you sure you want to delete "${sponsorName}"?\n\nThis action cannot be undone.`)) {
+        return;
+      }
+
+      try {
+        const response = await google.script.run
+          .withSuccessHandler(function(result) {
+            if (result.ok) {
+              showAlert('Sponsor deleted successfully!', 'success');
+              loadSponsors();
+            } else {
+              throw new Error(result.err || 'Failed to delete sponsor');
+            }
+          })
+          .withFailureHandler(function(error) {
+            showAlert('Error deleting sponsor: ' + error.message, 'error');
+          })
+          .api_delete({
+            brandId: brandId,
+            scope: 'sponsors',
+            id: sponsorId,
+            adminKey: adminKey
+          });
+      } catch (error) {
+        showAlert('Error: ' + error.message, 'error');
+      }
+    }
+
+    // Note: escapeHtml removed - use NU.esc() from NUSDK for XSS prevention
+  </script>
+</body>
+</html>

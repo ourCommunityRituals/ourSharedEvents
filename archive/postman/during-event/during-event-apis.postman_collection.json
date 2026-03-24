@@ -1,0 +1,195 @@
+{
+  "info": {
+    "name": "▶️ TRIANGLE: During Event APIs",
+    "description": "API endpoints for the During Event phase - Live Execution\n\nThis collection covers:\n- Event listing (public and admin)\n- Event details retrieval\n- Live event updates\n- Display configuration\n\nTriangle Phase: During Event (Orange #f59e0b)\nUser Roles: Event Manager, Consumer/Attendee",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "version": "1.0.0"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "https://script.google.com/macros/s/YOUR_DEPLOYMENT_ID/exec",
+      "type": "string"
+    },
+    {
+      "key": "admin_key",
+      "value": "CHANGE_ME_root",
+      "type": "string"
+    },
+    {
+      "key": "brand_id",
+      "value": "root",
+      "type": "string"
+    },
+    {
+      "key": "event_id",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Event Listing",
+      "item": [
+        {
+          "name": "List All Events",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response includes etag', function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('etag');",
+                  "});",
+                  "",
+                  "pm.test('Response includes items array', function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.value.items).to.be.an('array');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}?action=list&brand={{brand_id}}&scope=events",
+              "host": ["{{base_url}}"],
+              "query": [
+                {
+                  "key": "action",
+                  "value": "list"
+                },
+                {
+                  "key": "brand",
+                  "value": "{{brand_id}}"
+                },
+                {
+                  "key": "scope",
+                  "value": "events"
+                }
+              ]
+            },
+            "description": "List all events for public view"
+          }
+        },
+        {
+          "name": "List Events - With ETag",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}?action=list&brand={{brand_id}}&scope=events&etag=previous-etag",
+              "host": ["{{base_url}}"],
+              "query": [
+                {
+                  "key": "action",
+                  "value": "list"
+                },
+                {
+                  "key": "brand",
+                  "value": "{{brand_id}}"
+                },
+                {
+                  "key": "scope",
+                  "value": "events"
+                },
+                {
+                  "key": "etag",
+                  "value": "previous-etag",
+                  "description": "For caching/304 responses"
+                }
+              ]
+            },
+            "description": "List events with etag for efficient caching"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Event Details",
+      "item": [
+        {
+          "name": "Get Event by ID",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Response includes event data', function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.value).to.have.property('data');",
+                  "});",
+                  "",
+                  "pm.test('Response includes links', function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.value).to.have.property('links');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}?action=get&brand={{brand_id}}&scope=events&id={{event_id}}",
+              "host": ["{{base_url}}"],
+              "query": [
+                {
+                  "key": "action",
+                  "value": "get"
+                },
+                {
+                  "key": "brand",
+                  "value": "{{brand_id}}"
+                },
+                {
+                  "key": "scope",
+                  "value": "events"
+                },
+                {
+                  "key": "id",
+                  "value": "{{event_id}}"
+                }
+              ]
+            },
+            "description": "Get detailed event information by ID"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Live Updates",
+      "item": [
+        {
+          "name": "Update Event",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"action\": \"update\",\n  \"adminKey\": \"{{admin_key}}\",\n  \"brand\": \"{{brand_id}}\",\n  \"scope\": \"events\",\n  \"id\": \"{{event_id}}\",\n  \"data\": {\n    \"description\": \"Updated description during live event\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}",
+              "host": ["{{base_url}}"]
+            },
+            "description": "Update event details during live event"
+          }
+        }
+      ]
+    }
+  ]
+}

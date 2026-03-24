@@ -1,0 +1,195 @@
+# ============================================
+# TypeScript Worker Router Configuration
+# Story 1.1 - Create Central Worker Router
+# Story 2.3 - Worker Upstream Config via Env Var
+# ============================================
+# This is the new TypeScript-native Worker that serves as the
+# central router, replacing GAS doGet as the routing layer.
+#
+# Deployment:
+#   cd worker && wrangler deploy --env staging
+#   cd worker && wrangler deploy --env production
+#
+# Development:
+#   cd worker && wrangler dev
+#
+# ============================================
+#
+# UPSTREAM BACKEND CONFIGURATION (Story 2.3)
+# ============================================
+# The Worker uses Google Sheets API as its upstream backend.
+# All backend configuration is injected via environment secrets.
+#
+# Required secrets for upstream access:
+#   SHEETS_SPREADSHEET_ID - Google Sheets spreadsheet ID
+#   GOOGLE_CLIENT_EMAIL   - Service account email
+#   GOOGLE_PRIVATE_KEY    - Service account private key (PEM format)
+#
+# If any of these are missing:
+#   - /health/origin returns 500 with clear error message
+#   - /api/events returns 500 with "UPSTREAM_NOT_CONFIGURED" code
+#   - /api/status continues to work (reports configuration status)
+#
+# Verify configuration:
+#   curl https://stg.eventangle.com/health/origin
+#
+# ============================================
+
+name = "eventangle-router"
+main = "src/router.ts"
+compatibility_date = "2024-01-01"
+
+# TypeScript compilation is handled automatically by wrangler
+
+# ============================================
+# Static Asset Rules (Story 4.1, 4.2)
+# ============================================
+# HTML templates and shared JS modules are imported as text and embedded
+# in the Worker bundle. This eliminates the need for GAS fetch or KV storage.
+# Note: Must use fallthrough = true to not conflict with wrangler defaults
+
+# HTML templates (Story 4.1)
+[[rules]]
+type = "Text"
+globs = ["**/*.html"]
+fallthrough = true
+
+# Shared JavaScript modules (Story 4.2)
+[[rules]]
+type = "Text"
+globs = ["../web/shared/*.js"]
+fallthrough = true
+
+# ===========================================
+# Development Environment (workers.dev)
+# ===========================================
+# Default deployment uses workers.dev for testing:
+# https://eventangle-router.YOUR_SUBDOMAIN.workers.dev
+#
+# Test URLs:
+# - https://eventangle-router.YOUR_SUBDOMAIN.workers.dev/api/status
+# - https://eventangle-router.YOUR_SUBDOMAIN.workers.dev/public
+# - https://eventangle-router.YOUR_SUBDOMAIN.workers.dev/admin
+#
+[vars]
+WORKER_ENV = "development"
+WORKER_BUILD_VERSION = "dev-local"
+DEBUG_LEVEL = "debug"
+
+# ============================================
+# Staging Environment (stg.eventangle.com)
+# ============================================
+# Staging deployment for pre-production validation.
+#
+# Deploy: cd worker && wrangler deploy --env staging
+# ============================================
+[env.staging]
+name = "eventangle-router-staging"
+routes = [
+  { pattern = "stg.eventangle.com/*", zone_name = "eventangle.com" },
+  { pattern = "api-stg.eventangle.com/*", zone_name = "eventangle.com" }
+]
+
+[env.staging.vars]
+WORKER_ENV = "staging"
+WORKER_NAME = "eventangle-staging"
+WORKER_BUILD_VERSION = "stg-2025.12.12"
+DEBUG_LEVEL = "debug"
+# Enable debug features for staging only
+ENABLE_DEBUG_ENDPOINTS = "true"
+# Upstream webapp URL for health checks (Story 3.1)
+# Note: This is configured via wrangler secret for staging/production
+# UPSTREAM_WEBAPP_URL = "https://script.google.com/.../exec"
+
+# SEC-IAC-05: KV namespace for signed mutation nonce storage
+# Create with: wrangler kv:namespace create "HMAC_NONCE_KV" --env staging
+[[env.staging.kv_namespaces]]
+binding = "HMAC_NONCE_KV"
+id = "STAGING_HMAC_NONCE_KV_ID"  # Replace with actual namespace ID after creation
+
+# ============================================
+# Production Environment (eventangle.com)
+# ============================================
+# Production deployment serving the main site.
+#
+# Deploy: cd worker && wrangler deploy --env production
+# ============================================
+[env.production]
+name = "eventangle-router-prod"
+# SEC-4.1: www.eventangle.com/* removed - redirected at edge via Cloudflare Redirect Rule
+# See docs/RUNBOOK-SEC-4.1-CANONICAL-HOST.md for configuration details
+routes = [
+  { pattern = "eventangle.com/*", zone_name = "eventangle.com" },
+  { pattern = "api.eventangle.com/*", zone_name = "eventangle.com" }
+]
+
+[env.production.vars]
+WORKER_ENV = "production"
+WORKER_NAME = "eventangle-prod"
+WORKER_BUILD_VERSION = "prod-2025.12.12"
+DEBUG_LEVEL = "error"
+# Upstream webapp URL for health checks (Story 3.1)
+# Note: This is configured via wrangler secret for production
+# UPSTREAM_WEBAPP_URL = "https://script.google.com/.../exec"
+
+# SEC-IAC-05: KV namespace for signed mutation nonce storage
+# Create with: wrangler kv:namespace create "HMAC_NONCE_KV" --env production
+[[env.production.kv_namespaces]]
+binding = "HMAC_NONCE_KV"
+id = "PRODUCTION_HMAC_NONCE_KV_ID"  # Replace with actual namespace ID after creation
+
+# ============================================
+# SECRETS - Required for API functionality
+# ============================================
+# These secrets must be configured via wrangler:
+#
+#   wrangler secret put ADMIN_TOKEN --env staging
+#   wrangler secret put GOOGLE_SA_CLIENT_EMAIL --env staging
+#   wrangler secret put GOOGLE_SA_PRIVATE_KEY_PEM --env staging
+#   wrangler secret put SHEETS_SPREADSHEET_ID --env staging
+#   wrangler secret put UPSTREAM_WEBAPP_URL --env staging
+#
+# Required secrets for backend auth (Story B1):
+#   GOOGLE_SA_CLIENT_EMAIL    - Service account email (REQUIRED)
+#   GOOGLE_SA_PRIVATE_KEY_PEM - Service account private key, PEM format (REQUIRED)
+#
+# Legacy naming (deprecated, still supported):
+#   GOOGLE_CLIENT_EMAIL   - Use GOOGLE_SA_CLIENT_EMAIL instead
+#   GOOGLE_PRIVATE_KEY    - Use GOOGLE_SA_PRIVATE_KEY_PEM instead
+#
+# Required secrets for Sheets access:
+#   SHEETS_SPREADSHEET_ID - Google Sheets spreadsheet ID (REQUIRED)
+#
+# Required secrets for upstream health check (Story 3.1):
+#   UPSTREAM_WEBAPP_URL   - URL to probe for upstream health (REQUIRED for /health/origin)
+#
+# Optional secrets:
+#   ADMIN_TOKEN           - Bearer token for admin endpoints
+#
+# SEC-IAC-05: Signed Public Mutations (optional)
+#   HMAC_SECRET           - HMAC-SHA256 secret for signing mutation tokens (min 32 chars)
+#                           Generate with: openssl rand -base64 32
+#                           Set with: wrangler secret put HMAC_SECRET --env staging
+#   HMAC_NONCE_KV         - KV namespace for nonce replay prevention (configured above)
+#
+# IMPORTANT (Story B1):
+# Use /api/health/backend to verify backend auth configuration:
+#   ok: true/false             - Overall health status
+#   auth.secretsConfigured     - Whether SA secrets are present
+#   auth.tokenMintSuccess      - Whether OAuth token was minted
+#   code                       - Error code if unhealthy:
+#                               - GOOGLE_AUTH_MISSING_SECRET
+#                               - GOOGLE_AUTH_KEY_IMPORT_FAILED
+#                               - GOOGLE_AUTH_TOKEN_EXCHANGE_FAILED
+#
+# IMPORTANT (Story 2.3):
+# If any of the required upstream secrets are missing, the Worker will
+# return a 500 error with "UPSTREAM_NOT_CONFIGURED" for data endpoints.
+# Use /health/origin to verify upstream configuration status.
+#
+# IMPORTANT (Story 3.1):
+# /health/origin always returns HTTP 200. Check the JSON body for upstream status:
+#   ok: true/false      - Overall health status
+#   upstreamReachable   - Whether upstream responded successfully
+#   status              - HTTP status from upstream (or 500 if misconfigured)
+# ============================================

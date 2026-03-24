@@ -1,0 +1,152 @@
+<!--
+  Base Card Component Template
+
+  Props (passed via template variables):
+  - id: Card element ID
+  - title: Card title
+  - subtitle: Optional subtitle/description
+  - visible: Boolean for initial visibility (default: true)
+  - role: ARIA role (default: 'region')
+  - ariaLabel: ARIA label for accessibility
+  - content: Card body content (injected via slot)
+-->
+<section
+  id="<?= cardId ?>"
+  class="card"
+  style="display: <?= (typeof cardVisible !== 'undefined' && !cardVisible) ? 'none' : 'block' ?>;"
+  role="<?= cardRole || 'region' ?>"
+  aria-label="<?= cardAriaLabel || cardTitle ?>">
+
+  <? if (cardTitle) { ?>
+  <div class="card-header">
+    <h2 id="<?= cardId ?>-title"><?= cardTitle ?></h2>
+    <? if (cardSubtitle) { ?>
+      <p class="card-subtitle muted"><?= cardSubtitle ?></p>
+    <? } ?>
+    <? if (cardActions) { ?>
+      <div class="card-actions">
+        <?= cardActions ?>
+      </div>
+    <? } ?>
+  </div>
+  <? } ?>
+
+  <div class="card-body" id="<?= cardId ?>-body">
+    <?= cardContent ?>
+  </div>
+
+  <? if (cardFooter) { ?>
+  <div class="card-footer">
+    <?= cardFooter ?>
+  </div>
+  <? } ?>
+</section>
+
+<style>
+/* Enhanced Card Component Styles */
+.card {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  margin-bottom: 24px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  border-left: 4px solid #2563eb;
+  transition: all 0.3s ease;
+}
+
+.card:focus-within {
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.15);
+  border-left-color: #1d4ed8;
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.card-header h2 {
+  margin: 0;
+  color: #1e293b;
+  font-size: 1.5rem;
+  font-weight: 600;
+}
+
+.card-subtitle {
+  font-size: 14px;
+  color: #64748b;
+  margin: 8px 0 0 0;
+  line-height: 1.5;
+}
+
+.card-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.card-body {
+  position: relative;
+}
+
+.card-footer {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid #e2e8f0;
+}
+
+/* Card state variations */
+.card.card-success {
+  border-left-color: #10b981;
+}
+
+.card.card-warning {
+  border-left-color: #f59e0b;
+}
+
+.card.card-error {
+  border-left-color: #ef4444;
+}
+
+.card.card-info {
+  border-left-color: #3b82f6;
+}
+
+/* Collapsible card */
+.card.collapsible .card-header {
+  cursor: pointer;
+  user-select: none;
+}
+
+.card.collapsible .card-header::after {
+  content: '▼';
+  margin-left: auto;
+  transition: transform 0.3s ease;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.card.collapsible.collapsed .card-header::after {
+  transform: rotate(-90deg);
+}
+
+.card.collapsible.collapsed .card-body,
+.card.collapsible.collapsed .card-footer {
+  display: none;
+}
+
+/* Responsive adjustments */
+@media (max-width: 640px) {
+  .card {
+    padding: 16px;
+    border-radius: 8px;
+  }
+
+  .card-header h2 {
+    font-size: 1.25rem;
+  }
+}
+</style>

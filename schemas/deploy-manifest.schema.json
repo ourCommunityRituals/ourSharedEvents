@@ -1,0 +1,246 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://eventangle.com/schemas/deploy-manifest.schema.json",
+  "title": "Deployment Manifest Schema",
+  "description": "Schema for validating deploy-manifest.json - centralized environment configuration (Story 1.4)",
+  "type": "object",
+  "required": ["environments", "defaults"],
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "JSON Schema reference"
+    },
+    "_comment": {
+      "type": "string"
+    },
+    "_version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "_lastUpdated": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+    },
+    "_story": {
+      "type": "string"
+    },
+    "environments": {
+      "type": "object",
+      "required": ["staging", "production"],
+      "additionalProperties": {
+        "$ref": "#/definitions/environment"
+      }
+    },
+    "defaults": {
+      "type": "object",
+      "required": ["testEnvironment", "deploymentBranch"],
+      "properties": {
+        "testEnvironment": {
+          "type": "string",
+          "enum": ["staging", "production"]
+        },
+        "deploymentBranch": {
+          "type": "string"
+        },
+        "tagPattern": {
+          "type": "string"
+        }
+      }
+    },
+    "brands": {
+      "type": "object",
+      "properties": {
+        "_comment": {
+          "type": "string"
+        },
+        "validBrands": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1
+        },
+        "defaultBrand": {
+          "type": "string"
+        }
+      }
+    },
+    "validation": {
+      "type": "object",
+      "properties": {
+        "scriptIdPattern": {
+          "type": "string"
+        },
+        "deploymentIdPattern": {
+          "type": "string"
+        },
+        "deploymentIdMinLength": {
+          "type": "integer"
+        }
+      }
+    },
+    "parity": {
+      "type": "object",
+      "description": "Story 1.4: Configuration parity requirements between staging and production",
+      "properties": {
+        "_comment": {
+          "type": "string"
+        },
+        "mustMatch": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Configuration items that must be identical between staging and production"
+        },
+        "allowedDifferences": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Configuration items that are expected to differ between environments"
+        },
+        "lastAuditDate": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+        },
+        "auditedBy": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  "definitions": {
+    "environment": {
+      "type": "object",
+      "required": ["name", "appsScript", "cloudflare", "urls", "flags"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Human-readable environment name"
+        },
+        "description": {
+          "type": "string"
+        },
+        "appsScript": {
+          "type": "object",
+          "required": ["scriptId", "deploymentId", "webAppUrl"],
+          "properties": {
+            "scriptId": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9_-]{40,60}$",
+              "description": "Google Apps Script project ID (permanent)"
+            },
+            "deploymentId": {
+              "type": "string",
+              "pattern": "^AKfycb[a-zA-Z0-9_-]+$",
+              "minLength": 50,
+              "description": "Web app deployment ID (changes per deployment)"
+            },
+            "webAppUrl": {
+              "type": "string",
+              "format": "uri",
+              "pattern": "^https://script\\.google\\.com/macros/s/AKfycb[a-zA-Z0-9_-]+/exec$",
+              "description": "Executable web app URL"
+            },
+            "editUrl": {
+              "type": "string",
+              "format": "uri",
+              "description": "Project editor URL"
+            },
+            "_note": {
+              "type": "string"
+            }
+          }
+        },
+        "cloudflare": {
+          "type": "object",
+          "required": ["workerName", "routes", "zoneName"],
+          "properties": {
+            "workerName": {
+              "type": "string",
+              "description": "Cloudflare Worker name"
+            },
+            "routes": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "minItems": 1,
+              "description": "Worker routes"
+            },
+            "zoneName": {
+              "type": "string",
+              "description": "Cloudflare zone name"
+            }
+          }
+        },
+        "urls": {
+          "type": "object",
+          "required": ["baseUrl"],
+          "properties": {
+            "baseUrl": {
+              "type": "string",
+              "format": "uri",
+              "description": "Base URL for the environment"
+            },
+            "apiUrl": {
+              "type": "string",
+              "format": "uri",
+              "description": "API URL for the environment"
+            }
+          }
+        },
+        "flags": {
+          "type": "object",
+          "required": ["workerEnv", "debugLevel"],
+          "properties": {
+            "workerEnv": {
+              "type": "string",
+              "enum": ["staging", "production"],
+              "description": "Worker environment identifier"
+            },
+            "debugLevel": {
+              "type": "string",
+              "enum": ["debug", "info", "warn", "error"],
+              "description": "Debug logging level"
+            },
+            "enableDebugEndpoints": {
+              "type": "boolean",
+              "description": "Whether debug endpoints are enabled"
+            }
+          }
+        },
+        "featureFlags": {
+          "type": "object",
+          "description": "Story 1.4: Feature flags for the environment",
+          "properties": {
+            "_comment": {
+              "type": "string"
+            },
+            "mvpFeatures": {
+              "$ref": "#/definitions/featureFlagSet"
+            },
+            "testingFeatures": {
+              "$ref": "#/definitions/featureFlagSet"
+            },
+            "v2Features": {
+              "$ref": "#/definitions/featureFlagSet"
+            },
+            "experimentalFeatures": {
+              "$ref": "#/definitions/featureFlagSet"
+            }
+          }
+        }
+      }
+    },
+    "featureFlagSet": {
+      "type": "object",
+      "description": "A set of feature flags with optional comment",
+      "properties": {
+        "_comment": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": {
+        "type": "boolean"
+      }
+    }
+  }
+}

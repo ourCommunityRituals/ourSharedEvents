@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zeventbook.com/schemas/delete-response.schema.json",
+  "title": "Delete Response",
+  "description": "API response schema for delete endpoints. Story 3.1 - API Response Schema Validation.",
+  "$comment": "Version 1.0 - Created 2025-12-11. Used by ?action=delete endpoints.",
+  "type": "object",
+  "oneOf": [
+    { "$ref": "#/$defs/SuccessDeleteResponse" },
+    { "$ref": "#/$defs/ErrorResponse" }
+  ],
+  "$defs": {
+    "SuccessDeleteResponse": {
+      "type": "object",
+      "required": ["ok", "value"],
+      "properties": {
+        "ok": {
+          "type": "boolean",
+          "const": true
+        },
+        "value": {
+          "type": "null",
+          "description": "Delete operations return null value on success"
+        }
+      },
+      "additionalProperties": false
+    },
+    "ErrorResponse": {
+      "type": "object",
+      "required": ["ok", "code", "message"],
+      "properties": {
+        "ok": {
+          "type": "boolean",
+          "const": false
+        },
+        "code": {
+          "type": "string",
+          "enum": ["BAD_INPUT", "NOT_FOUND", "RATE_LIMITED", "INTERNAL", "CONTRACT", "FEATURE_DISABLED", "UNAUTHORIZED"]
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1
+        },
+        "corrId": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "examples": [
+    {
+      "ok": true,
+      "value": null
+    },
+    {
+      "ok": false,
+      "code": "NOT_FOUND",
+      "message": "Event not found: EVT_invalid"
+    },
+    {
+      "ok": false,
+      "code": "UNAUTHORIZED",
+      "message": "Invalid admin key"
+    }
+  ]
+}

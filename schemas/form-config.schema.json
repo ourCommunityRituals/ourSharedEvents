@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zeventbook.com/schemas/form-config.schema.json",
+  "title": "FormConfig",
+  "description": "MVP FormConfig Contract v1.0 (MVP-frozen) - Shape for signup form integration in Admin.html and SharedReport.html",
+  "type": "object",
+  "required": ["formId", "signupUrl", "totalResponses"],
+  "additionalProperties": false,
+  "properties": {
+    "formId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "MVP REQUIRED - Google Form ID"
+    },
+    "signupUrl": {
+      "type": "string",
+      "pattern": "^https?://.+",
+      "description": "MVP REQUIRED - Published form URL (Google Forms viewform URL)"
+    },
+    "shortLink": {
+      "type": ["string", "null"],
+      "pattern": "^https?://.+",
+      "description": "MVP OPTIONAL - Shortened URL for sharing (if generated)"
+    },
+    "qrB64": {
+      "type": ["string", "null"],
+      "description": "MVP OPTIONAL - QR code as base64-encoded PNG data URI (if generated)"
+    },
+    "totalResponses": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "MVP REQUIRED - Total response count from linked response spreadsheet"
+    }
+  }
+}

@@ -1,0 +1,1454 @@
+<!--
+================================================================================
+EXPERIMENTAL - v2+ (Not MVP)
+================================================================================
+Page: PlannerCards.html
+Purpose: Event planner card-based interface
+Status: NOT included in MVP focus group testing
+
+This page is an experimental UI and is not part of the core MVP surfaces.
+================================================================================
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Event Planner - Card Interface</title>
+  <?!= HtmlService.createHtmlOutputFromFile('NUSDK').getContent(); ?>
+  <?!= HtmlService.createHtmlOutputFromFile('SharedUtils').getContent(); ?>
+  <?!= HtmlService.createHtmlOutputFromFile('Styles').getContent(); ?>
+  <style>
+    /* Card-based layout styles */
+    .planner-container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+
+    .planner-card {
+      background: white;
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 20px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      border-left: 4px solid #2563eb;
+      transition: all 0.3s ease;
+    }
+
+    .planner-card.collapsed {
+      padding: 16px 24px;
+    }
+
+    .planner-card:hover {
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .card-header h2 {
+      margin: 0;
+      font-size: 1.25rem;
+      color: #1e293b;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .card-toggle {
+      background: none;
+      border: none;
+      font-size: 1.5rem;
+      cursor: pointer;
+      color: #64748b;
+      transition: transform 0.3s ease;
+      padding: 4px;
+    }
+
+    .card-toggle.expanded {
+      transform: rotate(180deg);
+    }
+
+    .card-body {
+      margin-top: 20px;
+      display: block;
+    }
+
+    .card-body.hidden {
+      display: none;
+    }
+
+    .header-card {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border-left: none;
+      margin-bottom: 24px;
+    }
+
+    .header-card h1 {
+      margin: 0 0 8px 0;
+      font-size: 1.75rem;
+    }
+
+    .header-info {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-top: 12px;
+    }
+
+    .status-badge {
+      display: inline-block;
+      padding: 6px 16px;
+      border-radius: 20px;
+      background: rgba(255,255,255,0.2);
+      font-size: 0.875rem;
+      font-weight: 500;
+    }
+
+    .status-badge.draft {
+      background: rgba(251, 191, 36, 0.9);
+      color: #78350f;
+    }
+
+    .status-badge.published {
+      background: rgba(34, 197, 94, 0.9);
+      color: #14532d;
+    }
+
+    .form-group {
+      margin-bottom: 20px;
+    }
+
+    .form-group label {
+      display: block;
+      margin-bottom: 6px;
+      font-weight: 500;
+      color: #334155;
+    }
+
+    .form-group input,
+    .form-group textarea,
+    .form-group select {
+      width: 100%;
+      padding: 10px 14px;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      font-size: 0.9375rem;
+      transition: border-color 0.2s;
+    }
+
+    .form-group input:focus,
+    .form-group textarea:focus,
+    .form-group select:focus {
+      outline: none;
+      border-color: #2563eb;
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+    }
+
+    .form-group textarea {
+      min-height: 100px;
+      resize: vertical;
+    }
+
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    @media (max-width: 640px) {
+      .form-row {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .toggle-section {
+      margin-top: 16px;
+      padding: 16px;
+      background: #f8fafc;
+      border-radius: 8px;
+      border: 1px solid #e2e8f0;
+    }
+
+    .toggle-button {
+      background: none;
+      border: none;
+      color: #2563eb;
+      font-size: 0.875rem;
+      font-weight: 500;
+      cursor: pointer;
+      padding: 8px 0;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .toggle-button:hover {
+      text-decoration: underline;
+    }
+
+    .btn {
+      padding: 12px 24px;
+      border: none;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn-primary {
+      background: #2563eb;
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: #1d4ed8;
+    }
+
+    .btn-secondary {
+      background: #64748b;
+      color: white;
+    }
+
+    .btn-secondary:hover {
+      background: #475569;
+    }
+
+    .btn-success {
+      background: #22c55e;
+      color: white;
+    }
+
+    .btn-success:hover {
+      background: #16a34a;
+    }
+
+    .btn-danger {
+      background: #ef4444;
+      color: white;
+    }
+
+    .btn-danger:hover {
+      background: #dc2626;
+    }
+
+    .btn-group {
+      display: flex;
+      gap: 12px;
+      margin-top: 20px;
+    }
+
+    .preview-container {
+      margin-top: 16px;
+      padding: 20px;
+      background: #f8fafc;
+      border-radius: 8px;
+      border: 1px solid #e2e8f0;
+    }
+
+    .preview-iframe {
+      width: 100%;
+      height: 500px;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      background: white;
+    }
+
+    .event-list {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 16px;
+    }
+
+    .event-card-mini {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-left: 3px solid #64748b;
+      border-radius: 12px;
+      padding: 16px;
+      transition: all 0.2s;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .event-card-mini:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+      border-left-color: #2563eb;
+    }
+
+    .event-card-info h3 {
+      margin: 0 0 4px 0;
+      font-size: 1.125rem;
+      color: #1e293b;
+    }
+
+    .event-card-info p {
+      margin: 0;
+      font-size: 0.875rem;
+      color: #64748b;
+    }
+
+    .event-card-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .icon-btn {
+      background: none;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      width: 36px;
+      height: 36px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .icon-btn:hover {
+      background: #f1f5f9;
+      border-color: #2563eb;
+      color: #2563eb;
+    }
+
+    .qr-container {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 20px;
+      margin-top: 20px;
+    }
+
+    .qr-item {
+      text-align: center;
+      padding: 16px;
+      background: #f8fafc;
+      border-radius: 8px;
+      border: 1px solid #e2e8f0;
+    }
+
+    .qr-item h4 {
+      margin: 0 0 12px 0;
+      color: #1e293b;
+    }
+
+    .qr-code {
+      width: 150px;
+      height: 150px;
+      margin: 0 auto;
+      background: white;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .qr-link {
+      margin-top: 12px;
+      font-size: 0.875rem;
+      color: #2563eb;
+      word-break: break-all;
+    }
+
+    .counter-badge {
+      display: inline-block;
+      background: #22c55e;
+      color: white;
+      padding: 4px 12px;
+      border-radius: 12px;
+      font-size: 0.875rem;
+      font-weight: 600;
+      margin-top: 8px;
+    }
+
+    .search-bar {
+      width: 100%;
+      padding: 12px 16px;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      font-size: 1rem;
+      margin-bottom: 16px;
+    }
+
+    .search-bar:focus {
+      outline: none;
+      border-color: #2563eb;
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+    }
+
+    .video-preview {
+      margin-top: 16px;
+      max-width: 100%;
+      height: auto;
+      border-radius: 8px;
+    }
+
+    .sponsor-config {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 16px;
+      margin-top: 16px;
+    }
+
+    .sponsor-toggle {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px;
+      background: white;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+    }
+
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 48px;
+      height: 24px;
+    }
+
+    .switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: #cbd5e1;
+      transition: .3s;
+      border-radius: 24px;
+    }
+
+    .slider:before {
+      position: absolute;
+      content: "";
+      height: 18px;
+      width: 18px;
+      left: 3px;
+      bottom: 3px;
+      background-color: white;
+      transition: .3s;
+      border-radius: 50%;
+    }
+
+    input:checked + .slider {
+      background-color: #2563eb;
+    }
+
+    input:checked + .slider:before {
+      transform: translateX(24px);
+    }
+
+    .loading {
+      text-align: center;
+      padding: 40px;
+      color: #64748b;
+    }
+
+    .loading::after {
+      content: "...";
+      animation: dots 1.5s steps(4, end) infinite;
+    }
+
+    @keyframes dots {
+      0%, 20% { content: "."; }
+      40% { content: ".."; }
+      60%, 100% { content: "..."; }
+    }
+
+    .alert {
+      padding: 12px 16px;
+      border-radius: 8px;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .alert-info {
+      background: #dbeafe;
+      color: #1e40af;
+      border: 1px solid #93c5fd;
+    }
+
+    .alert-success {
+      background: #dcfce7;
+      color: #166534;
+      border: 1px solid #86efac;
+    }
+
+    .alert-warning {
+      background: #fef3c7;
+      color: #92400e;
+      border: 1px solid #fde68a;
+    }
+
+    .alert-error {
+      background: #fee2e2;
+      color: #991b1b;
+      border: 1px solid #fca5a5;
+    }
+  </style>
+</head>
+<body>
+  <div class="planner-container">
+    <!-- Header Card (Always Visible) -->
+    <div class="header-card planner-card">
+      <h1 id="brandName">Loading...</h1>
+      <div class="header-info">
+        <span id="currentDate">Today: Loading...</span>
+        <span class="status-badge draft" id="planStatus">Draft</span>
+      </div>
+    </div>
+
+    <!-- Create Event Card -->
+    <div class="planner-card" id="createEventCard">
+      <div class="card-header" onclick="toggleCard('createEvent')">
+        <h2>📝 Create Event</h2>
+        <button class="card-toggle expanded" id="createEventToggle">▼</button>
+      </div>
+      <div class="card-body" id="createEventBody">
+        <form id="eventForm">
+          <!-- Required Fields -->
+          <div class="form-group">
+            <label for="eventName">Event Name *</label>
+            <input type="text" id="eventName" required placeholder="e.g., Annual Tech Conference 2025">
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="eventDate">Event Date *</label>
+              <input type="date" id="eventDate" required>
+            </div>
+            <div class="form-group">
+              <label for="eventTime">Event Time *</label>
+              <input type="time" id="eventTime" required>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="eventLocation">Location *</label>
+            <input type="text" id="eventLocation" required placeholder="e.g., Grand Ballroom, Main St">
+          </div>
+
+          <div class="form-group">
+            <label for="eventType">Event Type *</label>
+            <select id="eventType" required>
+              <option value="">Select type...</option>
+              <option value="conference">Conference</option>
+              <option value="workshop">Workshop</option>
+              <option value="seminar">Seminar</option>
+              <option value="networking">Networking</option>
+              <option value="webinar">Webinar</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+
+          <!-- More Settings Toggle -->
+          <button type="button" class="toggle-button" onclick="toggleMoreSettings()">
+            <span id="moreSettingsIcon">▶</span>
+            <span id="moreSettingsText">More settings</span>
+          </button>
+
+          <div class="toggle-section hidden" id="moreSettings">
+            <div class="form-group">
+              <label for="eventCapacity">Capacity</label>
+              <input type="number" id="eventCapacity" placeholder="e.g., 100">
+            </div>
+
+            <div class="form-group">
+              <label for="eventTags">Tags (comma-separated)</label>
+              <input type="text" id="eventTags" placeholder="e.g., tech, networking, innovation">
+            </div>
+
+            <div class="form-group">
+              <label for="eventStatus">Status</label>
+              <select id="eventStatus">
+                <option value="draft">Draft</option>
+                <option value="published">Published</option>
+                <option value="cancelled">Cancelled</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="btn-group">
+            <button type="submit" class="btn btn-primary" id="createUpdateBtn">Create Event</button>
+            <button type="button" class="btn btn-secondary" onclick="resetForm()">Reset</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Summary Section Card -->
+    <div class="planner-card" id="summaryCard" style="display:none;">
+      <div class="card-header" onclick="toggleCard('summary')">
+        <h2>📋 Summary Section</h2>
+        <button class="card-toggle expanded" id="summaryToggle">▼</button>
+      </div>
+      <div class="card-body" id="summaryBody">
+        <div class="form-group">
+          <label for="eventSummary">Event Description</label>
+          <textarea id="eventSummary" placeholder="Describe your event in detail..."></textarea>
+        </div>
+        <div class="form-group">
+          <label for="summaryLink">Learn More Link (optional)</label>
+          <input type="url" id="summaryLink" placeholder="https://example.com/event-details">
+        </div>
+        <div class="preview-container">
+          <h4>Preview</h4>
+          <p id="summaryPreview" style="color: #64748b; font-style: italic;">Your summary will appear here...</p>
+        </div>
+        <div class="btn-group">
+          <button class="btn btn-success" onclick="saveSummary()">Save Summary</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Videos Section Card -->
+    <div class="planner-card" id="videosCard" style="display:none;">
+      <div class="card-header" onclick="toggleCard('videos')">
+        <h2>🎥 Videos Section</h2>
+        <button class="card-toggle expanded" id="videosToggle">▼</button>
+      </div>
+      <div class="card-body" id="videosBody">
+        <div class="form-group">
+          <label for="videoUrl">Video URL (YouTube or Vimeo)</label>
+          <input type="url" id="videoUrl" placeholder="https://youtube.com/watch?v=...">
+        </div>
+        <div class="btn-group">
+          <button class="btn btn-primary" onclick="loadVideoPreview()">Load Preview</button>
+          <button class="btn btn-success" onclick="saveVideo()">Save Video</button>
+        </div>
+        <div class="preview-container" id="videoPreviewContainer" style="display:none;">
+          <h4>Video Preview</h4>
+          <iframe id="videoPreview" class="preview-iframe" frameborder="0" allowfullscreen></iframe>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bio Section Card -->
+    <div class="planner-card" id="bioCard" style="display:none;">
+      <div class="card-header" onclick="toggleCard('bio')">
+        <h2>👤 Bio Section</h2>
+        <button class="card-toggle expanded" id="bioToggle">▼</button>
+      </div>
+      <div class="card-body" id="bioBody">
+        <div class="form-group">
+          <label for="organizerName">Organizer/Brand Name</label>
+          <input type="text" id="organizerName" placeholder="e.g., Acme Corp">
+        </div>
+        <div class="form-group">
+          <label for="bioText">Mission Statement / About</label>
+          <textarea id="bioText" placeholder="Tell attendees about your organization..."></textarea>
+        </div>
+        <div class="form-group">
+          <label for="bioLink">Website or Contact Link</label>
+          <input type="url" id="bioLink" placeholder="https://example.com">
+        </div>
+        <div class="btn-group">
+          <button class="btn btn-success" onclick="saveBio()">Save Bio</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Display Section Card -->
+    <div class="planner-card" id="displayCard" style="display:none;">
+      <div class="card-header" onclick="toggleCard('display')">
+        <h2>📺 Display Section (TV Preview)</h2>
+        <button class="card-toggle expanded" id="displayToggle">▼</button>
+      </div>
+      <div class="card-body" id="displayBody">
+        <div class="form-group">
+          <label for="displayMode">Display Mode</label>
+          <select id="displayMode" onchange="updateDisplayPreview()">
+            <option value="public">Public (Mirror Mobile)</option>
+            <option value="dynamic">Dynamic (Carousel)</option>
+          </select>
+        </div>
+
+        <div class="sponsor-config">
+          <div class="sponsor-toggle">
+            <span>Show Sponsors on TV</span>
+            <label class="switch">
+              <input type="checkbox" id="tvSponsorEnabled" onchange="updateDisplayPreview()">
+              <span class="slider"></span>
+            </label>
+          </div>
+          <div class="form-group">
+            <label for="sponsorPlacement">Sponsor Placement</label>
+            <select id="sponsorPlacement" onchange="updateDisplayPreview()">
+              <option value="top">Top</option>
+              <option value="bottom">Bottom</option>
+              <option value="left">Left</option>
+              <option value="right">Right</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="preview-container">
+          <h4>TV Display Preview</h4>
+          <iframe id="displayPreview" class="preview-iframe" frameborder="0"></iframe>
+        </div>
+
+        <div class="btn-group">
+          <button class="btn btn-success" onclick="saveDisplay()">Save Display Settings</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Public Section Card -->
+    <div class="planner-card" id="publicCard" style="display:none;">
+      <div class="card-header" onclick="toggleCard('public')">
+        <h2>📱 Public Section (Mobile Preview)</h2>
+        <button class="card-toggle expanded" id="publicToggle">▼</button>
+      </div>
+      <div class="card-body" id="publicBody">
+        <div class="alert alert-info">
+          Preview how your event will look on mobile devices and public landing pages.
+        </div>
+        <div class="preview-container">
+          <h4>Public Page Preview</h4>
+          <iframe id="publicPreview" class="preview-iframe" frameborder="0"></iframe>
+        </div>
+        <div class="btn-group">
+          <button class="btn btn-primary" onclick="refreshPublicPreview()">Refresh Preview</button>
+          <button class="btn btn-secondary" onclick="openPublicPage()">Open in New Tab</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sign Up Form / Poster / Display / Public Links Card -->
+    <div class="planner-card" id="linksCard" style="display:none;">
+      <div class="card-header" onclick="toggleCard('links')">
+        <h2>🔗 Forms, QR Codes & Links</h2>
+        <button class="card-toggle expanded" id="linksToggle">▼</button>
+      </div>
+      <div class="card-body" id="linksBody">
+        <div class="alert alert-success">
+          <strong id="signupCounter">0</strong> people have signed up so far!
+        </div>
+
+        <div class="qr-container">
+          <div class="qr-item">
+            <h4>Sign Up Form</h4>
+            <div class="qr-code" id="formQR">
+              <span style="color: #94a3b8;">QR Code</span>
+            </div>
+            <div class="qr-link" id="formLink">Generating...</div>
+            <div class="counter-badge" id="formCounter">0 responses</div>
+          </div>
+
+          <div class="qr-item">
+            <h4>Event Page</h4>
+            <div class="qr-code" id="publicQR">
+              <span style="color: #94a3b8;">QR Code</span>
+            </div>
+            <div class="qr-link" id="publicLink">Generating...</div>
+          </div>
+
+          <div class="qr-item">
+            <h4>TV Display</h4>
+            <div class="qr-code" id="displayQR">
+              <span style="color: #94a3b8;">QR Code</span>
+            </div>
+            <div class="qr-link" id="displayLink">Generating...</div>
+          </div>
+        </div>
+
+        <div class="form-group" style="margin-top: 24px;">
+          <label for="posterImage">Poster Image</label>
+          <input type="url" id="posterImage" placeholder="https://example.com/poster.jpg">
+        </div>
+
+        <div class="btn-group">
+          <button class="btn btn-primary" onclick="generateQRCodes()">Generate QR Codes</button>
+          <button class="btn btn-secondary" onclick="viewPoster()">View Poster</button>
+          <button class="btn btn-success" onclick="refreshSignupCount()">Refresh Count</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Event Card List -->
+    <div class="planner-card">
+      <div class="card-header" onclick="toggleCard('eventList')">
+        <h2>📚 All Events</h2>
+        <button class="card-toggle expanded" id="eventListToggle">▼</button>
+      </div>
+      <div class="card-body" id="eventListBody">
+        <input type="text" class="search-bar" id="eventSearch" placeholder="Search events..." oninput="filterEvents()">
+        <div class="event-list" id="eventList">
+          <div class="loading">Loading events</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // NUSDK wrapper for Google Apps Script RPC
+    const NU = {
+      rpc: function(method, params) {
+        return new Promise((resolve, reject) => {
+          google.script.run
+            .withSuccessHandler(resolve)
+            .withFailureHandler(reject)
+            [method](params);
+        });
+      }
+    };
+
+    // Global state
+    let currentEvent = null;
+    let allEvents = [];
+    const BRAND_ID = 'root'; // Get from URL params or config
+
+    // Initialize on load
+    window.addEventListener('DOMContentLoaded', async () => {
+      await initializePlanner();
+    });
+
+    async function initializePlanner() {
+      try {
+        // Set current date
+        const today = new Date().toLocaleDateString('en-US', {
+          weekday: 'long',
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric'
+        });
+        document.getElementById('currentDate').textContent = `Today: ${today}`;
+
+        // Load brand config
+        const config = await NU.rpc('api_getConfig', { brandId: BRAND_ID });
+        if (config.ok) {
+          document.getElementById('brandName').textContent = config.value.name || 'Event Planner';
+        }
+
+        // Load events
+        await loadEvents();
+
+        // Setup form handler
+        document.getElementById('eventForm').addEventListener('submit', handleEventSubmit);
+
+        // Setup summary preview
+        document.getElementById('eventSummary').addEventListener('input', updateSummaryPreview);
+      } catch (error) {
+        console.error('Initialization error:', error);
+        showAlert('Failed to initialize planner', 'error');
+      }
+    }
+
+    async function loadEvents() {
+      try {
+        const response = await NU.rpc('api_list', {
+          brandId: BRAND_ID,
+          scope: 'events'
+        });
+
+        if (response.ok) {
+          allEvents = response.value || [];
+          renderEventList(allEvents);
+        }
+      } catch (error) {
+        console.error('Failed to load events:', error);
+        document.getElementById('eventList').innerHTML = '<div class="alert alert-error">Failed to load events</div>';
+      }
+    }
+
+    function renderEventList(events) {
+      const container = document.getElementById('eventList');
+
+      if (events.length === 0) {
+        container.innerHTML = '<div class="alert alert-info">No events yet. Create your first event above!</div>';
+        return;
+      }
+
+      container.innerHTML = events.map(event => `
+        <div class="event-card-mini">
+          <div class="event-card-info">
+            <h3>${escapeHtml(event.name || 'Untitled Event')}</h3>
+            <p>${formatDate(event.date)} • ${escapeHtml(event.location || 'Location TBD')}</p>
+          </div>
+          <div class="event-card-actions">
+            <button class="icon-btn" onclick="editEvent('${event.id}')" title="Edit">✏️</button>
+            <button class="icon-btn" onclick="duplicateEvent('${event.id}')" title="Duplicate">📋</button>
+            <button class="icon-btn" onclick="viewAnalytics('${event.id}')" title="Analytics">📊</button>
+            <button class="icon-btn" onclick="deleteEvent('${event.id}')" title="Delete">🗑️</button>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function filterEvents() {
+      const searchTerm = document.getElementById('eventSearch').value.toLowerCase();
+      const filtered = allEvents.filter(event =>
+        (event.name || '').toLowerCase().includes(searchTerm) ||
+        (event.location || '').toLowerCase().includes(searchTerm)
+      );
+      renderEventList(filtered);
+    }
+
+    async function handleEventSubmit(e) {
+      e.preventDefault();
+
+      const eventData = {
+        brandId: BRAND_ID,
+        scope: 'events',
+        name: document.getElementById('eventName').value,
+        date: document.getElementById('eventDate').value,
+        time: document.getElementById('eventTime').value,
+        location: document.getElementById('eventLocation').value,
+        type: document.getElementById('eventType').value,
+        capacity: parseInt(document.getElementById('eventCapacity').value) || null,
+        tags: document.getElementById('eventTags').value,
+        status: document.getElementById('eventStatus').value || 'draft',
+        data: {}
+      };
+
+      try {
+        let response;
+        if (currentEvent) {
+          // Update existing event
+          response = await NU.rpc('api_updateEventData', {
+            eventId: currentEvent.id,
+            ...eventData
+          });
+        } else {
+          // Create new event
+          response = await NU.rpc('api_create', eventData);
+        }
+
+        if (response.ok) {
+          currentEvent = response.value;
+          showAlert(currentEvent.id ? 'Event updated successfully!' : 'Event created successfully!', 'success');
+
+          // Show additional cards
+          showEventCards();
+
+          // Reload event list
+          await loadEvents();
+
+          // Update button text
+          document.getElementById('createUpdateBtn').textContent = 'Update Event';
+          document.getElementById('planStatus').textContent = eventData.status === 'published' ? 'Published' : 'Draft';
+          document.getElementById('planStatus').className = `status-badge ${eventData.status === 'published' ? 'published' : 'draft'}`;
+        } else {
+          showAlert(response.message || 'Failed to save event', 'error');
+        }
+      } catch (error) {
+        console.error('Error saving event:', error);
+        showAlert('An error occurred while saving the event', 'error');
+      }
+    }
+
+    function showEventCards() {
+      // Show all cards that appear after event creation
+      document.getElementById('summaryCard').style.display = 'block';
+      document.getElementById('videosCard').style.display = 'block';
+      document.getElementById('bioCard').style.display = 'block';
+      document.getElementById('displayCard').style.display = 'block';
+      document.getElementById('publicCard').style.display = 'block';
+      document.getElementById('linksCard').style.display = 'block';
+
+      // Load previews
+      if (currentEvent) {
+        updateDisplayPreview();
+        updatePublicPreview();
+        generateQRCodes();
+      }
+    }
+
+    async function editEvent(eventId) {
+      try {
+        const response = await NU.rpc('api_get', { eventId });
+
+        if (response.ok) {
+          currentEvent = response.value;
+
+          // Populate form
+          document.getElementById('eventName').value = currentEvent.name || '';
+          document.getElementById('eventDate').value = currentEvent.date || '';
+          document.getElementById('eventTime').value = currentEvent.time || '';
+          document.getElementById('eventLocation').value = currentEvent.location || '';
+          document.getElementById('eventType').value = currentEvent.type || '';
+          document.getElementById('eventCapacity').value = currentEvent.capacity || '';
+          document.getElementById('eventTags').value = currentEvent.tags || '';
+          document.getElementById('eventStatus').value = currentEvent.status || 'draft';
+
+          // Populate other sections
+          document.getElementById('eventSummary').value = currentEvent.summary || '';
+          document.getElementById('summaryLink').value = currentEvent.summaryLink || '';
+          document.getElementById('videoUrl').value = currentEvent.videoUrl || '';
+          document.getElementById('organizerName').value = currentEvent.data?.organizerName || '';
+          document.getElementById('bioText').value = currentEvent.bio || '';
+          document.getElementById('bioLink').value = currentEvent.bioLink || '';
+
+          // Update UI
+          document.getElementById('createUpdateBtn').textContent = 'Update Event';
+          showEventCards();
+
+          // Scroll to top
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+
+          showAlert('Event loaded for editing', 'info');
+        }
+      } catch (error) {
+        console.error('Error loading event:', error);
+        showAlert('Failed to load event', 'error');
+      }
+    }
+
+    async function duplicateEvent(eventId) {
+      if (!confirm('Create a copy of this event?')) return;
+
+      try {
+        const response = await NU.rpc('api_get', { eventId });
+
+        if (response.ok) {
+          const original = response.value;
+          const duplicate = {
+            ...original,
+            name: `${original.name} (Copy)`,
+            status: 'draft'
+          };
+          delete duplicate.id;
+
+          const createResponse = await NU.rpc('api_create', duplicate);
+          if (createResponse.ok) {
+            showAlert('Event duplicated successfully!', 'success');
+            await loadEvents();
+          }
+        }
+      } catch (error) {
+        console.error('Error duplicating event:', error);
+        showAlert('Failed to duplicate event', 'error');
+      }
+    }
+
+    async function deleteEvent(eventId) {
+      if (!confirm('Are you sure you want to delete this event? This action cannot be undone.')) return;
+
+      try {
+        // Note: You'll need to implement api_delete in Code.gs
+        showAlert('Delete functionality coming soon', 'warning');
+      } catch (error) {
+        console.error('Error deleting event:', error);
+        showAlert('Failed to delete event', 'error');
+      }
+    }
+
+    function viewAnalytics(eventId) {
+      window.open(`?page=report&eventId=${eventId}`, '_blank');
+    }
+
+    async function saveSummary() {
+      if (!currentEvent) {
+        showAlert('Please create an event first', 'warning');
+        return;
+      }
+
+      try {
+        const response = await NU.rpc('api_updateEventData', {
+          eventId: currentEvent.id,
+          summary: document.getElementById('eventSummary').value,
+          summaryLink: document.getElementById('summaryLink').value
+        });
+
+        if (response.ok) {
+          showAlert('Summary saved!', 'success');
+          updatePublicPreview();
+        }
+      } catch (error) {
+        console.error('Error saving summary:', error);
+        showAlert('Failed to save summary', 'error');
+      }
+    }
+
+    async function saveVideo() {
+      if (!currentEvent) {
+        showAlert('Please create an event first', 'warning');
+        return;
+      }
+
+      try {
+        const response = await NU.rpc('api_updateEventData', {
+          eventId: currentEvent.id,
+          videoUrl: document.getElementById('videoUrl').value
+        });
+
+        if (response.ok) {
+          showAlert('Video saved!', 'success');
+          updatePublicPreview();
+        }
+      } catch (error) {
+        console.error('Error saving video:', error);
+        showAlert('Failed to save video', 'error');
+      }
+    }
+
+    /**
+     * Securely validate and load video preview from YouTube or Vimeo
+     * Fixes: GitHub Security Advisory - Incomplete URL substring sanitization
+     */
+    function loadVideoPreview() {
+      const rawUrl = document.getElementById('videoUrl').value;
+      if (!rawUrl) {
+        showAlert('Please enter a video URL', 'warning');
+        return;
+      }
+
+      // Validate and extract embed URL securely
+      const embedUrl = getSecureEmbedUrl(rawUrl);
+
+      if (!embedUrl) {
+        showAlert('Invalid video URL. Only YouTube and Vimeo URLs are supported.', 'error');
+        return;
+      }
+
+      // Assign only validated embed URL
+      document.getElementById('videoPreview').src = embedUrl;
+      document.getElementById('videoPreviewContainer').style.display = 'block';
+    }
+
+    /**
+     * Securely extract and validate video embed URLs
+     * Uses URL constructor and hostname validation to prevent malicious URLs
+     *
+     * @param {string} rawUrl - User-provided URL
+     * @returns {string|null} - Validated embed URL or null if invalid
+     */
+    function getSecureEmbedUrl(rawUrl) {
+      // Whitelist of allowed video platforms
+      const ALLOWED_YOUTUBE_HOSTS = [
+        'www.youtube.com',
+        'youtube.com',
+        'youtu.be',
+        'm.youtube.com'
+      ];
+
+      const ALLOWED_VIMEO_HOSTS = [
+        'vimeo.com',
+        'www.vimeo.com'
+      ];
+
+      try {
+        // Parse URL using URL constructor for proper validation
+        const urlObj = new URL(rawUrl);
+        const hostname = urlObj.hostname.toLowerCase();
+
+        // YouTube validation
+        if (ALLOWED_YOUTUBE_HOSTS.includes(hostname)) {
+          let videoId = null;
+
+          // Extract video ID from different YouTube URL formats
+          if (hostname === 'youtu.be') {
+            // Format: https://youtu.be/VIDEO_ID
+            videoId = urlObj.pathname.slice(1).split('?')[0];
+          } else {
+            // Format: https://www.youtube.com/watch?v=VIDEO_ID
+            videoId = urlObj.searchParams.get('v');
+          }
+
+          // Validate video ID format (alphanumeric, underscore, hyphen, 11 chars)
+          if (videoId && /^[a-zA-Z0-9_-]{11}$/.test(videoId)) {
+            // Return canonically formatted embed URL
+            return `https://www.youtube.com/embed/${encodeURIComponent(videoId)}`;
+          }
+        }
+
+        // Vimeo validation
+        if (ALLOWED_VIMEO_HOSTS.includes(hostname)) {
+          // Format: https://vimeo.com/VIDEO_ID
+          const pathMatch = urlObj.pathname.match(/^\/(\d+)/);
+
+          if (pathMatch && pathMatch[1]) {
+            const videoId = pathMatch[1];
+
+            // Validate video ID is numeric only
+            if (/^\d+$/.test(videoId)) {
+              // Return canonically formatted embed URL
+              return `https://player.vimeo.com/video/${encodeURIComponent(videoId)}`;
+            }
+          }
+        }
+
+        // URL didn't match any allowed platform
+        return null;
+
+      } catch (e) {
+        // URL constructor threw an error - invalid URL format
+        console.error('Invalid URL format:', e);
+        return null;
+      }
+    }
+
+    async function saveBio() {
+      if (!currentEvent) {
+        showAlert('Please create an event first', 'warning');
+        return;
+      }
+
+      try {
+        const response = await NU.rpc('api_updateEventData', {
+          eventId: currentEvent.id,
+          bio: document.getElementById('bioText').value,
+          bioLink: document.getElementById('bioLink').value,
+          data: {
+            ...currentEvent.data,
+            organizerName: document.getElementById('organizerName').value
+          }
+        });
+
+        if (response.ok) {
+          showAlert('Bio saved!', 'success');
+          updatePublicPreview();
+        }
+      } catch (error) {
+        console.error('Error saving bio:', error);
+        showAlert('Failed to save bio', 'error');
+      }
+    }
+
+    async function saveDisplay() {
+      if (!currentEvent) {
+        showAlert('Please create an event first', 'warning');
+        return;
+      }
+
+      try {
+        const response = await NU.rpc('api_updateEventData', {
+          eventId: currentEvent.id,
+          data: {
+            ...currentEvent.data,
+            displayMode: document.getElementById('displayMode').value,
+            tvSponsorEnabled: document.getElementById('tvSponsorEnabled').checked,
+            sponsorPlacement: document.getElementById('sponsorPlacement').value
+          }
+        });
+
+        if (response.ok) {
+          showAlert('Display settings saved!', 'success');
+        }
+      } catch (error) {
+        console.error('Error saving display settings:', error);
+        showAlert('Failed to save display settings', 'error');
+      }
+    }
+
+    function updateDisplayPreview() {
+      if (!currentEvent) return;
+
+      const baseUrl = window.location.origin + window.location.pathname;
+      const displayUrl = `${baseUrl}?page=display&eventId=${currentEvent.id}`;
+      document.getElementById('displayPreview').src = displayUrl;
+    }
+
+    function updatePublicPreview() {
+      if (!currentEvent) return;
+
+      const baseUrl = window.location.origin + window.location.pathname;
+      const publicUrl = `${baseUrl}?page=public&eventId=${currentEvent.id}`;
+      document.getElementById('publicPreview').src = publicUrl;
+    }
+
+    function refreshPublicPreview() {
+      updatePublicPreview();
+      showAlert('Preview refreshed', 'info');
+    }
+
+    function openPublicPage() {
+      if (!currentEvent) {
+        showAlert('Please create an event first', 'warning');
+        return;
+      }
+
+      const baseUrl = window.location.origin + window.location.pathname;
+      window.open(`${baseUrl}?page=public&eventId=${currentEvent.id}`, '_blank');
+    }
+
+    async function generateQRCodes() {
+      if (!currentEvent) {
+        showAlert('Please create an event first', 'warning');
+        return;
+      }
+
+      try {
+        const baseUrl = window.location.origin + window.location.pathname;
+
+        // Generate shortlink for form
+        const formResponse = await NU.rpc('api_generateFormShortlink', {
+          eventId: currentEvent.id,
+          formType: 'register'
+        });
+
+        if (formResponse.ok) {
+          const formUrl = formResponse.value.shortUrl || `${baseUrl}?form=register&eventId=${currentEvent.id}`;
+          document.getElementById('formLink').innerHTML = `<a href="${formUrl}" target="_blank">${formUrl}</a>`;
+
+          // Generate QR code using Google Charts API
+          const formQRUrl = `https://chart.googleapis.com/chart?cht=qr&chs=150x150&chl=${encodeURIComponent(formUrl)}`;
+          document.getElementById('formQR').innerHTML = `<img src="${formQRUrl}" alt="Form QR Code" style="width:150px;height:150px;">`;
+        }
+
+        // Public page link
+        const publicUrl = `${baseUrl}?page=public&eventId=${currentEvent.id}`;
+        document.getElementById('publicLink').innerHTML = `<a href="${publicUrl}" target="_blank">${publicUrl}</a>`;
+        const publicQRUrl = `https://chart.googleapis.com/chart?cht=qr&chs=150x150&chl=${encodeURIComponent(publicUrl)}`;
+        document.getElementById('publicQR').innerHTML = `<img src="${publicQRUrl}" alt="Public Page QR Code" style="width:150px;height:150px;">`;
+
+        // Display link
+        const displayUrl = `${baseUrl}?page=display&eventId=${currentEvent.id}`;
+        document.getElementById('displayLink').innerHTML = `<a href="${displayUrl}" target="_blank">${displayUrl}</a>`;
+        const displayQRUrl = `https://chart.googleapis.com/chart?cht=qr&chs=150x150&chl=${encodeURIComponent(displayUrl)}`;
+        document.getElementById('displayQR').innerHTML = `<img src="${displayQRUrl}" alt="Display QR Code" style="width:150px;height:150px;">`;
+
+        // Load signup count
+        await refreshSignupCount();
+
+        showAlert('QR codes generated!', 'success');
+      } catch (error) {
+        console.error('Error generating QR codes:', error);
+        showAlert('Failed to generate QR codes', 'error');
+      }
+    }
+
+    async function refreshSignupCount() {
+      if (!currentEvent) return;
+
+      try {
+        // Note: You'll need to implement api_getFormResponses in Code.gs
+        const count = 0; // Placeholder
+        document.getElementById('signupCounter').textContent = count;
+        document.getElementById('formCounter').textContent = `${count} responses`;
+      } catch (error) {
+        console.error('Error fetching signup count:', error);
+      }
+    }
+
+    function viewPoster() {
+      if (!currentEvent) {
+        showAlert('Please create an event first', 'warning');
+        return;
+      }
+
+      const baseUrl = window.location.origin + window.location.pathname;
+      window.open(`${baseUrl}?page=poster&eventId=${currentEvent.id}`, '_blank');
+    }
+
+    function updateSummaryPreview() {
+      const summary = document.getElementById('eventSummary').value;
+      document.getElementById('summaryPreview').textContent = summary || 'Your summary will appear here...';
+      document.getElementById('summaryPreview').style.fontStyle = summary ? 'normal' : 'italic';
+    }
+
+    function toggleCard(cardName) {
+      const body = document.getElementById(`${cardName}Body`);
+      const toggle = document.getElementById(`${cardName}Toggle`);
+
+      if (body.classList.contains('hidden')) {
+        body.classList.remove('hidden');
+        toggle.classList.add('expanded');
+      } else {
+        body.classList.add('hidden');
+        toggle.classList.remove('expanded');
+      }
+    }
+
+    function toggleMoreSettings() {
+      const section = document.getElementById('moreSettings');
+      const icon = document.getElementById('moreSettingsIcon');
+      const text = document.getElementById('moreSettingsText');
+
+      if (section.classList.contains('hidden')) {
+        section.classList.remove('hidden');
+        icon.textContent = '▼';
+        text.textContent = 'Less settings';
+      } else {
+        section.classList.add('hidden');
+        icon.textContent = '▶';
+        text.textContent = 'More settings';
+      }
+    }
+
+    function resetForm() {
+      if (confirm('Reset the form? All unsaved changes will be lost.')) {
+        document.getElementById('eventForm').reset();
+        currentEvent = null;
+        document.getElementById('createUpdateBtn').textContent = 'Create Event';
+
+        // Hide additional cards
+        document.getElementById('summaryCard').style.display = 'none';
+        document.getElementById('videosCard').style.display = 'none';
+        document.getElementById('bioCard').style.display = 'none';
+        document.getElementById('displayCard').style.display = 'none';
+        document.getElementById('publicCard').style.display = 'none';
+        document.getElementById('linksCard').style.display = 'none';
+
+        document.getElementById('planStatus').textContent = 'Draft';
+        document.getElementById('planStatus').className = 'status-badge draft';
+      }
+    }
+
+    function showAlert(message, type = 'info') {
+      // Create alert element
+      const alert = document.createElement('div');
+      alert.className = `alert alert-${type}`;
+      alert.textContent = message;
+      alert.style.position = 'fixed';
+      alert.style.top = '20px';
+      alert.style.right = '20px';
+      alert.style.zIndex = '9999';
+      alert.style.minWidth = '300px';
+
+      document.body.appendChild(alert);
+
+      // Auto-remove after 5 seconds
+      setTimeout(() => {
+        alert.style.opacity = '0';
+        alert.style.transition = 'opacity 0.3s';
+        setTimeout(() => alert.remove(), 300);
+      }, 5000);
+    }
+
+    // Use NU.esc from NUSDK for XSS prevention (local wrapper for backward compatibility)
+    function escapeHtml(text) {
+      if (window.NU && typeof window.NU.esc === 'function') {
+        return NU.esc(text);
+      }
+      // Fallback if NUSDK not loaded
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    // Use SharedUtils.formatDate (local wrapper for backward compatibility)
+    function formatDate(dateString) {
+      if (window.SharedUtils && typeof window.SharedUtils.formatDate === 'function') {
+        return SharedUtils.formatDate(dateString);
+      }
+      // Fallback if SharedUtils not loaded
+      if (!dateString) return 'Date TBD';
+      const date = new Date(dateString);
+      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    }
+  </script>
+</body>
+</html>

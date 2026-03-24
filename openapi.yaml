@@ -1,0 +1,649 @@
+openapi: 3.0.3
+info:
+  title: MVP Event Toolkit API
+  description: |
+    Complete REST API for managing events, sponsors, and analytics.
+
+    ## Features
+    - ✅ RESTful JSON API
+    - ✅ Multiple authentication methods (adminKey, JWT, API Key)
+    - ✅ Rate limiting (20 req/min per brand)
+    - ✅ ETag/SWR support for caching
+    - ✅ Comprehensive error handling
+    - ✅ CORS enabled
+
+    ## Authentication
+    The API supports three authentication methods:
+    1. **Admin Key** - Simple secret key in request body
+    2. **Bearer Token (JWT)** - Token-based authentication
+    3. **API Key Header** - X-API-Key header
+
+  version: 1.0.0
+  contact:
+    name: API Support
+    url: https://github.com/zeventbooks/MVP-EVENT-TOOLKIT
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: https://script.google.com/macros/s/{deploymentId}/exec
+    description: Production server
+    variables:
+      deploymentId:
+        default: YOUR_DEPLOYMENT_ID
+        description: Your Google Apps Script deployment ID
+
+tags:
+  - name: Public
+    description: Public endpoints (no authentication required)
+  - name: Authentication
+    description: Authentication and token management
+  - name: Events
+    description: Event management operations
+  - name: Analytics
+    description: Analytics and reporting
+
+security:
+  - adminKey: []
+  - bearerAuth: []
+  - apiKey: []
+
+paths:
+  /?action=status:
+    get:
+      tags:
+        - Public
+      summary: Health Check
+      description: Check API health and database connectivity
+      operationId: getStatus
+      security: []
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusResponse'
+
+  /?action=config:
+    get:
+      tags:
+        - Public
+      summary: Get Configuration
+      description: Get brand configuration and available templates
+      operationId: getConfig
+      security: []
+      parameters:
+        - name: brand
+          in: query
+          description: Brand ID
+          schema:
+            type: string
+            default: root
+        - name: scope
+          in: query
+          description: Scope (events, leagues, tournaments)
+          schema:
+            type: string
+            default: events
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConfigResponse'
+
+  /?action=list:
+    get:
+      tags:
+        - Public
+        - Events
+      summary: List Events
+      description: List all events for a brand with optional SWR/caching support
+      operationId: listEvents
+      security: []
+      parameters:
+        - name: brand
+          in: query
+          description: Brand ID
+          schema:
+            type: string
+            default: root
+        - name: scope
+          in: query
+          description: Scope
+          schema:
+            type: string
+            default: events
+        - name: etag
+          in: query
+          description: ETag for SWR/caching (returns 304 if not modified)
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListEventsResponse'
+        '304':
+          description: Not Modified (etag matched)
+
+  /?action=get:
+    get:
+      tags:
+        - Public
+        - Events
+      summary: Get Single Event
+      description: Get a single event by ID with all links
+      operationId: getEvent
+      security: []
+      parameters:
+        - name: brand
+          in: query
+          required: true
+          description: Brand ID
+          schema:
+            type: string
+        - name: scope
+          in: query
+          description: Scope
+          schema:
+            type: string
+            default: events
+        - name: id
+          in: query
+          required: true
+          description: Event ID
+          schema:
+            type: string
+        - name: etag
+          in: query
+          description: ETag for SWR/caching
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetEventResponse'
+        '404':
+          description: Event not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /:
+    post:
+      tags:
+        - Authentication
+        - Events
+        - Analytics
+      summary: Execute Admin Action
+      description: |
+        Execute admin actions (requires authentication).
+
+        **Available Actions:**
+        - `generateToken` - Generate JWT token
+        - `create` - Create event
+        - `update` - Update event
+        - `getReport` - Get analytics report
+        - `createShortlink` - Create trackable shortlink
+        - `logEvents` - Batch log analytics
+      operationId: executeAction
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: '#/components/schemas/GenerateTokenRequest'
+                - $ref: '#/components/schemas/CreateEventRequest'
+                - $ref: '#/components/schemas/UpdateEventRequest'
+                - $ref: '#/components/schemas/GetReportRequest'
+                - $ref: '#/components/schemas/CreateShortlinkRequest'
+                - $ref: '#/components/schemas/LogEventsRequest'
+              discriminator:
+                propertyName: action
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/TokenResponse'
+                  - $ref: '#/components/schemas/CreateEventResponse'
+                  - $ref: '#/components/schemas/UpdateEventResponse'
+                  - $ref: '#/components/schemas/ReportResponse'
+                  - $ref: '#/components/schemas/ShortlinkResponse'
+                  - $ref: '#/components/schemas/LogEventsResponse'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  securitySchemes:
+    adminKey:
+      type: apiKey
+      in: body
+      name: adminKey
+      description: Admin secret key in request body
+
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token obtained from generateToken endpoint
+
+    apiKey:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: API key in request header
+
+  schemas:
+    StatusResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+          example: true
+        value:
+          type: object
+          properties:
+            build:
+              type: string
+              example: mvp-v1.0-events-only
+            contract:
+              type: string
+              example: v1
+            dbOk:
+              type: boolean
+              example: true
+            brand:
+              type: string
+              example: root
+
+    ConfigResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        value:
+          type: object
+          properties:
+            brand:
+              type: object
+            templates:
+              type: array
+              items:
+                type: object
+
+    ListEventsResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        value:
+          type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/Event'
+            etag:
+              type: string
+
+    GetEventResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        value:
+          $ref: '#/components/schemas/Event'
+
+    Event:
+      type: object
+      properties:
+        id:
+          type: string
+          example: evt_abc123
+        brandId:
+          type: string
+          example: root
+        templateId:
+          type: string
+          example: Event
+        data:
+          type: object
+          properties:
+            eventName:
+              type: string
+              example: Summer Concert Series
+            eventDate:
+              type: string
+              format: date
+              example: '2025-07-15'
+            eventTime:
+              type: string
+              example: '19:00'
+            locationName:
+              type: string
+              example: Central Park Amphitheater
+            locationAddr:
+              type: string
+            locationCity:
+              type: string
+            locationState:
+              type: string
+            locationZip:
+              type: string
+            contact:
+              type: string
+            description:
+              type: string
+            registrationUrl:
+              type: string
+        publicUrl:
+          type: string
+          format: uri
+        posterUrl:
+          type: string
+          format: uri
+        displayUrl:
+          type: string
+          format: uri
+        createdAt:
+          type: string
+          format: date-time
+        slug:
+          type: string
+
+    GenerateTokenRequest:
+      type: object
+      required:
+        - action
+        - brandId
+        - adminKey
+      properties:
+        action:
+          type: string
+          enum: [generateToken]
+        brandId:
+          type: string
+          example: root
+        adminKey:
+          type: string
+          example: YOUR_ADMIN_SECRET
+        expiresIn:
+          type: integer
+          description: Token expiration in seconds
+          default: 3600
+          example: 3600
+        scope:
+          type: string
+          default: events
+
+    TokenResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        value:
+          type: object
+          properties:
+            token:
+              type: string
+              example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+            expiresIn:
+              type: integer
+              example: 3600
+            expiresAt:
+              type: string
+              format: date-time
+              example: '2025-11-10T15:30:00.000Z'
+            usage:
+              type: string
+              example: 'Authorization: Bearer {token}'
+
+    CreateEventRequest:
+      type: object
+      required:
+        - action
+        - brandId
+        - scope
+        - templateId
+        - data
+      properties:
+        action:
+          type: string
+          enum: [create]
+        brandId:
+          type: string
+          example: root
+        adminKey:
+          type: string
+          description: Required if not using Bearer token or API key
+        scope:
+          type: string
+          example: events
+        templateId:
+          type: string
+          example: Event
+        data:
+          type: object
+          required:
+            - eventName
+            - eventDate
+          properties:
+            eventName:
+              type: string
+            eventDate:
+              type: string
+              format: date
+            eventTime:
+              type: string
+            locationName:
+              type: string
+
+    CreateEventResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        value:
+          type: object
+          properties:
+            id:
+              type: string
+            publicUrl:
+              type: string
+            posterUrl:
+              type: string
+            displayUrl:
+              type: string
+
+    UpdateEventRequest:
+      type: object
+      required:
+        - action
+        - brandId
+        - scope
+        - id
+        - data
+      properties:
+        action:
+          type: string
+          enum: [update]
+        brandId:
+          type: string
+        adminKey:
+          type: string
+        scope:
+          type: string
+        id:
+          type: string
+        data:
+          type: object
+
+    UpdateEventResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        value:
+          type: object
+
+    GetReportRequest:
+      type: object
+      required:
+        - action
+        - brandId
+      properties:
+        action:
+          type: string
+          enum: [getReport]
+        brandId:
+          type: string
+        adminKey:
+          type: string
+        eventId:
+          type: string
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+
+    ReportResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        value:
+          type: object
+          properties:
+            totals:
+              type: object
+            bySurface:
+              type: object
+            bySponsor:
+              type: object
+            byToken:
+              type: object
+
+    CreateShortlinkRequest:
+      type: object
+      required:
+        - action
+        - brandId
+        - targetUrl
+      properties:
+        action:
+          type: string
+          enum: [createShortlink]
+        brandId:
+          type: string
+        adminKey:
+          type: string
+        targetUrl:
+          type: string
+          format: uri
+        eventId:
+          type: string
+        sponsorId:
+          type: string
+        surface:
+          type: string
+
+    ShortlinkResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        value:
+          type: object
+          properties:
+            token:
+              type: string
+            shortlink:
+              type: string
+            targetUrl:
+              type: string
+
+    LogEventsRequest:
+      type: object
+      required:
+        - action
+        - items
+      properties:
+        action:
+          type: string
+          enum: [logEvents]
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              eventId:
+                type: string
+              surface:
+                type: string
+              metric:
+                type: string
+                enum: [view, click, dwell, impression]
+              sponsorId:
+                type: string
+              value:
+                type: number
+              token:
+                type: string
+
+    LogEventsResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        value:
+          type: object
+
+    ErrorResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+          example: false
+        code:
+          type: string
+          enum:
+            - BAD_INPUT
+            - NOT_FOUND
+            - RATE_LIMITED
+            - INTERNAL
+            - CONTRACT
+        message:
+          type: string
+          example: Invalid authentication credentials

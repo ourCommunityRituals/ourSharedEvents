@@ -1,0 +1,301 @@
+<!--
+================================================================================
+MODULE: AdminDiagnostics.html
+PURPOSE: Diagnostics panel for Admin dashboard - SDK logging and debugging
+INCLUDED BY: Admin.html
+DEPENDENCIES: NUSDK.html (NU, NU_DIAG)
+================================================================================
+Story 4.1: Extracted from Admin.html for modularization and maintainability.
+This module provides real-time transport log visualization and debugging tools.
+
+Functions exposed to global scope:
+  - initDiagnosticsPanel()    → Initialize panel, detect environment
+  - toggleDiagDebugMode(bool) → Enable/disable debug mode in production
+  - refreshDiagLogs()         → Refresh log display
+  - setDiagFilter(filter)     → Filter logs by level (all/debug/error)
+  - clearDiagLogs()           → Clear all logs
+  - toggleDiagAutoRefresh(bool) → Toggle auto-refresh
+================================================================================
+-->
+<script>
+(function() {
+  'use strict';
+
+  // Diagnostics state - module-scoped
+  const DIAG_STATE = {
+    filter: 'all',          // 'all' | 'debug' | 'error'
+    autoRefresh: false,
+    autoRefreshInterval: null,
+    debugModeEnabled: false,
+    isProduction: false,
+    isStaging: false
+  };
+
+  /**
+   * Initialize the diagnostics panel.
+   * Auto-detects environment and shows/hides debug toggle accordingly.
+   */
+  function initDiagnosticsPanel() {
+    if (!window.NU || !window.NU_DIAG) {
+      console.warn('[Diag] NU SDK not available');
+      return;
+    }
+
+    // Get environment from NU SDK config
+    const config = NU.getConfig();
+    const hostname = window.location?.hostname || '';
+
+    // Environment detection (matching NUSDK.html logic)
+    const isDomain = (host, domain) =>
+      host === domain || host.endsWith('.' + domain);
+
+    DIAG_STATE.isStaging = isDomain(hostname, 'stg.eventangle.com') ||
+                            hostname === 'localhost' ||
+                            hostname === '127.0.0.1';
+    DIAG_STATE.isProduction = isDomain(hostname, 'eventangle.com') && !DIAG_STATE.isStaging;
+
+    // Set SDK version display
+    const versionEl = document.getElementById('diagSdkVersion');
+    if (versionEl) {
+      versionEl.textContent = NU.VERSION || '?';
+    }
+
+    // Show panel in staging by default, hide in production unless debug enabled
+    const panelWrapper = document.getElementById('diagPanelWrapper');
+    const debugToggle = document.getElementById('diagDebugToggle');
+
+    if (DIAG_STATE.isProduction) {
+      // Production: Show debug toggle, hide panel until debug is enabled
+      if (debugToggle) debugToggle.style.display = 'flex';
+      if (panelWrapper) panelWrapper.style.display = 'none';
+    } else {
+      // Staging/localhost: Show panel directly, hide toggle
+      if (debugToggle) debugToggle.style.display = 'none';
+      if (panelWrapper) panelWrapper.style.display = 'block';
+      // Auto-refresh on load for staging
+      refreshDiagLogs();
+    }
+
+    console.log('[Diag] Panel initialized', {
+      isProduction: DIAG_STATE.isProduction,
+      isStaging: DIAG_STATE.isStaging,
+      logLevel: config.logLevel
+    });
+  }
+
+  /**
+   * Toggle debug mode in production.
+   * When enabled, sets log level to 'debug' and shows the panel.
+   */
+  function toggleDiagDebugMode(enabled) {
+    DIAG_STATE.debugModeEnabled = enabled;
+
+    const panelWrapper = document.getElementById('diagPanelWrapper');
+
+    if (enabled) {
+      // Enable debug logging
+      NU.setLogLevel('debug');
+      if (panelWrapper) panelWrapper.style.display = 'block';
+      refreshDiagLogs();
+      console.log('[Diag] Debug mode enabled');
+    } else {
+      // Restore error-only logging
+      NU.setLogLevel('error');
+      if (panelWrapper) panelWrapper.style.display = 'none';
+      stopDiagAutoRefresh();
+      console.log('[Diag] Debug mode disabled');
+    }
+  }
+
+  /**
+   * Refresh the diagnostics log display.
+   */
+  function refreshDiagLogs() {
+    if (!window.NU_DIAG) {
+      console.warn('[Diag] NU_DIAG not available');
+      return;
+    }
+
+    const container = document.getElementById('diagLogContainer');
+    const statsEl = document.getElementById('diagStats');
+    if (!container) return;
+
+    // Get logs based on filter
+    const options = { limit: 100 };
+    if (DIAG_STATE.filter !== 'all') {
+      options.level = DIAG_STATE.filter;
+    }
+
+    const logs = NU_DIAG.getLogs(options);
+    const stats = NU_DIAG.getStats();
+
+    // Update stats display
+    if (statsEl) {
+      const errorCount = stats.byLevel?.error || 0;
+      const okCount = stats.byType?.ok || 0;
+      statsEl.innerHTML = `
+        <span>Total: ${stats.totalLogs}</span>
+        <span style="color: #4ade80;">OK: ${okCount}</span>
+        ${errorCount > 0 ? `<span style="color: #f87171;">Errors: ${errorCount}</span>` : ''}
+        ${stats.avgDurationMs > 0 ? `<span>Avg: ${stats.avgDurationMs}ms</span>` : ''}
+      `;
+    }
+
+    // Render logs
+    if (logs.length === 0) {
+      container.innerHTML = '<div class="diag-empty">No logs yet. Make an action to see transport logs.</div>';
+      return;
+    }
+
+    // Render logs in reverse chronological order (newest first)
+    const logsReversed = [...logs].reverse();
+    container.innerHTML = logsReversed.map(log => renderDiagLogEntry(log)).join('');
+  }
+
+  /**
+   * Render a single log entry as HTML.
+   * @private
+   */
+  function renderDiagLogEntry(log) {
+    const time = formatDiagTime(log.timestamp);
+    const levelClass = `level-${log.level || 'debug'}`;
+    const typeClass = `type-${log.type || 'unknown'}`;
+
+    // Build details string
+    const details = [];
+    if (log.path) details.push(`<span class="diag-log-path">${escapeHtml(log.path)}</span>`);
+    if (log.durationMs) details.push(`<span class="diag-log-duration">${log.durationMs}ms</span>`);
+    if (log.code) details.push(`code:${escapeHtml(log.code)}`);
+    if (log.error) details.push(`err:${escapeHtml(truncate(log.error, 50))}`);
+    if (log.message && log.type !== 'init') details.push(escapeHtml(truncate(log.message, 60)));
+    if (log.transport) details.push(`via:${log.transport}`);
+    if (log.hasValue !== undefined) details.push(log.hasValue ? 'has-value' : 'no-value');
+    if (log.payloadKeys?.length) details.push(`keys:[${log.payloadKeys.join(',')}]`);
+
+    // For init logs, show environment info
+    if (log.type === 'init') {
+      details.push(`env:${log.isProduction ? 'prod' : log.isStaging ? 'staging' : 'dev'}`);
+      details.push(`level:${log.logLevel || '?'}`);
+    }
+
+    return `
+      <div class="diag-log-entry ${levelClass}" data-testid="diag-log-entry">
+        <span class="diag-log-time">${time}</span>
+        <span class="diag-log-type ${typeClass}">${log.type || '?'}</span>
+        <span class="diag-log-details">${details.join(' ')}</span>
+      </div>
+    `;
+  }
+
+  /**
+   * Format timestamp for display.
+   * @private
+   */
+  function formatDiagTime(isoString) {
+    if (!isoString) return '--:--:--';
+    try {
+      const date = new Date(isoString);
+      return date.toLocaleTimeString('en-US', {
+        hour12: false,
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+      });
+    } catch {
+      return '--:--:--';
+    }
+  }
+
+  /**
+   * Truncate string for display.
+   * @private
+   */
+  function truncate(str, maxLen) {
+    if (!str || str.length <= maxLen) return str || '';
+    return str.slice(0, maxLen) + '...';
+  }
+
+  /**
+   * Escape HTML special characters.
+   * @private
+   */
+  function escapeHtml(str) {
+    if (!str) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  /**
+   * Set log filter.
+   */
+  function setDiagFilter(filter) {
+    DIAG_STATE.filter = filter;
+
+    // Update button states
+    ['All', 'Debug', 'Error'].forEach(f => {
+      const btn = document.getElementById(`diagFilter${f}`);
+      if (btn) {
+        btn.classList.toggle('active', f.toLowerCase() === filter || (f === 'All' && filter === 'all'));
+      }
+    });
+
+    refreshDiagLogs();
+  }
+
+  /**
+   * Clear all logs.
+   */
+  function clearDiagLogs() {
+    if (window.NU_DIAG) {
+      NU_DIAG.clearLogs();
+      refreshDiagLogs();
+    }
+  }
+
+  /**
+   * Toggle auto-refresh.
+   */
+  function toggleDiagAutoRefresh(enabled) {
+    DIAG_STATE.autoRefresh = enabled;
+
+    if (enabled) {
+      // Refresh every 2 seconds
+      DIAG_STATE.autoRefreshInterval = setInterval(refreshDiagLogs, 2000);
+      console.log('[Diag] Auto-refresh enabled');
+    } else {
+      stopDiagAutoRefresh();
+    }
+  }
+
+  /**
+   * Stop auto-refresh.
+   * @private
+   */
+  function stopDiagAutoRefresh() {
+    if (DIAG_STATE.autoRefreshInterval) {
+      clearInterval(DIAG_STATE.autoRefreshInterval);
+      DIAG_STATE.autoRefreshInterval = null;
+    }
+    DIAG_STATE.autoRefresh = false;
+    const checkbox = document.getElementById('diagAutoRefresh');
+    if (checkbox) checkbox.checked = false;
+    console.log('[Diag] Auto-refresh stopped');
+  }
+
+  // Expose functions to global scope for HTML onclick handlers
+  window.initDiagnosticsPanel = initDiagnosticsPanel;
+  window.toggleDiagDebugMode = toggleDiagDebugMode;
+  window.refreshDiagLogs = refreshDiagLogs;
+  window.setDiagFilter = setDiagFilter;
+  window.clearDiagLogs = clearDiagLogs;
+  window.toggleDiagAutoRefresh = toggleDiagAutoRefresh;
+
+  // Initialize diagnostics panel when DOM is ready
+  document.addEventListener('DOMContentLoaded', initDiagnosticsPanel);
+
+})();
+</script>

@@ -1,0 +1,360 @@
+# Manual Rollback Workflow
+#
+# EPIC 5 - Story 5.1: Worker Rollback Capability
+#
+# Purpose / Value:
+#   Emergency rollback to previous Worker deployment without full pipeline.
+#   Uses wrangler deployments list + wrangler rollback
+#
+# Flow:
+#   1. Manual dispatch with environment selection
+#   2. List current deployments (for visibility)
+#   3. Execute rollback to N-1 version
+#   4. Verify health check
+#
+# Acceptance Criteria:
+#   - Single-click rollback from GitHub Actions UI
+#   - Supports both staging and production
+#   - Health verification after rollback
+#   - Clear deployment history visibility
+#
+# Required Secrets:
+#   - CLOUDFLARE_API_TOKEN: Cloudflare API token for Worker deployment
+
+name: Manual Rollback
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to rollback'
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
+          - both
+        default: 'staging'
+      skip_health_check:
+        description: 'Skip health check after rollback'
+        required: false
+        default: 'false'
+        type: boolean
+      dry_run:
+        description: 'Dry run (list deployments only, no rollback)'
+        required: false
+        default: 'false'
+        type: boolean
+
+# Prevent concurrent rollbacks
+concurrency:
+  group: rollback-${{ github.event.inputs.environment }}
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: '18'
+  STG_BASE_URL: 'https://stg.eventangle.com'
+  PROD_BASE_URL: 'https://www.eventangle.com'
+
+jobs:
+  # ==========================================================================
+  # PRE-FLIGHT: Validate secrets and environment
+  # ==========================================================================
+  preflight:
+    name: Pre-Flight Check
+    runs-on: ubuntu-latest
+    outputs:
+      rollback_staging: ${{ steps.check.outputs.rollback_staging }}
+      rollback_production: ${{ steps.check.outputs.rollback_production }}
+
+    steps:
+      - name: Validate Cloudflare secrets
+        run: |
+          if [ -z "${{ secrets.CLOUDFLARE_API_TOKEN }}" ]; then
+            echo "::error::Missing required secret: CLOUDFLARE_API_TOKEN"
+            exit 1
+          fi
+          echo "CLOUDFLARE_API_TOKEN is set"
+
+      - name: Determine rollback targets
+        id: check
+        run: |
+          ENV="${{ github.event.inputs.environment }}"
+          echo "Selected environment: $ENV"
+
+          case "$ENV" in
+            staging)
+              echo "rollback_staging=true" >> $GITHUB_OUTPUT
+              echo "rollback_production=false" >> $GITHUB_OUTPUT
+              ;;
+            production)
+              echo "rollback_staging=false" >> $GITHUB_OUTPUT
+              echo "rollback_production=true" >> $GITHUB_OUTPUT
+              ;;
+            both)
+              echo "rollback_staging=true" >> $GITHUB_OUTPUT
+              echo "rollback_production=true" >> $GITHUB_OUTPUT
+              ;;
+          esac
+
+      - name: Create preflight summary
+        run: |
+          echo "## Manual Rollback" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Setting | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|---------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| **Environment** | \`${{ github.event.inputs.environment }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Dry Run** | \`${{ github.event.inputs.dry_run }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Skip Health Check** | \`${{ github.event.inputs.skip_health_check }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Initiated By** | \`${{ github.actor }}\` |" >> $GITHUB_STEP_SUMMARY
+
+  # ==========================================================================
+  # STAGING ROLLBACK
+  # ==========================================================================
+  rollback-staging:
+    name: Rollback Staging
+    runs-on: ubuntu-latest
+    needs: [preflight]
+    if: needs.preflight.outputs.rollback_staging == 'true'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install Wrangler
+        run: npm install -g wrangler@3
+
+      - name: List staging deployments
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          echo "=============================================="
+          echo "STAGING DEPLOYMENT HISTORY"
+          echo "=============================================="
+          echo ""
+          cd cloudflare-proxy
+          wrangler deployments list --env staging
+          echo ""
+
+      - name: Execute staging rollback
+        if: github.event.inputs.dry_run != 'true'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          echo "=============================================="
+          echo "ROLLING BACK STAGING"
+          echo "=============================================="
+          echo ""
+          cd cloudflare-proxy
+          wrangler rollback --env staging
+          echo ""
+          echo "=============================================="
+          echo "STAGING ROLLBACK COMPLETE"
+          echo "=============================================="
+
+      - name: Dry run notice
+        if: github.event.inputs.dry_run == 'true'
+        run: |
+          echo "=============================================="
+          echo "DRY RUN - No rollback executed"
+          echo "=============================================="
+          echo "Would have rolled back staging to previous version"
+
+      - name: Verify staging health
+        if: github.event.inputs.dry_run != 'true' && github.event.inputs.skip_health_check != 'true'
+        run: |
+          echo "Waiting for edge propagation..."
+          sleep 10
+
+          echo "Verifying staging health..."
+          RESPONSE=$(curl -s -w "\n%{http_code}" "${{ env.STG_BASE_URL }}/api/status" || echo "CURL_FAILED")
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+          BODY=$(echo "$RESPONSE" | sed '$d')
+
+          echo "HTTP Status: $HTTP_CODE"
+
+          if [ "$HTTP_CODE" = "200" ]; then
+            echo "Staging health check PASSED"
+            echo "$BODY" | jq . 2>/dev/null || echo "$BODY"
+          else
+            echo "::warning::Staging health check returned HTTP $HTTP_CODE"
+          fi
+
+      - name: Create staging rollback summary
+        if: always()
+        run: |
+          echo "## Staging Rollback" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
+            echo "### DRY RUN" >> $GITHUB_STEP_SUMMARY
+            echo "No changes made. Review deployment list above." >> $GITHUB_STEP_SUMMARY
+          elif [ "${{ job.status }}" = "success" ]; then
+            echo "### ROLLED BACK" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**URL:** ${{ env.STG_BASE_URL }}" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### FAILED" >> $GITHUB_STEP_SUMMARY
+            echo "Rollback failed. Check logs for details." >> $GITHUB_STEP_SUMMARY
+          fi
+
+  # ==========================================================================
+  # PRODUCTION ROLLBACK
+  # ==========================================================================
+  rollback-production:
+    name: Rollback Production
+    runs-on: ubuntu-latest
+    needs: [preflight]
+    if: needs.preflight.outputs.rollback_production == 'true'
+    # Production rollback requires extra confirmation via environment protection
+    environment:
+      name: production-rollback
+      url: https://www.eventangle.com
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install Wrangler
+        run: npm install -g wrangler@3
+
+      - name: List production deployments
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          echo "=============================================="
+          echo "PRODUCTION DEPLOYMENT HISTORY"
+          echo "=============================================="
+          echo ""
+          cd cloudflare-proxy
+          wrangler deployments list --env production
+          echo ""
+
+      - name: Execute production rollback
+        if: github.event.inputs.dry_run != 'true'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          echo "=============================================="
+          echo "ROLLING BACK PRODUCTION"
+          echo "=============================================="
+          echo ""
+          echo "WARNING: This affects live traffic!"
+          echo ""
+          cd cloudflare-proxy
+          wrangler rollback --env production
+          echo ""
+          echo "=============================================="
+          echo "PRODUCTION ROLLBACK COMPLETE"
+          echo "=============================================="
+
+      - name: Dry run notice
+        if: github.event.inputs.dry_run == 'true'
+        run: |
+          echo "=============================================="
+          echo "DRY RUN - No rollback executed"
+          echo "=============================================="
+          echo "Would have rolled back production to previous version"
+
+      - name: Verify production health
+        if: github.event.inputs.dry_run != 'true' && github.event.inputs.skip_health_check != 'true'
+        run: |
+          echo "Waiting for edge propagation..."
+          sleep 15
+
+          echo "Verifying production health..."
+          RESPONSE=$(curl -s -w "\n%{http_code}" "${{ env.PROD_BASE_URL }}/api/status" || echo "CURL_FAILED")
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+          BODY=$(echo "$RESPONSE" | sed '$d')
+
+          echo "HTTP Status: $HTTP_CODE"
+
+          if [ "$HTTP_CODE" = "200" ]; then
+            echo "Production health check PASSED"
+            echo "$BODY" | jq . 2>/dev/null || echo "$BODY"
+          else
+            echo "::warning::Production health check returned HTTP $HTTP_CODE"
+          fi
+
+      - name: Create production rollback summary
+        if: always()
+        run: |
+          echo "## Production Rollback" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
+            echo "### DRY RUN" >> $GITHUB_STEP_SUMMARY
+            echo "No changes made. Review deployment list above." >> $GITHUB_STEP_SUMMARY
+          elif [ "${{ job.status }}" = "success" ]; then
+            echo "### ROLLED BACK" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**URL:** ${{ env.PROD_BASE_URL }}" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### FAILED" >> $GITHUB_STEP_SUMMARY
+            echo "Rollback failed. Check logs for details." >> $GITHUB_STEP_SUMMARY
+          fi
+
+  # ==========================================================================
+  # FINAL SUMMARY
+  # ==========================================================================
+  summary:
+    name: Rollback Summary
+    runs-on: ubuntu-latest
+    needs: [preflight, rollback-staging, rollback-production]
+    if: always()
+
+    steps:
+      - name: Create final summary
+        run: |
+          echo "# Manual Rollback Complete" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          STG="${{ needs.rollback-staging.result }}"
+          PROD="${{ needs.rollback-production.result }}"
+          DRY_RUN="${{ github.event.inputs.dry_run }}"
+
+          echo "| Environment | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------------|--------|" >> $GITHUB_STEP_SUMMARY
+
+          if [ "${{ needs.preflight.outputs.rollback_staging }}" = "true" ]; then
+            if [ "$DRY_RUN" = "true" ]; then
+              echo "| Staging | DRY RUN |" >> $GITHUB_STEP_SUMMARY
+            elif [ "$STG" = "success" ]; then
+              echo "| Staging | ROLLED BACK |" >> $GITHUB_STEP_SUMMARY
+            elif [ "$STG" = "skipped" ]; then
+              echo "| Staging | SKIPPED |" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "| Staging | FAILED |" >> $GITHUB_STEP_SUMMARY
+            fi
+          fi
+
+          if [ "${{ needs.preflight.outputs.rollback_production }}" = "true" ]; then
+            if [ "$DRY_RUN" = "true" ]; then
+              echo "| Production | DRY RUN |" >> $GITHUB_STEP_SUMMARY
+            elif [ "$PROD" = "success" ]; then
+              echo "| Production | ROLLED BACK |" >> $GITHUB_STEP_SUMMARY
+            elif [ "$PROD" = "skipped" ]; then
+              echo "| Production | SKIPPED |" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "| Production | FAILED |" >> $GITHUB_STEP_SUMMARY
+            fi
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### CLI Commands" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+          echo "# Local rollback commands" >> $GITHUB_STEP_SUMMARY
+          echo "npm run rollback:staging   # Rollback staging" >> $GITHUB_STEP_SUMMARY
+          echo "npm run rollback:prod      # Rollback production" >> $GITHUB_STEP_SUMMARY
+          echo "npm run rollback:list      # List all deployments" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY

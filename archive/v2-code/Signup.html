@@ -1,0 +1,306 @@
+<!--
+================================================================================
+EXPERIMENTAL - v2+ (Not MVP)
+================================================================================
+Page: Signup.html
+Purpose: Sign-up forms management interface
+Status: NOT included in MVP focus group testing
+
+This page is for advanced form management and is not part of the core MVP surfaces.
+================================================================================
+-->
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <title><?= appTitle ?> · Sign-Up Forms Management</title>
+  <?!= include('Header'); ?>
+  <?!= include('HeaderInit'); ?>
+  <?!= include('NUSDK'); ?>
+  <?!= include('SharedUtils'); ?>
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+  <meta name="referrer" content="no-referrer"/>
+  <?!= include('Styles'); ?>
+  <style>
+    /* Page-specific styles (green theme gradient) */
+    body {
+      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+      min-height: 100vh;
+      padding: 2rem 1rem;
+    }
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    /* Theme-specific accent color override */
+    .nav-breadcrumb a {
+      color: #10b981;
+    }
+    /* Form type cards - page specific */
+    .form-types-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 1.5rem;
+      margin-top: 1.5rem;
+    }
+    .form-type-card {
+      background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+      border: 2px solid #10b981;
+      border-radius: 12px;
+      padding: 2rem;
+      text-align: center;
+      transition: all 0.2s;
+      cursor: pointer;
+    }
+    .form-type-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 8px 16px rgba(16, 185, 129, 0.3);
+    }
+    .form-type-card .icon {
+      font-size: 3rem;
+      margin-bottom: 1rem;
+    }
+    .form-type-card h3 {
+      margin: 0 0 0.5rem 0;
+      font-size: 1.25rem;
+      color: #1f2937;
+    }
+    .form-type-card .description {
+      font-size: 0.875rem;
+      color: #6b7280;
+      margin-bottom: 1.5rem;
+    }
+    .form-type-card .btn {
+      background: #10b981;
+      color: white;
+      padding: 0.75rem 1.5rem;
+      border-radius: 8px;
+      text-decoration: none;
+      display: inline-block;
+      font-weight: 600;
+      transition: all 0.2s;
+    }
+    .form-type-card .btn:hover {
+      background: #059669;
+    }
+    /* Info box - page specific styling */
+    .info-box {
+      background: #dbeafe;
+      border-left: 4px solid #3b82f6;
+      padding: 1.5rem;
+      border-radius: 8px;
+      margin: 1.5rem 0;
+    }
+    .info-box h3 {
+      margin: 0 0 0.5rem 0;
+      color: #1e40af;
+      font-size: 1.125rem;
+    }
+    .info-box ul {
+      margin: 0.5rem 0 0 1.5rem;
+      color: #1f2937;
+    }
+    .info-box ul li {
+      margin: 0.5rem 0;
+    }
+    /* Integration steps - page specific */
+    .integration-info {
+      background: #f9fafb;
+      border: 2px solid #e5e7eb;
+      border-radius: 12px;
+      padding: 1.5rem;
+      margin-top: 1.5rem;
+    }
+    .integration-info h4 {
+      margin: 0 0 1rem 0;
+      color: #1f2937;
+      font-size: 1.125rem;
+    }
+    .integration-step {
+      display: flex;
+      gap: 1rem;
+      margin-bottom: 1rem;
+      padding-bottom: 1rem;
+      border-bottom: 1px solid #e5e7eb;
+    }
+    .integration-step:last-child {
+      border-bottom: none;
+      margin-bottom: 0;
+      padding-bottom: 0;
+    }
+    .step-number {
+      background: #10b981;
+      color: white;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      flex-shrink: 0;
+    }
+    .step-content {
+      flex: 1;
+    }
+    .step-content strong {
+      color: #1f2937;
+      display: block;
+      margin-bottom: 0.25rem;
+    }
+    .step-content span {
+      color: #6b7280;
+      font-size: 0.875rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <div class="page-header-card">
+      <div class="nav-breadcrumb">
+        <a href="?page=test&brand=<?= brandId ?>">← Back to Dashboard</a>
+      </div>
+      <h1>
+        <span>📝</span>
+        Sign-Up Forms Management
+      </h1>
+      <div class="subtitle">Create and manage registration, check-in, walk-in, and survey forms for your events</div>
+    </div>
+
+    <!-- Form Types Section -->
+    <div class="page-section">
+      <h2>Available Form Types</h2>
+      <p style="color: #6b7280; margin-bottom: 1.5rem;">
+        Choose a form type to create. Forms are powered by Google Forms and automatically integrate with your events.
+      </p>
+
+      <div class="form-types-grid">
+        <!-- Registration Form -->
+        <div class="form-type-card">
+          <div class="icon">📝</div>
+          <h3>Registration Form</h3>
+          <div class="description">
+            Collect attendee information before the event. Includes name, email, contact details, and custom questions.
+          </div>
+          <a href="?page=admin&brand=<?= brandId ?>#forms" class="btn">Create Registration Form</a>
+        </div>
+
+        <!-- Check-In Form -->
+        <div class="form-type-card">
+          <div class="icon">✅</div>
+          <h3>Check-In Form</h3>
+          <div class="description">
+            Quick check-in for registered attendees at the door. Verify attendance and collect additional data.
+          </div>
+          <a href="?page=admin&brand=<?= brandId ?>#forms" class="btn">Create Check-In Form</a>
+        </div>
+
+        <!-- Walk-In Form -->
+        <div class="form-type-card">
+          <div class="icon">🚶</div>
+          <h3>Walk-In Form</h3>
+          <div class="description">
+            Register attendees who arrive without prior registration. Capture essential information on-site.
+          </div>
+          <a href="?page=admin&brand=<?= brandId ?>#forms" class="btn">Create Walk-In Form</a>
+        </div>
+
+        <!-- Survey Form -->
+        <div class="form-type-card">
+          <div class="icon">💬</div>
+          <h3>Survey Form</h3>
+          <div class="description">
+            Gather feedback after the event. Measure satisfaction and collect insights for future events.
+          </div>
+          <a href="?page=admin&brand=<?= brandId ?>#forms" class="btn">Create Survey Form</a>
+        </div>
+      </div>
+    </div>
+
+    <!-- How It Works Section -->
+    <div class="page-section">
+      <h2>How Sign-Up Forms Work</h2>
+
+      <div class="info-box">
+        <h3>📋 Triangle Framework Integration</h3>
+        <ul>
+          <li><strong>Before Event:</strong> Create forms and share registration links via posters, social media, and email</li>
+          <li><strong>During Event:</strong> Use check-in and walk-in forms at the venue entrance for attendance tracking</li>
+          <li><strong>After Event:</strong> Send survey forms to gather feedback and measure event success</li>
+        </ul>
+      </div>
+
+      <div class="integration-info">
+        <h4>🔗 Integration Steps</h4>
+
+        <div class="integration-step">
+          <div class="step-number">1</div>
+          <div class="step-content">
+            <strong>Create Form in Google Forms</strong>
+            <span>Use Google Forms templates or create custom forms with your questions</span>
+          </div>
+        </div>
+
+        <div class="integration-step">
+          <div class="step-number">2</div>
+          <div class="step-content">
+            <strong>Get Form URL</strong>
+            <span>Copy the public link from Google Forms (Send → Link)</span>
+          </div>
+        </div>
+
+        <div class="integration-step">
+          <div class="step-number">3</div>
+          <div class="step-content">
+            <strong>Add to Event in Admin Dashboard</strong>
+            <span>Paste the form URL into the appropriate field when creating/editing an event</span>
+          </div>
+        </div>
+
+        <div class="integration-step">
+          <div class="step-number">4</div>
+          <div class="step-content">
+            <strong>Generate Shortlinks</strong>
+            <span>System automatically creates trackable shortlinks for analytics</span>
+          </div>
+        </div>
+
+        <div class="integration-step">
+          <div class="step-number">5</div>
+          <div class="step-content">
+            <strong>Share Across Surfaces</strong>
+            <span>Forms appear on Public page, Posters (QR codes), and Display screens</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Quick Actions Section -->
+    <div class="page-section">
+      <h2>Quick Actions</h2>
+      <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+        <a href="?page=admin&brand=<?= brandId ?>" class="btn-secondary">
+          ⚙️ Go to Admin Dashboard
+        </a>
+        <a href="?page=poster&brand=<?= brandId ?>" class="btn-secondary">
+          🖼️ View Posters with QR Codes
+        </a>
+        <a href="?p=events&brand=<?= brandId ?>" class="btn-secondary">
+          🌐 View Public Event Page
+        </a>
+        <a href="?page=report&brand=<?= brandId ?>" class="btn-secondary">
+          📊 View Form Analytics
+        </a>
+      </div>
+    </div>
+
+    <!-- Back to Dashboard Button -->
+    <div style="text-align: center; margin-top: 2rem;">
+      <a href="?page=test&brand=<?= brandId ?>" class="btn-secondary">
+        ← Back to Triangle Dashboard
+      </a>
+    </div>
+  </div>
+</body>
+</html>

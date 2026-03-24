@@ -1,0 +1,211 @@
+# Banned Origins Allowlist - Story 3
+#
+# This file lists files that are ALLOWED to contain banned GAS origin patterns.
+# Each entry must include a justification comment explaining why it's allowed.
+#
+# Format:
+#   # Justification: <reason>
+#   path/to/file.ext
+#
+# Allowlisted paths are relative to the repository root.
+#
+# Categories of legitimate references:
+#   1. Documentation files (explaining migration or history)
+#   2. Configuration files for deployment tooling (clasp)
+#   3. Historical/archived code (not executed at runtime)
+#   4. Test files checking for ABSENCE of patterns (negative assertions)
+#
+# HOW TO ADD AN ENTRY:
+#   1. Add a justification comment explaining why the file needs the pattern
+#   2. Add the path on the next line
+#   3. The entry will be reviewed during code review
+#   4. Never allowlist runtime code that actually CALLS GAS URLs
+#
+# =============================================================================
+# DEPLOYMENT CONFIGURATION FILES
+# =============================================================================
+# Justification: Deployment manifest contains historical GAS deployment IDs for audit trail
+# These are documentation-only; Worker uses SHEETS_SPREADSHEET_ID secret instead
+deploy-manifest.json
+
+# Justification: Clasp CLI configuration files for Google Apps Script (archived)
+# These are used by clasp CLI only, not at runtime
+.clasp.json
+.clasp-staging.json
+.clasp-production.json
+.clasp.json.archived
+.clasp-staging.json.archived
+.clasp-production.json.archived
+.clasp.tmp
+
+# =============================================================================
+# HISTORICAL / MIGRATION REFERENCE FILES
+# =============================================================================
+# Justification: Migration reference showing old GAS upstream configuration
+# Kept as template example only - Worker reads from env vars, not this file
+config/gas-upstream.template.json
+
+# Justification: Deployment IDs module contains historical GAS URLs for reference
+# Used for documentation and legacy URL construction only - not for runtime API calls
+config/deployment-ids.js
+
+# =============================================================================
+# DOCUMENTATION FILES (*.md automatically excluded)
+# =============================================================================
+# All .md files are automatically excluded from scanning.
+# This includes:
+#   - docs/**/*.md
+#   - README.md
+#   - CHANGELOG.md
+#   - etc.
+
+# =============================================================================
+# ARCHIVED CODE
+# =============================================================================
+# The entire archive/ directory is automatically excluded from scanning.
+# This includes all archived GAS code that is no longer in active use.
+
+# =============================================================================
+# SCHEMA & API TESTING FILES
+# =============================================================================
+# The following directories are automatically excluded:
+#   - schemas/**    (JSON Schema examples)
+#   - postman/**    (Postman collection examples)
+
+# =============================================================================
+# TEST FILES WITH NEGATIVE ASSERTIONS
+# =============================================================================
+# Test files that CHECK for the ABSENCE of GAS patterns are automatically
+# detected and excluded. The script recognizes patterns like:
+#   - expect(...).not.toContain('script.google.com')
+#   - expect(...).not.toMatch(/google\.script\.run/)
+#   - etc.
+#
+# If you have a test file that needs explicit allowlisting:
+# Justification: Test file validates GAS patterns are NOT present in production code
+# tests/contract/gas-html-guardrails.contract.test.js
+
+# =============================================================================
+# TEST FILES WITH DOCUMENTATION COMMENTS
+# =============================================================================
+# Test files that contain JSDoc comments showing legacy BASE_URL examples
+# These are documentation-only, not actual GAS calls
+#
+# Justification: JSDoc comment showing legacy usage example - not runtime code
+tests/api/mvp-bundle-contracts.test.js
+tests/config/environments.js
+tests/e2e/config.js
+tests/e2e/1-smoke/api-contract.spec.js
+tests/e2e/1-smoke/critical-smoke.spec.js
+tests/e2e/1-smoke/security-smoke.spec.js
+tests/e2e/2-pages/admin-page.spec.js
+tests/e2e/2-pages/config-page.spec.js
+tests/e2e/2-pages/display-page.spec.js
+tests/e2e/2-pages/poster-page.spec.js
+tests/e2e/2-pages/public-page.spec.js
+tests/e2e/3-flows/admin-flows.spec.js
+tests/e2e/3-flows/admin-wizard-flow.spec.js
+tests/e2e/3-flows/advanced-display-features.spec.js
+tests/e2e/3-flows/customer-flows.spec.js
+tests/e2e/3-flows/forms-templates.spec.js
+tests/e2e/3-flows/poster-maps-integration.spec.js
+tests/e2e/3-flows/shared-report-name-resolution.spec.js
+tests/e2e/3-flows/shared-reporting.spec.js
+tests/e2e/3-flows/sponsor-flows.spec.js
+tests/e2e/3-flows/triangle-framework.spec.js
+tests/shared/config/test.config.js
+tests/smoke/api.smoke.test.js
+tests/smoke/components.smoke.test.js
+tests/smoke/pages.smoke.test.js
+
+# =============================================================================
+# CONTRACT TEST FILES WITH MOCK DATA
+# =============================================================================
+# Contract tests that contain mock response data with placeholder GAS URLs
+# These are schema validation tests, not actual GAS calls
+#
+# Justification: Mock data with placeholder URLs for contract validation
+tests/contract/all-endpoints.contract.test.js
+tests/contract/api.contract.test.js
+tests/contract/gas-html-guardrails.contract.test.js
+tests/contract/worker-gas-routing.contract.test.js
+
+# =============================================================================
+# SMOKE TEST FILES WITH DOCUMENTATION
+# =============================================================================
+# Smoke tests that contain documentation about legacy GAS testing
+#
+# Justification: Documentation comments explaining migration from GAS
+tests/api/smoke/gas-html-integrity.spec.ts
+tests/api/smoke/worker-gas-routing.spec.ts
+
+# =============================================================================
+# INTEGRATION TEST FILES
+# =============================================================================
+# Integration tests that contain mock data with placeholder GAS URLs
+#
+# Justification: Mock upstream URL for testing health origin endpoint
+tests/integration/story3.1-healthOrigin.integration.test.js
+
+# =============================================================================
+# LOAD TEST FILES
+# =============================================================================
+# Load test files that contain legacy URL patterns for backwards compatibility
+# These files need updates to default to staging (see Story 3 acceptance criteria)
+#
+# Justification: Load test helpers with legacy GAS URL fallback - should be updated
+tests/load/helpers.js
+
+# =============================================================================
+# TRIANGLE FRAMEWORK TEST FILES
+# =============================================================================
+# Contract tests for the Triangle framework with mock shortlink data
+#
+# Justification: Mock shortlink data with placeholder URLs
+tests/triangle/before-event/contract/shortlinks.contract.test.js
+
+# =============================================================================
+# LEGACY WORKER CODE (Story 5.2 - DEPRECATED GAS SUPPORT)
+# =============================================================================
+# These files contain legacy GAS URL construction that is DEPRECATED.
+# BACKEND_MODE = "worker" means no GAS calls are actually made.
+# The GAS URLs are fallbacks that are overridden by environment variables.
+#
+# TODO: Refactor to remove GAS URL fallbacks entirely per Story 3 AC:
+#       "Remove dead or commented-out code referencing GAS endpoints."
+#
+# Justification: Legacy fallback code - worker-only mode active, GAS not called
+cloudflare-proxy/worker.js
+
+# =============================================================================
+# HTML TEMPLATES WITH JSDOC DOCUMENTATION
+# =============================================================================
+# HTML templates that contain JSDoc examples in embedded <script> tags
+# These are documentation examples only, not actual GAS calls
+#
+# Justification: JSDoc example in embedded NUSDK showing legacy execUrl pattern
+src/mvp/NUSDK.html
+cloudflare-proxy/templates/admin.html
+cloudflare-proxy/templates/display.html
+cloudflare-proxy/templates/poster.html
+cloudflare-proxy/templates/public.html
+cloudflare-proxy/templates/report.html
+
+# =============================================================================
+# CONFIGURATION FILES WITH DOCUMENTATION
+# =============================================================================
+# Configuration files that contain documentation about legacy GAS URLs
+#
+# Justification: Documentation comment explaining GAS URL pattern
+config/environments.js
+
+# =============================================================================
+# ROOT CONFIGURATION / SPECIFICATION FILES
+# =============================================================================
+# Root-level files with example/documentation URLs
+#
+# Justification: Example env file with legacy BASE_URL documentation
+.env.example
+
+# Justification: OpenAPI spec with legacy server URL for historical reference
+openapi.yaml

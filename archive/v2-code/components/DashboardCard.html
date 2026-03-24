@@ -1,0 +1,395 @@
+<!--
+  Event Dashboard Card Component
+
+  Shows:
+  - Event lifecycle phase indicator
+  - Statistics (views, impressions, CTR, engagement)
+  - Phase progress bars (pre-event, event-day, post-event)
+
+  Props:
+  - eventData: Current event data object
+-->
+<section
+  id="dashboardCard"
+  class="card"
+  role="region"
+  aria-label="Event Dashboard and Analytics"
+  style="display:none;">
+
+  <div class="card-header">
+    <h2 id="dashboardCard-title">Event Dashboard</h2>
+  </div>
+
+  <div class="card-body">
+    <!-- Event Phase Indicator -->
+    <div id="eventPhaseIndicator" role="status" aria-live="polite"></div>
+
+    <!-- Statistics Grid -->
+    <div class="stats-grid" style="margin-top: 20px;" role="group" aria-label="Event Statistics">
+      <div class="stat-card blue" role="article">
+        <div class="stat-value" id="statViews" aria-label="Total Views">-</div>
+        <div class="stat-label">Total Views</div>
+      </div>
+      <div class="stat-card green" role="article">
+        <div class="stat-value" id="statImpressions" aria-label="Sponsor Impressions">-</div>
+        <div class="stat-label">Sponsor Impressions</div>
+      </div>
+      <div class="stat-card purple" role="article">
+        <div class="stat-value" id="statCTR" aria-label="Click-Through Rate">-</div>
+        <div class="stat-label">Click-Through Rate</div>
+      </div>
+      <div class="stat-card orange" role="article">
+        <div class="stat-value" id="statEngagement" aria-label="Engagement Score">-</div>
+        <div class="stat-label">Engagement Score</div>
+      </div>
+    </div>
+
+    <!-- Event Lifecycle Progress -->
+    <h3 style="margin-top: 24px;">Event Lifecycle</h3>
+
+    <div class="metric-card" role="article" aria-labelledby="pre-event-title">
+      <div class="metric-header">
+        <span class="metric-title" id="pre-event-title">Pre-Event Phase</span>
+        <span class="phase-indicator pre-event" aria-label="Phase status">Preparation</span>
+      </div>
+      <p style="color: #64748b; font-size: 14px; margin-top: 8px;">
+        Advertising with sponsors, creating posters, setting up displays, and getting the public to register
+      </p>
+      <div class="progress-bar" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" aria-label="Pre-event phase progress">
+        <div class="progress-bar-fill" id="preEventProgress" style="width: 0%"></div>
+      </div>
+    </div>
+
+    <div class="metric-card" role="article" aria-labelledby="event-day-title">
+      <div class="metric-header">
+        <span class="metric-title" id="event-day-title">Event Day</span>
+        <span class="phase-indicator event-day" aria-label="Phase status">Active</span>
+      </div>
+      <p style="color: #64748b; font-size: 14px; margin-top: 8px;">
+        Public reminders, displays at entrance, check-in at door, sponsor banners rotating on screens
+      </p>
+      <div class="progress-bar" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" aria-label="Event day progress">
+        <div class="progress-bar-fill green" id="eventDayProgress" style="width: 0%"></div>
+      </div>
+    </div>
+
+    <div class="metric-card" role="article" aria-labelledby="post-event-title">
+      <div class="metric-header">
+        <span class="metric-title" id="post-event-title">Post-Event Phase</span>
+        <span class="phase-indicator post-event" aria-label="Phase status">Analytics</span>
+      </div>
+      <p style="color: #64748b; font-size: 14px; margin-top: 8px;">
+        CTR analysis, sponsor impressions per screen/time/location, ROI calculations
+      </p>
+      <div class="progress-bar" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" aria-label="Post-event phase progress">
+        <div class="progress-bar-fill orange" id="postEventProgress" style="width: 0%"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script>
+/**
+ * Dashboard Card Controller
+ */
+(function() {
+  'use strict';
+
+  window.DashboardCard = {
+    /**
+     * Initialize dashboard with event data
+     */
+    init: function(eventData) {
+      if (!eventData) return;
+
+      this.updatePhase(eventData);
+      this.updateStats(eventData);
+      this.show();
+    },
+
+    /**
+     * Update event phase indicator and progress bars
+     */
+    updatePhase: function(eventData) {
+      const d = eventData.data || {};
+      const eventDate = new Date(d.dateISO || '');
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const eventDay = new Date(eventDate);
+      eventDay.setHours(0, 0, 0, 0);
+
+      let phase = 'pre-event';
+      let phaseLabel = 'Pre-Event Preparation';
+
+      if (eventDay.getTime() === today.getTime()) {
+        phase = 'event-day';
+        phaseLabel = 'Event Day - Live';
+      } else if (eventDay < today) {
+        phase = 'post-event';
+        phaseLabel = 'Post-Event Analytics';
+      }
+
+      // Update phase indicator
+      document.getElementById('eventPhaseIndicator').innerHTML = `
+        <div style="text-align: center; margin-bottom: 16px;">
+          <span class="phase-indicator ${phase}" style="font-size: 15px; padding: 8px 20px;">
+            ${phaseLabel}
+          </span>
+        </div>
+      `;
+
+      // Update progress bars based on phase
+      const preEventProg = phase === 'pre-event' ? 50 : 100;
+      const eventDayProg = phase === 'event-day' ? 50 : (phase === 'post-event' ? 100 : 0);
+      const postEventProg = phase === 'post-event' ? 50 : 0;
+
+      this.updateProgressBar('preEventProgress', preEventProg);
+      this.updateProgressBar('eventDayProgress', eventDayProg);
+      this.updateProgressBar('postEventProgress', postEventProg);
+    },
+
+    /**
+     * Update statistics
+     */
+    updateStats: function(eventData) {
+      const d = eventData.data || {};
+      const sponsors = d.sponsors || [];
+
+      // Calculate mock metrics (in real implementation, fetch from analytics)
+      const mockViews = Math.floor(Math.random() * 500) + 100;
+      const mockImpressions = sponsors.length * Math.floor(Math.random() * 1000) + 200;
+      const mockCTR = ((Math.random() * 5) + 1).toFixed(1) + '%';
+      const mockEngagement = Math.floor(Math.random() * 100);
+
+      document.getElementById('statViews').textContent = mockViews;
+      document.getElementById('statImpressions').textContent = mockImpressions.toLocaleString();
+      document.getElementById('statCTR').textContent = mockCTR;
+      document.getElementById('statEngagement').textContent = mockEngagement + '/100';
+    },
+
+    /**
+     * Update progress bar with ARIA attributes
+     */
+    updateProgressBar: function(elementId, percentage) {
+      const progressBar = document.getElementById(elementId);
+      const container = progressBar?.closest('.progress-bar');
+
+      if (progressBar) {
+        progressBar.style.width = percentage + '%';
+      }
+
+      if (container) {
+        container.setAttribute('aria-valuenow', percentage);
+      }
+    },
+
+    /**
+     * Show dashboard card
+     */
+    show: function() {
+      const card = document.getElementById('dashboardCard');
+      if (card) {
+        card.style.display = 'block';
+        // Announce to screen readers
+        this.announceToScreenReader('Dashboard loaded with event statistics');
+      }
+    },
+
+    /**
+     * Hide dashboard card
+     */
+    hide: function() {
+      const card = document.getElementById('dashboardCard');
+      if (card) {
+        card.style.display = 'none';
+      }
+    },
+
+    /**
+     * Announce message to screen readers
+     */
+    announceToScreenReader: function(message) {
+      const announcer = document.getElementById('sr-announcer') ||
+        (() => {
+          const el = document.createElement('div');
+          el.id = 'sr-announcer';
+          el.setAttribute('role', 'status');
+          el.setAttribute('aria-live', 'polite');
+          el.className = 'sr-only';
+          document.body.appendChild(el);
+          return el;
+        })();
+
+      announcer.textContent = message;
+
+      // Clear after announcement
+      setTimeout(() => {
+        announcer.textContent = '';
+      }, 1000);
+    }
+  };
+})();
+</script>
+
+<style>
+/* Dashboard-specific styles */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+}
+
+.stat-card {
+  background: white;
+  border: 2px solid;
+  border-radius: 10px;
+  padding: 20px;
+  text-align: center;
+  transition: all 0.2s ease;
+}
+
+.stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.stat-card.blue {
+  border-color: #3b82f6;
+  background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+}
+
+.stat-card.green {
+  border-color: #10b981;
+  background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+}
+
+.stat-card.purple {
+  border-color: #8b5cf6;
+  background: linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%);
+}
+
+.stat-card.orange {
+  border-color: #f59e0b;
+  background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
+}
+
+.stat-value {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #1e293b;
+  margin-bottom: 8px;
+}
+
+.stat-label {
+  font-size: 13px;
+  color: #64748b;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.metric-card {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 16px;
+  transition: all 0.2s ease;
+}
+
+.metric-card:hover {
+  border-color: #cbd5e1;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.metric-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.metric-title {
+  font-weight: 600;
+  color: #1e293b;
+  font-size: 15px;
+}
+
+.phase-indicator {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.phase-indicator.pre-event {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.phase-indicator.event-day {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.phase-indicator.post-event {
+  background: #fed7aa;
+  color: #9a3412;
+}
+
+.progress-bar {
+  width: 100%;
+  height: 8px;
+  background: #e2e8f0;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-top: 12px;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  background: #2563eb;
+  border-radius: 4px;
+  transition: width 0.6s ease;
+}
+
+.progress-bar-fill.green {
+  background: #10b981;
+}
+
+.progress-bar-fill.orange {
+  background: #f59e0b;
+}
+
+/* Screen reader only class */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+@media (max-width: 640px) {
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .stat-value {
+    font-size: 1.5rem;
+  }
+
+  .metric-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+}
+</style>

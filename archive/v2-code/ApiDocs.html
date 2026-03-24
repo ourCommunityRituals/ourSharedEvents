@@ -1,0 +1,853 @@
+<!--
+================================================================================
+EXPERIMENTAL - v2+ (Not MVP)
+================================================================================
+Page: ApiDocs.html
+Purpose: Interactive API documentation for developers
+Status: NOT included in MVP focus group testing
+
+This page is for developer tooling and is not part of the core MVP surfaces.
+================================================================================
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="referrer" content="no-referrer">
+  <title>API Documentation - MVP Event Toolkit</title>
+  <style>
+    :root {
+      --primary: #2563eb;
+      --primary-dark: #1e40af;
+      --success: #10b981;
+      --danger: #ef4444;
+      --warning: #f59e0b;
+      --gray-50: #f9fafb;
+      --gray-100: #f3f4f6;
+      --gray-200: #e5e7eb;
+      --gray-300: #d1d5db;
+      --gray-600: #4b5563;
+      --gray-700: #374151;
+      --gray-800: #1f2937;
+      --gray-900: #111827;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      line-height: 1.6;
+      color: var(--gray-800);
+      background: var(--gray-50);
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 20px;
+    }
+
+    /* Header */
+    header {
+      background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+      color: white;
+      padding: 3rem 0;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    }
+
+    h1 {
+      font-size: 2.5rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .subtitle {
+      font-size: 1.1rem;
+      opacity: 0.9;
+    }
+
+    /* Navigation */
+    nav {
+      background: white;
+      border-bottom: 1px solid var(--gray-200);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    }
+
+    nav ul {
+      list-style: none;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0;
+    }
+
+    nav a {
+      display: block;
+      padding: 1rem 1.5rem;
+      text-decoration: none;
+      color: var(--gray-700);
+      transition: all 0.2s;
+      border-bottom: 3px solid transparent;
+    }
+
+    nav a:hover {
+      background: var(--gray-50);
+      color: var(--primary);
+      border-bottom-color: var(--primary);
+    }
+
+    /* Main Content */
+    main {
+      padding: 3rem 0;
+    }
+
+    section {
+      background: white;
+      border-radius: 8px;
+      padding: 2rem;
+      margin-bottom: 2rem;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    }
+
+    h2 {
+      font-size: 1.875rem;
+      margin-bottom: 1.5rem;
+      color: var(--gray-900);
+      border-bottom: 2px solid var(--gray-200);
+      padding-bottom: 0.5rem;
+    }
+
+    h3 {
+      font-size: 1.5rem;
+      margin: 2rem 0 1rem;
+      color: var(--gray-800);
+    }
+
+    h4 {
+      font-size: 1.25rem;
+      margin: 1.5rem 0 1rem;
+      color: var(--gray-700);
+    }
+
+    /* Method Badges */
+    .method {
+      display: inline-block;
+      padding: 0.25rem 0.75rem;
+      border-radius: 4px;
+      font-weight: 600;
+      font-size: 0.875rem;
+      margin-right: 0.5rem;
+    }
+
+    .method-get {
+      background: #dbeafe;
+      color: #1e40af;
+    }
+
+    .method-post {
+      background: #d1fae5;
+      color: #065f46;
+    }
+
+    /* Auth Badges */
+    .auth-required {
+      display: inline-block;
+      padding: 0.25rem 0.75rem;
+      border-radius: 4px;
+      background: #fef3c7;
+      color: #92400e;
+      font-size: 0.875rem;
+      font-weight: 500;
+    }
+
+    .auth-public {
+      display: inline-block;
+      padding: 0.25rem 0.75rem;
+      border-radius: 4px;
+      background: #d1fae5;
+      color: #065f46;
+      font-size: 0.875rem;
+      font-weight: 500;
+    }
+
+    /* Code Blocks */
+    pre {
+      background: var(--gray-900);
+      color: #f3f4f6;
+      padding: 1.5rem;
+      border-radius: 6px;
+      overflow-x: auto;
+      margin: 1rem 0;
+      font-size: 0.875rem;
+      line-height: 1.7;
+    }
+
+    code {
+      font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
+    }
+
+    /* Endpoint Cards */
+    .endpoint {
+      border: 1px solid var(--gray-200);
+      border-radius: 8px;
+      padding: 1.5rem;
+      margin: 1.5rem 0;
+      background: var(--gray-50);
+    }
+
+    .endpoint-header {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      margin-bottom: 1rem;
+      flex-wrap: wrap;
+    }
+
+    .endpoint-url {
+      font-family: 'Menlo', 'Monaco', monospace;
+      font-size: 0.9rem;
+      color: var(--gray-700);
+      background: white;
+      padding: 0.5rem 1rem;
+      border-radius: 4px;
+      flex: 1;
+      min-width: 200px;
+    }
+
+    .endpoint-desc {
+      color: var(--gray-600);
+      margin-bottom: 1rem;
+    }
+
+    /* Try It Out */
+    .try-it {
+      background: white;
+      border: 2px solid var(--primary);
+      border-radius: 6px;
+      padding: 1.5rem;
+      margin-top: 1rem;
+    }
+
+    .try-it h5 {
+      color: var(--primary);
+      margin-bottom: 1rem;
+    }
+
+    .form-group {
+      margin-bottom: 1rem;
+    }
+
+    .form-group label {
+      display: block;
+      font-weight: 500;
+      margin-bottom: 0.5rem;
+      color: var(--gray-700);
+    }
+
+    .form-group input,
+    .form-group textarea {
+      width: 100%;
+      padding: 0.75rem;
+      border: 1px solid var(--gray-300);
+      border-radius: 4px;
+      font-family: 'Menlo', 'Monaco', monospace;
+      font-size: 0.875rem;
+    }
+
+    .form-group textarea {
+      min-height: 150px;
+      resize: vertical;
+    }
+
+    button {
+      background: var(--primary);
+      color: white;
+      padding: 0.75rem 1.5rem;
+      border: none;
+      border-radius: 6px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    button:hover {
+      background: var(--primary-dark);
+    }
+
+    button:disabled {
+      background: var(--gray-300);
+      cursor: not-allowed;
+    }
+
+    .response {
+      margin-top: 1rem;
+      padding: 1rem;
+      border-radius: 4px;
+      font-family: 'Menlo', 'Monaco', monospace;
+      font-size: 0.875rem;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+
+    .response-success {
+      background: #d1fae5;
+      color: #065f46;
+      border: 1px solid #10b981;
+    }
+
+    .response-error {
+      background: #fee2e2;
+      color: #991b1b;
+      border: 1px solid #ef4444;
+    }
+
+    /* Tables */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 1rem 0;
+    }
+
+    th, td {
+      padding: 0.75rem;
+      text-align: left;
+      border-bottom: 1px solid var(--gray-200);
+    }
+
+    th {
+      background: var(--gray-50);
+      font-weight: 600;
+      color: var(--gray-700);
+    }
+
+    /* Info Boxes */
+    .info-box {
+      padding: 1rem 1.5rem;
+      border-radius: 6px;
+      margin: 1rem 0;
+      border-left: 4px solid;
+    }
+
+    .info-box-info {
+      background: #dbeafe;
+      border-color: var(--primary);
+      color: #1e40af;
+    }
+
+    .info-box-warning {
+      background: #fef3c7;
+      border-color: var(--warning);
+      color: #92400e;
+    }
+
+    .info-box-success {
+      background: #d1fae5;
+      border-color: var(--success);
+      color: #065f46;
+    }
+
+    /* Footer */
+    footer {
+      background: var(--gray-800);
+      color: var(--gray-300);
+      padding: 2rem 0;
+      margin-top: 4rem;
+      text-align: center;
+    }
+
+    .auth-methods {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 1rem;
+      margin: 1.5rem 0;
+    }
+
+    .auth-card {
+      background: white;
+      border: 2px solid var(--gray-200);
+      border-radius: 8px;
+      padding: 1.5rem;
+      transition: all 0.2s;
+    }
+
+    .auth-card:hover {
+      border-color: var(--primary);
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    }
+
+    .auth-card h4 {
+      margin-top: 0;
+      color: var(--primary);
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="container">
+      <h1>🚀 MVP Event Toolkit API</h1>
+      <p class="subtitle">Complete REST API documentation with interactive testing</p>
+    </div>
+  </header>
+
+  <nav>
+    <div class="container">
+      <ul>
+        <li><a href="#overview">Overview</a></li>
+        <li><a href="#authentication">Authentication</a></li>
+        <li><a href="#endpoints">Endpoints</a></li>
+        <li><a href="#examples">Examples</a></li>
+        <li><a href="#errors">Errors</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <main class="container">
+    <!-- Overview -->
+    <section id="overview">
+      <h2>📖 Overview</h2>
+      <p>The MVP Event Toolkit provides a complete REST API for managing events, sponsors, and analytics. You can use this API to build custom frontends in React, Vue, mobile apps, or integrate with third-party systems.</p>
+
+      <div class="info-box info-box-success">
+        <strong>Base URL:</strong> <code id="base-url">https://script.google.com/macros/s/{DEPLOYMENT_ID}/exec</code>
+      </div>
+
+      <h3>Features</h3>
+      <ul>
+        <li>✅ RESTful JSON API</li>
+        <li>✅ Multiple authentication methods (adminKey, JWT, API Key)</li>
+        <li>✅ Rate limiting (20 req/min per brand)</li>
+        <li>✅ ETag/SWR support for caching</li>
+        <li>✅ Comprehensive error handling</li>
+        <li>✅ CORS enabled for cross-origin requests</li>
+      </ul>
+    </section>
+
+    <!-- Authentication -->
+    <section id="authentication">
+      <h2>🔐 Authentication</h2>
+      <p>The API supports three authentication methods. Choose the one that best fits your use case:</p>
+
+      <div class="auth-methods">
+        <div class="auth-card">
+          <h4>1. Admin Key (Legacy)</h4>
+          <p>Simple secret key in request body</p>
+          <pre>{
+  "adminKey": "YOUR_SECRET"
+}</pre>
+          <p><small>✅ Best for: Quick testing, internal tools</small></p>
+        </div>
+
+        <div class="auth-card">
+          <h4>2. Bearer Token (JWT)</h4>
+          <p>Token-based authentication</p>
+          <pre>Authorization: Bearer {TOKEN}</pre>
+          <p><small>✅ Best for: Production apps, mobile apps</small></p>
+        </div>
+
+        <div class="auth-card">
+          <h4>3. API Key Header</h4>
+          <p>API key in request header</p>
+          <pre>X-API-Key: YOUR_SECRET</pre>
+          <p><small>✅ Best for: Server-to-server integrations</small></p>
+        </div>
+      </div>
+
+      <h3>Generate JWT Token</h3>
+      <div class="endpoint">
+        <div class="endpoint-header">
+          <span class="method method-post">POST</span>
+          <code class="endpoint-url">?action=generateToken</code>
+          <span class="auth-required">🔒 Auth Required</span>
+        </div>
+        <p class="endpoint-desc">Generate a JWT token for use in subsequent requests</p>
+
+        <h5>Request Body:</h5>
+        <pre>{
+  "action": "generateToken",
+  "brandId": "root",
+  "adminKey": "YOUR_ADMIN_SECRET",
+  "expiresIn": 3600,
+  "scope": "events"
+}</pre>
+
+        <h5>Response:</h5>
+        <pre>{
+  "ok": true,
+  "value": {
+    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "expiresIn": 3600,
+    "expiresAt": "2025-11-10T15:30:00.000Z",
+    "usage": "Authorization: Bearer {token}"
+  }
+}</pre>
+
+        <div class="try-it">
+          <h5>🧪 Try It Out</h5>
+          <div class="form-group">
+            <label>Admin Key:</label>
+            <input type="text" id="token-admin-key" placeholder="YOUR_ADMIN_SECRET">
+          </div>
+          <div class="form-group">
+            <label>Expires In (seconds):</label>
+            <input type="number" id="token-expires" value="3600">
+          </div>
+          <button onclick="generateToken()">Generate Token</button>
+          <div id="token-response"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Endpoints -->
+    <section id="endpoints">
+      <h2>📡 API Endpoints</h2>
+
+      <h3>Public Endpoints (No Auth)</h3>
+
+      <!-- Status -->
+      <div class="endpoint">
+        <div class="endpoint-header">
+          <span class="method method-get">GET</span>
+          <code class="endpoint-url">?action=status</code>
+          <span class="auth-public">🔓 Public</span>
+        </div>
+        <p class="endpoint-desc">Check API health and database connectivity</p>
+
+        <h5>Response:</h5>
+        <pre>{
+  "ok": true,
+  "value": {
+    "build": "mvp-v1.0-events-only",
+    "contract": "v1",
+    "dbOk": true,
+    "brand": "root"
+  }
+}</pre>
+
+        <div class="try-it">
+          <h5>🧪 Try It Out</h5>
+          <button onclick="testStatus()">Test Status Endpoint</button>
+          <div id="status-response"></div>
+        </div>
+      </div>
+
+      <!-- List Events -->
+      <div class="endpoint">
+        <div class="endpoint-header">
+          <span class="method method-get">GET</span>
+          <code class="endpoint-url">?action=list&brand=root&scope=events</code>
+          <span class="auth-public">🔓 Public</span>
+        </div>
+        <p class="endpoint-desc">List all events for a brand. Supports SWR/caching with etag parameter.</p>
+
+        <h5>Query Parameters:</h5>
+        <table>
+          <tr>
+            <th>Parameter</th>
+            <th>Type</th>
+            <th>Required</th>
+            <th>Description</th>
+          </tr>
+          <tr>
+            <td>brand</td>
+            <td>string</td>
+            <td>No</td>
+            <td>Brand ID (default: root)</td>
+          </tr>
+          <tr>
+            <td>scope</td>
+            <td>string</td>
+            <td>No</td>
+            <td>Scope (events, leagues, tournaments)</td>
+          </tr>
+          <tr>
+            <td>etag</td>
+            <td>string</td>
+            <td>No</td>
+            <td>ETag for SWR/caching</td>
+          </tr>
+        </table>
+
+        <h5>Response:</h5>
+        <pre>{
+  "ok": true,
+  "value": {
+    "items": [
+      {
+        "id": "evt_123",
+        "data": {
+          "eventName": "Summer Concert",
+          "eventDate": "2025-07-15",
+          "eventTime": "19:00"
+        },
+        "publicUrl": "https://...",
+        "posterUrl": "https://...",
+        "displayUrl": "https://..."
+      }
+    ],
+    "etag": "xyz789"
+  }
+}</pre>
+
+        <div class="try-it">
+          <h5>🧪 Try It Out</h5>
+          <div class="form-group">
+            <label>Brand ID:</label>
+            <input type="text" id="list-brand" value="root">
+          </div>
+          <div class="form-group">
+            <label>Scope:</label>
+            <input type="text" id="list-scope" value="events">
+          </div>
+          <button onclick="testList()">List Events</button>
+          <div id="list-response"></div>
+        </div>
+      </div>
+
+      <h3>Admin Endpoints (Auth Required)</h3>
+
+      <!-- Create Event -->
+      <div class="endpoint">
+        <div class="endpoint-header">
+          <span class="method method-post">POST</span>
+          <code class="endpoint-url">Base URL</code>
+          <span class="auth-required">🔒 Auth Required</span>
+        </div>
+        <p class="endpoint-desc">Create a new event</p>
+
+        <h5>Request Body:</h5>
+        <pre>{
+  "action": "create",
+  "brandId": "root",
+  "adminKey": "YOUR_ADMIN_SECRET",
+  "scope": "events",
+  "templateId": "Event",
+  "data": {
+    "eventName": "Summer Concert Series",
+    "eventDate": "2025-07-15",
+    "eventTime": "19:00",
+    "locationName": "Central Park Amphitheater"
+  }
+}</pre>
+
+        <h5>Response:</h5>
+        <pre>{
+  "ok": true,
+  "value": {
+    "id": "evt_abc123",
+    "publicUrl": "https://...",
+    "posterUrl": "https://...",
+    "displayUrl": "https://..."
+  }
+}</pre>
+
+        <div class="try-it">
+          <h5>🧪 Try It Out</h5>
+          <div class="form-group">
+            <label>Request Body (JSON):</label>
+            <textarea id="create-body">{
+  "action": "create",
+  "brandId": "root",
+  "adminKey": "YOUR_ADMIN_SECRET",
+  "scope": "events",
+  "templateId": "Event",
+  "data": {
+    "eventName": "Test Event",
+    "eventDate": "2025-07-15",
+    "eventTime": "19:00",
+    "locationName": "Test Venue"
+  }
+}</textarea>
+          </div>
+          <button onclick="testCreate()">Create Event</button>
+          <div id="create-response"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Examples -->
+    <section id="examples">
+      <h2>💻 Code Examples</h2>
+
+      <h3>JavaScript (Fetch API)</h3>
+      <pre>// List events
+const response = await fetch(
+  'https://script.google.com/.../exec?action=list&brand=root&scope=events'
+);
+const result = await response.json();
+
+if (result.ok) {
+  console.log('Events:', result.value.items);
+}
+
+// Create event with JWT
+const response = await fetch('https://script.google.com/.../exec', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'Authorization': 'Bearer YOUR_JWT_TOKEN'
+  },
+  body: JSON.stringify({
+    action: 'create',
+    brandId: 'root',
+    scope: 'events',
+    templateId: 'Event',
+    data: {
+      eventName: 'Summer Concert',
+      eventDate: '2025-07-15'
+    }
+  })
+});</pre>
+
+      <h3>cURL</h3>
+      <pre># List events
+curl "https://script.google.com/.../exec?action=list&brand=root&scope=events"
+
+# Create event
+curl -X POST "https://script.google.com/.../exec" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -d '{
+    "action": "create",
+    "brandId": "root",
+    "scope": "events",
+    "templateId": "Event",
+    "data": {
+      "eventName": "Summer Concert"
+    }
+  }'</pre>
+    </section>
+
+    <!-- Errors -->
+    <section id="errors">
+      <h2>⚠️ Error Handling</h2>
+      <p>All errors return a consistent error envelope:</p>
+
+      <pre>{
+  "ok": false,
+  "code": "ERROR_CODE",
+  "message": "Human-readable error message"
+}</pre>
+
+      <h3>Error Codes</h3>
+      <table>
+        <tr>
+          <th>Code</th>
+          <th>Description</th>
+        </tr>
+        <tr>
+          <td><code>BAD_INPUT</code></td>
+          <td>Invalid input parameters or authentication failure</td>
+        </tr>
+        <tr>
+          <td><code>NOT_FOUND</code></td>
+          <td>Resource not found (brand, event, etc.)</td>
+        </tr>
+        <tr>
+          <td><code>RATE_LIMITED</code></td>
+          <td>Too many requests (max 20/minute per brand)</td>
+        </tr>
+        <tr>
+          <td><code>INTERNAL</code></td>
+          <td>Internal server error</td>
+        </tr>
+        <tr>
+          <td><code>CONTRACT</code></td>
+          <td>API contract violation</td>
+        </tr>
+      </table>
+    </section>
+  </main>
+
+  <footer>
+    <div class="container">
+      <p>&copy; 2025 MVP Event Toolkit | <a href="?page=admin" style="color: #60a5fa;">Admin Dashboard</a> | <a href="?page=test" style="color: #60a5fa;">Test Page</a></p>
+    </div>
+  </footer>
+
+  <script>
+    // Get base URL from current location
+    const baseUrl = window.location.origin + window.location.pathname;
+    document.getElementById('base-url').textContent = baseUrl;
+
+    // Update all code samples with actual base URL
+    document.querySelectorAll('pre').forEach(pre => {
+      pre.innerHTML = pre.innerHTML.replace(/https:\/\/script\.google\.com\/\.\.\.\/exec/g, baseUrl);
+    });
+
+    function showResponse(elementId, data, isError = false) {
+      const el = document.getElementById(elementId);
+      el.className = 'response ' + (isError ? 'response-error' : 'response-success');
+      el.textContent = JSON.stringify(data, null, 2);
+    }
+
+    async function generateToken() {
+      const adminKey = document.getElementById('token-admin-key').value;
+      const expiresIn = parseInt(document.getElementById('token-expires').value) || 3600;
+
+      try {
+        const response = await fetch(baseUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'generateToken',
+            brandId: 'root',
+            adminKey,
+            expiresIn
+          })
+        });
+
+        const data = await response.json();
+        showResponse('token-response', data, !data.ok);
+      } catch (error) {
+        showResponse('token-response', { error: error.message }, true);
+      }
+    }
+
+    async function testStatus() {
+      try {
+        const response = await fetch(`${baseUrl}?action=status`);
+        const data = await response.json();
+        showResponse('status-response', data, !data.ok);
+      } catch (error) {
+        showResponse('status-response', { error: error.message }, true);
+      }
+    }
+
+    async function testList() {
+      const brand = document.getElementById('list-brand').value;
+      const scope = document.getElementById('list-scope').value;
+
+      try {
+        const response = await fetch(`${baseUrl}?action=list&brand=${brand}&scope=${scope}`);
+        const data = await response.json();
+        showResponse('list-response', data, !data.ok);
+      } catch (error) {
+        showResponse('list-response', { error: error.message }, true);
+      }
+    }
+
+    async function testCreate() {
+      const body = document.getElementById('create-body').value;
+
+      try {
+        const response = await fetch(baseUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: body
+        });
+
+        const data = await response.json();
+        showResponse('create-response', data, !data.ok);
+      } catch (error) {
+        showResponse('create-response', { error: error.message }, true);
+      }
+    }
+  </script>
+</body>
+</html>

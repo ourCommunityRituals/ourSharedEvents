@@ -1,0 +1,58 @@
+// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
+
+exports[`URL Routing Sync Contract Snapshot consistency Config URL_ALIASES should match expected snapshot 1`] = `
+{
+  "admin": "admin",
+  "analytics": "report",
+  "calendar": "public",
+  "create": "admin",
+  "dashboard": "admin",
+  "display": "display",
+  "events": "public",
+  "flyers": "poster",
+  "health": "status",
+  "insights": "report",
+  "kiosk": "display",
+  "manage": "admin",
+  "ping": "ping",
+  "poster": "poster",
+  "posters": "poster",
+  "reports": "report",
+  "schedule": "public",
+  "screen": "display",
+  "stats": "report",
+  "status": "status",
+  "tv": "display",
+  "whoami": "whoami",
+}
+`;
+
+exports[`URL Routing Sync Contract Snapshot consistency Worker pathToPage should match expected snapshot 1`] = `
+{
+  "admin": "admin",
+  "analytics": "report",
+  "api": "api",
+  "calendar": "public",
+  "create": "admin",
+  "dashboard": "admin",
+  "display": "display",
+  "docs": "admin",
+  "env-status": "env-status",
+  "events": "public",
+  "flyers": "poster",
+  "health": "status",
+  "insights": "report",
+  "kiosk": "display",
+  "manage": "admin",
+  "ping": "ping",
+  "poster": "poster",
+  "posters": "poster",
+  "reports": "report",
+  "schedule": "public",
+  "screen": "display",
+  "stats": "report",
+  "status": "status",
+  "tv": "display",
+  "whoami": "whoami",
+}
+`;

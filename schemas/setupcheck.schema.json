@@ -1,0 +1,173 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://eventangle.com/schemas/setupcheck.schema.json",
+  "title": "SetupCheck Response",
+  "description": "Setup verification response from api_setupCheck() with diagnostic checks and actionable guidance.",
+  "type": "object",
+  "required": ["ok"],
+  "additionalProperties": false,
+  "oneOf": [
+    {
+      "properties": {
+        "ok": { "const": true },
+        "value": { "$ref": "#/$defs/SetupCheckValue" }
+      },
+      "required": ["ok", "value"]
+    },
+    {
+      "properties": {
+        "ok": { "const": false },
+        "code": { "$ref": "#/$defs/ErrorCode" },
+        "message": { "type": "string", "minLength": 1 }
+      },
+      "required": ["ok", "code", "message"]
+    }
+  ],
+  "$defs": {
+    "SetupCheckValue": {
+      "type": "object",
+      "required": ["status", "message", "brand", "timestamp", "checks", "issues", "warnings", "fixes", "nextSteps"],
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "$ref": "#/$defs/OverallStatus",
+          "description": "Overall setup status"
+        },
+        "message": {
+          "type": "string",
+          "description": "Human-readable summary message"
+        },
+        "brand": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Brand being checked"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Check timestamp in ISO 8601 format"
+        },
+        "checks": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/Check" },
+          "description": "Individual diagnostic checks"
+        },
+        "issues": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Critical issues that must be fixed"
+        },
+        "warnings": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Non-blocking warnings"
+        },
+        "fixes": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Actionable fix suggestions"
+        },
+        "nextSteps": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Next actions to take"
+        }
+      }
+    },
+    "Check": {
+      "type": "object",
+      "required": ["name", "status"],
+      "additionalProperties": true,
+      "properties": {
+        "name": {
+          "type": "string",
+          "enum": [
+            "Brand Configuration",
+            "Spreadsheet Access",
+            "Admin Secrets",
+            "Deployment Configuration",
+            "OAuth Scopes",
+            "Database Structure"
+          ],
+          "description": "Name of the diagnostic check"
+        },
+        "status": {
+          "$ref": "#/$defs/CheckStatus",
+          "description": "Status of this check"
+        },
+        "details": {
+          "oneOf": [
+            { "type": "string" },
+            { "type": "array" },
+            { "type": "object" }
+          ],
+          "description": "Additional details about the check"
+        },
+        "error": {
+          "type": "string",
+          "description": "Error message if check failed"
+        },
+        "permissions": {
+          "type": "string",
+          "enum": ["owner/editor", "viewer/limited"],
+          "description": "Permission level detected"
+        },
+        "access": {
+          "type": "string",
+          "enum": ["anonymous", "requires-auth"],
+          "description": "Access level for deployment"
+        },
+        "note": {
+          "type": "string",
+          "description": "Additional note about the check"
+        }
+      }
+    },
+    "OverallStatus": {
+      "type": "string",
+      "enum": ["ok", "warning", "error"],
+      "description": "Overall status: ok (all passed), warning (non-blocking issues), error (critical issues)"
+    },
+    "CheckStatus": {
+      "type": "string",
+      "enum": ["ok", "warning", "error", "checking", "skipped"],
+      "description": "Individual check status"
+    },
+    "ErrorCode": {
+      "type": "string",
+      "enum": ["NOT_FOUND", "INTERNAL", "UNAUTHORIZED", "BAD_REQUEST"],
+      "description": "Standard error codes"
+    }
+  },
+  "examples": [
+    {
+      "ok": true,
+      "value": {
+        "status": "ok",
+        "message": "All setup checks passed! System is ready to use.",
+        "brand": "root",
+        "timestamp": "2025-11-28T12:00:00.000Z",
+        "checks": [
+          { "name": "Brand Configuration", "status": "ok", "details": "Brand: Default Brand (root)" },
+          { "name": "Spreadsheet Access", "status": "ok", "details": "Connected to: \"Events\" (1abc123)", "permissions": "owner/editor" },
+          { "name": "Admin Secrets", "status": "ok", "details": "Configured (length: 32 chars)" },
+          { "name": "Deployment Configuration", "status": "ok", "details": "https://script.google.com/macros/s/xxx/exec" },
+          { "name": "OAuth Scopes", "status": "ok", "details": "All required scopes authorized" },
+          { "name": "Database Structure", "status": "ok", "details": "All required sheets present" }
+        ],
+        "issues": [],
+        "warnings": [],
+        "fixes": [],
+        "nextSteps": [
+          "Your setup is complete!",
+          "Test the API: https://script.google.com/macros/s/xxx/exec?page=status&brand=root"
+        ]
+      }
+    },
+    {
+      "ok": false,
+      "code": "NOT_FOUND",
+      "message": "Brand not found: invalid"
+    }
+  ]
+}

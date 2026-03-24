@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Something went wrong · EventAngle</title>
+  <?!= include('Styles'); ?>
+  <style>
+    .error-container {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
+    }
+
+    .error-card {
+      background: white;
+      border-radius: 16px;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+      padding: 48px;
+      max-width: 500px;
+      width: 100%;
+      text-align: center;
+    }
+
+    .error-icon {
+      font-size: 64px;
+      margin-bottom: 24px;
+    }
+
+    .error-title {
+      font-size: 24px;
+      font-weight: 600;
+      color: #dc2626;
+      margin: 0 0 16px;
+    }
+
+    .error-message {
+      font-size: 16px;
+      color: #4b5563;
+      margin: 0 0 24px;
+      line-height: 1.6;
+    }
+
+    .error-reference {
+      background: #f3f4f6;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 24px;
+    }
+
+    .error-reference-label {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #6b7280;
+      margin-bottom: 4px;
+    }
+
+    .error-reference-code {
+      font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+      font-size: 14px;
+      color: #1f2937;
+      font-weight: 500;
+      word-break: break-all;
+    }
+
+    .error-help {
+      font-size: 14px;
+      color: #6b7280;
+      margin-bottom: 24px;
+    }
+
+    .error-actions {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 24px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 500;
+      text-decoration: none;
+      cursor: pointer;
+      transition: all 0.2s;
+      border: none;
+    }
+
+    .btn-primary {
+      background: #dc2626;
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: #b91c1c;
+    }
+
+    .btn-secondary {
+      background: white;
+      color: #374151;
+      border: 1px solid #d1d5db;
+    }
+
+    .btn-secondary:hover {
+      background: #f9fafb;
+    }
+
+    .copy-btn {
+      background: transparent;
+      border: none;
+      color: #6b7280;
+      cursor: pointer;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+    }
+
+    .copy-btn:hover {
+      background: #e5e7eb;
+      color: #374151;
+    }
+
+    .copy-btn.copied {
+      color: #059669;
+    }
+
+    @media (max-width: 480px) {
+      .error-card {
+        padding: 32px 24px;
+      }
+
+      .error-icon {
+        font-size: 48px;
+      }
+
+      .error-title {
+        font-size: 20px;
+      }
+
+      .error-actions {
+        flex-direction: column;
+      }
+
+      .btn {
+        width: 100%;
+        justify-content: center;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="error-container">
+    <div class="error-card">
+      <div class="error-icon">⚠️</div>
+      <h1 class="error-title">Something went wrong</h1>
+      <p class="error-message">
+        We hit an unexpected error while loading this page.
+        Don't worry, your data is safe.
+      </p>
+
+      <div class="error-reference">
+        <div class="error-reference-label">Reference Code</div>
+        <div class="error-reference-code" id="corrId"><?= corrId ?></div>
+        <button class="copy-btn" onclick="copyReference()" id="copyBtn">
+          📋 Copy
+        </button>
+      </div>
+
+      <p class="error-help">
+        You can refresh the page, or share this reference code with the event organizer
+        if the problem continues.
+      </p>
+
+      <div class="error-actions">
+        <button class="btn btn-primary" onclick="location.reload()">
+          🔄 Refresh Page
+        </button>
+        <a class="btn btn-secondary" href="?page=public">
+          🏠 Go Home
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function copyReference() {
+      const corrId = document.getElementById('corrId').textContent;
+      navigator.clipboard.writeText(corrId).then(function() {
+        const btn = document.getElementById('copyBtn');
+        btn.textContent = '✓ Copied!';
+        btn.classList.add('copied');
+        setTimeout(function() {
+          btn.textContent = '📋 Copy';
+          btn.classList.remove('copied');
+        }, 2000);
+      }).catch(function(err) {
+        console.error('Could not copy text: ', err);
+      });
+    }
+  </script>
+</body>
+</html>
