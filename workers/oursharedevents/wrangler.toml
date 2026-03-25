@@ -45,6 +45,10 @@ ALLOW_ADMIN_KEY_FALLBACK = "true"
 #   SHEETS_SPREADSHEET_ID
 #   GOOGLE_SA_CLIENT_EMAIL
 #   GOOGLE_SA_PRIVATE_KEY_PEM
+#   GOOGLE_MAPS_API_KEY          (Google Maps for SharedReports venue maps)
+#   BIGQUERY_DATASET_ID           (BigQuery dataset for data backup)
+#   GCP_PROJECT_ID                (defaults to project-7cc9adcd-ed55-47aa-958)
+#   VERTEX_AI_MODEL_ID            (defaults to gemini-2.0-flash)
 
 # ── Production: oursharedevents.com ──────────────────────────────
 [env.production]
@@ -63,3 +67,7 @@ WORKER_BUILD_VERSION = "prod-2026.03.22"
 #   SHEETS_SPREADSHEET_ID
 #   GOOGLE_SA_CLIENT_EMAIL
 #   GOOGLE_SA_PRIVATE_KEY_PEM
+#   GOOGLE_MAPS_API_KEY          (Google Maps for SharedReports venue maps)
+#   BIGQUERY_DATASET_ID           (BigQuery dataset for data backup)
+#   GCP_PROJECT_ID                (defaults to project-7cc9adcd-ed55-47aa-958)
+#   VERTEX_AI_MODEL_ID            (defaults to gemini-2.0-flash)
