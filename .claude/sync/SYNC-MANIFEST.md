@@ -5,11 +5,21 @@ How files flow between Claude Code (CLI), Claude Web (claude.ai), phone (GitHub 
 ## Sync Architecture
 
 ```
+Local CoWork (wkrp_ftw\claude\)        GitHub (.claude/)
+  Documents/ ◄──── git sync ────►  documents/
+  Inputs/    ◄──── git sync ────►  inputs/
+  Outputs/   ◄──── git sync ────►  outputs/
+  Research/  ◄──── git sync ────►  research/
+  README.md  ◄──── git sync ────►  README.md
+
 GitHub (source of truth)
   └── .claude/
-       ├── skills/          → Claude Code + Claude Web (shared skills)
-       ├── knowledge/        → Claude Code + Claude Web (shared context)
-       ├── inputs/           → CoWork feed → Linear intake
+       ├── documents/        → CoWork Documents (specs, decisions)
+       ├── inputs/           → CoWork Inputs (story intake feed)
+       ├── outputs/          → CoWork Outputs (Claude-generated artifacts)
+       ├── research/         → CoWork Research (analysis, references)
+       ├── knowledge/        → Claude Code + Claude Web (session context)
+       ├── skills/           → Claude Code + Claude Web (reusable skills)
        └── sync/
             ├── SYNC-MANIFEST.md   (this file)
             └── LINEAR-MAP.md      (story ↔ Linear mapping)
@@ -35,8 +45,11 @@ Claude Code / Claude Web
 | File Pattern | Direction | Devices | Notes |
 |---|---|---|---|
 | `STORIES.md` | bidirectional | All | Sprint state — Linear reads this |
-| `.claude/inputs/*.md` | phone → repo | Phone, Claude | CoWork story intake |
-| `.claude/knowledge/*.md` | repo → clients | Claude Code, Web | Shared context MDs |
+| `.claude/documents/*` | CoWork ↔ repo | Local, Claude, Phone | Specs, decisions, persistent docs |
+| `.claude/inputs/*` | CoWork → repo → Claude | Local, Phone, Claude | Story intake from CoWork |
+| `.claude/outputs/*` | Claude → repo → CoWork | Claude, Local, Phone | Generated reports, summaries |
+| `.claude/research/*` | bidirectional | All | Analysis, references, findings |
+| `.claude/knowledge/*.md` | repo → clients | Claude Code, Web | Session context (auto-loaded) |
 | `.claude/skills/*.md` | repo → clients | Claude Code, Web | Reusable skill definitions |
 | `.claude/sync/LINEAR-MAP.md` | repo ↔ Linear | All | Story ID ↔ Linear issue mapping |
 | `docs/stories/*.md` | repo → clients | All | Detailed story specs |
