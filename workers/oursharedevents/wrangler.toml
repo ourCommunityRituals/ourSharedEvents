@@ -23,11 +23,11 @@ main = "src/index.ts"
 compatibility_date = "2024-01-01"
 
 # ── D1 Database (local dev) ──────────────────────────────────────
+# Migrations applied via: wrangler d1 execute ocr-db-local --file migrations/000X_*.sql --local
 [[d1_databases]]
 binding = "DB"
 database_name = "ocr-db-local"
 database_id = "local"
-migrations_dir = "migrations"
 
 # ── Default (local dev / workers.dev) ─────────────────────────────
 [vars]
@@ -42,11 +42,11 @@ routes = [
 ]
 
 # ── D1 Database (staging) ────────────────────────────────────────
+# Migrations applied via CI: wrangler d1 execute --env staging --file --remote
 [[env.staging.d1_databases]]
 binding = "DB"
 database_name = "ocr-db-staging"
 database_id = "<staging-db-id>"
-migrations_dir = "migrations"
 
 [env.staging.vars]
 WORKER_ENV = "staging"
@@ -69,11 +69,11 @@ routes = [
 ]
 
 # ── D1 Database (production) ─────────────────────────────────────
+# Production migrations NEVER run locally — only via deploy-prod CI with approval gate
 [[env.production.d1_databases]]
 binding = "DB"
 database_name = "ocr-db-production"
 database_id = "<production-db-id>"
-migrations_dir = "migrations"
 
 [env.production.vars]
 WORKER_ENV = "production"

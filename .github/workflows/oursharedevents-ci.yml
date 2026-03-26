@@ -113,6 +113,39 @@ jobs:
         run: npm ci
         working-directory: ${{ env.WORKER_DIR }}
 
+      - name: Apply D1 migrations to staging
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        working-directory: ${{ env.WORKER_DIR }}
+        run: |
+          for f in migrations/0001_create_events.sql \
+                   migrations/0002_create_sponsors.sql \
+                   migrations/0003_create_poster_deployments.sql \
+                   migrations/0004_create_scans.sql \
+                   migrations/0005_create_checkins_registrations.sql \
+                   migrations/0006_create_scan_aggregates.sql \
+                   migrations/0007_create_indexes.sql; do
+            echo "Applying $f to staging..."
+            npx wrangler d1 execute ocr-db-staging --env staging --file "$f" --remote
+            echo "✓ $f applied"
+          done
+
+      - name: Verify D1 staging tables
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        working-directory: ${{ env.WORKER_DIR }}
+        run: |
+          RESULT=$(npx wrangler d1 execute ocr-db-staging --env staging --remote \
+            --command "SELECT COUNT(*) as cnt FROM sqlite_master WHERE type='table' AND name IN ('events','sponsors','poster_deployments','scans','checkins','registrations','scan_aggregates')")
+          echo "$RESULT"
+          if ! echo "$RESULT" | grep -q "7"; then
+            echo "::error::D1 staging table verification failed — expected 7 tables"
+            exit 1
+          fi
+          echo "✓ All 7 tables verified in staging D1"
+
       - name: Deploy to staging
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -228,6 +261,40 @@ jobs:
       - name: Install worker dependencies
         run: npm ci
         working-directory: ${{ env.WORKER_DIR }}
+
+      - name: Apply D1 migrations to production
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        working-directory: ${{ env.WORKER_DIR }}
+        run: |
+          echo "⚠️  Applying migrations to PRODUCTION D1 (approved via environment gate)"
+          for f in migrations/0001_create_events.sql \
+                   migrations/0002_create_sponsors.sql \
+                   migrations/0003_create_poster_deployments.sql \
+                   migrations/0004_create_scans.sql \
+                   migrations/0005_create_checkins_registrations.sql \
+                   migrations/0006_create_scan_aggregates.sql \
+                   migrations/0007_create_indexes.sql; do
+            echo "Applying $f to production..."
+            npx wrangler d1 execute ocr-db-production --env production --file "$f" --remote
+            echo "✓ $f applied"
+          done
+
+      - name: Verify D1 production tables
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        working-directory: ${{ env.WORKER_DIR }}
+        run: |
+          RESULT=$(npx wrangler d1 execute ocr-db-production --env production --remote \
+            --command "SELECT COUNT(*) as cnt FROM sqlite_master WHERE type='table' AND name IN ('events','sponsors','poster_deployments','scans','checkins','registrations','scan_aggregates')")
+          echo "$RESULT"
+          if ! echo "$RESULT" | grep -q "7"; then
+            echo "::error::D1 production table verification failed — expected 7 tables"
+            exit 1
+          fi
+          echo "✓ All 7 tables verified in production D1"
 
       - name: Deploy to production
         env:
