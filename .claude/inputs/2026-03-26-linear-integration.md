@@ -7,11 +7,11 @@ feature
 high
 
 ## Description
-Set up Linear workspace for ourCommunityRituals with ourSharedEvents as the first project. Import all stories from STORIES.md. Enable cycle tracking for sprints. This gives the product owner a visual dashboard to track all agent work across repos.
+Import all stories from STORIES.md into the existing Linear workspace. Enable cycle tracking for sprints. Connect GitHub integration so PRs auto-link to Linear issues.
 
 ## Acceptance Criteria
-- [ ] Linear workspace `ourCommunityRituals` created
-- [ ] Team `Platform` created
+- [ ] Linear workspace `oursharedevents` configured
+- [ ] Team `OUR` has all stories imported
 - [ ] Project `ourSharedEvents` created with all stories imported
 - [ ] Cycles configured for sprint tracking
 - [ ] LINEAR-MAP.md updated with Linear issue IDs

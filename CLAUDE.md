@@ -65,49 +65,7 @@ workers/oursharedevents/src/
 
 ---
 
-## 2. Privacy Model
-
-<!-- TODO: Fill from your privacy framework -->
-<!-- Include: data handling principles, what's collected, what's not, -->
-<!-- consent model, data retention, anonymization rules -->
-
----
-
-## 3. NCR Methodology
-
-<!-- TODO: Fill from your NCR framework -->
-<!-- Include: what NCR stands for, core principles, how it applies -->
-<!-- to community event management, decision-making framework -->
-
----
-
-## 4. UEC System
-
-<!-- TODO: Fill from your UEC event type definitions -->
-<!-- Include: all event type codes, what each represents, -->
-<!-- how they map to Worker routes and data schemas -->
-<!-- Reference: "47 event types" mentioned in system design -->
-
----
-
-## 5. Beverly Study Baseline
-
-<!-- TODO: Fill from your Beverly Study research -->
-<!-- Include: baseline metrics, Thursday observation methodology, -->
-<!-- how findings feed back into product decisions -->
-<!-- Update cycle: weekly after Thursday observations -->
-
----
-
-## 6. Blackboard Covenant
-
-<!-- TODO: Fill from your Blackboard Covenant principles -->
-<!-- Include: the covenant rules, how they govern the system, -->
-<!-- what they mean for data, privacy, and community trust -->
-
----
-
-## 7. ourCommunityRituals Ecosystem
+## 2. ourCommunityRituals Ecosystem
 
 | Product | Repo | Purpose |
 |---|---|---|
@@ -121,7 +79,7 @@ workers/oursharedevents/src/
 
 ---
 
-## 8. Scrum Team — Role POVs
+## 3. Scrum Team — Role POVs
 
 Every story is implemented from all six POVs simultaneously. CC reads all six and writes code that satisfies all six.
 
@@ -163,7 +121,7 @@ Every story is implemented from all six POVs simultaneously. CC reads all six an
 
 ---
 
-## 9. Known Constraints
+## 4. Known Constraints
 
 - **Google Sheets latency**: 200-800ms per request (Phase 1 limitation, fixed in Phase 2)
 - **Single admin token**: Shared Bearer token (Phase 1 limitation, fixed in Phase 3)
@@ -173,7 +131,7 @@ Every story is implemented from all six POVs simultaneously. CC reads all six an
 
 ---
 
-## 10. The Loop — Session Protocol
+## 5. The Loop — Session Protocol
 
 ```
 ┌─────────────────────────────────────────────────────┐
@@ -190,11 +148,11 @@ Every story is implemented from all six POVs simultaneously. CC reads all six an
 │     - All 6 role POVs satisfied                     │
 │  6. Create PR             → CI runs automatically   │
 │  7. Update STORIES.md     → mark IN PROGRESS        │
-│  8. Update CLAUDE.md §8   → role current states     │
+│  8. Update CLAUDE.md §3   → role current states     │
 │                                                     │
 │ AFTER MERGE                                         │
 │  9. Update STORIES.md     → mark DONE               │
-│ 10. Update CLAUDE.md §8   → new current states      │
+│ 10. Update CLAUDE.md §3   → new current states      │
 │ 11. Next story begins     → context compounds       │
 └─────────────────────────────────────────────────────┘
 ```
@@ -209,14 +167,14 @@ Every story is implemented from all six POVs simultaneously. CC reads all six an
 
 ---
 
-## 11. Story Format (for STORIES.md)
+## 6. Story Format (for STORIES.md)
 
 Each story should include:
 
 ```markdown
-### OSE-XXX: [Title]
+### P<phase>-<number>: [Title]
 **Status:** 📋 BACKLOG | 🔄 IN PROGRESS | ✅ DONE
-**Prerequisite:** OSE-YYY
+**Prerequisite:** P<phase>-<number>
 **Sprint:** [cycle number or —]
 
 **PO Acceptance Criteria:**
@@ -247,15 +205,17 @@ Each story should include:
 
 ---
 
-## 12. File Map
+## 7. File Map
 
 | File | Purpose | Update Frequency |
 |---|---|---|
 | `CLAUDE.md` | This file — persistent brain | After each merged PR |
 | `STORIES.md` | Work queue — story registry | Each story state change |
-| `.claude/inputs/` | New story intake (CoWork/phone) | Anytime |
-| `.claude/knowledge/` | Session context supplements | As needed |
-| `.claude/skills/` | Reusable capabilities | As needed |
-| `.claude/sync/LINEAR-MAP.md` | Story ↔ Linear mapping | After Linear import |
+| `.claude/inputs/` | Story intake (CoWork `C:\Users\mzdan\claude\Inputs\` / phone) | Anytime |
+| `.claude/documents/` | Specs, decisions (syncs with CoWork Documents/) | As needed |
+| `.claude/outputs/` | Claude-generated artifacts (syncs with CoWork Outputs/) | As needed |
+| `.claude/research/` | Analysis, references (syncs with CoWork Research/) | As needed |
+| `.claude/skills/` | Reusable skill definitions | As needed |
+| `.claude/sync/LINEAR-MAP.md` | Story ID ↔ Linear `OUR-XXX` mapping | After Linear import |
 | `docs/migration/PHASE-*.md` | Phase implementation guides | Per phase |
 | `docs/stories/*.md` | Detailed story specs | Per story |

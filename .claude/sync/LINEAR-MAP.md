@@ -1,6 +1,6 @@
 # Linear Mapping — Story Registry ↔ Linear Issues
 
-Maps STORIES.md story IDs to Linear for visualization and scrum tracking.
+Maps STORIES.md story IDs to Linear issues. Status lives in STORIES.md (source of truth).
 
 ## Linear Setup
 
@@ -8,115 +8,30 @@ Maps STORIES.md story IDs to Linear for visualization and scrum tracking.
 Workspace:  oursharedevents
 URL:        https://linear.app/oursharedevents
 Team:       OUR
-Settings:   https://linear.app/oursharedevents/settings/teams/OUR
-
-Project:    ourSharedEvents
-  Cycles:
-    - Phase 0 — Project Setup
-    - Phase 1 — Build (✅ complete)
-    - Phase 1 — Operations
-    - Phase 2 — D1 Database
-    - Phase 3 — Firebase
+Backlog:    https://linear.app/oursharedevents/team/OUR/backlog
 ```
 
 ## Issue Mapping
 
-| Story ID | Linear ID | Title | Status | Sprint |
-|----------|-----------|-------|--------|--------|
-| P0-1 | — | Create Trello board + import all stories | Backlog | — |
-| P1-1 | — | Cloudflare Worker code | Done | — |
-| P1-2 | — | CI/CD pipeline (GitHub Actions) | Done | — |
-| P1-3 | — | README — ourSharedEvents identity | Done | — |
-| P1-4 | — | STORIES.md — project tracking registry | Done | — |
-| P1-5 | — | E2E launch checklist | Done | — |
-| P1-6 | — | Infra provisioning — Google Cloud + Cloudflare | Backlog | — |
-| P1-7 | — | Secrets + first staging deploy | Backlog | — |
-| P1-8 | — | Staging sign-off | Backlog | — |
-| P1-9 | — | Repo migration → ourCommunityRituals | Backlog | — |
-| P1-10 | — | Production launch — v1.0.0 | Backlog | — |
-| P2-1 | — | D1 database creation + schema migrations | Backlog | — |
-| P2-2 | — | Data migration script: Sheets → D1 | Backlog | — |
-| P2-3 | — | Swap data layer: sheets.ts → d1.ts | Backlog | — |
-| P2-4 | — | Remove Google SA credentials | Backlog | — |
-| P3-1 | — | Firebase Hosting + React/Tailwind UI | Backlog | — |
-| P3-2 | — | Firebase Auth — replace Bearer token | Backlog | — |
+| Story ID | Linear ID | Title |
+|----------|-----------|-------|
+| P0-1 | — | Create Linear board + import all stories |
+| P1-1 | — | Cloudflare Worker code |
+| P1-2 | — | CI/CD pipeline (GitHub Actions) |
+| P1-3 | — | README — ourSharedEvents identity |
+| P1-4 | — | STORIES.md — project tracking registry |
+| P1-5 | — | E2E launch checklist |
+| P1-6 | — | Infra provisioning — Google Cloud + Cloudflare |
+| P1-7 | — | Secrets + first staging deploy |
+| P1-8 | — | Staging sign-off |
+| P1-9 | — | Repo migration → ourCommunityRituals |
+| P1-10 | — | Production launch — v1.0.0 |
+| P2-1 | — | D1 database creation + schema migrations |
+| P2-2 | — | Data migration script: Sheets → D1 |
+| P2-3 | — | Swap data layer: sheets.ts → d1.ts |
+| P2-4 | — | Remove Google SA credentials |
+| P3-1 | — | Firebase Hosting + React/Tailwind UI |
+| P3-2 | — | Firebase Auth — replace Bearer token |
 
-> **Fill in Linear IDs** after importing stories. Format: `OUR-123` (team prefix + number).
-> Team prefix from: https://linear.app/oursharedevents/settings/teams/OUR
-
-## Scrum Mapping
-
-| Scrum Concept | Linear Feature | Source File |
-|---|---|---|
-| Product Backlog | Project backlog view | `STORIES.md` |
-| Sprint Backlog | Active cycle | `.claude/sync/LINEAR-MAP.md` Sprint column |
-| Daily Standup | Cycle progress view | Linear dashboard |
-| Sprint Review | Cycle completion | Phase acceptance criteria |
-| Epics | Projects | Phase 0, 1, 2, 3 |
-| Stories | Issues | P1-1, P1-2, etc. |
-| Tasks | Sub-issues | Individual PRs / commits |
-| Blockers | Issue dependencies | Prerequisite column in STORIES.md |
-
-## How the Scrum Team Works
-
-```
-Product Owner (You)
-  → Writes epics/features/stories in .claude/inputs/ via CoWork or phone
-  → Reviews sprint progress in Linear dashboard
-  → Accepts/rejects completed stories
-
-Scrum Master (Claude — this system)
-  → Picks up stories from STORIES.md in priority order
-  → Updates status as work progresses
-  → Creates PRs, runs tests, deploys
-  → Reports blockers
-
-Dev Team (Claude agents across repos)
-  → ourSharedEvents agent: Platform work
-  → Future: ourRecNights agent, etc.
-  → Each agent works its repo's STORIES.md
-```
-
-## Import to Linear
-
-### Option 1: Manual (quick)
-1. Go to https://linear.app/oursharedevents/team/OUR/backlog
-2. Create issues for each story in the table above
-3. Fill `Linear ID` column (e.g., `OUR-1`, `OUR-2`, etc.)
-4. Commit updated LINEAR-MAP.md
-
-### Option 2: CSV Import
-1. Linear → Settings → Import → CSV
-2. Map columns: Story ID → Identifier, Title → Title, Status → State
-3. Assign to `ourSharedEvents` project
-4. Fill `Linear ID` column back into this file
-5. Commit updated LINEAR-MAP.md
-
-### Option 3: Linear API
-```bash
-# Create issue via Linear API
-curl -X POST https://api.linear.app/graphql \
-  -H "Authorization: Bearer $LINEAR_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"query": "mutation { issueCreate(input: { teamId: \"OUR_TEAM_ID\", title: \"P1-6: Infra provisioning\" }) { issue { id identifier } } }"}'
-```
-
-### Option 4: GitHub Integration (recommended)
-1. Linear → Settings → Integrations → GitHub
-2. Connect `ourCommunityRituals/ourSharedEvents`
-3. PRs auto-link to Linear issues when commit messages include `OUR-XXX`
-4. Issue status updates when PRs merge
-
-## Multi-Repo in Linear
-
-When additional repos come online, each gets a Linear **Project** under the same `OUR` team:
-
-```
-Team: OUR (https://linear.app/oursharedevents/settings/teams/OUR)
-  ├── Project: ourSharedEvents   ← this repo
-  ├── Project: ourRecNights      ← future
-  ├── Project: OurOpenTables     ← future
-  └── ...
-```
-
-Each repo's `.claude/sync/LINEAR-MAP.md` maps its own stories to `OUR-XXX` issues.
+> Fill in `Linear ID` after importing. Format: `OUR-123`.
+> PRs that include `OUR-XXX` in commit messages auto-link via GitHub integration.
