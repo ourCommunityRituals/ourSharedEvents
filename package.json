@@ -368,7 +368,7 @@
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20251212.0",
     "@eslint/js": "^8.57.1",
-    "@google/clasp": "^2.4.2",
+    "@google/clasp": "^3.3.0",
     "@playwright/test": "^1.56.1",
     "@types/google-apps-script": "^1.0.83",
     "ajv": "^8.17.1",
@@ -381,5 +381,9 @@
     "jsqr": "^1.4.0",
     "playwright": "^1.40.0",
     "prettier": "^3.1.1"
+  },
+  "overrides": {
+    "flatted": "^3.4.2",
+    "picomatch": "^4.0.4"
   }
 }
