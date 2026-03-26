@@ -1,6 +1,6 @@
 # Claude — CoWork Sync Directory
 
-This directory mirrors the local `wkrp_ftw\claude\` CoWork folder structure.
+This directory mirrors the local `C:\Users\mzdan\claude\` CoWork folder structure.
 GitHub is the sync layer between devices.
 
 ## Structure
@@ -19,7 +19,7 @@ GitHub is the sync layer between devices.
 ## Sync Flow
 
 ```
-Local (wkrp_ftw\claude\)          GitHub (.claude/)
+Local (C:\Users\mzdan\claude\)     GitHub (.claude/)
   Documents/ ──── git push/pull ────→ documents/
   Inputs/    ──── git push/pull ────→ inputs/
   Outputs/   ──── git push/pull ────→ outputs/
@@ -30,7 +30,7 @@ Local (wkrp_ftw\claude\)          GitHub (.claude/)
 
 ```bash
 # Push local changes to GitHub
-cd wkrp_ftw\claude
+cd C:\Users\mzdan\claude
 git add . && git commit -m "sync: CoWork updates" && git push
 
 # Pull latest from GitHub to local

@@ -5,7 +5,7 @@ How files flow between Claude Code (CLI), Claude Web (claude.ai), phone (GitHub 
 ## Sync Architecture
 
 ```
-Local CoWork (wkrp_ftw\claude\)        GitHub (.claude/)
+Local CoWork (C:\Users\mzdan\claude\)  GitHub (.claude/)
   Documents/ ◄──── git sync ────►  documents/
   Inputs/    ◄──── git sync ────►  inputs/
   Outputs/   ◄──── git sync ────►  outputs/
