@@ -232,8 +232,8 @@ describe('Worker → GAS Routing Contract', () => {
     });
 
     test('worker adds X-Proxied-By header', () => {
-      expect(workerContent).toContain("'X-Proxied-By': 'eventangle-worker'");
-      expect(workerContent).toContain("'X-Proxied-By', 'eventangle-worker'");
+      expect(workerContent).toContain("'X-Proxied-By': 'zeventbooks-worker'");
+      expect(workerContent).toContain("'X-Proxied-By', 'zeventbooks-worker'");
     });
 
     test('worker adds X-Worker-Version header', () => {
