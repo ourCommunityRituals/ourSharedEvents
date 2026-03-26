@@ -5,13 +5,15 @@ Maps STORIES.md story IDs to Linear for visualization and scrum tracking.
 ## Linear Setup
 
 ```
-Workspace:  ourCommunityRituals
-Team:       Platform
+Workspace:  oursharedevents
+URL:        https://linear.app/oursharedevents
+Team:       OUR
+Settings:   https://linear.app/oursharedevents/settings/teams/OUR
 
 Project:    ourSharedEvents
   Cycles:
     - Phase 0 — Project Setup
-    - Phase 1 — Build
+    - Phase 1 — Build (✅ complete)
     - Phase 1 — Operations
     - Phase 2 — D1 Database
     - Phase 3 — Firebase
@@ -39,7 +41,8 @@ Project:    ourSharedEvents
 | P3-1 | — | Firebase Hosting + React/Tailwind UI | Backlog | — |
 | P3-2 | — | Firebase Auth — replace Bearer token | Backlog | — |
 
-> **Fill in Linear IDs** after importing stories. Format: `OSE-123` (project prefix + number).
+> **Fill in Linear IDs** after importing stories. Format: `OUR-123` (team prefix + number).
+> Team prefix from: https://linear.app/oursharedevents/settings/teams/OUR
 
 ## Scrum Mapping
 
@@ -76,20 +79,44 @@ Dev Team (Claude agents across repos)
 
 ## Import to Linear
 
-To bulk-import stories into Linear:
+### Option 1: Manual (quick)
+1. Go to https://linear.app/oursharedevents/team/OUR/backlog
+2. Create issues for each story in the table above
+3. Fill `Linear ID` column (e.g., `OUR-1`, `OUR-2`, etc.)
+4. Commit updated LINEAR-MAP.md
 
-1. Export this table as CSV
-2. Linear → Settings → Import → CSV
-3. Map columns: Story ID → Identifier, Title → Title, Status → State
-4. Assign to `ourSharedEvents` project
-5. Fill `Linear ID` column back into this file
-6. Commit updated LINEAR-MAP.md
+### Option 2: CSV Import
+1. Linear → Settings → Import → CSV
+2. Map columns: Story ID → Identifier, Title → Title, Status → State
+3. Assign to `ourSharedEvents` project
+4. Fill `Linear ID` column back into this file
+5. Commit updated LINEAR-MAP.md
 
-Or use Linear API:
+### Option 3: Linear API
 ```bash
-# Example: create issue via Linear API
+# Create issue via Linear API
 curl -X POST https://api.linear.app/graphql \
   -H "Authorization: Bearer $LINEAR_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"query": "mutation { issueCreate(input: { teamId: \"TEAM_ID\", title: \"P1-6: Infra provisioning\", projectId: \"PROJECT_ID\" }) { issue { id identifier } } }"}'
+  -d '{"query": "mutation { issueCreate(input: { teamId: \"OUR_TEAM_ID\", title: \"P1-6: Infra provisioning\" }) { issue { id identifier } } }"}'
 ```
+
+### Option 4: GitHub Integration (recommended)
+1. Linear → Settings → Integrations → GitHub
+2. Connect `ourCommunityRituals/ourSharedEvents`
+3. PRs auto-link to Linear issues when commit messages include `OUR-XXX`
+4. Issue status updates when PRs merge
+
+## Multi-Repo in Linear
+
+When additional repos come online, each gets a Linear **Project** under the same `OUR` team:
+
+```
+Team: OUR (https://linear.app/oursharedevents/settings/teams/OUR)
+  ├── Project: ourSharedEvents   ← this repo
+  ├── Project: ourRecNights      ← future
+  ├── Project: OurOpenTables     ← future
+  └── ...
+```
+
+Each repo's `.claude/sync/LINEAR-MAP.md` maps its own stories to `OUR-XXX` issues.
