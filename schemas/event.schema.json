@@ -410,6 +410,42 @@
             "type": "string",
             "pattern": "^https?://.+"
           }
+        },
+        "uploads": {
+          "type": ["array", "null"],
+          "description": "V2 OPTIONAL - Files uploaded from phone storage via R2",
+          "items": {
+            "$ref": "#/$defs/UploadedFile"
+          }
+        }
+      }
+    },
+    "UploadedFile": {
+      "type": "object",
+      "description": "V2 OPTIONAL - A file uploaded from phone storage",
+      "required": ["key", "url", "filename", "contentType", "size"],
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "type": "string",
+          "description": "R2 storage key"
+        },
+        "url": {
+          "type": "string",
+          "description": "URL to access the uploaded file"
+        },
+        "filename": {
+          "type": "string",
+          "description": "Original filename from the device"
+        },
+        "contentType": {
+          "type": "string",
+          "description": "MIME type of the uploaded file"
+        },
+        "size": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "File size in bytes"
         }
       }
     },

@@ -107,6 +107,12 @@ ENABLE_DEBUG_ENDPOINTS = "true"
 binding = "HMAC_NONCE_KV"
 id = "STAGING_HMAC_NONCE_KV_ID"  # Replace with actual namespace ID after creation
 
+# R2 bucket for phone storage file uploads
+# Create with: wrangler r2 bucket create eventangle-uploads-staging
+[[env.staging.r2_buckets]]
+binding = "UPLOADS_BUCKET"
+bucket_name = "eventangle-uploads-staging"
+
 # ============================================
 # Production Environment (eventangle.com)
 # ============================================
@@ -137,6 +143,12 @@ DEBUG_LEVEL = "error"
 [[env.production.kv_namespaces]]
 binding = "HMAC_NONCE_KV"
 id = "PRODUCTION_HMAC_NONCE_KV_ID"  # Replace with actual namespace ID after creation
+
+# R2 bucket for phone storage file uploads
+# Create with: wrangler r2 bucket create eventangle-uploads-prod
+[[env.production.r2_buckets]]
+binding = "UPLOADS_BUCKET"
+bucket_name = "eventangle-uploads-prod"
 
 # ============================================
 # SECRETS - Required for API functionality

@@ -2250,7 +2250,28 @@ Related MVP Surfaces: Poster, Display, Public, Sponsor, SharedReport
             <!-- Media Section -->
             <div style="border-top: 1px solid var(--color-gray-200, #e2e8f0); padding-top: 16px; margin-top: 16px;" id="v2MediaSection" data-testid="media-section">
               <label style="font-weight: 500; margin-bottom: 12px; display: block;">Media</label>
-              <div class="form-group">
+
+              <!-- Phone Storage Upload -->
+              <div class="form-group" id="phoneUploadSection" data-testid="phone-upload-section">
+                <label>Upload from Phone</label>
+                <small class="muted" style="display: block; margin-bottom: 8px;">Upload images, videos, or PDFs directly from your device (max 25MB)</small>
+                <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                  <label for="phoneFileInput" style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; background: var(--color-primary, #3b82f6); color: white; border-radius: 6px; cursor: pointer; font-size: 0.9rem; font-weight: 500;">
+                    Choose File
+                    <input type="file" id="phoneFileInput" accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/quicktime,application/pdf" style="display: none;" multiple>
+                  </label>
+                  <span id="phoneFileStatus" class="muted" style="font-size: 0.85rem;">No files selected</span>
+                </div>
+                <div id="phoneUploadProgress" style="display: none; margin-top: 8px;">
+                  <div style="background: var(--color-gray-200, #e2e8f0); border-radius: 4px; height: 6px; overflow: hidden;">
+                    <div id="phoneUploadBar" style="background: var(--color-primary, #3b82f6); height: 100%; width: 0%; transition: width 0.3s;"></div>
+                  </div>
+                  <small id="phoneUploadText" class="muted" style="margin-top: 4px; display: block;">Uploading...</small>
+                </div>
+                <div id="phoneUploadedFiles" style="margin-top: 8px;"></div>
+              </div>
+
+              <div class="form-group" style="margin-top: 12px;">
                 <label>Event Image URL</label>
                 <input id="imageUrl" type="url" placeholder="https://... (main event image)">
               </div>
@@ -3831,6 +3852,89 @@ Related MVP Surfaces: Poster, Display, Public, Sponsor, SharedReport
     }
 
     // Create Event
+    // =========================================================================
+    // Phone Storage File Upload
+    // =========================================================================
+    const phoneUploadedUrls = [];
+
+    document.getElementById('phoneFileInput').addEventListener('change', async (e) => {
+      const files = e.target.files;
+      if (!files || files.length === 0) return;
+
+      // Need an event ID to upload files to
+      if (!currentEventId) {
+        SharedUtils.showToast('Please create your event first, then upload files.', 'warning');
+        e.target.value = '';
+        return;
+      }
+
+      const statusEl = document.getElementById('phoneFileStatus');
+      const progressEl = document.getElementById('phoneUploadProgress');
+      const barEl = document.getElementById('phoneUploadBar');
+      const textEl = document.getElementById('phoneUploadText');
+      const filesListEl = document.getElementById('phoneUploadedFiles');
+
+      statusEl.textContent = `Uploading ${files.length} file(s)...`;
+      progressEl.style.display = 'block';
+
+      let completed = 0;
+      const total = files.length;
+
+      for (const file of files) {
+        // Validate file size client-side
+        if (file.size > 25 * 1024 * 1024) {
+          SharedUtils.showToast(`"${file.name}" is too large (max 25MB)`, 'warning');
+          continue;
+        }
+
+        textEl.textContent = `Uploading ${file.name}...`;
+
+        try {
+          const formData = new FormData();
+          formData.append('file', file);
+
+          const response = await fetch(
+            `${window.location.origin}/api/v2/admin/events/${currentEventId}/uploads`,
+            {
+              method: 'POST',
+              headers: buildAdminHeaders(),
+              credentials: 'same-origin',
+              body: formData
+            }
+          );
+
+          if (!response.ok) {
+            const errData = await response.json().catch(() => ({}));
+            throw new Error(errData.message || `Upload failed (${response.status})`);
+          }
+
+          const data = await response.json();
+          phoneUploadedUrls.push(data.file.url);
+
+          // Show uploaded file in the UI
+          const fileItem = document.createElement('div');
+          fileItem.style.cssText = 'display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: var(--color-gray-50, #f8fafc); border-radius: 6px; margin-bottom: 4px; font-size: 0.85rem;';
+          const isImage = file.type.startsWith('image/');
+          const isVideo = file.type.startsWith('video/');
+          const icon = isImage ? '🖼' : isVideo ? '🎬' : '📄';
+          fileItem.innerHTML = `<span>${icon}</span><span style="flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${file.name}</span><span style="color: var(--color-green-600, #16a34a);">Uploaded</span>`;
+          filesListEl.appendChild(fileItem);
+        } catch (err) {
+          SharedUtils.showToast(`Failed to upload "${file.name}": ${err.message}`, 'error');
+        }
+
+        completed++;
+        barEl.style.width = `${(completed / total) * 100}%`;
+      }
+
+      statusEl.textContent = `${phoneUploadedUrls.length} file(s) uploaded`;
+      textEl.textContent = 'Upload complete';
+      setTimeout(() => { progressEl.style.display = 'none'; }, 2000);
+
+      // Reset file input
+      e.target.value = '';
+    });
+
     document.getElementById('createForm').addEventListener('submit', async (e) => {
       e.preventDefault();
 

@@ -36,6 +36,7 @@ import { handleV2AdminUpdateEvent } from './handlers/v2AdminUpdateEvent';
 import { handleV2AdminArchiveEvent, handleV2AdminUnarchiveEvent } from './handlers/v2AdminArchiveEvent';
 import { handleV2AdminDefaultEvent } from './handlers/v2AdminDefaultEvent';
 import { handleV2AdminVerifyQr, handleV2AdminUnverifyQr } from './handlers/v2AdminVerifyQr';
+import { handleV2AdminUploadFile, handleV2GetUploadedFile } from './handlers/v2AdminUploadFile';
 import { handleGetDisplayBundle } from './handlers/displayBundle';
 import { handleGetPosterBundle } from './handlers/posterBundle';
 import { handleAdminRecordResult } from './handlers/adminRecordResult';
@@ -128,8 +129,9 @@ import {
  * 1.22.0 - Public Read-Only Enforcement (SEC-IAC-04)
  * 1.23.0 - Signed Public Mutations (SEC-IAC-05)
  * 1.24.0 - Audit Logging (SEC-IAC-06)
+ * 1.25.0 - Phone storage file upload via R2 (POST /api/v2/admin/events/:id/uploads)
  */
-export const ROUTER_VERSION = '1.24.0';
+export const ROUTER_VERSION = '1.25.0';
 
 /**
  * Valid brands for routing
@@ -215,6 +217,8 @@ export interface RouterEnv extends StatusEnv, AdminAuthEnv, AdminKeyEnv, StaticA
   ALLOWED_ADMIN_EMAILS?: string;
   /** Comma-separated list of allowed admin domains (optional) */
   ALLOWED_ADMIN_DOMAINS?: string;
+  /** R2 bucket for file uploads */
+  UPLOADS_BUCKET?: R2Bucket;
 }
 
 /**
@@ -307,6 +311,12 @@ function matchRoute(url: URL): RouteMatch {
       return { type: 'api', handler: 'healthBackend', brand };
     }
 
+    // /api/v2/uploads/events/:eventId/:filename - serve uploaded files (public)
+    const v2UploadedFileMatch = apiPath.match(/^\/v2\/uploads\/(events\/[^/]+\/.+)$/);
+    if (v2UploadedFileMatch) {
+      return { type: 'api', handler: 'v2GetUploadedFile', brand, params: { key: v2UploadedFileMatch[1] } };
+    }
+
     // /api/v2/events - events list V2 using sheetsGetValues (Story B5)
     if (apiPath === '/v2/events' || apiPath === '/v2/events/') {
       return { type: 'api', handler: 'eventsV2', brand };
@@ -378,6 +388,12 @@ function matchRoute(url: URL): RouteMatch {
     const posterBundleMatch = apiPath.match(/^\/events\/([^/]+)\/posterBundle$/);
     if (posterBundleMatch) {
       return { type: 'api', handler: 'posterBundle', brand, eventId: posterBundleMatch[1] };
+    }
+
+    // /api/v2/admin/events/:id/uploads - file upload from phone storage
+    const v2AdminUploadFileMatch = apiPath.match(/^\/v2\/admin\/events\/([^/]+)\/uploads$/);
+    if (v2AdminUploadFileMatch) {
+      return { type: 'api', handler: 'v2AdminUploadFile', brand, eventId: v2AdminUploadFileMatch[1] };
     }
 
     // /api/v2/admin/events/:id/default - set default event (Story D3)
@@ -1092,6 +1108,60 @@ async function handleApiV2AdminUnverifyQr(
 }
 
 /**
+ * Handle V2 admin upload file request
+ * POST /api/v2/admin/events/:id/uploads
+ */
+async function handleApiV2AdminUploadFile(
+  request: Request,
+  env: RouterEnv,
+  logger: RouterLogger,
+  eventId: string
+): Promise<Response> {
+  const startTime = Date.now();
+
+  try {
+    const response = await handleV2AdminUploadFile(request, env, logger.getRequestId(), eventId);
+    const durationMs = Date.now() - startTime;
+
+    logger.apiRequest(request.method, `/api/v2/admin/events/${eventId}/uploads`, response.status, durationMs, {
+      operation: 'v2UploadFile',
+      eventId,
+    });
+
+    return addStandardHeaders(response, logger);
+  } catch (error) {
+    logger.error('Failed to handle V2 admin uploadFile', error);
+    return create500Response(error instanceof Error ? error : new Error(String(error)), logger);
+  }
+}
+
+/**
+ * Handle GET /api/v2/uploads/* - serve uploaded files
+ */
+async function handleApiV2GetUploadedFile(
+  request: Request,
+  env: RouterEnv,
+  logger: RouterLogger,
+  key: string
+): Promise<Response> {
+  const startTime = Date.now();
+
+  try {
+    const response = await handleV2GetUploadedFile(request, env, logger.getRequestId(), key);
+    const durationMs = Date.now() - startTime;
+
+    logger.apiRequest(request.method, `/api/v2/uploads/${key}`, response.status, durationMs, {
+      operation: 'v2GetUploadedFile',
+    });
+
+    return addStandardHeaders(response, logger);
+  } catch (error) {
+    logger.error('Failed to handle V2 getUploadedFile', error);
+    return create500Response(error instanceof Error ? error : new Error(String(error)), logger);
+  }
+}
+
+/**
  * Handle admin record result request
  * POST /api/admin/events/:id/results
  * @see Story 3.3 - Port recordResult to Worker
@@ -1366,6 +1436,11 @@ export async function handleRequest(
             response = await handleApiEventsV2(request, env, logger, match.brand || 'root');
             break;
 
+          case 'v2GetUploadedFile':
+            // Serve uploaded files from R2 (public, no auth)
+            response = await handleApiV2GetUploadedFile(request, env, logger, match.params?.key || '');
+            break;
+
           case 'sponsorsPage':
             // Story F3: /api/v2/sponsors - list all sponsors with page status
             response = await handleSponsorsPage(request, env, logger.getRequestId());
@@ -1567,6 +1642,21 @@ export async function handleRequest(
             if (response.status >= 200 && response.status < 300) {
               const auditCtx = createAuditContext(request, logger.getRequestId());
               logAdminAction(env, auditCtx, 'v2_unverify_qr', `/api/v2/admin/events/${match.eventId}/unverify-qr`);
+            }
+            break;
+
+          case 'v2AdminUploadFile':
+            // Phone storage file upload to R2
+            response = await handleApiV2AdminUploadFile(
+              request,
+              env,
+              logger,
+              match.eventId!
+            );
+            // SEC-IAC-06: Log admin action
+            if (response.status >= 200 && response.status < 300) {
+              const auditCtx = createAuditContext(request, logger.getRequestId());
+              logAdminAction(env, auditCtx, 'v2_upload_file', `/api/v2/admin/events/${match.eventId}/uploads`);
             }
             break;
 
