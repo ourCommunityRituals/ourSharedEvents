@@ -3857,6 +3857,110 @@ Related MVP Surfaces: Poster, Display, Public, Sponsor, SharedReport
     // =========================================================================
     const phoneUploadedUrls = [];
 
+    /** Max file size in bytes (25MB) */
+    const UPLOAD_MAX_SIZE = 25 * 1024 * 1024;
+
+    /** Upload timeout in ms — 60s for images/PDFs, 120s for videos */
+    const UPLOAD_TIMEOUT_MS = { default: 60000, video: 120000 };
+
+    /** Allowed MIME types for client-side validation */
+    const UPLOAD_ALLOWED_TYPES = [
+      'image/jpeg', 'image/png', 'image/webp', 'image/gif',
+      'video/mp4', 'video/quicktime',
+      'application/pdf'
+    ];
+
+    /** Human-readable file type names for error messages */
+    const UPLOAD_TYPE_NAMES = {
+      'image/jpeg': 'JPEG image', 'image/png': 'PNG image', 'image/webp': 'WebP image',
+      'image/gif': 'GIF image', 'video/mp4': 'MP4 video', 'video/quicktime': 'MOV video',
+      'application/pdf': 'PDF document'
+    };
+
+    /**
+     * Validate a file before uploading.
+     * Returns null if valid, or a user-friendly error string.
+     */
+    function validateFileForUpload(file) {
+      if (!file || !file.name) {
+        return 'This file could not be read. Please try selecting it again.';
+      }
+      if (file.size === 0) {
+        return `"${file.name}" is empty (0 bytes). Please choose a different file.`;
+      }
+      if (file.size > UPLOAD_MAX_SIZE) {
+        const sizeMB = (file.size / 1024 / 1024).toFixed(1);
+        return `"${file.name}" is ${sizeMB}MB — the limit is 25MB. Try compressing it or using a lower resolution.`;
+      }
+      if (!UPLOAD_ALLOWED_TYPES.includes(file.type)) {
+        const ext = file.name.split('.').pop() || 'unknown';
+        return `"${file.name}" (.${ext}) is not a supported file type. Please upload an image (JPEG, PNG, WebP, GIF), video (MP4, MOV), or PDF.`;
+      }
+      return null;
+    }
+
+    /**
+     * Map server/network errors to user-friendly messages.
+     */
+    function getUploadErrorMessage(err, file, response) {
+      // Network offline
+      if (!navigator.onLine) {
+        return `No internet connection. Please check your connection and try uploading "${file.name}" again.`;
+      }
+      // Timeout (AbortError)
+      if (err && err.name === 'AbortError') {
+        const isVideo = file.type.startsWith('video/');
+        return isVideo
+          ? `"${file.name}" took too long to upload. Try a shorter or lower-resolution video.`
+          : `"${file.name}" took too long to upload. Please check your connection and try again.`;
+      }
+      // Network failure (TypeError from fetch)
+      if (err && err.name === 'TypeError') {
+        return `Connection lost while uploading "${file.name}". Please check your internet and try again.`;
+      }
+      // Server responded with an error
+      if (response) {
+        if (response.status === 401) {
+          return 'Your session has expired. Please refresh the page and log in again.';
+        }
+        if (response.status === 413) {
+          return `"${file.name}" is too large. The server limit is 25MB.`;
+        }
+        if (response.status === 415) {
+          return `"${file.name}" is not a supported file type. Please upload an image, video, or PDF.`;
+        }
+        if (response.status === 503) {
+          return 'File uploads are temporarily unavailable. Please try again in a few minutes.';
+        }
+        if (response.status >= 500) {
+          return `Something went wrong uploading "${file.name}". Please try again.`;
+        }
+      }
+      // Fallback
+      const msg = err && err.message ? err.message : 'Unknown error';
+      return `Failed to upload "${file.name}": ${msg}`;
+    }
+
+    /**
+     * Create a file list item element showing upload status.
+     */
+    function createFileListItem(fileName, fileType, status, errorMsg) {
+      const fileItem = document.createElement('div');
+      fileItem.style.cssText = 'display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: var(--color-gray-50, #f8fafc); border-radius: 6px; margin-bottom: 4px; font-size: 0.85rem;';
+      const isImage = fileType.startsWith('image/');
+      const isVideo = fileType.startsWith('video/');
+      const icon = isImage ? '🖼' : isVideo ? '🎬' : '📄';
+
+      if (status === 'success') {
+        fileItem.innerHTML = `<span>${icon}</span><span style="flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${fileName}</span><span style="color: var(--color-green-600, #16a34a);">Uploaded</span>`;
+      } else if (status === 'error') {
+        fileItem.innerHTML = `<span>${icon}</span><span style="flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${fileName}</span><span style="color: var(--color-red-600, #dc2626);" title="${errorMsg || 'Failed'}">Failed</span>`;
+      } else if (status === 'skipped') {
+        fileItem.innerHTML = `<span>${icon}</span><span style="flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${fileName}</span><span style="color: var(--color-amber-600, #d97706);">Skipped</span>`;
+      }
+      return fileItem;
+    }
+
     document.getElementById('phoneFileInput').addEventListener('change', async (e) => {
       const files = e.target.files;
       if (!files || files.length === 0) return;
@@ -3868,68 +3972,116 @@ Related MVP Surfaces: Poster, Display, Public, Sponsor, SharedReport
         return;
       }
 
+      // Check if offline before starting
+      if (!navigator.onLine) {
+        SharedUtils.showToast('You appear to be offline. Please check your internet connection and try again.', 'error');
+        e.target.value = '';
+        return;
+      }
+
       const statusEl = document.getElementById('phoneFileStatus');
       const progressEl = document.getElementById('phoneUploadProgress');
       const barEl = document.getElementById('phoneUploadBar');
       const textEl = document.getElementById('phoneUploadText');
       const filesListEl = document.getElementById('phoneUploadedFiles');
 
-      statusEl.textContent = `Uploading ${files.length} file(s)...`;
-      progressEl.style.display = 'block';
-
-      let completed = 0;
       const total = files.length;
+      let successCount = 0;
+      let failCount = 0;
+      let skipCount = 0;
 
-      for (const file of files) {
-        // Validate file size client-side
-        if (file.size > 25 * 1024 * 1024) {
-          SharedUtils.showToast(`"${file.name}" is too large (max 25MB)`, 'warning');
+      statusEl.textContent = `Uploading ${total} file(s)...`;
+      progressEl.style.display = 'block';
+      barEl.style.width = '0%';
+
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+
+        // Client-side validation
+        const validationError = validateFileForUpload(file);
+        if (validationError) {
+          SharedUtils.showToast(validationError, 'warning');
+          filesListEl.appendChild(createFileListItem(file.name, file.type || 'application/octet-stream', 'skipped', validationError));
+          skipCount++;
+          barEl.style.width = `${((i + 1) / total) * 100}%`;
           continue;
         }
 
-        textEl.textContent = `Uploading ${file.name}...`;
+        textEl.textContent = `Uploading ${file.name} (${i + 1}/${total})...`;
 
+        // Set up timeout — longer for video files
+        const isVideo = file.type.startsWith('video/');
+        const timeoutMs = isVideo ? UPLOAD_TIMEOUT_MS.video : UPLOAD_TIMEOUT_MS.default;
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+        let response = null;
         try {
           const formData = new FormData();
           formData.append('file', file);
 
-          const response = await fetch(
+          response = await fetch(
             `${window.location.origin}/api/v2/admin/events/${currentEventId}/uploads`,
             {
               method: 'POST',
               headers: buildAdminHeaders(),
               credentials: 'same-origin',
-              body: formData
+              body: formData,
+              signal: controller.signal
             }
           );
 
+          clearTimeout(timeoutId);
+
           if (!response.ok) {
-            const errData = await response.json().catch(() => ({}));
-            throw new Error(errData.message || `Upload failed (${response.status})`);
+            // Parse server error for the message mapper
+            let serverMsg = '';
+            try {
+              const errData = await response.json();
+              serverMsg = errData.message || '';
+            } catch { /* ignore parse errors */ }
+            const userMsg = getUploadErrorMessage(null, file, response) || serverMsg;
+            SharedUtils.showToast(userMsg, 'error');
+            filesListEl.appendChild(createFileListItem(file.name, file.type, 'error', userMsg));
+            failCount++;
+
+            // Stop all uploads on auth failure — re-auth required
+            if (response.status === 401) {
+              textEl.textContent = 'Session expired — please refresh and log in.';
+              break;
+            }
+            barEl.style.width = `${((i + 1) / total) * 100}%`;
+            continue;
           }
 
           const data = await response.json();
           phoneUploadedUrls.push(data.file.url);
-
-          // Show uploaded file in the UI
-          const fileItem = document.createElement('div');
-          fileItem.style.cssText = 'display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: var(--color-gray-50, #f8fafc); border-radius: 6px; margin-bottom: 4px; font-size: 0.85rem;';
-          const isImage = file.type.startsWith('image/');
-          const isVideo = file.type.startsWith('video/');
-          const icon = isImage ? '🖼' : isVideo ? '🎬' : '📄';
-          fileItem.innerHTML = `<span>${icon}</span><span style="flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${file.name}</span><span style="color: var(--color-green-600, #16a34a);">Uploaded</span>`;
-          filesListEl.appendChild(fileItem);
+          filesListEl.appendChild(createFileListItem(file.name, file.type, 'success'));
+          successCount++;
         } catch (err) {
-          SharedUtils.showToast(`Failed to upload "${file.name}": ${err.message}`, 'error');
+          clearTimeout(timeoutId);
+          const userMsg = getUploadErrorMessage(err, file, response);
+          SharedUtils.showToast(userMsg, 'error');
+          filesListEl.appendChild(createFileListItem(file.name, file.type || 'application/octet-stream', 'error', userMsg));
+          failCount++;
         }
 
-        completed++;
-        barEl.style.width = `${(completed / total) * 100}%`;
+        barEl.style.width = `${((i + 1) / total) * 100}%`;
       }
 
-      statusEl.textContent = `${phoneUploadedUrls.length} file(s) uploaded`;
-      textEl.textContent = 'Upload complete';
-      setTimeout(() => { progressEl.style.display = 'none'; }, 2000);
+      // Build summary status text
+      const parts = [];
+      if (successCount > 0) parts.push(`${successCount} uploaded`);
+      if (failCount > 0) parts.push(`${failCount} failed`);
+      if (skipCount > 0) parts.push(`${skipCount} skipped`);
+      statusEl.textContent = parts.join(', ') || 'No files processed';
+
+      if (failCount > 0 || skipCount > 0) {
+        textEl.textContent = failCount > 0 ? 'Some files could not be uploaded' : 'Some files were skipped';
+      } else {
+        textEl.textContent = 'All files uploaded successfully';
+      }
+      setTimeout(() => { progressEl.style.display = 'none'; }, 3000);
 
       // Reset file input
       e.target.value = '';

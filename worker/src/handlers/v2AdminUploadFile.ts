@@ -31,6 +31,9 @@ const ALLOWED_TYPES: Record<string, string> = {
   'application/pdf': '.pdf',
 };
 
+/** Human-readable file type descriptions for error messages */
+const ALLOWED_TYPES_FRIENDLY = 'images (JPEG, PNG, WebP, GIF), videos (MP4, MOV), or PDF';
+
 // =============================================================================
 // Types
 // =============================================================================
@@ -151,22 +154,51 @@ export async function handleV2AdminUploadFile(
     );
   }
 
+  // Validate event ID format
+  if (!eventId || !/^[a-zA-Z0-9_-]+$/.test(eventId)) {
+    return createErrorResponse(
+      'BAD_EVENT_ID',
+      'Invalid event ID. Please select a valid event before uploading.',
+      400,
+      requestId
+    );
+  }
+
   // Validate R2 bucket is configured
   if (!env.UPLOADS_BUCKET) {
     return createErrorResponse(
       'NOT_CONFIGURED',
-      'File storage is not configured',
+      'File uploads are not available right now. Please try again later.',
       503,
       requestId
     );
   }
 
-  // Validate Content-Type is multipart
+  // Reject requests that declare a Content-Length exceeding the limit (early bail)
+  const declaredLength = request.headers.get('Content-Length');
+  if (declaredLength && parseInt(declaredLength, 10) > MAX_FILE_SIZE * 2) {
+    return createErrorResponse(
+      'FILE_TOO_LARGE',
+      'The upload is too large. Maximum file size is 25MB.',
+      413,
+      requestId
+    );
+  }
+
+  // Validate Content-Type is multipart with a boundary
   const contentType = request.headers.get('Content-Type') || '';
   if (!contentType.includes('multipart/form-data')) {
     return createErrorResponse(
-      'BAD_INPUT',
-      'Content-Type must be multipart/form-data',
+      'BAD_CONTENT_TYPE',
+      'File must be uploaded as form data. Please use the upload button instead of sending raw data.',
+      400,
+      requestId
+    );
+  }
+  if (!contentType.includes('boundary=')) {
+    return createErrorResponse(
+      'BAD_CONTENT_TYPE',
+      'The upload request is malformed (missing boundary). Please try again.',
       400,
       requestId
     );
@@ -178,8 +210,8 @@ export async function handleV2AdminUploadFile(
     formData = await request.formData();
   } catch {
     return createErrorResponse(
-      'BAD_INPUT',
-      'Failed to parse multipart form data',
+      'BAD_FORM_DATA',
+      'The file upload was corrupted or incomplete. Please try again.',
       400,
       requestId
     );
@@ -189,8 +221,8 @@ export async function handleV2AdminUploadFile(
   const fileEntry = formData.get('file');
   if (!fileEntry || typeof fileEntry === 'string') {
     return createErrorResponse(
-      'BAD_INPUT',
-      'Missing required "file" field in form data',
+      'MISSING_FILE',
+      'No file was included in the upload. Please select a file and try again.',
       400,
       requestId
     );
@@ -200,9 +232,10 @@ export async function handleV2AdminUploadFile(
 
   // Validate file size
   if (file.size > MAX_FILE_SIZE) {
+    const sizeMB = (file.size / 1024 / 1024).toFixed(1);
     return createErrorResponse(
       'FILE_TOO_LARGE',
-      `File size ${(file.size / 1024 / 1024).toFixed(1)}MB exceeds maximum of 25MB`,
+      `This file is ${sizeMB}MB, which exceeds the 25MB limit. Try compressing the file or using a lower resolution.`,
       413,
       requestId
     );
@@ -210,8 +243,8 @@ export async function handleV2AdminUploadFile(
 
   if (file.size === 0) {
     return createErrorResponse(
-      'BAD_INPUT',
-      'File is empty',
+      'FILE_EMPTY',
+      'The selected file is empty (0 bytes). Please choose a different file.',
       400,
       requestId
     );
@@ -222,7 +255,7 @@ export async function handleV2AdminUploadFile(
   if (!ALLOWED_TYPES[mimeType]) {
     return createErrorResponse(
       'UNSUPPORTED_FILE_TYPE',
-      `File type "${mimeType}" is not supported. Allowed: ${Object.keys(ALLOWED_TYPES).join(', ')}`,
+      `This file type is not supported. Please upload ${ALLOWED_TYPES_FRIENDLY}.`,
       415,
       requestId
     );
@@ -286,7 +319,7 @@ export async function handleV2AdminUploadFile(
 
     return createErrorResponse(
       'UPLOAD_FAILED',
-      'Failed to store file',
+      'Something went wrong saving your file. Please try again.',
       500,
       requestId
     );
@@ -328,13 +361,23 @@ export async function handleV2GetUploadedFile(
     );
   }
 
+  // Validate key to prevent path traversal
+  if (!key || key.includes('..') || !key.startsWith('events/')) {
+    return createErrorResponse(
+      'BAD_INPUT',
+      'Invalid file path.',
+      400,
+      requestId
+    );
+  }
+
   try {
     const object = await env.UPLOADS_BUCKET.get(key);
 
     if (!object) {
       return createErrorResponse(
         'NOT_FOUND',
-        'File not found',
+        'This file could not be found. It may have been deleted.',
         404,
         requestId
       );
@@ -356,8 +399,8 @@ export async function handleV2GetUploadedFile(
     }));
 
     return createErrorResponse(
-      'INTERNAL',
-      'Failed to retrieve file',
+      'RETRIEVAL_FAILED',
+      'Something went wrong loading this file. Please try again.',
       500,
       requestId
     );
