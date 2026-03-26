@@ -9,7 +9,9 @@
     "secrets:staging": "bash ../../scripts/set-secrets.sh staging",
     "secrets:prod": "bash ../../scripts/set-secrets.sh production",
     "test": "vitest run",
-    "test:schema": "vitest run tests/schema.spec.ts"
+    "test:schema": "vitest run tests/schema.spec.ts",
+    "test:constraints": "vitest run tests/constraints.spec.ts",
+    "test:d1": "vitest run tests/schema.spec.ts tests/constraints.spec.ts"
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.8.0",

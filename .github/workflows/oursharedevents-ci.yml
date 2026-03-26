@@ -106,8 +106,8 @@ jobs:
         run: npm ci
         working-directory: ${{ env.WORKER_DIR }}
 
-      - name: Run schema verification tests
-        run: npm run test:schema
+      - name: Run D1 schema + constraint verification tests
+        run: npm run test:d1
         working-directory: ${{ env.WORKER_DIR }}
 
   # ============================================================================
@@ -285,6 +285,21 @@ jobs:
       - name: Install worker dependencies
         run: npm ci
         working-directory: ${{ env.WORKER_DIR }}
+
+      - name: Verify production DB isolation
+        working-directory: ${{ env.WORKER_DIR }}
+        run: |
+          echo "Checking wrangler.toml for cross-env contamination..."
+          # Extract the production d1 section and verify it points to ocr-db-production
+          if grep -A5 '\[env\.production' wrangler.toml | grep -q 'ocr-db-staging'; then
+            echo "::error::Production config references staging database — cross-env contamination detected"
+            exit 1
+          fi
+          if grep -A5 '\[env\.production' wrangler.toml | grep -q 'ocr-db-local'; then
+            echo "::error::Production config references local database — cross-env contamination detected"
+            exit 1
+          fi
+          echo "✓ Production DB isolation verified — no cross-env references"
 
       - name: Apply D1 migrations to production
         env:
