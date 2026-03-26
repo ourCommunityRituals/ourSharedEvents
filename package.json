@@ -368,7 +368,7 @@
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20251212.0",
     "@eslint/js": "^8.57.1",
-    "@google/clasp": "^2.4.2",
+    "@google/clasp": "^3.3.0",
     "@playwright/test": "^1.56.1",
     "@types/google-apps-script": "^1.0.83",
     "ajv": "^8.17.1",
