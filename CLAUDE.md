@@ -53,12 +53,20 @@ When starting a new session or when asked "what's next", follow this loop:
 2. **Pick the first unblocked issue** by story ID order (P1-6 before P1-7, etc.)
 3. **Move it to In Progress** in Linear (`state: "In Progress"`)
 4. **Do the work** — read the issue description for acceptance criteria and referenced files
-5. **When done**, mark it **Done** in Linear (`state: "Done"`)
-6. **Update `.claude/sync/LINEAR-MAP.md`** status column to reflect the change
-7. **Commit** with story ID in message: `feat: <description> (P1-6)` referencing `OUR-11`
-8. **Loop** — go back to step 1 for the next unblocked story
+5. **Commit + push** with story ID in message: `feat: <description> (P1-6)` referencing `OUR-11`
+6. **CI gate (BLOCKING)** — before marking Done, verify CI passes:
+   ```bash
+   # Wait for the run to appear, then poll until it completes
+   gh run list --branch <branch> --limit 1 --json status,conclusion,headSha
+   ```
+   - If `conclusion` is `success` → proceed to step 7
+   - If `conclusion` is `failure` → **do NOT mark Done**. Read the failure logs (`gh run view <id> --log-failed`), fix the issue, commit, push, and re-run this step
+   - If the story has no code changes (e.g., infra provisioning, manual steps) → skip this gate, note why in the commit
+7. **Mark Done** in Linear (`state: "Done"`) — only after CI is green or gate is explicitly skipped
+8. **Update `.claude/sync/LINEAR-MAP.md`** status column to reflect the change
+9. **Loop** — go back to step 1 for the next unblocked story
 
-This ensures Linear is always the live source of truth for what's done, in progress, and next.
+**CI gate is non-negotiable for any story that touches code or CI config.** A story is not Done until its changes pass the pipeline. This prevents broken code from unblocking downstream stories.
 
 ## Conventions
 
