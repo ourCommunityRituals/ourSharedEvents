@@ -60,13 +60,41 @@ When starting a new session or when asked "what's next", follow this loop:
    gh run list --branch <branch> --limit 1 --json status,conclusion,headSha
    ```
    - If `conclusion` is `success` → proceed to step 7
-   - If `conclusion` is `failure` → **do NOT mark Done**. Read the failure logs (`gh run view <id> --log-failed`), fix the issue, commit, push, and re-run this step
+   - If `conclusion` is `failure` → enter the **CCR loop** (see below). Max 3 attempts.
    - If the story has no code changes (e.g., infra provisioning, manual steps) → skip this gate, note why in the commit
 7. **Mark Done** in Linear (`state: "Done"`) — only after CI is green or gate is explicitly skipped
 8. **Update `.claude/sync/LINEAR-MAP.md`** status column to reflect the change
 9. **Loop** — go back to step 1 for the next unblocked story
 
 **CI gate is non-negotiable for any story that touches code or CI config.** A story is not Done until its changes pass the pipeline. This prevents broken code from unblocking downstream stories.
+
+### CCR loop — Critique → Correct → Revalidate (max 3 attempts)
+
+When CI fails, do NOT just patch the symptom. Each CCR iteration must critique the fix holistically before committing. Hard stop after 3 attempts — escalate to the user.
+
+**Each CCR iteration:**
+
+1. **Read failure logs** — `gh run view <id> --log-failed`
+2. **Critique** — before writing any code, evaluate candidate fixes against ALL of these dimensions:
+   - **Security** — does the fix introduce or leave open any vulnerability? (injection, auth bypass, secret exposure)
+   - **Product** — does the fix preserve the acceptance criteria from the story? No silent regressions to user-facing behavior
+   - **Time** — is this the most direct fix, or are you over-engineering? Prefer surgical changes
+   - **Maintenance** — does the fix make the codebase harder to maintain? Avoid workarounds that create tech debt
+   - **Existing maintainability** — does it respect current patterns, naming, and architecture? Don't refactor unrelated code mid-fix
+   - **Testing** — does the fix need new/updated tests? Will existing tests still pass?
+   - **Regressive functionality** — explicitly check that the fix doesn't break other endpoints, routes, or features
+   - **Observability** — does the fix degrade logging, health checks, or error reporting?
+   - **Token/batch efficiency** — is the fix minimal in scope? Avoid large rewrites that burn context and review bandwidth
+3. **Correct** — implement the single best fix that scores well across all dimensions. Commit + push.
+4. **Revalidate** — `gh run list --branch <branch> --limit 1 --json status,conclusion,headSha`
+   - Green → exit CCR loop, proceed to step 7
+   - Red → increment attempt counter, loop back to step 1
+
+**After 3 failed CCR attempts:**
+- **STOP.** Do not attempt a 4th fix.
+- Move the issue to **In Review** in Linear (`state: "In Review"`)
+- Add a comment to the Linear issue summarizing: what failed, what was tried (all 3 attempts), and what the agent believes the root cause is
+- Alert the user: "CCR loop exhausted on OUR-XX — needs human review"
 
 ## Conventions
 
