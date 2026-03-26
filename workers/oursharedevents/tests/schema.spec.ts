@@ -7,12 +7,23 @@
  *   3. scan_aggregates is NOT writable via user-facing route handlers
  *   4. All expected indexes exist (11 custom indexes)
  *   5. Column counts match schema spec per table
+ *
+ * Migration SQL and source files are injected at build time via vitest.config.ts
+ * `define` constants (Workers runtime cannot use node:fs).
  */
 
 import { env } from 'cloudflare:test';
 import { describe, test, expect, beforeAll } from 'vitest';
-import { readFileSync, readdirSync } from 'node:fs';
-import { join } from 'node:path';
+
+// ── Test env bindings (injected via vitest.config.ts miniflare bindings) ─────
+// Workers runtime cannot use node:fs — migration SQL and source files are
+// read at config time and passed as string bindings.
+interface TestEnv {
+  DB: D1Database;
+  TEST_MIGRATION_STATEMENTS: string; // JSON array of SQL statements
+  TEST_SOURCE_FILES_JSON: string;
+  TEST_WRANGLER_TOML: string;
+}
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -52,24 +63,16 @@ const EXPECTED_COLUMN_COUNTS: Record<string, number> = {
 
 // ── Apply migrations before tests ────────────────────────────────────────────
 
-beforeAll(async () => {
-  const migrationsDir = join(__dirname, '..', 'migrations');
-  const files = readdirSync(migrationsDir)
-    .filter((f) => f.endsWith('.sql'))
-    .sort();
-
-  for (const file of files) {
-    const sql = readFileSync(join(migrationsDir, file), 'utf8');
-    // Split on semicolons to handle multi-statement files
-    const statements = sql
-      .split(';')
-      .map((s) => s.trim())
-      .filter((s) => s.length > 0 && !s.startsWith('--'));
-
-    for (const stmt of statements) {
-      await env.DB.prepare(stmt).run();
-    }
+async function applyMigrations(): Promise<void> {
+  const tenv = env as unknown as TestEnv;
+  const statements: string[] = JSON.parse(tenv.TEST_MIGRATION_STATEMENTS);
+  for (const stmt of statements) {
+    await env.DB.prepare(stmt).run();
   }
+}
+
+beforeAll(async () => {
+  await applyMigrations();
 });
 
 // ── Gate 1: Table existence ──────────────────────────────────────────────────
@@ -119,19 +122,14 @@ describe('Gate 3: PII firewall', () => {
   test('scans table has NO exact timestamp column', async () => {
     const info = await env.DB.prepare('PRAGMA table_info(scans)').all();
     const cols = info.results.map((r: Record<string, unknown>) => r.name);
-    // scan_bucket is allowed; exact_timestamp / scanned_at are not
     expect(cols).not.toContain('exact_timestamp');
     expect(cols).not.toContain('scanned_at');
     expect(cols).toContain('scan_bucket');
   });
 
   test('no route handler INSERTs PII columns into scans', () => {
-    const srcDir = join(__dirname, '..', 'src');
-    const tsFiles = findTsFiles(srcDir);
-
-    for (const file of tsFiles) {
-      const content = readFileSync(file, 'utf8');
-      // If the file references INSERT INTO scans, it must not include PII column names
+    const sources: Record<string, string> = JSON.parse((env as unknown as TestEnv).TEST_SOURCE_FILES_JSON);
+    for (const [, content] of Object.entries(sources)) {
       if (/INSERT\s+INTO\s+scans/i.test(content)) {
         expect(content).not.toMatch(/user_email/i);
         expect(content).not.toMatch(/user_name/i);
@@ -145,13 +143,8 @@ describe('Gate 3: PII firewall', () => {
 
 describe('Gate 4: scan_aggregates write protection', () => {
   test('scan_aggregates is NOT writable via user-facing route handlers', () => {
-    const srcDir = join(__dirname, '..', 'src');
-    const tsFiles = findTsFiles(srcDir);
-
-    for (const file of tsFiles) {
-      const content = readFileSync(file, 'utf8');
-      // No route handler should INSERT into scan_aggregates
-      // (only the scheduled worker is allowed to write)
+    const sources: Record<string, string> = JSON.parse((env as unknown as TestEnv).TEST_SOURCE_FILES_JSON);
+    for (const [, content] of Object.entries(sources)) {
       expect(content).not.toMatch(/INSERT\s+.*scan_aggregates/i);
     }
   });
@@ -170,23 +163,3 @@ describe('Gate 5: Index verification', () => {
     EXPECTED_INDEXES.forEach((idx) => expect(names).toContain(idx));
   });
 });
-
-// ── Helpers ──────────────────────────────────────────────────────────────────
-
-function findTsFiles(dir: string): string[] {
-  const results: string[] = [];
-  try {
-    const entries = readdirSync(dir, { withFileTypes: true });
-    for (const entry of entries) {
-      const fullPath = join(dir, entry.name);
-      if (entry.isDirectory()) {
-        results.push(...findTsFiles(fullPath));
-      } else if (entry.name.endsWith('.ts') && !entry.name.endsWith('.spec.ts')) {
-        results.push(fullPath);
-      }
-    }
-  } catch {
-    // Directory may not exist yet
-  }
-  return results;
-}

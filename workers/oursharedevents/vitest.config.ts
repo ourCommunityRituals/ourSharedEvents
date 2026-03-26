@@ -1,4 +1,53 @@
+import { readFileSync, readdirSync } from 'fs';
+import { join, resolve } from 'path';
 import { defineWorkersConfig } from '@cloudflare/vitest-pool-workers/config';
+
+const rootDir = resolve(__dirname);
+const migrationsDir = join(rootDir, 'migrations');
+const srcDir = join(rootDir, 'src');
+
+// ── Read migration SQL at config time (Node.js context) ──────────────────────
+// Injected as miniflare bindings since Workers runtime cannot use node:fs.
+
+const migrationSQL = readdirSync(migrationsDir)
+  .filter((f) => f.endsWith('.sql'))
+  .sort()
+  .map((f) => readFileSync(join(migrationsDir, f), 'utf8'))
+  .join('\n')
+  // D1.exec() chokes on standalone comment lines — strip them
+  .split('\n')
+  .filter((line) => !line.trimStart().startsWith('--'))
+  .join('\n');
+
+// ── Read source files for static analysis gates ──────────────────────────────
+
+function collectTsFiles(dir: string): Record<string, string> {
+  const result: Record<string, string> = {};
+  try {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const full = join(dir, entry.name);
+      if (entry.isDirectory()) {
+        Object.assign(result, collectTsFiles(full));
+      } else if (entry.name.endsWith('.ts') && !entry.name.endsWith('.spec.ts')) {
+        result[full] = readFileSync(full, 'utf8');
+      }
+    }
+  } catch {
+    // dir may not exist
+  }
+  return result;
+}
+
+const sourceFiles = collectTsFiles(srcDir);
+const wranglerToml = readFileSync(join(rootDir, 'wrangler.toml'), 'utf8');
+
+// Split migrations into individual statements for reliable D1.exec() calls.
+// Each statement is a complete CREATE TABLE/INDEX — no partial SQL.
+const migrationStatements = migrationSQL
+  .split(';')
+  .map((s) => s.trim())
+  .filter((s) => s.length > 0)
+  .map((s) => s + ';');
 
 export default defineWorkersConfig({
   test: {
@@ -10,6 +59,11 @@ export default defineWorkersConfig({
         },
         miniflare: {
           d1Databases: ['DB'],
+          bindings: {
+            TEST_MIGRATION_STATEMENTS: JSON.stringify(migrationStatements),
+            TEST_SOURCE_FILES_JSON: JSON.stringify(sourceFiles),
+            TEST_WRANGLER_TOML: wranglerToml,
+          },
         },
       },
     },

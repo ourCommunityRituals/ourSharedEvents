@@ -7,39 +7,34 @@
  *   QA-3. UNIQUE constraints: duplicate slug, qr_token rejected
  *   QA-4. scan_aggregates empty on fresh deploy
  *   QA-5. Production DB isolation: binding mismatch caught
+ *
+ * Migration SQL and config files are injected at build time via vitest.config.ts
+ * `define` constants (Workers runtime cannot use node:fs).
  */
 
 import { env } from 'cloudflare:test';
 import { describe, test, expect, beforeAll } from 'vitest';
-import { readFileSync, readdirSync } from 'node:fs';
-import { join } from 'node:path';
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
-
-async function applyAllMigrations(): Promise<void> {
-  const migrationsDir = join(__dirname, '..', 'migrations');
-  const files = readdirSync(migrationsDir)
-    .filter((f) => f.endsWith('.sql'))
-    .sort();
-
-  for (const file of files) {
-    const sql = readFileSync(join(migrationsDir, file), 'utf8');
-    const statements = sql
-      .split(';')
-      .map((s) => s.trim())
-      .filter((s) => s.length > 0 && !s.startsWith('--'));
-
-    for (const stmt of statements) {
-      await env.DB.prepare(stmt).run();
-    }
-  }
+// ── Test env bindings (injected via vitest.config.ts miniflare bindings) ─────
+interface TestEnv {
+  DB: D1Database;
+  TEST_MIGRATION_STATEMENTS: string; // JSON array of SQL statements
+  TEST_SOURCE_FILES_JSON: string;
+  TEST_WRANGLER_TOML: string;
 }
 
 // ── Setup: apply migrations + enable FK enforcement ──────────────────────────
 
+async function applyMigrations(): Promise<void> {
+  const tenv = env as unknown as TestEnv;
+  const statements: string[] = JSON.parse(tenv.TEST_MIGRATION_STATEMENTS);
+  for (const stmt of statements) {
+    await env.DB.prepare(stmt).run();
+  }
+}
+
 beforeAll(async () => {
-  await applyAllMigrations();
-  // D1 (SQLite) requires explicit FK enforcement
+  await applyMigrations();
   await env.DB.prepare('PRAGMA foreign_keys = ON').run();
 });
 
@@ -48,7 +43,7 @@ beforeAll(async () => {
 describe('QA-1: Migration idempotency', () => {
   test('re-running all 7 migrations produces zero errors and zero duplicate tables', async () => {
     // Run migrations a second time — CREATE IF NOT EXISTS should be safe
-    await expect(applyAllMigrations()).resolves.not.toThrow();
+    await expect(applyMigrations()).resolves.not.toThrow();
 
     // Verify still exactly 7 application tables (no duplicates)
     const tables = await env.DB.prepare(
@@ -59,21 +54,7 @@ describe('QA-1: Migration idempotency', () => {
     expect(names).toHaveLength(7);
   });
 
-  test('re-running index migration produces zero errors and no duplicate indexes', async () => {
-    // Indexes also use IF NOT EXISTS
-    const indexSql = readFileSync(
-      join(__dirname, '..', 'migrations', '0007_create_indexes.sql'),
-      'utf8'
-    );
-    const statements = indexSql
-      .split(';')
-      .map((s) => s.trim())
-      .filter((s) => s.length > 0 && !s.startsWith('--'));
-
-    for (const stmt of statements) {
-      await expect(env.DB.prepare(stmt).run()).resolves.not.toThrow();
-    }
-
+  test('indexes remain at exactly 11 after idempotent re-run', async () => {
     const indexes = await env.DB.prepare(
       "SELECT name FROM sqlite_master WHERE type='index' AND name LIKE 'idx_%'"
     ).all();
@@ -92,7 +73,6 @@ describe('QA-2: Foreign key constraints', () => {
         `INSERT INTO scans (id, event_id, poster_deployment_id, scan_bucket)
          VALUES ('scan_bad_fk', 'nonexistent_event', 'nonexistent_pd', '2026-03-26T12')`
       ).run();
-      // If we get here, FK enforcement is off — fail the test explicitly
       expect.fail('INSERT with invalid event_id should have thrown FK constraint error');
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -137,25 +117,21 @@ describe('QA-2: Foreign key constraints', () => {
   test('valid FK chain succeeds: event → poster_deployment → scan', async () => {
     await env.DB.prepare('PRAGMA foreign_keys = ON').run();
 
-    // Insert a valid event
     await env.DB.prepare(
       `INSERT INTO events (id, brand_id, title, slug, status)
        VALUES ('evt_fk_test', 'brand_1', 'FK Test Event', 'fk-test-event', 'active')`
     ).run();
 
-    // Insert a valid poster_deployment referencing the event
     await env.DB.prepare(
       `INSERT INTO poster_deployments (id, event_id, qr_token)
        VALUES ('pd_fk_test', 'evt_fk_test', 'qr_fk_test_token')`
     ).run();
 
-    // Insert a valid scan referencing both
     await env.DB.prepare(
       `INSERT INTO scans (id, event_id, poster_deployment_id, scan_bucket)
        VALUES ('scan_fk_test', 'evt_fk_test', 'pd_fk_test', '2026-03-26T12')`
     ).run();
 
-    // Verify the scan was inserted
     const result = await env.DB.prepare(
       "SELECT COUNT(*) as cnt FROM scans WHERE id = 'scan_fk_test'"
     ).first<{ cnt: number }>();
@@ -167,13 +143,11 @@ describe('QA-2: Foreign key constraints', () => {
 
 describe('QA-3: UNIQUE constraints', () => {
   test('events.slug UNIQUE — second INSERT with same slug returns constraint violation', async () => {
-    // First insert
     await env.DB.prepare(
       `INSERT INTO events (id, brand_id, title, slug)
        VALUES ('evt_uniq_1', 'brand_1', 'Event One', 'unique-slug-test')`
     ).run();
 
-    // Second insert with same slug — must fail
     try {
       await env.DB.prepare(
         `INSERT INTO events (id, brand_id, title, slug)
@@ -187,19 +161,16 @@ describe('QA-3: UNIQUE constraints', () => {
   });
 
   test('poster_deployments.qr_token UNIQUE — duplicate token insert fails cleanly', async () => {
-    // Ensure parent event exists
     await env.DB.prepare(
       `INSERT OR IGNORE INTO events (id, brand_id, title, slug)
        VALUES ('evt_qr_uniq', 'brand_1', 'QR Test Event', 'qr-unique-test')`
     ).run();
 
-    // First poster deployment
     await env.DB.prepare(
       `INSERT INTO poster_deployments (id, event_id, qr_token)
        VALUES ('pd_uniq_1', 'evt_qr_uniq', 'duplicate-qr-token')`
     ).run();
 
-    // Second poster deployment with same qr_token — must fail
     try {
       await env.DB.prepare(
         `INSERT INTO poster_deployments (id, event_id, qr_token)
@@ -237,14 +208,19 @@ describe('QA-3: UNIQUE constraints', () => {
 
   test('sponsors.impression_token UNIQUE — duplicate impression_token insert fails', async () => {
     await env.DB.prepare(
+      `INSERT OR IGNORE INTO events (id, brand_id, title, slug)
+       VALUES ('evt_imp_uniq', 'brand_1', 'Impression Uniq Event', 'impression-unique-test')`
+    ).run();
+
+    await env.DB.prepare(
       `INSERT INTO sponsors (id, event_id, name, impression_token)
-       VALUES ('spn_uniq_3', 'evt_spn_uniq', 'Sponsor C', 'imp_token_dup')`
+       VALUES ('spn_uniq_3', 'evt_imp_uniq', 'Sponsor C', 'imp_token_dup')`
     ).run();
 
     try {
       await env.DB.prepare(
         `INSERT INTO sponsors (id, event_id, name, impression_token)
-         VALUES ('spn_uniq_4', 'evt_spn_uniq', 'Sponsor D', 'imp_token_dup')`
+         VALUES ('spn_uniq_4', 'evt_imp_uniq', 'Sponsor D', 'imp_token_dup')`
       ).run();
       expect.fail(
         'Duplicate impression_token INSERT should have thrown UNIQUE constraint error'
@@ -271,46 +247,37 @@ describe('QA-4: scan_aggregates fresh state', () => {
 
 describe('QA-5: Production DB isolation', () => {
   test('wrangler.toml has separate database_name per environment — no cross-env contamination', () => {
-    const wranglerPath = join(__dirname, '..', 'wrangler.toml');
-    const toml = readFileSync(wranglerPath, 'utf8');
+    const toml = (env as unknown as TestEnv).TEST_WRANGLER_TOML;
 
-    // Extract all database_name values
     const dbNames = [...toml.matchAll(/database_name\s*=\s*"([^"]+)"/g)].map(
       (m) => m[1]
     );
 
-    // Must have 3 distinct database names (local, staging, production)
     expect(dbNames.length).toBeGreaterThanOrEqual(3);
     const unique = new Set(dbNames);
     expect(unique.size).toBe(dbNames.length);
 
-    // Verify naming convention
     expect(dbNames).toContain('ocr-db-local');
     expect(dbNames).toContain('ocr-db-staging');
     expect(dbNames).toContain('ocr-db-production');
   });
 
   test('wrangler.toml has separate database_id per environment', () => {
-    const wranglerPath = join(__dirname, '..', 'wrangler.toml');
-    const toml = readFileSync(wranglerPath, 'utf8');
+    const toml = (env as unknown as TestEnv).TEST_WRANGLER_TOML;
 
-    // Extract all database_id values
     const dbIds = [...toml.matchAll(/database_id\s*=\s*"([^"]+)"/g)].map(
       (m) => m[1]
     );
 
-    // Must have 3 distinct database IDs
     expect(dbIds.length).toBeGreaterThanOrEqual(3);
     const unique = new Set(dbIds);
     expect(unique.size).toBe(dbIds.length);
   });
 
   test('no FIREBASE_CLIENT_SECRET or API keys in wrangler.toml', () => {
-    const wranglerPath = join(__dirname, '..', 'wrangler.toml');
-    const toml = readFileSync(wranglerPath, 'utf8');
+    const toml = (env as unknown as TestEnv).TEST_WRANGLER_TOML;
 
     expect(toml).not.toMatch(/FIREBASE_CLIENT_SECRET/i);
-    // Ensure no hardcoded API keys (look for patterns like key = "sk-..." or "AIza...")
     expect(toml).not.toMatch(/=\s*"sk-/);
     expect(toml).not.toMatch(/=\s*"AIza/);
   });
