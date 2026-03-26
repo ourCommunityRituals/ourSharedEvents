@@ -43,6 +43,22 @@ Tests are organized by story ID (e.g., Story 1.1, Story 2.3).
 - **Stories:** `STORIES.md` — single source of truth for all work
 - **Linear:** Team `OUR` (OurSharedEvents) — see `.claude/sync/LINEAR-MAP.md` for story ↔ issue mapping
 - **Phases:** P1 Build (done) → P1 Ops (current) → P2 D1 Database → P3 Firebase
+- **Dependencies:** All issues have `blockedBy` relationships in Linear matching the prerequisite chain in STORIES.md
+
+## Linear workflow loop
+
+When starting a new session or when asked "what's next", follow this loop:
+
+1. **Query Linear** for team OUR issues in Backlog/Todo state that have no unresolved blockers (all `blockedBy` issues are Done)
+2. **Pick the first unblocked issue** by story ID order (P1-6 before P1-7, etc.)
+3. **Move it to In Progress** in Linear (`state: "In Progress"`)
+4. **Do the work** — read the issue description for acceptance criteria and referenced files
+5. **When done**, mark it **Done** in Linear (`state: "Done"`)
+6. **Update `.claude/sync/LINEAR-MAP.md`** status column to reflect the change
+7. **Commit** with story ID in message: `feat: <description> (P1-6)` referencing `OUR-11`
+8. **Loop** — go back to step 1 for the next unblocked story
+
+This ensures Linear is always the live source of truth for what's done, in progress, and next.
 
 ## Conventions
 
