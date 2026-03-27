@@ -234,9 +234,13 @@ export async function handleStaticAsset(
     'X-Served-By': 'cloudflare-worker',
   };
 
-  // Add CSP header for landing page
+  // Add CSP headers for HTML pages
+  // Landing page: strict CSP (no inline scripts)
+  // Report + other pages: allow inline scripts (template rendering) but lock down sources
   if (pageType === 'landing') {
     headers['Content-Security-Policy'] = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; frame-ancestors 'self'";
+  } else if (pageType === 'report') {
+    headers['Content-Security-Policy'] = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'";
   }
 
   return new Response(html, { status: 200, headers });

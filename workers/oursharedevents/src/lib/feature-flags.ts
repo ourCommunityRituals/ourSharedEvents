@@ -61,3 +61,28 @@ export const FORM_FLAGS = {
   SURVEY: 'forms.survey',
   EMAIL_SIGNUP: 'forms.email-signup',
 } as const;
+
+/**
+ * Well-known flag keys for the SharedReport system.
+ *
+ * Tier mapping:
+ *   Free:       VIEW + EXPORT_JSON (default ON)
+ *   Mid:        + ADVANCED_METRICS + EXPORT_PDF + CUSTOM_WINDOW
+ *   Enterprise: + PORTFOLIO + WHITE_LABEL + per-event overrides
+ */
+export const REPORT_FLAGS = {
+  /** Basic 3-pane report view (Free tier — default ON) */
+  VIEW: 'report.view',
+  /** Raw JSON export link (Free tier — default ON) */
+  EXPORT_JSON: 'report.export-json',
+  /** Conversion funnels, trend charts (Mid tier) */
+  ADVANCED_METRICS: 'report.advanced-metrics',
+  /** Downloadable PDF export (Mid tier) */
+  EXPORT_PDF: 'report.export-pdf',
+  /** Custom date range picker (Mid tier) */
+  CUSTOM_WINDOW: 'report.custom-window',
+  /** Multi-event portfolio roll-ups (Enterprise tier) */
+  PORTFOLIO: 'report.portfolio',
+  /** Custom branding on report (Enterprise tier) */
+  WHITE_LABEL: 'report.white-label',
+} as const;

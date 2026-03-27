@@ -1264,7 +1264,7 @@ DO NOT modify contracts without updating:
 <body>
   <div class="container">
     <!-- Header -->
-    <div class="report-header">
+    <div class="report-header" data-testid="report-header">
       <h1 id="reportTitle">📊 Your Sponsorship Performance</h1>
       <p class="subtitle" id="reportSubtitle">See how your brand is performing across events</p>
       <p class="subtitle report-context" id="reportContext">Track impressions, clicks, and engagement from all your sponsored placements in one place.</p>
@@ -1273,14 +1273,14 @@ DO NOT modify contracts without updating:
 
     <!-- Action Bar (MVP: Refresh only) -->
     <div class="action-bar">
-      <button id="refreshBtn" class="btn btn-primary" onclick="loadReport()">
+      <button id="refreshBtn" class="btn btn-primary" data-testid="refresh-btn" onclick="loadReport()">
         <span class="btn-text">🔄 Refresh Data</span>
       </button>
       <!-- V2 features removed from MVP: Export, Filters, Portfolio Mode -->
     </div>
 
     <!-- Loading State -->
-    <div id="loading" class="loading">
+    <div id="loading" class="loading" data-testid="loading-state">
       <div class="spinner"></div>
       <p>Loading analytics data...</p>
     </div>
@@ -1293,29 +1293,29 @@ DO NOT modify contracts without updating:
       <!-- Story F6: 3-Pane Tab Navigation -->
       <div class="tab-container" id="tabContainer">
         <div class="tab-nav" role="tablist">
-          <button class="tab-btn active" role="tab" aria-selected="true" data-tab="event" onclick="switchTab('event')">
+          <button class="tab-btn active" role="tab" aria-selected="true" data-tab="event" data-testid="tab-event" onclick="switchTab('event')">
             <span class="tab-icon">🎉</span>Event
           </button>
-          <button class="tab-btn" role="tab" aria-selected="false" data-tab="sponsor" onclick="switchTab('sponsor')">
+          <button class="tab-btn" role="tab" aria-selected="false" data-tab="sponsor" data-testid="tab-sponsor" onclick="switchTab('sponsor')">
             <span class="tab-icon">🏢</span>Sponsor
           </button>
-          <button class="tab-btn" role="tab" aria-selected="false" data-tab="customer" onclick="switchTab('customer')">
+          <button class="tab-btn" role="tab" aria-selected="false" data-tab="customer" data-testid="tab-customer" onclick="switchTab('customer')">
             <span class="tab-icon">👥</span>Customer
           </button>
         </div>
 
         <!-- Event Tab Panel -->
-        <div class="tab-panel active" id="eventPanel" role="tabpanel">
+        <div class="tab-panel active" id="eventPanel" role="tabpanel" data-testid="panel-event">
           <div id="eventPaneContent"></div>
         </div>
 
         <!-- Sponsor Tab Panel -->
-        <div class="tab-panel" id="sponsorPanel" role="tabpanel">
+        <div class="tab-panel" id="sponsorPanel" role="tabpanel" data-testid="panel-sponsor">
           <div id="sponsorPaneContent"></div>
         </div>
 
         <!-- Customer Tab Panel -->
-        <div class="tab-panel" id="customerPanel" role="tabpanel">
+        <div class="tab-panel" id="customerPanel" role="tabpanel" data-testid="panel-customer">
           <div id="customerPaneContent"></div>
         </div>
       </div>
@@ -1381,7 +1381,7 @@ DO NOT modify contracts without updating:
     </div>
 
     <!-- S12: Error State container (dynamically rendered by StateRenderer) -->
-    <div id="errorState" style="display:none;"></div>
+    <div id="errorState" data-testid="error-state" style="display:none;"></div>
   </div>
 
   <!-- Trust Footer -->
@@ -1624,7 +1624,7 @@ DO NOT modify contracts without updating:
       }
 
       container.innerHTML = `
-        <div class="integrity-banner ${statusClass}">
+        <div class="integrity-banner ${statusClass}" data-testid="integrity-banner">
           <span class="integrity-icon">${icon}</span>
           <div style="flex: 1;">
             <strong>${message}</strong>
@@ -1661,11 +1661,11 @@ DO NOT modify contracts without updating:
       container.innerHTML = `
         <div class="pane-card">
           <h3>📋 Event Summary</h3>
-          <div class="metric-row">
+          <div class="metric-row" data-testid="metric-event-name">
             <span class="metric-label">Event Name</span>
             <span class="metric-value">${escapeHtml(event.name)}</span>
           </div>
-          <div class="metric-row">
+          <div class="metric-row" data-testid="metric-event-id">
             <span class="metric-label">Event ID</span>
             <span class="metric-value" style="font-family: monospace; font-size: 0.8rem;">${escapeHtml(event.eventId)}</span>
           </div>
@@ -1673,15 +1673,15 @@ DO NOT modify contracts without updating:
 
         <div class="pane-card">
           <h3>📊 Participation</h3>
-          <div class="metric-row">
+          <div class="metric-row" data-testid="metric-signups">
             <span class="metric-label">Signups</span>
             <span class="metric-value">${(summary.signups || 0).toLocaleString()}</span>
           </div>
-          <div class="metric-row">
+          <div class="metric-row" data-testid="metric-matches">
             <span class="metric-label">Matches Played</span>
             <span class="metric-value">${(summary.matches || 0).toLocaleString()}</span>
           </div>
-          <div class="metric-row">
+          <div class="metric-row" data-testid="metric-duration">
             <span class="metric-label">Duration</span>
             <span class="metric-value">${(summary.durationMinutes || 0)} min</span>
           </div>
@@ -1689,11 +1689,11 @@ DO NOT modify contracts without updating:
 
         <div class="pane-card">
           <h3>👁️ Traffic</h3>
-          <div class="metric-row">
+          <div class="metric-row" data-testid="metric-pageviews">
             <span class="metric-label">Page Views</span>
             <span class="metric-value">${(traffic.pageViews || 0).toLocaleString()}</span>
           </div>
-          <div class="metric-row">
+          <div class="metric-row" data-testid="metric-unique-visitors">
             <span class="metric-label">Unique Visitors</span>
             <span class="metric-value">${(traffic.uniqueVisitors || 0).toLocaleString()}</span>
           </div>
@@ -1701,11 +1701,11 @@ DO NOT modify contracts without updating:
 
         <div class="pane-card">
           <h3>📱 QR Codes</h3>
-          <div class="metric-row">
+          <div class="metric-row" data-testid="metric-qr-scans">
             <span class="metric-label">Total Scans</span>
             <span class="metric-value">${(qr.scans || 0).toLocaleString()}</span>
           </div>
-          <div class="metric-row">
+          <div class="metric-row" data-testid="metric-qr-verified">
             <span class="metric-label">Verified Only</span>
             <span class="metric-value">${qr.verifiedOnly ? '✓ Yes' : '✗ No'}</span>
           </div>
