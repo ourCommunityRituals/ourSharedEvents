@@ -574,7 +574,10 @@ jobs:
           echo "QUALITY GATE: UNIT TESTS WITH COVERAGE"
           echo "Story 2.3: Coverage threshold >= 80%"
           echo "=================================================="
-          npm run test:unit -- --coverage --coverageThreshold='{"global":{"branches":80,"functions":80,"lines":80,"statements":80}}'
+          npm run test:unit -- --coverage --coverageThreshold='{"global":{"branches":80,"functions":80,"lines":80,"statements":80}}' --ci --reporters=default --reporters=jest-junit
+        env:
+          JEST_JUNIT_OUTPUT_DIR: .test-results
+          JEST_JUNIT_OUTPUT_NAME: unit-tests-junit.xml
 
       - name: Run security-specific tests
         run: |
@@ -593,6 +596,25 @@ jobs:
             coverage/
             coverage/lcov-report/
           retention-days: 7
+
+      - name: Upload unit test JUnit results
+        if: always()
+        uses: actions/upload-artifact@v4
+        continue-on-error: true
+        with:
+          name: unit-tests-junit
+          path: .test-results/unit-tests-junit.xml
+          retention-days: 7
+
+      - name: Report unit test results in PR
+        if: always() && github.event_name == 'pull_request'
+        uses: dorny/test-reporter@v1
+        continue-on-error: true
+        with:
+          name: "Unit Test Results"
+          path: .test-results/unit-tests-junit.xml
+          reporter: jest-junit
+          fail-on-error: false
 
       - name: Create unit tests summary
         if: always()

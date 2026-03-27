@@ -209,8 +209,22 @@ jobs:
       - name: Install root dependencies
         run: npm ci
 
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            playwright-${{ runner.os }}-
+
       - name: Install Playwright browsers
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
         run: npx playwright install chromium --with-deps
+
+      - name: Install Playwright OS dependencies only (cached browsers)
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium
 
       - name: API smoke tests
         id: api-tests
@@ -241,6 +255,16 @@ jobs:
             .test-results/
             test-results/
           retention-days: 14
+
+      - name: Report staging E2E results in PR
+        if: always() && github.event_name == 'pull_request'
+        uses: dorny/test-reporter@v1
+        continue-on-error: true
+        with:
+          name: "E2E Staging Results"
+          path: .test-results/junit.xml
+          reporter: jest-junit
+          fail-on-error: false
 
       - name: Fail if tests failed
         if: steps.api-tests.outcome == 'failure' || steps.ui-tests.outcome == 'failure'
@@ -374,8 +398,22 @@ jobs:
       - name: Install root dependencies
         run: npm ci
 
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            playwright-${{ runner.os }}-
+
       - name: Install Playwright browsers
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
         run: npx playwright install chromium --with-deps
+
+      - name: Install Playwright OS dependencies only (cached browsers)
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium
 
       - name: API smoke tests
         id: api-tests
