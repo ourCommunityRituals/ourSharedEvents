@@ -23,19 +23,34 @@ export type RouterEnv = HealthEnv & EventsEnv & PagesEnv & AdminEnv & {
   WORKER_BUILD_VERSION?: string;
 };
 
+/** Origins allowed for CORS. Staging included for local dev and preview. */
+const ALLOWED_ORIGINS = new Set([
+  'https://oursharedevents.com',
+  'https://www.oursharedevents.com',
+  'https://stg.oursharedevents.com',
+]);
+
+function corsOrigin(request: Request): string | null {
+  const origin = request.headers.get('Origin');
+  if (origin && ALLOWED_ORIGINS.has(origin)) return origin;
+  return null;
+}
+
 export async function route(request: Request, env: RouterEnv): Promise<Response> {
   const url = new URL(request.url);
   const { pathname, method } = { pathname: url.pathname, method: request.method };
 
   // ── CORS preflight ────────────────────────────────────────────────────────
   if (method === 'OPTIONS') {
+    const origin = corsOrigin(request);
     return new Response(null, {
       status: 204,
       headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET, OPTIONS',
+        ...(origin ? { 'Access-Control-Allow-Origin': origin } : {}),
+        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
         'Access-Control-Allow-Headers': 'Authorization, Content-Type',
         'Access-Control-Max-Age': '86400',
+        'Vary': 'Origin',
       },
     });
   }
