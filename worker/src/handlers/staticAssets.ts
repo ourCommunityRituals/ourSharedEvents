@@ -15,7 +15,7 @@
 /**
  * Page types that can be served
  */
-export type PageType = 'public' | 'admin' | 'display' | 'poster' | 'report' | 'sponsor';
+export type PageType = 'public' | 'admin' | 'display' | 'poster' | 'report' | 'sponsor' | 'landing';
 
 /**
  * Template variables for runtime substitution
@@ -60,6 +60,7 @@ import displayTemplate from '../../templates/display.html';
 import posterTemplate from '../../templates/poster.html';
 import reportTemplate from '../../templates/report.html';
 import sponsorTemplate from '../../templates/sponsor.html';
+import landingTemplate from '../../templates/landing.html';
 
 /**
  * Template map for quick lookup
@@ -71,6 +72,7 @@ const TEMPLATES: Record<PageType, string> = {
   poster: posterTemplate,
   report: reportTemplate,
   sponsor: sponsorTemplate,
+  landing: landingTemplate,
 };
 
 // =============================================================================
@@ -150,6 +152,7 @@ function generateTitle(brandId: string, scope: string, pageType: PageType): stri
     poster: 'Poster Generator',
     report: 'Event Report',
     sponsor: 'Sponsor Dashboard',
+    landing: 'Home',
   };
 
   const brandNames: Record<string, string> = {
@@ -220,19 +223,23 @@ export async function handleStaticAsset(
     ? 'public, max-age=300, stale-while-revalidate=600' // 5 min cache in prod
     : 'no-cache, no-store, must-revalidate'; // No cache in dev/staging
 
-  return new Response(html, {
-    status: 200,
-    headers: {
-      'Content-Type': 'text/html; charset=utf-8',
-      'Cache-Control': cacheControl,
-      'X-Content-Type-Options': 'nosniff',
-      'X-Frame-Options': 'SAMEORIGIN',
-      'X-Page-Type': pageType,
-      'X-Brand': brandId,
-      // Story 4.1: Indicate this is served from Worker, not GAS
-      'X-Served-By': 'cloudflare-worker',
-    },
-  });
+  const headers: Record<string, string> = {
+    'Content-Type': 'text/html; charset=utf-8',
+    'Cache-Control': cacheControl,
+    'X-Content-Type-Options': 'nosniff',
+    'X-Frame-Options': 'SAMEORIGIN',
+    'X-Page-Type': pageType,
+    'X-Brand': brandId,
+    // Story 4.1: Indicate this is served from Worker, not GAS
+    'X-Served-By': 'cloudflare-worker',
+  };
+
+  // Add CSP header for landing page
+  if (pageType === 'landing') {
+    headers['Content-Security-Policy'] = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; frame-ancestors 'self'";
+  }
+
+  return new Response(html, { status: 200, headers });
 }
 
 /**

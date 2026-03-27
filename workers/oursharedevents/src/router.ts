@@ -3,7 +3,7 @@
  *
  * Route table:
  *
- *   GET /                        → public events page
+ *   GET /                        → landing page
  *   GET /admin                   → admin dashboard (auth required)
  *   GET /health                  → health check
  *   GET /api/status              → alias for /health
@@ -15,7 +15,7 @@
 
 import { handleHealth, type HealthEnv } from './handlers/health';
 import { handleListEvents, handleGetEvent, handleAdminListEvents, type EventsEnv } from './handlers/events';
-import { handlePublicPage, handleAdminPage, type PagesEnv } from './handlers/pages';
+import { handlePublicPage, handleAdminPage, handleLandingPage, type PagesEnv } from './handlers/pages';
 import { requireAdmin, type AdminEnv } from './auth/admin';
 
 export type RouterEnv = HealthEnv & EventsEnv & PagesEnv & AdminEnv & {
@@ -69,8 +69,13 @@ export async function route(request: Request, env: RouterEnv): Promise<Response>
     return handleGetEvent(request, env, eventMatch[1]);
   }
 
+  // ── Landing page ──────────────────────────────────────────────────────────
+  if (pathname === '/' || pathname === '/home' || pathname === '/welcome' || pathname === '/landing') {
+    return handleLandingPage(env);
+  }
+
   // ── Public pages ───────────────────────────────────────────────────────────
-  if (pathname === '/' || pathname === '/events' || pathname === '/public') {
+  if (pathname === '/events' || pathname === '/public') {
     return handlePublicPage(env);
   }
 
