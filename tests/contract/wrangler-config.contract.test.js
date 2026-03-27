@@ -106,13 +106,19 @@ function hasVarAssignment(content, varName, expectedValue) {
 }
 
 /**
- * Check if content has a route pattern
+ * Check if content has a route pattern (e.g. pattern = "stg.example.com/*")
+ * Uses string search instead of regex to avoid CodeQL hostname-in-regex alerts.
  */
-function hasRoutePattern(content, pattern) {
-  // Escape special regex characters in the pattern except *
-  const escapedPattern = pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\\\*/g, '\\*');
-  const regex = new RegExp(`pattern\\s*=\\s*"${escapedPattern}"`, 'm');
-  return regex.test(content);
+function hasRoutePattern(content, routePattern) {
+  // Look for: pattern = "routePattern" (with flexible whitespace)
+  // Normalize whitespace in content lines and check for the pattern assignment
+  return content.split('\n').some(function checkLine(line) {
+    const trimmed = line.trim();
+    if (trimmed.startsWith('#')) return false;
+    return trimmed.includes('pattern') &&
+           trimmed.includes('=') &&
+           trimmed.includes('"' + routePattern + '"');
+  });
 }
 
 /**
