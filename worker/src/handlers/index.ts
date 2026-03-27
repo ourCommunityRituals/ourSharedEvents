@@ -178,6 +178,15 @@ export {
   type PosterLayoutConfig,
 } from './posterBundle';
 
+// V2 Admin Upload File Handler (Phone Storage)
+export {
+  handleV2AdminUploadFile,
+  handleV2GetUploadedFile,
+  type V2AdminUploadFileEnv,
+  type V2AdminUploadFileResponse,
+  type V2AdminUploadFileErrorResponse,
+} from './v2AdminUploadFile';
+
 // Sponsor Page Handler (Story F3)
 export {
   handleSponsorPage,

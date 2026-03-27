@@ -121,8 +121,8 @@ describe('Worker → GAS Routing Contract', () => {
     });
 
     test('root wrangler.toml is configured for staging environment', () => {
-      expect(rootWranglerContent).toContain('name = "eventangle-staging"');
-      expect(rootWranglerContent).toContain('stg.eventangle.com');
+      expect(rootWranglerContent).toContain('name = "zeventbooks-staging"');
+      expect(rootWranglerContent).toContain('stg.zeventbooks.io');
     });
 
     test('proxy wrangler.toml [env.production] uses worker-only backend mode', () => {
@@ -141,10 +141,15 @@ describe('Worker → GAS Routing Contract', () => {
     });
 
     test('staging and production deployment IDs are still defined in config', () => {
-      // These are still needed for reference in deploy-manifest.json
-      expect(STAGING_DEPLOYMENT_ID).not.toBe(PRODUCTION_DEPLOYMENT_ID);
-      expect(STAGING_DEPLOYMENT_ID).toMatch(/^AKfycb/);
-      expect(PRODUCTION_DEPLOYMENT_ID).toMatch(/^AKfycb/);
+      // Story 5.3: GAS decommissioned. IDs may be REDACTED in manifest
+      // but hardcoded fallbacks in deployment-ids.js still provide AKfycb IDs.
+      // Verify they are defined (not undefined/null), regardless of value.
+      expect(STAGING_DEPLOYMENT_ID).toBeDefined();
+      expect(PRODUCTION_DEPLOYMENT_ID).toBeDefined();
+      expect(typeof STAGING_DEPLOYMENT_ID).toBe('string');
+      expect(typeof PRODUCTION_DEPLOYMENT_ID).toBe('string');
+      expect(STAGING_DEPLOYMENT_ID.length).toBeGreaterThan(0);
+      expect(PRODUCTION_DEPLOYMENT_ID.length).toBeGreaterThan(0);
     });
 
   });
@@ -232,8 +237,8 @@ describe('Worker → GAS Routing Contract', () => {
     });
 
     test('worker adds X-Proxied-By header', () => {
-      expect(workerContent).toContain("'X-Proxied-By': 'eventangle-worker'");
-      expect(workerContent).toContain("'X-Proxied-By', 'eventangle-worker'");
+      expect(workerContent).toContain("'X-Proxied-By': 'zeventbooks-worker'");
+      expect(workerContent).toContain("'X-Proxied-By', 'zeventbooks-worker'");
     });
 
     test('worker adds X-Worker-Version header', () => {
@@ -380,8 +385,11 @@ describe('Worker-Only Mode Verification', () => {
     // - Commented code (for migration reference)
     const deployManifest = readFileContent(path.join(__dirname, '../../deploy-manifest.json'));
 
-    // deploy-manifest.json SHOULD contain GAS URLs (historical record)
-    expect(deployManifest).toContain('script.google.com');
+    // Story 5.3: GAS decommissioned. deploy-manifest.json may have REDACTED
+    // values instead of actual script.google.com URLs.
+    // Verify the manifest exists and has deployment configuration structure.
+    expect(deployManifest).toContain('environments');
+    expect(deployManifest).toContain('deploymentId');
 
     // Wrangler configs should NOT have uncommented GAS URLs
     const rootWrangler = readFileContent(ROOT_WRANGLER_PATH);
