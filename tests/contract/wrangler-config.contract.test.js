@@ -42,7 +42,7 @@ const WORKER_WRANGLER_PATH = path.join(__dirname, '../../worker/wrangler.toml');
 // Expected Configuration Values (From ci-cd-architecture.md)
 // =============================================================================
 
-// Proxy wrangler uses zeventbooks.io (rebranded), worker/root use eventangle.com
+// Proxy wrangler uses oursharedevents.com (rebranded), worker/root use oursharedevents.com
 // Note: Route patterns are inlined in tests to avoid CodeQL hostname-in-variable alerts.
 // These are string constants for toContain/hasRoutePattern (which escapes before regex use).
 
@@ -166,16 +166,16 @@ describe('Wrangler Configuration Contract (Story 4)', () => {
 
     test('staging has correct worker name', () => {
       // Look for name within staging section context
-      expect(proxyWranglerContent).toMatch(/\[env\.staging\][\s\S]*?name\s*=\s*"zeventbooks-staging"/);
+      expect(proxyWranglerContent).toMatch(/\[env\.staging\][\s\S]*?name\s*=\s*"oursharedevents-staging"/);
     });
 
     test('staging routes include all expected patterns', () => {
-      expect(hasRoutePattern(proxyWranglerContent, 'stg.zeventbooks.io/*')).toBe(true);
-      expect(hasRoutePattern(proxyWranglerContent, 'api-stg.zeventbooks.io/*')).toBe(true);
+      expect(hasRoutePattern(proxyWranglerContent, 'stg.oursharedevents.com/*')).toBe(true);
+      expect(hasRoutePattern(proxyWranglerContent, 'api-stg.oursharedevents.com/*')).toBe(true);
     });
 
     test('staging routes use correct zone_name', () => {
-      expect(proxyWranglerContent).toContain('zone_name = "zeventbooks.io"');
+      expect(proxyWranglerContent).toContain('zone_name = "oursharedevents.com"');
     });
 
     test('staging has WORKER_ENV set to "staging"', () => {
@@ -193,16 +193,16 @@ describe('Wrangler Configuration Contract (Story 4)', () => {
     });
 
     test('production has correct worker name', () => {
-      expect(proxyWranglerContent).toMatch(/\[env\.production\][\s\S]*?name\s*=\s*"zeventbooks-prod"/);
+      expect(proxyWranglerContent).toMatch(/\[env\.production\][\s\S]*?name\s*=\s*"oursharedevents-prod"/);
     });
 
     test('production routes include all expected patterns', () => {
-      expect(hasRoutePattern(proxyWranglerContent, 'zeventbooks.io/*')).toBe(true);
-      expect(hasRoutePattern(proxyWranglerContent, 'api.zeventbooks.io/*')).toBe(true);
+      expect(hasRoutePattern(proxyWranglerContent, 'oursharedevents.com/*')).toBe(true);
+      expect(hasRoutePattern(proxyWranglerContent, 'oursharedevents.com/*')).toBe(true);
     });
 
     test('production routes use correct zone_name', () => {
-      expect(proxyWranglerContent).toContain('zone_name = "zeventbooks.io"');
+      expect(proxyWranglerContent).toContain('zone_name = "oursharedevents.com"');
     });
 
     test('production has WORKER_ENV set to "production"', () => {
@@ -338,8 +338,8 @@ describe('Wrangler Configuration Contract (Story 4)', () => {
 
   describe('Root Wrangler Configuration', () => {
     test('root wrangler.toml is configured for staging', () => {
-      expect(rootWranglerContent).toContain('name = "zeventbooks-staging"');
-      expect(rootWranglerContent).toContain('stg.zeventbooks.io');
+      expect(rootWranglerContent).toContain('name = "oursharedevents-staging"');
+      expect(rootWranglerContent).toContain('stg.oursharedevents.com');
     });
 
     test('root wrangler.toml points to correct worker file', () => {
@@ -367,16 +367,16 @@ describe('Wrangler Configuration Contract (Story 4)', () => {
     });
 
     test('TypeScript worker staging routes match expected patterns', () => {
-      expect(hasRoutePattern(workerWranglerContent, 'stg.eventangle.com/*')).toBe(true);
-      expect(hasRoutePattern(workerWranglerContent, 'api-stg.eventangle.com/*')).toBe(true);
+      expect(hasRoutePattern(workerWranglerContent, 'stg.oursharedevents.com/*')).toBe(true);
+      expect(hasRoutePattern(workerWranglerContent, 'api-stg.oursharedevents.com/*')).toBe(true);
     });
 
-    // SEC-4.1: www.eventangle.com/* removed - redirected at edge via Cloudflare Redirect Rule
+    // SEC-4.1: oursharedevents.com/* removed - redirected at edge via Cloudflare Redirect Rule
     test('TypeScript worker production routes match expected patterns', () => {
-      expect(hasRoutePattern(workerWranglerContent, 'eventangle.com/*')).toBe(true);
-      expect(hasRoutePattern(workerWranglerContent, 'api.eventangle.com/*')).toBe(true);
-      // www.eventangle.com/* intentionally NOT in Worker routes (SEC-4.1)
-      expect(hasRoutePattern(workerWranglerContent, 'www.eventangle.com/*')).toBe(false);
+      expect(hasRoutePattern(workerWranglerContent, 'oursharedevents.com/*')).toBe(true);
+      expect(hasRoutePattern(workerWranglerContent, 'api.oursharedevents.com/*')).toBe(true);
+      // oursharedevents.com/* intentionally NOT in Worker routes (SEC-4.1)
+      expect(hasRoutePattern(workerWranglerContent, 'oursharedevents.com/*')).toBe(false);
     });
   });
 });
@@ -399,17 +399,17 @@ describe('Wrangler Configuration Negative Paths', () => {
   });
 
   test('incorrect zone_name would break DNS routing', () => {
-    // All routes must use zone_name = "zeventbooks.io"
-    expect(proxyWranglerContent).toContain('zone_name = "zeventbooks.io"');
+    // All routes must use zone_name = "oursharedevents.com"
+    expect(proxyWranglerContent).toContain('zone_name = "oursharedevents.com"');
     // Should not have any other zone names
-    expect(proxyWranglerContent).not.toMatch(/zone_name\s*=\s*"(?!zeventbooks\.io")[^"]+"/);
+    expect(proxyWranglerContent).not.toMatch(/zone_name\s*=\s*"(?!oursharedevents\.io")[^"]+"/);
   });
 
   test('mismatched route and DNS would cause 503 errors', () => {
     // Routes must match DNS configuration
-    // stg.zeventbooks.io/* for staging
-    // zeventbooks.io/* for production
-    expect(proxyWranglerContent).toContain('stg.zeventbooks.io/*');
-    expect(proxyWranglerContent).toContain('zeventbooks.io/*');
+    // stg.oursharedevents.com/* for staging
+    // oursharedevents.com/* for production
+    expect(proxyWranglerContent).toContain('stg.oursharedevents.com/*');
+    expect(proxyWranglerContent).toContain('oursharedevents.com/*');
   });
 });

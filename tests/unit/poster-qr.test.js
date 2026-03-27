@@ -1,7 +1,7 @@
 /**
  * Poster QR + Domain Integrity Tests
  *
- * Purpose: Ensure Poster QR codes always point to friendly URLs (eventangle.com)
+ * Purpose: Ensure Poster QR codes always point to friendly URLs (oursharedevents.com)
  *          and never leak the Google Apps Script exec URL.
  *
  * Test Strategy:
@@ -18,7 +18,7 @@ const jsQR = require('jsqr');
 // =============================================================================
 
 // Friendly URL domain - QR codes MUST point here
-const FRIENDLY_DOMAIN = 'eventangle.com';
+const FRIENDLY_DOMAIN = 'oursharedevents.com';
 const FRIENDLY_BASE = `https://www.${FRIENDLY_DOMAIN}`;
 
 // GAS exec URL - QR codes MUST NOT contain this
@@ -44,8 +44,8 @@ function isExactDomainMatch(hostname, domain) {
   if (hostname === domain) {
     return true;
   }
-  // Subdomain match (e.g., "www.eventangle.com" matches "eventangle.com")
-  // Must end with ".domain" to prevent "evileventangle.com" matching
+  // Subdomain match (e.g., "oursharedevents.com" matches "oursharedevents.com")
+  // Must end with ".domain" to prevent "eviloursharedevents.com" matching
   if (hostname.endsWith('.' + domain)) {
     return true;
   }
@@ -154,7 +154,7 @@ function validateQRTargetUrl(url) {
     }
 
     // Check for friendly domain - use exact domain matching
-    // Accepts "eventangle.com" or "www.eventangle.com" or other valid subdomains
+    // Accepts "oursharedevents.com" or "oursharedevents.com" or other valid subdomains
     if (isExactDomainMatch(parsed.hostname, FRIENDLY_DOMAIN)) {
       result.isFriendly = true;
     } else {
@@ -181,7 +181,7 @@ function validateQRTargetUrl(url) {
       }
     } else {
       // Also support friendly URL paths (no query params needed)
-      // e.g., https://www.eventangle.com/events or /abc/events
+      // e.g., https://oursharedevents.com/events or /abc/events
       // Only check pathname if no page parameter is set
       if (parsed.pathname.includes('/events') || parsed.pathname.includes('/signup')) {
         result.hasValidPage = true;
@@ -210,29 +210,29 @@ describe('Poster QR + Domain Integrity', () => {
   describe('Domain Matching Security (isExactDomainMatch)', () => {
 
     it('should match exact domain', () => {
-      expect(isExactDomainMatch('eventangle.com', 'eventangle.com')).toBe(true);
+      expect(isExactDomainMatch('oursharedevents.com', 'oursharedevents.com')).toBe(true);
       expect(isExactDomainMatch('script.google.com', 'script.google.com')).toBe(true);
     });
 
     it('should match valid subdomains', () => {
-      expect(isExactDomainMatch('www.eventangle.com', 'eventangle.com')).toBe(true);
-      expect(isExactDomainMatch('api.eventangle.com', 'eventangle.com')).toBe(true);
+      expect(isExactDomainMatch('oursharedevents.com', 'oursharedevents.com')).toBe(true);
+      expect(isExactDomainMatch('api.oursharedevents.com', 'oursharedevents.com')).toBe(true);
       expect(isExactDomainMatch('www.script.google.com', 'script.google.com')).toBe(true);
     });
 
-    it('should NOT match prefix attacks (evileventangle.com)', () => {
-      expect(isExactDomainMatch('evileventangle.com', 'eventangle.com')).toBe(false);
+    it('should NOT match prefix attacks (eviloursharedevents.com)', () => {
+      expect(isExactDomainMatch('eviloursharedevents.com', 'oursharedevents.com')).toBe(false);
       expect(isExactDomainMatch('fakescript.google.com', 'script.google.com')).toBe(false);
       expect(isExactDomainMatch('notscript.google.com', 'script.google.com')).toBe(false);
     });
 
-    it('should NOT match suffix attacks (eventangle.com.evil.com)', () => {
-      expect(isExactDomainMatch('eventangle.com.evil.com', 'eventangle.com')).toBe(false);
+    it('should NOT match suffix attacks (oursharedevents.com.evil.com)', () => {
+      expect(isExactDomainMatch('oursharedevents.com.evil.com', 'oursharedevents.com')).toBe(false);
       expect(isExactDomainMatch('script.google.com.evil.com', 'script.google.com')).toBe(false);
     });
 
     it('should NOT match partial domain names', () => {
-      expect(isExactDomainMatch('eventangle', 'eventangle.com')).toBe(false);
+      expect(isExactDomainMatch('oursharedevents', 'oursharedevents.com')).toBe(false);
       expect(isExactDomainMatch('google.com', 'script.google.com')).toBe(false);
     });
   });
@@ -240,7 +240,7 @@ describe('Poster QR + Domain Integrity', () => {
   describe('URL Extraction from QuickChart', () => {
 
     it('should extract target URL from valid quickchart.io QR URL', () => {
-      const targetUrl = 'https://www.eventangle.com/events?page=public&event=test123';
+      const targetUrl = 'https://oursharedevents.com/events?page=public&event=test123';
       const qrImageUrl = `https://quickchart.io/qr?text=${encodeURIComponent(targetUrl)}&size=200&margin=1`;
 
       const extracted = extractTargetUrlFromQuickChart(qrImageUrl);
@@ -273,7 +273,7 @@ describe('Poster QR + Domain Integrity', () => {
     });
 
     it('should handle URL-encoded special characters', () => {
-      const targetUrl = 'https://www.eventangle.com/events?event=Summer%20BBQ%202024';
+      const targetUrl = 'https://oursharedevents.com/events?event=Summer%20BBQ%202024';
       const qrImageUrl = `https://quickchart.io/qr?text=${encodeURIComponent(targetUrl)}&size=200`;
 
       const extracted = extractTargetUrlFromQuickChart(qrImageUrl);
@@ -287,7 +287,7 @@ describe('Poster QR + Domain Integrity', () => {
     describe('Friendly URL Detection', () => {
 
       it('should validate friendly URL with www', () => {
-        const url = 'https://www.eventangle.com/events?page=public&event=test123';
+        const url = 'https://oursharedevents.com/events?page=public&event=test123';
 
         const result = validateQRTargetUrl(url);
 
@@ -298,7 +298,7 @@ describe('Poster QR + Domain Integrity', () => {
       });
 
       it('should validate friendly URL without www', () => {
-        const url = 'https://eventangle.com/events?page=public&event=test123';
+        const url = 'https://oursharedevents.com/events?page=public&event=test123';
 
         const result = validateQRTargetUrl(url);
 
@@ -308,7 +308,7 @@ describe('Poster QR + Domain Integrity', () => {
       });
 
       it('should validate friendly URL with signup page', () => {
-        const url = 'https://www.eventangle.com/events?page=signup&event=test123';
+        const url = 'https://oursharedevents.com/events?page=signup&event=test123';
 
         const result = validateQRTargetUrl(url);
 
@@ -318,7 +318,7 @@ describe('Poster QR + Domain Integrity', () => {
       });
 
       it('should validate friendly URL paths (no query params)', () => {
-        const url = 'https://www.eventangle.com/abc/events';
+        const url = 'https://oursharedevents.com/abc/events';
 
         const result = validateQRTargetUrl(url);
 
@@ -415,7 +415,7 @@ describe('Poster QR + Domain Integrity', () => {
         expect(result.errors.some(e => e.includes('Invalid URL'))).toBe(true);
       });
 
-      it('should reject non-eventangle domains', () => {
+      it('should reject non-oursharedevents domains', () => {
         const result = validateQRTargetUrl('https://example.com/events');
         expect(result.isFriendly).toBe(false);
         expect(result.errors.some(e => e.includes('must use friendly domain'))).toBe(true);
@@ -427,8 +427,8 @@ describe('Poster QR + Domain Integrity', () => {
 
     it('should generate friendly URLs for public page QR', () => {
       const eventLinks = {
-        publicUrl: 'https://www.eventangle.com/events?page=public&event=summer-bbq',
-        signupUrl: 'https://www.eventangle.com/events?page=signup&event=summer-bbq'
+        publicUrl: 'https://oursharedevents.com/events?page=public&event=summer-bbq',
+        signupUrl: 'https://oursharedevents.com/events?page=signup&event=summer-bbq'
       };
 
       const qrCodes = generateMockQRCodes(eventLinks);
@@ -439,14 +439,14 @@ describe('Poster QR + Domain Integrity', () => {
 
       expect(publicValidation.isFriendly).toBe(true);
       expect(publicValidation.isGAS).toBe(false);
-      expect(publicTarget).toContain('eventangle.com');
+      expect(publicTarget).toContain('oursharedevents.com');
       expect(publicTarget).not.toContain('script.google.com');
     });
 
     it('should generate friendly URLs for signup page QR', () => {
       const eventLinks = {
-        publicUrl: 'https://www.eventangle.com/events?page=public&event=summer-bbq',
-        signupUrl: 'https://www.eventangle.com/events?page=signup&event=summer-bbq'
+        publicUrl: 'https://oursharedevents.com/events?page=public&event=summer-bbq',
+        signupUrl: 'https://oursharedevents.com/events?page=signup&event=summer-bbq'
       };
 
       const qrCodes = generateMockQRCodes(eventLinks);
@@ -457,7 +457,7 @@ describe('Poster QR + Domain Integrity', () => {
 
       expect(signupValidation.isFriendly).toBe(true);
       expect(signupValidation.isGAS).toBe(false);
-      expect(signupTarget).toContain('eventangle.com');
+      expect(signupTarget).toContain('oursharedevents.com');
       expect(signupTarget).not.toContain('script.google.com');
     });
 
@@ -520,13 +520,13 @@ describe('Poster QR + Domain Integrity', () => {
 
   describe('Regression Prevention', () => {
 
-    it('CRITICAL: Public QR must start with https://www.eventangle.com/events', () => {
+    it('CRITICAL: Public QR must start with https://oursharedevents.com/events', () => {
       const validPublicUrls = [
-        'https://www.eventangle.com/events',
-        'https://www.eventangle.com/events?page=public',
-        'https://www.eventangle.com/events?page=public&event=abc123',
-        'https://www.eventangle.com/abc/events',
-        'https://eventangle.com/events'
+        'https://oursharedevents.com/events',
+        'https://oursharedevents.com/events?page=public',
+        'https://oursharedevents.com/events?page=public&event=abc123',
+        'https://oursharedevents.com/abc/events',
+        'https://oursharedevents.com/events'
       ];
 
       validPublicUrls.forEach(url => {
@@ -536,12 +536,12 @@ describe('Poster QR + Domain Integrity', () => {
       });
     });
 
-    it('CRITICAL: Signup QR must use eventangle.com domain', () => {
+    it('CRITICAL: Signup QR must use oursharedevents.com domain', () => {
       const validSignupUrls = [
-        'https://www.eventangle.com/events?page=signup',
-        'https://www.eventangle.com/events?page=signup&event=abc123',
-        'https://www.eventangle.com/signup',
-        'https://eventangle.com/signup'
+        'https://oursharedevents.com/events?page=signup',
+        'https://oursharedevents.com/events?page=signup&event=abc123',
+        'https://oursharedevents.com/signup',
+        'https://oursharedevents.com/signup'
       ];
 
       validSignupUrls.forEach(url => {
@@ -569,22 +569,22 @@ describe('Poster QR + Domain Integrity', () => {
 
     it('should validate page parameter values', () => {
       // Valid pages
-      expect(validateQRTargetUrl('https://www.eventangle.com/events?page=public').hasValidPage).toBe(true);
-      expect(validateQRTargetUrl('https://www.eventangle.com/events?page=signup').hasValidPage).toBe(true);
+      expect(validateQRTargetUrl('https://oursharedevents.com/events?page=public').hasValidPage).toBe(true);
+      expect(validateQRTargetUrl('https://oursharedevents.com/events?page=signup').hasValidPage).toBe(true);
 
       // Invalid pages should not crash but should flag
-      const invalidPage = validateQRTargetUrl('https://www.eventangle.com/events?page=admin');
+      const invalidPage = validateQRTargetUrl('https://oursharedevents.com/events?page=admin');
       expect(invalidPage.hasValidPage).toBe(false);
     });
 
     it('should detect event parameter presence', () => {
-      const withEvent = validateQRTargetUrl('https://www.eventangle.com/events?page=public&event=test123');
+      const withEvent = validateQRTargetUrl('https://oursharedevents.com/events?page=public&event=test123');
       expect(withEvent.hasEventParam).toBe(true);
 
-      const withId = validateQRTargetUrl('https://www.eventangle.com/events?page=public&id=test123');
+      const withId = validateQRTargetUrl('https://oursharedevents.com/events?page=public&id=test123');
       expect(withId.hasEventParam).toBe(true);
 
-      const withoutEvent = validateQRTargetUrl('https://www.eventangle.com/events?page=public');
+      const withoutEvent = validateQRTargetUrl('https://oursharedevents.com/events?page=public');
       expect(withoutEvent.hasEventParam).toBe(false);
     });
   });

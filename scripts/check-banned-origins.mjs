@@ -437,10 +437,10 @@ function scanFile(filePath) {
             fixHint = 'Replace with fetch() to /api/* endpoints via Cloudflare Worker';
           } else if (bannedString === 'script.google.com/macros') {
             reason = 'Direct GAS Web App URL - traffic must route via Cloudflare';
-            fixHint = 'Use stg.eventangle.com or eventangle.com instead of script.google.com';
+            fixHint = 'Use stg.oursharedevents.com or oursharedevents.com instead of script.google.com';
           } else if (bannedString.includes('googleusercontent')) {
             reason = 'Legacy GAS execution URL pattern';
-            fixHint = 'Use Cloudflare Worker endpoints (stg.eventangle.com or eventangle.com)';
+            fixHint = 'Use Cloudflare Worker endpoints (stg.oursharedevents.com or oursharedevents.com)';
           }
 
           violations.push({
@@ -544,7 +544,7 @@ function main() {
 
   console.log('Purpose: Prevent shipping code that references GAS origins');
   console.log('Policy: GAS must never re-enter runtime. Cloudflare is the backend.');
-  console.log('        All traffic must route through stg.eventangle.com or eventangle.com');
+  console.log('        All traffic must route through stg.oursharedevents.com or oursharedevents.com');
   console.log('');
   console.log('Banned patterns:');
   console.log('  - script.google.com/macros              (GAS Web App URLs)');
@@ -612,7 +612,7 @@ function main() {
     console.log('Contract boundary enforced:');
     console.log('  - Worker upstream is configured via environment variables');
     console.log('  - Front-end must never call GAS directly');
-    console.log('  - All traffic routes through stg.eventangle.com or eventangle.com');
+    console.log('  - All traffic routes through stg.oursharedevents.com or oursharedevents.com');
     console.log('');
     process.exit(0);
   } else {
@@ -648,8 +648,8 @@ function main() {
     console.log('');
     console.log('To fix:');
     console.log('  1. Remove or replace the banned URLs/patterns with Cloudflare Worker equivalents');
-    console.log('     - Replace script.google.com URLs with stg.eventangle.com (staging)');
-    console.log('       or eventangle.com (production)');
+    console.log('     - Replace script.google.com URLs with stg.oursharedevents.com (staging)');
+    console.log('       or oursharedevents.com (production)');
     console.log('  2. Replace google.script.run calls with fetch() to /api/* endpoints');
     console.log('  3. If legacy reference is needed for migration docs, add to allowlist:');
     console.log('     scripts/banned-origins.allow.txt');
@@ -657,7 +657,7 @@ function main() {
     console.log('');
     console.log('Example fix:');
     console.log('  Before: const url = "https://script.google.com/macros/s/.../exec";');
-    console.log('  After:  const url = "https://stg.eventangle.com/api/events";');
+    console.log('  After:  const url = "https://stg.oursharedevents.com/api/events";');
     console.log('');
     console.log('See Story 3 - Enforce Environment Alignment & Ban GAS Origins');
     console.log('');

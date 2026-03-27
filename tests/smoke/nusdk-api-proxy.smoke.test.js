@@ -3,10 +3,10 @@
  *
  * Purpose:
  *   Network-based smoke tests that validate the NU SDK + /api/* proxy
- *   works end-to-end on staging (stg.eventangle.com).
+ *   works end-to-end on staging (stg.oursharedevents.com).
  *
  * Stage-2 Tests (Network-Based):
- *   - https://stg.eventangle.com/events loads HTML (not GAS banner)
+ *   - https://stg.oursharedevents.com/events loads HTML (not GAS banner)
  *   - /api/events/list returns JSON with expected keys
  *   - No script.google.com URLs in network calls
  *
@@ -18,7 +18,7 @@
  *   - At least one /api/ XHR succeeds with JSON
  *
  * Run with: npm run test:smoke
- * Or: BASE_URL="https://stg.eventangle.com" npx playwright test tests/smoke/nusdk-api-proxy.smoke.test.js
+ * Or: BASE_URL="https://stg.oursharedevents.com" npx playwright test tests/smoke/nusdk-api-proxy.smoke.test.js
  *
  * @see tests/config/environments.js - Environment configuration
  */
@@ -68,7 +68,7 @@ test.describe('Story 4: NU SDK + /api/* Proxy Smoke Tests', () => {
 
       // Worker should add X-Proxied-By header
       const proxiedBy = response.headers()['x-proxied-by'];
-      expect(proxiedBy).toBe('eventangle-worker');
+      expect(proxiedBy).toBe('oursharedevents-worker');
     });
 
     test('/events page has NU SDK loaded', async ({ page }) => {
@@ -169,7 +169,7 @@ test.describe('Story 4: NU SDK + /api/* Proxy Smoke Tests', () => {
       });
 
       const proxiedBy = response.headers()['x-proxied-by'];
-      expect(proxiedBy).toBe('eventangle-worker');
+      expect(proxiedBy).toBe('oursharedevents-worker');
     });
 
     test('/api/events/list has CORS headers', async ({ request }) => {

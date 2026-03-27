@@ -44,8 +44,8 @@ class AutomationOrchestrator {
    */
   getDefaultBaseUrl() {
     const envUrls = {
-      qa: 'https://qa.zeventbooks.com',
-      production: 'https://zeventbooks.com',
+      qa: 'https://qa.oursharedevents.com',
+      production: 'https://oursharedevents.com',
       local: 'http://localhost:3000'
     };
     return envUrls[this.environment] || envUrls.qa;
@@ -479,7 +479,7 @@ EXAMPLES:
   node automation-orchestrator.js dashboard
 
   # Run with custom environment
-  TEST_ENV=production BASE_URL=https://zeventbooks.com node automation-orchestrator.js run
+  TEST_ENV=production BASE_URL=https://oursharedevents.com node automation-orchestrator.js run
         `);
     }
   } catch (error) {

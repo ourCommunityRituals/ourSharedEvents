@@ -45,13 +45,14 @@ describe('QA-1: Migration idempotency', () => {
     // Run migrations a second time — CREATE IF NOT EXISTS / DROP IF EXISTS should be safe
     await expect(applyMigrations()).resolves.not.toThrow();
 
-    // Verify still exactly 5 application tables (checkins/registrations moved to FORMS_DB)
+    // 6 tables: events, sponsors, poster_deployments, scans, scan_aggregates, subscribers
+    // (checkins/registrations dropped by migration 0009, moved to FORMS_DB)
     const tables = await env.DB.prepare(
       "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' ORDER BY name"
     ).all();
 
     const names = tables.results.map((r: Record<string, unknown>) => r.name);
-    expect(names).toHaveLength(5);
+    expect(names).toHaveLength(6);
   });
 
   test('indexes remain at exactly 8 after idempotent re-run', async () => {

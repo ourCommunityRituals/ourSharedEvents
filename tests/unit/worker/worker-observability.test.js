@@ -309,7 +309,7 @@ describe('Story 5: NU SDK Logging Configuration', () => {
     });
 
     it('should auto-detect staging environment', () => {
-      expect(nusdkContent).toContain('stg.eventangle.com');
+      expect(nusdkContent).toContain('stg.oursharedevents.com');
       expect(nusdkContent).toContain('localhost');
     });
 

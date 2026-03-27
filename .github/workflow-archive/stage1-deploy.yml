@@ -41,8 +41,8 @@ env:
   STAGING_SCRIPT_ID: '1gHiPuj7eXNk09dDyk17SJ6QsCJg7LMqXBRrkowljL3z2TaAKFIvBLhHJ'
   PRODUCTION_SCRIPT_ID: '1YO4apLOQoAIh208AcAqWO3pWtx_O3yas_QC4z-pkurgMem9UgYOsp86l'
   # URLs
-  STAGING_URL: 'https://stg.eventangle.com'
-  PRODUCTION_URL: 'https://eventangle.com'
+  STAGING_URL: 'https://stg.oursharedevents.com'
+  PRODUCTION_URL: 'https://oursharedevents.com'
 
 jobs:
   # ============================================================================

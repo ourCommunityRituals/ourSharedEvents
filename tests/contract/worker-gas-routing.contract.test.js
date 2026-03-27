@@ -121,8 +121,8 @@ describe('Worker → GAS Routing Contract', () => {
     });
 
     test('root wrangler.toml is configured for staging environment', () => {
-      expect(rootWranglerContent).toContain('name = "zeventbooks-staging"');
-      expect(rootWranglerContent).toContain('stg.zeventbooks.io');
+      expect(rootWranglerContent).toContain('name = "oursharedevents-staging"');
+      expect(rootWranglerContent).toContain('stg.oursharedevents.com');
     });
 
     test('proxy wrangler.toml [env.production] uses worker-only backend mode', () => {
@@ -237,8 +237,8 @@ describe('Worker → GAS Routing Contract', () => {
     });
 
     test('worker adds X-Proxied-By header', () => {
-      expect(workerContent).toContain("'X-Proxied-By': 'zeventbooks-worker'");
-      expect(workerContent).toContain("'X-Proxied-By', 'zeventbooks-worker'");
+      expect(workerContent).toContain("'X-Proxied-By': 'oursharedevents-worker'");
+      expect(workerContent).toContain("'X-Proxied-By', 'oursharedevents-worker'");
     });
 
     test('worker adds X-Worker-Version header', () => {
@@ -329,7 +329,7 @@ describe('Worker → GAS Routing Contract', () => {
     });
 
     test('environments.js has STAGING_URL defined', () => {
-      expect(environmentsContent).toContain("STAGING_URL = 'https://stg.eventangle.com'");
+      expect(environmentsContent).toContain("STAGING_URL = 'https://stg.oursharedevents.com'");
     });
 
     test('environments.js has correct staging deployment ID reference', () => {

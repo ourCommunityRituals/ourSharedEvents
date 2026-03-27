@@ -12,7 +12,7 @@
  *
  * Acceptance Criteria (Story 7):
  *   - After manual approval, prod Stage-2 leg can:
- *     - Hit https://www.eventangle.com/api/status
+ *     - Hit https://oursharedevents.com/api/status
  *     - Run lightweight /events smoke test
  *     - Fail if prod /events is broken
  *
@@ -67,7 +67,7 @@ test.describe('Story 7 - Production /events Smoke Test', () => {
 
       // Check Worker transparency header
       const proxiedBy = response.headers()['x-proxied-by'];
-      expect(proxiedBy).toBe('eventangle-worker');
+      expect(proxiedBy).toBe('oursharedevents-worker');
 
       // Should NOT have Google headers
       const headers = response.headers();

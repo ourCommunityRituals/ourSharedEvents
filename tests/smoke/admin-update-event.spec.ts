@@ -33,7 +33,7 @@ import { test, expect } from '@playwright/test';
 // =============================================================================
 
 /** Base URL for staging environment */
-const BASE_URL = process.env.BASE_URL || 'https://stg.eventangle.com';
+const BASE_URL = process.env.BASE_URL || 'https://stg.oursharedevents.com';
 
 /** Admin key for authorized requests (from CI secrets - ADMIN_KEY_STG) */
 const ADMIN_KEY = process.env.ADMIN_KEY || process.env.ADMIN_KEY_STG || process.env.ADMIN_TOKEN || '';

@@ -24,7 +24,7 @@ on:
         type: string
         default: ''
       use_production:
-        description: '⚠️ DANGER: Run minimal smoke tests against PRODUCTION (www.eventangle.com). Only workflow_dispatch. Read-only tests ONLY. Use with extreme caution!'
+        description: '⚠️ DANGER: Run minimal smoke tests against PRODUCTION (oursharedevents.com). Only workflow_dispatch. Read-only tests ONLY. Use with extreme caution!'
         required: false
         type: boolean
         default: false

@@ -157,7 +157,7 @@ describe('Worker RPC Proxy - Story 3: Defensive Response Handling', () => {
     });
 
     test('should set X-Proxied-By header', () => {
-      expect(workerSource).toContain("'X-Proxied-By': 'zeventbooks-worker'");
+      expect(workerSource).toContain("'X-Proxied-By': 'oursharedevents-worker'");
     });
 
     test('should include Retry-After header', () => {

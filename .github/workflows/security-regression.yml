@@ -54,8 +54,8 @@ on:
 env:
   # Default staging URL for PR testing
   # Production URL used for nightly runs on main branch
-  STAGING_URL: ${{ vars.STAGING_URL || 'https://stg.eventangle.com' }}
-  PRODUCTION_URL: ${{ vars.PRODUCTION_URL || 'https://www.eventangle.com' }}
+  STAGING_URL: ${{ vars.STAGING_URL || 'https://stg.oursharedevents.com' }}
+  PRODUCTION_URL: ${{ vars.PRODUCTION_URL || 'https://oursharedevents.com' }}
 
 jobs:
   # ============================================================================

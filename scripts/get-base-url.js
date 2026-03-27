@@ -14,7 +14,7 @@
  */
 
 // Canonical production URL (sync with Config.gs FRIENDLY_BASE_URL)
-const CANONICAL_BASE_URL = 'https://www.eventangle.com';
+const CANONICAL_BASE_URL = 'https://oursharedevents.com';
 
 // Canonical events page URL (for CI logs and marketing)
 const CANONICAL_EVENTS_URL = `${CANONICAL_BASE_URL}/events`;

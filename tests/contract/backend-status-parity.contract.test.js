@@ -33,7 +33,7 @@ const describeNetwork = skipNetworkTests ? describe.skip : describe;
 
 // Staging URL for backend parity tests
 // Only staging supports ?backend= query param override
-const STG_BASE_URL = process.env.STG_BASE_URL || process.env.BASE_URL || 'https://stg.eventangle.com';
+const STG_BASE_URL = process.env.STG_BASE_URL || process.env.BASE_URL || 'https://stg.oursharedevents.com';
 const TIMEOUT_MS = 30000;
 
 // =============================================================================

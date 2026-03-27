@@ -16,7 +16,7 @@
  *   WORKER_URL=http://localhost:8787 ADMIN_TOKEN=test npm test -- tests/integration/story3.3
  *
  * Run against staging:
- *   WORKER_URL=https://api-stg.eventangle.com ADMIN_TOKEN=xxx npm test -- tests/integration/story3.3
+ *   WORKER_URL=https://api-stg.oursharedevents.com ADMIN_TOKEN=xxx npm test -- tests/integration/story3.3
  *
  * @see worker/src/handlers/adminRecordResult.ts
  * @see Story 3.3 - Port recordResult to Worker

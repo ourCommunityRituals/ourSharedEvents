@@ -30,8 +30,8 @@
 #   ./scripts/cleanup-cloudflare-workers.sh --env production --keep 10 --force
 #
 # Worker Names (from wrangler.toml):
-#   - staging: eventangle-staging
-#   - production: eventangle-prod
+#   - staging: oursharedevents-staging
+#   - production: oursharedevents-prod
 #
 # ============================================================================
 
@@ -127,10 +127,10 @@ fi
 # Determine worker name from environment
 case $WRANGLER_ENV in
   staging)
-    WORKER_NAME="eventangle-staging"
+    WORKER_NAME="oursharedevents-staging"
     ;;
   production)
-    WORKER_NAME="eventangle-prod"
+    WORKER_NAME="oursharedevents-prod"
     ;;
   *)
     echo -e "${RED}❌ ERROR: Unknown environment '$WRANGLER_ENV'${NC}"

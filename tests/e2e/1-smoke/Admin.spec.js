@@ -6,7 +6,7 @@
  * 2. Create a test event
  * 3. Ensure it appears in the event list
  *
- * Run: BASE_URL="https://www.eventangle.com/events" npm run test:smoke
+ * Run: BASE_URL="https://oursharedevents.com/events" npm run test:smoke
  */
 
 const { test, expect } = require('@playwright/test');

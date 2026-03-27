@@ -84,11 +84,11 @@ jobs:
 
       - name: Run Scenario 1 Tests
         run: |
-          echo "🎯 Testing against canonical URL: https://www.eventangle.com/events"
+          echo "🎯 Testing against canonical URL: https://oursharedevents.com/events"
           npm run test:scenario:1
         env:
           # Canonical EventAngle production URL
-          BASE_URL: https://www.eventangle.com
+          BASE_URL: https://oursharedevents.com
           ADMIN_KEY: ${{ secrets.ADMIN_KEY_ROOT }}
           BRAND_ID: root
 
@@ -144,11 +144,11 @@ jobs:
 
       - name: Run Scenario 2 Tests
         run: |
-          echo "🎯 Testing against canonical URL: https://www.eventangle.com/events"
+          echo "🎯 Testing against canonical URL: https://oursharedevents.com/events"
           npm run test:scenario:2
         env:
           # Canonical EventAngle production URL
-          BASE_URL: https://www.eventangle.com
+          BASE_URL: https://oursharedevents.com
           ADMIN_KEY: ${{ secrets.ADMIN_KEY_ROOT }}
 
       - name: Upload Scenario 2 Results
@@ -183,11 +183,11 @@ jobs:
 
       - name: Run Scenario 3 Tests
         run: |
-          echo "🎯 Testing against canonical URL: https://www.eventangle.com/events"
+          echo "🎯 Testing against canonical URL: https://oursharedevents.com/events"
           npm run test:scenario:3
         env:
           # Canonical EventAngle production URL
-          BASE_URL: https://www.eventangle.com
+          BASE_URL: https://oursharedevents.com
           ADMIN_KEY: ${{ secrets.ADMIN_KEY_ROOT }}
 
       - name: Upload Scenario 3 Results
@@ -281,11 +281,11 @@ jobs:
 
       - name: Run Performance Tests
         run: |
-          echo "🎯 Testing against canonical URL: https://www.eventangle.com/events"
+          echo "🎯 Testing against canonical URL: https://oursharedevents.com/events"
           npm run test:scenario:2  # Mobile performance tests
         env:
           # Canonical EventAngle production URL
-          BASE_URL: https://www.eventangle.com
+          BASE_URL: https://oursharedevents.com
           ADMIN_KEY: ${{ secrets.ADMIN_KEY_ROOT }}
 
       - name: Check Performance Budgets

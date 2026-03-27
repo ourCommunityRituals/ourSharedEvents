@@ -7,10 +7,10 @@
  * ============================
  * All tests respect the BASE_URL environment variable:
  *
- *   BASE_URL="https://www.eventangle.com" npm run test:smoke
+ *   BASE_URL="https://oursharedevents.com" npm run test:smoke
  *   BASE_URL="https://script.google.com/macros/s/<DEPLOYMENT_ID>/exec" npm run test:smoke
  *
- * Default: https://stg.eventangle.com (staging via Cloudflare Workers)
+ * Default: https://stg.oursharedevents.com (staging via Cloudflare Workers)
  *
  * For unit/contract tests that mock APIs, the BASE_URL is used for URL validation
  * but no real network calls are made.
@@ -23,7 +23,7 @@ const { getBaseUrl } = require('../../config/environments');
 const ENV = process.env.NODE_ENV || 'test';
 const IS_CI = process.env.CI === 'true';
 
-// Base URL from centralized config (defaults to stg.eventangle.com)
+// Base URL from centralized config (defaults to stg.oursharedevents.com)
 const BASE_URL = getBaseUrl();
 const BRAND_ID = process.env.BRAND_ID || 'root';
 const ADMIN_KEY = process.env.ADMIN_KEY || 'CHANGE_ME_root';

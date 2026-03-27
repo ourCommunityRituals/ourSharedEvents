@@ -5,10 +5,10 @@
  * ============================
  * All E2E tests respect the BASE_URL environment variable:
  *
- *   BASE_URL="https://www.eventangle.com" npm run test:smoke
+ *   BASE_URL="https://oursharedevents.com" npm run test:smoke
  *   BASE_URL="https://script.google.com/macros/s/<DEPLOYMENT_ID>/exec" npm run test:smoke
  *
- * Default: https://stg.eventangle.com (staging via Cloudflare Workers)
+ * Default: https://stg.oursharedevents.com (staging via Cloudflare Workers)
  *
  * Sustainability: Single source of truth for all test settings
  * Easy to understand: All configuration in one place

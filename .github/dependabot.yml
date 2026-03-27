@@ -14,9 +14,9 @@ updates:
       timezone: "America/Chicago"
     open-pull-requests-limit: 10
     reviewers:
-      - "zeventbooks"
+      - "oursharedevents"
     assignees:
-      - "zeventbooks"
+      - "oursharedevents"
     labels:
       - "dependencies"
       - "security"
@@ -53,7 +53,7 @@ updates:
       timezone: "America/Chicago"
     open-pull-requests-limit: 5
     reviewers:
-      - "zeventbooks"
+      - "oursharedevents"
     labels:
       - "dependencies"
       - "github-actions"

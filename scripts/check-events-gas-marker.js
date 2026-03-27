@@ -13,8 +13,8 @@
  *
  * Examples:
  *   node scripts/check-events-gas-marker.js
- *   node scripts/check-events-gas-marker.js https://stg.eventangle.com/events
- *   node scripts/check-events-gas-marker.js https://eventangle.com/events
+ *   node scripts/check-events-gas-marker.js https://stg.oursharedevents.com/events
+ *   node scripts/check-events-gas-marker.js https://oursharedevents.com/events
  *
  * Checks:
  *   1. Response status code
@@ -33,7 +33,7 @@ const http = require('http');
 const { URL } = require('url');
 
 // Default URL to check
-const DEFAULT_URL = 'https://eventangle.com/events';
+const DEFAULT_URL = 'https://oursharedevents.com/events';
 
 // GAS blue-banner marker strings to detect in HTML content
 // Using string matching instead of regex to avoid false positive security warnings
@@ -57,7 +57,7 @@ const GAS_EXEC_URL_PATTERN = /macros\/s\/[A-Za-z0-9_-]+\/exec/;
 
 // Expected Worker headers
 const EXPECTED_HEADERS = {
-  'x-proxied-by': 'eventangle-worker',
+  'x-proxied-by': 'oursharedevents-worker',
 };
 
 /**
@@ -259,7 +259,7 @@ async function runChecks(urlString) {
   console.log(`   Response size: ${bodyLength} bytes`);
 
   // Check for expected content markers
-  const hasEventAngle = /eventangle/i.test(response.body);
+  const hasEventAngle = /oursharedevents/i.test(response.body);
   const hasDoctype = /<!DOCTYPE html>/i.test(response.body);
   const hasPublicPage = /public|events/i.test(response.body);
 

@@ -55,8 +55,8 @@ class TestDataManager {
       const hostname = url.hostname;
 
       // Match exact hostname or subdomain
-      if (hostname === 'qa.zeventbooks.com') return 'qa';
-      if (hostname === 'zeventbooks.com' || hostname === 'www.zeventbooks.com') return 'production';
+      if (hostname === 'qa.oursharedevents.com') return 'qa';
+      if (hostname === 'oursharedevents.com' || hostname === 'www.oursharedevents.com') return 'production';
       if (hostname === 'script.google.com') return 'googleAppsScript';
       if (hostname === 'localhost' || hostname === '127.0.0.1') return 'local';
 

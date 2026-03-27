@@ -7,15 +7,15 @@
  * Run with:
  *   npm run test:integration:health-origin
  *   OR
- *   STAGING_URL=https://stg.eventangle.com npm test -- tests/integration/story3.1-healthOrigin.integration.test.js
+ *   STAGING_URL=https://stg.oursharedevents.com npm test -- tests/integration/story3.1-healthOrigin.integration.test.js
  *
  * Environment Variables:
- *   STAGING_URL - Base URL for staging environment (default: https://stg.eventangle.com)
+ *   STAGING_URL - Base URL for staging environment (default: https://stg.oursharedevents.com)
  *
  * @see Story 3.1 - Worker /health/origin Endpoint
  */
 
-const STAGING_URL = process.env.STAGING_URL || 'https://stg.eventangle.com';
+const STAGING_URL = process.env.STAGING_URL || 'https://stg.oursharedevents.com';
 const HEALTH_ORIGIN_ENDPOINT = `${STAGING_URL}/health/origin`;
 
 // Skip integration tests if not explicitly enabled
@@ -73,7 +73,7 @@ describe('Story 3.1 Integration Tests - /health/origin Endpoint', () => {
 
     it('should include worker string field', () => {
       expect(typeof body.worker).toBe('string');
-      expect(body.worker).toContain('eventangle');
+      expect(body.worker).toContain('oursharedevents');
     });
 
     it('should include upstream field (string or null)', () => {
@@ -203,7 +203,7 @@ describe('Story 3.1 Response Shape Validation', () => {
     const successResponse = {
       ok: true,
       env: 'staging',
-      worker: 'eventangle-staging',
+      worker: 'oursharedevents-staging',
       upstream: 'https://script.google.com/macros/s/xxxxx/exec',
       upstreamReachable: true,
       status: 200,
@@ -220,7 +220,7 @@ describe('Story 3.1 Response Shape Validation', () => {
     });
 
     it('should have worker name', () => {
-      expect(successResponse.worker).toBe('eventangle-staging');
+      expect(successResponse.worker).toBe('oursharedevents-staging');
     });
 
     it('should have upstream URL', () => {
@@ -241,7 +241,7 @@ describe('Story 3.1 Response Shape Validation', () => {
     const goneResponse = {
       ok: false,
       env: 'staging',
-      worker: 'eventangle-staging',
+      worker: 'oursharedevents-staging',
       upstream: 'https://script.google.com/macros/s/xxxxx/exec',
       upstreamReachable: false,
       status: 410,
@@ -271,7 +271,7 @@ describe('Story 3.1 Response Shape Validation', () => {
     const missingConfigResponse = {
       ok: false,
       env: 'staging',
-      worker: 'eventangle-staging',
+      worker: 'oursharedevents-staging',
       upstream: null,
       upstreamReachable: false,
       status: 500,

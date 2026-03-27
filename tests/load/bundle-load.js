@@ -19,10 +19,10 @@
  *   k6 run tests/load/bundle-load.js
  *
  * With environment variables:
- *   BASE_URL=https://stg.eventangle.com BRAND_ID=root k6 run tests/load/bundle-load.js
+ *   BASE_URL=https://stg.oursharedevents.com BRAND_ID=root k6 run tests/load/bundle-load.js
  *
  * For staging (recommended):
- *   BASE_URL=https://stg.eventangle.com k6 run tests/load/bundle-load.js
+ *   BASE_URL=https://stg.oursharedevents.com k6 run tests/load/bundle-load.js
  */
 
 import { check, group, sleep } from 'k6';
@@ -357,7 +357,7 @@ export function setup() {
   let isProduction = false;
   try {
     const url = new URL(baseUrl);
-    isProduction = url.hostname === 'www.eventangle.com' || url.hostname === 'eventangle.com';
+    isProduction = url.hostname === 'oursharedevents.com' || url.hostname === 'oursharedevents.com';
   } catch (e) {
     // Invalid URL, not production
   }
@@ -367,7 +367,7 @@ export function setup() {
     console.error('WARNING: You are about to run load tests against PRODUCTION!');
     console.error('To confirm, set CONFIRM_PRODUCTION=true');
     console.error('Recommended: Use staging instead:');
-    console.error('  BASE_URL=https://stg.eventangle.com k6 run tests/load/bundle-load.js');
+    console.error('  BASE_URL=https://stg.oursharedevents.com k6 run tests/load/bundle-load.js');
     console.error('!'.repeat(60));
     console.error('');
     // K6 doesn't have a good way to abort, but this warning is important

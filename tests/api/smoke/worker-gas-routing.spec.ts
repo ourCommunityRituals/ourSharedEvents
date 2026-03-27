@@ -145,7 +145,7 @@ test.describe('Worker → GAS Routing (NU Transport)', () => {
       const response = await request.fetch('/api/events/list', {
         method: 'OPTIONS',
         headers: {
-          'Origin': 'https://stg.eventangle.com',
+          'Origin': 'https://stg.oursharedevents.com',
           'Access-Control-Request-Method': 'POST'
         }
       });
@@ -176,7 +176,7 @@ test.describe('Worker → GAS Routing (NU Transport)', () => {
 
       const headers = response.headers();
       // Worker adds transparency headers
-      expect(headers['x-proxied-by']).toBe('eventangle-worker');
+      expect(headers['x-proxied-by']).toBe('oursharedevents-worker');
       expect(headers['x-worker-version']).toBeDefined();
     });
 

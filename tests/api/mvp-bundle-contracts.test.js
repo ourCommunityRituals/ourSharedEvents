@@ -15,7 +15,7 @@
  *
  * Usage:
  *   BASE_URL="https://script.google.com/macros/s/XXXX/exec" npm run test:api-contracts
- *   BASE_URL="https://www.eventangle.com/events" npm run test:api-contracts
+ *   BASE_URL="https://oursharedevents.com/events" npm run test:api-contracts
  *
  * @see /src/mvp/ApiSchemas.gs for canonical schema definitions
  * @see /schemas/*.schema.json for JSON Schema source of truth

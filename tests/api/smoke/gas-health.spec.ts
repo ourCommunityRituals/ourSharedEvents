@@ -50,7 +50,7 @@ test.describe('GAS Reachability Health Check (Story 6)', () => {
       const headers = response.headers();
 
       // Worker transparency headers prove request went through Worker
-      expect(headers['x-proxied-by']).toBe('eventangle-worker');
+      expect(headers['x-proxied-by']).toBe('oursharedevents-worker');
       expect(headers['x-worker-version']).toBeDefined();
     });
 
@@ -88,7 +88,7 @@ test.describe('GAS Reachability Health Check (Story 6)', () => {
       const headers = response.headers();
 
       // Worker adds these headers when proxying to GAS
-      expect(headers['x-proxied-by']).toBe('eventangle-worker');
+      expect(headers['x-proxied-by']).toBe('oursharedevents-worker');
       expect(headers['x-worker-version']).toBeDefined();
     });
 

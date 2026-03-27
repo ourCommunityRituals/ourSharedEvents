@@ -26,11 +26,11 @@ const http = require('http');
 
 const ENVIRONMENTS = {
   staging: {
-    baseUrl: 'https://stg.eventangle.com',
+    baseUrl: 'https://stg.oursharedevents.com',
     expectedEnv: 'staging',
   },
   production: {
-    baseUrl: 'https://www.eventangle.com',
+    baseUrl: 'https://oursharedevents.com',
     expectedEnv: 'production',
   },
 };

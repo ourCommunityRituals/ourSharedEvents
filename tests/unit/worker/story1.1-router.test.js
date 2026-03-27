@@ -536,7 +536,7 @@ describe('Wrangler Configuration (Story 1.1)', () => {
     });
 
     it('should set worker name', () => {
-      expect(wranglerSource).toContain('name = "eventangle-router"');
+      expect(wranglerSource).toContain('name = "oursharedevents-router"');
     });
 
     it('should set compatibility date', () => {
@@ -549,8 +549,8 @@ describe('Wrangler Configuration (Story 1.1)', () => {
       expect(wranglerSource).toContain('[env.staging]');
     });
 
-    it('should route to stg.eventangle.com', () => {
-      expect(wranglerSource).toContain('stg.eventangle.com/*');
+    it('should route to stg.oursharedevents.com', () => {
+      expect(wranglerSource).toContain('stg.oursharedevents.com/*');
     });
 
     it('should set WORKER_ENV to staging', () => {
@@ -567,8 +567,8 @@ describe('Wrangler Configuration (Story 1.1)', () => {
       expect(wranglerSource).toContain('[env.production]');
     });
 
-    it('should route to eventangle.com', () => {
-      expect(wranglerSource).toContain('eventangle.com/*');
+    it('should route to oursharedevents.com', () => {
+      expect(wranglerSource).toContain('oursharedevents.com/*');
     });
 
     it('should set WORKER_ENV to production', () => {

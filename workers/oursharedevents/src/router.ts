@@ -3,7 +3,7 @@
  *
  * Route table:
  *
- *   GET /                        → public events page
+ *   GET /                        → landing page
  *   GET /admin                   → admin dashboard (auth required)
  *   GET /health                  → health check
  *   GET /api/status              → alias for /health
@@ -20,12 +20,13 @@
  *   GET  /api/v2/admin/events/:id/forms/surveys        → surveys, PII-scrubbed (admin)
  *   GET  /api/v2/admin/events/:id/forms/email-signups  → email signup count (admin)
  *   GET  /forms/:eventId?type=register|checkin|survey|email  → public form page (QR landing)
+ *   POST /subscribe              → email capture
  *   *                            → 404
  */
 
 import { handleHealth, type HealthEnv } from './handlers/health';
 import { handleListEvents, handleGetEvent, handleAdminListEvents, type EventsEnv } from './handlers/events';
-import { handlePublicPage, handleAdminPage, type PagesEnv } from './handlers/pages';
+import { handlePublicPage, handleAdminPage, handleLandingPage, handleSubscribe, type PagesEnv } from './handlers/pages';
 import { requireAdmin, type AdminEnv } from './auth/admin';
 import {
   handleFormRegistration,
@@ -39,7 +40,8 @@ import {
   type FormsEnv,
 } from './handlers/forms';
 import { handleFormPage, type FormPagesEnv } from './handlers/form-pages';
-import { isFeatureEnabled, FORM_FLAGS } from './lib/feature-flags';
+import { isFeatureEnabled } from './lib/feature-flags';
+import { corsOrigin } from './lib/cors';
 
 export type RouterEnv = HealthEnv & EventsEnv & PagesEnv & AdminEnv & FormsEnv & FormPagesEnv & {
   WORKER_ENV?: string;
@@ -50,15 +52,23 @@ export async function route(request: Request, env: RouterEnv): Promise<Response>
   const url = new URL(request.url);
   const { pathname, method } = { pathname: url.pathname, method: request.method };
 
+  // ── HTTPS redirect ──────────────────────────────────────────────────────
+  if (url.protocol === 'http:') {
+    url.protocol = 'https:';
+    return Response.redirect(url.toString(), 301);
+  }
+
   // ── CORS preflight ────────────────────────────────────────────────────────
   if (method === 'OPTIONS') {
+    const origin = corsOrigin(request);
     return new Response(null, {
       status: 204,
       headers: {
-        'Access-Control-Allow-Origin': '*',
+        ...(origin ? { 'Access-Control-Allow-Origin': origin } : {}),
         'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
         'Access-Control-Allow-Headers': 'Authorization, Content-Type',
         'Access-Control-Max-Age': '86400',
+        'Vary': 'Origin',
       },
     });
   }
@@ -147,11 +157,22 @@ export async function route(request: Request, env: RouterEnv): Promise<Response>
     return handleFormPage(request, env, formPageMatch[1]);
   }
 
+  // ── Subscribe (email capture) ─────────────────────────────────────────────
+  if (pathname === '/subscribe') {
+    if (method === 'POST') return handleSubscribe(request, env);
+    return Response.json({ ok: false, error: 'Method not allowed' }, { status: 405, headers: { 'Allow': 'POST' } });
+  }
+
+  // ── Landing page ──────────────────────────────────────────────────────────
+  if (pathname === '/' || pathname === '/home' || pathname === '/welcome' || pathname === '/landing') {
+    return handleLandingPage(env);
+  }
+
   // ── Public pages ───────────────────────────────────────────────────────────
-  if (pathname === '/' || pathname === '/events' || pathname === '/public') {
+  if (pathname === '/events' || pathname === '/public') {
     return handlePublicPage(env);
   }
 
   // ── 404 ────────────────────────────────────────────────────────────────────
-  return Response.json({ ok: false, status: 404, error: 'Not found', path: pathname }, { status: 404 });
+  return Response.json({ ok: false, status: 404, error: 'Not found' }, { status: 404 });
 }

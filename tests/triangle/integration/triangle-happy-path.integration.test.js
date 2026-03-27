@@ -20,13 +20,13 @@
  *   - Bundle-specific validators (config, rotation, layout, qrCodes, metrics)
  *
  * Environment Variables:
- *   - BASE_URL: Target environment (default: https://www.eventangle.com)
+ *   - BASE_URL: Target environment (default: https://oursharedevents.com)
  *   - ADMIN_KEY: Admin key for event creation (required for full test)
  *   - BRAND_ID: Brand to test against (default: root)
  *
  * Run:
  *   ADMIN_KEY=your-key npm run test:triangle:golden
- *   BASE_URL=https://stg.eventangle.com ADMIN_KEY=your-key npm run test:triangle:golden
+ *   BASE_URL=https://stg.oursharedevents.com ADMIN_KEY=your-key npm run test:triangle:golden
  *
  * CI Integration:
  *   BLOCKING gate in Stage 2 - release fails if this test fails on staging.

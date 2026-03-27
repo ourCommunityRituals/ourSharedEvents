@@ -31,16 +31,16 @@ WARNINGS=0
 # Expected values
 EXPECTED_SCRIPT_ID="1YO4apLOQoAIh208AcAqWO3pWtx_O3yas_QC4z-pkurgMem9UgYOsp86l"
 EXPECTED_DB_SPREADSHEET_ID="1SV1oZMq4GbZBaRc0YmTeV02Tl5KXWD8R6FZXC7TwVCQ"
-EXPECTED_GCP_PROJECT="zeventbooks"
-EXPECTED_SERVICE_ACCOUNT="apps-script-deployer@zeventbooks.iam.gserviceaccount.com"
+EXPECTED_GCP_PROJECT="oursharedevents"
+EXPECTED_SERVICE_ACCOUNT="apps-script-deployer@oursharedevents.iam.gserviceaccount.com"
 
 # Expected Cloudflare routing configuration (Story 4)
-EXPECTED_STAGING_ROUTE="stg.eventangle.com/*"
-EXPECTED_STAGING_API_ROUTE="api-stg.eventangle.com/*"
-EXPECTED_PRODUCTION_ROUTE="eventangle.com/*"
-EXPECTED_PRODUCTION_WWW_ROUTE="www.eventangle.com/*"
-EXPECTED_PRODUCTION_API_ROUTE="api.eventangle.com/*"
-EXPECTED_ZONE_NAME="eventangle.com"
+EXPECTED_STAGING_ROUTE="stg.oursharedevents.com/*"
+EXPECTED_STAGING_API_ROUTE="api-stg.oursharedevents.com/*"
+EXPECTED_PRODUCTION_ROUTE="oursharedevents.com/*"
+EXPECTED_PRODUCTION_WWW_ROUTE="oursharedevents.com/*"
+EXPECTED_PRODUCTION_API_ROUTE="api.oursharedevents.com/*"
+EXPECTED_ZONE_NAME="oursharedevents.com"
 
 ###############################################################################
 # Helper Functions
@@ -271,14 +271,14 @@ check_github_workflow() {
                 print_check "pass" "APPS_SCRIPT_SERVICE_ACCOUNT_JSON secret exists in GitHub"
             else
                 print_check "fail" "APPS_SCRIPT_SERVICE_ACCOUNT_JSON secret NOT found in GitHub"
-                print_action "Add this secret at: https://github.com/zeventbooks/MVP-EVENT-TOOLKIT/settings/secrets/actions"
+                print_action "Add this secret at: https://github.com/oursharedevents/MVP-EVENT-TOOLKIT/settings/secrets/actions"
             fi
 
             if gh secret list | grep -q "SCRIPT_ID"; then
                 print_check "pass" "SCRIPT_ID secret exists in GitHub"
             else
                 print_check "fail" "SCRIPT_ID secret NOT found in GitHub"
-                print_action "Add this secret at: https://github.com/zeventbooks/MVP-EVENT-TOOLKIT/settings/secrets/actions"
+                print_action "Add this secret at: https://github.com/oursharedevents/MVP-EVENT-TOOLKIT/settings/secrets/actions"
             fi
         else
             print_check "warn" "Cannot access GitHub secrets (may need authentication)"
@@ -350,39 +350,39 @@ check_wrangler_config() {
     fi
 
     # Check staging environment routes
-    if grep -q "stg.eventangle.com/\*" "$WRANGLER_FILE"; then
+    if grep -q "stg.oursharedevents.com/\*" "$WRANGLER_FILE"; then
         print_check "pass" "Staging route configured: $EXPECTED_STAGING_ROUTE"
     else
         print_check "fail" "Missing staging route: $EXPECTED_STAGING_ROUTE"
     fi
 
-    if grep -q "api-stg.eventangle.com/\*" "$WRANGLER_FILE"; then
+    if grep -q "api-stg.oursharedevents.com/\*" "$WRANGLER_FILE"; then
         print_check "pass" "Staging API route configured: $EXPECTED_STAGING_API_ROUTE"
     else
         print_check "fail" "Missing staging API route: $EXPECTED_STAGING_API_ROUTE"
     fi
 
     # Check production environment routes
-    if grep -q '"eventangle.com/\*"' "$WRANGLER_FILE" || grep -q "{ pattern = \"eventangle.com/\*\"" "$WRANGLER_FILE"; then
+    if grep -q '"oursharedevents.com/\*"' "$WRANGLER_FILE" || grep -q "{ pattern = \"oursharedevents.com/\*\"" "$WRANGLER_FILE"; then
         print_check "pass" "Production route configured: $EXPECTED_PRODUCTION_ROUTE"
     else
         print_check "fail" "Missing production route: $EXPECTED_PRODUCTION_ROUTE"
     fi
 
-    if grep -q "www.eventangle.com/\*" "$WRANGLER_FILE"; then
+    if grep -q "oursharedevents.com/\*" "$WRANGLER_FILE"; then
         print_check "pass" "Production www route configured: $EXPECTED_PRODUCTION_WWW_ROUTE"
     else
         print_check "fail" "Missing production www route: $EXPECTED_PRODUCTION_WWW_ROUTE"
     fi
 
-    if grep -q "api.eventangle.com/\*" "$WRANGLER_FILE"; then
+    if grep -q "api.oursharedevents.com/\*" "$WRANGLER_FILE"; then
         print_check "pass" "Production API route configured: $EXPECTED_PRODUCTION_API_ROUTE"
     else
         print_check "fail" "Missing production API route: $EXPECTED_PRODUCTION_API_ROUTE"
     fi
 
     # Check zone_name is consistent
-    if grep -q 'zone_name = "eventangle.com"' "$WRANGLER_FILE"; then
+    if grep -q 'zone_name = "oursharedevents.com"' "$WRANGLER_FILE"; then
         print_check "pass" "Zone name is correctly set to: $EXPECTED_ZONE_NAME"
     else
         print_check "fail" "zone_name should be: $EXPECTED_ZONE_NAME"
@@ -511,7 +511,7 @@ if [ $FAILED -eq 0 ]; then
         echo "Next steps:"
         echo "  1. Run tests: npm test"
         echo "  2. Push to main: git push origin main"
-        echo "  3. Monitor: https://github.com/zeventbooks/MVP-EVENT-TOOLKIT/actions"
+        echo "  3. Monitor: https://github.com/oursharedevents/MVP-EVENT-TOOLKIT/actions"
         echo ""
         exit 0
     else

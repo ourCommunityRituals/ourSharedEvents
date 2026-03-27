@@ -32,7 +32,7 @@ import {
 const BRAND = process.env.TEST_BRAND || 'root';
 
 // Base URL from environment (set by CI or defaults to staging)
-const BASE_URL = process.env.BASE_URL || 'https://stg.eventangle.com';
+const BASE_URL = process.env.BASE_URL || 'https://stg.oursharedevents.com';
 
 // ===========================================================================
 // CONSOLE ERROR TRACKING
@@ -286,7 +286,7 @@ test.describe('/manage Page Smoke Tests - Story A2', () => {
       const headers = response?.headers() || {};
 
       // Should be served by Worker (not direct GAS)
-      expect(headers['x-proxied-by']).toBe('eventangle-worker');
+      expect(headers['x-proxied-by']).toBe('oursharedevents-worker');
 
       // Worker version should be present
       expect(headers['x-worker-version']).toBeDefined();

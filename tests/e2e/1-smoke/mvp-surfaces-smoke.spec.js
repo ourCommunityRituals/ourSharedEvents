@@ -12,8 +12,8 @@
  * 4. Poster - Load with event, verify title/date/QR codes
  * 5. SharedReport - Load, verify KPI cards render
  *
- * BASE_URL-Aware: Tests work against GAS or eventangle.com:
- *   BASE_URL="https://www.eventangle.com" npm run test:smoke
+ * BASE_URL-Aware: Tests work against GAS or oursharedevents.com:
+ *   BASE_URL="https://oursharedevents.com" npm run test:smoke
  *   BASE_URL="https://script.google.com/macros/s/<ID>/exec" npm run test:smoke
  */
 

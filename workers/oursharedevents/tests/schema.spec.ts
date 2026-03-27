@@ -2,7 +2,7 @@
  * Schema Verification Tests — runs in CI after every migration apply.
  *
  * Gates:
- *   1. All 7 tables exist post-migration
+ *   1. All 8 tables exist post-migration
  *   2. PII firewall: scans table has no user_email, user_name, ip_address columns
  *   3. scan_aggregates is NOT writable via user-facing route handlers
  *   4. All expected indexes exist (11 custom indexes)
@@ -33,6 +33,7 @@ const EXPECTED_TABLES = [
   'poster_deployments',
   'scans',
   'scan_aggregates',
+  'subscribers',
 ] as const;
 
 const EXPECTED_INDEXES = [
@@ -52,6 +53,7 @@ const EXPECTED_COLUMN_COUNTS: Record<string, number> = {
   poster_deployments: 10,
   scans: 9,
   scan_aggregates: 9,
+  subscribers: 5,
 };
 
 // ── Apply migrations before tests ────────────────────────────────────────────
@@ -71,7 +73,7 @@ beforeAll(async () => {
 // ── Gate 1: Table existence ──────────────────────────────────────────────────
 
 describe('Gate 1: Table existence', () => {
-  test('all 5 tables exist post-migration', async () => {
+  test('all 6 tables exist post-migration', async () => {
     const tables = await env.DB.prepare(
       "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' ORDER BY name"
     ).all();

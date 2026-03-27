@@ -11,7 +11,7 @@
 #   - Reports discrepancies to the team via GitHub issue creation
 #
 # Acceptance Criteria:
-#   - Script compares staging (api-stg.eventangle.com) and production (api.eventangle.com)
+#   - Script compares staging (api-stg.oursharedevents.com) and production (api.oursharedevents.com)
 #   - Flags any discrepancy (fields present in one and not the other)
 #   - CI pipeline runs this comparison on a schedule (nightly)
 #   - CI pipeline can run this comparison on-demand (manual trigger)

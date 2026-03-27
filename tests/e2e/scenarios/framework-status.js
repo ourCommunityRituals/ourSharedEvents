@@ -99,7 +99,7 @@ To run the full test suite, you need:
    npx playwright install --with-deps chromium webkit
 
 2. Set Environment Variables:
-   export BASE_URL=https://zeventbooks.com
+   export BASE_URL=https://oursharedevents.com
    export ADMIN_KEY=your_admin_key
 
 3. Run Test Scenarios:

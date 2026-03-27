@@ -3,8 +3,8 @@
 # Cloudflare Staging DNS Setup Script
 #
 # This script creates the necessary DNS records in Cloudflare for the staging environment:
-#   - stg.eventangle.com    -> Proxied to Cloudflare Worker
-#   - api-stg.eventangle.com -> Proxied to Cloudflare Worker
+#   - stg.oursharedevents.com    -> Proxied to Cloudflare Worker
+#   - api-stg.oursharedevents.com -> Proxied to Cloudflare Worker
 #
 # Prerequisites:
 #   1. CLOUDFLARE_API_TOKEN environment variable set (with Zone:DNS:Edit permission)
@@ -22,7 +22,7 @@
 
 set -e
 
-ZONE_NAME="eventangle.com"
+ZONE_NAME="oursharedevents.com"
 API_BASE="https://api.cloudflare.com/client/v4"
 
 # Colors for output
@@ -59,7 +59,7 @@ if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
     echo "  1. Go to https://dash.cloudflare.com/profile/api-tokens"
     echo "  2. Click 'Create Token'"
     echo "  3. Use template: 'Edit zone DNS'"
-    echo "  4. Select zone: eventangle.com"
+    echo "  4. Select zone: oursharedevents.com"
     echo "  5. Copy the token and set:"
     echo "     export CLOUDFLARE_API_TOKEN='your-token'"
     echo ""
@@ -175,15 +175,15 @@ if [ $ERRORS -eq 0 ]; then
     echo -e "${GREEN}All DNS records created successfully!${NC}"
     echo ""
     echo "DNS Records configured:"
-    echo "  - stg.eventangle.com     -> Proxied (Cloudflare Worker)"
-    echo "  - api-stg.eventangle.com -> Proxied (Cloudflare Worker)"
+    echo "  - stg.oursharedevents.com     -> Proxied (Cloudflare Worker)"
+    echo "  - api-stg.oursharedevents.com -> Proxied (Cloudflare Worker)"
     echo ""
     echo "Next steps:"
     echo "  1. Deploy the staging worker:"
     echo "     cd cloudflare-proxy && wrangler deploy --env staging"
     echo ""
     echo "  2. Verify staging is working:"
-    echo "     curl https://stg.eventangle.com/status"
+    echo "     curl https://stg.oursharedevents.com/status"
     echo ""
     echo "Note: DNS propagation may take a few minutes."
 else

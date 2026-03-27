@@ -5,7 +5,7 @@
  * 1. Load ?page=display&event=<fixtureId>
  * 2. Assert event title and basic schedule or placeholder visible
  *
- * Run: BASE_URL="https://www.eventangle.com/events" npm run test:smoke
+ * Run: BASE_URL="https://oursharedevents.com/events" npm run test:smoke
  *
  * Fixture ID: Set FIXTURE_EVENT_ID env var, or test will load default display
  */

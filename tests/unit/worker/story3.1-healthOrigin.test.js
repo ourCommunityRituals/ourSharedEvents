@@ -245,7 +245,7 @@ describe('Wrangler Configuration (Story 3.1)', () => {
 
   describe('Staging Environment', () => {
     it('should have WORKER_NAME for staging', () => {
-      expect(wranglerTomlSource).toContain('WORKER_NAME = "eventangle-staging"');
+      expect(wranglerTomlSource).toContain('WORKER_NAME = "oursharedevents-staging"');
     });
 
     it('should document UPSTREAM_WEBAPP_URL for staging', () => {
@@ -255,7 +255,7 @@ describe('Wrangler Configuration (Story 3.1)', () => {
 
   describe('Production Environment', () => {
     it('should have WORKER_NAME for production', () => {
-      expect(wranglerTomlSource).toContain('WORKER_NAME = "eventangle-prod"');
+      expect(wranglerTomlSource).toContain('WORKER_NAME = "oursharedevents-prod"');
     });
   });
 

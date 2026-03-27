@@ -1070,7 +1070,7 @@ describe('NU.init()', () => {
   describe('Direct transport mode (with execUrl)', () => {
     test('should enable direct transport when valid execUrl is provided', () => {
       const execUrl = 'https://script.google.com/macros/s/ABC123/exec';
-      const brand = 'eventangle';
+      const brand = 'oursharedevents';
 
       NU.init({ execUrl, brand });
 

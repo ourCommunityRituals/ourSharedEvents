@@ -32,15 +32,15 @@ const http = require('http');
 const ENVIRONMENTS = {
   staging: {
     name: 'Staging',
-    baseUrl: 'https://api-stg.eventangle.com',
-    // Fallback to stg.eventangle.com if api-stg is not available
-    fallbackUrl: 'https://stg.eventangle.com'
+    baseUrl: 'https://api-stg.oursharedevents.com',
+    // Fallback to stg.oursharedevents.com if api-stg is not available
+    fallbackUrl: 'https://stg.oursharedevents.com'
   },
   production: {
     name: 'Production',
-    baseUrl: 'https://api.eventangle.com',
-    // Fallback to www.eventangle.com
-    fallbackUrl: 'https://www.eventangle.com'
+    baseUrl: 'https://api.oursharedevents.com',
+    // Fallback to oursharedevents.com
+    fallbackUrl: 'https://oursharedevents.com'
   }
 };
 
