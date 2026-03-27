@@ -1,0 +1,468 @@
+# Advanced Security Scans
+#
+# Complementary security workflow providing advanced scanning capabilities
+# beyond CodeQL and npm audit (which live in security-scan.yml and stage1.yml).
+#
+# Scans included:
+#   1. SBOM Generation         - Software Bill of Materials (supply chain transparency)
+#   2. License Compliance      - Detect copyleft/problematic licenses in dependencies
+#   3. Trivy Vulnerability     - Multi-source vulnerability DB (NVD, GitHub Advisory, etc.)
+#   4. Semgrep SAST            - Lightweight static analysis with community rules
+#   5. GitHub Dependency Review - PR-scoped dependency diff analysis
+#   6. OSSF Scorecard          - OpenSSF security health metrics
+#   7. Gitleaks Secret Scan    - Deep git-history secret detection
+#
+# When this runs:
+#   - Pull requests targeting main
+#   - Push to main or claude/* branches
+#   - Weekly (Mondays 02:00 UTC) - deep scheduled scan
+#   - Manual trigger
+#
+# @see .github/workflows/security-scan.yml - Primary CodeQL + npm audit workflow
+# @see docs/SECURITY.md - Vulnerability remediation guide
+
+name: Advanced Security Scans
+
+on:
+  push:
+    # Trigger on ALL branches - any code touching the repo gets scanned
+    branches:
+      - '**'
+    paths:
+      # Trigger on any code/config change (not just docs)
+      - '**.js'
+      - '**.ts'
+      - '**.jsx'
+      - '**.tsx'
+      - '**.json'
+      - '**.html'
+      - '**.gs'
+      - '**.mjs'
+      - '**.cjs'
+      - '**.yml'
+      - '**.yaml'
+      - '**.sh'
+      - '**.env*'
+      - 'Dockerfile*'
+      - 'docker-compose*'
+      - 'wrangler.toml'
+      - 'workers/**'
+  pull_request:
+    # Scan all PRs regardless of target branch
+    branches:
+      - '**'
+  schedule:
+    # Weekly deep scan - Mondays 02:00 UTC (offset from CodeQL Sunday midnight)
+    - cron: '0 2 * * 1'
+  workflow_dispatch:
+
+# Prevent duplicate runs
+concurrency:
+  group: advanced-security-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  security-events: write
+  pull-requests: read
+  actions: read
+
+jobs:
+  # ============================================================================
+  # 1. SBOM GENERATION - Software Bill of Materials
+  # ============================================================================
+  # Generates a CycloneDX SBOM for supply chain transparency and auditing.
+  # SBOM is uploaded as a build artifact for downstream consumption.
+  # ============================================================================
+  sbom:
+    name: "📦 SBOM Generation"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate CycloneDX SBOM
+        run: |
+          npx @cyclonedx/cyclonedx-npm --output-file sbom.json --output-format JSON --spec-version 1.5
+          echo "## 📦 SBOM Generation" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          COMPONENT_COUNT=$(jq '.components | length' sbom.json 2>/dev/null || echo "unknown")
+          echo "- **Format:** CycloneDX 1.5 (JSON)" >> $GITHUB_STEP_SUMMARY
+          echo "- **Components:** $COMPONENT_COUNT" >> $GITHUB_STEP_SUMMARY
+          echo "- **Artifact:** \`sbom-cyclonedx\`" >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-cyclonedx
+          path: sbom.json
+          retention-days: 90
+
+  # ============================================================================
+  # 2. LICENSE COMPLIANCE
+  # ============================================================================
+  # Scans dependencies for copyleft or problematic licenses that could
+  # create legal risk. Blocks on GPL/AGPL family licenses.
+  # ============================================================================
+  license-check:
+    name: "⚖️ License Compliance"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check dependency licenses
+        id: license-scan
+        run: |
+          echo "=================================================="
+          echo "LICENSE COMPLIANCE CHECK"
+          echo "=================================================="
+          echo ""
+
+          # Install license-checker
+          npx license-checker --json --out license-report.json 2>/dev/null || true
+
+          if [ ! -f license-report.json ]; then
+            echo "⚠️ Could not generate license report"
+            echo "license_status=skipped" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # Blocklist: copyleft licenses that create legal risk
+          BLOCKED_LICENSES="GPL-2.0|GPL-3.0|AGPL-1.0|AGPL-3.0|SSPL|EUPL"
+
+          echo "Checking for blocked licenses: $BLOCKED_LICENSES"
+          echo ""
+
+          FOUND_BLOCKED=false
+          mkdir -p .security-reports
+
+          # Extract licenses and check against blocklist
+          jq -r 'to_entries[] | "\(.key): \(.value.licenses // "UNKNOWN")"' license-report.json > .security-reports/license-list.txt
+
+          while IFS= read -r line; do
+            if echo "$line" | grep -qEi "($BLOCKED_LICENSES)"; then
+              echo "❌ Blocked license: $line"
+              FOUND_BLOCKED=true
+            fi
+          done < .security-reports/license-list.txt
+
+          TOTAL=$(wc -l < .security-reports/license-list.txt)
+          UNKNOWN=$(grep -ci "UNKNOWN" .security-reports/license-list.txt || echo "0")
+
+          echo ""
+          echo "Total packages scanned: $TOTAL"
+          echo "Unknown licenses: $UNKNOWN"
+
+          if [ "$FOUND_BLOCKED" = "true" ]; then
+            echo ""
+            echo "❌ Blocked copyleft licenses detected!"
+            echo "Review these dependencies and find MIT/Apache/ISC alternatives."
+            echo "license_status=failed" >> $GITHUB_OUTPUT
+            exit 1
+          else
+            echo ""
+            echo "✅ No blocked licenses found"
+            echo "license_status=pass" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Upload license report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: license-report
+          path: |
+            license-report.json
+            .security-reports/license-list.txt
+          retention-days: 30
+
+      - name: Create license summary
+        if: always()
+        run: |
+          echo "## ⚖️ License Compliance" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          STATUS="${{ steps.license-scan.outputs.license_status }}"
+          if [ "$STATUS" = "pass" ]; then
+            echo "### ✅ All dependency licenses are compliant" >> $GITHUB_STEP_SUMMARY
+          elif [ "$STATUS" = "failed" ]; then
+            echo "### ❌ Blocked licenses detected" >> $GITHUB_STEP_SUMMARY
+            echo "Copyleft (GPL/AGPL) licenses found. Replace with permissive alternatives." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### ⚠️ License check skipped" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Blocked license families:** GPL-2.0, GPL-3.0, AGPL, SSPL, EUPL" >> $GITHUB_STEP_SUMMARY
+          echo "**Allowed:** MIT, Apache-2.0, ISC, BSD-2-Clause, BSD-3-Clause, 0BSD, Unlicense" >> $GITHUB_STEP_SUMMARY
+
+  # ============================================================================
+  # 3. TRIVY VULNERABILITY SCAN
+  # ============================================================================
+  # Uses Trivy (Aqua Security) for filesystem-level vulnerability scanning
+  # against multiple vulnerability databases (NVD, GitHub Advisory, etc.).
+  # Complements npm audit with broader detection coverage.
+  # ============================================================================
+  trivy-scan:
+    name: "🛡️ Trivy Vulnerability Scan"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run Trivy filesystem scan
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH,MEDIUM'
+          # Skip unfixed vulns in scheduled scan context
+          ignore-unfixed: ${{ github.event_name == 'schedule' }}
+
+      - name: Upload Trivy SARIF to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        continue-on-error: true
+        with:
+          sarif_file: 'trivy-results.sarif'
+          category: 'trivy'
+
+      - name: Run Trivy table output (human-readable)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'table'
+          severity: 'CRITICAL,HIGH'
+          exit-code: '1'
+
+      - name: Create Trivy summary
+        if: always()
+        run: |
+          echo "## 🛡️ Trivy Vulnerability Scan" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ job.status }}" == "success" ]; then
+            echo "### ✅ No critical/high vulnerabilities found" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### ❌ Vulnerabilities detected" >> $GITHUB_STEP_SUMMARY
+            echo "Review the Trivy output in job logs for details." >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Databases:** NVD, GitHub Advisory, OSV, Red Hat, Debian" >> $GITHUB_STEP_SUMMARY
+          echo "**SARIF results** uploaded to the Security tab." >> $GITHUB_STEP_SUMMARY
+
+  # ============================================================================
+  # 4. SEMGREP SAST
+  # ============================================================================
+  # Lightweight static analysis using Semgrep community rules.
+  # Covers patterns CodeQL may miss: insecure defaults, misconfigurations,
+  # framework-specific issues, and custom security anti-patterns.
+  # ============================================================================
+  semgrep:
+    name: "🔎 Semgrep SAST"
+    runs-on: ubuntu-latest
+    # Only on PR and push (skip scheduled to avoid noise)
+    if: github.event_name != 'schedule'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run Semgrep
+        uses: semgrep/semgrep-action@v1
+        with:
+          config: >-
+            p/javascript
+            p/typescript
+            p/nodejs
+            p/security-audit
+            p/owasp-top-ten
+            p/xss
+            p/command-injection
+          generateSarif: "1"
+        env:
+          SEMGREP_RULES: "p/javascript p/typescript p/nodejs p/security-audit p/owasp-top-ten"
+
+      - name: Upload Semgrep SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        continue-on-error: true
+        with:
+          sarif_file: semgrep.sarif
+          category: 'semgrep'
+
+      - name: Create Semgrep summary
+        if: always()
+        run: |
+          echo "## 🔎 Semgrep Static Analysis" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ job.status }}" == "success" ]; then
+            echo "### ✅ No security issues found" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### ⚠️ Findings detected" >> $GITHUB_STEP_SUMMARY
+            echo "Review Semgrep output in job logs." >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Rule packs:** javascript, typescript, nodejs, security-audit, owasp-top-ten, xss, command-injection" >> $GITHUB_STEP_SUMMARY
+
+  # ============================================================================
+  # 5. GITHUB DEPENDENCY REVIEW (PR only)
+  # ============================================================================
+  # Analyzes dependency changes in PRs and flags new vulnerabilities,
+  # license issues, or risky dependency additions before merge.
+  # ============================================================================
+  dependency-review:
+    name: "📋 Dependency Review"
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Dependency Review
+        uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high
+          # Block known problematic licenses in new dependencies
+          deny-licenses: GPL-2.0-only, GPL-3.0-only, AGPL-3.0-only
+          comment-summary-in-pr: always
+
+  # ============================================================================
+  # 6. OSSF SCORECARD
+  # ============================================================================
+  # OpenSSF Scorecard evaluates the repository's security health across
+  # multiple dimensions: branch protection, CI tests, dependency pinning,
+  # signed releases, code review, etc.
+  # Runs weekly and on push to main for trend tracking.
+  # ============================================================================
+  scorecard:
+    name: "🏆 OSSF Scorecard"
+    runs-on: ubuntu-latest
+    # Only on main push and scheduled (not on every PR)
+    if: github.event_name != 'pull_request'
+    permissions:
+      contents: read
+      security-events: write
+      id-token: write  # Required for Scorecard
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Run OSSF Scorecard
+        uses: ossf/scorecard-action@v2.4.0
+        with:
+          results_file: scorecard-results.sarif
+          results_format: sarif
+          publish_results: true
+
+      - name: Upload Scorecard SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        continue-on-error: true
+        with:
+          sarif_file: scorecard-results.sarif
+          category: 'ossf-scorecard'
+
+      - name: Create Scorecard summary
+        if: always()
+        run: |
+          echo "## 🏆 OSSF Scorecard" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "OpenSSF security health evaluation completed." >> $GITHUB_STEP_SUMMARY
+          echo "Results published to [OpenSSF Scorecard](https://securityscorecards.dev)." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Checks include:** Branch protection, CI tests, code review," >> $GITHUB_STEP_SUMMARY
+          echo "dependency pinning, fuzzing, SAST, signed releases, and more." >> $GITHUB_STEP_SUMMARY
+
+  # ============================================================================
+  # 7. GITLEAKS SECRET SCANNING
+  # ============================================================================
+  # Deep git-history secret detection using Gitleaks.
+  # Goes beyond the regex grep in stage1.yml by scanning the full git history,
+  # using 150+ secret patterns, and detecting secrets in past commits.
+  # ============================================================================
+  gitleaks:
+    name: "🔑 Gitleaks Secret Scan"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for deep scanning
+
+      - name: Run Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
+
+      - name: Create Gitleaks summary
+        if: always()
+        run: |
+          echo "## 🔑 Gitleaks Secret Scan" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ job.status }}" == "success" ]; then
+            echo "### ✅ No secrets detected in git history" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### ❌ Secrets detected!" >> $GITHUB_STEP_SUMMARY
+            echo "Leaked secrets found in git history. Rotate immediately." >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Coverage:** Full git history, 150+ secret patterns" >> $GITHUB_STEP_SUMMARY
+          echo "**Detects:** API keys, tokens, passwords, private keys, cloud credentials" >> $GITHUB_STEP_SUMMARY
+
+  # ============================================================================
+  # SUMMARY AGGREGATOR
+  # ============================================================================
+  security-summary:
+    name: "📊 Security Summary"
+    runs-on: ubuntu-latest
+    if: always()
+    needs: [sbom, license-check, trivy-scan, semgrep, dependency-review, scorecard, gitleaks]
+    steps:
+      - name: Generate consolidated summary
+        run: |
+          echo "## 📊 Advanced Security Scan Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Scan | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| 📦 SBOM Generation | ${{ needs.sbom.result == 'success' && '✅' || needs.sbom.result == 'skipped' && '⏭️' || '❌' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| ⚖️ License Compliance | ${{ needs.license-check.result == 'success' && '✅' || needs.license-check.result == 'skipped' && '⏭️' || '❌' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 🛡️ Trivy Vulnerability | ${{ needs.trivy-scan.result == 'success' && '✅' || needs.trivy-scan.result == 'skipped' && '⏭️' || '❌' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 🔎 Semgrep SAST | ${{ needs.semgrep.result == 'success' && '✅' || needs.semgrep.result == 'skipped' && '⏭️' || '❌' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 📋 Dependency Review | ${{ needs.dependency-review.result == 'success' && '✅' || needs.dependency-review.result == 'skipped' && '⏭️' || '❌' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 🏆 OSSF Scorecard | ${{ needs.scorecard.result == 'success' && '✅' || needs.scorecard.result == 'skipped' && '⏭️' || '❌' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 🔑 Gitleaks Secrets | ${{ needs.gitleaks.result == 'success' && '✅' || needs.gitleaks.result == 'skipped' && '⏭️' || '❌' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "---" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Complements:** \`security-scan.yml\` (CodeQL + npm audit) and \`stage1.yml\` (S1-01 Security Check)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Coverage Map" >> $GITHUB_STEP_SUMMARY
+          echo "| Layer | Tool(s) |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|---------|" >> $GITHUB_STEP_SUMMARY
+          echo "| SAST (code) | CodeQL, Semgrep |" >> $GITHUB_STEP_SUMMARY
+          echo "| Dependency vulns | npm audit, Trivy, Dependency Review |" >> $GITHUB_STEP_SUMMARY
+          echo "| Secret detection | Gitleaks, stage1 grep |" >> $GITHUB_STEP_SUMMARY
+          echo "| License compliance | license-checker, Dependency Review |" >> $GITHUB_STEP_SUMMARY
+          echo "| Supply chain | SBOM, OSSF Scorecard, Dependabot |" >> $GITHUB_STEP_SUMMARY
+          echo "| Runtime security | Security regression tests (security-regression.yml) |" >> $GITHUB_STEP_SUMMARY

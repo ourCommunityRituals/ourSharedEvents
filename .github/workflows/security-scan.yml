@@ -26,12 +26,26 @@ name: CodeQL Security Analysis
 
 on:
   push:
+    # Trigger on ALL branches - any code touching the repo gets scanned
     branches:
-      - main
-      - 'claude/**'
+      - '**'
+    paths:
+      - '**.js'
+      - '**.ts'
+      - '**.jsx'
+      - '**.tsx'
+      - '**.json'
+      - '**.html'
+      - '**.gs'
+      - '**.mjs'
+      - '**.cjs'
+      - '**.sh'
+      - '**.env*'
+      - 'workers/**'
   pull_request:
+    # Scan all PRs regardless of target branch
     branches:
-      - main
+      - '**'
   schedule:
     # Run weekly on Sundays at 00:00 UTC for vulnerability discovery
     - cron: '0 0 * * 0'
