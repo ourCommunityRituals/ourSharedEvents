@@ -1,0 +1,239 @@
+/**
+ * Form page handler — serves mobile-first HTML form pages.
+ *
+ * Sr Design FE: 10-second comprehension test — customer sees event name,
+ * one clear action, and completes the form in under 10 seconds.
+ *
+ * QR→form routing: ?type= param selects form type.
+ *   GET /forms/:eventId                → registration (default)
+ *   GET /forms/:eventId?type=register  → registration
+ *   GET /forms/:eventId?type=checkin   → check-in
+ *   GET /forms/:eventId?type=survey    → survey
+ *   GET /forms/:eventId?type=email     → email signup
+ *
+ * Lead FE: Forms post to /api/v2/events/:id/forms/:type via fetch().
+ * No page reload. Success state shown inline.
+ */
+
+export interface FormPagesEnv {
+  WORKER_ENV?: string;
+}
+
+// ── Shared CSS: mobile-first, system fonts, 10-second comprehension ──────────
+
+const FORM_CSS = `
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: system-ui, -apple-system, sans-serif; background: #f8f9fa; color: #212529; min-height: 100vh; }
+  header { background: #1a1a2e; color: #fff; padding: 1rem 1.5rem; text-align: center; }
+  header h1 { font-size: 1.1rem; font-weight: 600; opacity: .7; text-transform: uppercase; letter-spacing: .05em; }
+  header .event-name { font-size: 1.4rem; font-weight: 700; margin-top: .25rem; }
+  main { max-width: 480px; margin: 0 auto; padding: 1.5rem 1rem; }
+  .form-card { background: #fff; border-radius: 12px; padding: 1.5rem; box-shadow: 0 2px 8px rgba(0,0,0,.08); }
+  .form-card h2 { font-size: 1.15rem; font-weight: 600; margin-bottom: 1rem; color: #1a1a2e; }
+  label { display: block; font-size: .85rem; font-weight: 500; color: #495057; margin-bottom: .25rem; }
+  input, textarea, select { width: 100%; padding: .65rem .75rem; border: 1.5px solid #dee2e6; border-radius: 8px; font-size: 1rem; margin-bottom: .75rem; font-family: inherit; }
+  input:focus, textarea:focus { outline: none; border-color: #4361ee; box-shadow: 0 0 0 3px rgba(67,97,238,.15); }
+  textarea { resize: vertical; min-height: 80px; }
+  button { width: 100%; padding: .75rem; background: #4361ee; color: #fff; border: none; border-radius: 8px; font-size: 1rem; font-weight: 600; cursor: pointer; margin-top: .5rem; }
+  button:active { background: #3451d1; }
+  button:disabled { background: #adb5bd; cursor: not-allowed; }
+  .success { text-align: center; padding: 2rem 1rem; }
+  .success .icon { font-size: 3rem; margin-bottom: .5rem; }
+  .success h2 { color: #2f9e44; font-size: 1.2rem; }
+  .success p { color: #868e96; font-size: .9rem; margin-top: .5rem; }
+  .error-msg { color: #e03131; font-size: .85rem; margin-bottom: .5rem; display: none; }
+  .rating-row { display: flex; gap: .5rem; margin-bottom: .75rem; }
+  .rating-row button { width: auto; flex: 1; padding: .5rem; font-size: 1.1rem; background: #f1f3f5; color: #495057; border: 2px solid transparent; }
+  .rating-row button.selected { background: #4361ee; color: #fff; border-color: #3451d1; }
+  .checkin-tap { text-align: center; padding: 3rem 1rem; }
+  .checkin-tap button { font-size: 1.5rem; padding: 1.5rem; border-radius: 50%; width: 180px; height: 180px; margin: 1rem auto; display: block; }
+  .checkin-tap .count { font-size: 2rem; font-weight: 700; color: #1a1a2e; margin-top: 1rem; }
+`;
+
+// ── Form JS: shared submit logic ─────────────────────────────────────────────
+
+const FORM_JS_SUBMIT = `
+  async function submitForm(eventId, formType, data) {
+    const errEl = document.getElementById('error-msg');
+    const btn = document.querySelector('button[type="submit"]');
+    if (errEl) errEl.style.display = 'none';
+    if (btn) btn.disabled = true;
+    try {
+      const res = await fetch('/api/v2/events/' + eventId + '/forms/' + formType, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      const body = await res.json();
+      if (!body.ok) throw new Error(body.error || 'Submission failed');
+      return body;
+    } catch (err) {
+      if (errEl) { errEl.textContent = err.message; errEl.style.display = 'block'; }
+      if (btn) btn.disabled = false;
+      throw err;
+    }
+  }
+  function showSuccess(msg) {
+    document.getElementById('form-area').innerHTML =
+      '<div class="success"><div class="icon">&#10003;</div><h2>' + msg + '</h2><p>You can close this page.</p></div>';
+  }
+`;
+
+// ── Registration form ────────────────────────────────────────────────────────
+
+function registrationForm(eventId: string, eventName: string): string {
+  return `
+    <div class="form-card" id="form-area">
+      <h2>Register for this event</h2>
+      <p id="error-msg" class="error-msg"></p>
+      <form onsubmit="handleRegister(event)">
+        <label for="name">Your name</label>
+        <input type="text" id="name" placeholder="Jane Smith" maxlength="200" required />
+        <label for="email">Email (optional)</label>
+        <input type="email" id="email" placeholder="jane@example.com" maxlength="320" />
+        <button type="submit">Register</button>
+      </form>
+    </div>
+    <script>
+      ${FORM_JS_SUBMIT}
+      async function handleRegister(e) {
+        e.preventDefault();
+        await submitForm('${eventId}', 'register', {
+          name: document.getElementById('name').value,
+          email: document.getElementById('email').value || undefined,
+        });
+        showSuccess('You\\'re registered!');
+      }
+    </script>`;
+}
+
+// ── Check-in form (tap counter) ──────────────────────────────────────────────
+
+function checkinForm(eventId: string, eventName: string): string {
+  return `
+    <div class="checkin-tap" id="form-area">
+      <h2>Check In</h2>
+      <p id="error-msg" class="error-msg"></p>
+      <button type="submit" onclick="handleCheckin()">Tap to<br/>Check In</button>
+      <div class="count" id="count"></div>
+    </div>
+    <script>
+      ${FORM_JS_SUBMIT}
+      async function handleCheckin() {
+        const body = await submitForm('${eventId}', 'checkin', {});
+        document.getElementById('count').textContent = body.count + ' checked in';
+        document.querySelector('button[type="submit"]').disabled = false;
+      }
+    </script>`;
+}
+
+// ── Survey form ──────────────────────────────────────────────────────────────
+
+function surveyForm(eventId: string, eventName: string): string {
+  return `
+    <div class="form-card" id="form-area">
+      <h2>How was the event?</h2>
+      <p id="error-msg" class="error-msg"></p>
+      <form onsubmit="handleSurvey(event)">
+        <label>Overall rating</label>
+        <div class="rating-row" id="rating-overall">
+          <button type="button" onclick="setRating('overall',1)">1</button>
+          <button type="button" onclick="setRating('overall',2)">2</button>
+          <button type="button" onclick="setRating('overall',3)">3</button>
+          <button type="button" onclick="setRating('overall',4)">4</button>
+          <button type="button" onclick="setRating('overall',5)">5</button>
+        </div>
+        <label for="comments">Comments (optional)</label>
+        <textarea id="comments" placeholder="Tell us what you thought..." maxlength="1000"></textarea>
+        <button type="submit">Submit Feedback</button>
+      </form>
+    </div>
+    <script>
+      ${FORM_JS_SUBMIT}
+      const ratings = {};
+      function setRating(key, val) {
+        ratings[key] = val;
+        document.querySelectorAll('#rating-' + key + ' button').forEach((b, i) => {
+          b.classList.toggle('selected', i < val);
+        });
+      }
+      async function handleSurvey(e) {
+        e.preventDefault();
+        const comments = document.getElementById('comments').value;
+        await submitForm('${eventId}', 'survey', {
+          responses: { ...ratings, ...(comments ? { comments } : {}) },
+        });
+        showSuccess('Thanks for your feedback!');
+      }
+    </script>`;
+}
+
+// ── Email signup form ────────────────────────────────────────────────────────
+
+function emailSignupForm(eventId: string, eventName: string): string {
+  return `
+    <div class="form-card" id="form-area">
+      <h2>Stay in the loop</h2>
+      <p style="color:#868e96;font-size:.9rem;margin-bottom:1rem;">Get notified about future events. We'll never share your email.</p>
+      <p id="error-msg" class="error-msg"></p>
+      <form onsubmit="handleEmail(event)">
+        <label for="email">Your email</label>
+        <input type="email" id="email" placeholder="you@example.com" maxlength="320" required />
+        <button type="submit">Sign me up</button>
+      </form>
+    </div>
+    <script>
+      ${FORM_JS_SUBMIT}
+      async function handleEmail(e) {
+        e.preventDefault();
+        const body = await submitForm('${eventId}', 'email-signup', {
+          email: document.getElementById('email').value,
+        });
+        showSuccess(body.duplicate ? 'You\\'re already signed up!' : 'You\\'re on the list!');
+      }
+    </script>`;
+}
+
+// ── Page shell ───────────────────────────────────────────────────────────────
+
+function formPage(eventId: string, eventName: string, formType: string): string {
+  let formHtml: string;
+  switch (formType) {
+    case 'checkin': formHtml = checkinForm(eventId, eventName); break;
+    case 'survey': formHtml = surveyForm(eventId, eventName); break;
+    case 'email': formHtml = emailSignupForm(eventId, eventName); break;
+    default: formHtml = registrationForm(eventId, eventName); break;
+  }
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>${eventName} – OurSharedEvents</title>
+  <style>${FORM_CSS}</style>
+</head>
+<body>
+  <header>
+    <h1>OurSharedEvents</h1>
+    <div class="event-name">${eventName}</div>
+  </header>
+  <main>${formHtml}</main>
+</body>
+</html>`;
+}
+
+// ─── Route handler ───────────────────────────────────────────────────────────
+
+export function handleFormPage(request: Request, _env: FormPagesEnv, eventId: string): Response {
+  const url = new URL(request.url);
+  const formType = url.searchParams.get('type') ?? 'register';
+  // Event name comes from query param (set by QR generator) or falls back
+  const eventName = url.searchParams.get('event') ?? 'Event';
+
+  const html = formPage(eventId, eventName, formType);
+  return new Response(html, {
+    status: 200,
+    headers: { 'Content-Type': 'text/html; charset=utf-8' },
+  });
+}

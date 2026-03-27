@@ -19,6 +19,7 @@
  *   GET  /api/v2/admin/events/:id/forms/checkin-count  → check-in count (admin)
  *   GET  /api/v2/admin/events/:id/forms/surveys        → surveys, PII-scrubbed (admin)
  *   GET  /api/v2/admin/events/:id/forms/email-signups  → email signup count (admin)
+ *   GET  /forms/:eventId?type=register|checkin|survey|email  → public form page (QR landing)
  *   *                            → 404
  */
 
@@ -37,8 +38,9 @@ import {
   handleAdminEmailSignupCount,
   type FormsEnv,
 } from './handlers/forms';
+import { handleFormPage, type FormPagesEnv } from './handlers/form-pages';
 
-export type RouterEnv = HealthEnv & EventsEnv & PagesEnv & AdminEnv & FormsEnv & {
+export type RouterEnv = HealthEnv & EventsEnv & PagesEnv & AdminEnv & FormsEnv & FormPagesEnv & {
   WORKER_ENV?: string;
   WORKER_BUILD_VERSION?: string;
 };
@@ -125,6 +127,12 @@ export async function route(request: Request, env: RouterEnv): Promise<Response>
       case 'email-signup':
         return handleFormEmailSignup(request, env, eventId);
     }
+  }
+
+  // ── Public form pages (QR→form landing) ───────────────────────────────────
+  const formPageMatch = pathname.match(/^\/forms\/([^/]+)$/);
+  if (formPageMatch && method === 'GET') {
+    return handleFormPage(request, env, formPageMatch[1]);
   }
 
   // ── Public pages ───────────────────────────────────────────────────────────

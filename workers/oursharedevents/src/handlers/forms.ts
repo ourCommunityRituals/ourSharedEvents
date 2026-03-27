@@ -3,6 +3,10 @@
  *
  * All form data lives in FORMS_DB — NEVER linked to the anonymous scan system (DB).
  *
+ * Container pattern: All 4 form types share the same request validation,
+ * observability logging, and response format. The container (processFormSubmission)
+ * handles cross-cutting concerns; each form type only implements its specific logic.
+ *
  * Public (no auth):
  *   POST /api/v2/events/:id/forms/register      → submit registration
  *   POST /api/v2/events/:id/forms/checkin        → increment check-in count
@@ -24,16 +28,13 @@ export interface FormsEnv extends FormsDbEnv {
 
 // ─── Constants ──────────────────────────────────────────────────────────────────
 
-/** Maximum request body size: 16 KB — forms are small payloads */
 const MAX_BODY_BYTES = 16 * 1024;
-
-/** Default registration expiry: 90 days from submission */
 const REGISTRATION_TTL_MS = 90 * 24 * 60 * 60 * 1000;
-
-/** Email signup retention: 30 days from submission */
 const EMAIL_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 
-// ─── Helpers ────────────────────────────────────────────────────────────────────
+// ─── Container Pattern: Shared Infrastructure ───────────────────────────────────
+
+type FormType = 'register' | 'checkin' | 'survey' | 'email-signup';
 
 function requestId(): string {
   return crypto.randomUUID ? crypto.randomUUID() : `req-${Date.now()}`;
@@ -50,13 +51,13 @@ function errorResponse(code: string, message: string, status: number): Response 
   return jsonResponse({ ok: false, status, code, error: message, timestamp: new Date().toISOString() }, status);
 }
 
-async function parseJsonBody(request: Request): Promise<Record<string, unknown> | null> {
-  // Enforce body size limit — reject before parsing
-  const contentLength = request.headers.get('Content-Length');
-  if (contentLength && parseInt(contentLength, 10) > MAX_BODY_BYTES) {
-    return null;
-  }
+function isValidEventId(id: string): boolean {
+  return id.length > 0 && id.length <= 128 && /^[a-zA-Z0-9_\-]+$/.test(id);
+}
 
+async function parseJsonBody(request: Request): Promise<Record<string, unknown> | null> {
+  const contentLength = request.headers.get('Content-Length');
+  if (contentLength && parseInt(contentLength, 10) > MAX_BODY_BYTES) return null;
   try {
     const text = await request.text();
     if (text.length > MAX_BODY_BYTES) return null;
@@ -66,9 +67,42 @@ async function parseJsonBody(request: Request): Promise<Record<string, unknown> 
   }
 }
 
-/** Validate event_id format: non-empty, reasonable length, no injection chars */
-function isValidEventId(id: string): boolean {
-  return id.length > 0 && id.length <= 128 && /^[a-zA-Z0-9_\-]+$/.test(id);
+/** SDET: Structured observability log for every form submission */
+function logFormEvent(
+  formType: FormType,
+  eventId: string,
+  action: 'submit' | 'admin_read' | 'lifecycle',
+  meta: Record<string, unknown> = {},
+): void {
+  console.log(JSON.stringify({
+    type: 'FORM_EVENT',
+    formType,
+    eventId,
+    action,
+    timestamp: new Date().toISOString(),
+    ...meta,
+  }));
+}
+
+/**
+ * Container: shared pre-processing for all public form submissions.
+ * Validates event ID and parses body. Returns null on success (call proceeds),
+ * or an error Response to return early.
+ */
+async function validateFormRequest(
+  request: Request,
+  eventId: string,
+  requireBody: boolean,
+): Promise<{ body: Record<string, unknown> | null; error: Response | null }> {
+  if (!isValidEventId(eventId)) {
+    return { body: null, error: errorResponse('INVALID_EVENT_ID', 'Invalid event ID format', 400) };
+  }
+  if (!requireBody) return { body: null, error: null };
+  const body = await parseJsonBody(request);
+  if (!body) {
+    return { body: null, error: errorResponse('INVALID_BODY', 'Request body must be valid JSON under 16KB', 400) };
+  }
+  return { body, error: null };
 }
 
 // ─── Public: Registration ───────────────────────────────────────────────────────
@@ -78,20 +112,17 @@ export async function handleFormRegistration(
   env: FormsEnv,
   eventId: string,
 ): Promise<Response> {
-  if (!isValidEventId(eventId)) return errorResponse('INVALID_EVENT_ID', 'Invalid event ID format', 400);
+  const start = Date.now();
+  const { body, error } = await validateFormRequest(request, eventId, true);
+  if (error) return error;
 
-  const body = await parseJsonBody(request);
-  if (!body) return errorResponse('INVALID_BODY', 'Request body must be valid JSON under 16KB', 400);
-
-  const name = typeof body.name === 'string' ? body.name.trim().slice(0, 200) : undefined;
-  const email = typeof body.email === 'string' ? body.email.trim().slice(0, 320) : undefined;
-  const sourcePlacementId = typeof body.sourcePlacementId === 'string' ? body.sourcePlacementId.slice(0, 128) : undefined;
+  const name = typeof body!.name === 'string' ? body!.name.trim().slice(0, 200) : undefined;
+  const email = typeof body!.email === 'string' ? body!.email.trim().slice(0, 320) : undefined;
+  const sourcePlacementId = typeof body!.sourcePlacementId === 'string' ? body!.sourcePlacementId.slice(0, 128) : undefined;
 
   const emailHash = email ? await hashEmail(email) : undefined;
   const bucket = bucketTimestamp();
   const id = generateId();
-
-  // Server-computed expiry — client NEVER controls when data is destroyed
   const expiresAt = new Date(Date.now() + REGISTRATION_TTL_MS).toISOString();
 
   await env.FORMS_DB.prepare(
@@ -101,17 +132,21 @@ export async function handleFormRegistration(
     .bind(id, eventId, sourcePlacementId ?? null, name ?? null, emailHash ?? null, bucket, expiresAt)
     .run();
 
+  logFormEvent('register', eventId, 'submit', { id, latencyMs: Date.now() - start });
+
   return jsonResponse({ ok: true, id, registrationBucket: bucket });
 }
 
 // ─── Public: Check-in ───────────────────────────────────────────────────────────
 
 export async function handleFormCheckin(
-  _request: Request,
+  request: Request,
   env: FormsEnv,
   eventId: string,
 ): Promise<Response> {
-  if (!isValidEventId(eventId)) return errorResponse('INVALID_EVENT_ID', 'Invalid event ID format', 400);
+  const start = Date.now();
+  const { error } = await validateFormRequest(request, eventId, false);
+  if (error) return error;
 
   const id = generateId();
 
@@ -129,7 +164,10 @@ export async function handleFormCheckin(
     .bind(eventId)
     .first<{ total_count: number }>();
 
-  return jsonResponse({ ok: true, count: result?.total_count ?? 1 });
+  const count = result?.total_count ?? 1;
+  logFormEvent('checkin', eventId, 'submit', { count, latencyMs: Date.now() - start });
+
+  return jsonResponse({ ok: true, count });
 }
 
 // ─── Public: Survey ─────────────────────────────────────────────────────────────
@@ -139,12 +177,11 @@ export async function handleFormSurvey(
   env: FormsEnv,
   eventId: string,
 ): Promise<Response> {
-  if (!isValidEventId(eventId)) return errorResponse('INVALID_EVENT_ID', 'Invalid event ID format', 400);
+  const start = Date.now();
+  const { body, error } = await validateFormRequest(request, eventId, true);
+  if (error) return error;
 
-  const body = await parseJsonBody(request);
-  if (!body) return errorResponse('INVALID_BODY', 'Request body must be valid JSON under 16KB', 400);
-
-  const responses = body.responses;
+  const responses = body!.responses;
   if (!responses || typeof responses !== 'object') {
     return errorResponse('MISSING_FIELD', 'Missing required field: responses', 400);
   }
@@ -159,6 +196,8 @@ export async function handleFormSurvey(
     .bind(id, eventId, JSON.stringify(responses), bucket)
     .run();
 
+  logFormEvent('survey', eventId, 'submit', { id, latencyMs: Date.now() - start });
+
   return jsonResponse({ ok: true, id });
 }
 
@@ -169,22 +208,18 @@ export async function handleFormEmailSignup(
   env: FormsEnv,
   eventId: string,
 ): Promise<Response> {
-  if (!isValidEventId(eventId)) return errorResponse('INVALID_EVENT_ID', 'Invalid event ID format', 400);
+  const start = Date.now();
+  const { body, error } = await validateFormRequest(request, eventId, true);
+  if (error) return error;
 
-  const body = await parseJsonBody(request);
-  if (!body) return errorResponse('INVALID_BODY', 'Request body must be valid JSON under 16KB', 400);
-
-  const email = typeof body.email === 'string' ? body.email.trim().slice(0, 320) : '';
+  const email = typeof body!.email === 'string' ? body!.email.trim().slice(0, 320) : '';
   if (!email) return errorResponse('MISSING_FIELD', 'Missing required field: email', 400);
 
   const encryptionKey = env.FORMS_ENCRYPTION_KEY;
-  if (!encryptionKey) {
-    return errorResponse('CONFIG_ERROR', 'FORMS_ENCRYPTION_KEY not configured', 503);
-  }
+  if (!encryptionKey) return errorResponse('CONFIG_ERROR', 'FORMS_ENCRYPTION_KEY not configured', 503);
 
   const emailHash = await hashEmail(email);
 
-  // Dedup: check if this email already signed up for this event
   const existing = await env.FORMS_DB.prepare(
     'SELECT id FROM email_signups WHERE event_id = ? AND email_hash = ?',
   )
@@ -192,14 +227,13 @@ export async function handleFormEmailSignup(
     .first();
 
   if (existing) {
+    logFormEvent('email-signup', eventId, 'submit', { duplicate: true, latencyMs: Date.now() - start });
     return jsonResponse({ ok: true, id: existing.id as string, duplicate: true });
   }
 
   const encrypted = await encryptEmail(email, encryptionKey);
   const id = generateId();
   const bucket = bucketTimestamp();
-
-  // Server-computed retention — client NEVER controls retention window
   const retentionExpiresAt = new Date(Date.now() + EMAIL_RETENTION_MS).toISOString();
 
   await env.FORMS_DB.prepare(
@@ -208,6 +242,8 @@ export async function handleFormEmailSignup(
   )
     .bind(id, eventId, emailHash, encrypted, bucket, retentionExpiresAt)
     .run();
+
+  logFormEvent('email-signup', eventId, 'submit', { id, latencyMs: Date.now() - start });
 
   return jsonResponse({ ok: true, id });
 }
@@ -225,6 +261,7 @@ export async function handleAdminRegistrations(
     .bind(eventId)
     .all();
 
+  logFormEvent('register', eventId, 'admin_read', { count: result.results.length });
   return jsonResponse({ ok: true, items: result.results, count: result.results.length });
 }
 
@@ -241,7 +278,9 @@ export async function handleAdminCheckinCount(
     .bind(eventId)
     .first<{ total_count: number }>();
 
-  return jsonResponse({ ok: true, count: result?.total_count ?? 0 });
+  const count = result?.total_count ?? 0;
+  logFormEvent('checkin', eventId, 'admin_read', { count });
+  return jsonResponse({ ok: true, count });
 }
 
 // ─── Admin: List Surveys (PII-scrubbed only) ───────────────────────────────────
@@ -257,6 +296,7 @@ export async function handleAdminSurveys(
     .bind(eventId)
     .all();
 
+  logFormEvent('survey', eventId, 'admin_read', { count: result.results.length });
   return jsonResponse({ ok: true, items: result.results, count: result.results.length });
 }
 
@@ -273,5 +313,7 @@ export async function handleAdminEmailSignupCount(
     .bind(eventId)
     .first<{ cnt: number }>();
 
-  return jsonResponse({ ok: true, count: result?.cnt ?? 0 });
+  const count = result?.cnt ?? 0;
+  logFormEvent('email-signup', eventId, 'admin_read', { count });
+  return jsonResponse({ ok: true, count });
 }

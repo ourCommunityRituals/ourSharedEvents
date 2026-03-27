@@ -106,7 +106,13 @@ async function runFormDataLifecycle(env: RouterEnv): Promise<void> {
       .bind(now)
       .run();
 
-    console.log(JSON.stringify({ type: 'LIFECYCLE_COMPLETE', timestamp: now }));
+    console.log(JSON.stringify({
+      type: 'LIFECYCLE_COMPLETE',
+      timestamp: now,
+      registrationsDeleted: true,
+      surveysScrubbed: unscrubbed.results.length,
+      emailSignupsDeleted: true,
+    }));
   } catch (err) {
     console.error(JSON.stringify({
       type: 'LIFECYCLE_ERROR',
