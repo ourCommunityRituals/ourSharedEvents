@@ -265,7 +265,7 @@ jobs:
         continue-on-error: true
         with:
           name: "E2E Staging Results"
-          path: .test-results/junit.xml
+          path: ".test-results/*-junit.xml"
           reporter: jest-junit
           fail-on-error: false
 
