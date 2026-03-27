@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
+<title>OurCommunityRituals — Status Dashboard v2</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Barlow:wght@400;500;600;700;800&family=Barlow+Condensed:wght@600;700&display=swap');
+
+:root {
+  --fs: 14px;
+  --bg: #060810; --bg1: #0b0e18; --bg2: #101520;
+  --bord: rgba(255,255,255,.065); --bord2: rgba(255,255,255,.11);
+  --text: #cdd5e8; --muted: #566070; --dim: #2a3345;
+  --Ap: #a3e635; --A: #10b981; --Bp: #06b6d4;
+  --B: #3b82f6; --Bm: #8b5cf6;
+  --Cp: #f59e0b; --C: #f97316;
+  --D: #ef4444; --F: #dc2626;
+}
+
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'Barlow',sans-serif;font-size:var(--fs);line-height:1.6;padding-bottom:80px}
+
+.ctrl{position:sticky;top:0;z-index:100;background:var(--bg1);border-bottom:1px solid var(--bord);padding:9px 14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.ctrl-lbl{font-family:'IBM Plex Mono',monospace;font-size:8px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+.sz-btn{background:var(--bg2);border:1px solid var(--bord);color:var(--text);border-radius:5px;padding:5px 12px;font-size:16px;cursor:pointer;touch-action:manipulation;line-height:1}
+.sz-btn:active{background:var(--dim)}
+.sz-disp{font-family:'IBM Plex Mono',monospace;font-size:11px;color:#06b6d4;min-width:34px;text-align:center}
+.toc-btn{margin-left:auto;background:none;border:1px solid var(--bord);color:var(--muted);border-radius:5px;padding:5px 11px;font-family:'IBM Plex Mono',monospace;font-size:8px;letter-spacing:.06em;cursor:pointer;text-transform:uppercase}
+.toc{display:none;background:var(--bg1);border-bottom:1px solid var(--bord);padding:10px 14px}
+.toc.open{display:block}
+.toc a{display:block;padding:6px 0;border-bottom:1px solid var(--bord);color:var(--muted);text-decoration:none;font-size:12px}
+.toc a.h{font-weight:700;color:var(--text)}
+.toc a:last-child{border-bottom:none}
+
+.doc{padding:0 14px;max-width:700px;margin:0 auto}
+
+.page-hdr{padding:20px 0 16px;border-bottom:1px solid var(--bord);margin-bottom:12px}
+.page-tag{font-family:'IBM Plex Mono',monospace;font-size:8px;text-transform:uppercase;letter-spacing:.12em;color:var(--Ap);margin-bottom:5px}
+.page-title{font-family:'Barlow Condensed',sans-serif;font-size:1.9em;font-weight:700;color:#fff;line-height:1.1;margin-bottom:4px}
+.page-sub{font-size:.8em;color:var(--muted)}
+
+.legend{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0 14px;padding:9px 12px;background:var(--bg1);border:1px solid var(--bord);border-radius:8px}
+.lg-item{display:flex;align-items:center;gap:4px;font-size:.7em;font-family:'IBM Plex Mono',monospace}
+.lg-dot{width:9px;height:9px;border-radius:2px;flex-shrink:0}
+.lg-lbl{color:var(--muted)}
+
+/* Milestones bar */
+.milestones{background:var(--bg1);border:1px solid var(--bord);border-radius:10px;padding:14px;margin:0 0 14px}
+.ms-title{font-family:'IBM Plex Mono',monospace;font-size:8px;text-transform:uppercase;letter-spacing:.1em;color:var(--Ap);margin-bottom:10px}
+.ms-row{display:flex;gap:6px;flex-wrap:wrap}
+.ms-item{flex:1;min-width:130px;background:var(--bg2);border:1px solid var(--bord);border-radius:7px;padding:9px 10px;text-align:center}
+.ms-date{font-family:'IBM Plex Mono',monospace;font-size:.85em;font-weight:700;color:#fff;margin-bottom:2px}
+.ms-label{font-size:.7em;color:var(--muted);line-height:1.4}
+.ms-item.active{border-color:var(--Ap);background:rgba(163,230,53,.04)}
+.ms-item.active .ms-date{color:var(--Ap)}
+
+.section-row{display:flex;align-items:stretch;background:var(--bg1);border:1px solid var(--bord);border-radius:10px;margin-bottom:6px;overflow:hidden;cursor:pointer;transition:border-color .15s}
+.section-row:hover{border-color:var(--bord2)}
+.section-row.open{border-color:var(--gc,var(--bord2))}
+.sr-left{flex:1;padding:11px 12px;min-width:0}
+.sr-top{display:flex;align-items:center;gap:8px;margin-bottom:5px}
+.sr-toggle{font-size:10px;color:var(--muted);flex-shrink:0;transition:transform .2s;width:14px}
+.section-row.open .sr-toggle{transform:rotate(90deg)}
+.sr-label{font-family:'IBM Plex Mono',monospace;font-size:7.5px;text-transform:uppercase;letter-spacing:.09em;color:var(--gc,var(--muted))}
+.sr-name{font-weight:700;font-size:.9em;color:#fff;line-height:1.3;flex:1}
+.prog-row{display:flex;align-items:center;gap:8px}
+.prog-bar{flex:1;height:3px;background:var(--dim);border-radius:2px;overflow:hidden}
+.prog-fill{height:100%;border-radius:2px;background:var(--gc,var(--dim));transition:width .3s}
+.prog-pct{font-family:'IBM Plex Mono',monospace;font-size:.72em;color:var(--gc,var(--muted));min-width:28px}
+.prog-date{font-size:.7em;color:var(--muted);white-space:nowrap}
+.sr-right{display:flex;flex-direction:column;align-items:center;justify-content:center;width:52px;flex-shrink:0;background:rgba(255,255,255,.02);border-left:1px solid var(--bord);padding:8px 6px;gap:2px}
+.grade-num{font-family:'IBM Plex Mono',monospace;font-size:1.1em;font-weight:700;color:var(--gc,var(--muted));line-height:1}
+.grade-ltr{font-family:'IBM Plex Mono',monospace;font-size:.62em;font-weight:600;color:var(--gc,var(--muted));opacity:.8}
+.grade-bar{width:28px;height:2px;border-radius:1px;background:var(--gc,var(--dim));opacity:.5;margin-top:2px}
+
+.detail{display:none;background:var(--bg2);border-top:1px solid var(--bord);padding:12px}
+.detail.open{display:block}
+.detail-grid{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:8px}
+.dg-item{background:var(--bg1);border:1px solid var(--bord);border-radius:7px;padding:8px 10px;flex:1;min-width:120px}
+.dg-label{font-family:'IBM Plex Mono',monospace;font-size:7px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:3px}
+.dg-val{font-weight:700;font-size:.85em;color:#fff}
+.dg-sub{font-size:.72em;color:var(--muted);margin-top:1px;line-height:1.4}
+.detail ul{margin:0;padding:0;list-style:none}
+.detail li{display:flex;gap:7px;font-size:.78em;color:var(--muted);padding:4px 0;border-bottom:1px solid rgba(255,255,255,.03);line-height:1.5}
+.detail li:last-child{border-bottom:none}
+.detail li .dot{color:var(--gc,var(--muted));flex-shrink:0;font-weight:700}
+.detail li strong{color:var(--text)}
+.tag{display:inline-block;font-family:'IBM Plex Mono',monospace;font-size:7px;padding:2px 6px;border-radius:3px;text-transform:uppercase;letter-spacing:.05em;margin:3px 2px 0 0}
+.tag-done{background:rgba(16,185,129,.12);color:#10b981;border:1px solid rgba(16,185,129,.25)}
+.tag-wip{background:rgba(245,158,11,.1);color:#f59e0b;border:1px solid rgba(245,158,11,.2)}
+.tag-todo{background:rgba(239,68,68,.08);color:#ef4444;border:1px solid rgba(239,68,68,.2)}
+.tag-block{background:rgba(220,38,38,.15);color:#dc2626;border:1px solid #7f1d1d}
+.tag-future{background:rgba(139,92,246,.08);color:#8b5cf6;border:1px solid rgba(139,92,246,.2)}
+.blocker{background:rgba(220,38,38,.07);border:1px solid rgba(220,38,38,.2);border-left:2px solid #dc2626;border-radius:5px;padding:7px 9px;font-size:.75em;color:#c05050;line-height:1.6;margin-top:7px}
+.blocker strong{display:block;font-family:'IBM Plex Mono',monospace;font-size:.82em;text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px;color:#dc2626}
+.good-note{background:rgba(16,185,129,.06);border:1px solid rgba(16,185,129,.15);border-left:2px solid #10b981;border-radius:5px;padding:7px 9px;font-size:.75em;color:#3a9e72;line-height:1.6;margin-top:7px}
+.group-label{font-family:'IBM Plex Mono',monospace;font-size:8px;text-transform:uppercase;letter-spacing:.1em;color:var(--dim);padding:10px 2px 5px;border-top:1px solid var(--bord);margin-top:6px}
+
+/* Year headers */
+.year-hdr{background:linear-gradient(135deg,rgba(163,230,53,.04),rgba(6,182,212,.03));border:1px solid rgba(163,230,53,.15);border-radius:10px;padding:14px;margin:8px 0;text-align:center}
+.year-num{font-family:'Barlow Condensed',sans-serif;font-size:1.8em;font-weight:700;color:#fff;line-height:1}
+.year-theme{font-size:.78em;color:var(--muted);margin-top:4px;line-height:1.5}
+
+.footer{text-align:center;padding:20px 14px;border-top:1px solid var(--bord);color:var(--muted);font-size:.75em;margin-top:16px}
+.footer-hl{color:var(--Ap);font-weight:600;display:block;margin-top:4px}
+</style>
+</head>
+<body>
+
+<div class="ctrl">
+  <span class="ctrl-lbl">Text</span>
+  <button class="sz-btn" onclick="adj(-1)">A-</button>
+  <span class="sz-disp" id="sz">14px</span>
+  <button class="sz-btn" onclick="adj(1)">A+</button>
+  <button class="toc-btn" onclick="togToc()">= Jump to</button>
+</div>
+
+<div class="toc" id="toc">
+  <a href="#milestones" onclick="ct()" class="h">Milestones</a>
+  <a href="#legal" onclick="ct()">Legal Entity</a>
+  <a href="#platform" onclick="ct()">Platform Engine</a>
+  <a href="#recnights" onclick="ct()">OurRecNights</a>
+  <a href="#recordnights" onclick="ct()">OurRecordNights</a>
+  <a href="#opentable" onclick="ct()">OurOpenTable</a>
+  <a href="#magnets" onclick="ct()">OurMagnets</a>
+  <a href="#governance" onclick="ct()">Governance Layer</a>
+  <a href="#privacy" onclick="ct()">Privacy Architecture</a>
+  <a href="#uec" onclick="ct()">UEC + Temporal QR</a>
+  <a href="#governor" onclick="ct()">Gaming Compression Governor</a>
+  <a href="#research" onclick="ct()">Research Layer</a>
+  <a href="#beverly" onclick="ct()">Beverly Thursday Study</a>
+  <a href="#transparency" onclick="ct()">Transparency Layer</a>
+  <a href="#intelligence" onclick="ct()">Intelligence Layer</a>
+  <a href="#loop" onclick="ct()">STORIES.md + CC Loop</a>
+  <a href="#y2026" onclick="ct()" class="h">2026 Roadmap</a>
+  <a href="#y2027" onclick="ct()" class="h">2027 Roadmap</a>
+  <a href="#y2028" onclick="ct()" class="h">2028 Roadmap</a>
+  <a href="#y2029" onclick="ct()" class="h">2029 Roadmap</a>
+  <a href="#y2030" onclick="ct()" class="h">2030 Roadmap</a>
+</div>
+
+<div class="doc">
+
+<div class="page-hdr">
+  <div class="page-tag">OurCommunityRituals LLC - Status Dashboard v2 - March 26, 2026</div>
+  <div class="page-title">What's Done.<br>What's Due.<br>What's the Grade.</div>
+  <div class="page-sub">Tap any row to expand. Grades on the right. Scroll to bottom for 2026-2030 roadmap.</div>
+</div>
+
+<div class="legend">
+  <div class="lg-item"><div class="lg-dot" style="background:var(--Ap)"></div><span class="lg-lbl">A+ (90+)</span></div>
+  <div class="lg-item"><div class="lg-dot" style="background:var(--A)"></div><span class="lg-lbl">A (80+)</span></div>
+  <div class="lg-item"><div class="lg-dot" style="background:var(--Bp)"></div><span class="lg-lbl">B+ (75+)</span></div>
+  <div class="lg-item"><div class="lg-dot" style="background:var(--B)"></div><span class="lg-lbl">B (70+)</span></div>
+  <div class="lg-item"><div class="lg-dot" style="background:var(--Cp)"></div><span class="lg-lbl">C+ (65+)</span></div>
+  <div class="lg-item"><div class="lg-dot" style="background:var(--C)"></div><span class="lg-lbl">C (55+)</span></div>
+  <div class="lg-item"><div class="lg-dot" style="background:var(--D)"></div><span class="lg-lbl">D (below 55)</span></div>
+</div>
+
+<!-- MILESTONES -->
+<div class="milestones" id="milestones">
+  <div class="ms-title">Four Milestones</div>
+  <div class="ms-row">
+    <div class="ms-item active"><div class="ms-date">Apr 9</div><div class="ms-label">OurRecNight launch<br>Beverly, no tech<br>Control period begins</div></div>
+    <div class="ms-item"><div class="ms-date">Apr 20</div><div class="ms-label">Worker + 7 admin cards<br>on stable infra</div></div>
+    <div class="ms-item"><div class="ms-date">May 15</div><div class="ms-label">Demoable without<br>founder intervention</div></div>
+    <div class="ms-item"><div class="ms-date">May 31</div><div class="ms-label">HARD LAUNCH<br>Regression suite<br>Production live</div></div>
+  </div>
+</div>
+
+
+<!-- ══ LEGAL + ENTITY ══ -->
+<div class="group-label" id="legal">Legal + Entity</div>
+
+<div class="section-row" style="--gc:var(--D)">
+  <div class="sr-left">
+    <div class="sr-top"><span class="sr-toggle">&#9654;</span><div><div class="sr-label">Legal Entity</div><div class="sr-name">OurCommunityRituals LLC</div></div></div>
+    <div class="prog-row"><div class="prog-bar"><div class="prog-fill" style="width:5%"></div></div><span class="prog-pct">5%</span><span class="prog-date">Due: TODAY</span></div>
+  </div>
+  <div class="sr-right"><div class="grade-num">28</div><div class="grade-ltr">D</div><div class="grade-bar"></div></div>
+</div>
+<div class="detail">
+  <ul>
+    <li><span class="dot">&#10007;</span><span><strong>LLC not filed.</strong> ilsos.gov, $150, 20 min. Every event runs without liability protection.</span></li>
+    <li><span class="dot">&#10007;</span><span><strong>BIPA attorney needed.</strong> IL QR scan legal opinion before April 9. $500-$1,500.</span></li>
+    <li><span class="dot">&#10007;</span><span><strong>Sponsor contract template:</strong> not drafted. Needs governor disclosure (Section 7).</span></li>
+    <li><span class="dot">&#10007;</span><span><strong>Privacy Bill of Rights v0.2:</strong> not sent to Tom for counsel approval.</span></li>
+  </ul>
+  <div class="blocker"><strong>Blocking Everything</strong>LLC + BIPA opinion must be done before April 9. Both cost less than one month of infrastructure.</div>
+</div>
+
+
+<!-- ══ PLATFORM ══ -->
+<div class="group-label" id="platform">Platform Engine</div>
+
+<div class="section-row" style="--gc:var(--Cp)">
+  <div class="sr-left">
+    <div class="sr-top"><span class="sr-toggle">&#9654;</span><div><div class="sr-label">Infrastructure - CF + D1 + Firebase</div><div class="sr-name">OurSharedEvents</div></div></div>
+    <div class="prog-row"><div class="prog-bar"><div class="prog-fill" style="width:28%"></div></div><span class="prog-pct">28%</span><span class="prog-date">Hard launch: May 31</span></div>
+  </div>
+  <div class="sr-right"><div class="grade-num">62</div><div class="grade-ltr">C+</div><div class="grade-bar"></div></div>
+</div>
+<div class="detail">
+  <div class="detail-grid">
+    <div class="dg-item"><div class="dg-label">Worker Code</div><div class="dg-val" style="color:var(--A)">85%</div><div class="dg-sub">All routes, auth, handlers</div></div>
+    <div class="dg-item"><div class="dg-label">CI/CD</div><div class="dg-val" style="color:var(--A)">90%</div><div class="dg-sub">GH Actions wired</div></div>
+    <div class="dg-item"><div class="dg-label">Infra</div><div class="dg-val" style="color:var(--D)">0%</div><div class="dg-sub">CF zone not created</div></div>
+    <div class="dg-item"><div class="dg-label">Admin Cards</div><div class="dg-val" style="color:var(--Cp)">60%</div><div class="dg-sub">isPrimary bug blocking</div></div>
+  </div>
+  <ul>
+    <li><span class="dot" style="color:#10b981">&#10003;</span><span><strong>D1 schema:</strong> 7 tables, 7 migrations, privacy-first. scan_aggregates with k_anonymous flag.</span></li>
+    <li><span class="dot" style="color:#10b981">&#10003;</span><span><strong>10 specs production-ready:</strong> Governor, anonymous ID, slug routing, SharedReport SQL, privacy utilities, placement taxonomy, D1 schema, compliance check, pricing, admin cards.</span></li>
+    <li><span class="dot" style="color:#10b981">&#10003;</span><span><strong>255 test files.</strong> 70+ targeting new Worker stack. Daily tracker in Linear (OUR-22).</span></li>
+    <li><span class="dot" style="color:#ef4444">&#10007;</span><span><strong>CF zone not created.</strong> Nameservers not pointed. Blocks all deploys.</span></li>
+    <li><span class="dot" style="color:#ef4444">&#10007;</span><span><strong>isPrimary schema bug:</strong> 46 references across codebase. Blocks all sponsor features. Spec has exact diffs.</span></li>
+    <li><span class="dot" style="color:#ef4444">&#10007;</span><span><strong>wrangler.toml:</strong> KV namespace IDs are placeholders. Need real infra.</span></li>
+  </ul>
+  <span class="tag tag-done">Schema &#10003;</span><span class="tag tag-done">Tests &#10003;</span><span class="tag tag-done">Specs &#10003;</span><span class="tag tag-block">CF zone &#10007;</span><span class="tag tag-block">isPrimary &#10007;</span>
+</div>
+
+
+<!-- ══ EXPERIENCE VERTICALS ══ -->
+<div class="group-label">Experience Verticals</div>
+
+<div class="section-row" id="recnights" style="--gc:var(--Bp)">
+  <div class="sr-left">
+    <div class="sr-top"><span class="sr-toggle">&#9654;</span><div><div class="sr-label">Vertical - Thursdays - Beverly</div><div class="sr-name">OurRecNights</div></div></div>
+    <div class="prog-row"><div class="prog-bar"><div class="prog-fill" style="width:55%"></div></div><span class="prog-pct">55%</span><span class="prog-date">Formal: Apr 9</span></div>
+  </div>
+  <div class="sr-right"><div class="grade-num">78</div><div class="grade-ltr">B</div><div class="grade-bar"></div></div>
+</div>
+<div class="detail">
+  <ul>
+    <li><span class="dot" style="color:#10b981">&#10003;</span><span><strong>Running since March 12.</strong> Bocce anchor + tables (cards, puzzles, art) + music + seasonal table.</span></li>
+    <li><span class="dot" style="color:#10b981">&#10003;</span><span><strong>Tables Doctrine applied.</strong> Every table joinable mid-stream. Come for the tables, stay for the court.</span></li>
+    <li><span class="dot" style="color:#10b981">&#10003;</span><span><strong>Blackboard Covenant in use.</strong> Four lines. On the blackboard. Before every event.</span></li>
+    <li><span class="dot" style="color:#f59e0b">~</span><span><strong>Control period Apr 9 - June.</strong> Zero tech. Pure baseline. The most valuable data starts here.</span></li>
+    <li><span class="dot" style="color:#ef4444">&#10007;</span><span>LLC not filed. Events running without liability protection.</span></li>
+  </ul>
+  <span class="tag tag-done">Running &#10003;</span><span class="tag tag-wip">Control period</span><span class="tag tag-todo">QR: June</span>
+</div>
+
+<div class="section-row" id="recordnights" style="--gc:var(--B)">
+  <div class="sr-left">
+    <div class="sr-top"><span class="sr-toggle">&#9654;</span><div><div class="sr-label">Vertical - Music + Story</div><div class="sr-name">OurRecordNights</div></div></div>
+    <div class="prog-row"><div class="prog-bar"><div class="prog-fill" style="width:20%"></div></div><span class="prog-pct">20%</span><span class="prog-date">Summer 2026</span></div>
+  </div>
+  <div class="sr-right"><div class="grade-num">72</div><div class="grade-ltr">B-</div><div class="grade-bar"></div></div>
+</div>
+<div class="detail">
+  <ul>
+    <li><span class="dot" style="color:#10b981">&#10003;</span><span><strong>Format locked.</strong> One person. Five minutes. One story. One record side. "From your past to last week - why."</span></li>
+    <li><span class="dot" style="color:#10b981">&#10003;</span><span><strong>WKRP podcast archive concept defined.</strong> Every story becomes a shareable episode.</span></li>
+    <li><span class="dot" style="color:#ef4444">&#10007;</span><span>No events run yet. Test activations planned summer 2026 at RIPH back patio.</span></li>
+  </ul>
+  <span class="tag tag-done">Concept &#10003;</span><span class="tag tag-todo">Test activations</span>
+</div>
+
+<div class="section-row" id="opentable" style="--gc:var(--C)">
+  <div class="sr-left">
+    <div class="sr-top"><span class="sr-toggle">&#9654;</span><div><div class="sr-label">Vertical - Community Meal</div><div class="sr-name">OurOpenTable</div></div></div>
+    <div class="prog-row"><div class="prog-bar"><div class="prog-fill" style="width:8%"></div></div><span class="prog-pct">8%</span><span class="prog-date">2027</span></div>
+  </div>
+  <div class="sr-right"><div class="grade-num">58</div><div class="grade-ltr">C</div><div class="grade-bar"></div></div>
+</div>
+<div class="detail">
+  <ul>
+    <li><span class="dot" style="color:#10b981">&#10003;</span><span><strong>Concept locked.</strong> First Sunday. Faith kitchen anchor. Cross-faith gathering.</span></li>
+    <li><span class="dot" style="color:#ef4444">&#10007;</span><span>Blocked on LLC + food service insurance. Do not pursue until both in hand.</span></li>
+  </ul>
+</div>
+
+<div class="section-row" id="magnets" style="--gc:var(--C)">
+  <div class="sr-left">
+    <div class="sr-top"><span class="sr-toggle">&#9654;</span><div><div class="sr-label">Vertical - API + Franchise</div><div class="sr-name">OurMagnets</div></div></div>
+    <div class="prog-row"><div class="prog-bar"><div class="prog-fill" style="width:4%"></div></div><span class="prog-pct">4%</span><span class="prog-date">2027</span></div>
+  </div>
+  <div class="sr-right"><div class="grade-num">52</div><div class="grade-ltr">C-</div><div class="grade-bar"></div></div>
+</div>
+<div class="detail">
+  <ul>
+    <li><span class="dot" style="color:#10b981">&#10003;</span><span><strong>Concept defined.</strong> Postman API layer + SKILLS.md + KNOWLEDGE.md + playbook scripts for fast client ramp-up.</span></li>
+    <li><span class="dot" style="color:#ef4444">&#10007;</span><span>Requires OSE stable + first 3 clients + real SharedReport data. Year 2 product.</span></li>
+  </ul>
+</div>
+
+
+<!-- ══ GOVERNANCE + PRIVACY ══ -->
+<div class="group-label">Governance + Privacy</div>
+
+<div class="section-row" id="governance" style="--gc:var(--B)">
+  <div class="sr-left">
+    <div class="sr-top"><span class="sr-toggle">&#9654;</span><div><div class="sr-label">Sponsor + Community Data Governance</div><div class="sr-name">Governance Layer</div></div></div>
+    <div class="prog-row"><div class="prog-bar"><div class="prog-fill" style="width:50%"></div></div><span class="prog-pct">50%</span><span class="prog-date">June 2026</span></div>
+  </div>
+  <div class="sr-right"><div class="grade-num">74</div><div class="grade-ltr">B-</div><div class="grade-bar"></div></div>
+</div>
+<div class="detail">
+  <ul>
+    <li><span class="dot" style="color:#10b981">&#10003;</span><span><strong>Pricing locked:</strong> Local $75 | Med $200 | Premium $500 | Dedicated $750-$1,000/event.</span></li>
+    <li><span class="dot" style="color:#10b981">&#10003;</span><span><strong>Community data ownership doctrine written.</strong> Data belongs to the community. Platform is steward.</span></li>
+    <li><span class="dot" style="color:#ef4444">&#10007;</span><span>Monthly relationship pricing (temporal QR vehicle, $300-500/mo) not written.</span></li>
+    <li><span class="dot" style="color:#ef4444">&#10007;</span><span>No sponsor contracts, no signed sponsors, no community board formed.</span></li>
+  </ul>
+</div>
+
+<div class="section-row" id="privacy" style="--gc:var(--A)">
+  <div class="sr-left">
+    <div class="sr-top"><span class="sr-toggle">&#9654;</span><div><div class="sr-label">5-Layer Privacy Stack</div><div class="sr-name">Privacy Architecture</div></div></div>
+    <div class="prog-row"><div class="prog-bar"><div class="prog-fill" style="width:45%"></div></div><span class="prog-pct">45%</span><span class="prog-date">May 31</span></div>
+  </div>
+  <div class="sr-right"><div class="grade-num">82</div><div class="grade-ltr">A-</div><div class="grade-bar"></div></div>
+</div>
+<div class="detail">
+  <ul>
+    <li><span class="dot" style="color:#10b981">&#10003;</span><span><strong>5 layers specced + coded:</strong> Token isolation, temporal bucketing, write delay, k-anonymity, aggregate-only API.</span></li>
+    <li><span class="dot" style="color:#10b981">&#10003;</span><span><strong>Production TypeScript ready.</strong> bucketTimestamp(), applyKAnonymity(), assertAggregateOnly(), normalizeScanPayload().</span></li>
+    <li><span class="dot" style="color:#ef4444">&#10007;</span><span><strong>BIPA unresolved.</strong> 12 compliance requirements, 5 CRITICAL, 0 fully met.</span></li>
+  </ul>
+  <div class="good-note">Architecture is world-class. The foundation that makes HIPAA-adjacent verticals possible in 2029-2030.</div>
+</div>
+
+
+<!-- ══ PRODUCT COMPONENTS ══ -->
+<div class="group-label">Product Components</div>
+
+<div class="section-row" id="uec" style="--gc:var(--A)">
+  <div class="sr-left">
+    <div class="sr-top"><span class="sr-toggle">&#9654;</span><div><div class="sr-label">7 Color Codes - Trust System</div><div class="sr-name">UEC + Temporal QR Vehicle</div></div></div>
+    <div class="prog-row"><div class="prog-bar"><div class="prog-fill" style="width:60%"></div></div><span class="prog-pct">60%</span><span class="prog-date">June 2026</span></div>
+  </div>
+  <div class="sr-right"><div class="grade-num">88</div><div class="grade-ltr">A</div><div class="grade-bar"></div></div>
+</div>
+<div class="detail">
+  <ul>
+    <li><span class="dot" style="color:#10b981">&#10003;</span><span><strong>7 colors locked:</strong> GREEN/Enter, CORAL/Live, BLUE/Sponsor, PURPLE/Archive, PINK/Help, AMBER/Feedback, CHARCOAL/Utility.</span></li>
+    <li><span class="dot" style="color:#10b981">&#10003;</span><span><strong>Temporal QR:</strong> Pre-event travel &#8594; during live &#8594; post gallery. Same physical code, zero reprinting.</span></li>
+    <li><span class="dot" style="color:#10b981">&#10003;</span><span><strong>Trust system, not tracking.</strong> "A QR code should tell you what it does before you scan it."</span></li>
+    <li><span class="dot" style="color:#ef4444">&#10007;</span><span>Provisional patent not filed. ~$1,500-$3,000. File before June public launch.</span></li>
+  </ul>
+</div>
+
+<div class="section-row" id="governor" style="--gc:var(--Ap)">
+  <div class="sr-left">
+    <div class="sr-top"><span class="sr-toggle">&#9654;</span><div><div class="sr-label">Proprietary Algorithm - Core IP</div><div class="sr-name">Gaming Compression Governor</div></div></div>
+    <div class="prog-row"><div class="prog-bar"><div class="prog-fill" style="width:65%"></div></div><span class="prog-pct">65%</span><span class="prog-date">Apr 20</span></div>
+  </div>
+  <div class="sr-right"><div class="grade-num">90</div><div class="grade-ltr">A</div><div class="grade-bar"></div></div>
+</div>
+<div class="detail">
+  <ul>
+    <li><span class="dot" style="color:#10b981">&#10003;</span><span><strong>Spec v1.0 complete.</strong> State machine, KV+D1, 6 edge cases, pricing, legal disclosure, SharedReport template.</span></li>
+    <li><span class="dot" style="color:#10b981">&#10003;</span><span><strong>The product story:</strong> "During peak community engagement, local businesses get more visibility. National brands agreed to this in writing."</span></li>
+    <li><span class="dot" style="color:#ef4444">&#10007;</span><span>Not deployed. Requires CF infra + isPrimary fix first.</span></li>
+  </ul>
+  <div class="good-note">Highest-scored component. Previously flagged as "undefined feature with no spec" - that was wrong. Production-ready.</div>
+</div>
+
+
+<!-- ══ RESEARCH ══ -->
+<div class="group-label">Research + Intelligence</div>
+
+<div class="section-row" id="research" style="--gc:var(--B)">
+  <div class="sr-left">
+    <div class="sr-top"><span class="sr-toggle">&#9654;</span><div><div class="sr-label">NCR Methodology + Academic</div><div class="sr-name">Research Layer</div></div></div>
+    <div class="prog-row"><div class="prog-bar"><div class="prog-fill" style="width:30%"></div></div><span class="prog-pct">30%</span><span class="prog-date">Year 2+</span></div>
+  </div>
+  <div class="sr-right"><div class="grade-num">74</div><div class="grade-ltr">B-</div><div class="grade-bar"></div></div>
+</div>
+<div class="detail">
+  <ul>
+    <li><span class="dot" style="color:#10b981">&#10003;</span><span><strong>NCR Methodology v1.3 LOCKED.</strong> Node/Corridor/Ring. 6-layer hierarchy. 10 academic frameworks. Saturation formula.</span></li>
+    <li><span class="dot" style="color:#10b981">&#10003;</span><span><strong>Geographic Counter-Data Doctrine written.</strong> Policy-ready for alderman conversations.</span></li>
+    <li><span class="dot" style="color:#ef4444">&#10007;</span><span>No academic partner signed. No IRB protocol. Zero data - corpus needs 12-18 months.</span></li>
+  </ul>
+</div>
+
+<div class="section-row" id="beverly" style="--gc:var(--Ap)">
+  <div class="sr-left">
+    <div class="sr-top"><span class="sr-toggle">&#9654;</span><div><div class="sr-label">Longitudinal Study - 20yr Horizon</div><div class="sr-name">Beverly Thursday Study</div></div></div>
+    <div class="prog-row"><div class="prog-bar"><div class="prog-fill" style="width:3%"></div></div><span class="prog-pct">3%</span><span class="prog-date">Control: Apr 9</span></div>
+  </div>
+  <div class="sr-right"><div class="grade-num">86</div><div class="grade-ltr">B+</div><div class="grade-bar"></div></div>
+</div>
+<div class="detail">
+  <ul>
+    <li><span class="dot" style="color:#10b981">&#10003;</span><span><strong>Study design complete.</strong> Control &#8594; experiment &#8594; longitudinal. IRB-ready structure.</span></li>
+    <li><span class="dot" style="color:#f59e0b">~</span><span><strong>Control period starts April 9.</strong> Every Thursday documented. Cannot be manufactured retroactively.</span></li>
+  </ul>
+  <div class="good-note">High grade at 3% because the design is correct and value compounds from day one. The control period IS the study.</div>
+</div>
+
+<div class="section-row" id="intelligence" style="--gc:var(--B)">
+  <div class="sr-left">
+    <div class="sr-top"><span class="sr-toggle">&#9654;</span><div><div class="sr-label">SharedReports - BigQuery - AI</div><div class="sr-name">Intelligence Layer</div></div></div>
+    <div class="prog-row"><div class="prog-bar"><div class="prog-fill" style="width:22%"></div></div><span class="prog-pct">22%</span><span class="prog-date">Sept 2026</span></div>
+  </div>
+  <div class="sr-right"><div class="grade-num">70</div><div class="grade-ltr">B-</div><div class="grade-bar"></div></div>
+</div>
+<div class="detail">
+  <ul>
+    <li><span class="dot" style="color:#10b981">&#10003;</span><span><strong>10 SharedReport queries written.</strong> Attendance waves, sponsor funnel, placement ROI, corridor analysis, geographic heatmap.</span></li>
+    <li><span class="dot" style="color:#10b981">&#10003;</span><span><strong>BigQuery day-one architecture locked.</strong> Pre/during/post scan streams from first Thursday.</span></li>
+    <li><span class="dot" style="color:#ef4444">&#10007;</span><span>Datadog RUM, Vertex AI, Pub/Sub - all pending platform live.</span></li>
+  </ul>
+</div>
+
+<div class="section-row" id="loop" style="--gc:var(--Ap)">
+  <div class="sr-left">
+    <div class="sr-top"><span class="sr-toggle">&#9654;</span><div><div class="sr-label">Build Engine - STORIES + claude.md + CC</div><div class="sr-name">Development Loop</div></div></div>
+    <div class="prog-row"><div class="prog-bar"><div class="prog-fill" style="width:10%"></div></div><span class="prog-pct">10%</span><span class="prog-date">Start: TODAY</span></div>
+  </div>
+  <div class="sr-right"><div class="grade-num">84</div><div class="grade-ltr">B+</div><div class="grade-bar"></div></div>
+</div>
+<div class="detail">
+  <ul>
+    <li><span class="dot" style="color:#10b981">&#10003;</span><span><strong>Loop architecture complete.</strong> Linear (17 issues, blocking chain) &#8594; CLAUDE.md (workflow, CI gate, CCR) &#8594; Memory (17 files) &#8594; Code.</span></li>
+    <li><span class="dot" style="color:#10b981">&#10003;</span><span><strong>All specs ingested into memory.</strong> Agent is self-directing across sessions.</span></li>
+    <li><span class="dot" style="color:#10b981">&#10003;</span><span><strong>Daily test tracker live.</strong> 6:00 AM CST cron, OUR-22 in Linear.</span></li>
+    <li><span class="dot" style="color:#ef4444">&#10007;</span><span>SKILLS.md + KNOWLEDGE.md not written. Loop not cranking stories yet.</span></li>
+  </ul>
+  <div class="good-note">Highest-leverage unlock available today. Loop can write code without CF infrastructure.</div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════ -->
+<!-- 2026-2030 ROADMAP -->
+<!-- ═══════════════════════════════════════════ -->
+
+<div class="group-label" id="y2026" style="border-top:2px solid var(--Ap);margin-top:20px;padding-top:14px">Five-Year Roadmap</div>
+
+<!-- 2026 -->
+<div class="year-hdr">
+  <div class="year-num">2026</div>
+  <div class="year-theme">Launch year. Build the engine. Start the data. Prove the model.</div>
+</div>
+
+<div class="section-row" style="--gc:var(--A)">
+  <div class="sr-left">
+    <div class="sr-top"><span class="sr-toggle">&#9654;</span><div><div class="sr-label">Q2 2026 - Launch</div><div class="sr-name">OurRecNights + OurSharedEvents Launch</div></div></div>
+    <div class="prog-row"><div class="prog-bar"><div class="prog-fill" style="width:40%"></div></div><span class="prog-pct">40%</span><span class="prog-date">May 31</span></div>
+  </div>
+  <div class="sr-right"><div class="grade-num">80</div><div class="grade-ltr">A-</div><div class="grade-bar"></div></div>
+</div>
+<div class="detail">
+  <ul>
+    <li><span class="dot" style="color:#10b981">&#10003;</span><span><strong>OurRecNights running.</strong> Beverly Thursdays. Bocce + tables + music + seasonal.</span></li>
+    <li><span class="dot" style="color:#f59e0b">~</span><span><strong>Apr 9:</strong> Formal OurRecNight launch. Control period begins. Beverly baseline documented weekly.</span></li>
+    <li><span class="dot" style="color:#f59e0b">~</span><span><strong>Apr 20:</strong> Worker + 7 admin cards on stable infra. CF zone live.</span></li>
+    <li><span class="dot" style="color:#f59e0b">~</span><span><strong>May 31:</strong> HARD LAUNCH. OSE production. Regression suite. First QR scans at a Beverly event.</span></li>
+    <li><span class="dot" style="color:#ef4444">&#10007;</span><span><strong>OurRecordNights test activations:</strong> Summer 2026 at RIPH back patio. One story. One record side.</span></li>
+  </ul>
+</div>
+
+<div class="section-row" style="--gc:var(--Bp)">
+  <div class="sr-left">
+    <div class="sr-top"><span class="sr-toggle">&#9654;</span><div><div class="sr-label">Q3-Q4 2026 - First Revenue</div><div class="sr-name">Sponsors + SW Michigan + Internet Presence</div></div></div>
+    <div class="prog-row"><div class="prog-bar"><div class="prog-fill" style="width:15%"></div></div><span class="prog-pct">15%</span><span class="prog-date">Fall 2026</span></div>
+  </div>
+  <div class="sr-right"><div class="grade-num">68</div><div class="grade-ltr">C+</div><div class="grade-bar"></div></div>
+</div>
+<div class="detail">
+  <ul>
+    <li><span class="dot" style="color:#f59e0b">~</span><span><strong>Sponsor targeting begins.</strong> First 3 sponsors at event pricing ($75/$200/$500). Harbor Country Cabins (J) as anchor.</span></li>
+    <li><span class="dot" style="color:#f59e0b">~</span><span><strong>SW Michigan reach-out.</strong> Harbor Country bocce weekends. Brewery/winery corridor partnerships.</span></li>
+    <li><span class="dot" style="color:#ef4444">&#10007;</span><span><strong>Internet presence:</strong> Instagram 20-sec flow how-tos. Showcase AnonymousID, SharedReports, pricing, Governor, QR color standard.</span></li>
+    <li><span class="dot" style="color:#ef4444">&#10007;</span><span><strong>First SharedReport generated</strong> with real event data. Sponsor funnel + attendance waves + placement ROI.</span></li>
+    <li><span class="dot" style="color:#ef4444">&#10007;</span><span><strong>Beverly Thursday Study:</strong> 6 months of control + experiment data. First publishable finding (bull case).</span></li>
+  </ul>
+</div>
+
+
+<!-- 2027 -->
+<div class="year-hdr" id="y2027">
+  <div class="year-num">2027</div>
+  <div class="year-theme">Expand corridors. First institutional conversations. Data becomes the asset.</div>
+</div>
+
+<div class="section-row" style="--gc:var(--Bm)">
+  <div class="sr-left">
+    <div class="sr-top"><span class="sr-toggle">&#9654;</span><div><div class="sr-label">2027 - Expansion</div><div class="sr-name">New Verticals + Institutional Reach</div></div></div>
+    <div class="prog-row"><div class="prog-bar"><div class="prog-fill" style="width:5%"></div></div><span class="prog-pct">5%</span><span class="prog-date">2027</span></div>
+  </div>
+  <div class="sr-right"><div class="grade-num">--</div><div class="grade-ltr">TBD</div><div class="grade-bar"></div></div>
+</div>
+<div class="detail">
+  <ul>
+    <li><span class="dot" style="color:var(--Bm)">&#9679;</span><span><strong>OurOpenTable launches.</strong> Kennedy King College partnership. Faith kitchen anchor. First Sunday community meals.</span></li>
+    <li><span class="dot" style="color:var(--Bm)">&#9679;</span><span><strong>Blue Island:</strong> AJ, Director of Community Development. Bocce corridor expansion.</span></li>
+    <li><span class="dot" style="color:var(--Bm)">&#9679;</span><span><strong>OurSharedMagnets:</strong> API layer + SKILLS.md + KNOWLEDGE.md. Fast client ramp-up via playbook scripts. New vertical stood up in a day.</span></li>
+    <li><span class="dot" style="color:var(--Bm)">&#9679;</span><span><strong>Research conversations begin.</strong> University partners in the area. First DUA discussions. Beverly study = proof of concept.</span></li>
+    <li><span class="dot" style="color:var(--Bm)">&#9679;</span><span><strong>BigQuery + Vertex AI:</strong> Geographic analysis starts. Corridor gap detection. Sponsor targeting intelligence via Pub/Sub.</span></li>
+    <li><span class="dot" style="color:var(--Bm)">&#9679;</span><span><strong>10-15 operators</strong> across corridors. Monthly relationship pricing ($300-500/mo) for sponsors who've seen SharedReport data.</span></li>
+  </ul>
+  <span class="tag tag-future">OurOpenTable</span><span class="tag tag-future">Kennedy King</span><span class="tag tag-future">Blue Island</span><span class="tag tag-future">OurMagnets</span><span class="tag tag-future">BigQuery</span>
+</div>
+
+
+<!-- 2028 -->
+<div class="year-hdr" id="y2028">
+  <div class="year-num">2028</div>
+  <div class="year-theme">Spiderweb + Fractal + Reverb. Trust compounds. WOM and relationships pay off.</div>
+</div>
+
+<div class="section-row" style="--gc:var(--Bm)">
+  <div class="sr-left">
+    <div class="sr-top"><span class="sr-toggle">&#9654;</span><div><div class="sr-label">2028 - Compound Growth</div><div class="sr-name">Network Effects + Research Relationships</div></div></div>
+    <div class="prog-row"><div class="prog-bar"><div class="prog-fill" style="width:2%"></div></div><span class="prog-pct">2%</span><span class="prog-date">2028</span></div>
+  </div>
+  <div class="sr-right"><div class="grade-num">--</div><div class="grade-ltr">TBD</div><div class="grade-bar"></div></div>
+</div>
+<div class="detail">
+  <ul>
+    <li><span class="dot" style="color:var(--Bm)">&#9679;</span><span><strong>Spiderweb effect:</strong> Corridors connect. Beverly &#8594; Blue Island &#8594; Harbor Country. Nodes link across geographies.</span></li>
+    <li><span class="dot" style="color:var(--Bm)">&#9679;</span><span><strong>Fractal growth:</strong> Each new node follows the same NCR pattern. Tables Doctrine. Governor. SharedReport. Rinse and repeat.</span></li>
+    <li><span class="dot" style="color:var(--Bm)">&#9679;</span><span><strong>Reverb:</strong> Sponsors see compounding ROI across events. The Governor's transparency becomes the product story in every pitch.</span></li>
+    <li><span class="dot" style="color:var(--Bm)">&#9679;</span><span><strong>Research relationships:</strong> 2 years of real data. Academic partners publishing. k-anonymous corpus available for licensing.</span></li>
+    <li><span class="dot" style="color:var(--Bm)">&#9679;</span><span><strong>AI agent interface:</strong> Event Mirror as autonomous skill. Operators tell their agent "set up Thursday" and it happens.</span></li>
+    <li><span class="dot" style="color:var(--Bm)">&#9679;</span><span><strong>Word of mouth:</strong> The invested relationships from 2026-2027 start paying off. Sponsors refer sponsors. Communities refer communities.</span></li>
+  </ul>
+  <span class="tag tag-future">Spiderweb</span><span class="tag tag-future">Fractal</span><span class="tag tag-future">Reverb</span><span class="tag tag-future">AI agents</span><span class="tag tag-future">2yr data</span>
+</div>
+
+
+<!-- 2029 -->
+<div class="year-hdr" id="y2029">
+  <div class="year-num">2029</div>
+  <div class="year-theme">Regulatory maturity. HIPAA-adjacent verticals. Children's privacy support.</div>
+</div>
+
+<div class="section-row" style="--gc:var(--Bm)">
+  <div class="sr-left">
+    <div class="sr-top"><span class="sr-toggle">&#9654;</span><div><div class="sr-label">2029 - Regulatory Readiness</div><div class="sr-name">HIPAA + Children's Privacy + Feature Growth</div></div></div>
+    <div class="prog-row"><div class="prog-bar"><div class="prog-fill" style="width:1%"></div></div><span class="prog-pct">1%</span><span class="prog-date">2029</span></div>
+  </div>
+  <div class="sr-right"><div class="grade-num">--</div><div class="grade-ltr">TBD</div><div class="grade-bar"></div></div>
+</div>
+<div class="detail">
+  <ul>
+    <li><span class="dot" style="color:var(--Bm)">&#9679;</span><span><strong>Client + feature set growing.</strong> 50+ event types supported. Multiple geographies. Revenue from sponsors + data licensing + API subscriptions.</span></li>
+    <li><span class="dot" style="color:var(--Bm)">&#9679;</span><span><strong>Regulatory hurdles surpassed.</strong> BIPA resolved (2026). CCPA/CPRA compliant. GDPR-ready for EU expansion.</span></li>
+    <li><span class="dot" style="color:var(--Bm)">&#9679;</span><span><strong>HIPAA-adjacent verticals:</strong> The privacy architecture built in 2026 (5-layer stack, zero PII, k-anonymity) supports health-adjacent community events.</span></li>
+    <li><span class="dot" style="color:var(--Bm)">&#9679;</span><span><strong>Children's privacy support:</strong> COPPA compliance framework. Minor protection policies mature. Under-18 event types with parental consent flows.</span></li>
+    <li><span class="dot" style="color:var(--Bm)">&#9679;</span><span><strong>5 legal frameworks supported:</strong> BIPA, HIPAA-adjacent, COPPA, CCPA/CPRA, GDPR readiness.</span></li>
+    <li><span class="dot" style="color:var(--Bm)">&#9679;</span><span><strong>3 years of longitudinal data.</strong> Beverly Thursday Study publishable. Geographic patterns across corridors visible.</span></li>
+  </ul>
+  <span class="tag tag-future">HIPAA-adjacent</span><span class="tag tag-future">COPPA</span><span class="tag tag-future">50+ event types</span><span class="tag tag-future">3yr data</span>
+</div>
+
+
+<!-- 2030 -->
+<div class="year-hdr" id="y2030">
+  <div class="year-num">2030</div>
+  <div class="year-theme">Premier anonymized, compliant platform. 180+ event types. Clients come to us.</div>
+</div>
+
+<div class="section-row" style="--gc:var(--Bm)">
+  <div class="sr-left">
+    <div class="sr-top"><span class="sr-toggle">&#9654;</span><div><div class="sr-label">2030 - Market Position</div><div class="sr-name">Premier Compliant Community Infrastructure</div></div></div>
+    <div class="prog-row"><div class="prog-bar"><div class="prog-fill" style="width:0%"></div></div><span class="prog-pct">0%</span><span class="prog-date">2030</span></div>
+  </div>
+  <div class="sr-right"><div class="grade-num">--</div><div class="grade-ltr">TBD</div><div class="grade-bar"></div></div>
+</div>
+<div class="detail">
+  <ul>
+    <li><span class="dot" style="color:var(--Bm)">&#9679;</span><span><strong>Clients come to us.</strong> Premier anonymized, regulatory-compliant platform at the highest level.</span></li>
+    <li><span class="dot" style="color:var(--Bm)">&#9679;</span><span><strong>180+ event types supported</strong> across private, public, secure, and market-pervasive structures.</span></li>
+    <li><span class="dot" style="color:var(--Bm)">&#9679;</span><span><strong>Children + healthcare support:</strong> The privacy architecture from 2026 now supports the most sensitive use cases because it was built right from day one.</span></li>
+    <li><span class="dot" style="color:var(--Bm)">&#9679;</span><span><strong>4+ years of longitudinal data.</strong> The corpus that no competitor can replicate. 20-year study in progress.</span></li>
+    <li><span class="dot" style="color:var(--Bm)">&#9679;</span><span><strong>The closed loop at scale:</strong> Community generates data &#8594; data improves experience &#8594; sponsors earn trust &#8594; trust is the business &#8594; business funds the next Thursday. Forever.</span></li>
+    <li><span class="dot" style="color:var(--Bm)">&#9679;</span><span><strong>Infrastructure that compounds.</strong> Not extractive. Not surveillance. Not advertising dressed as community service.</span></li>
+  </ul>
+  <div class="good-note">Everything in 2030 is the direct result of filing the LLC today, getting the BIPA opinion this week, and starting the loop. The community forms April 9 whether the platform is ready or not.</div>
+</div>
+
+
+<!-- FOOTER -->
+<div class="footer">
+  OurCommunityRituals LLC - Status Dashboard v2 - March 26, 2026
+  <span class="footer-hl">LLC today - BIPA attorney today - isPrimary fix today - Loop today<br>"The community forms April 9 whether the platform is ready or not."</span>
+</div>
+
+</div>
+
+<script>
+let fs=14;
+function adj(d){fs=Math.max(11,Math.min(22,fs+d));document.documentElement.style.setProperty('--fs',fs+'px');document.getElementById('sz').textContent=fs+'px'}
+function togToc(){document.getElementById('toc').classList.toggle('open')}
+function ct(){document.getElementById('toc').classList.remove('open')}
+document.querySelectorAll('.section-row').forEach(row=>{row.addEventListener('click',function(){const detail=this.nextElementSibling;if(detail&&detail.classList.contains('detail')){detail.classList.toggle('open');this.classList.toggle('open')}})});
+</script>
+</body>
+</html>

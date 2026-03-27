@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>File Map — What Lives Where</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@600;700&display=swap');
+:root{--bg:#060810;--bg1:#0b0e18;--bg2:#101520;--bord:rgba(255,255,255,.065);--text:#cdd5e8;--muted:#566070;--dim:#2a3345;--Ap:#a3e635;--A:#10b981;--Bp:#06b6d4;--B:#3b82f6}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:'Barlow',sans-serif;font-size:14px;padding:0 16px 80px;line-height:1.6}
+.doc{max-width:700px;margin:0 auto}
+.hdr{padding:24px 0 16px;border-bottom:1px solid var(--bord);margin-bottom:16px}
+.tag{font-family:'IBM Plex Mono',monospace;font-size:8px;text-transform:uppercase;letter-spacing:.12em;color:var(--Ap);margin-bottom:5px}
+h1{font-family:'Barlow Condensed',sans-serif;font-size:1.8em;font-weight:700;color:#fff;line-height:1.1;margin-bottom:4px}
+.sub{font-size:.8em;color:var(--muted)}
+.group{font-family:'IBM Plex Mono',monospace;font-size:8px;text-transform:uppercase;letter-spacing:.1em;color:var(--Ap);padding:12px 0 6px;border-top:1px solid var(--bord);margin-top:10px}
+.row{display:flex;gap:10px;padding:8px 10px;background:var(--bg1);border:1px solid var(--bord);border-radius:7px;margin-bottom:4px;align-items:flex-start}
+.row:hover{border-color:var(--Bp)}
+.path{font-family:'IBM Plex Mono',monospace;font-size:.72em;color:var(--Bp);min-width:200px;flex-shrink:0;word-break:break-all;line-height:1.6}
+.desc{font-size:.8em;color:var(--muted);flex:1;line-height:1.5}
+.desc strong{color:var(--text)}
+.status{font-family:'IBM Plex Mono',monospace;font-size:7px;padding:2px 5px;border-radius:3px;flex-shrink:0;margin-top:2px}
+.s-canon{background:rgba(16,185,129,.12);color:#10b981;border:1px solid rgba(16,185,129,.25)}
+.s-active{background:rgba(6,182,212,.1);color:#06b6d4;border:1px solid rgba(6,182,212,.2)}
+.s-legacy{background:rgba(245,158,11,.08);color:#f59e0b;border:1px solid rgba(245,158,11,.2)}
+.s-gen{background:rgba(139,92,246,.08);color:#8b5cf6;border:1px solid rgba(139,92,246,.2)}
+.principle{background:var(--bg1);border:1px solid var(--bord);border-left:2px solid var(--Ap);border-radius:5px;padding:9px 12px;margin:10px 0;font-size:.8em;color:var(--muted);line-height:1.6}
+.principle strong{color:var(--Ap);font-family:'IBM Plex Mono',monospace;font-size:.85em;display:block;margin-bottom:3px}
+a{color:var(--Bp);text-decoration:none}
+.footer{text-align:center;padding:20px;border-top:1px solid var(--bord);color:var(--muted);font-size:.72em;margin-top:20px}
+</style>
+</head>
+<body>
+<div class="doc">
+
+<div class="hdr">
+  <div class="tag">OurCommunityRituals — File Map</div>
+  <h1>What Lives Where</h1>
+  <div class="sub">Single source of truth for every important file. When in doubt, check here.</div>
+</div>
+
+<div class="principle">
+  <strong>The Rule</strong>
+  Every piece of information has ONE canonical home. If it exists in two places, one is a copy. This map tells you which is which.
+</div>
+
+<!-- REPO ROOT -->
+<div class="group">Repo Root — ourSharedEvents/</div>
+
+<div class="row"><span class="status s-canon">CANON</span><div class="path">CLAUDE.md</div><div class="desc"><strong>Agent brain.</strong> Workflow loop, CI gate, CCR loop, architecture, Beverly study, research questions. Every session reads this.</div></div>
+<div class="row"><span class="status s-canon">CANON</span><div class="path">STORIES.md</div><div class="desc"><strong>Story registry.</strong> All P0-P3 stories with status, prerequisites, acceptance criteria.</div></div>
+<div class="row"><span class="status s-canon">CANON</span><div class="path">E2E-LAUNCH.md</div><div class="desc"><strong>Launch checklist.</strong> Zero to live in 9 parts. Maps to P1-6 through P1-10.</div></div>
+<div class="row"><span class="status s-canon">CANON</span><div class="path">README.md</div><div class="desc"><strong>Public identity.</strong> Ecosystem overview, architecture, API reference, quick start.</div></div>
+<div class="row"><span class="status s-active">ACTIVE</span><div class="path">.claude/sync/LINEAR-MAP.md</div><div class="desc"><strong>Issue tracker.</strong> Story ID to Linear OUR-XXX mapping. Updated when stories move.</div></div>
+
+<!-- DASHBOARDS -->
+<div class="group">Dashboards — dashboards/</div>
+
+<div class="row"><span class="status s-active">ACTIVE</span><div class="path">dashboards/index.html</div><div class="desc"><strong>Dashboard index.</strong> Links to all dashboards. Open locally in browser.</div></div>
+<div class="row"><span class="status s-active">ACTIVE</span><div class="path">dashboards/status.html</div><div class="desc"><strong>Status dashboard.</strong> Product readiness, grades, 2026-2030 roadmap. For Matt + G.</div></div>
+<div class="row"><span class="status s-active">ACTIVE</span><div class="path">dashboards/file-map.html</div><div class="desc"><strong>This page.</strong> What lives where.</div></div>
+<div class="row"><span class="status s-active">ACTIVE</span><div class="path">dashboards/spec-index.html</div><div class="desc"><strong>Spec index.</strong> Every production spec with status and coverage.</div></div>
+
+<!-- WORKER CODE -->
+<div class="group">Worker Code — workers/oursharedevents/</div>
+
+<div class="row"><span class="status s-active">ACTIVE</span><div class="path">workers/oursharedevents/src/</div><div class="desc"><strong>NEW Worker source.</strong> Phase 1 build. TypeScript. All routes, handlers, auth.</div></div>
+<div class="row"><span class="status s-active">ACTIVE</span><div class="path">workers/oursharedevents/wrangler.toml</div><div class="desc"><strong>Worker config.</strong> Staging + production routes. KV namespace IDs (placeholder until P1-6).</div></div>
+<div class="row"><span class="status s-active">ACTIVE</span><div class="path">workers/oursharedevents/src/lib/sheets.ts</div><div class="desc"><strong>Data layer (Phase 1).</strong> Google Sheets wrapper. Replaced by d1.ts in Phase 2.</div></div>
+<div class="row"><span class="status s-active">ACTIVE</span><div class="path">workers/oursharedevents/src/handlers/</div><div class="desc"><strong>Route handlers.</strong> health.ts, events.ts, pages.ts. Isolated for D1 swap.</div></div>
+<div class="row"><span class="status s-active">ACTIVE</span><div class="path">workers/oursharedevents/src/auth/admin.ts</div><div class="desc"><strong>Auth layer.</strong> CF Access JWT + Bearer fallback. Constant-time comparison.</div></div>
+
+<!-- LEGACY CODE -->
+<div class="group">Legacy Code (still in use, migrating)</div>
+
+<div class="row"><span class="status s-legacy">LEGACY</span><div class="path">cloudflare-proxy/</div><div class="desc"><strong>Legacy Worker + templates.</strong> admin.html (13K lines), display.html, public.html, poster.html. Has isPrimary bug (46 refs).</div></div>
+<div class="row"><span class="status s-legacy">LEGACY</span><div class="path">src/mvp/</div><div class="desc"><strong>Google Apps Script.</strong> Admin.html, AdminDisplay.html, Display.html, SponsorUtils.html. Being phased out per Story 5.2.</div></div>
+<div class="row"><span class="status s-legacy">LEGACY</span><div class="path">worker/</div><div class="desc"><strong>Intermediate Worker.</strong> worker/src/domain/, worker/src/mappers/. Has tier:null hardcoded in adminBundleMapper.ts.</div></div>
+<div class="row"><span class="status s-legacy">LEGACY</span><div class="path">archive/</div><div class="desc"><strong>Archived code.</strong> Old GAS code, analysis reports, deprecated docs. Reference only.</div></div>
+
+<!-- CI/CD -->
+<div class="group">CI/CD + Config</div>
+
+<div class="row"><span class="status s-active">ACTIVE</span><div class="path">.github/workflows/oursharedevents-ci.yml</div><div class="desc"><strong>CI pipeline.</strong> TypeScript check, staging deploy, E2E smoke, production deploy on tags.</div></div>
+<div class="row"><span class="status s-active">ACTIVE</span><div class="path">schemas/event.schema.json</div><div class="desc"><strong>Event schema.</strong> Has tier enum (unused due to isPrimary bug). additionalProperties: false.</div></div>
+<div class="row"><span class="status s-active">ACTIVE</span><div class="path">.env.example</div><div class="desc"><strong>Env template.</strong> ADMIN_KEY, BRAND_ID, SHEETS config.</div></div>
+
+<!-- TESTS -->
+<div class="group">Tests — tests/</div>
+
+<div class="row"><span class="status s-active">ACTIVE</span><div class="path">tests/unit/worker/ (23 files)</div><div class="desc"><strong>NEW Worker unit tests.</strong> Router, handlers, auth, security (IAC), sheets client.</div></div>
+<div class="row"><span class="status s-legacy">LEGACY</span><div class="path">tests/unit/ root (39 files)</div><div class="desc"><strong>Legacy unit tests.</strong> backend.test.js, sponsor-utils.test.js (has isPrimary). Portable ~80%.</div></div>
+<div class="row"><span class="status s-active">ACTIVE</span><div class="path">tests/api/smoke/ (31 files)</div><div class="desc"><strong>API smoke tests.</strong> Mix of Worker-focused (26) and legacy (18). Parameterized via getBaseUrl().</div></div>
+<div class="row"><span class="status s-active">ACTIVE</span><div class="path">tests/contract/ (37 files)</div><div class="desc"><strong>Contract tests.</strong> API response shapes. Worker (4 explicit) + legacy (13). ~95% portable.</div></div>
+<div class="row"><span class="status s-active">ACTIVE</span><div class="path">tests/e2e/ (79 files)</div><div class="desc"><strong>E2E tests.</strong> 1-smoke, 2-pages, 3-flows, 4-negative, api, stage-2. Playwright.</div></div>
+<div class="row"><span class="status s-active">ACTIVE</span><div class="path">tests/ui/smoke/ (12 files)</div><div class="desc"><strong>UI smoke tests.</strong> 100% Worker-focused. Admin, display, public, poster surfaces.</div></div>
+<div class="row"><span class="status s-active">ACTIVE</span><div class="path">tests/triangle/ (8 files)</div><div class="desc"><strong>Event lifecycle tests.</strong> Before/during/after event. Backend-agnostic.</div></div>
+
+<!-- CLAUDE BRAIN -->
+<div class="group">Claude Brain — C:/Users/mzdan/claude/</div>
+
+<div class="row"><span class="status s-active">ACTIVE</span><div class="path">claude/Inputs/</div><div class="desc"><strong>Inbox.</strong> Files to be processed by Claude. OCR-triple-CCR-v2.html lives here. Archive after processing.</div></div>
+<div class="row"><span class="status s-canon">CANON</span><div class="path">claude/Research/</div><div class="desc"><strong>Canonical spec location.</strong> All 10+ production specs. Governor, anonymous ID, D1 schema, compliance, etc.</div></div>
+<div class="row"><span class="status s-active">ACTIVE</span><div class="path">claude/Documents/</div><div class="desc"><strong>Business docs.</strong> MVP audit brief, privacy architecture statement, event mirror skill.</div></div>
+<div class="row"><span class="status s-active">ACTIVE</span><div class="path">claude/Outputs/</div><div class="desc"><strong>Generated artifacts.</strong> Daily test report, dashboard copies.</div></div>
+
+<!-- MEMORY -->
+<div class="group">Agent Memory — .claude/projects/.../memory/</div>
+
+<div class="row"><span class="status s-gen">AUTO</span><div class="path">memory/MEMORY.md</div><div class="desc"><strong>Memory index.</strong> 18 entries. Loaded every session. Points to individual memory files.</div></div>
+<div class="row"><span class="status s-gen">AUTO</span><div class="path">memory/feedback_*.md</div><div class="desc"><strong>Process rules.</strong> CI gate, CCR loop, process structure, lean baseline, daily tracker, colleague format.</div></div>
+<div class="row"><span class="status s-gen">AUTO</span><div class="path">memory/project_*.md</div><div class="desc"><strong>Project state.</strong> Ecosystem, specs, pricing, compliance, events, travel, placements, admin cards, IP claims, etc.</div></div>
+<div class="row"><span class="status s-gen">AUTO</span><div class="path">memory/reference_*.md</div><div class="desc"><strong>Pointers.</strong> Linear team, central brain directory.</div></div>
+<div class="row"><span class="status s-gen">AUTO</span><div class="path">memory/user_*.md</div><div class="desc"><strong>User context.</strong> Role, ecosystem, working style.</div></div>
+
+<!-- LINEAR -->
+<div class="group">Linear — team OUR</div>
+
+<div class="row"><span class="status s-active">ACTIVE</span><div class="path">OUR-5 to OUR-21</div><div class="desc"><strong>17 stories.</strong> P0-1 through P3-2. Full blocking chain. P1-1 to P1-5 Done. P1-6/P1-7 in cycle.</div></div>
+<div class="row"><span class="status s-active">ACTIVE</span><div class="path">OUR-22</div><div class="desc"><strong>Daily test tracker.</strong> Legacy vs Worker coverage comparison. Updated 6:00 AM CST.</div></div>
+
+<div class="footer">
+  OurCommunityRituals LLC — File Map — March 26, 2026<br>
+  <a href="index.html">Back to Dashboard Index</a>
+</div>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OurCommunityRituals — Dashboards</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@600;700&display=swap');
+:root{--bg:#060810;--bg1:#0b0e18;--bg2:#101520;--bord:rgba(255,255,255,.065);--text:#cdd5e8;--muted:#566070;--Ap:#a3e635;--A:#10b981;--Bp:#06b6d4;--B:#3b82f6}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:'Barlow',sans-serif;padding:0 16px 80px;line-height:1.6}
+.doc{max-width:600px;margin:0 auto}
+.hdr{padding:28px 0 20px;border-bottom:1px solid var(--bord);margin-bottom:20px}
+.tag{font-family:'IBM Plex Mono',monospace;font-size:8px;text-transform:uppercase;letter-spacing:.12em;color:var(--Ap);margin-bottom:6px}
+h1{font-family:'Barlow Condensed',sans-serif;font-size:2em;font-weight:700;color:#fff;line-height:1.1;margin-bottom:6px}
+.sub{font-size:.82em;color:var(--muted)}
+.card{display:block;background:var(--bg1);border:1px solid var(--bord);border-radius:10px;padding:16px;margin-bottom:8px;text-decoration:none;transition:border-color .15s}
+.card:hover{border-color:var(--Bp)}
+.card-label{font-family:'IBM Plex Mono',monospace;font-size:7.5px;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);margin-bottom:4px}
+.card-name{font-weight:700;font-size:1em;color:#fff;margin-bottom:4px}
+.card-desc{font-size:.8em;color:var(--muted);line-height:1.5}
+.card-updated{font-family:'IBM Plex Mono',monospace;font-size:.68em;color:var(--muted);margin-top:6px;opacity:.6}
+.group{font-family:'IBM Plex Mono',monospace;font-size:8px;text-transform:uppercase;letter-spacing:.1em;color:var(--Ap);padding:14px 0 6px;border-top:1px solid var(--bord);margin-top:10px}
+.access{background:var(--bg1);border:1px solid var(--bord);border-radius:8px;padding:10px 12px;margin:14px 0;font-size:.78em;color:var(--muted);line-height:1.6}
+.access strong{color:var(--text);font-family:'IBM Plex Mono',monospace;font-size:.85em}
+.footer{text-align:center;padding:20px;border-top:1px solid var(--bord);color:var(--muted);font-size:.75em;margin-top:20px}
+</style>
+</head>
+<body>
+<div class="doc">
+
+<div class="hdr">
+  <div class="tag">OurCommunityRituals LLC — Private Dashboards</div>
+  <h1>Dashboard Index</h1>
+  <div class="sub">Open any page locally in your browser. Private repo = private access.</div>
+</div>
+
+<div class="access">
+  <strong>Access:</strong> Matt + G only. These files live in the private repo. Clone/pull to view. Do not deploy to public hosting.
+</div>
+
+<div class="group">Status + Progress</div>
+
+<a class="card" href="status.html">
+  <div class="card-label">Product Status</div>
+  <div class="card-name">Status Dashboard</div>
+  <div class="card-desc">Full product readiness view. Every component graded. 2026-2030 roadmap. Tap to expand any section.</div>
+  <div class="card-updated">Last updated: 2026-03-26</div>
+</a>
+
+<a class="card" href="file-map.html">
+  <div class="card-label">Reference</div>
+  <div class="card-name">File Map — What Lives Where</div>
+  <div class="card-desc">Single page showing every important file, its purpose, and where to find it. Specs, configs, tests, docs.</div>
+  <div class="card-updated">Last updated: 2026-03-26</div>
+</a>
+
+<a class="card" href="spec-index.html">
+  <div class="card-label">Reference</div>
+  <div class="card-name">Spec Index</div>
+  <div class="card-desc">Every production spec with status, what it covers, and file path. Quick lookup before building any feature.</div>
+  <div class="card-updated">Last updated: 2026-03-26</div>
+</a>
+
+<div class="group">Coming Soon</div>
+
+<div class="card" style="opacity:.5;cursor:default">
+  <div class="card-label">Tracking</div>
+  <div class="card-name">Test Coverage Tracker</div>
+  <div class="card-desc">Daily legacy vs worker test comparison. Mirrors Linear OUR-22.</div>
+  <div class="card-updated">Planned</div>
+</div>
+
+<div class="card" style="opacity:.5;cursor:default">
+  <div class="card-label">Tracking</div>
+  <div class="card-name">Beverly Thursday Study Log</div>
+  <div class="card-desc">Weekly baseline observations starting April 9. Control period documentation.</div>
+  <div class="card-updated">Planned — starts Apr 9</div>
+</div>
+
+<div class="card" style="opacity:.5;cursor:default">
+  <div class="card-label">Compliance</div>
+  <div class="card-name">Legal + Compliance Tracker</div>
+  <div class="card-desc">12 requirements, attorney engagement blocks, privacy legal stages.</div>
+  <div class="card-updated">Planned</div>
+</div>
+
+<div class="footer">
+  OurCommunityRituals LLC — Private — Matt + G only<br>
+  Open locally: <code>dashboards/index.html</code>
+</div>
+
+</div>
+</body>
+</html>

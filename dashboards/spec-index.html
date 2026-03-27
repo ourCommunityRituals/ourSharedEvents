@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Spec Index — Production Specifications</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@600;700&display=swap');
+:root{--bg:#060810;--bg1:#0b0e18;--bg2:#101520;--bord:rgba(255,255,255,.065);--text:#cdd5e8;--muted:#566070;--dim:#2a3345;--Ap:#a3e635;--A:#10b981;--Bp:#06b6d4;--B:#3b82f6;--Cp:#f59e0b;--D:#ef4444}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:'Barlow',sans-serif;font-size:14px;padding:0 16px 80px;line-height:1.6}
+.doc{max-width:700px;margin:0 auto}
+.hdr{padding:24px 0 16px;border-bottom:1px solid var(--bord);margin-bottom:16px}
+.tag{font-family:'IBM Plex Mono',monospace;font-size:8px;text-transform:uppercase;letter-spacing:.12em;color:var(--Ap);margin-bottom:5px}
+h1{font-family:'Barlow Condensed',sans-serif;font-size:1.8em;font-weight:700;color:#fff;line-height:1.1;margin-bottom:4px}
+.sub{font-size:.8em;color:var(--muted)}
+.group{font-family:'IBM Plex Mono',monospace;font-size:8px;text-transform:uppercase;letter-spacing:.1em;color:var(--Ap);padding:12px 0 6px;border-top:1px solid var(--bord);margin-top:10px}
+
+.spec{background:var(--bg1);border:1px solid var(--bord);border-radius:10px;margin-bottom:6px;overflow:hidden;cursor:pointer;transition:border-color .15s}
+.spec:hover{border-color:var(--Bp)}
+.spec.open{border-color:var(--sc,var(--Bp))}
+.spec-top{display:flex;align-items:center;gap:10px;padding:11px 12px}
+.spec-toggle{font-size:10px;color:var(--muted);flex-shrink:0;transition:transform .2s;width:14px}
+.spec.open .spec-toggle{transform:rotate(90deg)}
+.spec-status{font-family:'IBM Plex Mono',monospace;font-size:7px;padding:2px 6px;border-radius:3px;flex-shrink:0}
+.ss-done{background:rgba(16,185,129,.12);color:#10b981;border:1px solid rgba(16,185,129,.25)}
+.ss-partial{background:rgba(245,158,11,.1);color:#f59e0b;border:1px solid rgba(245,158,11,.2)}
+.ss-blocking{background:rgba(220,38,38,.15);color:#dc2626;border:1px solid #7f1d1d}
+.ss-missing{background:rgba(239,68,68,.08);color:#ef4444;border:1px solid rgba(239,68,68,.2)}
+.spec-name{font-weight:700;font-size:.88em;color:#fff;flex:1}
+.spec-detail{display:none;background:var(--bg2);border-top:1px solid var(--bord);padding:12px}
+.spec.open .spec-detail{display:block}
+.sd-grid{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+.sd-item{background:var(--bg1);border:1px solid var(--bord);border-radius:6px;padding:7px 9px;flex:1;min-width:140px}
+.sd-label{font-family:'IBM Plex Mono',monospace;font-size:6.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:2px}
+.sd-val{font-size:.8em;color:#fff;font-weight:600}
+.sd-note{font-size:.72em;color:var(--muted);margin-top:1px}
+.covers{margin:0;padding:0;list-style:none}
+.covers li{font-size:.78em;color:var(--muted);padding:3px 0;border-bottom:1px solid rgba(255,255,255,.03);line-height:1.5}
+.covers li:last-child{border-bottom:none}
+.covers li strong{color:var(--text)}
+a{color:var(--Bp);text-decoration:none}
+.footer{text-align:center;padding:20px;border-top:1px solid var(--bord);color:var(--muted);font-size:.72em;margin-top:20px}
+</style>
+</head>
+<body>
+<div class="doc">
+
+<div class="hdr">
+  <div class="tag">OurCommunityRituals — Spec Index</div>
+  <h1>Production Specifications</h1>
+  <div class="sub">Tap any spec to see what it covers and where to find it. Check here before building any feature.</div>
+</div>
+
+
+<div class="group">Done — Production-Ready</div>
+
+<div class="spec" style="--sc:var(--A)">
+  <div class="spec-top"><span class="spec-toggle">&#9654;</span><span class="spec-status ss-done">DONE</span><span class="spec-name">Gaming Compression Governor</span></div>
+  <div class="spec-detail">
+    <div class="sd-grid">
+      <div class="sd-item"><div class="sd-label">File</div><div class="sd-val">gaming_compression_governor_spec.md</div></div>
+      <div class="sd-item"><div class="sd-label">Location</div><div class="sd-val">claude/Research/</div></div>
+      <div class="sd-item"><div class="sd-label">CCR Score</div><div class="sd-val" style="color:var(--A)">90/A</div></div>
+    </div>
+    <ul class="covers">
+      <li><strong>State machine:</strong> INACTIVE, ACTIVE, COOLING_DOWN with hysteresis (2 consecutive sub-threshold windows)</li>
+      <li><strong>Weights:</strong> Premium 50%&#8594;40%, Med 30%&#8594;32%, Local 20%&#8594;28%</li>
+      <li><strong>6 edge cases:</strong> No sponsors in tier, single sponsor, dedicated exempt, rapid cycling, event-length, manual override</li>
+      <li><strong>D1 schema:</strong> governor_state, governor_events, governor_config tables</li>
+      <li><strong>Legal disclosure (Section 7):</strong> Mandatory in every Premium Sponsor Agreement</li>
+      <li><strong>SharedReport template (Section 8):</strong> Governor activation timeline, display frequency impact</li>
+      <li><strong>Pricing (Section 6):</strong> Local $75, Med $200, Premium $500, Dedicated $750-$1,000</li>
+      <li style="color:var(--Cp)"><strong>Action needed:</strong> Update "Orange QR" references to "Coral/LIVE" per UEC v1.1</li>
+    </ul>
+  </div>
+</div>
+
+<div class="spec" style="--sc:var(--A)">
+  <div class="spec-top"><span class="spec-toggle">&#9654;</span><span class="spec-status ss-done">DONE</span><span class="spec-name">Anonymous ID Application Spec</span></div>
+  <div class="spec-detail">
+    <div class="sd-grid">
+      <div class="sd-item"><div class="sd-label">File</div><div class="sd-val">anonymous_id_application_spec.md</div></div>
+      <div class="sd-item"><div class="sd-label">Location</div><div class="sd-val">claude/Research/</div></div>
+      <div class="sd-item"><div class="sd-label">CCR Score</div><div class="sd-val" style="color:var(--A)">82/A-</div></div>
+    </div>
+    <ul class="covers">
+      <li><strong>5 privacy layers:</strong> Token isolation, temporal bucketing (30min), write delay (0-90s), k-anonymity (k=5), aggregate-only API</li>
+      <li><strong>Dual implementation:</strong> GAS (PropertiesService + staging sheet) + CF Workers (crypto.randomUUID + Queue)</li>
+      <li><strong>Violated patterns:</strong> Documented per layer (what NOT to do)</li>
+      <li><strong>Developer checklist:</strong> Pre-deploy verification for all 5 layers</li>
+      <li><strong>Covenant text:</strong> "New anonymous ID. Nothing follows you home."</li>
+      <li><strong>Infrastructure logging:</strong> Documented as honest limitation (CF/Google log IP)</li>
+    </ul>
+  </div>
+</div>
+
+<div class="spec" style="--sc:var(--A)">
+  <div class="spec-top"><span class="spec-toggle">&#9654;</span><span class="spec-status ss-done">DONE</span><span class="spec-name">Worker Privacy Utilities</span></div>
+  <div class="spec-detail">
+    <div class="sd-grid">
+      <div class="sd-item"><div class="sd-label">File</div><div class="sd-val">worker_privacy_utilities.md</div></div>
+      <div class="sd-item"><div class="sd-label">Location</div><div class="sd-val">claude/Research/</div></div>
+    </div>
+    <ul class="covers">
+      <li><strong>Drop-in TypeScript:</strong> No Node.js deps. CF Workers native.</li>
+      <li><strong>Exports:</strong> bucketTimestamp(), delayedD1Write(), applyKAnonymity&lt;T&gt;(), assertAggregateOnly(), buildAggregateResponse(), normalizeScanPayload()</li>
+      <li><strong>Interfaces:</strong> ScanWritePayload, ScanAggregateRow, AggregateResponse, Env</li>
+      <li><strong>Queue handler:</strong> handleScanWriteQueue() for batch D1 inserts</li>
+      <li><strong>Test sketches:</strong> Included for all functions (vitest/jest compatible)</li>
+    </ul>
+  </div>
+</div>
+
+<div class="spec" style="--sc:var(--Bp)">
+  <div class="spec-top"><span class="spec-toggle">&#9654;</span><span class="spec-status ss-done">DONE</span><span class="spec-name">D1 Schema + Migrations</span></div>
+  <div class="spec-detail">
+    <div class="sd-grid">
+      <div class="sd-item"><div class="sd-label">File</div><div class="sd-val">d1_schema_migrations.md</div></div>
+      <div class="sd-item"><div class="sd-label">Location</div><div class="sd-val">claude/Research/</div></div>
+    </div>
+    <ul class="covers">
+      <li><strong>7 tables:</strong> events, sponsors, poster_deployments, scans, checkins, registrations, scan_aggregates</li>
+      <li><strong>7 migrations:</strong> Idempotent (CREATE IF NOT EXISTS). Comprehensive indexes.</li>
+      <li><strong>Privacy-first:</strong> scans table has scan_bucket (no exact timestamps), anonymous_id (one-time)</li>
+      <li><strong>scan_aggregates:</strong> Materialized by scheduled Worker only. k_anonymous flag. Never written by user requests.</li>
+      <li><strong>Example queries:</strong> MVP dashboard, cross-event research, privacy-safe export, placement ROI</li>
+    </ul>
+  </div>
+</div>
+
+<div class="spec" style="--sc:var(--Bp)">
+  <div class="spec-top"><span class="spec-toggle">&#9654;</span><span class="spec-status ss-done">DONE</span><span class="spec-name">SharedReport Aggregate SQL</span></div>
+  <div class="spec-detail">
+    <div class="sd-grid">
+      <div class="sd-item"><div class="sd-label">File</div><div class="sd-val">sharedreport_aggregate_sql.md</div></div>
+      <div class="sd-item"><div class="sd-label">Location</div><div class="sd-val">claude/Research/</div></div>
+    </div>
+    <ul class="covers">
+      <li><strong>10 queries:</strong> (1) Attendance waves, (2) Sponsor funnel Green&#8594;Blue&#8594;Purple, (3) Placement format breakdown, (4) Pre-event corridor analysis, (5) Peak engagement, (6) Sponsor CTR, (7) Return rate, (8) Cross-event sponsor, (9) Segment comparison, (10) Geography heatmap</li>
+      <li><strong>Materialization query:</strong> INSERT OR REPLACE into scan_aggregates with CHECK (scan_count >= 5)</li>
+      <li><strong>All enforce HAVING COUNT(*) >= 5</strong> — no individual data ever returned</li>
+    </ul>
+  </div>
+</div>
+
+<div class="spec" style="--sc:var(--Bp)">
+  <div class="spec-top"><span class="spec-toggle">&#9654;</span><span class="spec-status ss-done">DONE</span><span class="spec-name">Worker Slug Routing</span></div>
+  <div class="spec-detail">
+    <div class="sd-grid">
+      <div class="sd-item"><div class="sd-label">File</div><div class="sd-val">worker_slug_routing.md</div></div>
+      <div class="sd-item"><div class="sd-label">Location</div><div class="sd-val">claude/Research/</div></div>
+    </div>
+    <ul class="covers">
+      <li><strong>Routes:</strong> /p/{slug} poster, /e/{slug} public, /d/{slug} display, /r/{slug} report</li>
+      <li><strong>D1 lookup patterns:</strong> Slug &#8594; event_id &#8594; full event data</li>
+      <li><strong>Auth per route:</strong> /r/ and /admin require auth, /p/ and /e/ are public</li>
+      <li><strong>Template injection:</strong> Slug-based data injected into HTML responses</li>
+    </ul>
+  </div>
+</div>
+
+<div class="spec" style="--sc:var(--Bp)">
+  <div class="spec-top"><span class="spec-toggle">&#9654;</span><span class="spec-status ss-done">DONE</span><span class="spec-name">Placement Taxonomy</span></div>
+  <div class="spec-detail">
+    <div class="sd-grid">
+      <div class="sd-item"><div class="sd-label">File</div><div class="sd-val">placement_taxonomy.md + full_placement_architecture.md</div></div>
+      <div class="sd-item"><div class="sd-label">Location</div><div class="sd-val">claude/Research/</div></div>
+    </div>
+    <ul class="covers">
+      <li><strong>6 formats:</strong> wall_poster, table_card, bar_top, event_space, partner_site, kiosk_display</li>
+      <li><strong>Signal quality:</strong> wall=awareness, table=intent, bar=transaction, partner=cross-audience</li>
+      <li><strong>Package tiers:</strong> Starter (4) &#8594; Standard (8) &#8594; Enhanced (12) &#8594; Premium (16+) &#8594; Custom</li>
+      <li><strong>3-dimension targeting:</strong> segment x format x tier</li>
+      <li><strong>Harbor Country:</strong> Reference implementation with on/off-premise placement map</li>
+    </ul>
+  </div>
+</div>
+
+
+<div class="group">Partial — Gaps Identified</div>
+
+<div class="spec" style="--sc:var(--Cp)">
+  <div class="spec-top"><span class="spec-toggle">&#9654;</span><span class="spec-status ss-partial">PARTIAL</span><span class="spec-name">QR Color Code Spec (UEC v1.1)</span></div>
+  <div class="spec-detail">
+    <div class="sd-grid">
+      <div class="sd-item"><div class="sd-label">File</div><div class="sd-val">qr_color_code_spec.md</div></div>
+      <div class="sd-item"><div class="sd-label">Location</div><div class="sd-val">claude/Research/</div></div>
+    </div>
+    <ul class="covers">
+      <li><strong>7 colors:</strong> GREEN/Enter, CORAL/Live, BLUE/Sponsor, PURPLE/Archive, PINK/Help, AMBER/Feedback, CHARCOAL/Utility</li>
+      <li><strong>Trust system, not tracking.</strong> Colors describe FUNCTIONS, not people.</li>
+      <li style="color:var(--Cp)"><strong>Gap:</strong> Original spec (Mar 22) uses 4 colors with Orange. UEC v1.1 (Mar 26) uses 7 with Coral. Governor references Orange. Need canonical reconciliation.</li>
+    </ul>
+  </div>
+</div>
+
+<div class="spec" style="--sc:var(--Cp)">
+  <div class="spec-top"><span class="spec-toggle">&#9654;</span><span class="spec-status ss-partial">PARTIAL</span><span class="spec-name">Compliance Check — Anonymous Architecture</span></div>
+  <div class="spec-detail">
+    <div class="sd-grid">
+      <div class="sd-item"><div class="sd-label">File</div><div class="sd-val">compliance_check_anonymous_architecture.md</div></div>
+      <div class="sd-item"><div class="sd-label">Location</div><div class="sd-val">claude/Research/</div></div>
+    </div>
+    <ul class="covers">
+      <li><strong>12 requirements:</strong> 5 CRITICAL, 0 fully met. Assessment IS the gap map.</li>
+      <li><strong>5 attorney blocks:</strong> BIPA, infrastructure logging, email linkage, minors, NCD gaps</li>
+      <li><strong>3-tier risk matrix:</strong> Critical (BIPA, IP logging, FTC), High (COPPA, operator), Medium (GDPR, retention)</li>
+      <li style="color:var(--Cp)"><strong>Gap:</strong> Gaps identified but not closed. R2/R4/R9 advanceable without attorney. R1/R5/R6/R12 require counsel.</li>
+    </ul>
+  </div>
+</div>
+
+
+<div class="group">Blocking — Fix First</div>
+
+<div class="spec" style="--sc:var(--D)">
+  <div class="spec-top"><span class="spec-toggle">&#9654;</span><span class="spec-status ss-blocking">BLOCKING</span><span class="spec-name">Sponsor Tier Migration (isPrimary bug)</span></div>
+  <div class="spec-detail">
+    <div class="sd-grid">
+      <div class="sd-item"><div class="sd-label">File</div><div class="sd-val">sponsor_tier_migration_diffs.md</div></div>
+      <div class="sd-item"><div class="sd-label">Location</div><div class="sd-val">claude/Research/</div></div>
+      <div class="sd-item"><div class="sd-label">Priority</div><div class="sd-val" style="color:var(--D)">CRITICAL</div></div>
+    </div>
+    <ul class="covers">
+      <li><strong>The bug:</strong> Admin writes isPrimary:boolean. Schema forbids it (additionalProperties:false). Every sponsor fails silently.</li>
+      <li><strong>The fix:</strong> Replace isPrimary with tier:"premium"|"med"|"local" across 10+ files</li>
+      <li><strong>Exact diffs provided:</strong> 3 admin HTMLs (checkbox&#8594;dropdown), 4 display surfaces, 1 TS interface, 1 test file</li>
+      <li><strong>Migration rule:</strong> isPrimary:true&#8594;"premium", false/missing&#8594;"local". Backward compatible.</li>
+      <li><strong>Schema already has tier enum</strong> — no schema changes needed. Just code changes.</li>
+      <li style="color:var(--D)"><strong>BLOCKS:</strong> All sponsor features, Governor testing, SharedReport sponsor funnel, EPIC-02 entirely.</li>
+    </ul>
+  </div>
+</div>
+
+
+<div class="group">Missing — Need to Create</div>
+
+<div class="spec" style="--sc:var(--D)">
+  <div class="spec-top"><span class="spec-toggle">&#9654;</span><span class="spec-status ss-missing">MISSING</span><span class="spec-name">SKILLS.md</span></div>
+  <div class="spec-detail">
+    <ul class="covers">
+      <li>How to spin up a new vertical</li>
+      <li>How to write a new Worker route</li>
+      <li>How to add a Newman collection</li>
+      <li>How to add a Playwright test</li>
+      <li>How to update claude.md</li>
+      <li>How to read SharedReports data</li>
+      <li style="color:var(--D)"><strong>Needed for:</strong> CC agent ramp-up. New vertical spin-up in a day. Fast client onboarding.</li>
+    </ul>
+  </div>
+</div>
+
+<div class="spec" style="--sc:var(--D)">
+  <div class="spec-top"><span class="spec-toggle">&#9654;</span><span class="spec-status ss-missing">MISSING</span><span class="spec-name">BIPA Legal Opinion (R1)</span></div>
+  <div class="spec-detail">
+    <ul class="covers">
+      <li>IL-licensed attorney written opinion</li>
+      <li>Question: Does anonymous QR scan flow trigger BIPA?</li>
+      <li>Question: Does Blackboard Covenant satisfy BIPA consent?</li>
+      <li style="color:var(--D)"><strong>Deadline:</strong> Before April 9. Budget $500-$1,500.</li>
+    </ul>
+  </div>
+</div>
+
+
+<div class="footer">
+  OurCommunityRituals LLC — Spec Index — March 26, 2026<br>
+  <a href="index.html">Back to Dashboard Index</a>
+</div>
+
+</div>
+
+<script>
+document.querySelectorAll('.spec').forEach(s=>{s.addEventListener('click',function(){this.classList.toggle('open')})});
+</script>
+</body>
+</html>
