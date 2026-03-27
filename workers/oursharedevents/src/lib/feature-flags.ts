@@ -1,20 +1,124 @@
 /**
- * Feature flag system — system-wide toggles for any feature.
+ * Feature flag system — system-wide toggles with 3-tier pricing support.
  *
- * PO: Feature flags allow turning features on/off without deploys.
- * Convention: dot-notation keys (forms.register, forms.checkin, etc.)
+ * PO: Feature flags control what each tier can access. Free/Mid/Enterprise
+ * tiers are code-defined presets. Applying a tier seeds global flag rows.
+ * Enterprise gets event-level overrides on top.
  *
  * Lookup order (first match wins):
  *   1. Event-scoped:  scope='event', scope_id=eventId, flag_key=key
- *   2. Global:        scope='global', scope_id=NULL, flag_key=key
- *   3. Default:       feature is ON (no row = enabled)
+ *   2. Global:        scope='global', scope_id IS NULL, flag_key=key
+ *   3. Default:       feature is ON (no row = enabled — backwards compatible)
  *
  * Stored in FORMS_DB (the forms-side database).
  */
 
+import { generateId } from './forms-db';
+
 export interface FeatureFlagEnv {
   FORMS_DB: D1Database;
 }
+
+// ─── All Known Flag Keys ────────────────────────────────────────────────────
+
+export const FLAG_KEYS = {
+  // Forms
+  FORMS_REGISTER: 'forms.register',
+  FORMS_CHECKIN: 'forms.checkin',
+  FORMS_SURVEY: 'forms.survey',
+  FORMS_EMAIL_SIGNUP: 'forms.email-signup',
+  // Config
+  CONFIG_SELF_SERVE: 'config.self-serve',
+  CONFIG_EVENT_SETTINGS: 'config.event-settings',
+  // Analytics
+  ANALYTICS_SHARED_REPORT: 'analytics.shared-report',
+  // Assets
+  ASSETS_FILE_UPLOAD: 'assets.file-upload',
+  ASSETS_CUSTOM_QR: 'assets.custom-qr',
+  // Branding
+  BRANDING_WHITE_LABEL: 'branding.white-label',
+  BRANDING_CUSTOM_DOMAIN: 'branding.custom-domain',
+  BRANDING_COLOR_PALETTE: 'branding.color-palette',
+} as const;
+
+export type FlagKey = (typeof FLAG_KEYS)[keyof typeof FLAG_KEYS];
+
+/** Legacy alias — forms-only subset */
+export const FORM_FLAGS = {
+  REGISTRATION: FLAG_KEYS.FORMS_REGISTER,
+  CHECKIN: FLAG_KEYS.FORMS_CHECKIN,
+  SURVEY: FLAG_KEYS.FORMS_SURVEY,
+  EMAIL_SIGNUP: FLAG_KEYS.FORMS_EMAIL_SIGNUP,
+} as const;
+
+// ─── Tier Definitions ───────────────────────────────────────────────────────
+
+export type Tier = 'free' | 'mid' | 'enterprise';
+
+export interface TierPreset {
+  name: string;
+  description: string;
+  flags: Record<FlagKey, boolean>;
+}
+
+export const TIER_PRESETS: Record<Tier, TierPreset> = {
+  free: {
+    name: 'Free',
+    description: 'Registration + check-in forms. Basic public page. Admin read-only.',
+    flags: {
+      'forms.register': true,
+      'forms.checkin': true,
+      'forms.survey': false,
+      'forms.email-signup': false,
+      'config.self-serve': false,
+      'config.event-settings': false,
+      'analytics.shared-report': false,
+      'assets.file-upload': false,
+      'assets.custom-qr': false,
+      'branding.white-label': false,
+      'branding.custom-domain': false,
+      'branding.color-palette': false,
+    },
+  },
+  mid: {
+    name: 'Mid',
+    description: 'All 4 form types. Self-serve config. Shared reports.',
+    flags: {
+      'forms.register': true,
+      'forms.checkin': true,
+      'forms.survey': true,
+      'forms.email-signup': true,
+      'config.self-serve': true,
+      'config.event-settings': true,
+      'analytics.shared-report': true,
+      'assets.file-upload': false,
+      'assets.custom-qr': false,
+      'branding.white-label': false,
+      'branding.custom-domain': false,
+      'branding.color-palette': false,
+    },
+  },
+  enterprise: {
+    name: 'Enterprise',
+    description: 'File upload, white-label branding, custom domain, per-event overrides.',
+    flags: {
+      'forms.register': true,
+      'forms.checkin': true,
+      'forms.survey': true,
+      'forms.email-signup': true,
+      'config.self-serve': true,
+      'config.event-settings': true,
+      'analytics.shared-report': true,
+      'assets.file-upload': true,
+      'assets.custom-qr': true,
+      'branding.white-label': true,
+      'branding.custom-domain': true,
+      'branding.color-palette': true,
+    },
+  },
+} as const;
+
+// ─── Core Lookup ────────────────────────────────────────────────────────────
 
 /**
  * Check if a feature flag is enabled.
@@ -37,9 +141,9 @@ export async function isFeatureEnabled(
       if (eventFlag) return eventFlag.enabled === 1;
     }
 
-    // 2. Check global flag
+    // 2. Check global flag (scope_id may be NULL from seed migration or '' from setFlag)
     const globalFlag = await db.prepare(
-      "SELECT enabled FROM feature_flags WHERE flag_key = ? AND scope = 'global'",
+      "SELECT enabled FROM feature_flags WHERE flag_key = ? AND scope = 'global' AND (scope_id IS NULL OR scope_id = '')",
     )
       .bind(flagKey)
       .first<{ enabled: number }>();
@@ -54,10 +158,152 @@ export async function isFeatureEnabled(
   }
 }
 
-/** Well-known flag keys for the form system */
-export const FORM_FLAGS = {
-  REGISTRATION: 'forms.register',
-  CHECKIN: 'forms.checkin',
-  SURVEY: 'forms.survey',
-  EMAIL_SIGNUP: 'forms.email-signup',
-} as const;
+// ─── Admin Helpers ──────────────────────────────────────────────────────────
+
+export interface FlagRow {
+  id: string;
+  scope: string;
+  scope_id: string | null;
+  flag_key: string;
+  enabled: number;
+  updated_at: string;
+}
+
+/**
+ * List all feature flags. Optionally filter by scope or event.
+ */
+export async function listFlags(
+  db: D1Database,
+  opts?: { scope?: 'global' | 'event'; eventId?: string },
+): Promise<FlagRow[]> {
+  let query = 'SELECT * FROM feature_flags';
+  const params: string[] = [];
+
+  if (opts?.scope === 'event' && opts.eventId) {
+    query += " WHERE scope = 'event' AND scope_id = ?";
+    params.push(opts.eventId);
+  } else if (opts?.scope === 'global') {
+    query += " WHERE scope = 'global'";
+  }
+
+  query += ' ORDER BY flag_key, scope, scope_id';
+
+  const stmt = params.length > 0
+    ? db.prepare(query).bind(...params)
+    : db.prepare(query);
+
+  const result = await stmt.all<FlagRow>();
+  return result.results;
+}
+
+/**
+ * Set a single flag. Upserts based on (scope, scope_id, flag_key).
+ *
+ * NOTE: Global flags use scope_id = '' (empty string), not NULL.
+ * SQLite treats each NULL as unique in UNIQUE constraints, so
+ * ON CONFLICT won't fire with NULL. Empty string is deterministic.
+ */
+export async function setFlag(
+  db: D1Database,
+  flagKey: string,
+  enabled: boolean,
+  scope: 'global' | 'event' = 'global',
+  scopeId?: string,
+): Promise<void> {
+  // Use '' for global scope_id — SQLite NULL != NULL in UNIQUE constraints
+  const resolvedScopeId = scopeId ?? '';
+  const id = generateId();
+  await db.prepare(
+    `INSERT INTO feature_flags (id, scope, scope_id, flag_key, enabled, updated_at)
+     VALUES (?, ?, ?, ?, ?, datetime('now'))
+     ON CONFLICT(scope, scope_id, flag_key)
+     DO UPDATE SET enabled = excluded.enabled, updated_at = datetime('now')`,
+  )
+    .bind(id, scope, resolvedScopeId, flagKey, enabled ? 1 : 0)
+    .run();
+}
+
+/**
+ * Apply a tier preset — upserts all global flags to match the tier.
+ * Does NOT touch event-scoped overrides (enterprise stays intact).
+ */
+export async function applyTier(
+  db: D1Database,
+  tier: Tier,
+): Promise<{ applied: number; tier: Tier }> {
+  const preset = TIER_PRESETS[tier];
+  const entries = Object.entries(preset.flags) as [FlagKey, boolean][];
+
+  for (const [flagKey, enabled] of entries) {
+    await setFlag(db, flagKey, enabled, 'global');
+  }
+
+  return { applied: entries.length, tier };
+}
+
+/**
+ * Set an event-level flag override (enterprise feature).
+ */
+export async function setEventFlag(
+  db: D1Database,
+  eventId: string,
+  flagKey: string,
+  enabled: boolean,
+): Promise<void> {
+  await setFlag(db, flagKey, enabled, 'event', eventId);
+}
+
+/**
+ * Remove an event-level override (reverts to global/default behavior).
+ */
+export async function removeEventFlag(
+  db: D1Database,
+  eventId: string,
+  flagKey: string,
+): Promise<boolean> {
+  const result = await db.prepare(
+    "DELETE FROM feature_flags WHERE scope = 'event' AND scope_id = ? AND flag_key = ?",
+  )
+    .bind(eventId, flagKey)
+    .run();
+  return (result.meta?.changes ?? 0) > 0;
+}
+
+/**
+ * Get the resolved state of all flags for a given event.
+ * Applies the full lookup hierarchy: event > global > default ON.
+ */
+export async function resolveFlags(
+  db: D1Database,
+  eventId?: string,
+): Promise<Record<string, boolean>> {
+  const allKeys = Object.values(FLAG_KEYS);
+  const resolved: Record<string, boolean> = {};
+
+  for (const key of allKeys) {
+    resolved[key] = await isFeatureEnabled(db, key, eventId);
+  }
+
+  return resolved;
+}
+
+/**
+ * Detect which tier best matches the current global flags.
+ * Returns the highest tier whose flags are all satisfied.
+ */
+export async function detectCurrentTier(
+  db: D1Database,
+): Promise<Tier> {
+  const globalFlags = await resolveFlags(db);
+
+  // Check from highest tier down
+  const tiers: Tier[] = ['enterprise', 'mid', 'free'];
+  for (const tier of tiers) {
+    const preset = TIER_PRESETS[tier];
+    const match = (Object.entries(preset.flags) as [FlagKey, boolean][])
+      .every(([key, expected]) => globalFlags[key] === expected);
+    if (match) return tier;
+  }
+
+  return 'free'; // fallback
+}

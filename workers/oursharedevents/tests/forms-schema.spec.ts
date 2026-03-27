@@ -82,12 +82,17 @@ describe('Gate F1: Forms table existence', () => {
     EXPECTED_TABLES.forEach((t) => expect(names).toContain(t));
   });
 
-  test('each forms table returns 0 rows (empty, not missing)', async () => {
+  test('each forms table returns 0 rows (empty, not missing) — except feature_flags (seeded)', async () => {
     for (const table of EXPECTED_TABLES) {
       const result = await (env as unknown as TestEnv).FORMS_DB.prepare(
         `SELECT COUNT(*) as cnt FROM ${table}`,
       ).first<{ cnt: number }>();
-      expect(result?.cnt).toBe(0);
+      if (table === 'feature_flags') {
+        // Seed migration 0007 inserts 12 free-tier default flags
+        expect(result?.cnt).toBe(12);
+      } else {
+        expect(result?.cnt).toBe(0);
+      }
     }
   });
 });
@@ -162,5 +167,53 @@ describe('Gate F5: Forms index verification', () => {
     const names = indexes.results.map((r: Record<string, unknown>) => r.name);
     expect(names.length).toBe(8);
     EXPECTED_INDEXES.forEach((idx) => expect(names).toContain(idx));
+  });
+});
+
+// ── Gate F6: Free tier seed data integrity ──────────────────────────────────
+
+describe('Gate F6: Free tier seed data integrity', () => {
+  test('exactly 12 global flags seeded with correct free-tier defaults', async () => {
+    const flags = await (env as unknown as TestEnv).FORMS_DB.prepare(
+      "SELECT flag_key, enabled FROM feature_flags WHERE scope = 'global' ORDER BY flag_key",
+    ).all();
+
+    expect(flags.results).toHaveLength(12);
+
+    // Verify the exact expected state — this is the contract
+    const expected: Record<string, number> = {
+      'analytics.shared-report': 0,
+      'assets.custom-qr': 0,
+      'assets.file-upload': 0,
+      'branding.color-palette': 0,
+      'branding.custom-domain': 0,
+      'branding.white-label': 0,
+      'config.event-settings': 0,
+      'config.self-serve': 0,
+      'forms.checkin': 1,
+      'forms.email-signup': 0,
+      'forms.register': 1,
+      'forms.survey': 0,
+    };
+
+    for (const row of flags.results) {
+      const key = row.flag_key as string;
+      expect(expected).toHaveProperty(key);
+      expect(row.enabled).toBe(expected[key]);
+    }
+  });
+
+  test('feature_flags table has 6 columns: id, scope, scope_id, flag_key, enabled, updated_at', async () => {
+    const info = await (env as unknown as TestEnv).FORMS_DB.prepare(
+      'PRAGMA table_info(feature_flags)',
+    ).all();
+    const cols = info.results.map((r: Record<string, unknown>) => r.name);
+    expect(cols).toHaveLength(6);
+    expect(cols).toContain('id');
+    expect(cols).toContain('scope');
+    expect(cols).toContain('scope_id');
+    expect(cols).toContain('flag_key');
+    expect(cols).toContain('enabled');
+    expect(cols).toContain('updated_at');
   });
 });

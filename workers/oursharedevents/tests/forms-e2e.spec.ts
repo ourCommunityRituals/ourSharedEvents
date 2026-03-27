@@ -12,7 +12,9 @@
  *   Scenario 5: Auth gates   — admin endpoints reject without token (via SELF.fetch)
  *   Scenario 6: Input guards — bad payloads, invalid event IDs
  *   Scenario 7: Cross-layer  — data from one layer never leaks to another
- *   Scenario 8: Existing routes — health, public page, 404 still work (via SELF.fetch)
+ *   Scenario 8: Tier gating  — free blocks survey, mid allows, downgrade re-blocks
+ *   Scenario 8b: Enterprise  — event override allows survey for one event, blocks others
+ *   Scenario 9: Existing routes — health, public page, 404 still work (via SELF.fetch)
  */
 
 import { env, SELF } from 'cloudflare:test';
@@ -423,10 +425,120 @@ describe('Scenario 7: Cross-layer data isolation', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// SCENARIO 8: Existing Routes (via SELF.fetch)
+// SCENARIO 8: Tier-Gating E2E — Free Can't Survey, Mid Can
 // ═══════════════════════════════════════════════════════════════════════════════
 
-describe('Scenario 8: Existing routes unaffected', () => {
+describe('Scenario 8: Tier gating — free tier blocks survey, mid tier allows it', () => {
+  test('free tier → POST survey 403 FORM_DISABLED, mid tier → POST survey 200, downgrade → 403 again', async () => {
+    const EVENT = 'evt-tier-gate';
+
+    // ── Free tier: survey is OFF (seeded by migration 0007) ──────────────
+    const freeRes = await SELF.fetch(`https://t.test/api/v2/events/${EVENT}/forms/survey`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ responses: { rating: 5 } }),
+    });
+    expect(freeRes.status).toBe(403);
+    const freeBody = await json(freeRes);
+    expect(freeBody.code).toBe('FORM_DISABLED');
+
+    // ── Free tier: register IS allowed ───────────────────────────────────
+    const regRes = await SELF.fetch(`https://t.test/api/v2/events/${EVENT}/forms/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'Tier Test' }),
+    });
+    expect(regRes.status).toBe(200);
+
+    // ── Upgrade to mid tier ──────────────────────────────────────────────
+    const upgradeRes = await SELF.fetch('https://t.test/api/v2/admin/flags/apply-tier', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${MOCK_ADMIN_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tier: 'mid' }),
+    });
+    expect(upgradeRes.status).toBe(200);
+
+    // ── Mid tier: survey now allowed ─────────────────────────────────────
+    const midRes = await SELF.fetch(`https://t.test/api/v2/events/${EVENT}/forms/survey`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ responses: { rating: 5 } }),
+    });
+    expect(midRes.status).toBe(200);
+    expect((await json(midRes)).ok).toBe(true);
+
+    // ── Mid tier: email-signup also allowed ──────────────────────────────
+    const emailRes = await SELF.fetch(`https://t.test/api/v2/events/${EVENT}/forms/email-signup`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: 'tier@test.com' }),
+    });
+    expect(emailRes.status).toBe(200);
+
+    // ── Downgrade back to free ───────────────────────────────────────────
+    await SELF.fetch('https://t.test/api/v2/admin/flags/apply-tier', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${MOCK_ADMIN_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tier: 'free' }),
+    });
+
+    // ── Free tier again: survey blocked ──────────────────────────────────
+    const downgradeRes = await SELF.fetch(`https://t.test/api/v2/events/${EVENT}/forms/survey`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ responses: { rating: 5 } }),
+    });
+    expect(downgradeRes.status).toBe(403);
+    expect((await json(downgradeRes)).code).toBe('FORM_DISABLED');
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// SCENARIO 8b: Enterprise Event Override E2E
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('Scenario 8b: Enterprise event override — global OFF, event ON', () => {
+  test('free tier blocks survey globally, but enterprise event override allows it for one event', async () => {
+    const EVENT_ENTERPRISE = 'evt-enterprise-e2e';
+    const EVENT_FREE = 'evt-free-e2e';
+
+    // ── Ensure free tier (survey globally OFF) ───────────────────────────
+    await SELF.fetch('https://t.test/api/v2/admin/flags/apply-tier', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${MOCK_ADMIN_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tier: 'free' }),
+    });
+
+    // ── Set event-level override: survey ON for enterprise event ─────────
+    await SELF.fetch(`https://t.test/api/v2/admin/events/${EVENT_ENTERPRISE}/flags/forms.survey`, {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${MOCK_ADMIN_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled: true }),
+    });
+
+    // ── Enterprise event: survey ALLOWED (event override) ────────────────
+    const entRes = await SELF.fetch(`https://t.test/api/v2/events/${EVENT_ENTERPRISE}/forms/survey`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ responses: { rating: 5 } }),
+    });
+    expect(entRes.status).toBe(200);
+
+    // ── Free event: survey BLOCKED (no override, global OFF) ─────────────
+    const freeRes = await SELF.fetch(`https://t.test/api/v2/events/${EVENT_FREE}/forms/survey`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ responses: { rating: 5 } }),
+    });
+    expect(freeRes.status).toBe(403);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// SCENARIO 9: Existing Routes (via SELF.fetch)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('Scenario 9: Existing routes unaffected', () => {
   test('GET / → 200 HTML, /health → 200 JSON, /nonexistent → 404, OPTIONS → 204 CORS', async () => {
     const home = await SELF.fetch('https://t.test/');
     expect(home.status).toBe(200);
