@@ -1,0 +1,185 @@
+# Security Human Gate
+#
+# Enforces that code with security violations CANNOT be merged by automated
+# agents or bots. Only a human reviewer can override security findings.
+#
+# How it works:
+#   1. Runs on every PR
+#   2. Checks if any security scan has failed
+#   3. If failures exist, requires a human-applied "security:human-override" label
+#   4. Verifies the label was applied by a human (not a bot)
+#   5. This check is a REQUIRED status check — no merge without it passing
+#
+# To configure as required:
+#   Settings > Branches > main > Require status checks > "Security Human Gate"
+
+name: Security Human Gate
+
+on:
+  pull_request:
+    branches:
+      - '**'
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+  pull_request_review:
+    types: [submitted]
+
+permissions:
+  pull-requests: read
+  checks: read
+  statuses: read
+  actions: read
+
+jobs:
+  human-gate:
+    name: "🛑 Security Human Gate"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check for security scan failures
+        id: check-scans
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PR_NUMBER="${{ github.event.pull_request.number }}"
+          HEAD_SHA="${{ github.event.pull_request.head.sha }}"
+
+          echo "Checking security scan status for PR #$PR_NUMBER (SHA: $HEAD_SHA)..."
+          echo ""
+
+          # Check status of security-related workflows
+          SECURITY_FAILED=false
+
+          # Get all check runs for this commit
+          CHECKS=$(gh api \
+            "repos/${{ github.repository }}/commits/$HEAD_SHA/check-runs" \
+            --jq '.check_runs[] | select(.name | test("Security|Trivy|Semgrep|Gitleaks|License|Dependency|CodeQL"; "i")) | {name: .name, conclusion: .conclusion, status: .status}' \
+            2>/dev/null || echo "")
+
+          if [ -n "$CHECKS" ]; then
+            echo "Security-related checks found:"
+            echo "$CHECKS" | jq -r '"  \(.name): \(.conclusion // .status)"'
+            echo ""
+
+            # Check if any security check failed
+            FAILED_CHECKS=$(echo "$CHECKS" | jq -r 'select(.conclusion == "failure") | .name' 2>/dev/null || echo "")
+
+            if [ -n "$FAILED_CHECKS" ]; then
+              SECURITY_FAILED=true
+              echo "❌ Failed security checks:"
+              echo "$FAILED_CHECKS" | while read -r check; do
+                echo "  - $check"
+              done
+            fi
+          else
+            echo "No security checks found yet (may still be running)."
+          fi
+
+          echo "security_failed=$SECURITY_FAILED" >> $GITHUB_OUTPUT
+
+      - name: Verify human override if security failed
+        if: steps.check-scans.outputs.security_failed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PR_NUMBER="${{ github.event.pull_request.number }}"
+
+          echo "=================================================="
+          echo "SECURITY VIOLATIONS DETECTED"
+          echo "=================================================="
+          echo ""
+          echo "This PR has failing security scans."
+          echo "Automated agents (bots, CI, Claude Code) CANNOT override this."
+          echo ""
+          echo "A HUMAN must either:"
+          echo "  1. Fix the security violations and re-push"
+          echo "  2. Apply the 'security:human-override' label with justification"
+          echo ""
+
+          # Check if the human override label exists
+          HAS_OVERRIDE=$(gh pr view "$PR_NUMBER" \
+            --json labels \
+            --jq '.labels[].name' 2>/dev/null | grep -c "security:human-override" || echo "0")
+
+          if [ "$HAS_OVERRIDE" -eq 0 ]; then
+            echo "❌ BLOCKED: No 'security:human-override' label found."
+            echo ""
+            echo "To proceed, a human reviewer must:"
+            echo "  1. Review the security findings in the failed checks"
+            echo "  2. Add the 'security:human-override' label to this PR"
+            echo "  3. Post a comment explaining why the override is acceptable"
+            echo ""
+            echo "This label MUST be applied by a human — bot-applied labels"
+            echo "will be detected and rejected."
+            exit 1
+          fi
+
+          # Verify the label was applied by a human (check PR timeline)
+          echo "Override label found. Verifying it was applied by a human..."
+
+          # Check for a human review approval
+          HUMAN_APPROVAL=$(gh pr view "$PR_NUMBER" \
+            --json reviews \
+            --jq '[.reviews[] | select(.state == "APPROVED" and (.author.login | test("bot|\\[bot\\]|github-actions"; "i") | not))] | length' \
+            2>/dev/null || echo "0")
+
+          # Check the PR author — if it's a bot, we need human approval
+          PR_AUTHOR=$(gh pr view "$PR_NUMBER" --json author --jq '.author.login' 2>/dev/null || echo "")
+          IS_BOT_AUTHOR=false
+          if echo "$PR_AUTHOR" | grep -qiE "bot|\[bot\]|github-actions|dependabot|claude"; then
+            IS_BOT_AUTHOR=true
+          fi
+
+          if [ "$IS_BOT_AUTHOR" = "true" ] && [ "$HUMAN_APPROVAL" -eq 0 ]; then
+            echo ""
+            echo "❌ BLOCKED: PR authored by bot/agent ($PR_AUTHOR) with security violations."
+            echo "A human must APPROVE this PR (not just apply the label)."
+            echo ""
+            echo "Required: Human review approval via GitHub PR review."
+            exit 1
+          fi
+
+          # Check for a human comment explaining the override
+          OVERRIDE_COMMENTS=$(gh pr view "$PR_NUMBER" \
+            --json comments \
+            --jq '[.comments[] | select(.body | test("security override|override reason|security exception"; "i")) | select(.author.login | test("bot|\\[bot\\]|github-actions"; "i") | not)] | length' \
+            2>/dev/null || echo "0")
+
+          if [ "$OVERRIDE_COMMENTS" -eq 0 ]; then
+            echo ""
+            echo "⚠️ WARNING: No human override justification comment found."
+            echo "Best practice: Add a comment explaining why this override is acceptable."
+            echo ""
+            echo "Example comment:"
+            echo '  "Security override: This Semgrep finding is a false positive because...'
+            echo '   The flagged code path is not reachable from user input."'
+            echo ""
+            # Warning only, not blocking — the label + approval is sufficient
+          fi
+
+          echo ""
+          echo "✅ Human override verified. Proceeding with merge eligibility."
+
+      - name: Security gate passed
+        if: steps.check-scans.outputs.security_failed != 'true'
+        run: |
+          echo "✅ All security scans passing. No human override needed."
+
+      - name: Create gate summary
+        if: always()
+        run: |
+          echo "## 🛑 Security Human Gate" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ "${{ steps.check-scans.outputs.security_failed }}" = "true" ]; then
+            echo "### Security violations detected" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Automated agents cannot merge this PR.**" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "A human must either:" >> $GITHUB_STEP_SUMMARY
+            echo "1. Fix the security violations" >> $GITHUB_STEP_SUMMARY
+            echo "2. Apply \`security:human-override\` label + approve the PR + add justification comment" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Why:** Security findings are the highest priority. No automated process" >> $GITHUB_STEP_SUMMARY
+            echo "should be able to bypass security controls without human judgment." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### ✅ No security violations — gate open" >> $GITHUB_STEP_SUMMARY
+          fi

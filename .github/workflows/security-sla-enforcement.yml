@@ -1,0 +1,213 @@
+# Security SLA Enforcement
+#
+# Runs daily to check for overdue security issues and escalates them.
+# Ensures security findings are not forgotten or deprioritized.
+#
+# Actions:
+#   - Warns on issues approaching SLA deadline
+#   - Escalates overdue issues with a comment
+#   - Checks for expired security exceptions
+#   - Generates a weekly security posture summary
+
+name: Security SLA Enforcement
+
+on:
+  schedule:
+    # Daily at 08:00 UTC (3:00 AM CST)
+    - cron: '0 8 * * *'
+  workflow_dispatch:
+
+permissions:
+  issues: write
+  contents: read
+
+jobs:
+  # ============================================================================
+  # CHECK OVERDUE SECURITY ISSUES
+  # ============================================================================
+  check-overdue:
+    name: "⏰ Check Overdue Security Issues"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Audit open security issues
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "=================================================="
+          echo "SECURITY SLA ENFORCEMENT"
+          echo "=================================================="
+          echo ""
+
+          NOW=$(date -u +%s)
+          OVERDUE_COUNT=0
+          WARNING_COUNT=0
+
+          # Get all open security issues
+          ISSUES=$(gh issue list \
+            --label "security" \
+            --state open \
+            --json number,title,labels,createdAt,assignees \
+            --limit 100 2>/dev/null || echo "[]")
+
+          if [ "$ISSUES" = "[]" ] || [ -z "$ISSUES" ]; then
+            echo "✅ No open security issues. Security posture is clean."
+            exit 0
+          fi
+
+          echo "$ISSUES" | jq -c '.[]' | while read -r issue; do
+            NUMBER=$(echo "$issue" | jq -r '.number')
+            TITLE=$(echo "$issue" | jq -r '.title')
+            CREATED=$(echo "$issue" | jq -r '.createdAt')
+            LABELS=$(echo "$issue" | jq -r '[.labels[].name] | join(",")')
+
+            # Parse creation timestamp
+            CREATED_TS=$(date -u -d "$CREATED" +%s 2>/dev/null || date -u -jf "%Y-%m-%dT%H:%M:%SZ" "$CREATED" +%s 2>/dev/null || echo "0")
+            AGE_HOURS=$(( (NOW - CREATED_TS) / 3600 ))
+            AGE_DAYS=$(( AGE_HOURS / 24 ))
+
+            # Determine SLA based on priority label
+            SLA_HOURS=24  # Default: high
+            SEVERITY="high"
+            if echo "$LABELS" | grep -q "priority:critical"; then
+              SLA_HOURS=4
+              SEVERITY="critical"
+            elif echo "$LABELS" | grep -q "priority:high"; then
+              SLA_HOURS=24
+              SEVERITY="high"
+            elif echo "$LABELS" | grep -q "priority:moderate"; then
+              SLA_HOURS=168  # 7 days
+              SEVERITY="moderate"
+            elif echo "$LABELS" | grep -q "priority:low"; then
+              SLA_HOURS=720  # 30 days
+              SEVERITY="low"
+            fi
+
+            # Check if overdue
+            if [ "$AGE_HOURS" -gt "$SLA_HOURS" ]; then
+              OVERDUE_BY=$(( AGE_HOURS - SLA_HOURS ))
+              echo "❌ OVERDUE: #$NUMBER - $TITLE (overdue by ${OVERDUE_BY}h, severity: $SEVERITY)"
+
+              # Post escalation comment
+              gh issue comment "$NUMBER" \
+                --body "## ⚠️ SLA BREACH — Escalation Notice
+
+          This security issue has **exceeded its SLA**.
+
+          | Metric | Value |
+          |--------|-------|
+          | **Severity** | $SEVERITY |
+          | **SLA** | ${SLA_HOURS} hours |
+          | **Age** | ${AGE_HOURS} hours (${AGE_DAYS} days) |
+          | **Overdue by** | ${OVERDUE_BY} hours |
+
+          **Required action:** This issue must be resolved or a formal exception filed immediately.
+
+          See [Security Remediation Guide](docs/SECURITY.md) for resolution steps.
+          See [Exception Process](docs/SECURITY.md#exception-process) if a fix is not yet available.
+
+          ---
+          *Posted by security-sla-enforcement workflow*" 2>/dev/null || true
+
+              # Add overdue label
+              gh issue edit "$NUMBER" --add-label "sla:overdue" 2>/dev/null || true
+
+            elif [ "$AGE_HOURS" -gt $(( SLA_HOURS * 3 / 4 )) ]; then
+              REMAINING=$(( SLA_HOURS - AGE_HOURS ))
+              echo "⚠️ WARNING: #$NUMBER - $TITLE (${REMAINING}h remaining, severity: $SEVERITY)"
+            else
+              echo "✅ OK: #$NUMBER - $TITLE (${AGE_HOURS}h / ${SLA_HOURS}h SLA, severity: $SEVERITY)"
+            fi
+          done
+
+      - name: Create enforcement summary
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "## ⏰ Security SLA Enforcement Report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Date:** $(date -u '+%Y-%m-%d %H:%M UTC')" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Count issues by state
+          TOTAL=$(gh issue list --label "security" --state open --json number --jq 'length' 2>/dev/null || echo "0")
+          OVERDUE=$(gh issue list --label "security,sla:overdue" --state open --json number --jq 'length' 2>/dev/null || echo "0")
+          CRITICAL=$(gh issue list --label "security,priority:critical" --state open --json number --jq 'length' 2>/dev/null || echo "0")
+          HIGH=$(gh issue list --label "security,priority:high" --state open --json number --jq 'length' 2>/dev/null || echo "0")
+          EXCEPTIONS=$(gh issue list --label "security,exception" --state open --json number --jq 'length' 2>/dev/null || echo "0")
+
+          echo "### Security Posture" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Metric | Count |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Open security issues | $TOTAL |" >> $GITHUB_STEP_SUMMARY
+          echo "| 🔴 Critical | $CRITICAL |" >> $GITHUB_STEP_SUMMARY
+          echo "| 🟠 High | $HIGH |" >> $GITHUB_STEP_SUMMARY
+          echo "| ⏰ SLA overdue | $OVERDUE |" >> $GITHUB_STEP_SUMMARY
+          echo "| 📋 Active exceptions | $EXCEPTIONS |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ "$TOTAL" -eq 0 ]; then
+            echo "### ✅ Clean security posture — no open issues" >> $GITHUB_STEP_SUMMARY
+          elif [ "$OVERDUE" -gt 0 ]; then
+            echo "### ❌ ACTION REQUIRED — $OVERDUE issue(s) past SLA" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### ⚠️ $TOTAL open issue(s) — all within SLA" >> $GITHUB_STEP_SUMMARY
+          fi
+
+  # ============================================================================
+  # CHECK EXPIRED SECURITY EXCEPTIONS
+  # ============================================================================
+  check-exceptions:
+    name: "📋 Check Security Exceptions"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check exception expiry
+        run: |
+          echo "=================================================="
+          echo "SECURITY EXCEPTION REVIEW"
+          echo "=================================================="
+          echo ""
+
+          if [ ! -f .security-exceptions.json ]; then
+            echo "✅ No security exceptions file found — nothing to review."
+            exit 0
+          fi
+
+          NOW=$(date -u +%Y-%m-%d)
+          EXPIRED=0
+
+          echo "Checking exception review dates against today ($NOW)..."
+          echo ""
+
+          jq -r '.exceptions[]? | "\(.id) | \(.package) | \(.reviewDate) | \(.reason)"' .security-exceptions.json 2>/dev/null | while IFS='|' read -r id pkg review_date reason; do
+            review_date=$(echo "$review_date" | xargs)
+            if [[ "$review_date" < "$NOW" ]] || [[ "$review_date" == "$NOW" ]]; then
+              echo "❌ EXPIRED: $id ($pkg) — review was due $review_date"
+              echo "   Reason: $reason"
+              EXPIRED=$((EXPIRED + 1))
+            else
+              echo "✅ Active: $id ($pkg) — review due $review_date"
+            fi
+          done
+
+      - name: Create exception summary
+        if: always()
+        run: |
+          echo "## 📋 Security Exception Review" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ -f .security-exceptions.json ]; then
+            TOTAL=$(jq '.exceptions | length' .security-exceptions.json 2>/dev/null || echo "0")
+            echo "**Active exceptions:** $TOTAL" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Exceptions with past review dates require immediate action:" >> $GITHUB_STEP_SUMMARY
+            echo "either renew with updated justification or resolve the finding." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "No security exceptions on file." >> $GITHUB_STEP_SUMMARY
+          fi

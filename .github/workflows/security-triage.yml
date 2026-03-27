@@ -1,0 +1,155 @@
+# Security Triage — Auto-create issues from scan failures
+#
+# When any security scan fails, this workflow automatically:
+#   1. Creates a GitHub issue with severity label and SLA deadline
+#   2. Assigns the security owner
+#   3. Posts a summary linking to the failed scan
+#
+# This ensures no security finding is silently ignored.
+
+name: Security Triage
+
+on:
+  workflow_run:
+    workflows:
+      - "CodeQL Security Analysis"
+      - "Advanced Security Scans"
+    types:
+      - completed
+
+permissions:
+  issues: write
+  actions: read
+  contents: read
+
+jobs:
+  triage:
+    name: "🚨 Triage Security Findings"
+    runs-on: ubuntu-latest
+    # Only triage when the scan failed (findings detected)
+    if: github.event.workflow_run.conclusion == 'failure'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Determine severity and SLA
+        id: severity
+        run: |
+          WORKFLOW="${{ github.event.workflow_run.name }}"
+          BRANCH="${{ github.event.workflow_run.head_branch }}"
+          RUN_URL="${{ github.event.workflow_run.html_url }}"
+          SHA="${{ github.event.workflow_run.head_sha }}"
+          SHORT_SHA="${SHA:0:7}"
+
+          echo "workflow=$WORKFLOW" >> $GITHUB_OUTPUT
+          echo "branch=$BRANCH" >> $GITHUB_OUTPUT
+          echo "run_url=$RUN_URL" >> $GITHUB_OUTPUT
+          echo "short_sha=$SHORT_SHA" >> $GITHUB_OUTPUT
+
+          # Default to high severity for automated triage
+          # Manual review may downgrade after investigation
+          echo "severity=high" >> $GITHUB_OUTPUT
+          echo "sla=24 hours" >> $GITHUB_OUTPUT
+          echo "label=priority:high" >> $GITHUB_OUTPUT
+
+          # Calculate SLA deadline (24h from now)
+          SLA_DEADLINE=$(date -u -d "+24 hours" "+%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || date -u -v+24H "+%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || echo "within 24 hours")
+          echo "sla_deadline=$SLA_DEADLINE" >> $GITHUB_OUTPUT
+
+      - name: Check for existing open issue
+        id: existing
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Avoid duplicate issues for the same workflow failure
+          EXISTING=$(gh issue list \
+            --label "security,auto-triage" \
+            --state open \
+            --search "${{ steps.severity.outputs.workflow }} failure" \
+            --json number \
+            --jq 'length' 2>/dev/null || echo "0")
+
+          echo "count=$EXISTING" >> $GITHUB_OUTPUT
+
+      - name: Create security issue
+        if: steps.existing.outputs.count == '0'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          WORKFLOW="${{ steps.severity.outputs.workflow }}"
+          BRANCH="${{ steps.severity.outputs.branch }}"
+          RUN_URL="${{ steps.severity.outputs.run_url }}"
+          SHORT_SHA="${{ steps.severity.outputs.short_sha }}"
+          SLA="${{ steps.severity.outputs.sla }}"
+          SLA_DEADLINE="${{ steps.severity.outputs.sla_deadline }}"
+
+          BODY=$(cat <<'ISSUEEOF'
+          ## Security Scan Failure — Requires Immediate Attention
+
+          | Field | Value |
+          |-------|-------|
+          | **Workflow** | WORKFLOW_PLACEHOLDER |
+          | **Branch** | `BRANCH_PLACEHOLDER` |
+          | **Commit** | `SHA_PLACEHOLDER` |
+          | **Failed Run** | [View logs](RUN_URL_PLACEHOLDER) |
+          | **SLA** | SLA_PLACEHOLDER |
+          | **SLA Deadline** | SLA_DEADLINE_PLACEHOLDER |
+
+          ### Required Actions
+
+          1. **Investigate** — Review the [failed workflow run](RUN_URL_PLACEHOLDER) to identify specific findings
+          2. **Assess** — Determine true severity (Critical/High/Moderate/Low)
+          3. **Fix or Except** — Apply remediation or file a Security Exception with justification
+          4. **Verify** — Re-run the security scan to confirm resolution
+          5. **Close** — Close this issue with a summary of actions taken
+
+          ### Response SLAs
+
+          | Severity | Response Time | Resolution Time |
+          |----------|--------------|-----------------|
+          | Critical | 1 hour | 4 hours |
+          | High | 4 hours | 24 hours |
+          | Moderate | 24 hours | 7 days |
+          | Low | 7 days | 30 days |
+
+          > If severity is upgraded to **Critical** after investigation, the 4-hour resolution SLA applies immediately.
+
+          ### Process Reference
+          - [Security Remediation Guide](docs/SECURITY.md)
+          - [Exception Process](docs/SECURITY.md#exception-process)
+
+          ---
+          *Auto-created by security-triage workflow. Do not ignore — SLA is binding.*
+          ISSUEEOF
+
+          # Replace placeholders
+          BODY="${BODY//WORKFLOW_PLACEHOLDER/$WORKFLOW}"
+          BODY="${BODY//BRANCH_PLACEHOLDER/$BRANCH}"
+          BODY="${BODY//SHA_PLACEHOLDER/$SHORT_SHA}"
+          BODY="${BODY//RUN_URL_PLACEHOLDER/$RUN_URL}"
+          BODY="${BODY//SLA_PLACEHOLDER/$SLA}"
+          BODY="${BODY//SLA_DEADLINE_PLACEHOLDER/$SLA_DEADLINE}"
+
+          gh issue create \
+            --title "[SECURITY] $WORKFLOW failure on $BRANCH ($SHORT_SHA)" \
+            --body "$BODY" \
+            --label "security,${{ steps.severity.outputs.label }},auto-triage" \
+            --assignee "zeventbooks"
+
+      - name: Comment on existing issue
+        if: steps.existing.outputs.count != '0'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Find the existing issue number
+          ISSUE_NUM=$(gh issue list \
+            --label "security,auto-triage" \
+            --state open \
+            --search "${{ steps.severity.outputs.workflow }} failure" \
+            --json number \
+            --jq '.[0].number' 2>/dev/null || echo "")
+
+          if [ -n "$ISSUE_NUM" ]; then
+            gh issue comment "$ISSUE_NUM" \
+              --body "**Recurring failure detected.** New failure on \`${{ steps.severity.outputs.branch }}\` at commit \`${{ steps.severity.outputs.short_sha }}\`. [View run](${{ steps.severity.outputs.run_url }}). This issue remains unresolved — SLA clock continues."
+          fi
