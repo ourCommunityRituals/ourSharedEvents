@@ -1,0 +1,91 @@
+name: Security Exception Request
+description: Request a temporary exception for a security finding that cannot be immediately resolved
+title: "[SECURITY EXCEPTION] "
+labels: ["security", "exception", "needs-review"]
+assignees:
+  - zeventbooks
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Exceptions are temporary.** They expire after the review period and must be renewed or resolved.
+        Critical severity findings are NOT eligible for exceptions.
+
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Finding Severity
+      options:
+        - High — max 30 day exception
+        - Moderate — max 90 day exception
+        - Low — max 180 day exception
+    validations:
+      required: true
+
+  - type: input
+    id: related-issue
+    attributes:
+      label: Related Security Issue
+      description: Link to the original security vulnerability issue
+      placeholder: "#123"
+    validations:
+      required: true
+
+  - type: input
+    id: cve
+    attributes:
+      label: CVE / Advisory ID
+      placeholder: "CVE-YYYY-XXXXX"
+
+  - type: input
+    id: package
+    attributes:
+      label: Affected Package / File
+      placeholder: "package-name@1.0.0"
+    validations:
+      required: true
+
+  - type: textarea
+    id: justification
+    attributes:
+      label: Justification
+      description: Why can't this be fixed immediately?
+      placeholder: |
+        - No upstream patch available
+        - Fix requires breaking API change that needs coordination
+        - Vulnerability is not exploitable in our deployment context because...
+    validations:
+      required: true
+
+  - type: textarea
+    id: mitigation
+    attributes:
+      label: Compensating Controls
+      description: What mitigations are in place to reduce risk while the exception is active?
+      placeholder: |
+        - Input validation added at API boundary
+        - WAF rule deployed to block known attack patterns
+        - Monitoring alert configured for suspicious activity
+    validations:
+      required: true
+
+  - type: input
+    id: review-date
+    attributes:
+      label: Exception Review Date
+      description: When should this exception be re-evaluated? (YYYY-MM-DD)
+      placeholder: "2026-04-27"
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: acknowledgment
+    attributes:
+      label: Acknowledgment
+      options:
+        - label: I confirm this exception will be reviewed on the specified date
+          required: true
+        - label: I confirm compensating controls are in place
+          required: true
+        - label: I understand Critical severity findings cannot be excepted
+          required: true

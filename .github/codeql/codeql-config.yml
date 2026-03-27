@@ -1,0 +1,73 @@
+# CodeQL Custom Configuration
+#
+# Extends the default security-extended + security-and-quality packs
+# with technology-specific coverage for our stack:
+#
+#   Cloudflare Workers, D1 (planned), Firebase (planned), React (planned),
+#   HTML embedded JS, GitHub Actions CI/CD, Playwright, Postman/Newman,
+#   Wrangler configuration
+#
+# @see .github/workflows/security-scan.yml - Uses this config
+# @see docs/SECURITY.md - Security process documentation
+
+name: "ourSharedEvents CodeQL Config"
+
+# Query packs - the "+" in workflow YAML adds these ON TOP of defaults
+# Here we list additional query suites for deeper coverage
+queries:
+  # Core security + quality (also specified in workflow as fallback)
+  - uses: security-extended
+  - uses: security-and-quality
+
+  # JavaScript-specific deep analysis
+  - uses: security-experimental
+
+query-filters:
+  # Include ALL security queries regardless of precision
+  - include:
+      tags contain: security
+  # Include crypto-related checks (HMAC, signing, randomness)
+  - include:
+      tags contain: cryptography
+  # Include external data flow (API inputs, fetch responses)
+  - include:
+      tags contain: external/cwe
+
+paths:
+  # ── Cloudflare Workers ──
+  - cloudflare-proxy
+  - worker
+  - workers
+
+  # ── HTML surfaces with embedded JavaScript ──
+  - src/mvp
+
+  # ── CI/CD workflows (GitHub Actions script injection) ──
+  - .github/workflows
+
+  # ── Playwright tests (origin safety, credential handling) ──
+  - tests
+
+  # ── Postman/Newman collections (hardcoded secrets in collections) ──
+  - archive/postman
+
+  # ── Scripts (deployment, security, utilities) ──
+  - scripts
+
+  # ── Root config files ──
+  - '*.js'
+  - '*.ts'
+  - '*.mjs'
+  - '*.cjs'
+
+paths-ignore:
+  # Skip vendored/generated code
+  - node_modules
+  - '**/node_modules'
+  - dist
+  - build
+  - coverage
+  - .wrangler
+
+  # Skip archived workflows (historical reference only)
+  - .github/workflow-archive

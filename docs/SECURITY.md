@@ -1,40 +1,112 @@
 # Security Scanning & Vulnerability Remediation
 
-> **Purpose:** Document security scanning processes and provide guidance for addressing vulnerabilities.
-> **Last Updated:** 2025-12-10
-> **Status:** Story 2.4 Implementation
+> **Purpose:** Document security scanning processes, response SLAs, and the binding process for addressing vulnerabilities as the highest priority.
+> **Last Updated:** 2026-03-27
+> **Status:** Story 2.4 Implementation + Advanced Security Process
 
 ---
 
 ## Table of Contents
 
 1. [Overview](#overview)
-2. [Automated Security Scanning](#automated-security-scanning)
-3. [Branch Protection Requirements](#branch-protection-requirements)
-4. [Vulnerability Severity Levels](#vulnerability-severity-levels)
-5. [Remediation Process](#remediation-process)
-6. [Handling npm Audit Findings](#handling-npm-audit-findings)
-7. [Handling CodeQL Findings](#handling-codeql-findings)
-8. [Exception Process](#exception-process)
-9. [Security Checklist for PRs](#security-checklist-for-prs)
-10. [Quick Reference](#quick-reference)
+2. [Security Response Process (SLA)](#security-response-process-sla)
+3. [Automated Security Scanning](#automated-security-scanning)
+4. [Branch Protection Requirements](#branch-protection-requirements)
+5. [Vulnerability Severity Levels](#vulnerability-severity-levels)
+6. [Triage and Escalation](#triage-and-escalation)
+7. [Remediation Process](#remediation-process)
+8. [Handling npm Audit Findings](#handling-npm-audit-findings)
+9. [Handling CodeQL Findings](#handling-codeql-findings)
+10. [Exception Process](#exception-process)
+11. [Security Checklist for PRs](#security-checklist-for-prs)
+12. [Quick Reference](#quick-reference)
 
 ---
 
 ## Overview
 
-This repository uses automated security scanning to identify vulnerabilities before code reaches production. Security scans are **required status checks** that block merging if issues are found.
+This repository uses automated security scanning to identify vulnerabilities before code reaches production. Security scans are **required status checks** that block merging if issues are found. **Any code change on any branch triggers security scanning.**
+
+Security findings are treated as the **highest priority work item**. No feature work proceeds while Critical or High findings remain unresolved.
 
 ### Security Gates
 
 | Gate | Tool | Runs On | Blocks Merge? |
 |------|------|---------|---------------|
-| **CodeQL Analysis** | GitHub CodeQL | Push, PR, Weekly | Yes (critical/high) |
-| **Dependency Audit** | npm audit | Push, PR, Weekly | Yes (critical/high) |
+| **CodeQL Analysis** | GitHub CodeQL + custom queries | All branches, PR, Weekly | Yes (critical/high) |
+| **Dependency Audit** | npm audit | All branches, PR, Weekly | Yes (critical/high) |
+| **Secret Detection** | Stage-1 grep + CodeQL | All branches, PR | Yes (any secret) |
+| **License Compliance** | license-checker | All branches, PR | Yes (copyleft) |
+| **Dependency Review** | GitHub | PR only | Yes (high severity) |
+| **SBOM Generation** | CycloneDX | All branches, PR | No (artifact) |
 
-### Workflow File
+### Workflow Files
 
-**Location:** `.github/workflows/security-scan.yml`
+| File | Purpose |
+|------|---------|
+| `.github/workflows/security-scan.yml` | CodeQL + npm audit + custom queries + CI/CD + wrangler checks |
+| `.github/workflows/advanced-security-scan.yml` | SBOM, License Compliance, Dependency Review |
+| `.github/workflows/security-triage.yml` | Auto-creates issues from scan failures |
+| `.github/workflows/security-sla-enforcement.yml` | Daily SLA checks + escalation |
+| `.github/workflows/security-regression.yml` | Runtime security regression tests |
+
+---
+
+## Security Response Process (SLA)
+
+**This process is binding.** All security findings follow this lifecycle:
+
+```
+Scan Failure
+    │
+    ▼
+Auto-Triage (security-triage.yml)
+    │ Creates GitHub issue with severity + SLA deadline
+    │ Assigns security owner (zeventbooks)
+    ▼
+Investigate (within Response SLA)
+    │ Review scan logs → identify specific finding
+    │ Confirm severity (may upgrade/downgrade)
+    ▼
+Decide: Fix or Except?
+    │
+    ├─► Fix → Apply remediation → Verify scan passes → Close issue
+    │
+    └─► Exception → File Security Exception issue
+                     Requires justification + compensating controls
+                     Critical findings CANNOT be excepted
+                     Has mandatory review date
+    ▼
+Daily SLA Enforcement (security-sla-enforcement.yml)
+    │ Posts escalation comments on overdue issues
+    │ Adds "sla:overdue" label
+    │ Checks exception expiry dates
+    ▼
+Resolution
+    │ Issue closed with summary of actions taken
+    │ Exception renewed or finding fixed
+```
+
+### SLA Table
+
+| Severity | Response Time | Resolution Time | Exception Eligible? | Escalation |
+|----------|--------------|-----------------|---------------------|------------|
+| **Critical** | 1 hour | 4 hours | No | Immediate — all feature work stops |
+| **High** | 4 hours | 24 hours | Yes (30 day max) | Feature work paused until resolved |
+| **Moderate** | 24 hours | 7 days | Yes (90 day max) | Tracked, reviewed weekly |
+| **Low** | 7 days | 30 days | Yes (180 day max) | Tracked, reviewed monthly |
+
+### Rules
+
+1. **Critical/High findings stop feature work.** No PRs for new features are merged while Critical or High security issues are open.
+2. **Auto-triage is mandatory.** Every scan failure creates a tracked issue. No silent failures.
+3. **SLA clock starts at detection**, not at human acknowledgment.
+4. **Overdue issues are escalated daily** with comments and labels by the SLA enforcement workflow.
+5. **Exceptions require compensating controls.** You cannot except a finding without documenting what mitigates the risk.
+6. **Exceptions expire.** If not renewed by the review date, the finding reverts to its original priority.
+7. **Critical findings cannot be excepted.** They must be fixed within 4 hours or the affected code is reverted.
+8. **Human gate is enforced.** Automated agents (bots, CI, Claude Code) **cannot** merge code with security violations. Only a human reviewer can override by: (a) applying the `security:human-override` label, (b) approving the PR via GitHub review, and (c) posting a justification comment. The `security-human-gate.yml` workflow enforces this as a required status check.
+9. **Bot-authored PRs with security failures require human approval.** If a PR is authored by a bot or agent and has security scan failures, a human must submit an approving review — the label alone is not sufficient.
 
 ---
 
@@ -112,16 +184,66 @@ Checks
 
 ---
 
+## Triage and Escalation
+
+### Automated Triage
+
+When any security scan fails, the `security-triage.yml` workflow automatically:
+
+1. **Creates a GitHub issue** with severity label, SLA deadline, and assigned owner
+2. **Links to the failed scan run** for immediate investigation
+3. **Avoids duplicates** — if an open issue already exists for the same scan, adds a comment instead
+
+### Escalation Chain
+
+```
+Detection (scan failure)
+  └─► Auto-issue created (security-triage.yml)
+       └─► Assigned to: zeventbooks
+            └─► Daily SLA check (security-sla-enforcement.yml)
+                 ├─► 75% SLA elapsed → warning comment posted
+                 └─► SLA exceeded → "sla:overdue" label + escalation comment
+                      └─► If Critical: affected code must be reverted
+```
+
+### Human Gate Enforcement
+
+The `security-human-gate.yml` workflow runs on every PR and enforces:
+
+- If security scans **pass** → gate is open, merge is allowed
+- If security scans **fail** → gate blocks merge until:
+  1. A **human** (not bot/agent) applies the `security:human-override` label
+  2. A **human** approves the PR via GitHub review (required for bot-authored PRs)
+  3. A **human** posts a comment with override justification (recommended)
+
+**Configure as required status check:** Settings > Branches > main > Require status checks > add "Security Human Gate"
+
+### Labels Used
+
+| Label | Purpose |
+|-------|---------|
+| `security` | All security-related issues |
+| `priority:critical` | Critical severity — 4h SLA |
+| `priority:high` | High severity — 24h SLA |
+| `priority:moderate` | Moderate severity — 7 day SLA |
+| `priority:low` | Low severity — 30 day SLA |
+| `auto-triage` | Issue auto-created by triage workflow |
+| `sla:overdue` | Issue has exceeded its SLA |
+| `exception` | Security exception filed |
+| `security:human-override` | Human has reviewed and approved override |
+
+---
+
 ## Vulnerability Severity Levels
 
 ### Classification
 
 | Severity | Description | Blocks Merge? | Response Time |
 |----------|-------------|---------------|---------------|
-| **Critical** | Active exploitation possible, data breach risk | Yes | Immediate |
-| **High** | Significant security impact, exploitation likely | Yes | Within 24 hours |
-| **Moderate** | Limited impact or complex exploitation | No | Within sprint |
-| **Low** | Minimal impact, theoretical risk | No | As capacity allows |
+| **Critical** | Active exploitation possible, data breach risk | Yes | 1 hour response / 4 hour fix |
+| **High** | Significant security impact, exploitation likely | Yes | 4 hour response / 24 hour fix |
+| **Moderate** | Limited impact or complex exploitation | No | 24 hour response / 7 day fix |
+| **Low** | Minimal impact, theoretical risk | No | 7 day response / 30 day fix |
 
 ### Examples
 
@@ -496,7 +618,14 @@ npm audit --json > .security-reports/audit.json
 
 | File | Purpose |
 |------|---------|
-| `.github/workflows/security-scan.yml` | CI security workflow |
+| `.github/workflows/security-scan.yml` | CodeQL + npm audit (all branches) |
+| `.github/workflows/advanced-security-scan.yml` | SBOM, License Compliance, Dependency Review (all branches) |
+| `.github/workflows/security-triage.yml` | Auto-creates issues from scan failures |
+| `.github/workflows/security-sla-enforcement.yml` | Daily SLA checks + escalation |
+| `.github/workflows/security-human-gate.yml` | Blocks bot/agent merges on security failures |
+| `.github/workflows/security-regression.yml` | Runtime security regression tests |
+| `.github/ISSUE_TEMPLATE/security-vulnerability.yml` | Security issue template with SLA |
+| `.github/ISSUE_TEMPLATE/security-exception.yml` | Exception request template |
 | `tests/unit/security.test.js` | Security unit tests |
 | `docs/SECURITY.md` | This document |
 | `.security-exceptions.json` | Documented exceptions |

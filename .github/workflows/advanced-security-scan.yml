@@ -1,0 +1,261 @@
+# Advanced Security Scans
+#
+# Complementary security workflow providing scans beyond CodeQL + npm audit.
+#
+# Kept (non-redundant):
+#   1. SBOM Generation         - Supply chain transparency (advisory)
+#   2. License Compliance      - Detect copyleft/problematic licenses
+#   3. GitHub Dependency Review - PR-scoped dependency diff analysis
+#
+# Removed (redundant per research):
+#   - Semgrep SAST       → redundant with CodeQL security-extended + security-and-quality
+#   - Trivy filesystem    → redundant with npm audit for non-container Node.js project
+#   - OSSF Scorecard      → informational repo hygiene, not a vulnerability scanner
+#   - Gitleaks            → stage1.yml grep + CodeQL hardcoded-credentials covers secrets
+#
+# @see .github/workflows/security-scan.yml - Primary CodeQL + npm audit + custom queries
+# @see docs/SECURITY.md - Vulnerability remediation guide
+
+name: Advanced Security Scans
+
+on:
+  push:
+    branches:
+      - '**'
+    paths:
+      - '**.js'
+      - '**.ts'
+      - '**.jsx'
+      - '**.tsx'
+      - '**.json'
+      - '**.html'
+      - '**.gs'
+      - '**.mjs'
+      - '**.cjs'
+      - '**.yml'
+      - '**.yaml'
+      - '**.sh'
+      - '**.env*'
+      - 'Dockerfile*'
+      - 'docker-compose*'
+      - 'wrangler.toml'
+      - 'workers/**'
+  pull_request:
+    branches:
+      - '**'
+  schedule:
+    # Weekly deep scan - Mondays 02:00 UTC (offset from CodeQL Sunday midnight)
+    - cron: '0 2 * * 1'
+  workflow_dispatch:
+
+# Prevent duplicate runs
+concurrency:
+  group: advanced-security-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  security-events: write
+  pull-requests: read
+  actions: read
+
+jobs:
+  # ============================================================================
+  # 1. SBOM GENERATION - Software Bill of Materials
+  # ============================================================================
+  # Generates a CycloneDX SBOM for supply chain transparency and auditing.
+  # SBOM is uploaded as a build artifact for downstream consumption.
+  # Advisory only — does not block merges.
+  # ============================================================================
+  sbom:
+    name: "📦 SBOM Generation"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate CycloneDX SBOM
+        run: |
+          npx @cyclonedx/cyclonedx-npm --output-file sbom.json --output-format JSON --spec-version 1.5
+          echo "## 📦 SBOM Generation" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          COMPONENT_COUNT=$(jq '.components | length' sbom.json 2>/dev/null || echo "unknown")
+          echo "- **Format:** CycloneDX 1.5 (JSON)" >> $GITHUB_STEP_SUMMARY
+          echo "- **Components:** $COMPONENT_COUNT" >> $GITHUB_STEP_SUMMARY
+          echo "- **Artifact:** \`sbom-cyclonedx\`" >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-cyclonedx
+          path: sbom.json
+          retention-days: 90
+
+  # ============================================================================
+  # 2. LICENSE COMPLIANCE
+  # ============================================================================
+  # Scans dependencies for copyleft or problematic licenses that could
+  # create legal risk. Blocks on GPL/AGPL family licenses.
+  # ============================================================================
+  license-check:
+    name: "⚖️ License Compliance"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check dependency licenses
+        id: license-scan
+        run: |
+          echo "=================================================="
+          echo "LICENSE COMPLIANCE CHECK"
+          echo "=================================================="
+          echo ""
+
+          # Install license-checker
+          npx license-checker --json --out license-report.json 2>/dev/null || true
+
+          if [ ! -f license-report.json ]; then
+            echo "⚠️ Could not generate license report"
+            echo "license_status=skipped" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # Blocklist: copyleft licenses that create legal risk
+          BLOCKED_LICENSES="GPL-2.0|GPL-3.0|AGPL-1.0|AGPL-3.0|SSPL|EUPL"
+
+          echo "Checking for blocked licenses: $BLOCKED_LICENSES"
+          echo ""
+
+          FOUND_BLOCKED=false
+          mkdir -p .security-reports
+
+          # Extract licenses and check against blocklist
+          jq -r 'to_entries[] | "\(.key): \(.value.licenses // "UNKNOWN")"' license-report.json > .security-reports/license-list.txt
+
+          while IFS= read -r line; do
+            if echo "$line" | grep -qEi "($BLOCKED_LICENSES)"; then
+              echo "❌ Blocked license: $line"
+              FOUND_BLOCKED=true
+            fi
+          done < .security-reports/license-list.txt
+
+          TOTAL=$(wc -l < .security-reports/license-list.txt)
+          UNKNOWN=$(grep -ci "UNKNOWN" .security-reports/license-list.txt || echo "0")
+
+          echo ""
+          echo "Total packages scanned: $TOTAL"
+          echo "Unknown licenses: $UNKNOWN"
+
+          if [ "$FOUND_BLOCKED" = "true" ]; then
+            echo ""
+            echo "❌ Blocked copyleft licenses detected!"
+            echo "Review these dependencies and find MIT/Apache/ISC alternatives."
+            echo "license_status=failed" >> $GITHUB_OUTPUT
+            exit 1
+          else
+            echo ""
+            echo "✅ No blocked licenses found"
+            echo "license_status=pass" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Upload license report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: license-report
+          path: |
+            license-report.json
+            .security-reports/license-list.txt
+          retention-days: 30
+
+      - name: Create license summary
+        if: always()
+        run: |
+          echo "## ⚖️ License Compliance" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          STATUS="${{ steps.license-scan.outputs.license_status }}"
+          if [ "$STATUS" = "pass" ]; then
+            echo "### ✅ All dependency licenses are compliant" >> $GITHUB_STEP_SUMMARY
+          elif [ "$STATUS" = "failed" ]; then
+            echo "### ❌ Blocked licenses detected" >> $GITHUB_STEP_SUMMARY
+            echo "Copyleft (GPL/AGPL) licenses found. Replace with permissive alternatives." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### ⚠️ License check skipped" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Blocked license families:** GPL-2.0, GPL-3.0, AGPL, SSPL, EUPL" >> $GITHUB_STEP_SUMMARY
+          echo "**Allowed:** MIT, Apache-2.0, ISC, BSD-2-Clause, BSD-3-Clause, 0BSD, Unlicense" >> $GITHUB_STEP_SUMMARY
+
+  # ============================================================================
+  # 3. GITHUB DEPENDENCY REVIEW (PR only)
+  # ============================================================================
+  # Analyzes dependency changes in PRs and flags new vulnerabilities,
+  # license issues, or risky dependency additions before merge.
+  # ============================================================================
+  dependency-review:
+    name: "📋 Dependency Review"
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Dependency Review
+        uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high
+          # Block known problematic licenses in new dependencies
+          deny-licenses: GPL-2.0-only, GPL-3.0-only, AGPL-3.0-only
+          comment-summary-in-pr: always
+
+  # ============================================================================
+  # SUMMARY AGGREGATOR
+  # ============================================================================
+  security-summary:
+    name: "📊 Security Summary"
+    runs-on: ubuntu-latest
+    if: always()
+    needs: [sbom, license-check, dependency-review]
+    steps:
+      - name: Generate consolidated summary
+        run: |
+          echo "## 📊 Advanced Security Scan Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Scan | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| 📦 SBOM Generation | ${{ needs.sbom.result == 'success' && '✅' || needs.sbom.result == 'skipped' && '⏭️' || '❌' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| ⚖️ License Compliance | ${{ needs.license-check.result == 'success' && '✅' || needs.license-check.result == 'skipped' && '⏭️' || '❌' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 📋 Dependency Review | ${{ needs.dependency-review.result == 'success' && '✅' || needs.dependency-review.result == 'skipped' && '⏭️' || '❌' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "---" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Complements:** \`security-scan.yml\` (CodeQL + npm audit + custom queries) and \`stage1.yml\` (S1-01 Security Check)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Coverage Map" >> $GITHUB_STEP_SUMMARY
+          echo "| Layer | Tool(s) |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|---------|" >> $GITHUB_STEP_SUMMARY
+          echo "| SAST (code) | CodeQL (security-extended + security-and-quality + custom queries) |" >> $GITHUB_STEP_SUMMARY
+          echo "| Dependency vulns | npm audit (stage1 + security-scan), Dependency Review (PR) |" >> $GITHUB_STEP_SUMMARY
+          echo "| Secret detection | Stage1 grep + CodeQL hardcoded-credentials |" >> $GITHUB_STEP_SUMMARY
+          echo "| License compliance | license-checker, Dependency Review |" >> $GITHUB_STEP_SUMMARY
+          echo "| Supply chain | SBOM (CycloneDX), Dependabot |" >> $GITHUB_STEP_SUMMARY
+          echo "| Runtime security | Security regression tests (security-regression.yml) |" >> $GITHUB_STEP_SUMMARY

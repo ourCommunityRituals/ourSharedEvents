@@ -16,6 +16,13 @@
 - [ ] Tested in browser (Admin, Public, Display pages)
 - [ ] Tested on mobile viewport (if UI changes)
 
+## Security
+- [ ] All security scans pass (CodeQL + custom queries, npm audit)
+- [ ] No new dependencies with copyleft licenses (GPL/AGPL)
+- [ ] No hardcoded secrets or credentials
+- [ ] User input is validated/sanitized at system boundaries
+- [ ] If security scan fails: human reviewer has assessed and applied `security:human-override` label with justification comment (automated agents/bots CANNOT override)
+
 ## Code Quality
 - [ ] Code follows project style guidelines
 - [ ] Self-review completed
