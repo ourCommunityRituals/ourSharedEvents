@@ -1444,9 +1444,9 @@ Related MVP Surfaces: Admin, Poster, Public, Sponsor, SharedReport
       }
 
       container.innerHTML = displaySponsors.map(s => {
-        const isPrimary = s.tier === 'primary' || s.tier === 'gold' || s.tier === 'title';
+        const isPremium = s.tier === 'premium';
         return `
-          <a href="${esc(s.linkUrl || '#')}" target="_blank" rel="noopener" class="sponsor-carousel-item ${isPrimary ? 'primary' : ''}" data-sponsor-id="${esc(s.id)}">
+          <a href="${esc(s.linkUrl || '#')}" target="_blank" rel="noopener" class="sponsor-carousel-item ${isPremium ? 'premium' : ''}" data-sponsor-id="${esc(s.id)}">
             ${s.logoUrl ? `<img src="${esc(s.logoUrl)}" alt="${esc(s.name)}" onerror="this.style.display='none'">` : ''}
             <span class="sponsor-name">${esc(s.name)}</span>
           </a>

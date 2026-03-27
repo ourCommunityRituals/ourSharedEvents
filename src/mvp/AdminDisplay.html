@@ -147,7 +147,7 @@ Functions exposed to global scope:
         name,
         url: row.querySelector('.sp-url')?.value.trim() || '',
         img: row.querySelector('.sp-img')?.value.trim() || '',
-        isPrimary: row.querySelector('.sp-isPrimary')?.checked || false,
+        tier: row.querySelector('.sp-tier')?.value || 'local',
         placements: {
           posterTop: row.querySelector('.sp-posterTop')?.checked || false,
           tvTop: row.querySelector('.sp-tvTop')?.checked || false,
@@ -248,11 +248,16 @@ Functions exposed to global scope:
       div.className = 'event-card';
       const placements = sp.placements || {};
       div.innerHTML = `
-        <h4>Sponsor ${i + 1} ${sp.isPrimary ? '<span style="background:#fef3c7;color:#92400e;padding:2px 6px;border-radius:8px;font-size:0.7rem;">PRIMARY</span>' : ''}</h4>
+        <h4>Sponsor ${i + 1} ${sp.tier === 'premium' ? '<span style="background:#fef3c7;color:#92400e;padding:2px 6px;border-radius:8px;font-size:0.7rem;">PREMIUM</span>' : sp.tier === 'med' ? '<span style="background:#f3e8ff;color:#6b21a8;padding:2px 6px;border-radius:8px;font-size:0.7rem;">MID-TIER</span>' : '<span style="background:#e0f2fe;color:#0c4a6e;padding:2px 6px;border-radius:8px;font-size:0.7rem;">LOCAL</span>'}</h4>
         <input type="text" placeholder="Name" value="${sp.name || ''}" class="sp-name" style="width:100%;margin-bottom:4px;">
         <input type="url" placeholder="URL" value="${sp.url || ''}" class="sp-url" style="width:100%;margin-bottom:4px;">
         <input type="url" placeholder="Image URL" value="${sp.img || ''}" class="sp-img" style="width:100%;margin-bottom:8px;">
-        <label style="display:block;margin-bottom:8px;padding:8px;background:#fef3c7;border-radius:6px;"><input type="checkbox" class="sp-isPrimary" ${sp.isPrimary ? 'checked' : ''}> <strong>Primary Sponsor</strong> <span style="font-size:0.8em;color:#92400e;">(Bigger rendering)</span></label>
+        <label style="display:block;margin-bottom:12px;"><strong>Sponsor Tier</strong></label>
+        <select class="sp-tier" style="width:100%;margin-bottom:8px;padding:6px;border:1px solid #ccc;border-radius:4px;">
+          <option value="local" ${sp.tier === 'local' || !sp.tier ? 'selected' : ''}>Local ($75/event)</option>
+          <option value="med" ${sp.tier === 'med' ? 'selected' : ''}>Mid-Tier ($200/event)</option>
+          <option value="premium" ${sp.tier === 'premium' ? 'selected' : ''}>Premium ($500/event)</option>
+        </select>
         <label><input type="checkbox" class="sp-posterTop" ${placements.posterTop ? 'checked' : ''}> Poster Top</label><br>
         <label><input type="checkbox" class="sp-tvTop" ${placements.tvTop ? 'checked' : ''}> TV Top</label><br>
         <label><input type="checkbox" class="sp-tvSide" ${placements.tvSide ? 'checked' : ''}> TV Side</label><br>
@@ -276,7 +281,12 @@ Functions exposed to global scope:
       <input type="text" placeholder="Name" class="sp-name" style="width:100%;margin-bottom:4px;">
       <input type="url" placeholder="URL" class="sp-url" style="width:100%;margin-bottom:4px;">
       <input type="url" placeholder="Image URL" class="sp-img" style="width:100%;margin-bottom:8px;">
-      <label style="display:block;margin-bottom:8px;padding:8px;background:#fef3c7;border-radius:6px;"><input type="checkbox" class="sp-isPrimary"> <strong>Primary Sponsor</strong> <span style="font-size:0.8em;color:#92400e;">(Bigger rendering)</span></label>
+      <label style="display:block;margin-bottom:12px;"><strong>Sponsor Tier</strong></label>
+      <select class="sp-tier" style="width:100%;margin-bottom:8px;padding:6px;border:1px solid #ccc;border-radius:4px;">
+        <option value="local" selected>Local ($75/event)</option>
+        <option value="med">Mid-Tier ($200/event)</option>
+        <option value="premium">Premium ($500/event)</option>
+      </select>
       <label><input type="checkbox" class="sp-posterTop"> Poster Top</label><br>
       <label><input type="checkbox" class="sp-tvTop"> TV Top</label><br>
       <label><input type="checkbox" class="sp-tvSide"> TV Side</label><br>

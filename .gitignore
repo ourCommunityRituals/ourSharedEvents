@@ -59,3 +59,6 @@ build/
 
 # Deployment history (local only)
 .deployment-history.json
+
+# Minified template build artifacts
+cloudflare-proxy/templates-min/

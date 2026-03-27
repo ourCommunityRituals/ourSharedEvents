@@ -246,7 +246,7 @@ export function mapSponsorsForAdmin(sponsors: Sponsor[] | null | undefined): Adm
     name: s.name,
     logoUrl: s.logoUrl || null,
     website: s.linkUrl || null,
-    tier: null, // Would come from extended sponsor data
+    tier: s.tier || (s.isPrimary ? 'premium' : 'local'), // Tier with legacy isPrimary coercion
     entity: null, // Would come from extended sponsor data
   }));
 }
