@@ -10,7 +10,7 @@ function normalizeSponsorTier(input) {
     const validTiers = ['premium', 'med', 'local'];
     tier = validTiers.includes(input.tier) ? input.tier : 'local';
   } else if (typeof input.isPrimary !== 'undefined') {
-    tier = !!input.isPrimary ? 'premium' : 'local';
+    tier = input.isPrimary ? 'premium' : 'local';
   }
   return tier;
 }
