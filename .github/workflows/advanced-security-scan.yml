@@ -94,7 +94,7 @@ jobs:
           echo "- **Artifact:** \`sbom-cyclonedx\`" >> $GITHUB_STEP_SUMMARY
 
       - name: Upload SBOM artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: sbom-cyclonedx
           path: sbom.json
@@ -179,7 +179,7 @@ jobs:
 
       - name: Upload license report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: license-report
           path: |
