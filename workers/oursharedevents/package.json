@@ -11,7 +11,9 @@
     "test": "vitest run",
     "test:schema": "vitest run tests/schema.spec.ts",
     "test:constraints": "vitest run tests/constraints.spec.ts",
-    "test:d1": "vitest run tests/schema.spec.ts tests/constraints.spec.ts"
+    "test:d1": "vitest run tests/schema.spec.ts tests/constraints.spec.ts",
+    "test:forms": "vitest run tests/forms-schema.spec.ts tests/forms-constraints.spec.ts",
+    "test:all": "vitest run"
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.8.0",

@@ -32,8 +32,6 @@ const EXPECTED_TABLES = [
   'sponsors',
   'poster_deployments',
   'scans',
-  'checkins',
-  'registrations',
   'scan_aggregates',
 ] as const;
 
@@ -45,9 +43,6 @@ const EXPECTED_INDEXES = [
   'idx_poster_deployments_qr_token',
   'idx_scans_event_bucket',
   'idx_scans_poster_deployment',
-  'idx_checkins_event_id',
-  'idx_registrations_event_id',
-  'idx_registrations_source_placement',
   'idx_scan_aggregates_event_date',
 ] as const;
 
@@ -56,8 +51,6 @@ const EXPECTED_COLUMN_COUNTS: Record<string, number> = {
   sponsors: 12,
   poster_deployments: 10,
   scans: 9,
-  checkins: 7,
-  registrations: 8,
   scan_aggregates: 9,
 };
 
@@ -78,7 +71,7 @@ beforeAll(async () => {
 // ── Gate 1: Table existence ──────────────────────────────────────────────────
 
 describe('Gate 1: Table existence', () => {
-  test('all 7 tables exist post-migration', async () => {
+  test('all 5 tables exist post-migration', async () => {
     const tables = await env.DB.prepare(
       "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' ORDER BY name"
     ).all();
@@ -153,13 +146,13 @@ describe('Gate 4: scan_aggregates write protection', () => {
 // ── Gate 5: Index verification ───────────────────────────────────────────────
 
 describe('Gate 5: Index verification', () => {
-  test('all 11 custom indexes exist', async () => {
+  test('all 8 custom indexes exist', async () => {
     const indexes = await env.DB.prepare(
       "SELECT name FROM sqlite_master WHERE type='index' AND name LIKE 'idx_%' ORDER BY name"
     ).all();
 
     const names = indexes.results.map((r: Record<string, unknown>) => r.name);
-    expect(names.length).toBe(11);
+    expect(names.length).toBe(8);
     EXPECTED_INDEXES.forEach((idx) => expect(names).toContain(idx));
   });
 });

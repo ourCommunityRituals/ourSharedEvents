@@ -29,6 +29,13 @@ binding = "DB"
 database_name = "ocr-db-local"
 database_id = "local"
 
+# ── Forms D1 Database (local dev) — SEPARATE from anonymous scan system ──
+# Migrations applied via: wrangler d1 execute ocr-forms-db-local --file migrations-forms/000X_*.sql --local
+[[d1_databases]]
+binding = "FORMS_DB"
+database_name = "ocr-forms-db-local"
+database_id = "local-forms"
+
 # ── Default (local dev / workers.dev) ─────────────────────────────
 [vars]
 WORKER_ENV = "development"
@@ -47,6 +54,12 @@ routes = [
 binding = "DB"
 database_name = "ocr-db-staging"
 database_id = "<staging-db-id>"
+
+# ── Forms D1 Database (staging) — SEPARATE from anonymous scan system ──
+[[env.staging.d1_databases]]
+binding = "FORMS_DB"
+database_name = "ocr-forms-db-staging"
+database_id = "<staging-forms-db-id>"
 
 [env.staging.vars]
 WORKER_ENV = "staging"
@@ -78,6 +91,12 @@ routes = [
 binding = "DB"
 database_name = "ocr-db-production"
 database_id = "<production-db-id>"
+
+# ── Forms D1 Database (production) — SEPARATE from anonymous scan system ──
+[[env.production.d1_databases]]
+binding = "FORMS_DB"
+database_name = "ocr-forms-db-production"
+database_id = "<production-forms-db-id>"
 
 [env.production.vars]
 WORKER_ENV = "production"
