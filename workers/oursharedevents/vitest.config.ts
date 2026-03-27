@@ -83,6 +83,12 @@ export default defineWorkersConfig({
             TEST_FORMS_MIGRATION_STATEMENTS: JSON.stringify(formsMigrationStatements),
             TEST_SOURCE_FILES_JSON: JSON.stringify(sourceFiles),
             TEST_WRANGLER_TOML: wranglerToml,
+            // Mock secrets for E2E tests (forms-e2e.spec.ts)
+            ADMIN_KEY: 'test-admin-key-e2e-2026',
+            ALLOW_ADMIN_KEY_FALLBACK: 'true',
+            FORMS_ENCRYPTION_KEY: 'test-forms-encryption-secret-32ch',
+            WORKER_ENV: 'test',
+            WORKER_BUILD_VERSION: 'e2e-mock',
           },
         },
       },
