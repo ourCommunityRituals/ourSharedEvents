@@ -2251,8 +2251,8 @@ Related MVP Surfaces: Poster, Display, Public, Sponsor, SharedReport
             <div style="border-top: 1px solid var(--color-gray-200, #e2e8f0); padding-top: 16px; margin-top: 16px;" id="v2MediaSection" data-testid="media-section">
               <label style="font-weight: 500; margin-bottom: 12px; display: block;">Media</label>
 
-              <!-- Phone Storage Upload -->
-              <div class="form-group" id="phoneUploadSection" data-testid="phone-upload-section">
+              <!-- GATED: Phone upload disabled for launch. Anonymous data story takes priority. See OUR-23. -->
+              <div class="form-group" id="phoneUploadSection" data-testid="phone-upload-section" style="display:none">
                 <label>Upload from Phone</label>
                 <small class="muted" style="display: block; margin-bottom: 8px;">Upload images, videos, or PDFs directly from your device (max 25MB)</small>
                 <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
@@ -4723,11 +4723,16 @@ Related MVP Surfaces: Poster, Display, Public, Sponsor, SharedReport
         div.className = 'event-card';
         const placements = sp.placements || {};
         div.innerHTML = `
-          <h4>Sponsor ${i + 1} ${sp.isPrimary ? '<span style="background:#fef3c7;color:#92400e;padding:2px 6px;border-radius:8px;font-size:0.7rem;">PRIMARY</span>' : ''}</h4>
+          <h4>Sponsor ${i + 1} ${sp.tier === 'premium' ? '<span style="background:#fef3c7;color:#92400e;padding:2px 6px;border-radius:8px;font-size:0.7rem;">PREMIUM</span>' : sp.tier === 'med' ? '<span style="background:#f3e8ff;color:#6b21a8;padding:2px 6px;border-radius:8px;font-size:0.7rem;">MID-TIER</span>' : '<span style="background:#e0f2fe;color:#0c4a6e;padding:2px 6px;border-radius:8px;font-size:0.7rem;">LOCAL</span>'}</h4>
           <input type="text" placeholder="Name" value="${sp.name || ''}" class="sp-name" style="width:100%;margin-bottom:4px;">
           <input type="url" placeholder="URL" value="${sp.url || ''}" class="sp-url" style="width:100%;margin-bottom:4px;">
           <input type="url" placeholder="Image URL" value="${sp.img || ''}" class="sp-img" style="width:100%;margin-bottom:8px;">
-          <label style="display:block;margin-bottom:8px;padding:8px;background:#fef3c7;border-radius:6px;"><input type="checkbox" class="sp-isPrimary" ${sp.isPrimary ? 'checked' : ''}> <strong>Primary Sponsor</strong> <span style="font-size:0.8em;color:#92400e;">(Bigger rendering)</span></label>
+          <label style="display:block;margin-bottom:12px;"><strong>Sponsor Tier</strong></label>
+          <select class="sp-tier" style="width:100%;margin-bottom:8px;padding:6px;border:1px solid #ccc;border-radius:4px;">
+            <option value="local" ${sp.tier === 'local' || !sp.tier ? 'selected' : ''}>Local ($75/event)</option>
+            <option value="med" ${sp.tier === 'med' ? 'selected' : ''}>Mid-Tier ($200/event)</option>
+            <option value="premium" ${sp.tier === 'premium' ? 'selected' : ''}>Premium ($500/event)</option>
+          </select>
           <label><input type="checkbox" class="sp-posterTop" ${placements.posterTop ? 'checked' : ''}> Poster Top</label><br>
           <label><input type="checkbox" class="sp-tvTop" ${placements.tvTop ? 'checked' : ''}> TV Top</label><br>
           <label><input type="checkbox" class="sp-tvSide" ${placements.tvSide ? 'checked' : ''}> TV Side</label><br>
@@ -4746,7 +4751,12 @@ Related MVP Surfaces: Poster, Display, Public, Sponsor, SharedReport
         <input type="text" placeholder="Name" class="sp-name" style="width:100%;margin-bottom:4px;">
         <input type="url" placeholder="URL" class="sp-url" style="width:100%;margin-bottom:4px;">
         <input type="url" placeholder="Image URL" class="sp-img" style="width:100%;margin-bottom:8px;">
-        <label style="display:block;margin-bottom:8px;padding:8px;background:#fef3c7;border-radius:6px;"><input type="checkbox" class="sp-isPrimary"> <strong>Primary Sponsor</strong> <span style="font-size:0.8em;color:#92400e;">(Bigger rendering)</span></label>
+        <label style="display:block;margin-bottom:12px;"><strong>Sponsor Tier</strong></label>
+        <select class="sp-tier" style="width:100%;margin-bottom:8px;padding:6px;border:1px solid #ccc;border-radius:4px;">
+          <option value="local" selected>Local ($75/event)</option>
+          <option value="med">Mid-Tier ($200/event)</option>
+          <option value="premium">Premium ($500/event)</option>
+        </select>
         <label><input type="checkbox" class="sp-posterTop"> Poster Top</label><br>
         <label><input type="checkbox" class="sp-tvTop"> TV Top</label><br>
         <label><input type="checkbox" class="sp-tvSide"> TV Side</label><br>
@@ -4778,7 +4788,7 @@ Related MVP Surfaces: Poster, Display, Public, Sponsor, SharedReport
           name,
           url: row.querySelector('.sp-url').value.trim(),
           img: row.querySelector('.sp-img').value.trim(),
-          isPrimary: row.querySelector('.sp-isPrimary')?.checked || false,
+          tier: row.querySelector('.sp-tier')?.value || 'local',
           placements: {
             posterTop: row.querySelector('.sp-posterTop').checked,
             tvTop: row.querySelector('.sp-tvTop').checked,
@@ -5056,11 +5066,11 @@ Related MVP Surfaces: Poster, Display, Public, Sponsor, SharedReport
               const sponsorUrl = buildSponsorReportUrl(sp.id);
               const escapedUrl = NU.esc(sponsorUrl);
               const escapedId = NU.esc(sp.id);
-              const primaryBadge = sp.isPrimary ? '<span style="background:#fef3c7;color:#92400e;padding:2px 6px;border-radius:8px;font-size:0.65rem;margin-left:6px;">PRIMARY</span>' : '';
+              const tierBadge = sp.tier === 'premium' ? '<span style="background:#fef3c7;color:#92400e;padding:2px 6px;border-radius:8px;font-size:0.65rem;margin-left:6px;">PREMIUM</span>' : sp.tier === 'med' ? '<span style="background:#f3e8ff;color:#6b21a8;padding:2px 6px;border-radius:8px;font-size:0.65rem;margin-left:6px;">MID-TIER</span>' : '<span style="background:#e0f2fe;color:#0c4a6e;padding:2px 6px;border-radius:8px;font-size:0.65rem;margin-left:6px;">LOCAL</span>';
               const placementBadge = getSponsorPlacementBadge(sp.placement);
               return '<tr style="border-bottom:1px solid var(--color-gray-100,#f1f5f9);" data-sponsor-id="' + escapedId + '">' +
                 '<td style="padding:0.75rem 1rem;">' +
-                  '<strong>' + NU.esc(sp.name || sp.id) + '</strong>' + primaryBadge +
+                  '<strong>' + NU.esc(sp.name || sp.id) + '</strong>' + tierBadge +
                   '<div style="font-size:0.7rem;color:#94a3b8;margin-top:4px;word-break:break-all;">' + escapedUrl.slice(0,60) + '...</div>' +
                 '</td>' +
                 '<td style="padding:0.75rem 0.5rem;text-align:center;">' + placementBadge + '</td>' +

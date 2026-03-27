@@ -5078,7 +5078,7 @@ window.SponsorUtils = (function() {
    * - logoUrl: string (required)
    * - linkUrl: string (optional)
    * - placement: "poster"|"display"|"public"|"tv-banner" (required)
-   * - isPrimary: boolean (optional) - Primary sponsor gets bigger rendering
+   * - tier: "premium"|"med"|"local" (optional) - Sponsor tier for rendering priority
    *
    * LEGACY FIELD MAPPING (deprecated - will be removed in V3):
    * - s.img → logoUrl
@@ -5087,7 +5087,7 @@ window.SponsorUtils = (function() {
    * - s.placements → placement (first key with true value)
    *
    * @param {Object} s - Sponsor object (schema or legacy format)
-   * @returns {Object} - Schema-compliant sponsor: { id, name, logoUrl, linkUrl, placement, isPrimary }
+   * @returns {Object} - Schema-compliant sponsor: { id, name, logoUrl, linkUrl, placement, tier }
    */
   function normalizeSponsor(s) {
     if (!s) return null;
@@ -5106,7 +5106,7 @@ window.SponsorUtils = (function() {
       logoUrl: s.logoUrl || s.img || '',      // Legacy fallback: img
       linkUrl: s.linkUrl || s.website || s.url || '',  // Legacy fallback: website, url
       placement: placement,
-      isPrimary: !!s.isPrimary  // Feature 3: Primary sponsor flag
+      tier: s.tier || (s.isPrimary ? 'premium' : 'local')  // Tier with legacy isPrimary coercion
     };
   }
 
@@ -5168,18 +5168,19 @@ window.SponsorUtils = (function() {
       const normalized = sponsors.map(normalizeSponsor).filter(s => s && s.name);
       const filtered = this._filterByPlacement(normalized, placement);
       // Sort primary sponsors first
-      const picks = filtered.sort((a, b) => (b.isPrimary ? 1 : 0) - (a.isPrimary ? 1 : 0));
+      const tierOrder = { premium: 3, med: 2, local: 1 };
+      const picks = filtered.sort((a, b) => (tierOrder[b.tier] || 1) - (tierOrder[a.tier] || 1));
       if (!picks.length) return [];
 
       container.innerHTML = picks.map(s => {
-        const primaryClass = s.isPrimary ? ' sponsor-primary' : '';
-        const tierBadge = showTier && s.isPrimary ? '<span class="sponsor-tier-badge">PRIMARY</span>' : '';
+        const premiumClass = s.tier === 'premium' ? ' sponsor-premium' : '';
+        const tierBadge = showTier && s.tier ? `<span class="sponsor-tier-badge sponsor-tier-${s.tier}">${s.tier.toUpperCase()}</span>` : '';
         const content = s.logoUrl
-          ? `<img src="${esc(s.logoUrl)}" alt="${esc(s.name)}" class="sponsor-logo${primaryClass}">${tierBadge}`
-          : `<strong class="${primaryClass}">${esc(s.name)}</strong>${tierBadge}`;
+          ? `<img src="${esc(s.logoUrl)}" alt="${esc(s.name)}" class="sponsor-logo${premiumClass}">${tierBadge}`
+          : `<strong class="${premiumClass}">${esc(s.name)}</strong>${tierBadge}`;
 
         if (showLinks && s.linkUrl) {
-          return `<a href="${esc(s.linkUrl)}" target="_blank" rel="noopener sponsored" data-sponsor-id="${esc(s.id)}" class="sponsor-item${primaryClass}">${content}</a>`;
+          return `<a href="${esc(s.linkUrl)}" target="_blank" rel="noopener sponsored" data-sponsor-id="${esc(s.id)}" class="sponsor-item${premiumClass}">${content}</a>`;
         }
         return `<span class="sponsor-item${primaryClass}">${content}</span>`;
       }).join('');
@@ -6811,9 +6812,9 @@ DO NOT modify this component's structure without updating:
       }
 
       container.innerHTML = displaySponsors.map(s => {
-        const isPrimary = s.tier === 'primary' || s.tier === 'gold' || s.tier === 'title';
+        const isPremium = s.tier === 'premium';
         return `
-          <a href="${esc(s.linkUrl || '#')}" target="_blank" rel="noopener" class="sponsor-carousel-item ${isPrimary ? 'primary' : ''}" data-sponsor-id="${esc(s.id)}">
+          <a href="${esc(s.linkUrl || '#')}" target="_blank" rel="noopener" class="sponsor-carousel-item ${isPremium ? 'premium' : ''}" data-sponsor-id="${esc(s.id)}">
             ${s.logoUrl ? `<img src="${esc(s.logoUrl)}" alt="${esc(s.name)}" onerror="this.style.display='none'">` : ''}
             <span class="sponsor-name">${esc(s.name)}</span>
           </a>
