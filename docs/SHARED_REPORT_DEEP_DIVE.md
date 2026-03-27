@@ -255,13 +255,18 @@ Enterprise tier
 6. **Rate limiting guard** — Per-endpoint request throttling
 7. **Newman collection** — SharedReport API E2E test chain
 
-### Future Stories (Backlog candidates)
+### Quick Wins (Shipped in this PR — second commit)
 
-- `SR-1`: PDF export (mid tier)
-- `SR-2`: Custom date window (mid tier)
-- `SR-3`: Portfolio mode (enterprise)
-- `SR-4`: White-label report (enterprise)
-- `SR-5`: Print stylesheet
-- `SR-6`: Keyboard tab navigation (WCAG)
-- `SR-7`: Loading skeletons
-- `SR-8`: URL hash for active tab state
+8. **SR-8: URL hash tab state** — `#tab=sponsor` persists active tab across refresh, enables deep links, supports browser back/forward
+9. **SR-6: Keyboard arrow navigation** — Left/Right/Home/End keys move between tabs per WAI-ARIA tabs pattern
+10. **SR-5: Print stylesheet** — `@media print` hides chrome, expands all tabs and collapsed sections, adds section headers, prevents page breaks mid-card
+
+### Remaining Backlog (Prioritized)
+
+| Priority | Story | Tier | Effort |
+|----------|-------|------|--------|
+| P1 | `SR-7`: Loading skeletons | Free | Medium |
+| P2 | `SR-2`: Custom date window | Mid | Medium |
+| P3 | `SR-1`: PDF export | Mid | Large |
+| P4 | `SR-3`: Portfolio mode | Enterprise | Large |
+| P5 | `SR-4`: White-label report | Enterprise | Large |

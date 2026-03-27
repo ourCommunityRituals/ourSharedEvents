@@ -1259,6 +1259,71 @@ DO NOT modify contracts without updating:
         min-width: 500px;
       }
     }
+
+    /* ===== Print Stylesheet ===== */
+    @media print {
+      /* Hide interactive chrome */
+      .action-bar,
+      .tab-nav,
+      .site-footer,
+      .btn-retry,
+      #loading,
+      #errorState,
+      .toggle-icon,
+      .detail-section.collapsed::after {
+        display: none !important;
+      }
+
+      /* Show all tab panels (no tabs in print) */
+      .tab-panel {
+        display: block !important;
+        break-inside: avoid;
+        margin-bottom: 1.5rem;
+      }
+
+      /* Expand all collapsed detail sections */
+      .detail-section.collapsed .section-content {
+        display: block !important;
+      }
+      .detail-section.collapsed .section-help {
+        display: block !important;
+      }
+
+      /* Clean backgrounds */
+      body { background: white; }
+      .container { max-width: 100%; padding: 0; }
+      .report-header {
+        background: #2563eb !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+
+      /* Remove shadows and borders for clean output */
+      .pane-card, .section-card, .metric-card {
+        box-shadow: none;
+        border: 1px solid #e2e8f0;
+        break-inside: avoid;
+      }
+
+      /* Ensure tables don't break across pages */
+      .data-table tr { break-inside: avoid; }
+
+      /* Add tab section labels since tab nav is hidden */
+      .tab-panel::before {
+        content: attr(data-testid);
+        display: block;
+        font-size: 1.25rem;
+        font-weight: 700;
+        color: #1e293b;
+        margin-bottom: 1rem;
+        padding-bottom: 0.5rem;
+        border-bottom: 2px solid #2563eb;
+        text-transform: capitalize;
+      }
+      #eventPanel::before { content: 'Event Analytics'; }
+      #sponsorPanel::before { content: 'Sponsor Analytics'; }
+      #customerPanel::before { content: 'Customer Analytics'; }
+    }
   </style>
 </head>
 <body>
@@ -1539,14 +1604,23 @@ DO NOT modify contracts without updating:
     // ========================================================================
 
     /**
+     * Valid tab names for hash routing
+     */
+    const VALID_TABS = ['event', 'sponsor', 'customer'];
+
+    /**
      * Switch between tabs (Event | Sponsor | Customer)
+     * Persists selection in URL hash for refresh resilience and deep linking.
      */
     function switchTab(tabName) {
+      if (!VALID_TABS.includes(tabName)) return;
+
       // Update tab button states
       document.querySelectorAll('.tab-btn').forEach(btn => {
         const isActive = btn.dataset.tab === tabName;
         btn.classList.toggle('active', isActive);
         btn.setAttribute('aria-selected', isActive ? 'true' : 'false');
+        btn.setAttribute('tabindex', isActive ? '0' : '-1');
       });
 
       // Update tab panel visibility
@@ -1558,7 +1632,56 @@ DO NOT modify contracts without updating:
       if (activePanel) {
         activePanel.classList.add('active');
       }
+
+      // Persist in URL hash (no page reload)
+      history.replaceState(null, '', '#tab=' + tabName);
     }
+
+    /**
+     * Read tab from URL hash (e.g., #tab=sponsor)
+     */
+    function getTabFromHash() {
+      const hash = window.location.hash;
+      const match = hash.match(/^#tab=(event|sponsor|customer)$/);
+      return match ? match[1] : null;
+    }
+
+    // Restore tab on back/forward navigation
+    window.addEventListener('hashchange', function () {
+      const tab = getTabFromHash();
+      if (tab) switchTab(tab);
+    });
+
+    /**
+     * Keyboard navigation for tabs (WAI-ARIA tabs pattern).
+     * Left/Right arrows move between tabs, Home/End jump to first/last.
+     */
+    document.addEventListener('keydown', function (e) {
+      const active = document.activeElement;
+      if (!active || !active.classList.contains('tab-btn')) return;
+
+      const currentTab = active.dataset.tab;
+      const idx = VALID_TABS.indexOf(currentTab);
+      if (idx === -1) return;
+
+      let nextIdx = -1;
+      if (e.key === 'ArrowRight') {
+        nextIdx = (idx + 1) % VALID_TABS.length;
+      } else if (e.key === 'ArrowLeft') {
+        nextIdx = (idx - 1 + VALID_TABS.length) % VALID_TABS.length;
+      } else if (e.key === 'Home') {
+        nextIdx = 0;
+      } else if (e.key === 'End') {
+        nextIdx = VALID_TABS.length - 1;
+      }
+
+      if (nextIdx >= 0) {
+        e.preventDefault();
+        switchTab(VALID_TABS[nextIdx]);
+        const nextBtn = document.querySelector('.tab-btn[data-tab="' + VALID_TABS[nextIdx] + '"]');
+        if (nextBtn) nextBtn.focus();
+      }
+    });
 
     /**
      * Render V2 SharedAnalytics bundle with 3-pane UI
@@ -1592,6 +1715,10 @@ DO NOT modify contracts without updating:
         document.getElementById('reportContext').textContent =
           'Comprehensive metrics for event, sponsor, and customer engagement.';
       }
+
+      // Restore tab from URL hash (deep link support)
+      const hashTab = getTabFromHash();
+      if (hashTab) switchTab(hashTab);
     }
 
     /**
