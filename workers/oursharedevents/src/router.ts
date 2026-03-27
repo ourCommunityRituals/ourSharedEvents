@@ -39,6 +39,7 @@ import {
   type FormsEnv,
 } from './handlers/forms';
 import { handleFormPage, type FormPagesEnv } from './handlers/form-pages';
+import { isFeatureEnabled, FORM_FLAGS } from './lib/feature-flags';
 
 export type RouterEnv = HealthEnv & EventsEnv & PagesEnv & AdminEnv & FormsEnv & FormPagesEnv & {
   WORKER_ENV?: string;
@@ -117,6 +118,17 @@ export async function route(request: Request, env: RouterEnv): Promise<Response>
   );
   if (publicFormsMatch && method === 'POST') {
     const [, eventId, formType] = publicFormsMatch;
+
+    // Feature flag check: is this form type enabled for this event?
+    const flagKey = `forms.${formType}`;
+    const enabled = await isFeatureEnabled(env.FORMS_DB, flagKey, eventId);
+    if (!enabled) {
+      return Response.json(
+        { ok: false, status: 403, code: 'FORM_DISABLED', error: `${formType} is not enabled for this event` },
+        { status: 403 },
+      );
+    }
+
     switch (formType) {
       case 'register':
         return handleFormRegistration(request, env, eventId);

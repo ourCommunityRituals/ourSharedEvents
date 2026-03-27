@@ -26,6 +26,7 @@ const EXPECTED_TABLES = [
   'checkin_counts',
   'form_surveys',
   'email_signups',
+  'feature_flags',
 ] as const;
 
 const EXPECTED_INDEXES = [
@@ -36,6 +37,7 @@ const EXPECTED_INDEXES = [
   'idx_form_surveys_pii',
   'idx_email_signups_event',
   'idx_email_signups_retention',
+  'idx_feature_flags_lookup',
 ] as const;
 
 const EXPECTED_COLUMN_COUNTS: Record<string, number> = {
@@ -71,7 +73,7 @@ beforeAll(async () => {
 // ── Gate F1: Table existence ─────────────────────────────────────────────────
 
 describe('Gate F1: Forms table existence', () => {
-  test('all 4 forms tables exist post-migration', async () => {
+  test('all 5 forms tables exist post-migration', async () => {
     const tables = await (env as unknown as TestEnv).FORMS_DB.prepare(
       "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' ORDER BY name",
     ).all();
@@ -152,13 +154,13 @@ describe('Gate F4: DB isolation', () => {
 // ── Gate F5: Index verification ──────────────────────────────────────────────
 
 describe('Gate F5: Forms index verification', () => {
-  test('all 7 forms indexes exist', async () => {
+  test('all 8 forms indexes exist', async () => {
     const indexes = await (env as unknown as TestEnv).FORMS_DB.prepare(
       "SELECT name FROM sqlite_master WHERE type='index' AND name LIKE 'idx_%' ORDER BY name",
     ).all();
 
     const names = indexes.results.map((r: Record<string, unknown>) => r.name);
-    expect(names.length).toBe(7);
+    expect(names.length).toBe(8);
     EXPECTED_INDEXES.forEach((idx) => expect(names).toContain(idx));
   });
 });

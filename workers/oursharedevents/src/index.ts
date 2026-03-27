@@ -45,7 +45,6 @@ const SAFE_KEY_PATTERNS = /^(rating|score|count|number|rank|order|id|uuid|type|c
  * Scrub PII from survey responses JSON using whitelist approach.
  * Keeps numeric values and keys matching safe patterns (ratings, scores, etc).
  * ALL string values for non-safe keys are replaced with "[SCRUBBED]".
- * This catches name variants (first_name, attendee_name, etc) that a blacklist would miss.
  */
 function scrubSurveyPii(responsesJson: string): string {
   try {
@@ -53,13 +52,13 @@ function scrubSurveyPii(responsesJson: string): string {
     const scrubbed: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(data)) {
       if (typeof value === 'number' || typeof value === 'boolean') {
-        scrubbed[key] = value; // Numeric/boolean data is always safe
+        scrubbed[key] = value;
       } else if (SAFE_KEY_PATTERNS.test(key)) {
-        scrubbed[key] = value; // Safe key — keep as-is
+        scrubbed[key] = value;
       } else if (typeof value === 'string') {
-        scrubbed[key] = '[SCRUBBED]'; // Unsafe string — scrub
+        scrubbed[key] = '[SCRUBBED]';
       } else {
-        scrubbed[key] = value; // Arrays, objects — keep structure
+        scrubbed[key] = value;
       }
     }
     return JSON.stringify(scrubbed);
@@ -71,60 +70,72 @@ function scrubSurveyPii(responsesJson: string): string {
 /**
  * Scheduled data lifecycle job — runs daily via cron trigger.
  *
- * 1. Delete registrations for ended events (expires_at passed)
- * 2. Scrub PII from surveys for ended events
- * 3. Delete email signups past retention window
+ * Each phase runs independently. A failure in one phase does NOT abort
+ * the others. All results are logged for SRE observability.
+ *
+ * Phase 1: Delete registrations for ended events (expires_at passed)
+ * Phase 2: Scrub PII from surveys (whitelist approach)
+ * Phase 3: Delete email signups past retention window
  */
 async function runFormDataLifecycle(env: RouterEnv): Promise<void> {
   const now = new Date().toISOString();
+  const results: Record<string, unknown> = { timestamp: now };
 
+  // ── Phase 1: Delete expired registrations ──────────────────────────────
   try {
-    // 1. Delete expired registrations
-    await env.FORMS_DB.prepare(
+    const del = await env.FORMS_DB.prepare(
       'DELETE FROM form_registrations WHERE expires_at IS NOT NULL AND expires_at < ?',
     )
       .bind(now)
       .run();
+    results.registrationsDeleted = del.meta?.changes ?? 0;
+  } catch (err) {
+    results.registrationsError = err instanceof Error ? err.message : String(err);
+    console.error(JSON.stringify({ type: 'LIFECYCLE_PHASE_ERROR', phase: 'registrations', error: results.registrationsError, timestamp: now }));
+  }
 
-    // 2. Scrub PII from surveys: NULL out responses that could contain PII,
-    //    keep only the structure. Then flip the flag so admin can read them.
-    //    responses_json is preserved (behavioral data) but we strip any
-    //    free-text keys that commonly contain PII (name, email, comment, phone).
-    //    The safest approach: replace responses_json with a scrubbed version.
+  // ── Phase 2: Scrub PII from surveys ────────────────────────────────────
+  try {
     const unscrubbed = await env.FORMS_DB.prepare(
       'SELECT id, responses_json FROM form_surveys WHERE pii_scrubbed = 0 AND created_at < ?',
     )
       .bind(now)
       .all();
 
+    let scrubbed = 0;
+    let scrubErrors = 0;
     for (const row of unscrubbed.results ?? []) {
-      const scrubbed = scrubSurveyPii(row.responses_json as string);
-      await env.FORMS_DB.prepare(
-        'UPDATE form_surveys SET responses_json = ?, pii_scrubbed = 1 WHERE id = ?',
-      )
-        .bind(scrubbed, row.id as string)
-        .run();
+      try {
+        const cleaned = scrubSurveyPii(row.responses_json as string);
+        await env.FORMS_DB.prepare(
+          'UPDATE form_surveys SET responses_json = ?, pii_scrubbed = 1 WHERE id = ?',
+        )
+          .bind(cleaned, row.id as string)
+          .run();
+        scrubbed++;
+      } catch {
+        scrubErrors++;
+      }
     }
+    results.surveysScrubbed = scrubbed;
+    results.surveysScrubErrors = scrubErrors;
+  } catch (err) {
+    results.surveysError = err instanceof Error ? err.message : String(err);
+    console.error(JSON.stringify({ type: 'LIFECYCLE_PHASE_ERROR', phase: 'surveys', error: results.surveysError, timestamp: now }));
+  }
 
-    // 3. Delete email signups past retention window
-    await env.FORMS_DB.prepare(
+  // ── Phase 3: Delete expired email signups ──────────────────────────────
+  try {
+    const del = await env.FORMS_DB.prepare(
       'DELETE FROM email_signups WHERE retention_expires_at < ?',
     )
       .bind(now)
       .run();
-
-    console.log(JSON.stringify({
-      type: 'LIFECYCLE_COMPLETE',
-      timestamp: now,
-      registrationsDeleted: true,
-      surveysScrubbed: unscrubbed.results.length,
-      emailSignupsDeleted: true,
-    }));
+    results.emailSignupsDeleted = del.meta?.changes ?? 0;
   } catch (err) {
-    console.error(JSON.stringify({
-      type: 'LIFECYCLE_ERROR',
-      error: err instanceof Error ? err.message : String(err),
-      timestamp: now,
-    }));
+    results.emailSignupsError = err instanceof Error ? err.message : String(err);
+    console.error(JSON.stringify({ type: 'LIFECYCLE_PHASE_ERROR', phase: 'email_signups', error: results.emailSignupsError, timestamp: now }));
   }
+
+  console.log(JSON.stringify({ type: 'LIFECYCLE_COMPLETE', ...results }));
 }

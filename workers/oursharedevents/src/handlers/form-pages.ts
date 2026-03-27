@@ -13,6 +13,9 @@
  *
  * Lead FE: Forms post to /api/v2/events/:id/forms/:type via fetch().
  * No page reload. Success state shown inline.
+ *
+ * Sr Design FE: All interactive elements have data-testid attributes
+ * for stable Playwright automation. These IDs survive CSS/layout changes.
  */
 
 export interface FormPagesEnv {
@@ -66,7 +69,7 @@ const FORM_CSS = `
 const FORM_JS_SUBMIT = `
   async function submitForm(eventId, formType, data) {
     const errEl = document.getElementById('error-msg');
-    const btn = document.querySelector('button[type="submit"]');
+    const btn = document.querySelector('[data-testid$="-submit"]');
     if (errEl) errEl.style.display = 'none';
     if (btn) btn.disabled = true;
     try {
@@ -86,23 +89,23 @@ const FORM_JS_SUBMIT = `
   }
   function showSuccess(msg) {
     document.getElementById('form-area').innerHTML =
-      '<div class="success"><div class="icon">&#10003;</div><h2>' + msg + '</h2><p>You can close this page.</p></div>';
+      '<div class="success" data-testid="form-success"><div class="icon">&#10003;</div><h2>' + msg + '</h2><p>You can close this page.</p></div>';
   }
 `;
 
 // ── Registration form ────────────────────────────────────────────────────────
 
-function registrationForm(eventId: string, eventName: string): string {
+function registrationForm(eventId: string): string {
   return `
-    <div class="form-card" id="form-area">
+    <div class="form-card" id="form-area" data-testid="form-register">
       <h2>Register for this event</h2>
-      <p id="error-msg" class="error-msg"></p>
-      <form onsubmit="handleRegister(event)">
+      <p id="error-msg" class="error-msg" data-testid="form-error"></p>
+      <form onsubmit="handleRegister(event)" data-testid="register-form">
         <label for="name">Your name</label>
-        <input type="text" id="name" placeholder="Jane Smith" maxlength="200" required />
+        <input type="text" id="name" data-testid="register-name-input" placeholder="Jane Smith" maxlength="200" required />
         <label for="email">Email (optional)</label>
-        <input type="email" id="email" placeholder="jane@example.com" maxlength="320" />
-        <button type="submit">Register</button>
+        <input type="email" id="email" data-testid="register-email-input" placeholder="jane@example.com" maxlength="320" />
+        <button type="submit" data-testid="register-submit">Register</button>
       </form>
     </div>
     <script>
@@ -120,13 +123,13 @@ function registrationForm(eventId: string, eventName: string): string {
 
 // ── Check-in form (tap counter) ──────────────────────────────────────────────
 
-function checkinForm(eventId: string, eventName: string): string {
+function checkinForm(eventId: string): string {
   return `
-    <div class="checkin-tap" id="form-area">
+    <div class="checkin-tap" id="form-area" data-testid="form-checkin">
       <h2>Check In</h2>
-      <p id="error-msg" class="error-msg"></p>
-      <button type="button" id="checkin-btn" ontouchend="handleCheckin(event)" onclick="handleCheckin(event)">Tap to<br/>Check In</button>
-      <div class="count" id="count"></div>
+      <p id="error-msg" class="error-msg" data-testid="form-error"></p>
+      <button type="button" id="checkin-btn" data-testid="checkin-submit" ontouchend="handleCheckin(event)" onclick="handleCheckin(event)">Tap to<br/>Check In</button>
+      <div class="count" id="count" data-testid="checkin-count"></div>
     </div>
     <script>
       ${FORM_JS_SUBMIT}
@@ -153,23 +156,23 @@ function checkinForm(eventId: string, eventName: string): string {
 
 // ── Survey form ──────────────────────────────────────────────────────────────
 
-function surveyForm(eventId: string, eventName: string): string {
+function surveyForm(eventId: string): string {
   return `
-    <div class="form-card" id="form-area">
+    <div class="form-card" id="form-area" data-testid="form-survey">
       <h2>How was the event?</h2>
-      <p id="error-msg" class="error-msg"></p>
-      <form onsubmit="handleSurvey(event)">
+      <p id="error-msg" class="error-msg" data-testid="form-error"></p>
+      <form onsubmit="handleSurvey(event)" data-testid="survey-form">
         <label>Overall rating</label>
-        <div class="rating-row" id="rating-overall">
-          <button type="button" onclick="setRating('overall',1)">1</button>
-          <button type="button" onclick="setRating('overall',2)">2</button>
-          <button type="button" onclick="setRating('overall',3)">3</button>
-          <button type="button" onclick="setRating('overall',4)">4</button>
-          <button type="button" onclick="setRating('overall',5)">5</button>
+        <div class="rating-row" id="rating-overall" data-testid="survey-rating-overall">
+          <button type="button" data-testid="survey-rating-1" onclick="setRating('overall',1)">1</button>
+          <button type="button" data-testid="survey-rating-2" onclick="setRating('overall',2)">2</button>
+          <button type="button" data-testid="survey-rating-3" onclick="setRating('overall',3)">3</button>
+          <button type="button" data-testid="survey-rating-4" onclick="setRating('overall',4)">4</button>
+          <button type="button" data-testid="survey-rating-5" onclick="setRating('overall',5)">5</button>
         </div>
         <label for="comments">Comments (optional)</label>
-        <textarea id="comments" placeholder="Tell us what you thought..." maxlength="1000"></textarea>
-        <button type="submit">Submit Feedback</button>
+        <textarea id="comments" data-testid="survey-comments-input" placeholder="Tell us what you thought..." maxlength="1000"></textarea>
+        <button type="submit" data-testid="survey-submit">Submit Feedback</button>
       </form>
     </div>
     <script>
@@ -194,16 +197,16 @@ function surveyForm(eventId: string, eventName: string): string {
 
 // ── Email signup form ────────────────────────────────────────────────────────
 
-function emailSignupForm(eventId: string, eventName: string): string {
+function emailSignupForm(eventId: string): string {
   return `
-    <div class="form-card" id="form-area">
+    <div class="form-card" id="form-area" data-testid="form-email">
       <h2>Stay in the loop</h2>
       <p style="color:#868e96;font-size:.9rem;margin-bottom:1rem;">Get notified about future events. We'll never share your email.</p>
-      <p id="error-msg" class="error-msg"></p>
-      <form onsubmit="handleEmail(event)">
+      <p id="error-msg" class="error-msg" data-testid="form-error"></p>
+      <form onsubmit="handleEmail(event)" data-testid="email-form">
         <label for="email">Your email</label>
-        <input type="email" id="email" placeholder="you@example.com" maxlength="320" required />
-        <button type="submit">Sign me up</button>
+        <input type="email" id="email" data-testid="email-email-input" placeholder="you@example.com" maxlength="320" required />
+        <button type="submit" data-testid="email-submit">Sign me up</button>
       </form>
     </div>
     <script>
@@ -223,10 +226,10 @@ function emailSignupForm(eventId: string, eventName: string): string {
 function formPage(eventId: string, eventName: string, formType: string): string {
   let formHtml: string;
   switch (formType) {
-    case 'checkin': formHtml = checkinForm(eventId, eventName); break;
-    case 'survey': formHtml = surveyForm(eventId, eventName); break;
-    case 'email': formHtml = emailSignupForm(eventId, eventName); break;
-    default: formHtml = registrationForm(eventId, eventName); break;
+    case 'checkin': formHtml = checkinForm(eventId); break;
+    case 'survey': formHtml = surveyForm(eventId); break;
+    case 'email': formHtml = emailSignupForm(eventId); break;
+    default: formHtml = registrationForm(eventId); break;
   }
 
   return `<!DOCTYPE html>
@@ -238,11 +241,11 @@ function formPage(eventId: string, eventName: string, formType: string): string 
   <style>${FORM_CSS}</style>
 </head>
 <body>
-  <header>
+  <header data-testid="form-header">
     <h1>OurSharedEvents</h1>
-    <div class="event-name">${eventName}</div>
+    <div class="event-name" data-testid="form-event-name">${eventName}</div>
   </header>
-  <main>${formHtml}</main>
+  <main data-testid="form-main">${formHtml}</main>
 </body>
 </html>`;
 }
