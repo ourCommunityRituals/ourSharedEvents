@@ -41,17 +41,17 @@ beforeAll(async () => {
 // ── QA-1: Idempotency ────────────────────────────────────────────────────────
 
 describe('QA-1: Migration idempotency', () => {
-  test('re-running all 7 migrations produces zero errors and zero duplicate tables', async () => {
+  test('re-running all 8 migrations produces zero errors and zero duplicate tables', async () => {
     // Run migrations a second time — CREATE IF NOT EXISTS should be safe
     await expect(applyMigrations()).resolves.not.toThrow();
 
-    // Verify still exactly 7 application tables (no duplicates)
+    // Verify still exactly 8 application tables (no duplicates)
     const tables = await env.DB.prepare(
       "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' ORDER BY name"
     ).all();
 
     const names = tables.results.map((r: Record<string, unknown>) => r.name);
-    expect(names).toHaveLength(7);
+    expect(names).toHaveLength(8);
   });
 
   test('indexes remain at exactly 11 after idempotent re-run', async () => {
