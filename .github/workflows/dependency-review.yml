@@ -1,0 +1,83 @@
+# Dependency Review — Block PRs with Known Vulnerabilities
+#
+# Purpose: Catches vulnerable, deprecated, or license-incompatible dependencies
+# BEFORE they merge. Complements npm audit in Stage-1 by providing PR-level
+# diff-aware dependency analysis with inline annotations.
+#
+# Unlike npm audit (which checks the full tree), this only flags NEW vulnerabilities
+# introduced by the PR — reducing noise and catching regressions at the gate.
+#
+# Prerequisites:
+#   - Dependency Graph must be enabled on the repository
+#   - Settings > Security > Code security and analysis > Dependency graph
+#
+# @see .github/workflows/stage1.yml - Stage-1 npm audit (full tree scan)
+# @see .github/workflows/security-scan.yml - CodeQL + dependency audit
+
+name: Dependency Review
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  dependency-review:
+    name: "Dependency Review"
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check dependency graph availability
+        id: check
+        run: |
+          echo "=============================================="
+          echo "DEPENDENCY REVIEW PRE-CHECK"
+          echo "=============================================="
+          echo ""
+          echo "This action requires Dependency Graph to be enabled."
+          echo "If this step passes but the next fails with:"
+          echo "  'Dependency review is not supported on this repository'"
+          echo ""
+          echo "Enable it at:"
+          echo "  Settings > Security > Code security and analysis > Dependency graph"
+          echo "=============================================="
+
+      - uses: actions/dependency-review-action@v4
+        # Graceful degradation: if Dependency Graph is not enabled, this errors
+        # but should not block PRs. Stage-1 npm audit provides the backstop.
+        # Once Dependency Graph is enabled, remove continue-on-error to make this a hard gate.
+        continue-on-error: true
+        id: dep-review
+        with:
+          # Block on high/critical vulnerabilities (matches Stage-1 npm audit threshold)
+          fail-on-severity: high
+          comment-summary-in-pr: always
+          # Deny licenses incompatible with the project
+          deny-licenses: GPL-2.0-only, GPL-3.0-only, AGPL-3.0-only
+
+      - name: Dependency review summary
+        if: always()
+        run: |
+          echo "## Dependency Review" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ steps.dep-review.outcome }}" == "success" ]; then
+            echo "### ✅ PASSED" >> $GITHUB_STEP_SUMMARY
+            echo "No high/critical vulnerabilities or prohibited licenses found." >> $GITHUB_STEP_SUMMARY
+          elif [ "${{ steps.dep-review.outcome }}" == "failure" ]; then
+            echo "### ⚠️ ISSUE DETECTED" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Dependency review flagged an issue. Check the action output above." >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "If the error is 'Dependency review is not supported':" >> $GITHUB_STEP_SUMMARY
+            echo "1. Go to **Settings > Security > Code security and analysis**" >> $GITHUB_STEP_SUMMARY
+            echo "2. Enable **Dependency graph**" >> $GITHUB_STEP_SUMMARY
+            echo "3. Re-run this workflow" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Note:** Stage-1 npm audit provides the authoritative vulnerability gate." >> $GITHUB_STEP_SUMMARY
+          fi

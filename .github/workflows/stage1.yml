@@ -546,6 +546,9 @@ jobs:
     name: "S1·04 🧪 Unit Tests"
     runs-on: ubuntu-latest
     needs: [lint]  # Story 2.5: Fail-fast - unit tests skip if lint fails
+    permissions:
+      contents: read
+      checks: write  # Required for dorny/test-reporter PR annotations
 
     steps:
       - name: Checkout code
@@ -574,7 +577,26 @@ jobs:
           echo "QUALITY GATE: UNIT TESTS WITH COVERAGE"
           echo "Story 2.3: Coverage threshold >= 80%"
           echo "=================================================="
-          npm run test:unit -- --coverage --coverageThreshold='{"global":{"branches":80,"functions":80,"lines":80,"statements":80}}'
+          npm run test:unit -- --coverage --coverageThreshold='{"global":{"branches":80,"functions":80,"lines":80,"statements":80}}' --ci
+
+      - name: Re-run unit tests for JUnit report
+        if: always()
+        id: junit-report
+        continue-on-error: true  # JUnit generation must never mask the real test result
+        run: |
+          mkdir -p .test-results
+          npm run test:unit -- --ci --reporters=jest-junit 2>/dev/null || true
+        env:
+          JEST_JUNIT_OUTPUT_DIR: .test-results
+          JEST_JUNIT_OUTPUT_NAME: unit-tests-junit.xml
+
+      - name: Generate JUnit fallback if missing
+        if: always()
+        run: |
+          mkdir -p .test-results
+          if [ ! -f .test-results/unit-tests-junit.xml ]; then
+            echo '<?xml version="1.0" encoding="UTF-8"?><testsuites><testsuite name="unit-tests" tests="0" failures="0" errors="1"><testcase name="jest-junit-unavailable"><failure>jest-junit reporter did not produce output</failure></testcase></testsuite></testsuites>' > .test-results/unit-tests-junit.xml
+          fi
 
       - name: Run security-specific tests
         run: |
@@ -593,6 +615,25 @@ jobs:
             coverage/
             coverage/lcov-report/
           retention-days: 7
+
+      - name: Upload unit test JUnit results
+        if: always()
+        uses: actions/upload-artifact@v4
+        continue-on-error: true
+        with:
+          name: unit-tests-junit
+          path: .test-results/unit-tests-junit.xml
+          retention-days: 7
+
+      - name: Report unit test results in PR
+        if: always() && github.event_name == 'pull_request'
+        uses: dorny/test-reporter@v1
+        continue-on-error: true
+        with:
+          name: "Unit Test Results"
+          path: .test-results/unit-tests-junit.xml
+          reporter: jest-junit
+          fail-on-error: false
 
       - name: Create unit tests summary
         if: always()

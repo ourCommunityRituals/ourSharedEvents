@@ -88,6 +88,12 @@ jobs:
         # Learn more about CodeQL language support at https://aka.ms/codeql-docs/language-support
 
     steps:
+    - name: Harden runner
+      uses: step-security/harden-runner@v2
+      continue-on-error: true  # Must not block CodeQL if harden-runner itself fails
+      with:
+        egress-policy: audit
+
     - name: Checkout repository
       uses: actions/checkout@v4
 
