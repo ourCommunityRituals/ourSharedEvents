@@ -22,6 +22,17 @@ export interface FormsEnv extends FormsDbEnv {
   FORMS_ENCRYPTION_KEY?: string;
 }
 
+// ─── Constants ──────────────────────────────────────────────────────────────────
+
+/** Maximum request body size: 16 KB — forms are small payloads */
+const MAX_BODY_BYTES = 16 * 1024;
+
+/** Default registration expiry: 90 days from submission */
+const REGISTRATION_TTL_MS = 90 * 24 * 60 * 60 * 1000;
+
+/** Email signup retention: 30 days from submission */
+const EMAIL_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
+
 // ─── Helpers ────────────────────────────────────────────────────────────────────
 
 function requestId(): string {
@@ -40,11 +51,24 @@ function errorResponse(code: string, message: string, status: number): Response 
 }
 
 async function parseJsonBody(request: Request): Promise<Record<string, unknown> | null> {
+  // Enforce body size limit — reject before parsing
+  const contentLength = request.headers.get('Content-Length');
+  if (contentLength && parseInt(contentLength, 10) > MAX_BODY_BYTES) {
+    return null;
+  }
+
   try {
-    return (await request.json()) as Record<string, unknown>;
+    const text = await request.text();
+    if (text.length > MAX_BODY_BYTES) return null;
+    return JSON.parse(text) as Record<string, unknown>;
   } catch {
     return null;
   }
+}
+
+/** Validate event_id format: non-empty, reasonable length, no injection chars */
+function isValidEventId(id: string): boolean {
+  return id.length > 0 && id.length <= 128 && /^[a-zA-Z0-9_\-]+$/.test(id);
 }
 
 // ─── Public: Registration ───────────────────────────────────────────────────────
@@ -54,23 +78,27 @@ export async function handleFormRegistration(
   env: FormsEnv,
   eventId: string,
 ): Promise<Response> {
-  const body = await parseJsonBody(request);
-  if (!body) return errorResponse('INVALID_JSON', 'Request body must be valid JSON', 400);
+  if (!isValidEventId(eventId)) return errorResponse('INVALID_EVENT_ID', 'Invalid event ID format', 400);
 
-  const name = typeof body.name === 'string' ? body.name.trim() : undefined;
-  const email = typeof body.email === 'string' ? body.email.trim() : undefined;
-  const sourcePlacementId = typeof body.sourcePlacementId === 'string' ? body.sourcePlacementId : undefined;
-  const expiresAt = typeof body.expiresAt === 'string' ? body.expiresAt : undefined;
+  const body = await parseJsonBody(request);
+  if (!body) return errorResponse('INVALID_BODY', 'Request body must be valid JSON under 16KB', 400);
+
+  const name = typeof body.name === 'string' ? body.name.trim().slice(0, 200) : undefined;
+  const email = typeof body.email === 'string' ? body.email.trim().slice(0, 320) : undefined;
+  const sourcePlacementId = typeof body.sourcePlacementId === 'string' ? body.sourcePlacementId.slice(0, 128) : undefined;
 
   const emailHash = email ? await hashEmail(email) : undefined;
   const bucket = bucketTimestamp();
   const id = generateId();
 
+  // Server-computed expiry — client NEVER controls when data is destroyed
+  const expiresAt = new Date(Date.now() + REGISTRATION_TTL_MS).toISOString();
+
   await env.FORMS_DB.prepare(
     `INSERT INTO form_registrations (id, event_id, source_placement_id, attendee_name, attendee_email_hash, registration_bucket, status, expires_at)
      VALUES (?, ?, ?, ?, ?, ?, 'confirmed', ?)`,
   )
-    .bind(id, eventId, sourcePlacementId ?? null, name ?? null, emailHash ?? null, bucket, expiresAt ?? null)
+    .bind(id, eventId, sourcePlacementId ?? null, name ?? null, emailHash ?? null, bucket, expiresAt)
     .run();
 
   return jsonResponse({ ok: true, id, registrationBucket: bucket });
@@ -83,6 +111,8 @@ export async function handleFormCheckin(
   env: FormsEnv,
   eventId: string,
 ): Promise<Response> {
+  if (!isValidEventId(eventId)) return errorResponse('INVALID_EVENT_ID', 'Invalid event ID format', 400);
+
   const id = generateId();
 
   await env.FORMS_DB.prepare(
@@ -109,8 +139,10 @@ export async function handleFormSurvey(
   env: FormsEnv,
   eventId: string,
 ): Promise<Response> {
+  if (!isValidEventId(eventId)) return errorResponse('INVALID_EVENT_ID', 'Invalid event ID format', 400);
+
   const body = await parseJsonBody(request);
-  if (!body) return errorResponse('INVALID_JSON', 'Request body must be valid JSON', 400);
+  if (!body) return errorResponse('INVALID_BODY', 'Request body must be valid JSON under 16KB', 400);
 
   const responses = body.responses;
   if (!responses || typeof responses !== 'object') {
@@ -137,10 +169,12 @@ export async function handleFormEmailSignup(
   env: FormsEnv,
   eventId: string,
 ): Promise<Response> {
-  const body = await parseJsonBody(request);
-  if (!body) return errorResponse('INVALID_JSON', 'Request body must be valid JSON', 400);
+  if (!isValidEventId(eventId)) return errorResponse('INVALID_EVENT_ID', 'Invalid event ID format', 400);
 
-  const email = typeof body.email === 'string' ? body.email.trim() : '';
+  const body = await parseJsonBody(request);
+  if (!body) return errorResponse('INVALID_BODY', 'Request body must be valid JSON under 16KB', 400);
+
+  const email = typeof body.email === 'string' ? body.email.trim().slice(0, 320) : '';
   if (!email) return errorResponse('MISSING_FIELD', 'Missing required field: email', 400);
 
   const encryptionKey = env.FORMS_ENCRYPTION_KEY;
@@ -165,11 +199,8 @@ export async function handleFormEmailSignup(
   const id = generateId();
   const bucket = bucketTimestamp();
 
-  // Default retention: 30 days from now (caller can override via expiresAt)
-  const retentionExpiresAt =
-    typeof body.retentionExpiresAt === 'string'
-      ? body.retentionExpiresAt
-      : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+  // Server-computed retention — client NEVER controls retention window
+  const retentionExpiresAt = new Date(Date.now() + EMAIL_RETENTION_MS).toISOString();
 
   await env.FORMS_DB.prepare(
     `INSERT INTO email_signups (id, event_id, email_hash, email_encrypted, signup_bucket, retention_expires_at)
