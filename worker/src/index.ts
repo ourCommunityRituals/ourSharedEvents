@@ -465,3 +465,62 @@ export {
   buildAssetStateResponse,
   createNonRenderableResponse,
 } from './domain/assetState';
+
+// Google Cloud Platform Integrations
+export {
+  // Cloud Configuration
+  GCP_PROJECT_ID,
+  GCP_DEFAULT_REGION,
+  GCP_API_URLS,
+  GCP_SCOPES,
+  getProjectId,
+  getRegion,
+  getVertexAiBaseUrl,
+  type CloudEnv,
+
+  // BigQuery - Data Backup
+  bigQueryInsertRows,
+  bigQueryRunQuery,
+  backupEvents,
+  backupSharedReport,
+  isBigQueryConfigured,
+  BigQueryError,
+  BIGQUERY_ERROR_CODES,
+  BACKUP_TABLES,
+  type BigQueryEnv,
+  type BigQueryErrorCode,
+  type BigQueryInsertRow,
+  type BigQueryInsertResult,
+  type BigQueryQueryResult,
+
+  // Google Maps - SharedReports & OurEventRings
+  geocodeAddress,
+  getPlaceDetails,
+  buildStaticMapUrl,
+  buildMapsLink,
+  getReportLocationData,
+  isMapsConfigured,
+  MapsError,
+  MAPS_ERROR_CODES,
+  type MapsEnv,
+  type MapsErrorCode,
+  type LatLng,
+  type GeocodeResult,
+  type PlaceDetails,
+  type StaticMapOptions,
+  type ReportLocationData,
+
+  // Vertex AI - Chat Bot Creation
+  generateText,
+  chat,
+  eventBotRespond,
+  isVertexAiConfigured,
+  VertexAiError,
+  VERTEX_AI_ERROR_CODES,
+  type VertexAiEnv,
+  type VertexAiErrorCode,
+  type ChatMessage,
+  type GenerationConfig,
+  type GenerationResult,
+  type EventBotContext,
+} from './cloud';

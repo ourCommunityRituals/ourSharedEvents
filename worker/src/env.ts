@@ -8,6 +8,7 @@
  */
 
 import { GoogleServiceAccountEnv } from './google';
+import { type CloudEnv } from './cloud/config';
 
 // =============================================================================
 // Environment Types
@@ -18,7 +19,7 @@ import { GoogleServiceAccountEnv } from './google';
  *
  * Combines all environment variables needed by the worker.
  */
-export interface WorkerEnv extends GoogleServiceAccountEnv {
+export interface WorkerEnv extends GoogleServiceAccountEnv, CloudEnv {
   // Worker identification
   /** Worker environment (development, staging, production) */
   WORKER_ENV?: string;
