@@ -28,6 +28,14 @@ export async function route(request: Request, env: RouterEnv): Promise<Response>
   const url = new URL(request.url);
   const { pathname, method } = { pathname: url.pathname, method: request.method };
 
+  // ── HTTPS redirect ──────────────────────────────────────────────────────
+  if (url.protocol === 'http:') {
+    url.protocol = 'https:';
+    return Response.redirect(url.toString(), 301);
+  }
+
+  // ── HSTS header helper (applied to all responses below) ─────────────────
+
   // ── CORS preflight ────────────────────────────────────────────────────────
   if (method === 'OPTIONS') {
     const origin = corsOrigin(request);
