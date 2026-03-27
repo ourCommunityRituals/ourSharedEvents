@@ -149,7 +149,8 @@ jobs:
                    migrations/0004_create_scans.sql \
                    migrations/0005_create_checkins_registrations.sql \
                    migrations/0006_create_scan_aggregates.sql \
-                   migrations/0007_create_indexes.sql; do
+                   migrations/0007_create_indexes.sql \
+                   migrations/0008_create_subscribers.sql; do
             echo "Applying $f to staging..."
             npx wrangler d1 execute ocr-db-staging --env staging --file "$f" --remote
             echo "✓ $f applied"
@@ -162,13 +163,13 @@ jobs:
         working-directory: ${{ env.WORKER_DIR }}
         run: |
           RESULT=$(npx wrangler d1 execute ocr-db-staging --env staging --remote \
-            --command "SELECT COUNT(*) as cnt FROM sqlite_master WHERE type='table' AND name IN ('events','sponsors','poster_deployments','scans','checkins','registrations','scan_aggregates')")
+            --command "SELECT COUNT(*) as cnt FROM sqlite_master WHERE type='table' AND name IN ('events','sponsors','poster_deployments','scans','checkins','registrations','scan_aggregates','subscribers')")
           echo "$RESULT"
-          if ! echo "$RESULT" | grep -q "7"; then
-            echo "::error::D1 staging table verification failed — expected 7 tables"
+          if ! echo "$RESULT" | grep -q "8"; then
+            echo "::error::D1 staging table verification failed — expected 8 tables"
             exit 1
           fi
-          echo "✓ All 7 tables verified in staging D1"
+          echo "✓ All 8 tables verified in staging D1"
 
       - name: Deploy to staging
         env:
@@ -341,7 +342,8 @@ jobs:
                    migrations/0004_create_scans.sql \
                    migrations/0005_create_checkins_registrations.sql \
                    migrations/0006_create_scan_aggregates.sql \
-                   migrations/0007_create_indexes.sql; do
+                   migrations/0007_create_indexes.sql \
+                   migrations/0008_create_subscribers.sql; do
             echo "Applying $f to production..."
             npx wrangler d1 execute ocr-db-production --env production --file "$f" --remote
             echo "✓ $f applied"
@@ -354,13 +356,13 @@ jobs:
         working-directory: ${{ env.WORKER_DIR }}
         run: |
           RESULT=$(npx wrangler d1 execute ocr-db-production --env production --remote \
-            --command "SELECT COUNT(*) as cnt FROM sqlite_master WHERE type='table' AND name IN ('events','sponsors','poster_deployments','scans','checkins','registrations','scan_aggregates')")
+            --command "SELECT COUNT(*) as cnt FROM sqlite_master WHERE type='table' AND name IN ('events','sponsors','poster_deployments','scans','checkins','registrations','scan_aggregates','subscribers')")
           echo "$RESULT"
-          if ! echo "$RESULT" | grep -q "7"; then
-            echo "::error::D1 production table verification failed — expected 7 tables"
+          if ! echo "$RESULT" | grep -q "8"; then
+            echo "::error::D1 production table verification failed — expected 8 tables"
             exit 1
           fi
-          echo "✓ All 7 tables verified in production D1"
+          echo "✓ All 8 tables verified in production D1"
 
       - name: Deploy to production
         env:

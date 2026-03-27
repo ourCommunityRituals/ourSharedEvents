@@ -17,24 +17,12 @@ import { handleHealth, type HealthEnv } from './handlers/health';
 import { handleListEvents, handleGetEvent, handleAdminListEvents, type EventsEnv } from './handlers/events';
 import { handlePublicPage, handleAdminPage, handleLandingPage, handleSubscribe, type PagesEnv } from './handlers/pages';
 import { requireAdmin, type AdminEnv } from './auth/admin';
+import { corsOrigin } from './lib/cors';
 
 export type RouterEnv = HealthEnv & EventsEnv & PagesEnv & AdminEnv & {
   WORKER_ENV?: string;
   WORKER_BUILD_VERSION?: string;
 };
-
-/** Origins allowed for CORS. Staging included for local dev and preview. */
-const ALLOWED_ORIGINS = new Set([
-  'https://oursharedevents.com',
-  'https://www.oursharedevents.com',
-  'https://stg.oursharedevents.com',
-]);
-
-function corsOrigin(request: Request): string | null {
-  const origin = request.headers.get('Origin');
-  if (origin && ALLOWED_ORIGINS.has(origin)) return origin;
-  return null;
-}
 
 export async function route(request: Request, env: RouterEnv): Promise<Response> {
   const url = new URL(request.url);
@@ -85,8 +73,9 @@ export async function route(request: Request, env: RouterEnv): Promise<Response>
   }
 
   // ── Subscribe (email capture) ─────────────────────────────────────────────
-  if (pathname === '/subscribe' && method === 'POST') {
-    return handleSubscribe(request);
+  if (pathname === '/subscribe') {
+    if (method === 'POST') return handleSubscribe(request, env);
+    return Response.json({ ok: false, error: 'Method not allowed' }, { status: 405, headers: { 'Allow': 'POST' } });
   }
 
   // ── Landing page ──────────────────────────────────────────────────────────
@@ -100,5 +89,5 @@ export async function route(request: Request, env: RouterEnv): Promise<Response>
   }
 
   // ── 404 ────────────────────────────────────────────────────────────────────
-  return Response.json({ ok: false, status: 404, error: 'Not found', path: pathname }, { status: 404 });
+  return Response.json({ ok: false, status: 404, error: 'Not found' }, { status: 404 });
 }

@@ -10,6 +10,7 @@
 
 export interface PagesEnv {
   WORKER_ENV?: string;
+  DB?: D1Database;
 }
 
 // ─── Public page ────────────────────────────────────────────────────────────────
@@ -290,19 +291,39 @@ const LANDING_HTML = `<!DOCTYPE html>
 
 // ─── Handlers ───────────────────────────────────────────────────────────────────
 
-/** Standard security headers applied to every HTML response. */
-const SECURITY_HEADERS: Record<string, string> = {
-  'Content-Type': 'text/html; charset=utf-8',
-  'X-Content-Type-Options': 'nosniff',
-  'X-Frame-Options': 'SAMEORIGIN',
-  'Referrer-Policy': 'strict-origin-when-cross-origin',
-  'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self'; frame-ancestors 'self'",
-};
+/** Generate a cryptographic nonce for CSP script-src. */
+function generateNonce(): string {
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  // Base64-encode using btoa on a binary string
+  let binary = '';
+  for (const b of bytes) binary += String.fromCharCode(b);
+  return btoa(binary);
+}
 
-function html(content: string, status = 200, extraHeaders?: Record<string, string>): Response {
-  return new Response(content, {
+/** Build security headers with a per-request nonce. */
+function securityHeaders(nonce: string): Record<string, string> {
+  return {
+    'Content-Type': 'text/html; charset=utf-8',
+    'X-Content-Type-Options': 'nosniff',
+    'X-Frame-Options': 'SAMEORIGIN',
+    'Referrer-Policy': 'strict-origin-when-cross-origin',
+    'Content-Security-Policy': `default-src 'self'; script-src 'self' 'nonce-${nonce}'; style-src 'self' 'unsafe-inline'; connect-src 'self'; frame-ancestors 'self'`,
+  };
+}
+
+/**
+ * Serve an HTML page with nonce-based CSP.
+ * Replaces `<script` with `<script nonce="..."` so inline scripts are allowed
+ * only for this specific response.
+ */
+function html(content: string, status = 200): Response {
+  const nonce = generateNonce();
+  // Inject nonce into all <script> tags (handles <script>, <script type="module">, etc.)
+  const nonced = content.replace(/<script(?=[\s>])/g, `<script nonce="${nonce}"`);
+  return new Response(nonced, {
     status,
-    headers: { ...SECURITY_HEADERS, ...extraHeaders },
+    headers: securityHeaders(nonce),
   });
 }
 
@@ -321,7 +342,10 @@ export function handleAdminPage(_env: PagesEnv): Response {
 
 const RATE_WINDOW_MS = 60_000; // 1 minute
 const RATE_MAX_REQUESTS = 10;  // max 10 subscribe attempts per IP per minute
+const RATE_MAX_BUCKETS = 10_000;
+const RATE_EVICT_BATCH = 200;  // evict up to 200 stale entries per request
 const rateBuckets = new Map<string, number[]>();
+let evictCursor: string | undefined;
 
 function isRateLimited(ip: string): boolean {
   const now = Date.now();
@@ -336,11 +360,25 @@ function isRateLimited(ip: string): boolean {
   recent.push(now);
   rateBuckets.set(ip, recent);
 
-  // Evict stale IPs periodically to prevent unbounded growth
-  if (rateBuckets.size > 10_000) {
+  // Incremental eviction: scan a small batch per request to avoid blocking
+  if (rateBuckets.size > RATE_MAX_BUCKETS) {
+    let evicted = 0;
+    let started = false;
     for (const [key, ts] of rateBuckets) {
-      if (ts.every(t => now - t >= RATE_WINDOW_MS)) rateBuckets.delete(key);
+      if (evictCursor && !started) {
+        if (key === evictCursor) started = true;
+        else continue;
+      }
+      const active = ts.filter(t => now - t < RATE_WINDOW_MS);
+      if (active.length === 0) {
+        rateBuckets.delete(key);
+      } else {
+        rateBuckets.set(key, active); // compact timestamps
+      }
+      evicted++;
+      if (evicted >= RATE_EVICT_BATCH) { evictCursor = key; return false; }
     }
+    evictCursor = undefined; // wrapped around
   }
 
   return false;
@@ -349,9 +387,9 @@ function isRateLimited(ip: string): boolean {
 /** Max request body size for subscribe endpoint (2 KB). */
 const SUBSCRIBE_MAX_BODY = 2048;
 
-export async function handleSubscribe(request: Request): Promise<Response> {
-  // Rate limit by client IP
-  const clientIp = request.headers.get('CF-Connecting-IP') ?? request.headers.get('X-Forwarded-For') ?? 'unknown';
+export async function handleSubscribe(request: Request, env: PagesEnv): Promise<Response> {
+  // Rate limit by Cloudflare's trusted client IP header only
+  const clientIp = request.headers.get('CF-Connecting-IP') ?? 'unknown';
   if (isRateLimited(clientIp)) {
     return Response.json(
       { success: false, error: 'Too many requests. Please try again later.' },
@@ -359,9 +397,12 @@ export async function handleSubscribe(request: Request): Promise<Response> {
     );
   }
 
-  // Guard against oversized payloads before parsing
+  // Reject requests without Content-Length to prevent chunked transfer abuse
   const contentLength = request.headers.get('Content-Length');
-  if (contentLength && parseInt(contentLength, 10) > SUBSCRIBE_MAX_BODY) {
+  if (!contentLength) {
+    return Response.json({ success: false, error: 'Content-Length required.' }, { status: 411 });
+  }
+  if (parseInt(contentLength, 10) > SUBSCRIBE_MAX_BODY) {
     return Response.json({ success: false, error: 'Payload too large.' }, { status: 413 });
   }
 
@@ -377,12 +418,28 @@ export async function handleSubscribe(request: Request): Promise<Response> {
     if (!email) {
       return Response.json({ success: false, error: 'Email is required.' }, { status: 400 });
     }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    if (!/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(email)) {
       return Response.json({ success: false, error: 'Please enter a valid email address.' }, { status: 400 });
     }
+    if (email.length > 254) {
+      return Response.json({ success: false, error: 'Email address is too long.' }, { status: 400 });
+    }
 
-    // Phase 1: acknowledge the subscription (no persistence backend yet)
-    return Response.json({ success: true });
+    // Persist to D1 if available (graceful fallback if DB not provisioned)
+    let persisted = false;
+    if (env.DB) {
+      try {
+        await env.DB.prepare(
+          'INSERT INTO subscribers (email, ip_address, source) VALUES (?, ?, ?) ON CONFLICT (email) DO NOTHING'
+        ).bind(email, clientIp, 'landing').run();
+        persisted = true;
+      } catch (dbErr) {
+        // Log but don't fail the request — email capture is best-effort in Phase 1
+        console.error(JSON.stringify({ type: 'SUBSCRIBE_DB_ERROR', error: dbErr instanceof Error ? dbErr.message : String(dbErr) }));
+      }
+    }
+
+    return Response.json({ success: true, persisted });
   } catch {
     return Response.json({ success: false, error: 'Invalid request body.' }, { status: 400 });
   }
