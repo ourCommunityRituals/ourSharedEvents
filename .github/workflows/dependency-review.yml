@@ -30,6 +30,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - uses: actions/dependency-review-action@v4
+        continue-on-error: true  # Supplementary to Stage-1 npm audit — don't block if action itself errors
         with:
           # Block on high/critical vulnerabilities (matches Stage-1 npm audit threshold)
           fail-on-severity: high

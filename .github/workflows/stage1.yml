@@ -577,11 +577,18 @@ jobs:
           echo "QUALITY GATE: UNIT TESTS WITH COVERAGE"
           echo "Story 2.3: Coverage threshold >= 80%"
           echo "=================================================="
-          npm run test:unit -- --coverage --coverageThreshold='{"global":{"branches":80,"functions":80,"lines":80,"statements":80}}' --ci --reporters=default --reporters=jest-junit
+          npm run test:unit -- --coverage --coverageThreshold='{"global":{"branches":80,"functions":80,"lines":80,"statements":80}}' --ci
+
+      - name: Re-run unit tests for JUnit report
+        if: always()
+        id: junit-report
+        continue-on-error: true  # JUnit generation must never mask the real test result
+        run: |
+          mkdir -p .test-results
+          npm run test:unit -- --ci --reporters=jest-junit 2>/dev/null || true
         env:
           JEST_JUNIT_OUTPUT_DIR: .test-results
           JEST_JUNIT_OUTPUT_NAME: unit-tests-junit.xml
-        continue-on-error: false
 
       - name: Generate JUnit fallback if missing
         if: always()

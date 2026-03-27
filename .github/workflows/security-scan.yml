@@ -76,6 +76,7 @@ jobs:
     steps:
     - name: Harden runner
       uses: step-security/harden-runner@v2
+      continue-on-error: true  # Must not block CodeQL if harden-runner itself fails
       with:
         egress-policy: audit
 
