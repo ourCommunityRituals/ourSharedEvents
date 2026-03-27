@@ -356,7 +356,7 @@ function printActionableError(secretName, description, docLink) {
   log(colors.red + colors.bright + `ERROR: Missing required secret '${secretName}'` + colors.reset);
   log(colors.yellow + `  Purpose: ${description}` + colors.reset);
   log(colors.yellow + `  Action: Add this secret at:` + colors.reset);
-  log(colors.cyan + `    https://github.com/zeventbooks/MVP-EVENT-TOOLKIT/settings/secrets/actions` + colors.reset);
+  log(colors.cyan + `    https://github.com/oursharedevents/MVP-EVENT-TOOLKIT/settings/secrets/actions` + colors.reset);
   if (docLink && docLink !== 'N/A') {
     log(colors.yellow + `  Documentation: ${docLink}` + colors.reset);
   }
@@ -631,7 +631,7 @@ function printSummary(allResults) {
     }
     log('');
     log('To fix, add missing secrets at:');
-    log(colors.cyan + 'https://github.com/zeventbooks/MVP-EVENT-TOOLKIT/settings/secrets/actions' + colors.reset);
+    log(colors.cyan + 'https://github.com/oursharedevents/MVP-EVENT-TOOLKIT/settings/secrets/actions' + colors.reset);
     log('');
     log('For documentation, see:');
     log(colors.cyan + 'docs/CLOUDFLARE_SECRETS.md' + colors.reset);

@@ -516,8 +516,8 @@ test.describe('NU SDK Integration: Cross-Surface Validation', () => {
         const parsedUrl = new URL(baseUrl);
         const hostname = parsedUrl.hostname;
         // Exact match or proper suffix match for staging detection
-        isStaging = hostname === 'stg.eventangle.com' ||
-                    hostname.endsWith('.stg.eventangle.com') ||
+        isStaging = hostname === 'stg.oursharedevents.com' ||
+                    hostname.endsWith('.stg.oursharedevents.com') ||
                     hostname === 'localhost' ||
                     hostname === '127.0.0.1';
       } catch {

@@ -220,7 +220,7 @@ echo "════════════════════════�
 echo ""
 echo "1. Update GitHub Secrets (REQUIRED for CI/CD):"
 echo "   ─────────────────────────────────────────────────────────"
-echo "   Go to: https://github.com/zeventbooks/MVP-EVENT-TOOLKIT/settings/secrets/actions"
+echo "   Go to: https://github.com/oursharedevents/MVP-EVENT-TOOLKIT/settings/secrets/actions"
 echo ""
 if [ -n "$DEPLOYMENT_ID" ]; then
     echo -e "   Update ${BLUE}DEPLOYMENT_ID${NC} to: ${GREEN}$DEPLOYMENT_ID${NC}"

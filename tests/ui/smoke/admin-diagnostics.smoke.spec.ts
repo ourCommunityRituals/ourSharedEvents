@@ -93,7 +93,7 @@ async function isPageStaging(page: Page): Promise<boolean> {
     const isDomain = (host: string, domain: string) =>
       host === domain || host.endsWith('.' + domain);
 
-    return isDomain(hostname, 'stg.eventangle.com') ||
+    return isDomain(hostname, 'stg.oursharedevents.com') ||
            hostname === 'localhost' ||
            hostname === '127.0.0.1';
   });

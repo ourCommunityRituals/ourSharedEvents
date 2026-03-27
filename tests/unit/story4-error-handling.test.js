@@ -453,10 +453,10 @@ describe('Story 4: NU Environment Detection', () => {
         const isDomain = (host, domain) =>
           host === domain || host.endsWith('.' + domain);
 
-        const isStaging = isDomain(hostname, 'stg.eventangle.com') ||
+        const isStaging = isDomain(hostname, 'stg.oursharedevents.com') ||
                           hostname === 'localhost' ||
                           hostname === '127.0.0.1';
-        const isProduction = isDomain(hostname, 'eventangle.com') && !isStaging;
+        const isProduction = isDomain(hostname, 'oursharedevents.com') && !isStaging;
 
         NU._env = { isStaging, isProduction, hostname };
       },
@@ -472,17 +472,17 @@ describe('Story 4: NU Environment Detection', () => {
   });
 
   describe('isStaging()', () => {
-    test('should return true for stg.eventangle.com', () => {
-      NU._init('stg.eventangle.com');
+    test('should return true for stg.oursharedevents.com', () => {
+      NU._init('stg.oursharedevents.com');
       expect(NU.isStaging()).toBe(true);
     });
 
-    test('should return true for api-stg.eventangle.com', () => {
-      NU._init('api-stg.eventangle.com');
-      expect(NU.isStaging()).toBe(false); // This is subdomain of stg.eventangle.com? No, it ends with .com
+    test('should return true for api-stg.oursharedevents.com', () => {
+      NU._init('api-stg.oursharedevents.com');
+      expect(NU.isStaging()).toBe(false); // This is subdomain of stg.oursharedevents.com? No, it ends with .com
       // Wait, let me re-check the logic
-      // isDomain('api-stg.eventangle.com', 'stg.eventangle.com') -> ends with '.stg.eventangle.com'? No
-      // So api-stg.eventangle.com would NOT match stg.eventangle.com
+      // isDomain('api-stg.oursharedevents.com', 'stg.oursharedevents.com') -> ends with '.stg.oursharedevents.com'? No
+      // So api-stg.oursharedevents.com would NOT match stg.oursharedevents.com
       // That's correct behavior - api-stg is different
     });
 
@@ -496,30 +496,30 @@ describe('Story 4: NU Environment Detection', () => {
       expect(NU.isStaging()).toBe(true);
     });
 
-    test('should return false for eventangle.com', () => {
-      NU._init('eventangle.com');
+    test('should return false for oursharedevents.com', () => {
+      NU._init('oursharedevents.com');
       expect(NU.isStaging()).toBe(false);
     });
 
-    test('should return false for www.eventangle.com', () => {
-      NU._init('www.eventangle.com');
+    test('should return false for oursharedevents.com', () => {
+      NU._init('oursharedevents.com');
       expect(NU.isStaging()).toBe(false);
     });
   });
 
   describe('isProduction()', () => {
-    test('should return true for eventangle.com', () => {
-      NU._init('eventangle.com');
+    test('should return true for oursharedevents.com', () => {
+      NU._init('oursharedevents.com');
       expect(NU.isProduction()).toBe(true);
     });
 
-    test('should return true for www.eventangle.com', () => {
-      NU._init('www.eventangle.com');
+    test('should return true for oursharedevents.com', () => {
+      NU._init('oursharedevents.com');
       expect(NU.isProduction()).toBe(true);
     });
 
-    test('should return false for stg.eventangle.com', () => {
-      NU._init('stg.eventangle.com');
+    test('should return false for stg.oursharedevents.com', () => {
+      NU._init('stg.oursharedevents.com');
       expect(NU.isProduction()).toBe(false);
     });
 
@@ -530,13 +530,13 @@ describe('Story 4: NU Environment Detection', () => {
   });
 
   describe('Security: subdomain spoofing prevention', () => {
-    test('should NOT match fake-eventangle.com as production', () => {
-      NU._init('fake-eventangle.com');
+    test('should NOT match fake-oursharedevents.com as production', () => {
+      NU._init('fake-oursharedevents.com');
       expect(NU.isProduction()).toBe(false);
     });
 
-    test('should NOT match eventangle.com.attacker.com as production', () => {
-      NU._init('eventangle.com.attacker.com');
+    test('should NOT match oursharedevents.com.attacker.com as production', () => {
+      NU._init('oursharedevents.com.attacker.com');
       expect(NU.isProduction()).toBe(false);
     });
 

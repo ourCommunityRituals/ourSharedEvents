@@ -12,14 +12,14 @@
 #   ./scripts/security/rate_limit_probe.sh <base_url> [endpoint] [threshold]
 #
 # Arguments:
-#   base_url    - Required. The base URL to test (e.g., https://www.eventangle.com)
+#   base_url    - Required. The base URL to test (e.g., https://oursharedevents.com)
 #   endpoint    - Optional. The endpoint path to probe (default: /api/v2/events)
 #   threshold   - Optional. Expected rate limit threshold (default: 100)
 #
 # Examples:
-#   ./scripts/security/rate_limit_probe.sh https://www.eventangle.com
-#   ./scripts/security/rate_limit_probe.sh https://stg.eventangle.com /api/v2/events 100
-#   ./scripts/security/rate_limit_probe.sh https://stg.eventangle.com /api/v2/admin/events 20
+#   ./scripts/security/rate_limit_probe.sh https://oursharedevents.com
+#   ./scripts/security/rate_limit_probe.sh https://stg.oursharedevents.com /api/v2/events 100
+#   ./scripts/security/rate_limit_probe.sh https://stg.oursharedevents.com /api/v2/admin/events 20
 #
 # Exit Codes:
 #   0 - Success: 429 triggered within expected bounds
@@ -78,7 +78,7 @@ Usage: $0 <base_url> [endpoint] [threshold]
 Probe rate limiting configuration by sending rapid requests until 429 is received.
 
 Arguments:
-  base_url    Required. The base URL to test (e.g., https://www.eventangle.com)
+  base_url    Required. The base URL to test (e.g., https://oursharedevents.com)
   endpoint    Optional. The endpoint path (default: $DEFAULT_ENDPOINT)
   threshold   Optional. Expected rate limit threshold (default: $DEFAULT_THRESHOLD)
 
@@ -90,9 +90,9 @@ Endpoint Presets:
   /api/status              - Health endpoint (threshold: 300)
 
 Examples:
-  $0 https://www.eventangle.com
-  $0 https://stg.eventangle.com /api/v2/events 100
-  $0 https://stg.eventangle.com /jserror 10
+  $0 https://oursharedevents.com
+  $0 https://stg.oursharedevents.com /api/v2/events 100
+  $0 https://stg.oursharedevents.com /jserror 10
 
 Exit Codes:
   0 - Rate limit triggered within expected bounds

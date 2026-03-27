@@ -7,7 +7,7 @@
  *
  * All API calls must go through:
  * - Same origin (/api/...) relative paths, OR
- * - The staging/production eventangle.com domain
+ * - The staging/production oursharedevents.com domain
  *
  * Acceptance Criteria:
  * - No frontend file calls script.google.com or past GAS endpoints
@@ -20,7 +20,7 @@
 import { test, expect, Page, Request } from '@playwright/test';
 
 // Base URL from environment (set by CI or defaults to staging)
-const BASE_URL = process.env.BASE_URL || 'https://stg.eventangle.com';
+const BASE_URL = process.env.BASE_URL || 'https://stg.oursharedevents.com';
 
 /**
  * Tracked API call for verification
@@ -51,7 +51,7 @@ function isGasUrl(urlString: string): boolean {
 }
 
 /**
- * Check if a URL is to the expected origin (same-origin or eventangle.com)
+ * Check if a URL is to the expected origin (same-origin or oursharedevents.com)
  */
 function isExpectedOrigin(urlString: string, baseUrl: string): boolean {
   try {
@@ -64,8 +64,8 @@ function isExpectedOrigin(urlString: string, baseUrl: string): boolean {
     }
 
     // Eventangle.com domains
-    if (url.hostname === 'eventangle.com' ||
-        url.hostname.endsWith('.eventangle.com')) {
+    if (url.hostname === 'oursharedevents.com' ||
+        url.hostname.endsWith('.oursharedevents.com')) {
       return true;
     }
 
@@ -136,7 +136,7 @@ test.describe('Story 2.2 - No Mixed-Origin Calls', () => {
       assertNoGasCalls(apiCalls, '/events');
     });
 
-    test('all API calls go to same origin or eventangle.com', async ({ page }) => {
+    test('all API calls go to same origin or oursharedevents.com', async ({ page }) => {
       const apiCalls = setupRequestMonitor(page);
 
       await page.goto('/events');
@@ -281,7 +281,7 @@ test.describe('Story 2.2 - No Mixed-Origin Calls', () => {
         expect(
           headers['x-proxied-by'],
           `${surface} should be served by Worker`
-        ).toBe('eventangle-worker');
+        ).toBe('oursharedevents-worker');
       }
     });
 

@@ -3,7 +3,7 @@ description: Request a temporary exception for a security finding that cannot be
 title: "[SECURITY EXCEPTION] "
 labels: ["security", "exception", "needs-review"]
 assignees:
-  - zeventbooks
+  - oursharedevents
 body:
   - type: markdown
     attributes:

@@ -219,13 +219,20 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Dependency Review
-        uses: actions/dependency-review-action@v4
-        with:
-          fail-on-severity: high
-          # Block known problematic licenses in new dependencies
-          deny-licenses: GPL-2.0-only, GPL-3.0-only, AGPL-3.0-only
-          comment-summary-in-pr: always
+      # DISABLED: Requires Dependency Graph + GitHub Advanced Security.
+      # Enable at: Settings → Security → Code security and analysis
+      #   → Dependency graph ✓  → GitHub Advanced Security ✓
+      # Then uncomment the step below and remove the skip step.
+      #
+      # - name: Dependency Review
+      #   uses: actions/dependency-review-action@v4
+      #   with:
+      #     fail-on-severity: high
+      #     deny-licenses: GPL-2.0-only, GPL-3.0-only, AGPL-3.0-only
+      #     comment-summary-in-pr: always
+
+      - name: Dependency Review (skipped — GHAS not enabled)
+        run: echo "⏭️ Dependency Review requires GitHub Advanced Security. Enable in repo settings to activate this gate."
 
   # ============================================================================
   # SUMMARY AGGREGATOR

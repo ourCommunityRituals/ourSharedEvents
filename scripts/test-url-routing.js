@@ -20,7 +20,7 @@
  *   → Returns "Surface Not Available" error page
  *
  * Usage:
- *   BASE_URL="https://www.eventangle.com" npm run test:url-routing
+ *   BASE_URL="https://oursharedevents.com" npm run test:url-routing
  *   BASE_URL="https://script.google.com/macros/s/<ID>/exec" npm run test:url-routing
  *
  * Note: Reuses infrastructure from health-check.js
@@ -477,7 +477,7 @@ async function runTests() {
     console.error('ERROR: BASE_URL environment variable is required');
     console.error('');
     console.error('Usage:');
-    console.error('  BASE_URL="https://www.eventangle.com" npm run test:url-routing');
+    console.error('  BASE_URL="https://oursharedevents.com" npm run test:url-routing');
     console.error('  BASE_URL="https://script.google.com/macros/s/<ID>/exec" npm run test:url-routing');
     process.exit(1);
   }

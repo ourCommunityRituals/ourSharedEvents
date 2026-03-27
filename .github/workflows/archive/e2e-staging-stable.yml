@@ -41,7 +41,7 @@ on:
         type: boolean
 
 env:
-  BASE_URL: 'https://stg.eventangle.com'
+  BASE_URL: 'https://stg.oursharedevents.com'
   ENVIRONMENT: 'staging'
   QA_BRAND_ID: 'qa-testing'
   CI: true

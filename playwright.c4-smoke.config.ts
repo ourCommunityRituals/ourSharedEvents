@@ -12,7 +12,7 @@
  *   npm run test:c4:smoke
  *
  * Environment Variables:
- *   BASE_URL     - Override base URL (default: https://stg.eventangle.com)
+ *   BASE_URL     - Override base URL (default: https://stg.oursharedevents.com)
  *   ADMIN_KEY    - Admin API key for authorized requests
  *   ADMIN_KEY_STG - Alternative admin key (CI uses this)
  *
@@ -22,7 +22,7 @@
 import { defineConfig, devices } from '@playwright/test';
 
 // Default to staging URL per Story C4 requirements
-const BASE_URL = process.env.BASE_URL || 'https://stg.eventangle.com';
+const BASE_URL = process.env.BASE_URL || 'https://stg.oursharedevents.com';
 
 export default defineConfig({
   testDir: './tests/smoke',

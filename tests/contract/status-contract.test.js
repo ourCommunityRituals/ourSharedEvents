@@ -22,7 +22,7 @@
  *
  * Examples:
  *   npm run test:status-contract
- *   BASE_URL="https://www.eventangle.com" npm run test:status-contract
+ *   BASE_URL="https://oursharedevents.com" npm run test:status-contract
  *   BASE_URL="https://script.google.com/macros/s/XXXX/exec" npm run test:status-contract
  */
 

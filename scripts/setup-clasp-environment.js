@@ -404,7 +404,7 @@ function checkSecretsRequirements() {
   writeJson(secretsPath, secretsDoc);
 
   log.success(`Secrets requirements documented in .github-secrets-required.json`);
-  results.actions.push('Verify GitHub secrets at: https://github.com/zeventbooks/MVP-EVENT-TOOLKIT/settings/secrets/actions');
+  results.actions.push('Verify GitHub secrets at: https://github.com/oursharedevents/MVP-EVENT-TOOLKIT/settings/secrets/actions');
 
   return true;
 }

@@ -16,7 +16,7 @@
 #
 # Environment Variables (optional):
 #   STAGING_WEB_APP_URL - Direct GAS URL (defaults to deployment ID URL)
-#   STAGING_WORKER_URL  - Worker URL (defaults to https://stg.eventangle.com)
+#   STAGING_WORKER_URL  - Worker URL (defaults to https://stg.oursharedevents.com)
 #
 # =============================================================================
 
@@ -37,7 +37,7 @@ echo ""
 # Configuration
 STAGING_DEPLOYMENT_ID="${STAGING_DEPLOYMENT_ID:-AKfycbwFneYCpkio7wCn7y08eDUb2PRCPc2Tdtbv20L4AbEHvuCvoqY9ks7-ONL0pzPPw4Hm}"
 GAS_URL="${STAGING_WEB_APP_URL:-https://script.google.com/macros/s/${STAGING_DEPLOYMENT_ID}/exec}"
-WORKER_URL="${STAGING_WORKER_URL:-https://stg.eventangle.com}"
+WORKER_URL="${STAGING_WORKER_URL:-https://stg.oursharedevents.com}"
 
 echo "Configuration:"
 echo "  GAS URL:    $GAS_URL"
@@ -65,7 +65,7 @@ echo ""
 GAS_RESPONSE=$(curl -s -w "\n---HTTP_CODE:%{http_code}---" \
   -X POST \
   -H "Content-Type: application/json" \
-  -H "Origin: https://stg.eventangle.com" \
+  -H "Origin: https://stg.oursharedevents.com" \
   -d "$API_PAYLOAD" \
   "$GAS_URL" 2>&1)
 

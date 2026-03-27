@@ -15,8 +15,9 @@
 
 import { handleHealth, type HealthEnv } from './handlers/health';
 import { handleListEvents, handleGetEvent, handleAdminListEvents, type EventsEnv } from './handlers/events';
-import { handlePublicPage, handleAdminPage, handleLandingPage, type PagesEnv } from './handlers/pages';
+import { handlePublicPage, handleAdminPage, handleLandingPage, handleSubscribe, type PagesEnv } from './handlers/pages';
 import { requireAdmin, type AdminEnv } from './auth/admin';
+import { corsOrigin } from './lib/cors';
 
 export type RouterEnv = HealthEnv & EventsEnv & PagesEnv & AdminEnv & {
   WORKER_ENV?: string;
@@ -27,15 +28,25 @@ export async function route(request: Request, env: RouterEnv): Promise<Response>
   const url = new URL(request.url);
   const { pathname, method } = { pathname: url.pathname, method: request.method };
 
+  // ── HTTPS redirect ──────────────────────────────────────────────────────
+  if (url.protocol === 'http:') {
+    url.protocol = 'https:';
+    return Response.redirect(url.toString(), 301);
+  }
+
+  // ── HSTS header helper (applied to all responses below) ─────────────────
+
   // ── CORS preflight ────────────────────────────────────────────────────────
   if (method === 'OPTIONS') {
+    const origin = corsOrigin(request);
     return new Response(null, {
       status: 204,
       headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET, OPTIONS',
+        ...(origin ? { 'Access-Control-Allow-Origin': origin } : {}),
+        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
         'Access-Control-Allow-Headers': 'Authorization, Content-Type',
         'Access-Control-Max-Age': '86400',
+        'Vary': 'Origin',
       },
     });
   }
@@ -69,6 +80,12 @@ export async function route(request: Request, env: RouterEnv): Promise<Response>
     return handleGetEvent(request, env, eventMatch[1]);
   }
 
+  // ── Subscribe (email capture) ─────────────────────────────────────────────
+  if (pathname === '/subscribe') {
+    if (method === 'POST') return handleSubscribe(request, env);
+    return Response.json({ ok: false, error: 'Method not allowed' }, { status: 405, headers: { 'Allow': 'POST' } });
+  }
+
   // ── Landing page ──────────────────────────────────────────────────────────
   if (pathname === '/' || pathname === '/home' || pathname === '/welcome' || pathname === '/landing') {
     return handleLandingPage(env);
@@ -80,5 +97,5 @@ export async function route(request: Request, env: RouterEnv): Promise<Response>
   }
 
   // ── 404 ────────────────────────────────────────────────────────────────────
-  return Response.json({ ok: false, status: 404, error: 'Not found', path: pathname }, { status: 404 });
+  return Response.json({ ok: false, status: 404, error: 'Not found' }, { status: 404 });
 }

@@ -169,7 +169,7 @@ function printStatus() {
     console.log('');
     console.log('Next steps:');
     console.log('  1. Deploy worker: npm run deploy:staging:worker');
-    console.log('  2. Verify: curl https://stg.eventangle.com/status');
+    console.log('  2. Verify: curl https://stg.oursharedevents.com/status');
   } else {
     console.log('⚠️  STAGING SETUP INCOMPLETE');
     console.log('');
@@ -275,7 +275,7 @@ async function verify() {
     process.exit(1);
   }
 
-  const stagingUrl = 'https://stg.eventangle.com/status';
+  const stagingUrl = 'https://stg.oursharedevents.com/status';
   console.log(`Testing: ${stagingUrl}`);
   console.log('');
 
@@ -310,7 +310,7 @@ async function verify() {
     console.error('❌ Failed to reach staging:', error.message);
     console.log('');
     console.log('Possible causes:');
-    console.log('  1. DNS not configured (stg.eventangle.com → worker)');
+    console.log('  1. DNS not configured (stg.oursharedevents.com → worker)');
     console.log('  2. Worker not deployed (run: npm run deploy:staging:worker)');
     console.log('  3. GAS not deployed (run: npm run deploy:staging)');
     console.log('');
@@ -358,7 +358,7 @@ Setup Steps:
   4. Get Script ID from Project Settings
   5. Run: node scripts/setup-staging.js configure --script-id=... --deployment-id=...
   6. Deploy worker: npm run deploy:staging:worker
-  7. Configure DNS: stg.eventangle.com → eventangle.workers.dev (CNAME)
+  7. Configure DNS: stg.oursharedevents.com → oursharedevents.workers.dev (CNAME)
   8. Verify: node scripts/setup-staging.js verify
 
 See STAGING_SETUP.md for detailed instructions.

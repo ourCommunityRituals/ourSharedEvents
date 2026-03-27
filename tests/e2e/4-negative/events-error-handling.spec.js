@@ -9,8 +9,8 @@
  * - Never crashes on unexpected fields
  *
  * BASE_URL-Aware: Tests work against both staging and production:
- *   BASE_URL="https://stg.eventangle.com" npm run test:e2e
- *   BASE_URL="https://www.eventangle.com" npm run test:e2e
+ *   BASE_URL="https://stg.oursharedevents.com" npm run test:e2e
+ *   BASE_URL="https://oursharedevents.com" npm run test:e2e
  */
 
 const { test, expect } = require('@playwright/test');

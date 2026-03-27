@@ -13,6 +13,7 @@
  */
 
 import { sheetsGetValues, SheetsReadError, type SheetsEnv } from '../lib/sheets';
+import { corsHeaders } from '../lib/cors';
 
 // ─── Column indices ────────────────────────────────────────────────────────────
 
@@ -122,6 +123,7 @@ export async function handleListEvents(request: Request, env: EventsEnv): Promis
 
     return Response.json({ ok: true, status: 200, items }, {
       headers: {
+        ...corsHeaders(request),
         'Cache-Control': 'private, max-age=60, stale-while-revalidate=300',
         'X-Request-Id': rid,
       },
@@ -153,7 +155,7 @@ export async function handleGetEvent(request: Request, env: EventsEnv, id: strin
     }
 
     return Response.json({ ok: true, status: 200, event: rowToFullEvent(row) }, {
-      headers: { 'Cache-Control': 'private, max-age=60', 'X-Request-Id': rid },
+      headers: { ...corsHeaders(request), 'Cache-Control': 'private, max-age=60', 'X-Request-Id': rid },
     });
   } catch (err) {
     if (err instanceof SheetsReadError) {
@@ -186,7 +188,7 @@ export async function handleAdminListEvents(request: Request, env: EventsEnv): P
       .map(r => ({ ...rowToFullEvent(r), status: r.status, isDefault: r.isDefault }));
 
     return Response.json({ ok: true, status: 200, items }, {
-      headers: { 'X-Request-Id': rid, 'Cache-Control': 'no-store' },
+      headers: { ...corsHeaders(request), 'X-Request-Id': rid, 'Cache-Control': 'no-store' },
     });
   } catch (err) {
     if (err instanceof SheetsReadError) {

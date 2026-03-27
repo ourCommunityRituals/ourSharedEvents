@@ -116,8 +116,8 @@ function logRuntimeEnv() {
   console.log(`  Environment: ${env.name}`);
   console.log('');
   console.log('  Origin Detection:');
-  console.log(`    Is Staging (stg.eventangle.com): ${isStaging()}`);
-  console.log(`    Is Production (eventangle.com): ${isProduction()}`);
+  console.log(`    Is Staging (stg.oursharedevents.com): ${isStaging()}`);
+  console.log(`    Is Production (oursharedevents.com): ${isProduction()}`);
   console.log(`    Is GAS Direct (script.google.com): ${isGoogleAppsScript()}`);
   console.log('');
   console.log(`  Running in: ${process.env.CI ? 'CI' : 'Local'}`);

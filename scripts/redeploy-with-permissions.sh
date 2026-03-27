@@ -43,14 +43,14 @@ if [ "$ENVIRONMENT" = "production" ]; then
     EXPECTED_SCRIPT_ID="1YO4apLOQoAIh208AcAqWO3pWtx_O3yas_QC4z-pkurgMem9UgYOsp86l"
     DEPLOYMENT_VAR="PROD_DEPLOYMENT_ID"
     WEB_APP_VAR="PROD_WEB_APP_URL"
-    VERIFY_URL="https://www.eventangle.com"
+    VERIFY_URL="https://oursharedevents.com"
 else
     CLASP_CONFIG=".clasp-staging.json"
     WRANGLER_ENV="staging"
     EXPECTED_SCRIPT_ID="1gHiPuj7eXNk09dDyk17SJ6QsCJg7LMqXBRrkowljL3z2TaAKFIvBLhHJ"
     DEPLOYMENT_VAR="STAGING_DEPLOYMENT_ID"
     WEB_APP_VAR="STAGING_WEB_APP_URL"
-    VERIFY_URL="https://stg.eventangle.com"
+    VERIFY_URL="https://stg.oursharedevents.com"
 fi
 
 echo ""

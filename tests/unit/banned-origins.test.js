@@ -51,8 +51,8 @@ describe('Banned Origins Detection (Story 3)', () => {
       expect(contentContainsBannedPattern(content, 'script.google.com/macros')).toBe(true);
     });
 
-    test('should not flag eventangle.com URLs', () => {
-      const content = 'const url = "https://stg.eventangle.com/api/events";';
+    test('should not flag oursharedevents.com URLs', () => {
+      const content = 'const url = "https://stg.oursharedevents.com/api/events";';
       expect(contentContainsBannedPattern(content, 'script.google.com/macros')).toBe(false);
     });
   });
@@ -208,9 +208,9 @@ describe('Banned Origins Detection (Story 3)', () => {
       const bannedString = 'script.google.com/macros';
       let fixHint = 'Use Cloudflare Worker endpoints instead';
       if (bannedString === 'script.google.com/macros') {
-        fixHint = 'Use stg.eventangle.com or eventangle.com instead of script.google.com';
+        fixHint = 'Use stg.oursharedevents.com or oursharedevents.com instead of script.google.com';
       }
-      expect(fixHint).toContain('stg.eventangle.com');
+      expect(fixHint).toContain('stg.oursharedevents.com');
     });
   });
 });
@@ -268,7 +268,7 @@ describe('Banned Origins Script Integration', () => {
       const violations = [];
       const content = `
         // Clean Worker code using Cloudflare endpoints
-        const BASE_URL = 'https://stg.eventangle.com';
+        const BASE_URL = 'https://stg.oursharedevents.com';
 
         async function fetchEvents() {
           const response = await fetch(\`\${BASE_URL}/api/events\`);
@@ -317,7 +317,7 @@ describe('Story 3 Acceptance Criteria', () => {
       match: 'script.google.com/macros',
       context: 'const url = "https://script.google.com/macros/s/ABC/exec"',
       reason: 'Direct GAS Web App URL - traffic must route via Cloudflare',
-      fixHint: 'Use stg.eventangle.com or eventangle.com instead',
+      fixHint: 'Use stg.oursharedevents.com or oursharedevents.com instead',
     };
 
     expect(violation).toHaveProperty('file');
@@ -363,7 +363,7 @@ describe('Story 3 Acceptance Criteria', () => {
     }
   });
 
-  test('Playwright configs should default to stg.eventangle.com', () => {
+  test('Playwright configs should default to stg.oursharedevents.com', () => {
     const playwrightConfigPath = path.join(__dirname, '../../playwright.config.js');
     if (fs.existsSync(playwrightConfigPath)) {
       const content = fs.readFileSync(playwrightConfigPath, 'utf-8');

@@ -17,8 +17,8 @@
 
 set -e
 
-DOMAIN="eventangle.com"
-STAGING_DOMAIN="stg.eventangle.com"
+DOMAIN="oursharedevents.com"
+STAGING_DOMAIN="stg.oursharedevents.com"
 PASS_COUNT=0
 FAIL_COUNT=0
 WARN_COUNT=0
@@ -50,7 +50,7 @@ if [ "$1" = "--current-state" ]; then
         echo "Analysis:"
         echo "$ROUTES" | jq -r '.result[] | "\(.pattern)|\(.script)"' | while IFS='|' read -r pattern script; do
             case "$pattern" in
-                "eventangle.com/*"|"api.eventangle.com/*"|"stg.eventangle.com/*"|"api-stg.eventangle.com/*")
+                "oursharedevents.com/*"|"api.oursharedevents.com/*"|"stg.oursharedevents.com/*"|"api-stg.oursharedevents.com/*")
                     echo "  [KEEP]   $pattern"
                     ;;
                 *)
@@ -81,10 +81,10 @@ echo "SEC-4.2 Single Worker Route Verification"
 echo "============================================"
 echo ""
 echo "Target: 4 routes total (1 wildcard per domain)"
-echo "  - eventangle.com/*"
-echo "  - api.eventangle.com/*"
-echo "  - stg.eventangle.com/*"
-echo "  - api-stg.eventangle.com/*"
+echo "  - oursharedevents.com/*"
+echo "  - api.oursharedevents.com/*"
+echo "  - stg.oursharedevents.com/*"
+echo "  - api-stg.oursharedevents.com/*"
 echo ""
 
 # ===========================================
@@ -278,15 +278,15 @@ echo "10. Verifying wrangler.toml route configuration..."
 TOML_ERRORS=0
 
 # Check worker/wrangler.toml
-if grep -q 'pattern = "eventangle.com/\*"' worker/wrangler.toml 2>/dev/null; then
-    echo "   ✅ worker/wrangler.toml: eventangle.com/* configured"
+if grep -q 'pattern = "oursharedevents.com/\*"' worker/wrangler.toml 2>/dev/null; then
+    echo "   ✅ worker/wrangler.toml: oursharedevents.com/* configured"
 else
-    echo "   ❌ worker/wrangler.toml: eventangle.com/* not found"
+    echo "   ❌ worker/wrangler.toml: oursharedevents.com/* not found"
     ((TOML_ERRORS++))
 fi
 
 # Check for path-specific routes that shouldn't exist
-if grep -qE 'pattern = "eventangle\.com/(admin|public|api|display)/\*"' worker/wrangler.toml 2>/dev/null; then
+if grep -qE 'pattern = "oursharedevents\.com/(admin|public|api|display)/\*"' worker/wrangler.toml 2>/dev/null; then
     echo "   ❌ worker/wrangler.toml: Path-specific routes found (should be removed)"
     ((TOML_ERRORS++))
 else

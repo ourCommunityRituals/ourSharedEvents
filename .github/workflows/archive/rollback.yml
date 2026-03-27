@@ -53,8 +53,8 @@ concurrency:
 
 env:
   NODE_VERSION: '18'
-  STG_BASE_URL: 'https://stg.eventangle.com'
-  PROD_BASE_URL: 'https://www.eventangle.com'
+  STG_BASE_URL: 'https://stg.oursharedevents.com'
+  PROD_BASE_URL: 'https://oursharedevents.com'
 
 jobs:
   # ==========================================================================
@@ -214,7 +214,7 @@ jobs:
     # Production rollback requires extra confirmation via environment protection
     environment:
       name: production-rollback
-      url: https://www.eventangle.com
+      url: https://oursharedevents.com
 
     steps:
       - name: Checkout code

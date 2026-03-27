@@ -29,7 +29,7 @@
 #   - SharedReport pages
 #
 #   Acceptance Criteria:
-#   - Tests fail if first API host does not include stg.eventangle.com
+#   - Tests fail if first API host does not include stg.oursharedevents.com
 #   - Tests fail if any response returns ok:false
 #   - Stage-2 log output includes base URL and first host for debugging
 #   - Tests respect environment variables (BASE_URL, ADMIN_KEY)
@@ -45,12 +45,12 @@
 #   - Blocks promotion if GAS HTML is detected
 #
 # Story 7 - Mirror Fixed Pipeline & Backend Wiring to Production:
-#   Purpose: Bring prod to parity with staging so https://www.eventangle.com/events
+#   Purpose: Bring prod to parity with staging so https://oursharedevents.com/events
 #   behaves identically to staging.
 #
 #   Acceptance Criteria (CI):
 #   - After manual approval, prod Stage-2 leg can:
-#     - Hit https://www.eventangle.com/api/status
+#     - Hit https://oursharedevents.com/api/status
 #     - Run lightweight /events smoke test (events.smoke.prod.spec.ts)
 #     - Fail if prod /events is broken
 #   - Prod Stage-2 blocks marking deployment as "live good" if /events fails
@@ -127,13 +127,13 @@ on:
 #   PROD_BASE_URL: Used by Stage-2 tests against production
 env:
   # Staging environment (Story 6 CI config)
-  STG_BASE_URL: 'https://stg.eventangle.com'
-  STAGING_URL: 'https://stg.eventangle.com'
+  STG_BASE_URL: 'https://stg.oursharedevents.com'
+  STAGING_URL: 'https://stg.oursharedevents.com'
   # Production environment (Story 6 CI config)
-  PROD_BASE_URL: 'https://www.eventangle.com'
-  PROD_URL: 'https://www.eventangle.com'
+  PROD_BASE_URL: 'https://oursharedevents.com'
+  PROD_URL: 'https://oursharedevents.com'
   # Legacy alias (keeping for backward compatibility)
-  PRODUCTION_URL: 'https://www.eventangle.com'
+  PRODUCTION_URL: 'https://oursharedevents.com'
 
 # Prevent duplicate runs for the same deployment
 concurrency:
@@ -409,7 +409,7 @@ jobs:
       (github.event_name != 'workflow_dispatch' || inputs.skip_approval != true)
     environment:
       name: production
-      url: https://www.eventangle.com
+      url: https://oursharedevents.com
 
     steps:
       - name: Production deployment approved
@@ -429,7 +429,7 @@ jobs:
           echo "  - Approve the pending deployment"
           echo ""
           echo "Environment: production"
-          echo "Target URL: https://www.eventangle.com"
+          echo "Target URL: https://oursharedevents.com"
           echo "Trigger: ${{ github.event_name }}"
           echo "Ref: ${{ github.event.workflow_run.head_branch || github.ref_name }}"
           echo ""
@@ -448,7 +448,7 @@ jobs:
           echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
           echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
           echo "| **Environment** | \`production\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| **Target URL** | \`https://www.eventangle.com\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Target URL** | \`https://oursharedevents.com\` |" >> $GITHUB_STEP_SUMMARY
           echo "| **Trigger** | \`${{ github.event_name }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| **Ref** | \`${{ github.event.workflow_run.head_branch || github.ref_name }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| **Approver** | \`${{ github.actor }}\` |" >> $GITHUB_STEP_SUMMARY
@@ -1724,7 +1724,7 @@ jobs:
           echo "  - /manage UI basics"
           echo "  - /events public page"
           echo "  - SharedReport pages"
-          echo "  - Staging host assertion (stg.eventangle.com)"
+          echo "  - Staging host assertion (stg.oursharedevents.com)"
           echo ""
 
           # Run Stage-2 critical smoke tests
@@ -1821,7 +1821,7 @@ jobs:
           echo "Story 5 smoke tests failed. This blocks the release."
           echo ""
           echo "Possible causes:"
-          echo "  - First API host is not stg.eventangle.com (staging assertion)"
+          echo "  - First API host is not stg.oursharedevents.com (staging assertion)"
           echo "  - /api/health/backend returned ok:false"
           echo "  - /api/v2/events failed contract validation"
           echo "  - /manage or /events UI failed to load"

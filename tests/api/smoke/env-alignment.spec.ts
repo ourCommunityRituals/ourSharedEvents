@@ -31,8 +31,8 @@ function isProductionUrl(url: string | undefined): boolean {
   if (!url) return false;
   try {
     const parsedUrl = new URL(url);
-    return parsedUrl.hostname === 'www.eventangle.com' ||
-           parsedUrl.hostname === 'eventangle.com';
+    return parsedUrl.hostname === 'oursharedevents.com' ||
+           parsedUrl.hostname === 'oursharedevents.com';
   } catch {
     return false;
   }

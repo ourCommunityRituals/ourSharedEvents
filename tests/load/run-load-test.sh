@@ -26,9 +26,9 @@ if [ "$ENVIRONMENT" = "production" ]; then
     echo "Example: CONFIRM_PRODUCTION=true ./run-load-test.sh production"
     exit 1
   fi
-  BASE_URL="https://www.eventangle.com"
+  BASE_URL="https://oursharedevents.com"
 else
-  BASE_URL="https://stg.eventangle.com"
+  BASE_URL="https://stg.oursharedevents.com"
 fi
 
 echo "============================================================"

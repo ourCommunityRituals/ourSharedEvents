@@ -102,7 +102,7 @@ Usage: $0 <base_url>
 Security Regression Gate - Enforces NS-1..NS-4 and QR-0 requirements.
 
 Arguments:
-  base_url    Required. The base URL to test (e.g., https://www.eventangle.com)
+  base_url    Required. The base URL to test (e.g., https://oursharedevents.com)
 
 Environment Variables:
   SKIP_ORIGIN_BYPASS   Set to "true" to skip origin bypass check
@@ -119,9 +119,9 @@ Exit Codes:
   2 - Usage error or configuration problem
 
 Examples:
-  $0 https://www.eventangle.com
-  SKIP_RATE_LIMIT=true $0 https://stg.eventangle.com
-  SKIP_WWW_CHECK=true BEHIND_CF_ACCESS=true $0 https://stg.eventangle.com
+  $0 https://oursharedevents.com
+  SKIP_RATE_LIMIT=true $0 https://stg.oursharedevents.com
+  SKIP_WWW_CHECK=true BEHIND_CF_ACCESS=true $0 https://stg.oursharedevents.com
 
 EOF
     exit 2
@@ -187,8 +187,8 @@ check_www_canonical_redirect() {
     local domain
     domain=$(echo "$base_url" | sed -E 's|https?://||' | sed -E 's|/.*||')
 
-    # Skip www check for subdomains (e.g., stg.eventangle.com)
-    # www.stg.eventangle.com is not a valid pattern
+    # Skip www check for subdomains (e.g., stg.oursharedevents.com)
+    # www.stg.oursharedevents.com is not a valid pattern
     if is_subdomain "$domain"; then
         log_skip "NS-1: Skipping www check for subdomain ($domain)"
         log_detail "www prefix is not applicable to staging/preview subdomains"

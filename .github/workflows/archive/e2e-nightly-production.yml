@@ -33,7 +33,7 @@ on:
         type: boolean
 
 env:
-  BASE_URL: 'https://www.eventangle.com'
+  BASE_URL: 'https://oursharedevents.com'
   ENVIRONMENT: 'production'
   CI: true
   BRAND_ID: 'root'

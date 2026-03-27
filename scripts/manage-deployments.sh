@@ -190,7 +190,7 @@ fi
 echo ""
 echo "Next steps:"
 echo "1. Update GitHub secret DEPLOYMENT_ID to: $DEPLOYMENT_ID"
-echo "   https://github.com/zeventbooks/MVP-EVENT-TOOLKIT/settings/secrets/actions"
+echo "   https://github.com/oursharedevents/MVP-EVENT-TOOLKIT/settings/secrets/actions"
 echo ""
 echo "2. Test the deployment:"
 echo "   export BASE_URL='$WEB_APP_URL'"

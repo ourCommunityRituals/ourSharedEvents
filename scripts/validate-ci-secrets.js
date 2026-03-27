@@ -185,7 +185,7 @@ function main() {
     log('❌ VALIDATION FAILED - Required secrets missing');
     log('');
     log('To fix, add missing secrets at:');
-    log('https://github.com/zeventbooks/MVP-EVENT-TOOLKIT/settings/secrets/actions');
+    log('https://github.com/oursharedevents/MVP-EVENT-TOOLKIT/settings/secrets/actions');
 
     // Provide specific instructions for OAUTH_CREDENTIALS
     const oauthMissing = allResults.some(r =>

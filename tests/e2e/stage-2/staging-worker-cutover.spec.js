@@ -30,7 +30,7 @@ const { getBaseUrl, isStaging } = require('../../../config/environments');
 
 const BASE_URL = getBaseUrl();
 const TEST_BRAND = 'root';
-const STAGING_HOSTNAME = 'stg.eventangle.com';
+const STAGING_HOSTNAME = 'stg.oursharedevents.com';
 
 // Skip entire suite if not targeting staging
 test.describe('Stage-2: Staging Worker Cutover Validation', () => {

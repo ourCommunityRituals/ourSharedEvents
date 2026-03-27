@@ -36,7 +36,7 @@ const http = require('http');
 // Configuration
 const CONFIG = {
   // Target environment
-  baseUrl: process.env.BASE_URL || 'https://stg.eventangle.com',
+  baseUrl: process.env.BASE_URL || 'https://stg.oursharedevents.com',
   adminKey: process.env.ADMIN_KEY || process.env.ADMIN_KEY_ROOT,
 
   // QA isolation settings
@@ -659,7 +659,7 @@ Environment Variables:
 
 Examples:
   node scripts/qa-environment-setup.js setup
-  BASE_URL="https://stg.eventangle.com" node scripts/qa-environment-setup.js reset
+  BASE_URL="https://stg.oursharedevents.com" node scripts/qa-environment-setup.js reset
   DRY_RUN=true node scripts/qa-environment-setup.js cleanup
     `);
     process.exit(0);

@@ -13,7 +13,7 @@
  *
  * Acceptance Criteria (Story 5):
  * - Stage-2 executes only smoke tests
- * - Tests fail if first API host does not include stg.eventangle.com
+ * - Tests fail if first API host does not include stg.oursharedevents.com
  * - Tests fail if any response returns ok:false
  * - Log output includes base URL and first host for debugging
  *

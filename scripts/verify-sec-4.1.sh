@@ -1,7 +1,7 @@
 #!/bin/bash
 # SEC-4.1 Canonical Host Redirect Verification Script
 #
-# Verifies that www.eventangle.com correctly redirects to eventangle.com
+# Verifies that oursharedevents.com correctly redirects to oursharedevents.com
 #
 # Usage: ./scripts/verify-sec-4.1.sh
 #
@@ -9,7 +9,7 @@
 
 set -e
 
-DOMAIN="eventangle.com"
+DOMAIN="oursharedevents.com"
 PASS_COUNT=0
 FAIL_COUNT=0
 
@@ -115,7 +115,7 @@ if [ "$FAIL_COUNT" -eq 0 ]; then
     echo "✅ All critical tests passed!"
     echo ""
     echo "SEC-4.1 Acceptance Criteria:"
-    echo "  [✓] www.eventangle.com/* 301 → eventangle.com/*"
+    echo "  [✓] oursharedevents.com/* 301 → oursharedevents.com/*"
     echo "  [✓] Path and query string preserved"
     echo "  [✓] No Worker routes required for www"
     exit 0

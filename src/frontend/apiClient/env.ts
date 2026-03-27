@@ -62,18 +62,18 @@ export interface EnvironmentConfig {
  * Staging hostname patterns
  */
 const STAGING_HOSTNAMES = [
-  'stg.eventangle.com',
-  'api-stg.eventangle.com',
-  'staging.eventangle.com',
+  'stg.oursharedevents.com',
+  'api-stg.oursharedevents.com',
+  'staging.oursharedevents.com',
 ];
 
 /**
  * Production hostname patterns
  */
 const PRODUCTION_HOSTNAMES = [
-  'eventangle.com',
-  'www.eventangle.com',
-  'api.eventangle.com',
+  'oursharedevents.com',
+  'oursharedevents.com',
+  'api.oursharedevents.com',
 ];
 
 /**
@@ -112,7 +112,7 @@ export function detectEnvironment(hostname?: string): Environment {
   }
 
   // Story 5.2: script.google.com is no longer supported
-  // All traffic should go through eventangle.com domains
+  // All traffic should go through oursharedevents.com domains
   // If somehow accessed directly, treat as unknown (will use relative URLs)
 
   return 'unknown';
@@ -152,9 +152,9 @@ export function shouldUseWorkerV2(env: Environment): boolean {
 export function getBaseApiUrl(env: Environment): string {
   switch (env) {
     case 'staging':
-      return 'https://stg.eventangle.com';
+      return 'https://stg.oursharedevents.com';
     case 'production':
-      return 'https://www.eventangle.com';
+      return 'https://oursharedevents.com';
     case 'local':
       return 'http://localhost:3000';
     default:

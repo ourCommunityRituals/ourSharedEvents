@@ -8,8 +8,8 @@
  *
  * Usage:
  *   npm run test:api:health                          # Uses BASE_URL from env or defaults to staging
- *   BASE_URL="https://stg.eventangle.com" npm run test:api:health
- *   BASE_URL="https://www.eventangle.com" npm run test:api:health
+ *   BASE_URL="https://stg.oursharedevents.com" npm run test:api:health
+ *   BASE_URL="https://oursharedevents.com" npm run test:api:health
  *
  * Exit codes:
  *   0 - Health check passed (ok:true, status:200)
@@ -39,7 +39,7 @@ const https = require('https');
 const http = require('http');
 
 // Configuration
-const DEFAULT_BASE_URL = 'https://stg.eventangle.com';
+const DEFAULT_BASE_URL = 'https://stg.oursharedevents.com';
 const TIMEOUT_MS = 20000; // 20 seconds - slightly longer than health check timeout
 const ENDPOINT = '/api/status';
 
@@ -241,8 +241,8 @@ API Health Check Script - Story 5
 
 Usage:
   npm run test:api:health                              # Uses BASE_URL or defaults to staging
-  BASE_URL="https://stg.eventangle.com" npm run test:api:health
-  BASE_URL="https://www.eventangle.com" npm run test:api:health
+  BASE_URL="https://stg.oursharedevents.com" npm run test:api:health
+  BASE_URL="https://oursharedevents.com" npm run test:api:health
 
 Options:
   --verbose, -v   Show detailed response headers

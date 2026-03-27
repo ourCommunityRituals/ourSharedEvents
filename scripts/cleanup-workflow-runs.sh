@@ -19,7 +19,7 @@
 
 set -e
 
-REPO="zeventbooks/MVP-EVENT-TOOLKIT"
+REPO="oursharedevents/MVP-EVENT-TOOLKIT"
 
 # Workflows to KEEP (these should remain visible)
 KEEP_WORKFLOWS=(

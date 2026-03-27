@@ -15,7 +15,7 @@
  *   WORKER_URL=http://localhost:8787 ADMIN_TOKEN=test npm test -- tests/integration/story3.2
  *
  * Run against staging:
- *   WORKER_URL=https://api-stg.eventangle.com ADMIN_TOKEN=xxx npm test -- tests/integration/story3.2
+ *   WORKER_URL=https://api-stg.oursharedevents.com ADMIN_TOKEN=xxx npm test -- tests/integration/story3.2
  *
  * @see worker/src/handlers/adminCreateEvent.ts
  * @see Story 3.2 - Port createEvent to Worker

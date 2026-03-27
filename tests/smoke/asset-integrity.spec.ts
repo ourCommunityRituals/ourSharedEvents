@@ -30,7 +30,7 @@ import { test, expect } from '@playwright/test';
 // =============================================================================
 
 /** Base URL for staging environment */
-const BASE_URL = process.env.BASE_URL || 'https://stg.eventangle.com';
+const BASE_URL = process.env.BASE_URL || 'https://stg.oursharedevents.com';
 
 /** Cloudflare Access Service Token headers (Story D4) */
 const CF_ACCESS_CLIENT_ID = process.env.CF_ACCESS_CLIENT_ID || '';

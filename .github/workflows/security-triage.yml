@@ -134,7 +134,7 @@ jobs:
             --title "[SECURITY] $WORKFLOW failure on $BRANCH ($SHORT_SHA)" \
             --body "$BODY" \
             --label "security,${{ steps.severity.outputs.label }},auto-triage" \
-            --assignee "zeventbooks"
+            --assignee "oursharedevents"
 
       - name: Comment on existing issue
         if: steps.existing.outputs.count != '0'

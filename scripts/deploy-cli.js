@@ -627,10 +627,10 @@ class SetupWizard {
 
     print('2. Service Account Access', 'bright');
     print(`   URL: https://script.google.com/home/projects/${CONFIG.SCRIPT_ID}/edit`);
-    print('   Action: Share with apps-script-deployer@zeventbooks.iam.gserviceaccount.com\n');
+    print('   Action: Share with apps-script-deployer@oursharedevents.iam.gserviceaccount.com\n');
 
     print('3. GitHub Secrets', 'bright');
-    print('   URL: https://github.com/zeventbooks/MVP-EVENT-TOOLKIT/settings/secrets/actions');
+    print('   URL: https://github.com/oursharedevents/MVP-EVENT-TOOLKIT/settings/secrets/actions');
     print('   Secrets: APPS_SCRIPT_SERVICE_ACCOUNT_JSON, SCRIPT_ID, ADMIN_KEY_ROOT\n');
 
     const continueSetup = await question('Have you completed these steps? (y/N): ');

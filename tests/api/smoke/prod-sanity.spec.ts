@@ -2,7 +2,7 @@
  * Story 7 - Production Sanity Tests
  *
  * Purpose:
- *   Post-deploy sanity verification for production (www.eventangle.com).
+ *   Post-deploy sanity verification for production (oursharedevents.com).
  *   Validates that the Worker + GAS deployment meets Story 7 acceptance criteria.
  *
  * Acceptance Criteria Verified:
@@ -140,7 +140,7 @@ test.describe('Story 7 - Production Sanity Verification', () => {
 
       // Should have EventAngle branding
       const hasEventAngle = content.includes('EventAngle') ||
-                           content.includes('eventangle') ||
+                           content.includes('oursharedevents') ||
                            content.includes('event-angle');
 
       expect(hasEventAngle, 'Should show EventAngle branding').toBe(true);
@@ -171,7 +171,7 @@ test.describe('Story 7 - Production Sanity Verification', () => {
       const headers = response?.headers() || {};
 
       // Should have Worker transparency header
-      expect(headers['x-proxied-by']).toBe('eventangle-worker');
+      expect(headers['x-proxied-by']).toBe('oursharedevents-worker');
 
       // Should NOT have Google headers
       const googleHeaders = Object.keys(headers).filter(h =>
@@ -360,7 +360,7 @@ test.describe('Story 7 - Production Sanity Verification', () => {
         expect(
           proxiedBy,
           `${name} should have X-Proxied-By header`
-        ).toBe('eventangle-worker');
+        ).toBe('oursharedevents-worker');
       }
     });
 

@@ -33,7 +33,7 @@ import {
 const BRAND = process.env.TEST_BRAND || 'root';
 
 // Base URL from environment (set by CI or defaults to staging)
-const BASE_URL = process.env.BASE_URL || 'https://stg.eventangle.com';
+const BASE_URL = process.env.BASE_URL || 'https://stg.oursharedevents.com';
 
 /**
  * Console error tracking for detecting uncaught JS errors
@@ -136,7 +136,7 @@ test.describe('Events Page Tests - Story 6', () => {
 
       // Title should contain EventAngle or similar branding
       // Allows for variations like "EventAngle", "EventAngle · Events", etc.
-      expect(title.toLowerCase()).toContain('eventangle');
+      expect(title.toLowerCase()).toContain('oursharedevents');
     });
 
     test('page title is non-empty', async ({ page }) => {
@@ -257,7 +257,7 @@ test.describe('Events Page Tests - Story 6', () => {
       const headers = response?.headers() || {};
 
       // Should be served by Worker (not direct GAS)
-      expect(headers['x-proxied-by']).toBe('eventangle-worker');
+      expect(headers['x-proxied-by']).toBe('oursharedevents-worker');
     });
 
     test('Worker version header present', async ({ page }) => {
@@ -454,7 +454,7 @@ test.describe('Events Page Origin Safety - Story A2', () => {
     console.log(`  Banned origin calls: ${summary.bannedOriginCalls.length}`);
   });
 
-  test('first API call goes to same origin (stg.eventangle.com)', async ({ page }) => {
+  test('first API call goes to same origin (stg.oursharedevents.com)', async ({ page }) => {
     await page.goto(`/events`);
     await page.waitForLoadState('networkidle');
     await page.waitForTimeout(2000);

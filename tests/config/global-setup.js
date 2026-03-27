@@ -205,10 +205,10 @@ module.exports = async () => {
   console.log(`  Resolved BASE_URL: ${baseUrl}`);
   console.log(`  Resolved Host: ${baseHost}`);
 
-  // Validate that staging tests run against stg.eventangle.com
+  // Validate that staging tests run against stg.oursharedevents.com
   if (process.env.CI) {
-    const expectedStagingHost = 'stg.eventangle.com';
-    if (!process.env.USE_PRODUCTION && baseHost !== expectedStagingHost && !baseHost.includes('eventangle.com')) {
+    const expectedStagingHost = 'stg.oursharedevents.com';
+    if (!process.env.USE_PRODUCTION && baseHost !== expectedStagingHost && !baseHost.includes('oursharedevents.com')) {
       console.log(`  ⚠️ WARNING: Running in CI but not using ${expectedStagingHost}`);
       console.log(`     Expected: ${expectedStagingHost}`);
       console.log(`     Actual:   ${baseHost}`);

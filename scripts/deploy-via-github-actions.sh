@@ -17,7 +17,7 @@ if ! command -v gh &> /dev/null; then
     echo "  - Linux: https://github.com/cli/cli/blob/trunk/docs/install_linux.md"
     echo ""
     echo "Or skip this script and create PR manually at:"
-    echo "  https://github.com/zeventbooks/MVP-EVENT-TOOLKIT/compare/main...claude/comprehensive-architecture-review-011CUyEGnrsjfBCKLd65ysL6"
+    echo "  https://github.com/oursharedevents/MVP-EVENT-TOOLKIT/compare/main...claude/comprehensive-architecture-review-011CUyEGnrsjfBCKLd65ysL6"
     echo ""
     exit 1
 fi
@@ -67,7 +67,7 @@ if [ $MISSING_SECRETS -eq 1 ]; then
     echo "⚠️  Missing required secrets!"
     echo ""
     echo "Please add them at:"
-    echo "  https://github.com/zeventbooks/MVP-EVENT-TOOLKIT/settings/secrets/actions"
+    echo "  https://github.com/oursharedevents/MVP-EVENT-TOOLKIT/settings/secrets/actions"
     echo ""
     echo "Required secrets:"
     echo "  1. CLASPRC_JSON   - Run: cat ~/.clasprc.json"
@@ -158,7 +158,7 @@ EXISTING_PR=$(gh pr list --head "$CURRENT_BRANCH" --json number --jq '.[0].numbe
 
 if [ -n "$EXISTING_PR" ]; then
     echo "📋 Pull Request already exists: #$EXISTING_PR"
-    echo "   View at: https://github.com/zeventbooks/MVP-EVENT-TOOLKIT/pull/$EXISTING_PR"
+    echo "   View at: https://github.com/oursharedevents/MVP-EVENT-TOOLKIT/pull/$EXISTING_PR"
     echo ""
     read -p "Update PR description? (y/n) " -n 1 -r
     echo ""
@@ -181,12 +181,12 @@ echo ""
 echo "🎯 Next Steps:"
 echo ""
 echo "1. Review the PR at:"
-echo "   https://github.com/zeventbooks/MVP-EVENT-TOOLKIT/pulls"
+echo "   https://github.com/oursharedevents/MVP-EVENT-TOOLKIT/pulls"
 echo ""
 echo "2. Merge the PR (or run: gh pr merge --squash)"
 echo ""
 echo "3. Watch GitHub Actions deploy:"
-echo "   https://github.com/zeventbooks/MVP-EVENT-TOOLKIT/actions"
+echo "   https://github.com/oursharedevents/MVP-EVENT-TOOLKIT/actions"
 echo ""
 echo "4. Download E2E test reports from Artifacts section"
 echo ""

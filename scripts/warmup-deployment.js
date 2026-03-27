@@ -13,7 +13,7 @@
  * - Outputs deployment readiness metrics
  *
  * Usage:
- *   BASE_URL="https://www.eventangle.com" node scripts/warmup-deployment.js
+ *   BASE_URL="https://oursharedevents.com" node scripts/warmup-deployment.js
  *   BASE_URL="https://script.google.com/macros/s/<ID>/exec" node scripts/warmup-deployment.js
  *
  * Options:
@@ -208,7 +208,7 @@ async function main() {
     console.error('❌ ERROR: BASE_URL environment variable is required');
     console.error('');
     console.error('Usage:');
-    console.error('  BASE_URL="https://www.eventangle.com" node scripts/warmup-deployment.js');
+    console.error('  BASE_URL="https://oursharedevents.com" node scripts/warmup-deployment.js');
     console.error('  BASE_URL="https://script.google.com/macros/s/<ID>/exec" node scripts/warmup-deployment.js');
     process.exit(1);
   }

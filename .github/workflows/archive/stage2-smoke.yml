@@ -75,8 +75,8 @@ concurrency:
 
 env:
   NODE_VERSION: '18'
-  STG_BASE_URL: 'https://stg.eventangle.com'
-  PROD_BASE_URL: 'https://www.eventangle.com'
+  STG_BASE_URL: 'https://stg.oursharedevents.com'
+  PROD_BASE_URL: 'https://oursharedevents.com'
   # Test event for UI smoke tests (use a known stable test event)
   TEST_EVENT_TAG: 'smoke-test-event'
 
@@ -1104,7 +1104,7 @@ jobs:
       needs.smoke-summary.outputs.auto_promote != 'true'
     environment:
       name: production
-      url: https://www.eventangle.com
+      url: https://oursharedevents.com
 
     steps:
       - name: Approval received
@@ -1127,7 +1127,7 @@ jobs:
           echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
           echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
           echo "| **Approver** | \`${{ github.actor }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| **Target URL** | \`https://www.eventangle.com\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Target URL** | \`https://oursharedevents.com\` |" >> $GITHUB_STEP_SUMMARY
 
   # ==========================================================================
   # AUTO-PROMOTE TO PRODUCTION
@@ -1215,7 +1215,7 @@ jobs:
           echo "=============================================="
           echo "DEPLOYING TO PRODUCTION"
           echo "=============================================="
-          echo "Target: www.eventangle.com"
+          echo "Target: oursharedevents.com"
           echo "Environment: production"
           echo ""
 
@@ -1266,7 +1266,7 @@ jobs:
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "Worker successfully deployed to production." >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
-            echo "**Production URL**: https://www.eventangle.com" >> $GITHUB_STEP_SUMMARY
+            echo "**Production URL**: https://oursharedevents.com" >> $GITHUB_STEP_SUMMARY
           else
             echo "### FAILED" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
@@ -1321,7 +1321,7 @@ jobs:
               echo "All smoke tests passed and production deployment completed." >> $GITHUB_STEP_SUMMARY
             fi
             echo "" >> $GITHUB_STEP_SUMMARY
-            echo "**Production URL**: https://www.eventangle.com" >> $GITHUB_STEP_SUMMARY
+            echo "**Production URL**: https://oursharedevents.com" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "### Rollback (if needed)" >> $GITHUB_STEP_SUMMARY
             echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY

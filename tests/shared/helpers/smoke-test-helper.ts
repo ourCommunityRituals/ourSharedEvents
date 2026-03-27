@@ -3,7 +3,7 @@
  *
  * Consolidated helper for Stage-2 smoke tests providing:
  * - Runtime logging of BASE_URL, first navigation URL, first API host
- * - Staging host assertion (stg.eventangle.com)
+ * - Staging host assertion (stg.oursharedevents.com)
  * - Failure handling with requestId extraction
  * - Environment variable validation
  *
@@ -42,20 +42,20 @@ import { Page, APIRequestContext } from '@playwright/test';
  * Expected staging host pattern for Stage-2 tests
  * Tests fail if first API host does not include this value
  */
-export const STAGING_HOST_PATTERN = 'stg.eventangle.com';
+export const STAGING_HOST_PATTERN = 'stg.oursharedevents.com';
 
 /**
  * Production host pattern
  */
-export const PRODUCTION_HOST_PATTERN = 'www.eventangle.com';
+export const PRODUCTION_HOST_PATTERN = 'oursharedevents.com';
 
 /**
  * Valid staging hosts (includes legacy patterns)
  */
 export const VALID_STAGING_HOSTS = [
-  'stg.eventangle.com',
-  'staging.eventangle.com',
-  'api-stg.eventangle.com',
+  'stg.oursharedevents.com',
+  'staging.oursharedevents.com',
+  'api-stg.oursharedevents.com',
 ];
 
 // ===========================================================================
@@ -104,7 +104,7 @@ export class SmokeTestHelper {
 
   constructor(page: Page, baseUrl?: string) {
     this.page = page;
-    this.baseUrl = baseUrl || process.env.BASE_URL || 'https://stg.eventangle.com';
+    this.baseUrl = baseUrl || process.env.BASE_URL || 'https://stg.oursharedevents.com';
     this.start();
   }
 
@@ -218,7 +218,7 @@ export class SmokeTestHelper {
     if (firstApiHost) {
       if (VALID_STAGING_HOSTS.some(h => firstApiHost.includes(h)) || firstApiHost.includes('stg.')) {
         environment = 'staging';
-      } else if (firstApiHost.includes('www.eventangle.com') || firstApiHost === 'eventangle.com') {
+      } else if (firstApiHost.includes('oursharedevents.com') || firstApiHost === 'oursharedevents.com') {
         environment = 'production';
       }
     } else {
@@ -226,7 +226,7 @@ export class SmokeTestHelper {
       const baseHost = this.parseUrl(this.baseUrl)?.host;
       if (baseHost?.includes('stg.') || baseHost?.includes('staging.')) {
         environment = 'staging';
-      } else if (baseHost?.includes('eventangle.com') && !baseHost.includes('stg.')) {
+      } else if (baseHost?.includes('oursharedevents.com') && !baseHost.includes('stg.')) {
         environment = 'production';
       }
     }
@@ -279,7 +279,7 @@ export class SmokeTestHelper {
   // ===========================================================================
 
   /**
-   * Assert that the first API host is staging (stg.eventangle.com)
+   * Assert that the first API host is staging (stg.oursharedevents.com)
    * Throws error if not in staging environment
    */
   assertStagingEnvironment(): void {
@@ -297,8 +297,8 @@ export class SmokeTestHelper {
         `  Expected host to include: ${STAGING_HOST_PATTERN}\n` +
         `  Actual first API host:    ${info.firstApiHost || 'N/A'}\n` +
         `  BASE_URL:                 ${info.baseUrl}\n\n` +
-        `This test must run against staging (stg.eventangle.com).\n` +
-        `Set BASE_URL=https://stg.eventangle.com or ensure CI secrets are configured.`
+        `This test must run against staging (stg.oursharedevents.com).\n` +
+        `Set BASE_URL=https://stg.oursharedevents.com or ensure CI secrets are configured.`
       );
     }
   }
@@ -377,7 +377,7 @@ export function assertStagingHost(host: string | null | undefined): void {
  * Get base URL from environment with staging default
  */
 export function getBaseUrl(): string {
-  return process.env.BASE_URL || 'https://stg.eventangle.com';
+  return process.env.BASE_URL || 'https://stg.oursharedevents.com';
 }
 
 /**

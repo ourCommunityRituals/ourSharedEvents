@@ -8,8 +8,8 @@
  *   - Phone Debug Viewport: Sponsor title visible, dynamic links/sections visible, footer visible
  *   - Manual Cast/TV Validation: Documented issues for follow-up
  *
- * BASE_URL-Aware: Tests work against GAS or eventangle.com:
- *   BASE_URL="https://www.eventangle.com" npm run test:e2e
+ * BASE_URL-Aware: Tests work against GAS or oursharedevents.com:
+ *   BASE_URL="https://oursharedevents.com" npm run test:e2e
  *
  * SCHEMA: /schemas/event.schema.json (EVENT_CONTRACT.md v2.0)
  */
@@ -17,7 +17,7 @@
 const { test, expect } = require('@playwright/test');
 const { getBaseUrl } = require('../../config/environments');
 
-// Use centralized BASE_URL config (defaults to eventangle.com)
+// Use centralized BASE_URL config (defaults to oursharedevents.com)
 const BASE_URL = getBaseUrl();
 const BRAND_ID = process.env.BRAND_ID || 'root';
 

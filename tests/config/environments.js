@@ -11,19 +11,19 @@
  * =================================
  * Tests can run against different environments without code changes:
  *
- * Staging (stg.eventangle.com) - DEFAULT for tests:
+ * Staging (stg.oursharedevents.com) - DEFAULT for tests:
  *   npm run test:smoke
- *   BASE_URL="https://stg.eventangle.com" npm run test:smoke
+ *   BASE_URL="https://stg.oursharedevents.com" npm run test:smoke
  *
- * Production (eventangle.com) - ONLY via explicit test:prod or deploy-validation:
+ * Production (oursharedevents.com) - ONLY via explicit test:prod or deploy-validation:
  *   npm run test:prod:smoke
- *   BASE_URL="https://www.eventangle.com" npm run test:smoke
+ *   BASE_URL="https://oursharedevents.com" npm run test:smoke
  *
  * GAS Webapp (direct - for debugging):
  *   BASE_URL="https://script.google.com/macros/s/<DEPLOYMENT_ID>/exec" npm run test:smoke
  *
  * Default (no BASE_URL set):
- *   Uses STAGING URL (stg.eventangle.com) for safe testing
+ *   Uses STAGING URL (stg.oursharedevents.com) for safe testing
  *
  * Environment Variables:
  *   - BASE_URL: Primary URL override (recommended)

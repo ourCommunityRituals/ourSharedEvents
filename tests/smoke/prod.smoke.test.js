@@ -1,7 +1,7 @@
 /**
  * Production Smoke Tests - Read-only health checks for NU SDK promotion
  *
- * DANGER: These tests run against LIVE PRODUCTION (www.eventangle.com)
+ * DANGER: These tests run against LIVE PRODUCTION (oursharedevents.com)
  *
  * SAFETY CONSTRAINTS:
  * - READ-ONLY: No writes, no mutations, no form submissions
@@ -17,7 +17,7 @@
  * Use case: Verify production is alive after a release or incident
  *
  * Run locally:
- *   BASE_URL="https://www.eventangle.com" npm run test:prod:smoke:minimal
+ *   BASE_URL="https://oursharedevents.com" npm run test:prod:smoke:minimal
  *
  * CI:
  *   Only via workflow_dispatch with use_production=true
@@ -26,23 +26,23 @@
 const { test, expect } = require('@playwright/test');
 
 // Production URL - hardcoded for safety (don't inherit from env)
-const PROD_URL = 'https://www.eventangle.com';
+const PROD_URL = 'https://oursharedevents.com';
 const BRAND_ID = 'root';
 
 /**
- * Check if a URL string belongs to the eventangle.com domain
+ * Check if a URL string belongs to the oursharedevents.com domain
  * Uses URL parsing to prevent subdomain spoofing attacks
  * @param {string} urlStr - URL string to check
- * @returns {boolean} - True if URL is from eventangle.com domain
+ * @returns {boolean} - True if URL is from oursharedevents.com domain
  */
 function isEventangleDomain(urlStr) {
   try {
     const url = new URL(urlStr);
     const hostname = url.hostname;
-    // Exact match or proper subdomain match (e.g., www.eventangle.com, stg.eventangle.com)
-    return hostname === 'eventangle.com' || hostname.endsWith('.eventangle.com');
+    // Exact match or proper subdomain match (e.g., oursharedevents.com, stg.oursharedevents.com)
+    return hostname === 'oursharedevents.com' || hostname.endsWith('.oursharedevents.com');
   } catch {
-    // If URL parsing fails, check for eventangle.com with boundary markers
+    // If URL parsing fails, check for oursharedevents.com with boundary markers
     // This handles cases where the URL is malformed but still contains our domain
     return false;
   }
