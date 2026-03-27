@@ -27,13 +27,13 @@ const EXPECTED_IDS = {
     scriptId: '1gHiPuj7eXNk09dDyk17SJ6QsCJg7LMqXBRrkowljL3z2TaAKFIvBLhHJ',
     deploymentId: 'AKfycbwFneYCpkio7wCn7y08eDUb2PRCPc2Tdtbv20L4AbEHvuCvoqY9ks7-ONL0pzPPw4Hm',
     workerEnv: 'staging',
-    hostname: 'stg.eventangle.com',
+    hostname: 'stg.oursharedevents.com',
   },
   production: {
     scriptId: '1YO4apLOQoAIh208AcAqWO3pWtx_O3yas_QC4z-pkurgMem9UgYOsp86l',
     deploymentId: '1YO4apLOQoAIh208AcAqWO3pWtx_O3yas_QC4z-pkurgMem9UgYOsp86l',
     workerEnv: 'production',
-    hostname: 'www.eventangle.com',
+    hostname: 'oursharedevents.com',
   }
 };
 
@@ -51,7 +51,7 @@ function detectExpectedEnvironment(): 'staging' | 'production' {
 
   try {
     const parsedUrl = new URL(baseUrl);
-    if (parsedUrl.hostname === 'www.eventangle.com' || parsedUrl.hostname === 'eventangle.com') {
+    if (parsedUrl.hostname === 'oursharedevents.com' || parsedUrl.hostname === 'oursharedevents.com') {
       return 'production';
     }
   } catch {

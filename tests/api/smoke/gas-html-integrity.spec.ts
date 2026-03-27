@@ -215,7 +215,7 @@ ${html.substring(0, 500)}
 
         // Worker should add transparency header
         const proxiedBy = response.headers()['x-proxied-by'];
-        expect(proxiedBy).toBe('eventangle-worker');
+        expect(proxiedBy).toBe('oursharedevents-worker');
       });
 
     }
@@ -289,7 +289,7 @@ ${html.substring(0, 500)}
 
       // Should contain EventAngle references
       const hasEventAngle = html.includes('EventAngle') ||
-                           html.includes('eventangle') ||
+                           html.includes('oursharedevents') ||
                            html.includes('event-angle');
 
       expect(hasEventAngle).toBe(true);
@@ -388,7 +388,7 @@ ${html.substring(0, 500)}
 
       // Worker should handle 404, not proxy to GAS
       const proxiedBy = response.headers()['x-proxied-by'];
-      expect(proxiedBy).toBe('eventangle-worker');
+      expect(proxiedBy).toBe('oursharedevents-worker');
     });
 
   });

@@ -20,7 +20,7 @@
  *   - Invalid brand returns 400 with INVALID_BRAND code
  *
  * Environment Variables (injected by CI):
- *   BASE_URL=https://stg.eventangle.com
+ *   BASE_URL=https://stg.oursharedevents.com
  *
  * @see Story B4 - Implement GET /api/v2/events?brand=root (Read Path)
  */

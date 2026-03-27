@@ -2,7 +2,7 @@
 # Bulk delete GitHub Actions artifacts
 # Usage: GITHUB_TOKEN=your_token ./scripts/cleanup-artifacts.sh
 
-REPO="zeventbooks/MVP-EVENT-TOOLKIT"
+REPO="oursharedevents/MVP-EVENT-TOOLKIT"
 API="https://api.github.com/repos/$REPO/actions/artifacts"
 
 if [ -z "$GITHUB_TOKEN" ]; then

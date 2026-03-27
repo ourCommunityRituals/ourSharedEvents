@@ -441,7 +441,7 @@ describe('Data Validation Bug Fixes', () => {
     test('should return null for unknown hosts instead of defaulting to root', () => {
       const BRANDS = [
         { id: 'root', hostnames: ['zeventbook.io'] },
-        { id: 'abc', hostnames: ['abc.zeventbooks.io'] }
+        { id: 'abc', hostnames: ['abc.oursharedevents.com'] }
       ];
 
       const findBrandByHost = (host) => {
@@ -450,7 +450,7 @@ describe('Data Validation Bug Fixes', () => {
       };
 
       expect(findBrandByHost('zeventbook.io')).toEqual({ id: 'root', hostnames: ['zeventbook.io'] });
-      expect(findBrandByHost('abc.zeventbooks.io')).toEqual({ id: 'abc', hostnames: ['abc.zeventbooks.io'] });
+      expect(findBrandByHost('abc.oursharedevents.com')).toEqual({ id: 'abc', hostnames: ['abc.oursharedevents.com'] });
       expect(findBrandByHost('unknown.com')).toBe(null); // Should be null, not root
     });
 

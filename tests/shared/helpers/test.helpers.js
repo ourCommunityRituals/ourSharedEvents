@@ -527,7 +527,7 @@ const brandHelpers = {
         brandId: brandId || 'root',
         spreadsheetId: process.env.SPREADSHEET_ID || '1SV1oZMq4GbZBaRc0YmTeV02Tl5KXWD8R6FZXC7TwVCQ',
         adminKey: process.env.ADMIN_KEY || null,
-        baseUrl: process.env.BASE_URL || 'https://stg.eventangle.com',
+        baseUrl: process.env.BASE_URL || 'https://stg.oursharedevents.com',
         hasAdminKey: !!process.env.ADMIN_KEY,
         hasDedicatedSpreadsheet: false,
         isConfigured: !!process.env.ADMIN_KEY

@@ -22,8 +22,8 @@
 #   - Secret/Config Verification (verify-secrets.js, verify-deployment-config.sh)
 #
 # Story 1.1 (DevOps/Cloudflare): Automated Cloudflare Worker deployments
-#   - Push to main: deploys eventangle-staging to stg.eventangle.com
-#   - Tagging vX.Y.Z: deploys eventangle-prod to eventangle.com
+#   - Push to main: deploys eventangle-staging to stg.oursharedevents.com
+#   - Tagging vX.Y.Z: deploys eventangle-prod to oursharedevents.com
 #
 # Story 2.5 (Fail-Fast): Unit/contract/guards depend on lint passing
 #
@@ -76,16 +76,16 @@ env:
   # Manifest file path
   DEPLOY_MANIFEST: 'deploy-manifest.json'
   # Story 6 CI config - Base URLs for tests
-  STG_BASE_URL: 'https://stg.eventangle.com'
-  PROD_BASE_URL: 'https://www.eventangle.com'
-  # Staging environment (stg.eventangle.com) - loaded from manifest
-  STAGING_URL: 'https://stg.eventangle.com'
+  STG_BASE_URL: 'https://stg.oursharedevents.com'
+  PROD_BASE_URL: 'https://oursharedevents.com'
+  # Staging environment (stg.oursharedevents.com) - loaded from manifest
+  STAGING_URL: 'https://stg.oursharedevents.com'
   STAGING_SCRIPT_ID: '1gHiPuj7eXNk09dDyk17SJ6QsCJg7LMqXBRrkowljL3z2TaAKFIvBLhHJ'
-  # Production environment (www.eventangle.com) - loaded from manifest
-  PROD_URL: 'https://www.eventangle.com'
+  # Production environment (oursharedevents.com) - loaded from manifest
+  PROD_URL: 'https://oursharedevents.com'
   PROD_SCRIPT_ID: '1YO4apLOQoAIh208AcAqWO3pWtx_O3yas_QC4z-pkurgMem9UgYOsp86l'
   # Legacy aliases (keeping for backward compatibility)
-  PRODUCTION_URL: 'https://www.eventangle.com'
+  PRODUCTION_URL: 'https://oursharedevents.com'
   PRODUCTION_SCRIPT_ID: '1YO4apLOQoAIh208AcAqWO3pWtx_O3yas_QC4z-pkurgMem9UgYOsp86l'
 
 jobs:
@@ -513,7 +513,7 @@ jobs:
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "**Contract Boundary Enforced:**" >> $GITHUB_STEP_SUMMARY
             echo "- Worker upstream URL from environment variables" >> $GITHUB_STEP_SUMMARY
-            echo "- All traffic routes through Cloudflare (stg.eventangle.com)" >> $GITHUB_STEP_SUMMARY
+            echo "- All traffic routes through Cloudflare (stg.oursharedevents.com)" >> $GITHUB_STEP_SUMMARY
           else
             echo "### ❌ FAILED" >> $GITHUB_STEP_SUMMARY
             echo "Banned GAS origins detected in codebase!" >> $GITHUB_STEP_SUMMARY
@@ -1563,7 +1563,7 @@ jobs:
   #   - Emits stg-base-url artifact for Stage-2 consumption
   #
   # Contract:
-  #   - Produces artifact: stg-base-url containing https://stg.eventangle.com
+  #   - Produces artifact: stg-base-url containing https://stg.oursharedevents.com
   #   - Stage-2 consumes this artifact for post-deploy E2E testing
   #
   # Required secrets for Cloudflare Worker deployment:
@@ -1596,7 +1596,7 @@ jobs:
           else
             echo "⏭️ PR detected - Deploy to Staging runs on merge to main"
             echo ""
-            echo "This job deploys to https://stg.eventangle.com"
+            echo "This job deploys to https://stg.oursharedevents.com"
             echo "It will execute when this PR is merged to main."
             echo "should_execute=false" >> $GITHUB_OUTPUT
           fi
@@ -2041,7 +2041,7 @@ jobs:
         run: |
           if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
             echo "::warning::Cloudflare secrets not configured - skipping worker update"
-            echo "To enable staging URL (stg.eventangle.com), configure:"
+            echo "To enable staging URL (stg.oursharedevents.com), configure:"
             echo "  - CLOUDFLARE_API_TOKEN secret"
             echo "  - CLOUDFLARE_ACCOUNT_ID secret"
             echo ""
@@ -2156,8 +2156,8 @@ jobs:
           # Test 4: Verify staging routes
           echo ""
           echo "Test 4: Verifying staging routes configured..."
-          echo "  ✓ stg.eventangle.com/* → eventangle-staging worker"
-          echo "  ✓ api-stg.eventangle.com/* → eventangle-staging worker"
+          echo "  ✓ stg.oursharedevents.com/* → eventangle-staging worker"
+          echo "  ✓ api-stg.oursharedevents.com/* → eventangle-staging worker"
 
           echo ""
           echo "=============================================="
@@ -2167,8 +2167,8 @@ jobs:
           echo "Environment: staging"
           echo "Worker Name: eventangle-staging"
           echo "Routes:"
-          echo "  - https://stg.eventangle.com/*"
-          echo "  - https://api-stg.eventangle.com/*"
+          echo "  - https://stg.oursharedevents.com/*"
+          echo "  - https://api-stg.oursharedevents.com/*"
           echo "Backend: ${{ steps.deploy.outputs.web_app_url }}"
           echo "=============================================="
 
@@ -2218,7 +2218,7 @@ jobs:
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "| Target | URL |" >> $GITHUB_STEP_SUMMARY
             echo "|--------|-----|" >> $GITHUB_STEP_SUMMARY
-            echo "| **Staging** | \`https://stg.eventangle.com\` |" >> $GITHUB_STEP_SUMMARY
+            echo "| **Staging** | \`https://stg.oursharedevents.com\` |" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "When merged, this job will:" >> $GITHUB_STEP_SUMMARY
             echo "- Deploy to Google Apps Script staging" >> $GITHUB_STEP_SUMMARY
@@ -2252,8 +2252,8 @@ jobs:
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "| Route | Worker | Backend |" >> $GITHUB_STEP_SUMMARY
             echo "|-------|--------|---------|" >> $GITHUB_STEP_SUMMARY
-            echo "| \`stg.eventangle.com/*\` | eventangle-staging | Staging GAS |" >> $GITHUB_STEP_SUMMARY
-            echo "| \`api-stg.eventangle.com/*\` | eventangle-staging | Staging GAS |" >> $GITHUB_STEP_SUMMARY
+            echo "| \`stg.oursharedevents.com/*\` | eventangle-staging | Staging GAS |" >> $GITHUB_STEP_SUMMARY
+            echo "| \`api-stg.oursharedevents.com/*\` | eventangle-staging | Staging GAS |" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "**Environment Isolation:** Verified (staging uses different deployment ID than production)" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
@@ -2264,7 +2264,7 @@ jobs:
               echo "### Warning: Cloudflare Worker Not Deployed" >> $GITHUB_STEP_SUMMARY
               echo "" >> $GITHUB_STEP_SUMMARY
               echo "Stage-2 smoke tests will likely fail because the Cloudflare Worker for" >> $GITHUB_STEP_SUMMARY
-              echo "\`stg.eventangle.com\` was not updated with the new deployment ID." >> $GITHUB_STEP_SUMMARY
+              echo "\`stg.oursharedevents.com\` was not updated with the new deployment ID." >> $GITHUB_STEP_SUMMARY
               echo "" >> $GITHUB_STEP_SUMMARY
               echo "To fix this, configure the following secrets in GitHub:" >> $GITHUB_STEP_SUMMARY
               echo "- \`CLOUDFLARE_API_TOKEN\`: API token with Worker deployment permissions" >> $GITHUB_STEP_SUMMARY
@@ -2306,7 +2306,7 @@ jobs:
   # Contract:
   #   - Tagged releases become the sole path to production
   #   - Prod deploy uses stable API contract only (no dev-only endpoints)
-  #   - Produces artifact: prod-base-url containing https://www.eventangle.com
+  #   - Produces artifact: prod-base-url containing https://oursharedevents.com
   # ============================================================================
   production-deploy:
     name: "S1·12 🚀 Deploy to Production"
@@ -2898,9 +2898,9 @@ jobs:
           # Test 4: Verify production routes
           echo ""
           echo "Test 4: Verifying production routes configured..."
-          echo "  ✓ eventangle.com/* → eventangle-prod worker"
-          echo "  ✓ www.eventangle.com/* → eventangle-prod worker"
-          echo "  ✓ api.eventangle.com/* → eventangle-prod worker"
+          echo "  ✓ oursharedevents.com/* → eventangle-prod worker"
+          echo "  ✓ oursharedevents.com/* → eventangle-prod worker"
+          echo "  ✓ api.oursharedevents.com/* → eventangle-prod worker"
 
           # Test 5: Cross-contamination check - verify staging URL still points to staging
           echo ""
@@ -2923,9 +2923,9 @@ jobs:
           echo "Worker Name: eventangle-prod"
           echo "Version: ${{ steps.extract-version.outputs.version }}"
           echo "Routes:"
-          echo "  - https://eventangle.com/*"
-          echo "  - https://www.eventangle.com/*"
-          echo "  - https://api.eventangle.com/*"
+          echo "  - https://oursharedevents.com/*"
+          echo "  - https://oursharedevents.com/*"
+          echo "  - https://api.oursharedevents.com/*"
           echo "Backend: ${{ steps.deploy.outputs.web_app_url }}"
           echo ""
           echo "Staging isolation: VERIFIED"
@@ -3070,9 +3070,9 @@ jobs:
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "| Route | Worker | Backend |" >> $GITHUB_STEP_SUMMARY
             echo "|-------|--------|---------|" >> $GITHUB_STEP_SUMMARY
-            echo "| \`eventangle.com/*\` | eventangle-prod | Production GAS |" >> $GITHUB_STEP_SUMMARY
-            echo "| \`www.eventangle.com/*\` | eventangle-prod | Production GAS |" >> $GITHUB_STEP_SUMMARY
-            echo "| \`api.eventangle.com/*\` | eventangle-prod | Production GAS |" >> $GITHUB_STEP_SUMMARY
+            echo "| \`oursharedevents.com/*\` | eventangle-prod | Production GAS |" >> $GITHUB_STEP_SUMMARY
+            echo "| \`oursharedevents.com/*\` | eventangle-prod | Production GAS |" >> $GITHUB_STEP_SUMMARY
+            echo "| \`api.oursharedevents.com/*\` | eventangle-prod | Production GAS |" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "**Environment Isolation:** Verified" >> $GITHUB_STEP_SUMMARY
             echo "- Production uses different deployment ID than staging" >> $GITHUB_STEP_SUMMARY

@@ -4,15 +4,15 @@
  * Purpose: Test all buttons, forms, and interactions on Admin page
  * Coverage: UI components, button clicks, form submissions, navigation
  *
- * BASE_URL-Aware: Tests work against GAS or eventangle.com:
- *   BASE_URL="https://www.eventangle.com" npm run test:pages
+ * BASE_URL-Aware: Tests work against GAS or oursharedevents.com:
+ *   BASE_URL="https://oursharedevents.com" npm run test:pages
  *   BASE_URL="https://script.google.com/macros/s/<ID>/exec" npm run test:pages
  */
 
 const { test, expect } = require('@playwright/test');
 const { getBaseUrl } = require('../../config/environments');
 
-// Use centralized BASE_URL config (defaults to eventangle.com)
+// Use centralized BASE_URL config (defaults to oursharedevents.com)
 const BASE_URL = getBaseUrl();
 const ADMIN_KEY = process.env.ADMIN_KEY || 'CHANGE_ME_root';
 const BRAND_ID = 'root';

@@ -11,7 +11,7 @@
  *   - Envelope boundary compliance (API_CONTRACT.md)
  *
  * Usage:
- *   BASE_URL=https://stg.eventangle.com node scripts/run-matrix-tests.js
+ *   BASE_URL=https://stg.oursharedevents.com node scripts/run-matrix-tests.js
  *   ADMIN_KEY=xxx node scripts/run-matrix-tests.js
  *
  * Exit codes:
@@ -35,7 +35,7 @@ const {
 // CONFIGURATION
 // ============================================================================
 
-const BASE_URL = process.env.BASE_URL || 'https://stg.eventangle.com';
+const BASE_URL = process.env.BASE_URL || 'https://stg.oursharedevents.com';
 const ADMIN_KEY = process.env.ADMIN_KEY || process.env.ADMIN_KEY_ROOT || '';
 const VERBOSE = process.env.VERBOSE === 'true' || process.argv.includes('--verbose');
 

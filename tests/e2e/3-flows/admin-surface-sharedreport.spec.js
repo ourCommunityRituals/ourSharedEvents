@@ -13,7 +13,7 @@
  * - Fires api_logExternalClick via SponsorUtils
  * - Calls api_getSharedAnalytics and verifies summary totals increased
  *
- * BASE_URL-Aware: Tests work against GAS or eventangle.com
+ * BASE_URL-Aware: Tests work against GAS or oursharedevents.com
  */
 
 const { test, expect } = require('@playwright/test');

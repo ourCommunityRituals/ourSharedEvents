@@ -116,7 +116,7 @@ export class RequestLogger {
 
   constructor(page: Page, baseUrl?: string) {
     this.page = page;
-    this.baseUrl = baseUrl || process.env.BASE_URL || 'https://stg.eventangle.com';
+    this.baseUrl = baseUrl || process.env.BASE_URL || 'https://stg.oursharedevents.com';
   }
 
   /**

@@ -44,9 +44,9 @@ function getBrandConfig(brandId) {
   let baseUrl;
   try {
     const env = getEnvironment();
-    baseUrl = env?.baseUrl || process.env.BASE_URL || 'https://stg.eventangle.com';
+    baseUrl = env?.baseUrl || process.env.BASE_URL || 'https://stg.oursharedevents.com';
   } catch {
-    baseUrl = process.env.BASE_URL || 'https://stg.eventangle.com';
+    baseUrl = process.env.BASE_URL || 'https://stg.oursharedevents.com';
   }
 
   return {

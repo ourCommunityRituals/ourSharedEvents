@@ -20,7 +20,7 @@
  *   Headers: CF-Access-Client-Id, CF-Access-Client-Secret
  *
  * Environment Variables (injected by CI, never printed):
- *   BASE_URL=https://stg.eventangle.com
+ *   BASE_URL=https://stg.oursharedevents.com
  *   CF_ACCESS_CLIENT_ID=<secret>
  *   CF_ACCESS_CLIENT_SECRET=<secret>
  *

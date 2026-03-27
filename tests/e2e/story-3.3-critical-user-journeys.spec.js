@@ -22,8 +22,8 @@
  *   Journey 10: Error Handling
  *
  * BASE_URL-Aware Testing:
- * - Default: https://stg.eventangle.com (staging)
- * - Production: BASE_URL=https://www.eventangle.com npm run test:story3.3
+ * - Default: https://stg.oursharedevents.com (staging)
+ * - Production: BASE_URL=https://oursharedevents.com npm run test:story3.3
  *
  * Run: npm run test:story3.3
  */

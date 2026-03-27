@@ -4,8 +4,8 @@
  * Stage-2 UI Smoke Pack Configuration
  * Validates "If you show it, it works" across Admin, Public, Display, and Poster surfaces.
  *
- * Story 1.2 (DevOps + SDET): All CI tests use https://stg.eventangle.com
- * - Reads process.env.BASE_URL with default = https://stg.eventangle.com
+ * Story 1.2 (DevOps + SDET): All CI tests use https://stg.oursharedevents.com
+ * - Reads process.env.BASE_URL with default = https://stg.oursharedevents.com
  * - Uses canonical config/environments.js for consistent environment resolution
  *
  * Usage:

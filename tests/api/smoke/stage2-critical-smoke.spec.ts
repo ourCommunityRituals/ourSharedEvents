@@ -13,7 +13,7 @@
  *
  * Acceptance Criteria (Story 5):
  * - Smoke tests cover all critical endpoints
- * - Tests fail if first API host does not include stg.eventangle.com
+ * - Tests fail if first API host does not include stg.oursharedevents.com
  * - Tests fail if any response returns ok:false
  * - Stage-2 log output includes base URL and first host for debugging
  *
@@ -270,7 +270,7 @@ test.describe('/manage - Admin UI', () => {
     const headers = response?.headers() || {};
 
     // Should be proxied by worker
-    expect(headers['x-proxied-by']).toBe('eventangle-worker');
+    expect(headers['x-proxied-by']).toBe('oursharedevents-worker');
     expect(headers['x-worker-version']).toBeDefined();
 
     console.log(`Proxied by: ${headers['x-proxied-by']}`);
@@ -353,7 +353,7 @@ test.describe('/events - Public Events Page', () => {
     await page.waitForLoadState('domcontentloaded');
 
     const title = await page.title();
-    expect(title.toLowerCase()).toContain('eventangle');
+    expect(title.toLowerCase()).toContain('oursharedevents');
     console.log(`Page title: ${title}`);
   });
 

@@ -7,12 +7,12 @@
  * Reads BASE_URL from environment variable and validates the response.
  *
  * Usage:
- *   BASE_URL="https://www.eventangle.com/events" npm run test:health
+ *   BASE_URL="https://oursharedevents.com/events" npm run test:health
  *   BASE_URL="https://script.google.com/macros/s/<DEPLOYMENT_ID>/exec" npm run test:health
  *
  * For MVP analytics health check (recommended before events):
- *   BASE_URL="https://www.eventangle.com/events" npm run test:health -- --mvp
- *   CHECK_ANALYTICS=true BASE_URL="https://www.eventangle.com/events" npm run test:health
+ *   BASE_URL="https://oursharedevents.com/events" npm run test:health -- --mvp
+ *   CHECK_ANALYTICS=true BASE_URL="https://oursharedevents.com/events" npm run test:health
  *
  * Expected response (basic):
  *   {
@@ -118,12 +118,12 @@ async function runHealthCheck() {
     console.error('❌ ERROR: BASE_URL environment variable is required');
     console.error('');
     console.error('Usage:');
-    console.error('  BASE_URL="https://www.eventangle.com/events" npm run test:health');
+    console.error('  BASE_URL="https://oursharedevents.com/events" npm run test:health');
     console.error('  BASE_URL="https://script.google.com/macros/s/<ID>/exec" npm run test:health');
     console.error('');
     console.error('For MVP analytics health check (recommended before events):');
-    console.error('  BASE_URL="https://www.eventangle.com/events" npm run test:health -- --mvp');
-    console.error('  CHECK_ANALYTICS=true BASE_URL="https://www.eventangle.com/events" npm run test:health');
+    console.error('  BASE_URL="https://oursharedevents.com/events" npm run test:health -- --mvp');
+    console.error('  CHECK_ANALYTICS=true BASE_URL="https://oursharedevents.com/events" npm run test:health');
     process.exit(1);
   }
 

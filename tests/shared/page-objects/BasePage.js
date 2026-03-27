@@ -4,7 +4,7 @@
  * Contains common methods and utilities for all page objects
  *
  * BASE_URL-Aware: Automatically uses centralized environment config
- * Default: https://stg.eventangle.com (staging via Cloudflare Workers)
+ * Default: https://stg.oursharedevents.com (staging via Cloudflare Workers)
  */
 
 const { getBaseUrl } = require('../../config/environments');
@@ -12,7 +12,7 @@ const { getBaseUrl } = require('../../config/environments');
 class BasePage {
   constructor(page) {
     this.page = page;
-    // Use centralized BASE_URL config (defaults to stg.eventangle.com)
+    // Use centralized BASE_URL config (defaults to stg.oursharedevents.com)
     this.baseUrl = getBaseUrl();
     this.brandId = process.env.BRAND_ID || 'root';
     this.adminKey = process.env.ADMIN_KEY || 'CHANGE_ME_root';

@@ -38,7 +38,7 @@ import { test, expect } from '@playwright/test';
 // =============================================================================
 
 /** Base URL for staging environment */
-const BASE_URL = process.env.BASE_URL || 'https://stg.eventangle.com';
+const BASE_URL = process.env.BASE_URL || 'https://stg.oursharedevents.com';
 
 /** Test event ID (create one if not provided) */
 const TEST_EVENT_ID = process.env.TEST_EVENT_ID || 'gate_test_event_f6';

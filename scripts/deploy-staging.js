@@ -20,7 +20,7 @@ const CONFIG = {
   prodClaspFile: '.clasp.json',
   stagingClaspFile: '.clasp-staging.json',
   stagingScriptId: '1gHiPuj7eXNk09dDyk17SJ6QsCJg7LMqXBRrkowljL3z2TaAKFIvBLhHJ',
-  stagingUrl: 'https://stg.eventangle.com',
+  stagingUrl: 'https://stg.oursharedevents.com',
   maxRetries: 3,
   retryDelay: 5000
 };

@@ -4,15 +4,15 @@
  * Purpose: Test Brand Portfolio UI components in ConfigHtml.html
  * Coverage: Portfolio relationships, analytics dashboard, sponsor reports
  *
- * BASE_URL-Aware: Tests work against GAS or eventangle.com:
- *   BASE_URL="https://www.eventangle.com" npm run test:pages
+ * BASE_URL-Aware: Tests work against GAS or oursharedevents.com:
+ *   BASE_URL="https://oursharedevents.com" npm run test:pages
  *   BASE_URL="https://script.google.com/macros/s/<ID>/exec" npm run test:pages
  */
 
 const { test, expect } = require('@playwright/test');
 const { getBaseUrl } = require('../../config/environments');
 
-// Use centralized BASE_URL config (defaults to eventangle.com)
+// Use centralized BASE_URL config (defaults to oursharedevents.com)
 const BASE_URL = getBaseUrl();
 const ABC_ADMIN_KEY = process.env.ABC_ADMIN_KEY || 'abc-admin-key';
 const CBC_ADMIN_KEY = process.env.CBC_ADMIN_KEY || 'cbc-admin-key';

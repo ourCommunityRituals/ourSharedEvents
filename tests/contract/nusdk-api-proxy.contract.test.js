@@ -354,9 +354,9 @@ describe('Story 4: NU SDK + /api/* Proxy (Stage-1 Hermetic)', () => {
         startDateISO: '2025-12-08',
         venue: 'Test Venue',
         links: {
-          publicUrl: 'https://stg.eventangle.com/events?id=evt-1',
-          displayUrl: 'https://stg.eventangle.com/display?id=evt-1',
-          posterUrl: 'https://stg.eventangle.com/poster?id=evt-1',
+          publicUrl: 'https://stg.oursharedevents.com/events?id=evt-1',
+          displayUrl: 'https://stg.oursharedevents.com/display?id=evt-1',
+          posterUrl: 'https://stg.oursharedevents.com/poster?id=evt-1',
           signupUrl: ''
         },
         qr: { public: 'data:image/png;base64,...', signup: '' },

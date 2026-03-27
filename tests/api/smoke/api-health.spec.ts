@@ -104,7 +104,7 @@ test.describe('API Health Check (/api/status) - Story 5', () => {
       const headers = response.headers();
 
       expect(headers['content-type']).toContain('application/json');
-      expect(headers['x-proxied-by']).toBe('eventangle-worker');
+      expect(headers['x-proxied-by']).toBe('oursharedevents-worker');
       expect(headers['x-worker-version']).toBeDefined();
       expect(headers['x-backend-status']).toBeDefined();
       expect(headers['x-backend-duration-ms']).toBeDefined();

@@ -12,7 +12,7 @@
  *
  * Usage:
  *   npm run test:api-contracts
- *   BASE_URL="https://www.eventangle.com" npm run test:api-contracts
+ *   BASE_URL="https://oursharedevents.com" npm run test:api-contracts
  *
  * @see /src/mvp/Code.gs - _listMvpApis_() for canonical API list
  * @see /src/mvp/ApiSchemas.gs for schema definitions

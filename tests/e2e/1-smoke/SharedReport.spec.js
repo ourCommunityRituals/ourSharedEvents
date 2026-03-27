@@ -5,7 +5,7 @@
  * 1. Load ?page=report&event=<fixtureId>
  * 2. Assert top-level KPIs and at least one table render
  *
- * Run: BASE_URL="https://www.eventangle.com/events" npm run test:smoke
+ * Run: BASE_URL="https://oursharedevents.com/events" npm run test:smoke
  *
  * Fixture ID: Set FIXTURE_EVENT_ID env var, or test will load default report
  */

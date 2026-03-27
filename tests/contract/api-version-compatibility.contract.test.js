@@ -18,8 +18,8 @@
  *
  * Environment Variables:
  * - RUN_API_VERSION_CHECK: Set to 'true' to run live API comparisons
- * - STAGING_BASE_URL: Override staging URL (default: api-stg.eventangle.com)
- * - PRODUCTION_BASE_URL: Override production URL (default: api.eventangle.com)
+ * - STAGING_BASE_URL: Override staging URL (default: api-stg.oursharedevents.com)
+ * - PRODUCTION_BASE_URL: Override production URL (default: api.oursharedevents.com)
  *
  * @see tests/shared/helpers/api-version-comparator.js
  * @see API_CONTRACT.md
@@ -495,8 +495,8 @@ describe('Report Formatting', () => {
       }
     ],
     environments: {
-      staging: { name: 'Staging', baseUrl: 'https://api-stg.eventangle.com' },
-      production: { name: 'Production', baseUrl: 'https://api.eventangle.com' }
+      staging: { name: 'Staging', baseUrl: 'https://api-stg.oursharedevents.com' },
+      production: { name: 'Production', baseUrl: 'https://api.oursharedevents.com' }
     }
   };
 
@@ -507,8 +507,8 @@ describe('Report Formatting', () => {
     expect(report).toContain('Story 3.2');
     expect(report).toContain('Status:');
     expect(report).toContain('PASS');
-    expect(report).toContain('api-stg.eventangle.com');
-    expect(report).toContain('api.eventangle.com');
+    expect(report).toContain('api-stg.oursharedevents.com');
+    expect(report).toContain('api.oursharedevents.com');
   });
 
   it('formats JSON report', () => {

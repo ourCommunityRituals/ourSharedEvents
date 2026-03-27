@@ -331,7 +331,7 @@ function main() {
     console.log('\n─────────────────────────────────────────────────────────────');
     console.log('Next steps:');
     console.log(`1. Deploy the worker: wrangler deploy --env ${options.env}`);
-    console.log(`2. Verify templates: curl https://${options.env === 'staging' ? 'stg.' : ''}eventangle.com/events`);
+    console.log(`2. Verify templates: curl https://${options.env === 'staging' ? 'stg.' : ''}oursharedevents.com/events`);
     console.log('─────────────────────────────────────────────────────────────');
   }
 }

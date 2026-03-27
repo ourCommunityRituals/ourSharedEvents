@@ -8,7 +8,7 @@ name: OLD – Stage 2 - Staging Contract & Matrix Tests
 # ⚠️  STAGING ONLY - NEVER HITS PROD ⚠️
 # ============================================================================
 # This is the "beat the crap out of staging" pipeline.
-# All tests run exclusively against STAGING_URL (https://stg.eventangle.com).
+# All tests run exclusively against STAGING_URL (https://stg.oursharedevents.com).
 # This workflow is intentionally isolated from production to enable aggressive
 # testing without risk.
 #
@@ -52,7 +52,7 @@ concurrency:
 env:
   NODE_VERSION: '18'
   # Never hits prod; staging only.
-  STAGING_URL: 'https://stg.eventangle.com'
+  STAGING_URL: 'https://stg.oursharedevents.com'
 
 jobs:
   # NOTE: This is an archived/deprecated workflow.

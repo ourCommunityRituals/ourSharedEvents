@@ -79,9 +79,9 @@ jobs:
         run: |
           sleep 5
           if [ "${{ inputs.environment }}" == "staging" ]; then
-            curl -sf "https://stg.eventangle.com/?page=status" || echo "Health check pending"
+            curl -sf "https://stg.oursharedevents.com/?page=status" || echo "Health check pending"
           else
-            curl -sf "https://eventangle.com/?page=status" || echo "Health check pending"
+            curl -sf "https://oursharedevents.com/?page=status" || echo "Health check pending"
           fi
 
 # SEC-7.2 HARDENING NOTES:
@@ -95,7 +95,7 @@ jobs:
 # 2. DEPLOY TOKEN SCOPE (CF_DEPLOY_TOKEN)
 #    Required permissions:
 #      - Workers Scripts: Edit (Account)
-#      - Workers Routes: Edit (Zone: eventangle.com)
+#      - Workers Routes: Edit (Zone: oursharedevents.com)
 #      - Workers KV Storage: Edit (if using KV)
 #      - Account Settings: Read
 #

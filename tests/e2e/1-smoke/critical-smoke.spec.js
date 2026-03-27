@@ -10,8 +10,8 @@
  * 2. Page Tests - Component and interaction testing
  * 3. Flow Tests - End-to-end user journeys
  *
- * BASE_URL-Aware: Tests work against GAS or eventangle.com:
- *   BASE_URL="https://www.eventangle.com" npm run test:smoke
+ * BASE_URL-Aware: Tests work against GAS or oursharedevents.com:
+ *   BASE_URL="https://oursharedevents.com" npm run test:smoke
  *   BASE_URL="https://script.google.com/macros/s/<ID>/exec" npm run test:smoke
  *
  * CRITICAL: No retries configured - tests must pass reliably on first run
@@ -20,7 +20,7 @@
 const { test, expect } = require('@playwright/test');
 const { getBaseUrl } = require('../../config/environments');
 
-// Use centralized BASE_URL config (defaults to eventangle.com)
+// Use centralized BASE_URL config (defaults to oursharedevents.com)
 const BASE_URL = getBaseUrl();
 const BRAND_ID = 'root';
 
@@ -29,7 +29,7 @@ test.beforeAll(async () => {
   if (!BASE_URL || BASE_URL.includes('YOUR_SCRIPT_ID') || BASE_URL.includes('.../exec')) {
     throw new Error(
       '❌ BASE_URL not configured! Set BASE_URL or GOOGLE_SCRIPT_URL environment variable.\n' +
-      'Example: export BASE_URL=https://zeventbooks.com\n' +
+      'Example: export BASE_URL=https://oursharedevents.com\n' +
       'See .env.example for details.'
     );
   }
