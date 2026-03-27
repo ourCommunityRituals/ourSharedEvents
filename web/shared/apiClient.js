@@ -572,7 +572,7 @@
           onUpdate && onUpdate(res.value);
         }
       });
-    } catch (e) {
+    } catch (_e) {
       // localStorage unavailable, just fetch
       rpc(path, payload).then(res => {
         if (res?.ok && res.value && onUpdate) {

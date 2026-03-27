@@ -258,7 +258,7 @@ function detectEnvironmentFromUrl(url) {
       brands: VALID_BRANDS,
       isDefault: false
     };
-  } catch (error) {
+  } catch (_error) {
     console.warn(`Invalid URL format: ${url}`);
     return null;
   }

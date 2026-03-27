@@ -39,7 +39,7 @@ function loadManifest() {
     if (fs.existsSync(manifestPath)) {
       return JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
     }
-  } catch (error) {
+  } catch (_error) {
     // Silent fallback to hardcoded values
   }
   return null;
