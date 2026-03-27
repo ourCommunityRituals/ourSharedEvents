@@ -252,9 +252,28 @@ export function handleAdminPage(_env: PagesEnv): Response {
   return html(ADMIN_HTML);
 }
 
+export async function handleSubscribe(request: Request): Promise<Response> {
+  try {
+    const body = await request.json() as { email?: string };
+    const email = typeof body?.email === 'string' ? body.email.trim() : '';
+
+    if (!email) {
+      return Response.json({ success: false, error: 'Email is required.' }, { status: 400 });
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return Response.json({ success: false, error: 'Please enter a valid email address.' }, { status: 400 });
+    }
+
+    // Phase 1: acknowledge the subscription (no persistence backend yet)
+    return Response.json({ success: true });
+  } catch {
+    return Response.json({ success: false, error: 'Invalid request body.' }, { status: 400 });
+  }
+}
+
 export function handleLandingPage(_env: PagesEnv): Response {
   return html(LANDING_HTML, 200, {
     'X-Frame-Options': 'SAMEORIGIN',
-    'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; frame-ancestors 'self'",
+    'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; frame-ancestors 'self'",
   });
 }

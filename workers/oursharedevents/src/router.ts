@@ -15,7 +15,7 @@
 
 import { handleHealth, type HealthEnv } from './handlers/health';
 import { handleListEvents, handleGetEvent, handleAdminListEvents, type EventsEnv } from './handlers/events';
-import { handlePublicPage, handleAdminPage, handleLandingPage, type PagesEnv } from './handlers/pages';
+import { handlePublicPage, handleAdminPage, handleLandingPage, handleSubscribe, type PagesEnv } from './handlers/pages';
 import { requireAdmin, type AdminEnv } from './auth/admin';
 
 export type RouterEnv = HealthEnv & EventsEnv & PagesEnv & AdminEnv & {
@@ -67,6 +67,11 @@ export async function route(request: Request, env: RouterEnv): Promise<Response>
   const eventMatch = pathname.match(/^\/api\/v2\/events\/([^/]+)$/);
   if (eventMatch) {
     return handleGetEvent(request, env, eventMatch[1]);
+  }
+
+  // ── Subscribe (email capture) ─────────────────────────────────────────────
+  if (pathname === '/subscribe' && method === 'POST') {
+    return handleSubscribe(request);
   }
 
   // ── Landing page ──────────────────────────────────────────────────────────
