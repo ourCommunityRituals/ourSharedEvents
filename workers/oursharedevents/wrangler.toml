@@ -29,6 +29,19 @@ binding = "DB"
 database_name = "ocr-db-local"
 database_id = "local"
 
+# ── Forms D1 Database (local dev) — SEPARATE from anonymous scan system ──
+# Migrations applied via: wrangler d1 execute ocr-forms-db-local --file migrations-forms/000X_*.sql --local
+[[d1_databases]]
+binding = "FORMS_DB"
+database_name = "ocr-forms-db-local"
+database_id = "local-forms"
+
+# ── Cron trigger: data lifecycle job (destroy expired forms data) ──
+# Runs daily at 3 AM UTC. Deletes expired registrations, scrubs survey PII,
+# removes email signups past 30-day retention.
+[triggers]
+crons = ["0 3 * * *"]
+
 # ── Default (local dev / workers.dev) ─────────────────────────────
 [vars]
 WORKER_ENV = "development"
@@ -48,6 +61,12 @@ binding = "DB"
 database_name = "ocr-db-staging"
 database_id = "<staging-db-id>"
 
+# ── Forms D1 Database (staging) — SEPARATE from anonymous scan system ──
+[[env.staging.d1_databases]]
+binding = "FORMS_DB"
+database_name = "ocr-forms-db-staging"
+database_id = "<staging-forms-db-id>"
+
 [env.staging.vars]
 WORKER_ENV = "staging"
 WORKER_BUILD_VERSION = "stg-2026.03.22"
@@ -59,6 +78,7 @@ ALLOW_ADMIN_KEY_FALLBACK = "true"
 #   SHEETS_SPREADSHEET_ID
 #   GOOGLE_SA_CLIENT_EMAIL
 #   GOOGLE_SA_PRIVATE_KEY_PEM
+#   FORMS_ENCRYPTION_KEY          (AES-GCM key for email signup encryption — min 32 chars)
 #   GOOGLE_MAPS_API_KEY          (Google Maps for SharedReports venue maps)
 #   BIGQUERY_DATASET_ID           (BigQuery dataset for data backup)
 #   GCP_PROJECT_ID                (defaults to project-7cc9adcd-ed55-47aa-958)
@@ -79,6 +99,12 @@ binding = "DB"
 database_name = "ocr-db-production"
 database_id = "<production-db-id>"
 
+# ── Forms D1 Database (production) — SEPARATE from anonymous scan system ──
+[[env.production.d1_databases]]
+binding = "FORMS_DB"
+database_name = "ocr-forms-db-production"
+database_id = "<production-forms-db-id>"
+
 [env.production.vars]
 WORKER_ENV = "production"
 WORKER_BUILD_VERSION = "prod-2026.03.22"
@@ -88,6 +114,7 @@ WORKER_BUILD_VERSION = "prod-2026.03.22"
 #   SHEETS_SPREADSHEET_ID
 #   GOOGLE_SA_CLIENT_EMAIL
 #   GOOGLE_SA_PRIVATE_KEY_PEM
+#   FORMS_ENCRYPTION_KEY          (AES-GCM key for email signup encryption — min 32 chars)
 #   GOOGLE_MAPS_API_KEY          (Google Maps for SharedReports venue maps)
 #   BIGQUERY_DATASET_ID           (BigQuery dataset for data backup)
 #   GCP_PROJECT_ID                (defaults to project-7cc9adcd-ed55-47aa-958)

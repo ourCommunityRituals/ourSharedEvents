@@ -41,24 +41,25 @@ beforeAll(async () => {
 // ── QA-1: Idempotency ────────────────────────────────────────────────────────
 
 describe('QA-1: Migration idempotency', () => {
-  test('re-running all 8 migrations produces zero errors and zero duplicate tables', async () => {
-    // Run migrations a second time — CREATE IF NOT EXISTS should be safe
+  test('re-running all migrations produces zero errors and zero duplicate tables', async () => {
+    // Run migrations a second time — CREATE IF NOT EXISTS / DROP IF EXISTS should be safe
     await expect(applyMigrations()).resolves.not.toThrow();
 
-    // Verify still exactly 8 application tables (no duplicates)
+    // 6 tables: events, sponsors, poster_deployments, scans, scan_aggregates, subscribers
+    // (checkins/registrations dropped by migration 0009, moved to FORMS_DB)
     const tables = await env.DB.prepare(
       "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' ORDER BY name"
     ).all();
 
     const names = tables.results.map((r: Record<string, unknown>) => r.name);
-    expect(names).toHaveLength(8);
+    expect(names).toHaveLength(6);
   });
 
-  test('indexes remain at exactly 11 after idempotent re-run', async () => {
+  test('indexes remain at exactly 8 after idempotent re-run', async () => {
     const indexes = await env.DB.prepare(
       "SELECT name FROM sqlite_master WHERE type='index' AND name LIKE 'idx_%'"
     ).all();
-    expect(indexes.results).toHaveLength(11);
+    expect(indexes.results).toHaveLength(8);
   });
 });
 
@@ -253,13 +254,20 @@ describe('QA-5: Production DB isolation', () => {
       (m) => m[1]
     );
 
-    expect(dbNames.length).toBeGreaterThanOrEqual(3);
+    // 6 databases: 3 for DB (local/staging/prod) + 3 for FORMS_DB (local/staging/prod)
+    expect(dbNames.length).toBeGreaterThanOrEqual(6);
     const unique = new Set(dbNames);
     expect(unique.size).toBe(dbNames.length);
 
+    // Main DB
     expect(dbNames).toContain('ocr-db-local');
     expect(dbNames).toContain('ocr-db-staging');
     expect(dbNames).toContain('ocr-db-production');
+
+    // Forms DB (separate)
+    expect(dbNames).toContain('ocr-forms-db-local');
+    expect(dbNames).toContain('ocr-forms-db-staging');
+    expect(dbNames).toContain('ocr-forms-db-production');
   });
 
   test('wrangler.toml has separate database_id per environment', () => {
@@ -269,7 +277,8 @@ describe('QA-5: Production DB isolation', () => {
       (m) => m[1]
     );
 
-    expect(dbIds.length).toBeGreaterThanOrEqual(3);
+    // 6 database IDs: 3 for DB + 3 for FORMS_DB
+    expect(dbIds.length).toBeGreaterThanOrEqual(6);
     const unique = new Set(dbIds);
     expect(unique.size).toBe(dbIds.length);
   });

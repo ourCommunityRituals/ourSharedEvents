@@ -106,8 +106,8 @@ jobs:
         run: npm ci
         working-directory: ${{ env.WORKER_DIR }}
 
-      - name: Run D1 schema + constraint verification tests
-        run: npm run test:d1
+      - name: Run D1 schema + constraint verification tests (main DB + forms DB)
+        run: npm run test
         working-directory: ${{ env.WORKER_DIR }}
 
   # ============================================================================
@@ -137,7 +137,7 @@ jobs:
         run: npm ci
         working-directory: ${{ env.WORKER_DIR }}
 
-      - name: Apply D1 migrations to staging
+      - name: Apply D1 migrations to staging (main DB)
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -150,26 +150,59 @@ jobs:
                    migrations/0005_create_checkins_registrations.sql \
                    migrations/0006_create_scan_aggregates.sql \
                    migrations/0007_create_indexes.sql \
-                   migrations/0008_create_subscribers.sql; do
+                   migrations/0008_create_subscribers.sql \
+                   migrations/0009_drop_form_tables_from_main_db.sql; do
             echo "Applying $f to staging..."
             npx wrangler d1 execute ocr-db-staging --env staging --file "$f" --remote
             echo "✓ $f applied"
           done
 
-      - name: Verify D1 staging tables
+      - name: Apply D1 migrations to staging (forms DB — separate)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        working-directory: ${{ env.WORKER_DIR }}
+        run: |
+          for f in migrations-forms/0001_create_form_registrations.sql \
+                   migrations-forms/0002_create_checkin_counts.sql \
+                   migrations-forms/0003_create_form_surveys.sql \
+                   migrations-forms/0004_create_email_signups.sql \
+                   migrations-forms/0005_create_forms_indexes.sql \
+                   migrations-forms/0006_create_form_config.sql; do
+            echo "Applying $f to staging forms DB..."
+            npx wrangler d1 execute ocr-forms-db-staging --env staging --file "$f" --remote
+            echo "✓ $f applied"
+          done
+
+      - name: Verify D1 staging tables (main DB)
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         working-directory: ${{ env.WORKER_DIR }}
         run: |
           RESULT=$(npx wrangler d1 execute ocr-db-staging --env staging --remote \
-            --command "SELECT COUNT(*) as cnt FROM sqlite_master WHERE type='table' AND name IN ('events','sponsors','poster_deployments','scans','checkins','registrations','scan_aggregates','subscribers')")
+            --command "SELECT COUNT(*) as cnt FROM sqlite_master WHERE type='table' AND name IN ('events','sponsors','poster_deployments','scans','scan_aggregates','subscribers')")
           echo "$RESULT"
-          if ! echo "$RESULT" | grep -q "8"; then
-            echo "::error::D1 staging table verification failed — expected 8 tables"
+          if ! echo "$RESULT" | grep -q "6"; then
+            echo "::error::D1 staging table verification failed — expected 6 tables in main DB"
             exit 1
           fi
-          echo "✓ All 8 tables verified in staging D1"
+          echo "✓ All 6 tables verified in staging main D1"
+
+      - name: Verify D1 staging tables (forms DB)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        working-directory: ${{ env.WORKER_DIR }}
+        run: |
+          RESULT=$(npx wrangler d1 execute ocr-forms-db-staging --env staging --remote \
+            --command "SELECT COUNT(*) as cnt FROM sqlite_master WHERE type='table' AND name IN ('form_registrations','checkin_counts','form_surveys','email_signups','feature_flags')")
+          echo "$RESULT"
+          if ! echo "$RESULT" | grep -q "5"; then
+            echo "::error::D1 staging forms table verification failed — expected 5 tables in forms DB"
+            exit 1
+          fi
+          echo "✓ All 5 tables verified in staging forms D1"
 
       - name: Deploy to staging
         env:
@@ -329,7 +362,7 @@ jobs:
           fi
           echo "✓ Production DB isolation verified — no cross-env references"
 
-      - name: Apply D1 migrations to production
+      - name: Apply D1 migrations to production (main DB)
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -343,26 +376,60 @@ jobs:
                    migrations/0005_create_checkins_registrations.sql \
                    migrations/0006_create_scan_aggregates.sql \
                    migrations/0007_create_indexes.sql \
-                   migrations/0008_create_subscribers.sql; do
+                   migrations/0008_create_subscribers.sql \
+                   migrations/0009_drop_form_tables_from_main_db.sql; do
             echo "Applying $f to production..."
             npx wrangler d1 execute ocr-db-production --env production --file "$f" --remote
             echo "✓ $f applied"
           done
 
-      - name: Verify D1 production tables
+      - name: Apply D1 migrations to production (forms DB — separate)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        working-directory: ${{ env.WORKER_DIR }}
+        run: |
+          echo "⚠️  Applying forms migrations to PRODUCTION forms D1"
+          for f in migrations-forms/0001_create_form_registrations.sql \
+                   migrations-forms/0002_create_checkin_counts.sql \
+                   migrations-forms/0003_create_form_surveys.sql \
+                   migrations-forms/0004_create_email_signups.sql \
+                   migrations-forms/0005_create_forms_indexes.sql \
+                   migrations-forms/0006_create_form_config.sql; do
+            echo "Applying $f to production forms DB..."
+            npx wrangler d1 execute ocr-forms-db-production --env production --file "$f" --remote
+            echo "✓ $f applied"
+          done
+
+      - name: Verify D1 production tables (main DB)
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         working-directory: ${{ env.WORKER_DIR }}
         run: |
           RESULT=$(npx wrangler d1 execute ocr-db-production --env production --remote \
-            --command "SELECT COUNT(*) as cnt FROM sqlite_master WHERE type='table' AND name IN ('events','sponsors','poster_deployments','scans','checkins','registrations','scan_aggregates','subscribers')")
+            --command "SELECT COUNT(*) as cnt FROM sqlite_master WHERE type='table' AND name IN ('events','sponsors','poster_deployments','scans','scan_aggregates','subscribers')")
           echo "$RESULT"
-          if ! echo "$RESULT" | grep -q "8"; then
-            echo "::error::D1 production table verification failed — expected 8 tables"
+          if ! echo "$RESULT" | grep -q "6"; then
+            echo "::error::D1 production table verification failed — expected 6 tables in main DB"
             exit 1
           fi
-          echo "✓ All 8 tables verified in production D1"
+          echo "✓ All 6 tables verified in production main D1"
+
+      - name: Verify D1 production tables (forms DB)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        working-directory: ${{ env.WORKER_DIR }}
+        run: |
+          RESULT=$(npx wrangler d1 execute ocr-forms-db-production --env production --remote \
+            --command "SELECT COUNT(*) as cnt FROM sqlite_master WHERE type='table' AND name IN ('form_registrations','checkin_counts','form_surveys','email_signups','feature_flags')")
+          echo "$RESULT"
+          if ! echo "$RESULT" | grep -q "5"; then
+            echo "::error::D1 production forms table verification failed — expected 5 tables in forms DB"
+            exit 1
+          fi
+          echo "✓ All 5 tables verified in production forms D1"
 
       - name: Deploy to production
         env:
