@@ -114,9 +114,12 @@ jobs:
       continue-on-error: true
       with:
         languages: ${{ matrix.language }}
-        # Extended security queries for comprehensive coverage
-        # Prefix with "+" to use these queries AND those in config file
-        queries: +security-extended,security-and-quality
+        # Custom config with technology-specific queries for our full stack:
+        # Cloudflare Workers, D1, Firebase, React, HTML, CI/CD, Playwright,
+        # Postman/Newman, Wrangler — plus security-extended + security-and-quality
+        config-file: .github/codeql/codeql-config.yml
+        # Extended security queries (also in config, but explicit here as fallback)
+        queries: +security-extended,security-and-quality,.github/codeql/custom-queries
 
     - name: Setup Node.js (for dependency analysis)
       uses: actions/setup-node@v4
@@ -144,6 +147,96 @@ jobs:
     # Note: CodeQL analyze action will fail if Advanced Security is not enabled
     # The workflow continues so npm audit can still run
     # To enable: Settings > Security > Code security and analysis > Advanced Security
+
+    - name: Scan CI/CD workflows for script injection
+      if: always()
+      run: |
+        echo "=================================================="
+        echo "CI/CD SCRIPT INJECTION CHECK"
+        echo "=================================================="
+        echo ""
+        echo "Checking GitHub Actions workflows for unsafe \${{ }} expressions in run: blocks..."
+        echo ""
+
+        FOUND_INJECTION=false
+
+        # Dangerous contexts that can be controlled by external actors
+        DANGEROUS_PATTERNS=(
+          "github.event.pull_request.title"
+          "github.event.pull_request.body"
+          "github.event.issue.title"
+          "github.event.issue.body"
+          "github.event.comment.body"
+          "github.event.review.body"
+          "github.event.discussion.title"
+          "github.event.discussion.body"
+          "github.head_ref"
+        )
+
+        for pattern in "${DANGEROUS_PATTERNS[@]}"; do
+          # Search for the pattern inside run: blocks in workflow files
+          MATCHES=$(grep -rn "\${{.*${pattern}.*}}" .github/workflows/*.yml 2>/dev/null | grep -v "env:" | grep -v "#" || true)
+          if [ -n "$MATCHES" ]; then
+            echo "❌ Potential script injection: \${{ $pattern }}"
+            echo "$MATCHES"
+            echo ""
+            FOUND_INJECTION=true
+          fi
+        done
+
+        if [ "$FOUND_INJECTION" = "true" ]; then
+          echo "=================================================="
+          echo "❌ CI/CD SCRIPT INJECTION RISK DETECTED"
+          echo "=================================================="
+          echo "Move dangerous expressions to env: blocks instead of using them in run: directly."
+          echo ""
+          echo "UNSAFE:  run: echo \"\${{ github.event.pull_request.title }}\""
+          echo "SAFE:    env:"
+          echo "           PR_TITLE: \${{ github.event.pull_request.title }}"
+          echo "         run: echo \"\$PR_TITLE\""
+          # Warning only — not blocking since some uses may be safe
+        else
+          echo "✅ No CI/CD script injection patterns detected"
+        fi
+
+    - name: Scan wrangler.toml for security misconfigurations
+      if: always()
+      run: |
+        echo "=================================================="
+        echo "WRANGLER CONFIGURATION SECURITY CHECK"
+        echo "=================================================="
+        echo ""
+
+        FOUND_ISSUES=false
+
+        # Check for debug endpoints enabled in production configs
+        for toml_file in $(find . -name "wrangler.toml" -not -path "*/node_modules/*"); do
+          echo "Checking $toml_file..."
+
+          # Debug endpoints in production
+          if grep -n 'ENABLE_DEBUG_ENDPOINTS.*=.*"true"' "$toml_file" 2>/dev/null | grep -i "prod"; then
+            echo "❌ $toml_file: Debug endpoints enabled in production config!"
+            FOUND_ISSUES=true
+          fi
+
+          # Hardcoded secrets (not just variable names)
+          if grep -nE '^\s*(ADMIN_TOKEN|HMAC_SECRET|PRIVATE_KEY)\s*=\s*"[^"]+"' "$toml_file" 2>/dev/null; then
+            echo "❌ $toml_file: Hardcoded secret value detected!"
+            FOUND_ISSUES=true
+          fi
+
+          # Overly permissive compatibility flags
+          if grep -n 'nodejs_compat_v2' "$toml_file" 2>/dev/null; then
+            echo "⚠️ $toml_file: nodejs_compat_v2 flag — verify this is intentional"
+          fi
+        done
+
+        echo ""
+        if [ "$FOUND_ISSUES" = "true" ]; then
+          echo "❌ Wrangler security issues found — review above"
+        else
+          echo "✅ No wrangler security misconfigurations detected"
+        fi
 
     - name: Create analysis summary
       if: always()
@@ -178,36 +271,38 @@ jobs:
           echo "### Query Packs Used" >> $GITHUB_STEP_SUMMARY
           echo "- **security-extended**: Extended security queries" >> $GITHUB_STEP_SUMMARY
           echo "- **security-and-quality**: Security and code quality queries" >> $GITHUB_STEP_SUMMARY
+          echo "- **security-experimental**: Experimental security queries" >> $GITHUB_STEP_SUMMARY
+          echo "- **custom-queries**: Stack-specific security queries" >> $GITHUB_STEP_SUMMARY
         fi
 
         echo "" >> $GITHUB_STEP_SUMMARY
-        echo "**Note:** This workflow runs on PR/push per ci-cd-architecture.md" >> $GITHUB_STEP_SUMMARY
+        echo "**Note:** This workflow runs on all branches per ci-cd-architecture.md" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
-        echo "### Coverage" >> $GITHUB_STEP_SUMMARY
-        echo "- Backend: Google Apps Script (.gs files)" >> $GITHUB_STEP_SUMMARY
-        echo "- Frontend: HTML files with embedded JavaScript" >> $GITHUB_STEP_SUMMARY
-        echo "- Tests: Jest and Playwright test files" >> $GITHUB_STEP_SUMMARY
-        echo "- Scripts: Deployment and utility scripts" >> $GITHUB_STEP_SUMMARY
-        echo "- Cloudflare Worker: cloudflare-proxy/" >> $GITHUB_STEP_SUMMARY
+        echo "### Technology Coverage" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
-        echo "### Security Checks Include" >> $GITHUB_STEP_SUMMARY
-        echo "- SQL Injection vulnerabilities" >> $GITHUB_STEP_SUMMARY
-        echo "- Cross-Site Scripting (XSS)" >> $GITHUB_STEP_SUMMARY
-        echo "- Command Injection" >> $GITHUB_STEP_SUMMARY
-        echo "- Path Traversal" >> $GITHUB_STEP_SUMMARY
-        echo "- Insecure Randomness" >> $GITHUB_STEP_SUMMARY
-        echo "- Hardcoded Credentials" >> $GITHUB_STEP_SUMMARY
-        echo "- Prototype Pollution" >> $GITHUB_STEP_SUMMARY
-        echo "- Regular Expression DoS (ReDoS)" >> $GITHUB_STEP_SUMMARY
-        echo "- And 200+ other security patterns" >> $GITHUB_STEP_SUMMARY
+        echo "| Technology | Custom Query | What It Detects |" >> $GITHUB_STEP_SUMMARY
+        echo "|------------|-------------|-----------------|" >> $GITHUB_STEP_SUMMARY
+        echo "| Cloudflare Workers | cloudflare-workers.ql | Unsafe body parsing without try/catch |" >> $GITHUB_STEP_SUMMARY
+        echo "| Cloudflare Workers | cloudflare-cors-wildcard.ql | Permissive CORS origins |" >> $GITHUB_STEP_SUMMARY
+        echo "| Cloudflare Workers | cloudflare-timing-safe.ql | Non-timing-safe token comparison |" >> $GITHUB_STEP_SUMMARY
+        echo "| Cloudflare Workers | cloudflare-insecure-random.ql | Math.random() for security |" >> $GITHUB_STEP_SUMMARY
+        echo "| Cloudflare Workers | cloudflare-debug-endpoints.ql | Debug endpoints in production |" >> $GITHUB_STEP_SUMMARY
+        echo "| D1 Database | d1-sql-injection.ql | SQL injection via string concat |" >> $GITHUB_STEP_SUMMARY
+        echo "| Firebase Auth | firebase-auth-bypass.ql | Client-only auth without server verify |" >> $GITHUB_STEP_SUMMARY
+        echo "| React | react-dangerouslysetinnerhtml.ql | Unsanitized dangerouslySetInnerHTML |" >> $GITHUB_STEP_SUMMARY
+        echo "| HTML Surfaces | html-innerhtml-xss.ql | innerHTML with dynamic content |" >> $GITHUB_STEP_SUMMARY
+        echo "| Wrangler | wrangler-secrets-exposure.ql | Secrets logged to console |" >> $GITHUB_STEP_SUMMARY
+        echo "| CI/CD | cicd-script-injection step | GitHub Actions \${{ }} injection |" >> $GITHUB_STEP_SUMMARY
+        echo "| Playwright | playwright-credential-exposure.ql | Hardcoded creds in tests |" >> $GITHUB_STEP_SUMMARY
+        echo "| Postman | postman-hardcoded-secrets.ql | Real secrets in collections |" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Built-in Security Checks (200+ patterns)" >> $GITHUB_STEP_SUMMARY
+        echo "- SQL Injection, XSS, Command Injection, Path Traversal" >> $GITHUB_STEP_SUMMARY
+        echo "- Insecure Randomness, Hardcoded Credentials, Prototype Pollution" >> $GITHUB_STEP_SUMMARY
+        echo "- Regular Expression DoS (ReDoS), SSRF, Open Redirect" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "### Results" >> $GITHUB_STEP_SUMMARY
         echo "Check the **Security** tab to view detailed findings." >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-        echo "---" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-        echo "**Story 5.2 Architecture**: Security gates are now in Stage-1 CI." >> $GITHUB_STEP_SUMMARY
-        echo "This scheduled scan provides deep vulnerability discovery." >> $GITHUB_STEP_SUMMARY
 
   # ============================================================================
   # DEPENDENCY AUDIT (npm audit)
