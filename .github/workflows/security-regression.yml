@@ -211,9 +211,9 @@ jobs:
 
         # Check that bundle handlers include qrVerified in their response
         QR_HANDLERS=(
-          "worker/src/handlers/posterBundle.ts"
-          "worker/src/handlers/displayBundle.ts"
-          "worker/src/handlers/publicBundle.ts"
+          "workers/oursharedevents/src/handlers/posterBundle.ts"
+          "workers/oursharedevents/src/handlers/displayBundle.ts"
+          "workers/oursharedevents/src/handlers/publicBundle.ts"
         )
 
         CONTRACT_VIOLATIONS=0
@@ -235,7 +235,7 @@ jobs:
         done
 
         # Check mapper for qrVerified field
-        MAPPER="worker/src/mappers/publicBundleMapper.ts"
+        MAPPER="workers/oursharedevents/src/mappers/publicBundleMapper.ts"
         if [ -f "$MAPPER" ]; then
           echo ""
           echo "Checking mapper: $MAPPER"
@@ -285,7 +285,7 @@ jobs:
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "### Files Checked" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
-        echo "- \`worker/src/handlers/posterBundle.ts\`" >> $GITHUB_STEP_SUMMARY
-        echo "- \`worker/src/handlers/displayBundle.ts\`" >> $GITHUB_STEP_SUMMARY
-        echo "- \`worker/src/handlers/publicBundle.ts\`" >> $GITHUB_STEP_SUMMARY
-        echo "- \`worker/src/mappers/publicBundleMapper.ts\`" >> $GITHUB_STEP_SUMMARY
+        echo "- \`workers/oursharedevents/src/handlers/posterBundle.ts\`" >> $GITHUB_STEP_SUMMARY
+        echo "- \`workers/oursharedevents/src/handlers/displayBundle.ts\`" >> $GITHUB_STEP_SUMMARY
+        echo "- \`workers/oursharedevents/src/handlers/publicBundle.ts\`" >> $GITHUB_STEP_SUMMARY
+        echo "- \`workers/oursharedevents/src/mappers/publicBundleMapper.ts\`" >> $GITHUB_STEP_SUMMARY
