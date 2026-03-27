@@ -93,6 +93,8 @@ const ADMIN_HTML = `<!DOCTYPE html>
     th { background: #1a1a2e; color: #fff; padding: .75rem 1rem; text-align: left; font-size: .8rem; text-transform: uppercase; letter-spacing: .05em; }
     td { padding: .75rem 1rem; border-bottom: 1px solid #f1f3f5; font-size: .9rem; }
     tr:last-child td { border-bottom: none; }
+    tbody tr:hover { background: #f1f3f5; }
+    tbody tr.selected { background: #dbe4ff; }
     .badge { display: inline-block; padding: .15rem .5rem; border-radius: 4px; font-size: .75rem; font-weight: 600; }
     .badge.active   { background: #d3f9d8; color: #2f9e44; }
     .badge.archived { background: #f1f3f5; color: #868e96; }
@@ -130,15 +132,19 @@ const ADMIN_HTML = `<!DOCTYPE html>
           container.innerHTML = '<p class="loading">No events found.</p>';
           return;
         }
-        const rows = data.items.map(e => \`
-          <tr>
-            <td>\${e.id}</td>
-            <td>\${e.name || '—'}</td>
+        function esc(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+        const rows = data.items.map(e => {
+          const safeName = esc(e.name || 'Untitled');
+          const safeNameAttr = safeName.replace(/'/g, "\\\\'");
+          return \`
+          <tr onclick="window.loadForms('\${e.id}', '\${safeNameAttr}'); document.querySelectorAll('tr.selected').forEach(r=>r.classList.remove('selected')); this.classList.add('selected');" style="cursor:pointer">
+            <td>\${esc(e.id)}</td>
+            <td>\${safeName}</td>
             <td>\${e.startDateISO ? new Date(e.startDateISO).toLocaleDateString() : '—'}</td>
-            <td>\${e.venue || '—'}</td>
-            <td><span class="badge \${e.status}">\${e.status}</span></td>
+            <td>\${esc(e.venue || '—')}</td>
+            <td><span class="badge \${e.status}">\${esc(e.status)}</span></td>
           </tr>
-        \`).join('');
+        \`}).join('');
         container.innerHTML = \`
           <table>
             <thead><tr><th>ID</th><th>Name</th><th>Date</th><th>Venue</th><th>Status</th></tr></thead>

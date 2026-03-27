@@ -3,9 +3,10 @@
  *
  * All form data lives in FORMS_DB — NEVER linked to the anonymous scan system (DB).
  *
- * Container pattern: All 4 form types share the same request validation,
- * observability logging, and response format. The container (processFormSubmission)
- * handles cross-cutting concerns; each form type only implements its specific logic.
+ * Container pattern: All 4 form types share validateFormRequest() for input
+ * validation, logFormEvent() for observability, and jsonResponse/errorResponse
+ * for consistent error handling. Each type implements its own success response
+ * shape (registration returns bucket, check-in returns count, etc).
  *
  * Public (no auth):
  *   POST /api/v2/events/:id/forms/register      → submit registration
@@ -43,7 +44,12 @@ function requestId(): string {
 function jsonResponse(body: Record<string, unknown>, status = 200): Response {
   return Response.json(body, {
     status,
-    headers: { 'X-Request-Id': requestId() },
+    headers: {
+      'X-Request-Id': requestId(),
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    },
   });
 }
 

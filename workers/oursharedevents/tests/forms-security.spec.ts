@@ -226,12 +226,16 @@ describe('S7: Survey PII scrub actually removes data', () => {
     expect(beforeData.name).toBe('John Doe');
     expect(beforeData.email).toBe('john@example.com');
 
-    // Simulate PII scrub (same logic as lifecycle job)
-    const PII_KEYS = /^(name|email|e-?mail|phone|address|comment|comments|feedback|message|notes|contact)$/i;
+    // Simulate PII scrub (whitelist approach — same as lifecycle job)
+    const SAFE_KEYS = /^(rating|score|count|number|rank|order|id|uuid|type|category|topic|session|duration|index|overall|venue|speaker|event|quality|value|level|tier|scale|stars?|thumbs?).*$/i;
     const parsed = JSON.parse(before!.responses_json) as Record<string, unknown>;
     const scrubbed: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(parsed)) {
-      if (PII_KEYS.test(key) && typeof value === 'string') {
+      if (typeof value === 'number' || typeof value === 'boolean') {
+        scrubbed[key] = value;
+      } else if (SAFE_KEYS.test(key)) {
+        scrubbed[key] = value;
+      } else if (typeof value === 'string') {
         scrubbed[key] = '[SCRUBBED]';
       } else {
         scrubbed[key] = value;

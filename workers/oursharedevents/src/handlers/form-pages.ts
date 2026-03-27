@@ -19,6 +19,17 @@ export interface FormPagesEnv {
   WORKER_ENV?: string;
 }
 
+// ── XSS Prevention ───────────────────────────────────────────────────────────
+
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 // ── Shared CSS: mobile-first, system fonts, 10-second comprehension ──────────
 
 const FORM_CSS = `
@@ -46,7 +57,7 @@ const FORM_CSS = `
   .rating-row button { width: auto; flex: 1; padding: .5rem; font-size: 1.1rem; background: #f1f3f5; color: #495057; border: 2px solid transparent; }
   .rating-row button.selected { background: #4361ee; color: #fff; border-color: #3451d1; }
   .checkin-tap { text-align: center; padding: 3rem 1rem; }
-  .checkin-tap button { font-size: 1.5rem; padding: 1.5rem; border-radius: 50%; width: 180px; height: 180px; margin: 1rem auto; display: block; }
+  .checkin-tap button { font-size: 1.5rem; padding: 1.5rem; border-radius: 50%; width: 180px; height: 180px; margin: 1rem auto; display: block; -webkit-tap-highlight-color: transparent; touch-action: manipulation; transition: transform 0.1s, opacity 0.1s; user-select: none; }
   .checkin-tap .count { font-size: 2rem; font-weight: 700; color: #1a1a2e; margin-top: 1rem; }
 `;
 
@@ -114,15 +125,28 @@ function checkinForm(eventId: string, eventName: string): string {
     <div class="checkin-tap" id="form-area">
       <h2>Check In</h2>
       <p id="error-msg" class="error-msg"></p>
-      <button type="submit" onclick="handleCheckin()">Tap to<br/>Check In</button>
+      <button type="button" id="checkin-btn" ontouchend="handleCheckin(event)" onclick="handleCheckin(event)">Tap to<br/>Check In</button>
       <div class="count" id="count"></div>
     </div>
     <script>
       ${FORM_JS_SUBMIT}
-      async function handleCheckin() {
-        const body = await submitForm('${eventId}', 'checkin', {});
-        document.getElementById('count').textContent = body.count + ' checked in';
-        document.querySelector('button[type="submit"]').disabled = false;
+      let tapping = false;
+      async function handleCheckin(e) {
+        if (e) e.preventDefault();
+        if (tapping) return;
+        tapping = true;
+        const btn = document.getElementById('checkin-btn');
+        btn.style.transform = 'scale(0.93)';
+        btn.style.opacity = '0.7';
+        try {
+          const body = await submitForm('${eventId}', 'checkin', {});
+          document.getElementById('count').textContent = body.count + ' checked in';
+        } finally {
+          tapping = false;
+          btn.style.transform = 'scale(1)';
+          btn.style.opacity = '1';
+          btn.disabled = false;
+        }
       }
     </script>`;
 }
@@ -228,8 +252,8 @@ function formPage(eventId: string, eventName: string, formType: string): string 
 export function handleFormPage(request: Request, _env: FormPagesEnv, eventId: string): Response {
   const url = new URL(request.url);
   const formType = url.searchParams.get('type') ?? 'register';
-  // Event name comes from query param (set by QR generator) or falls back
-  const eventName = url.searchParams.get('event') ?? 'Event';
+  // Escape event name to prevent XSS — this value comes from a URL query param
+  const eventName = escapeHtml((url.searchParams.get('event') ?? 'Event').slice(0, 200));
 
   const html = formPage(eventId, eventName, formType);
   return new Response(html, {

@@ -172,15 +172,17 @@ describe('Scenario 2: Check-in lifecycle', () => {
 describe('Scenario 3: Survey lifecycle with PII scrub', () => {
   test('submit PII → admin blocked → scrub → admin reads (ratings kept, PII gone)', async () => {
     const EVENT = 'evt-survey-e2e';
-    const PII_KEYS = /^(name|email|e-?mail|phone|address|comment|comments|feedback|message|notes|contact)$/i;
+    // Whitelist approach — safe keys kept, all other strings scrubbed
+    const SAFE_KEYS = /^(rating|score|count|number|rank|order|id|uuid|type|category|topic|session|duration|index|overall|venue|speaker|event|quality|value|level|tier|scale|stars?|thumbs?).*$/i;
 
-    // ── Step 1: Submit survey with PII ────────────────────────────────────
+    // ── Step 1: Submit survey with PII (including tricky variants) ────────
     const submitRes = await handleFormSurvey(
       postReq({
         responses: {
           overall_rating: 5, venue_rating: 4,
           name: 'Bob Smith', email: 'bob@example.com',
           comments: 'Amazing event!', speaker_quality: 3,
+          first_name: 'Bob', attendee_phone: '555-1234',
         },
       }),
       formsEnv(), EVENT,
@@ -205,11 +207,19 @@ describe('Scenario 3: Survey lifecycle with PII scrub', () => {
       'SELECT id, responses_json FROM form_surveys WHERE pii_scrubbed = 0 AND created_at < ?',
     ).bind(new Date().toISOString()).all();
 
-    for (const row of unscrubbed.results) {
+    for (const row of unscrubbed.results ?? []) {
       const parsed = JSON.parse(row.responses_json as string) as Record<string, unknown>;
       const scrubbed: Record<string, unknown> = {};
       for (const [key, value] of Object.entries(parsed)) {
-        scrubbed[key] = PII_KEYS.test(key) && typeof value === 'string' ? '[SCRUBBED]' : value;
+        if (typeof value === 'number' || typeof value === 'boolean') {
+          scrubbed[key] = value;
+        } else if (SAFE_KEYS.test(key)) {
+          scrubbed[key] = value;
+        } else if (typeof value === 'string') {
+          scrubbed[key] = '[SCRUBBED]';
+        } else {
+          scrubbed[key] = value;
+        }
       }
       await formsDb().prepare(
         'UPDATE form_surveys SET responses_json = ?, pii_scrubbed = 1 WHERE id = ?',
@@ -225,9 +235,11 @@ describe('Scenario 3: Survey lifecycle with PII scrub', () => {
     expect(data.name).toBe('[SCRUBBED]');
     expect(data.email).toBe('[SCRUBBED]');
     expect(data.comments).toBe('[SCRUBBED]');
-    expect(data.overall_rating).toBe(5);
-    expect(data.venue_rating).toBe(4);
-    expect(data.speaker_quality).toBe(3);
+    expect(data.first_name).toBe('[SCRUBBED]');       // Whitelist catches variants
+    expect(data.attendee_phone).toBe('[SCRUBBED]');   // Whitelist catches variants
+    expect(data.overall_rating).toBe(5);              // Numeric — always safe
+    expect(data.venue_rating).toBe(4);                // Numeric — always safe
+    expect(data.speaker_quality).toBe(3);             // Numeric — always safe
 
     // ── Step 6: Admin NOW reads — ratings intact, PII gone ────────────────
     const visibleRes = await handleAdminSurveys(getReq(), formsEnv(), EVENT);

@@ -35,24 +35,31 @@ export default {
 };
 
 /**
- * PII field patterns — keys in survey responses that commonly contain personal data.
- * Values for these keys are replaced with "[SCRUBBED]".
+ * Safe key patterns — keys in survey responses that are behavioral/rating data
+ * and are safe to keep post-scrub. ALL other string values are scrubbed.
+ * This whitelist approach is safer than a PII blacklist.
  */
-const PII_KEY_PATTERNS = /^(name|email|e-?mail|phone|address|comment|comments|feedback|message|notes|contact)$/i;
+const SAFE_KEY_PATTERNS = /^(rating|score|count|number|rank|order|id|uuid|type|category|topic|session|duration|index|overall|venue|speaker|event|quality|value|level|tier|scale|stars?|thumbs?).*$/i;
 
 /**
- * Scrub PII from survey responses JSON. Preserves rating/numeric data,
- * replaces string values for PII-pattern keys with "[SCRUBBED]".
+ * Scrub PII from survey responses JSON using whitelist approach.
+ * Keeps numeric values and keys matching safe patterns (ratings, scores, etc).
+ * ALL string values for non-safe keys are replaced with "[SCRUBBED]".
+ * This catches name variants (first_name, attendee_name, etc) that a blacklist would miss.
  */
 function scrubSurveyPii(responsesJson: string): string {
   try {
     const data = JSON.parse(responsesJson) as Record<string, unknown>;
     const scrubbed: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(data)) {
-      if (PII_KEY_PATTERNS.test(key) && typeof value === 'string') {
-        scrubbed[key] = '[SCRUBBED]';
+      if (typeof value === 'number' || typeof value === 'boolean') {
+        scrubbed[key] = value; // Numeric/boolean data is always safe
+      } else if (SAFE_KEY_PATTERNS.test(key)) {
+        scrubbed[key] = value; // Safe key — keep as-is
+      } else if (typeof value === 'string') {
+        scrubbed[key] = '[SCRUBBED]'; // Unsafe string — scrub
       } else {
-        scrubbed[key] = value;
+        scrubbed[key] = value; // Arrays, objects — keep structure
       }
     }
     return JSON.stringify(scrubbed);
@@ -90,7 +97,7 @@ async function runFormDataLifecycle(env: RouterEnv): Promise<void> {
       .bind(now)
       .all();
 
-    for (const row of unscrubbed.results) {
+    for (const row of unscrubbed.results ?? []) {
       const scrubbed = scrubSurveyPii(row.responses_json as string);
       await env.FORMS_DB.prepare(
         'UPDATE form_surveys SET responses_json = ?, pii_scrubbed = 1 WHERE id = ?',
