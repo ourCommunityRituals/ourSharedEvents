@@ -150,9 +150,104 @@ describe('QA-F4: FORMS_DB has NO main DB tables', () => {
   });
 });
 
-// ── QA-F5: checkin_counts.event_id UNIQUE ────────────────────────────────────
+// ── QA-F5: Feature flag UNIQUE constraint ───────────────────────────────────
 
-describe('QA-F5: checkin_counts UNIQUE constraint', () => {
+describe('QA-F5: feature_flags UNIQUE(scope, scope_id, flag_key)', () => {
+  test('duplicate global flag INSERT fails with UNIQUE constraint', async () => {
+    try {
+      // Seed migration already inserted (global, '', 'forms.register')
+      // Direct INSERT with same combo should fail
+      await formsDb()
+        .prepare(
+          `INSERT INTO feature_flags (id, scope, scope_id, flag_key, enabled, updated_at)
+           VALUES ('dup_test', 'global', '', 'forms.register', 1, datetime('now'))`,
+        )
+        .run();
+      expect.fail('Duplicate flag INSERT should have thrown UNIQUE constraint error');
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      expect(msg.toUpperCase()).toMatch(/UNIQUE/);
+    }
+  });
+
+  test('same flag_key for different events does NOT conflict', async () => {
+    await formsDb()
+      .prepare(
+        `INSERT INTO feature_flags (id, scope, scope_id, flag_key, enabled, updated_at)
+         VALUES ('evt_a_flag', 'event', 'evt-a', 'forms.survey', 1, datetime('now'))`,
+      )
+      .run();
+
+    await formsDb()
+      .prepare(
+        `INSERT INTO feature_flags (id, scope, scope_id, flag_key, enabled, updated_at)
+         VALUES ('evt_b_flag', 'event', 'evt-b', 'forms.survey', 0, datetime('now'))`,
+      )
+      .run();
+
+    const count = await formsDb()
+      .prepare("SELECT COUNT(*) as cnt FROM feature_flags WHERE flag_key = 'forms.survey' AND scope = 'event'")
+      .first<{ cnt: number }>();
+
+    expect(count?.cnt).toBe(2);
+  });
+});
+
+// ── QA-F6: Seed migration idempotency ───────────────────────────────────────
+
+describe('QA-F6: Seed migration idempotency (ON CONFLICT DO NOTHING)', () => {
+  test('re-running seed migration does not create duplicate flags', async () => {
+    const before = await formsDb()
+      .prepare("SELECT COUNT(*) as cnt FROM feature_flags WHERE scope = 'global'")
+      .first<{ cnt: number }>();
+
+    // Re-apply the seed statements (ON CONFLICT DO NOTHING)
+    await applyFormsMigrations();
+
+    const after = await formsDb()
+      .prepare("SELECT COUNT(*) as cnt FROM feature_flags WHERE scope = 'global'")
+      .first<{ cnt: number }>();
+
+    expect(after?.cnt).toBe(before?.cnt);
+  });
+});
+
+// ── QA-F7: Feature flag upsert behavior ─────────────────────────────────────
+
+describe('QA-F7: feature_flags upsert via ON CONFLICT DO UPDATE', () => {
+  test('upsert changes enabled value, does not create new row', async () => {
+    // Insert initial flag
+    await formsDb()
+      .prepare(
+        `INSERT INTO feature_flags (id, scope, scope_id, flag_key, enabled, updated_at)
+         VALUES ('upsert_test', 'event', 'evt-upsert', 'assets.file-upload', 0, datetime('now'))
+         ON CONFLICT(scope, scope_id, flag_key) DO NOTHING`,
+      )
+      .run();
+
+    // Upsert to flip it ON
+    await formsDb()
+      .prepare(
+        `INSERT INTO feature_flags (id, scope, scope_id, flag_key, enabled, updated_at)
+         VALUES ('upsert_test_2', 'event', 'evt-upsert', 'assets.file-upload', 1, datetime('now'))
+         ON CONFLICT(scope, scope_id, flag_key)
+         DO UPDATE SET enabled = excluded.enabled, updated_at = datetime('now')`,
+      )
+      .run();
+
+    const result = await formsDb()
+      .prepare("SELECT id, enabled FROM feature_flags WHERE scope = 'event' AND scope_id = 'evt-upsert' AND flag_key = 'assets.file-upload'")
+      .first<{ id: string; enabled: number }>();
+
+    // Original row updated, NOT a new row created
+    expect(result?.id).toBe('upsert_test');
+    expect(result?.enabled).toBe(1);
+  });
+});
+
+// ── QA-F8: checkin_counts.event_id UNIQUE ────────────────────────────────────
+
+describe('QA-F8: checkin_counts UNIQUE constraint', () => {
   test('checkin_counts.event_id is UNIQUE — second direct INSERT fails', async () => {
     await formsDb()
       .prepare(

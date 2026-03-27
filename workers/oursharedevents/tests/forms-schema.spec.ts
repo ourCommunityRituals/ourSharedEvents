@@ -169,3 +169,51 @@ describe('Gate F5: Forms index verification', () => {
     EXPECTED_INDEXES.forEach((idx) => expect(names).toContain(idx));
   });
 });
+
+// ── Gate F6: Free tier seed data integrity ──────────────────────────────────
+
+describe('Gate F6: Free tier seed data integrity', () => {
+  test('exactly 12 global flags seeded with correct free-tier defaults', async () => {
+    const flags = await (env as unknown as TestEnv).FORMS_DB.prepare(
+      "SELECT flag_key, enabled FROM feature_flags WHERE scope = 'global' ORDER BY flag_key",
+    ).all();
+
+    expect(flags.results).toHaveLength(12);
+
+    // Verify the exact expected state — this is the contract
+    const expected: Record<string, number> = {
+      'analytics.shared-report': 0,
+      'assets.custom-qr': 0,
+      'assets.file-upload': 0,
+      'branding.color-palette': 0,
+      'branding.custom-domain': 0,
+      'branding.white-label': 0,
+      'config.event-settings': 0,
+      'config.self-serve': 0,
+      'forms.checkin': 1,
+      'forms.email-signup': 0,
+      'forms.register': 1,
+      'forms.survey': 0,
+    };
+
+    for (const row of flags.results) {
+      const key = row.flag_key as string;
+      expect(expected).toHaveProperty(key);
+      expect(row.enabled).toBe(expected[key]);
+    }
+  });
+
+  test('feature_flags table has 6 columns: id, scope, scope_id, flag_key, enabled, updated_at', async () => {
+    const info = await (env as unknown as TestEnv).FORMS_DB.prepare(
+      'PRAGMA table_info(feature_flags)',
+    ).all();
+    const cols = info.results.map((r: Record<string, unknown>) => r.name);
+    expect(cols).toHaveLength(6);
+    expect(cols).toContain('id');
+    expect(cols).toContain('scope');
+    expect(cols).toContain('scope_id');
+    expect(cols).toContain('flag_key');
+    expect(cols).toContain('enabled');
+    expect(cols).toContain('updated_at');
+  });
+});

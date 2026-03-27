@@ -168,7 +168,8 @@ jobs:
                    migrations-forms/0003_create_form_surveys.sql \
                    migrations-forms/0004_create_email_signups.sql \
                    migrations-forms/0005_create_forms_indexes.sql \
-                   migrations-forms/0006_create_form_config.sql; do
+                   migrations-forms/0006_create_form_config.sql \
+                   migrations-forms/0007_seed_free_tier_flags.sql; do
             echo "Applying $f to staging forms DB..."
             npx wrangler d1 execute ocr-forms-db-staging --env staging --file "$f" --remote
             echo "✓ $f applied"
@@ -395,7 +396,8 @@ jobs:
                    migrations-forms/0003_create_form_surveys.sql \
                    migrations-forms/0004_create_email_signups.sql \
                    migrations-forms/0005_create_forms_indexes.sql \
-                   migrations-forms/0006_create_form_config.sql; do
+                   migrations-forms/0006_create_form_config.sql \
+                   migrations-forms/0007_seed_free_tier_flags.sql; do
             echo "Applying $f to production forms DB..."
             npx wrangler d1 execute ocr-forms-db-production --env production --file "$f" --remote
             echo "✓ $f applied"
