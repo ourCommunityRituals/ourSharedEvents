@@ -17,7 +17,7 @@
 - [ ] Tested on mobile viewport (if UI changes)
 
 ## Security
-- [ ] All security scans pass (CodeQL, npm audit, Trivy, Semgrep, Gitleaks)
+- [ ] All security scans pass (CodeQL + custom queries, npm audit)
 - [ ] No new dependencies with copyleft licenses (GPL/AGPL)
 - [ ] No hardcoded secrets or credentials
 - [ ] User input is validated/sanitized at system boundaries

@@ -33,22 +33,19 @@ Security findings are treated as the **highest priority work item**. No feature 
 
 | Gate | Tool | Runs On | Blocks Merge? |
 |------|------|---------|---------------|
-| **CodeQL Analysis** | GitHub CodeQL | All branches, PR, Weekly | Yes (critical/high) |
+| **CodeQL Analysis** | GitHub CodeQL + custom queries | All branches, PR, Weekly | Yes (critical/high) |
 | **Dependency Audit** | npm audit | All branches, PR, Weekly | Yes (critical/high) |
-| **Trivy Vulnerability** | Aqua Trivy | All branches, PR, Weekly | Yes (critical/high) |
-| **Semgrep SAST** | Semgrep | All branches, PR | Yes (findings) |
-| **Gitleaks Secrets** | Gitleaks | All branches, PR | Yes (any secret) |
+| **Secret Detection** | Stage-1 grep + CodeQL | All branches, PR | Yes (any secret) |
 | **License Compliance** | license-checker | All branches, PR | Yes (copyleft) |
 | **Dependency Review** | GitHub | PR only | Yes (high severity) |
 | **SBOM Generation** | CycloneDX | All branches, PR | No (artifact) |
-| **OSSF Scorecard** | OpenSSF | main, Weekly | No (tracking) |
 
 ### Workflow Files
 
 | File | Purpose |
 |------|---------|
-| `.github/workflows/security-scan.yml` | CodeQL + npm audit |
-| `.github/workflows/advanced-security-scan.yml` | Trivy, Semgrep, Gitleaks, SBOM, License, OSSF, Dep Review |
+| `.github/workflows/security-scan.yml` | CodeQL + npm audit + custom queries + CI/CD + wrangler checks |
+| `.github/workflows/advanced-security-scan.yml` | SBOM, License Compliance, Dependency Review |
 | `.github/workflows/security-triage.yml` | Auto-creates issues from scan failures |
 | `.github/workflows/security-sla-enforcement.yml` | Daily SLA checks + escalation |
 | `.github/workflows/security-regression.yml` | Runtime security regression tests |
@@ -622,7 +619,7 @@ npm audit --json > .security-reports/audit.json
 | File | Purpose |
 |------|---------|
 | `.github/workflows/security-scan.yml` | CodeQL + npm audit (all branches) |
-| `.github/workflows/advanced-security-scan.yml` | Trivy, Semgrep, Gitleaks, SBOM, License, OSSF (all branches) |
+| `.github/workflows/advanced-security-scan.yml` | SBOM, License Compliance, Dependency Review (all branches) |
 | `.github/workflows/security-triage.yml` | Auto-creates issues from scan failures |
 | `.github/workflows/security-sla-enforcement.yml` | Daily SLA checks + escalation |
 | `.github/workflows/security-human-gate.yml` | Blocks bot/agent merges on security failures |
