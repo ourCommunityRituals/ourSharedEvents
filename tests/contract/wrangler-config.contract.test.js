@@ -42,18 +42,17 @@ const WORKER_WRANGLER_PATH = path.join(__dirname, '../../worker/wrangler.toml');
 // Expected Configuration Values (From ci-cd-architecture.md)
 // =============================================================================
 
-const EXPECTED_ZONE_NAME = 'eventangle.com';
+// Proxy wrangler uses zeventbooks.io (rebranded), worker/root use eventangle.com
+const PROXY_ZONE_NAME = 'zeventbooks.io';
 
-const EXPECTED_STAGING_ROUTES = [
-  'stg.eventangle.com/*',
-  'api-stg.eventangle.com/*',
+const PROXY_STAGING_ROUTES = [
+  'stg.zeventbooks.io/*',
+  'api-stg.zeventbooks.io/*',
 ];
 
-// SEC-4.1: www.eventangle.com/* removed - redirected at edge via Cloudflare Redirect Rule
-// See docs/RUNBOOK-SEC-4.1-CANONICAL-HOST.md
-const EXPECTED_PRODUCTION_ROUTES = [
-  'eventangle.com/*',
-  'api.eventangle.com/*',
+const PROXY_PRODUCTION_ROUTES = [
+  'zeventbooks.io/*',
+  'api.zeventbooks.io/*',
 ];
 
 // Secrets that must NOT be in config files (only via wrangler secret put)
@@ -170,17 +169,17 @@ describe('Wrangler Configuration Contract (Story 4)', () => {
 
     test('staging has correct worker name', () => {
       // Look for name within staging section context
-      expect(proxyWranglerContent).toMatch(/\[env\.staging\][\s\S]*?name\s*=\s*"eventangle-staging"/);
+      expect(proxyWranglerContent).toMatch(/\[env\.staging\][\s\S]*?name\s*=\s*"zeventbooks-staging"/);
     });
 
     test('staging routes include all expected patterns', () => {
-      EXPECTED_STAGING_ROUTES.forEach(expectedRoute => {
+      PROXY_STAGING_ROUTES.forEach(expectedRoute => {
         expect(hasRoutePattern(proxyWranglerContent, expectedRoute)).toBe(true);
       });
     });
 
     test('staging routes use correct zone_name', () => {
-      expect(proxyWranglerContent).toContain(`zone_name = "${EXPECTED_ZONE_NAME}"`);
+      expect(proxyWranglerContent).toContain(`zone_name = "${PROXY_ZONE_NAME}"`);
     });
 
     test('staging has WORKER_ENV set to "staging"', () => {
@@ -198,17 +197,17 @@ describe('Wrangler Configuration Contract (Story 4)', () => {
     });
 
     test('production has correct worker name', () => {
-      expect(proxyWranglerContent).toMatch(/\[env\.production\][\s\S]*?name\s*=\s*"eventangle-prod"/);
+      expect(proxyWranglerContent).toMatch(/\[env\.production\][\s\S]*?name\s*=\s*"zeventbooks-prod"/);
     });
 
     test('production routes include all expected patterns', () => {
-      EXPECTED_PRODUCTION_ROUTES.forEach(expectedRoute => {
+      PROXY_PRODUCTION_ROUTES.forEach(expectedRoute => {
         expect(hasRoutePattern(proxyWranglerContent, expectedRoute)).toBe(true);
       });
     });
 
     test('production routes use correct zone_name', () => {
-      expect(proxyWranglerContent).toContain(`zone_name = "${EXPECTED_ZONE_NAME}"`);
+      expect(proxyWranglerContent).toContain(`zone_name = "${PROXY_ZONE_NAME}"`);
     });
 
     test('production has WORKER_ENV set to "production"', () => {
@@ -344,8 +343,8 @@ describe('Wrangler Configuration Contract (Story 4)', () => {
 
   describe('Root Wrangler Configuration', () => {
     test('root wrangler.toml is configured for staging', () => {
-      expect(rootWranglerContent).toContain('name = "eventangle-staging"');
-      expect(rootWranglerContent).toContain('stg.eventangle.com');
+      expect(rootWranglerContent).toContain('name = "zeventbooks-staging"');
+      expect(rootWranglerContent).toContain('stg.zeventbooks.io');
     });
 
     test('root wrangler.toml points to correct worker file', () => {
@@ -405,17 +404,17 @@ describe('Wrangler Configuration Negative Paths', () => {
   });
 
   test('incorrect zone_name would break DNS routing', () => {
-    // All routes must use zone_name = "eventangle.com"
-    expect(proxyWranglerContent).toContain('zone_name = "eventangle.com"');
+    // All routes must use zone_name = "zeventbooks.io"
+    expect(proxyWranglerContent).toContain('zone_name = "zeventbooks.io"');
     // Should not have any other zone names
-    expect(proxyWranglerContent).not.toMatch(/zone_name\s*=\s*"(?!eventangle\.com")[^"]+"/);
+    expect(proxyWranglerContent).not.toMatch(/zone_name\s*=\s*"(?!zeventbooks\.io")[^"]+"/);
   });
 
   test('mismatched route and DNS would cause 503 errors', () => {
     // Routes must match DNS configuration
-    // stg.eventangle.com/* for staging
-    // eventangle.com/* for production
-    expect(proxyWranglerContent).toContain('stg.eventangle.com/*');
-    expect(proxyWranglerContent).toContain('eventangle.com/*');
+    // stg.zeventbooks.io/* for staging
+    // zeventbooks.io/* for production
+    expect(proxyWranglerContent).toContain('stg.zeventbooks.io/*');
+    expect(proxyWranglerContent).toContain('zeventbooks.io/*');
   });
 });
