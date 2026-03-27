@@ -546,6 +546,9 @@ jobs:
     name: "S1·04 🧪 Unit Tests"
     runs-on: ubuntu-latest
     needs: [lint]  # Story 2.5: Fail-fast - unit tests skip if lint fails
+    permissions:
+      contents: read
+      checks: write  # Required for dorny/test-reporter PR annotations
 
     steps:
       - name: Checkout code
@@ -578,6 +581,15 @@ jobs:
         env:
           JEST_JUNIT_OUTPUT_DIR: .test-results
           JEST_JUNIT_OUTPUT_NAME: unit-tests-junit.xml
+        continue-on-error: false
+
+      - name: Generate JUnit fallback if missing
+        if: always()
+        run: |
+          mkdir -p .test-results
+          if [ ! -f .test-results/unit-tests-junit.xml ]; then
+            echo '<?xml version="1.0" encoding="UTF-8"?><testsuites><testsuite name="unit-tests" tests="0" failures="0" errors="1"><testcase name="jest-junit-unavailable"><failure>jest-junit reporter did not produce output</failure></testcase></testsuite></testsuites>' > .test-results/unit-tests-junit.xml
+          fi
 
       - name: Run security-specific tests
         run: |

@@ -33,8 +33,6 @@ jobs:
         with:
           # Block on high/critical vulnerabilities (matches Stage-1 npm audit threshold)
           fail-on-severity: high
-          # Flag these license types for review (not block)
-          warn-only: true
           comment-summary-in-pr: always
           # Deny licenses incompatible with the project
           deny-licenses: GPL-3.0, AGPL-3.0
