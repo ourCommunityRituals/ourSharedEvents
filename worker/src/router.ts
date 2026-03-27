@@ -142,7 +142,7 @@ type Brand = (typeof VALID_BRANDS)[number];
 /**
  * HTML page types that the router can serve
  */
-type PageType = 'public' | 'admin' | 'display' | 'poster' | 'report' | 'sponsor';
+type PageType = 'public' | 'admin' | 'display' | 'poster' | 'report' | 'sponsor' | 'landing';
 
 /**
  * Route aliases mapping paths to page types
@@ -181,6 +181,11 @@ const HTML_ROUTE_MAP: Record<string, PageType> = {
   '/sponsor': 'sponsor',
   '/sponsors': 'sponsor',
   '/partnership': 'sponsor',
+
+  // Landing page aliases
+  '/home': 'landing',
+  '/welcome': 'landing',
+  '/landing': 'landing',
 };
 
 // =============================================================================
@@ -458,9 +463,9 @@ function matchRoute(url: URL): RouteMatch {
     return { type: 'page', pageType, brand };
   }
 
-  // Root path - default to public page
+  // Root path - serve landing page
   if (normalizedPath === '/') {
-    return { type: 'page', pageType: 'public', brand };
+    return { type: 'page', pageType: 'landing', brand };
   }
 
   // Check for shared module routes (Story 4.2)
