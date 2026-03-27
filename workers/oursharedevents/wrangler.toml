@@ -84,7 +84,7 @@ WORKER_ENV = "production"
 WORKER_BUILD_VERSION = "prod-2026.03.22"
 
 # Required secrets for production (set with wrangler secret put … --env production):
-#   ADMIN_TOKEN
+#   ADMIN_KEY
 #   SHEETS_SPREADSHEET_ID
 #   GOOGLE_SA_CLIENT_EMAIL
 #   GOOGLE_SA_PRIVATE_KEY_PEM

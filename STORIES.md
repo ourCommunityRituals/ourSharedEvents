@@ -28,7 +28,7 @@ Stories are ordered by the sequence you work through them. Each row unlocks the 
 | P1-5 | — | ✅ DONE | E2E launch checklist (this doc's guide) | P1-4 |
 | **Phase 1 — Operations (go live)** | | | | |
 | P1-6 | — | 📋 BACKLOG | Infra provisioning — Google Cloud + Cloudflare | P1-5 |
-| P1-7 | — | 📋 BACKLOG | Secrets + first staging deploy | P1-6 |
+| P1-7 | — | 🔄 IN PROGRESS | Secrets + first staging deploy | P1-6 |
 | P1-8 | — | 📋 BACKLOG | Staging sign-off — all checks pass | P1-7 |
 | P1-9 | — | 📋 BACKLOG | Repo migration → ourCommunityRituals/ourSharedEvents | P1-8 |
 | P1-10 | — | 📋 BACKLOG | Production launch — v1.0.0 live | P1-9 |
@@ -139,7 +139,7 @@ Stories are ordered by the sequence you work through them. Each row unlocks the 
 ---
 
 ### P1-7: Secrets + first staging deploy
-**Status:** 📋 BACKLOG
+**Status:** 🔄 IN PROGRESS
 **Prerequisite:** P1-6 ✅ (infra must exist before secrets can point to it)
 **Unlocks:** P1-8 (staging sign-off — nothing to verify until it's deployed)
 **Description:** Add all credentials to GitHub Actions and Cloudflare Worker, then trigger the first deploy to `stg.oursharedevents.com`.
