@@ -223,6 +223,10 @@ jobs:
         uses: actions/dependency-review-action@v4
         with:
           fail-on-severity: high
+          # Only fail on vulnerabilities newly introduced by this PR,
+          # not pre-existing ones on the base branch.
+          base-ref: ${{ github.event.pull_request.base.sha }}
+          head-ref: ${{ github.event.pull_request.head.sha }}
           # Block known problematic licenses in new dependencies
           deny-licenses: GPL-2.0-only, GPL-3.0-only, AGPL-3.0-only
           comment-summary-in-pr: always
