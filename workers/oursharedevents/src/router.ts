@@ -21,6 +21,17 @@
  *   GET  /api/v2/admin/events/:id/forms/email-signups  → email signup count (admin)
  *   GET  /forms/:eventId?type=register|checkin|survey|email  → public form page (QR landing)
  *   POST /subscribe              → email capture
+ *
+ *   Feature Flag Admin (auth required):
+ *   GET    /api/v2/admin/flags              → list all flags
+ *   GET    /api/v2/admin/flags/tiers        → list tier presets
+ *   GET    /api/v2/admin/flags/current-tier → detect active tier
+ *   GET    /api/v2/admin/flags/resolve      → resolved flags (?eventId=)
+ *   PUT    /api/v2/admin/flags/:key         → toggle a global flag
+ *   POST   /api/v2/admin/flags/apply-tier   → apply tier preset
+ *   PUT    /api/v2/admin/events/:id/flags/:key    → set event override
+ *   DELETE /api/v2/admin/events/:id/flags/:key    → remove event override
+ *
  *   *                            → 404
  */
 
@@ -40,7 +51,17 @@ import {
   type FormsEnv,
 } from './handlers/forms';
 import { handleFormPage, type FormPagesEnv } from './handlers/form-pages';
-import { isFeatureEnabled } from './lib/feature-flags';
+import { isFeatureEnabled, type FeatureFlagEnv } from './lib/feature-flags';
+import {
+  handleListFlags,
+  handleListTiers,
+  handleGetCurrentTier,
+  handleResolveFlags,
+  handleSetFlag,
+  handleApplyTier,
+  handleSetEventFlag,
+  handleRemoveEventFlag,
+} from './handlers/feature-flags';
 import { corsOrigin } from './lib/cors';
 
 export type RouterEnv = HealthEnv & EventsEnv & PagesEnv & AdminEnv & FormsEnv & FormPagesEnv & {
@@ -109,6 +130,58 @@ export async function route(request: Request, env: RouterEnv): Promise<Response>
       case 'email-signups':
         return handleAdminEmailSignupCount(request, env, eventId);
     }
+  }
+
+  // ── Feature Flag Admin routes (auth-gated) ─────────────────────────────────
+
+  // Event-level flag overrides: PUT/DELETE /api/v2/admin/events/:id/flags/:key
+  const eventFlagMatch = pathname.match(
+    /^\/api\/v2\/admin\/events\/([^/]+)\/flags\/([^/]+)$/,
+  );
+  if (eventFlagMatch && (method === 'PUT' || method === 'DELETE')) {
+    const deny = requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
+    if (deny) return deny;
+    const [, eventId, flagKey] = eventFlagMatch;
+    if (method === 'PUT') return handleSetEventFlag(request, env, eventId, flagKey);
+    return handleRemoveEventFlag(env, eventId, flagKey);
+  }
+
+  if (pathname === '/api/v2/admin/flags' && method === 'GET') {
+    const deny = requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
+    if (deny) return deny;
+    return handleListFlags(request, env);
+  }
+
+  if (pathname === '/api/v2/admin/flags/tiers' && method === 'GET') {
+    const deny = requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
+    if (deny) return deny;
+    return handleListTiers();
+  }
+
+  if (pathname === '/api/v2/admin/flags/current-tier' && method === 'GET') {
+    const deny = requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
+    if (deny) return deny;
+    return handleGetCurrentTier(env);
+  }
+
+  if (pathname === '/api/v2/admin/flags/resolve' && method === 'GET') {
+    const deny = requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
+    if (deny) return deny;
+    return handleResolveFlags(request, env);
+  }
+
+  // PUT /api/v2/admin/flags/:key — toggle a global flag
+  const flagKeyMatch = pathname.match(/^\/api\/v2\/admin\/flags\/([^/]+)$/);
+  if (flagKeyMatch && method === 'PUT') {
+    const deny = requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
+    if (deny) return deny;
+    return handleSetFlag(request, env, flagKeyMatch[1]);
+  }
+
+  if (pathname === '/api/v2/admin/flags/apply-tier' && method === 'POST') {
+    const deny = requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
+    if (deny) return deny;
+    return handleApplyTier(request, env);
   }
 
   // ── Public API ─────────────────────────────────────────────────────────────

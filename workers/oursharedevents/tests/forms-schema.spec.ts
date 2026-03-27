@@ -82,12 +82,17 @@ describe('Gate F1: Forms table existence', () => {
     EXPECTED_TABLES.forEach((t) => expect(names).toContain(t));
   });
 
-  test('each forms table returns 0 rows (empty, not missing)', async () => {
+  test('each forms table returns 0 rows (empty, not missing) — except feature_flags (seeded)', async () => {
     for (const table of EXPECTED_TABLES) {
       const result = await (env as unknown as TestEnv).FORMS_DB.prepare(
         `SELECT COUNT(*) as cnt FROM ${table}`,
       ).first<{ cnt: number }>();
-      expect(result?.cnt).toBe(0);
+      if (table === 'feature_flags') {
+        // Seed migration 0007 inserts 12 free-tier default flags
+        expect(result?.cnt).toBe(12);
+      } else {
+        expect(result?.cnt).toBe(0);
+      }
     }
   });
 });
