@@ -890,7 +890,7 @@ Sprint 6-7 (V2 enterprise):
 | **MVP v1.1** (Sprint 5) | ADMIN-12 | Fast, themeable, maintainable. Unblocks enterprise UI. |
 | **V2 v2.5** (Sprint 6-7) | ADMIN-17,18 | Enterprise. White-label. File upload. |
 
-### V2↑MVP Justification (Why 7 V2 items ship with MVP)
+### V2↑MVP Justification (Why 11 V2 items ship with MVP)
 
 | Story | Original Tag | Pulled To | Justification |
 |-------|-------------|-----------|---------------|
@@ -900,7 +900,11 @@ Sprint 6-7 (V2 enterprise):
 | **ADMIN-9** (Email signup) | V2 | Sprint 4 | Same logic. "We have 576 email subscribers" beats "we could collect emails." The list compounds — every month it doesn't exist is lost growth. |
 | **ADMIN-10** (Self-serve) | V2 | Sprint 4 | Art Institute isn't going to call you to change their event settings. Self-serve is table stakes for an institution. They test by trying it. If it's locked, the meeting is over. |
 | **ADMIN-11** (Export) | V2 | Sprint 4 | First question any institution asks: "Can I get my data out?" If the answer is "not yet," trust evaporates. Export is the proof that you don't lock them in. |
-| **ADMIN-12** (CSS tokens) | V2 | Sprint 5 | 500+ inline styles = slow mobile + impossible to theme. Every enterprise sprint is faster after this. |
+| **ADMIN-12** (CSS classes) | V2 | Sprint 4 | 500+ inline styles = slow mobile + impossible to theme. Every enterprise sprint is faster after this. |
+| **DESIGN-8** (External tokens) | V2 | Sprint 4 | Same token file duplicated in 5 templates. One edit = 5 files to update. Single source of truth stops drift cold. |
+| **DESIGN-11** (Hex audit) | V2 | Sprint 4 | 1,773 hardcoded hex colors. Primary palette is token-controlled but secondary drifts. Audit + extract in one pass with ADMIN-12. |
+| **DESIGN-2** (Breakpoints) | V2 | Sprint 4 | 58 `max-width` queries in a "mobile-first" codebase. Every new surface inherits the inconsistency. Fix once, all surfaces benefit. |
+| **DESIGN-6** (Report print) | V2 | Sprint 4 | Sponsors ask for printable report. Currently zero `@media print` on SharedReport. One sponsor handout = one deal closed. |
 
 ---
 
@@ -1157,7 +1161,23 @@ test(`${surface} renders correctly on ${viewport.name}`, async ({ page }) => {
 > a broken form. A test that can't find a test-id is a test that doesn't exist. Design debt
 > compounds faster than feature debt because it multiplies across 5 surfaces × N viewports.
 
-### Combined Sprint Plan (32 stories, ordered by compound value)
+### Completeness Audit (Section 1-11 → Section 12 cross-reference)
+
+Every actionable finding from every section was checked against the story list.
+8 gaps were found and added. **40 stories total** (was 32).
+
+| Gap Found | Source Section | Story Added | Sprint |
+|-----------|---------------|-------------|--------|
+| UC-9: Multi-event aggregate dashboard | §2 PO | **ADMIN-21** | 5 |
+| UC-10: Sponsor ROI click-through attribution | §2 PO | **ADMIN-22** | 5 |
+| Consent tracking (checkbox + timestamp on form submit) | §2 PO Privacy | **ADMIN-23** | 3 |
+| Wizard step 3 UX simplification (3 options → 2) | §5 Design | **DESIGN-13** | 2 |
+| "Last updated" indicator on Card 1 | §5 Design | **DESIGN-14** | 1 |
+| Edge case test suite (double submit, archived form, flag mid-session) | §6 QA | **QA-1** | 3 |
+| Flag toggle → surface gating E2E test | §4 FE Integration | **QA-2** | 3 |
+| Skip links on Display, Poster, Report (a11y) | §11 Design Engineer | **A11Y-ADMIN-1** | 2 |
+
+### Combined Sprint Plan (40 stories, ordered by compound value)
 
 ---
 
@@ -1175,8 +1195,9 @@ test(`${surface} renders correctly on ${viewport.name}`, async ({ page }) => {
 | 6 | **ADMIN-13** | Skeleton loaders + per-card error states | `MVP-UX` | 4h | "Blank screen then pop" kills first impressions. |
 | 7 | **DESIGN-10** | Report responsive tables (horizontal scroll or card-collapse) | `MVP-UX` | 0.5 sp | Report tables overflow on mobile. Sponsor handout is unusable on phones. |
 | 8 | **ADMIN-20** | Cross-surface sponsor integration test suite | `MVP` | 1 sp | Validates the money-maker renders on every surface. |
+| 9 | **DESIGN-14** | "Last updated" timestamp on Card 1 (event basics) | `MVP-UX` | 2h | §5: Users can't tell if data is stale. One line of text builds trust. |
 
-**Sprint 1 total:** ~4 sp. All zero-dependency. Can start today.
+**Sprint 1 total:** ~4.5 sp. All zero-dependency. Can start today.
 
 ---
 
@@ -1192,8 +1213,10 @@ test(`${surface} renders correctly on ${viewport.name}`, async ({ page }) => {
 | 12 | **ADMIN-5** | Card 3 redesign — inline form config | `V2↑MVP` | 1 sp | Forms are useless if operators can't find the config. |
 | 13 | **DESIGN-4** | CI viewport matrix — add iPad, TV 1080p, iPhone SE | `MVP` | 0.5 sp | 8 devices in config, 2 in CI. Fixing this catches breakpoint bugs before users do. |
 | 14 | **DESIGN-9** | Poster mobile landing (QR scan → mobile-friendly view) | `MVP-UX` | 0.5 sp | QR on poster → phone lands on print-optimized page. Bad UX. |
+| 15 | **DESIGN-13** | Wizard step 3 UX simplification (3 options → 2: "I have a form" / "Create one") | `MVP-UX` | 0.5 sp | §5: Current 3-way choice confuses operators. Simplify before forms ship. |
+| 16 | **A11Y-ADMIN-1** | Skip links on Display, Poster, Report surfaces | `MVP` | 0.5 sp | §11: Admin + Public have skip links. 3 surfaces missing. A11Y blocker. |
 
-**Sprint 2 total:** ~5 sp.
+**Sprint 2 total:** ~6 sp.
 
 ---
 
@@ -1203,13 +1226,16 @@ test(`${surface} renders correctly on ${viewport.name}`, async ({ page }) => {
 
 | # | ID | Title | Tag | Est | Why Now |
 |---|-----|-------|-----|-----|---------|
-| 15 | **ADMIN-6** | Anonymous ID system (cookie + D1, scan correlation) | `MVP` | 1 sp | Triangle model is broken without this. |
-| 16 | **ADMIN-7** | PII destruction jobs (scrub, audit, retention) | `MVP` | 1 sp | Compliance blocker — can't store form data without deletion path. |
-| 17 | **ADMIN-2** | Tier badge + gated UI (locked icons, upgrade prompts) | `MVP-UX` | 1 sp | Operators need to see what they can/can't access. |
-| 18 | **ADMIN-19** | Newman E2E chain (create → config → submit → count → scrub) | `MVP` | 1 sp | End-to-end validation of the entire form pipeline. |
-| 19 | **DESIGN-5** | Visual regression baseline — `toHaveScreenshot()` all surfaces × viewports | `MVP-UX` | 1 sp | Theme drift is invisible without this. One bad merge breaks 5 surfaces. |
+| 17 | **ADMIN-6** | Anonymous ID system (cookie + D1, scan correlation) | `MVP` | 1 sp | Triangle model is broken without this. |
+| 18 | **ADMIN-7** | PII destruction jobs (scrub, audit, retention) | `MVP` | 1 sp | Compliance blocker — can't store form data without deletion path. |
+| 19 | **ADMIN-23** | Consent tracking on form submit (checkbox + timestamp) | `MVP` | 0.5 sp | §2 Privacy: Can't collect PII without consent record. GDPR/CCPA. Ships with ADMIN-7. |
+| 20 | **ADMIN-2** | Tier badge + gated UI (locked icons, upgrade prompts) | `MVP-UX` | 1 sp | Operators need to see what they can/can't access. |
+| 21 | **ADMIN-19** | Newman E2E chain (create → config → submit → count → scrub) | `MVP` | 1 sp | End-to-end validation of the entire form pipeline. |
+| 22 | **QA-1** | Edge case test suite (double submit idempotency, archived form 410, nonexistent QR 404, flag change mid-session) | `MVP` | 0.5 sp | §6: 5 edge cases identified with no test coverage. Race conditions and error paths. |
+| 23 | **QA-2** | Flag toggle → surface gating E2E (disable feature → verify surface hides it) | `MVP` | 0.5 sp | §4: Admin flag changes must propagate to all 5 surfaces. Currently untested. |
+| 24 | **DESIGN-5** | Visual regression baseline — `toHaveScreenshot()` all surfaces × viewports | `MVP-UX` | 1 sp | Theme drift is invisible without this. One bad merge breaks 5 surfaces. |
 
-**Sprint 3 total:** ~5 sp.
+**Sprint 3 total:** ~6.5 sp.
 
 ---
 
@@ -1219,15 +1245,15 @@ test(`${surface} renders correctly on ${viewport.name}`, async ({ page }) => {
 
 | # | ID | Title | Tag | Est | Why Now |
 |---|-----|-------|-----|-----|---------|
-| 20 | **ADMIN-8** | Native survey form (tier-aware) | `V2↑MVP` | 1 sp | "Here's 1,920 survey responses" > "we can do surveys." |
-| 21 | **ADMIN-9** | Email signup form (duplicate detection) | `V2↑MVP` | 1 sp | Email list compounds. Every month without it is lost growth. |
-| 22 | **ADMIN-10** | Self-serve event config | `V2↑MVP` | 1 sp | Art Institute won't call you to change settings. |
-| 23 | **ADMIN-11** | Form data export (CSV/JSON) | `V2↑MVP` | 0.5 sp | "Can I get my data out?" Export = trust. |
-| 24 | **DESIGN-8** | External design token file (stop inline duplication) | `V2↑MVP` | 1 sp | Tokens duplicated in 5 files. One edit = 5 files to update. Single source stops drift. |
-| 25 | **DESIGN-11** | Color palette hardcode audit — extract 500+ inline hex to tokens | `V2↑MVP` | 1 sp | Merges with ADMIN-12 scope. |
-| 26 | **ADMIN-12** | Admin inline styles → CSS classes | `V2↑MVP` | 1 sp | Combined with DESIGN-11 as one design debt pass. |
-| 27 | **DESIGN-2** | Breakpoint direction standardization (eliminate 58 `max-width` queries) | `V2↑MVP` | 1 sp | Mobile-first is inconsistent. Standardize now before more surfaces ship. |
-| 28 | **DESIGN-6** | Report print stylesheet (sponsor handout) | `V2↑MVP` | 0.5 sp | Sponsors want to print the report. Currently no print CSS. |
+| 25 | **ADMIN-8** | Native survey form (tier-aware) | `V2↑MVP` | 1 sp | "Here's 1,920 survey responses" > "we can do surveys." |
+| 26 | **ADMIN-9** | Email signup form (duplicate detection) | `V2↑MVP` | 1 sp | Email list compounds. Every month without it is lost growth. |
+| 27 | **ADMIN-10** | Self-serve event config | `V2↑MVP` | 1 sp | Art Institute won't call you to change settings. |
+| 28 | **ADMIN-11** | Form data export (CSV/JSON) | `V2↑MVP` | 0.5 sp | "Can I get my data out?" Export = trust. |
+| 29 | **DESIGN-8** | External design token file (stop inline duplication) | `V2↑MVP` | 1 sp | Tokens duplicated in 5 files. One edit = 5 files to update. Single source stops drift. |
+| 30 | **DESIGN-11** | Color palette hardcode audit — extract 500+ inline hex to tokens | `V2↑MVP` | 1 sp | Merges with ADMIN-12 scope. |
+| 31 | **ADMIN-12** | Admin inline styles → CSS classes | `V2↑MVP` | 1 sp | Combined with DESIGN-11 as one design debt pass. |
+| 32 | **DESIGN-2** | Breakpoint direction standardization (eliminate 58 `max-width` queries) | `V2↑MVP` | 1 sp | Mobile-first is inconsistent. Standardize now before more surfaces ship. |
+| 33 | **DESIGN-6** | Report print stylesheet (sponsor handout) | `V2↑MVP` | 0.5 sp | Sponsors want to print the report. Currently no print CSS. |
 
 **Sprint 4 total:** ~8 sp. Heavy but this is the "make it real" sprint.
 
@@ -1239,12 +1265,15 @@ test(`${surface} renders correctly on ${viewport.name}`, async ({ page }) => {
 
 | # | ID | Title | Tag | Est | Why Now |
 |---|-----|-------|-----|-----|---------|
-| 29 | **ADMIN-17** | File upload to R2 (logos, posters, custom QR) | `V2-ENT` | 1 sp | Enterprise feature. |
-| 30 | **ADMIN-18** | White-label branding (colors/logo/domain) | `V2-ENT` | 2 sp | Enterprise feature. |
-| 31 | **DESIGN-7** | Tabletop tent card surface (4x6 variant of poster) | `V2` | 1 sp | New surface for restaurants/bars. |
-| 32 | **DESIGN-12** | Cross-browser CI — Firefox + WebKit weekly schedule | `V2` | 0.5 sp | Safari rendering bugs caught before users report them. |
+| 34 | **ADMIN-17** | File upload to R2 (logos, posters, custom QR) | `V2-ENT` | 1 sp | Enterprise feature. |
+| 35 | **ADMIN-18** | White-label branding (colors/logo/domain) | `V2-ENT` | 2 sp | Enterprise feature. |
+| 36 | **ADMIN-21** | Multi-event aggregate dashboard (cross-event view) | `V2` | 1.5 sp | §2 UC-9: Current dropdown is per-event. No portfolio view across events. Mid/enterprise need this. |
+| 37 | **ADMIN-22** | Sponsor ROI click-through attribution + conversion funnel | `V2` | 1.5 sp | §2 UC-10: SharedReport has basic metrics. No click attribution. Sponsors can't prove ROI without this. |
+| 38 | **DESIGN-7** | Tabletop tent card surface (4x6 variant of poster) | `V2` | 1 sp | New surface for restaurants/bars. |
+| 39 | **DESIGN-12** | Cross-browser CI — Firefox + WebKit weekly schedule | `V2` | 0.5 sp | Safari rendering bugs caught before users report them. |
+| 40 | **ADMIN-13b** | Progressive loading — core admin shell first, lazy-load card bodies | `V2` | 1 sp | §5: 13K-line monolith is slow on low-end devices. Shell first, cards on demand. |
 
-**Sprint 5 total:** ~4.5 sp.
+**Sprint 5 total:** ~9 sp (spread across 2 sprints if needed).
 
 ---
 
@@ -1253,9 +1282,10 @@ test(`${surface} renders correctly on ${viewport.name}`, async ({ page }) => {
 ```
 Sprint 1 (no deps — ship now):
   DESIGN-1 ← viewport fix (2h)
-  DESIGN-3 + ADMIN-16 ← testid pass (combined)
+  DESIGN-3 + ADMIN-16 ← testid pass (combined, all surfaces)
   ADMIN-15, ADMIN-14, ADMIN-13 ← UX polish
   DESIGN-10 ← report tables
+  DESIGN-14 ← last-updated indicator
   ADMIN-20 ← sponsor test suite
 
 Sprint 2 (foundation):
@@ -1264,13 +1294,17 @@ Sprint 2 (foundation):
     └── feeds Sprint 3 + 4
   DESIGN-4 (CI viewports) ← independent
   DESIGN-9 (poster mobile) ← independent
+  DESIGN-13 (wizard step 3) ← independent, but best before ADMIN-3 ships
+  A11Y-ADMIN-1 (skip links) ← independent
 
-Sprint 3 (triangle + visual):
+Sprint 3 (triangle + testing):
   ADMIN-4 → ADMIN-6 (anon ID)
-  ADMIN-3 → ADMIN-7 (PII scrub)
+  ADMIN-3 → ADMIN-7 (PII scrub) → ADMIN-23 (consent tracking — ships with ADMIN-7)
   ADMIN-1 → ADMIN-2 (tier badge)
   ADMIN-3 + ADMIN-7 → ADMIN-19 (Newman chain)
-  DESIGN-5 (visual regression) ← independent, but needs DESIGN-3 testids
+  ADMIN-1 → QA-2 (flag → surface gating E2E)
+  QA-1 (edge cases) ← needs ADMIN-3 form endpoints
+  DESIGN-5 (visual regression) ← needs DESIGN-3 testids from Sprint 1
 
 Sprint 4 (Art Institute + design debt):
   ADMIN-1 + ADMIN-3 → ADMIN-8, 9 (survey, email)
@@ -1282,20 +1316,24 @@ Sprint 4 (Art Institute + design debt):
 
 Sprint 5 (enterprise + scale):
   ADMIN-1 → ADMIN-17, 18 (upload, white-label)
+  ADMIN-21 (multi-event dashboard) ← needs ADMIN-1 flags
+  ADMIN-22 (sponsor attribution) ← needs ADMIN-6 anon ID
   DESIGN-7 (tabletop) ← independent
   DESIGN-12 (cross-browser) ← needs DESIGN-5 baselines
+  ADMIN-13b (progressive loading) ← independent
 ```
 
 ### Final Count
 
 | Category | MVP | MVP-UX | V2↑MVP | V2 | V2-ENT | Total |
 |----------|-----|--------|--------|-----|--------|-------|
-| ADMIN stories | 9 | 2 | 6 | 0 | 2 | 19 |
-| DESIGN stories | 3 | 3 | 5 | 2 | 0 | 13 |
-| **Combined** | **12** | **5** | **11** | **2** | **2** | **32** |
+| ADMIN stories | 10 | 2 | 6 | 3 | 2 | 23 |
+| DESIGN stories | 3 | 5 | 5 | 2 | 0 | 15 |
+| QA stories | 2 | 0 | 0 | 0 | 0 | 2 |
+| **Combined** | **15** | **7** | **11** | **5** | **2** | **40** |
 
-| Release | Stories | What You Have |
-|---------|---------|---------------|
-| **MVP v1.0** (Sprint 1-3) | 19 | Platform works. Forms native. Triangle closes. CI validates 5 viewports. Visual regression catches drift. |
-| **MVP v1.1** (Sprint 4) | 9 | All 4 form types. Design system extracted. Breakpoints standardized. 6 months of data collecting. Art Institute ready. |
-| **V2** (Sprint 5) | 4 | Enterprise. White-label. Tabletop surface. Cross-browser CI. |
+| Release | Sprint | Stories | What You Have |
+|---------|--------|---------|---------------|
+| **MVP v1.0** | 1-3 | **24** | Platform works. Forms native. Triangle closes. Consent tracked. CI validates 5 viewports. Visual regression catches drift. Edge cases tested. Skip links on all surfaces. |
+| **MVP v1.1** | 4 | **9** | All 4 form types. Design system extracted. Breakpoints standardized. 6 months of data collecting. Art Institute ready. |
+| **V2** | 5 | **7** | Enterprise (upload, white-label). Multi-event dashboard. Sponsor attribution. Tabletop. Cross-browser. Progressive loading. |
