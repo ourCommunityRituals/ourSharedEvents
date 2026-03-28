@@ -904,7 +904,228 @@ Sprint 6-7 (V2 enterprise):
 
 ---
 
-## Appendix: File Reference
+## 11. Lead Design Engineer Review — Universal Theme & Cross-Surface Testing
+
+> **Concern:** Does the design system carry uniformly across admin, public, display, poster,
+> sharedReport in every display POV (mobile, tablet, desktop, TV, print, tabletop doc)?
+> Is it tested with Playwright across all viewport/device types in CI/CD?
+
+---
+
+### 11.1 Design Token Consistency Scorecard
+
+| Aspect | Score | Finding |
+|--------|-------|---------|
+| **Shared Token Definitions** | A | `DesignTokens.html` defines 80+ tokens (colors, type, spacing, radius, shadows, z-index, animation, breakpoints, touch targets) |
+| **Token Adoption (surfaces)** | B- | Tokens duplicated inline per template — not referenced from external sheet. Drift risk on every surface edit. |
+| **Font Stacks** | A+ | 100% unified. All 5 surfaces use identical `--font-family-base` and `--font-family-mono` with same fallback chains. |
+| **Color Palette Control** | B- | Primary colors token-controlled. **1,773 hardcoded hex instances across all templates.** Many are fallbacks in `var(--x, #hex)`, but ~500+ in admin are pure inline styles. |
+| **Responsive Breakpoints** | B | All surfaces use 640/768/1024/1440px. **But mixed `min-width` vs `max-width` patterns** — some mobile-first up, some desktop-first down, even within the same file. |
+| **Touch Targets** | A | All surfaces enforce `--touch-target-min: 44px` (WCAG AAA). Buttons, inputs, form controls all compliant. |
+| **Safe Area (notch devices)** | B+ | Public/Display/Poster have `viewport-fit=cover` + `env(safe-area-inset-*)`. **Admin and Report are missing viewport meta tags.** |
+| **Print Styles** | C+ | Only Poster has full `@media print` (7 blocks, `@page` rules, color-adjust). Other surfaces have 1 block max. Report has zero. |
+| **data-testid Coverage** | D+ | Admin: 47, Sponsor: 18, Public: 5, Report: 5, Display: 3, Poster: 2. **Total: 80 across 5 surfaces — massively uneven.** |
+| **Shared JS Modules** | A | `apiClient.js`, `assetState.js`, `errorStates.js` — unified API/error/state modules. All use `EA.*` namespace with IIFE isolation. |
+| **Dark Mode** | F | Tokens defined but commented out. No `prefers-color-scheme: dark` active. Not blocking MVP but needed for V2 enterprise white-label. |
+
+---
+
+### 11.2 Surface-by-Surface Display POV Gaps
+
+| Surface | Mobile (390px) | Tablet (768px) | Desktop (1280px) | TV (1920px) | 4K (3840px) | Print | Tabletop/Doc |
+|---------|---------------|----------------|-------------------|-------------|-------------|-------|-------------|
+| **Admin** | ✅ Collapsible cards | ✅ 2-col grid | ✅ Max-width 1200px | ⚠️ Not designed for TV | — | ⚠️ Minimal | — |
+| **Public** | ✅ Mobile-first hero | ✅ Grid responsive | ✅ Full width | ⚠️ Used via Display iframe | — | ⚠️ Basic | — |
+| **Display** | ⚠️ Phone debug mode | ⚠️ iPad not optimized | ✅ Desktop preview | ✅ 1080p primary target | ⚠️ Defined but untested | — | — |
+| **Poster** | ⚠️ Not designed for mobile | ⚠️ Not optimized | ✅ Preview works | — | — | ✅ Full `@media print` | ❌ No tabletop variant |
+| **Report** | ⚠️ Tables overflow | ✅ Responsive tabs | ✅ Dashboard layout | — | — | ❌ No print styles | — |
+
+**Critical gaps by display POV:**
+
+**Mobile (390px):**
+- Admin missing `<meta name="viewport">` tag — browser may not respect mobile rendering
+- Report tables overflow on small screens — needs horizontal scroll or responsive table pattern
+- Poster has no mobile-optimized view (it's print-only, but QR scan lands here on mobile)
+
+**TV/Display (1920x1080):**
+- Display.html is the only surface designed for 10-foot viewing
+- Uses dark theme tokens (`--color-tv-bg`, `--color-tv-text-muted`) and 16px min font
+- 4K viewport defined in config but never tested in CI
+
+**Print:**
+- Only Poster has real print CSS (`@page`, margin-safe, color-adjust)
+- Report should print for sponsor handouts — currently no print stylesheet
+- Admin could benefit from a "print event summary" feature
+
+**Tabletop/Doc:**
+- No table tent or tabletop card variant exists
+- Poster is closest but designed for 8.5x11 not 4x6 tent cards
+- This is a new surface needed (referenced in FE Integration section)
+
+---
+
+### 11.3 Breakpoint Standardization Audit
+
+**Current state: 4 breakpoints, mixed direction**
+
+```css
+/* FOUND IN CODEBASE — INCONSISTENT PATTERN */
+@media (max-width: 640px) { ... }   /* ← desktop-first DOWN (wrong) */
+@media (min-width: 640px) { ... }   /* ← mobile-first UP (correct) */
+@media (max-width: 768px) { ... }   /* ← desktop-first DOWN (wrong) */
+@media (min-width: 768px) { ... }   /* ← mobile-first UP (correct) */
+```
+
+**Counts by direction:**
+
+| Pattern | Count | Correct? |
+|---------|-------|----------|
+| `min-width: 640px` | 52 | ✅ Mobile-first |
+| `max-width: 640px` | 37 | ❌ Desktop-first |
+| `min-width: 768px` | 31 | ✅ Mobile-first |
+| `max-width: 768px` | 21 | ❌ Desktop-first |
+| `min-width: 1024px` | 11 | ✅ Mobile-first |
+| `max-width: 375px` | 8 | ⚠️ Small device fallback |
+
+**Recommendation:** Standardize to mobile-first `min-width` everywhere. Base styles are mobile. Scale up. The 58 `max-width` queries should be refactored.
+
+---
+
+### 11.4 Playwright Test Coverage by Viewport
+
+**Current CI runs: Chromium + iPhone 14 Pro only**
+
+| Device/Viewport | In Config | In CI | In Tests | Gap |
+|-----------------|-----------|-------|----------|-----|
+| iPhone 14 Pro (390x844) | ✅ | ✅ | ✅ Admin, Public | — |
+| iPhone SE (375x667) | ✅ | ❌ | ✅ Display only | Not in CI |
+| Pixel 7 | ✅ | ❌ | ❌ | Configured but unused |
+| Samsung Galaxy S21 | ✅ | ❌ | ❌ | Configured but unused |
+| iPad Pro (768x1024) | ✅ | ❌ | ✅ Display only | Not in CI |
+| Desktop Chrome (1280x720) | ✅ | ✅ | ✅ All surfaces | — |
+| Desktop Firefox | ✅ | ❌ | ❌ | Not in CI |
+| Desktop Safari (WebKit) | ✅ | ❌ | ❌ | Not in CI |
+| TV 1080p (1920x1080) | ✅ | ❌ | ✅ Display only | Not in CI |
+| TV 4K (3840x2160) | ✅ | ❌ | ⚠️ Defined, not run | Not in CI |
+
+**Problem:** CI tests only 2 viewports (mobile + desktop Chromium). The full device matrix (8+ devices, 3 browsers) exists in config but never runs. Display/TV tests exist but aren't in the CI pipeline.
+
+**Visual Regression:** Screenshots captured on every test run but **no `toHaveScreenshot()` automated comparison**. Visual regression is manual.
+
+---
+
+### 11.5 Design System Stories (New — DESIGN Epic)
+
+| Story ID | Title | Tag | Sprint | Est |
+|----------|-------|-----|--------|-----|
+| **DESIGN-1** | Viewport meta tags on Admin + Report surfaces | `MVP` | 1 | 2h |
+| **DESIGN-2** | Breakpoint direction standardization (eliminate `max-width` queries) | `MVP` | 4 | 1 sp |
+| **DESIGN-3** | data-testid parity — all surfaces to 30+ test-ids each | `MVP` | 1 | 1 sp |
+| **DESIGN-4** | CI viewport matrix — add iPad, TV 1080p, iPhone SE to pipeline | `MVP` | 2 | 0.5 sp |
+| **DESIGN-5** | Visual regression baseline — `toHaveScreenshot()` per surface per viewport | `MVP-UX` | 3 | 1 sp |
+| **DESIGN-6** | Report print stylesheet (sponsor handout) | `V2↑MVP` | 4 | 0.5 sp |
+| **DESIGN-7** | Tabletop tent card surface (4x6 variant of poster) | `V2` | 5 | 1 sp |
+| **DESIGN-8** | External design token file (stop inline duplication) | `V2↑MVP` | 4 | 1 sp |
+| **DESIGN-9** | Poster mobile landing (QR scan → mobile-friendly view) | `MVP-UX` | 3 | 0.5 sp |
+| **DESIGN-10** | Report responsive tables (horizontal scroll or card-collapse) | `MVP-UX` | 2 | 0.5 sp |
+| **DESIGN-11** | Color palette hardcode audit — extract remaining 500+ inline hex to tokens | `V2↑MVP` | 4 | 1 sp |
+| **DESIGN-12** | Cross-browser CI — add Firefox + WebKit to pipeline (weekly schedule) | `V2` | 5 | 0.5 sp |
+
+---
+
+### 11.6 Recommended CI/CD Viewport Pipeline
+
+**Current:** 2 viewports, 1 browser, smoke only
+
+**Proposed MVP pipeline:**
+
+```
+PR Opened (every PR):
+  ├── Chromium Desktop (1280x720)     → all 5 surfaces
+  ├── iPhone 14 Pro (390x844)          → all 5 surfaces
+  └── Schema + TypeCheck + Unit tests
+
+Merge to Main (staging deploy):
+  ├── Chromium Desktop (1280x720)     → all 5 surfaces
+  ├── iPhone 14 Pro (390x844)          → all 5 surfaces
+  ├── iPad Pro (768x1024)              → admin, public, report
+  ├── TV 1080p (1920x1080)            → display only
+  ├── iPhone SE (375x667)             → public, poster (QR landing)
+  ├── Visual regression (toHaveScreenshot) → all surfaces × all viewports
+  └── axe-core accessibility scan      → all 5 surfaces
+
+Tag vX.Y.Z (production):
+  ├── Full staging matrix (above)
+  ├── Post-deploy smoke (Chromium + iPhone 14 Pro)
+  └── 15-min error rate monitoring
+
+Weekly (scheduled, off-peak):
+  ├── Firefox Desktop                  → all 5 surfaces
+  ├── WebKit Desktop (Safari)          → all 5 surfaces
+  ├── TV 4K (3840x2160)              → display
+  ├── Samsung Galaxy S21               → public, poster
+  └── Pixel 7                          → public, poster
+```
+
+**Cost analysis:** Current CI runs ~2 min for 2 viewports. Adding iPad + TV + iPhone SE adds ~3 min per merge. Weekly cross-browser adds ~8 min but only runs once. Total MVP cost increase: ~3 min per merge to main.
+
+---
+
+### 11.7 Visual Regression Strategy
+
+**Phase 1 (MVP): Baseline snapshots**
+```javascript
+// Per surface × per viewport = 15 baseline screenshots
+const surfaces = ['admin', 'public', 'display', 'poster', 'report'];
+const viewports = [
+  { name: 'mobile', width: 390, height: 844 },
+  { name: 'desktop', width: 1280, height: 720 },
+  { name: 'tv', width: 1920, height: 1080 },  // display only
+];
+
+test(`${surface} renders correctly on ${viewport.name}`, async ({ page }) => {
+  await page.setViewportSize(viewport);
+  await page.goto(`${BASE_URL}?page=${surface}`);
+  await expect(page).toHaveScreenshot(`${surface}-${viewport.name}.png`, {
+    maxDiffPixelRatio: 0.01,  // 1% tolerance for anti-aliasing
+    fullPage: true,
+  });
+});
+```
+
+**Phase 2 (V2): Component-level snapshots**
+- Individual card snapshots (7 admin cards)
+- Sponsor placement rendering per surface
+- Form states (empty, filled, error, success)
+- QR code rendering consistency
+
+---
+
+### 11.8 Theme Consistency Checklist (Per Surface)
+
+| Check | Admin | Public | Display | Poster | Report |
+|-------|-------|--------|---------|--------|--------|
+| `<meta viewport>` present | ❌ | ✅ | ✅ | ✅ | ❌ |
+| DesignTokens inlined | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Font stack matches | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `--color-primary` used (not hardcoded) | ⚠️ | ✅ | ✅ | ✅ | ⚠️ |
+| Safe-area insets | ✅ | ✅ | ✅ | ✅ | ❌ |
+| 44px touch targets | ✅ | ✅ | ✅ | N/A | ✅ |
+| Skip link (a11y) | ✅ | ✅ | ❌ | ❌ | ❌ |
+| `@media print` | ⚠️ 1 block | ⚠️ 2 blocks | ⚠️ 1 block | ✅ 7 blocks | ❌ |
+| data-testid 30+ | ✅ 47 | ❌ 5 | ❌ 3 | ❌ 2 | ❌ 5 |
+| Error state handling | ✅ | ✅ (errorStates.js) | ✅ | ⚠️ | ✅ |
+| Loading skeleton | ⚠️ Spinner only | ⚠️ Spinner only | ⚠️ Spinner only | ❌ | ⚠️ |
+| Sponsor renders correctly | ✅ | ✅ Carousel | ✅ Strip+panel | ✅ Strip | ✅ Metrics |
+| Breakpoints mobile-first only | ❌ Mixed | ❌ Mixed | ❌ Mixed | ❌ Mixed | ❌ Mixed |
+
+**Red flags (blocks MVP confidence):**
+1. Admin and Report missing viewport meta — mobile rendering unreliable
+2. data-testid coverage 2-5 on non-admin surfaces — can't write reliable automation
+3. No visual regression — theme drift invisible until a user reports it
+4. 58 `max-width` media queries — mobile-first is inconsistent
+
+---
 
 | File | Purpose |
 |------|---------|
