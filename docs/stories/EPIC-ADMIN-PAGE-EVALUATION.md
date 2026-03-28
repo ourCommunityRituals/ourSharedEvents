@@ -694,72 +694,195 @@ INSERT INTO feature_tiers VALUES ('__default__', 'free', 'branding.white-label',
 
 ---
 
-## 10. Recommended Stories (Priority Order)
+## 10. Recommended Stories — MVP vs V2 Priority
 
-### Epic: ADMIN — Admin Page as Launch Driver
+> **Principle:** MVP ships what makes the admin usable for a bar owner running their first event.
+> V2 ships what makes the admin scalable for paying clients. Some V2 items are **pulled forward**
+> when they directly fix usability friction — tagged `V2↑MVP` (V2 scope, MVP urgency).
 
-Stories ordered by dependency chain and business value. Each includes all 7 roles.
+### Release Tags
 
-| Story ID | Title | Tier | Prerequisite | Sprint Est |
-|----------|-------|------|-------------|------------|
-| **ADMIN-1** | Feature flag tier model (D1 + API + resolution chain) | All | P2-1 | 1 |
-| **ADMIN-2** | Admin tier badge + gated UI (locked icons, upgrade prompts) | All | ADMIN-1 | 1 |
-| **ADMIN-3** | Native registration form (submit, count, QR routing) | Free | ADMIN-1 | 1 |
-| **ADMIN-4** | Native check-in form (anonymous ID, door mode) | Free | ADMIN-3 | 1 |
-| **ADMIN-5** | Card 3 redesign — inline form config, native form toggle | Free | ADMIN-4 | 1 |
-| **ADMIN-6** | Anonymous ID system (cookie + D1, scan correlation) | Free | ADMIN-4 | 1 |
-| **ADMIN-7** | PII destruction jobs (scheduled scrub, audit log, retention) | All | ADMIN-3 | 1 |
-| **ADMIN-8** | Native survey form (mid-tier gated) | Mid | ADMIN-1, ADMIN-3 | 1 |
-| **ADMIN-9** | Email signup form (mid-tier gated, duplicate detection) | Mid | ADMIN-1, ADMIN-3 | 1 |
-| **ADMIN-10** | Self-serve event config (mid-tier, scoped token) | Mid | ADMIN-1 | 1 |
-| **ADMIN-11** | Form data export (CSV/JSON, mid-tier) | Mid | ADMIN-3 | 0.5 |
-| **ADMIN-12** | Admin inline styles → CSS tokens extraction | All | — | 1 |
-| **ADMIN-13** | Skeleton loaders + per-card error states | All | — | 0.5 |
-| **ADMIN-14** | Card 5 QR code + Card 7 QR visibility | All | — | 0.5 |
-| **ADMIN-15** | Copy button feedback ("Copied!" state) | All | — | 0.5 |
-| **ADMIN-16** | data-testid complete coverage (all interactive elements) | All | — | 0.5 |
-| **ADMIN-17** | File upload to R2 (enterprise, logos/posters) | Enterprise | ADMIN-1 | 1 |
-| **ADMIN-18** | White-label branding (custom colors/logo/domain) | Enterprise | ADMIN-1 | 2 |
-| **ADMIN-19** | Newman E2E chain (create → config → submit → count → export → scrub) | All | ADMIN-3, ADMIN-7 | 1 |
-| **ADMIN-20** | Cross-surface sponsor integration test suite | All | — | 1 |
+| Tag | Meaning | Ships When |
+|-----|---------|------------|
+| `MVP` | Must have for launch — admin doesn't work without it | Phase 1-2 |
+| `MVP-UX` | Not blocking, but users will struggle without it — ship same sprint | Phase 1-2 |
+| `V2↑MVP` | V2 scope pulled forward because it fixes real usability pain | With MVP |
+| `V2` | Post-launch enhancement — valuable but not blocking | Phase 2-3 |
+| `V2-ENT` | Enterprise tier — revenue feature, not usability | Phase 3+ |
 
-### Dependency Graph
+---
+
+### Sprint 1: MVP Core — "Admin Works End to End"
+
+*Goal: An operator can create an event, get all links, and see them work across surfaces.*
+
+| # | Story ID | Title | Tag | Prereq | Est |
+|---|----------|-------|-----|--------|-----|
+| 1 | **ADMIN-15** | Copy button feedback ("Copied!" 2s state) | `MVP-UX` | — | 2h |
+| 2 | **ADMIN-14** | Card 5 QR code + Card 7 QR visibility | `MVP-UX` | — | 2h |
+| 3 | **ADMIN-16** | data-testid complete coverage (all interactive elements) | `MVP` | — | 4h |
+| 4 | **ADMIN-13** | Skeleton loaders + per-card error states | `MVP-UX` | — | 4h |
+| 5 | **ADMIN-20** | Cross-surface sponsor integration test suite | `MVP` | — | 1 sp |
+
+**Why this order:** These have zero dependencies — ship immediately. ADMIN-15/14 are the most visible user-facing friction. ADMIN-16 unblocks all QA automation. ADMIN-13 fixes the "blank screen then pop" first impression. ADMIN-20 validates that the sponsor money-maker actually renders everywhere it claims to.
+
+**Gate:** All 7 cards render, all copy buttons give feedback, all link cards have QR codes, every interactive element has a test-id, skeleton states show during load.
+
+---
+
+### Sprint 2: MVP Foundation — "Flags + Forms Scaffolding"
+
+*Goal: Feature flag system works. Native forms have API contracts. Card 3 stops being a dead end.*
+
+| # | Story ID | Title | Tag | Prereq | Est |
+|---|----------|-------|-----|--------|-----|
+| 6 | **ADMIN-1** | Feature flag tier model (D1 + API + resolution chain) | `MVP` | P2-1 | 1 sp |
+| 7 | **ADMIN-3** | Native registration form (submit endpoint, count, public render) | `MVP` | ADMIN-1 | 1 sp |
+| 8 | **ADMIN-4** | Native check-in form (door mode, anonymous ID foundation) | `MVP` | ADMIN-3 | 1 sp |
+| 9 | **ADMIN-5** | Card 3 redesign — inline form config replaces hidden scroll-away | `V2↑MVP` | ADMIN-4 | 1 sp |
+
+**Why ADMIN-5 is V2↑MVP:** Card 3 currently opens a hidden section that scrolls away from context. Users lose their place. This is the #1 usability complaint in the wizard flow. Pulling it forward because the form cards are useless if operators can't find the config.
+
+**Gate:** `POST /api/v2/forms/:eventId/register` returns 201. Count endpoint works. Card 3 shows inline config. Feature flags resolve from D1 with correct tier cascade.
+
+---
+
+### Sprint 3: MVP Forms Complete — "The Triangle Closes"
+
+*Goal: Events ↔ Sponsors ↔ Customers triangle works. QR → form → count → report pipeline.*
+
+| # | Story ID | Title | Tag | Prereq | Est |
+|---|----------|-------|-----|--------|-----|
+| 10 | **ADMIN-6** | Anonymous ID system (cookie + D1, scan correlation) | `MVP` | ADMIN-4 | 1 sp |
+| 11 | **ADMIN-7** | PII destruction jobs (scheduled scrub, audit log, retention) | `MVP` | ADMIN-3 | 1 sp |
+| 12 | **ADMIN-2** | Admin tier badge + gated UI (locked icons, upgrade prompts) | `MVP-UX` | ADMIN-1 | 1 sp |
+| 13 | **ADMIN-19** | Newman E2E chain (create → config → submit → count → scrub) | `MVP` | ADMIN-3, ADMIN-7 | 1 sp |
+
+**Why ADMIN-6 is MVP not V2:** Without anonymous ID, the entire triangle model is broken. Sponsors can't see customer engagement. Reports show zero attribution. This is the data backbone.
+
+**Why ADMIN-7 is MVP:** Can't store form submissions without a destruction policy. Compliance blocker — no PII storage without a deletion path.
+
+**Gate:** QR scan → form submit → anonymous ID created → count incremented → PII scrub works → audit log written. Newman chain passes end-to-end.
+
+---
+
+### Sprint 4: MVP Polish — "CSS Debt + Quality"
+
+*Goal: Admin is fast, consistent, and ready for real users.*
+
+| # | Story ID | Title | Tag | Prereq | Est |
+|---|----------|-------|-----|--------|-----|
+| 14 | **ADMIN-12** | Admin inline styles → CSS tokens extraction | `V2↑MVP` | — | 1 sp |
+
+**Why ADMIN-12 is V2↑MVP:** 500+ inline styles make the page slow to parse on mobile and impossible to theme. Every future card change requires hunting through HTML. This is tech debt that compounds — paying it now makes Sprints 5-8 faster.
+
+**Gate:** Zero inline `style=` attributes on card shells. All colors from CSS custom properties. Lighthouse performance score ≥ 70 on mobile.
+
+---
+
+### Sprint 5: V2 Mid Tier — "Monetization Unlocked"
+
+*Goal: Mid-tier clients get survey, email signup, self-serve, export. Revenue starts.*
+
+| # | Story ID | Title | Tag | Prereq | Est |
+|---|----------|-------|-----|--------|-----|
+| 15 | **ADMIN-8** | Native survey form (mid-tier gated, post-event) | `V2` | ADMIN-1, ADMIN-3 | 1 sp |
+| 16 | **ADMIN-9** | Email signup form (mid-tier gated, duplicate detection) | `V2` | ADMIN-1, ADMIN-3 | 1 sp |
+| 17 | **ADMIN-10** | Self-serve event config (mid-tier, scoped token) | `V2` | ADMIN-1 | 1 sp |
+| 18 | **ADMIN-11** | Form data export (CSV/JSON, mid-tier) | `V2` | ADMIN-3 | 0.5 sp |
+
+**Gate:** Free tier user sees locked icons with "Upgrade to Pro" on survey/email. Mid-tier user can configure, submit, and export. Self-serve token scopes enforced.
+
+---
+
+### Sprint 6-7: V2 Enterprise — "White Glove"
+
+*Goal: Enterprise clients get full control — file upload, branding, per-event overrides.*
+
+| # | Story ID | Title | Tag | Prereq | Est |
+|---|----------|-------|-----|--------|-----|
+| 19 | **ADMIN-17** | File upload to R2 (logos, posters, custom QR) | `V2-ENT` | ADMIN-1 | 1 sp |
+| 20 | **ADMIN-18** | White-label branding (custom colors/logo/domain) | `V2-ENT` | ADMIN-1 | 2 sp |
+
+**Gate:** Enterprise user uploads logo → appears on all surfaces. Custom color palette renders across public, display, poster. Per-event flag overrides work.
+
+---
+
+### Priority Matrix (Visual)
 
 ```
-ADMIN-1 (flags)
-  ├── ADMIN-2 (tier UI)
-  ├── ADMIN-3 (register form) ──→ ADMIN-4 (checkin) ──→ ADMIN-5 (Card 3 redesign)
-  │     │                              │
-  │     ├── ADMIN-7 (PII scrub)        └── ADMIN-6 (anon ID)
-  │     ├── ADMIN-8 (survey)
-  │     ├── ADMIN-9 (email signup)
-  │     └── ADMIN-11 (export)
-  ├── ADMIN-10 (self-serve)
-  ├── ADMIN-17 (file upload)
-  └── ADMIN-18 (white-label)
-
-Independent (no deps):
-  ADMIN-12, ADMIN-13, ADMIN-14, ADMIN-15, ADMIN-16, ADMIN-20
+                    MVP IMPACT
+                    ▲
+                    │
+    ADMIN-15 ●      │  ● ADMIN-3   ● ADMIN-7
+    (copy btn)      │  (register)  (PII scrub)
+                    │
+    ADMIN-14 ●      │  ● ADMIN-4   ● ADMIN-6
+    (QR parity)     │  (checkin)   (anon ID)
+                    │
+    ADMIN-13 ●      │  ● ADMIN-1   ● ADMIN-5 (V2↑)
+    (skeletons)     │  (flags)     (card3 UX)
+                    │
+    ADMIN-16 ●      │  ● ADMIN-12 (V2↑)
+    (test-ids)      │  (CSS tokens)
+                    │
+    ────────────────┼────────────────────────► EFFORT
+    Low effort      │              High effort
+                    │
+                    │  ● ADMIN-8    ● ADMIN-17
+                    │  (survey)     (upload)
+                    │
+                    │  ● ADMIN-9    ● ADMIN-18
+                    │  (email)      (white-label)
+                    │
+                    V2 SCOPE
 ```
 
-### Quick Wins (Ship This Week)
+### Dependency Graph (MVP-first ordering)
 
-| Story | Effort | Impact |
-|-------|--------|--------|
-| ADMIN-15: Copy button feedback | 2h | UX polish, user confidence |
-| ADMIN-14: Card 5 QR + Card 7 QR | 2h | Consistency across all link cards |
-| ADMIN-16: data-testid coverage | 4h | Unblocks all automation work |
-| ADMIN-13: Skeleton loaders | 4h | Perceived performance improvement |
+```
+Sprint 1 (no deps — ship now):
+  ADMIN-15, ADMIN-14, ADMIN-16, ADMIN-13, ADMIN-20
 
-### Phase Gate
+Sprint 2 (foundation):
+  ADMIN-1 (flags) ──→ ADMIN-3 (register) ──→ ADMIN-4 (checkin) ──→ ADMIN-5 (V2↑ card3)
 
-| Phase | Stories | Gate Criteria |
-|-------|---------|---------------|
-| **Phase A: Foundation** | ADMIN-1, 2, 12, 13, 14, 15, 16 | Flags resolve, tier UI visible, test-ids complete |
-| **Phase B: Free Tier Forms** | ADMIN-3, 4, 5, 6, 7 | Native forms work, anonymous ID tracks, PII scrubs |
-| **Phase C: Mid Tier** | ADMIN-8, 9, 10, 11 | Survey/email gated, self-serve works, export downloads |
-| **Phase D: Enterprise** | ADMIN-17, 18 | File upload to R2, white-label renders on all surfaces |
-| **Phase E: Validation** | ADMIN-19, 20 | Full Newman chain passes, cross-surface sponsor verified |
+Sprint 3 (triangle):
+  ADMIN-4 ──→ ADMIN-6 (anon ID)
+  ADMIN-3 ──→ ADMIN-7 (PII scrub)
+  ADMIN-1 ──→ ADMIN-2 (tier badge)
+  ADMIN-3 + ADMIN-7 ──→ ADMIN-19 (Newman chain)
+
+Sprint 4 (polish):
+  ADMIN-12 (CSS tokens — independent)
+
+Sprint 5 (V2 mid):
+  ADMIN-1 + ADMIN-3 ──→ ADMIN-8 (survey)
+  ADMIN-1 + ADMIN-3 ──→ ADMIN-9 (email)
+  ADMIN-1 ──→ ADMIN-10 (self-serve)
+  ADMIN-3 ──→ ADMIN-11 (export)
+
+Sprint 6-7 (V2 enterprise):
+  ADMIN-1 ──→ ADMIN-17 (file upload)
+  ADMIN-1 ──→ ADMIN-18 (white-label)
+```
+
+### Summary: What Ships When
+
+| Release | Stories | User Impact |
+|---------|---------|-------------|
+| **MVP v1.0** (Sprints 1-3) | ADMIN-1,2,3,4,5,6,7,13,14,15,16,19,20 | Admin works end-to-end. Forms are native. Triangle closes. Compliance ready. |
+| **MVP v1.1** (Sprint 4) | ADMIN-12 | Fast, themeable, maintainable. Unblocks all future UI work. |
+| **V2 v2.0** (Sprint 5) | ADMIN-8,9,10,11 | Mid-tier revenue. Self-serve. Clients manage their own events. |
+| **V2 v2.5** (Sprint 6-7) | ADMIN-17,18 | Enterprise. White-label. File upload. Full platform. |
+
+### V2↑MVP Justification (Why 3 V2 items ship with MVP)
+
+| Story | Original Tag | Pulled To | Justification |
+|-------|-------------|-----------|---------------|
+| **ADMIN-5** (Card 3 redesign) | V2 | MVP Sprint 2 | Card 3 config scrolls away — operators lose context. Forms are useless if you can't find the config. |
+| **ADMIN-12** (CSS tokens) | V2 | MVP Sprint 4 | 500+ inline styles = slow mobile parse + impossible to theme. Every sprint after this is faster if we pay the debt now. |
+| **ADMIN-2** (Tier badge UI) | V2 | MVP Sprint 3 | Without visible tier badges, operators don't know what they have access to. Locked features need visible "why" to drive upgrades. |
 
 ---
 
