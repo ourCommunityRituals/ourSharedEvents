@@ -766,32 +766,46 @@ INSERT INTO feature_tiers VALUES ('__default__', 'free', 'branding.white-label',
 
 ---
 
-### Sprint 4: MVP Polish — "CSS Debt + Quality"
+### Sprint 4: MVP Platform — "The Art Institute Pitch"
 
-*Goal: Admin is fast, consistent, and ready for real users.*
+*Goal: Survey, email signup, self-serve, and export ship NOW — not someday.
+When you walk into the Art Institute 6 months from now, you show 6 months of live
+survey data, an email list they built themselves, and a CSV export they downloaded
+without calling support. That's a platform, not a prototype.*
 
 | # | Story ID | Title | Tag | Prereq | Est |
 |---|----------|-------|-----|--------|-----|
-| 14 | **ADMIN-12** | Admin inline styles → CSS tokens extraction | `V2↑MVP` | — | 1 sp |
+| 14 | **ADMIN-8** | Native survey form (post-event feedback, tier-aware) | `V2↑MVP` | ADMIN-1, ADMIN-3 | 1 sp |
+| 15 | **ADMIN-9** | Email signup form (list building, duplicate detection) | `V2↑MVP` | ADMIN-1, ADMIN-3 | 1 sp |
+| 16 | **ADMIN-10** | Self-serve event config (client manages own settings) | `V2↑MVP` | ADMIN-1 | 1 sp |
+| 17 | **ADMIN-11** | Form data export (CSV/JSON download) | `V2↑MVP` | ADMIN-3 | 0.5 sp |
 
-**Why ADMIN-12 is V2↑MVP:** 500+ inline styles make the page slow to parse on mobile and impossible to theme. Every future card change requires hunting through HTML. This is tech debt that compounds — paying it now makes Sprints 5-8 faster.
+**Why V2↑MVP:** These were tagged V2 because they're "mid-tier" features. But the pitch isn't "we have forms" — the pitch is "we have 6 months of survey responses, an email list of 2,000 attendees, and here's the CSV." That data doesn't exist if these ship in V2. They need to be collecting data from day one.
 
-**Gate:** Zero inline `style=` attributes on card shells. All colors from CSS custom properties. Lighthouse performance score ≥ 70 on mobile.
+**The Art Institute math:**
+- MVP launches month 0
+- 4 events/month × 6 months = 24 events
+- 24 events × avg 80 attendees = ~1,920 survey responses
+- 24 events × avg 30% email opt-in = ~576 email subscribers
+- All exportable, all with anonymous ID attribution, all with PII lifecycle
+
+Without Sprint 4 in MVP, you walk in with: "we can do forms." With Sprint 4: "here's what 24 events produced."
+
+**Gate:** Survey form submits, gated by tier flag. Email signup deduplicates. Self-serve config saves without admin intervention. CSV export downloads with correct row count. All four form types show in Card 3 with tier-appropriate lock/unlock state.
 
 ---
 
-### Sprint 5: V2 Mid Tier — "Monetization Unlocked"
+### Sprint 5: MVP Polish — "CSS Debt + Quality"
 
-*Goal: Mid-tier clients get survey, email signup, self-serve, export. Revenue starts.*
+*Goal: Admin is fast, consistent, and ready for scale.*
 
 | # | Story ID | Title | Tag | Prereq | Est |
 |---|----------|-------|-----|--------|-----|
-| 15 | **ADMIN-8** | Native survey form (mid-tier gated, post-event) | `V2` | ADMIN-1, ADMIN-3 | 1 sp |
-| 16 | **ADMIN-9** | Email signup form (mid-tier gated, duplicate detection) | `V2` | ADMIN-1, ADMIN-3 | 1 sp |
-| 17 | **ADMIN-10** | Self-serve event config (mid-tier, scoped token) | `V2` | ADMIN-1 | 1 sp |
-| 18 | **ADMIN-11** | Form data export (CSV/JSON, mid-tier) | `V2` | ADMIN-3 | 0.5 sp |
+| 18 | **ADMIN-12** | Admin inline styles → CSS tokens extraction | `V2↑MVP` | — | 1 sp |
 
-**Gate:** Free tier user sees locked icons with "Upgrade to Pro" on survey/email. Mid-tier user can configure, submit, and export. Self-serve token scopes enforced.
+**Why ADMIN-12 is V2↑MVP:** 500+ inline styles make the page slow to parse on mobile and impossible to theme. Every future card change requires hunting through HTML. This is tech debt that compounds — paying it now makes enterprise sprints faster.
+
+**Gate:** Zero inline `style=` attributes on card shells. All colors from CSS custom properties. Lighthouse performance score ≥ 70 on mobile.
 
 ---
 
@@ -811,31 +825,32 @@ INSERT INTO feature_tiers VALUES ('__default__', 'free', 'branding.white-label',
 ### Priority Matrix (Visual)
 
 ```
-                    MVP IMPACT
+                    MVP IMPACT (ships with launch)
                     ▲
                     │
-    ADMIN-15 ●      │  ● ADMIN-3   ● ADMIN-7
-    (copy btn)      │  (register)  (PII scrub)
+    ADMIN-15 ●      │  ● ADMIN-3    ● ADMIN-7
+    (copy btn)      │  (register)   (PII scrub)
                     │
-    ADMIN-14 ●      │  ● ADMIN-4   ● ADMIN-6
-    (QR parity)     │  (checkin)   (anon ID)
+    ADMIN-14 ●      │  ● ADMIN-4    ● ADMIN-6
+    (QR parity)     │  (checkin)    (anon ID)
                     │
-    ADMIN-13 ●      │  ● ADMIN-1   ● ADMIN-5 (V2↑)
-    (skeletons)     │  (flags)     (card3 UX)
+    ADMIN-13 ●      │  ● ADMIN-1    ● ADMIN-5 (V2↑)
+    (skeletons)     │  (flags)      (card3 UX)
                     │
-    ADMIN-16 ●      │  ● ADMIN-12 (V2↑)
-    (test-ids)      │  (CSS tokens)
+    ADMIN-16 ●      │  ● ADMIN-8 (V2↑)  ● ADMIN-10 (V2↑)
+    (test-ids)      │  (survey)          (self-serve)
                     │
-    ────────────────┼────────────────────────► EFFORT
-    Low effort      │              High effort
+    ADMIN-11 (V2↑)  │  ● ADMIN-9 (V2↑)  ● ADMIN-12 (V2↑)
+    (export)        │  (email)           (CSS tokens)
                     │
-                    │  ● ADMIN-8    ● ADMIN-17
-                    │  (survey)     (upload)
+    ────────────────┼────────────────────────────────────► EFFORT
+    Low effort      │                      High effort
                     │
-                    │  ● ADMIN-9    ● ADMIN-18
-                    │  (email)      (white-label)
+                    │  ● ADMIN-17          ● ADMIN-18
+                    │  (upload)            (white-label)
                     │
-                    V2 SCOPE
+                    V2-ENT ONLY
+                    (Enterprise — post-launch)
 ```
 
 ### Dependency Graph (MVP-first ordering)
@@ -853,14 +868,14 @@ Sprint 3 (triangle):
   ADMIN-1 ──→ ADMIN-2 (tier badge)
   ADMIN-3 + ADMIN-7 ──→ ADMIN-19 (Newman chain)
 
-Sprint 4 (polish):
-  ADMIN-12 (CSS tokens — independent)
-
-Sprint 5 (V2 mid):
+Sprint 4 (Art Institute pitch — V2↑MVP):
   ADMIN-1 + ADMIN-3 ──→ ADMIN-8 (survey)
   ADMIN-1 + ADMIN-3 ──→ ADMIN-9 (email)
   ADMIN-1 ──→ ADMIN-10 (self-serve)
   ADMIN-3 ──→ ADMIN-11 (export)
+
+Sprint 5 (polish):
+  ADMIN-12 (CSS tokens — independent)
 
 Sprint 6-7 (V2 enterprise):
   ADMIN-1 ──→ ADMIN-17 (file upload)
@@ -869,20 +884,23 @@ Sprint 6-7 (V2 enterprise):
 
 ### Summary: What Ships When
 
-| Release | Stories | User Impact |
-|---------|---------|-------------|
-| **MVP v1.0** (Sprints 1-3) | ADMIN-1,2,3,4,5,6,7,13,14,15,16,19,20 | Admin works end-to-end. Forms are native. Triangle closes. Compliance ready. |
-| **MVP v1.1** (Sprint 4) | ADMIN-12 | Fast, themeable, maintainable. Unblocks all future UI work. |
-| **V2 v2.0** (Sprint 5) | ADMIN-8,9,10,11 | Mid-tier revenue. Self-serve. Clients manage their own events. |
-| **V2 v2.5** (Sprint 6-7) | ADMIN-17,18 | Enterprise. White-label. File upload. Full platform. |
+| Release | Stories | What You Walk In With |
+|---------|---------|----------------------|
+| **MVP v1.0** (Sprints 1-4) | 17 stories: ADMIN-1,2,3,4,5,6,7,8,9,10,11,13,14,15,16,19,20 | Full platform. Native forms (all 4 types). Triangle closes. Survey data collecting. Email list growing. Self-serve live. CSV export works. 6 months of data by Art Institute meeting. |
+| **MVP v1.1** (Sprint 5) | ADMIN-12 | Fast, themeable, maintainable. Unblocks enterprise UI. |
+| **V2 v2.5** (Sprint 6-7) | ADMIN-17,18 | Enterprise. White-label. File upload. |
 
-### V2↑MVP Justification (Why 3 V2 items ship with MVP)
+### V2↑MVP Justification (Why 7 V2 items ship with MVP)
 
 | Story | Original Tag | Pulled To | Justification |
 |-------|-------------|-----------|---------------|
-| **ADMIN-5** (Card 3 redesign) | V2 | MVP Sprint 2 | Card 3 config scrolls away — operators lose context. Forms are useless if you can't find the config. |
-| **ADMIN-12** (CSS tokens) | V2 | MVP Sprint 4 | 500+ inline styles = slow mobile parse + impossible to theme. Every sprint after this is faster if we pay the debt now. |
-| **ADMIN-2** (Tier badge UI) | V2 | MVP Sprint 3 | Without visible tier badges, operators don't know what they have access to. Locked features need visible "why" to drive upgrades. |
+| **ADMIN-5** (Card 3 redesign) | V2 | Sprint 2 | Card 3 config scrolls away — operators lose context. Forms are useless if you can't find the config. |
+| **ADMIN-2** (Tier badge UI) | V2 | Sprint 3 | Without visible tier badges, operators don't know what they can access. Locked features need visible "why." |
+| **ADMIN-8** (Survey form) | V2 | Sprint 4 | You don't pitch "we can do surveys." You pitch "here's 1,920 survey responses from 24 events." Data starts day one or it doesn't exist at the meeting. |
+| **ADMIN-9** (Email signup) | V2 | Sprint 4 | Same logic. "We have 576 email subscribers" beats "we could collect emails." The list compounds — every month it doesn't exist is lost growth. |
+| **ADMIN-10** (Self-serve) | V2 | Sprint 4 | Art Institute isn't going to call you to change their event settings. Self-serve is table stakes for an institution. They test by trying it. If it's locked, the meeting is over. |
+| **ADMIN-11** (Export) | V2 | Sprint 4 | First question any institution asks: "Can I get my data out?" If the answer is "not yet," trust evaporates. Export is the proof that you don't lock them in. |
+| **ADMIN-12** (CSS tokens) | V2 | Sprint 5 | 500+ inline styles = slow mobile + impossible to theme. Every enterprise sprint is faster after this. |
 
 ---
 
