@@ -41,7 +41,7 @@ Stories are ordered by the sequence you work through them. Each row unlocks the 
 | P3-1 | — | 📋 BACKLOG | Firebase Hosting + React/Tailwind UI | P2-3 |
 | P3-2 | — | 📋 BACKLOG | Firebase Auth — replace Bearer token admin | P3-1 |
 | **Epic A11Y — ADA Accessibility** | | | | |
-| A11Y-1 | — | 🔄 IN PROGRESS | Accessibility foundation — lang, skip links, landmarks, focus styles | — |
+| A11Y-1 | — | ✅ DONE | Accessibility foundation — lang, skip links, landmarks, focus styles | — |
 | A11Y-2 | — | 📋 BACKLOG | Form accessibility — labels, errors, required fields | A11Y-1 |
 | A11Y-3 | — | 📋 BACKLOG | Table & tab panel accessibility (report.html) | A11Y-1 |
 | A11Y-4 | — | 📋 BACKLOG | Data-testid foundation (all surfaces) | A11Y-1 |
@@ -49,6 +49,34 @@ Stories are ordered by the sequence you work through them. Each row unlocks the 
 | A11Y-6 | — | 📋 BACKLOG | Keyboard navigation & focus trap | A11Y-1 |
 | A11Y-7 | — | 📋 BACKLOG | axe-core CI integration | A11Y-1 |
 | A11Y-8 | — | 📋 BACKLOG | Screen reader testing & polish | A11Y-7 |
+| **Epic INFRA — Infrastructure Provisioning** | | | | |
+| INFRA-1 | — | 📋 BACKLOG | Provision D1 databases (main + forms, staging + prod) | — |
+| INFRA-2 | — | 📋 BACKLOG | Activate Cloudflare zone + DNS for oursharedevents.com | — |
+| INFRA-3 | — | 📋 BACKLOG | Create Google Cloud service account + set secrets | — |
+| INFRA-4 | — | 📋 BACKLOG | Document FORMS_ENCRYPTION_KEY generation + rotation | — |
+| **Epic BE — Backend Architecture** | | | | |
+| BE-1 | — | 📋 BACKLOG | Anonymous ID system (migration + handler + cookie) | INFRA-1 |
+| BE-2 | — | 📋 BACKLOG | Rate limiting on public form endpoints | INFRA-1 |
+| BE-3 | — | 📋 BACKLOG | PII destruction audit log (migration + lifecycle update) | INFRA-1 |
+| BE-4 | — | 📋 BACKLOG | Form data export endpoint (CSV/JSON) | — |
+| BE-5 | — | 📋 BACKLOG | Form config GET/PUT endpoint (self-serve, mid tier) | — |
+| BE-6 | — | 📋 BACKLOG | Manual PII destruction trigger endpoint | BE-3 |
+| BE-7 | — | 📋 BACKLOG | API envelope standardization (match schema) | — |
+| BE-8 | — | 📋 BACKLOG | Pagination on admin list endpoints | — |
+| **Epic QA — Test Coverage** | | | | |
+| QA-1 | — | 📋 BACKLOG | API smoke tests for form endpoints in CI | INFRA-1 |
+| QA-2 | — | 📋 BACKLOG | E2E flow: admin→configure→QR→submit→verify count | QA-1 |
+| QA-3 | — | 📋 BACKLOG | Contract tests (Pact) for form API shapes | — |
+| QA-4 | — | 📋 BACKLOG | Newman E2E chain (create→config→submit→count→scrub) | QA-1, BE-6 |
+| QA-5 | — | 📋 BACKLOG | Feature flag seed parity CI gate | — |
+| **Epic SRE — Observability** | | | | |
+| SRE-1 | — | 📋 BACKLOG | Form submission rate dashboard + alerting | INFRA-1 |
+| SRE-2 | — | 📋 BACKLOG | PII destruction job monitoring + failure alerts | BE-3 |
+| SRE-3 | — | 📋 BACKLOG | Wire k6 load tests to staging CI gate | INFRA-1 |
+| **Epic HK — Housekeeping** | | | | |
+| HK-1 | — | 📋 BACKLOG | Archive legacy worker/ directory | — |
+| HK-2 | — | 📋 BACKLOG | Sync STORIES.md with implemented features | — |
+| HK-3 | — | 📋 BACKLOG | Update stale docs (DEPLOYMENT, .env.example, RUNBOOK) | HK-1 |
 
 ---
 
