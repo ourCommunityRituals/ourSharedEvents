@@ -40,6 +40,15 @@ Stories are ordered by the sequence you work through them. Each row unlocks the 
 | **Phase 3 — Firebase (auth + modern UI)** | | | | |
 | P3-1 | — | 📋 BACKLOG | Firebase Hosting + React/Tailwind UI | P2-3 |
 | P3-2 | — | 📋 BACKLOG | Firebase Auth — replace Bearer token admin | P3-1 |
+| **Epic A11Y — ADA Accessibility** | | | | |
+| A11Y-1 | — | 🔄 IN PROGRESS | Accessibility foundation — lang, skip links, landmarks, focus styles | — |
+| A11Y-2 | — | 📋 BACKLOG | Form accessibility — labels, errors, required fields | A11Y-1 |
+| A11Y-3 | — | 📋 BACKLOG | Table & tab panel accessibility (report.html) | A11Y-1 |
+| A11Y-4 | — | 📋 BACKLOG | Data-testid foundation (all surfaces) | A11Y-1 |
+| A11Y-5 | — | 📋 BACKLOG | Color contrast remediation | A11Y-1 |
+| A11Y-6 | — | 📋 BACKLOG | Keyboard navigation & focus trap | A11Y-1 |
+| A11Y-7 | — | 📋 BACKLOG | axe-core CI integration | A11Y-1 |
+| A11Y-8 | — | 📋 BACKLOG | Screen reader testing & polish | A11Y-7 |
 
 ---
 

@@ -194,18 +194,31 @@
       .subscribe-form button[type="submit"] { width: 100%; flex: none; }
       .features { padding: 2rem 1rem 3rem; }
     }
+
+    /* ===== Accessibility Core (WCAG 2.1 AA) ===== */
+    .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+    .skip-link { position: absolute; top: -100%; left: 16px; background: #2563eb; color: #fff; padding: 0.75rem 1.25rem; text-decoration: none; font-weight: 600; font-size: 0.875rem; z-index: 10000; border-radius: 0 0 8px 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.2); }
+    .skip-link:focus { top: 0; outline: 3px solid #2563eb; outline-offset: 2px; }
+    *:focus:not(:focus-visible) { outline: none; }
+    button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, [tabindex]:focus-visible { outline: 3px solid #2563eb; outline-offset: 2px; box-shadow: 0 0 0 4px rgba(37,99,235,0.15); }
+    .a11y-live-region { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; } }
+    @media (prefers-contrast: high) { .card, .feature-card, input, select, textarea, button { border-width: 2px; border-color: currentColor; } }
   </style>
 </head>
 <body>
-  <header>
+  <!-- A11Y: Skip to main content link (WCAG 2.4.1) -->
+  <a href="#main-content" class="skip-link">Skip to main content</a>
+
+  <header role="banner">
     <span class="logo">OurSharedEvents</span>
-    <nav>
+    <nav role="navigation" aria-label="Main navigation">
       <a href="/events">Events</a>
       <a href="/admin">Admin</a>
     </nav>
   </header>
 
-  <main>
+  <main id="main-content" role="main">
     <section class="hero">
       <h1>Gather with your neighborhood on Chicago's Southside</h1>
       <p>Community events that bring people together. Stay in the loop and be the first to know when something's happening near you.</p>
@@ -243,7 +256,10 @@
     </section>
   </main>
 
-  <footer>
+  <!-- A11Y: ARIA live region for dynamic announcements (WCAG 4.1.3) -->
+  <div id="a11y-live-region" class="a11y-live-region" aria-live="polite" aria-atomic="true" role="status"></div>
+
+  <footer role="contentinfo">
     <p>&copy; 2026 OurSharedEvents &middot; <a href="/events">Browse Events</a></p>
   </footer>
 
