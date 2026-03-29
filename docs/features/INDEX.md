@@ -86,6 +86,7 @@ Every feature serves at least one vertex of the Triangle. The live chat assistan
 |----------|-------------|
 | [SPONSORS.md](SPONSORS.md) | Sponsor experience: attribution, analytics, tiers by scale |
 | [SPONSOR-PRICING.md](SPONSOR-PRICING.md) | Pricing governance: weight classes, governor, pool dynamics |
+| [GOVERNOR-DESIGN.md](GOVERNOR-DESIGN.md) | Deep dive: pool-based allocation — security, edge cases, error handling |
 | [BRANDS.md](BRANDS.md) | Multi-brand isolation, white-label, sponsor layering |
 | [TIERS.md](TIERS.md) | What each tier unlocks for sponsors |
 | [EVENTS.md](EVENTS.md) | How events work, the Triangle data model |
