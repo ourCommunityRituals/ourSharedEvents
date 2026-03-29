@@ -41,14 +41,88 @@ Stories are ordered by the sequence you work through them. Each row unlocks the 
 | P3-1 | — | 📋 BACKLOG | Firebase Hosting + React/Tailwind UI | P2-3 |
 | P3-2 | — | 📋 BACKLOG | Firebase Auth — replace Bearer token admin | P3-1 |
 | **Epic A11Y — ADA Accessibility** | | | | |
-| A11Y-1 | — | 🔄 IN PROGRESS | Accessibility foundation — lang, skip links, landmarks, focus styles | — |
-| A11Y-2 | — | 📋 BACKLOG | Form accessibility — labels, errors, required fields | A11Y-1 |
+| A11Y-1 | — | ✅ DONE | Accessibility foundation — lang, skip links, landmarks, focus styles | — |
+| A11Y-2 | — | 📋 BACKLOG | Form accessibility — labels, errors, `role="alert"`, `autocomplete` | A11Y-1 |
 | A11Y-3 | — | 📋 BACKLOG | Table & tab panel accessibility (report.html) | A11Y-1 |
 | A11Y-4 | — | 📋 BACKLOG | Data-testid foundation (all surfaces) | A11Y-1 |
 | A11Y-5 | — | 📋 BACKLOG | Color contrast remediation | A11Y-1 |
 | A11Y-6 | — | 📋 BACKLOG | Keyboard navigation & focus trap | A11Y-1 |
 | A11Y-7 | — | 📋 BACKLOG | axe-core CI integration | A11Y-1 |
 | A11Y-8 | — | 📋 BACKLOG | Screen reader testing & polish | A11Y-7 |
+| **Epic INFRA — Infrastructure Provisioning** | | | | |
+| INFRA-1 | — | 📋 BACKLOG | Provision D1 databases (main + forms, staging + prod) | — |
+| INFRA-2 | — | 📋 BACKLOG | Activate Cloudflare zone + DNS for oursharedevents.com | — |
+| INFRA-3 | — | 📋 BACKLOG | Create Google Cloud service account + set secrets | — |
+| INFRA-4 | — | 📋 BACKLOG | Document FORMS_ENCRYPTION_KEY generation + rotation | — |
+| **Epic BE — Backend Architecture** | | | | |
+| BE-2 | — | 📋 BACKLOG | Rate limiting on public form endpoints | INFRA-1 |
+| BE-7 | — | 📋 BACKLOG | API envelope standardization (match schema) | — |
+| BE-8 | — | 📋 BACKLOG | Pagination on admin list endpoints | — |
+| BE-9 | — | 📋 BACKLOG | Privacy notice at point of collection (GDPR Art. 13) | — |
+| BE-10 | — | 📋 BACKLOG | Privacy policy link on form pages | — |
+| BE-11 | — | 📋 BACKLOG | Email format validation on form submit | — |
+| BE-12 | — | 📋 BACKLOG | Flag resolution optimization (batch query) | — |
+| **Epic SEC — Security** | | | | |
+| SEC-1 | — | 📋 BACKLOG | Fix CORS wildcard in forms.ts (use corsOrigin()) | — |
+| SEC-2 | — | 📋 BACKLOG | Add CSP headers + remove user-scalable=no on form pages | — |
+| **Epic ADMIN — Admin Page Architecture (PR #28)** | | | | |
+| ADMIN-1 | — | 📋 BACKLOG | Feature flag tier model (D1 + API + resolution chain) | P2-1 |
+| ADMIN-2 | — | 📋 BACKLOG | Admin tier badge + gated UI (locked icons, upgrade prompts) | ADMIN-1 |
+| ADMIN-3 | — | 📋 BACKLOG | Native registration form (submit, count, QR routing) | ADMIN-1 |
+| ADMIN-4 | — | 📋 BACKLOG | Native check-in form (door mode, anonymous ID foundation) | ADMIN-3 |
+| ADMIN-5 | — | 📋 BACKLOG | Card 3 redesign — inline form config | ADMIN-4 |
+| ADMIN-6 | — | 📋 BACKLOG | Anonymous ID system (cookie + D1, scan correlation) | ADMIN-4 |
+| ADMIN-7 | — | 📋 BACKLOG | PII destruction jobs (scrub, audit log, retention) | ADMIN-3 |
+| ADMIN-8 | — | 📋 BACKLOG | Native survey form (tier-aware) | ADMIN-1, ADMIN-3 |
+| ADMIN-9 | — | 📋 BACKLOG | Email signup form (duplicate detection) | ADMIN-1, ADMIN-3 |
+| ADMIN-10 | — | 📋 BACKLOG | Self-serve event config | ADMIN-1 |
+| ADMIN-11 | — | 📋 BACKLOG | Form data export (CSV/JSON) | ADMIN-3 |
+| ADMIN-12 | — | 📋 BACKLOG | Admin inline styles → CSS classes | — |
+| ADMIN-13 | — | 📋 BACKLOG | Skeleton loaders + per-card error states | — |
+| ADMIN-14 | — | 📋 BACKLOG | Card 5 QR code + Card 7 QR visibility | — |
+| ADMIN-15 | — | 📋 BACKLOG | Copy button feedback ("Copied!" 2s state) | — |
+| ADMIN-16 | — | 📋 BACKLOG | data-testid complete coverage (all interactive elements) | — |
+| ADMIN-17 | — | 📋 BACKLOG | File upload to R2 (logos, posters, custom QR) | ADMIN-1 |
+| ADMIN-18 | — | 📋 BACKLOG | White-label branding (colors/logo/domain) | ADMIN-1 |
+| ADMIN-19 | — | 📋 BACKLOG | Newman E2E chain (create→config→submit→count→scrub) | ADMIN-3, ADMIN-7 |
+| ADMIN-20 | — | 📋 BACKLOG | Cross-surface sponsor integration test suite | — |
+| ADMIN-21 | — | 📋 BACKLOG | Multi-event aggregate dashboard | ADMIN-1 |
+| ADMIN-22 | — | 📋 BACKLOG | Sponsor ROI click-through attribution | ADMIN-6 |
+| ADMIN-23 | — | 📋 BACKLOG | Consent tracking on form submit (privacy notice + timestamp) | — |
+| **Epic DESIGN — Design System (PR #28)** | | | | |
+| DESIGN-1 | — | 📋 BACKLOG | Viewport meta tags on Admin + Report surfaces | — |
+| DESIGN-2 | — | 📋 BACKLOG | Breakpoint direction standardization (eliminate max-width) | — |
+| DESIGN-3 | — | 📋 BACKLOG | data-testid parity — all surfaces to 30+ each | — |
+| DESIGN-4 | — | 📋 BACKLOG | CI viewport matrix — add iPad, TV 1080p, iPhone SE | — |
+| DESIGN-5 | — | 📋 BACKLOG | Visual regression baseline — toHaveScreenshot() | DESIGN-3 |
+| DESIGN-6 | — | 📋 BACKLOG | Report print stylesheet (sponsor handout) | — |
+| DESIGN-7 | — | 📋 BACKLOG | Tabletop tent card surface (4x6 poster variant) | — |
+| DESIGN-8 | — | 📋 BACKLOG | External design token file (stop inline duplication) | — |
+| DESIGN-9 | — | 📋 BACKLOG | Poster mobile landing (QR scan → mobile view) | — |
+| DESIGN-10 | — | 📋 BACKLOG | Report responsive tables (horizontal scroll) | — |
+| DESIGN-11 | — | 📋 BACKLOG | Color palette hardcode audit — extract 500+ inline hex | — |
+| DESIGN-12 | — | 📋 BACKLOG | Cross-browser CI — Firefox + WebKit weekly | DESIGN-5 |
+| DESIGN-13 | — | 📋 BACKLOG | Wizard step 3 UX simplification (3 options → 2) | — |
+| DESIGN-14 | — | 📋 BACKLOG | "Last updated" timestamp on Card 1 | — |
+| DESIGN-15 | — | 📋 BACKLOG | Skip links on Display, Poster, Report | — |
+| **Epic QA — Test Coverage** | | | | |
+| QA-1 | — | 📋 BACKLOG | Edge case test suite (double submit, archived form, flag mid-session) | ADMIN-3 |
+| QA-2 | — | 📋 BACKLOG | Flag toggle → surface gating E2E test | ADMIN-1 |
+| QA-3 | — | 📋 BACKLOG | API smoke tests for form endpoints in CI | INFRA-1 |
+| QA-4 | — | 📋 BACKLOG | E2E flow: admin→configure→QR→submit→verify count | QA-3 |
+| QA-5 | — | 📋 BACKLOG | Contract tests (Pact) for form API shapes | — |
+| QA-6 | — | 📋 BACKLOG | Feature flag seed parity CI gate | — |
+| QA-7 | — | 📋 BACKLOG | Newman E2E chain (create→config→submit→count→scrub) | QA-3, ADMIN-7 |
+| **Epic SRE — Observability** | | | | |
+| SRE-1 | — | 📋 BACKLOG | Form submission rate dashboard + alerting | INFRA-1 |
+| SRE-2 | — | 📋 BACKLOG | PII destruction job monitoring + failure alerts | ADMIN-7 |
+| SRE-3 | — | 📋 BACKLOG | Wire k6 load tests to staging CI gate | INFRA-1 |
+| SRE-4 | — | 📋 BACKLOG | Enable Workers Logs/Traces in wrangler.toml | — |
+| SRE-5 | — | 📋 BACKLOG | Define SLOs (availability, latency, error rate) | SRE-4 |
+| **Epic HK — Housekeeping** | | | | |
+| HK-1 | — | 📋 BACKLOG | Archive legacy worker/ directory | — |
+| HK-2 | — | 📋 BACKLOG | Sync STORIES.md with implemented features | — |
+| HK-3 | — | 📋 BACKLOG | Update stale docs (DEPLOYMENT, .env.example, RUNBOOK) | HK-1 |
 
 ---
 
