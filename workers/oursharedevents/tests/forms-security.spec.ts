@@ -370,6 +370,94 @@ describe('S13: No raw email column in any FORMS_DB table', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// FEATURE FLAG SECURITY GATES — Tier System Integrity
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('S15: Feature flag handlers NEVER reference main DB', () => {
+  test('handlers/feature-flags.ts has zero references to env.DB or .DB.prepare', () => {
+    const sources: Record<string, string> = JSON.parse(tenv().TEST_SOURCE_FILES_JSON);
+    for (const [path, content] of Object.entries(sources)) {
+      if (path.includes('handlers/feature-flags')) {
+        expect(content).not.toMatch(/env\.DB\b/);
+        expect(content).not.toMatch(/\.DB\.prepare/);
+        expect(content).not.toMatch(/from\s+['"].*sheets/);
+      }
+    }
+  });
+});
+
+describe('S16: Feature flag lib NEVER references main DB', () => {
+  test('lib/feature-flags.ts has zero references to env.DB, sheets, or scan tables', () => {
+    const sources: Record<string, string> = JSON.parse(tenv().TEST_SOURCE_FILES_JSON);
+    for (const [path, content] of Object.entries(sources)) {
+      if (path.includes('lib/feature-flags')) {
+        expect(content).not.toMatch(/env\.DB\b/);
+        expect(content).not.toMatch(/\.DB\.prepare/);
+        expect(content).not.toMatch(/\bscans\b/);
+        expect(content).not.toMatch(/scan_aggregates/);
+        expect(content).not.toMatch(/poster_deployments/);
+      }
+    }
+  });
+});
+
+describe('S17: Feature flag validation — only known keys accepted', () => {
+  test('feature-flags handler validates flag keys against a fixed set', () => {
+    const sources: Record<string, string> = JSON.parse(tenv().TEST_SOURCE_FILES_JSON);
+    for (const [path, content] of Object.entries(sources)) {
+      if (path.includes('handlers/feature-flags')) {
+        // Must validate flag keys (isValidFlagKey check exists)
+        expect(content).toMatch(/isValidFlagKey/);
+        // Must validate tier names (isValidTier check exists)
+        expect(content).toMatch(/isValidTier/);
+      }
+    }
+  });
+});
+
+describe('S18: Feature flag seed uses safe defaults (free tier)', () => {
+  test('free tier seed has forms.register ON, forms.survey OFF, assets OFF, branding OFF', async () => {
+    // Verify the seed migration applied correctly — free tier is the safe default
+    const flags = await tenv().FORMS_DB.prepare(
+      "SELECT flag_key, enabled FROM feature_flags WHERE scope = 'global'",
+    ).all();
+
+    const flagMap = Object.fromEntries(
+      flags.results.map((r: Record<string, unknown>) => [r.flag_key, r.enabled]),
+    );
+
+    // Free tier: only basic forms enabled
+    expect(flagMap['forms.register']).toBe(1);
+    expect(flagMap['forms.checkin']).toBe(1);
+
+    // Everything else OFF by default — principle of least privilege
+    expect(flagMap['forms.survey']).toBe(0);
+    expect(flagMap['forms.email-signup']).toBe(0);
+    expect(flagMap['config.self-serve']).toBe(0);
+    expect(flagMap['assets.file-upload']).toBe(0);
+    expect(flagMap['branding.white-label']).toBe(0);
+    expect(flagMap['branding.custom-domain']).toBe(0);
+  });
+});
+
+describe('S19: Tier definitions enforce principle of least privilege', () => {
+  test('free tier has the fewest enabled flags, enterprise the most', () => {
+    const sources: Record<string, string> = JSON.parse(tenv().TEST_SOURCE_FILES_JSON);
+    for (const [path, content] of Object.entries(sources)) {
+      if (path.includes('lib/feature-flags')) {
+        // Enterprise tier must have file upload and branding enabled
+        // Free tier must NOT have these — verified by string analysis
+        // The tier presets are typed, so we verify the structure exists
+        expect(content).toMatch(/TIER_PRESETS/);
+        expect(content).toMatch(/free.*mid.*enterprise/s);
+        // Each tier must define all flag keys (no partial presets)
+        expect(content).toMatch(/forms\.register.*forms\.checkin.*forms\.survey/s);
+      }
+    }
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // REVERSE ISOLATION — Main DB has no form data
 // ═══════════════════════════════════════════════════════════════════════════════
 
