@@ -58,6 +58,8 @@ Same real-time counts       Same real-time counts         Same real-time counts
 
 **This is deliberate.** The local bar gets real signal — "42 people checked in tonight" — without needing Enterprise pricing. The marketplace works when all participants get honest data from the same infrastructure.
 
+**Sponsor pricing tiers** (title, platinum, gold, silver, bronze, primary) determine **display priority within an event** — where and how prominently a sponsor's logo appears. They do NOT gate access to the platform, the QR system, or the analytics. A bronze sponsor gets the same anonymous signal data as a title sponsor. Monetization hooks track billable units (QR scans, impressions, event count) per sponsor, preparing for future pricing without coupling billing logic to product logic. See [SPONSORS.md](SPONSORS.md) for the full governance model.
+
 ---
 
 ### 3. Event Automation — Volume Creates the Signal
