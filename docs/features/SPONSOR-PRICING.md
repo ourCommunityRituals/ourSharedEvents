@@ -11,15 +11,16 @@
 Sponsors buy into a **weight class** — local, mid, or premium. The weight class determines their screen time allocation across surfaces. The governor dynamically rebalances weights when activity spikes, compressing premium and boosting local. This is the fair marketplace in action.
 
 ```
-Sponsor signs up → picks weight class → gets screen time allocation
+Sponsor signs up → picks weight class → pool-based share calculation
                                               │
                                      Governor monitors scan rate
                                               │
                               ┌───────────────┼───────────────┐
                          Low activity     Normal          High activity
-                        (standard)      (standard)       (compressed)
+                        (standard)      (standard)       (share compression)
                               │               │               │
-                        P:50 M:30 L:20  P:50 M:30 L:20  P:40 M:32 L:28
+                         3x/2x/1x        3x/2x/1x       20% haircut on premium
+                         multipliers     multipliers      redistributed to local
 ```
 
 **When activity is high, local sponsors get proportionally MORE screen time, not less.**
@@ -28,13 +29,19 @@ Sponsor signs up → picks weight class → gets screen time allocation
 
 ## Weight Classes
 
-| Class | Screen Time (Standard) | Screen Time (Compressed) | Display Placement | Public Placement |
-|-------|:---------------------:|:------------------------:|-------------------|------------------|
-| **Premium** | 50% | 40% (-10pp) | Headers (top banner) | Sidebars |
-| **Mid** | 30% | 32% (+2pp) | Headers (top banner) | Sidebars |
-| **Local** | 20% | 28% (+8pp) | Sidebars (side panel) | Sidebars |
+Screen time is **pool-based**: every sponsor gets `multiplier / sum(all multipliers)`. The ratio between tiers is locked to the multiplier (3:1 premium vs local) regardless of pool size.
 
-**Weights always sum to 100%.** The governor redistributes — it never adds or removes time from the total pool.
+| Class | Multiplier | Display Placement | Public Placement |
+|-------|:---------:|-------------------|------------------|
+| **Premium** | 3x | Headers (top banner) | Sidebars |
+| **Mid** | 2x | Headers (top banner) | Sidebars |
+| **Local** | 1x | Sidebars (side panel) | Sidebars |
+
+**Multipliers are global** — same for every event type. One set of numbers for the entire platform. Sponsors know exactly what they're buying: "Mid = 2x screen time at every event."
+
+When the governor activates during high activity, it applies **share compression** (20% haircut on premium's computed share, redistributed to local). This preserves the premium investment — premium still gets ~2.2:1 vs local — while giving local sponsors a meaningful boost when the crowd is biggest.
+
+See [GOVERNOR-DESIGN.md](GOVERNOR-DESIGN.md) for the full security, functional, and error handling analysis.
 
 ### What Each Class Gets
 
@@ -77,11 +84,11 @@ INACTIVE ──(scans >= threshold)──→ ACTIVE ──(scans < threshold)─
                                ACTIVE ←──(scans >= threshold)────────────┘
 ```
 
-| State | Weights | Behavior |
-|-------|---------|----------|
-| **INACTIVE** | Standard (P:50, M:30, L:20) | Normal rotation — premium gets most time |
-| **ACTIVE** | Compressed (P:40, M:32, L:28) | High traffic — local gets boosted |
-| **COOLING_DOWN** | Standard | Hysteresis — waits 2 windows before deactivating |
+| State | Effect | Behavior |
+|-------|--------|----------|
+| **INACTIVE** | Standard pool math (3x/2x/1x) | Normal rotation — premium gets 3:1 vs local |
+| **ACTIVE** | 20% share compression on premium | High traffic — premium drops to ~2.2:1, local boosted |
+| **COOLING_DOWN** | Standard pool math | Hysteresis — waits 2 windows before deactivating |
 
 ### Configuration
 
@@ -90,10 +97,14 @@ INACTIVE ──(scans >= threshold)──→ ACTIVE ──(scans < threshold)─
 | `ROLLING_WINDOW` | 15 minutes | Scan counting window |
 | `THRESHOLD` | 5 scans | Activation threshold per window |
 | `HYSTERESIS_WINDOWS` | 2 | Consecutive sub-threshold windows before deactivation |
+| `COMPRESSION_PCT` | 20% | Share haircut on premium when governor active |
+| `MIN_DWELL_MS` | 2000 | Minimum display time per sponsor (floor) |
 
 ### Why This Matters
 
-During a packed bocce night with 200 people scanning QR codes, the governor activates. Premium's screen time drops from 50% to 40%. Local's jumps from 20% to 28%. The national brand still gets the most time — they paid for it — but the neighborhood bar gets a meaningful boost when it matters most: when the crowd is biggest.
+During a packed bocce night with 200 people scanning QR codes, the governor activates. Premium's share gets a 20% haircut — from 25% to 20% in a typical pool. The freed time goes to local. The national brand still gets the most time — they paid for 3x and they're getting ~2.2x — but the neighborhood bar gets a meaningful boost when it matters most: when the crowd is biggest.
+
+The 2-second minimum dwell floor ensures no sponsor's impression drops below the threshold where a human eye can register the brand. Below 2 seconds, the impression has no value.
 
 ---
 

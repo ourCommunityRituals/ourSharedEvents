@@ -365,12 +365,75 @@ if (govState.sub_threshold_windows < 0) → reset to 0
 
 ---
 
-## Open Questions
+## Design Decisions (Resolved)
 
-1. **Should the governor compress the multiplier or the final share?** Compressing the multiplier (3x → 2x) changes the ratio. Compressing the final share (apply a % reduction to premium's computed share) preserves the ratio but reduces the absolute amount. Multiplier compression is more aggressive in protecting local sponsors.
+### D1: Share Compression, Not Multiplier Compression
 
-2. **Should multipliers be per-event or global?** Per-event allows tuning for different event types (a 47-event-type platform may need different ratios for trivia vs league vs health event). Global is simpler to manage. Recommendation: global default with per-event override (same pattern as feature flags).
+**Decision:** Compress the final share, not the multiplier.
 
-3. **Should the minimum dwell floor apply before or after governor compression?** Before = floor is absolute. After = governor can push sponsors below floor. Recommendation: after, with a hard minimum of 2 seconds. No sponsor should be visible for less than 2 seconds — below that the impression has no value.
+**Rationale:** Share compression honors the premium buy. The sponsor paid for 3x — the ratio stays meaningful even during peak activity. Multiplier compression (3x → 2x) collapses the ratio to 1.3:1, which undermines the value proposition of paying $500 vs $75.
 
-4. **What happens to the existing `gaming_compression_governor_spec.md`?** It was lost with the laptop. This document serves as its replacement. The governor state machine test (`governor-state-machine.test.js`) remains valid — the state transitions don't change, only the weight calculation inputs.
+Share compression applies a percentage haircut to the premium share and redistributes to local:
+
+```
+Pool A: 1 premium, 2 mid, 5 local (20% compression on premium)
+
+Standard:     P=25.0%   M=16.7%   L=8.3%   (ratio 3:1)
+Compressed:   P=20.0%   M=13.3%   L=9.3%   (ratio 2.2:1)
+```
+
+Premium still gets 2.2x local — they paid 6.7x more but the diminishing returns are the feature, not a bug. Local gets a meaningful floor boost. The premium sponsor's investment is respected.
+
+**Compression parameter:** The compression percentage is tunable. 20% is the starting point. Higher compression = more local protection. Lower = more premium advantage. This is a single global config value.
+
+### D2: Global Multipliers, Not Per-Event
+
+**Decision:** Global multipliers only. No per-event override.
+
+**Rationale:** Per-event tuning is the ideal, but the processing cost and operational complexity at scale are prohibitive. With 47 event types now and 180 by 2028:
+
+- Per-event multipliers require a lookup + computation per sponsor per event on every display render
+- Configuration surface area explodes — who manages 180 different multiplier sets?
+- Sponsors expect consistent treatment across events — "I bought mid, I get 2x everywhere"
+- Edge workers have limited compute budget per request — global lookup is O(1), per-event is O(N)
+
+Global multipliers mean one set of numbers for the entire platform. Change once, applies everywhere. Sponsors can explain their package to anyone: "We get 2x screen time at every event."
+
+If market data later proves that certain event types need different ratios, the architecture supports adding per-event overrides through the existing feature flag system. But start global.
+
+### D3: Minimum Dwell Floor After Compression
+
+**Decision:** Floor applies after governor compression, with a hard minimum of 2 seconds.
+
+**Rationale:** The governor should have full range to compress. But below 2 seconds, an impression has no value — the human eye can't register the brand. The floor is a practical reality constraint, not a fairness rule.
+
+```
+computePoolWeights(pool, multipliers, governorState)
+  → apply pool-based share calculation
+  → apply share compression if governor active
+  → apply 2-second minimum dwell floor  ← last step, catches edge cases
+```
+
+In practice, the floor only activates for very large pools (30+) where compression could push a premium sponsor's dwell below 2 seconds. For pools under 20, it never fires.
+
+### D4: GOVERNOR-DESIGN.md Replaces the Lost Spec
+
+**Decision:** This document is the spec. The test is refactored to match.
+
+**Rationale:** The governor state machine test (`governor-state-machine.test.js`) validates state transitions and hysteresis — that logic is correct and unchanged. The fixed weight constants (`STANDARD_WEIGHTS`, `COMPRESSED_WEIGHTS`) are replaced with:
+
+1. `computePoolWeights(pool, multipliers)` for standard allocation
+2. `applyShareCompression(weights, compressionPct)` for governor-active state
+3. `applyDwellFloor(dwellTimes, minDwellMs)` for the 2-second minimum
+
+The test file becomes the executable spec. This document is the design rationale.
+
+---
+
+## Open Questions (Remaining)
+
+1. **What compression percentage?** Starting at 20%. Should this be tunable by admin, or fixed in code? Recommendation: fixed in code for Phase 1, admin-tunable in Phase 2 via feature flag system.
+
+2. **Should the compression percentage vary by pool size?** A 20% haircut on premium in a pool of 3 has a different feel than in a pool of 30. Constant percentage is simpler and predictable. Variable adds complexity but could feel more fair at extremes. Recommendation: constant for launch, evaluate after market data.
+
+3. **How should the SharedReport surface display the weight allocation?** Sponsors see their impression counts and screen time. Should the report show the pool size, their multiplier, and the governor state? More transparency builds trust. But it also reveals the pricing mechanics to competitors in the same pool. Recommendation: show impressions and percentage of total — not the underlying multiplier math.
