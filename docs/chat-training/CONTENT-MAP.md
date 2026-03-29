@@ -42,6 +42,12 @@ The platform serves 3 primary audiences that mirror the Triangle data model:
 > **What the product does.** Highest-value training content. Answers the most common
 > questions from all 3 audiences directly.
 
+### Platform Foundation (All Audiences)
+
+| Document | Answers Questions Like... |
+|----------|--------------------------|
+| `docs/features/VISION.md` | "What is this platform for?", "Why anonymous?", "How do local sponsors compete?", "What are the 11 QR codes?", "What's NCR?" |
+
 ### Customer-Facing Features
 
 | Document | Answers Questions Like... |
@@ -180,49 +186,52 @@ The platform serves 3 primary audiences that mirror the Triangle data model:
 
 For targeted chat assistants serving a single audience:
 
-### Customer Chat (attendee-facing — 7 docs)
+### Customer Chat (attendee-facing — 8 docs)
 
 The minimum set to answer any attendee question:
 
-1. `docs/features/FORMS.md` — how to register, check in, survey, email signup
-2. `docs/features/QR-ROUTING.md` — what happens when they scan a QR code
-3. `docs/features/SURFACES.md` — what pages exist and what they do
-4. `docs/features/EVENTS.md` — how to find and view events
-5. `docs/features/PRIVACY.md` — what happens with their data
-6. `docs/features/ERROR-REFERENCE.md` — why something isn't working
-7. `docs/architecture/FRIENDLY_URLS.md` — what URL to use
+1. `docs/features/VISION.md` — why the platform exists, anonymous-ID-first promise
+2. `docs/features/FORMS.md` — how to register, check in, survey, email signup
+3. `docs/features/QR-ROUTING.md` — what happens when they scan a QR code
+4. `docs/features/SURFACES.md` — what pages exist and what they do
+5. `docs/features/EVENTS.md` — how to find and view events
+6. `docs/features/PRIVACY.md` — what happens with their data
+7. `docs/features/ERROR-REFERENCE.md` — why something isn't working
+8. `docs/architecture/FRIENDLY_URLS.md` — what URL to use
 
-### Sponsor Chat (brand-facing — 9 docs)
+### Sponsor Chat (brand-facing — 10 docs)
 
 Everything a sponsor needs to understand the platform and their data:
 
-1. `docs/features/EVENTS.md` — event structure and the Triangle model
-2. `docs/features/BRANDS.md` — multi-brand isolation and white-label
-3. `docs/features/TIERS.md` — what's available at each tier, analytics
-4. `docs/features/SURFACES.md` — shared report, display surface, sponsor visibility
-5. `docs/features/PRIVACY.md` — what attendee data sponsors can/cannot access
-6. `docs/features/FORMS.md` — form attribution via `source_placement_id`
-7. `docs/architecture/API_CONTRACT.md` — integration endpoints
-8. `docs/architecture/FRIENDLY_URLS.md` — brand-specific URLs
-9. `README.md` — platform overview
+1. `docs/features/VISION.md` — fair marketplace, why local sponsors have a seat, NCR horizon
+2. `docs/features/SPONSORS.md` — sponsor experience, attribution, scale tiers
+3. `docs/features/EVENTS.md` — event structure and the Triangle model
+4. `docs/features/BRANDS.md` — multi-brand isolation and white-label
+5. `docs/features/TIERS.md` — what's available at each tier, analytics
+6. `docs/features/SURFACES.md` — shared report, display surface, sponsor visibility
+7. `docs/features/PRIVACY.md` — what attendee data sponsors can/cannot access
+8. `docs/features/FORMS.md` — form attribution via `source_placement_id`
+9. `docs/architecture/API_CONTRACT.md` — integration endpoints
+10. `README.md` — platform overview
 
-### Admin Chat (organizer-facing — 13 docs)
+### Admin Chat (organizer-facing — 14 docs)
 
 Full operational knowledge for event organizers:
 
-1. `docs/features/TIERS.md` — tier management, flag toggling
-2. `docs/features/FORMS.md` — form system, admin endpoints, counts
-3. `docs/features/QR-ROUTING.md` — generating QR links, test-IDs
-4. `docs/features/BRANDS.md` — brand setup and isolation
-5. `docs/features/AUTH.md` — admin access methods
-6. `docs/features/EVENTS.md` — event data and APIs
-7. `docs/features/SURFACES.md` — all surfaces and admin dashboard
-8. `docs/features/PRIVACY.md` — PII lifecycle and compliance
-9. `docs/features/ERROR-REFERENCE.md` — troubleshooting
-10. `docs/architecture/API_CONTRACT.md` — full API reference
-11. `docs/architecture/FRIENDLY_URLS.md` — URL system
-12. `docs/support/ERROR_HANDLING_GUIDE.md` — error investigation
-13. `README.md` — platform overview
+1. `docs/features/VISION.md` — platform philosophy, 11-QR standard, event lifecycle
+2. `docs/features/TIERS.md` — tier management, flag toggling
+3. `docs/features/FORMS.md` — form system, admin endpoints, counts
+4. `docs/features/QR-ROUTING.md` — generating QR links, test-IDs
+5. `docs/features/BRANDS.md` — brand setup and isolation
+6. `docs/features/SPONSORS.md` — sponsor attribution and management
+7. `docs/features/AUTH.md` — admin access methods
+8. `docs/features/EVENTS.md` — event data and APIs
+9. `docs/features/SURFACES.md` — all surfaces and admin dashboard
+10. `docs/features/PRIVACY.md` — PII lifecycle and compliance
+11. `docs/features/ERROR-REFERENCE.md` — troubleshooting
+12. `docs/architecture/API_CONTRACT.md` — full API reference
+13. `docs/support/ERROR_HANDLING_GUIDE.md` — error investigation
+14. `README.md` — platform overview
 
 ### Future: Government / Policy / Researcher Chat
 

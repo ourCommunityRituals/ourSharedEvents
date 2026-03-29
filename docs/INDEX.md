@@ -19,13 +19,14 @@
 
 ## Directory Map
 
-### [`features/`](features/) — Feature Documentation (10 files)
+### [`features/`](features/) — Feature Documentation (11 files)
 
 **Start here for understanding what the product does.** Written for the 3 Triangle audiences: Customers, Sponsors, Admins.
 
 | File | Audience | Description |
 |------|----------|-------------|
 | [INDEX.md](features/INDEX.md) | All | Feature map by tier + audience-indexed docs |
+| [VISION.md](features/VISION.md) | All | Platform philosophy: anonymous-ID-first, fair marketplace, 11-QR standard, NCR horizon |
 | [FORMS.md](features/FORMS.md) | Customer, Admin | 4-layer form system: register, check-in, survey, email |
 | [QR-ROUTING.md](features/QR-ROUTING.md) | Customer, Admin | QR code to form routing |
 | [SPONSORS.md](features/SPONSORS.md) | Sponsor | Sponsor experience: attribution, analytics, scale tiers |

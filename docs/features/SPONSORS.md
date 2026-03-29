@@ -2,12 +2,23 @@
 
 > How sponsors interact with the platform — from a local bar to a national brand.
 > Sponsors are one vertex of the Triangle: **Events ↔ Sponsors ↔ Customers**.
+> See [VISION.md](VISION.md) for the foundational philosophy.
+
+---
+
+## The Fair Marketplace Principle
+
+**Every local sponsor has a seat at the event.**
+
+A neighborhood bar hosting trivia night gets the same QR system, the same mobile form UX, the same privacy protection, and the same real-time counts as a national franchise. The tiers unlock operational tools (analytics, branding, config) — they never create a better customer experience for premium buyers.
+
+This is how the market gets real signals. When a local bar sees "42 people checked in tonight" from the same infrastructure a national brand uses, both get honest data. The local economy works when all participants compete on the quality of their events, not the size of their tech budget.
 
 ---
 
 ## What Sponsors Get
 
-Sponsors support community events. In return, they get visibility to attendees and data on their impact.
+Sponsors support community events. In return, they get visibility to attendees and anonymous signal on their impact — never personal data on individual attendees.
 
 ### The Sponsor Value Chain
 

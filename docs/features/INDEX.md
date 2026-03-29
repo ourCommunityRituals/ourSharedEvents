@@ -5,6 +5,12 @@
 
 ---
 
+## Start Here: [VISION.md](VISION.md)
+
+The foundational philosophy: anonymous-ID-first platform serving the hyperlocal economy through a fair marketplace where every local sponsor has a seat. Covers the 3 core principles, the 11-QR standard system, and the NCR geo-spatial intelligence horizon.
+
+---
+
 ## The Triangle — Three Audiences, One Platform
 
 ```

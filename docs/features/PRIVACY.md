@@ -1,14 +1,55 @@
 # Privacy & PII Lifecycle
 
-> How ourSharedEvents protects personal data at every layer.
+> Anonymous ID first. Presence, not identity.
+> See [VISION.md](VISION.md) for why this is the foundational design principle.
 
 ---
 
 ## Core Principle
 
-**Never store what you don't need. Delete what you have when you're done with it.**
+**The platform captures signal of presence — not personal identity.**
 
-The forms system (FORMS_DB) is completely separate from the anonymous scan system (DB). No cross-linking.
+This isn't a privacy policy bolted on after the fact. The database schema itself makes it impossible to store PII in the scan system. There is no column for email, name, or IP address in the `scans` table. The anonymous ID system and the forms system are **completely separate databases** with no cross-linking.
+
+```
+FORMS_DB (opt-in personal data)     DB (anonymous presence signal)
+───────────────────────────────     ────────────────────────────
+Registrations (name, email hash)    Scans (scan_bucket, agent_hash)
+Surveys (responses, PII-scrubbed)   Poster deployments (qr_token, lat/lng)
+Email signups (encrypted, 30d TTL)  Scan aggregates (counts by hour)
+Check-in counts (aggregate only)    Sponsors (click/impression tokens)
+                                    Events (the core entity)
+    ↓                                   ↓
+  Auto-deleted on schedule          Permanent anonymous signal
+  Customer opted in voluntarily     No opt-in needed — no PII exists
+```
+
+**For customers:** You can scan any QR code knowing no personal data is captured. If you voluntarily fill out a form, your data is hashed or encrypted and auto-deleted.
+
+**For sponsors:** The analytics you see are real aggregate signal, not individual tracking. You know how many people engaged with your placement — not who they are.
+
+---
+
+## The Two Data Systems
+
+### System 1: Anonymous Scan Signal (DB — permanent)
+
+The scan system stores **presence signal only**. By schema design, no PII can enter:
+
+| What's Stored | How | Purpose |
+|---------------|-----|---------|
+| `scan_bucket` | Hourly time window | When (approximate) |
+| `user_agent_hash` | SHA-256 of user agent | Device class (not individual) |
+| `country_code`, `region_code` | From CF headers | Where (approximate) |
+| `poster_deployment_id` | FK to physical QR placement | Which placement was scanned |
+
+**What's explicitly excluded:** email, name, IP address, exact timestamp, cookies, device fingerprint.
+
+This data is **permanent** — it's safe to keep forever because it contains no personal information. It becomes the foundation for geo-spatial intelligence at scale.
+
+### System 2: Opt-In Form Data (FORMS_DB — temporary)
+
+When a customer **voluntarily** fills out a form, that data enters a separate system with strict lifecycle rules:
 
 ---
 
