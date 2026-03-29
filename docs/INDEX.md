@@ -29,6 +29,7 @@
 | [VISION.md](features/VISION.md) | All | Platform philosophy: anonymous-ID-first, fair marketplace, 11-QR standard, NCR horizon |
 | [FORMS.md](features/FORMS.md) | Customer, Admin | 4-layer form system: register, check-in, survey, email |
 | [QR-ROUTING.md](features/QR-ROUTING.md) | Customer, Admin | QR code to form routing |
+| [UEC-CODES.md](features/UEC-CODES.md) | All | Universal Event Code — 7+4 color-coded QR standard |
 | [SPONSORS.md](features/SPONSORS.md) | Sponsor | Sponsor experience: attribution, analytics, scale tiers |
 | [TIERS.md](features/TIERS.md) | Admin, Sponsor | 3-tier pricing: Free, Mid, Enterprise |
 | [SURFACES.md](features/SURFACES.md) | Customer, Admin, Sponsor | 5 MVP surfaces + landing page |

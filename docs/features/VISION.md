@@ -81,35 +81,30 @@ Each phase generates different signal. Pre-event shows demand. During-event show
 
 ---
 
-## The 11-QR Standard System
+## The UEC System — Universal Event Code
 
-OurSharedEvents has developed a standardized QR interaction framework that spans the entire event lifecycle. Each QR code serves a specific purpose in a specific phase:
+OurSharedEvents uses a color-based semantic standard for QR codes: the **Universal Event Code (UEC)**. Seven colors. One meaning each. No instructions required. The color tells you what the code does before you scan it.
 
-### Pre-Event QR Codes
+### 7 Core Codes
 
-| # | QR Purpose | Phase | What It Does |
-|---|-----------|-------|-------------|
-| 1 | **Registration** | Pre-event | Attendee signs up for the event |
-| 2 | **Event Info** | Pre-event | Links to public event page with details |
-| 3 | **Sponsor Intro** | Pre-event | Sponsor placement — "brought to you by" |
+| # | Color | Code | What It Does | Phase |
+|---|-------|------|-------------|-------|
+| 01 | **Green** | ENTER | Venue entry, gate access, check-in | Arrival |
+| 02 | **Coral** | LIVE | Real-time scoring, brackets, live feed | During |
+| 03 | **Blue** | SPONSOR | Sponsor offers, brand activation, local deals | During |
+| 04 | **Purple** | ARCHIVE | Past results, SharedReport, memories | Post |
+| 05 | **Pink** | HELP | ADA assistance, first aid, accessibility | Anytime |
+| 06 | **Amber** | FEEDBACK | Surveys, ratings, post-event voice | Post |
+| 07 | **Charcoal** | UTILITY | WiFi, schedule, maps, general info | Anytime |
 
-### During-Event QR Codes
+### 4 Extensions
 
-| # | QR Purpose | Phase | What It Does |
-|---|-----------|-------|-------------|
-| 4 | **Check-In** | Arrival | Tap-to-count at the door |
-| 5 | **Sponsor Funnel** | During | Table-top/poster sponsor engagement — tracks placement interaction |
-| 6 | **Gamification** | During | Interactive challenges, scavenger hunts, leaderboards |
-| 7 | **Shopping** | During | Sponsor product/service link — direct commerce |
-| 8 | **Donations** | During | Community fundraising — direct giving |
-
-### Post-Event QR Codes
-
-| # | QR Purpose | Phase | What It Does |
-|---|-----------|-------|-------------|
-| 9 | **Survey** | Post-event | Event feedback with 1-5 rating |
-| 10 | **Email Signup** | Post-event | Opt-in for future event notifications |
-| 11 | **Shared Report** | Post-event | Sponsor/stakeholder analytics dashboard |
+| Color | Code | What It Does | Priority |
+|-------|------|-------------|----------|
+| **Yellow** | ALERT | Safety notices, weather, emergencies | HIGH |
+| **Red** | STAFF | Staff-only, admin tools, backstage | HIGH |
+| **Teal** | CHECK-IN | Attendance tracking, roster verification | MEDIUM |
+| **Dark Teal** | SHOP | Merchandise, concessions, silent auction | MEDIUM |
 
 ### How It Works Physically
 
@@ -119,18 +114,22 @@ Poster at venue entrance     Table tent at sponsor table     Display screen at e
 │                     │     │                         │     │                      │
 │  [Event Name]       │     │  [Sponsor Logo]         │     │  How was tonight?    │
 │                     │     │                         │     │                      │
-│  ┌───┐  Register    │     │  ┌───┐  Learn More      │     │  ┌───┐  Rate Us      │
-│  │QR1│  for event   │     │  │QR5│  from sponsor    │     │  │QR9│  Survey        │
+│  ┌───┐  GREEN       │     │  ┌───┐  BLUE            │     │  ┌───┐  AMBER        │
+│  │ ■ │  ENTER       │     │  │ ■ │  SPONSOR         │     │  │ ■ │  FEEDBACK     │
 │  └───┘              │     │  └───┘                  │     │  └───┘               │
 │                     │     │                         │     │                      │
-│  ┌───┐  Check in    │     │  ┌───┐  Special offer   │     │  ┌───┐  Stay in loop │
-│  │QR4│  on arrival  │     │  │QR7│  Shop now        │     │  │QR10│ Email signup  │
+│  ┌───┐  CORAL       │     │  ┌───┐  TEAL            │     │  ┌───┐  PURPLE       │
+│  │ ■ │  LIVE        │     │  │ ■ │  SHOP            │     │  │ ■ │  ARCHIVE      │
 │  └───┘              │     │  └───┘                  │     │  └───┘               │
 │                     │     │                         │     │                      │
 └─────────────────────┘     └─────────────────────────┘     └──────────────────────┘
 ```
 
+The color IS the instruction. An attendee sees green and knows it's entry. Sees blue and knows it's a sponsor. No training, no legend, no explanation needed.
+
 Every scan is tracked anonymously via the `scans` table — `poster_deployment_id` links to the physical placement (with lat/lng), `scan_bucket` records the time window, and `user_agent_hash` indicates device class. No personal data. Just presence signal.
+
+See [UEC-CODES.md](UEC-CODES.md) for the complete UEC v1.1 specification: color psychology, contrast audits, deployment checklist, and the full 7+4 code system.
 
 ---
 
@@ -173,8 +172,9 @@ Phase 3: Geo-Spatial Intelligence (horizon)
 | Principle | Where It Lives in the Platform |
 |-----------|-------------------------------|
 | Anonymous ID first | `scans` table schema (no PII columns), forms PII lifecycle (hash/encrypt/delete) |
-| Fair marketplace | Same form UX at all tiers, tiered ops tools not customer experience |
-| Event automation | 4 form types × 11 QR standard × 3 event phases |
+| Fair marketplace | Same form UX at all tiers, Sponsor Pricing Tier Balancer, tiered ops tools not customer experience |
+| UEC system | 7 core codes + 4 extensions, color-semantic QR standard across all event types |
+| Event automation | 4 form types × UEC codes × 3 event phases |
 | Presence signal | `scan_bucket`, `user_agent_hash`, `poster_deployment_id` with lat/lng |
 | Geo-spatial horizon | `poster_deployments` (lat/lng) + `scan_aggregates` (time bucketed) |
 

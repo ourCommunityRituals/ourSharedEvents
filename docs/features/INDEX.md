@@ -50,6 +50,7 @@ Every feature serves at least one vertex of the Triangle. The live chat assistan
 | Check-in counter | Y | Y | Y | [FORMS.md](FORMS.md) |
 | Survey form | - | Y | Y | [FORMS.md](FORMS.md) |
 | Email signup form | - | Y | Y | [FORMS.md](FORMS.md) |
+| UEC color-coded QR system | Y | Y | Y | [UEC-CODES.md](UEC-CODES.md) |
 | QR code form routing | Y | Y | Y | [QR-ROUTING.md](QR-ROUTING.md) |
 | Sponsor attribution tracking | Y | Y | Y | [SPONSORS.md](SPONSORS.md) |
 | Admin dashboard | Y | Y | Y | [SURFACES.md](SURFACES.md) |
@@ -74,6 +75,7 @@ Every feature serves at least one vertex of the Triangle. The live chat assistan
 | Document | Description |
 |----------|-------------|
 | [FORMS.md](FORMS.md) | How to register, check in, take surveys, sign up for emails |
+| [UEC-CODES.md](UEC-CODES.md) | Universal Event Code — 7 colors, one meaning each |
 | [QR-ROUTING.md](QR-ROUTING.md) | What happens when you scan a QR code |
 | [SURFACES.md](SURFACES.md) | What pages you can visit |
 | [EVENTS.md](EVENTS.md) | How to find and view events |
