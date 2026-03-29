@@ -268,12 +268,16 @@ export async function setFlag(
 export async function applyTier(
   db: D1Database,
   tier: Tier,
-): Promise<void> {
+): Promise<{ applied: number }> {
   const preset = TIER_PRESETS[tier];
+  let applied = 0;
 
   for (const [key, enabled] of Object.entries(preset.flags)) {
     await setFlag(db, key, enabled, 'global');
+    applied++;
   }
+
+  return { applied };
 }
 
 /**
