@@ -2,7 +2,7 @@
  * Feature Flags — 3-Tier System Tests
  *
  * Exercises the complete feature flag lifecycle:
- *   Scenario 1: Free tier seed — 12 flags seeded, 2 ON / 10 OFF
+ *   Scenario 1: Free tier seed — 17 flags seeded, 3 ON / 14 OFF
  *   Scenario 2: Tier upgrade — free → mid → enterprise, flags match presets
  *   Scenario 3: Event-level overrides — enterprise override wins over global
  *   Scenario 4: Lookup hierarchy — event > global > default ON
@@ -66,24 +66,29 @@ beforeAll(async () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('Scenario 1: Free tier seed migration', () => {
-  test('12 global flags seeded — forms.register + forms.checkin ON, rest OFF', async () => {
+  test('17 global flags seeded — forms.register + forms.checkin + report.export-json ON, rest OFF', async () => {
     const flags = await listFlags(formsDb(), { scope: 'global' });
 
-    // Should have all 12 flag keys
-    expect(flags.length).toBe(12);
+    // Should have all 17 flag keys
+    expect(flags.length).toBe(17);
 
     const flagMap = Object.fromEntries(flags.map(f => [f.flag_key, f.enabled]));
 
-    // Free tier: 2 ON
+    // Free tier: 3 ON
     expect(flagMap['forms.register']).toBe(1);
     expect(flagMap['forms.checkin']).toBe(1);
+    expect(flagMap['report.export-json']).toBe(1);
 
-    // Free tier: 10 OFF
+    // Free tier: 14 OFF
     expect(flagMap['forms.survey']).toBe(0);
     expect(flagMap['forms.email-signup']).toBe(0);
     expect(flagMap['config.self-serve']).toBe(0);
     expect(flagMap['config.event-settings']).toBe(0);
     expect(flagMap['analytics.shared-report']).toBe(0);
+    expect(flagMap['report.advanced-metrics']).toBe(0);
+    expect(flagMap['report.export-pdf']).toBe(0);
+    expect(flagMap['report.custom-window']).toBe(0);
+    expect(flagMap['report.portfolio']).toBe(0);
     expect(flagMap['assets.file-upload']).toBe(0);
     expect(flagMap['assets.custom-qr']).toBe(0);
     expect(flagMap['branding.white-label']).toBe(0);
@@ -110,7 +115,7 @@ describe('Scenario 2: Tier upgrade free → mid → enterprise', () => {
   test('apply mid tier — surveys + email + config ON, assets still OFF', async () => {
     const result = await applyTier(formsDb(), 'mid');
     expect(result.tier).toBe('mid');
-    expect(result.applied).toBe(12);
+    expect(result.applied).toBe(17);
 
     expect(await isFeatureEnabled(formsDb(), 'forms.register')).toBe(true);
     expect(await isFeatureEnabled(formsDb(), 'forms.survey')).toBe(true);
@@ -131,7 +136,7 @@ describe('Scenario 2: Tier upgrade free → mid → enterprise', () => {
     const result = await applyTier(formsDb(), 'enterprise');
     expect(result.tier).toBe('enterprise');
 
-    // All 12 flags ON
+    // All 17 flags ON
     for (const key of Object.values(FLAG_KEYS)) {
       expect(await isFeatureEnabled(formsDb(), key)).toBe(true);
     }
@@ -229,7 +234,7 @@ describe('Scenario 6: Admin flag CRUD via HTTP', () => {
     expect(res.status).toBe(200);
     const body = await json(res);
     expect(body.ok).toBe(true);
-    expect((body.items as unknown[]).length).toBeGreaterThanOrEqual(12);
+    expect((body.items as unknown[]).length).toBeGreaterThanOrEqual(17);
   });
 
   test('GET /api/v2/admin/flags/tiers → list tier presets', async () => {
@@ -254,7 +259,7 @@ describe('Scenario 6: Admin flag CRUD via HTTP', () => {
     const body = await json(res);
     expect(body.ok).toBe(true);
     expect(body.tier).toBe('mid');
-    expect(body.applied).toBe(12);
+    expect(body.applied).toBe(17);
   });
 
   test('GET /api/v2/admin/flags/current-tier → detect applied tier', async () => {

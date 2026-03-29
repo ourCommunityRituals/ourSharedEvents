@@ -20,5 +20,10 @@ VALUES
   ('seed-assets-custom-qr',     'global', '', 'assets.custom-qr',     0, datetime('now')),
   ('seed-branding-white-label',  'global', '', 'branding.white-label',  0, datetime('now')),
   ('seed-branding-custom-domain','global', '', 'branding.custom-domain',0, datetime('now')),
-  ('seed-branding-color-palette','global', '', 'branding.color-palette',0, datetime('now'))
+  ('seed-branding-color-palette','global', '', 'branding.color-palette',0, datetime('now')),
+  ('seed-report-export-json',    'global', '', 'report.export-json',    1, datetime('now')),
+  ('seed-report-advanced-metrics','global', '', 'report.advanced-metrics',0, datetime('now')),
+  ('seed-report-export-pdf',     'global', '', 'report.export-pdf',     0, datetime('now')),
+  ('seed-report-custom-window',  'global', '', 'report.custom-window',  0, datetime('now')),
+  ('seed-report-portfolio',      'global', '', 'report.portfolio',      0, datetime('now'))
 ON CONFLICT(scope, scope_id, flag_key) DO NOTHING;

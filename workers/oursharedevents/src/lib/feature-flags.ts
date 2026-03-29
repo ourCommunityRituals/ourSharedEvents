@@ -268,7 +268,7 @@ export async function setFlag(
 export async function applyTier(
   db: D1Database,
   tier: Tier,
-): Promise<{ applied: number }> {
+): Promise<{ tier: string; applied: number }> {
   const preset = TIER_PRESETS[tier];
   let applied = 0;
 
@@ -277,7 +277,7 @@ export async function applyTier(
     applied++;
   }
 
-  return { applied };
+  return { tier, applied };
 }
 
 /**
