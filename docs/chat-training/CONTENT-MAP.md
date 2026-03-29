@@ -1,78 +1,120 @@
 # Live Chat Training — Content Map
 
-> Maps documentation to training suitability for the live chat / documentation assistant.
-> Documents are rated by training value: how well they teach the system vs. record point-in-time state.
+> Maps all documentation to training suitability for the live chat / documentation assistant.
+> Organized by **audience** (who asks) and **value tier** (what to train first).
 
 ---
 
-## Training Value Tiers
+## Audience Dimensions
 
-### Tier 1: High Value — Core Knowledge (train first)
+The chat assistant serves 3 distinct audiences. Each needs different knowledge:
 
-These documents explain **how the system works** and are stable over time.
+| Audience | Questions They Ask | Primary Sources |
+|----------|-------------------|-----------------|
+| **End Users** (attendees) | "How do I register?", "What happens with my email?", "Why can't I submit the survey?" | Feature docs, error reference, surfaces |
+| **Admins** (organizers) | "How do I see registrations?", "How do I enable surveys?", "What tier do I need?" | Feature docs, tiers, admin API, auth |
+| **Internal** (dev/ops/support) | "How do I deploy?", "What's the DB schema?", "How do I rotate secrets?" | Architecture, runbooks, deployment, security |
 
-| Document | Topic | Why High Value |
-|----------|-------|---------------|
-| `docs/architecture/ARCHITECTURE.md` | System architecture | Explains the full system design |
-| `docs/architecture/API_CONTRACT.md` | API specification | Defines all public + admin endpoints |
-| `docs/architecture/EVENT_CONTRACT.md` | Event data model | Core data structure definition |
-| `docs/architecture/INTEGRATION-FLOWS.md` | Integration patterns | How components connect |
-| `docs/architecture/worker-routing.md` | Route design | How requests flow through the Worker |
-| `docs/architecture/SCHEMA_GUIDELINES.md` | Schema conventions | Data modeling rules |
-| `docs/architecture/CODING-STYLE.md` | Code conventions | How code should be written |
-| `docs/architecture/PAGES.md` | Surface architecture | How HTML surfaces work |
-| `docs/security/SECURITY.md` | Security overview | Security model explanation |
-| `docs/security/ROUTE_CLASSIFICATION_POLICY.md` | Auth classification | Which routes need what auth |
-| `docs/security/SERVICE_AUTH_PATTERN.md` | Auth patterns | How authentication works |
-| `docs/security/SECRETS_POLICY.md` | Secrets management | How secrets are handled |
-| `docs/security/LOGGING_STANDARD.md` | Logging patterns | How structured logging works |
-| `docs/migration/PHASE-1-OURSHAREDEVENTS.md` | Phase 1 design | Current architecture rationale |
-| `docs/migration/PHASE-2-D1-DATABASE.md` | Phase 2 plan | D1 migration design |
-| `docs/migration/PHASE-3-FIREBASE.md` | Phase 3 plan | Firebase integration design |
-| `docs/mvp/MVP_SCOPE.md` | Product scope | What the MVP includes |
-| `docs/mvp/MVP_SURFACES.md` | Surface specs | 5 MVP surface definitions |
-| `docs/architecture/DATA_POLICY.md` | Data handling | Privacy and data rules |
-| `docs/support/ERROR_HANDLING_GUIDE.md` | Error patterns | How errors are handled |
-| `CLAUDE.md` | Project context | Full project brain |
-| `README.md` | Project overview | Entry point for all understanding |
-| `CONTRIBUTING.md` | Contribution guide | How to contribute |
+---
 
-### Tier 2: Medium Value — Operational Knowledge (train second)
+## Tier 1: Feature Knowledge — Train First
 
-These documents explain **how to operate** the system. Useful for support and troubleshooting.
+> **What the product does.** This is the highest-value training content because it answers
+> the most common user questions directly.
 
-| Document | Topic | Why Medium Value |
-|----------|-------|-----------------|
-| `docs/runbooks/RUNBOOK.md` | Master runbook | Operational procedures |
-| `docs/runbooks/RUNBOOK-DEPLOYMENT.md` | Deploy procedure | How to deploy |
-| `docs/runbooks/RUNBOOK-SECRETS.md` | Secrets rotation | How to rotate secrets |
-| `docs/runbooks/ROLLBACK.md` | Rollback procedure | How to rollback |
-| `docs/deployment/DEPLOYMENT.md` | Deploy overview | Deployment architecture |
-| `docs/deployment/STAGING_SETUP.md` | Staging setup | How staging works |
-| `docs/deployment/CLOUDFLARE_SECRETS.md` | CF secrets | Cloudflare secret reference |
-| `docs/deployment/ENVIRONMENT_MATRIX.md` | Env comparison | Environment differences |
-| `docs/qa/QA-FLOWS.md` | QA workflows | How to test |
-| `docs/qa/E2E_PLAYWRIGHT_GUIDE.md` | E2E guide | How E2E tests work |
-| `docs/qa/QA-ADMIN-QUICK-START.md` | Admin QA | How to QA admin surface |
-| `docs/monitoring/SYNTHETIC_MONITORING.md` | Monitoring | How monitoring works |
-| `docs/monitoring/UPTIME_MONITORING.md` | Uptime | Uptime check setup |
-| `docs/mvp/QUICK_REFERENCE.md` | Quick ref | Fast lookup card |
-| `docs/architecture/ci-cd-architecture.md` | CI/CD design | Pipeline architecture |
-| `docs/env/GOOGLE_SERVICE_ACCOUNT_SETUP.md` | GCP setup | Google SA configuration |
+### End User + Admin Features (9 docs)
 
-### Tier 3: Low Value — Point-in-Time Records (train last or skip)
+| Document | Audience | Answers Questions Like... |
+|----------|----------|--------------------------|
+| `docs/features/FORMS.md` | End user, Admin | "How do I register?", "What data do you collect?", "How does check-in work?" |
+| `docs/features/QR-ROUTING.md` | End user, Admin | "What happens when I scan the QR code?", "How do I get the form link?" |
+| `docs/features/SURFACES.md` | End user, Admin | "What pages are there?", "What does the admin dashboard show?" |
+| `docs/features/EVENTS.md` | End user, Admin | "How do I see events?", "What info is on an event?" |
+| `docs/features/TIERS.md` | Admin, Sales | "What do I get on Free?", "How do I upgrade?", "What features need Enterprise?" |
+| `docs/features/PRIVACY.md` | End user, Admin, Compliance | "What happens with my data?", "How long do you keep emails?", "Is data encrypted?" |
+| `docs/features/BRANDS.md` | Admin, Sales | "Can I have my own brand?", "How does multi-tenant work?" |
+| `docs/features/AUTH.md` | Admin, DevOps | "How do I access admin?", "What's the Bearer token?" |
+| `docs/features/ERROR-REFERENCE.md` | End user, Support | "Why am I getting 403?", "What does DB_ERROR mean?", "The form won't submit" |
 
-These documents record **specific states** that may be outdated. Use selectively.
+### Core Architecture (8 docs)
 
-| Category | File Count | Reason |
-|----------|-----------|--------|
-| `docs/audits/` | 5 | Snapshot audits — useful for patterns, not current state |
-| `docs/verification/` | 7 | Milestone verification — historical record |
-| `docs/security/` (hardening runbooks) | ~15 | Procedural — useful only if infra matches |
-| `docs/runbooks/RUNBOOK-SEC-*` | 8 | Security setup procedures — infra-dependent |
-| `docs/deployment/` (migration-specific) | 4 | Migration procedures — one-time use |
+| Document | Audience | Answers Questions Like... |
+|----------|----------|--------------------------|
+| `README.md` | All | "What is ourSharedEvents?", "How does it work?" |
+| `docs/architecture/ARCHITECTURE.md` | Internal | "What's the system architecture?", "How do components connect?" |
+| `docs/architecture/API_CONTRACT.md` | Internal, Admin | "What are the API endpoints?", "What's the request/response format?" |
+| `docs/architecture/EVENT_CONTRACT.md` | Internal | "What's the event data model?" |
+| `docs/architecture/FRIENDLY_URLS.md` | End user, Admin | "What URL do I use?", "How do brand URLs work?" |
+| `docs/mvp/MVP_SCOPE.md` | Internal, Admin | "What's included in the MVP?", "What's coming next?" |
+| `docs/mvp/MVP_SURFACES.md` | Internal, Admin | "What are the 5 surfaces?", "What does each page do?" |
+| `docs/support/ERROR_HANDLING_GUIDE.md` | Support | "User reported an error — how do I investigate?" |
 
-### Tier 4: Archive Only — Do Not Train
+---
+
+## Tier 2: Operational Knowledge — Train Second
+
+> **How to operate the system.** Answers questions from admins, support staff, and internal ops.
+
+### Ops & Support (12 docs)
+
+| Document | Audience | Topic |
+|----------|----------|-------|
+| `docs/architecture/worker-routing.md` | Internal | Route design and request flow |
+| `docs/architecture/INTEGRATION-FLOWS.md` | Internal | Integration patterns |
+| `docs/architecture/ci-cd-architecture.md` | Internal | CI/CD pipeline design |
+| `docs/runbooks/RUNBOOK.md` | Internal | Master operational runbook |
+| `docs/runbooks/RUNBOOK-DEPLOYMENT.md` | Internal | How to deploy |
+| `docs/runbooks/RUNBOOK-SECRETS.md` | Internal | How to rotate secrets |
+| `docs/runbooks/ROLLBACK.md` | Internal | Rollback procedure |
+| `docs/deployment/DEPLOYMENT.md` | Internal | Deployment architecture |
+| `docs/deployment/STAGING_SETUP.md` | Internal | Staging setup |
+| `docs/deployment/ENVIRONMENT_MATRIX.md` | Internal | Env comparison |
+| `docs/monitoring/SYNTHETIC_MONITORING.md` | Internal | Monitoring setup |
+| `docs/env/GOOGLE_SERVICE_ACCOUNT_SETUP.md` | Internal | GCP setup |
+
+### Security Fundamentals (8 docs)
+
+| Document | Audience | Topic |
+|----------|----------|-------|
+| `docs/security/SECURITY.md` | Internal | Security overview |
+| `docs/security/ROUTE_CLASSIFICATION_POLICY.md` | Internal | Which routes need auth |
+| `docs/security/SERVICE_AUTH_PATTERN.md` | Internal | Auth implementation |
+| `docs/security/SECRETS_POLICY.md` | Internal | Secrets management |
+| `docs/security/LOGGING_STANDARD.md` | Internal | Structured logging |
+| `docs/security/RATE_LIMITING_SPEC.md` | Internal, Support | Rate limiting rules |
+| `docs/security/BOT_CONTROLS_BASELINE.md` | Internal, Support | Bot management |
+| `docs/security/WAF_BASELINE.md` | Internal, Support | WAF rules |
+
+### QA & Testing (4 docs)
+
+| Document | Audience | Topic |
+|----------|----------|-------|
+| `docs/qa/QA-FLOWS.md` | Internal | QA workflows |
+| `docs/qa/E2E_PLAYWRIGHT_GUIDE.md` | Internal | E2E test guide |
+| `docs/qa/QA-ADMIN-QUICK-START.md` | Internal | Admin QA quick start |
+| `docs/mvp/QUICK_REFERENCE.md` | Internal | Quick reference card |
+
+---
+
+## Tier 3: Reference Knowledge — Train Selectively
+
+> **Point-in-time records and procedural docs.** Useful for edge cases.
+
+| Category | File Count | Audience | Use Selectively For |
+|----------|-----------|----------|---------------------|
+| `docs/migration/` | 3 | Internal | Phase transition questions |
+| `docs/security/` (hardening runbooks) | ~15 | Internal | "Why is this request blocked?" infra questions |
+| `docs/runbooks/RUNBOOK-SEC-*` | 8 | Internal | Security setup procedures |
+| `docs/deployment/` (migration-specific) | 4 | Internal | Migration procedure questions |
+| `docs/audits/` | 5 | Internal | Audit pattern reference |
+| `docs/verification/` | 7 | Internal | Milestone verification records |
+| `docs/architecture/` (remaining) | ~7 | Internal | Deep architecture reference |
+| `CLAUDE.md` | Internal | Full project context |
+| `CONTRIBUTING.md` | Internal | Contribution guide |
+
+---
+
+## Tier 4: Archive Only — Do Not Train
 
 | Category | File Count | Reason |
 |----------|-----------|--------|
@@ -88,14 +130,25 @@ These documents record **specific states** that may be outdated. Use selectively
 
 ## Training Corpus Summary
 
-| Tier | Files | Training Strategy |
-|------|-------|-------------------|
-| **Tier 1** | ~23 | Full ingestion — core knowledge base |
-| **Tier 2** | ~16 | Full ingestion — operational knowledge |
-| **Tier 3** | ~35 | Selective ingestion — extract patterns only |
-| **Tier 4** | ~190 | Skip — archive reference only |
+| Tier | Files | Training Strategy | Primary Audience |
+|------|-------|-------------------|------------------|
+| **Tier 1: Features** | ~17 | Full ingestion — feature knowledge + core architecture | End users, Admins, Support |
+| **Tier 2: Operations** | ~24 | Full ingestion — operational + security + QA | Internal ops, Support |
+| **Tier 3: Reference** | ~50 | Selective — edge cases and deep dives | Internal only |
+| **Tier 4: Archive** | ~190 | Skip — frozen reference | Nobody |
 
-**Recommended training order**: Tier 1 (architecture + contracts) → Tier 2 (operations) → Tier 3 (selectively, for edge cases)
+### Recommended Training Order
+
+```
+Phase 1: Feature docs (docs/features/*.md)
+   ↓  The chat can now answer: "How do I register?", "What tier has surveys?",
+   ↓  "Why am I getting 403?", "How does privacy work?"
+Phase 2: Core architecture (README, ARCHITECTURE, API_CONTRACT, FRIENDLY_URLS)
+   ↓  The chat can now answer: "What's the API?", "How do URLs work?"
+Phase 3: Ops knowledge (runbooks, deployment, security fundamentals)
+   ↓  The chat can now answer: "How do I deploy?", "How do I rotate secrets?"
+Phase 4: Reference (selectively, for edge cases)
+```
 
 ---
 
@@ -103,7 +156,31 @@ These documents record **specific states** that may be outdated. Use selectively
 
 | Tier | Refresh When |
 |------|-------------|
-| Tier 1 | After any architecture change or phase transition |
-| Tier 2 | After deployment procedure changes |
-| Tier 3 | After new audits or verification milestones |
+| Tier 1 | After any feature change, new form type, tier update, or surface change |
+| Tier 2 | After deployment procedure or security policy changes |
+| Tier 3 | After new audits, verification milestones, or migration phases |
 | Tier 4 | Never — archive is frozen |
+
+---
+
+## Audience-Specific Training Sets
+
+For targeted chat assistants serving only one audience:
+
+### End-User Chat (minimum viable training set — 6 docs)
+1. `docs/features/FORMS.md`
+2. `docs/features/QR-ROUTING.md`
+3. `docs/features/SURFACES.md`
+4. `docs/features/EVENTS.md`
+5. `docs/features/PRIVACY.md`
+6. `docs/features/ERROR-REFERENCE.md`
+
+### Admin Chat (+ 4 more docs = 10 total)
+All end-user docs plus:
+7. `docs/features/TIERS.md`
+8. `docs/features/BRANDS.md`
+9. `docs/features/AUTH.md`
+10. `docs/architecture/API_CONTRACT.md`
+
+### Internal Support Chat (full Tier 1 + Tier 2 = ~41 docs)
+All admin docs plus Tier 2 operational and security docs.
