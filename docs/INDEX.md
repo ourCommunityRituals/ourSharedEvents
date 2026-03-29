@@ -19,22 +19,23 @@
 
 ## Directory Map
 
-### [`features/`](features/) — Feature Documentation (9 files)
+### [`features/`](features/) — Feature Documentation (10 files)
 
-**Start here for understanding what the product does.** Written from the end-user and admin perspective.
+**Start here for understanding what the product does.** Written for the 3 Triangle audiences: Customers, Sponsors, Admins.
 
 | File | Audience | Description |
 |------|----------|-------------|
-| [INDEX.md](features/INDEX.md) | All | Feature map by tier + document index |
-| [FORMS.md](features/FORMS.md) | End user, Admin | 4-layer form system: register, check-in, survey, email |
-| [QR-ROUTING.md](features/QR-ROUTING.md) | End user, Admin | QR code to form routing |
-| [TIERS.md](features/TIERS.md) | Admin, Sales | 3-tier pricing: Free, Mid, Enterprise |
-| [SURFACES.md](features/SURFACES.md) | End user, Admin | 5 MVP surfaces + landing page |
-| [EVENTS.md](features/EVENTS.md) | End user, Admin | Event data model and APIs |
-| [PRIVACY.md](features/PRIVACY.md) | Admin, Compliance | PII handling, encryption, auto-deletion |
-| [BRANDS.md](features/BRANDS.md) | Admin, Sales | Multi-brand isolation |
-| [AUTH.md](features/AUTH.md) | Admin, DevOps | Authentication methods |
-| [ERROR-REFERENCE.md](features/ERROR-REFERENCE.md) | Support, End user | Every error code and resolution |
+| [INDEX.md](features/INDEX.md) | All | Feature map by tier + audience-indexed docs |
+| [FORMS.md](features/FORMS.md) | Customer, Admin | 4-layer form system: register, check-in, survey, email |
+| [QR-ROUTING.md](features/QR-ROUTING.md) | Customer, Admin | QR code to form routing |
+| [SPONSORS.md](features/SPONSORS.md) | Sponsor | Sponsor experience: attribution, analytics, scale tiers |
+| [TIERS.md](features/TIERS.md) | Admin, Sponsor | 3-tier pricing: Free, Mid, Enterprise |
+| [SURFACES.md](features/SURFACES.md) | Customer, Admin, Sponsor | 5 MVP surfaces + landing page |
+| [EVENTS.md](features/EVENTS.md) | All | Event data model, Triangle framework, APIs |
+| [PRIVACY.md](features/PRIVACY.md) | Customer, Admin, Sponsor | PII handling, encryption, auto-deletion |
+| [BRANDS.md](features/BRANDS.md) | Admin, Sponsor | Multi-brand isolation, white-label, sponsor layering |
+| [AUTH.md](features/AUTH.md) | Admin | Authentication methods |
+| [ERROR-REFERENCE.md](features/ERROR-REFERENCE.md) | Customer, Admin | Every error code and resolution |
 
 ### [`architecture/`](architecture/) — System Design & Contracts (20 files)
 
