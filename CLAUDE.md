@@ -50,17 +50,22 @@ Admin (Bearer token):
 
 ```
 workers/oursharedevents/src/
-├── index.ts           # Entry point
-├── router.ts          # Route table
-├── auth/admin.ts      # Admin auth guard
+├── index.ts              # Entry point + scheduled PII lifecycle job
+├── router.ts             # Route table (30+ endpoints)
+├── auth/admin.ts         # Admin auth guard (CF Access JWT + Bearer fallback)
 ├── handlers/
-│   ├── health.ts      # Health check
-│   ├── events.ts      # Events API
-│   └── pages.ts       # HTML pages
+│   ├── health.ts         # Health check
+│   ├── events.ts         # Events API (Sheets Phase 1)
+│   ├── pages.ts          # HTML pages (public, admin, landing)
+│   ├── forms.ts          # Form submissions (register, checkin, survey, email)
+│   ├── form-pages.ts     # Mobile-first QR form landing pages
+│   └── feature-flags.ts  # Admin flag management (8 endpoints)
 └── lib/
-    ├── google-auth.ts # Google JWT (Phase 1)
-    ├── sheets.ts      # Google Sheets client (Phase 1)
-    └── d1.ts          # D1 client (Phase 2 — planned)
+    ├── google-auth.ts    # Google JWT (Phase 1)
+    ├── sheets.ts         # Google Sheets client (Phase 1)
+    ├── forms-db.ts       # Privacy utilities (hash, encrypt, bucket)
+    ├── feature-flags.ts  # Flag resolution (3-tier: free/mid/enterprise)
+    └── cors.ts           # CORS allowlist
 ```
 
 ---
@@ -88,36 +93,35 @@ Every story is implemented from all six POVs simultaneously. CC reads all six an
 - Prioritizes backlog
 - Reviews sprint progress in Linear
 - Accepts/rejects completed stories
-- **Current state**: Phase 1 Build complete, Phase 1 Ops next
+- **Current state**: Phase 1 Build complete, Phase 1 Ops blocked on infra (INFRA-1,2,3). 3-tier feature flags implemented. Forms system implemented (4 types). A11Y-1 done. 65 stories across 8 epics tracked. MVP readiness 6.5/10 — staging ready, production blocked.
 
-### Backend Engineer (BE)
+### Lead Backend Architect (BE)
 - Writes Worker route handlers
 - Implements D1 queries (Phase 2)
-- Writes Hono middleware
-- **Current state**: Worker routes complete, D1 migrations laid
+- Owns DB design, API contracts, auth, feature flags, testing pyramid
+- **Current state**: 30 routes implemented, 16 D1 migrations (9 main + 7 forms), 3-tier feature flags working, forms handler with PII encryption/scrubbing. Gaps: anonymous ID (BE-1), rate limiting (BE-2), PII audit log (BE-3), 5 admin endpoints unimplemented.
 
-### Frontend Developer (FD)
-- Builds React/Tailwind components (Phase 3)
-- Maintains 5 MVP surfaces
-- **Current state**: HTML templates embedded in Worker (Phase 1)
+### Lead FE Integration (FD)
+- Coordinates 5 MVP surfaces + forms QR routing
+- Integration testing between front and back
+- **Current state**: All 5 surfaces render with CSP + CORS. Forms QR handler exists (`form-pages.ts`, 32 test-IDs). Gaps: admin Card 3 not wired to form handler, QR codes don't route to native forms, no cross-surface E2E test.
 
-### QA Engineer (QA)
-- Writes Jest unit tests
-- Writes Playwright E2E tests
-- Validates acceptance criteria
-- **Current state**: Test suites exist, schema verification in place
+### Sr Design FE
+- Mobile-first form UX, Kaizen, uniform design, color palette
+- Dedication to test-ids and automation-friendly selectors
+- **Current state**: 34 design tokens defined (85% color adoption). Touch targets 44px+. A11Y foundation done. Gaps: 345 admin inline styles, 58 wrong-direction breakpoints, test-ID coverage 3-80% by surface (forms best at 80%, poster worst at 3%).
 
-### SDET (Performance)
-- Writes load tests
-- Monitors latency (Sheets: 200-800ms → D1: <5ms target)
-- Performance gates in CI
-- **Current state**: Performance notes documented, no automated load tests yet
+### Sr Automation QA
+- API tests, Playwright E2E per form type, PII scrub verification
+- **Current state**: 237 test files across 6 frameworks. 7 Vitest files target deployed Worker. PII scrub verified in unit tests. Gaps: zero form endpoint smoke tests in CI, zero E2E flows per form type, zero contract tests (Pact).
+
+### SRE/SDET (Performance + Observability)
+- CI/CD gates, observability, form submission monitoring, destruction job monitoring
+- **Current state**: 8 CI gates working (typecheck, schema verify, migration apply, table verify, health check, API smoke, UI smoke, prod isolation). Structured logging in place (FORM_EVENT, FLAG_EVENT, LIFECYCLE). k6 scripts exist (5 scenarios). Gaps: zero dashboards, zero alerting, load tests not wired to CI, no performance baselines measured.
 
 ### DevOps
-- Manages CI/CD pipeline (GitHub Actions)
-- Manages Cloudflare deployment (wrangler)
-- Manages secrets and environment config
-- **Current state**: CI pipeline complete, infra provisioning not started
+- DB provisioning, service config, CI/CD pipeline, secrets management
+- **Current state**: CI pipeline mature (5-stage, staging+prod). Secrets documented in `.github-secrets-required.json` + `CLOUDFLARE_SECRETS.md`. Environment parity verified. Gaps: D1 not provisioned (placeholder IDs), CF zone not active, GCP not set up, FORMS_ENCRYPTION_KEY undocumented, no gitleaks scanning.
 
 ---
 
