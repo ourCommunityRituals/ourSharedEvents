@@ -100,6 +100,26 @@ Query params for `/api/v2/events`: `?brand=root`, `?full=true`
 
 ---
 
+## Documentation
+
+Full documentation index: [`docs/INDEX.md`](docs/INDEX.md)
+
+| Section | Path | Contents |
+|---------|------|----------|
+| **Architecture** | `docs/architecture/` | System design, API contracts, integration flows |
+| **Security** | `docs/security/` | Baselines, hardening, access control (28 files) |
+| **Runbooks** | `docs/runbooks/` | Operational procedures, incident response |
+| **Deployment** | `docs/deployment/` | Deploy guides, environment setup |
+| **QA & Testing** | `docs/qa/` | E2E guides, test matrices, QA flows |
+| **Monitoring** | `docs/monitoring/` | Uptime, synthetic checks, performance |
+| **MVP** | `docs/mvp/` | Scope, surfaces, production readiness |
+| **Migration** | `docs/migration/` | Phase 1→2→3 migration guides |
+| **Stories** | `docs/stories/` | Epic and story specifications |
+| **Audits** | `docs/audits/` | System and frontend audit reports |
+| **Archive** | `archive/` | Historical docs, legacy code (189 files) |
+
+---
+
 ## Repo Structure
 
 ```
@@ -109,20 +129,32 @@ workers/
     │   ├── index.ts        # Entry point
     │   ├── router.ts       # Route table
     │   ├── auth/admin.ts   # Admin auth guard
-    │   ├── handlers/       # health, events, pages
-    │   └── lib/            # google-auth, sheets
+    │   ├── handlers/       # health, events, pages, forms
+    │   └── lib/            # google-auth, sheets, forms-db, feature-flags
     ├── wrangler.toml       # Staging + production config
     └── CLOUDFLARE-SETUP.md # Zone + secrets setup guide
+
+docs/                       # Organized documentation (13 categories)
+├── INDEX.md                # Master documentation index
+├── architecture/           # System design & contracts
+├── security/               # Security baselines & policies
+├── runbooks/               # Operational runbooks
+├── deployment/             # Deploy & infrastructure
+├── qa/                     # Testing & QA
+├── monitoring/             # Observability & performance
+├── mvp/                    # MVP scope & surfaces
+├── migration/              # Phase migration guides
+├── stories/                # Epics & stories
+├── audits/                 # Audit reports
+├── verification/           # Milestone verification
+├── env/                    # Environment configuration
+├── support/                # Troubleshooting
+└── chat-training/          # Live chat training corpus map
 
 .github/workflows/
 └── oursharedevents-ci.yml  # CI/CD: typecheck → staging → E2E → production
 
-docs/migration/
-├── PHASE-1-OURSHAREDEVENTS.md
-├── PHASE-2-D1-DATABASE.md
-└── PHASE-3-FIREBASE.md
-
-STORIES.md                  # Story registry — synced with Trello
+STORIES.md                  # Story registry — synced with Linear
 ```
 
 ---
