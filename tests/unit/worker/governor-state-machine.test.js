@@ -1,7 +1,7 @@
 /**
- * Gaming Compression Governor — State Machine Tests
+ * Sponsor Pricing Tier Balancer — State Machine Tests
  * Tests state transitions: INACTIVE → ACTIVE → COOLING_DOWN → INACTIVE
- * From: gaming_compression_governor_spec.md
+ * Spec: docs/features/GOVERNOR-DESIGN.md (replaces lost gaming_compression_governor_spec.md)
  * Story: OUR-23 / Governor Implementation
  */
 

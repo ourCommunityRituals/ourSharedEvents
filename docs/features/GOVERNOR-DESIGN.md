@@ -1,9 +1,12 @@
-# Governor Design — Pool-Based Fair Allocation
+# Sponsor Pricing Tier Balancer — Design
 
-> Deep dive into the pool-based tier multiplier model with governor compression.
+> Deep dive into the pool-based tier multiplier model with share compression.
 > Security, functional edge cases, error handling, and implementation path.
 >
-> **Design status:** Under discussion. This doc captures the analysis, not a final spec.
+> Formerly "Sponsor Pricing Tier Balancer." Renamed for clarity — you should be
+> able to read the name once and know exactly what it does.
+>
+> **Design status:** Decisions D1-D4 resolved. This doc is the spec.
 > See [SPONSOR-PRICING.md](SPONSOR-PRICING.md) for the business model context.
 
 ---
@@ -401,20 +404,24 @@ Global multipliers mean one set of numbers for the entire platform. Change once,
 
 If market data later proves that certain event types need different ratios, the architecture supports adding per-event overrides through the existing feature flag system. But start global.
 
-### D3: Minimum Dwell Floor After Compression
+### D3: Absolute Minimum Dwell Floor — Before Compression
 
-**Decision:** Floor applies after governor compression, with a hard minimum of 2 seconds.
+**Decision:** Floor applies before compression. No sponsor ever shows for less than 2 seconds, period. The balancer cannot push anyone below.
 
-**Rationale:** The governor should have full range to compress. But below 2 seconds, an impression has no value — the human eye can't register the brand. The floor is a practical reality constraint, not a fairness rule.
+**Rationale:** Same reasoning as global multipliers — simpler guarantee, less edge cases, less to explain. "2 seconds minimum, always" is a rule anyone can understand. An absolute floor means:
+
+- Sponsors can trust their minimum visibility regardless of pool size or activity
+- The balancer works within a bounded range — it can compress premium but can never eliminate anyone
+- No scenario, however extreme, produces a sub-2-second impression
 
 ```
-computePoolWeights(pool, multipliers, governorState)
+computePoolWeights(pool, multipliers)
+  → apply 2-second minimum dwell floor  ← first, absolute guarantee
   → apply pool-based share calculation
-  → apply share compression if governor active
-  → apply 2-second minimum dwell floor  ← last step, catches edge cases
+  → apply share compression if balancer active
 ```
 
-In practice, the floor only activates for very large pools (30+) where compression could push a premium sponsor's dwell below 2 seconds. For pools under 20, it never fires.
+Below 2 seconds, the human eye can't register the brand. The floor is a practical reality constraint. It protects all tiers equally — local and premium alike.
 
 ### D4: GOVERNOR-DESIGN.md Replaces the Lost Spec
 

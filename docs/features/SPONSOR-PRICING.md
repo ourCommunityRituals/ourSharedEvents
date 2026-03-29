@@ -70,9 +70,9 @@ See [GOVERNOR-DESIGN.md](GOVERNOR-DESIGN.md) for the full security, functional, 
 
 ---
 
-## The Governor State Machine
+## The Sponsor Pricing Tier Balancer
 
-The Gaming Compression Governor monitors real-time scan activity and rebalances display weights to protect local sponsors during high-traffic events.
+The Sponsor Pricing Tier Balancer monitors real-time scan activity and rebalances screen time to protect local sponsors during high-traffic events.
 
 ### States
 
