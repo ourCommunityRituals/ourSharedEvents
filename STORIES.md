@@ -1,14 +1,14 @@
 # ourSharedEvents — Story Registry
 
 Master list of all development stories. Read top to bottom — this is the order you do the work.
-Synced with Trello: fill in `Trello #` when cards are created.
+Synced with Linear: fill in `Linear #` when issues are created.
 
 **Workflow:**
-- Creating a Trello card → fill in the `Trello #` column with the card short ID (e.g., `42`)
+- Creating a Linear issue → fill in the `Linear #` column with the issue ID (e.g., `OUR-42`)
 - Starting work → change status to 🔄 IN PROGRESS, commit this file
 - Finishing → change status to ✅ DONE, include story ID in commit message (e.g., `feat: add health endpoint (P1-1)`)
 
-> **Trello setup:** When ready — provide API key + token to Claude and all cards are created automatically with `Trello #` filled in.
+> **Linear setup:** When ready — provide API key to Claude and all issues are created automatically with `Linear #` filled in. Mapping stored in `.claude/sync/LINEAR-MAP.md`.
 
 ---
 
@@ -16,10 +16,10 @@ Synced with Trello: fill in `Trello #` when cards are created.
 
 Stories are ordered by the sequence you work through them. Each row unlocks the next.
 
-| Story ID | Trello # | Status | Title | Prerequisite |
+| Story ID | Linear # | Status | Title | Prerequisite |
 |----------|----------|--------|-------|--------------|
 | **Phase 0 — Project Setup** | | | | |
-| P0-1 | — | 📋 BACKLOG | Create Trello board + import all stories | — |
+| P0-1 | — | 📋 BACKLOG | Create Linear project + import all stories | — |
 | **Phase 1 — Build (code + docs)** | | | | |
 | P1-1 | — | ✅ DONE | Cloudflare Worker code | — |
 | P1-2 | — | ✅ DONE | CI/CD pipeline (GitHub Actions) | P1-1 |
@@ -49,13 +49,40 @@ Stories are ordered by the sequence you work through them. Each row unlocks the 
 | A11Y-6 | — | 📋 BACKLOG | Keyboard navigation & focus trap | A11Y-1 |
 | A11Y-7 | — | 📋 BACKLOG | axe-core CI integration | A11Y-1 |
 | A11Y-8 | — | 📋 BACKLOG | Screen reader testing & polish | A11Y-7 |
+| **Epic SR — SharedReport Hardening** | | | | |
+| SR-12 | — | 📋 BACKLOG | Runtime flag gating on sharedReport endpoint | — |
+| SR-13 | — | 📋 BACKLOG | Export JSON button (FE) | SR-12 |
+| SR-14 | — | 📋 BACKLOG | CSP headers on all remaining surfaces *(subsumes SEC-2)* | — |
+| SR-15 | — | 📋 BACKLOG | Form page CSP (nonce-based) *(subsumes SEC-2)* | — |
+| SR-16 | — | 📋 BACKLOG | Rate limiting on form endpoints *(subsumes BE-2)* | — |
+| SR-17 | — | 📋 BACKLOG | Advanced metrics (conversion funnels, trends) | SR-12 |
+| SR-18 | — | 📋 BACKLOG | PDF export (mid tier) | SR-12 |
+| SR-19 | — | 📋 BACKLOG | Custom date range picker | SR-17 |
+| SR-20 | — | 📋 BACKLOG | Sponsor-scoped deep link | — |
+| SR-21 | — | 📋 BACKLOG | Portfolio multi-event view (enterprise) | SR-17 |
+| SR-22 | — | 📋 BACKLOG | White-label branding on report (enterprise) | — |
+| SR-23 | — | 📋 BACKLOG | Distributed rate limiting (CF Rules) | SR-16 |
+| SR-24 | — | 📋 BACKLOG | Report email share (enterprise) | SR-18 |
+| **Epic AS — All-Surface FE Uniformity** | | | | |
+| AS-1 | — | 📋 BACKLOG | Uniform DesignTokens across all surfaces *(xref DESIGN-8)* | — |
+| AS-2 | — | 📋 BACKLOG | data-testid on Poster (0→10+) *(xref DESIGN-3)* | — |
+| AS-3 | — | 📋 BACKLOG | data-testid on Display (1→10+) *(xref DESIGN-3)* | — |
+| AS-4 | — | 📋 BACKLOG | data-testid on Public (3→15+) *(xref DESIGN-3)* | — |
+| AS-5 | — | 📋 BACKLOG | ARIA attributes on Admin | A11Y-1 |
+| AS-6 | — | 📋 BACKLOG | ARIA attributes on Public | A11Y-1 |
+| AS-7 | — | 📋 BACKLOG | ARIA attributes on Display | A11Y-1 |
+| AS-8 | — | 📋 BACKLOG | ARIA attributes on Poster | A11Y-1 |
+| AS-9 | — | 📋 BACKLOG | Sponsor surface module integration | AS-1 |
+| AS-10 | — | 📋 BACKLOG | Print styles on Admin | — |
+| AS-11 | — | 📋 BACKLOG | Keyboard nav on Admin | — |
+| AS-12 | — | 📋 BACKLOG | Keyboard nav on Public | — |
+| AS-13 | — | 📋 BACKLOG | axe-core CI integration *(xref A11Y-7)* | A11Y-7 |
 | **Epic INFRA — Infrastructure Provisioning** | | | | |
 | INFRA-1 | — | 📋 BACKLOG | Provision D1 databases (main + forms, staging + prod) | — |
 | INFRA-2 | — | 📋 BACKLOG | Activate Cloudflare zone + DNS for oursharedevents.com | — |
 | INFRA-3 | — | 📋 BACKLOG | Create Google Cloud service account + set secrets | — |
 | INFRA-4 | — | 📋 BACKLOG | Document FORMS_ENCRYPTION_KEY generation + rotation | — |
 | **Epic BE — Backend Architecture** | | | | |
-| BE-2 | — | 📋 BACKLOG | Rate limiting on public form endpoints | INFRA-1 |
 | BE-7 | — | 📋 BACKLOG | API envelope standardization (match schema) | — |
 | BE-8 | — | 📋 BACKLOG | Pagination on admin list endpoints | — |
 | BE-9 | — | 📋 BACKLOG | Privacy notice at point of collection (GDPR Art. 13) | — |
@@ -64,8 +91,7 @@ Stories are ordered by the sequence you work through them. Each row unlocks the 
 | BE-12 | — | 📋 BACKLOG | Flag resolution optimization (batch query) | — |
 | **Epic SEC — Security** | | | | |
 | SEC-1 | — | 📋 BACKLOG | Fix CORS wildcard in forms.ts (use corsOrigin()) | — |
-| SEC-2 | — | 📋 BACKLOG | Add CSP headers + remove user-scalable=no on form pages | — |
-| **Epic ADMIN — Admin Page Architecture (PR #28)** | | | | |
+| **Epic ADMIN — Admin Page Architecture** | | | | |
 | ADMIN-1 | — | 📋 BACKLOG | Feature flag tier model (D1 + API + resolution chain) | P2-1 |
 | ADMIN-2 | — | 📋 BACKLOG | Admin tier badge + gated UI (locked icons, upgrade prompts) | ADMIN-1 |
 | ADMIN-3 | — | 📋 BACKLOG | Native registration form (submit, count, QR routing) | ADMIN-1 |
@@ -89,15 +115,15 @@ Stories are ordered by the sequence you work through them. Each row unlocks the 
 | ADMIN-21 | — | 📋 BACKLOG | Multi-event aggregate dashboard | ADMIN-1 |
 | ADMIN-22 | — | 📋 BACKLOG | Sponsor ROI click-through attribution | ADMIN-6 |
 | ADMIN-23 | — | 📋 BACKLOG | Consent tracking on form submit (privacy notice + timestamp) | — |
-| **Epic DESIGN — Design System (PR #28)** | | | | |
+| **Epic DESIGN — Design System** | | | | |
 | DESIGN-1 | — | 📋 BACKLOG | Viewport meta tags on Admin + Report surfaces | — |
 | DESIGN-2 | — | 📋 BACKLOG | Breakpoint direction standardization (eliminate max-width) | — |
-| DESIGN-3 | — | 📋 BACKLOG | data-testid parity — all surfaces to 30+ each | — |
+| DESIGN-3 | — | 📋 BACKLOG | data-testid parity — all surfaces to 30+ each *(xref AS-2/3/4)* | — |
 | DESIGN-4 | — | 📋 BACKLOG | CI viewport matrix — add iPad, TV 1080p, iPhone SE | — |
 | DESIGN-5 | — | 📋 BACKLOG | Visual regression baseline — toHaveScreenshot() | DESIGN-3 |
 | DESIGN-6 | — | 📋 BACKLOG | Report print stylesheet (sponsor handout) | — |
 | DESIGN-7 | — | 📋 BACKLOG | Tabletop tent card surface (4x6 poster variant) | — |
-| DESIGN-8 | — | 📋 BACKLOG | External design token file (stop inline duplication) | — |
+| DESIGN-8 | — | 📋 BACKLOG | External design token file (stop inline duplication) *(xref AS-1)* | — |
 | DESIGN-9 | — | 📋 BACKLOG | Poster mobile landing (QR scan → mobile view) | — |
 | DESIGN-10 | — | 📋 BACKLOG | Report responsive tables (horizontal scroll) | — |
 | DESIGN-11 | — | 📋 BACKLOG | Color palette hardcode audit — extract 500+ inline hex | — |
@@ -123,17 +149,16 @@ Stories are ordered by the sequence you work through them. Each row unlocks the 
 | HK-1 | — | 📋 BACKLOG | Archive legacy worker/ directory | — |
 | HK-2 | — | 📋 BACKLOG | Sync STORIES.md with implemented features | — |
 | HK-3 | — | 📋 BACKLOG | Update stale docs (DEPLOYMENT, .env.example, RUNBOOK) | HK-1 |
-
 ---
 
 ## Phase 0 — Project Setup
 
-### P0-1: Create Trello board + import all stories
+### P0-1: Create Linear project + import all stories
 **Status:** 📋 BACKLOG
 **Prerequisite:** —
-**Unlocks:** Everything — gives you a Trello board to track all work below
-**Description:** Create the `ourSharedEvents` Trello board under the `ourCommunityRituals` workspace. Create columns: Backlog / In Progress / Done. Create one card per story in this file. Record each card's short ID in the `Trello #` column above.
-**How to automate:** Provide Trello API key + token to Claude → all cards created via Trello REST API, `Trello #` column auto-filled.
+**Unlocks:** Everything — gives you a Linear project to track all work below
+**Description:** Create the `ourSharedEvents` Linear project under the `ourCommunityRituals` workspace. Create columns: Backlog / In Progress / Done. Create one card per story in this file. Record each card's short ID in the `Linear #` column above.
+**How to automate:** Provide Linear API key to Claude → all cards created via Linear API, `Linear #` column auto-filled.
 
 ---
 
@@ -184,7 +209,7 @@ Stories are ordered by the sequence you work through them. Each row unlocks the 
 **Status:** ✅ DONE
 **Prerequisite:** P1-3 ✅
 **Unlocks:** P1-5 (E2E checklist builds on story IDs defined here)
-**Description:** This file. Single source of truth for all stories. Trello-synced via `Trello #` column.
+**Description:** This file. Single source of truth for all stories. Linear-synced via `Linear #` column.
 **Files:** `STORIES.md`
 **Commits:** `2e91855`
 
@@ -376,3 +401,371 @@ Stories are ordered by the sequence you work through them. Each row unlocks the 
 - Old Bearer token auth removed from codebase
 **New secrets:** `FIREBASE_PROJECT_ID`, `FIREBASE_API_KEY`
 **Removes:** `ADMIN_KEY` secret
+
+---
+
+## Epic SR — SharedReport Hardening
+
+*Stories sourced from CCR audit (docs/CCR_SHARED_REPORT_AUDIT.md). SR-1 through SR-11 shipped in previous sprints. SR-12+ are open gaps.*
+
+### SR-12: Runtime flag gating on sharedReport endpoint
+**Status:** 📋 BACKLOG
+**Rating:** MVP
+**Prerequisite:** —
+**Tier:** Mid+
+**Effort:** S
+**Description:** Check `analytics.shared-report` flag in the sharedReport handler before returning data. Free tier gets 403 with upgrade prompt. `isFeatureEnabled()` already exists — wire it into the handler.
+**Acceptance criteria:**
+- Free tier request to `/api/v2/sharedreport` → 403 `{ ok: false, code: 'FEATURE_DISABLED' }`
+- Mid/Enterprise tier → 200 as before
+- Event-level override can enable for free tier events
+**Files:** `worker/src/handlers/sharedReport.ts`
+
+---
+
+### SR-13: Export JSON button (FE)
+**Status:** 📋 BACKLOG
+**Rating:** MVP
+**Prerequisite:** SR-12
+**Tier:** Free+
+**Effort:** S
+**Description:** Add a "Download JSON" button to the SharedReport action bar. Uses the existing API response data — no new endpoint needed. Button triggers a client-side Blob download.
+**Acceptance criteria:**
+- Button visible on all tiers (free flag `report.export-json` is ON)
+- Click downloads `report-{eventId}.json` with the full bundle
+- data-testid: `export-json-btn`
+**Files:** `src/mvp/SharedReport.html`
+
+---
+
+### SR-14: CSP headers on all remaining surfaces
+**Status:** 📋 BACKLOG
+**Rating:** MVP
+**Prerequisite:** —
+**Tier:** All
+**Effort:** S
+**Description:** Extend the nonce-based CSP from landing/report to Admin, Public, Display, Poster, and Sponsor pages. Pattern already exists in `staticAssets.ts` — extend the conditional to all page types.
+**Acceptance criteria:**
+- All 7 HTML page responses include `Content-Security-Policy` header
+- Nonce rotates per request (16 bytes, base64)
+- Inline `<script>` tags use matching nonce
+- No `unsafe-inline` for script-src
+**Files:** `worker/src/handlers/staticAssets.ts`
+
+---
+
+### SR-15: Form page CSP (nonce-based)
+**Status:** 📋 BACKLOG
+**Rating:** MVP
+**Prerequisite:** —
+**Tier:** All
+**Effort:** S
+**Description:** Apply nonce-based CSP to `/forms/:eventId` pages. Currently these pages have inline scripts with no CSP protection.
+**Acceptance criteria:**
+- `/forms/:eventId` responses include nonce-based CSP header
+- Inline scripts work with nonce
+- Form submission still functions
+**Files:** `workers/oursharedevents/src/handlers/form-pages.ts`
+
+---
+
+### SR-16: Rate limiting on form endpoints
+**Status:** 📋 BACKLOG
+**Rating:** MVP
+**Prerequisite:** —
+**Tier:** All
+**Effort:** M
+**Description:** Add per-eventId + per-IP rate limiting to form submission endpoints (register, checkin, survey, email-signup). Prevent spam without blocking legitimate multi-user submissions.
+**Acceptance criteria:**
+- 10 submissions per IP per eventId per minute
+- 429 response with `Retry-After` header when exceeded
+- Rate limit state is per-isolate (same as `/subscribe` pattern)
+- Different eventIds have independent limits
+**Files:** `workers/oursharedevents/src/handlers/forms.ts`
+
+---
+
+### SR-17: Advanced metrics (conversion funnels, trends)
+**Status:** 📋 BACKLOG
+**Rating:** V2↑MVP
+**Prerequisite:** SR-12
+**Tier:** Mid+
+**Effort:** L
+**Description:** Add conversion funnel visualization and trend charts to the SharedReport. Requires new domain logic for time-series aggregation and FE chart rendering.
+**Acceptance criteria:**
+- Funnel: impressions → clicks → signups → check-ins
+- Trend: daily metrics over the event window
+- Gated behind `report.advanced-metrics` flag
+- Graceful degradation when data insufficient
+
+---
+
+### SR-18: PDF export (mid tier)
+**Status:** 📋 BACKLOG
+**Rating:** V2↑MVP
+**Prerequisite:** SR-12
+**Tier:** Mid+
+**Effort:** M
+**Description:** Generate a downloadable PDF from the SharedReport data. Server-side generation preferred (html-to-pdf or puppeteer).
+**Acceptance criteria:**
+- "Download PDF" button visible for mid+ tier
+- Gated behind `report.export-pdf` flag
+- PDF includes all 3 tab sections with formatting
+- data-testid: `export-pdf-btn`
+
+---
+
+### SR-19: Custom date range picker
+**Status:** 📋 BACKLOG
+**Rating:** V2
+**Prerequisite:** SR-17
+**Tier:** Mid+
+**Effort:** M
+**Description:** Replace the hardcoded 30-day lookback window with a configurable date range picker. Gated behind `report.custom-window` flag.
+**Acceptance criteria:**
+- Date picker UI with start/end inputs
+- API accepts `?windowStart=&windowEnd=` query params
+- Free tier sees "Upgrade for custom date range" prompt
+
+---
+
+### SR-20: Sponsor-scoped deep link
+**Status:** 📋 BACKLOG
+**Rating:** V2
+**Prerequisite:** —
+**Tier:** Mid+
+**Effort:** S
+**Description:** Support `/report?eventId=X&sponsorId=Y` to auto-focus the Sponsor tab filtered to a specific sponsor. Enables sponsor-specific share links.
+**Acceptance criteria:**
+- `?sponsorId=Y` auto-switches to Sponsor tab
+- Sponsor row highlighted/expanded
+- URL updates on sponsor selection
+
+---
+
+### SR-21: Portfolio multi-event view (enterprise)
+**Status:** 📋 BACKLOG
+**Rating:** V2-ENT
+**Prerequisite:** SR-17
+**Tier:** Enterprise
+**Effort:** L
+**Description:** Aggregate metrics across multiple events for enterprise sponsors. Gated behind `report.portfolio` flag.
+**Acceptance criteria:**
+- New "Portfolio" tab or view toggle
+- Cross-event totals and per-event breakdown
+- Enterprise-only access
+
+---
+
+### SR-22: White-label branding on report (enterprise)
+**Status:** 📋 BACKLOG
+**Rating:** V2-ENT
+**Prerequisite:** —
+**Tier:** Enterprise
+**Effort:** M
+**Description:** Allow enterprise customers to customize report appearance (logo, colors, footer). Gated behind `branding.white-label` flag.
+**Acceptance criteria:**
+- Custom logo replaces default header
+- Brand colors applied via CSS variables
+- "Powered by" footer removable
+
+---
+
+### SR-23: Distributed rate limiting (CF Rules)
+**Status:** 📋 BACKLOG
+**Rating:** V2
+**Prerequisite:** SR-16
+**Tier:** All
+**Effort:** M
+**Description:** Replace per-isolate rate limiting with Cloudflare Rate Limiting Rules for cross-isolate enforcement. The per-isolate approach resets on cold starts and doesn't share state.
+**Acceptance criteria:**
+- Rate limits enforced across all isolates
+- Configured via `wrangler.toml` or Cloudflare dashboard
+- Per-isolate fallback remains as defense-in-depth
+
+---
+
+### SR-24: Report email share (enterprise)
+**Status:** 📋 BACKLOG
+**Rating:** V2-ENT
+**Prerequisite:** SR-18
+**Tier:** Enterprise
+**Effort:** M
+**Description:** Allow enterprise users to email a report link or PDF attachment directly from the report page.
+**Acceptance criteria:**
+- "Share via Email" button for enterprise tier
+- Sends link or PDF attachment
+- Respects PII firewall (no customer data in email)
+
+---
+
+## Epic AS — All-Surface FE Uniformity
+
+*Stories sourced from CCR audit FE uniformity matrix. Goal: consistent experience across all 7 surfaces.*
+
+### AS-1: Uniform DesignTokens across all surfaces
+**Status:** 📋 BACKLOG
+**Rating:** MVP-UX
+**Prerequisite:** —
+**Effort:** S
+**Description:** Include `DesignTokens.html` in Admin, Public, Display, and Sponsor surfaces. Currently only Poster and SharedReport include it.
+**Acceptance criteria:**
+- All 6 MVP surfaces reference DesignTokens.html
+- CSS custom properties (spacing, colors, radii) consistent across surfaces
+- No visual regression on existing surfaces
+
+---
+
+### AS-2: data-testid on Poster (0→10+)
+**Status:** 📋 BACKLOG
+**Rating:** MVP-UX
+**Prerequisite:** —
+**Effort:** S
+**Description:** Add data-testid attributes to Poster surface. Currently at 0 — target 10+.
+**Acceptance criteria:**
+- Minimum 10 data-testid attributes on key elements (header, QR sections, sponsor strip, event info, print button)
+- Test specs updated to use new testids
+
+---
+
+### AS-3: data-testid on Display (1→10+)
+**Status:** 📋 BACKLOG
+**Rating:** MVP-UX
+**Prerequisite:** —
+**Effort:** S
+**Description:** Add data-testid attributes to Display surface. Currently at 1 — target 10+.
+**Acceptance criteria:**
+- Minimum 10 data-testid attributes on key elements (rotation controls, panes, sponsor strip, mode indicator)
+- Test specs updated to use new testids
+
+---
+
+### AS-4: data-testid on Public (3→15+)
+**Status:** 📋 BACKLOG
+**Rating:** MVP-UX
+**Prerequisite:** —
+**Effort:** S
+**Description:** Add data-testid attributes to Public surface. Currently at 3 — target 15+.
+**Acceptance criteria:**
+- Minimum 15 data-testid attributes on key elements (event cards, sections, CTAs, sponsor banner, form links)
+- Test specs updated to use new testids
+
+---
+
+### AS-5: ARIA attributes on Admin
+**Status:** 📋 BACKLOG
+**Rating:** MVP-UX
+**Prerequisite:** A11Y-1
+**Effort:** M
+**Description:** Add ARIA roles and labels to Admin surface. Currently no ARIA attributes.
+**Acceptance criteria:**
+- Tabs use `role="tablist"`, `role="tab"`, `role="tabpanel"`
+- Forms use `aria-required`, `aria-invalid`, `aria-describedby`
+- Cards use `role="region"` with `aria-label`
+- Live regions for status updates
+
+---
+
+### AS-6: ARIA attributes on Public
+**Status:** 📋 BACKLOG
+**Rating:** MVP-UX
+**Prerequisite:** A11Y-1
+**Effort:** S
+**Description:** Add ARIA roles and labels to Public surface.
+**Acceptance criteria:**
+- Event cards use `role="article"` or `role="region"`
+- Sections use `aria-label` for screen readers
+- CTA buttons use `aria-label` for context
+
+---
+
+### AS-7: ARIA attributes on Display
+**Status:** 📋 BACKLOG
+**Rating:** MVP-UX
+**Prerequisite:** A11Y-1
+**Effort:** S
+**Description:** Add ARIA roles and labels to Display surface.
+**Acceptance criteria:**
+- Rotation panes use `aria-live="polite"` for announcements
+- Controls use `aria-label` for keyboard users
+- Mode indicator uses `role="status"`
+
+---
+
+### AS-8: ARIA attributes on Poster
+**Status:** 📋 BACKLOG
+**Rating:** MVP-UX
+**Prerequisite:** A11Y-1
+**Effort:** S
+**Description:** Add ARIA roles and labels to Poster surface.
+**Acceptance criteria:**
+- QR images use `alt` text with destination URL description
+- Print button uses `aria-label`
+- Sponsor logos use `alt` text
+
+---
+
+### AS-9: Sponsor surface module integration
+**Status:** 📋 BACKLOG
+**Rating:** V2↑MVP
+**Prerequisite:** AS-1
+**Effort:** M
+**Description:** Integrate Sponsor surface (currently standalone CF template) into the standard module system (Styles.html, SharedUtils.html, NUSDK.html, GlobalErrorHandler.html).
+**Acceptance criteria:**
+- Sponsor surface uses shared Styles.html
+- Sponsor surface uses SharedUtils.html helpers
+- Sponsor surface uses NUSDK.html for API calls
+- No visual regression
+
+---
+
+### AS-10: Print styles on Admin
+**Status:** 📋 BACKLOG
+**Rating:** V2
+**Prerequisite:** —
+**Effort:** S
+**Description:** Add `@media print` stylesheet to Admin surface for printable event summaries.
+**Acceptance criteria:**
+- Navigation and action bars hidden in print
+- Event details print cleanly on A4/Letter
+
+---
+
+### AS-11: Keyboard nav on Admin
+**Status:** 📋 BACKLOG
+**Rating:** V2
+**Prerequisite:** —
+**Effort:** M
+**Description:** Add keyboard navigation support to Admin surface (tab management, form focus, card navigation).
+**Acceptance criteria:**
+- Arrow keys navigate between tabs/cards
+- Enter/Space activate buttons and links
+- Escape closes modals/wizards
+- Focus visible on all interactive elements
+
+---
+
+### AS-12: Keyboard nav on Public
+**Status:** 📋 BACKLOG
+**Rating:** V2
+**Prerequisite:** —
+**Effort:** S
+**Description:** Add keyboard navigation to Public surface event cards and sections.
+**Acceptance criteria:**
+- Tab key navigates between event cards
+- Enter opens event detail
+- Focus management on section toggles
+
+---
+
+### AS-13: axe-core CI integration
+**Status:** 📋 BACKLOG
+**Rating:** V2↑MVP
+**Prerequisite:** A11Y-7
+**Effort:** M
+**Description:** Add automated accessibility testing using axe-core via Playwright. Runs on all 7 surfaces in CI.
+**Acceptance criteria:**
+- `@axe-core/playwright` installed
+- Test spec runs axe on each surface
+- CI blocks merge on critical a11y violations
+- Results reported in test output

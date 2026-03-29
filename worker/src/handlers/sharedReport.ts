@@ -53,12 +53,49 @@ import {
 } from '../domain/assetState';
 
 // =============================================================================
+// Rate Limiting (per-isolate, best-effort)
+// =============================================================================
+
+/**
+ * Simple sliding-window rate limiter.
+ *
+ * Cloudflare Workers run in short-lived isolates, so this is best-effort
+ * (resets on cold start). It protects against sustained abuse within a
+ * single isolate's lifetime — a reasonable first layer before adding
+ * Cloudflare Rate Limiting Rules as a proper infrastructure gate.
+ *
+ * Config: 60 requests per IP per 60-second window.
+ */
+const RATE_LIMIT_WINDOW_MS = 60_000;
+const RATE_LIMIT_MAX_REQUESTS = 60;
+const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
+
+function isRateLimited(clientIp: string): boolean {
+  const now = Date.now();
+  const entry = rateLimitMap.get(clientIp);
+
+  if (!entry || now >= entry.resetAt) {
+    rateLimitMap.set(clientIp, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
+    return false;
+  }
+
+  entry.count++;
+  return entry.count > RATE_LIMIT_MAX_REQUESTS;
+}
+
+// =============================================================================
 // Constants
 // =============================================================================
 
 const HANDLER_VERSION = '1.0.0';
 const EVENTS_SHEET = 'EVENTS';
 const SPONSORS_SHEET = 'SPONSORS';
+
+/**
+ * Allowed eventId pattern: alphanumeric, underscores, hyphens, 1-64 chars.
+ * Rejects injection patterns (HTML, SQL, shell) without being overly restrictive.
+ */
+const EVENT_ID_PATTERN = /^[a-zA-Z0-9_-]{1,64}$/;
 
 /**
  * Default ranges for reading from sheets
@@ -401,18 +438,28 @@ function buildCustomerSection(
 }
 
 /**
- * Create JSON response with standard headers
+ * Create JSON response with standard headers.
+ *
+ * Cache strategy:
+ *   - Success (200): short TTL (60s) + stale-while-revalidate (5min).
+ *     Report data is not real-time; slight staleness is acceptable and
+ *     dramatically reduces Sheets API calls under load.
+ *   - Error (4xx/5xx): no-cache to avoid caching error responses.
  */
 function createJsonResponse(
   body: unknown,
   status: number,
   requestId: string
 ): Response {
+  const cacheControl = status === 200
+    ? 'public, max-age=60, stale-while-revalidate=300'
+    : 'no-cache, no-store, must-revalidate';
+
   return new Response(JSON.stringify(body), {
     status,
     headers: {
       'Content-Type': 'application/json',
-      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Cache-Control': cacheControl,
       'X-Handler-Version': HANDLER_VERSION,
       'X-Contract-Version': SHARED_ANALYTICS_CONTRACT_VERSION,
       'X-Request-Id': requestId,
@@ -444,10 +491,30 @@ export async function handleSharedReport(
   requestId: string
 ): Promise<Response> {
   const startTime = Date.now();
+
+  // Rate limit check (best-effort, per-isolate)
+  const clientIp = request.headers.get('CF-Connecting-IP') || request.headers.get('X-Forwarded-For') || 'unknown';
+  if (isRateLimited(clientIp)) {
+    return new Response(JSON.stringify({
+      ok: false,
+      status: 429,
+      code: 'RATE_LIMITED',
+      message: 'Too many requests. Please try again shortly.',
+      requestId,
+    }), {
+      status: 429,
+      headers: {
+        'Content-Type': 'application/json',
+        'Retry-After': '60',
+        'X-Request-Id': requestId,
+      },
+    });
+  }
+
   const url = new URL(request.url);
   const eventId = url.searchParams.get('eventId');
 
-  // Validate eventId
+  // Validate eventId presence
   if (!eventId || !eventId.trim()) {
     logSharedAnalyticsAccess('', requestId, false, SHARED_ANALYTICS_ERROR_CODES.INVALID_EVENT_ID);
     return createJsonResponse(
@@ -455,6 +522,21 @@ export async function handleSharedReport(
         400,
         SHARED_ANALYTICS_ERROR_CODES.INVALID_EVENT_ID,
         'eventId query parameter is required',
+        requestId
+      ),
+      400,
+      requestId
+    );
+  }
+
+  // Validate eventId format (alphanumeric, underscores, hyphens, 1-64 chars)
+  if (!EVENT_ID_PATTERN.test(eventId)) {
+    logSharedAnalyticsAccess(eventId.slice(0, 64), requestId, false, SHARED_ANALYTICS_ERROR_CODES.INVALID_EVENT_ID);
+    return createJsonResponse(
+      buildSharedAnalyticsErrorResponse(
+        400,
+        SHARED_ANALYTICS_ERROR_CODES.INVALID_EVENT_ID,
+        'eventId must be 1-64 alphanumeric characters, underscores, or hyphens',
         requestId
       ),
       400,
@@ -521,7 +603,7 @@ export async function handleSharedReport(
         buildSharedAnalyticsErrorResponse(
           404,
           SHARED_ANALYTICS_ERROR_CODES.NOT_FOUND,
-          `Event not found: ${eventId}`,
+          'Event not found',
           requestId
         ),
         404,

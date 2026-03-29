@@ -1,0 +1,326 @@
+{
+  "info": {
+    "name": "SharedReport API — E2E Chain",
+    "_postman_id": "sr-api-e2e-001",
+    "description": "SharedReport deep dive: API contract validation, error handling, security, and performance E2E chain.\n\nCovers:\n- Valid bundle retrieval\n- Missing eventId (400)\n- Invalid eventId format (400)\n- Non-existent event (404)\n- Contract version header verification\n- Request tracing (X-Request-Id)\n- Cache header verification\n- Rate limit awareness\n\nRun with: newman run postman/collections/sharedreport-api.json -e postman/environments/mvp-event-toolkit-dev.json",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "https://stg.oursharedevents.com",
+      "type": "string"
+    },
+    {
+      "key": "testEventId",
+      "value": "gate_test_event_f6",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Health Check",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/health"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Health endpoint returns 200', function () {",
+              "  pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test('Health response has ok=true', function () {",
+              "  const json = pm.response.json();",
+              "  pm.expect(json.ok).to.eql(true);",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. SharedReport — Missing eventId (400)",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/v2/sharedreport"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Returns 400 for missing eventId', function () {",
+              "  pm.response.to.have.status(400);",
+              "});",
+              "",
+              "pm.test('Error code is INVALID_EVENT_ID', function () {",
+              "  const json = pm.response.json();",
+              "  pm.expect(json.ok).to.eql(false);",
+              "  pm.expect(json.code).to.eql('INVALID_EVENT_ID');",
+              "});",
+              "",
+              "pm.test('Error response includes requestId', function () {",
+              "  const json = pm.response.json();",
+              "  pm.expect(json.requestId).to.be.a('string');",
+              "  pm.expect(json.requestId.length).to.be.greaterThan(0);",
+              "});",
+              "",
+              "pm.test('X-Request-Id header present', function () {",
+              "  pm.response.to.have.header('X-Request-Id');",
+              "});",
+              "",
+              "pm.test('Cache-Control is no-cache for errors', function () {",
+              "  pm.expect(pm.response.headers.get('Cache-Control')).to.include('no-cache');",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. SharedReport — Invalid eventId format (400)",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/v2/sharedreport?eventId=<script>alert(1)</script>"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Returns 400 for XSS-style eventId', function () {",
+              "  pm.response.to.have.status(400);",
+              "});",
+              "",
+              "pm.test('Error code is INVALID_EVENT_ID', function () {",
+              "  const json = pm.response.json();",
+              "  pm.expect(json.code).to.eql('INVALID_EVENT_ID');",
+              "});",
+              "",
+              "pm.test('Error message does not echo the malicious input', function () {",
+              "  const json = pm.response.json();",
+              "  pm.expect(json.message).to.not.include('<script>');",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. SharedReport — eventId too long (400)",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/v2/sharedreport?eventId=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Returns 400 for eventId exceeding 64 chars', function () {",
+              "  pm.response.to.have.status(400);",
+              "});",
+              "",
+              "pm.test('Error code is INVALID_EVENT_ID', function () {",
+              "  const json = pm.response.json();",
+              "  pm.expect(json.code).to.eql('INVALID_EVENT_ID');",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. SharedReport — Non-existent event (404 or 503)",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/v2/sharedreport?eventId=nonexistent_event_xyz"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Returns 404 or 503 for non-existent event', function () {",
+              "  pm.expect([404, 503]).to.include(pm.response.code);",
+              "});",
+              "",
+              "pm.test('Error response has ok=false', function () {",
+              "  const json = pm.response.json();",
+              "  pm.expect(json.ok).to.eql(false);",
+              "});",
+              "",
+              "pm.test('Error response includes requestId', function () {",
+              "  const json = pm.response.json();",
+              "  pm.expect(json.requestId).to.be.a('string');",
+              "});",
+              "",
+              "pm.test('404 error message does not echo eventId', function () {",
+              "  if (pm.response.code === 404) {",
+              "    const json = pm.response.json();",
+              "    pm.expect(json.message).to.not.include('nonexistent_event_xyz');",
+              "  }",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "6. SharedReport — Valid bundle (200 or 404/503)",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/v2/sharedreport?eventId={{testEventId}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "const validStatuses = [200, 404, 503];",
+              "",
+              "pm.test('Returns valid status code', function () {",
+              "  pm.expect(validStatuses).to.include(pm.response.code);",
+              "});",
+              "",
+              "pm.test('Contract version header is 1.0.0', function () {",
+              "  if (pm.response.headers.get('X-Contract-Version')) {",
+              "    pm.expect(pm.response.headers.get('X-Contract-Version')).to.eql('1.0.0');",
+              "  }",
+              "});",
+              "",
+              "pm.test('X-Request-Id header present', function () {",
+              "  pm.response.to.have.header('X-Request-Id');",
+              "});",
+              "",
+              "if (pm.response.code === 200) {",
+              "  const json = pm.response.json();",
+              "",
+              "  pm.test('Success response has ok=true', function () {",
+              "    pm.expect(json.ok).to.eql(true);",
+              "    pm.expect(json.status).to.eql(200);",
+              "  });",
+              "",
+              "  pm.test('Bundle exists with required fields', function () {",
+              "    pm.expect(json.bundle).to.be.an('object');",
+              "    pm.expect(json.bundle.generatedAt).to.be.a('string');",
+              "    pm.expect(json.bundle.window).to.be.an('object');",
+              "    pm.expect(json.bundle.integrity).to.be.an('object');",
+              "    pm.expect(json.bundle.event).to.be.an('object');",
+              "    pm.expect(json.bundle.sponsor).to.be.an('object');",
+              "    pm.expect(json.bundle.customer).to.be.an('object');",
+              "  });",
+              "",
+              "  pm.test('Integrity metadata is valid', function () {",
+              "    const i = json.bundle.integrity;",
+              "    pm.expect(typeof i.complete).to.eql('boolean');",
+              "    pm.expect(typeof i.stale).to.eql('boolean');",
+              "    pm.expect(i.notes).to.be.an('array');",
+              "  });",
+              "",
+              "  pm.test('Event section has required fields', function () {",
+              "    const e = json.bundle.event;",
+              "    pm.expect(e.eventId).to.be.a('string');",
+              "    pm.expect(e.name).to.be.a('string');",
+              "    pm.expect(e.summary).to.be.an('object');",
+              "    pm.expect(e.traffic).to.be.an('object');",
+              "    pm.expect(e.qr).to.be.an('object');",
+              "    pm.expect(typeof e.qr.verifiedOnly).to.eql('boolean');",
+              "  });",
+              "",
+              "  pm.test('Customer section has NO PII fields', function () {",
+              "    const c = json.bundle.customer;",
+              "    pm.expect(c).to.not.have.property('email');",
+              "    pm.expect(c).to.not.have.property('name');",
+              "    pm.expect(c).to.not.have.property('deviceId');",
+              "    pm.expect(c).to.not.have.property('ip');",
+              "    pm.expect(c).to.not.have.property('userId');",
+              "    pm.expect(c.summary).to.not.have.property('email');",
+              "    pm.expect(c.notes).to.be.an('array');",
+              "  });",
+              "",
+              "  pm.test('Customer geo uses zip3 only (3 digits)', function () {",
+              "    const zips = json.bundle.customer.summary.geo.topZip3;",
+              "    pm.expect(zips).to.be.an('array');",
+              "    zips.forEach(function(z) {",
+              "      pm.expect(z).to.match(/^\\d{3}$/);",
+              "    });",
+              "  });",
+              "",
+              "  pm.test('Cache-Control allows short caching on success', function () {",
+              "    const cc = pm.response.headers.get('Cache-Control');",
+              "    pm.expect(cc).to.include('max-age=');",
+              "  });",
+              "",
+              "  // Save bundle for downstream chaining",
+              "  pm.collectionVariables.set('lastBundle', JSON.stringify(json.bundle));",
+              "  pm.collectionVariables.set('lastRequestId', json.requestId);",
+              "}"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "7. SharedReport — Response timing check",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/v2/sharedreport?eventId={{testEventId}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Response time is under 3 seconds', function () {",
+              "  pm.expect(pm.response.responseTime).to.be.below(3000);",
+              "});",
+              "",
+              "pm.test('Response time is ideally under 1 second', function () {",
+              "  if (pm.response.responseTime > 1000) {",
+              "    console.warn('SharedReport response time: ' + pm.response.responseTime + 'ms (above 1s target)');",
+              "  }",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "8. SharedReport — SQL injection attempt (400)",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/v2/sharedreport?eventId=1' OR '1'='1"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Returns 400 for SQL injection pattern', function () {",
+              "  pm.response.to.have.status(400);",
+              "});",
+              "",
+              "pm.test('Error code is INVALID_EVENT_ID', function () {",
+              "  const json = pm.response.json();",
+              "  pm.expect(json.code).to.eql('INVALID_EVENT_ID');",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    }
+  ]
+}

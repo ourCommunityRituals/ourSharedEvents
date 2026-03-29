@@ -1259,12 +1259,77 @@ DO NOT modify contracts without updating:
         min-width: 500px;
       }
     }
+
+    /* ===== Print Stylesheet ===== */
+    @media print {
+      /* Hide interactive chrome */
+      .action-bar,
+      .tab-nav,
+      .site-footer,
+      .btn-retry,
+      #loading,
+      #errorState,
+      .toggle-icon,
+      .detail-section.collapsed::after {
+        display: none !important;
+      }
+
+      /* Show all tab panels (no tabs in print) */
+      .tab-panel {
+        display: block !important;
+        break-inside: avoid;
+        margin-bottom: 1.5rem;
+      }
+
+      /* Expand all collapsed detail sections */
+      .detail-section.collapsed .section-content {
+        display: block !important;
+      }
+      .detail-section.collapsed .section-help {
+        display: block !important;
+      }
+
+      /* Clean backgrounds */
+      body { background: white; }
+      .container { max-width: 100%; padding: 0; }
+      .report-header {
+        background: #2563eb !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+
+      /* Remove shadows and borders for clean output */
+      .pane-card, .section-card, .metric-card {
+        box-shadow: none;
+        border: 1px solid #e2e8f0;
+        break-inside: avoid;
+      }
+
+      /* Ensure tables don't break across pages */
+      .data-table tr { break-inside: avoid; }
+
+      /* Add tab section labels since tab nav is hidden */
+      .tab-panel::before {
+        content: attr(data-testid);
+        display: block;
+        font-size: 1.25rem;
+        font-weight: 700;
+        color: #1e293b;
+        margin-bottom: 1rem;
+        padding-bottom: 0.5rem;
+        border-bottom: 2px solid #2563eb;
+        text-transform: capitalize;
+      }
+      #eventPanel::before { content: 'Event Analytics'; }
+      #sponsorPanel::before { content: 'Sponsor Analytics'; }
+      #customerPanel::before { content: 'Customer Analytics'; }
+    }
   </style>
 </head>
 <body>
   <div class="container">
     <!-- Header -->
-    <div class="report-header">
+    <div class="report-header" data-testid="report-header">
       <h1 id="reportTitle">📊 Your Sponsorship Performance</h1>
       <p class="subtitle" id="reportSubtitle">See how your brand is performing across events</p>
       <p class="subtitle report-context" id="reportContext">Track impressions, clicks, and engagement from all your sponsored placements in one place.</p>
@@ -1273,14 +1338,14 @@ DO NOT modify contracts without updating:
 
     <!-- Action Bar (MVP: Refresh only) -->
     <div class="action-bar">
-      <button id="refreshBtn" class="btn btn-primary" onclick="loadReport()">
+      <button id="refreshBtn" class="btn btn-primary" data-testid="refresh-btn" onclick="loadReport()">
         <span class="btn-text">🔄 Refresh Data</span>
       </button>
       <!-- V2 features removed from MVP: Export, Filters, Portfolio Mode -->
     </div>
 
     <!-- Loading State -->
-    <div id="loading" class="loading">
+    <div id="loading" class="loading" data-testid="loading-state">
       <div class="spinner"></div>
       <p>Loading analytics data...</p>
     </div>
@@ -1293,29 +1358,29 @@ DO NOT modify contracts without updating:
       <!-- Story F6: 3-Pane Tab Navigation -->
       <div class="tab-container" id="tabContainer">
         <div class="tab-nav" role="tablist">
-          <button class="tab-btn active" role="tab" aria-selected="true" data-tab="event" onclick="switchTab('event')">
+          <button class="tab-btn active" role="tab" aria-selected="true" data-tab="event" data-testid="tab-event" onclick="switchTab('event')">
             <span class="tab-icon">🎉</span>Event
           </button>
-          <button class="tab-btn" role="tab" aria-selected="false" data-tab="sponsor" onclick="switchTab('sponsor')">
+          <button class="tab-btn" role="tab" aria-selected="false" data-tab="sponsor" data-testid="tab-sponsor" onclick="switchTab('sponsor')">
             <span class="tab-icon">🏢</span>Sponsor
           </button>
-          <button class="tab-btn" role="tab" aria-selected="false" data-tab="customer" onclick="switchTab('customer')">
+          <button class="tab-btn" role="tab" aria-selected="false" data-tab="customer" data-testid="tab-customer" onclick="switchTab('customer')">
             <span class="tab-icon">👥</span>Customer
           </button>
         </div>
 
         <!-- Event Tab Panel -->
-        <div class="tab-panel active" id="eventPanel" role="tabpanel">
+        <div class="tab-panel active" id="eventPanel" role="tabpanel" data-testid="panel-event">
           <div id="eventPaneContent"></div>
         </div>
 
         <!-- Sponsor Tab Panel -->
-        <div class="tab-panel" id="sponsorPanel" role="tabpanel">
+        <div class="tab-panel" id="sponsorPanel" role="tabpanel" data-testid="panel-sponsor">
           <div id="sponsorPaneContent"></div>
         </div>
 
         <!-- Customer Tab Panel -->
-        <div class="tab-panel" id="customerPanel" role="tabpanel">
+        <div class="tab-panel" id="customerPanel" role="tabpanel" data-testid="panel-customer">
           <div id="customerPaneContent"></div>
         </div>
       </div>
@@ -1381,7 +1446,7 @@ DO NOT modify contracts without updating:
     </div>
 
     <!-- S12: Error State container (dynamically rendered by StateRenderer) -->
-    <div id="errorState" style="display:none;"></div>
+    <div id="errorState" data-testid="error-state" style="display:none;"></div>
   </div>
 
   <!-- Trust Footer -->
@@ -1539,14 +1604,23 @@ DO NOT modify contracts without updating:
     // ========================================================================
 
     /**
+     * Valid tab names for hash routing
+     */
+    const VALID_TABS = ['event', 'sponsor', 'customer'];
+
+    /**
      * Switch between tabs (Event | Sponsor | Customer)
+     * Persists selection in URL hash for refresh resilience and deep linking.
      */
     function switchTab(tabName) {
+      if (!VALID_TABS.includes(tabName)) return;
+
       // Update tab button states
       document.querySelectorAll('.tab-btn').forEach(btn => {
         const isActive = btn.dataset.tab === tabName;
         btn.classList.toggle('active', isActive);
         btn.setAttribute('aria-selected', isActive ? 'true' : 'false');
+        btn.setAttribute('tabindex', isActive ? '0' : '-1');
       });
 
       // Update tab panel visibility
@@ -1558,7 +1632,56 @@ DO NOT modify contracts without updating:
       if (activePanel) {
         activePanel.classList.add('active');
       }
+
+      // Persist in URL hash (no page reload)
+      history.replaceState(null, '', '#tab=' + tabName);
     }
+
+    /**
+     * Read tab from URL hash (e.g., #tab=sponsor)
+     */
+    function getTabFromHash() {
+      const hash = window.location.hash;
+      const match = hash.match(/^#tab=(event|sponsor|customer)$/);
+      return match ? match[1] : null;
+    }
+
+    // Restore tab on back/forward navigation
+    window.addEventListener('hashchange', function () {
+      const tab = getTabFromHash();
+      if (tab) switchTab(tab);
+    });
+
+    /**
+     * Keyboard navigation for tabs (WAI-ARIA tabs pattern).
+     * Left/Right arrows move between tabs, Home/End jump to first/last.
+     */
+    document.addEventListener('keydown', function (e) {
+      const active = document.activeElement;
+      if (!active || !active.classList.contains('tab-btn')) return;
+
+      const currentTab = active.dataset.tab;
+      const idx = VALID_TABS.indexOf(currentTab);
+      if (idx === -1) return;
+
+      let nextIdx = -1;
+      if (e.key === 'ArrowRight') {
+        nextIdx = (idx + 1) % VALID_TABS.length;
+      } else if (e.key === 'ArrowLeft') {
+        nextIdx = (idx - 1 + VALID_TABS.length) % VALID_TABS.length;
+      } else if (e.key === 'Home') {
+        nextIdx = 0;
+      } else if (e.key === 'End') {
+        nextIdx = VALID_TABS.length - 1;
+      }
+
+      if (nextIdx >= 0) {
+        e.preventDefault();
+        switchTab(VALID_TABS[nextIdx]);
+        const nextBtn = document.querySelector('.tab-btn[data-tab="' + VALID_TABS[nextIdx] + '"]');
+        if (nextBtn) nextBtn.focus();
+      }
+    });
 
     /**
      * Render V2 SharedAnalytics bundle with 3-pane UI
@@ -1592,6 +1715,10 @@ DO NOT modify contracts without updating:
         document.getElementById('reportContext').textContent =
           'Comprehensive metrics for event, sponsor, and customer engagement.';
       }
+
+      // Restore tab from URL hash (deep link support)
+      const hashTab = getTabFromHash();
+      if (hashTab) switchTab(hashTab);
     }
 
     /**
@@ -1624,7 +1751,7 @@ DO NOT modify contracts without updating:
       }
 
       container.innerHTML = `
-        <div class="integrity-banner ${statusClass}">
+        <div class="integrity-banner ${statusClass}" data-testid="integrity-banner">
           <span class="integrity-icon">${icon}</span>
           <div style="flex: 1;">
             <strong>${message}</strong>
@@ -1661,11 +1788,11 @@ DO NOT modify contracts without updating:
       container.innerHTML = `
         <div class="pane-card">
           <h3>📋 Event Summary</h3>
-          <div class="metric-row">
+          <div class="metric-row" data-testid="metric-event-name">
             <span class="metric-label">Event Name</span>
             <span class="metric-value">${escapeHtml(event.name)}</span>
           </div>
-          <div class="metric-row">
+          <div class="metric-row" data-testid="metric-event-id">
             <span class="metric-label">Event ID</span>
             <span class="metric-value" style="font-family: monospace; font-size: 0.8rem;">${escapeHtml(event.eventId)}</span>
           </div>
@@ -1673,15 +1800,15 @@ DO NOT modify contracts without updating:
 
         <div class="pane-card">
           <h3>📊 Participation</h3>
-          <div class="metric-row">
+          <div class="metric-row" data-testid="metric-signups">
             <span class="metric-label">Signups</span>
             <span class="metric-value">${(summary.signups || 0).toLocaleString()}</span>
           </div>
-          <div class="metric-row">
+          <div class="metric-row" data-testid="metric-matches">
             <span class="metric-label">Matches Played</span>
             <span class="metric-value">${(summary.matches || 0).toLocaleString()}</span>
           </div>
-          <div class="metric-row">
+          <div class="metric-row" data-testid="metric-duration">
             <span class="metric-label">Duration</span>
             <span class="metric-value">${(summary.durationMinutes || 0)} min</span>
           </div>
@@ -1689,11 +1816,11 @@ DO NOT modify contracts without updating:
 
         <div class="pane-card">
           <h3>👁️ Traffic</h3>
-          <div class="metric-row">
+          <div class="metric-row" data-testid="metric-pageviews">
             <span class="metric-label">Page Views</span>
             <span class="metric-value">${(traffic.pageViews || 0).toLocaleString()}</span>
           </div>
-          <div class="metric-row">
+          <div class="metric-row" data-testid="metric-unique-visitors">
             <span class="metric-label">Unique Visitors</span>
             <span class="metric-value">${(traffic.uniqueVisitors || 0).toLocaleString()}</span>
           </div>
@@ -1701,11 +1828,11 @@ DO NOT modify contracts without updating:
 
         <div class="pane-card">
           <h3>📱 QR Codes</h3>
-          <div class="metric-row">
+          <div class="metric-row" data-testid="metric-qr-scans">
             <span class="metric-label">Total Scans</span>
             <span class="metric-value">${(qr.scans || 0).toLocaleString()}</span>
           </div>
-          <div class="metric-row">
+          <div class="metric-row" data-testid="metric-qr-verified">
             <span class="metric-label">Verified Only</span>
             <span class="metric-value">${qr.verifiedOnly ? '✓ Yes' : '✗ No'}</span>
           </div>

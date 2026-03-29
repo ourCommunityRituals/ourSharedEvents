@@ -30,8 +30,13 @@ export const FLAG_KEYS = {
   // Config
   CONFIG_SELF_SERVE: 'config.self-serve',
   CONFIG_EVENT_SETTINGS: 'config.event-settings',
-  // Analytics
+  // Analytics / Reports
   ANALYTICS_SHARED_REPORT: 'analytics.shared-report',
+  REPORT_EXPORT_JSON: 'report.export-json',
+  REPORT_ADVANCED_METRICS: 'report.advanced-metrics',
+  REPORT_EXPORT_PDF: 'report.export-pdf',
+  REPORT_CUSTOM_WINDOW: 'report.custom-window',
+  REPORT_PORTFOLIO: 'report.portfolio',
   // Assets
   ASSETS_FILE_UPLOAD: 'assets.file-upload',
   ASSETS_CUSTOM_QR: 'assets.custom-qr',
@@ -49,6 +54,24 @@ export const FORM_FLAGS = {
   CHECKIN: FLAG_KEYS.FORMS_CHECKIN,
   SURVEY: FLAG_KEYS.FORMS_SURVEY,
   EMAIL_SIGNUP: FLAG_KEYS.FORMS_EMAIL_SIGNUP,
+} as const;
+
+/**
+ * SharedReport feature flag aliases.
+ *
+ * Tier mapping:
+ *   Free:       SHARED_REPORT (basic view) + EXPORT_JSON
+ *   Mid:        + ADVANCED_METRICS + EXPORT_PDF + CUSTOM_WINDOW
+ *   Enterprise: + PORTFOLIO + WHITE_LABEL (via branding flag)
+ */
+export const REPORT_FLAGS = {
+  VIEW: FLAG_KEYS.ANALYTICS_SHARED_REPORT,
+  EXPORT_JSON: FLAG_KEYS.REPORT_EXPORT_JSON,
+  ADVANCED_METRICS: FLAG_KEYS.REPORT_ADVANCED_METRICS,
+  EXPORT_PDF: FLAG_KEYS.REPORT_EXPORT_PDF,
+  CUSTOM_WINDOW: FLAG_KEYS.REPORT_CUSTOM_WINDOW,
+  PORTFOLIO: FLAG_KEYS.REPORT_PORTFOLIO,
+  WHITE_LABEL: FLAG_KEYS.BRANDING_WHITE_LABEL,
 } as const;
 
 // ─── Tier Definitions ───────────────────────────────────────────────────────
@@ -73,6 +96,11 @@ export const TIER_PRESETS: Record<Tier, TierPreset> = {
       'config.self-serve': false,
       'config.event-settings': false,
       'analytics.shared-report': false,
+      'report.export-json': true,
+      'report.advanced-metrics': false,
+      'report.export-pdf': false,
+      'report.custom-window': false,
+      'report.portfolio': false,
       'assets.file-upload': false,
       'assets.custom-qr': false,
       'branding.white-label': false,
@@ -82,7 +110,7 @@ export const TIER_PRESETS: Record<Tier, TierPreset> = {
   },
   mid: {
     name: 'Mid',
-    description: 'All 4 form types. Self-serve config. Shared reports.',
+    description: 'All 4 form types. Self-serve config. Shared reports with advanced metrics.',
     flags: {
       'forms.register': true,
       'forms.checkin': true,
@@ -91,6 +119,11 @@ export const TIER_PRESETS: Record<Tier, TierPreset> = {
       'config.self-serve': true,
       'config.event-settings': true,
       'analytics.shared-report': true,
+      'report.export-json': true,
+      'report.advanced-metrics': true,
+      'report.export-pdf': true,
+      'report.custom-window': true,
+      'report.portfolio': false,
       'assets.file-upload': false,
       'assets.custom-qr': false,
       'branding.white-label': false,
@@ -100,7 +133,7 @@ export const TIER_PRESETS: Record<Tier, TierPreset> = {
   },
   enterprise: {
     name: 'Enterprise',
-    description: 'File upload, white-label branding, custom domain, per-event overrides.',
+    description: 'File upload, white-label branding, custom domain, portfolio reports, per-event overrides.',
     flags: {
       'forms.register': true,
       'forms.checkin': true,
@@ -109,6 +142,11 @@ export const TIER_PRESETS: Record<Tier, TierPreset> = {
       'config.self-serve': true,
       'config.event-settings': true,
       'analytics.shared-report': true,
+      'report.export-json': true,
+      'report.advanced-metrics': true,
+      'report.export-pdf': true,
+      'report.custom-window': true,
+      'report.portfolio': true,
       'assets.file-upload': true,
       'assets.custom-qr': true,
       'branding.white-label': true,
@@ -230,19 +268,20 @@ export async function setFlag(
 export async function applyTier(
   db: D1Database,
   tier: Tier,
-): Promise<{ applied: number; tier: Tier }> {
+): Promise<{ tier: string; applied: number }> {
   const preset = TIER_PRESETS[tier];
-  const entries = Object.entries(preset.flags) as [FlagKey, boolean][];
+  let applied = 0;
 
-  for (const [flagKey, enabled] of entries) {
-    await setFlag(db, flagKey, enabled, 'global');
+  for (const [key, enabled] of Object.entries(preset.flags)) {
+    await setFlag(db, key, enabled, 'global');
+    applied++;
   }
 
-  return { applied: entries.length, tier };
+  return { tier, applied };
 }
 
 /**
- * Set an event-level flag override (enterprise feature).
+ * Set a flag at the event level (enterprise feature).
  */
 export async function setEventFlag(
   db: D1Database,

@@ -88,8 +88,8 @@ describe('Gate F1: Forms table existence', () => {
         `SELECT COUNT(*) as cnt FROM ${table}`,
       ).first<{ cnt: number }>();
       if (table === 'feature_flags') {
-        // Seed migration 0007 inserts 12 free-tier default flags
-        expect(result?.cnt).toBe(12);
+        // Seed migration 0007 inserts 17 free-tier default flags
+        expect(result?.cnt).toBe(17);
       } else {
         expect(result?.cnt).toBe(0);
       }
@@ -173,12 +173,12 @@ describe('Gate F5: Forms index verification', () => {
 // ── Gate F6: Free tier seed data integrity ──────────────────────────────────
 
 describe('Gate F6: Free tier seed data integrity', () => {
-  test('exactly 12 global flags seeded with correct free-tier defaults', async () => {
+  test('exactly 17 global flags seeded with correct free-tier defaults', async () => {
     const flags = await (env as unknown as TestEnv).FORMS_DB.prepare(
       "SELECT flag_key, enabled FROM feature_flags WHERE scope = 'global' ORDER BY flag_key",
     ).all();
 
-    expect(flags.results).toHaveLength(12);
+    expect(flags.results).toHaveLength(17);
 
     // Verify the exact expected state — this is the contract
     const expected: Record<string, number> = {
@@ -194,6 +194,11 @@ describe('Gate F6: Free tier seed data integrity', () => {
       'forms.email-signup': 0,
       'forms.register': 1,
       'forms.survey': 0,
+      'report.advanced-metrics': 0,
+      'report.custom-window': 0,
+      'report.export-json': 1,
+      'report.export-pdf': 0,
+      'report.portfolio': 0,
     };
 
     for (const row of flags.results) {
