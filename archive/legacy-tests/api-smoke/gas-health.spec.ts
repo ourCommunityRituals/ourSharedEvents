@@ -27,9 +27,7 @@ import { test, expect } from '@playwright/test';
 const BRAND = process.env.TEST_BRAND || 'root';
 
 test.describe('GAS Reachability Health Check (Story 6)', () => {
-
   test.describe('Worker /ping Endpoint', () => {
-
     test('returns HTTP 200 OK', async ({ request }) => {
       const response = await request.get(`/ping?brand=${BRAND}`);
 
@@ -53,11 +51,9 @@ test.describe('GAS Reachability Health Check (Story 6)', () => {
       expect(headers['x-proxied-by']).toBe('oursharedevents-worker');
       expect(headers['x-worker-version']).toBeDefined();
     });
-
   });
 
   test.describe('Worker /status Endpoint (GAS Proxied)', () => {
-
     test('returns HTTP 200 OK', async ({ request }) => {
       const response = await request.get(`/status?brand=${BRAND}`);
 
@@ -91,11 +87,9 @@ test.describe('GAS Reachability Health Check (Story 6)', () => {
       expect(headers['x-proxied-by']).toBe('oursharedevents-worker');
       expect(headers['x-worker-version']).toBeDefined();
     });
-
   });
 
   test.describe('GAS Backend Reachability (CI Gate)', () => {
-
     test('GAS responds within acceptable latency', async ({ request }) => {
       const startTime = Date.now();
 
@@ -125,18 +119,16 @@ test.describe('GAS Reachability Health Check (Story 6)', () => {
         expect(response.status()).toBe(200);
       }
     });
-
   });
 
   test.describe('Reachability Summary Report', () => {
-
     test('generates health report for CI artifacts', async ({ request }) => {
       const startTime = Date.now();
 
       // Fetch both health endpoints
       const [pingRes, statusRes] = await Promise.all([
         request.get(`/ping?brand=${BRAND}`),
-        request.get(`/status?brand=${BRAND}`)
+        request.get(`/status?brand=${BRAND}`),
       ]);
 
       const totalLatencyMs = Date.now() - startTime;
@@ -162,20 +154,20 @@ test.describe('GAS Reachability Health Check (Story 6)', () => {
             url: '/ping',
             status: pingRes.status(),
             ok: pingOk,
-            workerVersion: pingRes.headers()['x-worker-version'] || 'unknown'
+            workerVersion: pingRes.headers()['x-worker-version'] || 'unknown',
           },
           status: {
             url: '/status',
             status: statusRes.status(),
             ok: statusOk,
             buildId: statusJson?.buildId || 'unknown',
-            gasOk: statusJson?.ok ?? false
-          }
+            gasOk: statusJson?.ok ?? false,
+          },
         },
         latencyMs: totalLatencyMs,
         workerReachable: pingOk,
-        gasReachable: statusOk && (statusJson?.ok === true),
-        verdict: 'PENDING'
+        gasReachable: statusOk && statusJson?.ok === true,
+        verdict: 'PENDING',
       };
 
       // Determine overall verdict
@@ -194,7 +186,5 @@ test.describe('GAS Reachability Health Check (Story 6)', () => {
       expect(healthReport.workerReachable).toBe(true);
       expect(healthReport.gasReachable).toBe(true);
     });
-
   });
-
 });

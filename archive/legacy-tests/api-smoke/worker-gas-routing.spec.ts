@@ -24,12 +24,10 @@ import { test, expect } from '@playwright/test';
 const BRAND = process.env.TEST_BRAND || 'root';
 
 test.describe('Worker → GAS Routing (NU Transport)', () => {
-
   test.describe('/api/events/list - Fetch-Based Endpoint', () => {
-
     test('returns HTTP 200 with JSON Content-Type', async ({ request }) => {
       const response = await request.post('/api/events/list', {
-        data: { brandId: BRAND }
+        data: { brandId: BRAND },
       });
 
       expect(response.status()).toBe(200);
@@ -38,7 +36,7 @@ test.describe('Worker → GAS Routing (NU Transport)', () => {
 
     test('returns valid envelope wrapper (ok, value)', async ({ request }) => {
       const response = await request.post('/api/events/list', {
-        data: { brandId: BRAND }
+        data: { brandId: BRAND },
       });
 
       expect(response.ok()).toBe(true);
@@ -60,7 +58,7 @@ test.describe('Worker → GAS Routing (NU Transport)', () => {
 
     test('value contains items array with events', async ({ request }) => {
       const response = await request.post('/api/events/list', {
-        data: { brandId: BRAND }
+        data: { brandId: BRAND },
       });
 
       const json = await response.json();
@@ -73,7 +71,7 @@ test.describe('Worker → GAS Routing (NU Transport)', () => {
 
     test('response does NOT contain HTML (no fallback routing)', async ({ request }) => {
       const response = await request.post('/api/events/list', {
-        data: { brandId: BRAND }
+        data: { brandId: BRAND },
       });
 
       const text = await response.text();
@@ -88,17 +86,15 @@ test.describe('Worker → GAS Routing (NU Transport)', () => {
       // Verify it parses as JSON
       expect(() => JSON.parse(text)).not.toThrow();
     });
-
   });
 
   test.describe('/api/rpc - Legacy RPC Endpoint', () => {
-
     test('returns HTTP 200 for api_list method', async ({ request }) => {
       const response = await request.post('/api/rpc', {
         data: {
           method: 'api_list',
-          payload: { brandId: BRAND, scope: 'events' }
-        }
+          payload: { brandId: BRAND, scope: 'events' },
+        },
       });
 
       expect(response.status()).toBe(200);
@@ -109,8 +105,8 @@ test.describe('Worker → GAS Routing (NU Transport)', () => {
       const response = await request.post('/api/rpc', {
         data: {
           method: 'api_list',
-          payload: { brandId: BRAND, scope: 'events' }
-        }
+          payload: { brandId: BRAND, scope: 'events' },
+        },
       });
 
       const json = await response.json();
@@ -126,8 +122,8 @@ test.describe('Worker → GAS Routing (NU Transport)', () => {
       const response = await request.post('/api/rpc', {
         data: {
           method: 'api_list',
-          payload: { brandId: BRAND }
-        }
+          payload: { brandId: BRAND },
+        },
       });
 
       const text = await response.text();
@@ -136,18 +132,16 @@ test.describe('Worker → GAS Routing (NU Transport)', () => {
       expect(text).not.toContain('<!DOCTYPE');
       expect(text).not.toContain('<html');
     });
-
   });
 
   test.describe('CORS Headers Validation', () => {
-
     test('OPTIONS returns proper CORS headers', async ({ request }) => {
       const response = await request.fetch('/api/events/list', {
         method: 'OPTIONS',
         headers: {
-          'Origin': 'https://stg.oursharedevents.com',
-          'Access-Control-Request-Method': 'POST'
-        }
+          Origin: 'https://stg.oursharedevents.com',
+          'Access-Control-Request-Method': 'POST',
+        },
       });
 
       // Should return 204 No Content for preflight
@@ -161,7 +155,7 @@ test.describe('Worker → GAS Routing (NU Transport)', () => {
 
     test('POST response includes CORS headers', async ({ request }) => {
       const response = await request.post('/api/events/list', {
-        data: { brandId: BRAND }
+        data: { brandId: BRAND },
       });
 
       // CORS headers should be present on the response
@@ -171,7 +165,7 @@ test.describe('Worker → GAS Routing (NU Transport)', () => {
 
     test('X-Proxied-By header confirms Worker routing', async ({ request }) => {
       const response = await request.post('/api/events/list', {
-        data: { brandId: BRAND }
+        data: { brandId: BRAND },
       });
 
       const headers = response.headers();
@@ -179,15 +173,13 @@ test.describe('Worker → GAS Routing (NU Transport)', () => {
       expect(headers['x-proxied-by']).toBe('oursharedevents-worker');
       expect(headers['x-worker-version']).toBeDefined();
     });
-
   });
 
   test.describe('Error Handling (Negative Tests)', () => {
-
     test('returns JSON error for invalid JSON body', async ({ request }) => {
       const response = await request.post('/api/events/list', {
         data: 'not-valid-json',
-        headers: { 'Content-Type': 'text/plain' }
+        headers: { 'Content-Type': 'text/plain' },
       });
 
       // Should return 400 with JSON error, NOT HTML
@@ -201,7 +193,7 @@ test.describe('Worker → GAS Routing (NU Transport)', () => {
 
     test('returns JSON error for missing API path', async ({ request }) => {
       const response = await request.post('/api/', {
-        data: {}
+        data: {},
       });
 
       // Even errors should be JSON, not HTML
@@ -217,8 +209,8 @@ test.describe('Worker → GAS Routing (NU Transport)', () => {
       const response = await request.post('/api/rpc', {
         data: {
           method: 'api_nonexistent_method',
-          payload: {}
-        }
+          payload: {},
+        },
       });
 
       // Should still return JSON, not HTML
@@ -230,7 +222,7 @@ test.describe('Worker → GAS Routing (NU Transport)', () => {
     test('error response includes corrId for tracking', async ({ request }) => {
       // Request with missing required method
       const response = await request.post('/api/rpc', {
-        data: { payload: { brandId: BRAND } }
+        data: { payload: { brandId: BRAND } },
       });
 
       // Error response should have correlation ID
@@ -243,14 +235,12 @@ test.describe('Worker → GAS Routing (NU Transport)', () => {
         }
       }
     });
-
   });
 
   test.describe('Worker Transparency Headers', () => {
-
     test('response includes X-Worker-Version header', async ({ request }) => {
       const response = await request.post('/api/events/list', {
-        data: { brandId: BRAND }
+        data: { brandId: BRAND },
       });
 
       const version = response.headers()['x-worker-version'];
@@ -261,7 +251,7 @@ test.describe('Worker → GAS Routing (NU Transport)', () => {
 
     test('response includes X-Proxy-Duration-Ms header', async ({ request }) => {
       const response = await request.post('/api/events/list', {
-        data: { brandId: BRAND }
+        data: { brandId: BRAND },
       });
 
       const duration = response.headers()['x-proxy-duration-ms'];
@@ -269,14 +259,12 @@ test.describe('Worker → GAS Routing (NU Transport)', () => {
       // Duration should be a positive number
       expect(parseInt(duration)).toBeGreaterThan(0);
     });
-
   });
 
   test.describe('GAS Backend Connectivity', () => {
-
     test('api/status returns backend health check', async ({ request }) => {
       const response = await request.post('/api/status', {
-        data: { brandId: BRAND }
+        data: { brandId: BRAND },
       });
 
       expect(response.status()).toBe(200);
@@ -289,7 +277,7 @@ test.describe('Worker → GAS Routing (NU Transport)', () => {
     test('api/getPublicBundle returns event bundle', async ({ request }) => {
       // First get an event ID
       const listResponse = await request.post('/api/events/list', {
-        data: { brandId: BRAND }
+        data: { brandId: BRAND },
       });
       const listJson = await listResponse.json();
 
@@ -297,7 +285,7 @@ test.describe('Worker → GAS Routing (NU Transport)', () => {
         const eventId = listJson.value.items[0].id;
 
         const response = await request.post('/api/getPublicBundle', {
-          data: { brandId: BRAND, eventId }
+          data: { brandId: BRAND, eventId },
         });
 
         expect(response.status()).toBe(200);
@@ -310,7 +298,5 @@ test.describe('Worker → GAS Routing (NU Transport)', () => {
         }
       }
     });
-
   });
-
 });

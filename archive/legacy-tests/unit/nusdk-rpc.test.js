@@ -49,14 +49,18 @@ describe('NUSDK', () => {
             // Check if google.script.run is available
             if (!global.google || !global.google.script || !global.google.script.run) {
               console.error('[NUSDK] google.script.run is not available');
-              resolve({ ok: false, code: 'INTERNAL', message: 'google.script.run not available - page must be served from Apps Script' });
+              resolve({
+                ok: false,
+                code: 'INTERNAL',
+                message: 'google.script.run not available - page must be served from Apps Script',
+              });
               return;
             }
 
             try {
               const runner = global.google.script.run
-                .withSuccessHandler(res => resolve(res))
-                .withFailureHandler(err => {
+                .withSuccessHandler((res) => resolve(res))
+                .withFailureHandler((err) => {
                   console.error('[NUSDK] Server error for', method, ':', err);
                   resolve({ ok: false, code: 'INTERNAL', message: String(err) });
                 });
@@ -66,7 +70,7 @@ describe('NUSDK', () => {
               resolve({ ok: false, code: 'INTERNAL', message: String(e) });
             }
           });
-        }
+        },
       };
     });
 
@@ -82,24 +86,24 @@ describe('NUSDK', () => {
       test('should resolve with value from {ok:true, value:...} response', async () => {
         const mockResponse = {
           ok: true,
-          value: { event: { id: 'ev1', name: 'Test Event' } }
+          value: { event: { id: 'ev1', name: 'Test Event' } },
         };
 
         global.google = {
           script: {
             run: {
-              withSuccessHandler: jest.fn(function(handler) {
+              withSuccessHandler: jest.fn(function (handler) {
                 this._successHandler = handler;
                 return this;
               }),
-              withFailureHandler: jest.fn(function() {
+              withFailureHandler: jest.fn(function () {
                 return this;
               }),
-              api_getPublicBundle: jest.fn(function() {
+              api_getPublicBundle: jest.fn(function () {
                 this._successHandler(mockResponse);
-              })
-            }
-          }
+              }),
+            },
+          },
         };
 
         const result = await NU.rpc('api_getPublicBundle', { eventId: 'ev1' });
@@ -115,19 +119,19 @@ describe('NUSDK', () => {
         global.google = {
           script: {
             run: {
-              withSuccessHandler: jest.fn(function(handler) {
+              withSuccessHandler: jest.fn(function (handler) {
                 this._successHandler = handler;
                 return this;
               }),
-              withFailureHandler: jest.fn(function() {
+              withFailureHandler: jest.fn(function () {
                 return this;
               }),
-              api_getPublicBundle: jest.fn(function(p) {
+              api_getPublicBundle: jest.fn(function (p) {
                 receivedPayload = p;
                 this._successHandler({ ok: true, value: {} });
-              })
-            }
-          }
+              }),
+            },
+          },
         };
 
         await NU.rpc('api_getPublicBundle', payload);
@@ -139,24 +143,24 @@ describe('NUSDK', () => {
         const mockResponse = {
           ok: true,
           value: { event: { id: 'ev1' } },
-          etag: 'abc123'
+          etag: 'abc123',
         };
 
         global.google = {
           script: {
             run: {
-              withSuccessHandler: jest.fn(function(handler) {
+              withSuccessHandler: jest.fn(function (handler) {
                 this._successHandler = handler;
                 return this;
               }),
-              withFailureHandler: jest.fn(function() {
+              withFailureHandler: jest.fn(function () {
                 return this;
               }),
-              api_getPublicBundle: jest.fn(function() {
+              api_getPublicBundle: jest.fn(function () {
                 this._successHandler(mockResponse);
-              })
-            }
-          }
+              }),
+            },
+          },
         };
 
         const result = await NU.rpc('api_getPublicBundle', {});
@@ -168,24 +172,24 @@ describe('NUSDK', () => {
       test('should handle notModified response (304 equivalent)', async () => {
         const mockResponse = {
           ok: true,
-          notModified: true
+          notModified: true,
         };
 
         global.google = {
           script: {
             run: {
-              withSuccessHandler: jest.fn(function(handler) {
+              withSuccessHandler: jest.fn(function (handler) {
                 this._successHandler = handler;
                 return this;
               }),
-              withFailureHandler: jest.fn(function() {
+              withFailureHandler: jest.fn(function () {
                 return this;
               }),
-              api_getPublicBundle: jest.fn(function() {
+              api_getPublicBundle: jest.fn(function () {
                 this._successHandler(mockResponse);
-              })
-            }
-          }
+              }),
+            },
+          },
         };
 
         const result = await NU.rpc('api_getPublicBundle', { ifNoneMatch: 'abc123' });
@@ -204,24 +208,24 @@ describe('NUSDK', () => {
         const mockResponse = {
           ok: false,
           code: 'NOT_FOUND',
-          message: 'Event not found'
+          message: 'Event not found',
         };
 
         global.google = {
           script: {
             run: {
-              withSuccessHandler: jest.fn(function(handler) {
+              withSuccessHandler: jest.fn(function (handler) {
                 this._successHandler = handler;
                 return this;
               }),
-              withFailureHandler: jest.fn(function() {
+              withFailureHandler: jest.fn(function () {
                 return this;
               }),
-              api_getPublicBundle: jest.fn(function() {
+              api_getPublicBundle: jest.fn(function () {
                 this._successHandler(mockResponse);
-              })
-            }
-          }
+              }),
+            },
+          },
         };
 
         const result = await NU.rpc('api_getPublicBundle', { eventId: 'invalid' });
@@ -235,24 +239,24 @@ describe('NUSDK', () => {
         const mockResponse = {
           ok: false,
           code: 'BAD_INPUT',
-          message: 'Invalid eventId format'
+          message: 'Invalid eventId format',
         };
 
         global.google = {
           script: {
             run: {
-              withSuccessHandler: jest.fn(function(handler) {
+              withSuccessHandler: jest.fn(function (handler) {
                 this._successHandler = handler;
                 return this;
               }),
-              withFailureHandler: jest.fn(function() {
+              withFailureHandler: jest.fn(function () {
                 return this;
               }),
-              api_getPublicBundle: jest.fn(function() {
+              api_getPublicBundle: jest.fn(function () {
                 this._successHandler(mockResponse);
-              })
-            }
-          }
+              }),
+            },
+          },
         };
 
         const result = await NU.rpc('api_getPublicBundle', { eventId: '' });
@@ -265,24 +269,24 @@ describe('NUSDK', () => {
         const mockResponse = {
           ok: false,
           code: 'RATE_LIMITED',
-          message: 'Too many requests'
+          message: 'Too many requests',
         };
 
         global.google = {
           script: {
             run: {
-              withSuccessHandler: jest.fn(function(handler) {
+              withSuccessHandler: jest.fn(function (handler) {
                 this._successHandler = handler;
                 return this;
               }),
-              withFailureHandler: jest.fn(function() {
+              withFailureHandler: jest.fn(function () {
                 return this;
               }),
-              api_getPublicBundle: jest.fn(function() {
+              api_getPublicBundle: jest.fn(function () {
                 this._successHandler(mockResponse);
-              })
-            }
-          }
+              }),
+            },
+          },
         };
 
         const result = await NU.rpc('api_getPublicBundle', {});
@@ -295,24 +299,24 @@ describe('NUSDK', () => {
         const mockResponse = {
           ok: false,
           code: 'UNAUTHORIZED',
-          message: 'Admin key required'
+          message: 'Admin key required',
         };
 
         global.google = {
           script: {
             run: {
-              withSuccessHandler: jest.fn(function(handler) {
+              withSuccessHandler: jest.fn(function (handler) {
                 this._successHandler = handler;
                 return this;
               }),
-              withFailureHandler: jest.fn(function() {
+              withFailureHandler: jest.fn(function () {
                 return this;
               }),
-              api_adminSaveEvent: jest.fn(function() {
+              api_adminSaveEvent: jest.fn(function () {
                 this._successHandler(mockResponse);
-              })
-            }
-          }
+              }),
+            },
+          },
         };
 
         const result = await NU.rpc('api_adminSaveEvent', { event: {} });
@@ -325,24 +329,24 @@ describe('NUSDK', () => {
         const mockResponse = {
           ok: false,
           code: 'INTERNAL',
-          message: 'Server error occurred'
+          message: 'Server error occurred',
         };
 
         global.google = {
           script: {
             run: {
-              withSuccessHandler: jest.fn(function(handler) {
+              withSuccessHandler: jest.fn(function (handler) {
                 this._successHandler = handler;
                 return this;
               }),
-              withFailureHandler: jest.fn(function() {
+              withFailureHandler: jest.fn(function () {
                 return this;
               }),
-              api_getPublicBundle: jest.fn(function() {
+              api_getPublicBundle: jest.fn(function () {
                 this._successHandler(mockResponse);
-              })
-            }
-          }
+              }),
+            },
+          },
         };
 
         const result = await NU.rpc('api_getPublicBundle', {});
@@ -355,24 +359,24 @@ describe('NUSDK', () => {
         const mockResponse = {
           ok: false,
           code: 'NOT_FOUND',
-          message: 'Event not found'
+          message: 'Event not found',
         };
 
         global.google = {
           script: {
             run: {
-              withSuccessHandler: jest.fn(function(handler) {
+              withSuccessHandler: jest.fn(function (handler) {
                 this._successHandler = handler;
                 return this;
               }),
-              withFailureHandler: jest.fn(function() {
+              withFailureHandler: jest.fn(function () {
                 return this;
               }),
-              api_getPublicBundle: jest.fn(function() {
+              api_getPublicBundle: jest.fn(function () {
                 this._successHandler(mockResponse);
-              })
-            }
-          }
+              }),
+            },
+          },
         };
 
         const result = await NU.rpc('api_getPublicBundle', {});
@@ -382,7 +386,9 @@ describe('NUSDK', () => {
           expect(typeof result.code).toBe('string');
           expect(typeof result.message).toBe('string');
           // Surfaces can switch on result.code
-          expect(['BAD_INPUT', 'NOT_FOUND', 'RATE_LIMITED', 'INTERNAL', 'UNAUTHORIZED']).toContain(result.code);
+          expect(['BAD_INPUT', 'NOT_FOUND', 'RATE_LIMITED', 'INTERNAL', 'UNAUTHORIZED']).toContain(
+            result.code
+          );
         }
       });
     });
@@ -396,18 +402,18 @@ describe('NUSDK', () => {
         global.google = {
           script: {
             run: {
-              withSuccessHandler: jest.fn(function() {
+              withSuccessHandler: jest.fn(function () {
                 return this;
               }),
-              withFailureHandler: jest.fn(function(handler) {
+              withFailureHandler: jest.fn(function (handler) {
                 this._failureHandler = handler;
                 return this;
               }),
-              api_getPublicBundle: jest.fn(function() {
+              api_getPublicBundle: jest.fn(function () {
                 this._failureHandler(new Error('Network error'));
-              })
-            }
-          }
+              }),
+            },
+          },
         };
 
         const result = await NU.rpc('api_getPublicBundle', {});
@@ -421,18 +427,18 @@ describe('NUSDK', () => {
         global.google = {
           script: {
             run: {
-              withSuccessHandler: jest.fn(function() {
+              withSuccessHandler: jest.fn(function () {
                 return this;
               }),
-              withFailureHandler: jest.fn(function(handler) {
+              withFailureHandler: jest.fn(function (handler) {
                 this._failureHandler = handler;
                 return this;
               }),
-              api_getPublicBundle: jest.fn(function() {
+              api_getPublicBundle: jest.fn(function () {
                 this._failureHandler('Connection timeout');
-              })
-            }
-          }
+              }),
+            },
+          },
         };
 
         const result = await NU.rpc('api_getPublicBundle', {});
@@ -446,21 +452,21 @@ describe('NUSDK', () => {
         global.google = {
           script: {
             run: {
-              withSuccessHandler: jest.fn(function() {
+              withSuccessHandler: jest.fn(function () {
                 return this;
               }),
-              withFailureHandler: jest.fn(function() {
+              withFailureHandler: jest.fn(function () {
                 return this;
-              })
+              }),
               // Note: api_nonExistentMethod is not defined
-            }
-          }
+            },
+          },
         };
 
         // Should not throw, should return error
         await expect(NU.rpc('api_nonExistentMethod', {})).resolves.toMatchObject({
           ok: false,
-          code: 'INTERNAL'
+          code: 'INTERNAL',
         });
       });
     });
@@ -525,9 +531,13 @@ describe('NUSDK', () => {
       // Mock localStorage
       mockLocalStorage = {};
       global.localStorage = {
-        getItem: jest.fn(key => mockLocalStorage[key] || null),
-        setItem: jest.fn((key, value) => { mockLocalStorage[key] = value; }),
-        removeItem: jest.fn(key => { delete mockLocalStorage[key]; })
+        getItem: jest.fn((key) => mockLocalStorage[key] || null),
+        setItem: jest.fn((key, value) => {
+          mockLocalStorage[key] = value;
+        }),
+        removeItem: jest.fn((key) => {
+          delete mockLocalStorage[key];
+        }),
       };
 
       // Mock setTimeout
@@ -540,14 +550,17 @@ describe('NUSDK', () => {
           const key = `swr:${method}:${JSON.stringify(payload || {})}`;
           const cached = JSON.parse(localStorage.getItem(key) || '{}');
           if (cached.data) setTimeout(() => onUpdate && onUpdate(cached.data), 0);
-          NU.rpc(method, { ...(payload || {}), ifNoneMatch: cached.etag }).then(res => {
+          NU.rpc(method, { ...(payload || {}), ifNoneMatch: cached.etag }).then((res) => {
             if (res && res.notModified) return;
             if (res && res.ok && res.value) {
-              localStorage.setItem(key, JSON.stringify({ etag: res.etag, data: res.value, t: Date.now() }));
+              localStorage.setItem(
+                key,
+                JSON.stringify({ etag: res.etag, data: res.value, t: Date.now() })
+              );
               onUpdate && onUpdate(res.value);
             }
           });
-        }
+        },
       };
     });
 
@@ -561,15 +574,21 @@ describe('NUSDK', () => {
       mockLocalStorage['swr:api_getPublicBundle:{"eventId":"ev1"}'] = JSON.stringify({
         data: cachedData,
         etag: 'etag123',
-        t: Date.now()
+        t: Date.now(),
       });
 
       NU.rpc.mockResolvedValue({ ok: true, notModified: true });
 
       let receivedData = null;
-      NU.swr('api_getPublicBundle', { eventId: 'ev1' }, {
-        onUpdate: (data) => { receivedData = data; }
-      });
+      NU.swr(
+        'api_getPublicBundle',
+        { eventId: 'ev1' },
+        {
+          onUpdate: (data) => {
+            receivedData = data;
+          },
+        }
+      );
 
       // Run timers to trigger the setTimeout callback
       jest.runAllTimers();
@@ -581,7 +600,7 @@ describe('NUSDK', () => {
       mockLocalStorage['swr:api_getPublicBundle:{}'] = JSON.stringify({
         data: { event: {} },
         etag: 'cached-etag',
-        t: Date.now()
+        t: Date.now(),
       });
 
       NU.rpc.mockResolvedValue({ ok: true, notModified: true });
@@ -589,7 +608,7 @@ describe('NUSDK', () => {
       NU.swr('api_getPublicBundle', {}, { onUpdate: () => {} });
 
       expect(NU.rpc).toHaveBeenCalledWith('api_getPublicBundle', {
-        ifNoneMatch: 'cached-etag'
+        ifNoneMatch: 'cached-etag',
       });
     });
 
@@ -598,20 +617,28 @@ describe('NUSDK', () => {
       NU.rpc.mockResolvedValue({
         ok: true,
         value: freshData,
-        etag: 'new-etag'
+        etag: 'new-etag',
       });
 
       let receivedData = null;
-      NU.swr('api_getPublicBundle', { eventId: 'ev1' }, {
-        onUpdate: (data) => { receivedData = data; }
-      });
+      NU.swr(
+        'api_getPublicBundle',
+        { eventId: 'ev1' },
+        {
+          onUpdate: (data) => {
+            receivedData = data;
+          },
+        }
+      );
 
       // Wait for the rpc promise to resolve
       await Promise.resolve();
       await Promise.resolve();
 
       // Check that localStorage was updated
-      const storedData = JSON.parse(mockLocalStorage['swr:api_getPublicBundle:{"eventId":"ev1"}'] || '{}');
+      const storedData = JSON.parse(
+        mockLocalStorage['swr:api_getPublicBundle:{"eventId":"ev1"}'] || '{}'
+      );
       expect(storedData.data).toEqual(freshData);
       expect(storedData.etag).toBe('new-etag');
     });
@@ -620,15 +647,21 @@ describe('NUSDK', () => {
       mockLocalStorage['swr:api_getPublicBundle:{}'] = JSON.stringify({
         data: { event: { id: 'ev1' } },
         etag: 'old-etag',
-        t: 1000
+        t: 1000,
       });
 
       NU.rpc.mockResolvedValue({ ok: true, notModified: true });
 
       let updateCount = 0;
-      NU.swr('api_getPublicBundle', {}, {
-        onUpdate: () => { updateCount++; }
-      });
+      NU.swr(
+        'api_getPublicBundle',
+        {},
+        {
+          onUpdate: () => {
+            updateCount++;
+          },
+        }
+      );
 
       jest.runAllTimers();
       await Promise.resolve();
@@ -642,13 +675,19 @@ describe('NUSDK', () => {
       NU.rpc.mockResolvedValue({
         ok: true,
         value: { event: {} },
-        etag: 'new-etag'
+        etag: 'new-etag',
       });
 
       let receivedData = null;
-      NU.swr('api_getPublicBundle', {}, {
-        onUpdate: (data) => { receivedData = data; }
-      });
+      NU.swr(
+        'api_getPublicBundle',
+        {},
+        {
+          onUpdate: (data) => {
+            receivedData = data;
+          },
+        }
+      );
 
       await Promise.resolve();
       await Promise.resolve();
@@ -666,14 +705,18 @@ describe('NUSDK', () => {
 
     beforeAll(() => {
       // Simulate NU.esc implementation
-      esc = function(s) {
-        return String(s).replace(/[&<>"']/g, m => ({
-          '&': '&amp;',
-          '<': '&lt;',
-          '>': '&gt;',
-          '"': '&quot;',
-          "'": '&#39;'
-        }[m]));
+      esc = function (s) {
+        return String(s).replace(
+          /[&<>"']/g,
+          (m) =>
+            ({
+              '&': '&amp;',
+              '<': '&lt;',
+              '>': '&gt;',
+              '"': '&quot;',
+              "'": '&#39;',
+            })[m]
+        );
       };
     });
 
@@ -712,7 +755,6 @@ describe('NUSDK', () => {
 // These tests verify the fetch-based transport layer logs errors correctly
 
 describe('NU SDK v2.0 Fetch Transport', () => {
-
   describe('http_fail logging', () => {
     /**
      * Negative Test: Worker returns 400/500 → NU SDK logs rpc:http_fail
@@ -733,8 +775,8 @@ describe('NU SDK v2.0 Fetch Transport', () => {
         json: jest.fn().mockResolvedValue({
           ok: false,
           code: 'BAD_INPUT',
-          message: 'Invalid request'
-        })
+          message: 'Invalid request',
+        }),
       };
 
       // Simulate the SDK's HTTP error handling logic
@@ -744,17 +786,19 @@ describe('NU SDK v2.0 Fetch Transport', () => {
           path: 'events/list',
           requestId: 'test123',
           status: mockResponse.status,
-          code: errorData.code
+          code: errorData.code,
         });
       }
 
       // Verify http_fail was logged
-      expect(logs).toContainEqual(expect.objectContaining({
-        level: 'error',
-        type: 'http_fail',
-        status: 400,
-        code: 'BAD_INPUT'
-      }));
+      expect(logs).toContainEqual(
+        expect.objectContaining({
+          level: 'error',
+          type: 'http_fail',
+          status: 400,
+          code: 'BAD_INPUT',
+        })
+      );
     });
 
     test('should log http_fail when fetch returns HTTP 500', async () => {
@@ -770,8 +814,8 @@ describe('NU SDK v2.0 Fetch Transport', () => {
         json: jest.fn().mockResolvedValue({
           ok: false,
           code: 'INTERNAL',
-          message: 'Server error'
-        })
+          message: 'Server error',
+        }),
       };
 
       if (!mockResponse.ok) {
@@ -780,16 +824,18 @@ describe('NU SDK v2.0 Fetch Transport', () => {
           path: 'events/list',
           requestId: 'test456',
           status: mockResponse.status,
-          code: errorData.code
+          code: errorData.code,
         });
       }
 
-      expect(logs).toContainEqual(expect.objectContaining({
-        level: 'error',
-        type: 'http_fail',
-        status: 500,
-        code: 'INTERNAL'
-      }));
+      expect(logs).toContainEqual(
+        expect.objectContaining({
+          level: 'error',
+          type: 'http_fail',
+          status: 500,
+          code: 'INTERNAL',
+        })
+      );
     });
 
     test('should log http_fail when fetch returns HTTP 503 (SERVICE_UNAVAILABLE)', async () => {
@@ -804,8 +850,8 @@ describe('NU SDK v2.0 Fetch Transport', () => {
         json: jest.fn().mockResolvedValue({
           ok: false,
           code: 'SERVICE_UNAVAILABLE',
-          message: 'GAS backend unavailable'
-        })
+          message: 'GAS backend unavailable',
+        }),
       };
 
       if (!mockResponse.ok) {
@@ -814,15 +860,17 @@ describe('NU SDK v2.0 Fetch Transport', () => {
           path: 'events/list',
           requestId: 'test789',
           status: mockResponse.status,
-          code: errorData.code
+          code: errorData.code,
         });
       }
 
-      expect(logs).toContainEqual(expect.objectContaining({
-        type: 'http_fail',
-        status: 503,
-        code: 'SERVICE_UNAVAILABLE'
-      }));
+      expect(logs).toContainEqual(
+        expect.objectContaining({
+          type: 'http_fail',
+          status: 503,
+          code: 'SERVICE_UNAVAILABLE',
+        })
+      );
     });
 
     test('should log http_fail with corrId when present in error response', async () => {
@@ -838,8 +886,8 @@ describe('NU SDK v2.0 Fetch Transport', () => {
           ok: false,
           code: 'INTERNAL',
           message: 'Server error',
-          corrId: 'err_20241208_abc123'
-        })
+          corrId: 'err_20241208_abc123',
+        }),
       };
 
       if (!mockResponse.ok) {
@@ -848,20 +896,20 @@ describe('NU SDK v2.0 Fetch Transport', () => {
           path: 'events/list',
           status: mockResponse.status,
           code: errorData.code,
-          corrId: errorData.corrId
+          corrId: errorData.corrId,
         });
       }
 
-      expect(logs).toContainEqual(expect.objectContaining({
-        type: 'http_fail',
-        corrId: 'err_20241208_abc123'
-      }));
+      expect(logs).toContainEqual(
+        expect.objectContaining({
+          type: 'http_fail',
+          corrId: 'err_20241208_abc123',
+        })
+      );
     });
-
   });
 
   describe('network_fail logging', () => {
-
     test('should log network_fail when fetch throws network error', async () => {
       const logs = [];
       const _log = (level, type, data) => {
@@ -876,13 +924,15 @@ describe('NU SDK v2.0 Fetch Transport', () => {
         path: 'events/list',
         requestId: 'test_net_01',
         error: networkError.message,
-        fallback: 'google.script.run'
+        fallback: 'google.script.run',
       });
 
-      expect(logs).toContainEqual(expect.objectContaining({
-        type: 'network_fail',
-        error: 'Failed to fetch'
-      }));
+      expect(logs).toContainEqual(
+        expect.objectContaining({
+          type: 'network_fail',
+          error: 'Failed to fetch',
+        })
+      );
     });
 
     test('should log network_fail at error level when no fallback available', () => {
@@ -894,19 +944,19 @@ describe('NU SDK v2.0 Fetch Transport', () => {
       _log('error', 'network_fail', {
         path: 'events/list',
         requestId: 'test_net_02',
-        error: 'Cannot connect to backend'
+        error: 'Cannot connect to backend',
       });
 
-      expect(logs).toContainEqual(expect.objectContaining({
-        level: 'error',
-        type: 'network_fail'
-      }));
+      expect(logs).toContainEqual(
+        expect.objectContaining({
+          level: 'error',
+          type: 'network_fail',
+        })
+      );
     });
-
   });
 
   describe('json_fail logging', () => {
-
     test('should log json_fail when response is not valid JSON', async () => {
       const logs = [];
       const _log = (level, type, data) => {
@@ -922,32 +972,32 @@ describe('NU SDK v2.0 Fetch Transport', () => {
         _log('error', 'json_fail', {
           path: 'events/list',
           requestId: 'test_json_01',
-          error: jsonError.message
+          error: jsonError.message,
         });
       }
 
-      expect(logs).toContainEqual(expect.objectContaining({
-        type: 'json_fail',
-        path: 'events/list'
-      }));
+      expect(logs).toContainEqual(
+        expect.objectContaining({
+          type: 'json_fail',
+          path: 'events/list',
+        })
+      );
     });
 
     test('should return INTERNAL code for json_fail', async () => {
       const result = {
         ok: false,
         code: 'INTERNAL',
-        message: 'Invalid JSON response'
+        message: 'Invalid JSON response',
       };
 
       expect(result.ok).toBe(false);
       expect(result.code).toBe('INTERNAL');
       expect(result.message).toBe('Invalid JSON response');
     });
-
   });
 
   describe('Rolling log buffer (__NU_LOGS__)', () => {
-
     test('should maintain maximum 100 log entries', () => {
       const maxLogs = 100;
       const logs = [];
@@ -976,7 +1026,7 @@ describe('NU SDK v2.0 Fetch Transport', () => {
         type: 'http_fail',
         path: 'events/list',
         status: 500,
-        code: 'INTERNAL'
+        code: 'INTERNAL',
       };
 
       expect(entry).toHaveProperty('timestamp');
@@ -984,9 +1034,7 @@ describe('NU SDK v2.0 Fetch Transport', () => {
       expect(entry).toHaveProperty('type');
       expect(entry).toHaveProperty('path');
     });
-
   });
-
 });
 
 // =============================================================================
@@ -1008,14 +1056,14 @@ describe('NU.init()', () => {
         logLevel: 'debug',
         maxLogs: 100,
         apiBase: '/api',
-        dedupeWindow: 5000
+        dedupeWindow: 5000,
       },
       _directTransport: {
         enabled: false,
         execUrl: null,
         brand: null,
         maxRetries: 3,
-        retryDelayMs: 1000
+        retryDelayMs: 1000,
       },
       _log: jest.fn(),
 
@@ -1031,7 +1079,7 @@ describe('NU.init()', () => {
               execUrl: execUrl.trim(),
               brand: brand || null,
               maxRetries: directTransportOptions.maxRetries ?? 3,
-              retryDelayMs: directTransportOptions.retryDelayMs ?? 1000
+              retryDelayMs: directTransportOptions.retryDelayMs ?? 1000,
             };
             NU._log('debug', 'init_config', { transport: 'direct' });
           } catch {
@@ -1060,10 +1108,10 @@ describe('NU.init()', () => {
           directTransport: {
             enabled: NU._directTransport.enabled,
             hasExecUrl: !!NU._directTransport.execUrl,
-            hasBrand: !!NU._directTransport.brand
-          }
+            hasBrand: !!NU._directTransport.brand,
+          },
         };
-      }
+      },
     };
   });
 
@@ -1097,7 +1145,7 @@ describe('NU.init()', () => {
       NU.init({
         execUrl,
         brand: 'abc',
-        directTransportOptions: { maxRetries: 5, retryDelayMs: 500 }
+        directTransportOptions: { maxRetries: 5, retryDelayMs: 500 },
       });
 
       expect(NU._directTransport.maxRetries).toBe(5);
@@ -1181,9 +1229,13 @@ describe('NU.init()', () => {
       NU.init({ execUrl: 'not-a-valid-url' });
 
       expect(NU.getTransportMode()).toBe('proxy');
-      expect(NU._log).toHaveBeenCalledWith('error', 'init_config', expect.objectContaining({
-        error: 'Invalid execUrl format'
-      }));
+      expect(NU._log).toHaveBeenCalledWith(
+        'error',
+        'init_config',
+        expect.objectContaining({
+          error: 'Invalid execUrl format',
+        })
+      );
     });
 
     test('should fall back to proxy when execUrl is a number', () => {
@@ -1248,7 +1300,7 @@ describe('Raw Fetch Ban Enforcement', () => {
     'Display.html',
     'Poster.html',
     'Admin.html',
-    'SharedReport.html'
+    'SharedReport.html',
   ];
 
   const srcDir = path.join(__dirname, '../../src/mvp');
@@ -1272,7 +1324,7 @@ describe('Raw Fetch Ban Enforcement', () => {
     const matches = content.match(fetchPattern) || [];
 
     // Filter out false positives
-    const suspiciousFetches = matches.filter(match => {
+    const suspiciousFetches = matches.filter((match) => {
       // Check context - fetch in comments or UrlFetchApp is OK
       return true; // All remaining matches are suspicious
     });
@@ -1311,11 +1363,11 @@ describe('Raw Fetch Ban Enforcement', () => {
     // v2.x features
     expect(content).toContain('window.__NU_LOGS__');
     expect(content).toContain('window.NU_DIAG');
-    expect(content).toMatch(/VERSION:\s*['"]2\./);  // Version 2.x
+    expect(content).toMatch(/VERSION:\s*['"]2\./); // Version 2.x
     expect(content).toContain('flush()');
 
     // v2.2 features (NU.init)
-    expect(content).toMatch(/init\s*\(\s*config\s*=/);  // init(config = {})
+    expect(content).toMatch(/init\s*\(\s*config\s*=/); // init(config = {})
     expect(content).toContain('isInitialized()');
     expect(content).toContain('getTransportMode()');
   });

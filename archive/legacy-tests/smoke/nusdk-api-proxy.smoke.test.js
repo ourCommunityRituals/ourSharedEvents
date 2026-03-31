@@ -34,13 +34,11 @@ const BRAND_ID = 'root';
 const GAS_BANNER_TEXT = 'This application was created by a Google Apps Script user';
 
 test.describe('Story 4: NU SDK + /api/* Proxy Smoke Tests', () => {
-
   // ===========================================================================
   // /events Page - HTML Template Verification
   // ===========================================================================
 
   test.describe('/events Page', () => {
-
     test('/events loads with HTTP 200', async ({ page }) => {
       const response = await page.goto(`${BASE_URL}/events?brand=${BRAND_ID}`);
 
@@ -101,7 +99,6 @@ test.describe('Story 4: NU SDK + /api/* Proxy Smoke Tests', () => {
 
       expect(hasLogs).toBe(true);
     });
-
   });
 
   // ===========================================================================
@@ -109,11 +106,10 @@ test.describe('Story 4: NU SDK + /api/* Proxy Smoke Tests', () => {
   // ===========================================================================
 
   test.describe('/api/* Endpoints', () => {
-
     test('POST /api/events/list returns JSON', async ({ request }) => {
       const response = await request.post(`${BASE_URL}/api/events/list`, {
         data: { brandId: BRAND_ID },
-        headers: { 'Content-Type': 'application/json' }
+        headers: { 'Content-Type': 'application/json' },
       });
 
       expect(response.status()).toBe(200);
@@ -125,7 +121,7 @@ test.describe('Story 4: NU SDK + /api/* Proxy Smoke Tests', () => {
     test('POST /api/events/list returns envelope with ok=true', async ({ request }) => {
       const response = await request.post(`${BASE_URL}/api/events/list`, {
         data: { brandId: BRAND_ID },
-        headers: { 'Content-Type': 'application/json' }
+        headers: { 'Content-Type': 'application/json' },
       });
 
       const json = await response.json();
@@ -137,7 +133,7 @@ test.describe('Story 4: NU SDK + /api/* Proxy Smoke Tests', () => {
     test('POST /api/events/list returns value.items array', async ({ request }) => {
       const response = await request.post(`${BASE_URL}/api/events/list`, {
         data: { brandId: BRAND_ID },
-        headers: { 'Content-Type': 'application/json' }
+        headers: { 'Content-Type': 'application/json' },
       });
 
       const json = await response.json();
@@ -150,7 +146,7 @@ test.describe('Story 4: NU SDK + /api/* Proxy Smoke Tests', () => {
     test('POST /api/events/list returns pagination info', async ({ request }) => {
       const response = await request.post(`${BASE_URL}/api/events/list`, {
         data: { brandId: BRAND_ID },
-        headers: { 'Content-Type': 'application/json' }
+        headers: { 'Content-Type': 'application/json' },
       });
 
       const json = await response.json();
@@ -165,7 +161,7 @@ test.describe('Story 4: NU SDK + /api/* Proxy Smoke Tests', () => {
     test('/api/events/list has Worker transparency headers', async ({ request }) => {
       const response = await request.post(`${BASE_URL}/api/events/list`, {
         data: { brandId: BRAND_ID },
-        headers: { 'Content-Type': 'application/json' }
+        headers: { 'Content-Type': 'application/json' },
       });
 
       const proxiedBy = response.headers()['x-proxied-by'];
@@ -175,13 +171,12 @@ test.describe('Story 4: NU SDK + /api/* Proxy Smoke Tests', () => {
     test('/api/events/list has CORS headers', async ({ request }) => {
       const response = await request.post(`${BASE_URL}/api/events/list`, {
         data: { brandId: BRAND_ID },
-        headers: { 'Content-Type': 'application/json' }
+        headers: { 'Content-Type': 'application/json' },
       });
 
       const corsHeader = response.headers()['access-control-allow-origin'];
       expect(corsHeader).toBe('*');
     });
-
   });
 
   // ===========================================================================
@@ -189,13 +184,12 @@ test.describe('Story 4: NU SDK + /api/* Proxy Smoke Tests', () => {
   // ===========================================================================
 
   test.describe('Network Traffic Verification', () => {
-
     test('/events page data calls use /api/*, not script.google.com', async ({ page }) => {
       const apiCalls = [];
       const gasCalls = [];
 
       // Intercept network requests
-      page.on('request', request => {
+      page.on('request', (request) => {
         const url = request.url();
 
         if (url.includes('/api/')) {
@@ -231,7 +225,7 @@ test.describe('Story 4: NU SDK + /api/* Proxy Smoke Tests', () => {
       const apiResponses = [];
 
       // Intercept responses
-      page.on('response', async response => {
+      page.on('response', async (response) => {
         const url = response.url();
 
         if (url.includes('/api/') && response.status() === 200) {
@@ -241,7 +235,7 @@ test.describe('Story 4: NU SDK + /api/* Proxy Smoke Tests', () => {
               apiResponses.push({
                 url,
                 contentType,
-                status: response.status()
+                status: response.status(),
               });
             }
           } catch (e) {
@@ -256,12 +250,11 @@ test.describe('Story 4: NU SDK + /api/* Proxy Smoke Tests', () => {
       await page.waitForTimeout(2000);
 
       // If there are API calls, they should be JSON
-      apiResponses.forEach(resp => {
+      apiResponses.forEach((resp) => {
         expect(resp.contentType).toContain('application/json');
         expect(resp.status).toBe(200);
       });
     });
-
   });
 
   // ===========================================================================
@@ -269,7 +262,6 @@ test.describe('Story 4: NU SDK + /api/* Proxy Smoke Tests', () => {
   // ===========================================================================
 
   test.describe('NU SDK Debug Logging', () => {
-
     test('NU SDK logs rpc:start and rpc:ok for API calls', async ({ page }) => {
       await page.goto(`${BASE_URL}/events?brand=${BRAND_ID}`);
 
@@ -282,15 +274,15 @@ test.describe('Story 4: NU SDK + /api/* Proxy Smoke Tests', () => {
         await window.NU.rpc('events/list', { brandId: 'root' });
 
         // Return the logs
-        return window.__NU_LOGS__.map(log => ({ type: log.type, path: log.path }));
+        return window.__NU_LOGS__.map((log) => ({ type: log.type, path: log.path }));
       });
 
       // Should have 'start' log
-      const startLog = logs.find(l => l.type === 'start');
+      const startLog = logs.find((l) => l.type === 'start');
       expect(startLog).toBeDefined();
 
       // Should have 'ok' log (assuming API call succeeded)
-      const okLog = logs.find(l => l.type === 'ok');
+      const okLog = logs.find((l) => l.type === 'ok');
       expect(okLog).toBeDefined();
     });
 
@@ -304,7 +296,7 @@ test.describe('Story 4: NU SDK + /api/* Proxy Smoke Tests', () => {
       });
 
       // Find the start log
-      const startLog = logs.find(l => l.type === 'start');
+      const startLog = logs.find((l) => l.type === 'start');
       expect(startLog).toBeDefined();
       expect(startLog.path).toBe('events/list');
     });
@@ -319,12 +311,11 @@ test.describe('Story 4: NU SDK + /api/* Proxy Smoke Tests', () => {
       });
 
       // Find the start log
-      const startLog = logs.find(l => l.type === 'start');
+      const startLog = logs.find((l) => l.type === 'start');
       expect(startLog).toBeDefined();
       expect(startLog.requestId).toBeDefined();
       expect(typeof startLog.requestId).toBe('string');
     });
-
   });
 
   // ===========================================================================
@@ -332,7 +323,6 @@ test.describe('Story 4: NU SDK + /api/* Proxy Smoke Tests', () => {
   // ===========================================================================
 
   test.describe('/manage (Admin) Page', () => {
-
     test('/manage loads with HTTP 200', async ({ page }) => {
       const response = await page.goto(`${BASE_URL}/manage?brand=${BRAND_ID}`);
 
@@ -355,9 +345,7 @@ test.describe('Story 4: NU SDK + /api/* Proxy Smoke Tests', () => {
 
       expect(hasNU).toBe(true);
     });
-
   });
-
 });
 
 // =============================================================================
@@ -365,10 +353,9 @@ test.describe('Story 4: NU SDK + /api/* Proxy Smoke Tests', () => {
 // =============================================================================
 
 test.describe('API Error Path Smoke Tests', () => {
-
   test('/api/* without body returns BAD_INPUT error', async ({ request }) => {
     const response = await request.post(`${BASE_URL}/api/events/list`, {
-      headers: { 'Content-Type': 'application/json' }
+      headers: { 'Content-Type': 'application/json' },
       // No body
     });
 
@@ -382,7 +369,7 @@ test.describe('API Error Path Smoke Tests', () => {
   test('/api/invalid-endpoint returns error envelope', async ({ request }) => {
     const response = await request.post(`${BASE_URL}/api/nonexistent/endpoint`, {
       data: { brandId: BRAND_ID },
-      headers: { 'Content-Type': 'application/json' }
+      headers: { 'Content-Type': 'application/json' },
     });
 
     const json = await response.json();
@@ -390,5 +377,4 @@ test.describe('API Error Path Smoke Tests', () => {
     // Should return error envelope (from GAS or Worker)
     expect(json).toHaveProperty('ok');
   });
-
 });

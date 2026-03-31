@@ -46,10 +46,7 @@ const ENVIRONMENTS_PATH = path.join(__dirname, '../../config/environments.js');
 // Known Deployment IDs (Import from canonical source)
 // =============================================================================
 // These are imported from config/deployment-ids.js - the single source of truth
-const {
-  STAGING_DEPLOYMENT_ID,
-  PROD_DEPLOYMENT_ID
-} = require('../../config/deployment-ids');
+const { STAGING_DEPLOYMENT_ID, PROD_DEPLOYMENT_ID } = require('../../config/deployment-ids');
 
 // Legacy alias for backward compatibility in tests
 const PRODUCTION_DEPLOYMENT_ID = PROD_DEPLOYMENT_ID;
@@ -90,7 +87,6 @@ function hasUncommentedMarker(content, markerParts) {
 // =============================================================================
 
 describe('Worker → GAS Routing Contract', () => {
-
   describe('Worker-Only Mode Configuration (Story 2.1)', () => {
     let rootWranglerContent;
     let proxyWranglerContent;
@@ -109,10 +105,11 @@ describe('Worker → GAS Routing Contract', () => {
       // Story 2.1: GAS URLs should be removed from active config
       // Only commented documentation should remain
       // Using helper with split marker to avoid CodeQL false positive
-      const hasUncommentedGasUrl = hasUncommentedMarker(
-        rootWranglerContent,
-        ['https://script.google', '.com/macros/s/', 'AKfycb']
-      );
+      const hasUncommentedGasUrl = hasUncommentedMarker(rootWranglerContent, [
+        'https://script.google',
+        '.com/macros/s/',
+        'AKfycb',
+      ]);
       expect(hasUncommentedGasUrl).toBe(false);
     });
 
@@ -133,10 +130,11 @@ describe('Worker → GAS Routing Contract', () => {
     test('proxy wrangler.toml does NOT contain active GAS URLs', () => {
       // Story 2.1: GAS URLs should be removed from active config
       // Using helper with split marker to avoid CodeQL false positive
-      const hasUncommentedGasUrl = hasUncommentedMarker(
-        proxyWranglerContent,
-        ['https://script.google', '.com/macros/s/', 'AKfycb']
-      );
+      const hasUncommentedGasUrl = hasUncommentedMarker(proxyWranglerContent, [
+        'https://script.google',
+        '.com/macros/s/',
+        'AKfycb',
+      ]);
       expect(hasUncommentedGasUrl).toBe(false);
     });
 
@@ -151,7 +149,6 @@ describe('Worker → GAS Routing Contract', () => {
       expect(STAGING_DEPLOYMENT_ID.length).toBeGreaterThan(0);
       expect(PRODUCTION_DEPLOYMENT_ID.length).toBeGreaterThan(0);
     });
-
   });
 
   describe('Worker /api/* Routing Logic', () => {
@@ -198,7 +195,6 @@ describe('Worker → GAS Routing Contract', () => {
       expect(workerContent).toContain('function generateCorrId');
       expect(workerContent).toContain('corrId');
     });
-
   });
 
   describe('Worker CORS Configuration', () => {
@@ -226,7 +222,6 @@ describe('Worker → GAS Routing Contract', () => {
     test('addCORSHeaders function exists and adds headers', () => {
       expect(workerContent).toContain('function addCORSHeaders');
     });
-
   });
 
   describe('Worker Transparency Headers', () => {
@@ -253,7 +248,6 @@ describe('Worker → GAS Routing Contract', () => {
     test('worker adds X-Error-CorrId header on errors', () => {
       expect(workerContent).toContain("'X-Error-CorrId'");
     });
-
   });
 
   describe('Worker API Path Extraction', () => {
@@ -283,7 +277,6 @@ describe('Worker → GAS Routing Contract', () => {
       expect(workerContent).toContain('fetch(appsScriptBase');
       expect(workerContent).toContain("method: 'POST'");
     });
-
   });
 
   describe('Worker Error Response Contract', () => {
@@ -318,7 +311,6 @@ describe('Worker → GAS Routing Contract', () => {
     test('SERVICE_UNAVAILABLE error for upstream failures', () => {
       expect(workerContent).toContain("'SERVICE_UNAVAILABLE'");
     });
-
   });
 
   describe('Environment Configuration Sync', () => {
@@ -341,7 +333,6 @@ describe('Worker → GAS Routing Contract', () => {
       // Staging section should have isDefault: true
       expect(environmentsContent).toMatch(/staging[\s\S]*?isDefault:\s*true/);
     });
-
   });
 
   describe('Worker Version', () => {
@@ -361,9 +352,7 @@ describe('Worker → GAS Routing Contract', () => {
         expect(minor).toBeGreaterThanOrEqual(5);
       }
     });
-
   });
-
 });
 
 // =============================================================================
@@ -371,7 +360,6 @@ describe('Worker → GAS Routing Contract', () => {
 // =============================================================================
 
 describe('Worker-Only Mode Verification', () => {
-
   test('root wrangler.toml has BACKEND_MODE = worker', () => {
     const rootWrangler = readFileContent(ROOT_WRANGLER_PATH);
     expect(rootWrangler).toContain('BACKEND_MODE = "worker"');
@@ -398,11 +386,11 @@ describe('Worker-Only Mode Verification', () => {
     // Check that any GAS URL lines are commented out
     // Using helper to check for uncommented markers (avoids CodeQL false positive)
     const combinedContent = rootWrangler + '\n' + proxyWrangler;
-    const hasUncommentedGasUrl = hasUncommentedMarker(
-      combinedContent,
-      ['script.google', '.com/macros/s/', 'AKfycb']
-    );
+    const hasUncommentedGasUrl = hasUncommentedMarker(combinedContent, [
+      'script.google',
+      '.com/macros/s/',
+      'AKfycb',
+    ]);
     expect(hasUncommentedGasUrl).toBe(false);
   });
-
 });

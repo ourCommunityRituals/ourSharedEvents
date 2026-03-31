@@ -41,7 +41,7 @@ const ACTIVE_TEMPLATES = [
   'Public.html',
   'Display.html',
   'Poster.html',
-  'SharedReport.html'
+  'SharedReport.html',
 ];
 
 const BUNDLED_TEMPLATES = [
@@ -49,7 +49,7 @@ const BUNDLED_TEMPLATES = [
   'public.html',
   'display.html',
   'poster.html',
-  'report.html'
+  'report.html',
 ];
 
 // =============================================================================
@@ -69,7 +69,6 @@ function fileExists(filePath) {
 // =============================================================================
 
 describe('Story 4: NU SDK + /api/* Proxy (Stage-1 Hermetic)', () => {
-
   describe('NU SDK API Base Configuration', () => {
     let nusdkContent;
 
@@ -100,7 +99,7 @@ describe('Story 4: NU SDK + /api/* Proxy (Stage-1 Hermetic)', () => {
 
     test('NU SDK v2.0 should support path-based routing', () => {
       // Path-based: /api/<path> instead of /api/rpc
-      expect(nusdkContent).toContain("NU._config.apiBase");
+      expect(nusdkContent).toContain('NU._config.apiBase');
       // Check that URL is built from apiBase + path: `${NU._config.apiBase}/${path}`
       expect(nusdkContent).toContain('`${NU._config.apiBase}/${path}`');
     });
@@ -115,27 +114,23 @@ describe('Story 4: NU SDK + /api/* Proxy (Stage-1 Hermetic)', () => {
   // =============================================================================
 
   describe('No Direct GAS URL Usage in Frontend', () => {
+    test.each(ACTIVE_TEMPLATES)('%s should NOT use fetch(execUrl) directly', (templateName) => {
+      const filePath = path.join(SRC_MVP_DIR, templateName);
 
-    test.each(ACTIVE_TEMPLATES)(
-      '%s should NOT use fetch(execUrl) directly',
-      (templateName) => {
-        const filePath = path.join(SRC_MVP_DIR, templateName);
-
-        if (!fileExists(filePath)) {
-          console.warn(`[SKIP] ${templateName} not found`);
-          return;
-        }
-
-        const content = readFileContent(filePath);
-
-        // Look for direct fetch(execUrl) calls
-        // This is now invalid - should use NU.rpc() instead
-        const directFetchPattern = /fetch\s*\(\s*execUrl\s*[,)]/g;
-        const matches = content.match(directFetchPattern) || [];
-
-        expect(matches.length).toBe(0);
+      if (!fileExists(filePath)) {
+        console.warn(`[SKIP] ${templateName} not found`);
+        return;
       }
-    );
+
+      const content = readFileContent(filePath);
+
+      // Look for direct fetch(execUrl) calls
+      // This is now invalid - should use NU.rpc() instead
+      const directFetchPattern = /fetch\s*\(\s*execUrl\s*[,)]/g;
+      const matches = content.match(directFetchPattern) || [];
+
+      expect(matches.length).toBe(0);
+    });
 
     test.each(ACTIVE_TEMPLATES)(
       '%s should NOT use fetch() with script.google.com',
@@ -150,9 +145,7 @@ describe('Story 4: NU SDK + /api/* Proxy (Stage-1 Hermetic)', () => {
         const content = readFileContent(filePath);
 
         // Remove comments
-        const withoutComments = content
-          .replace(/\/\/.*$/gm, '')
-          .replace(/\/\*[\s\S]*?\*\//g, '');
+        const withoutComments = content.replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
 
         // Should not have direct fetch to GAS
         const directGasPattern = /fetch\s*\(\s*['"]https:\/\/script\.google\.com/g;
@@ -196,57 +189,47 @@ describe('Story 4: NU SDK + /api/* Proxy (Stage-1 Hermetic)', () => {
   // =============================================================================
 
   describe('NU SDK Loaded in All Templates', () => {
+    test.each(BUNDLED_TEMPLATES)('bundled %s should have window.NU defined', (templateName) => {
+      const filePath = path.join(TEMPLATES_DIR, templateName);
 
-    test.each(BUNDLED_TEMPLATES)(
-      'bundled %s should have window.NU defined',
-      (templateName) => {
-        const filePath = path.join(TEMPLATES_DIR, templateName);
-
-        if (!fileExists(filePath)) {
-          console.warn(`[SKIP] ${templateName} not found`);
-          return;
-        }
-
-        const content = readFileContent(filePath);
-
-        // Bundled templates should have NU SDK inlined
-        expect(content).toMatch(/window\.NU\s*=\s*\{/);
+      if (!fileExists(filePath)) {
+        console.warn(`[SKIP] ${templateName} not found`);
+        return;
       }
-    );
 
-    test.each(BUNDLED_TEMPLATES)(
-      'bundled %s should have NU.rpc method',
-      (templateName) => {
-        const filePath = path.join(TEMPLATES_DIR, templateName);
+      const content = readFileContent(filePath);
 
-        if (!fileExists(filePath)) {
-          console.warn(`[SKIP] ${templateName} not found`);
-          return;
-        }
+      // Bundled templates should have NU SDK inlined
+      expect(content).toMatch(/window\.NU\s*=\s*\{/);
+    });
 
-        const content = readFileContent(filePath);
+    test.each(BUNDLED_TEMPLATES)('bundled %s should have NU.rpc method', (templateName) => {
+      const filePath = path.join(TEMPLATES_DIR, templateName);
 
-        // Should have rpc method defined
-        expect(content).toMatch(/async\s+rpc\s*\(|rpc:\s*async\s+function|rpc\s*\([^)]*\)\s*\{/);
+      if (!fileExists(filePath)) {
+        console.warn(`[SKIP] ${templateName} not found`);
+        return;
       }
-    );
 
-    test.each(BUNDLED_TEMPLATES)(
-      'bundled %s should have apiBase set to /api',
-      (templateName) => {
-        const filePath = path.join(TEMPLATES_DIR, templateName);
+      const content = readFileContent(filePath);
 
-        if (!fileExists(filePath)) {
-          console.warn(`[SKIP] ${templateName} not found`);
-          return;
-        }
+      // Should have rpc method defined
+      expect(content).toMatch(/async\s+rpc\s*\(|rpc:\s*async\s+function|rpc\s*\([^)]*\)\s*\{/);
+    });
 
-        const content = readFileContent(filePath);
+    test.each(BUNDLED_TEMPLATES)('bundled %s should have apiBase set to /api', (templateName) => {
+      const filePath = path.join(TEMPLATES_DIR, templateName);
 
-        // Should have apiBase: '/api' in config
-        expect(content).toMatch(/apiBase:\s*['"]\/api['"]/);
+      if (!fileExists(filePath)) {
+        console.warn(`[SKIP] ${templateName} not found`);
+        return;
       }
-    );
+
+      const content = readFileContent(filePath);
+
+      // Should have apiBase: '/api' in config
+      expect(content).toMatch(/apiBase:\s*['"]\/api['"]/);
+    });
   });
 
   // =============================================================================
@@ -294,7 +277,6 @@ describe('Story 4: NU SDK + /api/* Proxy (Stage-1 Hermetic)', () => {
   // =============================================================================
 
   describe('/api/events/list Response Contract', () => {
-
     test('Worker should support /api/events/list endpoint', () => {
       const workerContent = readFileContent(WORKER_PATH);
 
@@ -312,8 +294,8 @@ describe('Story 4: NU SDK + /api/* Proxy (Stage-1 Hermetic)', () => {
         etag: 'abc123',
         value: {
           items: [{ id: 'evt-1', name: 'Test Event' }],
-          pagination: { total: 1, limit: 50, offset: 0, hasMore: false }
-        }
+          pagination: { total: 1, limit: 50, offset: 0, hasMore: false },
+        },
       };
 
       // Validate response matches expected shape
@@ -324,9 +306,9 @@ describe('Story 4: NU SDK + /api/* Proxy (Stage-1 Hermetic)', () => {
           pagination: expect.objectContaining({
             total: expect.any(Number),
             limit: expect.any(Number),
-            hasMore: expect.any(Boolean)
-          })
-        }
+            hasMore: expect.any(Boolean),
+          }),
+        },
       });
 
       expect(mockResponse.value).toHaveProperty('items');
@@ -344,7 +326,7 @@ describe('Story 4: NU SDK + /api/* Proxy (Stage-1 Hermetic)', () => {
         'links',
         'qr',
         'ctas',
-        'settings'
+        'settings',
       ];
 
       const mockEvent = {
@@ -357,14 +339,19 @@ describe('Story 4: NU SDK + /api/* Proxy (Stage-1 Hermetic)', () => {
           publicUrl: 'https://stg.oursharedevents.com/events?id=evt-1',
           displayUrl: 'https://stg.oursharedevents.com/display?id=evt-1',
           posterUrl: 'https://stg.oursharedevents.com/poster?id=evt-1',
-          signupUrl: ''
+          signupUrl: '',
         },
         qr: { public: 'data:image/png;base64,...', signup: '' },
         ctas: { primary: { label: 'Sign Up', url: '' }, secondary: null },
-        settings: { showSchedule: false, showStandings: false, showBracket: false, showSponsors: false }
+        settings: {
+          showSchedule: false,
+          showStandings: false,
+          showBracket: false,
+          showSponsors: false,
+        },
       };
 
-      requiredKeys.forEach(key => {
+      requiredKeys.forEach((key) => {
         expect(mockEvent).toHaveProperty(key);
       });
     });
@@ -375,7 +362,6 @@ describe('Story 4: NU SDK + /api/* Proxy (Stage-1 Hermetic)', () => {
   // =============================================================================
 
   describe('NU SDK Debug Logging', () => {
-
     test('NU SDK should log rpc:start', () => {
       const nusdkContent = readFileContent(NUSDK_PATH);
       expect(nusdkContent).toMatch(/_log\s*\(\s*['"]debug['"]\s*,\s*['"]start['"]/);
@@ -397,7 +383,6 @@ describe('Story 4: NU SDK + /api/* Proxy (Stage-1 Hermetic)', () => {
       expect(nusdkContent).toContain('maxLogs');
     });
   });
-
 });
 
 // =============================================================================
@@ -405,11 +390,10 @@ describe('Story 4: NU SDK + /api/* Proxy (Stage-1 Hermetic)', () => {
 // =============================================================================
 
 describe('NU SDK + API Proxy Configuration Sync', () => {
-
   test('All source templates should include NUSDK', () => {
     const missingIncludes = [];
 
-    ACTIVE_TEMPLATES.forEach(template => {
+    ACTIVE_TEMPLATES.forEach((template) => {
       const filePath = path.join(SRC_MVP_DIR, template);
       if (!fileExists(filePath)) return;
 
@@ -425,7 +409,7 @@ describe('NU SDK + API Proxy Configuration Sync', () => {
   test('No template should have both NU.rpc() and direct fetch(execUrl)', () => {
     const violations = [];
 
-    ACTIVE_TEMPLATES.forEach(template => {
+    ACTIVE_TEMPLATES.forEach((template) => {
       const filePath = path.join(SRC_MVP_DIR, template);
       if (!fileExists(filePath)) return;
 
@@ -440,5 +424,4 @@ describe('NU SDK + API Proxy Configuration Sync', () => {
 
     expect(violations).toEqual([]);
   });
-
 });
