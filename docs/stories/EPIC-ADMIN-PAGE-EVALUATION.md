@@ -124,7 +124,7 @@ Admin.html → Worker API v2 → Google Sheets (Phase 1) / D1 (Phase 2)
 1. **Forms** — highest-value gap. Every event needs registration. Google Forms dependency is a churn risk and UX friction point
 2. **Feature flags / tier gating** — unlocks monetization. Can't sell mid/enterprise without gating features
 3. **PII lifecycle** — compliance blocker. Must ship before enterprise clients
-4. **Anonymous ID** — enables the triangle (Events ↔ Sponsors ↔ Customers) without storing PII
+4. **Anonymous ID** — enables the triangle (Events (apex) ↔ Sponsors ↔ Customers, SharedReports (center)) without storing PII
 5. **Self-serve** — reduces manual onboarding (OurPulse cost center)
 
 ---
@@ -749,7 +749,7 @@ INSERT INTO feature_tiers VALUES ('__default__', 'free', 'branding.white-label',
 
 ### Sprint 3: MVP Forms Complete — "The Triangle Closes"
 
-*Goal: Events ↔ Sponsors ↔ Customers triangle works. QR → form → count → report pipeline.*
+*Goal: Events (apex) ↔ Sponsors ↔ Customers, SharedReports (center) triangle works. QR → form → count → report pipeline.*
 
 | # | Story ID | Title | Tag | Prereq | Est |
 |---|----------|-------|-----|--------|-----|
@@ -1222,7 +1222,7 @@ Every actionable finding from every section was checked against the story list.
 
 #### Sprint 3: "The Triangle Closes" — Anonymous ID + PII + Visual Regression
 
-*Gate: Events ↔ Sponsors ↔ Customers triangle works. Visual regression catches drift.*
+*Gate: Events (apex) ↔ Sponsors ↔ Customers, SharedReports (center) triangle works. Visual regression catches drift.*
 
 | # | ID | Title | Tag | Est | Why Now |
 |---|-----|-------|-----|-----|---------|

@@ -129,16 +129,16 @@
     .ring-section { text-align: center; padding: 3rem 1.5rem 2rem; max-width: 700px; margin: 0 auto; }
     .ring-section h2 { font-size: 1.5rem; font-weight: 800; color: #0f172a; margin-bottom: .5rem; }
     .ring-section p.ring-subtitle { font-size: .95rem; color: #64748b; margin-bottom: 2.5rem; }
-    .ring-container { position: relative; width: 340px; height: 340px; margin: 0 auto; }
+    .ring-container { position: relative; width: 340px; height: 340px; margin: 0 auto; overflow: visible; }
     .ring-path { position: absolute; inset: 0; border: 2.5px dashed #cbd5e1; border-radius: 50%; pointer-events: none; }
-    .ring-node { position: absolute; width: 100px; height: 100px; border-radius: 50%; display: flex; align-items: center; justify-content: center; text-align: center; font-size: .78rem; font-weight: 700; color: #fff; line-height: 1.2; padding: .5rem; box-shadow: 0 2px 8px rgba(0,0,0,.12); transition: transform 0.25s ease, box-shadow 0.25s ease; }
+    .ring-node { position: absolute; width: 100px; height: 100px; border-radius: 50%; display: flex; align-items: center; justify-content: center; text-align: center; font-size: .78rem; font-weight: 700; color: #fff; line-height: 1.2; padding: .5rem; box-shadow: 0 2px 8px rgba(0,0,0,.12); transition: transform 0.25s ease, box-shadow 0.25s ease; z-index: 1; }
     .ring-node:hover { transform: scale(1.08); box-shadow: 0 4px 16px rgba(0,0,0,.2); }
     .ring-node.n-ep  { background: #2563eb; top: 8px;   left: 18px; }
-    .ring-node.n-br  { background: #7c3aed; top: 8px;   right: 18px; }
+    .ring-node.n-br  { background: #6d28d9; top: 8px;   right: 18px; }
     .ring-node.n-bv  { background: #059669; top: 50%;    right: -12px; transform: translateY(-50%); }
     .ring-node.n-bv:hover { transform: translateY(-50%) scale(1.08); }
-    .ring-node.n-bi  { background: #d97706; bottom: 8px; right: 18px; }
-    .ring-node.n-mg  { background: #dc2626; bottom: 8px; left: 18px; }
+    .ring-node.n-bi  { background: #b45309; bottom: 8px; right: 18px; }
+    .ring-node.n-mg  { background: #b91c1c; bottom: 8px; left: 18px; }
     .ring-node.n-ol  { background: #0891b2; top: 50%;    left: -12px; transform: translateY(-50%); }
     .ring-node.n-ol:hover { transform: translateY(-50%) scale(1.08); }
     @media (min-width: 600px) {
@@ -152,6 +152,7 @@
       .ring-node.n-ol  { left: -18px; }
     }
     @media (max-width: 380px) {
+      .ring-section { padding-left: 2rem; padding-right: 2rem; }
       .ring-container { width: 280px; height: 280px; }
       .ring-node { width: 82px; height: 82px; font-size: .7rem; padding: .35rem; }
       .ring-node.n-ep  { top: 4px;   left: 10px; }
@@ -279,12 +280,12 @@
       <p class="ring-subtitle">Six Southside communities. One connected flywheel.</p>
       <div class="ring-container" data-testid="ring-layout">
         <div class="ring-path" aria-hidden="true"></div>
-        <div class="ring-node n-ep" data-testid="ring-node-ep">Evergreen Park</div>
-        <div class="ring-node n-br" data-testid="ring-node-br">Brainard</div>
-        <div class="ring-node n-bv" data-testid="ring-node-bv">Beverly</div>
-        <div class="ring-node n-bi" data-testid="ring-node-bi">Blue Island</div>
-        <div class="ring-node n-mg" data-testid="ring-node-mg">Mt Greenwood</div>
-        <div class="ring-node n-ol" data-testid="ring-node-ol">Oak Lawn</div>
+        <div class="ring-node n-ep" data-testid="ring-node-ep" aria-label="Evergreen Park neighborhood">Evergreen Park</div>
+        <div class="ring-node n-br" data-testid="ring-node-br" aria-label="Brainard neighborhood">Brainard</div>
+        <div class="ring-node n-bv" data-testid="ring-node-bv" aria-label="Beverly neighborhood">Beverly</div>
+        <div class="ring-node n-bi" data-testid="ring-node-bi" aria-label="Blue Island neighborhood">Blue Island</div>
+        <div class="ring-node n-mg" data-testid="ring-node-mg" aria-label="Mt Greenwood neighborhood">Mt Greenwood</div>
+        <div class="ring-node n-ol" data-testid="ring-node-ol" aria-label="Oak Lawn neighborhood">Oak Lawn</div>
       </div>
     </section>
 

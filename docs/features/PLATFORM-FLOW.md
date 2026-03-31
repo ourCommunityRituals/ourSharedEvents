@@ -7,21 +7,36 @@
 
 ## The Full Picture
 
-ourSharedEvents is event infrastructure for the hyperlocal economy. A Cloudflare Worker serves 6 surfaces, 4 form types, and 30+ API routes — all from a single deployment. Events are the core entity. Sponsors support them. Customers attend them. Every interaction flows through the Triangle.
+ourSharedEvents is event infrastructure for the hyperlocal economy. A Cloudflare Worker serves 6 surfaces, 4 form types, and 30+ API routes — all from a single deployment. Events are the core entity. Sponsors support them. Customers attend them. Every interaction flows through the Triangle. The platform's signature brand motif is **Rings and Triangles**.
+
+### The Triangle (Relationships)
 
 ```
-                    ┌─────────────┐
-                    │   EVENTS    │
-                    │  (core)     │
-                    └──────┬──────┘
-                           │
-              ┌────────────┼────────────┐
-              │                         │
-       ┌──────┴──────┐          ┌──────┴──────┐
-       │  SPONSORS   │──────────│  CUSTOMERS  │
-       │  (brands)   │          │ (attendees) │
-       └─────────────┘          └─────────────┘
+              Events
+             ╱  ·   ╲
+            ╱   ·    ╲
+           ╱  Shared  ╲
+          ╱  Reports   ╲
+         ╱       ·      ╲
+   Sponsors ──────────── Customers
 ```
+
+- **Events** (apex): The core entity — gatherings/occasions
+- **Sponsors** (bottom-left): Brands supporting events — placement + tracking
+- **Customers** (bottom-right): Attendees — QR codes and shortlinks
+- **SharedReports** (center): The proof layer — validates value for all three vertices
+
+### The Ring (Lifecycle)
+
+```
+              Ads
+           ↙     ↘
+  SharedReports  Pre-Events
+        ↑            ↓
+   Post-Events ← Events
+```
+
+Five stages in a clockwise flywheel — Ads at 12 o'clock. SharedReports closes the loop and feeds the next round of Ads. The flywheel starts with visibility and ends with proof — which generates the next round of visibility.
 
 ---
 

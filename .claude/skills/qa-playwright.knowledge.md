@@ -48,7 +48,7 @@
 | `coverage-matrix.spec.js` | All surfaces covered |
 | `brand-branding.spec.js` | Multi-brand theming applied |
 | `security-smoke.spec.js` | Auth enforcement, CORS headers |
-| `full-triangle-smoke.spec.js` | Events ↔ Sponsors ↔ Customers triangle |
+| `full-triangle-smoke.spec.js` | Events (apex) ↔ Sponsors ↔ Customers triangle, SharedReports (center) |
 | `mvp-surfaces-smoke.spec.js` | All 5 MVP surfaces load |
 
 ### Layer 2 — Pages (`tests/e2e/2-pages/`)

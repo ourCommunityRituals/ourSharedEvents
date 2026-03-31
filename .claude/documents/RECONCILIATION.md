@@ -8,7 +8,7 @@
 
 ## Executive Summary
 
-The ourSharedEvents codebase is **further ahead than CLAUDE.md documents** in several areas, but has **two parallel Worker implementations** that need architectural resolution. Documentation is extensive (62+ markdown files in docs/) but references legacy systems (GAS/Apps Script) that are archived. The Triangle Framework (Events ↔ Sponsors ↔ Customers) is implemented in schema but not yet wired in the active Worker routes.
+The ourSharedEvents codebase is **further ahead than CLAUDE.md documents** in several areas, but has **two parallel Worker implementations** that need architectural resolution. Documentation is extensive (62+ markdown files in docs/) but references legacy systems (GAS/Apps Script) that are archived. The Triangle Framework (Events at apex, Sponsors bottom-left, Customers bottom-right, SharedReports center) is implemented in schema but not yet wired in the active Worker routes.
 
 ### Traffic Light Summary
 
