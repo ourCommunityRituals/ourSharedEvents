@@ -232,6 +232,42 @@ const LANDING_HTML = `<!DOCTYPE html>
     .form-message { width: 100%; text-align: center; font-size: .875rem; margin-top: .75rem; min-height: 1.25rem; }
     .form-message.success { color: #059669; }
     .form-message.error { color: #dc2626; }
+    .ring-section { text-align: center; padding: 3rem 1.5rem 2rem; max-width: 700px; margin: 0 auto; }
+    .ring-section h2 { font-size: 1.5rem; font-weight: 800; color: #0f172a; margin-bottom: .5rem; }
+    .ring-section p.ring-subtitle { font-size: .95rem; color: #64748b; margin-bottom: 2.5rem; }
+    .ring-container { position: relative; width: 340px; height: 340px; margin: 0 auto; overflow: visible; }
+    .ring-path { position: absolute; inset: 0; border: 2.5px dashed #cbd5e1; border-radius: 50%; pointer-events: none; }
+    .ring-node { position: absolute; width: 100px; height: 100px; border-radius: 50%; display: flex; align-items: center; justify-content: center; text-align: center; font-size: .78rem; font-weight: 700; color: #fff; line-height: 1.2; padding: .5rem; box-shadow: 0 2px 8px rgba(0,0,0,.12); transition: transform 0.25s ease, box-shadow 0.25s ease; z-index: 1; }
+    .ring-node:hover { transform: scale(1.08); box-shadow: 0 4px 16px rgba(0,0,0,.2); }
+    .ring-node.n-ep  { background: #2563eb; top: 8px;   left: 18px; }
+    .ring-node.n-br  { background: #6d28d9; top: 8px;   right: 18px; }
+    .ring-node.n-bv  { background: #059669; top: 50%;    right: -12px; transform: translateY(-50%); }
+    .ring-node.n-bv:hover { transform: translateY(-50%) scale(1.08); }
+    .ring-node.n-bi  { background: #b45309; bottom: 8px; right: 18px; }
+    .ring-node.n-mg  { background: #b91c1c; bottom: 8px; left: 18px; }
+    .ring-node.n-ol  { background: #0891b2; top: 50%;    left: -12px; transform: translateY(-50%); }
+    .ring-node.n-ol:hover { transform: translateY(-50%) scale(1.08); }
+    @media (min-width: 600px) {
+      .ring-container { width: 440px; height: 440px; }
+      .ring-node { width: 120px; height: 120px; font-size: .85rem; }
+      .ring-node.n-ep  { top: 6px;   left: 24px; }
+      .ring-node.n-br  { top: 6px;   right: 24px; }
+      .ring-node.n-bv  { right: -18px; }
+      .ring-node.n-bi  { bottom: 6px; right: 24px; }
+      .ring-node.n-mg  { bottom: 6px; left: 24px; }
+      .ring-node.n-ol  { left: -18px; }
+    }
+    @media (max-width: 380px) {
+      .ring-section { padding-left: 2rem; padding-right: 2rem; }
+      .ring-container { width: 280px; height: 280px; }
+      .ring-node { width: 82px; height: 82px; font-size: .7rem; padding: .35rem; }
+      .ring-node.n-ep  { top: 4px;   left: 10px; }
+      .ring-node.n-br  { top: 4px;   right: 10px; }
+      .ring-node.n-bv  { right: -8px; }
+      .ring-node.n-bi  { bottom: 4px; right: 10px; }
+      .ring-node.n-mg  { bottom: 4px; left: 10px; }
+      .ring-node.n-ol  { left: -8px; }
+    }
     .features { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1.5rem; max-width: 960px; margin: 0 auto; padding: 3rem 1.5rem 4rem; }
     .feature-card { background: #fff; border-radius: 12px; padding: 2rem; box-shadow: 0 1px 3px rgba(0,0,0,.06); border: 1px solid #e2e8f0; }
     .feature-icon { width: 48px; height: 48px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; margin-bottom: 1rem; }
@@ -264,6 +300,19 @@ const LANDING_HTML = `<!DOCTYPE html>
         <button type="submit">Stay in the Loop</button>
         <div class="form-message" id="form-message" role="status" aria-live="polite"></div>
       </form>
+    </section>
+    <section class="ring-section" aria-label="Focus neighborhoods">
+      <h2>Our Neighborhood Ring</h2>
+      <p class="ring-subtitle">Six Southside communities. One connected flywheel.</p>
+      <div class="ring-container" data-testid="ring-layout">
+        <div class="ring-path" aria-hidden="true"></div>
+        <div class="ring-node n-ep" data-testid="ring-node-ep" aria-label="Evergreen Park neighborhood">Evergreen Park</div>
+        <div class="ring-node n-br" data-testid="ring-node-br" aria-label="Brainard neighborhood">Brainard</div>
+        <div class="ring-node n-bv" data-testid="ring-node-bv" aria-label="Beverly neighborhood">Beverly</div>
+        <div class="ring-node n-bi" data-testid="ring-node-bi" aria-label="Blue Island neighborhood">Blue Island</div>
+        <div class="ring-node n-mg" data-testid="ring-node-mg" aria-label="Mt Greenwood neighborhood">Mt Greenwood</div>
+        <div class="ring-node n-ol" data-testid="ring-node-ol" aria-label="Oak Lawn neighborhood">Oak Lawn</div>
+      </div>
     </section>
     <section class="features">
       <div class="feature-card">

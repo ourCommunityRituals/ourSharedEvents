@@ -1,25 +1,28 @@
 # Story: Schema Triangle Architecture
 
 ## Summary
-Formalize the triangle data model (Events ↔ Sponsors ↔ Customers) with proper JSON schemas as the single source of truth, then validate the application against these contracts.
+Formalize the triangle data model (Events at apex, Sponsors bottom-left, Customers bottom-right, SharedReports center) with proper JSON schemas as the single source of truth, then validate the application against these contracts.
 
 ## Business Context
-The product models a triangle relationship:
-- **Events** - The gatherings/occasions
-- **Sponsors** - Brands supporting events
-- **Customers** - Attendees, represented by QR codes and shortlinks
+The product models a triangle relationship with SharedReports at the center:
+- **Events** (apex) - The gatherings/occasions — the core entity, always on top
+- **Sponsors** (bottom-left) - Brands supporting events
+- **Customers** (bottom-right) - Attendees, represented by QR codes and shortlinks
+- **SharedReports** (center) - The proof layer connecting all three vertices
 
 QR codes and shortlinks serve as the "customer representative" in the model - they're the touchpoint where customers interact with events and sponsors.
 
 ## Current State
 ```
-                    EVENTS
-                   /      \
-           event.schema.json (solid, frozen v1.0)
-           - id, slug, name
-           - links, qr, sponsors[]
-                /              \
-    SPONSORS ─────────────────── CUSTOMERS
+              EVENTS (apex)
+             /      \
+     event.schema.json (solid, frozen v1.0)
+     - id, slug, name
+     - links, qr, sponsors[]
+          /    [Shared    \
+         /     Reports]    \
+SPONSORS ─────────────────── CUSTOMERS
+(bottom-left)          (bottom-right)
     sponsor.schema.json         ??? Fragmented
     - id, name, logoUrl         - sponsor-report-qr.schema.json (partial)
     - placements                - QRCodes in event.schema.json

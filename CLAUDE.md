@@ -16,13 +16,43 @@
 
 **Key principle**: Code is written and tested NOW, infrastructure is the last step. CC writes Worker routes, tests, migrations, and PRs without needing a live staging URL. CI validates. Infrastructure deployment happens when ready.
 
-### Triangle Framework
+### Brand Motif: Rings and Triangles
 
-Three-vertex data model: **Events ↔ Sponsors ↔ Customers**
+Two visual/conceptual frameworks define the platform. These are the signature brand elements.
 
-- **Events**: Gatherings/occasions — the core entity
-- **Sponsors**: Brands supporting events — placement + tracking
-- **Customers**: Attendees — represented by QR codes and shortlinks
+#### Triangle Framework
+
+```
+         Events
+        ╱  ·   ╲
+       ╱   ·    ╲
+      ╱  Shared  ╲
+     ╱  Reports   ╲
+    ╱       ·      ╲
+Sponsors ──────── Customers
+```
+
+- **Events** (apex): Gatherings/occasions — the core entity, always on top
+- **Sponsors** (bottom-left): Brands supporting events — placement + tracking
+- **Customers** (bottom-right): Attendees — represented by QR codes and shortlinks
+- **SharedReports** (center): The proof layer — validates value for all three vertices
+
+#### Ring Framework (NCR: Node, Corridor, Ring)
+
+```
+          Ads
+        ↙     ↘
+SharedReports  Pre-Events
+      ↑            ↓
+ Post-Events ← Events
+```
+
+Five lifecycle stages in a clockwise flywheel — Ads at 12 o'clock:
+- **Ads**: Visibility — getting the word out (starts the cycle)
+- **Pre-Events**: Incubation — registration, QR generation, sponsor setup
+- **Events**: Engagement — check-ins, scans, live interaction
+- **Post-Events**: Analytics — surveys, email signups, data collection
+- **SharedReports**: Proof — aggregate results feed back into the next Ads cycle
 
 ### 5 MVP Surfaces
 

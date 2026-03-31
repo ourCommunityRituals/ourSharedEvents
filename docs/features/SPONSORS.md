@@ -1,7 +1,7 @@
 # Sponsors
 
 > How sponsors interact with the platform — from a local bar to a national brand.
-> Sponsors are one vertex of the Triangle: **Events ↔ Sponsors ↔ Customers**.
+> Sponsors are the bottom-left vertex of the Triangle: **Events (apex) → Sponsors (bottom-left) → Customers (bottom-right)**, with SharedReports at the center.
 > See [VISION.md](VISION.md) for the foundational philosophy.
 
 ---
