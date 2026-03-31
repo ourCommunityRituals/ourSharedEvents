@@ -55,11 +55,11 @@ describe('QA-1: Migration idempotency', () => {
     expect(names).toHaveLength(6);
   });
 
-  test('indexes remain at exactly 8 after idempotent re-run', async () => {
+  test('indexes remain at exactly 19 after idempotent re-run', async () => {
     const indexes = await env.DB.prepare(
       "SELECT name FROM sqlite_master WHERE type='index' AND name LIKE 'idx_%'"
     ).all();
-    expect(indexes.results).toHaveLength(8);
+    expect(indexes.results).toHaveLength(19);
   });
 });
 
@@ -89,9 +89,7 @@ describe('QA-2: Foreign key constraints', () => {
         `INSERT INTO poster_deployments (id, event_id, qr_token)
          VALUES ('pd_bad_fk', 'nonexistent_event', 'token_fk_test')`
       ).run();
-      expect.fail(
-        'INSERT with invalid event_id should have thrown FK constraint error'
-      );
+      expect.fail('INSERT with invalid event_id should have thrown FK constraint error');
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
       expect(msg.toUpperCase()).toMatch(/FOREIGN KEY/);
@@ -106,9 +104,7 @@ describe('QA-2: Foreign key constraints', () => {
         `INSERT INTO sponsors (id, event_id, name)
          VALUES ('spn_bad_fk', 'nonexistent_event', 'Bad Sponsor')`
       ).run();
-      expect.fail(
-        'INSERT with invalid event_id should have thrown FK constraint error'
-      );
+      expect.fail('INSERT with invalid event_id should have thrown FK constraint error');
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
       expect(msg.toUpperCase()).toMatch(/FOREIGN KEY/);
@@ -223,9 +219,7 @@ describe('QA-3: UNIQUE constraints', () => {
         `INSERT INTO sponsors (id, event_id, name, impression_token)
          VALUES ('spn_uniq_4', 'evt_imp_uniq', 'Sponsor D', 'imp_token_dup')`
       ).run();
-      expect.fail(
-        'Duplicate impression_token INSERT should have thrown UNIQUE constraint error'
-      );
+      expect.fail('Duplicate impression_token INSERT should have thrown UNIQUE constraint error');
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
       expect(msg.toUpperCase()).toMatch(/UNIQUE/);
@@ -237,9 +231,9 @@ describe('QA-3: UNIQUE constraints', () => {
 
 describe('QA-4: scan_aggregates fresh state', () => {
   test('scan_aggregates has zero rows on fresh deploy — no data until scheduled Worker runs', async () => {
-    const result = await env.DB.prepare(
-      'SELECT COUNT(*) as cnt FROM scan_aggregates'
-    ).first<{ cnt: number }>();
+    const result = await env.DB.prepare('SELECT COUNT(*) as cnt FROM scan_aggregates').first<{
+      cnt: number;
+    }>();
     expect(result?.cnt).toBe(0);
   });
 });
@@ -250,9 +244,7 @@ describe('QA-5: Production DB isolation', () => {
   test('wrangler.toml has separate database_name per environment — no cross-env contamination', () => {
     const toml = (env as unknown as TestEnv).TEST_WRANGLER_TOML;
 
-    const dbNames = [...toml.matchAll(/database_name\s*=\s*"([^"]+)"/g)].map(
-      (m) => m[1]
-    );
+    const dbNames = [...toml.matchAll(/database_name\s*=\s*"([^"]+)"/g)].map((m) => m[1]);
 
     // 6 databases: 3 for DB (local/staging/prod) + 3 for FORMS_DB (local/staging/prod)
     expect(dbNames.length).toBeGreaterThanOrEqual(6);
@@ -273,9 +265,7 @@ describe('QA-5: Production DB isolation', () => {
   test('wrangler.toml has separate database_id per environment', () => {
     const toml = (env as unknown as TestEnv).TEST_WRANGLER_TOML;
 
-    const dbIds = [...toml.matchAll(/database_id\s*=\s*"([^"]+)"/g)].map(
-      (m) => m[1]
-    );
+    const dbIds = [...toml.matchAll(/database_id\s*=\s*"([^"]+)"/g)].map((m) => m[1]);
 
     // 6 database IDs: 3 for DB + 3 for FORMS_DB
     expect(dbIds.length).toBeGreaterThanOrEqual(6);
