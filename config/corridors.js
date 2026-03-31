@@ -95,6 +95,70 @@ const METRO_NODES = Object.freeze([
 ]);
 
 // =============================================================================
+// Founding Community Corridors (Level 1 Community)
+// The original five corridors. They remain as Level 1 community corridors.
+// These represent local community connection patterns, not highway routes.
+// =============================================================================
+
+const FOUNDING_CORRIDORS = Object.freeze([
+  {
+    id: 'corridor-beverly',
+    name: 'Beverly Community Corridor',
+    origin_node_id: 'community-beverly',
+    destination_node_id: 'metro-chicago',
+    corridor_signal_class: 'CLASS_B',
+    corridor_status: 'HYPOTHESIZED',
+    separation_blur_index: null,
+    level: HIERARCHY_LEVELS.COMMUNITY,
+    route_designation: null,
+  },
+  {
+    id: 'corridor-sw-michigan',
+    name: 'SW Michigan / Harbor Country Community Corridor',
+    origin_node_id: 'community-sw-michigan',
+    destination_node_id: 'metro-sw-michigan',
+    corridor_signal_class: 'CLASS_B',
+    corridor_status: 'HYPOTHESIZED',
+    separation_blur_index: null,
+    level: HIERARCHY_LEVELS.COMMUNITY,
+    route_designation: null,
+  },
+  {
+    id: 'corridor-hammond',
+    name: 'Hammond Community Corridor',
+    origin_node_id: 'community-hammond',
+    destination_node_id: 'metro-chicago',
+    corridor_signal_class: 'CLASS_B',
+    corridor_status: 'HYPOTHESIZED',
+    separation_blur_index: null,
+    level: HIERARCHY_LEVELS.COMMUNITY,
+    route_designation: null,
+  },
+  {
+    id: 'corridor-bronzeville',
+    name: 'Bronzeville Community Corridor',
+    origin_node_id: 'community-bronzeville',
+    destination_node_id: 'metro-chicago',
+    corridor_signal_class: 'CLASS_B',
+    corridor_status: 'HYPOTHESIZED',
+    separation_blur_index: null,
+    level: HIERARCHY_LEVELS.COMMUNITY,
+    route_designation: null,
+  },
+  {
+    id: 'corridor-evergreen-park',
+    name: 'Evergreen Park Community Corridor',
+    origin_node_id: 'community-evergreen-park',
+    destination_node_id: 'metro-chicago',
+    corridor_signal_class: 'CLASS_B',
+    corridor_status: 'HYPOTHESIZED',
+    separation_blur_index: null,
+    level: HIERARCHY_LEVELS.COMMUNITY,
+    route_designation: null,
+  },
+]);
+
+// =============================================================================
 // Primary Highway Corridors (Level 5 Region)
 // All status: HYPOTHESIZED — awaiting validation through event data.
 // =============================================================================
@@ -177,5 +241,6 @@ module.exports = {
   HIERARCHY_LEVELS,
   FOUNDING_COMMUNITIES,
   METRO_NODES,
+  FOUNDING_CORRIDORS,
   HIGHWAY_CORRIDORS,
 };
