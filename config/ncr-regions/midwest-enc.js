@@ -9,6 +9,18 @@
  * @module config/ncr-regions/midwest-enc
  */
 
+const territories = Object.freeze([
+  { id: 'territory-east-north-central', name: 'East North Central', level: 6 },
+]);
+
+const states = Object.freeze([
+  { id: 'state-il', name: 'Illinois', state: 'IL', level: 5, territory: 'territory-east-north-central' },
+  { id: 'state-in', name: 'Indiana', state: 'IN', level: 5, territory: 'territory-east-north-central' },
+  { id: 'state-mi', name: 'Michigan', state: 'MI', level: 5, territory: 'territory-east-north-central' },
+  { id: 'state-oh', name: 'Ohio', state: 'OH', level: 5, territory: 'territory-east-north-central' },
+  { id: 'state-wi', name: 'Wisconsin', state: 'WI', level: 5, territory: 'territory-east-north-central' },
+]);
+
 const nodes = Object.freeze([
   // ─── ILLINOIS ───────────────────────────────────────────────
   // Level 4: Cities 100k+
@@ -99,4 +111,4 @@ const nodes = Object.freeze([
   { id: 'node-wi-sturgeon-bay', name: 'Sturgeon Bay', state: 'WI', level: 3, lat: 44.8342, lng: -87.3770 },
 ]);
 
-module.exports = { nodes };
+module.exports = { territories, states, nodes };
