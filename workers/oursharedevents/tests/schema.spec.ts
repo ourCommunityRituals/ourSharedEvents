@@ -37,6 +37,7 @@ const EXPECTED_TABLES = [
 ] as const;
 
 const EXPECTED_INDEXES = [
+  // Original (migrations 0001-0007)
   'idx_events_brand_status',
   'idx_events_slug',
   'idx_sponsors_event_id',
@@ -45,6 +46,20 @@ const EXPECTED_INDEXES = [
   'idx_scans_event_bucket',
   'idx_scans_poster_deployment',
   'idx_scan_aggregates_event_date',
+  // NCR v2 hierarchy (migration 0010)
+  'idx_node_hierarchy_brand_level',
+  'idx_node_hierarchy_parent',
+  'idx_corridors_brand',
+  'idx_corridors_status',
+  'idx_corridors_signal_class',
+  // Corridor growth model (migration 0011)
+  'idx_corridors_parent',
+  'idx_corridors_growth_pattern',
+  'idx_node_hierarchy_legal_tier',
+  // Ring emergence support (migration 0012)
+  'idx_corridors_directionality',
+  'idx_corridors_temporal',
+  'idx_node_hierarchy_ring_role',
 ] as const;
 
 const EXPECTED_COLUMN_COUNTS: Record<string, number> = {
@@ -148,13 +163,13 @@ describe('Gate 4: scan_aggregates write protection', () => {
 // ── Gate 5: Index verification ───────────────────────────────────────────────
 
 describe('Gate 5: Index verification', () => {
-  test('all 8 custom indexes exist', async () => {
+  test('all 19 custom indexes exist', async () => {
     const indexes = await env.DB.prepare(
       "SELECT name FROM sqlite_master WHERE type='index' AND name LIKE 'idx_%' ORDER BY name"
     ).all();
 
     const names = indexes.results.map((r: Record<string, unknown>) => r.name);
-    expect(names.length).toBe(8);
+    expect(names.length).toBe(19);
     EXPECTED_INDEXES.forEach((idx) => expect(names).toContain(idx));
   });
 });
