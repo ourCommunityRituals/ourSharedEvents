@@ -27,7 +27,7 @@
 -- ─────────────────────────────────────────────────────────
 -- Add parent_corridor_id for fractal branching
 -- ─────────────────────────────────────────────────────────
-ALTER TABLE corridors ADD COLUMN parent_corridor_id TEXT
+ALTER TABLE corridors ADD COLUMN IF NOT EXISTS parent_corridor_id TEXT
   REFERENCES corridors(id);
 
 -- ─────────────────────────────────────────────────────────
@@ -38,12 +38,12 @@ ALTER TABLE corridors ADD COLUMN parent_corridor_id TEXT
 -- SPIDERWEB = branching outward from route into surrounding communities
 -- FRACTAL   = self-similar pattern replicating at smaller scale
 -- REVERB    = signal echo between connected nodes amplifying engagement
-ALTER TABLE corridors ADD COLUMN growth_pattern TEXT
+ALTER TABLE corridors ADD COLUMN IF NOT EXISTS growth_pattern TEXT
   CHECK (growth_pattern IN ('SPIDERWEB', 'FRACTAL', 'REVERB'));
 
 -- Reverb strength: 0.0 (no echo) to 1.0 (full signal propagation)
 -- Measures how strongly events in one node generate attendance from connected nodes
-ALTER TABLE corridors ADD COLUMN reverb_strength REAL;
+ALTER TABLE corridors ADD COLUMN IF NOT EXISTS reverb_strength REAL;
 
 -- ─────────────────────────────────────────────────────────
 -- Add event vertical tracking to nodes
@@ -52,13 +52,13 @@ ALTER TABLE corridors ADD COLUMN reverb_strength REAL;
 -- JSON array of event verticals active at this node
 -- e.g. ["sports", "dance", "school", "museum", "community"]
 -- Tracks what types of events have activated this node
-ALTER TABLE node_hierarchy ADD COLUMN event_verticals TEXT;
+ALTER TABLE node_hierarchy ADD COLUMN IF NOT EXISTS event_verticals TEXT;
 
 -- Legal clearance tier for sensitive verticals
 -- OPEN       = sports, dance, general community (no special clearance)
 -- RESTRICTED = school functions, youth events (COPPA compliance required)
 -- REGULATED  = healthcare-adjacent, museum partnerships (HIPAA/institutional)
-ALTER TABLE node_hierarchy ADD COLUMN legal_clearance_tier TEXT
+ALTER TABLE node_hierarchy ADD COLUMN IF NOT EXISTS legal_clearance_tier TEXT
   DEFAULT 'OPEN'
   CHECK (legal_clearance_tier IN ('OPEN', 'RESTRICTED', 'REGULATED'));
 
