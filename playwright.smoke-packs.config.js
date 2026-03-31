@@ -8,14 +8,14 @@
  */
 
 const { defineConfig, devices } = require('@playwright/test');
-const { getCurrentEnvironment } = require('./tests/config/environments');
+const { getCurrentEnvironment } = require('./archive/legacy-tests/tests/config/environments');
 
 // Get the current environment configuration
 const env = getCurrentEnvironment();
 
 module.exports = defineConfig({
   // Smoke packs are in tests/smoke/ directory
-  testDir: './tests/smoke',
+  testDir: './archive/legacy-tests/tests/smoke',
 
   fullyParallel: false, // Run sequentially for more reliable results
   forbidOnly: !!process.env.CI,
@@ -34,21 +34,29 @@ module.exports = defineConfig({
     timeout: 15000,
   },
 
-  reporter: process.env.CI ? [
-    ['html', {
-      outputFolder: process.env.PLAYWRIGHT_HTML_REPORT || 'playwright-report',
-      open: 'never',
-    }],
-    ['json', { outputFile: '.test-results/smoke-packs-results.json' }],
-    ['junit', { outputFile: '.test-results/smoke-packs-junit.xml' }],
-    ['line'],
-  ] : [
-    ['html', {
-      outputFolder: process.env.PLAYWRIGHT_HTML_REPORT || 'playwright-report',
-      open: 'never',
-    }],
-    ['list']
-  ],
+  reporter: process.env.CI
+    ? [
+        [
+          'html',
+          {
+            outputFolder: process.env.PLAYWRIGHT_HTML_REPORT || 'playwright-report',
+            open: 'never',
+          },
+        ],
+        ['json', { outputFile: '.test-results/smoke-packs-results.json' }],
+        ['junit', { outputFile: '.test-results/smoke-packs-junit.xml' }],
+        ['line'],
+      ]
+    : [
+        [
+          'html',
+          {
+            outputFolder: process.env.PLAYWRIGHT_HTML_REPORT || 'playwright-report',
+            open: 'never',
+          },
+        ],
+        ['list'],
+      ],
 
   use: {
     // Use environment-aware base URL
@@ -67,11 +75,12 @@ module.exports = defineConfig({
 
     // Extra HTTP headers
     extraHTTPHeaders: {
-      'Accept': 'text/html,application/json',
+      Accept: 'text/html,application/json',
     },
 
     // Realistic user agent
-    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+    userAgent:
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
 
     // Ignore HTTPS errors for QA/staging
     ignoreHTTPSErrors: true,

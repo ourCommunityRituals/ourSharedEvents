@@ -86,17 +86,19 @@ export default defineConfig({
   globalTimeout: 15 * 60 * 1000, // 15 minutes
 
   // Reporters optimized for CI visibility
-  reporter: process.env.CI ? [
-    ['html', { outputFolder: 'playwright-report-stage2-smoke', open: 'never' }],
-    ['json', { outputFile: '.test-results/stage2-smoke-results.json' }],
-    ['junit', { outputFile: '.test-results/stage2-smoke-junit.xml' }],
-    ['line'], // Concise CI output
-    ['github'], // GitHub Actions annotations
-  ] : [
-    ['html', { outputFolder: 'playwright-report-stage2-smoke', open: 'never' }],
-    ['json', { outputFile: '.test-results/stage2-smoke-results.json' }],
-    ['list'], // Verbose local output
-  ],
+  reporter: process.env.CI
+    ? [
+        ['html', { outputFolder: 'playwright-report-stage2-smoke', open: 'never' }],
+        ['json', { outputFile: '.test-results/stage2-smoke-results.json' }],
+        ['junit', { outputFile: '.test-results/stage2-smoke-junit.xml' }],
+        ['line'], // Concise CI output
+        ['github'], // GitHub Actions annotations
+      ]
+    : [
+        ['html', { outputFolder: 'playwright-report-stage2-smoke', open: 'never' }],
+        ['json', { outputFile: '.test-results/stage2-smoke-results.json' }],
+        ['list'], // Verbose local output
+      ],
 
   use: {
     // Base URL from environment (defaults to staging)
@@ -113,7 +115,7 @@ export default defineConfig({
 
     // Extra HTTP headers for API requests
     extraHTTPHeaders: {
-      'Accept': 'application/json',
+      Accept: 'application/json',
     },
 
     // Ignore HTTPS errors for staging/QA
@@ -136,7 +138,7 @@ export default defineConfig({
   projects: [
     {
       name: 'stage2-api-smoke',
-      testDir: './tests/api/smoke',
+      testDir: './archive/legacy-tests/tests/api/smoke',
       testMatch: [
         'stage2-critical-smoke.spec.ts',
         'backend-health.spec.ts',
@@ -150,12 +152,8 @@ export default defineConfig({
     },
     {
       name: 'stage2-ui-smoke',
-      testDir: './tests/ui/smoke',
-      testMatch: [
-        'manage.smoke.spec.ts',
-        'events.smoke.spec.ts',
-        'sharedreport.smoke.spec.ts',
-      ],
+      testDir: './archive/legacy-tests/tests/ui/smoke',
+      testMatch: ['manage.smoke.spec.ts', 'events.smoke.spec.ts', 'sharedreport.smoke.spec.ts'],
       use: {
         ...devices['Desktop Chrome'],
         viewport: { width: 1280, height: 720 },
