@@ -1,10 +1,35 @@
 /**
  * Corridors Configuration — Geographic Seed Data
  *
- * Defines founding community corridors (Level 1-3) and
+ * Defines founding community corridors (Level 1) and
  * primary highway corridors (Level 5 Region).
  *
- * Schema: See workers/oursharedevents/migrations/0010_create_ncr_v2_hierarchy.sql
+ * GROWTH MODEL — Corridors are living structures, not static lines:
+ *
+ *   SPIDERWEB: Highway corridors branch into sub-corridors at every
+ *     intermediate town, school gym, dance studio, park, and venue
+ *     along the route. I-94 East spawns dozens of community corridors
+ *     between Chicago and Detroit.
+ *
+ *   FRACTAL: The branching pattern repeats at every hierarchy level.
+ *     Level 5 highway corridor → Level 4 metro corridors → Level 3
+ *     zone corridors → Level 1 community corridors. Same pattern,
+ *     every scale, infinitely.
+ *
+ *   REVERB: Signal echoes both directions and amplifies. A bocce
+ *     tournament in Beverly generates attendance from Evergreen Park
+ *     and Hammond. That signal doesn't decay — it compounds as more
+ *     events activate more nodes along the corridor.
+ *
+ * GROWTH SEQUENCE (event verticals activating nodes over time):
+ *   Wave 1 (NOW):   Sports leagues, rec nights, bocce, pickup games
+ *   Wave 2 (NEXT):  Dance, gymnastics, school-funded gatherings
+ *   Wave 3 (LEGAL): Museums, art institutes, school functions
+ *                    (requires HIPAA/COPPA clearance)
+ *   Wave 4 (SCALE): Every public/private event along the routes as
+ *                    corridors span into countryside where people live
+ *
+ * Schema: See migrations/0010 (base) + 0011 (growth model)
  * ADR: See docs/adr/ADR-009-ncr-v2-geographic-hierarchy.md
  *
  * @module config/corridors
@@ -25,8 +50,51 @@ const HIERARCHY_LEVELS = Object.freeze({
 });
 
 // =============================================================================
-// Founding Community Corridors (Level 1-3)
-// These are the original five communities. They remain as-is.
+// Growth Patterns
+// =============================================================================
+
+const GROWTH_PATTERNS = Object.freeze({
+  SPIDERWEB: 'SPIDERWEB',   // Branching outward from route into surrounding communities
+  FRACTAL: 'FRACTAL',       // Self-similar pattern replicating at smaller scale
+  REVERB: 'REVERB',         // Signal echo between connected nodes amplifying engagement
+});
+
+// =============================================================================
+// Event Verticals — What activates nodes (growth sequence)
+// =============================================================================
+
+const EVENT_VERTICALS = Object.freeze({
+  // Wave 1 — NOW (no special legal clearance)
+  SPORTS: 'sports',               // Bocce, rec leagues, pickup games
+  DANCE: 'dance',                 // Dance nights, classes, competitions
+  GYMNASTICS: 'gymnastics',       // Gymnastics events, meets
+  SCHOOL_FUNDED: 'school_funded', // School-funded community gatherings
+
+  // Wave 2 — RESTRICTED (COPPA compliance required)
+  SCHOOL_FUNCTIONS: 'school_functions', // K-12 events, PTA, assemblies
+  YOUTH_EVENTS: 'youth_events',         // Under-18 programs
+
+  // Wave 3 — REGULATED (HIPAA/institutional clearance)
+  MUSEUMS: 'museums',             // Museum events, gallery openings
+  ART_INSTITUTES: 'art_institutes', // Art institute programs
+  COMMUNITY_HEALTH: 'community_health', // Health fairs, wellness events
+
+  // Wave 4 — OPEN (general expansion)
+  COMMUNITY: 'community',         // General community gatherings
+  PRIVATE: 'private',             // Private events, parties, corporate
+  PUBLIC: 'public',               // Public festivals, fairs, markets
+});
+
+// Legal clearance tiers for event verticals
+const LEGAL_CLEARANCE = Object.freeze({
+  OPEN: 'OPEN',             // sports, dance, general community
+  RESTRICTED: 'RESTRICTED', // school functions, youth events (COPPA)
+  REGULATED: 'REGULATED',   // healthcare-adjacent, institutional (HIPAA)
+});
+
+// =============================================================================
+// Founding Community Nodes (Level 3 Zone)
+// The original five communities as geographic nodes.
 // =============================================================================
 
 const FOUNDING_COMMUNITIES = Object.freeze([
@@ -111,6 +179,9 @@ const FOUNDING_CORRIDORS = Object.freeze([
     separation_blur_index: null,
     level: HIERARCHY_LEVELS.COMMUNITY,
     route_designation: null,
+    parent_corridor_id: null,
+    growth_pattern: GROWTH_PATTERNS.REVERB,
+    reverb_strength: null,
   },
   {
     id: 'corridor-sw-michigan',
@@ -122,6 +193,9 @@ const FOUNDING_CORRIDORS = Object.freeze([
     separation_blur_index: null,
     level: HIERARCHY_LEVELS.COMMUNITY,
     route_designation: null,
+    parent_corridor_id: 'corridor-i94-east', // child of I-94 East highway corridor
+    growth_pattern: GROWTH_PATTERNS.REVERB,
+    reverb_strength: null,
   },
   {
     id: 'corridor-hammond',
@@ -133,6 +207,9 @@ const FOUNDING_CORRIDORS = Object.freeze([
     separation_blur_index: null,
     level: HIERARCHY_LEVELS.COMMUNITY,
     route_designation: null,
+    parent_corridor_id: 'corridor-i94-east', // child of I-94 East highway corridor
+    growth_pattern: GROWTH_PATTERNS.REVERB,
+    reverb_strength: null,
   },
   {
     id: 'corridor-bronzeville',
@@ -144,6 +221,9 @@ const FOUNDING_CORRIDORS = Object.freeze([
     separation_blur_index: null,
     level: HIERARCHY_LEVELS.COMMUNITY,
     route_designation: null,
+    parent_corridor_id: null,
+    growth_pattern: GROWTH_PATTERNS.REVERB,
+    reverb_strength: null,
   },
   {
     id: 'corridor-evergreen-park',
@@ -155,6 +235,9 @@ const FOUNDING_CORRIDORS = Object.freeze([
     separation_blur_index: null,
     level: HIERARCHY_LEVELS.COMMUNITY,
     route_designation: null,
+    parent_corridor_id: null,
+    growth_pattern: GROWTH_PATTERNS.REVERB,
+    reverb_strength: null,
   },
 ]);
 
@@ -174,6 +257,12 @@ const HIGHWAY_CORRIDORS = Object.freeze([
     separation_blur_index: null,
     level: HIERARCHY_LEVELS.REGION,
     route_designation: 'I-94 East',
+    parent_corridor_id: null,
+    growth_pattern: GROWTH_PATTERNS.SPIDERWEB,
+    reverb_strength: null,
+    // Spiderweb: every exit between Chicago and Detroit spawns community
+    // corridors — Michigan City, Benton Harbor, Kalamazoo, Ann Arbor, etc.
+    // SW Michigan and Hammond founding corridors are already children.
   },
   {
     id: 'corridor-i94-north',
@@ -185,6 +274,10 @@ const HIGHWAY_CORRIDORS = Object.freeze([
     separation_blur_index: null,
     level: HIERARCHY_LEVELS.REGION,
     route_designation: 'I-94 North',
+    parent_corridor_id: null,
+    growth_pattern: GROWTH_PATTERNS.SPIDERWEB,
+    reverb_strength: null,
+    // Spiderweb: Kenosha, Racine, Waukegan — every town along the lakeshore
   },
   {
     id: 'corridor-i90-94',
@@ -196,6 +289,10 @@ const HIGHWAY_CORRIDORS = Object.freeze([
     separation_blur_index: null,
     level: HIERARCHY_LEVELS.REGION,
     route_designation: 'I-90/94',
+    parent_corridor_id: null,
+    growth_pattern: GROWTH_PATTERNS.SPIDERWEB,
+    reverb_strength: null,
+    // Spiderweb: Rockford, Madison, Wisconsin Dells, La Crosse, Rochester
   },
   {
     id: 'corridor-i55',
@@ -207,6 +304,10 @@ const HIGHWAY_CORRIDORS = Object.freeze([
     separation_blur_index: null,
     level: HIERARCHY_LEVELS.REGION,
     route_designation: 'I-55',
+    parent_corridor_id: null,
+    growth_pattern: GROWTH_PATTERNS.SPIDERWEB,
+    reverb_strength: null,
+    // Spiderweb: Joliet, Bloomington-Normal, Springfield, Litchfield
   },
   {
     id: 'corridor-i65',
@@ -218,7 +319,12 @@ const HIGHWAY_CORRIDORS = Object.freeze([
     separation_blur_index: null,
     level: HIERARCHY_LEVELS.REGION,
     route_designation: 'I-65',
+    parent_corridor_id: null,
+    growth_pattern: GROWTH_PATTERNS.SPIDERWEB,
+    reverb_strength: null,
     metadata_json: JSON.stringify({ louisville_status: 'TBD' }),
+    // Spiderweb: Gary, Lafayette, Indianapolis suburbs, Columbus (IN),
+    // Louisville (TBD legal), Bowling Green, Nashville suburbs
   },
   {
     id: 'corridor-i88-74',
@@ -230,6 +336,10 @@ const HIGHWAY_CORRIDORS = Object.freeze([
     separation_blur_index: null,
     level: HIERARCHY_LEVELS.REGION,
     route_designation: 'I-88/I-74 West',
+    parent_corridor_id: null,
+    growth_pattern: GROWTH_PATTERNS.SPIDERWEB,
+    reverb_strength: null,
+    // Spiderweb: DeKalb, Dixon, Sterling, Peoria spur — deep countryside
   },
 ]);
 
@@ -239,6 +349,9 @@ const HIGHWAY_CORRIDORS = Object.freeze([
 
 module.exports = {
   HIERARCHY_LEVELS,
+  GROWTH_PATTERNS,
+  EVENT_VERTICALS,
+  LEGAL_CLEARANCE,
   FOUNDING_COMMUNITIES,
   METRO_NODES,
   FOUNDING_CORRIDORS,
