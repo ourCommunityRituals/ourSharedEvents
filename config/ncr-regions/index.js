@@ -25,6 +25,7 @@ const northeast = require('./northeast');
 const south = require('./south');
 const midwest = require('./midwest');
 const west = require('./west');
+const usTerritories = require('./territories');
 
 // =============================================================================
 // Level 7 — Network Root
@@ -46,6 +47,7 @@ const ALL_TERRITORIES = Object.freeze([
   ...south.territories,
   ...midwest.territories,
   ...west.territories,
+  ...usTerritories.territories,
 ]);
 
 const ALL_STATES = Object.freeze([
@@ -53,6 +55,7 @@ const ALL_STATES = Object.freeze([
   ...south.states,
   ...midwest.states,
   ...west.states,
+  ...usTerritories.states,
 ]);
 
 const ALL_NODES = Object.freeze([
@@ -60,6 +63,7 @@ const ALL_NODES = Object.freeze([
   ...south.nodes,
   ...midwest.nodes,
   ...west.nodes,
+  ...usTerritories.nodes,
 ]);
 
 // =============================================================================
@@ -98,4 +102,5 @@ module.exports = {
   south,
   midwest,
   west,
+  usTerritories,
 };
