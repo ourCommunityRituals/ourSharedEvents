@@ -400,16 +400,16 @@ export function handleAdminPage(_env: PagesEnv): Response {
 // to KV or Durable Objects in Phase 2.
 
 const RATE_WINDOW_MS = 60_000; // 1 minute
-const RATE_MAX_REQUESTS = 10;  // max 10 subscribe attempts per IP per minute
+const RATE_MAX_REQUESTS = 10; // max 10 subscribe attempts per IP per minute
 const RATE_MAX_BUCKETS = 10_000;
-const RATE_EVICT_BATCH = 200;  // evict up to 200 stale entries per request
+const RATE_EVICT_BATCH = 200; // evict up to 200 stale entries per request
 const rateBuckets = new Map<string, number[]>();
 let evictCursor: string | undefined;
 
 function isRateLimited(ip: string): boolean {
   const now = Date.now();
   const timestamps = rateBuckets.get(ip) ?? [];
-  const recent = timestamps.filter(t => now - t < RATE_WINDOW_MS);
+  const recent = timestamps.filter((t) => now - t < RATE_WINDOW_MS);
 
   if (recent.length >= RATE_MAX_REQUESTS) {
     rateBuckets.set(ip, recent);
@@ -428,14 +428,17 @@ function isRateLimited(ip: string): boolean {
         if (key === evictCursor) started = true;
         else continue;
       }
-      const active = ts.filter(t => now - t < RATE_WINDOW_MS);
+      const active = ts.filter((t) => now - t < RATE_WINDOW_MS);
       if (active.length === 0) {
         rateBuckets.delete(key);
       } else {
         rateBuckets.set(key, active); // compact timestamps
       }
       evicted++;
-      if (evicted >= RATE_EVICT_BATCH) { evictCursor = key; return false; }
+      if (evicted >= RATE_EVICT_BATCH) {
+        evictCursor = key;
+        return false;
+      }
     }
     evictCursor = undefined; // wrapped around
   }
@@ -452,7 +455,7 @@ export async function handleSubscribe(request: Request, env: PagesEnv): Promise<
   if (isRateLimited(clientIp)) {
     return Response.json(
       { success: false, error: 'Too many requests. Please try again later.' },
-      { status: 429, headers: { 'Retry-After': '60' } },
+      { status: 429, headers: { 'Retry-After': '60' } }
     );
   }
 
@@ -478,10 +481,16 @@ export async function handleSubscribe(request: Request, env: PagesEnv): Promise<
       return Response.json({ success: false, error: 'Email is required.' }, { status: 400 });
     }
     if (!/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(email)) {
-      return Response.json({ success: false, error: 'Please enter a valid email address.' }, { status: 400 });
+      return Response.json(
+        { success: false, error: 'Please enter a valid email address.' },
+        { status: 400 }
+      );
     }
     if (email.length > 254) {
-      return Response.json({ success: false, error: 'Email address is too long.' }, { status: 400 });
+      return Response.json(
+        { success: false, error: 'Email address is too long.' },
+        { status: 400 }
+      );
     }
 
     // Persist to D1 if available (graceful fallback if DB not provisioned)
@@ -490,11 +499,18 @@ export async function handleSubscribe(request: Request, env: PagesEnv): Promise<
       try {
         await env.DB.prepare(
           'INSERT INTO subscribers (email, ip_address, source) VALUES (?, ?, ?) ON CONFLICT (email) DO NOTHING'
-        ).bind(email, clientIp, 'landing').run();
+        )
+          .bind(email, clientIp, 'landing')
+          .run();
         persisted = true;
       } catch (dbErr) {
         // Log but don't fail the request — email capture is best-effort in Phase 1
-        console.error(JSON.stringify({ type: 'SUBSCRIBE_DB_ERROR', error: dbErr instanceof Error ? dbErr.message : String(dbErr) }));
+        console.error(
+          JSON.stringify({
+            type: 'SUBSCRIBE_DB_ERROR',
+            error: dbErr instanceof Error ? dbErr.message : String(dbErr),
+          })
+        );
       }
     }
 
@@ -506,4 +522,308 @@ export async function handleSubscribe(request: Request, env: PagesEnv): Promise<
 
 export function handleLandingPage(_env: PagesEnv): Response {
   return html(LANDING_HTML);
+}
+
+// ─── Display page (TV / kiosk) ──────────────────────────────────────────────────
+
+const DISPLAY_HTML = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Display – OurSharedEvents</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; }
+    body { font-family: system-ui, -apple-system, sans-serif; background: #0f172a; color: #f8fafc; display: flex; flex-direction: column; }
+    header { background: #1a1a2e; padding: 1rem 2rem; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,.08); }
+    header h1 { font-size: 1.4rem; font-weight: 700; letter-spacing: -0.01em; }
+    .clock { font-size: 1rem; opacity: .6; font-variant-numeric: tabular-nums; }
+    main { flex: 1; max-width: 1200px; width: 100%; margin: 0 auto; padding: 2rem 1.5rem; display: flex; flex-direction: column; gap: 1.5rem; }
+    .event-card {
+      background: rgba(255,255,255,.05); border-radius: 12px;
+      padding: 2rem 2.5rem; border: 1px solid rgba(255,255,255,.08);
+    }
+    .event-card .label { font-size: .75rem; text-transform: uppercase; letter-spacing: .08em; color: #94a3b8; margin-bottom: .5rem; }
+    .event-card h2 { font-size: clamp(1.5rem, 4vw, 2.5rem); font-weight: 800; line-height: 1.15; color: #f8fafc; margin-bottom: .75rem; }
+    .event-card .meta { font-size: 1.1rem; color: #94a3b8; display: flex; gap: 1.5rem; flex-wrap: wrap; }
+    .event-card .meta span::before { content: ""; }
+    .next-events { display: grid; gap: 1rem; }
+    .next-events h3 { font-size: .8rem; text-transform: uppercase; letter-spacing: .08em; color: #64748b; margin-bottom: .25rem; }
+    .next-card { background: rgba(255,255,255,.03); border-radius: 8px; padding: 1rem 1.25rem; border: 1px solid rgba(255,255,255,.06); display: flex; justify-content: space-between; align-items: center; }
+    .next-card .name { font-weight: 600; font-size: 1rem; }
+    .next-card .date { font-size: .85rem; color: #94a3b8; }
+    .empty { text-align: center; padding: 4rem; color: #475569; font-size: 1.1rem; }
+    .ticker { background: #1e3a5f; padding: .6rem 2rem; font-size: .85rem; color: #93c5fd; border-top: 1px solid rgba(255,255,255,.06); overflow: hidden; white-space: nowrap; }
+    .ticker-inner { display: inline-block; animation: scroll 30s linear infinite; }
+    @keyframes scroll { from { transform: translateX(100vw); } to { transform: translateX(-100%); } }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>OurSharedEvents</h1>
+    <div class="clock" id="clock" aria-live="off"></div>
+  </header>
+  <main id="main">
+    <p class="empty">Loading&hellip;</p>
+  </main>
+  <div class="ticker" aria-hidden="true"><span class="ticker-inner" id="ticker">OurSharedEvents &mdash; Community events on Chicago&rsquo;s Southside</span></div>
+  <script>
+    // Clock
+    function updateClock() {
+      const el = document.getElementById('clock');
+      if (el) el.textContent = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    }
+    updateClock();
+    setInterval(updateClock, 30_000);
+
+    // Events
+    async function loadEvents() {
+      const main = document.getElementById('main');
+      try {
+        const res = await fetch('/api/v2/events');
+        const data = await res.json();
+        const items = (data.ok && data.items) ? data.items : [];
+        if (!items.length) {
+          main.innerHTML = '<p class="empty">No upcoming events scheduled.</p>';
+          return;
+        }
+        const esc = s => { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; };
+        const fmt = iso => iso ? new Date(iso).toLocaleDateString('en-US', { weekday:'long', month:'long', day:'numeric' }) : '';
+        const [featured, ...rest] = items;
+        let html = '<div class="event-card">' +
+          '<div class="label">Upcoming Event</div>' +
+          '<h2>' + esc(featured.name || 'Untitled Event') + '</h2>' +
+          '<div class="meta">' +
+          (featured.startDateISO ? '<span>' + esc(fmt(featured.startDateISO)) + '</span>' : '') +
+          (featured.venue ? '<span>' + esc(featured.venue) + '</span>' : '') +
+          '</div></div>';
+        if (rest.length) {
+          html += '<div class="next-events"><h3>Also Coming Up</h3>' +
+            rest.slice(0, 4).map(e => '<div class="next-card"><div class="name">' + esc(e.name || 'Untitled') + '</div>' +
+              '<div class="date">' + esc(fmt(e.startDateISO)) + '</div></div>').join('') +
+            '</div>';
+        }
+        main.innerHTML = html;
+        // Update ticker
+        const ticker = document.getElementById('ticker');
+        if (ticker) ticker.textContent = items.map(e => e.name).filter(Boolean).join(' \u2022 ');
+      } catch {
+        main.innerHTML = '<p class="empty">Could not load events.</p>';
+      }
+    }
+    loadEvents();
+    // Auto-refresh every 5 minutes
+    setInterval(loadEvents, 5 * 60 * 1000);
+  </script>
+</body>
+</html>`;
+
+// ─── Poster page (printable) ────────────────────────────────────────────────────
+
+const POSTER_HTML = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Event Poster – OurSharedEvents</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, -apple-system, sans-serif; background: #f8f9fa; color: #1e293b; }
+    .page-header { background: #1a1a2e; color: #fff; padding: 1rem 2rem; display: flex; align-items: center; justify-content: space-between; }
+    .page-header h1 { font-size: 1.2rem; font-weight: 700; }
+    .page-header a { color: rgba(255,255,255,.7); font-size: .85rem; text-decoration: none; }
+    .page-header a:hover { color: #fff; }
+    .container { max-width: 680px; margin: 2rem auto; padding: 0 1rem; }
+    .poster {
+      background: #fff; border-radius: 12px; overflow: hidden;
+      box-shadow: 0 4px 24px rgba(0,0,0,.12); border: 1px solid #e2e8f0;
+    }
+    .poster-header { background: #1a1a2e; color: #fff; padding: 2.5rem 2rem 2rem; text-align: center; }
+    .poster-header .org { font-size: .8rem; text-transform: uppercase; letter-spacing: .12em; opacity: .6; margin-bottom: .75rem; }
+    .poster-header h2 { font-size: clamp(1.5rem, 5vw, 2.25rem); font-weight: 800; line-height: 1.2; }
+    .poster-body { padding: 2rem; }
+    .poster-meta { display: grid; gap: .75rem; margin-bottom: 2rem; }
+    .meta-row { display: flex; align-items: flex-start; gap: .75rem; }
+    .meta-icon { width: 24px; flex-shrink: 0; text-align: center; font-size: 1rem; padding-top: .1rem; }
+    .meta-text { font-size: 1rem; color: #334155; }
+    .qr-section { display: flex; justify-content: center; gap: 2rem; flex-wrap: wrap; padding: 1.5rem 0; border-top: 1px solid #e2e8f0; border-bottom: 1px solid #e2e8f0; margin-bottom: 1.5rem; }
+    .qr-item { text-align: center; }
+    .qr-placeholder { width: 120px; height: 120px; background: #f1f5f9; border: 2px dashed #cbd5e1; border-radius: 8px; display: flex; align-items: center; justify-content: center; margin: 0 auto .5rem; font-size: .7rem; color: #94a3b8; text-align: center; padding: .5rem; }
+    .qr-label { font-size: .75rem; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: .05em; }
+    .poster-footer { text-align: center; padding: 1rem; background: #f8fafc; font-size: .8rem; color: #94a3b8; }
+    .loading { text-align: center; padding: 4rem; color: #94a3b8; }
+    .error { text-align: center; padding: 3rem; color: #dc2626; }
+    .event-select { margin-bottom: 1.5rem; }
+    .event-select label { display: block; font-size: .875rem; font-weight: 600; color: #374151; margin-bottom: .375rem; }
+    .event-select select { width: 100%; padding: .5rem .75rem; border: 1px solid #d1d5db; border-radius: 6px; font-size: .95rem; background: #fff; color: #1e293b; }
+    @media print {
+      .page-header, .event-select, .no-print { display: none !important; }
+      body { background: #fff; }
+      .container { margin: 0; max-width: 100%; }
+      .poster { box-shadow: none; border: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page-header no-print">
+    <h1>OurSharedEvents — Poster</h1>
+    <a href="javascript:window.print()">&#x1F5A8; Print</a>
+  </div>
+  <div class="container">
+    <div class="event-select no-print">
+      <label for="event-picker">Select Event</label>
+      <select id="event-picker"><option value="">Loading events&hellip;</option></select>
+    </div>
+    <div id="poster-area"><p class="loading">Loading&hellip;</p></div>
+  </div>
+  <script>
+    const esc = s => { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; };
+    const fmt = iso => iso ? new Date(iso).toLocaleDateString('en-US', { weekday:'long', year:'numeric', month:'long', day:'numeric' }) : '';
+    const fmtTime = iso => iso ? new Date(iso).toLocaleTimeString('en-US', { hour:'numeric', minute:'2-digit' }) : '';
+
+    function renderPoster(event) {
+      const data = event.data || {};
+      const venue = data.venue || event.venue || '';
+      const address = data.address || '';
+      const startISO = data.startDateISO || event.startDateISO || '';
+      const name = data.name || event.name || 'Event';
+
+      return '<div class="poster">' +
+        '<div class="poster-header">' +
+          '<div class="org">OurSharedEvents</div>' +
+          '<h2>' + esc(name) + '</h2>' +
+        '</div>' +
+        '<div class="poster-body">' +
+          '<div class="poster-meta">' +
+          (startISO ? '<div class="meta-row"><div class="meta-icon">&#x1F4C5;</div><div class="meta-text">' + esc(fmt(startISO)) + (startISO ? ' &mdash; ' + esc(fmtTime(startISO)) : '') + '</div></div>' : '') +
+          (venue ? '<div class="meta-row"><div class="meta-icon">&#x1F4CD;</div><div class="meta-text">' + esc(venue) + (address ? '<br><small>' + esc(address) + '</small>' : '') + '</div></div>' : '') +
+          '</div>' +
+          '<div class="qr-section">' +
+            '<div class="qr-item"><div class="qr-placeholder">QR codes available after event setup</div><div class="qr-label">Event Page</div></div>' +
+            '<div class="qr-item"><div class="qr-placeholder">QR codes available after event setup</div><div class="qr-label">Registration</div></div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="poster-footer">oursharedevents.com</div>' +
+      '</div>';
+    }
+
+    async function init() {
+      const picker = document.getElementById('event-picker');
+      const area = document.getElementById('poster-area');
+      try {
+        const res = await fetch('/api/v2/events');
+        const data = await res.json();
+        const items = (data.ok && data.items) ? data.items : [];
+        if (!items.length) {
+          picker.innerHTML = '<option>No events available</option>';
+          area.innerHTML = '<p class="loading">No events scheduled.</p>';
+          return;
+        }
+        picker.innerHTML = items.map((e, i) =>
+          '<option value="' + i + '">' + esc(e.name || 'Untitled Event') + '</option>'
+        ).join('');
+        area.innerHTML = renderPoster(items[0]);
+        picker.addEventListener('change', () => {
+          const idx = parseInt(picker.value, 10);
+          if (!isNaN(idx) && items[idx]) area.innerHTML = renderPoster(items[idx]);
+        });
+      } catch {
+        area.innerHTML = '<p class="error">Could not load events.</p>';
+      }
+    }
+    init();
+  </script>
+</body>
+</html>`;
+
+// ─── Shared report page ─────────────────────────────────────────────────────────
+
+const SHARED_REPORT_HTML = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Shared Report – OurSharedEvents</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, -apple-system, sans-serif; background: #f8f9fa; color: #212529; }
+    header { background: #1a1a2e; color: #fff; padding: 1.25rem 2rem; display: flex; align-items: center; justify-content: space-between; }
+    header h1 { font-size: 1.4rem; font-weight: 600; }
+    header span { font-size: .8rem; opacity: .6; text-transform: uppercase; letter-spacing: .05em; }
+    main { max-width: 960px; margin: 2rem auto; padding: 0 1rem; display: grid; gap: 1.5rem; }
+    .section-title { font-size: .75rem; text-transform: uppercase; letter-spacing: .08em; color: #6c757d; margin-bottom: .75rem; font-weight: 600; }
+    .stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 1rem; }
+    .stat-card { background: #fff; border-radius: 8px; padding: 1.25rem 1.5rem; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+    .stat-card .num { font-size: 2rem; font-weight: 800; color: #1a1a2e; line-height: 1; margin-bottom: .25rem; }
+    .stat-card .label { font-size: .8rem; color: #6c757d; }
+    .events-list { background: #fff; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,.08); overflow: hidden; }
+    .event-row { display: flex; align-items: center; justify-content: space-between; padding: .875rem 1.25rem; border-bottom: 1px solid #f1f3f5; gap: 1rem; }
+    .event-row:last-child { border-bottom: none; }
+    .event-row .name { font-weight: 600; font-size: .95rem; }
+    .event-row .date { font-size: .8rem; color: #6c757d; white-space: nowrap; }
+    .badge { display: inline-block; padding: .15rem .5rem; border-radius: 4px; font-size: .72rem; font-weight: 600; }
+    .badge.active { background: #d3f9d8; color: #2f9e44; }
+    .badge.archived { background: #f1f3f5; color: #868e96; }
+    .loading { text-align: center; padding: 3rem; color: #868e96; }
+    .empty { text-align: center; padding: 2rem; color: #868e96; font-size: .95rem; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>OurSharedEvents</h1>
+    <span>Shared Report</span>
+  </header>
+  <main>
+    <div>
+      <div class="section-title">Events Overview</div>
+      <div class="stats-row" id="stats-row">
+        <div class="stat-card"><div class="num" id="stat-total">&mdash;</div><div class="label">Total Events</div></div>
+        <div class="stat-card"><div class="num" id="stat-active">&mdash;</div><div class="label">Active</div></div>
+      </div>
+    </div>
+    <div>
+      <div class="section-title">Events</div>
+      <div class="events-list" id="events-list"><p class="loading">Loading&hellip;</p></div>
+    </div>
+  </main>
+  <script>
+    (async () => {
+      const esc = s => { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; };
+      const fmt = iso => iso ? new Date(iso).toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' }) : '\u2014';
+      const listEl = document.getElementById('events-list');
+      try {
+        const res = await fetch('/api/v2/events');
+        const data = await res.json();
+        const items = (data.ok && data.items) ? data.items : [];
+        document.getElementById('stat-total').textContent = items.length;
+        document.getElementById('stat-active').textContent = items.filter(e => e.status === 'active').length;
+        if (!items.length) {
+          listEl.innerHTML = '<p class="empty">No events to report.</p>';
+          return;
+        }
+        listEl.innerHTML = items.map(e => '<div class="event-row">' +
+          '<div class="name">' + esc(e.name || 'Untitled') + '</div>' +
+          '<div style="display:flex;align-items:center;gap:.75rem">' +
+          '<div class="date">' + esc(fmt(e.startDateISO)) + '</div>' +
+          '<span class="badge ' + esc(e.status || '') + '">' + esc(e.status || '') + '</span>' +
+          '</div></div>').join('');
+      } catch {
+        listEl.innerHTML = '<p class="empty">Could not load data.</p>';
+      }
+    })();
+  </script>
+</body>
+</html>`;
+
+export function handleDisplayPage(_env: PagesEnv): Response {
+  return html(DISPLAY_HTML);
+}
+
+export function handlePosterPage(_env: PagesEnv): Response {
+  return html(POSTER_HTML);
+}
+
+export function handleSharedReportPage(_env: PagesEnv): Response {
+  return html(SHARED_REPORT_HTML);
 }
