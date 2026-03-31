@@ -27,12 +27,29 @@ Adopt a 7-level geographic node hierarchy with corridor connections:
 | 7 | Network | Full platform network |
 
 Corridors connect nodes (primarily Level 4+ metros) with signal taxonomy:
-- **CLASS_A**: High-confidence corridor with validated engagement data
-- **CLASS_B**: Hypothesized corridor based on geographic/demographic reasoning
+- **SIGNAL_PRESENCE** (legacy CLASS_A): Poster/tabletop scan. Proves proximity to a node but NOT corridor crossing. Cannot validate a corridor alone. Useful as denominator — establishes the pre-event population pool at a node.
+- **SIGNAL_BEHAVIORAL** (legacy CLASS_B): Event attendance via QR funnel. Proves intentional behavior — someone chose to attend an event at a specific community. Primary signal for corridor validation. Conversion rate (PRESENCE pool → BEHAVIORAL crossings) measures corridor strength.
 
 Corridor status lifecycle: `HYPOTHESIZED` → `VALIDATED`
 
+Corridor directionality:
+- **UNIDIRECTIONAL**: Signal observed in one direction only (A→B but not B→A). Sufficient for corridor validation. NOT sufficient for ring membership.
+- **BIDIRECTIONAL**: Signal observed in both directions. Required for core ring nodes.
+- **UNKNOWN**: Not yet measured.
+
 The `separation_blur_index` (0.0–1.0) quantifies boundary clarity between connected nodes.
+
+### Ring Emergence — Phase 2 Analytical Problem
+
+Ring emergence criteria are treated as a Phase 2 analytical problem, intentionally deferred until sufficient corridor data exists to fit an appropriate cluster-hybrid model. Pre-registering arbitrary thresholds before data collection would impose theoretical structure on what is designed to be an empirically-derived geographic finding. The NCR infrastructure is built to capture the data that will eventually make the analytical model possible — not to predict its conclusions in advance.
+
+**Minimum topology:** 3+ nodes in a cycle (A ↔ B ↔ C ↔ A). Spokes to a hub are corridors, not rings.
+
+**Core/periphery model:** Core nodes require full bidirectional flow to each other. Periphery nodes connect to the ring unidirectionally (e.g., SW Michigan seasonal connection to Beverly/EP/Hammond core).
+
+**Temporal requirement:** Ring must be observable across 2+ distinct time windows (different seasons) to rule out seasonality.
+
+**Statistical validation:** Deferred to academic partner. The infrastructure captures the data needed for null hypothesis testing.
 
 ### Corridor Growth Model — Spiderweb, Fractal, Reverb
 

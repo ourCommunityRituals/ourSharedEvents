@@ -242,6 +242,128 @@ const FOUNDING_CORRIDORS = Object.freeze([
 ]);
 
 // =============================================================================
+// Ring Candidate Corridors (Inter-Community, same hierarchy level)
+// These form the cycle topology required for ring emergence:
+//   Beverly ↔ Evergreen Park ↔ Hammond ↔ Beverly (minimum 3-node cycle)
+//   Bronzeville connects but may be core or periphery — TBD by data.
+//
+// A ring is NOT spokes to a hub. It's a cycle: A ↔ B ↔ C ↔ A.
+// These corridors exist BETWEEN communities at the same level,
+// not between communities and their parent metro.
+// =============================================================================
+
+const RING_CANDIDATE_CORRIDORS = Object.freeze([
+  // Beverly ↔ Evergreen Park (adjacent south side communities, ~2 miles)
+  {
+    id: 'corridor-beverly-ep',
+    name: 'Beverly ↔ Evergreen Park',
+    origin_node_id: 'community-beverly',
+    destination_node_id: 'community-evergreen-park',
+    corridor_signal_class: 'CLASS_B',
+    corridor_status: 'HYPOTHESIZED',
+    signal_class: 'SIGNAL_BEHAVIORAL',
+    directionality: 'UNKNOWN',
+    separation_blur_index: null,
+    level: HIERARCHY_LEVELS.ZONE,
+    route_designation: null,
+    parent_corridor_id: null,
+    growth_pattern: GROWTH_PATTERNS.REVERB,
+    reverb_strength: null,
+    ring_candidate: true,
+  },
+  // Evergreen Park ↔ Hammond (cross-state, ~15 miles via I-80/I-94)
+  {
+    id: 'corridor-ep-hammond',
+    name: 'Evergreen Park ↔ Hammond',
+    origin_node_id: 'community-evergreen-park',
+    destination_node_id: 'community-hammond',
+    corridor_signal_class: 'CLASS_B',
+    corridor_status: 'HYPOTHESIZED',
+    signal_class: 'SIGNAL_BEHAVIORAL',
+    directionality: 'UNKNOWN',
+    separation_blur_index: null,
+    level: HIERARCHY_LEVELS.ZONE,
+    route_designation: null,
+    parent_corridor_id: null,
+    growth_pattern: GROWTH_PATTERNS.REVERB,
+    reverb_strength: null,
+    ring_candidate: true,
+  },
+  // Hammond ↔ Beverly (closes the 3-node cycle — minimum ring topology)
+  {
+    id: 'corridor-hammond-beverly',
+    name: 'Hammond ↔ Beverly',
+    origin_node_id: 'community-hammond',
+    destination_node_id: 'community-beverly',
+    corridor_signal_class: 'CLASS_B',
+    corridor_status: 'HYPOTHESIZED',
+    signal_class: 'SIGNAL_BEHAVIORAL',
+    directionality: 'UNKNOWN',
+    separation_blur_index: null,
+    level: HIERARCHY_LEVELS.ZONE,
+    route_designation: null,
+    parent_corridor_id: null,
+    growth_pattern: GROWTH_PATTERNS.REVERB,
+    reverb_strength: null,
+    ring_candidate: true,
+  },
+  // Beverly ↔ Bronzeville (connects core candidate to potential periphery)
+  {
+    id: 'corridor-beverly-bronzeville',
+    name: 'Beverly ↔ Bronzeville',
+    origin_node_id: 'community-beverly',
+    destination_node_id: 'community-bronzeville',
+    corridor_signal_class: 'CLASS_B',
+    corridor_status: 'HYPOTHESIZED',
+    signal_class: 'SIGNAL_BEHAVIORAL',
+    directionality: 'UNKNOWN',
+    separation_blur_index: null,
+    level: HIERARCHY_LEVELS.ZONE,
+    route_designation: null,
+    parent_corridor_id: null,
+    growth_pattern: GROWTH_PATTERNS.REVERB,
+    reverb_strength: null,
+    ring_candidate: true,
+  },
+  // Bronzeville ↔ Hammond (potential second ring path)
+  {
+    id: 'corridor-bronzeville-hammond',
+    name: 'Bronzeville ↔ Hammond',
+    origin_node_id: 'community-bronzeville',
+    destination_node_id: 'community-hammond',
+    corridor_signal_class: 'CLASS_B',
+    corridor_status: 'HYPOTHESIZED',
+    signal_class: 'SIGNAL_BEHAVIORAL',
+    directionality: 'UNKNOWN',
+    separation_blur_index: null,
+    level: HIERARCHY_LEVELS.ZONE,
+    route_designation: null,
+    parent_corridor_id: null,
+    growth_pattern: GROWTH_PATTERNS.REVERB,
+    reverb_strength: null,
+    ring_candidate: true,
+  },
+  // SW Michigan connects as periphery (seasonal, unidirectional expected)
+  {
+    id: 'corridor-beverly-sw-michigan',
+    name: 'Beverly ↔ SW Michigan',
+    origin_node_id: 'community-beverly',
+    destination_node_id: 'community-sw-michigan',
+    corridor_signal_class: 'CLASS_B',
+    corridor_status: 'HYPOTHESIZED',
+    signal_class: 'SIGNAL_BEHAVIORAL',
+    directionality: 'UNKNOWN',
+    separation_blur_index: null,
+    level: HIERARCHY_LEVELS.ZONE,
+    route_designation: null,
+    parent_corridor_id: 'corridor-i94-east',
+    growth_pattern: GROWTH_PATTERNS.REVERB,
+    reverb_strength: null,
+    ring_candidate: true,
+  },
+]);
+
+// =============================================================================
 // Primary Highway Corridors (Level 5 Region)
 // All status: HYPOTHESIZED — awaiting validation through event data.
 // =============================================================================
@@ -355,5 +477,6 @@ module.exports = {
   FOUNDING_COMMUNITIES,
   METRO_NODES,
   FOUNDING_CORRIDORS,
+  RING_CANDIDATE_CORRIDORS,
   HIGHWAY_CORRIDORS,
 };
