@@ -109,9 +109,10 @@
 
 ### FLAG 11 — README.md: Platform Framed as Event App
 **File:** `README.md`
-**Issue:** Likely describes the platform as an event management tool without the NCR v2 evolution arc. (Needs verification — file not yet fully read in this session.)
+**Lines:** 1-5
+**Issue:** CONFIRMED. Line 3: "Core event infrastructure platform". Line 5: "powers community leagues and recurring events — from registration and scheduling to public-facing event pages and admin tools." No mention of NCR, community intelligence, hierarchy, or corridors. The README frames the platform entirely as an event tool.
 **Replacement language:**
-> Ensure README includes: "ourSharedEvents is event infrastructure that evolves into community intelligence. Phase 1 serves individual events. Phase 2 reveals cross-event patterns. Phase 3 produces geo-spatial intelligence through the NCR v2 hierarchy — from neighborhood blocks (Level 1) to national network (Level 7)."
+> After line 5 add: "Beyond event automation, ourSharedEvents is the foundation for community intelligence. As anonymous event data accumulates across the NCR v2 geographic hierarchy — from neighborhood blocks (Level 1 Community) to national network (Level 7 Network) — the platform produces geo-spatial intelligence: corridor connections, engagement density maps, and hyperlocal economic indicators."
 
 ---
 

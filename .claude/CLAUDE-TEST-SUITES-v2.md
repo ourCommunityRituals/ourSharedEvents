@@ -52,7 +52,7 @@ All are flagged `[ARCHIVE - NOT CURRENT]`. Do not treat as active spec.
 | `tests/e2e/scenarios/README.md:45` | [ARCHIVE - NOT CURRENT] CI/CD pipeline references Apps Script | Needs update |
 | `.github/DEPLOYMENT_TEST.md` | [ARCHIVE - NOT CURRENT] Google Apps Script deployment setup (lines 3-18) | Needs update |
 | `tests/e2e/README.md:362-400` | [ARCHIVE - NOT CURRENT] isGoogleAppsScript(), clasp deploy references | Needs update |
-| `tests/FORMS_WORKFLOW_TEST_SUMMARY.md` | [ARCHIVE - NOT CURRENT] Full file references MVP-EVENT-TOOLKIT, Config.gs, Apps Script runtime (25+ refs) | Needs update |
+| `tests/FORMS_WORKFLOW_TEST_SUMMARY.md` | [ARCHIVE - NOT CURRENT] Full file references MVP-EVENT-TOOLKIT, Config.gs, Apps Script runtime (16 refs) | Needs update |
 | `web/README.md:29` | References "No GAS Fetch" — actually correct (documents the migration away) | OK — keep |
 | `.security-reports/AUDIT_REPORT_2025-12-10.md:37-38` | [ARCHIVE - NOT CURRENT] @google/clasp dependency audit | Needs update |
 | `CONTRIBUTING.md:28` | [ARCHIVE - NOT CURRENT] References Code.gs dead exports | Needs update |
@@ -65,7 +65,7 @@ All are flagged `[ARCHIVE - NOT CURRENT]`. Do not treat as active spec.
 | `.devcontainer/README.md:31,162-163` | [ARCHIVE - NOT CURRENT] `github.com/zeventbooks/MVP-EVENT-TOOLKIT` | Needs update |
 | `archive/START_HERE.md:127,199,282-283,306` | [ARCHIVE - NOT CURRENT] Multiple zeventbooks/MVP-EVENT-TOOLKIT URLs | In archive/ — OK |
 | `tests/FORMS_WORKFLOW_TEST_SUMMARY.md:25,52,93` | [ARCHIVE - NOT CURRENT] `/home/user/MVP-EVENT-TOOLKIT/` paths | Needs update |
-| `tests/triangle/*/e2e/README.md` | [ARCHIVE - NOT CURRENT] `/home/user/MVP-EVENT-TOOLKIT/tests/` paths (12+ refs) | Needs update |
+| `tests/triangle/*/e2e/README.md` | [ARCHIVE - NOT CURRENT] `/home/user/MVP-EVENT-TOOLKIT/tests/` paths (21 refs across 4 files) | Needs update |
 
 ### ~/ZEVENTBOOKS References
 
@@ -75,9 +75,9 @@ No direct `~/ZEVENTBOOKS` path references found in the repository.
 
 ## Summary
 
-- **Total legacy references found:** 50+ across 16+ files
-- **In archive/ directory (acceptable):** ~30 references — these are historical, no action needed
-- **In active docs/tests (need update):** ~20 references in 8 files
+- **Total legacy references found:** 3,145 occurrences across 228 files (clasp, Apps Script, GAS, Code.gs, zeventbooks, MVP-EVENT-TOOLKIT)
+- **In archive/ directory (acceptable):** Majority — these are historical, no action needed
+- **In active docs/tests (need update):** 100+ references across 30+ files outside archive/
 - **Priority files to clean up:**
   1. `tests/FORMS_WORKFLOW_TEST_SUMMARY.md` — heaviest legacy concentration
   2. `tests/triangle/*/e2e/README.md` — MVP-EVENT-TOOLKIT paths
