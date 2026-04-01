@@ -250,6 +250,23 @@ Each story should include:
 | `.claude/outputs/` | Claude-generated artifacts (syncs with CoWork Outputs/) | As needed |
 | `.claude/research/` | Analysis, references (syncs with CoWork Research/) | As needed |
 | `.claude/skills/` | Reusable skill definitions | As needed |
+| `.claude/skills/ccr-protocol.md` | CCR Protocol — standard for all assessments, reviews, test gating, code reviews | Reference |
 | `.claude/sync/LINEAR-MAP.md` | Story ID ↔ Linear `OUR-XXX` mapping | After Linear import |
 | `docs/migration/PHASE-*.md` | Phase implementation guides | Per phase |
 | `docs/stories/*.md` | Detailed story specs | Per story |
+
+---
+
+## 8. CCR Protocol — Standard Review Methodology
+
+**CCR (Critical, Conservative, Recursive)** is the standard protocol for all assessments, reviews, test gating, and code reviews in this project. When anyone calls for a "CCR", run the protocol defined in `.claude/skills/ccr-protocol.md`.
+
+**When to invoke CCR:**
+- Code reviews and PR assessments
+- Production readiness reviews
+- Test gating decisions
+- Security assessments
+- Architecture change evaluations
+- Any request for "CCR", "confidence check", or "is this ready to ship"
+
+**Core contract:** No AI-assisted output earns artifact status until it survives recursive confidence testing at or above 95%. Below that threshold, the loop pauses and surfaces to a human.
