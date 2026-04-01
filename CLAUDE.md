@@ -250,6 +250,33 @@ Each story should include:
 | `.claude/outputs/` | Claude-generated artifacts (syncs with CoWork Outputs/) | As needed |
 | `.claude/research/` | Analysis, references (syncs with CoWork Research/) | As needed |
 | `.claude/skills/` | Reusable skill definitions | As needed |
+| `.claude/skills/ccr-protocol.md` | CCR Protocol — standard for all assessments, reviews, test gating, code reviews | Reference |
 | `.claude/sync/LINEAR-MAP.md` | Story ID ↔ Linear `OUR-XXX` mapping | After Linear import |
 | `docs/migration/PHASE-*.md` | Phase implementation guides | Per phase |
 | `docs/stories/*.md` | Detailed story specs | Per story |
+
+---
+
+## 8. CCR Protocol — Standard Review Methodology
+
+**CCR (Critical, Conservative, Recursive) v3.0** is the standard protocol for all assessments, reviews, test gating, and code reviews in this project. When anyone calls for a "CCR", run the protocol defined in `.claude/skills/ccr-protocol.md`.
+
+**When to invoke CCR:**
+- Code reviews and PR assessments
+- Production readiness reviews
+- Test gating decisions
+- Security assessments
+- Architecture change evaluations
+- Any request for "CCR", "confidence check", or "is this ready to ship"
+
+**Core contract:** No AI-assisted output earns artifact status until it survives recursive confidence testing at or above 95%. Below that threshold, the loop pauses, findings are corrected (reactive correction), and the process surfaces to a human.
+
+**Key v3.0 additions:**
+- Reactive correction rule — findings drive fixes between loops, not just reports
+- Governance artifact protection — CLAUDE.md, STORIES.md, protocol itself require 5+ loops
+- Evidence-based verification — "Verified" requires citable evidence, not "I looked at it"
+- Security Critical tier — no partial credit on security findings
+- CCR Lite — 1-loop fast path for low-risk changes
+- Escalation paths, time-boxing, peer review of worksheets
+- Threshold advancement framework — path from 95% to 99% gated by infrastructure economics
+- Transparency notes — honest framing of statistical claims and weight calibration
