@@ -5,6 +5,137 @@ User says: "CCR", "run a CCR", "code review", "assessment", "production readines
 
 ---
 
+# Executive Summary
+
+## What CCR Is
+
+CCR is a review protocol that makes confidence measurable. Before any AI-assisted output ships — a merged PR, a shipped fix, a documented decision — it must survive three layers of scrutiny (Critical, Conservative, Recursive) across multiple loops, scoring ≥ 95% on a weighted checklist. Below that threshold, the process stops, findings are fixed, and the score is recalculated. Above it, the artifact ships with a scored, auditable worksheet.
+
+**The core contract in one sentence:** You earn the right to ship by surviving your own scrutiny — recursively, conservatively, critically.
+
+## Why It Exists
+
+Every engineer has shipped something that broke because a surface wasn't mapped, a contract wasn't verified, or an environment assumption was wrong. Every team has had the argument: "I think it's ready" versus "I don't think it's ready." CCR replaces that argument with a number and a worksheet. It doesn't eliminate judgment — it structures it so it's scored, documented, and auditable.
+
+## How It Works — The 5-Minute Version
+
+**Step 1 — Classify.** What are you reviewing? A bug fix gets 3 loops. A security fix gets 3-4. A typo gets CCR Lite (1 loop). Governance docs get 5+.
+
+**Step 2 — Run loops.** Each loop passes through three layers:
+
+| Layer | The Question It Asks |
+|---|---|
+| **Critical** | What is the most dangerous assumption here — verified, or just assumed? |
+| **Conservative** | What is the worst-case if I'm wrong — does the fix still hold? |
+| **Recursive** | Has my confidence held, improved, or degraded across loops — honestly? |
+
+**Step 3 — Score.** Start at 100. Deduct points for every unresolved finding based on severity:
+
+| Severity | Deduction | When to Use |
+|---|---|---|
+| Regulatory Required | 25 pts | Federal legal obligation (HIPAA, COPPA). No partial credit. |
+| Security Critical | 15 pts | Exploitable vulnerability. No partial credit. |
+| Critical | 15 pts | Load-bearing — analysis fails if this is wrong |
+| High | 10 pts | Significant downstream risk |
+| Medium | 5 pts | Real gap, manageable if named |
+| Low | 2 pts | Improvement, not a blocker |
+
+**Step 4 — Gate check.** Score ≥ 95%? Advance to next loop. Score < 95%? Stop. Fix the findings. Re-score. Score drops between loops? Stop — confidence is decaying.
+
+**Step 5 — Fix between loops.** This is the key difference from other review frameworks: when you find a problem, you fix it before the next loop — not after the review. Findings drive fixes, not just reports.
+
+**Step 6 — Ship.** When the score is stable at ≥ 95% across two consecutive loops, the artifact ships with its scoring worksheet attached.
+
+## Where It Applies
+
+CCR is not a software-only tool. It applies to any handoff where the cost of being wrong exceeds the cost of running the loops.
+
+| Role | Loop Sequence | What 95% Means |
+|---|---|---|
+| **Product Owner** | Vision → Roadmap → Story | "I am confident this story is ready for Engineering" |
+| **Engineering** | Unit → Contract → Integration | "I am confident this is correct to hand to QA" |
+| **QA** | Manual → Automation → Regression | "I am confident this is correct to ship" |
+| **Security** | Threat Model → Attack Surface → Penetration | "I am confident the threat model holds" |
+| **DevOps / SRE** | Infrastructure → Pipeline → Observability | "I am confident the deploy path is verified" |
+
+Each role defines their own variable items. The scoring formula, threshold, and gate rules are the same for everyone.
+
+## What Engineers Will Ask First
+
+**"Isn't 95% arbitrary?"**
+It traces to Fisher's 1925 statistical convention (p < 0.05) — a century of validation across every scientific discipline. CCR adopts it as a calibration point, not a probability. It's high enough to filter noise, low enough to remain achievable. The path to 99% exists but is gated by infrastructure economics — when LLMs run locally and token cost is near-zero, 99% becomes pursuable. Not before.
+→ *Deep dive: Section 5*
+
+**"Who decides what severity to assign?"**
+You do, using the variable item sets for your review type (Security, Framework Upgrade, Bug Fix, or custom). The severity weights (25/15/10/5/2) are fixed — you don't change those. You own the items. You don't own the weights. Conservative classification is always safer: when in doubt, pick the higher severity.
+→ *Deep dive: Section 2.5*
+
+**"What counts as 'Verified'?"**
+Citable evidence only. A test result, a code path (file:line), a config value, a log entry, a screenshot. "I looked at it and it seems fine" is Partial (half deduction), not Verified (zero deduction). Evidence is what makes the worksheet auditable.
+→ *Deep dive: Section 2.5, Partial Credit Rules*
+
+**"Do I need to run this on every change?"**
+No. CCR Lite exists for low-risk, isolated, reversible changes (typo fixes, comment updates, formatting). One loop, base items only, 15 minutes. If any of six eligibility criteria fail, it escalates to standard CCR.
+→ *Deep dive: Section 7.1*
+
+**"How long does this take?"**
+CCR Lite: 15 minutes. Standard bug fix: ~1 hour. Security review: ~2 hours. The time budget is front-loaded verification that prevents expensive back-end rework. A finding that slips to production costs an incident. A finding caught in Loop 1 costs 20 minutes.
+→ *Deep dive: Section 7.3*
+
+**"What if my score is stuck below 95%?"**
+After 3 consecutive loops within 2% of each other and below threshold: restructure the change, not more loops. Split it smaller. Bring in a peer reviewer. Looping on a stable-but-insufficient score is wasted effort.
+→ *Deep dive: Section 7.2*
+
+**"This feels rigid."**
+The protocol is rigid in exactly the right places (formula, threshold, gates, heuristics — the invariant core) and flexible in exactly the right places (loop sequence, item sets, loop count, chunk scope — the variable surface). TCP/IP is rigid — the protocol never changes. The applications built on it are infinitely flexible. Same architecture.
+→ *Deep dive: Section 9.3*
+
+## Best Practices
+
+1. **Fix findings between loops** — do not just document them. Reactive correction is mandatory. (Section 3)
+2. **Start conservative** — if you're unsure between two severity levels, pick the higher one. You can always downgrade with evidence.
+3. **Cite evidence for every "Verified"** — the worksheet is only as trustworthy as its evidence.
+4. **Don't assign 95%+ in Loop 1** — Loop 1 is a surface pass. If you scored high, you stopped looking too early.
+5. **Don't round up** — 93% is 93%. The gate is not a negotiation.
+6. **Batch related findings** — multiple related issues across files go in one CCR run, not separate threads.
+7. **Scope each loop** — Loop 1 reads the specific file. Loop 2 expands to related surfaces. Loop 3 reads only the fix and its verification criteria. Don't re-process the whole repo every loop.
+8. **Use the decision tree** — match your review type to the right variable item set before starting. (Section 2.5)
+9. **Peer review near-threshold scores** — if your final score is 95-97%, have a second reviewer verify the worksheet.
+10. **Track scores over time** — consistent patterns reveal systemic gaps that individual CCR runs won't catch. (Section 11.4)
+
+## Risks to Watch For
+
+| Risk | What It Looks Like | Mitigation |
+|---|---|---|
+| **Form without substance** | Loops run as checkbox exercise, 95% assigned without pressure | Model honest scrutiny. The loops only work if you're willing to stop. |
+| **Score inflation** | "Partial" assigned to findings that are actually "Unverified" | Peer review of worksheets. Evidence requirement for "Verified." |
+| **Overhead avoidance** | Team skips CCR on "small" changes that turn out to be not small | Use CCR Lite for genuinely small changes. If criteria fail, escalate. |
+| **Late discovery cost** | Finding surfaces in production instead of Loop 1 | The loop position penalty makes late discovery mathematically expensive. |
+| **Governance drift** | Someone modifies CLAUDE.md or this protocol without elevated review | Governance artifacts require 5+ loops. Protocol requires CCR to modify itself. |
+
+---
+
+## Document Map
+
+Everything above is the 2-page summary. Everything below is the supporting deep dive, organized by section:
+
+| Section | What It Covers | Start Here If You Need |
+|---|---|---|
+| Quick Reference Card | Cheat sheet for daily use | A one-glance reminder during a CCR run |
+| 1. Foundation | Three layers, origin, transparency notes | Understanding the philosophical basis |
+| 2. Execution | Loops, gates, scoring formula, heuristics, worked example | The full math and mechanics |
+| 3. Reactive Correction | Fix-between-loops mandate, penalty math, bidirectional correction | Understanding why "report and move on" fails |
+| 4. Governance Protection | Document hierarchy, self-protection, when docs should change | Modifying CLAUDE.md, STORIES.md, or this protocol |
+| 5. Threshold Decision | Why 95%, why not 99%, advancement framework | Defending the threshold to stakeholders |
+| 6. Operational Standards | Chunking, output format, anti-patterns | Running CCR efficiently and avoiding pitfalls |
+| 7. Practical Application | CCR Lite, escalation, time-boxing, peer review | Day-to-day operational questions |
+| 8. Cross-Discipline | All Scrum roles, IT ops, professions, universal standard | Applying CCR outside Engineering |
+| 9. Presenting to a Team | Merits, risks, rigidity answer, how to walk into the room | Rolling CCR out to a new team |
+| 10. Regulatory Extensions | HIPAA, COPPA, Compound — full worksheets and formulas | Regulated surfaces (PHI, child data) |
+| 11. Reference | Worked examples, onboarding, calibration, glossary, doc info | Getting started, training new team members |
+
+---
+
 ## Quick Reference Card
 
 ```
