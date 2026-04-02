@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>OurCommunityRituals — Executive Briefing</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f8f9fa;color:#212529;-webkit-text-size-adjust:100%;line-height:1.6}
+#gate{min-height:100vh;min-height:100dvh;display:flex;align-items:center;justify-content:center;background:#1a1a2e;padding:1.5rem}
+.gate-card{background:#fff;border-radius:16px;padding:2.5rem 2rem;max-width:360px;width:100%;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,.25)}
+.gate-card h1{font-size:1.35rem;font-weight:700;color:#1a1a2e;margin-bottom:.25rem}
+.gate-card .subtitle{font-size:.85rem;color:#64748b;margin-bottom:2rem;font-weight:500}
+.gate-card input{width:100%;padding:.85rem 1rem;border:2px solid #e2e8f0;border-radius:10px;font-size:1rem;text-align:center;letter-spacing:.08em;margin-bottom:.75rem;outline:none;transition:border-color .2s}
+.gate-card input:focus{border-color:#4361ee}
+.gate-card button{width:100%;padding:.85rem;background:#4361ee;color:#fff;border:none;border-radius:10px;font-size:1rem;font-weight:600;cursor:pointer;transition:background .2s}
+.gate-card button:active{background:#3451d1;transform:scale(.97)}
+.gate-error{color:#e03131;font-size:.82rem;margin-top:.5rem;min-height:1.2em}
+#briefing{display:none}
+header{background:#1a1a2e;color:#fff;padding:1.5rem 1.25rem;text-align:center;position:sticky;top:0;z-index:10}
+header h1{font-size:1.15rem;font-weight:600;letter-spacing:.02em}
+header .tagline{font-size:.75rem;opacity:.65;margin-top:.15rem}
+main{max-width:680px;margin:0 auto;padding:1.5rem 1rem 4rem}
+.section{margin-bottom:2.5rem}
+.section-label{font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:#4361ee;margin-bottom:.35rem}
+.section h2{font-size:1.25rem;font-weight:700;color:#1a1a2e;margin-bottom:.75rem}
+.section>p,.section>blockquote{font-size:.95rem;color:#495057;margin-bottom:1rem}
+blockquote{border-left:3px solid #4361ee;padding-left:1rem;font-style:italic;color:#64748b}
+.product-group{margin-bottom:1.75rem}
+.group-label{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#64748b;margin-bottom:.65rem;padding-bottom:.35rem;border-bottom:1px solid #e2e8f0}
+.card{background:#fff;border-radius:12px;padding:1.15rem 1.1rem;margin-bottom:.75rem;box-shadow:0 1px 4px rgba(0,0,0,.06);border-left:3px solid #4361ee}
+.card.core{border-left-color:#2f9e44}
+.card.cultural{border-left-color:#9c36b5}
+.card.infra{border-left-color:#f59f00}
+.card h4{font-size:1rem;font-weight:700;color:#1a1a2e;margin-bottom:.3rem;display:flex;align-items:center;gap:.5rem;flex-wrap:wrap}
+.badge{display:inline-block;padding:.12rem .5rem;border-radius:4px;font-size:.65rem;font-weight:700;letter-spacing:.03em;white-space:nowrap}
+.badge.prelaunch{background:#fff3cd;color:#856404}
+.badge.active{background:#d3f9d8;color:#2f9e44}
+.badge.planned{background:#dbe4ff;color:#364fc7}
+.badge.concept{background:#f1f3f5;color:#868e96}
+.card p{font-size:.88rem;color:#495057;line-height:1.55}
+.pipeline{display:flex;align-items:center;gap:.5rem;margin:1rem 0;flex-wrap:wrap;justify-content:center}
+.pipeline .step{background:#fff;border:2px solid #e2e8f0;border-radius:10px;padding:.6rem 1rem;font-size:.82rem;font-weight:600;color:#1a1a2e;text-align:center}
+.pipeline .step.highlight{border-color:#4361ee;background:#eef1ff}
+.pipeline .step.core-step{border-color:#2f9e44;background:#ebfbee}
+.pipeline .arrow{color:#4361ee;font-size:1.1rem;font-weight:700}
+.diagram-box{background:#fff;border-radius:12px;padding:1.5rem 1rem;box-shadow:0 1px 4px rgba(0,0,0,.06);margin:1rem 0;text-align:center}
+.triangle-wrap{position:relative;width:260px;height:230px;margin:0 auto}
+.tri-node{position:absolute;width:90px;height:90px;border-radius:50%;display:flex;align-items:center;justify-content:center;text-align:center;font-size:.7rem;font-weight:700;line-height:1.2;color:#fff}
+.tri-node.events{top:0;left:50%;transform:translateX(-50%);background:#4361ee}
+.tri-node.sponsors{bottom:0;left:0;background:#f59f00}
+.tri-node.customers{bottom:0;right:0;background:#2f9e44}
+.tri-center{position:absolute;top:55%;left:50%;transform:translate(-50%,-50%);background:#1a1a2e;color:#fff;border-radius:8px;padding:.4rem .65rem;font-size:.62rem;font-weight:700;letter-spacing:.02em;white-space:nowrap}
+.tri-line{position:absolute;background:#dee2e6;z-index:0}
+.tri-line.left{width:2px;height:130px;top:70px;left:68px;transform:rotate(25deg)}
+.tri-line.right{width:2px;height:130px;top:70px;right:68px;transform:rotate(-25deg)}
+.tri-line.bottom{height:2px;width:120px;bottom:45px;left:50%;transform:translateX(-50%)}
+.ring-stages{display:flex;flex-wrap:wrap;justify-content:center;gap:.5rem;margin:1rem 0}
+.ring-stage{background:#fff;border:2px solid #e2e8f0;border-radius:10px;padding:.55rem .85rem;font-size:.78rem;font-weight:600;color:#1a1a2e;text-align:center;min-width:100px;position:relative}
+.ring-stage::after{content:"→";position:absolute;right:-1rem;top:50%;transform:translateY(-50%);color:#4361ee;font-weight:700;font-size:.9rem}
+.ring-stage:last-child::after{content:"↻";color:#2f9e44}
+.ring-label{font-size:.65rem;color:#64748b;font-weight:400;display:block}
+.moat-grid{display:grid;grid-template-columns:1fr 1fr;gap:.65rem;margin:1rem 0}
+@media(max-width:480px){.moat-grid{grid-template-columns:1fr}}
+.moat-card{background:#fff;border-radius:10px;padding:1rem;box-shadow:0 1px 4px rgba(0,0,0,.06)}
+.moat-card h4{font-size:.85rem;font-weight:700;color:#4361ee;margin-bottom:.25rem}
+.moat-card p{font-size:.8rem;color:#495057;line-height:1.45}
+.compound-list{list-style:none;padding:0}
+.compound-list li{padding:.75rem 0;border-bottom:1px solid #f1f3f5;font-size:.9rem;color:#495057}
+.compound-list li:last-child{border-bottom:none}
+.compound-list strong{color:#1a1a2e}
+.horizon-steps{display:flex;gap:.5rem;margin:1rem 0;flex-wrap:wrap}
+.horizon-step{flex:1;min-width:150px;background:#fff;border-radius:10px;padding:1rem;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,.06)}
+.horizon-step .phase-num{font-size:.65rem;font-weight:700;color:#4361ee;text-transform:uppercase;letter-spacing:.08em}
+.horizon-step .phase-name{font-size:.9rem;font-weight:700;color:#1a1a2e;margin:.25rem 0}
+.horizon-step .phase-desc{font-size:.75rem;color:#64748b}
+footer{text-align:center;padding:2rem 1rem;font-size:.72rem;color:#adb5bd;border-top:1px solid #f1f3f5}
+.spacer{height:1.5rem}
+.callout{background:#1a1a2e;color:#fff;border-radius:12px;padding:1.5rem 1.25rem;margin:1.5rem 0;text-align:center}
+.callout p{font-size:.95rem;line-height:1.6;opacity:.9}
+.callout .attribution{font-size:.75rem;opacity:.5;margin-top:.5rem}
+</style>
+</head>
+<body>
+
+<!-- ═══════════ PASSWORD GATE ═══════════ -->
+<div id="gate">
+  <div class="gate-card">
+    <h1>OurCommunityRituals</h1>
+    <p class="subtitle">Executive Briefing</p>
+    <form id="gate-form">
+      <input type="password" id="gate-pw" placeholder="Access code" autocomplete="off" autofocus>
+      <button type="submit">Continue</button>
+      <p class="gate-error" id="gate-error"></p>
+    </form>
+  </div>
+</div>
+
+<!-- ═══════════ BRIEFING CONTENT ═══════════ -->
+<div id="briefing">
+<header>
+  <h1>OurCommunityRituals</h1>
+  <div class="tagline">Executive Platform Overview &middot; Confidential</div>
+</header>
+
+<main>
+
+<!-- ── 1. THE VISION ── -->
+<section class="section">
+  <div class="section-label">Section 1</div>
+  <h2>The Vision</h2>
+  <p>OurCommunityRituals is building <strong>community infrastructure that compounds</strong>. Not an app. Not a marketplace. An interconnected platform of products that serve the hyperlocal economy &mdash; the neighborhood bar hosting trivia, the church opening its doors for dinner, the rec league that brings strangers together.</p>
+  <p>Each product in the ecosystem generates data. That data feeds the next product. The more communities use it, the smarter and more valuable the entire system becomes. This is the moat &mdash; and it deepens with every event, every scan, every meal shared.</p>
+</section>
+
+<!-- ── 2. PRODUCT ECOSYSTEM ── -->
+<section class="section">
+  <div class="section-label">Section 2</div>
+  <h2>The Product Ecosystem</h2>
+  <p>Nine products across five categories. Some generate revenue now. Some need the core platform first. All feed each other.</p>
+
+  <!-- Pre-Launch Independent -->
+  <div class="product-group">
+    <div class="group-label">Pre-Launch &mdash; Independent (No platform dependency)</div>
+    <div class="card">
+      <h4>ourSharedSpaces <span class="badge prelaunch">Pre-Launch</span></h4>
+      <p>Physical space rentals &mdash; starting with bocce court bookings. Generates revenue before the platform is live. Proves demand and builds the customer base that later flows into ourSharedEvents.</p>
+    </div>
+    <div class="card">
+      <h4>ourRecordStories <span class="badge prelaunch">Pre-Launch</span></h4>
+      <p>Record-night social events and storytelling experiences. Vinyl listening sessions that bring people together around music and memory. Standalone events that benefit greatly from ourSharedEvents once it's live &mdash; registration, check-in, post-event analytics all plug in.</p>
+    </div>
+  </div>
+
+  <!-- Core Platform Pipeline -->
+  <div class="product-group">
+    <div class="group-label">Core Platform Pipeline</div>
+    <div class="pipeline">
+      <div class="step highlight">ourPulse</div>
+      <div class="arrow">&rarr;</div>
+      <div class="step core-step">ourSharedEvents</div>
+    </div>
+    <div class="card core">
+      <h4>ourSharedEvents <span class="badge active">Active Build</span></h4>
+      <p><strong>The core platform.</strong> Event creation, QR-based registration, check-in, surveys, email capture, sponsor tracking, and shared analytics. Everything in the ecosystem connects here. Three-tier model (Free / Mid / Enterprise) lets anyone from a neighborhood bar to a national franchise use the same system.</p>
+    </div>
+    <div class="card">
+      <h4>ourPulse <span class="badge planned">Planned</span></h4>
+      <p>The on-ramp. League consulting &mdash; belts, community playlists, operational playbooks. Helps organizers who aren't tech-savvy get their leagues running, then feeds those leagues directly into ourSharedEvents. This is how we acquire and activate users without cold outreach.</p>
+    </div>
+  </div>
+
+  <!-- Technical Backbone -->
+  <div class="product-group">
+    <div class="group-label">Technical Backbone</div>
+    <div class="card infra">
+      <h4>ourSharedMagnets <span class="badge concept">Infrastructure</span></h4>
+      <p>The Cloudflare infrastructure layer that supports ourSharedEvents. <strong>At scale, this becomes the white-label engine.</strong> When a franchise or large organizer signs up, Magnets provisions an instant, branded front-end on their own domain &mdash; powered entirely by the ourSharedEvents backbone. This is what turns one platform into many storefronts.</p>
+    </div>
+  </div>
+
+  <!-- Community Products -->
+  <div class="product-group">
+    <div class="group-label">Community Products (Powered by ourSharedEvents)</div>
+    <div class="card">
+      <h4>ourSharedTable <span class="badge planned">Planned</span></h4>
+      <p>Churches, businesses, and us &mdash; working together to open doors for meals with zero agendas. Sunday dinners once a quarter with local business sponsorship. Eat until the food is gone. No agenda. Start mixed.</p>
+    </div>
+    <div class="callout">
+      <p>&ldquo;When the data shows growth, then don&rsquo;t tell us we are divided.&rdquo;</p>
+      <div class="attribution">&mdash; ourSharedTable founding principle</div>
+    </div>
+    <div class="card">
+      <h4>OurRecNights <span class="badge planned">Planned &middot; Q3 2026</span></h4>
+      <p>Recreational night leagues &mdash; bocce as the anchor sport. Adult social competition that drives repeat engagement, sponsor visibility, and community formation. First consumer product built on the ourSharedEvents platform.</p>
+    </div>
+  </div>
+
+  <!-- Cultural -->
+  <div class="product-group">
+    <div class="group-label">Cultural Product</div>
+    <div class="card cultural">
+      <h4>OurWKRP <span class="badge concept">Concept</span></h4>
+      <p>Founder. Kids. Friends. Build monthly personal, team, relational, and whole-group playlists to show we are cultural. Music curation as community signal.</p>
+    </div>
+    <div class="callout">
+      <p>&ldquo;As AI creates more and more crap, this is our human answer.&rdquo;</p>
+      <div class="attribution">&mdash; OurWKRP</div>
+    </div>
+  </div>
+
+  <!-- Research -->
+  <div class="product-group">
+    <div class="group-label">Research &amp; Data</div>
+    <div class="card">
+      <h4>ourEventRings <span class="badge concept">Concept</span></h4>
+      <p>The research and data analysis layer. Aggregates anonymized event data from across the ecosystem to surface patterns &mdash; venue performance, time-of-week trends, sponsor ROI, community growth signals. This is where raw event data becomes intelligence.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ── 3. HOW THEY CONNECT ── -->
+<section class="section">
+  <div class="section-label">Section 3</div>
+  <h2>How They Connect</h2>
+  <p>Every product either <strong>feeds into</strong> or <strong>is powered by</strong> the core platform. Nothing is standalone by accident.</p>
+  <div class="diagram-box">
+    <div style="font-size:.82rem;color:#495057;line-height:1.8;text-align:left;max-width:420px;margin:0 auto">
+      <strong style="color:#1a1a2e">Revenue now:</strong><br>
+      ourSharedSpaces &amp; ourRecordStories &rarr; <em>cash flow + customer base</em><br><br>
+      <strong style="color:#1a1a2e">Acquisition funnel:</strong><br>
+      ourPulse (consulting) &rarr; ourSharedEvents (platform)<br><br>
+      <strong style="color:#1a1a2e">Consumer products on the platform:</strong><br>
+      ourSharedTable, OurRecNights, ourRecordStories<br><br>
+      <strong style="color:#1a1a2e">Scale layer:</strong><br>
+      ourSharedMagnets &rarr; white-label any of the above<br><br>
+      <strong style="color:#1a1a2e">Intelligence layer:</strong><br>
+      ourEventRings &rarr; patterns from all event data<br><br>
+      <strong style="color:#1a1a2e">Cultural signal:</strong><br>
+      OurWKRP &rarr; human proof the community is real
+    </div>
+  </div>
+</section>
+
+<!-- ── 4. THE TRIANGLE ── -->
+<section class="section">
+  <div class="section-label">Section 4</div>
+  <h2>The Triangle Framework</h2>
+  <p>Every event creates a three-sided value loop. All three vertices must win, or the model doesn't sustain.</p>
+  <div class="diagram-box">
+    <div class="triangle-wrap">
+      <div class="tri-line left"></div>
+      <div class="tri-line right"></div>
+      <div class="tri-line bottom"></div>
+      <div class="tri-node events">Events</div>
+      <div class="tri-node sponsors">Sponsors</div>
+      <div class="tri-node customers">Customers</div>
+      <div class="tri-center">SharedReports</div>
+    </div>
+    <div style="margin-top:.75rem;font-size:.82rem;color:#64748b;line-height:1.6;text-align:left;max-width:400px;margin-left:auto;margin-right:auto">
+      <strong>Events</strong> (top) &mdash; The gatherings. The core entity.<br>
+      <strong>Sponsors</strong> (left) &mdash; Brands supporting events. Placement + tracking.<br>
+      <strong>Customers</strong> (right) &mdash; Attendees. QR scans and shortlinks.<br>
+      <strong>SharedReports</strong> (center) &mdash; The proof layer. Validates value for all three.
+    </div>
+  </div>
+</section>
+
+<!-- ── 5. THE RING (NCR FLYWHEEL) ── -->
+<section class="section">
+  <div class="section-label">Section 5</div>
+  <h2>The Ring &mdash; NCR Flywheel</h2>
+  <p>Five lifecycle stages in a clockwise loop. Each stage feeds the next. The flywheel gets faster with every cycle.</p>
+  <div class="diagram-box">
+    <div class="ring-stages">
+      <div class="ring-stage">Ads<span class="ring-label">Visibility</span></div>
+      <div class="ring-stage">Pre-Events<span class="ring-label">Incubation</span></div>
+      <div class="ring-stage">Events<span class="ring-label">Engagement</span></div>
+      <div class="ring-stage">Post-Events<span class="ring-label">Analytics</span></div>
+      <div class="ring-stage">SharedReports<span class="ring-label">Proof</span></div>
+    </div>
+    <p style="font-size:.8rem;color:#64748b;margin-top:.75rem">SharedReports prove results &rarr; which fund the next round of Ads &rarr; the cycle compounds.</p>
+  </div>
+</section>
+
+<!-- ── 6. THE MOAT ── -->
+<section class="section">
+  <div class="section-label">Section 6</div>
+  <h2>The Moat</h2>
+  <p>Six engineering decisions that create initial advantage and compound over time. These are the differentiators.</p>
+  <div class="moat-grid">
+    <div class="moat-card">
+      <h4>Anonymous-First Data</h4>
+      <p>No personal data required for core flows. Privacy is the product feature, not the compliance burden. Customers trust it because we never had their data to lose.</p>
+    </div>
+    <div class="moat-card">
+      <h4>3-Tier Feature Flags</h4>
+      <p>Free / Mid / Enterprise. One codebase serves a neighborhood bar and a national franchise. Same QR system, same form quality at every tier. Tiers unlock operational tools, never degrade customer experience.</p>
+    </div>
+    <div class="moat-card">
+      <h4>Brand Isolation</h4>
+      <p>Dual-key pattern in every database query. Each sponsor sees only their data. Multi-tenant from day one &mdash; not bolted on later.</p>
+    </div>
+    <div class="moat-card">
+      <h4>Universal Event Codes</h4>
+      <p>Seven color-coded QR codes per event. One scan to register, check in, take a survey, or sign up. Physical-to-digital bridge that works at every scale.</p>
+    </div>
+    <div class="moat-card">
+      <h4>Phased Architecture</h4>
+      <p>Google Sheets &rarr; Edge SQLite (D1) &rarr; Firebase Auth. Crawl-walk-run without rewrites. Ship now, scale later, never rebuild.</p>
+    </div>
+    <div class="moat-card">
+      <h4>White-Label at Scale</h4>
+      <p>ourSharedMagnets provisions branded front-ends on custom domains, all powered by the same backbone. One platform, many storefronts. Every new client multiplies the network.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ── 7. NCR HORIZON ── -->
+<section class="section">
+  <div class="section-label">Section 7</div>
+  <h2>The Horizon &mdash; Where This Goes</h2>
+  <p>The platform evolves through three horizons. Each unlocks new audiences and new revenue.</p>
+  <div class="horizon-steps">
+    <div class="horizon-step">
+      <div class="phase-num">Phase 1 &mdash; Now</div>
+      <div class="phase-name">Event Automation</div>
+      <div class="phase-desc">Individual events generate anonymous scan data. QR-in, QR-out. The foundation.</div>
+    </div>
+    <div class="horizon-step">
+      <div class="phase-num">Phase 2 &mdash; Next</div>
+      <div class="phase-name">Pattern Recognition</div>
+      <div class="phase-desc">Cross-event aggregation. Venue performance, time patterns, sponsor ROI. Data becomes intelligence.</div>
+    </div>
+    <div class="horizon-step">
+      <div class="phase-num">Phase 3 &mdash; Future</div>
+      <div class="phase-name">Geo-Spatial Intelligence</div>
+      <div class="phase-desc">Scan density maps. Hyperlocal economic mapping. Community planning signals. Government and policy audiences.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ── 8. WHY THIS COMPOUNDS ── -->
+<section class="section">
+  <div class="section-label">Section 8</div>
+  <h2>Why This Compounds</h2>
+  <ul class="compound-list">
+    <li><strong>Every event generates data.</strong> That data makes SharedReports more valuable. Better reports attract more sponsors. More sponsors fund more events. The flywheel accelerates.</li>
+    <li><strong>Every product feeds another.</strong> ourPulse brings organizers to ourSharedEvents. ourSharedEvents powers OurRecNights. OurRecNights creates data for ourEventRings. The ecosystem is the product.</li>
+    <li><strong>Every white-label client multiplies the network.</strong> ourSharedMagnets means each new franchise doesn't dilute the platform &mdash; it strengthens it. More storefronts, more events, more data, deeper moat.</li>
+    <li><strong>Anonymous data is a feature, not a limitation.</strong> Competitors collect PII and inherit liability. We collect patterns and inherit trust. The privacy-first approach becomes harder to replicate over time because it's architectural, not policy.</li>
+    <li><strong>Community is the lock-in.</strong> ourSharedTable, OurWKRP, bocce leagues &mdash; these aren't features you switch away from. They're relationships. The platform holds because the community holds.</li>
+  </ul>
+</section>
+
+<div class="spacer"></div>
+
+</main>
+
+<footer>
+  Confidential &mdash; OurCommunityRituals 2026<br>
+  For internal executive review only
+</footer>
+</div>
+
+<!-- ═══════════ PASSWORD GATE SCRIPT ═══════════ -->
+<script>
+(function(){
+  var H='60f4a6cff093f92133bd7c07d86fad75149f3dc4537476b66ab22d27c0ceb4d1';
+  var gate=document.getElementById('gate');
+  var briefing=document.getElementById('briefing');
+  var form=document.getElementById('gate-form');
+  var pw=document.getElementById('gate-pw');
+  var err=document.getElementById('gate-error');
+  function unlock(){gate.style.display='none';briefing.style.display='block';try{sessionStorage.setItem('ocr_exec','1')}catch(e){}}
+  try{if(sessionStorage.getItem('ocr_exec')==='1'){unlock()}}catch(e){}
+  form.addEventListener('submit',function(e){
+    e.preventDefault();
+    var val=pw.value;
+    crypto.subtle.digest('SHA-256',new TextEncoder().encode(val)).then(function(buf){
+      var hex=Array.from(new Uint8Array(buf)).map(function(b){return b.toString(16).padStart(2,'0')}).join('');
+      if(hex===H){unlock()}else{err.textContent='Incorrect access code.';pw.value='';pw.focus()}
+    });
+  });
+})();
+</script>
+</body>
+</html>
