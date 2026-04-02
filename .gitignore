@@ -62,3 +62,14 @@ build/
 
 # Minified template build artifacts
 cloudflare-proxy/templates-min/
+
+# SSH keys and credentials — never commit
+id_ed25519*
+id_rsa*
+*.pem
+*.pud.txt
+
+# Claude Code local config — machine-specific, not project state
+.claude/settings.local.json
+.claude/agents/
+.claude/worktrees/
