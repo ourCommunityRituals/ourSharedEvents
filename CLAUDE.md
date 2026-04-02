@@ -105,6 +105,7 @@ workers/oursharedevents/src/
 | Product | Repo | Purpose |
 |---|---|---|
 | **ourSharedEvents** | `ourCommunityRituals/ourSharedEvents` | Core platform — event infrastructure, API, admin |
+| **ourWKRP** | `ourCommunityRituals/ourWKRP` | Music catalog — Spotify auth, sync, discover, create. CF Worker + D1/KV. Contributors join with OurRecordStories via `wkrp:contributors` |
 | **ourRecNights** | `ourCommunityRituals/ourRecNights` | Recreational night leagues |
 | **OurRecordNights** | — | Record-night social events |
 | **OurOpenTables** | — | Open-table community dinners |
