@@ -7,13 +7,13 @@
 
 ## Quick Reference
 
-| Task | Where to Look |
-|------|---------------|
-| View CI run | GitHub Actions tab |
-| See test artifacts | Actions > Run > Artifacts section |
-| Find requestId | Test output or artifact logs |
+| Task                 | Where to Look                                        |
+| -------------------- | ---------------------------------------------------- |
+| View CI run          | GitHub Actions tab                                   |
+| See test artifacts   | Actions > Run > Artifacts section                    |
+| Find requestId       | Test output or artifact logs                         |
 | Check staging health | `curl https://stg.eventangle.com/api/health/backend` |
-| Reproduce locally | `npm run ci:local` |
+| Reproduce locally    | `npm run ci:local`                                   |
 
 ---
 
@@ -53,15 +53,15 @@ Understanding which stage failed helps narrow down the investigation:
 
 ### Common Failure Patterns
 
-| Pattern | Likely Cause |
-|---------|--------------|
-| Security Check failed | npm audit found vulnerabilities |
-| Lint failed | ESLint errors in code |
-| Unit Tests failed | Test assertion failure |
-| Contract Tests failed | Schema drift or API change |
-| Guards failed | MVP guard violation |
-| API Smoke Tests failed | Live environment issue |
-| UI Smoke Tests failed | Browser test issue |
+| Pattern                | Likely Cause                    |
+| ---------------------- | ------------------------------- |
+| Security Check failed  | npm audit found vulnerabilities |
+| Lint failed            | ESLint errors in code           |
+| Unit Tests failed      | Test assertion failure          |
+| Contract Tests failed  | Schema drift or API change      |
+| Guards failed          | MVP guard violation             |
+| API Smoke Tests failed | Live environment issue          |
+| UI Smoke Tests failed  | Browser test issue              |
 
 ---
 
@@ -85,6 +85,7 @@ Error: Request failed
 ```
 
 **Use requestId to:**
+
 - Correlate with server logs
 - Search Cloudflare dashboard
 - Find related errors in DIAG sheet
@@ -97,13 +98,13 @@ Most CI runs produce artifacts with detailed reports.
 
 ### Available Artifacts
 
-| Artifact | Contents |
-|----------|----------|
-| `playwright-report` | HTML test report |
-| `test-results` | Screenshots, traces |
-| `dependency-audit-report` | npm audit JSON |
-| `stg-base-url` | Staging URL used |
-| `prod-base-url` | Production URL used |
+| Artifact                  | Contents            |
+| ------------------------- | ------------------- |
+| `playwright-report`       | HTML test report    |
+| `test-results`            | Screenshots, traces |
+| `dependency-audit-report` | npm audit JSON      |
+| `stg-base-url`            | Staging URL used    |
+| `prod-base-url`           | Production URL used |
 
 ### Download Artifacts
 
@@ -166,6 +167,7 @@ DEBUG=pw:api npm run test:smoke
 ### Security Check Failed
 
 **npm audit vulnerabilities:**
+
 ```bash
 # See what's vulnerable
 npm audit
@@ -178,6 +180,7 @@ npm audit fix --force  # Use with caution
 ```
 
 **Secrets scanning failed:**
+
 - Check for accidentally committed credentials
 - Look for patterns like API keys, private keys
 
@@ -209,6 +212,7 @@ npm run test:unit -- --coverage
 ### Contract Tests Failed
 
 **Schema drift:**
+
 ```bash
 npm run test:contract
 
@@ -217,6 +221,7 @@ npm run test -- tests/contract/bundles.contract.test.js
 ```
 
 **Common causes:**
+
 - API response structure changed
 - Schema definition changed
 - Bundle format changed
@@ -236,17 +241,20 @@ node scripts/check-schema-fields.js # Schema compliance
 ### API Smoke Tests Failed
 
 1. **Check environment health:**
+
 ```bash
 curl -s https://stg.eventangle.com/api/health/backend | jq
 ```
 
 2. **Check specific failing endpoint:**
+
 ```bash
 # From test output, identify failing URL
 curl -s "https://stg.eventangle.com/api/v2/events" | jq
 ```
 
 3. **Look for requestId in failure:**
+
 ```
 Use requestId to search:
 - Cloudflare dashboard logs
@@ -260,11 +268,13 @@ Use requestId to search:
    - Trace files for replay
 
 2. **View trace locally:**
+
 ```bash
 npx playwright show-trace trace.zip
 ```
 
 3. **Check for GAS HTML leak:**
+
 ```bash
 curl -s https://stg.eventangle.com/events | grep -c "Google Apps Script"
 # Should be 0
@@ -279,6 +289,7 @@ curl -s https://stg.eventangle.com/events | grep -c "Google Apps Script"
 **Symptoms:** Test passes locally but fails in CI intermittently
 
 **Solutions:**
+
 1. Add retry logic to test
 2. Increase timeouts
 3. Check for race conditions
@@ -289,6 +300,7 @@ curl -s https://stg.eventangle.com/events | grep -c "Google Apps Script"
 **Symptoms:** Tests work against staging but CI fails
 
 **Solutions:**
+
 1. Verify BASE_URL in workflow
 2. Check secrets are set correctly
 3. Verify staging deployment completed
@@ -298,6 +310,7 @@ curl -s https://stg.eventangle.com/events | grep -c "Google Apps Script"
 **Symptoms:** Tests fail with timeout error
 
 **Solutions:**
+
 1. Check if staging is slow/down
 2. Increase test timeouts
 3. Check for network issues
@@ -307,6 +320,7 @@ curl -s https://stg.eventangle.com/events | grep -c "Google Apps Script"
 **Symptoms:** Tests fail with 401/403 errors
 
 **Solutions:**
+
 1. Verify ADMIN_KEY is set in secrets
 2. Check secret rotation status
 3. Verify token format

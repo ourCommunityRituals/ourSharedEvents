@@ -62,23 +62,23 @@ BASE_URL=https://www.eventangle.com npm run test:smoke
 
 ### Environment Variables
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `BASE_URL` | `https://stg.eventangle.com` | Target URL for tests |
-| `ADMIN_KEY` | `CHANGE_ME_root` | Admin key for write operations |
-| `BRAND_ID` | `root` | Brand to test against |
-| `USE_PRODUCTION` | `false` | Set to `true` to target production |
-| `TEST_ENV` | (auto-detected) | Explicit environment name |
+| Variable         | Default                      | Description                        |
+| ---------------- | ---------------------------- | ---------------------------------- |
+| `BASE_URL`       | `https://stg.eventangle.com` | Target URL for tests               |
+| `ADMIN_KEY`      | `CHANGE_ME_root`             | Admin key for write operations     |
+| `BRAND_ID`       | `root`                       | Brand to test against              |
+| `USE_PRODUCTION` | `false`                      | Set to `true` to target production |
+| `TEST_ENV`       | (auto-detected)              | Explicit environment name          |
 
 ### Supported Environments
 
-| Environment | URL | Use Case |
-|-------------|-----|----------|
-| **Staging** (Default) | `https://stg.eventangle.com` | Safe sandbox for all tests |
-| **Production** | `https://www.eventangle.com` | Read-only validation |
-| **QA** | `https://zeventbooks.com` | Secondary testing |
-| **Local** | `http://localhost:3000` | Development |
-| **GAS Direct** | `https://script.google.com/...` | Debugging |
+| Environment           | URL                             | Use Case                   |
+| --------------------- | ------------------------------- | -------------------------- |
+| **Staging** (Default) | `https://stg.eventangle.com`    | Safe sandbox for all tests |
+| **Production**        | `https://www.eventangle.com`    | Read-only validation       |
+| **QA**                | `https://zeventbooks.com`       | Secondary testing          |
+| **Local**             | `http://localhost:3000`         | Development                |
+| **GAS Direct**        | `https://script.google.com/...` | Debugging                  |
 
 ### Example Commands
 
@@ -131,15 +131,15 @@ tests/
 
 ### Test Categories
 
-| Category | Command | Description |
-|----------|---------|-------------|
+| Category      | Command                 | Description            |
+| ------------- | ----------------------- | ---------------------- |
 | **Story 3.3** | `npm run test:story3.3` | Critical user journeys |
-| **Smoke** | `npm run test:smoke` | Quick validation |
-| **Pages** | `npm run test:pages` | Detailed page tests |
-| **Flows** | `npm run test:flows` | User workflow tests |
-| **API** | `npm run test:api` | API endpoint tests |
-| **Negative** | `npm run test:negative` | Error handling |
-| **All E2E** | `npm run test:e2e` | Complete suite |
+| **Smoke**     | `npm run test:smoke`    | Quick validation       |
+| **Pages**     | `npm run test:pages`    | Detailed page tests    |
+| **Flows**     | `npm run test:flows`    | User workflow tests    |
+| **API**       | `npm run test:api`      | API endpoint tests     |
+| **Negative**  | `npm run test:negative` | Error handling         |
+| **All E2E**   | `npm run test:e2e`      | Complete suite         |
 
 ---
 
@@ -393,20 +393,20 @@ npm run qa:snapshots
 
 For testing, use the following conventions:
 
-| Purpose | Brand ID | Notes |
-|---------|----------|-------|
-| General Testing | `root` | Default brand |
-| Multi-brand Testing | `abc`, `cbc`, `cbl` | Child brands |
-| CI/CD Testing | `root` | Uses `ADMIN_KEY` secret |
+| Purpose             | Brand ID            | Notes                   |
+| ------------------- | ------------------- | ----------------------- |
+| General Testing     | `root`              | Default brand           |
+| Multi-brand Testing | `abc`, `cbc`, `cbl` | Child brands            |
+| CI/CD Testing       | `root`              | Uses `ADMIN_KEY` secret |
 
 ### Created Test Data
 
 During test runs, the following data may be created:
 
-| Data Type | Naming Convention | Cleanup |
-|-----------|------------------|---------|
-| Events | `E2E Test Event {timestamp}` | Auto-deleted |
-| Sponsors | `Test Sponsor {timestamp}` | Auto-deleted |
+| Data Type | Naming Convention            | Cleanup      |
+| --------- | ---------------------------- | ------------ |
+| Events    | `E2E Test Event {timestamp}` | Auto-deleted |
+| Sponsors  | `Test Sponsor {timestamp}`   | Auto-deleted |
 
 ---
 
@@ -444,23 +444,23 @@ npx playwright show-trace trace.zip
 
 ### Common Issues
 
-| Issue | Solution |
-|-------|----------|
-| Timeout errors | Increase timeout in config or test |
+| Issue              | Solution                                       |
+| ------------------ | ---------------------------------------------- |
+| Timeout errors     | Increase timeout in config or test             |
 | Dialog not handled | Ensure dialog handler is set before navigation |
-| Element not found | Check selectors, add explicit waits |
-| GAS cold start | First request may be slow, use longer timeout |
-| Auth failures | Verify `ADMIN_KEY` is set correctly |
+| Element not found  | Check selectors, add explicit waits            |
+| GAS cold start     | First request may be slow, use longer timeout  |
+| Auth failures      | Verify `ADMIN_KEY` is set correctly            |
 
 ### Console Logging
 
 ```javascript
 test('debug test', async ({ page }) => {
   // Log console messages
-  page.on('console', msg => console.log(msg.text()));
+  page.on('console', (msg) => console.log(msg.text()));
 
   // Log network requests
-  page.on('request', req => console.log(req.url()));
+  page.on('request', (req) => console.log(req.url()));
 });
 ```
 
@@ -555,13 +555,13 @@ Prefer stable selectors:
 
 ```javascript
 // Best: data-testid
-page.locator('[data-testid="submit-button"]')
+page.locator('[data-testid="submit-button"]');
 
 // Good: semantic role
-page.locator('button:has-text("Submit")')
+page.locator('button:has-text("Submit")');
 
 // Acceptable: CSS class
-page.locator('.submit-btn')
+page.locator('.submit-btn');
 
 // Avoid: XPath, complex selectors
 ```

@@ -22,14 +22,14 @@ Story 3.5 implements graceful test failure handling and environment resets for s
 
 ### Key Components
 
-| Component | Purpose | Location |
-|-----------|---------|----------|
-| QA Setup Script | Environment preparation/reset | `scripts/qa-environment-setup.js` |
-| Global Setup | Session tracking, health checks | `tests/config/global-setup.js` |
-| Global Teardown | Data cleanup after tests | `tests/config/global-teardown.js` |
-| Cleanup Fixture | Per-test data tracking | `tests/e2e/test-cleanup-fixture.js` |
-| Stability Tracker | Track consecutive passes | `tests/shared/stability-tracker.js` |
-| Staging Config | Enhanced timeouts/retries | `playwright.staging.config.js` |
+| Component         | Purpose                         | Location                            |
+| ----------------- | ------------------------------- | ----------------------------------- |
+| QA Setup Script   | Environment preparation/reset   | `scripts/qa-environment-setup.js`   |
+| Global Setup      | Session tracking, health checks | `tests/config/global-setup.js`      |
+| Global Teardown   | Data cleanup after tests        | `tests/config/global-teardown.js`   |
+| Cleanup Fixture   | Per-test data tracking          | `tests/e2e/test-cleanup-fixture.js` |
+| Stability Tracker | Track consecutive passes        | `tests/shared/stability-tracker.js` |
+| Staging Config    | Enhanced timeouts/retries       | `playwright.staging.config.js`      |
 
 ---
 
@@ -72,24 +72,24 @@ Location: `scripts/qa-environment-setup.js`
 
 ### Commands
 
-| Command | Description |
-|---------|-------------|
-| `setup` | Full setup: health check + cleanup + seed (default) |
-| `cleanup` | Remove old test data only |
-| `health` | Check environment health only |
-| `seed` | Create fresh test data only |
-| `reset` | Full reset: cleanup + seed |
-| `validate` | Validate environment is ready for tests |
+| Command    | Description                                         |
+| ---------- | --------------------------------------------------- |
+| `setup`    | Full setup: health check + cleanup + seed (default) |
+| `cleanup`  | Remove old test data only                           |
+| `health`   | Check environment health only                       |
+| `seed`     | Create fresh test data only                         |
+| `reset`    | Full reset: cleanup + seed                          |
+| `validate` | Validate environment is ready for tests             |
 
 ### Environment Variables
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `BASE_URL` | Target environment URL | `https://stg.eventangle.com` |
-| `ADMIN_KEY` | Admin authentication key | Required for CRUD operations |
-| `QA_BRAND_ID` | QA brand identifier | `qa-testing` |
-| `MAX_TEST_AGE` | Max age of test data (hours) | `24` |
-| `DRY_RUN` | Log actions without executing | `false` |
+| Variable       | Description                   | Default                      |
+| -------------- | ----------------------------- | ---------------------------- |
+| `BASE_URL`     | Target environment URL        | `https://stg.eventangle.com` |
+| `ADMIN_KEY`    | Admin authentication key      | Required for CRUD operations |
+| `QA_BRAND_ID`  | QA brand identifier           | `qa-testing`                 |
+| `MAX_TEST_AGE` | Max age of test data (hours)  | `24`                         |
+| `DRY_RUN`      | Log actions without executing | `false`                      |
 
 ### Example Usage
 
@@ -132,12 +132,12 @@ All test data is created under a dedicated QA brand (`qa-testing`) to isolate it
 
 Test data is identified by these markers:
 
-| Marker Type | Pattern | Example |
-|-------------|---------|---------|
-| Event Name Prefix | `QA_TEST_` | `QA_TEST_BasicEvent_1705312345678` |
-| Session Prefix | `SESSION_` | `SESSION_1705312345_abc123` |
-| Description Tag | `[AUTO-GENERATED-TEST-DATA]` | In event description |
-| Metadata Key | `_qaTestData: true` | In event object |
+| Marker Type       | Pattern                      | Example                            |
+| ----------------- | ---------------------------- | ---------------------------------- |
+| Event Name Prefix | `QA_TEST_`                   | `QA_TEST_BasicEvent_1705312345678` |
+| Session Prefix    | `SESSION_`                   | `SESSION_1705312345_abc123`        |
+| Description Tag   | `[AUTO-GENERATED-TEST-DATA]` | In event description               |
+| Metadata Key      | `_qaTestData: true`          | In event object                    |
 
 ### Using the Cleanup Fixture
 
@@ -149,7 +149,7 @@ test('create and verify event', async ({ page, testCleanup }) => {
   const event = await testCleanup.createTrackedEvent({
     name: 'My Test Event',
     date: testCleanup.getFutureDate(7),
-    venue: 'Test Venue'
+    venue: 'Test Venue',
   });
 
   // Event will be automatically cleaned up after test
@@ -193,12 +193,12 @@ Runs once after all tests:
 
 ### Environment Variables for Setup/Teardown
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `TEST_SESSION_ID` | Session identifier | Auto-generated |
-| `CLEANUP_AFTER_TESTS` | Enable/disable cleanup | `true` |
-| `QA_BRAND_ID` | QA brand for data | `qa-testing` |
-| `WARMUP_BEFORE_TESTS` | Run health check | `true` in CI |
+| Variable              | Description            | Default        |
+| --------------------- | ---------------------- | -------------- |
+| `TEST_SESSION_ID`     | Session identifier     | Auto-generated |
+| `CLEANUP_AFTER_TESTS` | Enable/disable cleanup | `true`         |
+| `QA_BRAND_ID`         | QA brand for data      | `qa-testing`   |
+| `WARMUP_BEFORE_TESTS` | Run health check       | `true` in CI   |
 
 ---
 
@@ -208,20 +208,20 @@ Runs once after all tests:
 
 The staging configuration (`playwright.staging.config.js`) has extended timeouts:
 
-| Setting | Value | Purpose |
-|---------|-------|---------|
-| Test timeout | 60s | Individual test execution |
-| Navigation timeout | 45s | Page loads |
-| Action timeout | 15s | Click, fill, etc. |
-| Expect timeout | 15s | Assertions |
-| Global timeout | 30 min | Entire test run |
+| Setting            | Value  | Purpose                   |
+| ------------------ | ------ | ------------------------- |
+| Test timeout       | 60s    | Individual test execution |
+| Navigation timeout | 45s    | Page loads                |
+| Action timeout     | 15s    | Click, fill, etc.         |
+| Expect timeout     | 15s    | Assertions                |
+| Global timeout     | 30 min | Entire test run           |
 
 ### Retry Strategy
 
-| Environment | Retries | Purpose |
-|-------------|---------|---------|
-| CI | 3 | Handle transient failures |
-| Local | 1 | Quick feedback |
+| Environment | Retries | Purpose                   |
+| ----------- | ------- | ------------------------- |
+| CI          | 3       | Handle transient failures |
+| Local       | 1       | Quick feedback            |
 
 ### Graceful Shutdown
 
@@ -279,22 +279,22 @@ node tests/shared/stability-tracker.js ci-check
 
 ### Stability Metrics
 
-| Metric | Description |
-|--------|-------------|
-| Current Streak | Consecutive passes from most recent |
-| Longest Streak | Historical best |
-| Success Rate | Passed/Total ratio |
-| Flaky Tests | Tests that pass on retry |
-| Stability Score | 0-100 composite score |
+| Metric          | Description                         |
+| --------------- | ----------------------------------- |
+| Current Streak  | Consecutive passes from most recent |
+| Longest Streak  | Historical best                     |
+| Success Rate    | Passed/Total ratio                  |
+| Flaky Tests     | Tests that pass on retry            |
+| Stability Score | 0-100 composite score               |
 
 ### Stability Status Levels
 
-| Level | Streak | Description |
-|-------|--------|-------------|
-| EXCELLENT | 5+ | Goal achieved |
-| GOOD | 3-4 | Near goal |
-| FAIR | 1-2 | Making progress |
-| NEEDS_ATTENTION | 0 | Investigation needed |
+| Level           | Streak | Description          |
+| --------------- | ------ | -------------------- |
+| EXCELLENT       | 5+     | Goal achieved        |
+| GOOD            | 3-4    | Near goal            |
+| FAIR            | 1-2    | Making progress      |
+| NEEDS_ATTENTION | 0      | Investigation needed |
 
 ### Example Output
 
@@ -330,6 +330,7 @@ node tests/shared/stability-tracker.js ci-check
 ### Workflow: `e2e-staging-stable.yml`
 
 Triggers:
+
 - Push to `main` (test/src changes)
 - Pull requests to `main`
 - Manual dispatch
@@ -368,19 +369,19 @@ Triggers:
 
 ### Required Secrets
 
-| Secret | Purpose |
-|--------|---------|
-| `ADMIN_KEY` | API authentication |
+| Secret              | Purpose                          |
+| ------------------- | -------------------------------- |
+| `ADMIN_KEY`         | API authentication               |
 | `SLACK_WEBHOOK_URL` | Failure notifications (optional) |
 
 ### Artifacts Produced
 
-| Artifact | Retention | Contents |
-|----------|-----------|----------|
-| `api-smoke-results-*` | 14 days | API test reports |
-| `ui-smoke-results-*` | 14 days | UI test reports |
-| `ui-failure-debug-*` | 30 days | Traces, videos, screenshots |
-| `stability-report-*` | 30 days | Stability metrics |
+| Artifact              | Retention | Contents                    |
+| --------------------- | --------- | --------------------------- |
+| `api-smoke-results-*` | 14 days   | API test reports            |
+| `ui-smoke-results-*`  | 14 days   | UI test reports             |
+| `ui-failure-debug-*`  | 30 days   | Traces, videos, screenshots |
+| `stability-report-*`  | 30 days   | Stability metrics           |
 
 ---
 
@@ -446,14 +447,14 @@ npx playwright show-trace test-results/trace.zip
 
 ### Logs Location
 
-| Log | Location |
-|-----|----------|
-| Setup state | `.test-data/qa-setup-state.json` |
-| Test tracking | `.test-data/test-run-tracking.json` |
-| Cleanup summary | `.test-data/cleanup-summary.json` |
-| Run history | `.test-data/test-run-history.json` |
+| Log               | Location                            |
+| ----------------- | ----------------------------------- |
+| Setup state       | `.test-data/qa-setup-state.json`    |
+| Test tracking     | `.test-data/test-run-tracking.json` |
+| Cleanup summary   | `.test-data/cleanup-summary.json`   |
+| Run history       | `.test-data/test-run-history.json`  |
 | Stability metrics | `.test-data/stability-metrics.json` |
-| Test history DB | `.test-results/test-history.json` |
+| Test history DB   | `.test-results/test-history.json`   |
 
 ---
 
@@ -486,6 +487,6 @@ Add these to `package.json`:
 
 ## Version History
 
-| Version | Date | Changes |
-|---------|------|---------|
-| 1.0.0 | 2025-01-15 | Initial Story 3.5 implementation |
+| Version | Date       | Changes                          |
+| ------- | ---------- | -------------------------------- |
+| 1.0.0   | 2025-01-15 | Initial Story 3.5 implementation |

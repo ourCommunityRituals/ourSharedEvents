@@ -31,24 +31,24 @@ Security findings are treated as the **highest priority work item**. No feature 
 
 ### Security Gates
 
-| Gate | Tool | Runs On | Blocks Merge? |
-|------|------|---------|---------------|
-| **CodeQL Analysis** | GitHub CodeQL + custom queries | All branches, PR, Weekly | Yes (critical/high) |
-| **Dependency Audit** | npm audit | All branches, PR, Weekly | Yes (critical/high) |
-| **Secret Detection** | Stage-1 grep + CodeQL | All branches, PR | Yes (any secret) |
-| **License Compliance** | license-checker | All branches, PR | Yes (copyleft) |
-| **Dependency Review** | GitHub | PR only | Yes (high severity) |
-| **SBOM Generation** | CycloneDX | All branches, PR | No (artifact) |
+| Gate                   | Tool                           | Runs On                  | Blocks Merge?       |
+| ---------------------- | ------------------------------ | ------------------------ | ------------------- |
+| **CodeQL Analysis**    | GitHub CodeQL + custom queries | All branches, PR, Weekly | Yes (critical/high) |
+| **Dependency Audit**   | npm audit                      | All branches, PR, Weekly | Yes (critical/high) |
+| **Secret Detection**   | Stage-1 grep + CodeQL          | All branches, PR         | Yes (any secret)    |
+| **License Compliance** | license-checker                | All branches, PR         | Yes (copyleft)      |
+| **Dependency Review**  | GitHub                         | PR only                  | Yes (high severity) |
+| **SBOM Generation**    | CycloneDX                      | All branches, PR         | No (artifact)       |
 
 ### Workflow Files
 
-| File | Purpose |
-|------|---------|
-| `.github/workflows/security-scan.yml` | CodeQL + npm audit + custom queries + CI/CD + wrangler checks |
-| `.github/workflows/advanced-security-scan.yml` | SBOM, License Compliance, Dependency Review |
-| `.github/workflows/security-triage.yml` | Auto-creates issues from scan failures |
-| `.github/workflows/security-sla-enforcement.yml` | Daily SLA checks + escalation |
-| `.github/workflows/security-regression.yml` | Runtime security regression tests |
+| File                                             | Purpose                                                       |
+| ------------------------------------------------ | ------------------------------------------------------------- |
+| `.github/workflows/security-scan.yml`            | CodeQL + npm audit + custom queries + CI/CD + wrangler checks |
+| `.github/workflows/advanced-security-scan.yml`   | SBOM, License Compliance, Dependency Review                   |
+| `.github/workflows/security-triage.yml`          | Auto-creates issues from scan failures                        |
+| `.github/workflows/security-sla-enforcement.yml` | Daily SLA checks + escalation                                 |
+| `.github/workflows/security-regression.yml`      | Runtime security regression tests                             |
 
 ---
 
@@ -89,12 +89,12 @@ Resolution
 
 ### SLA Table
 
-| Severity | Response Time | Resolution Time | Exception Eligible? | Escalation |
-|----------|--------------|-----------------|---------------------|------------|
-| **Critical** | 1 hour | 4 hours | No | Immediate — all feature work stops |
-| **High** | 4 hours | 24 hours | Yes (30 day max) | Feature work paused until resolved |
-| **Moderate** | 24 hours | 7 days | Yes (90 day max) | Tracked, reviewed weekly |
-| **Low** | 7 days | 30 days | Yes (180 day max) | Tracked, reviewed monthly |
+| Severity     | Response Time | Resolution Time | Exception Eligible? | Escalation                         |
+| ------------ | ------------- | --------------- | ------------------- | ---------------------------------- |
+| **Critical** | 1 hour        | 4 hours         | No                  | Immediate — all feature work stops |
+| **High**     | 4 hours       | 24 hours        | Yes (30 day max)    | Feature work paused until resolved |
+| **Moderate** | 24 hours      | 7 days          | Yes (90 day max)    | Tracked, reviewed weekly           |
+| **Low**      | 7 days        | 30 days         | Yes (180 day max)   | Tracked, reviewed monthly          |
 
 ### Rules
 
@@ -117,16 +117,19 @@ Resolution
 CodeQL performs static analysis of JavaScript code to detect security vulnerabilities.
 
 **Trigger Events:**
+
 - Every push to `main` or `claude/**` branches
 - Every PR to `main`
 - Weekly scheduled scan (Sundays at 00:00 UTC)
 - Manual dispatch for security audits
 
 **Query Packs Used:**
+
 - `security-extended` - Extended security queries
 - `security-and-quality` - Security and code quality checks
 
 **Coverage:**
+
 - Backend: Google Apps Script (`.gs` files)
 - Frontend: HTML files with embedded JavaScript
 - Scripts: Build and deployment scripts (`.js`, `.mjs`)
@@ -134,6 +137,7 @@ CodeQL performs static analysis of JavaScript code to detect security vulnerabil
 - Tests: Test files for code quality
 
 **Checks Include:**
+
 - SQL Injection
 - Cross-Site Scripting (XSS)
 - Command Injection
@@ -149,9 +153,11 @@ CodeQL performs static analysis of JavaScript code to detect security vulnerabil
 npm audit checks for known vulnerabilities in npm dependencies.
 
 **Trigger Events:**
+
 - Same as CodeQL (push, PR, weekly, manual)
 
 **Policy:**
+
 - **Critical/High severity:** Blocks merge
 - **Moderate/Low severity:** Warning only (should be addressed)
 
@@ -220,16 +226,16 @@ The `security-human-gate.yml` workflow runs on every PR and enforces:
 
 ### Labels Used
 
-| Label | Purpose |
-|-------|---------|
-| `security` | All security-related issues |
-| `priority:critical` | Critical severity — 4h SLA |
-| `priority:high` | High severity — 24h SLA |
-| `priority:moderate` | Moderate severity — 7 day SLA |
-| `priority:low` | Low severity — 30 day SLA |
-| `auto-triage` | Issue auto-created by triage workflow |
-| `sla:overdue` | Issue has exceeded its SLA |
-| `exception` | Security exception filed |
+| Label                     | Purpose                                  |
+| ------------------------- | ---------------------------------------- |
+| `security`                | All security-related issues              |
+| `priority:critical`       | Critical severity — 4h SLA               |
+| `priority:high`           | High severity — 24h SLA                  |
+| `priority:moderate`       | Moderate severity — 7 day SLA            |
+| `priority:low`            | Low severity — 30 day SLA                |
+| `auto-triage`             | Issue auto-created by triage workflow    |
+| `sla:overdue`             | Issue has exceeded its SLA               |
+| `exception`               | Security exception filed                 |
 | `security:human-override` | Human has reviewed and approved override |
 
 ---
@@ -238,31 +244,35 @@ The `security-human-gate.yml` workflow runs on every PR and enforces:
 
 ### Classification
 
-| Severity | Description | Blocks Merge? | Response Time |
-|----------|-------------|---------------|---------------|
-| **Critical** | Active exploitation possible, data breach risk | Yes | 1 hour response / 4 hour fix |
-| **High** | Significant security impact, exploitation likely | Yes | 4 hour response / 24 hour fix |
-| **Moderate** | Limited impact or complex exploitation | No | 24 hour response / 7 day fix |
-| **Low** | Minimal impact, theoretical risk | No | 7 day response / 30 day fix |
+| Severity     | Description                                      | Blocks Merge? | Response Time                 |
+| ------------ | ------------------------------------------------ | ------------- | ----------------------------- |
+| **Critical** | Active exploitation possible, data breach risk   | Yes           | 1 hour response / 4 hour fix  |
+| **High**     | Significant security impact, exploitation likely | Yes           | 4 hour response / 24 hour fix |
+| **Moderate** | Limited impact or complex exploitation           | No            | 24 hour response / 7 day fix  |
+| **Low**      | Minimal impact, theoretical risk                 | No            | 7 day response / 30 day fix   |
 
 ### Examples
 
 **Critical:**
+
 - Remote code execution (RCE)
 - SQL injection with data access
 - Authentication bypass
 
 **High:**
+
 - Cross-site scripting (XSS) with session theft potential
 - Prototype pollution affecting security functions
 - Hardcoded credentials in source
 
 **Moderate:**
+
 - Information disclosure (non-sensitive)
 - Denial of service (limited scope)
 - XSS requiring user interaction
 
 **Low:**
+
 - Theoretical vulnerabilities
 - Best practice violations
 - Minor information leaks
@@ -316,7 +326,7 @@ Edit `package.json` to specify a fixed version:
 ```json
 {
   "dependencies": {
-    "vulnerable-package": "^2.1.0"  // Updated from 2.0.0
+    "vulnerable-package": "^2.1.0" // Updated from 2.0.0
   }
 }
 ```
@@ -560,6 +570,7 @@ Some vulnerabilities may require temporary exceptions. Use this process sparingl
 ### Exception Review
 
 Exceptions are automatically reviewed:
+
 - **30 days:** Re-evaluate if fix is available
 - **90 days:** Exception expires and must be renewed or fixed
 
@@ -616,32 +627,33 @@ npm audit --json > .security-reports/audit.json
 
 ### Key Files
 
-| File | Purpose |
-|------|---------|
-| `.github/workflows/security-scan.yml` | CodeQL + npm audit (all branches) |
-| `.github/workflows/advanced-security-scan.yml` | SBOM, License Compliance, Dependency Review (all branches) |
-| `.github/workflows/security-triage.yml` | Auto-creates issues from scan failures |
-| `.github/workflows/security-sla-enforcement.yml` | Daily SLA checks + escalation |
-| `.github/workflows/security-human-gate.yml` | Blocks bot/agent merges on security failures |
-| `.github/workflows/security-regression.yml` | Runtime security regression tests |
-| `.github/ISSUE_TEMPLATE/security-vulnerability.yml` | Security issue template with SLA |
-| `.github/ISSUE_TEMPLATE/security-exception.yml` | Exception request template |
-| `tests/unit/security.test.js` | Security unit tests |
-| `docs/SECURITY.md` | This document |
-| `.security-exceptions.json` | Documented exceptions |
-| `.security-reports/` | Generated audit reports |
+| File                                                | Purpose                                                    |
+| --------------------------------------------------- | ---------------------------------------------------------- |
+| `.github/workflows/security-scan.yml`               | CodeQL + npm audit (all branches)                          |
+| `.github/workflows/advanced-security-scan.yml`      | SBOM, License Compliance, Dependency Review (all branches) |
+| `.github/workflows/security-triage.yml`             | Auto-creates issues from scan failures                     |
+| `.github/workflows/security-sla-enforcement.yml`    | Daily SLA checks + escalation                              |
+| `.github/workflows/security-human-gate.yml`         | Blocks bot/agent merges on security failures               |
+| `.github/workflows/security-regression.yml`         | Runtime security regression tests                          |
+| `.github/ISSUE_TEMPLATE/security-vulnerability.yml` | Security issue template with SLA                           |
+| `.github/ISSUE_TEMPLATE/security-exception.yml`     | Exception request template                                 |
+| `tests/unit/security.test.js`                       | Security unit tests                                        |
+| `docs/SECURITY.md`                                  | This document                                              |
+| `.security-exceptions.json`                         | Documented exceptions                                      |
+| `.security-reports/`                                | Generated audit reports                                    |
 
 ### GitHub Security Features
 
-| Feature | Location | Purpose |
-|---------|----------|---------|
-| **Security Alerts** | Security > Dependabot alerts | Automated vulnerability notifications |
-| **Code Scanning** | Security > Code scanning alerts | CodeQL findings |
-| **Secret Scanning** | Security > Secret scanning alerts | Exposed credentials detection |
+| Feature             | Location                          | Purpose                               |
+| ------------------- | --------------------------------- | ------------------------------------- |
+| **Security Alerts** | Security > Dependabot alerts      | Automated vulnerability notifications |
+| **Code Scanning**   | Security > Code scanning alerts   | CodeQL findings                       |
+| **Secret Scanning** | Security > Secret scanning alerts | Exposed credentials detection         |
 
 ### Contact
 
 For security questions or to report vulnerabilities:
+
 - Open an issue with the `security` label
 - Or contact the repository maintainers
 

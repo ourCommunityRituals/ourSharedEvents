@@ -1,0 +1,327 @@
+{
+  "info": {
+    "name": "ourSharedEvents - Subscribe Worker",
+    "description": "Security + Contract tests for the Mailchimp proxy Worker",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url", "value": "https://subscribe.oursharedevents.com" },
+    { "key": "test_email", "value": "ose-test-{{$randomInt}}@mailinator.com" }
+  ],
+  "item": [
+    {
+      "name": "SECURITY",
+      "item": [
+        {
+          "name": "SEC-01 | Rejects GET request",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/subscribe"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Returns 405 Method Not Allowed', () => {",
+                  "  pm.response.to.have.status(405);",
+                  "});",
+                  "pm.test('Does not expose server internals', () => {",
+                  "  const body = pm.response.text();",
+                  "  pm.expect(body).to.not.include('mailchimp');",
+                  "  pm.expect(body).to.not.include('api_key');",
+                  "  pm.expect(body).to.not.include('MAILCHIMP');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "SEC-02 | Rejects empty body",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/subscribe",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{}" }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Returns 400 for missing email', () => {",
+                  "  pm.response.to.have.status(400);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "SEC-03 | Rejects malformed email",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/subscribe",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"email\": \"notanemail\"}" }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Returns 400 for malformed email', () => {",
+                  "  pm.response.to.have.status(400);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "SEC-04 | Rejects XSS payload in email",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/subscribe",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"email\": \"<script>alert(1)</script>@evil.com\"}" }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Does not return 200 for XSS payload', () => {",
+                  "  pm.response.to.not.have.status(200);",
+                  "});",
+                  "pm.test('Response does not echo script tag', () => {",
+                  "  pm.expect(pm.response.text()).to.not.include('<script>');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "SEC-05 | Rejects oversized payload",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/subscribe",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"email\": \"{{$randomLoremParagraph}}{{$randomLoremParagraph}}{{$randomLoremParagraph}}@test.com\"}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Returns 400 for oversized email', () => {",
+                  "  pm.response.to.not.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "SEC-06 | CORS blocks disallowed origin",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/subscribe",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Origin", "value": "https://evil.com" }
+            ],
+            "body": { "mode": "raw", "raw": "{\"email\": \"test@test.com\"}" }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('CORS header does not allow evil origin', () => {",
+                  "  const acao = pm.response.headers.get('Access-Control-Allow-Origin');",
+                  "  pm.expect(acao).to.not.equal('https://evil.com');",
+                  "  pm.expect(acao).to.not.equal('*');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "SEC-07 | CORS preflight returns correct headers",
+          "request": {
+            "method": "OPTIONS",
+            "url": "{{base_url}}/subscribe",
+            "header": [
+              { "key": "Origin", "value": "https://oursharedevents.com" },
+              { "key": "Access-Control-Request-Method", "value": "POST" }
+            ]
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Preflight returns 2xx', () => {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 204]);",
+                  "});",
+                  "pm.test('Allows POST method', () => {",
+                  "  const methods = pm.response.headers.get('Access-Control-Allow-Methods');",
+                  "  pm.expect(methods).to.include('POST');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "SEC-08 | No server header fingerprinting",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/subscribe",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"email\": \"test@test.com\"}" }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('No X-Powered-By header', () => {",
+                  "  pm.expect(pm.response.headers.get('X-Powered-By')).to.be.null;",
+                  "});",
+                  "pm.test('Server header does not expose version', () => {",
+                  "  const server = pm.response.headers.get('Server') || '';",
+                  "  pm.expect(server).to.not.match(/\\d+\\.\\d+/);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "CONTRACT",
+      "item": [
+        {
+          "name": "CON-01 | Happy path - valid email returns 200",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/subscribe",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Origin", "value": "https://oursharedevents.com" }
+            ],
+            "body": { "mode": "raw", "raw": "{\"email\": \"{{test_email}}\"}" }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Returns 200', () => {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Response shape: { success: true }', () => {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json).to.have.property('success', true);",
+                  "});",
+                  "pm.test('Response time under 3s', () => {",
+                  "  pm.expect(pm.response.responseTime).to.be.below(3000);",
+                  "});",
+                  "pm.test('Content-Type is JSON', () => {",
+                  "  pm.response.to.have.header('Content-Type');",
+                  "  pm.expect(pm.response.headers.get('Content-Type')).to.include('application/json');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "CON-02 | Duplicate email is handled gracefully",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/subscribe",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Origin", "value": "https://oursharedevents.com" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"email\": \"ose-duplicate-fixture@mailinator.com\"}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Duplicate email returns 200 not 500', () => {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200]);",
+                  "});",
+                  "pm.test('Response contains success', () => {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json).to.have.property('success', true);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "CON-03 | Invalid JSON body returns 400",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/subscribe",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "this is not json" }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Returns 400 for invalid JSON', () => {",
+                  "  pm.response.to.have.status(400);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "CON-04 | Response never exposes Mailchimp internals",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/subscribe",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"email\": \"bad\"}" }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Error response does not leak Mailchimp detail', () => {",
+                  "  const body = pm.response.text().toLowerCase();",
+                  "  pm.expect(body).to.not.include('mailchimp');",
+                  "  pm.expect(body).to.not.include('list id');",
+                  "  pm.expect(body).to.not.include('api key');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -7,13 +7,13 @@
 
 ## Quick Reference
 
-| Action | Command |
-|--------|---------|
-| Deploy to staging | Push to `main` branch (automatic via CI) |
-| Deploy to production | Tag with `vX.Y.Z` (automatic via CI) |
-| Manual staging worker | `wrangler deploy --env staging` |
-| Rollback staging | `npm run rollback:staging` |
-| Rollback production | `npm run rollback:prod` |
+| Action                | Command                                  |
+| --------------------- | ---------------------------------------- |
+| Deploy to staging     | Push to `main` branch (automatic via CI) |
+| Deploy to production  | Tag with `vX.Y.Z` (automatic via CI)     |
+| Manual staging worker | `wrangler deploy --env staging`          |
+| Rollback staging      | `npm run rollback:staging`               |
+| Rollback production   | `npm run rollback:prod`                  |
 
 ---
 
@@ -67,6 +67,7 @@ git push -u origin feature/my-feature
 ### Step 3: Wait for Stage-1 Validation
 
 Watch the Actions tab for these status checks:
+
 - Security Check
 - Lint
 - Unit Tests
@@ -79,6 +80,7 @@ Watch the Actions tab for these status checks:
 ### Step 4: Merge PR
 
 Once approved and all checks pass:
+
 - Click "Merge pull request"
 - Stage-1 automatically deploys to staging
 
@@ -100,6 +102,7 @@ npm run test:smoke
 ### Step 6: Monitor Stage-2
 
 Watch the Stage-2 Orchestrator workflow:
+
 - Check Stage-1 Status
 - API Smoke Tests
 - UI Smoke Tests
@@ -145,6 +148,7 @@ git push origin v1.2.3
 ### Step 3: Wait for Stage-1 Production Deploy
 
 Stage-1 will:
+
 1. Run all validation steps
 2. Deploy Cloudflare Worker to production
 3. Create `prod-base-url` artifact for Stage-2
@@ -152,6 +156,7 @@ Stage-1 will:
 ### Step 4: Approve Production Validation
 
 Stage-2 requires manual approval for production:
+
 1. Go to Actions > Stage-2 Orchestrator workflow
 2. Click "Review deployments"
 3. Select "production" environment
@@ -160,6 +165,7 @@ Stage-2 requires manual approval for production:
 ### Step 5: Monitor Stage-2 Production Validation
 
 Watch for:
+
 - API smoke tests against production
 - UI smoke tests against production
 - Validation gate result

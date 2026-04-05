@@ -14,13 +14,13 @@
 
 ## MVP Surfaces (5 Total)
 
-| # | Surface | File | Route | Purpose |
-|---|---------|------|-------|---------|
-| 1 | **Admin** | `Admin.html` | `?page=admin` | Event management - create/edit events via templates |
-| 2 | **Public** | `Public.html` | `?page=public` | Mobile-first public event page with QR code |
-| 3 | **Display** | `Display.html` | `?page=display` | TV/kiosk live event display |
-| 4 | **Poster** | `Poster.html` | `?page=poster` | Printable poster with QR code |
-| 5 | **SharedReport** | `SharedReport.html` | `?page=report` | Analytics dashboard (impressions, clicks, CTR) |
+| #   | Surface          | File                | Route           | Purpose                                             |
+| --- | ---------------- | ------------------- | --------------- | --------------------------------------------------- |
+| 1   | **Admin**        | `Admin.html`        | `?page=admin`   | Event management - create/edit events via templates |
+| 2   | **Public**       | `Public.html`       | `?page=public`  | Mobile-first public event page with QR code         |
+| 3   | **Display**      | `Display.html`      | `?page=display` | TV/kiosk live event display                         |
+| 4   | **Poster**       | `Poster.html`       | `?page=poster`  | Printable poster with QR code                       |
+| 5   | **SharedReport** | `SharedReport.html` | `?page=report`  | Analytics dashboard (impressions, clicks, CTR)      |
 
 ### Surface URLs
 
@@ -46,20 +46,21 @@
 
 These are the canonical APIs that surfaces depend on:
 
-| Endpoint | Method | Auth | Used By | Purpose |
-|----------|--------|------|---------|---------|
-| `api_getEventTemplates` | GET | No | Admin | List available event templates |
-| `api_saveEvent` | POST | Yes | Admin | Create or update event (CANONICAL write) |
-| `api_get` | GET | No | Admin | Get single event by ID |
-| `api_list` | GET | No | Admin | List all events |
-| `api_getPublicBundle` | GET | No | Public | Event data for public page |
-| `api_getDisplayBundle` | GET | No | Display | Event data for TV/kiosk |
-| `api_getPosterBundle` | GET | No | Poster | Event data for print poster |
-| `api_getSharedAnalytics` | GET | No | SharedReport | Analytics summary data |
+| Endpoint                 | Method | Auth | Used By      | Purpose                                  |
+| ------------------------ | ------ | ---- | ------------ | ---------------------------------------- |
+| `api_getEventTemplates`  | GET    | No   | Admin        | List available event templates           |
+| `api_saveEvent`          | POST   | Yes  | Admin        | Create or update event (CANONICAL write) |
+| `api_get`                | GET    | No   | Admin        | Get single event by ID                   |
+| `api_list`               | GET    | No   | Admin        | List all events                          |
+| `api_getPublicBundle`    | GET    | No   | Public       | Event data for public page               |
+| `api_getDisplayBundle`   | GET    | No   | Display      | Event data for TV/kiosk                  |
+| `api_getPosterBundle`    | GET    | No   | Poster       | Event data for print poster              |
+| `api_getSharedAnalytics` | GET    | No   | SharedReport | Analytics summary data                   |
 
 ### Request/Response Shapes
 
 #### `api_getEventTemplates`
+
 ```
 GET ?action=getEventTemplates&brand=root
 
@@ -68,6 +69,7 @@ Response:
 ```
 
 #### `api_saveEvent` (CANONICAL - ZEVENT-003)
+
 ```
 POST { action: "saveEvent", brandId, event: {...}, templateId?, csrfToken }
 
@@ -76,6 +78,7 @@ Response:
 ```
 
 #### `api_get`
+
 ```
 GET ?action=get&id=EVENT_ID&brand=root
 
@@ -84,6 +87,7 @@ Response:
 ```
 
 #### `api_list`
+
 ```
 GET ?action=list&brand=root
 
@@ -92,6 +96,7 @@ Response:
 ```
 
 #### `api_getPublicBundle`
+
 ```
 GET ?action=getPublicBundle&id=EVENT_ID&brand=root
 
@@ -100,6 +105,7 @@ Response:
 ```
 
 #### `api_getDisplayBundle`
+
 ```
 GET ?action=getDisplayBundle&id=EVENT_ID&brand=root
 
@@ -108,6 +114,7 @@ Response:
 ```
 
 #### `api_getPosterBundle`
+
 ```
 GET ?action=getPosterBundle&id=EVENT_ID&brand=root
 
@@ -116,6 +123,7 @@ Response:
 ```
 
 #### `api_getSharedAnalytics`
+
 ```
 GET ?action=getSharedReportBundle&id=EVENT_ID&brand=root
 
@@ -129,17 +137,17 @@ Response:
 
 These support MVP operation but aren't core surface APIs:
 
-| Endpoint | Purpose | Notes |
-|----------|---------|-------|
-| `api_status` | System health | Returns system status |
-| `api_statusMvp` | MVP health check | Extended health with analytics |
-| `api_generateToken` | Auth token | JWT generation for API access |
-| `api_getAdminBundle` | Admin data | Optimized bundle for Admin.html |
-| `api_logEvents` | Analytics logging | Fire-and-forget impression/click tracking |
-| `api_trackEventMetric` | Simple tracking | Track view/impression/click/scan |
-| `api_createFormFromTemplate` | Form creation | Create Google Form for signups |
-| `api_generateFormShortlink` | Form shortlink | Generate trackable form URL |
-| `api_createShortlink` | URL shortening | Generate trackable shortlinks |
+| Endpoint                     | Purpose           | Notes                                     |
+| ---------------------------- | ----------------- | ----------------------------------------- |
+| `api_status`                 | System health     | Returns system status                     |
+| `api_statusMvp`              | MVP health check  | Extended health with analytics            |
+| `api_generateToken`          | Auth token        | JWT generation for API access             |
+| `api_getAdminBundle`         | Admin data        | Optimized bundle for Admin.html           |
+| `api_logEvents`              | Analytics logging | Fire-and-forget impression/click tracking |
+| `api_trackEventMetric`       | Simple tracking   | Track view/impression/click/scan          |
+| `api_createFormFromTemplate` | Form creation     | Create Google Form for signups            |
+| `api_generateFormShortlink`  | Form shortlink    | Generate trackable form URL               |
+| `api_createShortlink`        | URL shortening    | Generate trackable shortlinks             |
 
 ---
 
@@ -150,12 +158,12 @@ These support MVP operation but aren't core surface APIs:
 ```typescript
 interface Event {
   // Identity
-  id: string;           // UUID v4
-  slug: string;         // URL-safe identifier
-  name: string;         // Event name
+  id: string; // UUID v4
+  slug: string; // URL-safe identifier
+  name: string; // Event name
   startDateISO: string; // ISO 8601 date
-  venue: string;        // Venue name/address
-  templateId?: string;  // Template used to create
+  venue: string; // Venue name/address
+  templateId?: string; // Template used to create
 
   // Auto-generated links (read-only)
   links: {
@@ -167,13 +175,13 @@ interface Event {
 
   // Auto-generated QR codes (read-only)
   qr: {
-    public: string;     // Data URI for public QR
-    signup: string;     // Data URI for signup QR
+    public: string; // Data URI for public QR
+    signup: string; // Data URI for signup QR
   };
 
   // Primary CTA
   ctas: {
-    primary: { label: string; url: string; }
+    primary: { label: string; url: string };
   };
 
   // Display toggles
@@ -211,12 +219,14 @@ interface Event {
 ## What Is NOT MVP
 
 ### V2+ Surfaces (Blocked)
+
 - `Sponsor.html` - Sponsor self-service portal
 - `ApiDocs.html` - Interactive API docs
 - `Diagnostics.html` - System diagnostics
 - `PortfolioDashboard.html` - Multi-brand portfolio
 
 ### V2+ Endpoints (Feature-Flagged OFF)
+
 - `api_getPortfolioSponsorReport` - Portfolio analytics
 - `api_getPortfolioSummary` - Portfolio metrics
 - `api_listTemplatesV2` - Custom template CRUD
@@ -224,10 +234,12 @@ interface Event {
 - All i18n endpoints (`i18nService.gs` archived)
 
 ### Legacy Endpoints (Deprecated)
+
 - `api_create` - Use `api_saveEvent` instead
 - `api_updateEventData` - Use `api_saveEvent` instead
 
 ### Files in src/mvp/ That Are V2 (Feature-Flagged)
+
 - `TemplateManagementService.gs` - Gated by `TEMPLATE_MANAGEMENT_V2=false`
 
 ---
@@ -237,24 +249,27 @@ interface Event {
 All MVP endpoints return this envelope:
 
 ### Success
+
 ```json
 { "ok": true, "value": { ... }, "etag": "optional" }
 ```
 
 ### Error
+
 ```json
 { "ok": false, "code": "ERR_CODE", "message": "Human readable", "corrId": "trace-id" }
 ```
 
 ### Error Codes
-| Code | Meaning |
-|------|---------|
-| `BAD_INPUT` | Invalid request parameters |
-| `NOT_FOUND` | Resource doesn't exist |
-| `AUTH` | Authentication failed |
+
+| Code        | Meaning                        |
+| ----------- | ------------------------------ |
+| `BAD_INPUT` | Invalid request parameters     |
+| `NOT_FOUND` | Resource doesn't exist         |
+| `AUTH`      | Authentication failed          |
 | `FORBIDDEN` | Not authorized for this action |
-| `INTERNAL` | Server error |
-| `CONFLICT` | Resource already exists |
+| `INTERNAL`  | Server error                   |
+| `CONFLICT`  | Resource already exists        |
 
 ---
 
@@ -326,4 +341,4 @@ One eventbook per event → Single EVENTS row
 
 ---
 
-*MVP Contract v1.0 - Week 1 Baseline Lock*
+_MVP Contract v1.0 - Week 1 Baseline Lock_

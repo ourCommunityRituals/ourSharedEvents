@@ -87,24 +87,24 @@ OurSharedEvents uses a color-based semantic standard for QR codes: the **Univers
 
 ### 7 Core Codes
 
-| # | Color | Code | What It Does | Phase |
-|---|-------|------|-------------|-------|
-| 01 | **Green** | ENTER | Venue entry, gate access, check-in | Arrival |
-| 02 | **Coral** | LIVE | Real-time scoring, brackets, live feed | During |
-| 03 | **Blue** | SPONSOR | Sponsor offers, brand activation, local deals | During |
-| 04 | **Purple** | ARCHIVE | Past results, SharedReport, memories | Post |
-| 05 | **Pink** | HELP | ADA assistance, first aid, accessibility | Anytime |
-| 06 | **Amber** | FEEDBACK | Surveys, ratings, post-event voice | Post |
-| 07 | **Charcoal** | UTILITY | WiFi, schedule, maps, general info | Anytime |
+| #   | Color        | Code     | What It Does                                  | Phase   |
+| --- | ------------ | -------- | --------------------------------------------- | ------- |
+| 01  | **Green**    | ENTER    | Venue entry, gate access, check-in            | Arrival |
+| 02  | **Coral**    | LIVE     | Real-time scoring, brackets, live feed        | During  |
+| 03  | **Blue**     | SPONSOR  | Sponsor offers, brand activation, local deals | During  |
+| 04  | **Purple**   | ARCHIVE  | Past results, SharedReport, memories          | Post    |
+| 05  | **Pink**     | HELP     | ADA assistance, first aid, accessibility      | Anytime |
+| 06  | **Amber**    | FEEDBACK | Surveys, ratings, post-event voice            | Post    |
+| 07  | **Charcoal** | UTILITY  | WiFi, schedule, maps, general info            | Anytime |
 
 ### 4 Extensions
 
-| Color | Code | What It Does | Priority |
-|-------|------|-------------|----------|
-| **Yellow** | ALERT | Safety notices, weather, emergencies | HIGH |
-| **Red** | STAFF | Staff-only, admin tools, backstage | HIGH |
-| **Teal** | CHECK-IN | Attendance tracking, roster verification | MEDIUM |
-| **Dark Teal** | SHOP | Merchandise, concessions, silent auction | MEDIUM |
+| Color         | Code     | What It Does                             | Priority |
+| ------------- | -------- | ---------------------------------------- | -------- |
+| **Yellow**    | ALERT    | Safety notices, weather, emergencies     | HIGH     |
+| **Red**       | STAFF    | Staff-only, admin tools, backstage       | HIGH     |
+| **Teal**      | CHECK-IN | Attendance tracking, roster verification | MEDIUM   |
+| **Dark Teal** | SHOP     | Merchandise, concessions, silent auction | MEDIUM   |
 
 ### How It Works Physically
 
@@ -158,27 +158,28 @@ Phase 3: Geo-Spatial Intelligence (horizon)
 
 **Future audiences** that this unlocks:
 
-| Audience | What They Get |
-|----------|--------------|
-| **Government** | Venue utilization data, public event density, community gathering patterns |
-| **Policy** | Evidence-based community investment signals, engagement equity metrics |
-| **Public Services** | Library/community center event performance, nonprofit event analytics |
-| **Researchers** | Anonymized community engagement datasets, neighborhood economic indicators |
+| Audience            | What They Get                                                              |
+| ------------------- | -------------------------------------------------------------------------- |
+| **Government**      | Venue utilization data, public event density, community gathering patterns |
+| **Policy**          | Evidence-based community investment signals, engagement equity metrics     |
+| **Public Services** | Library/community center event performance, nonprofit event analytics      |
+| **Researchers**     | Anonymized community engagement datasets, neighborhood economic indicators |
 
 ---
 
 ## How This Connects to Everything Else
 
-| Principle | Where It Lives in the Platform |
-|-----------|-------------------------------|
-| Anonymous ID first | `scans` table schema (no PII columns), forms PII lifecycle (hash/encrypt/delete) |
-| Fair marketplace | Same form UX at all tiers, Sponsor Pricing Tier Balancer, tiered ops tools not customer experience |
-| UEC system | 7 core codes + 4 extensions, color-semantic QR standard across all event types |
-| Event automation | 4 form types × UEC codes × 3 event phases |
-| Presence signal | `scan_bucket`, `user_agent_hash`, `poster_deployment_id` with lat/lng |
-| Geo-spatial horizon | `poster_deployments` (lat/lng) + `scan_aggregates` (time bucketed) |
+| Principle           | Where It Lives in the Platform                                                                     |
+| ------------------- | -------------------------------------------------------------------------------------------------- |
+| Anonymous ID first  | `scans` table schema (no PII columns), forms PII lifecycle (hash/encrypt/delete)                   |
+| Fair marketplace    | Same form UX at all tiers, Sponsor Pricing Tier Balancer, tiered ops tools not customer experience |
+| UEC system          | 7 core codes + 4 extensions, color-semantic QR standard across all event types                     |
+| Event automation    | 4 form types × UEC codes × 3 event phases                                                          |
+| Presence signal     | `scan_bucket`, `user_agent_hash`, `poster_deployment_id` with lat/lng                              |
+| Geo-spatial horizon | `poster_deployments` (lat/lng) + `scan_aggregates` (time bucketed)                                 |
 
 **Read next:**
+
 - [PRIVACY.md](PRIVACY.md) — how anonymous-ID-first is implemented technically
 - [SPONSORS.md](SPONSORS.md) — how the fair marketplace works for sponsors
 - [TIERS.md](TIERS.md) — what each tier unlocks (ops tools, not customer experience)

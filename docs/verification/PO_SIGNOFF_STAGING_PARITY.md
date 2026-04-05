@@ -48,38 +48,38 @@ This document certifies that the staging environment is an acceptable User Accep
 
 The following differences between staging and production are **intentional and approved**:
 
-| Difference | Staging | Production | Approval Reason |
-|------------|---------|------------|-----------------|
-| Domain | stg.eventangle.com | www.eventangle.com | Standard staging subdomain |
-| Debug Level | debug | error | Enhanced logging for UAT |
-| Debug Endpoints | Enabled | Disabled | Security best practice |
-| Demo Mode | Available | Disabled | Testing convenience |
-| Sample Data Prefill | Available | Disabled | Testing convenience |
-| Experimental Features | Enabled | Disabled | Validation before release |
+| Difference            | Staging            | Production         | Approval Reason            |
+| --------------------- | ------------------ | ------------------ | -------------------------- |
+| Domain                | stg.eventangle.com | www.eventangle.com | Standard staging subdomain |
+| Debug Level           | debug              | error              | Enhanced logging for UAT   |
+| Debug Endpoints       | Enabled            | Disabled           | Security best practice     |
+| Demo Mode             | Available          | Disabled           | Testing convenience        |
+| Sample Data Prefill   | Available          | Disabled           | Testing convenience        |
+| Experimental Features | Enabled            | Disabled           | Validation before release  |
 
 ---
 
 ## Acceptance Criteria Verification
 
-| Criteria | Status | Evidence |
-|----------|--------|----------|
-| Single source of truth for config | PASS | `deploy-manifest.json` contains all environment-specific settings |
-| Feature flags documented in config | PASS | `featureFlags` section in manifest with comments |
-| No unintended differences | PASS | `compare-environments.js` reports PARITY VERIFIED |
-| Same Cloudflare worker code version | PASS | Same `worker.js` deployed to both |
-| Same API schema | PASS | Shared `/schemas/` directory |
-| Critical user journeys function the same | PASS | Manual verification completed |
+| Criteria                                 | Status | Evidence                                                          |
+| ---------------------------------------- | ------ | ----------------------------------------------------------------- |
+| Single source of truth for config        | PASS   | `deploy-manifest.json` contains all environment-specific settings |
+| Feature flags documented in config       | PASS   | `featureFlags` section in manifest with comments                  |
+| No unintended differences                | PASS   | `compare-environments.js` reports PARITY VERIFIED                 |
+| Same Cloudflare worker code version      | PASS   | Same `worker.js` deployed to both                                 |
+| Same API schema                          | PASS   | Shared `/schemas/` directory                                      |
+| Critical user journeys function the same | PASS   | Manual verification completed                                     |
 
 ---
 
 ## Risk Assessment
 
-| Risk | Mitigation | Status |
-|------|------------|--------|
-| Config drift between environments | Automated parity checks in CI | Implemented |
-| Accidental production deployment | Default `.clasp.json` points to staging | Implemented |
-| Testing features leaking to prod | Feature flags controlled by manifest | Implemented |
-| Debug info exposed in prod | Debug endpoints disabled by flag | Implemented |
+| Risk                              | Mitigation                              | Status      |
+| --------------------------------- | --------------------------------------- | ----------- |
+| Config drift between environments | Automated parity checks in CI           | Implemented |
+| Accidental production deployment  | Default `.clasp.json` points to staging | Implemented |
+| Testing features leaking to prod  | Feature flags controlled by manifest    | Implemented |
+| Debug info exposed in prod        | Debug endpoints disabled by flag        | Implemented |
 
 ---
 
@@ -134,6 +134,6 @@ Signature: ________________________________
 
 ## Revision History
 
-| Version | Date | Change | Author |
-|---------|------|--------|--------|
-| 1.0 | 2025-12-10 | Initial sign-off document | Story 1.4 Implementation |
+| Version | Date       | Change                    | Author                   |
+| ------- | ---------- | ------------------------- | ------------------------ |
+| 1.0     | 2025-12-10 | Initial sign-off document | Story 1.4 Implementation |

@@ -1,11 +1,14 @@
 const { defineConfig, devices } = require('@playwright/test');
-const { getCurrentEnvironment } = require('./tests/config/environments');
+const { getCurrentEnvironment } = require('./archive/legacy-tests/tests/config/environments');
 
 // Get the current environment configuration
 const env = getCurrentEnvironment();
 
+// NOTE: GAS/legacy E2E tests have been archived to archive/legacy-tests/tests/.
+// This config is retained for reference but these tests target the dead GAS/NUSDK system.
+// Canonical worker tests live in workers/oursharedevents/tests/ and use vitest.
 module.exports = defineConfig({
-  testDir: './tests/e2e',
+  testDir: './archive/legacy-tests/tests/e2e',
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
 
@@ -23,27 +26,35 @@ module.exports = defineConfig({
     timeout: 10000,
   },
 
-  reporter: process.env.CI ? [
-    // CI: Verbose output to see console logs after every test
-    ['html', {
-      outputFolder: process.env.PLAYWRIGHT_HTML_REPORT || 'playwright-report',
-      open: 'never',
-    }],
-    ['json', { outputFile: '.test-results/playwright-results.json' }],
-    ['junit', { outputFile: '.test-results/junit.xml' }],
-    ['./tests/shared/history-reporter.js'],
-    ['line'],  // Line reporter shows output in real-time including console.log
-  ] : [
-    // Local: Standard reporters
-    ['html', {
-      outputFolder: process.env.PLAYWRIGHT_HTML_REPORT || 'playwright-report',
-      open: 'never',
-    }],
-    ['json', { outputFile: '.test-results/playwright-results.json' }],
-    ['junit', { outputFile: '.test-results/junit.xml' }],
-    ['./tests/shared/history-reporter.js'],
-    ['list']
-  ],
+  reporter: process.env.CI
+    ? [
+        // CI: Verbose output to see console logs after every test
+        [
+          'html',
+          {
+            outputFolder: process.env.PLAYWRIGHT_HTML_REPORT || 'playwright-report',
+            open: 'never',
+          },
+        ],
+        ['json', { outputFile: '.test-results/playwright-results.json' }],
+        ['junit', { outputFile: '.test-results/junit.xml' }],
+        ['./archive/legacy-tests/tests/shared/history-reporter.js'],
+        ['line'], // Line reporter shows output in real-time including console.log
+      ]
+    : [
+        // Local: Standard reporters
+        [
+          'html',
+          {
+            outputFolder: process.env.PLAYWRIGHT_HTML_REPORT || 'playwright-report',
+            open: 'never',
+          },
+        ],
+        ['json', { outputFile: '.test-results/playwright-results.json' }],
+        ['junit', { outputFile: '.test-results/junit.xml' }],
+        ['./archive/legacy-tests/tests/shared/history-reporter.js'],
+        ['list'],
+      ],
 
   use: {
     // Use environment-aware base URL
@@ -52,8 +63,8 @@ module.exports = defineConfig({
 
     // Enable traces on all retries for better debugging in CI
     trace: 'retain-on-failure',
-    screenshot: 'on',  // Capture screenshots for all tests (helps track failures across retries)
-    video: process.env.CI ? 'retain-on-failure' : 'off',  // Video only in CI on failure
+    screenshot: 'on', // Capture screenshots for all tests (helps track failures across retries)
+    video: process.env.CI ? 'retain-on-failure' : 'off', // Video only in CI on failure
 
     // Navigation timeout (20 seconds for Google Apps Script)
     navigationTimeout: 20000,
@@ -63,47 +74,50 @@ module.exports = defineConfig({
 
     // Extra HTTP headers
     extraHTTPHeaders: {
-      'Accept': 'text/html,application/json',
+      Accept: 'text/html,application/json',
     },
 
     // Bypass bot detection with realistic user agent
-    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+    userAgent:
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
 
     // Ignore HTTPS errors for QA/staging environments
     ignoreHTTPSErrors: true,
   },
 
   // Global setup - print environment info before tests, initialize tracking (Story 3.5)
-  globalSetup: require.resolve('./tests/config/global-setup.js'),
+  globalSetup: require.resolve('./archive/legacy-tests/tests/config/global-setup.js'),
 
   // Global teardown - cleanup test data after tests complete (Story 3.5)
-  globalTeardown: require.resolve('./tests/config/global-teardown.js'),
+  globalTeardown: require.resolve('./archive/legacy-tests/tests/config/global-teardown.js'),
 
   // CI and Local now use the same browser matrix for consistent coverage
   // Both chromium (Chrome/Edge) and webkit (Safari/iOS) are tested
-  projects: process.env.CI ? [
-    // CI: Chromium + WebKit for cross-browser coverage
-    {
-      name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
-    },
-    {
-      name: 'iPhone 14 Pro',
-      use: { ...devices['iPhone 14 Pro'] },
-    },
-  ] : [
-    // Local: Both mobile and desktop for comprehensive testing
-    // Mobile: Safari iPhone 14 Pro (represents latest iOS/Safari)
-    {
-      name: 'iPhone 14 Pro',
-      use: { ...devices['iPhone 14 Pro'] },
-    },
-    // Desktop: Chromium (most common browser, Chrome/Edge base)
-    {
-      name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
-    },
-  ],
+  projects: process.env.CI
+    ? [
+        // CI: Chromium + WebKit for cross-browser coverage
+        {
+          name: 'chromium',
+          use: { ...devices['Desktop Chrome'] },
+        },
+        {
+          name: 'iPhone 14 Pro',
+          use: { ...devices['iPhone 14 Pro'] },
+        },
+      ]
+    : [
+        // Local: Both mobile and desktop for comprehensive testing
+        // Mobile: Safari iPhone 14 Pro (represents latest iOS/Safari)
+        {
+          name: 'iPhone 14 Pro',
+          use: { ...devices['iPhone 14 Pro'] },
+        },
+        // Desktop: Chromium (most common browser, Chrome/Edge base)
+        {
+          name: 'chromium',
+          use: { ...devices['Desktop Chrome'] },
+        },
+      ],
 
   // Full device matrix for local/manual testing only
   // Uncomment these when running comprehensive device testing locally

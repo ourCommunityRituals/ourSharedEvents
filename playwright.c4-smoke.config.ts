@@ -25,7 +25,7 @@ import { defineConfig, devices } from '@playwright/test';
 const BASE_URL = process.env.BASE_URL || 'https://stg.oursharedevents.com';
 
 export default defineConfig({
-  testDir: './tests/smoke',
+  testDir: './archive/legacy-tests/tests/smoke',
 
   // Smoke tests run sequentially
   fullyParallel: false,
@@ -48,16 +48,18 @@ export default defineConfig({
   },
 
   // Reporters
-  reporter: process.env.CI ? [
-    ['html', { outputFolder: 'playwright-report-c4-smoke', open: 'never' }],
-    ['json', { outputFile: '.test-results/c4-smoke-results.json' }],
-    ['junit', { outputFile: '.test-results/c4-smoke-junit.xml' }],
-    ['line'],
-  ] : [
-    ['html', { outputFolder: 'playwright-report-c4-smoke', open: 'never' }],
-    ['json', { outputFile: '.test-results/c4-smoke-results.json' }],
-    ['list'],
-  ],
+  reporter: process.env.CI
+    ? [
+        ['html', { outputFolder: 'playwright-report-c4-smoke', open: 'never' }],
+        ['json', { outputFile: '.test-results/c4-smoke-results.json' }],
+        ['junit', { outputFile: '.test-results/c4-smoke-junit.xml' }],
+        ['line'],
+      ]
+    : [
+        ['html', { outputFolder: 'playwright-report-c4-smoke', open: 'never' }],
+        ['json', { outputFile: '.test-results/c4-smoke-results.json' }],
+        ['list'],
+      ],
 
   use: {
     // Base URL for API requests
@@ -68,7 +70,7 @@ export default defineConfig({
 
     // Extra HTTP headers for API requests
     extraHTTPHeaders: {
-      'Accept': 'application/json',
+      Accept: 'application/json',
     },
 
     // Ignore HTTPS errors for staging/QA

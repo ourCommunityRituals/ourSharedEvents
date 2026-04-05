@@ -48,14 +48,14 @@ The Admin surface (`Admin.html`) communicates with backend APIs in `Code.gs` via
 
 ### APIs Used
 
-| API | Purpose | Line |
-|-----|---------|------|
-| `api_getEventTemplates` | Fetch available templates for brand | Code.gs:1347 |
-| `api_create` | Create new event | Code.gs:3816 |
-| `api_get` | Retrieve single event | Code.gs:3053 |
-| `api_updateEventData` | Update existing event | Code.gs:3869 |
-| `api_createFormFromTemplate` | Generate Google Form from template | Code.gs:4766 |
-| `api_generateFormShortlink` | Create trackable shortlink for form | Code.gs:4863 |
+| API                          | Purpose                             | Line         |
+| ---------------------------- | ----------------------------------- | ------------ |
+| `api_getEventTemplates`      | Fetch available templates for brand | Code.gs:1347 |
+| `api_create`                 | Create new event                    | Code.gs:3816 |
+| `api_get`                    | Retrieve single event               | Code.gs:3053 |
+| `api_updateEventData`        | Update existing event               | Code.gs:3869 |
+| `api_createFormFromTemplate` | Generate Google Form from template  | Code.gs:4766 |
+| `api_generateFormShortlink`  | Create trackable shortlink for form | Code.gs:4863 |
 
 ---
 
@@ -64,6 +64,7 @@ The Admin surface (`Admin.html`) communicates with backend APIs in `Code.gs` via
 **Purpose:** Retrieve available event templates for a brand.
 
 **Payload:**
+
 ```javascript
 {
   brandId: string,      // Optional - defaults from context
@@ -72,6 +73,7 @@ The Admin surface (`Admin.html`) communicates with backend APIs in `Code.gs` via
 ```
 
 **Response:**
+
 ```javascript
 {
   ok: true,
@@ -99,6 +101,7 @@ The Admin surface (`Admin.html`) communicates with backend APIs in `Code.gs` via
 **Purpose:** Create a new event (normalized to canonical Event structure).
 
 **Payload:**
+
 ```javascript
 {
   brandId: string,           // Required
@@ -121,6 +124,7 @@ The Admin surface (`Admin.html`) communicates with backend APIs in `Code.gs` via
 ```
 
 **Response:**
+
 ```javascript
 {
   ok: true,
@@ -150,6 +154,7 @@ The Admin surface (`Admin.html`) communicates with backend APIs in `Code.gs` via
 **Purpose:** Retrieve a single event by ID with full hydration.
 
 **Payload:**
+
 ```javascript
 {
   brandId: string,        // Required
@@ -160,6 +165,7 @@ The Admin surface (`Admin.html`) communicates with backend APIs in `Code.gs` via
 ```
 
 **Response:**
+
 ```javascript
 {
   ok: true,
@@ -198,6 +204,7 @@ The Admin surface (`Admin.html`) communicates with backend APIs in `Code.gs` via
 **Purpose:** Update an existing event using Load-Merge-Save pattern.
 
 **Payload:**
+
 ```javascript
 {
   brandId: string,        // Required
@@ -219,6 +226,7 @@ The Admin surface (`Admin.html`) communicates with backend APIs in `Code.gs` via
 ```
 
 **Response:**
+
 ```javascript
 {
   ok: true,
@@ -243,6 +251,7 @@ The Admin surface (`Admin.html`) communicates with backend APIs in `Code.gs` via
 **Purpose:** Create a Google Form from a predefined template and link to an event.
 
 **Payload:**
+
 ```javascript
 {
   templateType: string,    // Required: 'sign-up', 'check-in', 'walk-in', 'survey'
@@ -254,6 +263,7 @@ The Admin surface (`Admin.html`) communicates with backend APIs in `Code.gs` via
 ```
 
 **Response:**
+
 ```javascript
 {
   ok: true,
@@ -270,12 +280,12 @@ The Admin surface (`Admin.html`) communicates with backend APIs in `Code.gs` via
 
 **Form Templates:**
 
-| Template | Description | Key Questions |
-|----------|-------------|---------------|
-| `sign-up` | Pre-registration | Name, Email, Phone, Attendees, Dietary, Source |
-| `check-in` | Day-of check-in | Name, Email, Confirmation#, Party Size |
-| `walk-in` | Walk-in registration | Name, Email, Phone, Party Size, Source |
-| `survey` | Post-event feedback | Rating (1-5), Enjoyed, Improve, Recommend (NPS) |
+| Template   | Description          | Key Questions                                   |
+| ---------- | -------------------- | ----------------------------------------------- |
+| `sign-up`  | Pre-registration     | Name, Email, Phone, Attendees, Dietary, Source  |
+| `check-in` | Day-of check-in      | Name, Email, Confirmation#, Party Size          |
+| `walk-in`  | Walk-in registration | Name, Email, Phone, Party Size, Source          |
+| `survey`   | Post-event feedback  | Rating (1-5), Enjoyed, Improve, Recommend (NPS) |
 
 **Helpers:** `gate_()`, `findFormTemplate_()`, `FormApp.create()`
 
@@ -286,6 +296,7 @@ The Admin surface (`Admin.html`) communicates with backend APIs in `Code.gs` via
 **Purpose:** Generate a trackable shortlink for a form URL.
 
 **Payload:**
+
 ```javascript
 {
   formUrl: string,        // Required - full form URL (validated)
@@ -297,6 +308,7 @@ The Admin surface (`Admin.html`) communicates with backend APIs in `Code.gs` via
 ```
 
 **Response:**
+
 ```javascript
 {
   ok: true,
@@ -318,11 +330,11 @@ The Public surface (`Public.html`) reads event data and logs analytics via these
 
 ### APIs Used
 
-| API | Purpose | Line |
-|-----|---------|------|
-| `api_list` | Paginated event listing | Code.gs:3026 |
-| `api_getPublicBundle` | Single event + brand config | Code.gs:3080 |
-| `api_logExternalClick` | Track external link clicks | Code.gs:4112 |
+| API                    | Purpose                     | Line         |
+| ---------------------- | --------------------------- | ------------ |
+| `api_list`             | Paginated event listing     | Code.gs:3026 |
+| `api_getPublicBundle`  | Single event + brand config | Code.gs:3080 |
+| `api_logExternalClick` | Track external link clicks  | Code.gs:4112 |
 
 ---
 
@@ -331,6 +343,7 @@ The Public surface (`Public.html`) reads event data and logs analytics via these
 **Purpose:** Paginated list of events for the public list view.
 
 **Payload:**
+
 ```javascript
 {
   brandId: string,        // Required
@@ -342,6 +355,7 @@ The Public surface (`Public.html`) reads event data and logs analytics via these
 ```
 
 **Response:**
+
 ```javascript
 {
   ok: true,
@@ -367,6 +381,7 @@ The Public surface (`Public.html`) reads event data and logs analytics via these
 **Purpose:** Single event with brand config for detail view (Public, Display, Poster surfaces).
 
 **Payload:**
+
 ```javascript
 {
   brandId: string,        // Required
@@ -377,6 +392,7 @@ The Public surface (`Public.html`) reads event data and logs analytics via these
 ```
 
 **Response:**
+
 ```javascript
 {
   ok: true,
@@ -401,6 +417,7 @@ The Public surface (`Public.html`) reads event data and logs analytics via these
 **Purpose:** Track clicks on external links (schedule, standings, bracket, stream URLs).
 
 **Payload:**
+
 ```javascript
 {
   eventId: string,              // Required
@@ -412,6 +429,7 @@ The Public surface (`Public.html`) reads event data and logs analytics via these
 ```
 
 **Response:**
+
 ```javascript
 {
   ok: true,
@@ -428,13 +446,14 @@ The Public surface (`Public.html`) reads event data and logs analytics via these
 Client-side analytics for sponsor impressions and clicks use `SponsorUtils.logEvent()` (defined in `SponsorUtils.html:65`).
 
 **Usage:**
+
 ```javascript
 // Log sponsor impression
 SponsorUtils.logEvent({
   eventId: string,
   surface: 'public' | 'display' | 'poster',
   metric: 'impression',
-  sponsorId: string
+  sponsorId: string,
 });
 
 // Log sponsor click
@@ -442,7 +461,7 @@ SponsorUtils.logEvent({
   eventId: string,
   surface: 'public',
   metric: 'click',
-  sponsorId: string
+  sponsorId: string,
 });
 ```
 
@@ -458,8 +477,8 @@ The Display surface (`Display.html`) fetches TV/kiosk-optimized bundles and logs
 
 ### APIs Used
 
-| API | Purpose | Line |
-|-----|---------|------|
+| API                    | Purpose                        | Line         |
+| ---------------------- | ------------------------------ | ------------ |
 | `api_getDisplayBundle` | Event + rotation/layout config | Code.gs:3303 |
 
 ---
@@ -469,6 +488,7 @@ The Display surface (`Display.html`) fetches TV/kiosk-optimized bundles and logs
 **Purpose:** Single event with TV/kiosk display configuration (sponsor rotation, layout emphasis).
 
 **Payload:**
+
 ```javascript
 {
   brandId: string,        // Required
@@ -479,6 +499,7 @@ The Display surface (`Display.html`) fetches TV/kiosk-optimized bundles and logs
 ```
 
 **Response:**
+
 ```javascript
 {
   ok: true,
@@ -510,9 +531,14 @@ Display surface logs metrics via `SponsorUtils.logEvent()`:
 logEvent({ eventId: ev.id, surface: 'display', metric: 'view', value: 1 });
 
 // Log sponsor impressions (when rendered)
-sponsors.forEach(s => logEvent({
-  eventId, surface: 'display', metric: 'impression', sponsorId: s.id
-}));
+sponsors.forEach((s) =>
+  logEvent({
+    eventId,
+    surface: 'display',
+    metric: 'impression',
+    sponsorId: s.id,
+  })
+);
 
 // Log sponsor clicks
 logEvent({ eventId, surface: 'display', metric: 'click', sponsorId: id });
@@ -526,8 +552,8 @@ The Poster surface (`Poster.html`) fetches print-optimized bundles with QR codes
 
 ### APIs Used
 
-| API | Purpose | Line |
-|-----|---------|------|
+| API                   | Purpose                          | Line         |
+| --------------------- | -------------------------------- | ------------ |
 | `api_getPosterBundle` | Event + QR codes + print strings | Code.gs:3396 |
 
 ---
@@ -537,6 +563,7 @@ The Poster surface (`Poster.html`) fetches print-optimized bundles with QR codes
 **Purpose:** Single event with print-optimized QR codes and formatted strings.
 
 **Payload:**
+
 ```javascript
 {
   brandId: string,        // Required
@@ -547,6 +574,7 @@ The Poster surface (`Poster.html`) fetches print-optimized bundles with QR codes
 ```
 
 **Response:**
+
 ```javascript
 {
   ok: true,
@@ -578,9 +606,14 @@ Poster surface logs metrics via `SponsorUtils.logEvent()`:
 logEvent({ eventId: event.id, surface: 'poster', metric: 'view', value: 1 });
 
 // Log sponsor impressions (when rendered)
-sponsors.forEach(s => logEvent({
-  eventId, surface: 'poster', metric: 'impression', sponsorId: s.id
-}));
+sponsors.forEach((s) =>
+  logEvent({
+    eventId,
+    surface: 'poster',
+    metric: 'impression',
+    sponsorId: s.id,
+  })
+);
 
 // Log print action (via beforeprint event)
 window.addEventListener('beforeprint', () => {
@@ -596,10 +629,10 @@ All surfaces log metrics to `AnalyticsService.gs` for aggregation and reporting.
 
 ### APIs Used
 
-| API | Purpose | Line |
-|-----|---------|------|
-| `api_logEvents` | Batch write analytics events | Code.gs:3987 |
-| `api_logExternalClick` | Track external link clicks | Code.gs:4112 |
+| API                    | Purpose                      | Line         |
+| ---------------------- | ---------------------------- | ------------ |
+| `api_logEvents`        | Batch write analytics events | Code.gs:3987 |
+| `api_logExternalClick` | Track external link clicks   | Code.gs:4112 |
 
 ---
 
@@ -608,23 +641,27 @@ All surfaces log metrics to `AnalyticsService.gs` for aggregation and reporting.
 **Purpose:** Batch write analytics events to ANALYTICS sheet.
 
 **Payload:**
+
 ```javascript
 {
-  items: [{
-    eventId: string,        // Event ID
-    surface: string,        // 'public' | 'display' | 'poster' | 'sponsor'
-    metric: string,         // 'view' | 'impression' | 'click' | 'print' | 'dwellSec'
-    sponsorId: string,      // Sponsor ID (for sponsor metrics)
-    value: number,          // Metric value (default: 0)
-    ts: number,             // Timestamp (default: now)
-    ua: string,             // User agent (truncated to 200 chars)
-    sessionId: string,      // Session ID for attribution
-    token: string           // Tracking token (optional)
-  }]
+  items: [
+    {
+      eventId: string, // Event ID
+      surface: string, // 'public' | 'display' | 'poster' | 'sponsor'
+      metric: string, // 'view' | 'impression' | 'click' | 'print' | 'dwellSec'
+      sponsorId: string, // Sponsor ID (for sponsor metrics)
+      value: number, // Metric value (default: 0)
+      ts: number, // Timestamp (default: now)
+      ua: string, // User agent (truncated to 200 chars)
+      sessionId: string, // Session ID for attribution
+      token: string, // Tracking token (optional)
+    },
+  ];
 }
 ```
 
 **Response:**
+
 ```javascript
 {
   ok: true,
@@ -633,6 +670,7 @@ All surfaces log metrics to `AnalyticsService.gs` for aggregation and reporting.
 ```
 
 **Storage format (10 columns):**
+
 ```
 timestamp | eventId | surface | metric | sponsorId | value | token | ua | sessionId | visibleSponsorIds
 ```
@@ -643,14 +681,15 @@ timestamp | eventId | surface | metric | sponsorId | value | token | ua | sessio
 
 `AnalyticsService_aggregateEventData()` groups metrics by:
 
-| Dimension | Description |
-|-----------|-------------|
+| Dimension   | Description                                   |
+| ----------- | --------------------------------------------- |
 | `bySurface` | Metrics per surface (public, display, poster) |
-| `bySponsor` | Metrics per sponsor ID |
-| `byToken` | Metrics per tracking token |
-| `timeline` | Daily breakdown (date → metrics) |
+| `bySponsor` | Metrics per sponsor ID                        |
+| `byToken`   | Metrics per tracking token                    |
+| `timeline`  | Daily breakdown (date → metrics)              |
 
 **Aggregated metrics per dimension:**
+
 ```javascript
 {
   impressions: number,
@@ -721,6 +760,7 @@ User Action → Surface → api_logMetric → ANALYTICS Sheet
 ### Authentication
 
 All write operations require `adminKey` validated via `gate_()`:
+
 - Rate limited: 10 req/min per brand/IP
 - Lockout: 15 minutes after 5 failed attempts
 
@@ -744,4 +784,4 @@ All write operations require `adminKey` validated via `gate_()`:
 
 ---
 
-*Integration Flows - ZEVENT-004*
+_Integration Flows - ZEVENT-004_

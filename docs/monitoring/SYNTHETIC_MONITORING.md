@@ -14,19 +14,19 @@ You don't want to learn about 410s by staring at Playwright logs. Synthetic test
 
 ### Endpoints Monitored
 
-| Endpoint | URL | Assertions |
-|----------|-----|------------|
-| **Health Origin** | `https://stg.eventangle.com/health/origin` | `ok === true`, `env === "staging"` |
-| **Events Page** | `https://stg.eventangle.com/events` | HTTP 200, `data-testid="events-root"` |
+| Endpoint          | URL                                        | Assertions                            |
+| ----------------- | ------------------------------------------ | ------------------------------------- |
+| **Health Origin** | `https://stg.eventangle.com/health/origin` | `ok === true`, `env === "staging"`    |
+| **Events Page**   | `https://stg.eventangle.com/events`        | HTTP 200, `data-testid="events-root"` |
 
 ### Alert Routing Logic
 
-| Scenario | Interpretation | Action |
-|----------|----------------|--------|
-| `/health/origin` fails, `/events` passes | Config drift (upstream misconfigured) | Check worker env vars, upstream URL |
-| `/events` fails, `/health/origin` passes | Frontend/route issue (not upstream) | Check worker routing, HTML templates |
-| Both fail | Worker down or Cloudflare issue | Check Cloudflare dashboard, worker logs |
-| Both pass | System healthy | No action needed |
+| Scenario                                 | Interpretation                        | Action                                  |
+| ---------------------------------------- | ------------------------------------- | --------------------------------------- |
+| `/health/origin` fails, `/events` passes | Config drift (upstream misconfigured) | Check worker env vars, upstream URL     |
+| `/events` fails, `/health/origin` passes | Frontend/route issue (not upstream)   | Check worker routing, HTML templates    |
+| Both fail                                | Worker down or Cloudflare issue       | Check Cloudflare dashboard, worker logs |
+| Both pass                                | System healthy                        | No action needed                        |
 
 ---
 
@@ -43,6 +43,7 @@ Cloudflare Health Checks are the primary synthetic monitoring solution, integrat
 2. **Navigate to Traffic > Health Checks**
 
 3. **Create Health Check 1: /health/origin**
+
    ```
    Name: eventangle-staging-health-origin
    Monitor Type: HTTPS
@@ -180,25 +181,28 @@ curl -X POST "https://api.cloudflare.com/client/v4/zones/{zone_id}/healthchecks"
 
 ### What exists today
 
-| Layer | State |
-|-------|-------|
-| Cloudflare Health Checks | Documented above — still needs manual creation |
-| `stage2.yml` Datadog job | **Not present** — no `datadog-synthetic` job in the workflow |
-| Datadog synthetic tests | **Not created** — no public IDs exist yet |
-| GitHub secrets | **Not set** — `DATADOG_API_KEY`, `DATADOG_APP_KEY` absent |
-| Slack → Datadog alert | **Not wired** — Slack webhook not connected to any Datadog monitor |
-| Terraform for Datadog | **Not written** — no `.tf` file for synthetics |
+| Layer                    | State                                                              |
+| ------------------------ | ------------------------------------------------------------------ |
+| Cloudflare Health Checks | Documented above — still needs manual creation                     |
+| `stage2.yml` Datadog job | **Not present** — no `datadog-synthetic` job in the workflow       |
+| Datadog synthetic tests  | **Not created** — no public IDs exist yet                          |
+| GitHub secrets           | **Not set** — `DATADOG_API_KEY`, `DATADOG_APP_KEY` absent          |
+| Slack → Datadog alert    | **Not wired** — Slack webhook not connected to any Datadog monitor |
+| Terraform for Datadog    | **Not written** — no `.tf` file for synthetics                     |
 
 ### Implementation steps (in order)
 
 **Step 1 — GitHub secrets**
 
 Add to the repo's GitHub Actions secrets (Settings → Secrets → Actions):
+
 ```
 DATADOG_API_KEY   ← from Datadog > Organization Settings > API Keys
 DATADOG_APP_KEY   ← from Datadog > Organization Settings > Application Keys
 ```
+
 Add as a GitHub variable (not secret):
+
 ```
 DATADOG_SYNTHETICS_ENABLED = true
 ```
@@ -215,7 +219,7 @@ Add this job to `.github/workflows/stage2.yml`, after the `ui-smoke` job:
 ```yaml
 datadog-synthetic:
   name: Datadog Synthetics
-  needs: [api-smoke]            # only run if API smoke passed
+  needs: [api-smoke] # only run if API smoke passed
   if: vars.DATADOG_SYNTHETICS_ENABLED == 'true'
   runs-on: ubuntu-latest
   steps:
@@ -229,10 +233,11 @@ datadog-synthetic:
 ```
 
 Replace `test_search_query` with explicit IDs once you have them:
+
 ```yaml
-        public_ids: |
-          abc-123-xyz
-          def-456-uvw
+public_ids: |
+  abc-123-xyz
+  def-456-uvw
 ```
 
 **Step 4 — Slack webhook → Datadog monitor**
@@ -471,10 +476,10 @@ Add to your deployment checklist:
 
 ## Environment Matrix
 
-| Environment | Health Origin URL | Events URL | Check Interval |
-|-------------|-------------------|------------|----------------|
-| Staging | `https://stg.eventangle.com/health/origin` | `https://stg.eventangle.com/events` | 1 minute |
-| Production | `https://www.eventangle.com/health/origin` | `https://www.eventangle.com/events` | 1 minute |
+| Environment | Health Origin URL                          | Events URL                          | Check Interval |
+| ----------- | ------------------------------------------ | ----------------------------------- | -------------- |
+| Staging     | `https://stg.eventangle.com/health/origin` | `https://stg.eventangle.com/events` | 1 minute       |
+| Production  | `https://www.eventangle.com/health/origin` | `https://www.eventangle.com/events` | 1 minute       |
 
 ---
 
@@ -483,12 +488,14 @@ Add to your deployment checklist:
 ### Health Check Failing
 
 1. **Check endpoint directly:**
+
    ```bash
    curl -s https://stg.eventangle.com/health/origin | jq
    curl -s -o /dev/null -w "%{http_code}" https://stg.eventangle.com/events
    ```
 
 2. **Verify assertions:**
+
    ```bash
    # Check ok field
    curl -s https://stg.eventangle.com/health/origin | jq '.ok'
@@ -505,13 +512,13 @@ Add to your deployment checklist:
 
 ### Alert Interpretation
 
-| Alert | Likely Cause | First Action |
-|-------|--------------|--------------|
-| `/health/origin` unhealthy, `ok: false` | Upstream unreachable | Check `UPSTREAM_WEBAPP_URL` env var |
-| `/health/origin` unhealthy, `env` wrong | Wrong environment config | Check `WORKER_ENV` env var |
-| `/events` unhealthy, 404 | Route not configured | Check worker routing |
-| `/events` unhealthy, missing marker | HTML template issue | Check KV templates |
-| Both unhealthy | Worker down | Check Cloudflare Workers status |
+| Alert                                   | Likely Cause             | First Action                        |
+| --------------------------------------- | ------------------------ | ----------------------------------- |
+| `/health/origin` unhealthy, `ok: false` | Upstream unreachable     | Check `UPSTREAM_WEBAPP_URL` env var |
+| `/health/origin` unhealthy, `env` wrong | Wrong environment config | Check `WORKER_ENV` env var          |
+| `/events` unhealthy, 404                | Route not configured     | Check worker routing                |
+| `/events` unhealthy, missing marker     | HTML template issue      | Check KV templates                  |
+| Both unhealthy                          | Worker down              | Check Cloudflare Workers status     |
 
 ---
 

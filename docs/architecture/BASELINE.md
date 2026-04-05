@@ -54,12 +54,12 @@ The MVP Event Toolkit is a multi-brand event management platform deployed on Clo
 
 ### Supported Brands
 
-| Brand ID | Description |
-|----------|-------------|
-| `root` | Default/primary brand |
-| `abc` | ABC organization |
-| `cbc` | CBC organization |
-| `cbl` | CBL organization |
+| Brand ID | Description           |
+| -------- | --------------------- |
+| `root`   | Default/primary brand |
+| `abc`    | ABC organization      |
+| `cbc`    | CBC organization      |
+| `cbl`    | CBL organization      |
 
 ---
 
@@ -71,11 +71,11 @@ The repository uses a **two-stage CI/CD architecture** designed for safety and r
 
 Only three workflows are part of the live CI/CD pipeline:
 
-| Workflow | File | Purpose | Trigger |
-|----------|------|---------|---------|
-| **Stage-1 Validation** | `.github/workflows/stage1.yml` | Validate + Deploy | PR, push to main, tag |
-| **Stage-2 Orchestrator** | `.github/workflows/stage2.yml` | Post-deploy environment tests | After Stage-1 succeeds |
-| **Security Scan** | `.github/workflows/security-scan.yml` | CodeQL + npm audit | Push, PR, weekly |
+| Workflow                 | File                                  | Purpose                       | Trigger                |
+| ------------------------ | ------------------------------------- | ----------------------------- | ---------------------- |
+| **Stage-1 Validation**   | `.github/workflows/stage1.yml`        | Validate + Deploy             | PR, push to main, tag  |
+| **Stage-2 Orchestrator** | `.github/workflows/stage2.yml`        | Post-deploy environment tests | After Stage-1 succeeds |
+| **Security Scan**        | `.github/workflows/security-scan.yml` | CodeQL + npm audit            | Push, PR, weekly       |
 
 **Rule:** If it's not one of these three workflows, it doesn't run. All other CI definitions are archived.
 
@@ -112,13 +112,13 @@ Stage-1 runs **hermetic validation** with zero external dependencies (no `BASE_U
 
 **Quality Gate Details:**
 
-| Gate | Job Name | What It Checks |
-|------|----------|----------------|
-| Security Check | `security-check` | npm audit, secrets scanning, dependency review |
-| Lint | `lint` | ESLint code quality |
-| Unit Tests | `unit-tests` | Jest unit tests + security tests |
-| Contract Tests | `contract-tests` | Schema sync, API contracts, bundles, GAS HTML |
-| Guards | `guards` | MVP surfaces, dead code, schema, V2 files, bundle |
+| Gate           | Job Name         | What It Checks                                    |
+| -------------- | ---------------- | ------------------------------------------------- |
+| Security Check | `security-check` | npm audit, secrets scanning, dependency review    |
+| Lint           | `lint`           | ESLint code quality                               |
+| Unit Tests     | `unit-tests`     | Jest unit tests + security tests                  |
+| Contract Tests | `contract-tests` | Schema sync, API contracts, bundles, GAS HTML     |
+| Guards         | `guards`         | MVP surfaces, dead code, schema, V2 files, bundle |
 
 ### Stage-2: Post-Deploy Environment Tests
 
@@ -157,6 +157,7 @@ Stage-2 validates the **live deployed environment** after Stage-1 succeeds.
 ```
 
 **Progressive Gating Rules:**
+
 - API tests must pass before UI tests run
 - If API tests fail, UI tests are skipped (fail-fast)
 - Production tests require manual approval via GitHub Environment
@@ -166,6 +167,7 @@ Stage-2 validates the **live deployed environment** after Stage-1 succeeds.
 Configure in GitHub Settings > Branches > Branch protection rules for `main`:
 
 **Required Status Checks:**
+
 - `Lint`
 - `Unit Tests`
 - `Contract Tests`
@@ -181,14 +183,15 @@ Configure in GitHub Settings > Branches > Branch protection rules for `main`:
 
 ### Environment URLs
 
-| Environment | Worker Name | Base URL | API URL |
-|-------------|-------------|----------|---------|
-| **Staging** | `eventangle-staging` | `https://stg.eventangle.com` | `https://api-stg.eventangle.com` |
-| **Production** | `eventangle-prod` | `https://www.eventangle.com` | `https://api.eventangle.com` |
+| Environment    | Worker Name          | Base URL                     | API URL                          |
+| -------------- | -------------------- | ---------------------------- | -------------------------------- |
+| **Staging**    | `eventangle-staging` | `https://stg.eventangle.com` | `https://api-stg.eventangle.com` |
+| **Production** | `eventangle-prod`    | `https://www.eventangle.com` | `https://api.eventangle.com`     |
 
 ### Route Configuration
 
 **Staging Routes (wrangler.toml `[env.staging]`):**
+
 ```toml
 routes = [
   { pattern = "stg.eventangle.com/*", zone_name = "eventangle.com" },
@@ -197,6 +200,7 @@ routes = [
 ```
 
 **Production Routes (wrangler.toml `[env.production]`):**
+
 ```toml
 routes = [
   { pattern = "eventangle.com/*", zone_name = "eventangle.com" },
@@ -209,21 +213,21 @@ routes = [
 
 The system operates in **Worker-only mode** (`BACKEND_MODE=worker`). All traffic is handled by Cloudflare Workers with direct Google Sheets API access.
 
-| Mode | Description | Status |
-|------|-------------|--------|
-| `worker` | All routes use Worker-native backend | **Current (Default)** |
-| `gas` | Routes proxy to Google Apps Script | Deprecated (emergency only) |
-| `mixed` | Per-route selection | Deprecated |
+| Mode     | Description                          | Status                      |
+| -------- | ------------------------------------ | --------------------------- |
+| `worker` | All routes use Worker-native backend | **Current (Default)**       |
+| `gas`    | Routes proxy to Google Apps Script   | Deprecated (emergency only) |
+| `mixed`  | Per-route selection                  | Deprecated                  |
 
 ### Worker Environment Variables
 
-| Variable | Staging | Production |
-|----------|---------|------------|
-| `WORKER_ENV` | `staging` | `production` |
-| `BACKEND_MODE` | `worker` | `worker` |
-| `DEBUG_LEVEL` | `debug` | `error` |
-| `ENABLE_DEBUG_ENDPOINTS` | `true` | (not set) |
-| `WORKER_BUILD_VERSION` | `stg-YYYY.MM.DD-story` | `prod-YYYY.MM.DD-story` |
+| Variable                 | Staging                | Production              |
+| ------------------------ | ---------------------- | ----------------------- |
+| `WORKER_ENV`             | `staging`              | `production`            |
+| `BACKEND_MODE`           | `worker`               | `worker`                |
+| `DEBUG_LEVEL`            | `debug`                | `error`                 |
+| `ENABLE_DEBUG_ENDPOINTS` | `true`                 | (not set)               |
+| `WORKER_BUILD_VERSION`   | `stg-YYYY.MM.DD-story` | `prod-YYYY.MM.DD-story` |
 
 ---
 
@@ -237,25 +241,28 @@ The system operates in **Worker-only mode** (`BACKEND_MODE=worker`). All traffic
 
 ### Staging vs. Production Differences
 
-| Aspect | Staging | Production |
-|--------|---------|------------|
-| Debug logging | Full (`debug`) | Minimal (`error`) |
-| Debug endpoints | Enabled | Disabled |
-| Testing features | ON | OFF |
-| Experimental features | ON | OFF |
-| Manual approval | Not required | Required |
+| Aspect                | Staging        | Production        |
+| --------------------- | -------------- | ----------------- |
+| Debug logging         | Full (`debug`) | Minimal (`error`) |
+| Debug endpoints       | Enabled        | Disabled          |
+| Testing features      | ON             | OFF               |
+| Experimental features | ON             | OFF               |
+| Manual approval       | Not required   | Required          |
 
 ### Feature Flags
 
 Defined in `deploy-manifest.json`:
 
 **MVP Features (always ON):**
+
 - `EVENTS`, `SPONSORS`, `ANALYTICS`, `FORMS`, `SHORTLINKS`, `PORTFOLIO_ANALYTICS`
 
 **Testing Features (staging only):**
+
 - `DEMO_MODE_ENABLED`, `DEBUG_PANEL`, `API_TIMING_LOGS`, `ERROR_DETAILS`
 
 **V2 Features (deferred):**
+
 - `TEMPLATE_MANAGEMENT_V2`, `PORTFOLIO_V2` - OFF in both environments
 
 ---
@@ -348,43 +355,43 @@ All HTML responses must:
 
 ### GitHub Actions Secrets (Stage-1)
 
-| Secret | Category | Purpose | Rotation |
-|--------|----------|---------|----------|
-| `GOOGLE_CLIENT_EMAIL` | Google | Service account email | 90 days |
-| `GOOGLE_PRIVATE_KEY` | Google | Service account private key (PEM) | 90 days |
-| `STAGING_SHEETS_SPREADSHEET_ID` | Google | Staging spreadsheet ID | Static |
-| `CLOUDFLARE_API_TOKEN` | Cloudflare | Worker deployment | As needed |
-| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare | Account identifier | Static |
-| `OAUTH_CREDENTIALS` | Apps Script | Clasp OAuth (legacy) | Auto-refresh |
+| Secret                          | Category    | Purpose                           | Rotation     |
+| ------------------------------- | ----------- | --------------------------------- | ------------ |
+| `GOOGLE_CLIENT_EMAIL`           | Google      | Service account email             | 90 days      |
+| `GOOGLE_PRIVATE_KEY`            | Google      | Service account private key (PEM) | 90 days      |
+| `STAGING_SHEETS_SPREADSHEET_ID` | Google      | Staging spreadsheet ID            | Static       |
+| `CLOUDFLARE_API_TOKEN`          | Cloudflare  | Worker deployment                 | As needed    |
+| `CLOUDFLARE_ACCOUNT_ID`         | Cloudflare  | Account identifier                | Static       |
+| `OAUTH_CREDENTIALS`             | Apps Script | Clasp OAuth (legacy)              | Auto-refresh |
 
 ### GitHub Actions Secrets (Stage-2)
 
-| Secret | Category | Purpose | Rotation |
-|--------|----------|---------|----------|
-| `ADMIN_KEY_ROOT` | Admin | Root brand admin key | 90 days |
-| `ADMIN_KEY_ABC` | Admin | ABC brand admin key | 90 days |
-| `ADMIN_KEY_CBC` | Admin | CBC brand admin key | 90 days |
-| `ADMIN_KEY_CBL` | Admin | CBL brand admin key | 90 days |
+| Secret           | Category | Purpose              | Rotation |
+| ---------------- | -------- | -------------------- | -------- |
+| `ADMIN_KEY_ROOT` | Admin    | Root brand admin key | 90 days  |
+| `ADMIN_KEY_ABC`  | Admin    | ABC brand admin key  | 90 days  |
+| `ADMIN_KEY_CBC`  | Admin    | CBC brand admin key  | 90 days  |
+| `ADMIN_KEY_CBL`  | Admin    | CBL brand admin key  | 90 days  |
 
 ### Cloudflare Worker Secrets
 
 Set via `wrangler secret put <NAME> --env <staging|production>`:
 
-| Secret | Purpose | Command |
-|--------|---------|---------|
-| `GOOGLE_SA_CLIENT_EMAIL` | Service account email | `wrangler secret put GOOGLE_SA_CLIENT_EMAIL --env staging` |
-| `GOOGLE_SA_PRIVATE_KEY_PEM` | Private key (PEM format) | `wrangler secret put GOOGLE_SA_PRIVATE_KEY_PEM --env staging` |
-| `SHEETS_SPREADSHEET_ID` | Database spreadsheet ID | `wrangler secret put SHEETS_SPREADSHEET_ID --env staging` |
-| `ADMIN_TOKEN` | Bearer token for admin auth | `wrangler secret put ADMIN_TOKEN --env staging` |
+| Secret                      | Purpose                     | Command                                                       |
+| --------------------------- | --------------------------- | ------------------------------------------------------------- |
+| `GOOGLE_SA_CLIENT_EMAIL`    | Service account email       | `wrangler secret put GOOGLE_SA_CLIENT_EMAIL --env staging`    |
+| `GOOGLE_SA_PRIVATE_KEY_PEM` | Private key (PEM format)    | `wrangler secret put GOOGLE_SA_PRIVATE_KEY_PEM --env staging` |
+| `SHEETS_SPREADSHEET_ID`     | Database spreadsheet ID     | `wrangler secret put SHEETS_SPREADSHEET_ID --env staging`     |
+| `ADMIN_TOKEN`               | Bearer token for admin auth | `wrangler secret put ADMIN_TOKEN --env staging`               |
 
 ### Rotation Schedule
 
-| Secret Type | Period | Process |
-|-------------|--------|---------|
-| Google Service Account Keys | 90 days | Generate in GCP Console, update GitHub + Wrangler |
-| Admin Keys | 90 days | Generate new key, update GitHub, verify tests |
-| Cloudflare API Token | As needed | Regenerate on compromise |
-| OAuth Credentials | Auto-refresh | N/A (automatic) |
+| Secret Type                 | Period       | Process                                           |
+| --------------------------- | ------------ | ------------------------------------------------- |
+| Google Service Account Keys | 90 days      | Generate in GCP Console, update GitHub + Wrangler |
+| Admin Keys                  | 90 days      | Generate new key, update GitHub, verify tests     |
+| Cloudflare API Token        | As needed    | Regenerate on compromise                          |
+| OAuth Credentials           | Auto-refresh | N/A (automatic)                                   |
 
 ### Verification
 
@@ -516,14 +523,14 @@ node scripts/verify-secrets.js
 
 Detailed runbooks for operational tasks are available:
 
-| Runbook | Location | Purpose |
-|---------|----------|---------|
-| **Deploying to Staging/Production** | [RUNBOOK-DEPLOYMENT.md](./RUNBOOK-DEPLOYMENT.md) | Step-by-step deployment procedures |
-| **Rotating Secrets** | [RUNBOOK-SECRETS.md](./RUNBOOK-SECRETS.md) | Secret rotation and verification |
-| **Running Local Tests** | [RUNBOOK-LOCAL-TESTING.md](./RUNBOOK-LOCAL-TESTING.md) | Local CI execution guide |
-| **Investigating CI Failures** | [RUNBOOK-CI-DEBUG.md](./RUNBOOK-CI-DEBUG.md) | Debugging failing CI runs |
-| **Incident Response** | [RUNBOOK.md](../RUNBOOK.md) | SEV definitions, rollback, escalation |
-| **Rollback Procedures** | [ROLLBACK.md](./ROLLBACK.md) | Worker and GAS rollback |
+| Runbook                             | Location                                               | Purpose                               |
+| ----------------------------------- | ------------------------------------------------------ | ------------------------------------- |
+| **Deploying to Staging/Production** | [RUNBOOK-DEPLOYMENT.md](./RUNBOOK-DEPLOYMENT.md)       | Step-by-step deployment procedures    |
+| **Rotating Secrets**                | [RUNBOOK-SECRETS.md](./RUNBOOK-SECRETS.md)             | Secret rotation and verification      |
+| **Running Local Tests**             | [RUNBOOK-LOCAL-TESTING.md](./RUNBOOK-LOCAL-TESTING.md) | Local CI execution guide              |
+| **Investigating CI Failures**       | [RUNBOOK-CI-DEBUG.md](./RUNBOOK-CI-DEBUG.md)           | Debugging failing CI runs             |
+| **Incident Response**               | [RUNBOOK.md](../RUNBOOK.md)                            | SEV definitions, rollback, escalation |
+| **Rollback Procedures**             | [ROLLBACK.md](./ROLLBACK.md)                           | Worker and GAS rollback               |
 
 ---
 
@@ -531,41 +538,41 @@ Detailed runbooks for operational tasks are available:
 
 ### Architecture & Design
 
-| Document | Purpose |
-|----------|---------|
-| [ci-cd-architecture.md](./ci-cd-architecture.md) | Detailed CI/CD pipeline documentation |
-| [worker-routing.md](./worker-routing.md) | Cloudflare Worker routing architecture |
-| [ARCHITECTURE.md](./ARCHITECTURE.md) | System architecture overview |
-| [integration-map.md](./integration-map.md) | Service integration documentation |
+| Document                                         | Purpose                                |
+| ------------------------------------------------ | -------------------------------------- |
+| [ci-cd-architecture.md](./ci-cd-architecture.md) | Detailed CI/CD pipeline documentation  |
+| [worker-routing.md](./worker-routing.md)         | Cloudflare Worker routing architecture |
+| [ARCHITECTURE.md](./ARCHITECTURE.md)             | System architecture overview           |
+| [integration-map.md](./integration-map.md)       | Service integration documentation      |
 
 ### Operations
 
-| Document | Purpose |
-|----------|---------|
-| [RUNBOOK.md](../RUNBOOK.md) | Releases, incidents, SEV response |
-| [ROLLBACK.md](./ROLLBACK.md) | Rollback procedures |
-| [CLOUDFLARE_SECRETS.md](./CLOUDFLARE_SECRETS.md) | Secrets and environment variables |
-| [UPTIME_MONITORING.md](./UPTIME_MONITORING.md) | External monitoring setup |
+| Document                                             | Purpose                            |
+| ---------------------------------------------------- | ---------------------------------- |
+| [RUNBOOK.md](../RUNBOOK.md)                          | Releases, incidents, SEV response  |
+| [ROLLBACK.md](./ROLLBACK.md)                         | Rollback procedures                |
+| [CLOUDFLARE_SECRETS.md](./CLOUDFLARE_SECRETS.md)     | Secrets and environment variables  |
+| [UPTIME_MONITORING.md](./UPTIME_MONITORING.md)       | External monitoring setup          |
 | [SYNTHETIC_MONITORING.md](./SYNTHETIC_MONITORING.md) | Cloudflare/Datadog synthetic tests |
 
 ### Development
 
-| Document | Purpose |
-|----------|---------|
-| [DEPLOYMENT.md](./DEPLOYMENT.md) | Deployment procedures |
-| [E2E_PLAYWRIGHT_GUIDE.md](./E2E_PLAYWRIGHT_GUIDE.md) | Playwright test guide |
-| [CODING-STYLE.md](./CODING-STYLE.md) | Code style guidelines |
-| [SCHEMA_GUIDELINES.md](./SCHEMA_GUIDELINES.md) | Schema design guidelines |
+| Document                                             | Purpose                  |
+| ---------------------------------------------------- | ------------------------ |
+| [DEPLOYMENT.md](./DEPLOYMENT.md)                     | Deployment procedures    |
+| [E2E_PLAYWRIGHT_GUIDE.md](./E2E_PLAYWRIGHT_GUIDE.md) | Playwright test guide    |
+| [CODING-STYLE.md](./CODING-STYLE.md)                 | Code style guidelines    |
+| [SCHEMA_GUIDELINES.md](./SCHEMA_GUIDELINES.md)       | Schema design guidelines |
 
 ### Configuration Files
 
-| File | Purpose |
-|------|---------|
-| `deploy-manifest.json` | Centralized deployment configuration |
-| `.github-secrets-required.json` | Canonical secrets list |
-| `wrangler.toml` (root) | Staging Worker configuration |
-| `cloudflare-proxy/wrangler.toml` | Production Worker configuration |
-| `.env.example` | Environment variable template |
+| File                             | Purpose                              |
+| -------------------------------- | ------------------------------------ |
+| `deploy-manifest.json`           | Centralized deployment configuration |
+| `.github-secrets-required.json`  | Canonical secrets list               |
+| `wrangler.toml` (root)           | Staging Worker configuration         |
+| `cloudflare-proxy/wrangler.toml` | Production Worker configuration      |
+| `.env.example`                   | Environment variable template        |
 
 ---
 

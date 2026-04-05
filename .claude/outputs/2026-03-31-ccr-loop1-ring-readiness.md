@@ -2,7 +2,7 @@
 
 > Method: Continuous Confidence Review against ring topology requirements
 > Date: 2026-03-31
-> Artifacts reviewed: migrations 0010+0011, config/corridors.js, config/ncr-regions/*, ADR-009
+> Artifacts reviewed: migrations 0010+0011, config/corridors.js, config/ncr-regions/\*, ADR-009
 
 ---
 
@@ -15,6 +15,7 @@
 The corridors table has `origin_node_id` and `destination_node_id`. This models **directed edges** (A → B), not cycles. To detect a ring, you need to query for cycles: does a path from A through connected corridors return to A?
 
 **Structural gaps:**
+
 1. **No inter-community corridors exist.** The founding corridors all point from community → metro (Beverly → Chicago, Hammond → Chicago, etc.). These are **spoke patterns**, not cycles. There is no Beverly → Evergreen Park corridor, no Evergreen Park → Hammond corridor, no Hammond → Beverly corridor. You cannot form a ring from spokes to a hub.
 2. **No ring detection query is possible** without node-to-node corridors at the same hierarchy level. Beverly (Zone) → Evergreen Park (Zone) → Hammond (Zone) → Beverly would be a candidate ring. None of these corridors exist in the seed data.
 3. **The schema supports it** (corridors table can hold any origin→destination pair at any level), but **the seed data doesn't express it.**
@@ -30,8 +31,9 @@ The corridors table has `origin_node_id` and `destination_node_id`. This models 
 **Finding: FAIL — No bidirectionality tracking in schema.**
 
 The corridors table has one row per corridor with `origin_node_id` → `destination_node_id`. This is inherently **unidirectional**. To track bidirectionality, you need either:
+
 - Two corridor rows (A→B and B→A) with separate signal data, OR
-- A `directionality` field (UNIDIRECTIONAL, BIDIRECTIONAL) on the corridor, OR  
+- A `directionality` field (UNIDIRECTIONAL, BIDIRECTIONAL) on the corridor, OR
 - A separate signal/flow table that tracks directional counts per corridor
 
 **Additional gap:** No `core_periphery_role` field on nodes or corridors. The core/periphery model discussed in the methodology has no schema representation.
@@ -47,11 +49,12 @@ The corridors table has one row per corridor with `origin_node_id` → `destinat
 **Finding: FAIL — No temporal dimension in corridors or nodes.**
 
 The corridors table has `created_at` and `updated_at` but no:
+
 - `first_signal_date` / `last_signal_date` (when was this corridor first/last observed?)
 - `time_windows_validated` (how many distinct seasons show signal?)
 - `seasonal_pattern` (is this corridor seasonal or structural?)
 
-The `scans` table has `scan_bucket` for temporal data, but there's no bridge between scan temporal data and corridor temporal validation. The corridor status is binary (HYPOTHESIZED → VALIDATED) with no temporal metadata about *when* or *how consistently* it was validated.
+The `scans` table has `scan_bucket` for temporal data, but there's no bridge between scan temporal data and corridor temporal validation. The corridor status is binary (HYPOTHESIZED → VALIDATED) with no temporal metadata about _when_ or _how consistently_ it was validated.
 
 **Fix required:** Add temporal validation fields to corridors: `first_observed`, `last_observed`, `validation_window_count`, `seasonal_flag`.
 
@@ -78,10 +81,12 @@ The scan data (`scans`, `scan_aggregates`) provides the raw behavioral data. The
 **Finding: FAIL — Signal class definitions are INVERTED in the schema.**
 
 ADR-009 line 30 says:
+
 > CLASS_A: High-confidence corridor with validated engagement data
 > CLASS_B: Hypothesized corridor based on geographic/demographic reasoning
 
 But the methodology discussion defines:
+
 > Class B (event attendance via QR funnel) is the primary signal
 > Class A (poster/tabletop scan) is a presence signal only
 
@@ -90,6 +95,7 @@ These are **opposite definitions**. In ADR-009, CLASS_A = strong, CLASS_B = weak
 The seed data has all corridors as `CLASS_B` (which in the ADR means "hypothesized/weak" but in the methodology means "primary/strong"). This contradiction will cause confusion.
 
 **Fix required:** Align signal class definitions. Either:
+
 - Option A: Keep ADR-009 convention (A=strong, B=weak) and document clearly
 - Option B: Flip to methodology convention (A=presence, B=behavioral) and update all seed data
 
@@ -135,18 +141,19 @@ For the coverage map to support ring detection nationally, it needs corridor see
 
 ## CCR Loop 1 Summary
 
-| Problem | Status | Confidence | Fix Priority |
-|---------|--------|------------|--------------|
-| 1. Minimum Topology | **FAIL** | RECURSIVE | **P0 — Must fix now** |
-| 2. Bidirectionality | **FAIL** | RECURSIVE | **P0 — Must fix now** |
-| 3. Temporal Consistency | **FAIL** | RECURSIVE | **P1 — Fix in next migration** |
-| 4. Null Hypothesis | CONSERVATIVE | CONSERVATIVE | P2 — Phase 2 analytical |
-| 5. Signal Class Inversion | **FAIL** | RECURSIVE | **P0 — Must fix now** |
-| 6. Fractal Self-Similarity | PASS | CRITICAL | None |
-| 7. Inter-Referencing | CONSERVATIVE | CONSERVATIVE | P2 — Phase 2 analytical |
-| 8. Coverage Map Corridors | FAIL (expected) | CONSERVATIVE | P2 — Seed data expansion |
+| Problem                    | Status          | Confidence   | Fix Priority                   |
+| -------------------------- | --------------- | ------------ | ------------------------------ |
+| 1. Minimum Topology        | **FAIL**        | RECURSIVE    | **P0 — Must fix now**          |
+| 2. Bidirectionality        | **FAIL**        | RECURSIVE    | **P0 — Must fix now**          |
+| 3. Temporal Consistency    | **FAIL**        | RECURSIVE    | **P1 — Fix in next migration** |
+| 4. Null Hypothesis         | CONSERVATIVE    | CONSERVATIVE | P2 — Phase 2 analytical        |
+| 5. Signal Class Inversion  | **FAIL**        | RECURSIVE    | **P0 — Must fix now**          |
+| 6. Fractal Self-Similarity | PASS            | CRITICAL     | None                           |
+| 7. Inter-Referencing       | CONSERVATIVE    | CONSERVATIVE | P2 — Phase 2 analytical        |
+| 8. Coverage Map Corridors  | FAIL (expected) | CONSERVATIVE | P2 — Seed data expansion       |
 
 **3 P0 fixes required before the output can define a ring:**
+
 1. Add inter-community corridors (Beverly ↔ EP ↔ Hammond ↔ Bronzeville cycle)
 2. Add directionality tracking + ring role fields
 3. Resolve signal class definition inversion

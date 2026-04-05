@@ -26,6 +26,7 @@
 ### 1.1 Goal
 
 Prevent domain hijacking by:
+
 - Enabling registrar lock to prevent unauthorized transfers
 - Requiring MFA for all registrar account access
 - Verifying and securing recovery email, phone, and backup codes
@@ -33,6 +34,7 @@ Prevent domain hijacking by:
 ### 1.2 Why This Matters
 
 The domain registrar is the ultimate root of trust for any web property. If compromised:
+
 - Attackers can transfer the domain to their control
 - DNS records can be modified to redirect all traffic
 - SSL certificates can be issued for the stolen domain
@@ -43,26 +45,26 @@ The domain registrar is the ultimate root of trust for any web property. If comp
 
 ### 1.3 Threat Model
 
-| Threat | Attack Vector | Impact |
-|--------|--------------|--------|
+| Threat             | Attack Vector                                           | Impact               |
+| ------------------ | ------------------------------------------------------- | -------------------- |
 | Social engineering | Attacker convinces registrar support to transfer domain | Complete domain loss |
-| Account takeover | Weak password or credential stuffing | Complete domain loss |
-| Email compromise | Password reset via compromised recovery email | Complete domain loss |
-| SIM swap | MFA bypass via phone number takeover | Account access |
-| Insider threat | Malicious employee at registrar | Domain modification |
-| Expired domain | Failure to renew, domain purchased by attacker | Complete domain loss |
+| Account takeover   | Weak password or credential stuffing                    | Complete domain loss |
+| Email compromise   | Password reset via compromised recovery email           | Complete domain loss |
+| SIM swap           | MFA bypass via phone number takeover                    | Account access       |
+| Insider threat     | Malicious employee at registrar                         | Domain modification  |
+| Expired domain     | Failure to renew, domain purchased by attacker          | Complete domain loss |
 
 ### 1.4 Scope
 
-| Component | In Scope |
-|-----------|----------|
-| Domain registrar account security | Yes |
-| Registrar lock (clientTransferProhibited) | Yes |
-| Registrar MFA configuration | Yes |
-| Recovery email/phone verification | Yes |
-| Backup codes storage | Yes |
-| Domain auto-renewal settings | Yes |
-| WHOIS privacy settings | Yes |
+| Component                                 | In Scope |
+| ----------------------------------------- | -------- |
+| Domain registrar account security         | Yes      |
+| Registrar lock (clientTransferProhibited) | Yes      |
+| Registrar MFA configuration               | Yes      |
+| Recovery email/phone verification         | Yes      |
+| Backup codes storage                      | Yes      |
+| Domain auto-renewal settings              | Yes      |
+| WHOIS privacy settings                    | Yes      |
 
 ---
 
@@ -80,29 +82,29 @@ The domain registrar is the ultimate root of trust for any web property. If comp
 
 Before starting, gather:
 
-| Information | Source | Status |
-|-------------|--------|--------|
-| Registrar name | Domain registration records | |
-| Domain(s) managed | Registrar dashboard | |
-| Current account email | Registrar account settings | |
-| Current recovery email | Registrar account settings | |
-| Current recovery phone | Registrar account settings | |
-| Domain expiration date(s) | Registrar dashboard | |
-| Current lock status | Registrar/WHOIS | |
+| Information               | Source                      | Status |
+| ------------------------- | --------------------------- | ------ |
+| Registrar name            | Domain registration records |        |
+| Domain(s) managed         | Registrar dashboard         |        |
+| Current account email     | Registrar account settings  |        |
+| Current recovery email    | Registrar account settings  |        |
+| Current recovery phone    | Registrar account settings  |        |
+| Domain expiration date(s) | Registrar dashboard         |        |
+| Current lock status       | Registrar/WHOIS             |        |
 
 ### 2.3 Registrar Identification
 
 Common registrars and their security features:
 
-| Registrar | Registrar Lock | MFA Options | Registry Lock |
-|-----------|----------------|-------------|---------------|
-| Cloudflare Registrar | Yes | TOTP, HW Key | No (uses CF account MFA) |
-| Google Domains | Yes | Google Account MFA | No |
-| Namecheap | Yes | TOTP, U2F | Yes (premium) |
-| GoDaddy | Yes | TOTP, SMS | Yes (premium) |
-| Porkbun | Yes | TOTP | No |
-| Name.com | Yes | TOTP | No |
-| Gandi | Yes | TOTP, U2F | No |
+| Registrar            | Registrar Lock | MFA Options        | Registry Lock            |
+| -------------------- | -------------- | ------------------ | ------------------------ |
+| Cloudflare Registrar | Yes            | TOTP, HW Key       | No (uses CF account MFA) |
+| Google Domains       | Yes            | Google Account MFA | No                       |
+| Namecheap            | Yes            | TOTP, U2F          | Yes (premium)            |
+| GoDaddy              | Yes            | TOTP, SMS          | Yes (premium)            |
+| Porkbun              | Yes            | TOTP               | No                       |
+| Name.com             | Yes            | TOTP               | No                       |
+| Gandi                | Yes            | TOTP, U2F          | No                       |
 
 ---
 
@@ -111,17 +113,18 @@ Common registrars and their security features:
 ### 3.1 What is Registrar Lock?
 
 Registrar lock (also called "Domain Lock" or "Transfer Lock") sets the EPP status code `clientTransferProhibited` on the domain, preventing:
+
 - Domain transfers to another registrar
 - Unauthorized changes to WHOIS/registration data
 - Domain hijacking via transfer requests
 
 ### 3.2 Lock Status Hierarchy
 
-| Lock Type | Protection Level | Who Can Remove |
-|-----------|-----------------|----------------|
-| **Registrar Lock** (clientTransferProhibited) | Standard | Domain owner via dashboard |
-| **Registry Lock** | Enhanced | Registrar + manual verification |
-| **DNSSEC** | Integrity | Prevents DNS response tampering |
+| Lock Type                                     | Protection Level | Who Can Remove                  |
+| --------------------------------------------- | ---------------- | ------------------------------- |
+| **Registrar Lock** (clientTransferProhibited) | Standard         | Domain owner via dashboard      |
+| **Registry Lock**                             | Enhanced         | Registrar + manual verification |
+| **DNSSEC**                                    | Integrity        | Prevents DNS response tampering |
 
 ### 3.3 Check Current Lock Status
 
@@ -182,10 +185,10 @@ whois eventangle.com | grep -i "status"
 
 ### 3.5 Registrar Lock Audit Log
 
-| Domain | Registrar | Lock Status | Last Verified | Verified By |
-|--------|-----------|-------------|---------------|-------------|
-| eventangle.com | | [ ] Locked / [ ] Unlocked | YYYY-MM-DD | |
-| | | | | |
+| Domain         | Registrar | Lock Status               | Last Verified | Verified By |
+| -------------- | --------- | ------------------------- | ------------- | ----------- |
+| eventangle.com |           | [ ] Locked / [ ] Unlocked | YYYY-MM-DD    |             |
+|                |           |                           |               |             |
 
 ---
 
@@ -193,14 +196,14 @@ whois eventangle.com | grep -i "status"
 
 ### 4.1 MFA Hierarchy (Strongest to Weakest)
 
-| Tier | Method | Recommendation |
-|------|--------|----------------|
-| 1 | Hardware Security Key (FIDO2/WebAuthn) | **REQUIRED for domain owner** |
-| 2 | Hardware Security Key (U2F) | Acceptable |
-| 3 | Authenticator App (TOTP) | Acceptable as backup |
-| 4 | SMS/Voice OTP | **NOT ACCEPTABLE** (SIM swap risk) |
-| 5 | Email OTP | **NOT ACCEPTABLE** (email compromise risk) |
-| 6 | No MFA | **PROHIBITED** |
+| Tier | Method                                 | Recommendation                             |
+| ---- | -------------------------------------- | ------------------------------------------ |
+| 1    | Hardware Security Key (FIDO2/WebAuthn) | **REQUIRED for domain owner**              |
+| 2    | Hardware Security Key (U2F)            | Acceptable                                 |
+| 3    | Authenticator App (TOTP)               | Acceptable as backup                       |
+| 4    | SMS/Voice OTP                          | **NOT ACCEPTABLE** (SIM swap risk)         |
+| 5    | Email OTP                              | **NOT ACCEPTABLE** (email compromise risk) |
+| 6    | No MFA                                 | **PROHIBITED**                             |
 
 ### 4.2 Enable Registrar MFA
 
@@ -244,9 +247,9 @@ After enabling MFA:
 
 ### 4.4 Registrar MFA Audit Log
 
-| Registrar Account | MFA Type | Hardware Key | Backup Codes Saved | Last Verified |
-|-------------------|----------|--------------|-------------------|---------------|
-| | HW Key / TOTP / SMS | Yes / No | Yes / No | YYYY-MM-DD |
+| Registrar Account | MFA Type            | Hardware Key | Backup Codes Saved | Last Verified |
+| ----------------- | ------------------- | ------------ | ------------------ | ------------- |
+|                   | HW Key / TOTP / SMS | Yes / No     | Yes / No           | YYYY-MM-DD    |
 
 ---
 
@@ -289,12 +292,12 @@ After enabling MFA:
 
 Contact your mobile carrier to enable:
 
-| Protection | Description | Carrier Support |
-|------------|-------------|-----------------|
-| **SIM PIN** | 4-8 digit PIN required to use SIM | All carriers |
-| **Account PIN** | PIN required for account changes | Most carriers |
-| **Port freeze** | Prevent number porting | Some carriers |
-| **Extra verification** | In-person ID for SIM changes | Premium feature |
+| Protection             | Description                       | Carrier Support |
+| ---------------------- | --------------------------------- | --------------- |
+| **SIM PIN**            | 4-8 digit PIN required to use SIM | All carriers    |
+| **Account PIN**        | PIN required for account changes  | Most carriers   |
+| **Port freeze**        | Prevent number porting            | Some carriers   |
+| **Extra verification** | In-person ID for SIM changes      | Premium feature |
 
 #### Verification Steps
 
@@ -317,12 +320,12 @@ Contact your mobile carrier to enable:
 
 #### Best Practices for Backup Code Storage
 
-| Method | Security Level | Recovery Speed |
-|--------|---------------|----------------|
-| Password manager (1Password, Bitwarden) | High | Fast |
-| Physical safe (printed) | Very High | Medium |
-| Encrypted USB drive | High | Medium |
-| Bank safe deposit box | Very High | Slow |
+| Method                                  | Security Level | Recovery Speed |
+| --------------------------------------- | -------------- | -------------- |
+| Password manager (1Password, Bitwarden) | High           | Fast           |
+| Physical safe (printed)                 | Very High      | Medium         |
+| Encrypted USB drive                     | High           | Medium         |
+| Bank safe deposit box                   | Very High      | Slow           |
 
 #### Generate and Save Backup Codes
 
@@ -334,9 +337,9 @@ Contact your mobile carrier to enable:
 
 ### 5.4 Recovery Methods Audit Log
 
-| Account | Recovery Email | Email MFA | Recovery Phone | SIM Protected | Backup Codes |
-|---------|---------------|-----------|----------------|---------------|--------------|
-| | verified@... | Yes / No | +1... | Yes / No | Saved / Not Saved |
+| Account | Recovery Email | Email MFA | Recovery Phone | SIM Protected | Backup Codes      |
+| ------- | -------------- | --------- | -------------- | ------------- | ----------------- |
+|         | verified@...   | Yes / No  | +1...          | Yes / No      | Saved / Not Saved |
 
 ---
 
@@ -344,14 +347,14 @@ Contact your mobile carrier to enable:
 
 ### 6.1 Acceptance Criteria Verification
 
-| Criterion | How to Verify | Status |
-|-----------|---------------|--------|
-| **Registrar lock enabled** | WHOIS shows `clientTransferProhibited` | [ ] Pass |
-| **MFA enabled** | Login requires MFA completion | [ ] Pass |
+| Criterion                   | How to Verify                                | Status   |
+| --------------------------- | -------------------------------------------- | -------- |
+| **Registrar lock enabled**  | WHOIS shows `clientTransferProhibited`       | [ ] Pass |
+| **MFA enabled**             | Login requires MFA completion                | [ ] Pass |
 | **Recovery email verified** | Test email received, MFA on recovery account | [ ] Pass |
-| **Recovery phone verified** | Test SMS/call received | [ ] Pass |
-| **SIM protection enabled** | Carrier confirms PIN/freeze | [ ] Pass |
-| **Backup codes saved** | Codes accessible in secure storage | [ ] Pass |
+| **Recovery phone verified** | Test SMS/call received                       | [ ] Pass |
+| **SIM protection enabled**  | Carrier confirms PIN/freeze                  | [ ] Pass |
+| **Backup codes saved**      | Codes accessible in secure storage           | [ ] Pass |
 
 ### 6.2 Lock Verification Test
 
@@ -388,9 +391,9 @@ Contact your mobile carrier to enable:
 
 ### 6.5 Domain Expiration Audit
 
-| Domain | Expiration Date | Auto-Renew | Days Until Expiry | Status |
-|--------|-----------------|------------|-------------------|--------|
-| eventangle.com | YYYY-MM-DD | Yes / No | | |
+| Domain         | Expiration Date | Auto-Renew | Days Until Expiry | Status |
+| -------------- | --------------- | ---------- | ----------------- | ------ |
+| eventangle.com | YYYY-MM-DD      | Yes / No   |                   |        |
 
 > **Critical:** Enable auto-renewal and ensure payment method is current.
 
@@ -400,29 +403,29 @@ Contact your mobile carrier to enable:
 
 ### 7.1 Cannot Enable Registrar Lock
 
-| Issue | Cause | Solution |
-|-------|-------|----------|
-| Lock option greyed out | Recent transfer (60 day lock period) | Wait until transfer lock expires |
-| Lock not available | Registrar limitation | Contact support or consider premium lock |
-| Lock immediately unlocks | Pending transfer request | Cancel transfer request first |
+| Issue                    | Cause                                | Solution                                 |
+| ------------------------ | ------------------------------------ | ---------------------------------------- |
+| Lock option greyed out   | Recent transfer (60 day lock period) | Wait until transfer lock expires         |
+| Lock not available       | Registrar limitation                 | Contact support or consider premium lock |
+| Lock immediately unlocks | Pending transfer request             | Cancel transfer request first            |
 
 ### 7.2 MFA Issues
 
-| Issue | Solution |
-|-------|----------|
-| Lost authenticator app | Use backup codes, then re-enroll MFA |
-| Lost hardware key | Use backup key or TOTP backup |
-| Lost all MFA methods | Contact registrar support with identity verification |
-| Authenticator time drift | Sync device clock automatically (NTP) |
+| Issue                    | Solution                                             |
+| ------------------------ | ---------------------------------------------------- |
+| Lost authenticator app   | Use backup codes, then re-enroll MFA                 |
+| Lost hardware key        | Use backup key or TOTP backup                        |
+| Lost all MFA methods     | Contact registrar support with identity verification |
+| Authenticator time drift | Sync device clock automatically (NTP)                |
 
 ### 7.3 Recovery Access Issues
 
-| Issue | Solution |
-|-------|----------|
-| Recovery email bounces | Update recovery email before it's needed |
-| Recovery phone changed | Update immediately after carrier change |
-| Cannot access recovery email | Use backup codes and update recovery info |
-| SIM swapped | Report to carrier immediately, use backup codes |
+| Issue                        | Solution                                        |
+| ---------------------------- | ----------------------------------------------- |
+| Recovery email bounces       | Update recovery email before it's needed        |
+| Recovery phone changed       | Update immediately after carrier change         |
+| Cannot access recovery email | Use backup codes and update recovery info       |
+| SIM swapped                  | Report to carrier immediately, use backup codes |
 
 ### 7.4 Domain Expired
 
@@ -434,6 +437,7 @@ If domain expires:
 4. **Released:** Domain available for anyone to register
 
 **Prevention:**
+
 - Enable auto-renewal
 - Add payment method backup
 - Set calendar reminders 90, 60, 30 days before expiry
@@ -443,15 +447,15 @@ If domain expires:
 
 ## Appendix A: WHOIS Status Codes
 
-| Status Code | Meaning |
-|-------------|---------|
+| Status Code                | Meaning                           |
+| -------------------------- | --------------------------------- |
 | `clientTransferProhibited` | Registrar lock - transfer blocked |
-| `clientDeleteProhibited` | Deletion blocked at registrar |
-| `clientUpdateProhibited` | Updates blocked at registrar |
-| `serverTransferProhibited` | Registry lock - transfer blocked |
-| `serverDeleteProhibited` | Registry lock - deletion blocked |
-| `pendingTransfer` | Transfer in progress |
-| `redemptionPeriod` | Expired, pending deletion |
+| `clientDeleteProhibited`   | Deletion blocked at registrar     |
+| `clientUpdateProhibited`   | Updates blocked at registrar      |
+| `serverTransferProhibited` | Registry lock - transfer blocked  |
+| `serverDeleteProhibited`   | Registry lock - deletion blocked  |
+| `pendingTransfer`          | Transfer in progress              |
+| `redemptionPeriod`         | Expired, pending deletion         |
 
 ---
 
@@ -499,19 +503,19 @@ If you suspect domain hijacking:
 
 ### Emergency Contacts
 
-| Entity | Purpose | Contact |
-|--------|---------|---------|
-| Registrar Security | Primary contact | [From registrar dashboard] |
-| ICANN Complaints | Registrar disputes | https://www.icann.org/complaints |
-| FBI IC3 | Cybercrime reporting | https://www.ic3.gov |
-| Legal Counsel | UDRP proceedings | [Your attorney] |
+| Entity             | Purpose              | Contact                          |
+| ------------------ | -------------------- | -------------------------------- |
+| Registrar Security | Primary contact      | [From registrar dashboard]       |
+| ICANN Complaints   | Registrar disputes   | https://www.icann.org/complaints |
+| FBI IC3            | Cybercrime reporting | https://www.ic3.gov              |
+| Legal Counsel      | UDRP proceedings     | [Your attorney]                  |
 
 ---
 
 ## Document History
 
-| Date | Author | Changes |
-|------|--------|---------|
+| Date       | Author      | Changes                   |
+| ---------- | ----------- | ------------------------- |
 | 2025-12-20 | Claude Code | Initial runbook (SEC-2.1) |
 
 ---

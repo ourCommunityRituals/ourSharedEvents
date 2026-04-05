@@ -18,9 +18,9 @@
 
 All public traffic **MUST** flow through Cloudflare Workers:
 
-| Environment | Canonical URL | Backend |
-|-------------|---------------|---------|
-| **Staging** | `https://stg.eventangle.com` | Cloudflare Worker |
+| Environment    | Canonical URL                | Backend           |
+| -------------- | ---------------------------- | ----------------- |
+| **Staging**    | `https://stg.eventangle.com` | Cloudflare Worker |
 | **Production** | `https://www.eventangle.com` | Cloudflare Worker |
 
 These are the **only** origins permitted in CI pipelines, runtime code, and tests.
@@ -53,15 +53,18 @@ node scripts/check-banned-origins.mjs
 ```
 
 **What it scans:**
+
 - `tests/**`, `worker/**`, `web/**`, `src/**`, `config/**`, `cloudflare-proxy/**`
 - Root config files (`.env*`, `deploy-manifest.json`, `wrangler.toml`)
 
 **What it bans:**
+
 - `script.google.com/macros/s/{ID}/exec` (GAS execution URLs with real IDs)
 - `script.google.com/home/projects/{ID}` (GAS project URLs)
 - `googleusercontent.com/macros` (legacy GAS pattern)
 
 **Exit codes:**
+
 - `0` - No banned patterns found (or only in allowlisted files)
 - `1` - Banned patterns detected → **build fails**
 
@@ -92,10 +95,10 @@ If you add a new origin (e.g., a dedicated API domain like `api.eventangle.com`)
 
 As of Story 5.3, **all traffic flows through Cloudflare Workers**. The Google Apps Script (GAS) backend has been archived. This document catalogs all origin references for the staging cleanup (Stories 1.2-1.3).
 
-| Environment | Canonical URL | Backend | Status |
-|-------------|---------------|---------|--------|
-| **Staging** | `https://stg.eventangle.com` | Cloudflare Worker | **ACTIVE** |
-| **Production** | `https://www.eventangle.com` | Cloudflare Worker | **ACTIVE** |
+| Environment    | Canonical URL                                  | Backend            | Status       |
+| -------------- | ---------------------------------------------- | ------------------ | ------------ |
+| **Staging**    | `https://stg.eventangle.com`                   | Cloudflare Worker  | **ACTIVE**   |
+| **Production** | `https://www.eventangle.com`                   | Cloudflare Worker  | **ACTIVE**   |
 | **GAS Direct** | `https://script.google.com/macros/s/{ID}/exec` | Google Apps Script | **ARCHIVED** |
 
 ---
@@ -104,14 +107,15 @@ As of Story 5.3, **all traffic flows through Cloudflare Workers**. The Google Ap
 
 ### 1.1 Primary Staging URLs
 
-| URL | Purpose | Configured In | Status |
-|-----|---------|---------------|--------|
-| `https://stg.eventangle.com` | Main staging site | `wrangler.toml`, workflows, tests | **ACTIVE** |
-| `https://api-stg.eventangle.com` | Staging API | `wrangler.toml` routes | **ACTIVE** |
+| URL                              | Purpose           | Configured In                     | Status     |
+| -------------------------------- | ----------------- | --------------------------------- | ---------- |
+| `https://stg.eventangle.com`     | Main staging site | `wrangler.toml`, workflows, tests | **ACTIVE** |
+| `https://api-stg.eventangle.com` | Staging API       | `wrangler.toml` routes            | **ACTIVE** |
 
 ### 1.2 Configuration Sources
 
 #### Cloudflare Worker (`wrangler.toml` at root)
+
 ```toml
 # Lines 29-32
 routes = [
@@ -124,6 +128,7 @@ BACKEND_MODE = "worker"
 ```
 
 #### Cloudflare Worker (`cloudflare-proxy/wrangler.toml`)
+
 ```toml
 # [env.staging] Lines 159-166
 routes = [
@@ -136,27 +141,30 @@ BACKEND_MODE = "worker"
 ```
 
 #### GitHub Workflows
-| Workflow | Variable | Value | File:Line |
-|----------|----------|-------|-----------|
-| `stage1.yml` | `STG_BASE_URL` | `https://stg.eventangle.com` | Line 55 |
-| `stage1.yml` | `STAGING_URL` | `https://stg.eventangle.com` | Line 58 |
-| `stage2.yml` | `STG_BASE_URL` | `https://stg.eventangle.com` | Line 94 |
-| `stage2.yml` | `STAGING_URL` | `https://stg.eventangle.com` | Line 95 |
-| `stage2-smoke.yml` | `STG_BASE_URL` | `https://stg.eventangle.com` | Line 78 |
-| `e2e-staging-stable.yml` | `BASE_URL` | `https://stg.eventangle.com` | Line 44 |
-| `rollback.yml` | `STG_BASE_URL` | `https://stg.eventangle.com` | Line 56 |
-| `prod-parity-check.yml` | `STG_BASE_URL` | `https://stg.eventangle.com` | Line 51 |
+
+| Workflow                 | Variable       | Value                        | File:Line |
+| ------------------------ | -------------- | ---------------------------- | --------- |
+| `stage1.yml`             | `STG_BASE_URL` | `https://stg.eventangle.com` | Line 55   |
+| `stage1.yml`             | `STAGING_URL`  | `https://stg.eventangle.com` | Line 58   |
+| `stage2.yml`             | `STG_BASE_URL` | `https://stg.eventangle.com` | Line 94   |
+| `stage2.yml`             | `STAGING_URL`  | `https://stg.eventangle.com` | Line 95   |
+| `stage2-smoke.yml`       | `STG_BASE_URL` | `https://stg.eventangle.com` | Line 78   |
+| `e2e-staging-stable.yml` | `BASE_URL`     | `https://stg.eventangle.com` | Line 44   |
+| `rollback.yml`           | `STG_BASE_URL` | `https://stg.eventangle.com` | Line 56   |
+| `prod-parity-check.yml`  | `STG_BASE_URL` | `https://stg.eventangle.com` | Line 51   |
 
 #### Test Configuration
-| File | Variable/Function | Default Value |
-|------|-------------------|---------------|
-| `config/environments.js:58` | `STAGING_URL` | `https://stg.eventangle.com` |
-| `playwright.config.js:51` | `baseURL` | `env.baseUrl` (defaults to staging) |
-| `playwright.staging.config.js:20` | `baseUrl` | `process.env.BASE_URL \|\| STAGING_URL` |
-| `playwright.ui-smoke.config.ts:70` | `baseURL` | `getBaseUrl()` (defaults to staging) |
-| `tests/e2e/config.js:30` | `baseUrl` | `getBaseUrl()` (defaults to staging) |
+
+| File                               | Variable/Function | Default Value                           |
+| ---------------------------------- | ----------------- | --------------------------------------- |
+| `config/environments.js:58`        | `STAGING_URL`     | `https://stg.eventangle.com`            |
+| `playwright.config.js:51`          | `baseURL`         | `env.baseUrl` (defaults to staging)     |
+| `playwright.staging.config.js:20`  | `baseUrl`         | `process.env.BASE_URL \|\| STAGING_URL` |
+| `playwright.ui-smoke.config.ts:70` | `baseURL`         | `getBaseUrl()` (defaults to staging)    |
+| `tests/e2e/config.js:30`           | `baseUrl`         | `getBaseUrl()` (defaults to staging)    |
 
 #### Deploy Manifest (`deploy-manifest.json`)
+
 ```json
 {
   "environments": {
@@ -180,59 +188,59 @@ BACKEND_MODE = "worker"
 
 ### 2.1 GAS Deployment IDs (ARCHIVED)
 
-| Environment | Script ID | Deployment ID | Status |
-|-------------|-----------|---------------|--------|
-| **Staging** | `1gHiPuj7eXNk09dDyk17SJ6QsCJg7LMqXBRrkowljL3z2TaAKFIvBLhHJ` | `AKfycbwFneYCpkio7wCn7y08eDUb2PRCPc2Tdtbv20L4AbEHvuCvoqY9ks7-ONL0pzPPw4Hm` | **ARCHIVED** |
+| Environment    | Script ID                                                   | Deployment ID                                                                | Status       |
+| -------------- | ----------------------------------------------------------- | ---------------------------------------------------------------------------- | ------------ |
+| **Staging**    | `1gHiPuj7eXNk09dDyk17SJ6QsCJg7LMqXBRrkowljL3z2TaAKFIvBLhHJ` | `AKfycbwFneYCpkio7wCn7y08eDUb2PRCPc2Tdtbv20L4AbEHvuCvoqY9ks7-ONL0pzPPw4Hm`   | **ARCHIVED** |
 | **Production** | `1YO4apLOQoAIh208AcAqWO3pWtx_O3yas_QC4z-pkurgMem9UgYOsp86l` | `AKfycbz-RVTCdsQsI913wN3TkPtUP8F8EhSjyFAlWIpLVRgzV6WJ-isDyG-ntaV1VjBNaWZLdw` | **ARCHIVED** |
 
 ### 2.2 Files with GAS URLs
 
 #### Active Runtime Files (Require Review)
 
-| File | Line(s) | Content | Action |
-|------|---------|---------|--------|
-| `config/deployment-ids.js` | 114, 156 | Constructs `STAGING_WEB_APP_URL`, `PROD_WEB_APP_URL` | **LEGACY** - Only used for legacy aliases |
-| `config/environments.js` | 75-76 | `GAS_PRODUCTION_URL`, `GAS_STAGING_URL` exports | **LEGACY** - Re-exports from deployment-ids |
-| `tests/e2e/config.js` | 35 | `isGoogleAppsScript()` helper | **LEGACY** - For detecting GAS environment |
-| `tests/shared/test-data-manager.js` | 60 | GAS hostname detection | **LEGACY** - Test helper |
-| `tests/ui/smoke/events.smoke.spec.ts` | 347-349 | GAS hostname check | **LEGACY** - Smoke test validation |
-| `cloudflare-proxy/worker.js` | 205, 210 | GAS URL construction (deprecated path) | **LEGACY** - Commented/deprecated |
+| File                                  | Line(s)  | Content                                              | Action                                      |
+| ------------------------------------- | -------- | ---------------------------------------------------- | ------------------------------------------- |
+| `config/deployment-ids.js`            | 114, 156 | Constructs `STAGING_WEB_APP_URL`, `PROD_WEB_APP_URL` | **LEGACY** - Only used for legacy aliases   |
+| `config/environments.js`              | 75-76    | `GAS_PRODUCTION_URL`, `GAS_STAGING_URL` exports      | **LEGACY** - Re-exports from deployment-ids |
+| `tests/e2e/config.js`                 | 35       | `isGoogleAppsScript()` helper                        | **LEGACY** - For detecting GAS environment  |
+| `tests/shared/test-data-manager.js`   | 60       | GAS hostname detection                               | **LEGACY** - Test helper                    |
+| `tests/ui/smoke/events.smoke.spec.ts` | 347-349  | GAS hostname check                                   | **LEGACY** - Smoke test validation          |
+| `cloudflare-proxy/worker.js`          | 205, 210 | GAS URL construction (deprecated path)               | **LEGACY** - Commented/deprecated           |
 
 #### Documentation Files (Mark as Archive)
 
-| File | Context | Status |
-|------|---------|--------|
-| `docs/env/staging.md` | Staging GAS URLs | **LEGACY** - Update or archive |
-| `docs/env/gas-projects.md` | GAS project URLs | **LEGACY** - Archive |
-| `docs/RUNBOOK.md` | GAS debugging URLs | **LEGACY** - Update |
-| `RUNBOOK.md` | GAS monitoring URLs | **LEGACY** - Update |
-| `docs/DEPLOYMENT.md` | GAS deployment URLs | **LEGACY** - Update |
-| `docs/STAGING_EVENTS_DIAGNOSIS.md` | GAS debugging | **LEGACY** - Archive |
-| `docs/STAGING_GAS_PERMISSIONS.md` | GAS permissions | **LEGACY** - Archive |
+| File                               | Context             | Status                         |
+| ---------------------------------- | ------------------- | ------------------------------ |
+| `docs/env/staging.md`              | Staging GAS URLs    | **LEGACY** - Update or archive |
+| `docs/env/gas-projects.md`         | GAS project URLs    | **LEGACY** - Archive           |
+| `docs/RUNBOOK.md`                  | GAS debugging URLs  | **LEGACY** - Update            |
+| `RUNBOOK.md`                       | GAS monitoring URLs | **LEGACY** - Update            |
+| `docs/DEPLOYMENT.md`               | GAS deployment URLs | **LEGACY** - Update            |
+| `docs/STAGING_EVENTS_DIAGNOSIS.md` | GAS debugging       | **LEGACY** - Archive           |
+| `docs/STAGING_GAS_PERMISSIONS.md`  | GAS permissions     | **LEGACY** - Archive           |
 
 #### Configuration Files (Commented Out - OK)
 
-| File | Line(s) | Status |
-|------|---------|--------|
-| `wrangler.toml` | 56-59 | **OK** - Commented out, kept for emergency rollback |
-| `cloudflare-proxy/wrangler.toml` | 121-124, 204-207, 244-246, 341-344 | **OK** - Commented out |
+| File                             | Line(s)                            | Status                                              |
+| -------------------------------- | ---------------------------------- | --------------------------------------------------- |
+| `wrangler.toml`                  | 56-59                              | **OK** - Commented out, kept for emergency rollback |
+| `cloudflare-proxy/wrangler.toml` | 121-124, 204-207, 244-246, 341-344 | **OK** - Commented out                              |
 
 #### Test Documentation (Update)
 
-| File | Line(s) | Status |
-|------|---------|--------|
-| `tests/README.md` | 199, 207, 354, 436, 443 | **LEGACY** - Remove GAS direct option |
-| `.env.example` | 35, 51 | **LEGACY** - Remove GAS direct option |
-| `.devcontainer/README.md` | 61, 77 | **LEGACY** - Remove GAS direct option |
+| File                      | Line(s)                 | Status                                |
+| ------------------------- | ----------------------- | ------------------------------------- |
+| `tests/README.md`         | 199, 207, 354, 436, 443 | **LEGACY** - Remove GAS direct option |
+| `.env.example`            | 35, 51                  | **LEGACY** - Remove GAS direct option |
+| `.devcontainer/README.md` | 61, 77                  | **LEGACY** - Remove GAS direct option |
 
 #### Archive/Historical (Leave As-Is)
 
-| File | Status |
-|------|--------|
-| `archive/PROJECT_CONFIGURATION.md` | **OK** - In archive |
-| `.github/workflow-archive/*.yml` | **OK** - In archive |
-| `schemas/*.schema.json` | **OK** - Schema examples |
-| `postman/environments/*.json` | **LEGACY** - Update environments |
+| File                               | Status                           |
+| ---------------------------------- | -------------------------------- |
+| `archive/PROJECT_CONFIGURATION.md` | **OK** - In archive              |
+| `.github/workflow-archive/*.yml`   | **OK** - In archive              |
+| `schemas/*.schema.json`            | **OK** - Schema examples         |
+| `postman/environments/*.json`      | **LEGACY** - Update environments |
 
 ---
 
@@ -240,16 +248,15 @@ BACKEND_MODE = "worker"
 
 ### 3.1 Browser-Side API Client (`web/shared/apiClient.js`)
 
-| Setting | Value | Notes |
-|---------|-------|-------|
-| `DEFAULT_API_BASE` | `/api` | Relative path - uses current hostname |
-| Environment Detection | `window.location.hostname` | Auto-detects staging vs production |
+| Setting               | Value                      | Notes                                 |
+| --------------------- | -------------------------- | ------------------------------------- |
+| `DEFAULT_API_BASE`    | `/api`                     | Relative path - uses current hostname |
+| Environment Detection | `window.location.hostname` | Auto-detects staging vs production    |
 
 ```javascript
 // Lines 781-784 - Environment detection
-state.isStaging = isDomain(hostname, 'stg.eventangle.com') ||
-                  hostname === 'localhost' ||
-                  hostname === '127.0.0.1';
+state.isStaging =
+  isDomain(hostname, 'stg.eventangle.com') || hostname === 'localhost' || hostname === '127.0.0.1';
 state.isProduction = isDomain(hostname, 'eventangle.com') && !state.isStaging;
 ```
 
@@ -257,11 +264,11 @@ state.isProduction = isDomain(hostname, 'eventangle.com') && !state.isStaging;
 
 ### 3.2 TypeScript API Client (`src/frontend/apiClient/env.ts`)
 
-| Function | Returns | Notes |
-|----------|---------|-------|
-| `detectEnvironment()` | `staging \| production \| local \| unknown` | No GAS detection |
-| `getApiBackend()` | Always `'worker'` | GAS backend removed |
-| `getBaseApiUrl('staging')` | `https://stg.eventangle.com` | Hardcoded |
+| Function                   | Returns                                     | Notes               |
+| -------------------------- | ------------------------------------------- | ------------------- |
+| `detectEnvironment()`      | `staging \| production \| local \| unknown` | No GAS detection    |
+| `getApiBackend()`          | Always `'worker'`                           | GAS backend removed |
+| `getBaseApiUrl('staging')` | `https://stg.eventangle.com`                | Hardcoded           |
 
 **Status**: **ACTIVE** - Story 5.2 removed all GAS references
 
@@ -280,12 +287,12 @@ state.isProduction = isDomain(hostname, 'eventangle.com') && !state.isStaging;
 
 ### 4.2 Playwright Config Files
 
-| File | baseURL Source | Default |
-|------|----------------|---------|
-| `playwright.config.js` | `env.baseUrl` | Staging |
-| `playwright.staging.config.js` | `process.env.BASE_URL \|\| STAGING_URL` | Staging |
-| `playwright.ui-smoke.config.ts` | `getBaseUrl()` | Staging |
-| `playwright.smoke-packs.config.js` | `env.baseUrl` | Staging |
+| File                               | baseURL Source                          | Default |
+| ---------------------------------- | --------------------------------------- | ------- |
+| `playwright.config.js`             | `env.baseUrl`                           | Staging |
+| `playwright.staging.config.js`     | `process.env.BASE_URL \|\| STAGING_URL` | Staging |
+| `playwright.ui-smoke.config.ts`    | `getBaseUrl()`                          | Staging |
+| `playwright.smoke-packs.config.js` | `env.baseUrl`                           | Staging |
 
 **Status**: **ACTIVE** - All default to staging (Cloudflare Worker)
 
@@ -295,20 +302,20 @@ state.isProduction = isDomain(hostname, 'eventangle.com') && !state.isStaging;
 
 ### 5.1 Stage-1 Workflow (`stage1.yml`)
 
-| Job | Target | URL Source |
-|-----|--------|------------|
-| `deploy-staging-worker` | Staging | `stg.eventangle.com` via wrangler |
-| `validate-staging-deployment` | Staging | `$STG_BASE_URL` env var |
-| `deploy-production-worker` | Production | `www.eventangle.com` via wrangler |
+| Job                           | Target     | URL Source                        |
+| ----------------------------- | ---------- | --------------------------------- |
+| `deploy-staging-worker`       | Staging    | `stg.eventangle.com` via wrangler |
+| `validate-staging-deployment` | Staging    | `$STG_BASE_URL` env var           |
+| `deploy-production-worker`    | Production | `www.eventangle.com` via wrangler |
 
 **GAS References in Stage-1**: Lines 1373, 1450, 2078, 2165, 2174 - **LEGACY** (GAS deployment steps, now archived)
 
 ### 5.2 Stage-2 Workflow (`stage2.yml`)
 
-| Variable | Value | Used By |
-|----------|-------|---------|
-| `STG_BASE_URL` | `https://stg.eventangle.com` | Staging smoke tests |
-| `STAGING_URL` | `https://stg.eventangle.com` | Legacy alias |
+| Variable        | Value                        | Used By                |
+| --------------- | ---------------------------- | ---------------------- |
+| `STG_BASE_URL`  | `https://stg.eventangle.com` | Staging smoke tests    |
+| `STAGING_URL`   | `https://stg.eventangle.com` | Legacy alias           |
 | `PROD_BASE_URL` | `https://www.eventangle.com` | Production smoke tests |
 
 **Status**: **ACTIVE** - No GAS URLs used in runtime tests
@@ -319,30 +326,30 @@ state.isProduction = isDomain(hostname, 'eventangle.com') && !state.isStaging;
 
 ### 6.1 High Priority (Runtime Impact)
 
-| File | Action | Story |
-|------|--------|-------|
-| `config/deployment-ids.js` | Mark GAS exports as `@deprecated` | 1.2 |
-| `config/environments.js` | Remove `googleAppsScript` environment | 1.2 |
-| `.env.example` | Remove GAS direct option | 1.2 |
-| `tests/README.md` | Remove GAS direct testing option | 1.2 |
+| File                       | Action                                | Story |
+| -------------------------- | ------------------------------------- | ----- |
+| `config/deployment-ids.js` | Mark GAS exports as `@deprecated`     | 1.2   |
+| `config/environments.js`   | Remove `googleAppsScript` environment | 1.2   |
+| `.env.example`             | Remove GAS direct option              | 1.2   |
+| `tests/README.md`          | Remove GAS direct testing option      | 1.2   |
 
 ### 6.2 Medium Priority (Documentation)
 
-| File | Action | Story |
-|------|--------|-------|
-| `docs/env/staging.md` | Update to Worker-only architecture | 1.2 |
-| `docs/RUNBOOK.md` | Remove GAS debugging sections | 1.2 |
-| `RUNBOOK.md` | Remove GAS monitoring sections | 1.2 |
-| `docs/DEPLOYMENT.md` | Update deployment instructions | 1.2 |
+| File                  | Action                             | Story |
+| --------------------- | ---------------------------------- | ----- |
+| `docs/env/staging.md` | Update to Worker-only architecture | 1.2   |
+| `docs/RUNBOOK.md`     | Remove GAS debugging sections      | 1.2   |
+| `RUNBOOK.md`          | Remove GAS monitoring sections     | 1.2   |
+| `docs/DEPLOYMENT.md`  | Update deployment instructions     | 1.2   |
 
 ### 6.3 Low Priority (Archive/Cleanup)
 
-| File | Action | Story |
-|------|--------|-------|
-| `docs/STAGING_EVENTS_DIAGNOSIS.md` | Move to archive | 1.3 |
-| `docs/STAGING_GAS_PERMISSIONS.md` | Move to archive | 1.3 |
-| `docs/env/gas-projects.md` | Move to archive | 1.3 |
-| `postman/environments/*.json` | Remove GAS URLs | 1.3 |
+| File                               | Action          | Story |
+| ---------------------------------- | --------------- | ----- |
+| `docs/STAGING_EVENTS_DIAGNOSIS.md` | Move to archive | 1.3   |
+| `docs/STAGING_GAS_PERMISSIONS.md`  | Move to archive | 1.3   |
+| `docs/env/gas-projects.md`         | Move to archive | 1.3   |
+| `postman/environments/*.json`      | Remove GAS URLs | 1.3   |
 
 ---
 
@@ -359,6 +366,7 @@ For later stories, add these CI gates:
 ## Appendix: Quick Reference
 
 ### Staging URLs (Use These)
+
 ```bash
 # Primary staging
 https://stg.eventangle.com
@@ -372,6 +380,7 @@ BASE_URL="https://stg.eventangle.com" npm run test:smoke  # Explicit
 ```
 
 ### Environment Variables
+
 ```bash
 # Staging (default)
 STG_BASE_URL=https://stg.eventangle.com
@@ -383,6 +392,7 @@ PROD_URL=https://www.eventangle.com
 ```
 
 ### Cloudflare Worker Routes
+
 ```
 stg.eventangle.com/*      → eventangle-staging worker
 api-stg.eventangle.com/*  → eventangle-staging worker

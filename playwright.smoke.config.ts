@@ -24,7 +24,7 @@ import { defineConfig, devices } from '@playwright/test';
 const { getBaseUrl } = require('./config/environments');
 
 export default defineConfig({
-  testDir: './tests/api/smoke',
+  testDir: './archive/legacy-tests/tests/api/smoke',
 
   // Smoke tests run sequentially to avoid overwhelming the API
   fullyParallel: false,
@@ -47,16 +47,18 @@ export default defineConfig({
   },
 
   // Reporters
-  reporter: process.env.CI ? [
-    ['html', { outputFolder: 'playwright-report-smoke', open: 'never' }],
-    ['json', { outputFile: '.test-results/smoke-results.json' }],
-    ['junit', { outputFile: '.test-results/smoke-junit.xml' }],
-    ['line'],
-  ] : [
-    ['html', { outputFolder: 'playwright-report-smoke', open: 'never' }],
-    ['json', { outputFile: '.test-results/smoke-results.json' }],
-    ['list'],
-  ],
+  reporter: process.env.CI
+    ? [
+        ['html', { outputFolder: 'playwright-report-smoke', open: 'never' }],
+        ['json', { outputFile: '.test-results/smoke-results.json' }],
+        ['junit', { outputFile: '.test-results/smoke-junit.xml' }],
+        ['line'],
+      ]
+    : [
+        ['html', { outputFolder: 'playwright-report-smoke', open: 'never' }],
+        ['json', { outputFile: '.test-results/smoke-results.json' }],
+        ['list'],
+      ],
 
   use: {
     // Base URL from environment
@@ -67,7 +69,7 @@ export default defineConfig({
 
     // Extra HTTP headers for API requests
     extraHTTPHeaders: {
-      'Accept': 'application/json',
+      Accept: 'application/json',
     },
 
     // Ignore HTTPS errors for staging/QA
