@@ -133,7 +133,8 @@ export const TIER_PRESETS: Record<Tier, TierPreset> = {
   },
   enterprise: {
     name: 'Enterprise',
-    description: 'File upload, white-label branding, custom domain, portfolio reports, per-event overrides.',
+    description:
+      'File upload, white-label branding, custom domain, portfolio reports, per-event overrides.',
     flags: {
       'forms.register': true,
       'forms.checkin': true,
@@ -165,14 +166,15 @@ export const TIER_PRESETS: Record<Tier, TierPreset> = {
 export async function isFeatureEnabled(
   db: D1Database,
   flagKey: string,
-  eventId?: string,
+  eventId?: string
 ): Promise<boolean> {
   try {
     // 1. Check event-scoped flag first
     if (eventId) {
-      const eventFlag = await db.prepare(
-        "SELECT enabled FROM feature_flags WHERE flag_key = ? AND scope = 'event' AND scope_id = ?",
-      )
+      const eventFlag = await db
+        .prepare(
+          "SELECT enabled FROM feature_flags WHERE flag_key = ? AND scope = 'event' AND scope_id = ?"
+        )
         .bind(flagKey, eventId)
         .first<{ enabled: number }>();
 
@@ -180,9 +182,10 @@ export async function isFeatureEnabled(
     }
 
     // 2. Check global flag (scope_id may be NULL from seed migration or '' from setFlag)
-    const globalFlag = await db.prepare(
-      "SELECT enabled FROM feature_flags WHERE flag_key = ? AND scope = 'global' AND (scope_id IS NULL OR scope_id = '')",
-    )
+    const globalFlag = await db
+      .prepare(
+        "SELECT enabled FROM feature_flags WHERE flag_key = ? AND scope = 'global' AND (scope_id IS NULL OR scope_id = '')"
+      )
       .bind(flagKey)
       .first<{ enabled: number }>();
 
@@ -212,7 +215,7 @@ export interface FlagRow {
  */
 export async function listFlags(
   db: D1Database,
-  opts?: { scope?: 'global' | 'event'; eventId?: string },
+  opts?: { scope?: 'global' | 'event'; eventId?: string }
 ): Promise<FlagRow[]> {
   let query = 'SELECT * FROM feature_flags';
   const params: string[] = [];
@@ -226,9 +229,7 @@ export async function listFlags(
 
   query += ' ORDER BY flag_key, scope, scope_id';
 
-  const stmt = params.length > 0
-    ? db.prepare(query).bind(...params)
-    : db.prepare(query);
+  const stmt = params.length > 0 ? db.prepare(query).bind(...params) : db.prepare(query);
 
   const result = await stmt.all<FlagRow>();
   return result.results;
@@ -246,17 +247,18 @@ export async function setFlag(
   flagKey: string,
   enabled: boolean,
   scope: 'global' | 'event' = 'global',
-  scopeId?: string,
+  scopeId?: string
 ): Promise<void> {
   // Use '' for global scope_id — SQLite NULL != NULL in UNIQUE constraints
   const resolvedScopeId = scopeId ?? '';
   const id = generateId();
-  await db.prepare(
-    `INSERT INTO feature_flags (id, scope, scope_id, flag_key, enabled, updated_at)
+  await db
+    .prepare(
+      `INSERT INTO feature_flags (id, scope, scope_id, flag_key, enabled, updated_at)
      VALUES (?, ?, ?, ?, ?, datetime('now'))
      ON CONFLICT(scope, scope_id, flag_key)
-     DO UPDATE SET enabled = excluded.enabled, updated_at = datetime('now')`,
-  )
+     DO UPDATE SET enabled = excluded.enabled, updated_at = datetime('now')`
+    )
     .bind(id, scope, resolvedScopeId, flagKey, enabled ? 1 : 0)
     .run();
 }
@@ -264,20 +266,34 @@ export async function setFlag(
 /**
  * Apply a tier preset — upserts all global flags to match the tier.
  * Does NOT touch event-scoped overrides (enterprise stays intact).
+ *
+<<<<<<< HEAD
+ * Uses db.batch() to send all upserts in a single round-trip.
+=======
+ * Uses db.batch() to collapse 17 sequential writes into a single round-trip.
+>>>>>>> origin/main
  */
 export async function applyTier(
   db: D1Database,
-  tier: Tier,
+  tier: Tier
 ): Promise<{ tier: string; applied: number }> {
   const preset = TIER_PRESETS[tier];
-  let applied = 0;
+  const entries = Object.entries(preset.flags) as [FlagKey, boolean][];
 
-  for (const [key, enabled] of Object.entries(preset.flags)) {
-    await setFlag(db, key, enabled, 'global');
-    applied++;
-  }
+  const statements = entries.map(([key, enabled]) => {
+    const id = generateId();
+    return db
+      .prepare(
+        `INSERT INTO feature_flags (id, scope, scope_id, flag_key, enabled, updated_at)
+       VALUES (?, 'global', '', ?, ?, datetime('now'))
+       ON CONFLICT(scope, scope_id, flag_key)
+       DO UPDATE SET enabled = excluded.enabled, updated_at = datetime('now')`
+      )
+      .bind(id, key, enabled ? 1 : 0);
+  });
 
-  return { tier, applied };
+  await db.batch(statements);
+  return { tier, applied: entries.length };
 }
 
 /**
@@ -287,7 +303,7 @@ export async function setEventFlag(
   db: D1Database,
   eventId: string,
   flagKey: string,
-  enabled: boolean,
+  enabled: boolean
 ): Promise<void> {
   await setFlag(db, flagKey, enabled, 'event', eventId);
 }
@@ -298,11 +314,10 @@ export async function setEventFlag(
 export async function removeEventFlag(
   db: D1Database,
   eventId: string,
-  flagKey: string,
+  flagKey: string
 ): Promise<boolean> {
-  const result = await db.prepare(
-    "DELETE FROM feature_flags WHERE scope = 'event' AND scope_id = ? AND flag_key = ?",
-  )
+  const result = await db
+    .prepare("DELETE FROM feature_flags WHERE scope = 'event' AND scope_id = ? AND flag_key = ?")
     .bind(eventId, flagKey)
     .run();
   return (result.meta?.changes ?? 0) > 0;
@@ -311,36 +326,82 @@ export async function removeEventFlag(
 /**
  * Get the resolved state of all flags for a given event.
  * Applies the full lookup hierarchy: event > global > default ON.
+ *
+ * Uses a single D1 query instead of N per-flag queries.
+ * Resolution hierarchy is applied in application code after the fetch.
  */
 export async function resolveFlags(
   db: D1Database,
-  eventId?: string,
+  eventId?: string
 ): Promise<Record<string, boolean>> {
-  const allKeys = Object.values(FLAG_KEYS);
-  const resolved: Record<string, boolean> = {};
+  try {
+    // Single query: fetch all global rows + event-scoped rows (if eventId given)
+    let rows: FlagRow[];
+    if (eventId) {
+      const result = await db
+        .prepare(
+          `SELECT scope, scope_id, flag_key, enabled FROM feature_flags
+         WHERE (scope = 'global' AND (scope_id IS NULL OR scope_id = ''))
+            OR (scope = 'event' AND scope_id = ?)`
+        )
+        .bind(eventId)
+        .all<FlagRow>();
+      rows = result.results;
+    } else {
+      const result = await db
+        .prepare(
+          `SELECT scope, scope_id, flag_key, enabled FROM feature_flags
+         WHERE scope = 'global' AND (scope_id IS NULL OR scope_id = '')`
+        )
+        .all<FlagRow>();
+      rows = result.results;
+    }
 
-  for (const key of allKeys) {
-    resolved[key] = await isFeatureEnabled(db, key, eventId);
+    // Build lookup maps
+    const eventMap = new Map<string, boolean>();
+    const globalMap = new Map<string, boolean>();
+    for (const row of rows) {
+      if (row.scope === 'event') {
+        eventMap.set(row.flag_key, row.enabled === 1);
+      } else {
+        globalMap.set(row.flag_key, row.enabled === 1);
+      }
+    }
+
+    // Resolve: event → global → default ON
+    const resolved: Record<string, boolean> = {};
+    for (const key of Object.values(FLAG_KEYS)) {
+      if (eventMap.has(key)) {
+        resolved[key] = eventMap.get(key)!;
+      } else if (globalMap.has(key)) {
+        resolved[key] = globalMap.get(key)!;
+      } else {
+        resolved[key] = true; // default ON
+      }
+    }
+    return resolved;
+  } catch {
+    // Pre-migration fallback: allow everything
+    const resolved: Record<string, boolean> = {};
+    for (const key of Object.values(FLAG_KEYS)) resolved[key] = true;
+    return resolved;
   }
-
-  return resolved;
 }
 
 /**
  * Detect which tier best matches the current global flags.
  * Returns the highest tier whose flags are all satisfied.
  */
-export async function detectCurrentTier(
-  db: D1Database,
-): Promise<Tier> {
+export async function detectCurrentTier(db: D1Database): Promise<Tier> {
   const globalFlags = await resolveFlags(db);
 
   // Check from highest tier down
   const tiers: Tier[] = ['enterprise', 'mid', 'free'];
   for (const tier of tiers) {
     const preset = TIER_PRESETS[tier];
-    const match = (Object.entries(preset.flags) as [FlagKey, boolean][])
-      .every(([key, expected]) => globalFlags[key] === expected);
+    const match = (Object.entries(preset.flags) as [FlagKey, boolean][]).every(
+      ([key, expected]) => globalFlags[key] === expected
+    );
     if (match) return tier;
   }
 

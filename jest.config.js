@@ -28,7 +28,7 @@ module.exports = {
     '**/tests/api/**/*.test.js',
     '**/tests/api-contracts/**/*.test.js',
   ],
-  testPathIgnorePatterns: ['/node_modules/', '/archive/', '/tests/e2e/', '/tests/smoke/'],
+  testPathIgnorePatterns: ['/node_modules/', '/tests/e2e/', '/tests/smoke/', '/archive/'],
   reporters: ['default', './tests/shared/jest-history-reporter.js'],
   // Coverage thresholds enforced (Story 2.3: >= 80% threshold)
   // Mock Google Apps Script APIs in tests to achieve coverage
