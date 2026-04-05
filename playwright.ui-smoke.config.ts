@@ -25,7 +25,7 @@ import { defineConfig, devices } from '@playwright/test';
 const { getBaseUrl } = require('./config/environments');
 
 export default defineConfig({
-  testDir: './tests/ui/smoke',
+  testDir: './archive/legacy-tests/tests/ui/smoke',
 
   // UI smoke tests run sequentially to avoid race conditions
   fullyParallel: false,
@@ -48,16 +48,18 @@ export default defineConfig({
   },
 
   // Reporters
-  reporter: process.env.CI ? [
-    ['html', { outputFolder: 'playwright-report-ui-smoke', open: 'never' }],
-    ['json', { outputFile: '.test-results/ui-smoke-results.json' }],
-    ['junit', { outputFile: '.test-results/ui-smoke-junit.xml' }],
-    ['line'],
-  ] : [
-    ['html', { outputFolder: 'playwright-report-ui-smoke', open: 'never' }],
-    ['json', { outputFile: '.test-results/ui-smoke-results.json' }],
-    ['list'],
-  ],
+  reporter: process.env.CI
+    ? [
+        ['html', { outputFolder: 'playwright-report-ui-smoke', open: 'never' }],
+        ['json', { outputFile: '.test-results/ui-smoke-results.json' }],
+        ['junit', { outputFile: '.test-results/ui-smoke-junit.xml' }],
+        ['line'],
+      ]
+    : [
+        ['html', { outputFolder: 'playwright-report-ui-smoke', open: 'never' }],
+        ['json', { outputFile: '.test-results/ui-smoke-results.json' }],
+        ['list'],
+      ],
 
   use: {
     // Base URL from environment
