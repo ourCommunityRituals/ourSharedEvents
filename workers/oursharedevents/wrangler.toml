@@ -28,13 +28,15 @@ compatibility_date = "2024-01-01"
 binding = "DB"
 database_name = "ocr-db-local"
 database_id = "local"
+migrations_dir = "migrations"
 
 # ── Forms D1 Database (local dev) — SEPARATE from anonymous scan system ──
-# Migrations applied via: wrangler d1 execute ocr-forms-db-local --file migrations-forms/000X_*.sql --local
+# Migrations applied via: wrangler d1 migrations apply FORMS_DB --local
 [[d1_databases]]
 binding = "FORMS_DB"
 database_name = "ocr-forms-db-local"
 database_id = "local-forms"
+migrations_dir = "migrations-forms"
 
 # ── Cron trigger: data lifecycle job (destroy expired forms data) ──
 # Runs daily at 3 AM UTC. Deletes expired registrations, scrubs survey PII,
@@ -55,17 +57,19 @@ routes = [
 ]
 
 # ── D1 Database (staging) ────────────────────────────────────────
-# Migrations applied via CI: wrangler d1 execute --env staging --file --remote
+# Migrations applied via CI: wrangler d1 migrations apply DB --env staging --remote
 [[env.staging.d1_databases]]
 binding = "DB"
 database_name = "ocr-db-staging"
 database_id = "<staging-db-id>"
+migrations_dir = "migrations"
 
 # ── Forms D1 Database (staging) — SEPARATE from anonymous scan system ──
 [[env.staging.d1_databases]]
 binding = "FORMS_DB"
 database_name = "ocr-forms-db-staging"
 database_id = "<staging-forms-db-id>"
+migrations_dir = "migrations-forms"
 
 [env.staging.vars]
 WORKER_ENV = "staging"
@@ -94,16 +98,19 @@ routes = [
 
 # ── D1 Database (production) ─────────────────────────────────────
 # Production migrations NEVER run locally — only via deploy-prod CI with approval gate
+# Migrations applied via CI: wrangler d1 migrations apply DB --env production --remote
 [[env.production.d1_databases]]
 binding = "DB"
 database_name = "ocr-db-production"
 database_id = "<production-db-id>"
+migrations_dir = "migrations"
 
 # ── Forms D1 Database (production) — SEPARATE from anonymous scan system ──
 [[env.production.d1_databases]]
 binding = "FORMS_DB"
 database_name = "ocr-forms-db-production"
 database_id = "<production-forms-db-id>"
+migrations_dir = "migrations-forms"
 
 [env.production.vars]
 WORKER_ENV = "production"
