@@ -296,7 +296,7 @@ jobs:
 
       - name: Report staging E2E results in PR
         if: always() && github.event_name == 'pull_request'
-        uses: dorny/test-reporter@v1
+        uses: dorny/test-reporter@v3
         continue-on-error: true
         with:
           name: "E2E Staging Results"
