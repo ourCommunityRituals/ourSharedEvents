@@ -21,23 +21,24 @@ share(sponsor) = multiplier(tier) / sum(all multipliers in pool)
 
 ### Standard Multipliers
 
-| Tier | Multiplier | What It Means |
-|------|:---------:|---------------|
-| Premium | 3x | 3x the screen time of a local sponsor |
-| Mid | 2x | 2x the screen time of a local sponsor |
-| Local | 1x | Base unit |
+| Tier    | Multiplier | What It Means                         |
+| ------- | :--------: | ------------------------------------- |
+| Premium |     3x     | 3x the screen time of a local sponsor |
+| Mid     |     2x     | 2x the screen time of a local sponsor |
+| Local   |     1x     | Base unit                             |
 
 ### Compressed Multipliers (Governor Active)
 
-| Tier | Multiplier | Change |
-|------|:---------:|--------|
-| Premium | 2x | -1x (compressed) |
-| Mid | 1.8x | -0.2x |
-| Local | 1.5x | +0.5x (boosted) |
+| Tier    | Multiplier | Change           |
+| ------- | :--------: | ---------------- |
+| Premium |     2x     | -1x (compressed) |
+| Mid     |    1.8x    | -0.2x            |
+| Local   |    1.5x    | +0.5x (boosted)  |
 
 ### Worked Examples
 
 **Pool A:** 1 premium, 2 mid, 5 local (typical bocce night)
+
 ```
 Standard:    3 + 2(2) + 5(1) = 12 units
   Premium:   3/12 = 25.0%
@@ -53,6 +54,7 @@ Compressed:  2 + 2(1.8) + 5(1.5) = 13.1 units
 ```
 
 **Pool B:** 1 premium, 0 mid, 1 local (small trivia night)
+
 ```
 Standard:    3 + 1 = 4 units
   Premium:   3/4 = 75.0%
@@ -66,6 +68,7 @@ Compressed:  2 + 1.5 = 3.5 units
 ```
 
 **Pool C:** 1 premium, 2 mid, 20 local (regional event)
+
 ```
 Standard:    3 + 2(2) + 20(1) = 27 units
   Premium:   3/27 = 11.1%
@@ -75,6 +78,7 @@ Standard:    3 + 2(2) + 20(1) = 27 units
 ```
 
 **Pool D:** 5 local only (all-local event)
+
 ```
 Standard:    5(1) = 5 units
   Each local: 1/5 = 20.0%  — equal share ✓
@@ -89,12 +93,14 @@ Standard:    5(1) = 5 units
 **Threat:** Attacker creates fake sponsor accounts to dilute other sponsors' screen time. Adding 100 fake local sponsors would shrink a premium sponsor's share from 25% to ~3%.
 
 **Mitigation:**
+
 - Sponsor creation requires admin authentication (Bearer token / CF Access JWT)
 - Sponsor records live in the admin-controlled SPONSORS sheet / D1 table — no public write access
 - Every sponsor is tied to an event via `event_id` FK — admin must explicitly associate
 - Monetization hooks track billable units per sponsor — fake sponsors with zero impressions are obvious in analytics
 
 **Residual risk:** A compromised admin key could inject sponsors. Mitigated by:
+
 - Rate limiting on admin endpoints
 - Audit logging (`SPONSOR_MONETIZATION_REQUEST` events)
 - Future: multi-user auth (Phase 3 Firebase) with role-based access
@@ -104,6 +110,7 @@ Standard:    5(1) = 5 units
 **Threat:** A local sponsor manipulates their tier field to premium to get 3x instead of 1x.
 
 **Mitigation:**
+
 - Tier field is admin-controlled (SPONSORS sheet column or D1 column) — no public API to change it
 - `normalizeSponsor()` in `SponsorUtils.html` coerces tier from backend data, not from client input
 - The locked sponsor contract (`sponsor.ts`) defines `VALID_SPONSOR_TIERS` — invalid tiers are rejected
@@ -116,12 +123,14 @@ Standard:    5(1) = 5 units
 **Threat:** A local sponsor sends automated scan requests to trigger the governor, compressing premium's share to boost their own.
 
 **Mitigation:**
+
 - Scans are anonymous — `user_agent_hash` + `scan_bucket` — but repeated identical hashes in a short window are detectable
 - In-memory rate limiting already exists on subscribe endpoint; same pattern applies to scan recording
 - Governor threshold (default 5 scans per 15-min window) is per-event, not per-sponsor — gaming requires broad QR code access
 - QR tokens (`qr_token` UNIQUE in `poster_deployments`) are per physical placement — attacker needs physical access to poster
 
 **Residual risk:** Someone standing at a poster rapidly scanning could trigger the governor. But:
+
 - This is also legitimate high engagement
 - The hysteresis (2 consecutive sub-threshold windows to deactivate) prevents rapid on/off cycling
 - Peak tracking (`peak_scan_rate`) records the spike for audit
@@ -134,6 +143,7 @@ Standard:    5(1) = 5 units
 **Threat:** Display surface renders with stale sponsor pool data. A sponsor was removed but still appears in rotation.
 
 **Mitigation:**
+
 - Display surface fetches sponsor data from API on page load and on event selection
 - Carousel renders from the current pool — removing a sponsor from the backend removes them on next fetch
 - `is_active` flag on sponsors table allows soft-delete without data loss
@@ -149,10 +159,12 @@ Standard:    5(1) = 5 units
 **Design principle from sponsor contract:** "All aggregation happens server-side. UI must NEVER compute these values."
 
 **Mitigation for pool-based model:**
+
 - **Option A (preferred):** Server computes `dwellMs` per sponsor and includes it in the API response. Client just uses the number. No weight math on the client.
 - **Option B:** Server returns the pool and multipliers. Client computes dwell. Simpler API but weight math is exposed.
 
 **Recommendation:** Option A. The sponsor contract already establishes that metrics are server-computed. Extend this to dwell time. The API response includes:
+
 ```json
 {
   "sponsors": [
@@ -208,6 +220,7 @@ Standard:    5(1) = 5 units
 **Risk:** If display surface caches pool data, the transition is delayed.
 
 **Mitigation:**
+
 - Display re-fetches pool data periodically (see S4)
 - Governor state is independent of tier — a tier change doesn't trigger state transition
 - Carousel smoothly transitions on next rotation cycle with new dwell times
@@ -226,6 +239,7 @@ Standard:    5(1) = 5 units
 **Scenario:** 50 sponsors (3 premium, 7 mid, 40 local).
 
 **Pool-based math:**
+
 ```
 Standard:  3(3) + 7(2) + 40(1) = 63 units
   Each premium: 3/63 = 4.8%
@@ -237,6 +251,7 @@ Standard:  3(3) + 7(2) + 40(1) = 63 units
 **Concern:** At 1.6% per local sponsor with a 5s base rotation, each local gets 1.6% of display time. In a 250s cycle, that's ~4 seconds per cycle. Is that enough?
 
 **Options:**
+
 1. Cap pool size (e.g., max 20 sponsors per event) — simple but arbitrary
 2. Increase base rotation speed for larger pools — more sponsors = faster cycle
 3. Split into rotation groups — premium/mid in top banner, locals in sidebar carousel
@@ -248,14 +263,15 @@ Standard:  3(3) + 7(2) + 40(1) = 63 units
 
 **Design space:**
 
-| Multiplier Set | P:L Ratio | Character |
-|---------------|:---------:|-----------|
-| 5x / 3x / 1x | 5:1 | Premium-dominant — closer to fixed weights |
-| 3x / 2x / 1x | 3:1 | Balanced — premium gets meaningful advantage, local stays viable |
-| 2x / 1.5x / 1x | 2:1 | Local-friendly — premium advantage is modest |
-| 1.5x / 1.25x / 1x | 1.5:1 | Near-equal — tiers barely matter |
+| Multiplier Set    | P:L Ratio | Character                                                        |
+| ----------------- | :-------: | ---------------------------------------------------------------- |
+| 5x / 3x / 1x      |    5:1    | Premium-dominant — closer to fixed weights                       |
+| 3x / 2x / 1x      |    3:1    | Balanced — premium gets meaningful advantage, local stays viable |
+| 2x / 1.5x / 1x    |    2:1    | Local-friendly — premium advantage is modest                     |
+| 1.5x / 1.25x / 1x |   1.5:1   | Near-equal — tiers barely matter                                 |
 
 **Recommendation:** Start with **3x / 2x / 1x**. This gives premium a clear advantage (3x screen time) while ensuring local always gets a meaningful share. The price-to-multiplier ratio creates diminishing returns:
+
 - Local: $75 for 1x = $75 per unit
 - Mid: $200 for 2x = $100 per unit
 - Premium: $500 for 3x = $167 per unit
@@ -269,6 +285,7 @@ Local gets the best value per dollar. Premium pays a premium for premium. This i
 **Current state:** Governor test uses fixed weights (`{ premium: 0.50, med: 0.30, local: 0.20 }`). Carousel uses equal `rotationMs`.
 
 **Migration path:**
+
 1. Add multiplier configuration to event settings or global config
 2. Replace `getDisplayWeights()` with `getPoolWeights(pool, multipliers, governorState)`
 3. Server computes `dwellMs` per sponsor from pool weights
@@ -288,6 +305,7 @@ Local gets the best value per dollar. Premium pays a premium for premium. This i
 **Expected behavior:** Display renders with cached/stale pool data or no sponsors. Never a broken display.
 
 **Mitigation:**
+
 - Display surface already has loading/error states in the HTML
 - API returns last-known pool from cache if DB is unavailable
 - Governor state is in-memory (per-isolate) — independent of DB availability
@@ -298,6 +316,7 @@ Local gets the best value per dollar. Premium pays a premium for premium. This i
 **Scenario:** Division by zero, corrupt multiplier value, or negative multiplier.
 
 **Guard clauses needed:**
+
 ```
 if (totalUnits <= 0) → equal time for all (1/N)
 if (multiplier < 0) → treat as 1x
@@ -314,6 +333,7 @@ if (!isFinite(share)) → fallback to equal time
 **Current mitigation:** `createGovernorState()` initializes with known-good defaults. State transitions are explicit — no partial updates.
 
 **Enhancement:** Add validation on governor state read:
+
 ```
 if (!['INACTIVE', 'ACTIVE', 'COOLING_DOWN'].includes(govState.state)) → reset to INACTIVE
 if (govState.sub_threshold_windows < 0) → reset to 0
@@ -324,6 +344,7 @@ if (govState.sub_threshold_windows < 0) → reset to 0
 **Scenario:** Cloudflare Worker isolate has stale `Date.now()` or scan events arrive out of order.
 
 **Mitigation:**
+
 - `scan_bucket` uses hourly windows — tolerant of seconds-level skew
 - Governor rolling window (15 min) is coarse enough to absorb jitter
 - `activated_at` timestamp is informational, not used in state transitions
@@ -333,6 +354,7 @@ if (govState.sub_threshold_windows < 0) → reset to 0
 **Scenario:** Two admin requests simultaneously change the sponsor pool (add and remove a sponsor at the same time).
 
 **Mitigation:**
+
 - D1 provides serializable transactions per database
 - Sponsor list is read atomically (single `SELECT` query)
 - Weight calculation is pure function of pool snapshot — no mutable shared state
@@ -352,19 +374,19 @@ if (govState.sub_threshold_windows < 0) → reset to 0
 
 ## Implementation Priority
 
-| Item | Priority | Effort | Dependencies |
-|------|----------|--------|-------------|
-| `computePoolWeights()` pure function | P0 | Small | None — pure math |
-| Test suite for pool-based weights | P0 | Small | computePoolWeights |
-| Guard clauses (E2) | P0 | Small | computePoolWeights |
-| Server-side `dwellMs` in API response (S5) | P1 | Medium | computePoolWeights + API change |
-| Governor multiplier tables (standard/compressed) | P1 | Small | computePoolWeights |
-| Carousel per-sponsor dwell time | P1 | Medium | dwellMs in API response |
-| Multiplier config in event settings | P2 | Medium | Feature flag system |
-| Pool re-fetch on display (S4) | P2 | Small | Display surface change |
-| Minimum dwell floor (F6) | P2 | Small | computePoolWeights |
-| Governor state validation (E3) | P3 | Small | Governor state machine |
-| Timer drift fix (E6) | P3 | Small | Carousel rendering |
+| Item                                             | Priority | Effort | Dependencies                    |
+| ------------------------------------------------ | -------- | ------ | ------------------------------- |
+| `computePoolWeights()` pure function             | P0       | Small  | None — pure math                |
+| Test suite for pool-based weights                | P0       | Small  | computePoolWeights              |
+| Guard clauses (E2)                               | P0       | Small  | computePoolWeights              |
+| Server-side `dwellMs` in API response (S5)       | P1       | Medium | computePoolWeights + API change |
+| Governor multiplier tables (standard/compressed) | P1       | Small  | computePoolWeights              |
+| Carousel per-sponsor dwell time                  | P1       | Medium | dwellMs in API response         |
+| Multiplier config in event settings              | P2       | Medium | Feature flag system             |
+| Pool re-fetch on display (S4)                    | P2       | Small  | Display surface change          |
+| Minimum dwell floor (F6)                         | P2       | Small  | computePoolWeights              |
+| Governor state validation (E3)                   | P3       | Small  | Governor state machine          |
+| Timer drift fix (E6)                             | P3       | Small  | Carousel rendering              |
 
 ---
 

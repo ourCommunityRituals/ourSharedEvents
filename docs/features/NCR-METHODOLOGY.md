@@ -27,6 +27,7 @@ Ten events    → "Thursdays at this venue draw 3x more than Tuesdays"
 The current state. Individual events generate anonymous scan data. Each event is a self-contained analytics unit.
 
 **Data generated per event:**
+
 - Scan counts by hourly bucket
 - Unique device classes (user agent hash)
 - Country/region from CF headers
@@ -41,6 +42,7 @@ The current state. Individual events generate anonymous scan data. Each event is
 Cross-event aggregation begins. The platform starts answering questions that no single event can answer alone.
 
 **Questions this phase answers:**
+
 - Which venues draw the most engagement?
 - What day/time combinations work best for which event types?
 - Which sponsors perform consistently vs. one-off spikes?
@@ -48,6 +50,7 @@ Cross-event aggregation begins. The platform starts answering questions that no 
 - Which neighborhoods are under-served by events?
 
 **Data pipeline:**
+
 ```
 scan_aggregates (per event)
         │
@@ -72,6 +75,7 @@ Pattern tables:
 The full NCR vision. AI processing of accumulated scan data produces hyperlocal economic maps.
 
 **What becomes possible:**
+
 - Scan density maps showing where community engagement concentrates
 - Hyperlocal economic mapping: "this block has 3x engagement on Thursdays"
 - Community planning signals: where to invest, where events thrive
@@ -183,14 +187,14 @@ Sponsors tracked ────────→ sponsors (click, impression) ──
 
 NCR unlocks audiences that individual event analytics cannot serve:
 
-| Audience | What NCR Gives Them | Data Source |
-|----------|-------------------|------------|
-| **Government** | Venue utilization data, public event density, community gathering patterns | scan_aggregates + poster_deployments (lat/lng) |
-| **Policy Makers** | Evidence-based community investment signals, engagement equity metrics | Cross-neighborhood scan density comparison |
-| **Public Services** | Library/community center event performance, nonprofit event analytics | scan_aggregates filtered by venue type |
-| **Researchers** | Anonymized community engagement datasets, neighborhood economic indicators | Full NCR dataset export (anonymized) |
-| **Urban Planners** | Where people gather, when, and how often — without surveillance | Geo-spatial density maps by time period |
-| **Local Business Associations** | Which blocks have the most foot traffic, which events drive commerce | Sponsor attribution + scan density overlay |
+| Audience                        | What NCR Gives Them                                                        | Data Source                                    |
+| ------------------------------- | -------------------------------------------------------------------------- | ---------------------------------------------- |
+| **Government**                  | Venue utilization data, public event density, community gathering patterns | scan_aggregates + poster_deployments (lat/lng) |
+| **Policy Makers**               | Evidence-based community investment signals, engagement equity metrics     | Cross-neighborhood scan density comparison     |
+| **Public Services**             | Library/community center event performance, nonprofit event analytics      | scan_aggregates filtered by venue type         |
+| **Researchers**                 | Anonymized community engagement datasets, neighborhood economic indicators | Full NCR dataset export (anonymized)           |
+| **Urban Planners**              | Where people gather, when, and how often — without surveillance            | Geo-spatial density maps by time period        |
+| **Local Business Associations** | Which blocks have the most foot traffic, which events drive commerce       | Sponsor attribution + scan density overlay     |
 
 ---
 
@@ -214,10 +218,10 @@ NCR is only possible **because** the data is anonymous:
 
 **ourEventRings** is the planned sibling product that focuses on research and data analysis from ourSharedEvents data. While ourSharedEvents handles event automation (Phases 1-2), ourEventRings will handle NCR analytics (Phase 3).
 
-| Product | Scope | Data |
-|---------|-------|------|
-| **ourSharedEvents** | Event automation, forms, surfaces, sponsor management | Raw scan data, form submissions, feature flags |
-| **ourEventRings** | Research, NCR analytics, geo-spatial intelligence | Aggregated scan data, density maps, pattern analysis |
+| Product             | Scope                                                 | Data                                                 |
+| ------------------- | ----------------------------------------------------- | ---------------------------------------------------- |
+| **ourSharedEvents** | Event automation, forms, surfaces, sponsor management | Raw scan data, form submissions, feature flags       |
+| **ourEventRings**   | Research, NCR analytics, geo-spatial intelligence     | Aggregated scan data, density maps, pattern analysis |
 
 The separation ensures that event operations and intelligence analytics evolve independently. ourSharedEvents remains fast and focused on serving events. ourEventRings can run expensive analytics without affecting event performance.
 
@@ -227,13 +231,13 @@ The separation ensures that event operations and intelligence analytics evolve i
 
 NCR becomes meaningful at specific data density thresholds:
 
-| Metric | Threshold for Meaningful NCR | Current State |
-|--------|------------------------------|---------------|
-| Events per neighborhood | 50+ events in a 1-mile radius | Pre-launch |
-| Scan density | 10,000+ scans per neighborhood per quarter | Pre-launch |
-| Venue diversity | 10+ unique venues per neighborhood | Pre-launch |
-| Temporal coverage | 12+ months of continuous data | Pre-launch |
-| Sponsor participation | 20+ sponsors with attribution data | Pre-launch |
+| Metric                  | Threshold for Meaningful NCR               | Current State |
+| ----------------------- | ------------------------------------------ | ------------- |
+| Events per neighborhood | 50+ events in a 1-mile radius              | Pre-launch    |
+| Scan density            | 10,000+ scans per neighborhood per quarter | Pre-launch    |
+| Venue diversity         | 10+ unique venues per neighborhood         | Pre-launch    |
+| Temporal coverage       | 12+ months of continuous data              | Pre-launch    |
+| Sponsor participation   | 20+ sponsors with attribution data         | Pre-launch    |
 
 The platform needs to reach **event automation maturity** (Phase 1-2) before NCR becomes actionable. The schema is ready. The data pipeline is designed. The events need to happen.
 

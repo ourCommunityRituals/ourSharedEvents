@@ -17,19 +17,19 @@ Staging and production Apps Script projects are **fully separate** with distinct
 
 ### Script ID Configuration
 
-| Environment | Script ID | Config File |
-|-------------|-----------|-------------|
-| **Staging** | `1gHiPuj7eXNk09dDyk17SJ6QsCJg7LMqXBRrkowljL3z2TaAKFIvBLhHJ` | `.clasp-staging.json` |
-| **Production** | `1YO4apLOQoAIh208AcAqWO3pWtx_O3yas_QC4z-pkurgMem9UgYOsp86l` | `.clasp-production.json` |
-| **Default (safe)** | Staging | `.clasp.json` |
+| Environment        | Script ID                                                   | Config File              |
+| ------------------ | ----------------------------------------------------------- | ------------------------ |
+| **Staging**        | `1gHiPuj7eXNk09dDyk17SJ6QsCJg7LMqXBRrkowljL3z2TaAKFIvBLhHJ` | `.clasp-staging.json`    |
+| **Production**     | `1YO4apLOQoAIh208AcAqWO3pWtx_O3yas_QC4z-pkurgMem9UgYOsp86l` | `.clasp-production.json` |
+| **Default (safe)** | Staging                                                     | `.clasp.json`            |
 
 ### Configuration Files
 
-| File | Purpose | Safe for Local Use |
-|------|---------|-------------------|
-| `.clasp.json` | Default config - points to STAGING for safety | Yes |
-| `.clasp-staging.json` | Explicit staging config | Yes |
-| `.clasp-production.json` | Production reference - **CI-ONLY** | **NO** |
+| File                     | Purpose                                       | Safe for Local Use |
+| ------------------------ | --------------------------------------------- | ------------------ |
+| `.clasp.json`            | Default config - points to STAGING for safety | Yes                |
+| `.clasp-staging.json`    | Explicit staging config                       | Yes                |
+| `.clasp-production.json` | Production reference - **CI-ONLY**            | **NO**             |
 
 ### How CI Uses Script IDs
 
@@ -47,10 +47,10 @@ Staging and production Apps Script projects are **fully separate** with distinct
 
 After a deployment, verify the correct project was updated:
 
-| Environment | Manage Deployments URL |
-|-------------|----------------------|
-| Staging | https://script.google.com/home/projects/1gHiPuj7eXNk09dDyk17SJ6QsCJg7LMqXBRrkowljL3z2TaAKFIvBLhHJ/deployments |
-| Production | https://script.google.com/home/projects/1YO4apLOQoAIh208AcAqWO3pWtx_O3yas_QC4z-pkurgMem9UgYOsp86l/deployments |
+| Environment | Manage Deployments URL                                                                                        |
+| ----------- | ------------------------------------------------------------------------------------------------------------- |
+| Staging     | https://script.google.com/home/projects/1gHiPuj7eXNk09dDyk17SJ6QsCJg7LMqXBRrkowljL3z2TaAKFIvBLhHJ/deployments |
+| Production  | https://script.google.com/home/projects/1YO4apLOQoAIh208AcAqWO3pWtx_O3yas_QC4z-pkurgMem9UgYOsp86l/deployments |
 
 ---
 
@@ -74,13 +74,13 @@ If owner is NOT zeventbook@gmail.com, follow the [Ownership Migration](#ownershi
 
 There is **ONE** production Apps Script deployment. All production traffic routes through this deployment.
 
-| Setting | Value |
-|---------|-------|
-| **Script ID** | `1YO4apLOQoAIh208AcAqWO3pWtx_O3yas_QC4z-pkurgMem9UgYOsp86l` |
-| **Project URL** | https://script.google.com/home/projects/1YO4apLOQoAIh208AcAqWO3pWtx_O3yas_QC4z-pkurgMem9UgYOsp86l/edit |
-| **Deployment URL** | https://script.google.com/macros/s/AKfycbxaTPh3FS4NHJblIcUrz4k01kWAdxsKzLNnYRf0TXe18lBditTm3hqbBoQ4ZxbGhhGuCA/exec |
-| **Production Domain** | https://eventangle.com |
-| **Owner** | `zeventbook@gmail.com` ✓ |
+| Setting               | Value                                                                                                              |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| **Script ID**         | `1YO4apLOQoAIh208AcAqWO3pWtx_O3yas_QC4z-pkurgMem9UgYOsp86l`                                                        |
+| **Project URL**       | https://script.google.com/home/projects/1YO4apLOQoAIh208AcAqWO3pWtx_O3yas_QC4z-pkurgMem9UgYOsp86l/edit             |
+| **Deployment URL**    | https://script.google.com/macros/s/AKfycbxaTPh3FS4NHJblIcUrz4k01kWAdxsKzLNnYRf0TXe18lBditTm3hqbBoQ4ZxbGhhGuCA/exec |
+| **Production Domain** | https://eventangle.com                                                                                             |
+| **Owner**             | `zeventbook@gmail.com` ✓                                                                                           |
 
 ---
 
@@ -96,6 +96,7 @@ See [PRODUCTION_DEPLOYMENT_POLICY.md](./PRODUCTION_DEPLOYMENT_POLICY.md) for ful
 ### Who Can Deploy to Production
 
 Only GitHub Actions CI/CD pipeline, triggered by:
+
 - **Push to `main` branch** - After PR merge
 - **Push to `release/*` branches** - Release deployments
 
@@ -110,20 +111,20 @@ Only GitHub Actions CI/CD pipeline, triggered by:
 
 ## Google Cloud Project
 
-| Setting | Value |
-|---------|-------|
-| **Project ID** | `zeventbooks` |
-| **Console** | https://console.cloud.google.com/home/dashboard?project=zeventbooks |
+| Setting              | Value                                                                          |
+| -------------------- | ------------------------------------------------------------------------------ |
+| **Project ID**       | `zeventbooks`                                                                  |
+| **Console**          | https://console.cloud.google.com/home/dashboard?project=zeventbooks            |
 | **Service Accounts** | https://console.cloud.google.com/iam-admin/serviceaccounts?project=zeventbooks |
 
 ---
 
 ## Service Account (CI/CD)
 
-| Setting | Value |
-|---------|-------|
-| **Email** | `apps-script-deployer@zeventbooks.iam.gserviceaccount.com` |
-| **Purpose** | Automated CI/CD deployment only |
+| Setting             | Value                                                           |
+| ------------------- | --------------------------------------------------------------- |
+| **Email**           | `apps-script-deployer@zeventbooks.iam.gserviceaccount.com`      |
+| **Purpose**         | Automated CI/CD deployment only                                 |
 | **Required Scopes** | `script.projects`, `script.deployments`, `script.webapp.deploy` |
 
 ---
@@ -149,19 +150,19 @@ clasp deploy -d "Dev test deployment"
 
 ## Staging Deployment
 
-| Setting | Value |
-|---------|-------|
-| **Script ID** | `1gHiPuj7eXNk09dDyk17SJ6QsCJg7LMqXBRrkowljL3z2TaAKFIvBLhHJ` |
+| Setting         | Value                                                                                                  |
+| --------------- | ------------------------------------------------------------------------------------------------------ |
+| **Script ID**   | `1gHiPuj7eXNk09dDyk17SJ6QsCJg7LMqXBRrkowljL3z2TaAKFIvBLhHJ`                                            |
 | **Project URL** | https://script.google.com/home/projects/1gHiPuj7eXNk09dDyk17SJ6QsCJg7LMqXBRrkowljL3z2TaAKFIvBLhHJ/edit |
-| **Config File** | `.clasp-staging.json` |
-| **Staging URL** | https://stg.eventangle.com |
-| **Owner** | `zeventbook@gmail.com` (REQUIRED) |
+| **Config File** | `.clasp-staging.json`                                                                                  |
+| **Staging URL** | https://stg.eventangle.com                                                                             |
+| **Owner**       | `zeventbook@gmail.com` (REQUIRED)                                                                      |
 
 ### GitHub Secrets (Story 1.3)
 
-| Secret | Purpose | Required | Default |
-|--------|---------|----------|---------|
-| `OAUTH_CREDENTIALS` | Clasp authentication | Yes | - |
+| Secret              | Purpose                    | Required | Default                     |
+| ------------------- | -------------------------- | -------- | --------------------------- |
+| `OAUTH_CREDENTIALS` | Clasp authentication       | Yes      | -                           |
 | `STAGING_SCRIPT_ID` | Override staging Script ID | Optional | From `deploy-manifest.json` |
 
 **Note:** `STAGING_SCRIPT_ID` is optional. If not set, the CI pipeline uses the value from `deploy-manifest.json`. This secret allows changing the staging Script ID without modifying code.
@@ -215,6 +216,7 @@ clasp login --no-localhost
 ```
 
 **IMPORTANT:** When the OAuth screen opens:
+
 - Verify the account shown is `zeventbook@gmail.com`
 - If it shows mzdano or another account, cancel and use a private/incognito window
 
@@ -253,6 +255,7 @@ npm run clasp:verify-ownership
 ```
 
 This script checks:
+
 - clasp login status
 - Production config (.clasp.json)
 - Staging config (.clasp-staging.json)
@@ -300,19 +303,19 @@ npm run deploy:staging:auto
 
 ### Available Automation Commands
 
-| Command | Description |
-|---------|-------------|
-| `npm run setup:clasp` | Interactive environment setup |
-| `npm run setup:clasp:check` | Check environment (no changes) |
-| `npm run setup:clasp:fix` | Auto-fix configuration issues |
-| `npm run setup:clasp:ci` | CI mode (exit codes only) |
-| `npm run clasp:verify-ownership` | Verify zeventbook ownership |
-| `npm run validate:secrets` | Validate CI secrets requirements |
-| `npm run validate:secrets:stage1` | Validate Stage 1 secrets |
-| `npm run validate:secrets:stage2` | Validate Stage 2 secrets |
-| `npm run deploy:staging:auto` | Automated staging deployment |
-| `npm run deploy:staging:check` | Pre-flight check for staging |
-| `npm run deploy:staging:verify` | Verify staging deployment |
+| Command                           | Description                      |
+| --------------------------------- | -------------------------------- |
+| `npm run setup:clasp`             | Interactive environment setup    |
+| `npm run setup:clasp:check`       | Check environment (no changes)   |
+| `npm run setup:clasp:fix`         | Auto-fix configuration issues    |
+| `npm run setup:clasp:ci`          | CI mode (exit codes only)        |
+| `npm run clasp:verify-ownership`  | Verify zeventbook ownership      |
+| `npm run validate:secrets`        | Validate CI secrets requirements |
+| `npm run validate:secrets:stage1` | Validate Stage 1 secrets         |
+| `npm run validate:secrets:stage2` | Validate Stage 2 secrets         |
+| `npm run deploy:staging:auto`     | Automated staging deployment     |
+| `npm run deploy:staging:check`    | Pre-flight check for staging     |
+| `npm run deploy:staging:verify`   | Verify staging deployment        |
 
 ### CI Environment Validation
 
@@ -323,6 +326,7 @@ The `validate-environment.yml` workflow automatically validates:
 3. **Stage 2 Secrets** - Admin keys, spreadsheet IDs per brand
 
 Runs automatically on:
+
 - PRs that modify configuration files
 - Pushes to main that modify configuration
 - Manual trigger for debugging
@@ -338,17 +342,17 @@ The automation scripts include:
 
 ### Required GitHub Secrets
 
-| Secret | Required | Purpose |
-|--------|----------|---------|
-| `OAUTH_CREDENTIALS` | ✅ Yes | Clasp authentication (zeventbook@gmail.com) |
-| `DEPLOYMENT_ID` | Optional | Production deployment ID |
-| `ADMIN_KEY_ROOT` | For Stage 2 | Root brand admin key |
-| `ADMIN_KEY_ABC` | Optional | ABC brand admin key |
-| `ADMIN_KEY_CBC` | Optional | CBC brand admin key |
-| `ADMIN_KEY_CBL` | Optional | CBL brand admin key |
-| `SPREADSHEET_ID` | Optional | Fallback spreadsheet ID |
-| `CLOUDFLARE_API_TOKEN` | Optional | Cloudflare Worker updates |
-| `CLOUDFLARE_ACCOUNT_ID` | Optional | Cloudflare Worker updates |
+| Secret                  | Required    | Purpose                                     |
+| ----------------------- | ----------- | ------------------------------------------- |
+| `OAUTH_CREDENTIALS`     | ✅ Yes      | Clasp authentication (zeventbook@gmail.com) |
+| `DEPLOYMENT_ID`         | Optional    | Production deployment ID                    |
+| `ADMIN_KEY_ROOT`        | For Stage 2 | Root brand admin key                        |
+| `ADMIN_KEY_ABC`         | Optional    | ABC brand admin key                         |
+| `ADMIN_KEY_CBC`         | Optional    | CBC brand admin key                         |
+| `ADMIN_KEY_CBL`         | Optional    | CBL brand admin key                         |
+| `SPREADSHEET_ID`        | Optional    | Fallback spreadsheet ID                     |
+| `CLOUDFLARE_API_TOKEN`  | Optional    | Cloudflare Worker updates                   |
+| `CLOUDFLARE_ACCOUNT_ID` | Optional    | Cloudflare Worker updates                   |
 
 ---
 
@@ -366,10 +370,10 @@ src/mvp/ (local) → Staging Script → Production Script
 
 ### CI/CD Default Behavior
 
-| Trigger | Target Environment |
-|---------|-------------------|
-| Push to `main` | **STAGING** (default) |
-| Push to `release/*` | **STAGING** (default) |
+| Trigger                  | Target Environment             |
+| ------------------------ | ------------------------------ |
+| Push to `main`           | **STAGING** (default)          |
+| Push to `release/*`      | **STAGING** (default)          |
 | Manual workflow_dispatch | User choice (default: staging) |
 
 **Production deployments require explicit opt-in via workflow_dispatch.**
@@ -404,6 +408,7 @@ Production deployment is opt-in only. To deploy to production:
 4. Click **Run workflow**
 
 Or via GitHub CLI:
+
 ```bash
 gh workflow run "Stage 1 - Build & Deploy" \
   -f environment=production
@@ -423,10 +428,10 @@ npm run deploy:staging
 
 ### Project URLs
 
-| Environment | Apps Script Project | Cloudflare URL |
-|-------------|---------------------|----------------|
-| **Staging** | [Edit](https://script.google.com/home/projects/1gHiPuj7eXNk09dDyk17SJ6QsCJg7LMqXBRrkowljL3z2TaAKFIvBLhHJ/edit) | stg.eventangle.com |
-| **Production** | [Edit](https://script.google.com/home/projects/1YO4apLOQoAIh208AcAqWO3pWtx_O3yas_QC4z-pkurgMem9UgYOsp86l/edit) | eventangle.com |
+| Environment    | Apps Script Project                                                                                            | Cloudflare URL     |
+| -------------- | -------------------------------------------------------------------------------------------------------------- | ------------------ |
+| **Staging**    | [Edit](https://script.google.com/home/projects/1gHiPuj7eXNk09dDyk17SJ6QsCJg7LMqXBRrkowljL3z2TaAKFIvBLhHJ/edit) | stg.eventangle.com |
+| **Production** | [Edit](https://script.google.com/home/projects/1YO4apLOQoAIh208AcAqWO3pWtx_O3yas_QC4z-pkurgMem9UgYOsp86l/edit) | eventangle.com     |
 
 ---
 

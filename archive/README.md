@@ -12,6 +12,7 @@
 Deep-dive analysis reports generated during development. Covers architecture reviews, deployment analysis, testing audits, security scans, and refactoring plans.
 
 **Key reports:**
+
 - `ARCHITECTURE-FINDINGS-SUMMARY.md` — Architecture analysis findings
 - `EXECUTIVE_SUMMARY.md` — Executive project summary
 - `CODEBASE_ARCHITECTURE_OVERVIEW.md` — Full codebase overview

@@ -71,9 +71,9 @@ const ALL_NODES = Object.freeze([
 // =============================================================================
 
 function getCoverageStats() {
-  const level4 = ALL_NODES.filter(n => n.level === 4);
-  const level3 = ALL_NODES.filter(n => n.level === 3);
-  const states = new Set(ALL_NODES.map(n => n.state));
+  const level4 = ALL_NODES.filter((n) => n.level === 4);
+  const level3 = ALL_NODES.filter((n) => n.level === 3);
+  const states = new Set(ALL_NODES.map((n) => n.state));
 
   return {
     network: 1,

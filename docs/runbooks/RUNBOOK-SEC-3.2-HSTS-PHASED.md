@@ -29,6 +29,7 @@
 ### 1.1 Goal
 
 Enable HTTP Strict Transport Security (HSTS) with a phased rollout approach:
+
 - Start with conservative `max-age` to minimize risk
 - Gradually increase `max-age` after verified stability
 - Only consider preload after extended stability period
@@ -68,12 +69,12 @@ Browser Request: http://eventangle.com
 
 HSTS misconfiguration can **lock users out** of your site:
 
-| Scenario | Risk | Impact |
-|----------|------|--------|
-| HTTPS breaks after HSTS enabled | Users cannot access HTTP fallback | Site completely inaccessible |
-| Subdomain without HTTPS + `includeSubDomains` | All subdomains forced to HTTPS | Non-HTTPS subdomains break |
-| Preload with configuration issues | Browsers refuse HTTP for years | Cannot easily undo |
-| Long max-age with broken HTTPS | Users locked out for extended period | Recovery requires user cache clear |
+| Scenario                                      | Risk                                 | Impact                             |
+| --------------------------------------------- | ------------------------------------ | ---------------------------------- |
+| HTTPS breaks after HSTS enabled               | Users cannot access HTTP fallback    | Site completely inaccessible       |
+| Subdomain without HTTPS + `includeSubDomains` | All subdomains forced to HTTPS       | Non-HTTPS subdomains break         |
+| Preload with configuration issues             | Browsers refuse HTTP for years       | Cannot easily undo                 |
+| Long max-age with broken HTTPS                | Users locked out for extended period | Recovery requires user cache clear |
 
 **Conservative max-age = Fast recovery if issues arise**
 
@@ -87,11 +88,11 @@ Strict-Transport-Security: max-age=31536000; includeSubDomains; preload
                            └─ Time in seconds to remember this policy
 ```
 
-| Directive | Purpose | Caution Level |
-|-----------|---------|---------------|
-| `max-age` | How long browsers remember HTTPS-only | Start small, increase gradually |
-| `includeSubDomains` | Apply to all subdomains | Only if ALL subdomains use HTTPS |
-| `preload` | Browser ships with HTTPS-only | **ONE-WAY DOOR** - very hard to undo |
+| Directive           | Purpose                               | Caution Level                        |
+| ------------------- | ------------------------------------- | ------------------------------------ |
+| `max-age`           | How long browsers remember HTTPS-only | Start small, increase gradually      |
+| `includeSubDomains` | Apply to all subdomains               | Only if ALL subdomains use HTTPS     |
+| `preload`           | Browser ships with HTTPS-only         | **ONE-WAY DOOR** - very hard to undo |
 
 ### 1.5 Rollout Timeline
 
@@ -107,14 +108,14 @@ Phase 1          Phase 2         Phase 3          Phase 4         Phase 5
 
 ### 1.6 Scope
 
-| Component | In Scope |
-|-----------|----------|
-| HSTS header configuration | Yes |
-| max-age staged increases | Yes |
-| includeSubDomains assessment | Yes |
-| Preload decision criteria | Yes |
-| Subdomain HTTPS audit | Yes |
-| Rollback procedures | Yes |
+| Component                    | In Scope |
+| ---------------------------- | -------- |
+| HSTS header configuration    | Yes      |
+| max-age staged increases     | Yes      |
+| includeSubDomains assessment | Yes      |
+| Preload decision criteria    | Yes      |
+| Subdomain HTTPS audit        | Yes      |
+| Rollback procedures          | Yes      |
 
 ---
 
@@ -132,23 +133,23 @@ Phase 1          Phase 2         Phase 3          Phase 4         Phase 5
 
 Before enabling `includeSubDomains`, audit ALL subdomains:
 
-| Subdomain | HTTPS Working | Certificate Valid | Include in HSTS |
-|-----------|--------------|-------------------|-----------------|
-| `www.eventangle.com` | [ ] Yes | [ ] Valid | [ ] Yes |
-| `api.eventangle.com` | [ ] Yes | [ ] Valid | [ ] Yes |
-| `stg.eventangle.com` | [ ] Yes | [ ] Valid | [ ] Yes |
-| `api-stg.eventangle.com` | [ ] Yes | [ ] Valid | [ ] Yes |
+| Subdomain                | HTTPS Working | Certificate Valid | Include in HSTS |
+| ------------------------ | ------------- | ----------------- | --------------- |
+| `www.eventangle.com`     | [ ] Yes       | [ ] Valid         | [ ] Yes         |
+| `api.eventangle.com`     | [ ] Yes       | [ ] Valid         | [ ] Yes         |
+| `stg.eventangle.com`     | [ ] Yes       | [ ] Valid         | [ ] Yes         |
+| `api-stg.eventangle.com` | [ ] Yes       | [ ] Valid         | [ ] Yes         |
 
 **Warning:** If ANY subdomain doesn't support HTTPS, do NOT enable `includeSubDomains`.
 
 ### 2.3 Stability Requirements Per Phase
 
-| Phase | Minimum Stability Period | Before Advancing |
-|-------|-------------------------|------------------|
-| 1 → 2 | 24-48 hours stable | No HTTPS issues reported |
-| 2 → 3 | 7-14 days stable | Zero certificate or TLS errors |
-| 3 → 4 | 30+ days stable | Full confidence in HTTPS infrastructure |
-| 4 → 5 | 90+ days stable | Business decision to commit permanently |
+| Phase | Minimum Stability Period | Before Advancing                        |
+| ----- | ------------------------ | --------------------------------------- |
+| 1 → 2 | 24-48 hours stable       | No HTTPS issues reported                |
+| 2 → 3 | 7-14 days stable         | Zero certificate or TLS errors          |
+| 3 → 4 | 30+ days stable          | Full confidence in HTTPS infrastructure |
+| 4 → 5 | 90+ days stable          | Business decision to commit permanently |
 
 ---
 
@@ -156,11 +157,11 @@ Before enabling `includeSubDomains`, audit ALL subdomains:
 
 ### 3.1 Configuration
 
-| Setting | Value | Rationale |
-|---------|-------|-----------|
-| `max-age` | 300 (5 minutes) | Quick recovery if issues |
-| `includeSubDomains` | No | Test main domain first |
-| `preload` | No | Never in early phases |
+| Setting             | Value           | Rationale                |
+| ------------------- | --------------- | ------------------------ |
+| `max-age`           | 300 (5 minutes) | Quick recovery if issues |
+| `includeSubDomains` | No              | Test main domain first   |
+| `preload`           | No              | Never in early phases    |
 
 ### 3.2 Enable via Cloudflare Dashboard
 
@@ -234,11 +235,11 @@ curl -sI https://eventangle.com | grep -i "strict-transport" | grep -oP 'max-age
 
 ### 4.1 Configuration
 
-| Setting | Value | Rationale |
-|---------|-------|-----------|
-| `max-age` | 604800 (1 week) | Meaningful protection, recoverable |
-| `includeSubDomains` | Optional | Only if ALL subdomains verified |
-| `preload` | No | Still too early |
+| Setting             | Value           | Rationale                          |
+| ------------------- | --------------- | ---------------------------------- |
+| `max-age`           | 604800 (1 week) | Meaningful protection, recoverable |
+| `includeSubDomains` | Optional        | Only if ALL subdomains verified    |
+| `preload`           | No              | Still too early                    |
 
 ### 4.2 Update via Cloudflare Dashboard
 
@@ -317,11 +318,11 @@ curl -sI https://eventangle.com | grep -i "strict-transport"
 
 ### 5.1 Configuration
 
-| Setting | Value | Rationale |
-|---------|-------|-----------|
-| `max-age` | 15768000 (6 months) | Strong protection |
-| `includeSubDomains` | Recommended | Should be enabled by now |
-| `preload` | No | Evaluate after this phase |
+| Setting             | Value               | Rationale                 |
+| ------------------- | ------------------- | ------------------------- |
+| `max-age`           | 15768000 (6 months) | Strong protection         |
+| `includeSubDomains` | Recommended         | Should be enabled by now  |
+| `preload`           | No                  | Evaluate after this phase |
 
 ### 5.2 Update via Cloudflare API
 
@@ -366,11 +367,11 @@ curl -sI https://eventangle.com | grep -i "strict-transport"
 
 ### 6.1 Configuration
 
-| Setting | Value | Rationale |
-|---------|-------|-----------|
-| `max-age` | 31536000 (1 year) | Industry standard |
-| `includeSubDomains` | Yes | Required for preload consideration |
-| `preload` | No (yet) | Final decision pending |
+| Setting             | Value             | Rationale                          |
+| ------------------- | ----------------- | ---------------------------------- |
+| `max-age`           | 31536000 (1 year) | Industry standard                  |
+| `includeSubDomains` | Yes               | Required for preload consideration |
+| `preload`           | No (yet)          | Final decision pending             |
 
 ### 6.2 Update via Cloudflare API
 
@@ -475,6 +476,7 @@ curl -X PATCH "https://api.cloudflare.com/client/v4/zones/{zone_id}/settings/sec
 ### 7.5 Submit to Preload List
 
 1. Verify header includes preload:
+
    ```bash
    curl -sI https://eventangle.com | grep -i "strict-transport"
    # Expected: strict-transport-security: max-age=31536000; includeSubDomains; preload
@@ -598,24 +600,24 @@ echo "=== Verification Complete ==="
 
 ### 8.2 Current Phase Status
 
-| Check | Result | Notes |
-|-------|--------|-------|
-| HSTS header present | [ ] Pass | |
-| max-age value | [ ] _____ seconds | Phase: ___ |
-| includeSubDomains | [ ] Enabled / [ ] Disabled | |
-| preload | [ ] Enabled / [ ] Disabled | |
-| HTTP redirects | [ ] Pass | |
-| HTTPS working | [ ] Pass | |
+| Check               | Result                     | Notes         |
+| ------------------- | -------------------------- | ------------- |
+| HSTS header present | [ ] Pass                   |               |
+| max-age value       | [ ] **\_** seconds         | Phase: \_\_\_ |
+| includeSubDomains   | [ ] Enabled / [ ] Disabled |               |
+| preload             | [ ] Enabled / [ ] Disabled |               |
+| HTTP redirects      | [ ] Pass                   |               |
+| HTTPS working       | [ ] Pass                   |               |
 
 ### 8.3 Phase Advancement Criteria
 
-| From | To | Minimum Wait | Stability Required |
-|------|----|--------------|--------------------|
-| None | Phase 1 | Immediate | Pre-requisites met |
-| Phase 1 | Phase 2 | 24-48 hours | Zero issues |
-| Phase 2 | Phase 3 | 7-14 days | Zero issues |
-| Phase 3 | Phase 4 | 30+ days | Zero issues |
-| Phase 4 | Phase 5 | 90+ days | Business decision |
+| From    | To      | Minimum Wait | Stability Required |
+| ------- | ------- | ------------ | ------------------ |
+| None    | Phase 1 | Immediate    | Pre-requisites met |
+| Phase 1 | Phase 2 | 24-48 hours  | Zero issues        |
+| Phase 2 | Phase 3 | 7-14 days    | Zero issues        |
+| Phase 3 | Phase 4 | 30+ days     | Zero issues        |
+| Phase 4 | Phase 5 | 90+ days     | Business decision  |
 
 ---
 
@@ -672,17 +674,20 @@ curl -X PATCH "https://api.cloudflare.com/client/v4/zones/{zone_id}/settings/sec
 For individual users experiencing issues:
 
 **Chrome:**
+
 1. Navigate to `chrome://net-internals/#hsts`
 2. Under "Delete domain security policies"
 3. Enter: `eventangle.com`
 4. Click **Delete**
 
 **Firefox:**
+
 1. Navigate to `about:config`
 2. Search for `network.stricttransportsecurity.preloadlist`
 3. Or clear all site data for the domain
 
 **Safari:**
+
 1. Quit Safari
 2. Delete `~/Library/Cookies/HSTS.plist`
 3. Reopen Safari
@@ -719,13 +724,13 @@ For individual users experiencing issues:
 
 ### 10.1 Common Issues
 
-| Issue | Cause | Solution |
-|-------|-------|----------|
-| Site inaccessible after enabling HSTS | HTTPS not working properly | Disable HSTS, fix HTTPS, re-enable |
-| Subdomain broken | includeSubDomains enabled without subdomain HTTPS | Disable includeSubDomains or add HTTPS to subdomain |
-| Users report locked out | HSTS cached in browser | Direct users to clear HSTS cache |
-| HSTS header not appearing | Cloudflare setting not saved | Re-enable in dashboard or via API |
-| Mixed content warnings | HTTP resources on HTTPS page | Update all resources to HTTPS |
+| Issue                                 | Cause                                             | Solution                                            |
+| ------------------------------------- | ------------------------------------------------- | --------------------------------------------------- |
+| Site inaccessible after enabling HSTS | HTTPS not working properly                        | Disable HSTS, fix HTTPS, re-enable                  |
+| Subdomain broken                      | includeSubDomains enabled without subdomain HTTPS | Disable includeSubDomains or add HTTPS to subdomain |
+| Users report locked out               | HSTS cached in browser                            | Direct users to clear HSTS cache                    |
+| HSTS header not appearing             | Cloudflare setting not saved                      | Re-enable in dashboard or via API                   |
+| Mixed content warnings                | HTTP resources on HTTPS page                      | Update all resources to HTTPS                       |
 
 ### 10.2 Debugging Commands
 
@@ -789,16 +794,16 @@ PATCH https://api.cloudflare.com/client/v4/zones/{zone_id}/settings/security_hea
 
 ### max-age Reference
 
-| Duration | Seconds | Use Case |
-|----------|---------|----------|
-| 5 minutes | 300 | Testing/Phase 1 |
-| 1 hour | 3600 | Debug |
-| 1 day | 86400 | Short-term |
-| 1 week | 604800 | Phase 2 |
-| 1 month | 2592000 | Intermediate |
-| 6 months | 15768000 | Phase 3 |
-| 1 year | 31536000 | Production/Phase 4-5 |
-| 2 years | 63072000 | Maximum (some use) |
+| Duration  | Seconds  | Use Case             |
+| --------- | -------- | -------------------- |
+| 5 minutes | 300      | Testing/Phase 1      |
+| 1 hour    | 3600     | Debug                |
+| 1 day     | 86400    | Short-term           |
+| 1 week    | 604800   | Phase 2              |
+| 1 month   | 2592000  | Intermediate         |
+| 6 months  | 15768000 | Phase 3              |
+| 1 year    | 31536000 | Production/Phase 4-5 |
+| 2 years   | 63072000 | Maximum (some use)   |
 
 ---
 
@@ -806,15 +811,15 @@ PATCH https://api.cloudflare.com/client/v4/zones/{zone_id}/settings/security_hea
 
 Use this matrix to decide if preload is appropriate:
 
-| Question | Required Answer |
-|----------|-----------------|
-| Has HTTPS been stable for 90+ days? | Yes |
-| Are ALL subdomains HTTPS-enabled? | Yes |
-| Will you NEVER need HTTP access? | Yes |
-| Is certificate management fully automated? | Yes |
-| Do you have monitoring for certificate expiry? | Yes |
-| Is there business/legal approval? | Yes |
-| Are you prepared for months-long removal process? | Yes |
+| Question                                          | Required Answer |
+| ------------------------------------------------- | --------------- |
+| Has HTTPS been stable for 90+ days?               | Yes             |
+| Are ALL subdomains HTTPS-enabled?                 | Yes             |
+| Will you NEVER need HTTP access?                  | Yes             |
+| Is certificate management fully automated?        | Yes             |
+| Do you have monitoring for certificate expiry?    | Yes             |
+| Is there business/legal approval?                 | Yes             |
+| Are you prepared for months-long removal process? | Yes             |
 
 **If ANY answer is "No" or "Unsure", do NOT enable preload.**
 
@@ -822,8 +827,8 @@ Use this matrix to decide if preload is appropriate:
 
 ## Document History
 
-| Date | Author | Changes |
-|------|--------|---------|
+| Date       | Author      | Changes                   |
+| ---------- | ----------- | ------------------------- |
 | 2025-12-20 | Claude Code | Initial runbook (SEC-3.2) |
 
 ---

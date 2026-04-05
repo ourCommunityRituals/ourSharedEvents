@@ -10,12 +10,12 @@ Clear performance budgets that define "fast enough" for our critical API endpoin
 
 ### SLO Targets
 
-| Endpoint | p95 Latency | Error Rate | Description |
-|----------|-------------|------------|-------------|
-| `api_getPublicBundle` | < 2000ms | < 1% | Public event page data |
-| `api_getDisplayBundle` | < 2000ms | < 1% | TV/Display rotation config |
-| `api_getPosterBundle` | < 2000ms | < 1% | Poster with QR codes |
-| `api_getSharedAnalytics` | < 2000ms | < 1% | Shared analytics dashboard |
+| Endpoint                 | p95 Latency | Error Rate | Description                |
+| ------------------------ | ----------- | ---------- | -------------------------- |
+| `api_getPublicBundle`    | < 2000ms    | < 1%       | Public event page data     |
+| `api_getDisplayBundle`   | < 2000ms    | < 1%       | TV/Display rotation config |
+| `api_getPosterBundle`    | < 2000ms    | < 1%       | Poster with QR codes       |
+| `api_getSharedAnalytics` | < 2000ms    | < 1%       | Shared analytics dashboard |
 
 ### SLO Definitions
 
@@ -31,11 +31,11 @@ Clear performance budgets that define "fast enough" for our critical API endpoin
 
 ### Alert Thresholds
 
-| Level | p95 Latency | Error Rate | Action |
-|-------|-------------|------------|--------|
-| 🟢 Healthy | < 1500ms | < 0.5% | No action needed |
-| 🟡 Warning | 1500-2000ms | 0.5-1% | Investigate before deploy |
-| 🔴 Critical | > 2000ms | > 1% | Do not deploy, investigate |
+| Level       | p95 Latency | Error Rate | Action                     |
+| ----------- | ----------- | ---------- | -------------------------- |
+| 🟢 Healthy  | < 1500ms    | < 0.5%     | No action needed           |
+| 🟡 Warning  | 1500-2000ms | 0.5-1%     | Investigate before deploy  |
+| 🔴 Critical | > 2000ms    | > 1%       | Do not deploy, investigate |
 
 ---
 
@@ -47,11 +47,11 @@ The bundle endpoints serve the public-facing pages (Public, Display, Poster) and
 
 ### Endpoints Tested
 
-| Endpoint | Purpose | Response Includes |
-|----------|---------|-------------------|
-| `api_getPublicBundle` | Public event page | Event + brand config |
-| `api_getDisplayBundle` | TV/Display page | Event + rotation config + layout |
-| `api_getPosterBundle` | Poster/print page | Event + QR codes + print strings |
+| Endpoint                 | Purpose             | Response Includes                  |
+| ------------------------ | ------------------- | ---------------------------------- |
+| `api_getPublicBundle`    | Public event page   | Event + brand config               |
+| `api_getDisplayBundle`   | TV/Display page     | Event + rotation config + layout   |
+| `api_getPosterBundle`    | Poster/print page   | Event + QR codes + print strings   |
 | `api_getSharedAnalytics` | Analytics dashboard | Metrics + sponsor/event breakdowns |
 
 ### Load Test Configuration
@@ -66,12 +66,12 @@ The bundle endpoints serve the public-facing pages (Public, Display, Poster) and
 
 These baselines align with our SLO targets:
 
-| Metric | Public Bundle | Display Bundle | Poster Bundle | Analytics |
-|--------|---------------|----------------|---------------|-----------|
-| **p95 Latency** | < 2000ms | < 2000ms | < 2000ms | < 2000ms |
-| **Average Latency** | < 1500ms | < 1500ms | < 1500ms | < 1500ms |
-| **Error Rate** | < 1% | < 1% | < 1% | < 1% |
-| **Success Rate** | > 99% | > 99% | > 99% | > 99% |
+| Metric              | Public Bundle | Display Bundle | Poster Bundle | Analytics |
+| ------------------- | ------------- | -------------- | ------------- | --------- |
+| **p95 Latency**     | < 2000ms      | < 2000ms       | < 2000ms      | < 2000ms  |
+| **Average Latency** | < 1500ms      | < 1500ms       | < 1500ms      | < 1500ms  |
+| **Error Rate**      | < 1%          | < 1%           | < 1%          | < 1%      |
+| **Success Rate**    | > 99%         | > 99%          | > 99%         | > 99%     |
 
 ### Running the Load Test
 
@@ -111,20 +111,22 @@ poster_bundle_success......: 99.25%
 ```
 
 **Pass criteria (SLO-aligned):**
+
 - All p(95) values under 2000ms (SLO target)
 - All success rates above 99%
 - http_req_failed rate under 1%
 
 **Warning threshold:**
+
 - p(95) between 1500-2000ms indicates degradation, investigate before deploying
 
 ### Historical Baselines
 
 Record your baseline measurements here after each significant run:
 
-| Date | Environment | Public p95 | Display p95 | Poster p95 | Analytics p95 | Error Rate | Status | Notes |
-|------|-------------|------------|-------------|------------|---------------|------------|--------|-------|
-| YYYY-MM-DD | staging | TBD | TBD | TBD | TBD | TBD | - | Initial baseline |
+| Date       | Environment | Public p95 | Display p95 | Poster p95 | Analytics p95 | Error Rate | Status | Notes            |
+| ---------- | ----------- | ---------- | ----------- | ---------- | ------------- | ---------- | ------ | ---------------- |
+| YYYY-MM-DD | staging     | TBD        | TBD         | TBD        | TBD           | TBD        | -      | Initial baseline |
 
 > **Note**: Load test results are automatically appended to `tests/load/results/perf-results.csv` with timestamps.
 
@@ -138,16 +140,19 @@ Record your baseline measurements here after each significant run:
 ### Troubleshooting
 
 **High error rates:**
+
 - Check if staging environment is up
 - Verify brand ID exists
 - Check for rate limiting
 
 **Slow response times:**
+
 - Check Google Apps Script quotas
 - Verify external dependencies (quickchart.io for posters)
 - Consider cold start effects
 
 **No events found:**
+
 - Seed test data using `npm run qa:seed`
 - Verify brand has events
 
@@ -155,13 +160,13 @@ Record your baseline measurements here after each significant run:
 
 The project includes additional load tests in `tests/load/`:
 
-| Test | Purpose | Command |
-|------|---------|---------|
-| `smoke-load.js` | Baseline verification | `npm run test:load:smoke` |
+| Test              | Purpose               | Command                     |
+| ----------------- | --------------------- | --------------------------- |
+| `smoke-load.js`   | Baseline verification | `npm run test:load:smoke`   |
 | `average-load.js` | Typical usage pattern | `npm run test:load:average` |
-| `stress-load.js` | Find breaking point | `npm run test:load:stress` |
-| `spike-load.js` | Sudden traffic surge | `npm run test:load:spike` |
-| `bundle-load.js` | Bundle endpoints | `npm run test:load:bundles` |
+| `stress-load.js`  | Find breaking point   | `npm run test:load:stress`  |
+| `spike-load.js`   | Sudden traffic surge  | `npm run test:load:spike`   |
+| `bundle-load.js`  | Bundle endpoints      | `npm run test:load:bundles` |
 
 ## Performance Improvement Ideas
 

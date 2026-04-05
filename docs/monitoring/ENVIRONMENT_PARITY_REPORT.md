@@ -16,13 +16,13 @@ Staging environment (`stg.eventangle.com`) has been verified as an acceptable UA
 
 All environment configuration is now centralized in:
 
-| File | Purpose |
-|------|---------|
-| `deploy-manifest.json` | **Primary source** - URLs, deployment IDs, feature flags |
-| `config/environments.js` | Node.js environment configuration (imports from manifest) |
-| `config/feature-flags.js` | Feature flag access with staging/production defaults |
-| `cloudflare-proxy/wrangler.toml` | Cloudflare Worker environment configuration |
-| `.clasp-*.json` | Apps Script project configurations |
+| File                             | Purpose                                                   |
+| -------------------------------- | --------------------------------------------------------- |
+| `deploy-manifest.json`           | **Primary source** - URLs, deployment IDs, feature flags  |
+| `config/environments.js`         | Node.js environment configuration (imports from manifest) |
+| `config/feature-flags.js`        | Feature flag access with staging/production defaults      |
+| `cloudflare-proxy/wrangler.toml` | Cloudflare Worker environment configuration               |
+| `.clasp-*.json`                  | Apps Script project configurations                        |
 
 ---
 
@@ -30,41 +30,41 @@ All environment configuration is now centralized in:
 
 ### Must Match (Parity Required)
 
-| Configuration | Staging | Production | Status |
-|--------------|---------|------------|--------|
-| Cloudflare Zone | eventangle.com | eventangle.com | MATCH |
-| MVP Features: EVENTS | true | true | MATCH |
-| MVP Features: SPONSORS | true | true | MATCH |
-| MVP Features: ANALYTICS | true | true | MATCH |
-| MVP Features: FORMS | true | true | MATCH |
-| MVP Features: SHORTLINKS | true | true | MATCH |
-| MVP Features: PORTFOLIO_ANALYTICS | true | true | MATCH |
-| V2 Features: TEMPLATE_MANAGEMENT_V2 | false | false | MATCH |
-| V2 Features: PORTFOLIO_V2 | false | false | MATCH |
-| Valid Brands | root, abc, cbc, cbl | root, abc, cbc, cbl | MATCH |
-| Default Brand | root | root | MATCH |
-| API Schema Version | Same | Same | MATCH |
+| Configuration                       | Staging             | Production          | Status |
+| ----------------------------------- | ------------------- | ------------------- | ------ |
+| Cloudflare Zone                     | eventangle.com      | eventangle.com      | MATCH  |
+| MVP Features: EVENTS                | true                | true                | MATCH  |
+| MVP Features: SPONSORS              | true                | true                | MATCH  |
+| MVP Features: ANALYTICS             | true                | true                | MATCH  |
+| MVP Features: FORMS                 | true                | true                | MATCH  |
+| MVP Features: SHORTLINKS            | true                | true                | MATCH  |
+| MVP Features: PORTFOLIO_ANALYTICS   | true                | true                | MATCH  |
+| V2 Features: TEMPLATE_MANAGEMENT_V2 | false               | false               | MATCH  |
+| V2 Features: PORTFOLIO_V2           | false               | false               | MATCH  |
+| Valid Brands                        | root, abc, cbc, cbl | root, abc, cbc, cbl | MATCH  |
+| Default Brand                       | root                | root                | MATCH  |
+| API Schema Version                  | Same                | Same                | MATCH  |
 
 ### Allowed Differences (By Design)
 
-| Configuration | Staging | Production | Reason |
-|--------------|---------|------------|--------|
-| Base URL | https://stg.eventangle.com | https://www.eventangle.com | Different domains |
-| API URL | https://api-stg.eventangle.com | https://api.eventangle.com | Different domains |
-| Worker Name | eventangle-staging | eventangle-prod | Different workers |
-| Worker Routes | stg.eventangle.com/* | eventangle.com/*, www.eventangle.com/* | Different domains |
-| Script ID | 1gHiPuj7e... | 1YO4apLOQ... | Separate GAS projects |
-| Deployment ID | AKfycbwFne... | AKfycbz-RV... | Separate deployments |
-| Debug Level | debug | error | More logging in staging |
-| Debug Endpoints | true | false | Security (disabled in prod) |
-| DEMO_MODE_ENABLED | true | false | Testing in staging only |
-| DEBUG_PANEL | true | false | Testing in staging only |
-| API_TIMING_LOGS | true | false | Testing in staging only |
-| ERROR_DETAILS | true | false | Security (hide in prod) |
-| SAMPLE_DATA_PREFILL | true | false | Testing in staging only |
-| FEATURE_HIGHLIGHTING | true | false | Testing in staging only |
-| CONSOLE_LOGGING | true | false | Performance (off in prod) |
-| Experimental Features | true | false | Validation before production |
+| Configuration         | Staging                        | Production                             | Reason                       |
+| --------------------- | ------------------------------ | -------------------------------------- | ---------------------------- |
+| Base URL              | https://stg.eventangle.com     | https://www.eventangle.com             | Different domains            |
+| API URL               | https://api-stg.eventangle.com | https://api.eventangle.com             | Different domains            |
+| Worker Name           | eventangle-staging             | eventangle-prod                        | Different workers            |
+| Worker Routes         | stg.eventangle.com/\*          | eventangle.com/_, www.eventangle.com/_ | Different domains            |
+| Script ID             | 1gHiPuj7e...                   | 1YO4apLOQ...                           | Separate GAS projects        |
+| Deployment ID         | AKfycbwFne...                  | AKfycbz-RV...                          | Separate deployments         |
+| Debug Level           | debug                          | error                                  | More logging in staging      |
+| Debug Endpoints       | true                           | false                                  | Security (disabled in prod)  |
+| DEMO_MODE_ENABLED     | true                           | false                                  | Testing in staging only      |
+| DEBUG_PANEL           | true                           | false                                  | Testing in staging only      |
+| API_TIMING_LOGS       | true                           | false                                  | Testing in staging only      |
+| ERROR_DETAILS         | true                           | false                                  | Security (hide in prod)      |
+| SAMPLE_DATA_PREFILL   | true                           | false                                  | Testing in staging only      |
+| FEATURE_HIGHLIGHTING  | true                           | false                                  | Testing in staging only      |
+| CONSOLE_LOGGING       | true                           | false                                  | Performance (off in prod)    |
+| Experimental Features | true                           | false                                  | Validation before production |
 
 ---
 
@@ -104,16 +104,16 @@ All environment configuration is now centralized in:
 
 All critical user journeys verified to work identically in staging and production:
 
-| Journey | Staging Verified | Production Equivalent |
-|---------|-----------------|----------------------|
-| View Public Events | `stg.eventangle.com/events` | `www.eventangle.com/events` |
-| Admin Login | `stg.eventangle.com/manage` | `www.eventangle.com/manage` |
-| Create Event | Admin CRUD operations | Same API endpoints |
-| Sponsor Management | Sponsor CRUD operations | Same API endpoints |
-| Display Mode | `stg.eventangle.com/display` | `www.eventangle.com/display` |
-| Status Check | `stg.eventangle.com/status` | `www.eventangle.com/status` |
+| Journey             | Staging Verified                | Production Equivalent           |
+| ------------------- | ------------------------------- | ------------------------------- |
+| View Public Events  | `stg.eventangle.com/events`     | `www.eventangle.com/events`     |
+| Admin Login         | `stg.eventangle.com/manage`     | `www.eventangle.com/manage`     |
+| Create Event        | Admin CRUD operations           | Same API endpoints              |
+| Sponsor Management  | Sponsor CRUD operations         | Same API endpoints              |
+| Display Mode        | `stg.eventangle.com/display`    | `www.eventangle.com/display`    |
+| Status Check        | `stg.eventangle.com/status`     | `www.eventangle.com/status`     |
 | Multi-brand Routing | `stg.eventangle.com/abc/events` | `www.eventangle.com/abc/events` |
-| Analytics/Reports | Report pages | Same functionality |
+| Analytics/Reports   | Report pages                    | Same functionality              |
 
 ---
 
@@ -155,11 +155,11 @@ node -e "require('./config/feature-flags').printFeatureFlagInfo()"
 
 ## Audit Trail
 
-| Date | Action | Performed By |
-|------|--------|-------------|
-| 2025-12-10 | Initial parity audit | Story 1.4 Implementation |
+| Date       | Action                                | Performed By             |
+| ---------- | ------------------------------------- | ------------------------ |
+| 2025-12-10 | Initial parity audit                  | Story 1.4 Implementation |
 | 2025-12-10 | Feature flags centralized in manifest | Story 1.4 Implementation |
-| 2025-12-10 | Parity comparison script created | Story 1.4 Implementation |
+| 2025-12-10 | Parity comparison script created      | Story 1.4 Implementation |
 
 ---
 

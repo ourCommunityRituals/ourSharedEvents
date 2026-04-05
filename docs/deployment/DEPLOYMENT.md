@@ -31,6 +31,7 @@ npm run ci:all
 ```
 
 This unified gate chains all required tests for production release:
+
 1. `test:ci:stage1` — lint + unit tests + contract tests
 2. `test:api-contracts` — explicit API contract validation
 3. `test:smoke` — smoke tests (requires Playwright)
@@ -50,6 +51,7 @@ npm run test:ci:stage1
 ```
 
 This runs:
+
 - `npm run lint` - ESLint code quality
 - `npm run test:unit` - Unit tests (~512 tests)
 - `npm run test:contract` - Contract tests (~155 tests)
@@ -67,6 +69,7 @@ npm run test:ci:stage2
 ```
 
 This runs:
+
 - `npm run test:api` - API integration tests
 - `npm run test:fe` - Frontend E2E (smoke + pages + flows)
 
@@ -76,13 +79,14 @@ Requires `BASE_URL` environment variable pointing to deployed app.
 
 ## Current Live Build
 
-| Field | Value |
-|-------|-------|
-| **BUILD_ID** | Check Admin footer or `?p=status&brand=root` |
+| Field              | Value                                                                                                              |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------ |
+| **BUILD_ID**       | Check Admin footer or `?p=status&brand=root`                                                                       |
 | **Deployment URL** | https://script.google.com/macros/s/AKfycbxaTPh3FS4NHJblIcUrz4k01kWAdxsKzLNnYRf0TXe18lBditTm3hqbBoQ4ZxbGhhGuCA/exec |
-| **Custom Domain** | eventangle.com |
+| **Custom Domain**  | eventangle.com                                                                                                     |
 
 To check current version:
+
 ```bash
 curl "DEPLOYMENT_URL?p=status&brand=root" | jq '.value.version'
 ```
@@ -109,6 +113,7 @@ git push origin main
 ```
 
 The CI pipeline will:
+
 1. Run all tests (lint, unit, contract, MVP guards)
 2. **Deploy only if ALL tests pass**
 3. Trigger Stage 2 E2E testing
@@ -137,27 +142,27 @@ npm run deploy  # Create new deployment (dev/stage only)
 
 ### Google Cloud Project
 
-| Setting | Value |
-|---------|-------|
-| **Project ID** | `zeventbooks` |
-| **Console** | https://console.cloud.google.com/home/dashboard?project=zeventbooks |
+| Setting              | Value                                                                          |
+| -------------------- | ------------------------------------------------------------------------------ |
+| **Project ID**       | `zeventbooks`                                                                  |
+| **Console**          | https://console.cloud.google.com/home/dashboard?project=zeventbooks            |
 | **Service Accounts** | https://console.cloud.google.com/iam-admin/serviceaccounts?project=zeventbooks |
 
 ### Apps Script Project
 
-| Setting | Value |
-|---------|-------|
-| **Script ID** | `1YO4apLOQoAIh208AcAqWO3pWtx_O3yas_QC4z-pkurgMem9UgYOsp86l` |
-| **Project URL** | https://script.google.com/home/projects/1YO4apLOQoAIh208AcAqWO3pWtx_O3yas_QC4z-pkurgMem9UgYOsp86l/edit |
+| Setting            | Value                                                                                                              |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------ |
+| **Script ID**      | `1YO4apLOQoAIh208AcAqWO3pWtx_O3yas_QC4z-pkurgMem9UgYOsp86l`                                                        |
+| **Project URL**    | https://script.google.com/home/projects/1YO4apLOQoAIh208AcAqWO3pWtx_O3yas_QC4z-pkurgMem9UgYOsp86l/edit             |
 | **Deployment URL** | https://script.google.com/macros/s/AKfycbxaTPh3FS4NHJblIcUrz4k01kWAdxsKzLNnYRf0TXe18lBditTm3hqbBoQ4ZxbGhhGuCA/exec |
 
 ### Service Account
 
-| Setting | Value |
-|---------|-------|
-| **Email** | `apps-script-deployer@zeventbooks.iam.gserviceaccount.com` |
-| **Unique ID** | `103062520768864288562` |
-| **Purpose** | Automated CI/CD deployment |
+| Setting             | Value                                                           |
+| ------------------- | --------------------------------------------------------------- |
+| **Email**           | `apps-script-deployer@zeventbooks.iam.gserviceaccount.com`      |
+| **Unique ID**       | `103062520768864288562`                                         |
+| **Purpose**         | Automated CI/CD deployment                                      |
 | **Required Scopes** | `script.projects`, `script.deployments`, `script.webapp.deploy` |
 
 ---
@@ -166,11 +171,11 @@ npm run deploy  # Create new deployment (dev/stage only)
 
 > **See [ENVIRONMENT_MATRIX.md](../ENVIRONMENT_MATRIX.md) for the authoritative environment reference.**
 
-| Environment | URL | Cloudflare Env | Purpose |
-|-------------|-----|----------------|---------|
-| **Staging** | `https://stg.eventangle.com` | `[env.staging]` | Testing & validation (default for tests) |
-| **Production** | `https://www.eventangle.com` | `[env.production]` | Live application (CI-only deploy) |
-| **QA** | `https://zeventbooks.com` | - | Secondary testing |
+| Environment    | URL                          | Cloudflare Env     | Purpose                                  |
+| -------------- | ---------------------------- | ------------------ | ---------------------------------------- |
+| **Staging**    | `https://stg.eventangle.com` | `[env.staging]`    | Testing & validation (default for tests) |
+| **Production** | `https://www.eventangle.com` | `[env.production]` | Live application (CI-only deploy)        |
+| **QA**         | `https://zeventbooks.com`    | -                  | Secondary testing                        |
 
 ### Brand-Specific Access
 
@@ -229,20 +234,22 @@ Push to main
 
 The Stage-2 workflow runs comprehensive E2E tests after each staging deployment:
 
-| Test Suite | Description | Environment |
-|------------|-------------|-------------|
+| Test Suite                | Description                                 | Environment          |
+| ------------------------- | ------------------------------------------- | -------------------- |
 | **Environment Alignment** | Verifies Worker ↔ GAS deployment IDs match | Staging + Production |
-| **API Smoke Tests** | Validates API contracts, status endpoints | Staging + Production |
-| **UI Smoke Tests** | All 5 surfaces load correctly | Staging + Production |
-| **E2E Critical Journeys** | 10 user journeys (creates test data) | Staging only |
+| **API Smoke Tests**       | Validates API contracts, status endpoints   | Staging + Production |
+| **UI Smoke Tests**        | All 5 surfaces load correctly               | Staging + Production |
+| **E2E Critical Journeys** | 10 user journeys (creates test data)        | Staging only         |
 
 **Progressive Test Gates:**
+
 - Tests run in sequence with fail-fast behavior
 - If API tests fail → UI tests are SKIPPED
 - If any test fails → Deployment is marked FAILED
 - Notifications sent via Slack/Teams on failure
 
 **Artifacts Captured:**
+
 - Screenshots (all tests)
 - Videos (on failure)
 - Traces (on failure)
@@ -256,6 +263,7 @@ The Stage-2 workflow runs comprehensive E2E tests after each staging deployment:
 4. Check the workflow summary for quick failure overview
 
 **Common Failure Causes:**
+
 - GAS cold start timeouts (retries usually handle this)
 - Test data conflicts (tests use unique timestamps)
 - UI selector changes not reflected in tests
@@ -277,6 +285,7 @@ A separate workflow runs read-only E2E tests against production nightly:
 **Use `npm run ci:all` as the single gate for production releases.**
 
 All of these must pass:
+
 - Lint
 - Unit Tests (>80% coverage)
 - Contract Tests
@@ -284,9 +293,11 @@ All of these must pass:
 - E2E Smoke Tests
 
 Optional (via `npm run ci:all:full`):
+
 - E2E Negative Tests
 
 Post-deploy verification:
+
 - E2E Page Tests
 - E2E Flow Tests
 
@@ -296,11 +307,11 @@ Post-deploy verification:
 
 Configure at: https://github.com/zeventbooks/MVP-EVENT-TOOLKIT/settings/secrets/actions
 
-| Secret | Purpose |
-|--------|---------|
-| `APPS_SCRIPT_SERVICE_ACCOUNT_JSON` | Service account key (complete JSON file) |
-| `SCRIPT_ID` | `1YO4apLOQoAIh208AcAqWO3pWtx_O3yas_QC4z-pkurgMem9UgYOsp86l` |
-| `ADMIN_KEY_ROOT` | Admin API key for testing |
+| Secret                             | Purpose                                                     |
+| ---------------------------------- | ----------------------------------------------------------- |
+| `APPS_SCRIPT_SERVICE_ACCOUNT_JSON` | Service account key (complete JSON file)                    |
+| `SCRIPT_ID`                        | `1YO4apLOQoAIh208AcAqWO3pWtx_O3yas_QC4z-pkurgMem9UgYOsp86l` |
+| `ADMIN_KEY_ROOT`                   | Admin API key for testing                                   |
 
 ---
 
@@ -348,6 +359,7 @@ The QA environment (zeventbooks.com) uses Cloudflare Workers to proxy requests t
    - See `/cloudflare-proxy/CLOUDFLARE_SETUP.md` for manual configuration
 
 3. **Test It**
+
    ```bash
    curl -I https://zeventbooks.com/status
    # Should return 200 with content from Apps Script
@@ -441,6 +453,7 @@ BASE_URL="https://staging.zeventbooks.com" npm run test:smoke
 ```
 
 **Key Points:**
+
 - Default URL: `https://eventangle.com` (production via Cloudflare Workers)
 - No code changes needed to switch environments
 - Tests auto-detect environment type (GAS vs Cloudflare)
@@ -457,6 +470,7 @@ curl "YOUR_DEPLOYMENT_URL?p=setup&brand=root"
 ```
 
 This checks:
+
 - Brand configuration
 - Spreadsheet access
 - Admin secrets
@@ -471,19 +485,20 @@ curl "YOUR_DEPLOYMENT_URL?p=status&brand=root"
 ```
 
 Expected:
+
 ```json
 { "ok": true, "value": { "status": "healthy" } }
 ```
 
 ### Test All Surfaces
 
-| Surface | URL |
-|---------|-----|
-| Admin | `?p=admin&brand=root` |
-| Public | `?p=public&brand=root` |
-| Display | `?p=display&brand=root` |
-| Poster | `?p=poster&brand=root&eventId=EVT_xxx` |
-| Status | `?p=status&brand=root` |
+| Surface | URL                                    |
+| ------- | -------------------------------------- |
+| Admin   | `?p=admin&brand=root`                  |
+| Public  | `?p=public&brand=root`                 |
+| Display | `?p=display&brand=root`                |
+| Poster  | `?p=poster&brand=root&eventId=EVT_xxx` |
+| Status  | `?p=status&brand=root`                 |
 
 ---
 
@@ -494,6 +509,7 @@ Expected:
 **This causes 90% of deployment failures.**
 
 **Fix:**
+
 1. Go to: https://script.google.com/home/usersettings
 2. Toggle ON: "Google Apps Script API"
 3. Wait 2-5 minutes
@@ -502,6 +518,7 @@ Expected:
 ### "Script not found"
 
 **Fix:**
+
 1. Verify `SCRIPT_ID` is correct
 2. Check service account has Editor access
 3. Run: `clasp open` to verify access
@@ -509,6 +526,7 @@ Expected:
 ### "Token expired"
 
 **Fix:**
+
 1. Re-login: `clasp login`
 2. Get new `.clasprc.json` contents
 3. Update `CLASPRC_JSON` GitHub secret
@@ -516,6 +534,7 @@ Expected:
 ### "Permission denied"
 
 **Fix:**
+
 1. Share Apps Script project with service account
 2. Grant **Editor** access
 3. Retry deployment
@@ -523,6 +542,7 @@ Expected:
 ### CLASPRC_JSON validation fails
 
 **Fix:**
+
 1. Run: `./scripts/validate-clasp-setup.sh`
 2. Check JSON: `cat ~/.clasprc.json | jq .`
 3. Re-login: `clasp logout && clasp login`
@@ -531,6 +551,7 @@ Expected:
 ### QA environment not accessible
 
 **Fix:**
+
 1. Check Cloudflare Worker is deployed and running
 2. Verify Apps Script deployment ID in worker configuration
 3. Test Apps Script URL directly
@@ -554,32 +575,32 @@ Expected:
 
 12 files form the runtime spine:
 
-| File | Purpose |
-|------|---------|
-| Code.gs | Router + API endpoints |
-| Config.gs | Brands, templates, feature flags |
-| TemplateService.gs | Event templates |
-| ApiSchemas.gs | API contracts |
-| EventService.gs | Event CRUD |
-| FormService.gs | Google Forms |
-| SponsorService.gs | Sponsor management |
-| SharedReporting.gs | Analytics views |
-| AnalyticsService.gs | Logging |
-| SecurityMiddleware.gs | Auth/security |
-| i18nService.gs | Multi-lang (deferred) |
-| WebhookService.gs | Integrations (deferred) |
+| File                  | Purpose                          |
+| --------------------- | -------------------------------- |
+| Code.gs               | Router + API endpoints           |
+| Config.gs             | Brands, templates, feature flags |
+| TemplateService.gs    | Event templates                  |
+| ApiSchemas.gs         | API contracts                    |
+| EventService.gs       | Event CRUD                       |
+| FormService.gs        | Google Forms                     |
+| SponsorService.gs     | Sponsor management               |
+| SharedReporting.gs    | Analytics views                  |
+| AnalyticsService.gs   | Logging                          |
+| SecurityMiddleware.gs | Auth/security                    |
+| i18nService.gs        | Multi-lang (deferred)            |
+| WebhookService.gs     | Integrations (deferred)          |
 
 ### Frontend (.html)
 
 5 MVP surfaces + supporting files:
 
-| File | Purpose |
-|------|---------|
-| Admin.html | Event management |
-| Public.html | Mobile event page |
-| Display.html | TV/kiosk display |
-| Poster.html | Print/QR |
-| SharedReport.html | Analytics |
+| File              | Purpose           |
+| ----------------- | ----------------- |
+| Admin.html        | Event management  |
+| Public.html       | Mobile event page |
+| Display.html      | TV/kiosk display  |
+| Poster.html       | Print/QR          |
+| SharedReport.html | Analytics         |
 
 ---
 
@@ -593,4 +614,4 @@ Expected:
 
 ---
 
-*Deployment Guide - MVP v1.0*
+_Deployment Guide - MVP v1.0_

@@ -13,19 +13,10 @@
 const enc = require('./midwest-enc');
 const wnc = require('./midwest-wnc');
 
-const territories = Object.freeze([
-  ...(enc.territories || []),
-  ...(wnc.territories || []),
-]);
+const territories = Object.freeze([...(enc.territories || []), ...(wnc.territories || [])]);
 
-const states = Object.freeze([
-  ...(enc.states || []),
-  ...(wnc.states || []),
-]);
+const states = Object.freeze([...(enc.states || []), ...(wnc.states || [])]);
 
-const nodes = Object.freeze([
-  ...enc.nodes,
-  ...wnc.nodes,
-]);
+const nodes = Object.freeze([...enc.nodes, ...wnc.nodes]);
 
 module.exports = { territories, states, nodes };

@@ -8,6 +8,7 @@ to accept HTTP requests from the Cloudflare Worker on staging.
 ## TL;DR
 
 The GAS web app must be deployed with:
+
 - **Execute as**: "Me" (the owner)
 - **Who has access**: "Anyone" (not "Anyone with Google account")
 
@@ -15,6 +16,7 @@ The GAS web app must be deployed with:
 
 When the Cloudflare Worker on `stg.eventangle.com` sends POST requests to the
 GAS backend, the requests were being rejected with either:
+
 - HTTP 403 (permission denied)
 - HTML error page ("Sorry, unable to open the file")
 
@@ -37,9 +39,9 @@ hostnames: [
   'www.zeventbook.io',
   'eventangle.com',
   'www.eventangle.com',
-  'stg.eventangle.com',      // Added for staging
-  'api-stg.eventangle.com'   // Added for staging API
-]
+  'stg.eventangle.com', // Added for staging
+  'api-stg.eventangle.com', // Added for staging API
+];
 ```
 
 ### 2. Web App Deployment Permissions
@@ -71,6 +73,7 @@ doesn't have Google credentials) cannot access the API.
 5. Copy the deployment ID (starts with `AKfycb...`)
 
 6. Update `wrangler.toml`:
+
    ```toml
    STAGING_DEPLOYMENT_ID = "AKfycb..."
    STAGING_WEB_APP_URL = "https://script.google.com/macros/s/AKfycb.../exec"
@@ -98,12 +101,12 @@ npm run deploy:staging
 
 The staging Worker uses these environment variables:
 
-| Variable | Purpose | Status |
-|----------|---------|--------|
-| `STAGING_WEB_APP_URL` | Full GAS URL (single source of truth) | **Primary** |
-| `STAGING_DEPLOYMENT_ID` | Deployment ID for reference | **Primary** |
-| `GAS_DEPLOYMENT_BASE_URL` | Legacy alias | **Deprecated** |
-| `DEPLOYMENT_ID` | Legacy alias | **Deprecated** |
+| Variable                  | Purpose                               | Status         |
+| ------------------------- | ------------------------------------- | -------------- |
+| `STAGING_WEB_APP_URL`     | Full GAS URL (single source of truth) | **Primary**    |
+| `STAGING_DEPLOYMENT_ID`   | Deployment ID for reference           | **Primary**    |
+| `GAS_DEPLOYMENT_BASE_URL` | Legacy alias                          | **Deprecated** |
+| `DEPLOYMENT_ID`           | Legacy alias                          | **Deprecated** |
 
 **Important**: Always update `STAGING_WEB_APP_URL` when creating new deployments.
 
@@ -116,6 +119,7 @@ After deployment, run the smoke test:
 ```
 
 Expected output:
+
 - Test 1 (Direct GAS): HTTP 200, valid JSON with `ok: true`
 - Test 2 (Worker proxy): HTTP 200, valid JSON with `ok: true`
 - Test 3 (Invalid method): HTTP 200, JSON with `ok: false`
@@ -145,6 +149,7 @@ curl -X POST https://stg.eventangle.com/api/rpc \
 ```
 
 Response:
+
 ```json
 {
   "ok": false,
@@ -180,6 +185,7 @@ Add the hostname and redeploy.
 ### Worker Returns 503
 
 Check that:
+
 1. `STAGING_WEB_APP_URL` in `wrangler.toml` is correct
 2. Worker is deployed: `wrangler deploy`
 3. DNS is configured for `stg.eventangle.com`
@@ -198,10 +204,10 @@ wrangler tail --env staging
 
 ## File Changes (Story 2)
 
-| File | Change |
-|------|--------|
-| `src/mvp/Config.gs` | Added staging hostnames to BRANDS |
-| `wrangler.toml` | Marked legacy env vars as deprecated |
-| `cloudflare-proxy/wrangler.toml` | Marked legacy env vars as deprecated |
-| `scripts/check-staging-api-list-events.sh` | New smoke test script |
-| `docs/STAGING_GAS_PERMISSIONS.md` | This documentation |
+| File                                       | Change                               |
+| ------------------------------------------ | ------------------------------------ |
+| `src/mvp/Config.gs`                        | Added staging hostnames to BRANDS    |
+| `wrangler.toml`                            | Marked legacy env vars as deprecated |
+| `cloudflare-proxy/wrangler.toml`           | Marked legacy env vars as deprecated |
+| `scripts/check-staging-api-list-events.sh` | New smoke test script                |
+| `docs/STAGING_GAS_PERMISSIONS.md`          | This documentation                   |

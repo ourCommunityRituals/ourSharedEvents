@@ -16,23 +16,25 @@ NCR v2 introduces a 7-level hierarchy that enables the platform to reason about 
 
 Adopt a 7-level geographic node hierarchy with corridor connections:
 
-| Level | Label | Example |
-|-------|-------|---------|
-| 1 | Community | Single venue cluster, neighborhood block |
-| 2 | District | Multi-block area, ward-level |
-| 3 | Zone | Named neighborhood (Beverly, Bronzeville, Evergreen Park) |
-| 4 | Metro | City (Chicago, Detroit, Milwaukee) |
-| 5 | Region | Multi-city corridor (Chicago→Detroit via I-94) |
-| 6 | Territory | State/multi-state (Great Lakes) |
-| 7 | Network | Full platform network |
+| Level | Label     | Example                                                   |
+| ----- | --------- | --------------------------------------------------------- |
+| 1     | Community | Single venue cluster, neighborhood block                  |
+| 2     | District  | Multi-block area, ward-level                              |
+| 3     | Zone      | Named neighborhood (Beverly, Bronzeville, Evergreen Park) |
+| 4     | Metro     | City (Chicago, Detroit, Milwaukee)                        |
+| 5     | Region    | Multi-city corridor (Chicago→Detroit via I-94)            |
+| 6     | Territory | State/multi-state (Great Lakes)                           |
+| 7     | Network   | Full platform network                                     |
 
 Corridors connect nodes (primarily Level 4+ metros) with signal taxonomy:
+
 - **SIGNAL_PRESENCE** (legacy CLASS_A): Poster/tabletop scan. Proves proximity to a node but NOT corridor crossing. Cannot validate a corridor alone. Useful as denominator — establishes the pre-event population pool at a node.
 - **SIGNAL_BEHAVIORAL** (legacy CLASS_B): Event attendance via QR funnel. Proves intentional behavior — someone chose to attend an event at a specific community. Primary signal for corridor validation. Conversion rate (PRESENCE pool → BEHAVIORAL crossings) measures corridor strength.
 
 Corridor status lifecycle: `HYPOTHESIZED` → `VALIDATED`
 
 Corridor directionality:
+
 - **UNIDIRECTIONAL**: Signal observed in one direction only (A→B but not B→A). Sufficient for corridor validation. NOT sufficient for ring membership.
 - **BIDIRECTIONAL**: Signal observed in both directions. Required for core ring nodes.
 - **UNKNOWN**: Not yet measured.
@@ -90,12 +92,12 @@ REVERB:
 
 Nodes activate through successive waves of event types:
 
-| Wave | Verticals | Legal Tier | Timeline |
-|------|-----------|------------|----------|
-| 1 | Sports, dance, gymnastics, rec leagues | OPEN | Now |
-| 2 | School-funded gatherings, youth events | RESTRICTED (COPPA) | Next |
-| 3 | Museums, art institutes, school functions | REGULATED (HIPAA) | Post-legal |
-| 4 | Every public/private event along routes | OPEN | Scale |
+| Wave | Verticals                                 | Legal Tier         | Timeline   |
+| ---- | ----------------------------------------- | ------------------ | ---------- |
+| 1    | Sports, dance, gymnastics, rec leagues    | OPEN               | Now        |
+| 2    | School-funded gatherings, youth events    | RESTRICTED (COPPA) | Next       |
+| 3    | Museums, art institutes, school functions | REGULATED (HIPAA)  | Post-legal |
+| 4    | Every public/private event along routes   | OPEN               | Scale      |
 
 Wave 4 is where corridors span into countryside — where people actually live. The route towns between metros (Kalamazoo, Rockford, Bloomington-Normal, Lafayette) are not just waypoints. They're communities with their own event ecosystems waiting to activate.
 

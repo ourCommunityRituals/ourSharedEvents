@@ -23,10 +23,10 @@ This policy exists to prevent "random Tuesday" outages caused by bypassing safet
 
 Staging and production use **completely separate** Apps Script projects:
 
-| Environment | Script ID | Trigger |
-|-------------|-----------|---------|
-| **Staging** | `1gHiPuj7eXNk09dDyk17SJ6QsCJg7LMqXBRrkowljL3z2TaAKFIvBLhHJ` | Push to `main` |
-| **Production** | `1YO4apLOQoAIh208AcAqWO3pWtx_O3yas_QC4z-pkurgMem9UgYOsp86l` | Tag `vX.Y.Z` |
+| Environment    | Script ID                                                   | Trigger        |
+| -------------- | ----------------------------------------------------------- | -------------- |
+| **Staging**    | `1gHiPuj7eXNk09dDyk17SJ6QsCJg7LMqXBRrkowljL3z2TaAKFIvBLhHJ` | Push to `main` |
+| **Production** | `1YO4apLOQoAIh208AcAqWO3pWtx_O3yas_QC4z-pkurgMem9UgYOsp86l` | Tag `vX.Y.Z`   |
 
 ### How Manual Production Deploys Are Blocked
 
@@ -38,11 +38,13 @@ Staging and production use **completely separate** Apps Script projects:
 ### Verification After Deployment
 
 After a staging deployment:
+
 - Check [Staging Deployments](https://script.google.com/home/projects/1gHiPuj7eXNk09dDyk17SJ6QsCJg7LMqXBRrkowljL3z2TaAKFIvBLhHJ/deployments)
 - Verify new version appears under the **staging** project
 - Confirm production project is **unchanged**
 
 After a production deployment:
+
 - Check [Production Deployments](https://script.google.com/home/projects/1YO4apLOQoAIh208AcAqWO3pWtx_O3yas_QC4z-pkurgMem9UgYOsp86l/deployments)
 - Verify new version appears under the **production** project
 - Confirm staging project is **unchanged**
@@ -51,15 +53,15 @@ After a production deployment:
 
 ## Why CI-Only?
 
-| Risk | Without CI | With CI |
-|------|-----------|---------|
-| Untested code in prod | Possible | Blocked |
-| Schema drift | Undetected | Caught by contract tests |
-| Syntax errors | Live in prod | Caught by lint |
-| Regressions | Undetected | Caught by unit tests |
-| Broken API contracts | Live in prod | Caught by E2E tests |
-| Audit trail | None | Full git history |
-| Rollback capability | Manual guesswork | Versioned deployments |
+| Risk                  | Without CI       | With CI                  |
+| --------------------- | ---------------- | ------------------------ |
+| Untested code in prod | Possible         | Blocked                  |
+| Schema drift          | Undetected       | Caught by contract tests |
+| Syntax errors         | Live in prod     | Caught by lint           |
+| Regressions           | Undetected       | Caught by unit tests     |
+| Broken API contracts  | Live in prod     | Caught by E2E tests      |
+| Audit trail           | None             | Full git history         |
+| Rollback capability   | Manual guesswork | Versioned deployments    |
 
 ---
 
@@ -99,20 +101,22 @@ Production Live
 
 ### ALLOWED: GitHub Actions (Production)
 
-| Trigger | Target | Result |
-|---------|--------|--------|
-| Push to `main` | Staging | Build + Test + Deploy to **Staging** |
-| Tag `vX.Y.Z` | Production | Build + Test + Deploy to **Production** |
-| PR to `main` | - | Build + Test (no deploy) |
+| Trigger        | Target     | Result                                  |
+| -------------- | ---------- | --------------------------------------- |
+| Push to `main` | Staging    | Build + Test + Deploy to **Staging**    |
+| Tag `vX.Y.Z`   | Production | Build + Test + Deploy to **Production** |
+| PR to `main`   | -          | Build + Test (no deploy)                |
 
 **Workflow:** `.github/workflows/stage1.yml`
 
 **Story 1.3 Enforcement:**
+
 - Staging deploys use `STAGING_SCRIPT_ID` (from GitHub secret or `deploy-manifest.json`)
 - Production deploys use `PROD_SCRIPT_ID` (from `deploy-manifest.json` only)
 - CI dynamically configures `.clasp.json` with the correct Script ID for each environment
 
 The workflow:
+
 1. Runs lint, unit tests, contract tests, MVP guards
 2. **Only deploys if ALL tests pass**
 3. Only deploys on push to `main` or `release/*` branches
@@ -122,12 +126,12 @@ The workflow:
 
 These methods are **DEV/STAGE ONLY**:
 
-| Method | Status | Use Case |
-|--------|--------|----------|
-| `clasp push` | Dev/Stage only | Local development |
-| `clasp deploy` | Dev/Stage only | Creating test deployments |
-| Apps Script Editor | Dev/Stage only | Quick debugging |
-| Copy/paste code | Dev/Stage only | Never recommended |
+| Method             | Status         | Use Case                  |
+| ------------------ | -------------- | ------------------------- |
+| `clasp push`       | Dev/Stage only | Local development         |
+| `clasp deploy`     | Dev/Stage only | Creating test deployments |
+| Apps Script Editor | Dev/Stage only | Quick debugging           |
+| Copy/paste code    | Dev/Stage only | Never recommended         |
 
 **If you find yourself tempted to use these for production, STOP and create a PR.**
 
@@ -197,15 +201,16 @@ This policy is enforced by:
 
 The CI pipeline uses these secrets (configured by admins only):
 
-| Secret | Purpose | Required |
-|--------|---------|----------|
-| `OAUTH_CREDENTIALS` | Clasp OAuth credentials (JSON) | Yes |
-| `STAGING_SCRIPT_ID` | Override staging Script ID (Story 1.3) | Optional |
-| `DEPLOYMENT_ID` | Production deployment ID | Optional |
-| `CLOUDFLARE_API_TOKEN` | Cloudflare Worker deployment | Optional |
-| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare account | Optional |
+| Secret                  | Purpose                                | Required |
+| ----------------------- | -------------------------------------- | -------- |
+| `OAUTH_CREDENTIALS`     | Clasp OAuth credentials (JSON)         | Yes      |
+| `STAGING_SCRIPT_ID`     | Override staging Script ID (Story 1.3) | Optional |
+| `DEPLOYMENT_ID`         | Production deployment ID               | Optional |
+| `CLOUDFLARE_API_TOKEN`  | Cloudflare Worker deployment           | Optional |
+| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare account                     | Optional |
 
 **Notes:**
+
 - `STAGING_SCRIPT_ID` is optional - defaults to value in `deploy-manifest.json`
 - Production Script ID (`PROD_SCRIPT_ID`) is **never** stored as a secret - it comes from `deploy-manifest.json` only
 

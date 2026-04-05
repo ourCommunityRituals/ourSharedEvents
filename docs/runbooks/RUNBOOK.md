@@ -1,419 +1,10 @@
-# OurSharedEvents — Operations Runbook
+# Operations Runbook
 
-> **Linear:** OUR-130 (HK-7) — Backfill RUNBOOK.md escalation contacts + monitoring links
->
-> **Last Updated:** 2026-03-31
+This runbook provides step-by-step procedures for diagnosing and resolving common production issues.
 
 ---
 
 ## Quick Reference
-
-### Escalation Contacts
-
-| Role                             | Contact                              | When to Escalate                 |
-| -------------------------------- | ------------------------------------ | -------------------------------- |
-| Primary On-Call / Platform Owner | Matt — ourcommunityrituals@gmail.com | All incidents, first contact     |
-| Cloudflare / DNS                 | Matt via Cloudflare Dashboard        | Worker failures, DNS issues      |
-| Google Sheets / GCP              | Matt via Google Cloud Console        | Auth failures, Sheets API issues |
-
-> **Note:** This is a solo-operated platform. Matt is the single on-call for all incident types.
-
-### Health Check URLs
-
-| Environment | URL                                      | Expected Response                                |
-| ----------- | ---------------------------------------- | ------------------------------------------------ |
-| Staging     | `https://stg.oursharedevents.com/health` | `{"ok":true,"env":"staging","version":"..."}`    |
-| Production  | `https://oursharedevents.com/health`     | `{"ok":true,"env":"production","version":"..."}` |
-
-### Quick Commands
-
-```bash
-# Staging health check
-curl -s https://stg.oursharedevents.com/health | jq
-
-# Production health check
-curl -s https://oursharedevents.com/health | jq
-
-# Staging events API (public)
-curl -s https://stg.oursharedevents.com/api/v2/events | jq
-
-# Staging admin events API (requires Bearer token)
-curl -s -H "Authorization: Bearer $ADMIN_KEY" \
-  https://stg.oursharedevents.com/api/v2/admin/events | jq
-
-# Check current Worker deployment version
-curl -s https://stg.oursharedevents.com/health | jq '.version'
-```
-
----
-
-## Monitoring Links
-
-| Resource                    | URL / Location                                                                                                                |
-| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| Cloudflare Worker Analytics | [dash.cloudflare.com](https://dash.cloudflare.com) → Workers → `oursharedevents-staging` / `oursharedevents-prod` → Analytics |
-| Cloudflare Worker Logs      | Cloudflare Dashboard → Workers → Worker name → Logs (real-time tail)                                                          |
-| GitHub Actions CI/CD        | [github.com/ourCommunityRituals/ourSharedEvents/actions](https://github.com/ourCommunityRituals/ourSharedEvents/actions)      |
-| D1 Database Console         | Cloudflare Dashboard → D1 → `ocr-db-staging` / `ocr-db-production`                                                            |
-| Forms D1 Console            | Cloudflare Dashboard → D1 → `ocr-forms-db-staging` / `ocr-forms-db-production`                                                |
-
-> **Status:** No external uptime monitor (UptimeRobot / Pingdom) is configured yet. The `/health` endpoint is the canonical health anchor. Set up external monitoring as a next step.
-
----
-
-## Secret Locations
-
-### GitHub Actions Secrets
-
-Set at: **github.com/ourCommunityRituals/ourSharedEvents/settings/secrets/actions**
-
-| Secret                          | Purpose                                                                  | Required For                   |
-| ------------------------------- | ------------------------------------------------------------------------ | ------------------------------ |
-| `CLOUDFLARE_API_TOKEN`          | Scoped token for Worker deploy (Workers:Edit, Routes:Edit, Account:Read) | All deployments                |
-| `CLOUDFLARE_ACCOUNT_ID`         | Cloudflare account identifier                                            | All deployments                |
-| `ADMIN_KEY`                     | Bearer token for `/admin` and `/api/v2/admin/*` routes                   | E2E staging + production tests |
-| `GOOGLE_CLIENT_EMAIL`           | Google service account email                                             | Sheets API (Phase 1)           |
-| `GOOGLE_PRIVATE_KEY`            | Google service account private key (PEM)                                 | Sheets API (Phase 1)           |
-| `STAGING_SHEETS_SPREADSHEET_ID` | Staging spreadsheet ID                                                   | Staging Sheets backend         |
-
-> Full list: see `.github-secrets-required.json` and `docs/deployment/CLOUDFLARE_SECRETS.md`
-
-### Cloudflare Worker Secrets (set via Wrangler)
-
-These are set once per environment and live in Cloudflare — not in GitHub:
-
-```bash
-# Staging
-wrangler secret put ADMIN_KEY                  --env staging
-wrangler secret put SHEETS_SPREADSHEET_ID      --env staging
-wrangler secret put GOOGLE_SA_CLIENT_EMAIL     --env staging
-wrangler secret put GOOGLE_SA_PRIVATE_KEY_PEM  --env staging
-wrangler secret put FORMS_ENCRYPTION_KEY       --env staging
-wrangler secret put GOOGLE_MAPS_API_KEY        --env staging
-wrangler secret put BIGQUERY_DATASET_ID        --env staging
-wrangler secret put GCP_PROJECT_ID             --env staging
-wrangler secret put VERTEX_AI_MODEL_ID         --env staging
-
-# Production (same secrets, different values)
-wrangler secret put ADMIN_KEY                  --env production
-# ...repeat for each secret above
-```
-
-**List currently configured secrets:**
-
-```bash
-wrangler secret list --env staging
-wrangler secret list --env production
-```
-
-**Security rule:** Never store secrets in `wrangler.toml` or source code. Use Wrangler secrets for Worker runtime and GitHub Secrets for CI/CD. See `docs/deployment/CLOUDFLARE_SECRETS.md` for rotation schedule (90 days for Google SA keys and Cloudflare API token).
-
----
-
-## D1 Database Reference
-
-### Main DB (`DB` binding)
-
-| Environment | D1 Name             | Binding |
-| ----------- | ------------------- | ------- |
-| Local dev   | `ocr-db-local`      | `DB`    |
-| Staging     | `ocr-db-staging`    | `DB`    |
-| Production  | `ocr-db-production` | `DB`    |
-
-**Tables:** `events`, `sponsors`, `poster_deployments`, `scans`, `scan_aggregates`, `subscribers`
-
-**Contains:** Core event entities — event records, sponsor placements, scan/check-in aggregates, subscriber list.
-
-**Migrations:** `workers/oursharedevents/migrations/0001_*.sql` through `0009_*.sql`
-
-### Forms DB (`FORMS_DB` binding)
-
-| Environment | D1 Name                   | Binding    |
-| ----------- | ------------------------- | ---------- |
-| Local dev   | `ocr-forms-db-local`      | `FORMS_DB` |
-| Staging     | `ocr-forms-db-staging`    | `FORMS_DB` |
-| Production  | `ocr-forms-db-production` | `FORMS_DB` |
-
-**Tables:** `form_registrations`, `checkin_counts`, `form_surveys`, `email_signups`, `feature_flags`
-
-**Contains:** PII-sensitive form submissions. Email signups are AES-GCM encrypted via `FORMS_ENCRYPTION_KEY`. PII is scrubbed by a daily cron job at 03:00 UTC (30-day retention for email signups, expired registrations destroyed).
-
-**Migrations:** `workers/oursharedevents/migrations-forms/0001_*.sql` through `0007_*.sql`
-
-> **IMPORTANT:** Production D1 migrations run ONLY via the `deploy-production` CI job with GitHub environment approval gate. Never run `--env production` migrations locally.
-
-**Query D1 directly (staging example):**
-
-```bash
-npx wrangler d1 execute ocr-db-staging --env staging --remote \
-  --command "SELECT id, name, start_date FROM events LIMIT 10"
-
-npx wrangler d1 execute ocr-forms-db-staging --env staging --remote \
-  --command "SELECT COUNT(*) FROM email_signups WHERE expires_at > datetime('now')"
-```
-
----
-
-## Deployment Paths
-
-### Staging (automatic on push to `main`)
-
-```
-PR merged to main
-  → CI job 01: TypeCheck Worker (tsc --noEmit)
-  → CI job 01b: Schema Verify (Vitest D1 tests)
-  → CI job 02: Deploy → Staging
-      - Apply D1 migrations to ocr-db-staging (main DB)
-      - Apply D1 migrations to ocr-forms-db-staging (forms DB)
-      - Verify table counts (6 main, 5 forms)
-      - wrangler deploy --env staging
-      - Health check: GET stg.oursharedevents.com/health → HTTP 200
-  → CI job 03: E2E → Staging
-      - API smoke tests (npm run test:api:smoke)
-      - UI smoke tests (npm run test:ui:smoke)
-```
-
-### Production (on `vX.Y.Z` tag)
-
-```
-git tag v1.2.3 && git push --tags
-  → CI job 01: TypeCheck Worker
-  → CI job 01b: Schema Verify
-  → CI job 04: Deploy → Production (requires GitHub Environment approval)
-      - Verify DB isolation (no staging/local refs in production config)
-      - Apply D1 migrations to ocr-db-production
-      - Apply D1 migrations to ocr-forms-db-production
-      - Verify table counts
-      - wrangler deploy --env production
-      - Health check: GET oursharedevents.com/health → HTTP 200
-  → CI job 05: E2E → Production
-      - API + UI smoke tests against production
-```
-
-### Manual deploy (workflow_dispatch)
-
-```bash
-# Trigger from GitHub Actions UI or gh CLI:
-gh workflow run oursharedevents-ci.yml \
-  -f deploy_staging=true
-
-# Production (requires typing "PRODUCTION" in the input)
-gh workflow run oursharedevents-ci.yml \
-  -f deploy_production=PRODUCTION
-```
-
-### Local deploy (skip CI — use with care)
-
-```bash
-cd workers/oursharedevents
-
-# Staging
-wrangler deploy --env staging
-
-# Production — requires explicit confirmation, only when CI is unavailable
-wrangler deploy --env production
-```
-
----
-
-## How to Roll Back
-
-### Option 1: Cloudflare Instant Rollback (preferred)
-
-```
-Cloudflare Dashboard → Workers → oursharedevents-prod → Deployments
-  → Find previous deployment → click "Rollback"
-```
-
-This is instant. No CI run needed.
-
-### Option 2: Tag a previous commit and push tag
-
-```bash
-# Find the last known-good commit
-git log --oneline
-
-# Tag it as a new version to trigger CI deployment
-git tag v1.2.2-hotfix <commit-sha>
-git push origin v1.2.2-hotfix
-```
-
-CI will deploy it as a new production release.
-
-### Option 3: Revert PR and merge to main
-
-```bash
-# Revert the bad commit
-git revert <bad-commit-sha>
-git push origin main
-```
-
-This redeploys staging automatically, then tag for production.
-
----
-
-## Incident Response
-
-### Step 1: Verify (0–5 min)
-
-```bash
-# Is the Worker responding?
-curl -s -w "\nHTTP %{http_code} in %{time_total}s\n" \
-  https://oursharedevents.com/health
-
-# Is staging still healthy?
-curl -s https://stg.oursharedevents.com/health | jq '.ok'
-```
-
-### Step 2: Diagnose (5–15 min)
-
-**If Worker returns 5xx:**
-
-1. Check Cloudflare status: https://www.cloudflarestatus.com/
-2. Check Worker logs: Cloudflare Dashboard → Workers → `oursharedevents-prod` → Logs
-3. Check last CI run: GitHub Actions → `OurSharedEvents CI/CD`
-4. If recently deployed: roll back immediately (see above)
-
-**If `/health` returns 200 but `/api/v2/events` fails:**
-
-1. Check if Google Sheets backend is the issue — Sheets latency is 200–800ms (Phase 1 known limitation)
-2. Check GCP / Sheets API status: https://www.google.com/appsstatus
-3. Test admin endpoint to isolate public vs admin path
-
-**If D1 queries fail:**
-
-```bash
-# Check D1 is reachable
-npx wrangler d1 execute ocr-db-production --env production --remote \
-  --command "SELECT 1"
-```
-
-### Step 3: Escalate
-
-Email **ourcommunityrituals@gmail.com** with:
-
-- Incident time (UTC)
-- Endpoint(s) affected
-- Error codes / HTTP status
-- Last known-good deployment version (from `/health`)
-- Steps taken so far
-
----
-
-## Common Issues and Fixes
-
-### Health check returns non-200
-
-| Cause                                          | Fix                                                             |
-| ---------------------------------------------- | --------------------------------------------------------------- |
-| Worker not deployed                            | Push to `main` or trigger `workflow_dispatch`                   |
-| D1 database ID placeholder (`<staging-db-id>`) | Provision D1 in Cloudflare Dashboard and update `wrangler.toml` |
-| Missing `ADMIN_KEY` secret                     | `wrangler secret put ADMIN_KEY --env staging`                   |
-
-### Admin API returns 401
-
-```bash
-# Verify the secret is set
-wrangler secret list --env staging | grep ADMIN_KEY
-
-# Test with explicit Bearer token
-curl -H "Authorization: Bearer <your-token>" \
-  https://stg.oursharedevents.com/api/v2/admin/events
-```
-
-Admin auth accepts either:
-
-1. Cloudflare Access JWT (CF-Access-Jwt-Assertion header) — production
-2. Bearer token fallback (`ALLOW_ADMIN_KEY_FALLBACK=true`) — staging only
-
-### Google Sheets / Auth fails
-
-| Error Symptom                   | Fix                                                                        |
-| ------------------------------- | -------------------------------------------------------------------------- |
-| `GOOGLE_AUTH_MISSING_SECRET`    | Set `GOOGLE_SA_CLIENT_EMAIL` + `GOOGLE_SA_PRIVATE_KEY_PEM` via Wrangler    |
-| `GOOGLE_AUTH_KEY_IMPORT_FAILED` | PEM format issue — regenerate key from GCP Console, ensure actual newlines |
-| `SHEETS_READ_FAILED`            | Share the target spreadsheet with the service account email                |
-| `SHEETS_DB_ID_MISSING`          | `wrangler secret put SHEETS_SPREADSHEET_ID --env staging`                  |
-
-```bash
-# Extract service account email from auth error response hint
-curl -s https://stg.oursharedevents.com/health | jq '.hint'
-
-# Verify key format
-cat credentials.json | jq -r '.private_key' | head -n 2
-# Should show: -----BEGIN PRIVATE KEY-----
-```
-
-### D1 migration fails in CI
-
-Check which migration failed in the Actions log, then:
-
-```bash
-# Re-run the specific migration manually
-npx wrangler d1 execute ocr-db-staging --env staging --remote \
-  --file migrations/0007_create_indexes.sql
-```
-
-If a migration has a partial state, inspect the `sqlite_master` table:
-
-```bash
-npx wrangler d1 execute ocr-db-staging --env staging --remote \
-  --command "SELECT name FROM sqlite_master WHERE type='table'"
-```
-
-### Forms encryption / PII cron errors
-
-The PII destruction job runs daily at 03:00 UTC. If it fails:
-
-- Check Worker logs for `LIFECYCLE` log events
-- Verify `FORMS_ENCRYPTION_KEY` is set (`wrangler secret list --env production | grep FORMS_ENCRYPTION_KEY`)
-- The job is non-blocking — a failure won't affect live form submissions
-
-### Slow response times
-
-Google Sheets latency is a known Phase 1 constraint (200–800ms). Expected behavior:
-
-- Cold start (after inactivity): up to 5–10s on first request
-- Subsequent requests: 200–800ms (Sheets overhead)
-
-Phase 2 (D1 migration) will eliminate this. Until then, latency above 800ms warrants investigation.
-
----
-
-## Priority Stack (Security Reference)
-
-Operational decisions follow this priority order:
-
-1. **No data loss** — PII retention and destruction schedules must be honored
-2. **No auth bypass** — Admin endpoints must never be publicly accessible without a valid token
-3. **No cross-env contamination** — Production D1 must never be touched by staging/local workflows
-4. **Availability** — Platform should serve events to the public
-
-> Note: `SECURITY-GUARDRAILS.md` has not yet been created. This priority stack is derived from CI gates and CLAUDE.md architecture decisions. Create `SECURITY-GUARDRAILS.md` as a follow-up (OUR backlog).
-
----
-
-## Related Documentation
-
-- `docs/deployment/CLOUDFLARE_SECRETS.md` — Full secrets inventory and rotation schedule
-- `.github-secrets-required.json` — Machine-readable secrets manifest
-- `workers/oursharedevents/wrangler.toml` — Worker config, environments, D1 bindings, cron triggers
-- `.github/workflows/oursharedevents-ci.yml` — Full CI/CD pipeline definition
-- `docs/migration/` — Phase implementation guides
-- `STORIES.md` — Active work queue
-
----
-
----
-
-# ARCHIVED: Legacy eventangle.com Runbook
-
-> **Archived:** 2026-03-31 — Content below is from the pre-ourSharedEvents era (eventangle.com platform).
-> Kept for reference per no-delete policy. The active runbook is above.
-
----
-
-## Quick Reference (ARCHIVED — eventangle.com)
 
 **External uptime / SLO is measured via `?p=status`.**
 
@@ -455,7 +46,7 @@ curl -s https://www.eventangle.com/api/health/backend | jq
 
 ---
 
-## Incident Response (ARCHIVED)
+## Incident Response
 
 ### When Alerted
 
@@ -487,7 +78,7 @@ curl -s -w "\nHTTP Status: %{http_code}\n" \
 
 ---
 
-## Common Issues (ARCHIVED — eventangle.com)
+## Common Issues
 
 ### Issue: Ping Returns Non-200
 
@@ -525,7 +116,125 @@ curl -s -w "\nHTTP Status: %{http_code}\n" \
 
 ---
 
+### Issue: Ping Returns 200 but Wrong Content
+
+**Symptoms:**
+
+- HTTP 200 but body doesn't contain "ok"
+- Keyword check fails in monitoring
+
+**Diagnostic Steps:**
+
+1. **Check full response**:
+
+   ```bash
+   curl -s https://www.eventangle.com/ping | cat -v
+   ```
+
+2. **Check status endpoint for details**:
+
+   ```bash
+   curl -s https://www.eventangle.com/status | jq
+   ```
+
+3. **Run full setup diagnostics**:
+   ```bash
+   curl -s "https://www.eventangle.com/status?p=setup&brand=root" | jq '.value.checks'
+   ```
+
+**Resolution:**
+
+- Review the `issues` and `fixes` arrays in the setup response
+- Follow the suggested fix steps
+
+---
+
+### Issue: Slow Response Times
+
+**Symptoms:**
+
+- Response times > 5 seconds
+- Intermittent timeouts
+
+**Diagnostic Steps:**
+
+1. **Measure response time**:
+
+   ```bash
+   curl -s -w "Total time: %{time_total}s\n" -o /dev/null \
+     https://www.eventangle.com/ping
+   ```
+
+2. **Compare GAS vs Cloudflare**:
+
+   ```bash
+   # Direct GAS (no proxy)
+   curl -s -w "GAS Direct: %{time_total}s\n" -o /dev/null \
+     "https://script.google.com/macros/s/AKfycbyS1cW9VhviR-Jr8AmYY_BAGrb1gzuKkrgEBP2M3bMdqAv4ktqHOZInWV8ogkpz5i8SYQ/exec?p=ping"
+
+   # Via Cloudflare
+   curl -s -w "Cloudflare: %{time_total}s\n" -o /dev/null \
+     https://www.eventangle.com/ping
+   ```
+
+3. **Check for cold start** (GAS apps sleep after inactivity):
+   - First request after inactivity may take 5-10 seconds
+   - Subsequent requests should be < 2 seconds
+
+**Resolution:**
+
+- If only first request is slow: This is normal GAS cold start behavior
+- If consistently slow: Check Google Apps Script quotas and status
+
+---
+
+### Issue: Spreadsheet Access Errors
+
+**Symptoms:**
+
+- Status shows `"ok": false`
+- Error message mentions spreadsheet access
+
+**Diagnostic Steps:**
+
+1. **Run setup diagnostics**:
+
+   ```bash
+   curl -s "https://www.eventangle.com/status?p=setup&brand=root" | jq '.value.checks[] | select(.name == "Spreadsheet Access")'
+   ```
+
+2. **Check for quota issues**:
+   - Google Sheets has read/write quotas
+   - High traffic can exhaust quotas
+
+**Resolution:**
+
+- Verify spreadsheet still exists and hasn't been deleted
+- Verify script owner still has access
+- Check Google Workspace admin console for quota status
+- See [SETUP_DIAGNOSTICS.md](./SETUP_DIAGNOSTICS.md) for detailed fix steps
+
+---
+
 ### Issue: Backend Health Check Fails (Story B3)
+
+**Symptoms:**
+
+- `/api/health/backend` returns `"ok": false`
+- Error codes: `GOOGLE_AUTH_*` or `SHEETS_*`
+
+**Diagnostic Steps:**
+
+1. **Check backend health response**:
+
+   ```bash
+   curl -s https://stg.eventangle.com/api/health/backend | jq
+   ```
+
+2. **Look for error codes in response**:
+   ```bash
+   curl -s https://stg.eventangle.com/api/health/backend | jq '.errorCode, .hint'
+   ```
 
 **Error Code Reference:**
 
@@ -537,13 +246,120 @@ curl -s -w "\nHTTP Status: %{http_code}\n" \
 | `SHEETS_READ_FAILED`                | Can't read spreadsheet                                          | Share sheet with service account email   |
 | `SHEETS_DB_ID_MISSING`              | Missing `SHEETS_SPREADSHEET_ID`                                 | Set the spreadsheet ID secret            |
 
+**Resolution by Error Type:**
+
+**For `GOOGLE_AUTH_MISSING_SECRET`:**
+
+```bash
+# Verify secrets are set
+wrangler secret list --env staging
+
+# If missing, set them
+wrangler secret put GOOGLE_SA_CLIENT_EMAIL --env staging
+wrangler secret put GOOGLE_SA_PRIVATE_KEY_PEM --env staging
+```
+
+**For `SHEETS_READ_FAILED` (wrong sheet shared):**
+
+1. Get the service account email from health response:
+   ```bash
+   curl -s https://stg.eventangle.com/api/health/backend | jq '.hint'
+   ```
+2. Open the spreadsheet in Google Sheets
+3. Click **Share** > Add the service account email with **Editor** access
+
+**For `SHEETS_DB_ID_MISSING`:**
+
+```bash
+wrangler secret put SHEETS_SPREADSHEET_ID --env staging
+# Enter the spreadsheet ID from the Google Sheets URL
+```
+
+**Negative Path Verification (Story B3):**
+
+- If wrong sheet is shared, health check MUST fail with explicit error code
+- This is expected behavior until the correct sheet is shared
+- CI/CD gate (Stage-2) depends on this check passing
+
 ---
 
-## Monitoring Dashboard Locations (ARCHIVED — eventangle.com)
+### Issue: Recent Deployment Broke Something
+
+**Symptoms:**
+
+- Issues started after a deployment
+- New build ID in status response
+
+**Diagnostic Steps:**
+
+1. **Check current build**:
+
+   ```bash
+   curl -s https://www.eventangle.com/status | jq '.buildId'
+   ```
+
+2. **Check GitHub Actions history**:
+   - Go to repository > Actions tab
+   - Review recent workflow runs
+   - Look for failed tests or deployment errors
+
+3. **Check what changed**:
+   - Review commits in the last deployment
+   - Look for changes to routing, Config.gs, or Code.gs
+
+**Resolution:**
+
+- If deployment is broken: Revert to previous Apps Script version
+  1. Open Apps Script editor
+  2. Go to Deploy > Manage deployments
+  3. Edit the web app deployment
+  4. Select a previous version
+  5. Update Cloudflare Worker with old deployment ID if needed
+
+---
+
+### Issue: Brand-Specific Failures
+
+**Symptoms:**
+
+- One brand returns errors, others work fine
+- Error mentions brand configuration
+
+**Diagnostic Steps:**
+
+1. **Test specific brand**:
+
+   ```bash
+   curl -s "https://www.eventangle.com/status?p=status&brand=abc" | jq
+   curl -s "https://www.eventangle.com/status?p=setup&brand=abc" | jq
+   ```
+
+2. **Compare with working brand**:
+   ```bash
+   curl -s "https://www.eventangle.com/status?p=setup&brand=root" | jq
+   ```
+
+**Resolution:**
+
+- Check brand configuration in Config.gs
+- Verify brand's spreadsheet ID is valid
+- Check brand's admin secret is set in Script Properties
+
+---
+
+## Monitoring Dashboard Locations
 
 ### UptimeRobot
 
 - Dashboard: https://uptimerobot.com/dashboard
+- History: Click monitor > View history
+- Response times: Click monitor > Response Time tab
+
+### Pingdom
+
+- Dashboard: https://my.pingdom.com/
+- Uptime reports: Monitoring > Uptime > select check
+- Response times: Check details > Response Time tab
 
 ### Cloudflare
 
@@ -553,10 +369,11 @@ curl -s -w "\nHTTP Status: %{http_code}\n" \
 ### GitHub Actions
 
 - Deployments: https://github.com/zeventbooks/MVP-EVENT-TOOLKIT/actions
+- Recent runs: Actions tab > All workflows
 
 ---
 
-## Escalation Contacts (ARCHIVED — eventangle.com)
+## Escalation Contacts
 
 | Role              | Contact             | When to Escalate      |
 | ----------------- | ------------------- | --------------------- |
@@ -566,17 +383,88 @@ curl -s -w "\nHTTP Status: %{http_code}\n" \
 
 ---
 
-## Data Health Checker (ARCHIVED — eventangle.com)
+## Post-Incident
+
+After resolving an incident:
+
+1. **Update status page** (if you have one)
+   - Mark incident as resolved
+   - Add brief description
+
+2. **Document in incident log**
+   - Time detected
+   - Time resolved
+   - Root cause
+   - Fix applied
+   - Lessons learned
+
+3. **Create follow-up tasks**
+   - Improve monitoring if detection was slow
+   - Add automation if manual steps were needed
+   - Update this runbook if procedures were unclear
+
+---
+
+## Preventive Measures
+
+### Daily
+
+- Check uptime dashboard for any yellow/red indicators
+- Review response time trends
+
+### Weekly
+
+- Review GitHub Actions for any test failures
+- Check Google Sheets quotas if traffic increased
+
+### After Each Deployment
+
+- Verify ping endpoint returns 200
+- Run setup diagnostics
+- Monitor for 15 minutes for errors
+
+---
+
+## Data Health Checker
 
 ### Overview
 
-The Data Health Checker (`DataHealthChecker.gs`) provides nightly sanity checking for EVENTS and DIAG sheets.
+The Data Health Checker (`DataHealthChecker.gs`) provides nightly sanity checking for EVENTS and DIAG sheets. It detects data corruption, missing fields, and impossible states before they cause live event issues.
 
 **If the system is acting weird, check the DATA_ISSUES sheet first!**
+
+### Quick Commands
+
+```javascript
+// Run manual health check
+checkDataHealth_();
+
+// Check specific brand
+checkBrandDataHealth_('abc');
+
+// Run with email notification
+checkDataHealthWithEmail_('ops@example.com');
+
+// Get quick summary (no write)
+getDataHealthSummary_();
+```
 
 ### Automatic Nightly Checks
 
 The health checker runs automatically every night at 3 AM (after DIAG archiving at 2 AM).
+
+**Install/Manage Trigger:**
+
+```javascript
+// Install nightly trigger
+installDataHealthTrigger_();
+
+// List active triggers
+listDataHealthTriggers_();
+
+// Remove trigger
+uninstallDataHealthTrigger_();
+```
 
 ### What Gets Checked
 
@@ -585,18 +473,115 @@ The health checker runs automatically every night at 3 AM (after DIAG archiving 
 | EVENTS required fields  | ERROR    | id, slug, brandId, templateId, dataJSON, createdAt  |
 | EVENTS contract fields  | ERROR    | name, startDateISO, venue, links._, ctas.primary._  |
 | EVENTS settings fields  | WARN     | settings.showSchedule, showStandings, showBracket   |
+| EVENTS metadata         | WARN     | createdAtISO, updatedAtISO                          |
 | DIAG required fields    | ERROR    | ts, level, where, msg                               |
+| DIAG valid levels       | WARN     | Must be: info, warn, error, debug                   |
 | Orphan event references | WARN     | DIAG/ANALYTICS rows referencing non-existent events |
+
+### DATA_ISSUES Sheet
+
+Issues are written to the `DATA_ISSUES` sheet with these columns:
+
+| Column    | Description                             |
+| --------- | --------------------------------------- |
+| timestamp | When the check was run                  |
+| severity  | error, warn, or info                    |
+| category  | Issue type (e.g., EVENTS_MISSING_FIELD) |
+| sheet     | Source sheet (EVENTS, DIAG, ANALYTICS)  |
+| rowNumber | Row number with the issue               |
+| field     | Field name with the issue               |
+| message   | Human-readable description              |
+| value     | Problematic value (if applicable)       |
+
+**Severity colors:**
+
+- Red background = ERROR (needs immediate attention)
+- Yellow background = WARNING (should investigate)
+- Blue background = INFO (informational only)
+
+### Issue: DATA_ISSUES Sheet Has Errors
+
+**Symptoms:**
+
+- DATA_ISSUES sheet has red (error) rows
+- Nightly email notification received
+
+**Diagnostic Steps:**
+
+1. **Open DATA_ISSUES sheet** in the spreadsheet
+
+2. **Filter by severity = error** to see critical issues
+
+3. **Navigate to problem rows** using the rowNumber column
+
+4. **Fix the data** directly in the source sheet (EVENTS or DIAG)
+
+5. **Re-run health check** to verify:
+   ```javascript
+   checkDataHealth_();
+   ```
+
+**Common Issues and Fixes:**
+
+| Issue                   | Cause                    | Fix                                      |
+| ----------------------- | ------------------------ | ---------------------------------------- |
+| Missing id              | Row corruption           | Delete row or restore from backup        |
+| Invalid dataJSON        | Malformed JSON           | Fix JSON syntax in cell                  |
+| Missing startDateISO    | Incomplete event         | Edit event and add date                  |
+| Missing links.publicUrl | Event not properly saved | Re-save event via Admin                  |
+| Orphan event reference  | Event was deleted        | Ignore (historical data) or archive DIAG |
+
+### Issue: Health Check Failing
+
+**Symptoms:**
+
+- Health check returns errors
+- Cannot access spreadsheet
+
+**Diagnostic Steps:**
+
+1. **Check spreadsheet access:**
+
+   ```javascript
+   getDataHealthSummary_();
+   ```
+
+2. **Verify spreadsheet exists** and script has access
+
+3. **Check for quota issues** - health check reads many rows
+
+4. **Run with specific spreadsheet ID:**
+   ```javascript
+   checkDataHealth_({ spreadsheetId: '1abc...' });
+   ```
+
+### Environment Selection
+
+Health check supports staging vs production via spreadsheet ID:
+
+```javascript
+// Production (default - uses root brand config)
+checkDataHealth_();
+
+// Staging (specific spreadsheet)
+checkDataHealth_({ spreadsheetId: 'STAGING_SPREADSHEET_ID' });
+
+// Specific brand
+checkDataHealth_({ brandId: 'abc' });
+```
 
 ---
 
-## Related Documentation (ARCHIVED)
+## Related Documentation
 
 - [UPTIME_MONITORING.md](./UPTIME_MONITORING.md) - Setting up external monitoring
 - [SETUP_DIAGNOSTICS.md](./SETUP_DIAGNOSTICS.md) - 6-point setup verification
 - [DEPLOYMENT.md](../DEPLOYMENT.md) - Deployment procedures
+- [PRODUCTION_DEPLOYMENT_POLICY.md](../PRODUCTION_DEPLOYMENT_POLICY.md) - CI-only deployment policy
+- [DATA_POLICY.md](./DATA_POLICY.md) - Data retention and archiving policies
+- [env/GOOGLE_SERVICE_ACCOUNT_SETUP.md](./env/GOOGLE_SERVICE_ACCOUNT_SETUP.md) - Service account setup (Story B3)
 - [CLOUDFLARE_SECRETS.md](./CLOUDFLARE_SECRETS.md) - Cloudflare Worker secrets reference
 
 ---
 
-**Archive Note:** eventangle.com section archived 2026-03-31. Original last updated: 2025-12-14.
+**Last Updated:** 2025-12-14

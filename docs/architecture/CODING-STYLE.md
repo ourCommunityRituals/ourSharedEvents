@@ -34,24 +34,25 @@ The project uses ESLint's flat config format (`eslint.config.js`) with rules tai
 
 ### Critical Rules (Errors - Fail CI)
 
-| Rule | Description | Why |
-|------|-------------|-----|
+| Rule   | Description        | Why                 |
+| ------ | ------------------ | ------------------- |
 | `semi` | Require semicolons | Prevents ASI issues |
 
 ### Warning Rules (Tracked - Don't Fail CI Yet)
 
-| Rule | Description | Status |
-|------|-------------|--------|
-| `no-unused-vars` | Unused variables | Many false positives in GAS due to cross-file refs |
-| `no-undef` | Undefined variables | Many false positives in GAS due to cross-file refs |
-| `no-console` | Console statements | Allowed in scripts/tests, warn in prod code |
-| `no-var` | Prefer let/const | Gradual migration |
-| `eqeqeq` | Strict equality | Use `===` instead of `==` |
-| `curly` | Require braces | For multi-line blocks |
+| Rule             | Description         | Status                                             |
+| ---------------- | ------------------- | -------------------------------------------------- |
+| `no-unused-vars` | Unused variables    | Many false positives in GAS due to cross-file refs |
+| `no-undef`       | Undefined variables | Many false positives in GAS due to cross-file refs |
+| `no-console`     | Console statements  | Allowed in scripts/tests, warn in prod code        |
+| `no-var`         | Prefer let/const    | Gradual migration                                  |
+| `eqeqeq`         | Strict equality     | Use `===` instead of `==`                          |
+| `curly`          | Require braces      | For multi-line blocks                              |
 
 ## Google Apps Script Specifics
 
 GAS files (.gs) are concatenated by Google Apps Script at runtime, meaning:
+
 - Functions defined in one file are available in all files
 - Global variables are shared across files
 - ESLint can't see cross-file references
@@ -62,17 +63,17 @@ This is why `no-unused-vars` and `no-undef` are set to `warn` for .gs files - ma
 
 ```javascript
 // Public API functions - called from Code.gs router
-function api_createEvent(req) { }
-function api_getStatus(req) { }
+function api_createEvent(req) {}
+function api_getStatus(req) {}
 
 // Service functions - called from other .gs files
-function FormService_listTemplates() { }
-function SecurityMiddleware_sanitizeInput(input) { }
+function FormService_listTemplates() {}
+function SecurityMiddleware_sanitizeInput(input) {}
 
 // Internal helpers - underscore suffix
-function findBrand_(brandId) { }
-function getDb_() { }
-function diag_(message) { }
+function findBrand_(brandId) {}
+function getDb_() {}
+function diag_(message) {}
 
 // Constants - UPPER_SNAKE_CASE
 const ERR = { NOT_FOUND: 'NOT_FOUND' };
@@ -81,7 +82,7 @@ const BRANDS = {};
 
 ## File-Specific Rules
 
-### Production Code (src/mvp/*.gs)
+### Production Code (src/mvp/\*.gs)
 
 ```javascript
 // DO: Use Logger instead of console in GAS
@@ -94,17 +95,17 @@ console.log('This will work but Logger is preferred');
 const result = processData();
 
 // DON'T: Omit semicolons
-const result = processData()  // Missing semicolon
+const result = processData(); // Missing semicolon
 
 // DO: Use const/let instead of var
 const brandId = req.brandId;
 let counter = 0;
 
 // DON'T: Use var (legacy)
-var brandId = req.brandId;  // Use const instead
+var brandId = req.brandId; // Use const instead
 ```
 
-### Scripts (scripts/*.js)
+### Scripts (scripts/\*.js)
 
 ```javascript
 // Console is allowed in scripts
@@ -117,14 +118,14 @@ if (!args.length) {
 }
 ```
 
-### Tests (tests/**/*.js)
+### Tests (tests/\*_/_.js)
 
 ```javascript
 // Console is allowed in tests
 console.log('Test data:', testData);
 
 // Unused variables in mock setups are OK
-const { unused, ...rest } = mockData;  // Destructuring for exclusion
+const { unused, ...rest } = mockData; // Destructuring for exclusion
 
 // Use _ prefix for intentionally unused parameters
 test('handles callback', (_unusedParam) => {
@@ -132,14 +133,14 @@ test('handles callback', (_unusedParam) => {
 });
 ```
 
-### Cloudflare Workers (cloudflare-proxy/*.js)
+### Cloudflare Workers (cloudflare-proxy/\*.js)
 
 ```javascript
 // Console is allowed for observability
 console.log('Request received:', request.url);
 
 // Use DEPRECATED suffix for deprecated code
-const proxyRequest_DEPRECATED = () => { };  // Won't trigger unused warning
+const proxyRequest_DEPRECATED = () => {}; // Won't trigger unused warning
 ```
 
 ## Exceptions and Suppressions
@@ -189,6 +190,7 @@ npm run lint
 Current status: 0 errors, ~360 warnings
 
 The warnings are tracked and will be addressed over time:
+
 - Phase 1: Fix errors (DONE - CI now passes)
 - Phase 2: Reduce `no-unused-vars` warnings in scripts
 - Phase 3: Reduce `no-var` usage

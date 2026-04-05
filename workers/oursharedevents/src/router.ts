@@ -5,10 +5,16 @@
  *
  *   GET /                        → landing page
  *   GET /admin                   → admin dashboard (auth required)
+ *   GET /events, /public         → public events listing
+ *   GET /display, /tv, /kiosk, /screen → TV/kiosk display
+ *   GET /poster, /posters, /flyers     → printable poster
+ *   GET /sharedReport, /report, /analytics, /reports, /insights → shared analytics
  *   GET /health                  → health check
  *   GET /api/status              → alias for /health
  *   GET /api/v2/events           → list active events
  *   GET /api/v2/events/:id       → single event
+ *   GET /api/events              → alias for /api/v2/events (legacy)
+ *   GET /api/events/:id          → alias for /api/v2/events/:id (legacy)
  *   GET /api/v2/admin/events     → admin event list (auth required)
  *
  *   POST /api/v2/events/:id/forms/register      → submit registration (public)
@@ -36,8 +42,22 @@
  */
 
 import { handleHealth, type HealthEnv } from './handlers/health';
-import { handleListEvents, handleGetEvent, handleAdminListEvents, type EventsEnv } from './handlers/events';
-import { handlePublicPage, handleAdminPage, handleLandingPage, handleSubscribe, type PagesEnv } from './handlers/pages';
+import {
+  handleListEvents,
+  handleGetEvent,
+  handleAdminListEvents,
+  type EventsEnv,
+} from './handlers/events';
+import {
+  handlePublicPage,
+  handleAdminPage,
+  handleLandingPage,
+  handleSubscribe,
+  handleDisplayPage,
+  handlePosterPage,
+  handleSharedReportPage,
+  type PagesEnv,
+} from './handlers/pages';
 import { requireAdmin, type AdminEnv } from './auth/admin';
 import {
   handleFormRegistration,
@@ -64,10 +84,15 @@ import {
 } from './handlers/feature-flags';
 import { corsOrigin } from './lib/cors';
 
-export type RouterEnv = HealthEnv & EventsEnv & PagesEnv & AdminEnv & FormsEnv & FormPagesEnv & {
-  WORKER_ENV?: string;
-  WORKER_BUILD_VERSION?: string;
-};
+export type RouterEnv = HealthEnv &
+  EventsEnv &
+  PagesEnv &
+  AdminEnv &
+  FormsEnv &
+  FormPagesEnv & {
+    WORKER_ENV?: string;
+    WORKER_BUILD_VERSION?: string;
+  };
 
 export async function route(request: Request, env: RouterEnv): Promise<Response> {
   const url = new URL(request.url);
@@ -89,7 +114,7 @@ export async function route(request: Request, env: RouterEnv): Promise<Response>
         'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
         'Access-Control-Allow-Headers': 'Authorization, Content-Type',
         'Access-Control-Max-Age': '86400',
-        'Vary': 'Origin',
+        Vary: 'Origin',
       },
     });
   }
@@ -114,7 +139,7 @@ export async function route(request: Request, env: RouterEnv): Promise<Response>
 
   // ── Admin form endpoints (auth-gated) ──────────────────────────────────────
   const adminFormsMatch = pathname.match(
-    /^\/api\/v2\/admin\/events\/([^/]+)\/forms\/(registrations|checkin-count|surveys|email-signups)$/,
+    /^\/api\/v2\/admin\/events\/([^/]+)\/forms\/(registrations|checkin-count|surveys|email-signups)$/
   );
   if (adminFormsMatch && method === 'GET') {
     const deny = requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
@@ -135,9 +160,7 @@ export async function route(request: Request, env: RouterEnv): Promise<Response>
   // ── Feature Flag Admin routes (auth-gated) ─────────────────────────────────
 
   // Event-level flag overrides: PUT/DELETE /api/v2/admin/events/:id/flags/:key
-  const eventFlagMatch = pathname.match(
-    /^\/api\/v2\/admin\/events\/([^/]+)\/flags\/([^/]+)$/,
-  );
+  const eventFlagMatch = pathname.match(/^\/api\/v2\/admin\/events\/([^/]+)\/flags\/([^/]+)$/);
   if (eventFlagMatch && (method === 'PUT' || method === 'DELETE')) {
     const deny = requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
     if (deny) return deny;
@@ -197,7 +220,7 @@ export async function route(request: Request, env: RouterEnv): Promise<Response>
 
   // ── Public form endpoints (no auth) ────────────────────────────────────────
   const publicFormsMatch = pathname.match(
-    /^\/api\/v2\/events\/([^/]+)\/forms\/(register|checkin|survey|email-signup)$/,
+    /^\/api\/v2\/events\/([^/]+)\/forms\/(register|checkin|survey|email-signup)$/
   );
   if (publicFormsMatch && method === 'POST') {
     const [, eventId, formType] = publicFormsMatch;
@@ -207,8 +230,13 @@ export async function route(request: Request, env: RouterEnv): Promise<Response>
     const enabled = await isFeatureEnabled(env.FORMS_DB, flagKey, eventId);
     if (!enabled) {
       return Response.json(
-        { ok: false, status: 403, code: 'FORM_DISABLED', error: `${formType} is not enabled for this event` },
-        { status: 403 },
+        {
+          ok: false,
+          status: 403,
+          code: 'FORM_DISABLED',
+          error: `${formType} is not enabled for this event`,
+        },
+        { status: 403 }
       );
     }
 
@@ -233,17 +261,61 @@ export async function route(request: Request, env: RouterEnv): Promise<Response>
   // ── Subscribe (email capture) ─────────────────────────────────────────────
   if (pathname === '/subscribe') {
     if (method === 'POST') return handleSubscribe(request, env);
-    return Response.json({ ok: false, error: 'Method not allowed' }, { status: 405, headers: { 'Allow': 'POST' } });
+    return Response.json(
+      { ok: false, error: 'Method not allowed' },
+      { status: 405, headers: { Allow: 'POST' } }
+    );
   }
 
   // ── Landing page ──────────────────────────────────────────────────────────
-  if (pathname === '/' || pathname === '/home' || pathname === '/welcome' || pathname === '/landing') {
+  if (
+    pathname === '/' ||
+    pathname === '/home' ||
+    pathname === '/welcome' ||
+    pathname === '/landing'
+  ) {
     return handleLandingPage(env);
   }
 
   // ── Public pages ───────────────────────────────────────────────────────────
   if (pathname === '/events' || pathname === '/public') {
     return handlePublicPage(env);
+  }
+
+  // ── Display page (TV / kiosk) ──────────────────────────────────────────────
+  if (
+    pathname === '/display' ||
+    pathname === '/tv' ||
+    pathname === '/kiosk' ||
+    pathname === '/screen'
+  ) {
+    return handleDisplayPage(env);
+  }
+
+  // ── Poster page (printable) ────────────────────────────────────────────────
+  if (pathname === '/poster' || pathname === '/posters' || pathname === '/flyers') {
+    return handlePosterPage(env);
+  }
+
+  // ── Shared report page ─────────────────────────────────────────────────────
+  if (
+    pathname === '/sharedReport' ||
+    pathname === '/report' ||
+    pathname === '/analytics' ||
+    pathname === '/reports' ||
+    pathname === '/insights'
+  ) {
+    return handleSharedReportPage(env);
+  }
+
+  // ── Legacy API alias (/api/events → /api/v2/events) ───────────────────────
+  if (pathname === '/api/events') {
+    return handleListEvents(request, env);
+  }
+
+  const legacyEventMatch = pathname.match(/^\/api\/events\/([^/]+)$/);
+  if (legacyEventMatch) {
+    return handleGetEvent(request, env, legacyEventMatch[1]);
   }
 
   // ── 404 ────────────────────────────────────────────────────────────────────

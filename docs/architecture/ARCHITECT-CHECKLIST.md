@@ -8,14 +8,14 @@
 
 ## Checklist Summary
 
-| # | Invariant | Status | Notes |
-|---|-----------|--------|-------|
-| 1 | All event reads go through `_buildEventContract_()` | PASS | All endpoints use `getEventById_()` |
-| 2 | All event writes go through `saveEvent_()` / adapters | PASS | api_create, api_updateEventData, api_saveEvent |
-| 3 | No endpoint returns a non-canonical Event shape | PASS | All bundles wrap canonical Event |
-| 4 | All bundles wrap the canonical Event | PASS | 6 bundles verified |
-| 5 | No front-end builds URLs by hand | PASS | All use `event.links.*` |
-| 6 | No front-end bypasses `NU.rpc` patterns | PASS* | Boot sequences acceptable |
+| #   | Invariant                                             | Status | Notes                                          |
+| --- | ----------------------------------------------------- | ------ | ---------------------------------------------- |
+| 1   | All event reads go through `_buildEventContract_()`   | PASS   | All endpoints use `getEventById_()`            |
+| 2   | All event writes go through `saveEvent_()` / adapters | PASS   | api_create, api_updateEventData, api_saveEvent |
+| 3   | No endpoint returns a non-canonical Event shape       | PASS   | All bundles wrap canonical Event               |
+| 4   | All bundles wrap the canonical Event                  | PASS   | 6 bundles verified                             |
+| 5   | No front-end builds URLs by hand                      | PASS   | All use `event.links.*`                        |
+| 6   | No front-end bypasses `NU.rpc` patterns               | PASS\* | Boot sequences acceptable                      |
 
 ---
 
@@ -26,6 +26,7 @@
 **Schema:** `/schemas/event.schema.json`
 
 **Invariant:** Every time an Event is loaded from storage, it MUST pass through `_buildEventContract_()` to ensure canonical shape matching `/schemas/event.schema.json`:
+
 - Normalized fields (name, startDateISO, venue)
 - Generated links (publicUrl, displayUrl, posterUrl, signupUrl)
 - QR codes as base64 data URIs
@@ -35,14 +36,14 @@
 
 All bundle endpoints use `getEventById_()` which calls `_buildEventContract_()`:
 
-| Endpoint | Location | Calls getEventById_() |
-|----------|----------|----------------------|
-| `api_getPublicBundle` | `Code.gs:3080` | `Code.gs:3085` |
-| `api_getAdminBundle` | `Code.gs:3136` | `Code.gs:3145` |
-| `api_getDisplayBundle` | `Code.gs:3303` | `Code.gs:3308` |
-| `api_getPosterBundle` | `Code.gs:3396` | `Code.gs:3401` |
-| `api_getSponsorBundle` | `Code.gs:3507` | `Code.gs:3512` |
-| `api_getSharedReportBundle` | `Code.gs:3627` | `Code.gs:3632` |
+| Endpoint                    | Location       | Calls getEventById\_() |
+| --------------------------- | -------------- | ---------------------- |
+| `api_getPublicBundle`       | `Code.gs:3080` | `Code.gs:3085`         |
+| `api_getAdminBundle`        | `Code.gs:3136` | `Code.gs:3145`         |
+| `api_getDisplayBundle`      | `Code.gs:3303` | `Code.gs:3308`         |
+| `api_getPosterBundle`       | `Code.gs:3396` | `Code.gs:3401`         |
+| `api_getSponsorBundle`      | `Code.gs:3507` | `Code.gs:3512`         |
+| `api_getSharedReportBundle` | `Code.gs:3627` | `Code.gs:3632`         |
 
 ### Dead Code Cleanup (Completed)
 
@@ -55,6 +56,7 @@ All bundle endpoints use `getEventById_()` which calls `_buildEventContract_()`:
 **Definition:** `Code.gs:2657`
 
 **Invariant:** All event persistence MUST go through `saveEvent_()` which:
+
 - Validates required MVP fields (name, startDateISO, venue)
 - Generates/validates UUID format
 - Handles slug generation with collision detection
@@ -63,38 +65,39 @@ All bundle endpoints use `getEventById_()` which calls `_buildEventContract_()`:
 
 ### Verification
 
-| API Endpoint | Location | Calls saveEvent_() |
-|--------------|----------|-------------------|
-| `api_create` | `Code.gs:3805` | `Code.gs:3840` |
-| `api_updateEventData` | `Code.gs:3855` | `Code.gs:3891` |
-| `api_saveEvent` | `Code.gs:3910` | `Code.gs:3951` |
+| API Endpoint          | Location       | Calls saveEvent\_() |
+| --------------------- | -------------- | ------------------- |
+| `api_create`          | `Code.gs:3805` | `Code.gs:3840`      |
+| `api_updateEventData` | `Code.gs:3855` | `Code.gs:3891`      |
+| `api_saveEvent`       | `Code.gs:3910` | `Code.gs:3951`      |
 
 ### Adapter Functions
 
 Payloads are normalized before reaching `saveEvent_()`:
 
-| Adapter | Location | Purpose |
-|---------|----------|---------|
-| `normalizeCreatePayloadToEvent_()` | `Code.gs:2526` | Maps API payload to canonical Event |
-| `mergeEventUpdate_()` | `Code.gs:2575` | Overlays partial update onto hydrated Event |
+| Adapter                            | Location       | Purpose                                     |
+| ---------------------------------- | -------------- | ------------------------------------------- |
+| `normalizeCreatePayloadToEvent_()` | `Code.gs:2526` | Maps API payload to canonical Event         |
+| `mergeEventUpdate_()`              | `Code.gs:2575` | Overlays partial update onto hydrated Event |
 
 ---
 
 ## 3. No Endpoint Returns a Non-Canonical Event Shape
 
 **Invariant:** All API endpoints that return event data MUST return either:
+
 1. The full canonical Event shape, OR
 2. A documented derived DTO (subset) explicitly derived from canonical Event
 
 ### Verification
 
-| Bundle | Returns | Shape |
-|--------|---------|-------|
-| PublicBundle | `event: EventCore` | Full canonical |
-| AdminBundle | `event: EventCore` | Full canonical |
-| DisplayBundle | `event: EventCore` | Full canonical |
-| PosterBundle | `event: EventCore` | Full canonical |
-| SponsorBundle | `event: thinEvent` | Derived DTO (id, name, startDateISO, venue, templateId) |
+| Bundle             | Returns            | Shape                                                   |
+| ------------------ | ------------------ | ------------------------------------------------------- |
+| PublicBundle       | `event: EventCore` | Full canonical                                          |
+| AdminBundle        | `event: EventCore` | Full canonical                                          |
+| DisplayBundle      | `event: EventCore` | Full canonical                                          |
+| PosterBundle       | `event: EventCore` | Full canonical                                          |
+| SponsorBundle      | `event: thinEvent` | Derived DTO (id, name, startDateISO, venue, templateId) |
 | SharedReportBundle | `event: thinEvent` | Derived DTO (id, name, startDateISO, venue, templateId) |
 
 **Note:** Sponsor and SharedReport bundles intentionally use a "thin event view" to minimize payload size. The thin view is derived from the full canonical Event returned by `getEventById_()`.
@@ -156,25 +159,25 @@ URLs are generated server-side in `_buildEventContract_()` at `Code.gs:2112-2119
 
 ```javascript
 const links = {
-  publicUrl:  `${baseUrl}?page=events&brand=${brandId}&id=${id}`,
+  publicUrl: `${baseUrl}?page=events&brand=${brandId}&id=${id}`,
   displayUrl: `${baseUrl}?page=display&brand=${brandId}&id=${id}&tv=1`,
-  posterUrl:  `${baseUrl}?page=poster&brand=${brandId}&id=${id}`,
-  signupUrl:  signupUrl  // External or CTA URL
+  posterUrl: `${baseUrl}?page=poster&brand=${brandId}&id=${id}`,
+  signupUrl: signupUrl, // External or CTA URL
 };
 ```
 
 ### Front-End Usage
 
-| Surface | Usage | Location |
-|---------|-------|----------|
-| Admin.html | `links.publicUrl`, `links.displayUrl`, `links.posterUrl` | Lines 1060-1062, 1188-1209 |
-| Poster.html | `event.links.publicUrl`, `event.links.signupUrl` | Lines 476-519 |
-| Public.html | Uses `event.links.*` per contract | Line 1365 |
+| Surface     | Usage                                                    | Location                   |
+| ----------- | -------------------------------------------------------- | -------------------------- |
+| Admin.html  | `links.publicUrl`, `links.displayUrl`, `links.posterUrl` | Lines 1060-1062, 1188-1209 |
+| Poster.html | `event.links.publicUrl`, `event.links.signupUrl`         | Lines 476-519              |
+| Public.html | Uses `event.links.*` per contract                        | Line 1365                  |
 
 ### Exceptions (Acceptable)
 
-| Pattern | Location | Reason |
-|---------|----------|--------|
+| Pattern        | Location         | Reason                            |
+| -------------- | ---------------- | --------------------------------- |
 | `?page=wizard` | `Admin.html:256` | Navigation link, not an event URL |
 
 ---
@@ -202,18 +205,18 @@ window.NU = {
 
 ### Verification
 
-| Surface | RPC Pattern | Compliant |
-|---------|-------------|-----------|
-| Admin.html | `NU.rpc('api_*', {...})` | YES |
-| SharedReport.html | `NU.rpc('api_*', {...})` | YES |
-| Public.html | `NU.rpc('api_*', {...})` | YES |
-| Display.html | `NU.rpc('api_*', {...})` | YES |
-| Poster.html | `NU.rpc('api_*', {...})` | YES |
+| Surface           | RPC Pattern              | Compliant |
+| ----------------- | ------------------------ | --------- |
+| Admin.html        | `NU.rpc('api_*', {...})` | YES       |
+| SharedReport.html | `NU.rpc('api_*', {...})` | YES       |
+| Public.html       | `NU.rpc('api_*', {...})` | YES       |
+| Display.html      | `NU.rpc('api_*', {...})` | YES       |
+| Poster.html       | `NU.rpc('api_*', {...})` | YES       |
 
 ### Acceptable Exceptions
 
-| Surface | Pattern | Reason |
-|---------|---------|--------|
+| Surface           | Pattern                         | Reason                                  |
+| ----------------- | ------------------------------- | --------------------------------------- |
 | SponsorUtils.html | Fire-and-forget `api_logEvents` | Non-critical analytics, failure ignored |
 
 **Note:** All MVP surfaces now use `NU.rpc()` for data loading (E-002, 2025-11-23).
@@ -225,12 +228,14 @@ window.NU = {
 ### Files Analyzed
 
 **Backend (.gs):**
+
 - Code.gs (5000+ lines) - Main router and API
 - Config.gs - Configuration
 - TemplateService.gs - Templates
 - AnalyticsService.gs - Logging
 
 **Frontend (.html):**
+
 - Admin.html - Event management
 - Public.html - Public view
 - Display.html - TV display

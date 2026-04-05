@@ -5,6 +5,7 @@
 The friendly URL system makes your app URLs easy to remember, share, and understand. Instead of technical query parameters like `?p=admin&mode=advanced&brand=abc`, users can access pages with clean, descriptive URLs like `/abc/manage` or `/events`.
 
 **Business Benefits:**
+
 - ✅ Easy to remember and share
 - ✅ SEO-friendly structure
 - ✅ Professional appearance
@@ -16,6 +17,7 @@ The friendly URL system makes your app URLs easy to remember, share, and underst
 ## URL Patterns
 
 ### Pattern 1: Global Aliases
+
 ```
 /events        → Public events page (root brand)
 /display       → TV/kiosk display (root brand)
@@ -25,6 +27,7 @@ The friendly URL system makes your app URLs easy to remember, share, and underst
 ```
 
 ### Pattern 2: Brand-Specific Aliases
+
 ```
 /abc/events    → Public events for American Bocce Co.
 /abc/manage    → Admin for American Bocce Co.
@@ -33,6 +36,7 @@ The friendly URL system makes your app URLs easy to remember, share, and underst
 ```
 
 ### Pattern 3: Custom Brand Aliases
+
 ```
 /abc/tournaments  → Custom alias for ABC events
 /abc/bocce        → Custom alias for ABC events
@@ -46,45 +50,45 @@ The friendly URL system makes your app URLs easy to remember, share, and underst
 
 ### All Global Aliases
 
-| URL | Page File | Purpose | Auth |
-|-----|-----------|---------|------|
-| `/events` | Public.html | View all events | No |
-| `/schedule` | Public.html | View all events (alias) | No |
-| `/calendar` | Public.html | View all events (alias) | No |
-| `/manage` | Admin.html | Full admin dashboard | Yes |
-| `/admin` | Admin.html | Full admin dashboard (alias) | Yes |
-| `/dashboard` | Admin.html | Admin dashboard | Yes |
-| `/create` | Admin.html | Create event (routes to Admin) | Yes |
-| `/display` | Display.html | TV/kiosk slideshow | No |
-| `/tv` | Display.html | TV display (alias) | No |
-| `/kiosk` | Display.html | Kiosk mode (alias) | No |
-| `/screen` | Display.html | Screen display (alias) | No |
-| `/posters` | Poster.html | Print marketing materials | No |
-| `/poster` | Poster.html | Event poster (alias) | No |
-| `/flyers` | Poster.html | Marketing flyers (alias) | No |
-| `/analytics` | SharedReport.html | View reports/stats | Yes |
-| `/reports` | SharedReport.html | Reports (alias) | Yes |
-| `/insights` | SharedReport.html | Insights (alias) | Yes |
-| `/stats` | SharedReport.html | Statistics (alias) | Yes |
-| `/status` | JSON response | Health check/status | No |
-| `/health` | JSON response | Health check (alias) | No |
-| `/docs` | ApiDocs.html | API documentation | No |
-| `/api` | ApiDocs.html | API docs (alias) | No |
+| URL          | Page File         | Purpose                        | Auth |
+| ------------ | ----------------- | ------------------------------ | ---- |
+| `/events`    | Public.html       | View all events                | No   |
+| `/schedule`  | Public.html       | View all events (alias)        | No   |
+| `/calendar`  | Public.html       | View all events (alias)        | No   |
+| `/manage`    | Admin.html        | Full admin dashboard           | Yes  |
+| `/admin`     | Admin.html        | Full admin dashboard (alias)   | Yes  |
+| `/dashboard` | Admin.html        | Admin dashboard                | Yes  |
+| `/create`    | Admin.html        | Create event (routes to Admin) | Yes  |
+| `/display`   | Display.html      | TV/kiosk slideshow             | No   |
+| `/tv`        | Display.html      | TV display (alias)             | No   |
+| `/kiosk`     | Display.html      | Kiosk mode (alias)             | No   |
+| `/screen`    | Display.html      | Screen display (alias)         | No   |
+| `/posters`   | Poster.html       | Print marketing materials      | No   |
+| `/poster`    | Poster.html       | Event poster (alias)           | No   |
+| `/flyers`    | Poster.html       | Marketing flyers (alias)       | No   |
+| `/analytics` | SharedReport.html | View reports/stats             | Yes  |
+| `/reports`   | SharedReport.html | Reports (alias)                | Yes  |
+| `/insights`  | SharedReport.html | Insights (alias)               | Yes  |
+| `/stats`     | SharedReport.html | Statistics (alias)             | Yes  |
+| `/status`    | JSON response     | Health check/status            | No   |
+| `/health`    | JSON response     | Health check (alias)           | No   |
+| `/docs`      | ApiDocs.html      | API documentation              | No   |
+| `/api`       | ApiDocs.html      | API docs (alias)               | No   |
 
 ### Brand Custom Aliases
 
-| Brand | URL | Page File | Purpose | Auth |
-|-------|-----|-----------|---------|------|
-| abc | `/abc/tournaments` | Public.html | Tournament events | No |
-| abc | `/abc/leagues` | Public.html | League events | No |
-| abc | `/abc/bocce` | Public.html | Bocce events | No |
-| abc | `/abc/network` | SharedReport.html | Network analytics | Yes |
-| cbc | `/cbc/tournaments` | Public.html | CBC tournaments | No |
-| cbc | `/cbc/club-events` | Public.html | Club events | No |
-| cbc | `/cbc/register` | Admin.html | Register event | Yes |
-| cbl | `/cbl/seasons` | Public.html | Seasonal events | No |
-| cbl | `/cbl/league-events` | Public.html | League events | No |
-| cbl | `/cbl/schedule` | Public.html | Schedule | No |
+| Brand | URL                  | Page File         | Purpose           | Auth |
+| ----- | -------------------- | ----------------- | ----------------- | ---- |
+| abc   | `/abc/tournaments`   | Public.html       | Tournament events | No   |
+| abc   | `/abc/leagues`       | Public.html       | League events     | No   |
+| abc   | `/abc/bocce`         | Public.html       | Bocce events      | No   |
+| abc   | `/abc/network`       | SharedReport.html | Network analytics | Yes  |
+| cbc   | `/cbc/tournaments`   | Public.html       | CBC tournaments   | No   |
+| cbc   | `/cbc/club-events`   | Public.html       | Club events       | No   |
+| cbc   | `/cbc/register`      | Admin.html        | Register event    | Yes  |
+| cbl   | `/cbl/seasons`       | Public.html       | Seasonal events   | No   |
+| cbl   | `/cbl/league-events` | Public.html       | League events     | No   |
+| cbl   | `/cbl/schedule`      | Public.html       | Schedule          | No   |
 
 ---
 
@@ -93,6 +97,7 @@ The friendly URL system makes your app URLs easy to remember, share, and underst
 Configured in `Config.gs` → `ZEB.BRAND_URL_PATTERNS.customAliases`:
 
 ### American Bocce Co. (abc)
+
 ```javascript
 customAliases: {
   'abc': {
@@ -103,10 +108,12 @@ customAliases: {
 ```
 
 **URLs:**
+
 - `/abc/tournaments` → Public events for ABC
 - `/abc/bocce` → Public events for ABC
 
 ### Chicago Bocce Club (cbc)
+
 ```javascript
 customAliases: {
   'cbc': {
@@ -117,6 +124,7 @@ customAliases: {
 ```
 
 **URLs:**
+
 - `/cbc/club-events` → Public events for CBC
 - `/cbc/register` → Admin page for CBC (auth required)
 
@@ -127,6 +135,7 @@ customAliases: {
 ### For Customers/End Users
 
 **Before (Technical):**
+
 ```
 https://eventangle.com?p=public&brand=abc
 https://eventangle.com?p=display&brand=cbc
@@ -134,6 +143,7 @@ https://eventangle.com?p=admin&mode=advanced&brand=abc
 ```
 
 **After (Friendly):**
+
 ```
 https://eventangle.com/abc/events
 https://eventangle.com/cbc/display
@@ -143,6 +153,7 @@ https://eventangle.com/abc/manage
 ### For Marketing Materials
 
 **Print Flyers:**
+
 ```
 Visit our events page:
 eventangle.com/abc/events
@@ -152,6 +163,7 @@ eventangle.com/abc/tournaments
 ```
 
 **TV Display Setup:**
+
 ```
 Setup Instructions:
 1. Navigate to: eventangle.com/cbc/display
@@ -160,6 +172,7 @@ Setup Instructions:
 ```
 
 **Email to Event Managers:**
+
 ```
 Manage your events at:
 eventangle.com/abc/manage
@@ -218,6 +231,7 @@ BRAND_URL_PATTERNS: {
 ## Developer Functions
 
 ### Resolve URL Alias
+
 ```javascript
 // Get configuration for an alias
 const config = resolveUrlAlias_('events');
@@ -228,6 +242,7 @@ const config2 = resolveUrlAlias_('tournaments', 'abc');
 ```
 
 ### Generate Friendly URL
+
 ```javascript
 // Generate friendly URL for a page
 const url = getFriendlyUrl_('public', 'abc');
@@ -241,6 +256,7 @@ const url3 = getFriendlyUrl_('display', 'root');
 ```
 
 ### List All Aliases
+
 ```javascript
 // Get all available aliases for a brand
 const aliases = listUrlAliases_('abc');
@@ -276,6 +292,7 @@ const publicAliases = listUrlAliases_('abc', true);
 ### Backward Compatibility
 
 Old query parameter URLs still work:
+
 ```
 ?p=admin&brand=abc&mode=advanced  ← Still works!
 /abc/manage                        ← New friendly URL
@@ -288,6 +305,7 @@ Both route to the same page.
 ## Use Cases
 
 ### 1. Marketing & Promotions
+
 ```
 Print materials: eventangle.com/abc/events
 QR codes: eventangle.com/abc/tournaments
@@ -295,12 +313,14 @@ Social media: eventangle.com/cbc/schedule
 ```
 
 ### 2. TV/Kiosk Displays
+
 ```
 Simple setup URL: eventangle.com/cbc/display
 Easy to type, no query parameters needed
 ```
 
 ### 3. Admin Training
+
 ```
 "Just go to /manage to create events"
 "View analytics at /analytics"
@@ -308,6 +328,7 @@ Clear, memorable instructions
 ```
 
 ### 4. Multi-brand Branding
+
 ```
 Each brand gets branded URLs:
 - americanbocceco.com → eventangle.com/abc/events
@@ -424,6 +445,7 @@ Bookmarks and old links still work!
 ## Future Enhancements
 
 ### Subdomain Routing (Planned)
+
 ```
 abc.eventangle.com/events
 cbc.eventangle.com/display
@@ -432,6 +454,7 @@ cbc.eventangle.com/display
 Requires DNS configuration - set `enableSubdomainRouting: true` when ready.
 
 ### Short Link Integration
+
 ```
 eventangle.com/e/summer-tournament → Event detail page
 eventangle.com/s/abc123 → Shortlink redirect
@@ -452,6 +475,7 @@ Already supported via `/e/` and `/s/` patterns.
 ✅ Configurable per brand
 
 **Next Steps:**
+
 1. Test your aliases: [https://eventangle.com/abc/events](https://eventangle.com/abc/events)
 2. Add custom aliases for your brands in `Config.gs`
 3. Update marketing materials with new URLs

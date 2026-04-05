@@ -208,11 +208,11 @@ const SAFE_KEY_PATTERNS = /^(rating|score|count|number|rank|order|id|uuid|type|
 
 A daily cron job runs three independent cleanup phases:
 
-| Phase | Target | TTL | SQL |
-|-------|--------|-----|-----|
-| 1 | Registrations | 90 days after event | `DELETE WHERE expires_at < now()` |
-| 2 | Survey PII | Immediate (next cron run) | `UPDATE SET pii_scrubbed = 1` |
-| 3 | Email signups | 30 days after signup | `DELETE WHERE retention_expires_at < now()` |
+| Phase | Target        | TTL                       | SQL                                         |
+| ----- | ------------- | ------------------------- | ------------------------------------------- |
+| 1     | Registrations | 90 days after event       | `DELETE WHERE expires_at < now()`           |
+| 2     | Survey PII    | Immediate (next cron run) | `UPDATE SET pii_scrubbed = 1`               |
+| 3     | Email signups | 30 days after signup      | `DELETE WHERE retention_expires_at < now()` |
 
 Each phase runs independently. Failure in one does not block others.
 
@@ -224,31 +224,31 @@ FORMS_DB and DB are separate D1 databases. No foreign keys cross the boundary. N
 
 ## What Each Audience Sees
 
-| Data Point | Customer Sees | Sponsor Sees | Admin Sees |
-|-----------|--------------|-------------|-----------|
-| Scan count | — | Aggregate total | Aggregate total |
-| Scan time | — | Hourly buckets | Hourly buckets |
-| Scan location | — | Poster placement | Poster placement + lat/lng |
-| Registration name | Own submission | — | Plain text (90-day TTL) |
-| Registration email | Own submission | — | Hash only (never raw) |
-| Survey rating | Own submission | Aggregate | Scrubbed responses |
-| Email address | Own submission | — | Count only (never raw) |
-| Check-in count | — | Aggregate total | Aggregate total |
+| Data Point         | Customer Sees  | Sponsor Sees     | Admin Sees                 |
+| ------------------ | -------------- | ---------------- | -------------------------- |
+| Scan count         | —              | Aggregate total  | Aggregate total            |
+| Scan time          | —              | Hourly buckets   | Hourly buckets             |
+| Scan location      | —              | Poster placement | Poster placement + lat/lng |
+| Registration name  | Own submission | —                | Plain text (90-day TTL)    |
+| Registration email | Own submission | —                | Hash only (never raw)      |
+| Survey rating      | Own submission | Aggregate        | Scrubbed responses         |
+| Email address      | Own submission | —                | Count only (never raw)     |
+| Check-in count     | —              | Aggregate total  | Aggregate total            |
 
 ---
 
 ## Threat Model
 
-| Threat | Mitigation |
-|--------|-----------|
-| **Database breach of scan system** | No PII to leak — schema has no PII columns |
-| **Database breach of forms system** | Emails hashed/encrypted, surveys scrubbed, TTL-deleted |
-| **Cross-database correlation** | Separate D1 databases, no foreign keys between them |
-| **Timing correlation** | Hour-bucketed timestamps prevent exact-time matching |
-| **Device fingerprinting** | Only `user_agent_hash` stored — device class, not individual |
-| **IP logging** | IP never stored; country/region derived from CF headers at request time |
-| **Encryption key compromise** | Email signups TTL-deleted after 30 days regardless |
-| **Admin data access** | Admin APIs return hashes, counts, and scrubbed data — never raw PII |
+| Threat                              | Mitigation                                                              |
+| ----------------------------------- | ----------------------------------------------------------------------- |
+| **Database breach of scan system**  | No PII to leak — schema has no PII columns                              |
+| **Database breach of forms system** | Emails hashed/encrypted, surveys scrubbed, TTL-deleted                  |
+| **Cross-database correlation**      | Separate D1 databases, no foreign keys between them                     |
+| **Timing correlation**              | Hour-bucketed timestamps prevent exact-time matching                    |
+| **Device fingerprinting**           | Only `user_agent_hash` stored — device class, not individual            |
+| **IP logging**                      | IP never stored; country/region derived from CF headers at request time |
+| **Encryption key compromise**       | Email signups TTL-deleted after 30 days regardless                      |
+| **Admin data access**               | Admin APIs return hashes, counts, and scrubbed data — never raw PII     |
 
 ---
 

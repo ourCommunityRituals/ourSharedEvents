@@ -26,6 +26,7 @@
 ### 1.1 Goal
 
 Remove MITM-friendly configurations by:
+
 - Setting SSL/TLS encryption mode to **Full (strict)**
 - Enforcing minimum TLS 1.2 (preferring TLS 1.3)
 - Enabling **Always Use HTTPS** to redirect all HTTP traffic
@@ -34,24 +35,24 @@ Remove MITM-friendly configurations by:
 
 Weak TLS configurations expose users to serious security risks:
 
-| Configuration | Risk | Impact |
-|--------------|------|--------|
-| **Flexible SSL** | Traffic between Cloudflare and origin is unencrypted | MITM attacks at datacenter/ISP level |
-| **Full (non-strict)** | Invalid/expired origin certificates accepted | Attacker with any certificate can intercept |
-| **TLS 1.0/1.1** | Known vulnerabilities (BEAST, POODLE) | Session hijacking, data decryption |
-| **No HTTPS redirect** | Users may connect over HTTP | Credentials, cookies sent in plaintext |
+| Configuration         | Risk                                                 | Impact                                      |
+| --------------------- | ---------------------------------------------------- | ------------------------------------------- |
+| **Flexible SSL**      | Traffic between Cloudflare and origin is unencrypted | MITM attacks at datacenter/ISP level        |
+| **Full (non-strict)** | Invalid/expired origin certificates accepted         | Attacker with any certificate can intercept |
+| **TLS 1.0/1.1**       | Known vulnerabilities (BEAST, POODLE)                | Session hijacking, data decryption          |
+| **No HTTPS redirect** | Users may connect over HTTP                          | Credentials, cookies sent in plaintext      |
 
 **Full (strict) SSL ensures end-to-end encryption with certificate validation.**
 
 ### 1.3 Threat Model
 
-| Threat | Attack Vector | Without Strict TLS | With Strict TLS |
-|--------|--------------|-------------------|-----------------|
-| MITM at Origin | Attacker intercepts Cloudflare→Origin traffic | **VULNERABLE** (Flexible mode) | **PROTECTED** |
-| Certificate Spoofing | Attacker presents invalid certificate | **VULNERABLE** (Full mode) | **PROTECTED** |
-| Downgrade Attack | Force connection to weaker TLS version | **VULNERABLE** (TLS 1.0/1.1) | **PROTECTED** |
-| Session Hijacking | Capture cookies over HTTP | **VULNERABLE** (no redirect) | **PROTECTED** |
-| SSL Stripping | Intercept HTTP before upgrade | **VULNERABLE** (no HSTS) | **PROTECTED** |
+| Threat               | Attack Vector                                 | Without Strict TLS             | With Strict TLS |
+| -------------------- | --------------------------------------------- | ------------------------------ | --------------- |
+| MITM at Origin       | Attacker intercepts Cloudflare→Origin traffic | **VULNERABLE** (Flexible mode) | **PROTECTED**   |
+| Certificate Spoofing | Attacker presents invalid certificate         | **VULNERABLE** (Full mode)     | **PROTECTED**   |
+| Downgrade Attack     | Force connection to weaker TLS version        | **VULNERABLE** (TLS 1.0/1.1)   | **PROTECTED**   |
+| Session Hijacking    | Capture cookies over HTTP                     | **VULNERABLE** (no redirect)   | **PROTECTED**   |
+| SSL Stripping        | Intercept HTTP before upgrade                 | **VULNERABLE** (no HSTS)       | **PROTECTED**   |
 
 ### 1.4 SSL/TLS Mode Comparison
 
@@ -93,14 +94,14 @@ Weak TLS configurations expose users to serious security risks:
 
 ### 1.5 Scope
 
-| Component | In Scope |
-|-----------|----------|
-| SSL/TLS encryption mode setting | Yes |
-| Minimum TLS version enforcement | Yes |
-| Always Use HTTPS setting | Yes |
-| HSTS (HTTP Strict Transport Security) | Yes |
-| Origin certificate validation | Yes |
-| Mixed content prevention | Yes |
+| Component                             | In Scope |
+| ------------------------------------- | -------- |
+| SSL/TLS encryption mode setting       | Yes      |
+| Minimum TLS version enforcement       | Yes      |
+| Always Use HTTPS setting              | Yes      |
+| HSTS (HTTP Strict Transport Security) | Yes      |
+| Origin certificate validation         | Yes      |
+| Mixed content prevention              | Yes      |
 
 ---
 
@@ -116,24 +117,24 @@ Weak TLS configurations expose users to serious security risks:
 
 Before starting, gather:
 
-| Information | Source | Status |
-|-------------|--------|--------|
-| Domain name(s) | Cloudflare dashboard | |
-| Current SSL/TLS mode | Cloudflare → SSL/TLS → Overview | |
-| Origin certificate type | Origin server configuration | |
-| Origin certificate expiration | Origin server or certificate issuer | |
+| Information                   | Source                              | Status |
+| ----------------------------- | ----------------------------------- | ------ |
+| Domain name(s)                | Cloudflare dashboard                |        |
+| Current SSL/TLS mode          | Cloudflare → SSL/TLS → Overview     |        |
+| Origin certificate type       | Origin server configuration         |        |
+| Origin certificate expiration | Origin server or certificate issuer |        |
 
 ### 2.3 Origin Certificate Requirements
 
 For **Full (strict)** mode, the origin server MUST have a valid SSL certificate:
 
-| Certificate Type | Valid for Full (strict) | Notes |
-|-----------------|------------------------|-------|
-| Cloudflare Origin CA | ✅ Yes | Free, trusted by Cloudflare, 15-year validity |
-| Let's Encrypt | ✅ Yes | Free, 90-day validity, auto-renewal |
-| Commercial CA (DigiCert, Sectigo, etc.) | ✅ Yes | Paid, 1-2 year validity |
-| Self-signed | ❌ No | Not trusted, use "Full" mode only |
-| Expired certificate | ❌ No | Connection will fail |
+| Certificate Type                        | Valid for Full (strict) | Notes                                         |
+| --------------------------------------- | ----------------------- | --------------------------------------------- |
+| Cloudflare Origin CA                    | ✅ Yes                  | Free, trusted by Cloudflare, 15-year validity |
+| Let's Encrypt                           | ✅ Yes                  | Free, 90-day validity, auto-renewal           |
+| Commercial CA (DigiCert, Sectigo, etc.) | ✅ Yes                  | Paid, 1-2 year validity                       |
+| Self-signed                             | ❌ No                   | Not trusted, use "Full" mode only             |
+| Expired certificate                     | ❌ No                   | Connection will fail                          |
 
 ### 2.4 Pre-Flight Checks
 
@@ -153,12 +154,12 @@ Before changing SSL/TLS settings, verify:
 
 ### 3.1 Current SSL Modes in Cloudflare
 
-| Mode | Description | Security Level | Use Case |
-|------|-------------|----------------|----------|
-| **Off** | No encryption | ❌ None | Never use |
-| **Flexible** | Browser→Cloudflare encrypted only | ❌ Insecure | Never use |
-| **Full** | End-to-end encrypted, no validation | ⚠️ Partial | Legacy/self-signed only |
-| **Full (strict)** | End-to-end encrypted + validated | ✅ **Secure** | **Required** |
+| Mode              | Description                         | Security Level | Use Case                |
+| ----------------- | ----------------------------------- | -------------- | ----------------------- |
+| **Off**           | No encryption                       | ❌ None        | Never use               |
+| **Flexible**      | Browser→Cloudflare encrypted only   | ❌ Insecure    | Never use               |
+| **Full**          | End-to-end encrypted, no validation | ⚠️ Partial     | Legacy/self-signed only |
+| **Full (strict)** | End-to-end encrypted + validated    | ✅ **Secure**  | **Required**            |
 
 ### 3.2 Check Current Mode
 
@@ -224,13 +225,13 @@ If your origin doesn't have a valid certificate, create a free Cloudflare Origin
 
 ### 4.1 TLS Version Security
 
-| Version | Status | Known Vulnerabilities | Recommendation |
-|---------|--------|----------------------|----------------|
-| SSL 3.0 | Deprecated | POODLE | **Never use** |
-| TLS 1.0 | Deprecated | BEAST, multiple CVEs | **Never use** |
-| TLS 1.1 | Deprecated | Multiple CVEs | **Never use** |
-| TLS 1.2 | Supported | None critical | ✅ Minimum acceptable |
-| TLS 1.3 | Current | None | ✅ **Preferred** |
+| Version | Status     | Known Vulnerabilities | Recommendation        |
+| ------- | ---------- | --------------------- | --------------------- |
+| SSL 3.0 | Deprecated | POODLE                | **Never use**         |
+| TLS 1.0 | Deprecated | BEAST, multiple CVEs  | **Never use**         |
+| TLS 1.1 | Deprecated | Multiple CVEs         | **Never use**         |
+| TLS 1.2 | Supported  | None critical         | ✅ Minimum acceptable |
+| TLS 1.3 | Current    | None                  | ✅ **Preferred**      |
 
 ### 4.2 Check Current Minimum TLS Version
 
@@ -274,14 +275,14 @@ curl -X PATCH "https://api.cloudflare.com/client/v4/zones/{zone_id}/settings/min
 
 Setting minimum TLS 1.2 may affect very old browsers:
 
-| Browser | TLS 1.2 Support | Market Share |
-|---------|-----------------|--------------|
-| Chrome 30+ | ✅ Yes | 99.9%+ |
-| Firefox 27+ | ✅ Yes | 99.9%+ |
-| Safari 7+ | ✅ Yes | 99.9%+ |
-| Edge (all) | ✅ Yes | 100% |
-| IE 11 (Win 7+) | ✅ Yes | Declining |
-| IE 10 and below | ❌ No | <0.1% |
+| Browser         | TLS 1.2 Support | Market Share |
+| --------------- | --------------- | ------------ |
+| Chrome 30+      | ✅ Yes          | 99.9%+       |
+| Firefox 27+     | ✅ Yes          | 99.9%+       |
+| Safari 7+       | ✅ Yes          | 99.9%+       |
+| Edge (all)      | ✅ Yes          | 100%         |
+| IE 11 (Win 7+)  | ✅ Yes          | Declining    |
+| IE 10 and below | ❌ No           | <0.1%        |
 
 > **Note:** TLS 1.2 is supported by 99%+ of internet users. The remaining users are on extremely outdated systems.
 
@@ -314,6 +315,7 @@ HTTPS Response: https://eventangle.com/page
 ```
 
 This ensures:
+
 - Users typing `example.com` get redirected to `https://example.com`
 - Links using `http://` get upgraded automatically
 - Bookmarks using old HTTP URLs continue to work
@@ -391,14 +393,14 @@ To have your domain included in browser HSTS preload lists:
 
 ### 6.1 Acceptance Criteria Verification
 
-| Criterion | How to Verify | Status |
-|-----------|---------------|--------|
+| Criterion                         | How to Verify                   | Status   |
+| --------------------------------- | ------------------------------- | -------- |
 | **SSL/TLS mode is Full (strict)** | Dashboard shows "Full (strict)" | [ ] Pass |
-| **Minimum TLS 1.2 enforced** | Dashboard shows TLS 1.2 minimum | [ ] Pass |
-| **TLS 1.3 enabled** | Dashboard shows TLS 1.3 enabled | [ ] Pass |
-| **Always Use HTTPS enabled** | Dashboard toggle is On | [ ] Pass |
-| **HTTP redirects to HTTPS** | `curl -I http://...` shows 301 | [ ] Pass |
-| **No mixed content warnings** | Browser console clean | [ ] Pass |
+| **Minimum TLS 1.2 enforced**      | Dashboard shows TLS 1.2 minimum | [ ] Pass |
+| **TLS 1.3 enabled**               | Dashboard shows TLS 1.3 enabled | [ ] Pass |
+| **Always Use HTTPS enabled**      | Dashboard toggle is On          | [ ] Pass |
+| **HTTP redirects to HTTPS**       | `curl -I http://...` shows 301  | [ ] Pass |
+| **No mixed content warnings**     | Browser console clean           | [ ] Pass |
 
 ### 6.2 Command-Line Verification
 
@@ -450,6 +452,7 @@ Run a comprehensive SSL/TLS test:
 4. Review results
 
 **Expected Results:**
+
 - Overall rating: **A** or **A+**
 - Protocol support: TLS 1.2, TLS 1.3 only
 - No warnings for weak configurations
@@ -556,39 +559,41 @@ echo "=== Verification Complete ==="
 
 ### 7.1 Site Not Loading After Enabling Full (strict)
 
-| Symptom | Cause | Solution |
-|---------|-------|----------|
-| 525 SSL Handshake Failed | Origin has no SSL certificate | Install origin certificate |
-| 526 Invalid SSL Certificate | Origin certificate expired/invalid | Renew or replace certificate |
-| 526 Invalid SSL Certificate | Self-signed certificate | Use Cloudflare Origin CA or Let's Encrypt |
-| 526 Invalid SSL Certificate | Hostname mismatch | Ensure cert covers the hostname |
+| Symptom                     | Cause                              | Solution                                  |
+| --------------------------- | ---------------------------------- | ----------------------------------------- |
+| 525 SSL Handshake Failed    | Origin has no SSL certificate      | Install origin certificate                |
+| 526 Invalid SSL Certificate | Origin certificate expired/invalid | Renew or replace certificate              |
+| 526 Invalid SSL Certificate | Self-signed certificate            | Use Cloudflare Origin CA or Let's Encrypt |
+| 526 Invalid SSL Certificate | Hostname mismatch                  | Ensure cert covers the hostname           |
 
 **Emergency Recovery:**
 If site is down, temporarily switch to **Full** mode while fixing origin certificate:
+
 1. SSL/TLS → Overview → Select **Full**
 2. Fix origin certificate
 3. Return to **Full (strict)**
 
 ### 7.2 TLS Connection Errors
 
-| Error | Likely Cause | Solution |
-|-------|--------------|----------|
-| ERR_SSL_VERSION_OR_CIPHER_MISMATCH | Old browser/client | User needs to update browser |
-| SSL_ERROR_NO_CYPHER_OVERLAP | Incompatible cipher suites | Check Cloudflare cipher settings |
-| TLSV1_ALERT_PROTOCOL_VERSION | Client using TLS 1.0/1.1 | Client needs to upgrade |
+| Error                              | Likely Cause               | Solution                         |
+| ---------------------------------- | -------------------------- | -------------------------------- |
+| ERR_SSL_VERSION_OR_CIPHER_MISMATCH | Old browser/client         | User needs to update browser     |
+| SSL_ERROR_NO_CYPHER_OVERLAP        | Incompatible cipher suites | Check Cloudflare cipher settings |
+| TLSV1_ALERT_PROTOCOL_VERSION       | Client using TLS 1.0/1.1   | Client needs to upgrade          |
 
 ### 7.3 Mixed Content Issues
 
-| Content Type | How to Fix |
-|--------------|------------|
-| Images (`<img src="http://...">`) | Update to HTTPS or protocol-relative (`//`) |
-| Scripts (`<script src="http://...">`) | Update to HTTPS |
-| Stylesheets (`<link href="http://...">`) | Update to HTTPS |
-| iframes | Update to HTTPS or remove |
-| Third-party resources | Use HTTPS version or find alternative |
+| Content Type                             | How to Fix                                  |
+| ---------------------------------------- | ------------------------------------------- |
+| Images (`<img src="http://...">`)        | Update to HTTPS or protocol-relative (`//`) |
+| Scripts (`<script src="http://...">`)    | Update to HTTPS                             |
+| Stylesheets (`<link href="http://...">`) | Update to HTTPS                             |
+| iframes                                  | Update to HTTPS or remove                   |
+| Third-party resources                    | Use HTTPS version or find alternative       |
 
 **Quick Fix for Cloudflare:**
 Enable **Automatic HTTPS Rewrites** to automatically fix mixed content:
+
 1. SSL/TLS → Edge Certificates
 2. Enable **Automatic HTTPS Rewrites**
 
@@ -596,25 +601,26 @@ Enable **Automatic HTTPS Rewrites** to automatically fix mixed content:
 
 ### 7.4 HSTS Issues
 
-| Issue | Solution |
-|-------|----------|
-| Locked out of HTTP | Wait for HSTS cache to expire (max-age) |
-| Browser cached bad HSTS | Clear browser cache/HSTS settings |
-| Want to disable HSTS | Set max-age to 0, wait for propagation |
+| Issue                   | Solution                                |
+| ----------------------- | --------------------------------------- |
+| Locked out of HTTP      | Wait for HSTS cache to expire (max-age) |
+| Browser cached bad HSTS | Clear browser cache/HSTS settings       |
+| Want to disable HSTS    | Set max-age to 0, wait for propagation  |
 
 **Clear HSTS in Chrome:**
+
 1. Navigate to `chrome://net-internals/#hsts`
 2. Enter domain in "Delete domain security policies"
 3. Click "Delete"
 
 ### 7.5 Origin Certificate Issues
 
-| Issue | Solution |
-|-------|----------|
-| Certificate expired | Renew certificate (Let's Encrypt auto-renews) |
-| Wrong hostname | Generate new certificate with correct SANs |
-| Certificate not installed | Install certificate on web server |
-| Private key mismatch | Regenerate certificate and key |
+| Issue                     | Solution                                      |
+| ------------------------- | --------------------------------------------- |
+| Certificate expired       | Renew certificate (Let's Encrypt auto-renews) |
+| Wrong hostname            | Generate new certificate with correct SANs    |
+| Certificate not installed | Install certificate on web server             |
+| Private key mismatch      | Regenerate certificate and key                |
 
 **Verify Origin Certificate:**
 
@@ -629,13 +635,13 @@ openssl s_client -connect origin.example.com:443 -servername eventangle.com </de
 
 ### Settings Endpoints
 
-| Setting | Endpoint | Values |
-|---------|----------|--------|
-| SSL Mode | `/zones/{zone_id}/settings/ssl` | off, flexible, full, strict |
-| Min TLS Version | `/zones/{zone_id}/settings/min_tls_version` | 1.0, 1.1, 1.2, 1.3 |
-| Always Use HTTPS | `/zones/{zone_id}/settings/always_use_https` | on, off |
-| TLS 1.3 | `/zones/{zone_id}/settings/tls_1_3` | on, off, zrt |
-| HSTS | `/zones/{zone_id}/settings/security_header` | (complex object) |
+| Setting          | Endpoint                                     | Values                      |
+| ---------------- | -------------------------------------------- | --------------------------- |
+| SSL Mode         | `/zones/{zone_id}/settings/ssl`              | off, flexible, full, strict |
+| Min TLS Version  | `/zones/{zone_id}/settings/min_tls_version`  | 1.0, 1.1, 1.2, 1.3          |
+| Always Use HTTPS | `/zones/{zone_id}/settings/always_use_https` | on, off                     |
+| TLS 1.3          | `/zones/{zone_id}/settings/tls_1_3`          | on, off, zrt                |
+| HSTS             | `/zones/{zone_id}/settings/security_header`  | (complex object)            |
 
 ### Example: Full Configuration Script
 
@@ -688,6 +694,7 @@ Cloudflare uses strong cipher suites by default. To restrict further:
 3. Disable weak ciphers if any are enabled
 
 Recommended cipher suites:
+
 - `TLS_AES_256_GCM_SHA384` (TLS 1.3)
 - `TLS_CHACHA20_POLY1305_SHA256` (TLS 1.3)
 - `TLS_AES_128_GCM_SHA256` (TLS 1.3)
@@ -701,6 +708,7 @@ Recommended cipher suites:
 ### PCI-DSS
 
 PCI-DSS 3.2.1+ requires:
+
 - TLS 1.1 minimum (TLS 1.2+ recommended)
 - Strong cipher suites only
 - No SSL 3.0
@@ -710,6 +718,7 @@ PCI-DSS 3.2.1+ requires:
 ### HIPAA
 
 HIPAA requires encryption of ePHI in transit:
+
 - TLS 1.2+ recommended
 - Strong authentication of endpoints
 
@@ -718,6 +727,7 @@ HIPAA requires encryption of ePHI in transit:
 ### SOC 2
 
 SOC 2 requires:
+
 - Encryption of data in transit
 - Protection against unauthorized access
 
@@ -727,8 +737,8 @@ SOC 2 requires:
 
 ## Document History
 
-| Date | Author | Changes |
-|------|--------|---------|
+| Date       | Author      | Changes                   |
+| ---------- | ----------- | ------------------------- |
 | 2025-12-20 | Claude Code | Initial runbook (SEC-3.1) |
 
 ---
