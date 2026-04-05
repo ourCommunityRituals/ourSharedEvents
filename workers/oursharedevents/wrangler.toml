@@ -31,11 +31,7 @@ database_id = "local"
 migrations_dir = "migrations"
 
 # ── Forms D1 Database (local dev) — SEPARATE from anonymous scan system ──
-<<<<<<< HEAD
-# Migrations applied via: wrangler d1 migrations apply ocr-forms-db-local --local
-=======
 # Migrations applied via: wrangler d1 migrations apply FORMS_DB --local
->>>>>>> origin/main
 [[d1_databases]]
 binding = "FORMS_DB"
 database_name = "ocr-forms-db-local"
@@ -61,15 +57,11 @@ routes = [
 ]
 
 # ── D1 Database (staging) ────────────────────────────────────────
-<<<<<<< HEAD
 # Migrations applied via CI: wrangler d1 migrations apply ocr-db-staging --env staging --remote
-=======
-# Migrations applied via CI: wrangler d1 migrations apply DB --env staging --remote
->>>>>>> origin/main
 [[env.staging.d1_databases]]
 binding = "DB"
 database_name = "ocr-db-staging"
-database_id = "<staging-db-id>"
+database_id = "4c4381db-3823-412d-8275-e35d80e603b4"
 migrations_dir = "migrations"
 
 # ── Forms D1 Database (staging) — SEPARATE from anonymous scan system ──
@@ -77,7 +69,7 @@ migrations_dir = "migrations"
 [[env.staging.d1_databases]]
 binding = "FORMS_DB"
 database_name = "ocr-forms-db-staging"
-database_id = "<staging-forms-db-id>"
+database_id = "ff1cb46d-cb3b-463d-9aad-713de4d272b5"
 migrations_dir = "migrations-forms"
 
 [env.staging.vars]
@@ -107,11 +99,7 @@ routes = [
 
 # ── D1 Database (production) ─────────────────────────────────────
 # Production migrations NEVER run locally — only via deploy-prod CI with approval gate
-<<<<<<< HEAD
 # Migrations applied via CI: wrangler d1 migrations apply ocr-db-production --env production --remote
-=======
-# Migrations applied via CI: wrangler d1 migrations apply DB --env production --remote
->>>>>>> origin/main
 [[env.production.d1_databases]]
 binding = "DB"
 database_name = "ocr-db-production"
