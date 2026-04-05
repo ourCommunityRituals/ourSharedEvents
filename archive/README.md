@@ -1,59 +1,67 @@
-# Archived Documentation
+# Archive
 
-This directory contains archived documentation and code that is no longer part of the active MVP.
+> Historical documentation, legacy code, and analysis reports.
+> Preserved for reference. **Not actively maintained.**
 
-## Archive Structure
+---
 
-### `/hostinger-proxy/`
-Legacy PHP proxy files replaced by Cloudflare Workers.
-- `index.php`, `index-advanced.php` - PHP proxy scripts
-- `.htaccess` - Apache rewrite rules
-- `README.md`, `ROUTING_EXAMPLES.md` - Proxy documentation
+## Directory Guide
 
-### `/experimental-frontends/`
-Alternative Admin interfaces that are not part of the MVP golden path.
-- `AdminEnhanced.html` - Enhanced admin UI (experimental)
-- `AdminWizard.html` - Step-by-step wizard (experimental)
+### [`analysis-reports/`](analysis-reports/) — 89 files
 
-**MVP Admin**: Use `Admin.html` in the root directory.
+Deep-dive analysis reports generated during development. Covers architecture reviews, deployment analysis, testing audits, security scans, and refactoring plans.
 
-### `/experimental-dashboards/`
-Standalone dashboard experiments not integrated into main product.
-- `dashboard/` - Standalone monitoring dashboard
-- `test-dashboard.html` - Test dashboard page
+**Key reports:**
 
-### `/analysis-reports/`
-Historical analysis documents from previous sprints and reviews.
-- Architecture analyses
-- Deployment fix guides
-- CI/CD enhancement plans
-- Executive summaries
-- Consolidation reports
+- `ARCHITECTURE-FINDINGS-SUMMARY.md` — Architecture analysis findings
+- `EXECUTIVE_SUMMARY.md` — Executive project summary
+- `CODEBASE_ARCHITECTURE_OVERVIEW.md` — Full codebase overview
+- `TESTING_INFRASTRUCTURE_AUDIT.md` — Test infrastructure audit
+- `SECURITY_FIXES_REPORT.md` — Security fix report
 
-## Current Production Stack
+### [`v2-docs/`](v2-docs/) — 35 files
 
-| Component | Current | Archived |
-|-----------|---------|----------|
-| Proxy Layer | Cloudflare Workers | Hostinger PHP |
-| Admin Interface | `Admin.html` | `AdminEnhanced.html`, `AdminWizard.html` |
-| Documentation | 13 essential guides in root | 89+ analysis reports |
+Documentation from the previous (v2) development iteration. Includes setup guides, testing guides, deployment plans, and design system docs that have been superseded by current `/docs/` content.
 
-## For Current Documentation
+### [`v2-code/`](v2-code/) — 25 files
 
-See root directory for active documentation:
-- `README.md` - Project overview
-- `START_HERE.md` - Quick start guide
-- `DEPLOYMENT.md` - Deployment instructions
-- `TESTING.md` - Test infrastructure
-- `MVP_GOLDEN_PATH.md` - Canonical pages and architecture
+Legacy v2 HTML templates, GAS code, and UI components. Superseded by the current Cloudflare Worker embedded surfaces.
 
-See `docs/` for scope and architecture:
-- **`docs/MVP_SURFACES.md`** - MVP scope lock (5 surfaces for focus groups)
-- `docs/ARCHITECTURE.md` - System architecture
-- `docs/FRIENDLY_URLS.md` - URL routing documentation
+### [`gas/`](gas/) — 16 files
 
-## MVP vs Archived
+Legacy Google Apps Script backend code (`.gs` files). Being migrated to Cloudflare Workers (Phase 1). Preserved as reference for migration verification.
 
-**MVP Surfaces (5 total)**: Admin, Public, Display, Poster, SharedReport
+### [`experimental-dashboards/`](experimental-dashboards/) — 10 files
 
-**Everything in this directory is NOT part of the MVP** and should NOT be wired into navigation or tests.
+Prototype Node.js dashboard application. Not used in production.
+
+### [`postman/`](postman/) — 6 files
+
+Postman API test collections for different event phases. Superseded by Playwright E2E tests.
+
+### [`experimental-frontends/`](experimental-frontends/) — 4 files
+
+Prototype admin and sponsor UI components. Not used in production.
+
+### [`hostinger-proxy/`](hostinger-proxy/) — 5 files
+
+Legacy PHP proxy on Hostinger. Fully deprecated — replaced by Cloudflare Worker.
+
+### Root-level archive files — 13 files
+
+Hostinger-era deployment guides and Phase 1 implementation summaries.
+
+---
+
+## When to Reference Archive
+
+- **Migration verification**: Compare GAS behavior against Worker implementation
+- **Historical context**: Understand past architecture decisions
+- **Analysis reuse**: Some analysis reports contain useful metrics and findings
+- **API testing**: Postman collections document legacy API contracts
+
+## When NOT to Use Archive
+
+- **Current development**: Use `/docs/` for active documentation
+- **Deployment**: Use `/docs/deployment/` and `/docs/runbooks/`
+- **Security baselines**: Use `/docs/security/` for current policies

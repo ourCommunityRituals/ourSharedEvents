@@ -95,7 +95,7 @@ jobs:
         egress-policy: audit
 
     - name: Checkout repository
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
 
     - name: Display security scan configuration
       run: |
@@ -115,7 +115,7 @@ jobs:
 
     - name: Initialize CodeQL
       id: codeql-init
-      uses: github/codeql-action/init@v3
+      uses: github/codeql-action/init@v4
       # Continue on error - Advanced Security may not be enabled
       continue-on-error: true
       with:
@@ -128,7 +128,7 @@ jobs:
         queries: +security-extended,security-and-quality,.github/codeql/custom-queries
 
     - name: Setup Node.js (for dependency analysis)
-      uses: actions/setup-node@v4
+      uses: actions/setup-node@v6
       with:
         node-version: '20'
         cache: 'npm'
@@ -140,7 +140,7 @@ jobs:
 
     - name: Perform CodeQL Analysis
       id: codeql-analyze
-      uses: github/codeql-action/analyze@v3
+      uses: github/codeql-action/analyze@v4
       # Continue on error - Advanced Security may not be enabled on all repos
       continue-on-error: true
       with:
@@ -322,10 +322,10 @@ jobs:
 
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
 
     - name: Setup Node.js
-      uses: actions/setup-node@v4
+      uses: actions/setup-node@v6
       with:
         node-version: '20'
         cache: 'npm'
@@ -412,7 +412,7 @@ jobs:
 
     - name: Upload audit report
       if: always()
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: dependency-audit-report
         path: .security-reports/

@@ -267,7 +267,11 @@ export async function setFlag(
  * Apply a tier preset — upserts all global flags to match the tier.
  * Does NOT touch event-scoped overrides (enterprise stays intact).
  *
+<<<<<<< HEAD
  * Uses db.batch() to send all upserts in a single round-trip.
+=======
+ * Uses db.batch() to collapse 17 sequential writes into a single round-trip.
+>>>>>>> origin/main
  */
 export async function applyTier(
   db: D1Database,
@@ -289,7 +293,6 @@ export async function applyTier(
   });
 
   await db.batch(statements);
-
   return { tier, applied: entries.length };
 }
 
@@ -324,7 +327,8 @@ export async function removeEventFlag(
  * Get the resolved state of all flags for a given event.
  * Applies the full lookup hierarchy: event > global > default ON.
  *
- * Uses a single DB query instead of N+1 individual lookups.
+ * Uses a single D1 query instead of N per-flag queries.
+ * Resolution hierarchy is applied in application code after the fetch.
  */
 export async function resolveFlags(
   db: D1Database,
