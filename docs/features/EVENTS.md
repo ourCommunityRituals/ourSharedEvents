@@ -8,16 +8,16 @@
 
 An event is a community gathering — a bocce night, a record-night social, an open-table dinner. Events have:
 
-| Field | Description |
-|-------|-------------|
-| **ID** | Unique identifier (alphanumeric + hyphens) |
-| **Name** | Display name ("Spring Bocce Night") |
-| **Brand** | Which brand owns it (`root` default, or `abc`, `orn`, etc.) |
-| **Start date** | When the event happens (ISO 8601) |
-| **Venue** | Where it happens |
-| **Status** | `active` or `archived` |
-| **Slug** | URL-friendly identifier |
-| **Data JSON** | Flexible payload with event-specific details |
+| Field          | Description                                                 |
+| -------------- | ----------------------------------------------------------- |
+| **ID**         | Unique identifier (alphanumeric + hyphens)                  |
+| **Name**       | Display name ("Spring Bocce Night")                         |
+| **Brand**      | Which brand owns it (`root` default, or `abc`, `orn`, etc.) |
+| **Start date** | When the event happens (ISO 8601)                           |
+| **Venue**      | Where it happens                                            |
+| **Status**     | `active` or `archived`                                      |
+| **Slug**       | URL-friendly identifier                                     |
+| **Data JSON**  | Flexible payload with event-specific details                |
 
 ---
 
@@ -34,6 +34,7 @@ GET /api/v2/events?brand=root&full=true
 Returns active (non-archived) events for a brand, sorted by date (newest first). The `full=true` param includes all event data fields; without it, only summary fields (name, date, venue) are returned.
 
 **Response:**
+
 ```json
 {
   "ok": true,
@@ -77,18 +78,18 @@ Returns all events including archived. Requires admin authentication. No caching
 
 Events are stored in a Google Sheets `EVENTS` sheet with this column layout:
 
-| Column | Field | Description |
-|--------|-------|-------------|
-| A | id | Primary key |
-| B | brand_id | Multi-tenant isolation key |
-| C | template_id | Event template reference |
-| D | data_json | Flexible JSON payload (name, date, venue, etc.) |
-| E | created_at | Creation timestamp |
-| F | slug | URL-friendly ID |
-| G | updated_at | Last update timestamp |
-| H | status | `active` or `archived` |
-| I | is_default | Default event for brand |
-| J | asset_state | Asset readiness state |
+| Column | Field       | Description                                     |
+| ------ | ----------- | ----------------------------------------------- |
+| A      | id          | Primary key                                     |
+| B      | brand_id    | Multi-tenant isolation key                      |
+| C      | template_id | Event template reference                        |
+| D      | data_json   | Flexible JSON payload (name, date, venue, etc.) |
+| E      | created_at  | Creation timestamp                              |
+| F      | slug        | URL-friendly ID                                 |
+| G      | updated_at  | Last update timestamp                           |
+| H      | status      | `active` or `archived`                          |
+| I      | is_default  | Default event for brand                         |
+| J      | asset_state | Asset readiness state                           |
 
 In Phase 2 (D1), this moves to a SQL table with identical fields.
 
@@ -113,9 +114,9 @@ Events are the center of the data model triangle:
 
 ## Error Responses
 
-| Code | HTTP | Meaning |
-|------|------|---------|
-| `SHEETS_DB_ID_MISSING` | 503 | Spreadsheet ID not configured |
-| `SHEETS_READ_FAILED` | 503 | Google Sheets API error |
-| `NOT_FOUND` | 404 | Event ID doesn't exist |
-| `INTERNAL_ERROR` | 500 | Unexpected server error |
+| Code                   | HTTP | Meaning                       |
+| ---------------------- | ---- | ----------------------------- |
+| `SHEETS_DB_ID_MISSING` | 503  | Spreadsheet ID not configured |
+| `SHEETS_READ_FAILED`   | 503  | Google Sheets API error       |
+| `NOT_FOUND`            | 404  | Event ID doesn't exist        |
+| `INTERNAL_ERROR`       | 500  | Unexpected server error       |

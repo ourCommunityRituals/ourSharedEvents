@@ -7,6 +7,7 @@ This document describes the complete DNS cutover to route ALL eventangle.com tra
 ## Status: COMPLETE ✅
 
 As of Story 5.2, the DNS cutover is fully complete:
+
 - **Staging** (`stg.eventangle.com`): BACKEND_MODE=worker
 - **Production** (`eventangle.com`): BACKEND_MODE=worker
 - **No script.google.com backend calls exist anywhere**
@@ -14,6 +15,7 @@ As of Story 5.2, the DNS cutover is fully complete:
 ## Architecture
 
 ### Before Story 5.2
+
 ```
 eventangle.com → Cloudflare Worker → GAS (for shortlinks, RPC)
                                    → Worker templates (HTML)
@@ -21,6 +23,7 @@ eventangle.com → Cloudflare Worker → GAS (for shortlinks, RPC)
 ```
 
 ### After Story 5.2 (CURRENT)
+
 ```
 eventangle.com → Cloudflare Worker → Worker templates (HTML)
                                    → Google Sheets API (data)
@@ -73,6 +76,7 @@ wrangler deploy --env production
 ```
 
 Or trigger via CI/CD:
+
 1. Merge to main branch
 2. Stage-1 CI runs
 3. Stage-2 validates staging
@@ -117,27 +121,27 @@ After cutover, monitor for:
 
 ### All Routes Now Worker-Native
 
-| Route | Implementation | Notes |
-|-------|---------------|-------|
-| `/events` | Worker template | Embedded HTML |
-| `/admin` | Worker template | Embedded HTML |
-| `/display` | Worker template | Embedded HTML |
-| `/poster` | Worker template | Embedded HTML |
-| `/report` | Worker template | Embedded HTML |
-| `/api/v2/status` | Worker-native | Direct response |
-| `/api/v2/events` | Worker → Sheets | Google Sheets API |
-| `/api/v2/events/:id` | Worker → Sheets | Google Sheets API |
-| `/api/v2/events/:id/bundle/*` | Worker → Sheets | Google Sheets API |
-| `/r`, `/redirect` | **Worker → Sheets** | **NEW: Worker-native shortlinks** |
-| `/api/rpc` | **410 Gone** | **DEPRECATED: Use /api/v2/* instead** |
-| `/api/*` | **410 Gone** | **DEPRECATED: Use /api/v2/* instead** |
+| Route                         | Implementation      | Notes                                  |
+| ----------------------------- | ------------------- | -------------------------------------- |
+| `/events`                     | Worker template     | Embedded HTML                          |
+| `/admin`                      | Worker template     | Embedded HTML                          |
+| `/display`                    | Worker template     | Embedded HTML                          |
+| `/poster`                     | Worker template     | Embedded HTML                          |
+| `/report`                     | Worker template     | Embedded HTML                          |
+| `/api/v2/status`              | Worker-native       | Direct response                        |
+| `/api/v2/events`              | Worker → Sheets     | Google Sheets API                      |
+| `/api/v2/events/:id`          | Worker → Sheets     | Google Sheets API                      |
+| `/api/v2/events/:id/bundle/*` | Worker → Sheets     | Google Sheets API                      |
+| `/r`, `/redirect`             | **Worker → Sheets** | **NEW: Worker-native shortlinks**      |
+| `/api/rpc`                    | **410 Gone**        | **DEPRECATED: Use /api/v2/\* instead** |
+| `/api/*`                      | **410 Gone**        | **DEPRECATED: Use /api/v2/\* instead** |
 
 ### No Routes Proxy to GAS
 
 As of Story 5.2, **NO routes proxy to GAS**. All functionality is Worker-native:
 
 - **Shortlinks**: Resolved via Worker reading SHORTLINKS sheet directly
-- **Legacy RPC**: Returns 410 Gone with migration guidance to /api/v2/*
+- **Legacy RPC**: Returns 410 Gone with migration guidance to /api/v2/\*
 - **All HTML**: Served from embedded Worker templates
 - **All API**: Worker-native using Google Sheets API
 
@@ -165,12 +169,14 @@ npm run rollback:prod
 To revert to GAS-first routing:
 
 1. Edit `cloudflare-proxy/wrangler.toml`:
+
    ```toml
    [env.production.vars]
    BACKEND_MODE = "gas"  # or "mixed"
    ```
 
 2. Deploy:
+
    ```bash
    cd cloudflare-proxy
    wrangler deploy --env production
@@ -184,10 +190,10 @@ To revert to GAS-first routing:
 
 ## Backend Modes Reference
 
-| Mode | Behavior | Use Case |
-|------|----------|----------|
-| `gas` | All routes use GAS | Emergency rollback |
-| `mixed` | Per-route selection | Gradual migration |
+| Mode     | Behavior              | Use Case                 |
+| -------- | --------------------- | ------------------------ |
+| `gas`    | All routes use GAS    | Emergency rollback       |
+| `mixed`  | Per-route selection   | Gradual migration        |
 | `worker` | All routes use Worker | **Production (current)** |
 
 ## Troubleshooting
@@ -227,17 +233,17 @@ Shortlinks (`/r/...`) still require GAS:
 
 ## Timeline
 
-| Story | Event |
-|-------|-------|
-| Story 0.1 | Versioned backend routing introduced |
-| Story 4.2 | Staging switched to mixed mode |
-| Story 6.1 | Production DNS cutover to Worker-only (with GAS shortlink proxy) |
-| **Story 5.2** | **Full DNS cutover - NO GAS backend calls anywhere** |
-| | - Staging BACKEND_MODE=worker |
-| | - Production BACKEND_MODE=worker |
-| | - Worker-native shortlink resolution |
-| | - Legacy /api/* deprecated (410 Gone) |
-| Story 6.2+ | GAS code archival (no longer needed for runtime) |
+| Story         | Event                                                            |
+| ------------- | ---------------------------------------------------------------- |
+| Story 0.1     | Versioned backend routing introduced                             |
+| Story 4.2     | Staging switched to mixed mode                                   |
+| Story 6.1     | Production DNS cutover to Worker-only (with GAS shortlink proxy) |
+| **Story 5.2** | **Full DNS cutover - NO GAS backend calls anywhere**             |
+|               | - Staging BACKEND_MODE=worker                                    |
+|               | - Production BACKEND_MODE=worker                                 |
+|               | - Worker-native shortlink resolution                             |
+|               | - Legacy /api/\* deprecated (410 Gone)                           |
+| Story 6.2+    | GAS code archival (no longer needed for runtime)                 |
 
 ## Acceptance Criteria (Story 5.2)
 

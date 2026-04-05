@@ -12,6 +12,7 @@
 **What it does:** Attendees register for an event before it happens.
 
 **User flow:**
+
 1. Scan QR code or click registration link
 2. See event name and "Register for this event" heading
 3. Enter name (required) and email (optional)
@@ -36,6 +37,7 @@
 **What it does:** A simple tap counter for door-side headcount. No personal data collected.
 
 **User flow:**
+
 1. Event staff opens check-in page on phone/tablet
 2. Large circular "Tap to Check In" button fills the screen
 3. Each tap increments the counter with haptic-style visual feedback
@@ -59,6 +61,7 @@
 **What it does:** Collect event feedback with a 1-5 star rating and optional comments.
 
 **User flow:**
+
 1. Scan QR code or click survey link after event
 2. See "How was the event?" heading
 3. Tap 1-5 rating buttons (fill progressively like stars)
@@ -83,6 +86,7 @@
 **What it does:** Attendees opt in to hear about future events.
 
 **User flow:**
+
 1. Scan QR code or click email signup link
 2. See "Stay in the loop" heading with privacy reassurance
 3. Enter email address (required)
@@ -102,31 +106,31 @@
 
 ## Form Validation (All Types)
 
-| Check | Rule |
-|-------|------|
-| Event ID | Alphanumeric, hyphens, underscores. Max 128 chars |
-| Request body | Valid JSON, max 16KB |
-| Feature flag | Form type must be enabled for this event's tier |
-| Name field | Max 200 characters, trimmed |
-| Email field | Max 320 characters, trimmed |
-| Survey responses | Must be a JSON object |
+| Check            | Rule                                              |
+| ---------------- | ------------------------------------------------- |
+| Event ID         | Alphanumeric, hyphens, underscores. Max 128 chars |
+| Request body     | Valid JSON, max 16KB                              |
+| Feature flag     | Form type must be enabled for this event's tier   |
+| Name field       | Max 200 characters, trimmed                       |
+| Email field      | Max 320 characters, trimmed                       |
+| Survey responses | Must be a JSON object                             |
 
 ## Error Responses
 
-| Code | HTTP | Meaning |
-|------|------|---------|
-| `INVALID_EVENT_ID` | 400 | Event ID contains invalid characters |
-| `INVALID_BODY` | 400 | Request body isn't valid JSON or exceeds 16KB |
-| `MISSING_FIELD` | 400 | A required field is missing |
-| `FORM_DISABLED` | 403 | This form type isn't enabled for this event |
-| `CONFIG_ERROR` | 503 | Encryption key not configured (email signup) |
-| `DB_ERROR` | 503 | Database temporarily unavailable |
+| Code               | HTTP | Meaning                                       |
+| ------------------ | ---- | --------------------------------------------- |
+| `INVALID_EVENT_ID` | 400  | Event ID contains invalid characters          |
+| `INVALID_BODY`     | 400  | Request body isn't valid JSON or exceeds 16KB |
+| `MISSING_FIELD`    | 400  | A required field is missing                   |
+| `FORM_DISABLED`    | 403  | This form type isn't enabled for this event   |
+| `CONFIG_ERROR`     | 503  | Encryption key not configured (email signup)  |
+| `DB_ERROR`         | 503  | Database temporarily unavailable              |
 
 ## Admin Endpoints
 
-| Endpoint | Returns |
-|----------|---------|
+| Endpoint                                           | Returns                                                  |
+| -------------------------------------------------- | -------------------------------------------------------- |
 | `GET /api/v2/admin/events/:id/forms/registrations` | List all registrations (name + email hash, no raw email) |
-| `GET /api/v2/admin/events/:id/forms/checkin-count` | Current check-in count |
-| `GET /api/v2/admin/events/:id/forms/surveys` | PII-scrubbed survey responses only |
-| `GET /api/v2/admin/events/:id/forms/email-signups` | Count only (no email addresses returned) |
+| `GET /api/v2/admin/events/:id/forms/checkin-count` | Current check-in count                                   |
+| `GET /api/v2/admin/events/:id/forms/surveys`       | PII-scrubbed survey responses only                       |
+| `GET /api/v2/admin/events/:id/forms/email-signups` | Count only (no email addresses returned)                 |

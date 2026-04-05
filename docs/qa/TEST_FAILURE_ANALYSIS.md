@@ -33,28 +33,28 @@ The `/status` endpoint uses `api_statusPure()` which returns a **FLAT** format:
 
 #### Test Expectations (INCORRECT)
 
-| Test File | Expected Format | Issue |
-|-----------|-----------------|-------|
-| `system-api.spec.js:33` | `data.value.build` | Expects WRAPPED format with `value` property |
-| `system-api.spec.js:37` | `data.value.brand` | Expects `brand` not `brandId` |
-| `api-contract.spec.js:45` | `json.value` | Expects WRAPPED format |
-| `api-contract.spec.js:48-53` | `json.value.build` | Wrong property path |
+| Test File                    | Expected Format    | Issue                                        |
+| ---------------------------- | ------------------ | -------------------------------------------- |
+| `system-api.spec.js:33`      | `data.value.build` | Expects WRAPPED format with `value` property |
+| `system-api.spec.js:37`      | `data.value.brand` | Expects `brand` not `brandId`                |
+| `api-contract.spec.js:45`    | `json.value`       | Expects WRAPPED format                       |
+| `api-contract.spec.js:48-53` | `json.value.build` | Wrong property path                          |
 
 #### Test Expectations (CORRECT)
 
-| Test File | Expected Format | Status |
-|-----------|-----------------|--------|
-| `critical-smoke.spec.js:54` | `json.buildId` | Correct FLAT format |
-| `critical-smoke.spec.js:55` | `json.brandId` | Correct FLAT format |
+| Test File                   | Expected Format | Status              |
+| --------------------------- | --------------- | ------------------- |
+| `critical-smoke.spec.js:54` | `json.buildId`  | Correct FLAT format |
+| `critical-smoke.spec.js:55` | `json.brandId`  | Correct FLAT format |
 
 ### Issue 2: Two Different Status Functions
 
 The codebase has TWO status functions with different response formats:
 
-| Function | Location | Response Format |
-|----------|----------|-----------------|
-| `api_status()` | Code.gs:1583 | WRAPPED: `{ ok, value: { build, brand, ... } }` |
-| `api_statusPure()` | Code.gs:1646 | FLAT: `{ ok, buildId, brandId, timestamp }` |
+| Function           | Location     | Response Format                                 |
+| ------------------ | ------------ | ----------------------------------------------- |
+| `api_status()`     | Code.gs:1583 | WRAPPED: `{ ok, value: { build, brand, ... } }` |
+| `api_statusPure()` | Code.gs:1646 | FLAT: `{ ok, buildId, brandId, timestamp }`     |
 
 The `/status` page route uses `api_statusPure()` (FLAT), but tests expect `api_status()` format (WRAPPED).
 
@@ -108,9 +108,9 @@ expect(data).toHaveProperty('timestamp');
 
 ## Files to Modify
 
-| File | Changes Required |
-|------|------------------|
-| `tests/e2e/api/system-api.spec.js` | Update 4 tests to use FLAT format |
+| File                                     | Changes Required                  |
+| ---------------------------------------- | --------------------------------- |
+| `tests/e2e/api/system-api.spec.js`       | Update 4 tests to use FLAT format |
 | `tests/e2e/1-smoke/api-contract.spec.js` | Update 3 tests to use FLAT format |
 
 ---
@@ -135,14 +135,17 @@ npm run test:e2e
 ## Additional Issues Identified
 
 ### 1. Hardcoded Build ID ✅ FIXED
+
 - `critical-smoke.spec.js:54` hardcoded `'triangle-extended-v1.5'`
 - Fixed: Now validates format instead of hardcoded value
 
 ### 2. Performance SLA Too Strict ✅ FIXED
+
 - `api-contract.spec.js:62` expected `< 2000ms`
 - Fixed: Increased to `< 10000ms` for GAS cold starts
 
 ### 3. Missing CI Environment Variables
+
 - Tests skip when `ADMIN_KEY` not set
 - CI must have secrets configured
 
@@ -152,19 +155,21 @@ npm run test:e2e
 
 ### Problem: Tests expect HTML elements that don't exist
 
-| Test File | Expected Selector | Actual HTML | Status |
-|-----------|------------------|-------------|--------|
-| `critical-smoke.spec.js:81` | `main#app` | `div.container` (Public.html) | ✅ Fixed |
-| `public-page.spec.js:28` | `main#app` | `div.container` | ✅ Fixed |
-| `admin-page.spec.js:47` | `h3:has-text("Events List")` | Doesn't exist | ✅ Fixed |
-| `admin-page.spec.js:89` | `#eventsList` | Doesn't exist | ✅ Fixed |
+| Test File                   | Expected Selector            | Actual HTML                   | Status   |
+| --------------------------- | ---------------------------- | ----------------------------- | -------- |
+| `critical-smoke.spec.js:81` | `main#app`                   | `div.container` (Public.html) | ✅ Fixed |
+| `public-page.spec.js:28`    | `main#app`                   | `div.container`               | ✅ Fixed |
+| `admin-page.spec.js:47`     | `h3:has-text("Events List")` | Doesn't exist                 | ✅ Fixed |
+| `admin-page.spec.js:89`     | `#eventsList`                | Doesn't exist                 | ✅ Fixed |
 
 ### Root Cause
+
 - Tests were written assuming certain HTML structure
 - Actual HTML pages use different element IDs and classes
 - No validation that test selectors match actual HTML
 
 ### Fixes Applied
+
 1. Changed `main#app` to `.container, main#app` (supports both Public and Admin pages)
 2. Changed `#eventsList` to `#eventCard, .events-grid` (actual Admin.html elements)
 3. Removed non-existent `h3:has-text("Events List")` expectation
@@ -173,23 +178,24 @@ npm run test:e2e
 
 ## Implementation Status
 
-| Priority | Issue | Status |
-|----------|-------|--------|
-| **P0** | Fix `system-api.spec.js` - API format | ✅ FIXED |
-| **P0** | Fix `api-contract.spec.js` - API format | ✅ FIXED |
-| **P1** | Remove hardcoded buildId check | ✅ FIXED |
-| **P1** | Fix frontend selector mismatches | ✅ FIXED |
-| **P2** | Adjust performance SLAs for cold starts | ✅ FIXED |
+| Priority | Issue                                   | Status   |
+| -------- | --------------------------------------- | -------- |
+| **P0**   | Fix `system-api.spec.js` - API format   | ✅ FIXED |
+| **P0**   | Fix `api-contract.spec.js` - API format | ✅ FIXED |
+| **P1**   | Remove hardcoded buildId check          | ✅ FIXED |
+| **P1**   | Fix frontend selector mismatches        | ✅ FIXED |
+| **P2**   | Adjust performance SLAs for cold starts | ✅ FIXED |
 
 ---
 
 ## Verification
 
 After deploying fixes, CI should show:
+
 - ✅ API tests passing (correct response format expectations)
 - ✅ Smoke tests passing (correct selectors + SLAs)
 - ✅ Page tests passing (correct element selectors)
 
 ---
 
-*Analysis performed by systematic review of test code vs actual HTML/API implementation.*
+_Analysis performed by systematic review of test code vs actual HTML/API implementation._

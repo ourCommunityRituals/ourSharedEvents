@@ -8,11 +8,11 @@
 
 ### Phase Model (3 Phases)
 
-| Phase | Stack | Status |
-|---|---|---|
-| **Phase 1** | Cloudflare Worker + Google Sheets | Build ✅ / Ops 📋 |
-| **Phase 2** | Cloudflare Worker + D1 (edge SQLite) | Foundation laid |
-| **Phase 3** | Firebase Auth + React/Tailwind on Firebase Hosting | Not started |
+| Phase       | Stack                                              | Status            |
+| ----------- | -------------------------------------------------- | ----------------- |
+| **Phase 1** | Cloudflare Worker + Google Sheets                  | Build ✅ / Ops 📋 |
+| **Phase 2** | Cloudflare Worker + D1 (edge SQLite)               | Foundation laid   |
+| **Phase 3** | Firebase Auth + React/Tailwind on Firebase Hosting | Not started       |
 
 **Key principle**: Code is written and tested NOW, infrastructure is the last step. CC writes Worker routes, tests, migrations, and PRs without needing a live staging URL. CI validates. Infrastructure deployment happens when ready.
 
@@ -48,6 +48,7 @@ SharedReports  Pre-Events
 ```
 
 Five lifecycle stages in a clockwise flywheel — Ads at 12 o'clock:
+
 - **Ads**: Visibility — getting the word out (starts the cycle)
 - **Pre-Events**: Incubation — registration, QR generation, sponsor setup
 - **Events**: Engagement — check-ins, scans, live interaction
@@ -102,15 +103,15 @@ workers/oursharedevents/src/
 
 ## 2. ourCommunityRituals Ecosystem
 
-| Product | Repo | Purpose |
-|---|---|---|
+| Product             | Repo                                  | Purpose                                          |
+| ------------------- | ------------------------------------- | ------------------------------------------------ |
 | **ourSharedEvents** | `ourCommunityRituals/ourSharedEvents` | Core platform — event infrastructure, API, admin |
-| **ourRecNights** | `ourCommunityRituals/ourRecNights` | Recreational night leagues |
-| **OurRecordNights** | — | Record-night social events |
-| **OurOpenTables** | — | Open-table community dinners |
-| **ourEventRings** | — | Research/data analysis from ourSharedEvents |
-| **OurMagnets** | — | Technical infra (Cloudflare setup) |
-| **OurPulse** | — | Consulting/manual league onboarding |
+| **ourRecNights**    | `ourCommunityRituals/ourRecNights`    | Recreational night leagues                       |
+| **OurRecordNights** | —                                     | Record-night social events                       |
+| **OurOpenTables**   | —                                     | Open-table community dinners                     |
+| **ourEventRings**   | —                                     | Research/data analysis from ourSharedEvents      |
+| **OurMagnets**      | —                                     | Technical infra (Cloudflare setup)               |
+| **OurPulse**        | —                                     | Consulting/manual league onboarding              |
 
 ---
 
@@ -119,6 +120,7 @@ workers/oursharedevents/src/
 Every story is implemented from all six POVs simultaneously. CC reads all six and writes code that satisfies all six.
 
 ### Product Owner (PO) — You
+
 - Defines acceptance criteria
 - Prioritizes backlog
 - Reviews sprint progress in Linear
@@ -126,30 +128,36 @@ Every story is implemented from all six POVs simultaneously. CC reads all six an
 - **Current state**: Phase 1 Build complete, Phase 1 Ops blocked on infra (INFRA-1,2,3). 3-tier feature flags implemented. Forms system implemented (4 types). A11Y-1 done. 65 stories across 8 epics tracked. MVP readiness 6.5/10 — staging ready, production blocked.
 
 ### Lead Backend Architect (BE)
+
 - Writes Worker route handlers
 - Implements D1 queries (Phase 2)
 - Owns DB design, API contracts, auth, feature flags, testing pyramid
 - **Current state**: 30 routes implemented, 16 D1 migrations (9 main + 7 forms), 3-tier feature flags working, forms handler with PII encryption/scrubbing. Gaps: anonymous ID (BE-1), rate limiting (BE-2), PII audit log (BE-3), 5 admin endpoints unimplemented.
 
 ### Lead FE Integration (FD)
+
 - Coordinates 5 MVP surfaces + forms QR routing
 - Integration testing between front and back
 - **Current state**: All 5 surfaces render with CSP + CORS. Forms QR handler exists (`form-pages.ts`, 32 test-IDs). Gaps: admin Card 3 not wired to form handler, QR codes don't route to native forms, no cross-surface E2E test.
 
 ### Sr Design FE
+
 - Mobile-first form UX, Kaizen, uniform design, color palette
 - Dedication to test-ids and automation-friendly selectors
 - **Current state**: 34 design tokens defined (85% color adoption). Touch targets 44px+. A11Y foundation done. Gaps: 345 admin inline styles, 58 wrong-direction breakpoints, test-ID coverage 3-80% by surface (forms best at 80%, poster worst at 3%).
 
 ### Sr Automation QA
+
 - API tests, Playwright E2E per form type, PII scrub verification
 - **Current state**: 237 test files across 6 frameworks. 7 Vitest files target deployed Worker. PII scrub verified in unit tests. Gaps: zero form endpoint smoke tests in CI, zero E2E flows per form type, zero contract tests (Pact).
 
 ### SRE/SDET (Performance + Observability)
+
 - CI/CD gates, observability, form submission monitoring, destruction job monitoring
 - **Current state**: 8 CI gates working (typecheck, schema verify, migration apply, table verify, health check, API smoke, UI smoke, prod isolation). Structured logging in place (FORM_EVENT, FLAG_EVENT, LIFECYCLE). k6 scripts exist (5 scenarios). Gaps: zero dashboards, zero alerting, load tests not wired to CI, no performance baselines measured.
 
 ### DevOps
+
 - DB provisioning, service config, CI/CD pipeline, secrets management
 - **Current state**: CI pipeline mature (5-stage, staging+prod). Secrets documented in `.github-secrets-required.json` + `CLOUDFLARE_SECRETS.md`. Environment parity verified. Gaps: D1 not provisioned (placeholder IDs), CF zone not active, GCP not set up, FORMS_ENCRYPTION_KEY undocumented, no gitleaks scanning.
 
@@ -207,32 +215,39 @@ Each story should include:
 
 ```markdown
 ### P<phase>-<number>: [Title]
+
 **Status:** 📋 BACKLOG | 🔄 IN PROGRESS | ✅ DONE
 **Prerequisite:** P<phase>-<number>
 **Sprint:** [cycle number or —]
 
 **PO Acceptance Criteria:**
+
 - [ ] Criterion 1
 - [ ] Criterion 2
 
 **BE Route Spec:**
+
 - Endpoint: `METHOD /path`
 - Request/response contract
 
 **FD UI Spec:**
+
 - Which surface(s) affected
 - Component behavior
 
 **QA Test Matrix:**
+
 - Unit tests (Jest)
 - E2E tests (Playwright)
 - Edge cases
 
 **SDET Load Test:**
+
 - Latency target
 - Throughput target
 
 **DevOps Deploy Gate:**
+
 - CI checks required
 - Secrets/config needed
 ```
@@ -241,19 +256,19 @@ Each story should include:
 
 ## 7. File Map
 
-| File | Purpose | Update Frequency |
-|---|---|---|
-| `CLAUDE.md` | This file — persistent brain | After each merged PR |
-| `STORIES.md` | Work queue — story registry | Each story state change |
-| `.claude/inputs/` | Story intake (CoWork `C:\Users\mzdan\claude\Inputs\` / phone) | Anytime |
-| `.claude/documents/` | Specs, decisions (syncs with CoWork Documents/) | As needed |
-| `.claude/outputs/` | Claude-generated artifacts (syncs with CoWork Outputs/) | As needed |
-| `.claude/research/` | Analysis, references (syncs with CoWork Research/) | As needed |
-| `.claude/skills/` | Reusable skill definitions | As needed |
-| `.claude/skills/ccr-protocol.md` | CCR Protocol — standard for all assessments, reviews, test gating, code reviews | Reference |
-| `.claude/sync/LINEAR-MAP.md` | Story ID ↔ Linear `OUR-XXX` mapping | After Linear import |
-| `docs/migration/PHASE-*.md` | Phase implementation guides | Per phase |
-| `docs/stories/*.md` | Detailed story specs | Per story |
+| File                             | Purpose                                                                         | Update Frequency        |
+| -------------------------------- | ------------------------------------------------------------------------------- | ----------------------- |
+| `CLAUDE.md`                      | This file — persistent brain                                                    | After each merged PR    |
+| `STORIES.md`                     | Work queue — story registry                                                     | Each story state change |
+| `.claude/inputs/`                | Story intake (CoWork `C:\Users\mzdan\claude\Inputs\` / phone)                   | Anytime                 |
+| `.claude/documents/`             | Specs, decisions (syncs with CoWork Documents/)                                 | As needed               |
+| `.claude/outputs/`               | Claude-generated artifacts (syncs with CoWork Outputs/)                         | As needed               |
+| `.claude/research/`              | Analysis, references (syncs with CoWork Research/)                              | As needed               |
+| `.claude/skills/`                | Reusable skill definitions                                                      | As needed               |
+| `.claude/skills/ccr-protocol.md` | CCR Protocol — standard for all assessments, reviews, test gating, code reviews | Reference               |
+| `.claude/sync/LINEAR-MAP.md`     | Story ID ↔ Linear `OUR-XXX` mapping                                            | After Linear import     |
+| `docs/migration/PHASE-*.md`      | Phase implementation guides                                                     | Per phase               |
+| `docs/stories/*.md`              | Detailed story specs                                                            | Per story               |
 
 ---
 
@@ -262,6 +277,7 @@ Each story should include:
 **CCR (Critical, Conservative, Recursive) v3.0** is the standard protocol for all assessments, reviews, test gating, and code reviews in this project. When anyone calls for a "CCR", run the protocol defined in `.claude/skills/ccr-protocol.md`.
 
 **When to invoke CCR:**
+
 - Code reviews and PR assessments
 - Production readiness reviews
 - Test gating decisions
@@ -272,6 +288,7 @@ Each story should include:
 **Core contract:** No AI-assisted output earns artifact status until it survives recursive confidence testing at or above 95%. Below that threshold, the loop pauses, findings are corrected (reactive correction), and the process surfaces to a human.
 
 **Key v3.0 additions:**
+
 - Reactive correction rule — findings drive fixes between loops, not just reports
 - Governance artifact protection — CLAUDE.md, STORIES.md, protocol itself require 5+ loops
 - Evidence-based verification — "Verified" requires citable evidence, not "I looked at it"

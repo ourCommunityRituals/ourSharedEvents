@@ -267,7 +267,11 @@ export async function setFlag(
  * Apply a tier preset — upserts all global flags to match the tier.
  * Does NOT touch event-scoped overrides (enterprise stays intact).
  *
+<<<<<<< HEAD
+ * Uses db.batch() to send all upserts in a single round-trip.
+=======
  * Uses db.batch() to collapse 17 sequential writes into a single round-trip.
+>>>>>>> origin/main
  */
 export async function applyTier(
   db: D1Database,
@@ -330,15 +334,13 @@ export async function resolveFlags(
   db: D1Database,
   eventId?: string
 ): Promise<Record<string, boolean>> {
-  const allKeys = Object.values(FLAG_KEYS);
-
-  let rows: FlagRow[];
   try {
+    // Single query: fetch all global rows + event-scoped rows (if eventId given)
+    let rows: FlagRow[];
     if (eventId) {
-      // Fetch global rows + event-scoped rows for this event in one query
       const result = await db
         .prepare(
-          `SELECT * FROM feature_flags
+          `SELECT scope, scope_id, flag_key, enabled FROM feature_flags
          WHERE (scope = 'global' AND (scope_id IS NULL OR scope_id = ''))
             OR (scope = 'event' AND scope_id = ?)`
         )
@@ -348,41 +350,42 @@ export async function resolveFlags(
     } else {
       const result = await db
         .prepare(
-          `SELECT * FROM feature_flags
+          `SELECT scope, scope_id, flag_key, enabled FROM feature_flags
          WHERE scope = 'global' AND (scope_id IS NULL OR scope_id = '')`
         )
         .all<FlagRow>();
       rows = result.results;
     }
+
+    // Build lookup maps
+    const eventMap = new Map<string, boolean>();
+    const globalMap = new Map<string, boolean>();
+    for (const row of rows) {
+      if (row.scope === 'event') {
+        eventMap.set(row.flag_key, row.enabled === 1);
+      } else {
+        globalMap.set(row.flag_key, row.enabled === 1);
+      }
+    }
+
+    // Resolve: event → global → default ON
+    const resolved: Record<string, boolean> = {};
+    for (const key of Object.values(FLAG_KEYS)) {
+      if (eventMap.has(key)) {
+        resolved[key] = eventMap.get(key)!;
+      } else if (globalMap.has(key)) {
+        resolved[key] = globalMap.get(key)!;
+      } else {
+        resolved[key] = true; // default ON
+      }
+    }
+    return resolved;
   } catch {
-    // Pre-migration: feature_flags table doesn't exist yet — allow everything
-    return Object.fromEntries(allKeys.map((k) => [k, true]));
+    // Pre-migration fallback: allow everything
+    const resolved: Record<string, boolean> = {};
+    for (const key of Object.values(FLAG_KEYS)) resolved[key] = true;
+    return resolved;
   }
-
-  // Build per-scope lookup maps
-  const eventMap = new Map<string, boolean>();
-  const globalMap = new Map<string, boolean>();
-  for (const row of rows) {
-    if (row.scope === 'event') {
-      eventMap.set(row.flag_key, row.enabled === 1);
-    } else {
-      globalMap.set(row.flag_key, row.enabled === 1);
-    }
-  }
-
-  // Apply hierarchy: event > global > default ON
-  const resolved: Record<string, boolean> = {};
-  for (const key of allKeys) {
-    if (eventMap.has(key)) {
-      resolved[key] = eventMap.get(key)!;
-    } else if (globalMap.has(key)) {
-      resolved[key] = globalMap.get(key)!;
-    } else {
-      resolved[key] = true; // default ON — no row means enabled
-    }
-  }
-
-  return resolved;
 }
 
 /**

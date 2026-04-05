@@ -26,20 +26,22 @@ This checklist validates the "10 Minutes to Launch" admin workflow designed for 
 ## Part 1: Quick Start Guide (Initial View)
 
 ### 1.1 Visual Appearance
+
 - [ ] Quick Start Guide section is visible at top of page
 - [ ] Header shows "Launch Your Event in 10 Minutes"
 - [ ] Rocket icon (🚀) is displayed
 - [ ] Subtitle: "Here's everything you'll do—no surprises, no tech headaches."
 
 ### 1.2 Steps Display (6 total)
-| Step | Title | Time | Description |
-|------|-------|------|-------------|
-| 1 | Name your event | ~2 min | Just 3 fields: event name, date, and venue. |
-| 2 | Set up sign-ups | ~2 min | Add your registration form link, or let us create one. |
-| 3 | Print your poster | ~1 min | One click, print-ready PDF with QR code. |
-| 4 | Display on your TV | ~1 min | Copy the link, open on your bar TV or tablet. |
-| 5 | Share with your crowd | ~2 min | Copy the public link or share directly to social. |
-| ~ | Add sponsors | optional | Give each sponsor their own analytics link. |
+
+| Step | Title                 | Time     | Description                                            |
+| ---- | --------------------- | -------- | ------------------------------------------------------ |
+| 1    | Name your event       | ~2 min   | Just 3 fields: event name, date, and venue.            |
+| 2    | Set up sign-ups       | ~2 min   | Add your registration form link, or let us create one. |
+| 3    | Print your poster     | ~1 min   | One click, print-ready PDF with QR code.               |
+| 4    | Display on your TV    | ~1 min   | Copy the link, open on your bar TV or tablet.          |
+| 5    | Share with your crowd | ~2 min   | Copy the public link or share directly to social.      |
+| ~    | Add sponsors          | optional | Give each sponsor their own analytics link.            |
 
 - [ ] All 6 steps are visible
 - [ ] Each step has a numbered indicator (1-5, then ~)
@@ -48,6 +50,7 @@ This checklist validates the "10 Minutes to Launch" admin workflow designed for 
 - [ ] Footer shows: "Ready? Let's get started below."
 
 ### 1.3 Responsive Design
+
 - [ ] **Desktop (1280px+):** Steps display in 2-column grid
 - [ ] **Tablet (768px):** Steps display in 2-column grid or single
 - [ ] **Mobile (375px):** Steps stack vertically, still readable
@@ -57,6 +60,7 @@ This checklist validates the "10 Minutes to Launch" admin workflow designed for 
 ## Part 2: Event Creation Form (Step 1)
 
 ### 2.1 Form Layout
+
 - [ ] Header shows "Step 1: Create Your Event"
 - [ ] Subtitle explains what you'll get (posters, forms, TV display, reports)
 - [ ] Only 3 required fields visible by default:
@@ -65,6 +69,7 @@ This checklist validates the "10 Minutes to Launch" admin workflow designed for 
   - [ ] "Where?" (text input)
 
 ### 2.2 Advanced Options (Collapsed)
+
 - [ ] "More options" section is collapsed by default
 - [ ] Clicking expands to show:
   - [ ] Event Type template picker
@@ -74,6 +79,7 @@ This checklist validates the "10 Minutes to Launch" admin workflow designed for 
 - [ ] "Advanced event details" is collapsed
 
 ### 2.3 Form Submission
+
 - [ ] Fill only 3 required fields
 - [ ] Click "Create Event"
 - [ ] Admin key prompt appears (if not in demo mode)
@@ -85,12 +91,14 @@ This checklist validates the "10 Minutes to Launch" admin workflow designed for 
 ## Part 3: Post-Creation View
 
 ### 3.1 View Transition
+
 - [ ] Quick Start Guide is hidden after event creation
 - [ ] Create form is hidden
 - [ ] Seven-Card Shell is displayed
 - [ ] Page scrolls to Happy Path Checklist
 
 ### 3.2 Happy Path Checklist Appearance
+
 - [ ] Header shows "Finish Setup (~X min left)"
 - [ ] Progress indicator shows "X of 6 done"
 - [ ] 6 checklist items displayed in this order:
@@ -102,11 +110,13 @@ This checklist validates the "10 Minutes to Launch" admin workflow designed for 
   6. Add sponsors (optional) - ~ Optional
 
 ### 3.3 Time Estimates in Checklist
+
 - [ ] Each item shows time estimate badge
 - [ ] Time badges use blue background (pending) or green (done)
 - [ ] Optional item uses gray/dashed styling
 
 ### 3.4 Dynamic Progress
+
 - [ ] Header updates as items complete
 - [ ] Shows "All Set! 🎉" when 5+ items done
 - [ ] Progress counter updates in real-time
@@ -116,7 +126,9 @@ This checklist validates the "10 Minutes to Launch" admin workflow designed for 
 ## Part 4: Checklist Item Interactions
 
 ### 4.1 Click Navigation
+
 For each checklist item:
+
 - [ ] Click "Name your event" → Scrolls to Card 1 (Event Basics)
 - [ ] Click "Set up sign-ups" → Scrolls to Card 3 (Sign-Up Forms)
 - [ ] Click "Print your poster" → Scrolls to Card 4 (Poster)
@@ -125,6 +137,7 @@ For each checklist item:
 - [ ] Click "Add sponsors" → Scrolls to Card 2 (Sponsors)
 
 ### 4.2 Scroll Behavior
+
 - [ ] Smooth scroll animation
 - [ ] Target card gets brief highlight effect (blue shadow)
 - [ ] Card is fully visible after scroll
@@ -136,31 +149,34 @@ For each checklist item:
 **Manual Timing Test:**
 Record actual time for each step:
 
-| Step | Target | Actual | Pass? |
-|------|--------|--------|-------|
-| Create event (3 fields) | ≤2 min | ____ | [ ] |
-| Configure sign-ups | ≤2 min | ____ | [ ] |
-| Copy/print poster link | ≤1 min | ____ | [ ] |
-| Copy TV display link | ≤1 min | ____ | [ ] |
-| Copy/share public link | ≤2 min | ____ | [ ] |
-| **TOTAL** | **≤8 min** | ____ | [ ] |
+| Step                    | Target     | Actual   | Pass? |
+| ----------------------- | ---------- | -------- | ----- |
+| Create event (3 fields) | ≤2 min     | \_\_\_\_ | [ ]   |
+| Configure sign-ups      | ≤2 min     | \_\_\_\_ | [ ]   |
+| Copy/print poster link  | ≤1 min     | \_\_\_\_ | [ ]   |
+| Copy TV display link    | ≤1 min     | \_\_\_\_ | [ ]   |
+| Copy/share public link  | ≤2 min     | \_\_\_\_ | [ ]   |
+| **TOTAL**               | **≤8 min** | \_\_\_\_ | [ ]   |
 
 ---
 
 ## Part 6: Edge Cases
 
 ### 6.1 Form Validation
+
 - [ ] Empty event name shows validation error
 - [ ] Empty date shows validation error
 - [ ] Empty venue shows validation error
 - [ ] Past dates are allowed (or show appropriate message)
 
 ### 6.2 Repeat Visits
+
 - [ ] If event already exists (via URL param), Quick Start Guide is hidden
 - [ ] Happy Path Checklist shows for existing events
 - [ ] Checklist reflects actual completion status
 
 ### 6.3 Error Handling
+
 - [ ] Network error during creation shows user-friendly message
 - [ ] Can retry after error without losing form data
 
@@ -179,6 +195,7 @@ Record actual time for each step:
 ## Part 8: Browser Compatibility
 
 Test on:
+
 - [ ] Chrome (latest)
 - [ ] Firefox (latest)
 - [ ] Safari (latest)
@@ -190,17 +207,19 @@ Test on:
 
 ## Test Results
 
-**Tester:** _________________
-**Date:** _________________
-**Environment:** _________________
-**Build/Version:** _________________
+**Tester:** ********\_********
+**Date:** ********\_********
+**Environment:** ********\_********
+**Build/Version:** ********\_********
 
 ### Summary
+
 - [ ] **PASS** - All critical items pass
 - [ ] **PASS WITH NOTES** - Minor issues found (document below)
 - [ ] **FAIL** - Blocking issues found (document below)
 
 ### Notes/Issues Found
+
 ```
 (Document any issues here)
 ```

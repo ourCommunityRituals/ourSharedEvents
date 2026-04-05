@@ -16,6 +16,7 @@ curl "YOUR_DEPLOYMENT_URL?p=setup&brand=root"
 ```
 
 Or open in browser:
+
 ```
 YOUR_DEPLOYMENT_URL?p=setup&brand=root
 ```
@@ -27,33 +28,41 @@ YOUR_DEPLOYMENT_URL?p=setup&brand=root
 The setup diagnostic performs 6 comprehensive checks:
 
 ### 1. ✅ Brand Configuration
+
 **What it checks:**
+
 - Brand ID is valid
 - Brand name is configured
 - Store configuration exists
 
 **Common issues:**
+
 - Brand not found in Config.gs
 - Missing required fields
 
 **How to fix:**
+
 - Verify BRANDS array in Config.gs
 - Ensure brand has id, name, and store properties
 
 ---
 
 ### 2. 📊 Spreadsheet Access
+
 **What it checks:**
+
 - Spreadsheet ID is configured
 - Spreadsheet exists and is accessible
 - Script owner has edit permissions
 
 **Common issues:**
+
 - ❌ Spreadsheet not found: Invalid or incorrect ID
 - ❌ Permission denied: Script owner can't access the spreadsheet
 - ⚠️ Limited permissions: Only viewer access
 
 **How to fix:**
+
 ```javascript
 // In Config.gs, update spreadsheetId:
 store: {
@@ -63,6 +72,7 @@ store: {
 ```
 
 **Get spreadsheet ID from URL:**
+
 ```
 https://docs.google.com/spreadsheets/d/SPREADSHEET_ID/edit
                                        ^^^^^^^^^^^^^^^^
@@ -70,6 +80,7 @@ https://docs.google.com/spreadsheets/d/SPREADSHEET_ID/edit
 ```
 
 **Grant permissions:**
+
 1. Open the spreadsheet
 2. Click "Share"
 3. Add script owner email
@@ -78,15 +89,19 @@ https://docs.google.com/spreadsheets/d/SPREADSHEET_ID/edit
 ---
 
 ### 3. 🔐 Admin Secrets
+
 **What it checks:**
+
 - Admin secret is configured in Script Properties
 - Secret has reasonable length
 
 **Common issues:**
+
 - ⚠️ Not configured: Write operations will fail
 - ⚠️ Too short: Weak security
 
 **How to fix:**
+
 1. Apps Script → Project Settings (gear icon)
 2. Scroll to "Script Properties"
 3. Click "Add script property"
@@ -95,6 +110,7 @@ https://docs.google.com/spreadsheets/d/SPREADSHEET_ID/edit
 6. Click "Save"
 
 **Generate secure secret:**
+
 ```bash
 # On Linux/Mac:
 openssl rand -base64 32
@@ -105,16 +121,20 @@ openssl rand -base64 32
 ---
 
 ### 4. 🚀 Deployment Configuration
+
 **What it checks:**
+
 - Web app deployment exists
 - Deployment URL is accessible
 - Access level (anonymous vs authenticated)
 
 **Common issues:**
+
 - ❌ No deployment: App not deployed as web app
 - ⚠️ Requires authentication: Wrong access settings
 
 **How to fix:**
+
 1. Apps Script → Deploy → New deployment
 2. Select: Web app
 3. **Execute as:** Me (your-email@gmail.com)
@@ -127,16 +147,20 @@ openssl rand -base64 32
 ---
 
 ### 5. 🔑 OAuth Scopes
+
 **What it checks:**
+
 - Spreadsheets API access
 - External requests API access
 - All required scopes are authorized
 
 **Common issues:**
+
 - ⚠️ Some scopes not authorized
 - ❌ Permission denied for certain operations
 
 **How to fix:**
+
 1. Re-deploy the web app
 2. When prompted, click "Authorize access"
 3. Review permissions
@@ -145,13 +169,17 @@ openssl rand -base64 32
 ---
 
 ### 6. 🗄️ Database Structure
+
 **What it checks:**
+
 - Required sheets exist (EVENTS, SPONSORS, ANALYTICS, etc.)
 
 **Common issues:**
+
 - ⚠️ Missing sheets: Will be auto-created
 
 **How to fix:**
+
 - No action needed - sheets are auto-created on first use
 - Or manually create sheets in advance
 
@@ -247,9 +275,7 @@ openssl rand -base64 32
       "Spreadsheet not found: 1ixHd2iUc27UF0fJvKh9hXsRI1XZtNRKqbZYf0vgMbKrBFItxngd7L-VO",
       "No permission to access spreadsheet"
     ],
-    "warnings": [
-      "Admin secret not set for brand: root"
-    ],
+    "warnings": ["Admin secret not set for brand: root"],
     "fixes": [
       "Update spreadsheetId in Config.gs with a valid Google Sheets ID",
       "Ensure spreadsheet ID is from URL: https://docs.google.com/spreadsheets/d/SPREADSHEET_ID/edit",
@@ -273,12 +299,12 @@ openssl rand -base64 32
 
 Each check returns one of these status codes:
 
-| Status | Meaning | Action Required |
-|--------|---------|-----------------|
-| `ok` | ✅ Check passed | None |
-| `warning` | ⚠️ Non-critical issue | Recommended to fix |
-| `error` | ❌ Critical issue | Must fix before using |
-| `skipped` | ⏭️ Check skipped | Depends on previous check |
+| Status    | Meaning               | Action Required           |
+| --------- | --------------------- | ------------------------- |
+| `ok`      | ✅ Check passed       | None                      |
+| `warning` | ⚠️ Non-critical issue | Recommended to fix        |
+| `error`   | ❌ Critical issue     | Must fix before using     |
+| `skipped` | ⏭️ Check skipped      | Depends on previous check |
 
 ---
 
@@ -301,6 +327,7 @@ curl "YOUR_DEPLOYMENT_URL?p=status&brand=root"
 ```
 
 **Before (unhelpful):**
+
 ```json
 {
   "ok": false,
@@ -310,6 +337,7 @@ curl "YOUR_DEPLOYMENT_URL?p=status&brand=root"
 ```
 
 **After (helpful):**
+
 ```json
 {
   "ok": false,
@@ -325,6 +353,7 @@ curl "YOUR_DEPLOYMENT_URL?p=status&brand=root"
 ### 1. First-Time Setup Verification
 
 After completing initial configuration:
+
 ```bash
 curl "YOUR_DEPLOYMENT_URL?p=setup&brand=root"
 ```
@@ -336,6 +365,7 @@ Ensure all checks show `"status": "ok"`
 ### 2. Troubleshooting Deployment Issues
 
 When API returns errors:
+
 ```bash
 # Run diagnostics
 curl "YOUR_DEPLOYMENT_URL?p=setup&brand=root"
@@ -348,6 +378,7 @@ curl "YOUR_DEPLOYMENT_URL?p=setup&brand=root"
 ### 3. Post-Update Validation
 
 After updating configuration:
+
 ```bash
 # Verify changes didn't break anything
 curl "YOUR_DEPLOYMENT_URL?p=setup&brand=root"
@@ -358,6 +389,7 @@ curl "YOUR_DEPLOYMENT_URL?p=setup&brand=root"
 ### 4. New Team Member Onboarding
 
 Provide new team members with setup checklist:
+
 1. Run setup diagnostics
 2. Fix any errors shown in `fixes` array
 3. Re-run until `"status": "ok"`
@@ -423,6 +455,7 @@ curl "YOUR_DEPLOYMENT_URL?p=setup&brand=root"
 ### Q: Do I need to run setup check every time?
 
 **A:** No, only during:
+
 - Initial setup
 - Troubleshooting errors
 - Configuration changes
@@ -431,6 +464,7 @@ curl "YOUR_DEPLOYMENT_URL?p=setup&brand=root"
 ### Q: What if setup check shows warnings but status is "ok"?
 
 **A:** System is usable, but some features may not work:
+
 - Missing admin secret → Can't create/update data
 - Limited permissions → Can't modify spreadsheet structure
 - Missing sheets → Will auto-create on first use
@@ -442,6 +476,7 @@ curl "YOUR_DEPLOYMENT_URL?p=setup&brand=root"
 ### Q: How do I automate setup validation?
 
 **A:** Include in CI/CD pipeline:
+
 ```bash
 #!/bin/bash
 RESPONSE=$(curl -s "YOUR_DEPLOYMENT_URL?p=setup&brand=root")

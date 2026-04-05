@@ -5,6 +5,7 @@
 Your Stage 2 workflow now implements **sequential progressive testing** with failure gates:
 
 ### Old Flow (Parallel)
+
 ```
 API Tests     ←┐
 Smoke Tests    ├─ All run in parallel
@@ -13,6 +14,7 @@ Page Tests    ←┘
 ```
 
 ### New Flow (Sequential with Gates)
+
 ```
 API Tests (always run)
    ↓
@@ -39,19 +41,23 @@ Gate 1: Did API pass?
 ## Implementation Steps
 
 ### 1. Backup existing workflow
+
 ```bash
 cd ~/ZEVENTBOOKS/MVP-EVENT-TOOLKIT
 cp .github/workflows/stage2-testing.yml .github/workflows/stage2-testing.yml.backup
 ```
 
 ### 2. Replace with new workflow
+
 Download the new `stage2-testing.yml` from this conversation and replace:
+
 ```bash
 # Copy the downloaded file to your repo
 cp ~/Downloads/stage2-testing.yml .github/workflows/stage2-testing.yml
 ```
 
 ### 3. Commit and push
+
 ```bash
 git add .github/workflows/stage2-testing.yml
 git commit -m "feat: Implement sequential progressive testing with failure gates
@@ -65,6 +71,7 @@ git push origin main
 ```
 
 ### 4. Watch it work!
+
 1. Go to https://github.com/zeventbooks/MVP-EVENT-TOOLKIT/actions
 2. Your push will trigger Stage 1
 3. Stage 1 completion will auto-trigger Stage 2
@@ -73,8 +80,9 @@ git push origin main
 ## Expected Behavior
 
 ### Scenario 1: All Tests Pass ✅
+
 ```
-✅ API Tests → Gate 1 (proceed) 
+✅ API Tests → Gate 1 (proceed)
    ↓
 ✅ Smoke Tests → Gate 2 (proceed)
    ↓
@@ -84,6 +92,7 @@ git push origin main
 ```
 
 ### Scenario 2: API Tests Fail ❌
+
 ```
 ❌ API Tests → Gate 1 (BLOCK)
    ↓
@@ -94,6 +103,7 @@ git push origin main
 ```
 
 ### Scenario 3: Smoke Tests Fail ❌
+
 ```
 ✅ API Tests → Gate 1 (proceed)
    ↓
@@ -107,10 +117,12 @@ git push origin main
 ## Deployment URL (Anonymous Access)
 
 Your current deployment is already configured correctly:
+
 - **Execute as:** Me (zeventbook@gmail.com)
 - **Who has access:** Anyone
 
 This means:
+
 - ✅ Users can access WITHOUT signing into Google
 - ✅ App runs with your permissions
 - ✅ No authentication required
@@ -154,6 +166,7 @@ A: Verify Apps Script deployment settings are "Execute as: Me" + "Who has access
 
 **Q: Can I test locally?**
 A: Yes! Use the GOOGLE_SCRIPT_URL from GitHub Actions:
+
 ```bash
 export GOOGLE_SCRIPT_URL="https://script.google.com/macros/s/AKfycbz-RVTCdsQsI913wN3TkPtUP8F8EhSjyFAlWIpLVRgzV6WJ-isDyG-ntaV1VjBNaWZLdw/exec"
 export ADMIN_KEY="your-admin-key"

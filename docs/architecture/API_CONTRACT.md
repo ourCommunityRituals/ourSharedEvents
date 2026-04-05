@@ -44,33 +44,35 @@ Note: Flat format still has `ok` field but **no `value` wrapper**.
 
 ### Flat Endpoints (No Envelope)
 
-| Endpoint | Function | Schema | Purpose |
-|----------|----------|--------|---------|
-| `?p=status` | `api_statusPure()` | `status.schema.json` | SLO health anchor |
-| `?p=statusmvp` | `api_statusMvp()` | `status-mvp.schema.json` | MVP analytics health |
+| Endpoint       | Function           | Schema                   | Purpose              |
+| -------------- | ------------------ | ------------------------ | -------------------- |
+| `?p=status`    | `api_statusPure()` | `status.schema.json`     | SLO health anchor    |
+| `?p=statusmvp` | `api_statusMvp()`  | `status-mvp.schema.json` | MVP analytics health |
 
 **Why flat?**
+
 - Optimized for monitoring tools (Datadog, UptimeRobot, etc.)
 - No envelope overhead for high-frequency polling
 - Direct boolean `ok` for alerting thresholds
 
 ### Envelope Endpoints (Ok/Err Wrapped)
 
-| Category | Endpoints | Schema Pattern |
-|----------|-----------|----------------|
-| **Status (full)** | `?p=statusFull` | `status-envelope.schema.json` |
-| **Setup** | `?p=setup`, `?p=permissions` | `setupcheck.schema.json`, `checkpermissions.schema.json` |
-| **Bundles** | `getPublicBundle`, `getDisplayBundle`, `getPosterBundle`, `getAdminBundle`, `getSponsorBundle`, `getSharedReportBundle` | Envelope with `event` in value |
-| **CRUD** | `list`, `get`, `create`, `saveEvent`, `updateEventData` | Envelope with entity in value |
-| **Analytics** | `getReport`, `exportReport`, `getSponsorAnalytics`, `getSponsorROI` | Envelope with metrics in value |
-| **Templates** | `listTemplates`, `getTemplate`, `createTemplate`, `updateTemplate` | Envelope with template in value |
-| **Utilities** | `generateToken`, `createShortlink`, `generateFormShortlink` | Envelope with result in value |
+| Category          | Endpoints                                                                                                               | Schema Pattern                                           |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| **Status (full)** | `?p=statusFull`                                                                                                         | `status-envelope.schema.json`                            |
+| **Setup**         | `?p=setup`, `?p=permissions`                                                                                            | `setupcheck.schema.json`, `checkpermissions.schema.json` |
+| **Bundles**       | `getPublicBundle`, `getDisplayBundle`, `getPosterBundle`, `getAdminBundle`, `getSponsorBundle`, `getSharedReportBundle` | Envelope with `event` in value                           |
+| **CRUD**          | `list`, `get`, `create`, `saveEvent`, `updateEventData`                                                                 | Envelope with entity in value                            |
+| **Analytics**     | `getReport`, `exportReport`, `getSponsorAnalytics`, `getSponsorROI`                                                     | Envelope with metrics in value                           |
+| **Templates**     | `listTemplates`, `getTemplate`, `createTemplate`, `updateTemplate`                                                      | Envelope with template in value                          |
+| **Utilities**     | `generateToken`, `createShortlink`, `generateFormShortlink`                                                             | Envelope with result in value                            |
 
 ---
 
 ## Contract Rules
 
 ### Rule 1: Flat endpoints never emit envelope structure
+
 ```javascript
 // CORRECT: api_statusPure returns flat
 { ok: true, buildId: "mvp-v19", brandId: "root", time: "...", db: { ok: true } }
@@ -80,6 +82,7 @@ Note: Flat format still has `ok` field but **no `value` wrapper**.
 ```
 
 ### Rule 2: Envelope endpoints always wrap in value
+
 ```javascript
 // CORRECT: api_status returns envelope
 { ok: true, value: { build: "mvp-v19", brand: "root", ... } }
@@ -89,6 +92,7 @@ Note: Flat format still has `ok` field but **no `value` wrapper**.
 ```
 
 ### Rule 3: Error responses follow their format's pattern
+
 ```javascript
 // Flat error (status endpoints)
 { ok: false, buildId: "mvp-v19", brandId: "unknown", time: "...", message: "Brand not found" }
@@ -98,6 +102,7 @@ Note: Flat format still has `ok` field but **no `value` wrapper**.
 ```
 
 ### Rule 4: notModified omits value
+
 ```javascript
 // 304-equivalent response (bundles with If-None-Match)
 { ok: true, notModified: true, etag: "abc123..." }
@@ -112,16 +117,16 @@ Note: Flat format still has `ok` field but **no `value` wrapper**.
 
 ```javascript
 // For envelope endpoints
-validateEnvelope(response);        // Checks ok, value/code+message
+validateEnvelope(response); // Checks ok, value/code+message
 validateSuccessEnvelope(response); // Asserts ok=true + value
-validateErrorEnvelope(response);   // Asserts ok=false + code+message
+validateErrorEnvelope(response); // Asserts ok=false + code+message
 
 // For flat endpoints
-validateFlatResponse(response);    // Checks ok + required flat fields
+validateFlatResponse(response); // Checks ok + required flat fields
 
 // Boundary assertions
-assertIsEnvelope(response);        // Fails if response is flat
-assertNotEnvelope(response);       // Fails if response has value wrapper
+assertIsEnvelope(response); // Fails if response is flat
+assertNotEnvelope(response); // Fails if response has value wrapper
 ```
 
 ### Google Apps Script (Code.gs)
@@ -140,15 +145,15 @@ return { ok: true, buildId: ZEB.BUILD_ID, ... };
 
 ## Schema Files
 
-| Schema | Format | Used By |
-|--------|--------|---------|
-| `status.schema.json` | Flat | `api_statusPure` |
-| `status-mvp.schema.json` | Flat | `api_statusMvp` |
-| `status-envelope.schema.json` | Envelope | `api_status` |
-| `setupcheck.schema.json` | Envelope | `api_setupCheck` |
-| `checkpermissions.schema.json` | Envelope | `api_checkPermissions` |
-| `event.schema.json` | Inner value | All event endpoints |
-| `shared-analytics.schema.json` | Inner value | SharedReport |
+| Schema                         | Format      | Used By                |
+| ------------------------------ | ----------- | ---------------------- |
+| `status.schema.json`           | Flat        | `api_statusPure`       |
+| `status-mvp.schema.json`       | Flat        | `api_statusMvp`        |
+| `status-envelope.schema.json`  | Envelope    | `api_status`           |
+| `setupcheck.schema.json`       | Envelope    | `api_setupCheck`       |
+| `checkpermissions.schema.json` | Envelope    | `api_checkPermissions` |
+| `event.schema.json`            | Inner value | All event endpoints    |
+| `shared-analytics.schema.json` | Inner value | SharedReport           |
 
 ---
 

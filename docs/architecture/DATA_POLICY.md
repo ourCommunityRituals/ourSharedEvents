@@ -6,11 +6,11 @@ This document describes the retention policy for diagnostic logs and telemetry d
 
 The system generates three types of operational data:
 
-| Sheet | Purpose | Retention Strategy |
-|-------|---------|-------------------|
-| `DIAG` | General diagnostic logs (info, warn, error, debug) | Rolling 10k rows + monthly archive |
-| `LOG_ERRORS` | Structured error traces with correlation IDs | Rolling 5k rows + monthly archive |
-| `ANALYTICS` | User/sponsor metrics (impressions, clicks, signups) | Permanent (business data) |
+| Sheet        | Purpose                                             | Retention Strategy                 |
+| ------------ | --------------------------------------------------- | ---------------------------------- |
+| `DIAG`       | General diagnostic logs (info, warn, error, debug)  | Rolling 10k rows + monthly archive |
+| `LOG_ERRORS` | Structured error traces with correlation IDs        | Rolling 5k rows + monthly archive  |
+| `ANALYTICS`  | User/sponsor metrics (impressions, clicks, signups) | Permanent (business data)          |
 
 ## DIAG Sheet
 
@@ -25,13 +25,13 @@ The system generates three types of operational data:
 
 ### Columns
 
-| Column | Description |
-|--------|-------------|
-| `ts` | ISO 8601 timestamp |
+| Column  | Description                                 |
+| ------- | ------------------------------------------- |
+| `ts`    | ISO 8601 timestamp                          |
 | `level` | Log level: `error`, `warn`, `info`, `debug` |
-| `where` | Function or endpoint name |
-| `msg` | Human-readable message |
-| `meta` | JSON-serialized metadata (sanitized) |
+| `where` | Function or endpoint name                   |
+| `msg`   | Human-readable message                      |
+| `meta`  | JSON-serialized metadata (sanitized)        |
 
 ### Retention Rules
 
@@ -57,20 +57,20 @@ Example: `DIAG_ARCHIVE_2025_11` contains all DIAG entries from November 2025.
 
 ### Columns
 
-| Column | Description |
-|--------|-------------|
-| `ts` | ISO 8601 timestamp |
-| `corrId` | Correlation ID for tracing |
-| `endpoint` | API endpoint name |
-| `method` | HTTP method (GET/POST) |
-| `eventId` | Associated event ID |
-| `errorName` | Error type/name |
-| `message` | Error message |
-| `stack` | Stack trace |
-| `params` | Request parameters (sanitized JSON) |
-| `postData` | POST body (sanitized JSON) |
-| `userAgent` | Browser/client info |
-| `severity` | ERROR, WARN, INFO |
+| Column      | Description                         |
+| ----------- | ----------------------------------- |
+| `ts`        | ISO 8601 timestamp                  |
+| `corrId`    | Correlation ID for tracing          |
+| `endpoint`  | API endpoint name                   |
+| `method`    | HTTP method (GET/POST)              |
+| `eventId`   | Associated event ID                 |
+| `errorName` | Error type/name                     |
+| `message`   | Error message                       |
+| `stack`     | Stack trace                         |
+| `params`    | Request parameters (sanitized JSON) |
+| `postData`  | POST body (sanitized JSON)          |
+| `userAgent` | Browser/client info                 |
+| `severity`  | ERROR, WARN, INFO                   |
 
 ### Retention Rules
 
@@ -96,10 +96,11 @@ The ANALYTICS sheet contains business metrics and is **not subject to automatic 
 From the Google Apps Script editor, run:
 
 ```javascript
-rotateDiagLogs_()
+rotateDiagLogs_();
 ```
 
 This will:
+
 1. Archive rows older than 30 days from `DIAG` to the current month's archive sheet
 2. Archive rows older than 30 days from `LOG_ERRORS` to its archive sheet
 3. Enforce the 10k/5k row limits on active sheets
@@ -111,7 +112,7 @@ To set up automatic monthly archiving:
 
 ```javascript
 // Run once to install the trigger
-installDiagArchiveTrigger_()
+installDiagArchiveTrigger_();
 ```
 
 This creates a monthly trigger that runs on the 1st of each month at 2 AM.
@@ -119,13 +120,13 @@ This creates a monthly trigger that runs on the 1st of each month at 2 AM.
 To remove the trigger:
 
 ```javascript
-uninstallDiagArchiveTrigger_()
+uninstallDiagArchiveTrigger_();
 ```
 
 ### Viewing Trigger Status
 
 ```javascript
-listDiagArchiveTriggers_()
+listDiagArchiveTriggers_();
 ```
 
 ## Inspecting Archives
@@ -133,6 +134,7 @@ listDiagArchiveTriggers_()
 ### Finding Archives
 
 Archive sheets appear in the spreadsheet with names like:
+
 - `DIAG_ARCHIVE_2025_11`
 - `LOG_ERRORS_ARCHIVE_2025_11`
 
@@ -156,18 +158,18 @@ These values can be adjusted in `Code.gs`:
 
 ```javascript
 const DIAG_SHEET = 'DIAG';
-const DIAG_MAX = 3000;           // Hard cap for active sheet (inline cleanup)
-const DIAG_PER_DAY = 800;        // Daily burst limit
+const DIAG_MAX = 3000; // Hard cap for active sheet (inline cleanup)
+const DIAG_PER_DAY = 800; // Daily burst limit
 const LOG_ERRORS_SHEET = 'LOG_ERRORS';
-const LOG_ERRORS_MAX = 5000;     // Hard cap for error log sheet
+const LOG_ERRORS_MAX = 5000; // Hard cap for error log sheet
 ```
 
 Archive-specific configuration in `DiagArchiver.gs`:
 
 ```javascript
-const DIAG_ARCHIVE_THRESHOLD = 10000;  // Archive when exceeding this
-const DIAG_ARCHIVE_KEEP_DAYS = 30;     // Keep last 30 days in active sheet
-const ARCHIVE_RETENTION_MONTHS = 12;   // Keep archives for 12 months
+const DIAG_ARCHIVE_THRESHOLD = 10000; // Archive when exceeding this
+const DIAG_ARCHIVE_KEEP_DAYS = 30; // Keep last 30 days in active sheet
+const ARCHIVE_RETENTION_MONTHS = 12; // Keep archives for 12 months
 ```
 
 ## Security Considerations

@@ -42,6 +42,7 @@
 ### Key Principle: No HTML → GAS
 
 HTML routes are now served directly from Worker templates. GAS is ONLY accessed via:
+
 - `/api/*` JSON RPC endpoints
 - `/status`, `/ping` JSON endpoints
 - `?p=r&t=...` shortlink redirects
@@ -54,117 +55,136 @@ This eliminates the "leaky" routing where HTML could come from GAS.
 
 ### 1. HTML-Returning Routes (Worker Templates - NO GAS)
 
-| URL Pattern | Aliases | Template | Handler |
-|-------------|---------|----------|---------|
-| `/events` | `/schedule`, `/calendar` | `public.html` | `handleHtmlPageRequest()` |
-| `/manage` | `/admin`, `/dashboard`, `/create`, `/docs` | `admin.html` | `handleHtmlPageRequest()` |
-| `/display` | `/tv`, `/kiosk`, `/screen` | `display.html` | `handleHtmlPageRequest()` |
-| `/poster` | `/posters`, `/flyers` | `poster.html` | `handleHtmlPageRequest()` |
-| `/analytics` | `/reports`, `/insights`, `/stats` | `report.html` | `handleHtmlPageRequest()` |
-| `/` (root, no page param) | - | `public.html` | `handleHtmlPageRequest()` |
+| URL Pattern               | Aliases                                    | Template       | Handler                   |
+| ------------------------- | ------------------------------------------ | -------------- | ------------------------- |
+| `/events`                 | `/schedule`, `/calendar`                   | `public.html`  | `handleHtmlPageRequest()` |
+| `/manage`                 | `/admin`, `/dashboard`, `/create`, `/docs` | `admin.html`   | `handleHtmlPageRequest()` |
+| `/display`                | `/tv`, `/kiosk`, `/screen`                 | `display.html` | `handleHtmlPageRequest()` |
+| `/poster`                 | `/posters`, `/flyers`                      | `poster.html`  | `handleHtmlPageRequest()` |
+| `/analytics`              | `/reports`, `/insights`, `/stats`          | `report.html`  | `handleHtmlPageRequest()` |
+| `/` (root, no page param) | -                                          | `public.html`  | `handleHtmlPageRequest()` |
 
 **HTML_ROUTE_MAP (worker.js:59-90):**
+
 ```javascript
 const HTML_ROUTE_MAP = Object.freeze({
   // Public-facing routes
-  'public': 'public',
-  'events': 'public',
-  'schedule': 'public',
-  'calendar': 'public',
+  public: 'public',
+  events: 'public',
+  schedule: 'public',
+  calendar: 'public',
   // Admin routes
-  'admin': 'admin',
-  'manage': 'admin',
-  'dashboard': 'admin',
-  'create': 'admin',
-  'docs': 'admin',
+  admin: 'admin',
+  manage: 'admin',
+  dashboard: 'admin',
+  create: 'admin',
+  docs: 'admin',
   // Display/TV routes
-  'display': 'display',
-  'tv': 'display',
-  'kiosk': 'display',
-  'screen': 'display',
+  display: 'display',
+  tv: 'display',
+  kiosk: 'display',
+  screen: 'display',
   // Poster routes
-  'poster': 'poster',
-  'posters': 'poster',
-  'flyers': 'poster',
+  poster: 'poster',
+  posters: 'poster',
+  flyers: 'poster',
   // Report/Analytics routes
-  'report': 'report',
-  'analytics': 'report',
-  'reports': 'report',
-  'insights': 'report',
-  'stats': 'report'
+  report: 'report',
+  analytics: 'report',
+  reports: 'report',
+  insights: 'report',
+  stats: 'report',
 });
 ```
 
 ### 2. JSON-Returning Routes (Proxied to GAS)
 
-| URL Pattern | Handler | Response |
-|-------------|---------|----------|
-| `/status`, `/health` | `handleJsonPageRequest()` | JSON status |
-| `/ping` | `handleJsonPageRequest()` | `{"status":"ok"}` |
-| `/diagnostics` | `handleJsonPageRequest()` | JSON diagnostics |
+| URL Pattern          | Handler                   | Response          |
+| -------------------- | ------------------------- | ----------------- |
+| `/status`, `/health` | `handleJsonPageRequest()` | JSON status       |
+| `/ping`              | `handleJsonPageRequest()` | `{"status":"ok"}` |
+| `/diagnostics`       | `handleJsonPageRequest()` | JSON diagnostics  |
 
 **JSON_ROUTE_MAP (worker.js:96-102):**
+
 ```javascript
 const JSON_ROUTE_MAP = Object.freeze({
-  'status': 'status',
-  'health': 'status',
-  'ping': 'ping',
-  'diagnostics': 'diagnostics',
-  'test': 'test'
+  status: 'status',
+  health: 'status',
+  ping: 'ping',
+  diagnostics: 'diagnostics',
+  test: 'test',
 });
 ```
 
 ### 3. API Routes (Proxied to GAS)
 
-| URL Pattern | Handler | Response |
-|-------------|---------|----------|
-| `POST /api/rpc` | `handleRpcRequest()` → GAS | JSON RPC response |
-| `POST /api/<path>` | `handleApiRequest()` → GAS | JSON API response |
-| `?action=*` | `proxyToAppsScript()` → GAS | JSON API response |
+| URL Pattern        | Handler                     | Response          |
+| ------------------ | --------------------------- | ----------------- |
+| `POST /api/rpc`    | `handleRpcRequest()` → GAS  | JSON RPC response |
+| `POST /api/<path>` | `handleApiRequest()` → GAS  | JSON API response |
+| `?action=*`        | `proxyToAppsScript()` → GAS | JSON API response |
 
 **Whitelisted API Actions (worker.js:137-164):**
+
 ```javascript
 const CANONICAL_API_ACTIONS = [
-  'api_status', 'api_statusPure', 'api_events', 'api_eventById', 'api_sponsors',
-  'api_createEvent', 'api_updateEvent', 'api_deleteEvent', 'api_uploadImage',
-  'api_displayData', 'api_nextEvent', 'api_posterData', 'api_reportData',
-  'api_analytics', 'list', 'getPublicBundle', 'getSponsorReportQr',
-  'getSharedAnalytics', 'getSharedReportBundle'
+  'api_status',
+  'api_statusPure',
+  'api_events',
+  'api_eventById',
+  'api_sponsors',
+  'api_createEvent',
+  'api_updateEvent',
+  'api_deleteEvent',
+  'api_uploadImage',
+  'api_displayData',
+  'api_nextEvent',
+  'api_posterData',
+  'api_reportData',
+  'api_analytics',
+  'list',
+  'getPublicBundle',
+  'getSponsorReportQr',
+  'getSharedAnalytics',
+  'getSharedReportBundle',
 ];
 ```
 
 ### 4. Shortlink Routes (Proxied to GAS)
 
-| URL Pattern | Handler | Response |
-|-------------|---------|----------|
-| `?p=r&t=...` | `handleShortlinkRedirect()` | Redirect response |
+| URL Pattern         | Handler                     | Response          |
+| ------------------- | --------------------------- | ----------------- |
+| `?p=r&t=...`        | `handleShortlinkRedirect()` | Redirect response |
 | `?p=redirect&t=...` | `handleShortlinkRedirect()` | Redirect response |
 
 **GAS_PROXY_ROUTES (worker.js:108-111):**
+
 ```javascript
 const GAS_PROXY_ROUTES = Object.freeze({
-  'r': 'redirect',
-  'redirect': 'redirect'
+  r: 'redirect',
+  redirect: 'redirect',
 });
 ```
 
 ### 5. Routes Handled Locally (NOT proxied)
 
-| URL Pattern | Handler | Response |
-|-------------|---------|----------|
-| `/static/*` | `Response.redirect()` | 302 to `script.google.com/static/*` |
-| `/wardeninit*`, `/warden*`, `/jserror*`, `/_/*` | Stub response | `)]}'` + `[]` (Google internal endpoints) |
-| Unknown routes | `create404Response()` | Worker-generated 404 HTML |
-| Unknown API actions | `create404Response()` | Worker-generated 404 JSON |
+| URL Pattern                                     | Handler               | Response                                  |
+| ----------------------------------------------- | --------------------- | ----------------------------------------- |
+| `/static/*`                                     | `Response.redirect()` | 302 to `script.google.com/static/*`       |
+| `/wardeninit*`, `/warden*`, `/jserror*`, `/_/*` | Stub response         | `)]}'` + `[]` (Google internal endpoints) |
+| Unknown routes                                  | `create404Response()` | Worker-generated 404 HTML                 |
+| Unknown API actions                             | `create404Response()` | Worker-generated 404 JSON                 |
 
 ### 6. Brand-Prefixed Routes
 
-| Pattern | Example | Resolved |
-|---------|---------|----------|
+| Pattern            | Example       | Resolved                   |
+| ------------------ | ------------- | -------------------------- |
 | `/{brand}/{alias}` | `/abc/events` | brand=abc, template=public |
-| `/{brand}/{alias}` | `/cbc/manage` | brand=cbc, template=admin |
+| `/{brand}/{alias}` | `/cbc/manage` | brand=cbc, template=admin  |
 
 **Valid Brands (worker.js:206):**
+
 ```javascript
 const VALID_BRANDS = ['root', 'abc', 'cbc', 'cbl'];
 ```
@@ -207,12 +227,12 @@ const VALID_BRANDS = ['root', 'abc', 'cbc', 'cbl'];
 
 ### Key Difference from Story 1
 
-| Aspect | Story 1 (Before) | Story 2 (After) |
-|--------|------------------|-----------------|
-| Handler | `proxyPageRequest()` | `handleHtmlPageRequest()` |
-| Template Source | GAS `HtmlService` | Worker KV templates |
-| GAS Call | YES - fetch(GAS_URL) | NO - local render |
-| Network Latency | +200-500ms (GAS roundtrip) | Eliminated |
+| Aspect          | Story 1 (Before)           | Story 2 (After)           |
+| --------------- | -------------------------- | ------------------------- |
+| Handler         | `proxyPageRequest()`       | `handleHtmlPageRequest()` |
+| Template Source | GAS `HtmlService`          | Worker KV templates       |
+| GAS Call        | YES - fetch(GAS_URL)       | NO - local render         |
+| Network Latency | +200-500ms (GAS roundtrip) | Eliminated                |
 
 ---
 
@@ -234,25 +254,25 @@ npm run bundle:templates:check
 
 **Bundled Templates Location:** `cloudflare-proxy/templates/`
 
-| Template | Source | Size |
-|----------|--------|------|
-| `public.html` | `src/mvp/Public.html` | ~175 KB |
-| `admin.html` | `src/mvp/Admin.html` | ~296 KB |
-| `display.html` | `src/mvp/Display.html` | ~164 KB |
-| `poster.html` | `src/mvp/Poster.html` | ~139 KB |
-| `report.html` | `src/mvp/SharedReport.html` | ~166 KB |
+| Template       | Source                      | Size    |
+| -------------- | --------------------------- | ------- |
+| `public.html`  | `src/mvp/Public.html`       | ~175 KB |
+| `admin.html`   | `src/mvp/Admin.html`        | ~296 KB |
+| `display.html` | `src/mvp/Display.html`      | ~164 KB |
+| `poster.html`  | `src/mvp/Poster.html`       | ~139 KB |
+| `report.html`  | `src/mvp/SharedReport.html` | ~166 KB |
 
 ### Template Variables
 
 Variables replaced at runtime by Worker:
 
-| Variable | Source | Example |
-|----------|--------|---------|
-| `<?= appTitle ?>` | `brandName + ' · ' + scope` | "EventAngle · events" |
-| `<?= brandId ?>` | URL path or query param | "root" |
-| `<?= scope ?>` | URL path or brand config | "events" |
-| `<?= execUrl ?>` | `env.GAS_DEPLOYMENT_BASE_URL` | GAS URL for API calls |
-| `<?= demoMode ?>` | `?demo=true` query param | "true" or "false" |
+| Variable          | Source                        | Example               |
+| ----------------- | ----------------------------- | --------------------- |
+| `<?= appTitle ?>` | `brandName + ' · ' + scope`   | "EventAngle · events" |
+| `<?= brandId ?>`  | URL path or query param       | "root"                |
+| `<?= scope ?>`    | URL path or brand config      | "events"              |
+| `<?= execUrl ?>`  | `env.GAS_DEPLOYMENT_BASE_URL` | GAS URL for API calls |
+| `<?= demoMode ?>` | `?demo=true` query param      | "true" or "false"     |
 
 ### Template Loading (worker.js:260-279)
 
@@ -301,14 +321,14 @@ function renderTemplate(templateContent, params, env) {
 
 ### Explicit List (Story 2 Acceptance Criteria)
 
-| Route Type | Route Pattern | Handler | Touches GAS |
-|------------|---------------|---------|-------------|
-| HTML Page | `/events`, `/admin`, etc. | `handleHtmlPageRequest()` | **NO** |
-| JSON Page | `/status`, `/ping` | `handleJsonPageRequest()` | YES |
-| API RPC | `POST /api/*` | `handleApiRequest()` | YES |
-| Shortlink | `?p=r&t=...` | `handleShortlinkRedirect()` | YES |
-| Static | `/static/*` | `Response.redirect()` | NO (CDN redirect) |
-| 404 | Unknown routes | `create404Response()` | NO (Worker-generated) |
+| Route Type | Route Pattern             | Handler                     | Touches GAS           |
+| ---------- | ------------------------- | --------------------------- | --------------------- |
+| HTML Page  | `/events`, `/admin`, etc. | `handleHtmlPageRequest()`   | **NO**                |
+| JSON Page  | `/status`, `/ping`        | `handleJsonPageRequest()`   | YES                   |
+| API RPC    | `POST /api/*`             | `handleApiRequest()`        | YES                   |
+| Shortlink  | `?p=r&t=...`              | `handleShortlinkRedirect()` | YES                   |
+| Static     | `/static/*`               | `Response.redirect()`       | NO (CDN redirect)     |
+| 404        | Unknown routes            | `create404Response()`       | NO (Worker-generated) |
 
 ### GAS No Longer Receives
 
@@ -327,6 +347,7 @@ function renderTemplate(templateContent, params, env) {
 The function `proxyPageRequest()` has been renamed to `proxyPageRequest_DEPRECATED()` and is no longer used in the main routing logic.
 
 **Migration Path:**
+
 - HTML pages → `handleHtmlPageRequest()` (renders from Worker templates)
 - JSON pages → `handleJsonPageRequest()` (proxies to GAS for data)
 - Shortlinks → `handleShortlinkRedirect()` (proxies to GAS for redirect resolution)
@@ -338,22 +359,22 @@ The function `proxyPageRequest()` has been renamed to `proxyPageRequest_DEPRECAT
 
 ### Environment Variables (wrangler.toml)
 
-| Variable | Purpose |
-|----------|---------|
-| `GAS_DEPLOYMENT_BASE_URL` | Full GAS exec URL (for API calls) |
-| `DEPLOYMENT_ID` | GAS deployment ID (fallback) |
-| `UPSTREAM_TIMEOUT_MS` | Timeout for GAS requests (default: 30000ms) |
-| `ERROR_LOG_ENDPOINT` | External error logging URL (optional) |
-| `TEMPLATES_KV` | KV binding for template storage |
+| Variable                  | Purpose                                     |
+| ------------------------- | ------------------------------------------- |
+| `GAS_DEPLOYMENT_BASE_URL` | Full GAS exec URL (for API calls)           |
+| `DEPLOYMENT_ID`           | GAS deployment ID (fallback)                |
+| `UPSTREAM_TIMEOUT_MS`     | Timeout for GAS requests (default: 30000ms) |
+| `ERROR_LOG_ENDPOINT`      | External error logging URL (optional)       |
+| `TEMPLATES_KV`            | KV binding for template storage             |
 
 ### Deployment Environments
 
-| Environment | Domain | Config |
-|-------------|--------|--------|
-| Production | `eventangle.com/*` | `[env.production]` |
-| Staging | `stg.eventangle.com/*` | `[env.staging]` |
-| API-only | `api.eventangle.com/*` | `[env.api-only]` |
-| Development | `*.workers.dev` | Default |
+| Environment | Domain                 | Config             |
+| ----------- | ---------------------- | ------------------ |
+| Production  | `eventangle.com/*`     | `[env.production]` |
+| Staging     | `stg.eventangle.com/*` | `[env.staging]`    |
+| API-only    | `api.eventangle.com/*` | `[env.api-only]`   |
+| Development | `*.workers.dev`        | Default            |
 
 ---
 
@@ -367,6 +388,7 @@ npm run test:unit -- tests/unit/worker-routing.test.js
 ```
 
 **Test Coverage:**
+
 - Route validation logic
 - HTML_ROUTE_MAP configuration
 - JSON_ROUTE_MAP configuration
@@ -381,6 +403,7 @@ npm run test:unit -- tests/unit/worker-routing.test.js
 ### Template Bundle Tests
 
 Tests verify:
+
 - Templates directory exists
 - manifest.json is valid
 - All required templates exist

@@ -85,15 +85,15 @@ This document defines the critical test flows for MVP validation. These flows re
 
 ### Code References
 
-| Step | File | Line |
-|------|------|------|
-| Create Event RPC | `Admin.html` | 1020 |
-| Show Event Card | `Admin.html` | 1044 |
-| Generate Form RPC | `Admin.html` | 1361 |
-| Generate Shortlink | `Admin.html` | 1378 |
-| Poster render | `Poster.html` | 602 |
-| Public render | `Public.html` | 1854 |
-| Display boot | `Display.html` | 680 |
+| Step               | File           | Line |
+| ------------------ | -------------- | ---- |
+| Create Event RPC   | `Admin.html`   | 1020 |
+| Show Event Card    | `Admin.html`   | 1044 |
+| Generate Form RPC  | `Admin.html`   | 1361 |
+| Generate Shortlink | `Admin.html`   | 1378 |
+| Poster render      | `Poster.html`  | 602  |
+| Public render      | `Public.html`  | 1854 |
+| Display boot       | `Display.html` | 680  |
 
 ---
 
@@ -146,12 +146,12 @@ This document defines the critical test flows for MVP validation. These flows re
 
 ### Code References
 
-| Step | File | Line |
-|------|------|------|
-| Generate Form RPC | `Admin.html` | 1361 |
+| Step                   | File         | Line |
+| ---------------------- | ------------ | ---- |
+| Generate Form RPC      | `Admin.html` | 1361 |
 | Generate Shortlink RPC | `Admin.html` | 1378 |
-| Form creation backend | `Code.gs` | 4766 |
-| Shortlink creation | `Code.gs` | 4709 |
+| Form creation backend  | `Code.gs`    | 4766 |
+| Shortlink creation     | `Code.gs`    | 4709 |
 
 ### Notes
 
@@ -234,13 +234,13 @@ This document defines the critical test flows for MVP validation. These flows re
 
 ### Code References
 
-| Step | File | Line |
-|------|------|------|
-| Sponsor render (Public) | `Public.html` | 1192-1276 |
-| Sponsor render (Display) | `Display.html` | 713-719 |
-| logEvent function | `SponsorUtils.html` | 65 |
-| Flush to backend | `SponsorUtils.html` | 75-80 |
-| Backend log handler | `Code.gs` | (api_logEvents) |
+| Step                     | File                | Line            |
+| ------------------------ | ------------------- | --------------- |
+| Sponsor render (Public)  | `Public.html`       | 1192-1276       |
+| Sponsor render (Display) | `Display.html`      | 713-719         |
+| logEvent function        | `SponsorUtils.html` | 65              |
+| Flush to backend         | `SponsorUtils.html` | 75-80           |
+| Backend log handler      | `Code.gs`           | (api_logEvents) |
 
 ### Notes
 
@@ -298,11 +298,11 @@ This document defines the critical test flows for MVP validation. These flows re
 
 ### Code References
 
-| Step | File | Line |
-|------|------|------|
-| Public error state | `Public.html` | 1820-1836 |
-| Display fallback | `Display.html` | 681, 685 |
-| Poster error state | `Poster.html` | 611-618 |
+| Step               | File           | Line      |
+| ------------------ | -------------- | --------- |
+| Public error state | `Public.html`  | 1820-1836 |
+| Display fallback   | `Display.html` | 681, 685  |
+| Poster error state | `Poster.html`  | 611-618   |
 
 ---
 
@@ -311,6 +311,7 @@ This document defines the critical test flows for MVP validation. These flows re
 Use this for rapid smoke testing:
 
 ### Event Lifecycle (in order)
+
 - [ ] Admin: Create event with name, date, venue
 - [ ] Admin: Event card shows with 3 links (Public, Display, Poster)
 - [ ] Admin: Generate registration form → shortlink created
@@ -319,17 +320,20 @@ Use this for rapid smoke testing:
 - [ ] Display: TV mode loads with event + sponsor strip
 
 ### Forms
+
 - [ ] Form: Opens from shortlink
 - [ ] Form: Accepts test submission
 - [ ] Responses: Submission appears in response sheet
 
 ### Sponsors
+
 - [ ] Public: Sponsor banner/logo displays
 - [ ] Display: Sponsor strip displays
 - [ ] Analytics: Impressions logged in sheet
 - [ ] Analytics: Clicks logged when sponsor clicked
 
 ### Error Handling
+
 - [ ] Public: "Not Found" for bad event ID
 - [ ] Display: Fallback mode for bad event ID
 - [ ] Poster: Error state for bad event ID
@@ -386,6 +390,7 @@ These flows are designed to be automatable with:
 - **Sheet Assertions**: For analytics verification
 
 Priority for automation:
+
 1. Flow 1 (Event Lifecycle) - Most critical path
 2. Flow 4 (Error Handling) - Regression prevention
 3. Flow 3 (Sponsor Analytics) - Revenue-critical

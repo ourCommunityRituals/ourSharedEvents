@@ -16,13 +16,13 @@ This document is the source of truth for MVP scope. Do not add new surfaces, fea
 
 ## MVP Surfaces (5 Total)
 
-| # | Surface | File | Route | Purpose |
-|---|---------|------|-------|---------|
-| 1 | **Admin** | `Admin.html` | `?page=admin` | Event management control room |
-| 2 | **Public** | `Public.html` | `?page=public` (default) | Mobile-first public event page |
-| 3 | **Display** | `Display.html` | `?page=display` | TV/kiosk live event display |
-| 4 | **Poster** | `Poster.html` | `?page=poster` | Printable poster with QR code |
-| 5 | **SharedReport** | `SharedReport.html` | `?page=report` | Shareable analytics dashboard |
+| #   | Surface          | File                | Route                    | Purpose                        |
+| --- | ---------------- | ------------------- | ------------------------ | ------------------------------ |
+| 1   | **Admin**        | `Admin.html`        | `?page=admin`            | Event management control room  |
+| 2   | **Public**       | `Public.html`       | `?page=public` (default) | Mobile-first public event page |
+| 3   | **Display**      | `Display.html`      | `?page=display`          | TV/kiosk live event display    |
+| 4   | **Poster**       | `Poster.html`       | `?page=poster`           | Printable poster with QR code  |
+| 5   | **SharedReport** | `SharedReport.html` | `?page=report`           | Shareable analytics dashboard  |
 
 ### Surface Headers
 
@@ -53,16 +53,16 @@ Related MVP Surfaces: Admin, Poster, Display, Public, SharedReport
 
 These pages exist but are **NOT** part of focus group testing:
 
-| Page | File | Status | Notes |
-|------|------|--------|-------|
-| Sponsor | `Sponsor.html` | V2+ | Sponsor self-service portal |
-| API Docs | `ApiDocs.html` | EXPERIMENTAL | Developer tooling |
-| Diagnostics | `Diagnostics.html` | EXPERIMENTAL | Admin debugging |
-| DevOps Dashboard | `DiagnosticsDashboard.html` | EXPERIMENTAL | Operations |
-| Test Dashboard | `Test.html` | EXPERIMENTAL | Dev testing |
-| Sign-Up Forms | `Signup.html` | EXPERIMENTAL | Advanced forms |
-| Planner Cards | `PlannerCards.html` | EXPERIMENTAL | Alt UI |
-| System Config | `ConfigHtml.html` | EXPERIMENTAL | Advanced config |
+| Page             | File                        | Status       | Notes                       |
+| ---------------- | --------------------------- | ------------ | --------------------------- |
+| Sponsor          | `Sponsor.html`              | V2+          | Sponsor self-service portal |
+| API Docs         | `ApiDocs.html`              | EXPERIMENTAL | Developer tooling           |
+| Diagnostics      | `Diagnostics.html`          | EXPERIMENTAL | Admin debugging             |
+| DevOps Dashboard | `DiagnosticsDashboard.html` | EXPERIMENTAL | Operations                  |
+| Test Dashboard   | `Test.html`                 | EXPERIMENTAL | Dev testing                 |
+| Sign-Up Forms    | `Signup.html`               | EXPERIMENTAL | Advanced forms              |
+| Planner Cards    | `PlannerCards.html`         | EXPERIMENTAL | Alt UI                      |
+| System Config    | `ConfigHtml.html`           | EXPERIMENTAL | Advanced config             |
 
 ### Non-MVP Headers
 

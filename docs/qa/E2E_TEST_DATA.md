@@ -20,20 +20,20 @@ The E2E test suite uses a **self-cleaning** approach where all test data is auto
 
 ### Events
 
-| Field | Pattern | Example |
-|-------|---------|---------|
-| Name | `{Test Type} Test Event {timestamp}` | `E2E Test Event 1702300000000` |
-| Venue | `{Test Type} Test Venue` | `E2E Test Venue` |
-| Date | Future date (1 month ahead) | `2026-01-15` |
+| Field   | Pattern                               | Example                                             |
+| ------- | ------------------------------------- | --------------------------------------------------- |
+| Name    | `{Test Type} Test Event {timestamp}`  | `E2E Test Event 1702300000000`                      |
+| Venue   | `{Test Type} Test Venue`              | `E2E Test Venue`                                    |
+| Date    | Future date (1 month ahead)           | `2026-01-15`                                        |
 | Summary | `Automated {test type} test event...` | `Automated E2E test event for Story 3.3 validation` |
 
 ### Sponsors
 
-| Field | Pattern | Example |
-|-------|---------|---------|
-| Name | `Test Sponsor {timestamp}` | `Test Sponsor 1702300000000` |
-| Website | `https://example.com` | `https://example.com` |
-| Tier | `gold` | `gold` |
+| Field   | Pattern                    | Example                      |
+| ------- | -------------------------- | ---------------------------- |
+| Name    | `Test Sponsor {timestamp}` | `Test Sponsor 1702300000000` |
+| Website | `https://example.com`      | `https://example.com`        |
+| Tier    | `gold`                     | `gold`                       |
 
 ---
 
@@ -41,22 +41,22 @@ The E2E test suite uses a **self-cleaning** approach where all test data is auto
 
 ### Brand Configuration
 
-| Brand ID | Purpose | Environment |
-|----------|---------|-------------|
-| `root` | Primary testing (default) | All |
-| `abc` | Multi-brand testing | Staging/QA |
-| `cbc` | Multi-brand testing | Staging/QA |
-| `cbl` | Multi-brand testing | Staging/QA |
+| Brand ID | Purpose                   | Environment |
+| -------- | ------------------------- | ----------- |
+| `root`   | Primary testing (default) | All         |
+| `abc`    | Multi-brand testing       | Staging/QA  |
+| `cbc`    | Multi-brand testing       | Staging/QA  |
+| `cbl`    | Multi-brand testing       | Staging/QA  |
 
 ### Admin Keys
 
 Admin keys are stored as environment variables or CI secrets:
 
-| Environment | Variable | Source |
-|-------------|----------|--------|
-| Local | `ADMIN_KEY` | `.env` file |
-| CI | `ADMIN_KEY` | GitHub Secrets |
-| Staging | `ADMIN_KEY` | Deploy manifest |
+| Environment | Variable    | Source          |
+| ----------- | ----------- | --------------- |
+| Local       | `ADMIN_KEY` | `.env` file     |
+| CI          | `ADMIN_KEY` | GitHub Secrets  |
+| Staging     | `ADMIN_KEY` | Deploy manifest |
 
 **Never commit admin keys to version control.**
 
@@ -106,23 +106,23 @@ test.afterEach(async () => {
 
 ### Story 3.3 Critical User Journeys
 
-| Journey | Data Type | Quantity | Cleanup |
-|---------|-----------|----------|---------|
-| Journey 1: Event Creation | Events | 1-2 per test | Auto |
-| Journey 2: Event Viewing | Events | 1 | Auto |
-| Journey 3: Display Surface | Events | 1 | Auto |
-| Journey 4: Poster Surface | Events | 1 | Auto |
-| Journey 5: Shared Report | Events | 1 | Auto |
-| Journey 6: Event Management | Events | 1 | Auto |
-| Journey 7: Cross-Surface | Events | 1 | Auto |
+| Journey                     | Data Type | Quantity     | Cleanup |
+| --------------------------- | --------- | ------------ | ------- |
+| Journey 1: Event Creation   | Events    | 1-2 per test | Auto    |
+| Journey 2: Event Viewing    | Events    | 1            | Auto    |
+| Journey 3: Display Surface  | Events    | 1            | Auto    |
+| Journey 4: Poster Surface   | Events    | 1            | Auto    |
+| Journey 5: Shared Report    | Events    | 1            | Auto    |
+| Journey 6: Event Management | Events    | 1            | Auto    |
+| Journey 7: Cross-Surface    | Events    | 1            | Auto    |
 
 ### Smoke Tests
 
-| Test Suite | Data Type | Quantity | Cleanup |
-|------------|-----------|----------|---------|
-| Admin Smoke | Events | 1 | Manual review |
-| API Tests | Events, Sponsors | 1-3 | Auto |
-| Flow Tests | Events | Variable | Auto |
+| Test Suite  | Data Type        | Quantity | Cleanup       |
+| ----------- | ---------------- | -------- | ------------- |
+| Admin Smoke | Events           | 1        | Manual review |
+| API Tests   | Events, Sponsors | 1-3      | Auto          |
+| Flow Tests  | Events           | Variable | Auto          |
 
 ---
 
@@ -354,12 +354,12 @@ npm run qa:cleanup
 
 ## Data Retention Policy
 
-| Environment | Retention | Notes |
-|-------------|-----------|-------|
-| Local | Session | Deleted after test run |
-| Staging | 7 days | Periodic cleanup scripts |
-| QA | 14 days | Longer retention for debugging |
-| Production | Never created | E2E tests are read-only |
+| Environment | Retention     | Notes                          |
+| ----------- | ------------- | ------------------------------ |
+| Local       | Session       | Deleted after test run         |
+| Staging     | 7 days        | Periodic cleanup scripts       |
+| QA          | 14 days       | Longer retention for debugging |
+| Production  | Never created | E2E tests are read-only        |
 
 ---
 

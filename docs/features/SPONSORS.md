@@ -43,12 +43,14 @@ Sponsor invests in event
 > A neighborhood bar hosting a trivia night or watch party.
 
 **What they get:**
+
 - Events listed on the shared public page
 - Registration + check-in forms for their event
 - Basic admin dashboard (read-only counts)
 - QR code links to share
 
 **What they don't get:**
+
 - Own brand namespace (events live under `root`)
 - Analytics reports
 - Surveys or email signup
@@ -63,6 +65,7 @@ Sponsor invests in event
 > A league like American Bocce Co. running events across multiple venues.
 
 **What they get:**
+
 - Own brand namespace (`abc`) — isolated events, URLs, admin
 - All 4 form types (registration, check-in, survey, email signup)
 - Self-serve event configuration
@@ -71,6 +74,7 @@ Sponsor invests in event
 - Brand-specific URLs: `/abc/events`, `/abc/manage`
 
 **What they don't get:**
+
 - White-label (ourSharedEvents branding remains)
 - Custom domain
 - Custom QR designs
@@ -86,6 +90,7 @@ Sponsor invests in event
 
 **What they get:**
 Everything in Mid, plus:
+
 - White-label — their brand, not ourSharedEvents
 - Custom domain — `events.theirbrand.com`
 - Custom color palette — their brand colors
@@ -148,28 +153,28 @@ GET /api/v2/admin/events/bocce-spring/forms/registrations
 
 The sponsors table connects brands to events with placement tracking:
 
-| Field | Description |
-|-------|-------------|
-| **name** | Sponsor display name |
-| **event_id** | Which event they sponsor |
-| **logo_url** | Brand logo for display surfaces |
-| **website_url** | Link-back URL |
-| **tier** | Sponsor tier within the event (standard, premium, title) |
+| Field                 | Description                                                  |
+| --------------------- | ------------------------------------------------------------ |
+| **name**              | Sponsor display name                                         |
+| **event_id**          | Which event they sponsor                                     |
+| **logo_url**          | Brand logo for display surfaces                              |
+| **website_url**       | Link-back URL                                                |
+| **tier**              | Sponsor tier within the event (standard, premium, title)     |
 | **placement_formats** | JSON: where/how the sponsor appears (poster, table, digital) |
-| **click_token** | Unique click tracking token |
-| **impression_token** | Unique impression tracking token |
+| **click_token**       | Unique click tracking token                                  |
+| **impression_token**  | Unique impression tracking token                             |
 
 ---
 
 ## Sponsor Visibility Across Surfaces
 
-| Surface | How Sponsors Appear | Tier Required |
-|---------|--------------------|:-------------:|
-| **Public page** | Event cards show event details (sponsor name in event data) | Free |
-| **Poster** | Sponsor logo on printed poster | Mid |
-| **Display** | Sponsor logo on TV/kiosk during event | Mid |
-| **Shared Report** | Sponsor attribution data in analytics | Mid |
-| **Admin** | Placement-level registration counts | Free |
+| Surface           | How Sponsors Appear                                         | Tier Required |
+| ----------------- | ----------------------------------------------------------- | :-----------: |
+| **Public page**   | Event cards show event details (sponsor name in event data) |     Free      |
+| **Poster**        | Sponsor logo on printed poster                              |      Mid      |
+| **Display**       | Sponsor logo on TV/kiosk during event                       |      Mid      |
+| **Shared Report** | Sponsor attribution data in analytics                       |      Mid      |
+| **Admin**         | Placement-level registration counts                         |     Free      |
 
 ---
 
@@ -177,14 +182,14 @@ The sponsors table connects brands to events with placement tracking:
 
 Privacy boundaries protect attendees:
 
-| Data | Sponsor Access |
-|------|:-------------:|
-| Registration count per placement | Yes |
-| Attendee names | No (admin only) |
-| Attendee emails | Never stored raw |
-| Survey responses | No (admin only, PII-scrubbed) |
-| Email signup list | No (count only, even for admin) |
-| Individual attendee behavior | Never tracked |
+| Data                             |         Sponsor Access          |
+| -------------------------------- | :-----------------------------: |
+| Registration count per placement |               Yes               |
+| Attendee names                   |         No (admin only)         |
+| Attendee emails                  |        Never stored raw         |
+| Survey responses                 |  No (admin only, PII-scrubbed)  |
+| Email signup list                | No (count only, even for admin) |
+| Individual attendee behavior     |          Never tracked          |
 
 ---
 
@@ -192,14 +197,14 @@ Privacy boundaries protect attendees:
 
 Within a single event, sponsors are ranked by sponsorship tier — this determines display priority across surfaces and placement eligibility:
 
-| Tier | Display Priority | Typical Sponsor |
-|------|:---------------:|-----------------|
-| **Title** | 1 (highest) | Headline sponsor — name on the event |
-| **Platinum** | 2 | Major sponsor — logo on all surfaces |
-| **Gold** | 3 | Supporting sponsor — logo on poster + display |
-| **Silver** | 4 | Contributing sponsor — logo on poster |
-| **Bronze** | 5 | Community sponsor — name mention |
-| **Primary** | 6 | Default / untiered sponsor |
+| Tier         | Display Priority | Typical Sponsor                               |
+| ------------ | :--------------: | --------------------------------------------- |
+| **Title**    |   1 (highest)    | Headline sponsor — name on the event          |
+| **Platinum** |        2         | Major sponsor — logo on all surfaces          |
+| **Gold**     |        3         | Supporting sponsor — logo on poster + display |
+| **Silver**   |        4         | Contributing sponsor — logo on poster         |
+| **Bronze**   |        5         | Community sponsor — name mention              |
+| **Primary**  |        6         | Default / untiered sponsor                    |
 
 **Fair marketplace principle:** Tiers determine **display priority within an event**, not access to the platform. A bronze sponsor at Nicky's Pub gets the same QR system, the same anonymous analytics, and the same real-time counts as a title sponsor at a national event. The tier affects where and how prominently their logo appears — not whether they can participate.
 
@@ -207,22 +212,22 @@ Within a single event, sponsors are ranked by sponsorship tier — this determin
 
 Each sponsor can be placed on multiple surfaces simultaneously:
 
-| Placement | Surface | Description |
-|-----------|---------|-------------|
-| `posterTop` | Poster | Top banner on printed poster |
-| `tvTop` | Display | Top banner on TV/kiosk |
-| `tvSide` | Display | Side panel on TV/kiosk |
-| `mobileBanner` | Public | Mobile banner on public page |
+| Placement      | Surface | Description                  |
+| -------------- | ------- | ---------------------------- |
+| `posterTop`    | Poster  | Top banner on printed poster |
+| `tvTop`        | Display | Top banner on TV/kiosk       |
+| `tvSide`       | Display | Side panel on TV/kiosk       |
+| `mobileBanner` | Public  | Mobile banner on public page |
 
 ### Sponsor Metrics (Computed Server-Side)
 
 All sponsor metrics are aggregated at the backend — the UI never computes these values:
 
-| Metric | Description | Source |
-|--------|-------------|--------|
-| `impressions` | Page views where sponsor was visible | Scan system |
-| `scans` | QR code scans attributed to sponsor | Scan system |
-| `conversions` | Click-throughs on sponsor links | Click tokens |
+| Metric        | Description                          | Source       |
+| ------------- | ------------------------------------ | ------------ |
+| `impressions` | Page views where sponsor was visible | Scan system  |
+| `scans`       | QR code scans attributed to sponsor  | Scan system  |
+| `conversions` | Click-throughs on sponsor links      | Click tokens |
 
 ---
 
@@ -232,11 +237,11 @@ The platform has **monetization hooks** built in — read-only billable unit tra
 
 ### Billable Units
 
-| Unit | Description |
-|------|-------------|
-| `qrScans` | QR code scans attributed to the sponsor |
-| `impressions` | Page views where sponsor was visible |
-| `eventCount` | Number of events the sponsor is associated with |
+| Unit          | Description                                     |
+| ------------- | ----------------------------------------------- |
+| `qrScans`     | QR code scans attributed to the sponsor         |
+| `impressions` | Page views where sponsor was visible            |
+| `eventCount`  | Number of events the sponsor is associated with |
 
 ### API Endpoints
 
@@ -286,15 +291,15 @@ The sponsor data shape is a **locked contract** (version 1.1.0). Any field remov
 
 ## Roadmap
 
-| Feature | Status | Phase |
-|---------|--------|-------|
-| Basic attribution (source_placement_id) | Working | Phase 1 |
-| Sponsor contract domain model | Working | Phase 1 |
-| Monetization hooks (inert) | Working | Phase 1 |
-| Sponsor tier normalization | Working | Phase 1 |
-| Sponsors table in D1 | Migration written | Phase 2 |
-| Sponsor dashboard surface | Prototyped | Phase 2 |
-| Click/impression tracking | Schema ready | Phase 2 |
-| Active billing on monetization hooks | Not started | Phase 3 |
-| Sponsor self-serve portal | Not started | Phase 3 |
-| Sponsor API (programmatic access) | Not started | Phase 3 |
+| Feature                                 | Status            | Phase   |
+| --------------------------------------- | ----------------- | ------- |
+| Basic attribution (source_placement_id) | Working           | Phase 1 |
+| Sponsor contract domain model           | Working           | Phase 1 |
+| Monetization hooks (inert)              | Working           | Phase 1 |
+| Sponsor tier normalization              | Working           | Phase 1 |
+| Sponsors table in D1                    | Migration written | Phase 2 |
+| Sponsor dashboard surface               | Prototyped        | Phase 2 |
+| Click/impression tracking               | Schema ready      | Phase 2 |
+| Active billing on monetization hooks    | Not started       | Phase 3 |
+| Sponsor self-serve portal               | Not started       | Phase 3 |
+| Sponsor API (programmatic access)       | Not started       | Phase 3 |

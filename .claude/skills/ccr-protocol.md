@@ -1,6 +1,7 @@
 # CCR Protocol — Critical, Conservative, Recursive
 
 ## When to Use
+
 User says: "CCR", "run a CCR", "code review", "assessment", "production readiness", "review this", "test gating", "confidence check", "is this ready to ship"
 
 ---
@@ -23,22 +24,22 @@ Every engineer has shipped something that broke because a surface wasn't mapped,
 
 **Step 2 — Run loops.** Each loop passes through three layers:
 
-| Layer | The Question It Asks |
-|---|---|
-| **Critical** | What is the most dangerous assumption here — verified, or just assumed? |
-| **Conservative** | What is the worst-case if I'm wrong — does the fix still hold? |
-| **Recursive** | Has my confidence held, improved, or degraded across loops — honestly? |
+| Layer            | The Question It Asks                                                    |
+| ---------------- | ----------------------------------------------------------------------- |
+| **Critical**     | What is the most dangerous assumption here — verified, or just assumed? |
+| **Conservative** | What is the worst-case if I'm wrong — does the fix still hold?          |
+| **Recursive**    | Has my confidence held, improved, or degraded across loops — honestly?  |
 
 **Step 3 — Score.** Start at 100. Deduct points for every unresolved finding based on severity:
 
-| Severity | Deduction | When to Use |
-|---|---|---|
-| Regulatory Required | 25 pts | Federal legal obligation (HIPAA, COPPA). No partial credit. |
-| Security Critical | 15 pts | Exploitable vulnerability. No partial credit. |
-| Critical | 15 pts | Load-bearing — analysis fails if this is wrong |
-| High | 10 pts | Significant downstream risk |
-| Medium | 5 pts | Real gap, manageable if named |
-| Low | 2 pts | Improvement, not a blocker |
+| Severity            | Deduction | When to Use                                                 |
+| ------------------- | --------- | ----------------------------------------------------------- |
+| Regulatory Required | 25 pts    | Federal legal obligation (HIPAA, COPPA). No partial credit. |
+| Security Critical   | 15 pts    | Exploitable vulnerability. No partial credit.               |
+| Critical            | 15 pts    | Load-bearing — analysis fails if this is wrong              |
+| High                | 10 pts    | Significant downstream risk                                 |
+| Medium              | 5 pts     | Real gap, manageable if named                               |
+| Low                 | 2 pts     | Improvement, not a blocker                                  |
 
 **Step 4 — Gate check.** Score ≥ 95%? Advance to next loop. Score < 95%? Stop. Fix the findings. Re-score. Score drops between loops? Stop — confidence is decaying.
 
@@ -50,13 +51,13 @@ Every engineer has shipped something that broke because a surface wasn't mapped,
 
 CCR is not a software-only tool. It applies to any handoff where the cost of being wrong exceeds the cost of running the loops.
 
-| Role | Loop Sequence | What 95% Means |
-|---|---|---|
-| **Product Owner** | Vision → Roadmap → Story | "I am confident this story is ready for Engineering" |
-| **Engineering** | Unit → Contract → Integration | "I am confident this is correct to hand to QA" |
-| **QA** | Manual → Automation → Regression | "I am confident this is correct to ship" |
-| **Security** | Threat Model → Attack Surface → Penetration | "I am confident the threat model holds" |
-| **DevOps / SRE** | Infrastructure → Pipeline → Observability | "I am confident the deploy path is verified" |
+| Role              | Loop Sequence                               | What 95% Means                                       |
+| ----------------- | ------------------------------------------- | ---------------------------------------------------- |
+| **Product Owner** | Vision → Roadmap → Story                    | "I am confident this story is ready for Engineering" |
+| **Engineering**   | Unit → Contract → Integration               | "I am confident this is correct to hand to QA"       |
+| **QA**            | Manual → Automation → Regression            | "I am confident this is correct to ship"             |
+| **Security**      | Threat Model → Attack Surface → Penetration | "I am confident the threat model holds"              |
+| **DevOps / SRE**  | Infrastructure → Pipeline → Observability   | "I am confident the deploy path is verified"         |
 
 Each role defines their own variable items. The scoring formula, threshold, and gate rules are the same for everyone.
 
@@ -64,31 +65,31 @@ Each role defines their own variable items. The scoring formula, threshold, and 
 
 **"Isn't 95% arbitrary?"**
 It traces to Fisher's 1925 statistical convention (p < 0.05) — a century of validation across every scientific discipline. CCR adopts it as a calibration point, not a probability. It's high enough to filter noise, low enough to remain achievable. The path to 99% exists but is gated by infrastructure economics — when LLMs run locally and token cost is near-zero, 99% becomes pursuable. Not before.
-→ *Deep dive: Section 5*
+→ _Deep dive: Section 5_
 
 **"Who decides what severity to assign?"**
 You do, using the variable item sets for your review type (Security, Framework Upgrade, Bug Fix, or custom). The severity weights (25/15/10/5/2) are fixed — you don't change those. You own the items. You don't own the weights. Conservative classification is always safer: when in doubt, pick the higher severity.
-→ *Deep dive: Section 2.5*
+→ _Deep dive: Section 2.5_
 
 **"What counts as 'Verified'?"**
 Citable evidence only. A test result, a code path (file:line), a config value, a log entry, a screenshot. "I looked at it and it seems fine" is Partial (half deduction), not Verified (zero deduction). Evidence is what makes the worksheet auditable.
-→ *Deep dive: Section 2.5, Partial Credit Rules*
+→ _Deep dive: Section 2.5, Partial Credit Rules_
 
 **"Do I need to run this on every change?"**
 No. CCR Lite exists for low-risk, isolated, reversible changes (typo fixes, comment updates, formatting). One loop, base items only, 15 minutes. If any of six eligibility criteria fail, it escalates to standard CCR.
-→ *Deep dive: Section 7.1*
+→ _Deep dive: Section 7.1_
 
 **"How long does this take?"**
 CCR Lite: 15 minutes. Standard bug fix: ~1 hour. Security review: ~2 hours. The time budget is front-loaded verification that prevents expensive back-end rework. A finding that slips to production costs an incident. A finding caught in Loop 1 costs 20 minutes.
-→ *Deep dive: Section 7.3*
+→ _Deep dive: Section 7.3_
 
 **"What if my score is stuck below 95%?"**
 After 3 consecutive loops within 2% of each other and below threshold: restructure the change, not more loops. Split it smaller. Bring in a peer reviewer. Looping on a stable-but-insufficient score is wasted effort.
-→ *Deep dive: Section 7.2*
+→ _Deep dive: Section 7.2_
 
 **"This feels rigid."**
 The protocol is rigid in exactly the right places (formula, threshold, gates, heuristics — the invariant core) and flexible in exactly the right places (loop sequence, item sets, loop count, chunk scope — the variable surface). TCP/IP is rigid — the protocol never changes. The applications built on it are infinitely flexible. Same architecture.
-→ *Deep dive: Section 9.3*
+→ _Deep dive: Section 9.3_
 
 ## Best Practices
 
@@ -105,13 +106,13 @@ The protocol is rigid in exactly the right places (formula, threshold, gates, he
 
 ## Risks to Watch For
 
-| Risk | What It Looks Like | Mitigation |
-|---|---|---|
-| **Form without substance** | Loops run as checkbox exercise, 95% assigned without pressure | Model honest scrutiny. The loops only work if you're willing to stop. |
-| **Score inflation** | "Partial" assigned to findings that are actually "Unverified" | Peer review of worksheets. Evidence requirement for "Verified." |
-| **Overhead avoidance** | Team skips CCR on "small" changes that turn out to be not small | Use CCR Lite for genuinely small changes. If criteria fail, escalate. |
-| **Late discovery cost** | Finding surfaces in production instead of Loop 1 | The loop position penalty makes late discovery mathematically expensive. |
-| **Governance drift** | Someone modifies CLAUDE.md or this protocol without elevated review | Governance artifacts require 5+ loops. Protocol requires CCR to modify itself. |
+| Risk                       | What It Looks Like                                                  | Mitigation                                                                     |
+| -------------------------- | ------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| **Form without substance** | Loops run as checkbox exercise, 95% assigned without pressure       | Model honest scrutiny. The loops only work if you're willing to stop.          |
+| **Score inflation**        | "Partial" assigned to findings that are actually "Unverified"       | Peer review of worksheets. Evidence requirement for "Verified."                |
+| **Overhead avoidance**     | Team skips CCR on "small" changes that turn out to be not small     | Use CCR Lite for genuinely small changes. If criteria fail, escalate.          |
+| **Late discovery cost**    | Finding surfaces in production instead of Loop 1                    | The loop position penalty makes late discovery mathematically expensive.       |
+| **Governance drift**       | Someone modifies CLAUDE.md or this protocol without elevated review | Governance artifacts require 5+ loops. Protocol requires CCR to modify itself. |
 
 ---
 
@@ -119,20 +120,20 @@ The protocol is rigid in exactly the right places (formula, threshold, gates, he
 
 Everything above is the 2-page summary. Everything below is the supporting deep dive, organized by section:
 
-| Section | What It Covers | Start Here If You Need |
-|---|---|---|
-| Quick Reference Card | Cheat sheet for daily use | A one-glance reminder during a CCR run |
-| 1. Foundation | Three layers, origin, transparency notes | Understanding the philosophical basis |
-| 2. Execution | Loops, gates, scoring formula, heuristics, worked example | The full math and mechanics |
-| 3. Reactive Correction | Fix-between-loops mandate, penalty math, bidirectional correction | Understanding why "report and move on" fails |
-| 4. Governance Protection | Document hierarchy, self-protection, when docs should change | Modifying CLAUDE.md, STORIES.md, or this protocol |
-| 5. Threshold Decision | Why 95%, why not 99%, advancement framework | Defending the threshold to stakeholders |
-| 6. Operational Standards | Chunking, output format, anti-patterns | Running CCR efficiently and avoiding pitfalls |
-| 7. Practical Application | CCR Lite, escalation, time-boxing, peer review | Day-to-day operational questions |
-| 8. Cross-Discipline | All Scrum roles, IT ops, professions, universal standard | Applying CCR outside Engineering |
-| 9. Presenting to a Team | Merits, risks, rigidity answer, how to walk into the room | Rolling CCR out to a new team |
-| 10. Regulatory Extensions | HIPAA, COPPA, Compound — full worksheets and formulas | Regulated surfaces (PHI, child data) |
-| 11. Reference | Worked examples, onboarding, calibration, glossary, doc info | Getting started, training new team members |
+| Section                   | What It Covers                                                    | Start Here If You Need                            |
+| ------------------------- | ----------------------------------------------------------------- | ------------------------------------------------- |
+| Quick Reference Card      | Cheat sheet for daily use                                         | A one-glance reminder during a CCR run            |
+| 1. Foundation             | Three layers, origin, transparency notes                          | Understanding the philosophical basis             |
+| 2. Execution              | Loops, gates, scoring formula, heuristics, worked example         | The full math and mechanics                       |
+| 3. Reactive Correction    | Fix-between-loops mandate, penalty math, bidirectional correction | Understanding why "report and move on" fails      |
+| 4. Governance Protection  | Document hierarchy, self-protection, when docs should change      | Modifying CLAUDE.md, STORIES.md, or this protocol |
+| 5. Threshold Decision     | Why 95%, why not 99%, advancement framework                       | Defending the threshold to stakeholders           |
+| 6. Operational Standards  | Chunking, output format, anti-patterns                            | Running CCR efficiently and avoiding pitfalls     |
+| 7. Practical Application  | CCR Lite, escalation, time-boxing, peer review                    | Day-to-day operational questions                  |
+| 8. Cross-Discipline       | All Scrum roles, IT ops, professions, universal standard          | Applying CCR outside Engineering                  |
+| 9. Presenting to a Team   | Merits, risks, rigidity answer, how to walk into the room         | Rolling CCR out to a new team                     |
+| 10. Regulatory Extensions | HIPAA, COPPA, Compound — full worksheets and formulas             | Regulated surfaces (PHI, child data)              |
+| 11. Reference             | Worked examples, onboarding, calibration, glossary, doc info      | Getting started, training new team members        |
 
 ---
 
@@ -190,7 +191,7 @@ Every loop runs all three layers in sequence. The output of one layer becomes th
 
 **Purpose:** Strip assumption. Find what is actually true versus what is remembered or assumed to be true.
 
-> *What is the most dangerous assumption in this analysis — and has it been verified, or only assumed?*
+> _What is the most dangerous assumption in this analysis — and has it been verified, or only assumed?_
 
 A finding is not critical because it is large. It is critical because it is load-bearing — the rest of the analysis depends on it being true.
 
@@ -198,11 +199,12 @@ A finding is not critical because it is large. It is critical because it is load
 
 **Purpose:** Validate the floor, not the ceiling. Assume the worst-case path is possible and confirm the decision still holds.
 
-> *What is the worst-case outcome if Loop 1's findings are incomplete — and does the proposed fix still hold under that scenario?*
+> _What is the worst-case outcome if Loop 1's findings are incomplete — and does the proposed fix still hold under that scenario?_
 
 The Conservative layer does not look for reasons to proceed. It looks for reasons the proposed action fails under pressure.
 
 Key Conservative behaviors:
+
 - Flag partial fixes as potentially worse than no fix — they produce false documented closure
 - Require floor validation before ceiling analysis
 - Treat "it works in my environment" as an unverified assumption until proven otherwise
@@ -211,7 +213,7 @@ Key Conservative behaviors:
 
 **Purpose:** Confirm the conclusion is stable across all loops. Test for confidence decay, not just correctness.
 
-> *Has my confidence score held, improved, or degraded across all loops — and is that movement honest?*
+> _Has my confidence score held, improved, or degraded across all loops — and is that movement honest?_
 
 Confidence that only survives one pass is not confidence. It is optimism. The Recursive layer detects artificial inflation — conclusions that feel solid because they have not been pressured, not because they actually are.
 
@@ -245,13 +247,14 @@ Loop 3 → Confirmation Pass
 
 **Goal:** Find what is obviously wrong. Cast wide. Do not try to find everything.
 
-| Layer | Question |
-|---|---|
-| Critical | What is the most dangerous assumption in this analysis? |
-| Conservative | What is the worst-case outcome if I am wrong here? |
-| Recursive | Did this pass change my confidence score up or down? |
+| Layer        | Question                                                |
+| ------------ | ------------------------------------------------------- |
+| Critical     | What is the most dangerous assumption in this analysis? |
+| Conservative | What is the worst-case outcome if I am wrong here?      |
+| Recursive    | Did this pass change my confidence score up or down?    |
 
 **Gate:** Score. **Fix all actionable findings** (see Section 3). Then:
+
 - Score **< 95%** → Stop. Surface finding to human. Do not proceed to Loop 2.
 - Score **≥ 95%** → Advance to Loop 2.
 
@@ -262,13 +265,14 @@ Loop 3 → Confirmation Pass
 
 **Goal:** Find what Loop 1 did not find. Target gaps, edges, and things that looked solved but were not verified.
 
-| Layer | Question |
-|---|---|
-| Critical | What did I assume was solved that I never actually verified? |
-| Conservative | Does the floor still hold under the findings from Loop 1? |
-| Recursive | Is my confidence score from Loop 1 still defensible, or did Loop 2 erode it? |
+| Layer        | Question                                                                     |
+| ------------ | ---------------------------------------------------------------------------- |
+| Critical     | What did I assume was solved that I never actually verified?                 |
+| Conservative | Does the floor still hold under the findings from Loop 1?                    |
+| Recursive    | Is my confidence score from Loop 1 still defensible, or did Loop 2 erode it? |
 
 **Gate:** Score. **Fix all actionable findings.** Then:
+
 - Score **drops below 95%** → Stop. Loop 1's confidence was false. Surface to human.
 - Score **holds or improves** → Advance to Loop 3.
 
@@ -280,13 +284,14 @@ Loop 3 → Confirmation Pass
 
 **Goal:** Confirm the conclusion is stable. This loop is not looking for new problems. It is confirming the solution survives scrutiny without artificial inflation.
 
-| Layer | Question |
-|---|---|
-| Critical | Is there anything I am still rationalizing rather than verifying? |
+| Layer        | Question                                                                        |
+| ------------ | ------------------------------------------------------------------------------- |
+| Critical     | Is there anything I am still rationalizing rather than verifying?               |
 | Conservative | Would I be comfortable defending this output if it shipped and something broke? |
-| Recursive | Has the score held across all three loops without artificial inflation? |
+| Recursive    | Has the score held across all three loops without artificial inflation?         |
 
 **Gate:** Score. Then:
+
 - Score **< 95%** → Do not ship. Return to Loop 2 with new findings.
 - Score **≥ 95%** and **stable or improved from Loop 2** → Output earns artifact status. Ships.
 
@@ -296,14 +301,14 @@ Loop 3 → Confirmation Pass
 
 Three loops is the minimum for standard reviews. Some scenarios require more.
 
-| Scenario | Loops Required |
-|---|---|
-| Low-risk change (CCR Lite — see Section 7.1) | 1 |
-| Standard bug fix, isolated scope | 3 |
-| Security vulnerability remediation | 3-4 |
-| Major version upgrade (framework, runtime) | 4-5 |
-| Architecture change touching multiple services | 5+ |
-| Regulatory or compliance surface | 5+, human gate after every loop |
+| Scenario                                         | Loops Required                  |
+| ------------------------------------------------ | ------------------------------- |
+| Low-risk change (CCR Lite — see Section 7.1)     | 1                               |
+| Standard bug fix, isolated scope                 | 3                               |
+| Security vulnerability remediation               | 3-4                             |
+| Major version upgrade (framework, runtime)       | 4-5                             |
+| Architecture change touching multiple services   | 5+                              |
+| Regulatory or compliance surface                 | 5+, human gate after every loop |
 | Governance artifact modification (see Section 4) | 5+, human gate after every loop |
 
 **The rule:** Run loops until the score is stable across two consecutive loops at or above 95%. Stability, not just threshold, is the signal.
@@ -315,11 +320,13 @@ The human gate is not a failure state. It is a design feature.
 When a loop produces a score below 95%, the protocol does not retry automatically. It surfaces the specific finding and waits for a human to close it before the next loop begins.
 
 **What the human gate surfaces:**
+
 - The specific question that produced the confidence drop
 - The information needed to answer it
 - The loop number and layer where the gap was found
 
 **What the human gate does not do:**
+
 - Guess at the answer
 - Proceed with an assumed resolution
 - Treat silence as confirmation
@@ -333,6 +340,7 @@ Score = 100 - Σ(unresolved finding × severity weight)
 ```
 
 With heuristic modifiers applied (see Section 2.6):
+
 ```
 Score = 100 - Σ(
   base_deduction
@@ -345,13 +353,13 @@ Score = 100 - Σ(
 
 #### Scoring Reference
 
-| Score | State | Action |
-|---|---|---|
-| < 70% | Significant unknowns remain | Stop. Surface immediately. Gather inputs before re-running. |
-| 70-84% | Scope partially mapped, gaps named | Stop. Surface specific gaps. Do not advance. |
-| 85-94% | Most risks identified, mitigations partial | Stop. Mitigations must be complete before advancing. |
-| 95-97% | Full scope confirmed, mitigations in place | Advance. Output may ship with documented assumptions. |
-| 98-100% | All risks verified, no open assumptions | Advance. Output ships clean. |
+| Score   | State                                      | Action                                                      |
+| ------- | ------------------------------------------ | ----------------------------------------------------------- |
+| < 70%   | Significant unknowns remain                | Stop. Surface immediately. Gather inputs before re-running. |
+| 70-84%  | Scope partially mapped, gaps named         | Stop. Surface specific gaps. Do not advance.                |
+| 85-94%  | Most risks identified, mitigations partial | Stop. Mitigations must be complete before advancing.        |
+| 95-97%  | Full scope confirmed, mitigations in place | Advance. Output may ship with documented assumptions.       |
+| 98-100% | All risks verified, no open assumptions    | Advance. Output ships clean.                                |
 
 ### 2.5 Scoring Items
 
@@ -359,13 +367,13 @@ Score = 100 - Σ(
 
 These five items apply to every CCR run regardless of what is being reviewed. They are non-negotiable. If any base item fails, the score cannot exceed 70% regardless of how well everything else performs.
 
-| Base Item | Deduction if Unresolved |
-|---|---|
-| Environmental assumptions verified — not just stated | 15 points |
-| Full surface mapped — no unknown surfaces remain | 15 points |
-| Partial fix risk assessed — not creating false closure | 10 points |
-| Chunk scope correctly defined for this loop | 10 points |
-| Human gate not bypassed — no assumed resolutions | 15 points |
+| Base Item                                              | Deduction if Unresolved |
+| ------------------------------------------------------ | ----------------------- |
+| Environmental assumptions verified — not just stated   | 15 points               |
+| Full surface mapped — no unknown surfaces remain       | 15 points               |
+| Partial fix risk assessed — not creating false closure | 10 points               |
+| Chunk scope correctly defined for this loop            | 10 points               |
+| Human gate not bypassed — no assumed resolutions       | 15 points               |
 
 **Maximum base deduction: 65 points.** All five failing produces a score of 35%.
 
@@ -373,20 +381,21 @@ These five items apply to every CCR run regardless of what is being reviewed. Th
 
 These items are scoped to what is being reviewed. The set changes per application. The severity weights are fixed across all applications — they are invariant core, not team-adjustable.
 
-| Severity | Deduction per Finding | Definition |
-|---|---|---|
-| Regulatory Required | 25 points | Federal legal obligation. No partial credit. |
-| Security Critical | 15 points | Security finding with exploit potential. No partial credit. |
-| Critical | 15 points | Load-bearing. The analysis fails if this is wrong. |
-| High | 10 points | Significant impact. Creates downstream risk if unresolved. |
-| Medium | 5 points | Real gap. Manageable if named and bounded. |
-| Low | 2 points | Improvement. Not a blocker. |
+| Severity            | Deduction per Finding | Definition                                                  |
+| ------------------- | --------------------- | ----------------------------------------------------------- |
+| Regulatory Required | 25 points             | Federal legal obligation. No partial credit.                |
+| Security Critical   | 15 points             | Security finding with exploit potential. No partial credit. |
+| Critical            | 15 points             | Load-bearing. The analysis fails if this is wrong.          |
+| High                | 10 points             | Significant impact. Creates downstream risk if unresolved.  |
+| Medium              | 5 points              | Real gap. Manageable if named and bounded.                  |
+| Low                 | 2 points              | Improvement. Not a blocker.                                 |
 
 **Security Critical note:** Like Regulatory Required, Security Critical findings receive no partial credit. A security vulnerability is either verified closed or the artifact does not ship. "Partially mitigated" is not a shipping state for security findings.
 
 #### Variable Item Sets by Application Type
 
 **Decision tree — which set to use:**
+
 ```
 What are you reviewing?
 ├── Security fix or vulnerability? ──→ Security Review set
@@ -399,42 +408,42 @@ What are you reviewing?
 
 **Security Review:**
 
-| Item | Severity |
-|---|---|
-| Preflight handler verified | Security Critical |
-| All surfaces scanned, not just the reported one | Critical |
-| Auth surface included in scope | High |
-| No partial fix creating documented false closure | High |
-| CSP headers assessed | Medium |
+| Item                                             | Severity          |
+| ------------------------------------------------ | ----------------- |
+| Preflight handler verified                       | Security Critical |
+| All surfaces scanned, not just the reported one  | Critical          |
+| Auth surface included in scope                   | High              |
+| No partial fix creating documented false closure | High              |
+| CSP headers assessed                             | Medium            |
 
 **Framework Upgrade:**
 
-| Item | Severity |
-|---|---|
+| Item                                                | Severity |
+| --------------------------------------------------- | -------- |
 | Runtime compatibility confirmed in all environments | Critical |
-| Full import migration surface mapped | Critical |
-| Security library rewrite scoped | High |
-| ORM/persistence breaking changes assessed | High |
-| Commit sequence bisectable | Medium |
+| Full import migration surface mapped                | Critical |
+| Security library rewrite scoped                     | High     |
+| ORM/persistence breaking changes assessed           | High     |
+| Commit sequence bisectable                          | Medium   |
 
 **Standard Bug Fix:**
 
-| Item | Severity |
-|---|---|
-| Reproduction confirmed — not assumed | Critical |
-| Regression test exists or created | High |
-| No related surfaces carrying same pattern | Medium |
-| Commit is isolated — not bundled with other changes | Medium |
+| Item                                                | Severity |
+| --------------------------------------------------- | -------- |
+| Reproduction confirmed — not assumed                | Critical |
+| Regression test exists or created                   | High     |
+| No related surfaces carrying same pattern           | Medium   |
+| Commit is isolated — not bundled with other changes | Medium   |
 
 #### Partial Credit Rules
 
 Every finding carries one of three verification states:
 
-| State | Credit Applied | Evidence Required |
-|---|---|---|
-| Verified | Full credit — 0 deduction | Citable evidence: test result, code path, config value, log entry, screenshot |
-| Partially verified | Half deduction | Gap named, bounded, and documented with reason why full verification is not yet possible |
-| Unverified | Full deduction | Unknown, assumed, or "I looked at it and it seems fine" |
+| State              | Credit Applied            | Evidence Required                                                                        |
+| ------------------ | ------------------------- | ---------------------------------------------------------------------------------------- |
+| Verified           | Full credit — 0 deduction | Citable evidence: test result, code path, config value, log entry, screenshot            |
+| Partially verified | Half deduction            | Gap named, bounded, and documented with reason why full verification is not yet possible |
+| Unverified         | Full deduction            | Unknown, assumed, or "I looked at it and it seems fine"                                  |
 
 **"Verified" requires evidence.** A reviewer stating "I checked this" without citing what they checked is Partial, not Verified. Evidence is what makes the worksheet auditable. Without it, the score is a feeling with math around it.
 
@@ -478,12 +487,12 @@ Deduction × log₂(N + 1)   where N = number of surfaces affected
 ```
 
 | Surfaces Affected | Scalar | 15pt Critical Becomes |
-|---|---|---|
-| 1 | 1.00 | 15.0 pts |
-| 2 | 1.58 | 23.7 pts |
-| 4 | 2.32 | 34.8 pts |
-| 8 | 3.17 | 47.5 pts |
-| 16 | 4.09 | 61.4 pts |
+| ----------------- | ------ | --------------------- |
+| 1                 | 1.00   | 15.0 pts              |
+| 2                 | 1.58   | 23.7 pts              |
+| 4                 | 2.32   | 34.8 pts              |
+| 8                 | 3.17   | 47.5 pts              |
+| 16                | 4.09   | 61.4 pts              |
 
 #### Heuristic 4 — Systemic Pattern Auto-Promotion
 
@@ -512,43 +521,43 @@ Regulated surface (HIPAA, PCI, COPPA)   → deduction × 1.5
 
 #### Heuristic Constants — Transparency
 
-| Heuristic | Constants | Basis |
-|---|---|---|
-| H1 — Loop Position | 1.0 / 1.25 / 1.5 | Calibrated. Inspired by Boehm's defect cost curve. |
-| H2 — Correlation | 1.5x / 2.0x | Calibrated. Risk compounding convention. |
-| H3 — Surface Breadth | log₂(N+1) | **Derived.** Information theory. Mathematically grounded. |
-| H4 — Systemic Promotion | 3+ threshold | Calibrated. Rule-of-three convention across disciplines. |
-| H5 — Environment | 0.75 / 1.0 / 1.25 / 1.5 | Calibrated. Risk assessment convention. |
+| Heuristic               | Constants               | Basis                                                     |
+| ----------------------- | ----------------------- | --------------------------------------------------------- |
+| H1 — Loop Position      | 1.0 / 1.25 / 1.5        | Calibrated. Inspired by Boehm's defect cost curve.        |
+| H2 — Correlation        | 1.5x / 2.0x             | Calibrated. Risk compounding convention.                  |
+| H3 — Surface Breadth    | log₂(N+1)               | **Derived.** Information theory. Mathematically grounded. |
+| H4 — Systemic Promotion | 3+ threshold            | Calibrated. Rule-of-three convention across disciplines.  |
+| H5 — Environment        | 0.75 / 1.0 / 1.25 / 1.5 | Calibrated. Risk assessment convention.                   |
 
 #### Worked Scoring Example — Full Heuristics Applied
 
 **CORS Security Review — Production Surface:**
 
-*Loop 1:*
+_Loop 1:_
 
-| Finding | Base | Loop × | Breadth N=2 × | Env × | Subtotal |
-|---|---|---|---|---|---|
-| Full surface unmapped | 15 | 1.0 | 1.58 | 1.0 | 23.7 |
-| OPTIONS preflight unknown | 15 | 1.0 | 1.58 | 1.0 | 23.7 |
+| Finding                   | Base | Loop × | Breadth N=2 × | Env × | Subtotal |
+| ------------------------- | ---- | ------ | ------------- | ----- | -------- |
+| Full surface unmapped     | 15   | 1.0    | 1.58          | 1.0   | 23.7     |
+| OPTIONS preflight unknown | 15   | 1.0    | 1.58          | 1.0   | 23.7     |
 
 Correlation check: causally linked → `(23.7 + 23.7) × 1.5 = 71.1 pts`
 **Loop 1 Score: 100 - 71.1 = 28.9%.** Hard stop. Surface immediately.
 
 **Reactive correction applied:** Grep full codebase for CORS handlers. OPTIONS branch identified. Second handler (qr.ts) discovered.
 
-*Loop 2 — after corrections applied:*
+_Loop 2 — after corrections applied:_
 
-| Finding | Base | State | Partial × | Loop × | Breadth × | Env × | Subtotal |
-|---|---|---|---|---|---|---|---|
-| Full surface mapped | 15 | Partial | 0.5 | 1.25 | 1.58 | 1.0 | 14.8 |
-| Preflight verified | 15 | Verified | 0 | — | — | — | 0 |
-| qr.ts unscanned | 15 | Unverified | 1.0 | 1.25 | 1.0 | 1.0 | 18.75 |
+| Finding             | Base | State      | Partial × | Loop × | Breadth × | Env × | Subtotal |
+| ------------------- | ---- | ---------- | --------- | ------ | --------- | ----- | -------- |
+| Full surface mapped | 15   | Partial    | 0.5       | 1.25   | 1.58      | 1.0   | 14.8     |
+| Preflight verified  | 15   | Verified   | 0         | —      | —         | —     | 0        |
+| qr.ts unscanned     | 15   | Unverified | 1.0       | 1.25   | 1.0       | 1.0   | 18.75    |
 
 **Loop 2 Score: 100 - 14.8 - 18.75 = 66.4%.** Below 95%. Surface to human. Full surface grep confirms scope.
 
 **Reactive correction applied:** qr.ts scanned, shared CORS config constant created, both handlers patched.
 
-*Loop 3 — after corrections applied:*
+_Loop 3 — after corrections applied:_
 
 All items verified. Zero deductions.
 **Loop 3 Score: 100%.** Cleared. Ships.
@@ -570,14 +579,14 @@ This is a structural requirement of the protocol, not a recommendation. The prot
 
 A finding is actionable when the reviewer can take a concrete step to resolve it within the current assessment scope. Not all findings are actionable — some require external input (human gate), infrastructure changes, or scope expansion beyond the current review.
 
-| Finding Type | Actionable? | Required Response |
-|---|---|---|
-| Code gap identified, fix known | **Yes** | Fix before next loop |
-| Missing test identified | **Yes** | Write test before next loop |
-| Environmental assumption unverified, can be checked | **Yes** | Verify before next loop |
-| Requires information from another team member | **No** | Human gate — surface and wait |
-| Requires infrastructure not yet provisioned | **No** | Document as pre-condition, carry as Partial |
-| Scope expansion beyond current review | **No** | Document new scope, may trigger separate CCR |
+| Finding Type                                        | Actionable? | Required Response                            |
+| --------------------------------------------------- | ----------- | -------------------------------------------- |
+| Code gap identified, fix known                      | **Yes**     | Fix before next loop                         |
+| Missing test identified                             | **Yes**     | Write test before next loop                  |
+| Environmental assumption unverified, can be checked | **Yes**     | Verify before next loop                      |
+| Requires information from another team member       | **No**      | Human gate — surface and wait                |
+| Requires infrastructure not yet provisioned         | **No**      | Document as pre-condition, carry as Partial  |
+| Scope expansion beyond current review               | **No**      | Document new scope, may trigger separate CCR |
 
 ### 3.3 The Penalty for Non-Correction
 
@@ -613,6 +622,7 @@ Every correction made between loops is documented in the scoring worksheet under
 
 ```markdown
 **Corrections Applied Between Loop [N] and Loop [N+1]:**
+
 - [Finding]: [What was corrected] — [Evidence of correction]
 - [Finding]: [What was corrected] — [Evidence of correction]
 - [Variable item set change]: Added [item] at [severity] — triggered by [finding]
@@ -654,24 +664,26 @@ Tier 4 — Standard Code (baseline protection)
 
 ### 4.3 Protection Requirements by Tier
 
-| Tier | Min Loops | Human Gate | Environment Modifier | Additional Requirements |
-|---|---|---|---|---|
-| Tier 1 — Protocol | 5+ | Every loop | × 1.5 | Requires CCR to modify CCR. Peer review of scoring worksheet mandatory. |
-| Tier 2 — Governance | 5+ | Every loop | × 1.25 | Changes must be justified by CCR findings or explicit user instruction. |
-| Tier 3 — Specification | 3+ | Loops 1, 3 | × 1.0 | Changes must maintain backward compatibility or version explicitly. |
-| Tier 4 — Standard | 3 | As needed | Determined by environment | Standard CCR rules apply. |
+| Tier                   | Min Loops | Human Gate | Environment Modifier      | Additional Requirements                                                 |
+| ---------------------- | --------- | ---------- | ------------------------- | ----------------------------------------------------------------------- |
+| Tier 1 — Protocol      | 5+        | Every loop | × 1.5                     | Requires CCR to modify CCR. Peer review of scoring worksheet mandatory. |
+| Tier 2 — Governance    | 5+        | Every loop | × 1.25                    | Changes must be justified by CCR findings or explicit user instruction. |
+| Tier 3 — Specification | 3+        | Loops 1, 3 | × 1.0                     | Changes must maintain backward compatibility or version explicitly.     |
+| Tier 4 — Standard      | 3         | As needed  | Determined by environment | Standard CCR rules apply.                                               |
 
 ### 4.4 Self-Protection — Modifying the Protocol
 
 The CCR Protocol requires CCR to modify itself. This is not circular — it is a governance control that prevents casual or unreviewed changes to the standard all other reviews depend on.
 
 **To modify this protocol:**
+
 1. The proposed change must be justified by CCR findings (a gap identified during a CCR run) or explicit direction from the protocol owner
 2. The modification is assessed using CCR at Tier 1 protection (5+ loops, human gate every loop, × 1.5 environment modifier)
 3. The scoring worksheet is peer-reviewed — the modifier cannot be the sole reviewer of changes to the protocol they are modifying
 4. Version history is updated with the change description
 
 **What this prevents:**
+
 - Casual threshold adjustments ("let's just use 90% for this sprint")
 - Weight changes that break cross-team comparability
 - Structural changes without impact assessment
@@ -680,12 +692,14 @@ The CCR Protocol requires CCR to modify itself. This is not circular — it is a
 ### 4.5 When Governance Documents Should Change
 
 Governance documents are not frozen. They should change when:
+
 - CCR loops consistently reveal a gap in the document (systemic finding across multiple CCR runs)
 - The project's architecture or phase changes (Phase 1 → Phase 2 transition)
 - The protocol owner explicitly directs a change
 - A regulatory requirement mandates a change
 
 Governance documents should NOT change when:
+
 - A single CCR run produces a finding that is more easily fixed in code than in the document
 - A reviewer finds the document inconvenient for a specific task
 - A change would make the current task easier but weaken the standard for all future tasks
@@ -698,12 +712,12 @@ Governance documents should NOT change when:
 
 The 95% threshold is a calibration point validated by a century of use across scientific disciplines. It is not arbitrary, but it is also not derived from the CCR scoring model itself — it is adopted as the balance point between rigor and delivery velocity.
 
-| Reason | What It Means for CCR |
-|---|---|
-| **Reasonably high bar** | 1-in-20 residual risk tolerance. Filters noise, makes signal trustworthy. |
-| **Reasonably low bar** | Achievable under real engineering conditions without destroying velocity. |
-| **Ubiquitous** | Scores are comparable across teams, disciplines, and organizations running the same standard. |
-| **Practical** | Validated across disciplines — medicine, engineering, finance — for a century. |
+| Reason                  | What It Means for CCR                                                                         |
+| ----------------------- | --------------------------------------------------------------------------------------------- |
+| **Reasonably high bar** | 1-in-20 residual risk tolerance. Filters noise, makes signal trustworthy.                     |
+| **Reasonably low bar**  | Achievable under real engineering conditions without destroying velocity.                     |
+| **Ubiquitous**          | Scores are comparable across teams, disciplines, and organizations running the same standard. |
+| **Practical**           | Validated across disciplines — medicine, engineering, finance — for a century.                |
 
 The 5% residual is not ignored. It is documented, named, and bounded in the scoring worksheet as Partial items that carry forward explicitly to the next phase.
 
@@ -778,11 +792,11 @@ CCR is designed to run with AI assistance. Token cost is a real operational cons
 
 Each loop operates on a defined, scoped chunk of context — not the full repo, not the full PR.
 
-| Loop | Default Chunk Scope |
-|---|---|
-| 1 | The specific file, function, or component under review |
-| 2 | The expanded surface revealed by Loop 1 findings |
-| 3 | The proposed fix and its verification criteria only |
+| Loop | Default Chunk Scope                                    |
+| ---- | ------------------------------------------------------ |
+| 1    | The specific file, function, or component under review |
+| 2    | The expanded surface revealed by Loop 1 findings       |
+| 3    | The proposed fix and its verification criteria only    |
 
 This is not a shortcut. It is the correct design. Loop 1 does not need the full dependency tree — it needs the most dangerous assumption. Loop 3 does not need the original problem statement — it needs the solution and its mitigations.
 
@@ -794,9 +808,9 @@ Where multiple related findings exist — across files, handlers, or components 
 
 The chunking standard above is always applied unless explicitly overridden. An override requires a direct instruction that names the expanded scope — for example:
 
-> *"assess impact on feature"*
-> *"run against the full auth surface"*
-> *"include all downstream consumers"*
+> _"assess impact on feature"_
+> _"run against the full auth surface"_
+> _"include all downstream consumers"_
 
 Absent an explicit instruction, the loop operates on the default chunk. Scope creep is not a judgment call — it requires a named instruction to trigger.
 
@@ -810,11 +824,12 @@ When the loop process clears threshold, the output follows this standard structu
 **Loop Summary**
 | Loop | Confidence | Key Finding |
 |------|-----------|-------------|
-| 1    | XX%       | [What Loop 1 found] |
-| 2    | XX%       | [What Loop 2 found] |
-| 3    | XX%       | [What Loop 3 confirmed] |
+| 1 | XX% | [What Loop 1 found] |
+| 2 | XX% | [What Loop 2 found] |
+| 3 | XX% | [What Loop 3 confirmed] |
 
 **Corrections Applied Between Loops**
+
 - Loop 1→2: [Finding corrected] — [Evidence]
 - Loop 2→3: [Finding corrected] — [Evidence]
 
@@ -832,22 +847,27 @@ When the loop process clears threshold, the output follows this standard structu
 | **Score** | | | | | **100 - XX = XX%** |
 
 **Scope (Confirmed)**
+
 - [File/component 1]: [Change required]
 - [File/component 2]: [Change required]
 
 **Pre-conditions**
+
 - [ ] [Requirement 1 before merge]
 - [ ] [Requirement 2 before merge]
 
 **Commit Sequence**
+
 1. [First commit — scope and purpose]
 2. [Second commit — scope and purpose]
 
 **Verification**
+
 - [ ] [Post-merge check 1]
 - [ ] [Post-merge check 2]
 
 **Review Gates**
+
 - [Commit X]: Requires [specific reviewer qualification]
 ```
 
@@ -857,18 +877,18 @@ When the loop process clears threshold, the output follows this standard structu
 
 These behaviors indicate the protocol is being executed in form but not in substance.
 
-| Anti-Pattern | Why It Breaks CCR |
-|---|---|
-| Assigning 95%+ in Loop 1 | Loop 1 is a surface pass. A high score means the reviewer stopped looking too early. |
-| Reporting findings without fixing them | Reactive correction is mandatory. Reporting without fixing is false documented closure. |
-| Combining commits to save time | Merged scope cannot be bisected. A regression becomes invisible. |
-| Treating compilation as correctness | Code that compiles can fail at runtime. The compiler is not the test suite. |
-| Carrying Loop 1 scope into Loop 3 without expansion | If Loop 2 did not expand scope, Loop 2 was not run honestly. |
-| Rounding up to 95% | If the score is 93%, it is 93%. The gate is not a negotiation. |
-| Running loops in parallel | The output of Loop N is the pressure input of Loop N+1. Parallel execution breaks the recursive design. |
-| Expanding scope without a named instruction | Scope creep requires an explicit override. Silent expansion violates the default chunk rule. |
-| Claiming "Verified" without citable evidence | "I looked at it" is Partial, not Verified. Evidence is what makes the worksheet auditable. |
-| Modifying governance docs without elevated CCR | Governance artifacts require Tier 1/2 protection. Standard CCR is insufficient. |
+| Anti-Pattern                                        | Why It Breaks CCR                                                                                       |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| Assigning 95%+ in Loop 1                            | Loop 1 is a surface pass. A high score means the reviewer stopped looking too early.                    |
+| Reporting findings without fixing them              | Reactive correction is mandatory. Reporting without fixing is false documented closure.                 |
+| Combining commits to save time                      | Merged scope cannot be bisected. A regression becomes invisible.                                        |
+| Treating compilation as correctness                 | Code that compiles can fail at runtime. The compiler is not the test suite.                             |
+| Carrying Loop 1 scope into Loop 3 without expansion | If Loop 2 did not expand scope, Loop 2 was not run honestly.                                            |
+| Rounding up to 95%                                  | If the score is 93%, it is 93%. The gate is not a negotiation.                                          |
+| Running loops in parallel                           | The output of Loop N is the pressure input of Loop N+1. Parallel execution breaks the recursive design. |
+| Expanding scope without a named instruction         | Scope creep requires an explicit override. Silent expansion violates the default chunk rule.            |
+| Claiming "Verified" without citable evidence        | "I looked at it" is Partial, not Verified. Evidence is what makes the worksheet auditable.              |
+| Modifying governance docs without elevated CCR      | Governance artifacts require Tier 1/2 protection. Standard CCR is insufficient.                         |
 
 ---
 
@@ -880,14 +900,14 @@ Not every change warrants three full loops. CCR Lite is a single-loop assessment
 
 **Eligibility criteria — ALL must be true:**
 
-| Criterion | Question |
-|---|---|
-| Isolated | Does this change touch only one file or one narrowly-scoped surface? |
-| Reversible | Can this be reverted with a single commit and zero data impact? |
+| Criterion                  | Question                                                                            |
+| -------------------------- | ----------------------------------------------------------------------------------- |
+| Isolated                   | Does this change touch only one file or one narrowly-scoped surface?                |
+| Reversible                 | Can this be reverted with a single commit and zero data impact?                     |
 | Non-functional or cosmetic | Is this a typo fix, comment update, formatting change, or documentation correction? |
-| No security surface | Does this change touch zero auth, encryption, PII, or access control code? |
-| No governance artifact | Is this a Tier 4 document (standard code), not Tier 1-3? |
-| No external contract | Does this change zero API contracts, schemas, or public interfaces? |
+| No security surface        | Does this change touch zero auth, encryption, PII, or access control code?          |
+| No governance artifact     | Is this a Tier 4 document (standard code), not Tier 1-3?                            |
+| No external contract       | Does this change zero API contracts, schemas, or public interfaces?                 |
 
 **If any criterion is false → Standard CCR (3+ loops).**
 
@@ -935,12 +955,12 @@ Architecture (5+ loops): Score stuck after Loop 6
 
 #### When the human gate fires and nobody responds
 
-| Severity of finding | Response SLA |
-|---|---|
+| Severity of finding                      | Response SLA             |
+| ---------------------------------------- | ------------------------ |
 | Regulatory Required or Security Critical | 4 hours (business hours) |
-| Critical | 1 business day |
-| High | 2 business days |
-| Medium or Low | End of sprint |
+| Critical                                 | 1 business day           |
+| High                                     | 2 business days          |
+| Medium or Low                            | End of sprint            |
 
 If the SLA expires without response, the artifact does not advance. The CCR run is paused, not abandoned. It resumes when the gate is closed.
 
@@ -948,14 +968,14 @@ If the SLA expires without response, the artifact does not advance. The CCR run 
 
 Loops without time bounds risk analysis paralysis. These are suggested maximums — not hard limits, but signals that the loop should be concluding.
 
-| Scenario | Time per Loop | Total CCR Budget |
-|---|---|---|
-| CCR Lite (1 loop) | 15 minutes | 15 minutes |
-| Standard bug fix (3 loops) | 20 minutes | 1 hour |
-| Security review (3-4 loops) | 30 minutes | 2 hours |
-| Framework upgrade (4-5 loops) | 30 minutes | 2.5 hours |
-| Architecture change (5+ loops) | 45 minutes | 4+ hours |
-| Governance artifact (5+ loops) | 45 minutes | 4+ hours |
+| Scenario                       | Time per Loop | Total CCR Budget |
+| ------------------------------ | ------------- | ---------------- |
+| CCR Lite (1 loop)              | 15 minutes    | 15 minutes       |
+| Standard bug fix (3 loops)     | 20 minutes    | 1 hour           |
+| Security review (3-4 loops)    | 30 minutes    | 2 hours          |
+| Framework upgrade (4-5 loops)  | 30 minutes    | 2.5 hours        |
+| Architecture change (5+ loops) | 45 minutes    | 4+ hours         |
+| Governance artifact (5+ loops) | 45 minutes    | 4+ hours         |
 
 **If a loop exceeds its time budget:** The reviewer should score what they have, document the time constraint as a finding, and gate-check. The time constraint itself may reduce confidence — that is the protocol working correctly. A rushed loop should score lower than a thorough one.
 
@@ -964,12 +984,14 @@ Loops without time bounds risk analysis paralysis. These are suggested maximums 
 Scoring worksheets are judgment artifacts. For high-stakes assessments, a second reviewer should independently verify the worksheet.
 
 **When peer review is required:**
+
 - All Tier 1 (Protocol) modifications
 - Any assessment with Regulatory Required or Security Critical findings
 - Any assessment where the final score is between 95% and 97% (near-threshold)
 - When requested by the protocol owner or team lead
 
 **What the peer reviewer checks:**
+
 - Are severity classifications defensible?
 - Is each "Verified" item backed by cited evidence?
 - Are any "Partial" items actually "Unverified" with a generous classification?
@@ -1022,34 +1044,34 @@ The handoff gate is not a soft boundary. Engineering's residual risk — the ite
 
 **Unit Test Layer:**
 
-| Item | Severity |
-|---|---|
-| Happy path covered and passing | Critical |
-| Edge case boundaries tested — not just nominal inputs | Critical |
-| Failure paths explicitly tested — not just success | High |
-| No test asserting implementation detail instead of behavior | High |
-| Test is isolated — no shared state bleeding between tests | High |
-| Coverage gap documented if intentional | Medium |
+| Item                                                        | Severity |
+| ----------------------------------------------------------- | -------- |
+| Happy path covered and passing                              | Critical |
+| Edge case boundaries tested — not just nominal inputs       | Critical |
+| Failure paths explicitly tested — not just success          | High     |
+| No test asserting implementation detail instead of behavior | High     |
+| Test is isolated — no shared state bleeding between tests   | High     |
+| Coverage gap documented if intentional                      | Medium   |
 
 **Contract Test Layer:**
 
-| Item | Severity |
-|---|---|
-| API contract verified against consumer expectations | Critical |
-| Schema changes backward-compatible or versioned | Critical |
-| Breaking contract changes flagged to downstream consumers | Critical |
-| Consumer-driven contract tests passing | High |
-| Contract test covers error response shapes, not just success | High |
+| Item                                                         | Severity |
+| ------------------------------------------------------------ | -------- |
+| API contract verified against consumer expectations          | Critical |
+| Schema changes backward-compatible or versioned              | Critical |
+| Breaking contract changes flagged to downstream consumers    | Critical |
+| Consumer-driven contract tests passing                       | High     |
+| Contract test covers error response shapes, not just success | High     |
 
 **Integration Test Layer:**
 
-| Item | Severity |
-|---|---|
-| Change verified in context of dependent services | Critical |
-| No mocked dependencies in integration layer that are real in production | Critical |
-| Data flow verified end-to-end through the changed surface | High |
-| Environment parity confirmed — integration environment matches production | High |
-| Rollback path tested — change can be reverted without data corruption | Medium |
+| Item                                                                      | Severity |
+| ------------------------------------------------------------------------- | -------- |
+| Change verified in context of dependent services                          | Critical |
+| No mocked dependencies in integration layer that are real in production   | Critical |
+| Data flow verified end-to-end through the changed surface                 | High     |
+| Environment parity confirmed — integration environment matches production | High     |
+| Rollback path tested — change can be reverted without data corruption     | Medium   |
 
 **Engineering Handoff Template:**
 
@@ -1067,6 +1089,7 @@ The handoff gate is not a soft boundary. Engineering's residual risk — the ite
 | 3 | Integration | XX% | [Finding] |
 
 **Corrections Applied**
+
 - [What was fixed between loops]
 
 **Residual Risk (Partial items — QA starting scope)**
@@ -1079,99 +1102,99 @@ The handoff gate is not a soft boundary. Engineering's residual risk — the ite
 
 **Manual Exploration Layer:**
 
-| Item | Severity |
-|---|---|
+| Item                                                                          | Severity |
+| ----------------------------------------------------------------------------- | -------- |
 | Change behaves as specified from user perspective — not just code perspective | Critical |
-| Engineering's documented residual risk items verified or escalated | Critical |
-| Edge cases not in Engineering's test suite explored | High |
-| Negative testing — what breaks when the change is used wrong | High |
-| Cross-browser / cross-device behavior verified if applicable | High |
-| Visual and interaction regression checked on affected surfaces | Medium |
+| Engineering's documented residual risk items verified or escalated            | Critical |
+| Edge cases not in Engineering's test suite explored                           | High     |
+| Negative testing — what breaks when the change is used wrong                  | High     |
+| Cross-browser / cross-device behavior verified if applicable                  | High     |
+| Visual and interaction regression checked on affected surfaces                | Medium   |
 
 **Automation Layer:**
 
-| Item | Severity |
-|---|---|
-| Automated regression suite passes on changed surface | Critical |
+| Item                                                                           | Severity |
+| ------------------------------------------------------------------------------ | -------- |
+| Automated regression suite passes on changed surface                           | Critical |
 | New automation added for the changed behavior — not just existing suite re-run | Critical |
-| Automation covers the user-facing contract, not the implementation | High |
-| No flaky tests masking a real failure | High |
-| Test data represents production data shape — not synthetic ideals | Medium |
+| Automation covers the user-facing contract, not the implementation             | High     |
+| No flaky tests masking a real failure                                          | High     |
+| Test data represents production data shape — not synthetic ideals              | Medium   |
 
 **Regression Layer:**
 
-| Item | Severity |
-|---|---|
-| No previously passing tests now failing | Critical |
-| Adjacent surfaces not broken by the change | Critical |
-| Performance baseline not degraded beyond threshold | High |
-| Accessibility baseline maintained | High |
-| No new console errors introduced | Medium |
-| Monitoring and alerting verified — change is observable in production | Medium |
+| Item                                                                  | Severity |
+| --------------------------------------------------------------------- | -------- |
+| No previously passing tests now failing                               | Critical |
+| Adjacent surfaces not broken by the change                            | Critical |
+| Performance baseline not degraded beyond threshold                    | High     |
+| Accessibility baseline maintained                                     | High     |
+| No new console errors introduced                                      | Medium   |
+| Monitoring and alerting verified — change is observable in production | Medium   |
 
 ### 8.5 Applied Across the Full Scrum Team
 
-| Role | Loop Sequence | Critical Asks | Conservative Asks | Recursive Asks |
-|---|---|---|---|---|
-| **Product Owner** | Vision → Roadmap → Story | Is this the right problem? | What is worst-case if this is wrong? | Does this hold after stakeholder pressure? |
-| **Business Analyst** | Discovery → Rules → Criteria | What assumption am I treating as verified? | Does the floor hold if the requirement is incomplete? | Is acceptance criteria stable across multiple readers? |
-| **Scrum Master** | Team Health → Process → Impediment | What is blocking delivery nobody is naming? | What happens to the sprint if this is unresolved? | Is team confidence holding or degrading sprint over sprint? |
-| **Engineering** | Unit → Contract → Integration | Is this correct by construction? | Does integration hold under worst-case data? | Has confidence held across all three layers? |
-| **QA** | Manual → Automation → Regression | Is this correct by behavior? | Does the system break under negative testing? | Is the regression surface stable? |
-| **Security** | Threat Model → Attack Surface → Penetration | What is the most dangerous unverified assumption? | What is the blast radius if this is exploited? | Has the threat model held under adversarial pressure? |
-| **DevOps / SRE** | Infrastructure → Pipeline → Observability | Is the deployment path verified end to end? | What fails first under load? | Are SLOs and alerting confirmed stable? |
+| Role                 | Loop Sequence                               | Critical Asks                                     | Conservative Asks                                     | Recursive Asks                                              |
+| -------------------- | ------------------------------------------- | ------------------------------------------------- | ----------------------------------------------------- | ----------------------------------------------------------- |
+| **Product Owner**    | Vision → Roadmap → Story                    | Is this the right problem?                        | What is worst-case if this is wrong?                  | Does this hold after stakeholder pressure?                  |
+| **Business Analyst** | Discovery → Rules → Criteria                | What assumption am I treating as verified?        | Does the floor hold if the requirement is incomplete? | Is acceptance criteria stable across multiple readers?      |
+| **Scrum Master**     | Team Health → Process → Impediment          | What is blocking delivery nobody is naming?       | What happens to the sprint if this is unresolved?     | Is team confidence holding or degrading sprint over sprint? |
+| **Engineering**      | Unit → Contract → Integration               | Is this correct by construction?                  | Does integration hold under worst-case data?          | Has confidence held across all three layers?                |
+| **QA**               | Manual → Automation → Regression            | Is this correct by behavior?                      | Does the system break under negative testing?         | Is the regression surface stable?                           |
+| **Security**         | Threat Model → Attack Surface → Penetration | What is the most dangerous unverified assumption? | What is the blast radius if this is exploited?        | Has the threat model held under adversarial pressure?       |
+| **DevOps / SRE**     | Infrastructure → Pipeline → Observability   | Is the deployment path verified end to end?       | What fails first under load?                          | Are SLOs and alerting confirmed stable?                     |
 
 ### 8.6 Applied Across IT Operations
 
 **Incident Management:**
 
-| Loop | Layer | Question |
-|---|---|---|
-| 1 | Triage | What is actually broken vs. what we assume is broken? |
-| 2 | Root Cause | Does the identified cause explain all symptoms? |
-| 3 | Resolution | Does the fix hold under the conditions that caused the incident? |
+| Loop | Layer      | Question                                                         |
+| ---- | ---------- | ---------------------------------------------------------------- |
+| 1    | Triage     | What is actually broken vs. what we assume is broken?            |
+| 2    | Root Cause | Does the identified cause explain all symptoms?                  |
+| 3    | Resolution | Does the fix hold under the conditions that caused the incident? |
 
 **Change Management:**
 
-| Loop | Layer | Question |
-|---|---|---|
-| 1 | Impact Assessment | What surfaces does this change touch? |
-| 2 | Risk Analysis | What breaks if the change fails? |
-| 3 | Rollback Verification | Is the rollback path tested and confirmed? |
+| Loop | Layer                 | Question                                   |
+| ---- | --------------------- | ------------------------------------------ |
+| 1    | Impact Assessment     | What surfaces does this change touch?      |
+| 2    | Risk Analysis         | What breaks if the change fails?           |
+| 3    | Rollback Verification | Is the rollback path tested and confirmed? |
 
 **Capacity Planning:**
 
-| Loop | Layer | Question |
-|---|---|---|
-| 1 | Current State | What does the data actually show vs. what we assume? |
-| 2 | Growth Model | Does the model hold under worst-case demand scenarios? |
-| 3 | Threshold Validation | Are alerting thresholds verified against real failure patterns? |
+| Loop | Layer                | Question                                                        |
+| ---- | -------------------- | --------------------------------------------------------------- |
+| 1    | Current State        | What does the data actually show vs. what we assume?            |
+| 2    | Growth Model         | Does the model hold under worst-case demand scenarios?          |
+| 3    | Threshold Validation | Are alerting thresholds verified against real failure patterns? |
 
 ### 8.7 Applied Across Additional Professions
 
 **Compliance Officer:**
 
-| Loop | Layer | Question |
-|---|---|---|
-| 1 | Regulatory Inventory | What regulations actually apply to this system? |
-| 2 | Gap Analysis | Where does current state fail against each regulation? |
-| 3 | Remediation Verification | Does the remediation close the gap at the enforcement layer? |
+| Loop | Layer                    | Question                                                     |
+| ---- | ------------------------ | ------------------------------------------------------------ |
+| 1    | Regulatory Inventory     | What regulations actually apply to this system?              |
+| 2    | Gap Analysis             | Where does current state fail against each regulation?       |
+| 3    | Remediation Verification | Does the remediation close the gap at the enforcement layer? |
 
 **Financial Analyst:**
 
-| Loop | Layer | Question |
-|---|---|---|
-| 1 | Assumption Audit | What assumptions are load-bearing in this model? |
-| 2 | Stress Test | Does the model hold under worst-case scenarios? |
-| 3 | Sensitivity Validation | Which variables most change the output and are they verified? |
+| Loop | Layer                  | Question                                                      |
+| ---- | ---------------------- | ------------------------------------------------------------- |
+| 1    | Assumption Audit       | What assumptions are load-bearing in this model?              |
+| 2    | Stress Test            | Does the model hold under worst-case scenarios?               |
+| 3    | Sensitivity Validation | Which variables most change the output and are they verified? |
 
 **Data Engineer / Analyst:**
 
-| Loop | Layer | Question |
-|---|---|---|
-| 1 | Source Verification | Is the data what we think it is? |
-| 2 | Pipeline Integrity | Does transformation logic hold across edge case inputs? |
-| 3 | Output Validation | Does the output match expected shape under production data? |
+| Loop | Layer               | Question                                                    |
+| ---- | ------------------- | ----------------------------------------------------------- |
+| 1    | Source Verification | Is the data what we think it is?                            |
+| 2    | Pipeline Integrity  | Does transformation logic hold across edge case inputs?     |
+| 3    | Output Validation   | Does the output match expected shape under production data? |
 
 ### 8.8 Universal Loop Position Penalty
 
@@ -1239,7 +1262,7 @@ The analogy: TCP/IP is rigid — the protocol never changes. The applications bu
 
 Do not say "here is our new process." Say:
 
-> *"I built a framework for making our confidence in AI-assisted output measurable and documented. I want you to pick it apart. Here is what I think it gets right and here is where I think it needs hardening. The scoring rubric is the weakest point — let's fix that together."*
+> _"I built a framework for making our confidence in AI-assisted output measurable and documented. I want you to pick it apart. Here is what I think it gets right and here is where I think it needs hardening. The scoring rubric is the weakest point — let's fix that together."_
 
 That framing positions you as the author, not the enforcer. It gives engineers the intellectual invitation to engage rather than resist. It makes hardening the scoring rubric a team exercise — which means they own it. The engineers who engage most critically will become its strongest advocates once they have shaped it.
 
@@ -1253,14 +1276,14 @@ That framing positions you as the author, not the enforcer. It gives engineers t
 
 #### Severity Extension — Regulatory Required Tier
 
-| Severity | Deduction | Definition |
-|---|---|---|
-| **Regulatory Required** | **25 points** | **Federal legal obligation. No partial credit.** |
-| Security Critical | 15 points | Security finding with exploit potential. No partial credit. |
-| Critical | 15 points | Load-bearing. Analysis fails if wrong. |
-| High | 10 points | Significant downstream risk. |
-| Medium | 5 points | Real gap. Manageable if bounded. |
-| Low | 2 points | Improvement. Not a blocker. |
+| Severity                | Deduction     | Definition                                                  |
+| ----------------------- | ------------- | ----------------------------------------------------------- |
+| **Regulatory Required** | **25 points** | **Federal legal obligation. No partial credit.**            |
+| Security Critical       | 15 points     | Security finding with exploit potential. No partial credit. |
+| Critical                | 15 points     | Load-bearing. Analysis fails if wrong.                      |
+| High                    | 10 points     | Significant downstream risk.                                |
+| Medium                  | 5 points      | Real gap. Manageable if bounded.                            |
+| Low                     | 2 points      | Improvement. Not a blocker.                                 |
 
 #### The Hard Ceiling Rule
 
@@ -1287,42 +1310,42 @@ Mental health / substance abuse PHI     → deduction × 2.0   (42 CFR Part 2 ov
 
 #### HIPAA Base Items (Added to Tier 1)
 
-| HIPAA Base Item | Severity | Deduction if Unresolved |
-|---|---|---|
-| PHI data flow mapped — ingress, storage, egress, disposal | Regulatory Required | 25 pts |
-| Business Associate Agreements verified for all third-party PHI handlers | Regulatory Required | 25 pts |
-| Audit logging confirmed on all PHI access points | Regulatory Required | 25 pts |
-| Minimum Necessary standard verified — PHI access scoped to role | Critical | 15 pts |
-| Breach notification path documented and tested | Critical | 15 pts |
+| HIPAA Base Item                                                         | Severity            | Deduction if Unresolved |
+| ----------------------------------------------------------------------- | ------------------- | ----------------------- |
+| PHI data flow mapped — ingress, storage, egress, disposal               | Regulatory Required | 25 pts                  |
+| Business Associate Agreements verified for all third-party PHI handlers | Regulatory Required | 25 pts                  |
+| Audit logging confirmed on all PHI access points                        | Regulatory Required | 25 pts                  |
+| Minimum Necessary standard verified — PHI access scoped to role         | Critical            | 15 pts                  |
+| Breach notification path documented and tested                          | Critical            | 15 pts                  |
 
 #### Temporal Modifier
 
-| Deadline Category | Modifier |
-|---|---|
-| No regulatory deadline | × 1.0 |
-| 30-60 day legal deadline | × 1.5 |
-| Immediate legal exposure | × 2.0 |
+| Deadline Category        | Modifier |
+| ------------------------ | -------- |
+| No regulatory deadline   | × 1.0    |
+| 30-60 day legal deadline | × 1.5    |
+| Immediate legal exposure | × 2.0    |
 
 Key HIPAA deadlines: Breach notification to individuals (60 days), breach notification to HHS (60 days), PHI access upon patient request (30 days), audit log retention (6 years minimum).
 
 #### HIPAA Variable Item Set
 
-| Item | Severity |
-|---|---|
-| PHI encrypted at rest (AES-256 or equivalent) | Regulatory Required |
-| PHI encrypted in transit (TLS 1.2 minimum) | Regulatory Required |
+| Item                                                      | Severity            |
+| --------------------------------------------------------- | ------------------- |
+| PHI encrypted at rest (AES-256 or equivalent)             | Regulatory Required |
+| PHI encrypted in transit (TLS 1.2 minimum)                | Regulatory Required |
 | Access controls implemented — role-based, least privilege | Regulatory Required |
-| Audit logs capturing who accessed what PHI and when | Regulatory Required |
-| BAA in place for all third-party PHI processors | Regulatory Required |
-| Unique user identification — no shared credentials | Regulatory Required |
-| Automatic logoff on PHI-accessing systems | Regulatory Required |
-| Emergency access procedure documented and tested | Regulatory Required |
-| PHI disposal process verified — electronic and physical | High |
-| Workforce training documented for PHI handlers | High |
-| Contingency plan tested — backup, recovery, continuity | High |
-| PHI de-identification method verified if used | High |
-| Penetration test conducted within required window | Medium |
-| Policy and procedure documentation current | Medium |
+| Audit logs capturing who accessed what PHI and when       | Regulatory Required |
+| BAA in place for all third-party PHI processors           | Regulatory Required |
+| Unique user identification — no shared credentials        | Regulatory Required |
+| Automatic logoff on PHI-accessing systems                 | Regulatory Required |
+| Emergency access procedure documented and tested          | Regulatory Required |
+| PHI disposal process verified — electronic and physical   | High                |
+| Workforce training documented for PHI handlers            | High                |
+| Contingency plan tested — backup, recovery, continuity    | High                |
+| PHI de-identification method verified if used             | High                |
+| Penetration test conducted within required window         | Medium              |
+| Policy and procedure documentation current                | Medium              |
 
 #### HIPAA Formula
 
@@ -1362,9 +1385,9 @@ Hard ceiling: [ ] Active (max score 60%) [ ] Cleared (full scoring applies)
 **Loop Summary**
 | Loop | Raw Score | Cap Applied | Final Score | Key Finding |
 |------|-----------|-------------|-------------|-------------|
-| 1    | XX%       | Yes / No    | XX%         | [Finding]   |
-| 2    | XX%       | Yes / No    | XX%         | [Finding]   |
-| 3    | XX%       | Yes / No    | XX%         | [Finding]   |
+| 1 | XX% | Yes / No | XX% | [Finding] |
+| 2 | XX% | Yes / No | XX% | [Finding] |
+| 3 | XX% | Yes / No | XX% | [Finding] |
 
 **HIPAA Scoring Worksheet — Loop [N]**
 | Item | Tier | Severity | State | Base | Loop× | Breadth× | Env× | Temporal× | Subtotal |
@@ -1377,25 +1400,28 @@ Hard ceiling: [ ] Active (max score 60%) [ ] Cleared (full scoring applies)
 | **Final score** | | | | | | | | | **XX%** |
 
 **PHI Surface Classification**
+
 - Surface type: [De-identified / Limited / In transit / At rest / PCI overlap / 42 CFR Part 2]
 - Environment modifier applied: [×]
 
 **BAA Verification**
+
 - [ ] Cloud provider: [name] — BAA confirmed
 - [ ] Analytics: [name] — BAA confirmed
 - [ ] Logging platform: [name] — BAA confirmed
 - [ ] Email / notification service: [name] — BAA confirmed
 
 **Breach Notification Status**
+
 - [ ] No active breach exposure
 - [ ] Breach exposure identified — notification path activated
 ```
 
 #### Plain Language Summary — HIPAA
 
-Standard CCR asks: *how much unresolved risk is still load-bearing?*
+Standard CCR asks: _how much unresolved risk is still load-bearing?_
 
-HIPAA CCR asks the same question and adds: *does any of that risk carry a federal legal obligation that no engineering score can override?*
+HIPAA CCR asks the same question and adds: _does any of that risk carry a federal legal obligation that no engineering score can override?_
 
 If yes — the gate does not open. Not at 95%. Not at 99%. The Required item closes first or nothing ships. That is what makes HIPAA different from every other environment modifier in the protocol. It is not a multiplier. It is a veto.
 
@@ -1414,7 +1440,7 @@ COPPA applies when a digital service is:
 
 "Actual knowledge" is not a defense. If your platform collects data and children could reasonably use it, COPPA applies unless verified mechanisms exist to prevent or consent-gate their participation. The FTC enforces COPPA. Civil penalties run up to **$51,744 per violation per day.**
 
-**Key difference from HIPAA:** HIPAA is about *what data you hold and how you protect it.* COPPA is about *who the data belongs to and whether you had the right to collect it at all.* That is a fundamentally different legal question and it changes where in the CCR loop the risk surfaces. HIPAA violations typically emerge in Loop 2 — surface mapping reveals unprotected PHI. COPPA violations are frequently Loop 1 failures — the collection mechanism itself was never verified against the age threshold before anything else was built.
+**Key difference from HIPAA:** HIPAA is about _what data you hold and how you protect it._ COPPA is about _who the data belongs to and whether you had the right to collect it at all._ That is a fundamentally different legal question and it changes where in the CCR loop the risk surfaces. HIPAA violations typically emerge in Loop 2 — surface mapping reveals unprotected PHI. COPPA violations are frequently Loop 1 failures — the collection mechanism itself was never verified against the age threshold before anything else was built.
 
 #### The Hard Ceiling Rule
 
@@ -1432,14 +1458,14 @@ COPPA + HIPAA overlap (pediatric health)     → deduction × 2.5
 
 #### COPPA Base Items (Added to Tier 1)
 
-| COPPA Base Item | Severity | Deduction if Unresolved |
-|---|---|---|
-| Age determination mechanism verified — enforced at API layer, not just UI | Regulatory Required | 25 pts |
-| Verifiable parental consent flow implemented and tested | Regulatory Required | 25 pts |
-| Privacy notice present, plain language, COPPA-compliant | Regulatory Required | 25 pts |
-| PII collection scoped to minimum necessary — no excess collection | Critical | 15 pts |
-| Parental review, correction, and deletion path functional | Critical | 15 pts |
-| Data retention policy defined and enforced for child data | Critical | 15 pts |
+| COPPA Base Item                                                           | Severity            | Deduction if Unresolved |
+| ------------------------------------------------------------------------- | ------------------- | ----------------------- |
+| Age determination mechanism verified — enforced at API layer, not just UI | Regulatory Required | 25 pts                  |
+| Verifiable parental consent flow implemented and tested                   | Regulatory Required | 25 pts                  |
+| Privacy notice present, plain language, COPPA-compliant                   | Regulatory Required | 25 pts                  |
+| PII collection scoped to minimum necessary — no excess collection         | Critical            | 15 pts                  |
+| Parental review, correction, and deletion path functional                 | Critical            | 15 pts                  |
+| Data retention policy defined and enforced for child data                 | Critical            | 15 pts                  |
 
 #### Temporal Modifier
 
@@ -1451,23 +1477,23 @@ Finding with active FTC investigation risk   → deduction × 2.0
 
 #### COPPA Variable Item Set
 
-| Item | Severity |
-|---|---|
-| Age gate enforced at API layer — not just UI | Regulatory Required |
-| Verifiable parental consent — not a checkbox | Regulatory Required |
-| Privacy notice accessible before any collection | Regulatory Required |
-| No behavioral advertising to under-13 users | Regulatory Required |
-| No third-party data sharing without parental consent | Regulatory Required |
+| Item                                                         | Severity            |
+| ------------------------------------------------------------ | ------------------- |
+| Age gate enforced at API layer — not just UI                 | Regulatory Required |
+| Verifiable parental consent — not a checkbox                 | Regulatory Required |
+| Privacy notice accessible before any collection              | Regulatory Required |
+| No behavioral advertising to under-13 users                  | Regulatory Required |
+| No third-party data sharing without parental consent         | Regulatory Required |
 | Parental deletion request cascades to all downstream systems | Regulatory Required |
-| Child PII not used to build advertising profiles | Regulatory Required |
-| Session data for under-13 users not persisted beyond session | High |
-| Analytics tools audited for child PII collection | High |
-| Child data segregated from adult data at storage layer | High |
-| Support staff trained on parental rights requests | High |
-| Third-party SDKs audited for child data collection | High |
-| Child data excluded from AI training pipelines | Medium |
-| Retention enforcement automated — not manual | Medium |
-| Parental consent records retained as compliance evidence | Medium |
+| Child PII not used to build advertising profiles             | Regulatory Required |
+| Session data for under-13 users not persisted beyond session | High                |
+| Analytics tools audited for child PII collection             | High                |
+| Child data segregated from adult data at storage layer       | High                |
+| Support staff trained on parental rights requests            | High                |
+| Third-party SDKs audited for child data collection           | High                |
+| Child data excluded from AI training pipelines               | Medium              |
+| Retention enforcement automated — not manual                 | Medium              |
+| Parental consent records retained as compliance evidence     | Medium              |
 
 #### COPPA Scoring Worksheet
 
@@ -1485,6 +1511,7 @@ Finding with active FTC investigation risk   → deduction × 2.0
 Hard ceiling: [ ] Active (max score 60%) [ ] Cleared (full scoring applies)
 
 **Audience Classification**
+
 - [ ] No under-13 users possible — verified
 - [ ] Mixed audience — age gate in place
 - [ ] Platform directed to children under 13
@@ -1492,17 +1519,20 @@ Hard ceiling: [ ] Active (max score 60%) [ ] Cleared (full scoring applies)
 - [ ] HIPAA overlap active — see Compound Assessment
 
 **Age Gate Verification**
+
 - [ ] UI layer gate confirmed
 - [ ] API layer enforcement confirmed
 - [ ] Backend collection blocked for unverified users
 - [ ] Parental consent flow end-to-end tested
 
 **Third-Party SDK Audit**
+
 - [ ] [SDK name] — child data collection: confirmed / not confirmed / excluded
 - [ ] Analytics — child PII: excluded / not excluded
 - [ ] Ad network — behavioral targeting for under-13: disabled / not disabled
 
 **Parental Rights Path**
+
 - [ ] Access request path functional
 - [ ] Correction path functional
 - [ ] Deletion path functional — cascades to all downstream systems
@@ -1537,26 +1567,26 @@ The 40% dual-veto cap reflects that two independent federal enforcement paths ar
 
 #### Compound Variable Items (Added on top of both individual sets)
 
-| Item | Severity |
-|---|---|
-| PHI of minors segregated from adult PHI at storage layer | Regulatory Required |
-| Parental consent covers BOTH data collection (COPPA) AND treatment authorization (HIPAA) | Regulatory Required |
-| Minor's right to access PHI vs. parental right to access child data — conflict resolution documented | Critical |
-| Age-based access controls — minor's own records access policy defined | Critical |
-| Third parties holding both child PII and PHI have both BAA and COPPA data sharing agreement | Regulatory Required |
-| Mature health content access-gated for minors | High |
-| Breach notification path covers both HHS (HIPAA) and FTC (COPPA) simultaneously | Critical |
+| Item                                                                                                 | Severity            |
+| ---------------------------------------------------------------------------------------------------- | ------------------- |
+| PHI of minors segregated from adult PHI at storage layer                                             | Regulatory Required |
+| Parental consent covers BOTH data collection (COPPA) AND treatment authorization (HIPAA)             | Regulatory Required |
+| Minor's right to access PHI vs. parental right to access child data — conflict resolution documented | Critical            |
+| Age-based access controls — minor's own records access policy defined                                | Critical            |
+| Third parties holding both child PII and PHI have both BAA and COPPA data sharing agreement          | Regulatory Required |
+| Mature health content access-gated for minors                                                        | High                |
+| Breach notification path covers both HHS (HIPAA) and FTC (COPPA) simultaneously                      | Critical            |
 
 #### Compound Temporal Stack
 
 When both frameworks are active, the most restrictive deadline governs.
 
-| Scenario | HIPAA Deadline | COPPA Deadline | Governing | Modifier |
-|---|---|---|---|---|
-| Breach involving child PHI | 60 days | 30 days | 30 days | × 2.0 |
-| Access request for minor's PHI | 30 days | 30 days | 30 days | × 1.5 |
-| Deletion request for minor's PHI | N/A | 30 days | 30 days | × 1.5 |
-| Audit log retention | 6 years | N/A | 6 years | × 1.0 |
+| Scenario                         | HIPAA Deadline | COPPA Deadline | Governing | Modifier |
+| -------------------------------- | -------------- | -------------- | --------- | -------- |
+| Breach involving child PHI       | 60 days        | 30 days        | 30 days   | × 2.0    |
+| Access request for minor's PHI   | 30 days        | 30 days        | 30 days   | × 1.5    |
+| Deletion request for minor's PHI | N/A            | 30 days        | 30 days   | × 1.5    |
+| Audit log retention              | 6 years        | N/A            | 6 years   | × 1.0    |
 
 #### Compound Formula
 
@@ -1593,11 +1623,11 @@ Both close. Then the score runs. Then the gate decides. That is the correct orde
 
 ### 11.1 Worked Example — Framework Upgrade (Spring Boot 2.7 → 3.2)
 
-| Loop | Confidence | Finding |
-|---|---|---|
-| 1 | 62% | Production runtime on Java 11. Upgrade is two parts, not one. Stopped. |
-| 2 | 79% | 247 javax.* references. WebSecurityConfigurerAdapter rewrite required. Hibernate 6 breaking changes in JPA layer. Stopped. |
-| 3 | 96% | Commit sequence locked. Production Java 17 pre-condition confirmed. Security rewrite reviewer requirement added. Shipped. |
+| Loop | Confidence | Finding                                                                                                                     |
+| ---- | ---------- | --------------------------------------------------------------------------------------------------------------------------- |
+| 1    | 62%        | Production runtime on Java 11. Upgrade is two parts, not one. Stopped.                                                      |
+| 2    | 79%        | 247 javax.\* references. WebSecurityConfigurerAdapter rewrite required. Hibernate 6 breaking changes in JPA layer. Stopped. |
+| 3    | 96%        | Commit sequence locked. Production Java 17 pre-condition confirmed. Security rewrite reviewer requirement added. Shipped.   |
 
 **Without CCR:** pom.xml bumped. Deployed to Java 11 production runtime. Outage.
 **With CCR:** Four-commit sequence, pre-conditions verified, dedicated PR per concern, bisectable history.
@@ -1615,12 +1645,12 @@ Both close. Then the score runs. Then the gate decides. That is the correct orde
 
 **Common first-timer questions:**
 
-| Question | Answer |
-|---|---|
+| Question                                 | Answer                                                                                                                                                      |
+| ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | "How do I know what severity to assign?" | Start with the variable item set for your application type. If unsure between two levels, pick the higher one. Conservative classification is always safer. |
-| "What counts as evidence for Verified?" | Test result, code path (file:line), config value, log entry, screenshot. If you can point to it, it's evidence. If you can't, it's Partial. |
-| "My score is 93% — can I round up?" | No. 93% is 93%. Fix a finding or accept the gate. |
-| "Do I need to run CCR on everything?" | No. See CCR Lite eligibility (Section 7.1). Typo fixes, comment changes, and formatting don't need 3 loops. |
+| "What counts as evidence for Verified?"  | Test result, code path (file:line), config value, log entry, screenshot. If you can point to it, it's evidence. If you can't, it's Partial.                 |
+| "My score is 93% — can I round up?"      | No. 93% is 93%. Fix a finding or accept the gate.                                                                                                           |
+| "Do I need to run CCR on everything?"    | No. See CCR Lite eligibility (Section 7.1). Typo fixes, comment changes, and formatting don't need 3 loops.                                                 |
 
 ### 11.3 Calibration Exercises
 
@@ -1652,57 +1682,57 @@ Track CCR scores across sprints to identify systemic patterns:
 
 The protocol itself is reassessed on a defined schedule:
 
-| Trigger | Action |
-|---|---|
-| Quarterly | Review protocol version against team feedback. Any proposed changes go through Tier 1 CCR. |
-| After 10 CCR runs | Compile score trending data. Assess whether calibration constants need adjustment. |
-| Infrastructure change | If token cost model changes (cloud → local LLM), reassess threshold advancement pre-conditions. |
-| Regulatory change | If new regulations apply (e.g., GDPR extension, state privacy laws), assess whether new regulatory extension is needed. |
-| Protocol owner decision | Ad hoc reassessment at owner's discretion. |
+| Trigger                 | Action                                                                                                                  |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| Quarterly               | Review protocol version against team feedback. Any proposed changes go through Tier 1 CCR.                              |
+| After 10 CCR runs       | Compile score trending data. Assess whether calibration constants need adjustment.                                      |
+| Infrastructure change   | If token cost model changes (cloud → local LLM), reassess threshold advancement pre-conditions.                         |
+| Regulatory change       | If new regulations apply (e.g., GDPR extension, state privacy laws), assess whether new regulatory extension is needed. |
+| Protocol owner decision | Ad hoc reassessment at owner's discretion.                                                                              |
 
 ### 11.6 Glossary
 
-| Term | Definition |
-|---|---|
-| **Artifact** | Any output that earns the right to ship — merged PR, shipped fix, documented decision. Requires CCR ≥ 95%. |
-| **Base Item** | One of five universal scoring items that apply to every CCR run. If any fails, max score is 70%. |
-| **Calibration Constant** | A scoring weight validated through use, not mathematically derived. All severity weights and most heuristic constants are calibrations. |
-| **CCR Lite** | A single-loop fast path for low-risk, isolated, reversible changes. See Section 7.1. |
-| **Chunk** | The scoped context a single loop operates on. Defined per loop, expands only with named instruction. |
-| **Confidence Decay** | When a score drops between consecutive loops. Indicates new risk was uncovered. Process does not advance. |
-| **Dual-Veto** | Compound regulatory architecture where two independent frameworks (HIPAA + COPPA) each hold independent veto power. |
-| **Evidence** | Citable proof that a finding has been verified — test result, code path, config value, log entry. Required for "Verified" state. |
-| **Governance Artifact** | A Tier 1 or Tier 2 document that is load-bearing for all downstream work. Requires elevated CCR protection. |
-| **Hard Ceiling** | A score cap (60% for single regulatory veto, 40% for dual veto) that no heuristic can override. |
-| **Human Gate** | The point where the protocol stops and waits for human input. Not a failure — a design feature. |
-| **Invariant Core** | The parts of CCR that never change: formula, threshold, gates, heuristics, severity weights. |
-| **Loop** | A complete pass through all three layers (Critical, Conservative, Recursive). Minimum 3 for standard reviews. |
-| **Partial Credit** | Half deduction for findings that are named, bounded, and documented but not fully resolved. Not available for Regulatory Required or Security Critical. |
-| **Reactive Correction** | The mandate to fix actionable findings between loops, not just report them. Includes updating the variable item set. |
-| **Regulatory Required** | Severity tier (25 pts) for federal legal obligations. No partial credit. Open items cap score at 60%. |
-| **Security Critical** | Severity tier (15 pts) for security findings with exploit potential. No partial credit. |
-| **Variable Item Set** | Application-specific scoring items that change per review type. Teams own the items. They do not own the weights. |
-| **Variable Surface** | The parts of CCR that are team-owned: loop sequence, item sets, loop count, chunk scope. |
+| Term                     | Definition                                                                                                                                              |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Artifact**             | Any output that earns the right to ship — merged PR, shipped fix, documented decision. Requires CCR ≥ 95%.                                              |
+| **Base Item**            | One of five universal scoring items that apply to every CCR run. If any fails, max score is 70%.                                                        |
+| **Calibration Constant** | A scoring weight validated through use, not mathematically derived. All severity weights and most heuristic constants are calibrations.                 |
+| **CCR Lite**             | A single-loop fast path for low-risk, isolated, reversible changes. See Section 7.1.                                                                    |
+| **Chunk**                | The scoped context a single loop operates on. Defined per loop, expands only with named instruction.                                                    |
+| **Confidence Decay**     | When a score drops between consecutive loops. Indicates new risk was uncovered. Process does not advance.                                               |
+| **Dual-Veto**            | Compound regulatory architecture where two independent frameworks (HIPAA + COPPA) each hold independent veto power.                                     |
+| **Evidence**             | Citable proof that a finding has been verified — test result, code path, config value, log entry. Required for "Verified" state.                        |
+| **Governance Artifact**  | A Tier 1 or Tier 2 document that is load-bearing for all downstream work. Requires elevated CCR protection.                                             |
+| **Hard Ceiling**         | A score cap (60% for single regulatory veto, 40% for dual veto) that no heuristic can override.                                                         |
+| **Human Gate**           | The point where the protocol stops and waits for human input. Not a failure — a design feature.                                                         |
+| **Invariant Core**       | The parts of CCR that never change: formula, threshold, gates, heuristics, severity weights.                                                            |
+| **Loop**                 | A complete pass through all three layers (Critical, Conservative, Recursive). Minimum 3 for standard reviews.                                           |
+| **Partial Credit**       | Half deduction for findings that are named, bounded, and documented but not fully resolved. Not available for Regulatory Required or Security Critical. |
+| **Reactive Correction**  | The mandate to fix actionable findings between loops, not just report them. Includes updating the variable item set.                                    |
+| **Regulatory Required**  | Severity tier (25 pts) for federal legal obligations. No partial credit. Open items cap score at 60%.                                                   |
+| **Security Critical**    | Severity tier (15 pts) for security findings with exploit potential. No partial credit.                                                                 |
+| **Variable Item Set**    | Application-specific scoring items that change per review type. Teams own the items. They do not own the weights.                                       |
+| **Variable Surface**     | The parts of CCR that are team-owned: loop sequence, item sets, loop count, chunk scope.                                                                |
 
 ### 11.7 Document Info
 
-| Field | Value |
-|---|---|
-| **Protocol** | CCR — Critical, Conservative, Recursive |
-| **Version** | 3.0 |
-| **Status** | Active |
-| **Applies to** | Any role, team, or organization that produces work another role, team, or organization depends on |
-| **Minimum loops** | 3 (standard) / 1 (CCR Lite) |
-| **Confidence threshold** | 95% |
-| **Owner** | Matthew Zdano |
+| Field                    | Value                                                                                             |
+| ------------------------ | ------------------------------------------------------------------------------------------------- |
+| **Protocol**             | CCR — Critical, Conservative, Recursive                                                           |
+| **Version**              | 3.0                                                                                               |
+| **Status**               | Active                                                                                            |
+| **Applies to**           | Any role, team, or organization that produces work another role, team, or organization depends on |
+| **Minimum loops**        | 3 (standard) / 1 (CCR Lite)                                                                       |
+| **Confidence threshold** | 95%                                                                                               |
+| **Owner**                | Matthew Zdano                                                                                     |
 
 **Version History**
 
-| Version | Change |
-|---|---|
-| 1.0 | Base protocol — three layers, three loops, confidence scoring, five heuristics, chunking and batching, output format, anti-patterns |
-| 2.0 | Universal Standard — cross-discipline framework, full Scrum team and IT Operations application, threshold decision with statistical lineage and advancement framework, HIPAA extension, COPPA extension, compound regulatory assessment |
-| 3.0 | Reassessment release — reactive correction rule, governance artifact protection, self-protection mechanism, evidence-based verification standard, Security Critical tier, transparency notes (Fisher citation, weight calibration, repeatability), CCR Lite fast path, escalation paths, time-boxing, peer review of worksheets, calibration exercises, score trending, meta-CCR schedule, glossary, worked examples, onboarding guide |
+| Version | Change                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1.0     | Base protocol — three layers, three loops, confidence scoring, five heuristics, chunking and batching, output format, anti-patterns                                                                                                                                                                                                                                                                                                    |
+| 2.0     | Universal Standard — cross-discipline framework, full Scrum team and IT Operations application, threshold decision with statistical lineage and advancement framework, HIPAA extension, COPPA extension, compound regulatory assessment                                                                                                                                                                                                |
+| 3.0     | Reassessment release — reactive correction rule, governance artifact protection, self-protection mechanism, evidence-based verification standard, Security Critical tier, transparency notes (Fisher citation, weight calibration, repeatability), CCR Lite fast path, escalation paths, time-boxing, peer review of worksheets, calibration exercises, score trending, meta-CCR schedule, glossary, worked examples, onboarding guide |
 
 ---
 

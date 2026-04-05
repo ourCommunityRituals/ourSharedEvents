@@ -8,15 +8,15 @@ ourSharedEvents powers community leagues and recurring events — from registrat
 
 ## The ourCommunityRituals Ecosystem
 
-| Product | Role |
-|---------|------|
-| **ourSharedEvents** *(this repo)* | Core platform — event infrastructure, API, admin |
-| **ourRecNights** | Product: recreational night leagues |
-| **OurRecordNights** | Product: record-night social events |
-| **OurOpenTables** | Product: open-table community dinners |
-| **ourEventRings** | Research: data analysis from ourSharedEvents usage |
-| **OurMagnets** | Technical: Cloudflare/infra setup layer |
-| **OurPulse** | Consulting: manual league onboarding → ourSharedEvents adoption |
+| Product                           | Role                                                            |
+| --------------------------------- | --------------------------------------------------------------- |
+| **ourSharedEvents** _(this repo)_ | Core platform — event infrastructure, API, admin                |
+| **ourRecNights**                  | Product: recreational night leagues                             |
+| **OurRecordNights**               | Product: record-night social events                             |
+| **OurOpenTables**                 | Product: open-table community dinners                           |
+| **ourEventRings**                 | Research: data analysis from ourSharedEvents usage              |
+| **OurMagnets**                    | Technical: Cloudflare/infra setup layer                         |
+| **OurPulse**                      | Consulting: manual league onboarding → ourSharedEvents adoption |
 
 ---
 
@@ -48,17 +48,20 @@ Add Firebase Auth (multi-user admin) and Firebase Hosting (React/Tailwind UI, re
 ## Quick Start (Phase 1 Deploy)
 
 ### Prerequisites
+
 - Cloudflare account with `oursharedevents.com` added as a zone
 - Google Sheets spreadsheet with an `EVENTS` sheet
 - Google Service Account with Sheets API access
 
 ### 1. Install dependencies
+
 ```bash
 cd workers/oursharedevents
 npm install
 ```
 
 ### 2. Set Wrangler secrets (staging)
+
 ```bash
 wrangler secret put GOOGLE_SA_CLIENT_EMAIL --env staging
 wrangler secret put GOOGLE_SA_PRIVATE_KEY_PEM --env staging
@@ -67,11 +70,13 @@ wrangler secret put ADMIN_KEY --env staging
 ```
 
 ### 3. Deploy to staging
+
 ```bash
 npm run deploy:staging
 ```
 
 ### 4. Verify
+
 ```bash
 curl https://stg.oursharedevents.com/health
 # → { "ok": true, "env": "staging" }
@@ -86,15 +91,15 @@ Full setup guide (DNS, zone config, production deploy): `workers/oursharedevents
 
 ## API Reference
 
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| GET | `/health` | — | Worker health + Sheets connectivity |
-| GET | `/api/status` | — | Alias for /health |
-| GET | `/api/v2/events` | — | List active events |
-| GET | `/api/v2/events/:id` | — | Single event by ID |
-| GET | `/` | — | Public events page (HTML) |
-| GET | `/admin` | Bearer | Admin dashboard (HTML) |
-| GET | `/api/v2/admin/events` | Bearer | Admin events list (includes archived) |
+| Method | Path                   | Auth   | Description                           |
+| ------ | ---------------------- | ------ | ------------------------------------- |
+| GET    | `/health`              | —      | Worker health + Sheets connectivity   |
+| GET    | `/api/status`          | —      | Alias for /health                     |
+| GET    | `/api/v2/events`       | —      | List active events                    |
+| GET    | `/api/v2/events/:id`   | —      | Single event by ID                    |
+| GET    | `/`                    | —      | Public events page (HTML)             |
+| GET    | `/admin`               | Bearer | Admin dashboard (HTML)                |
+| GET    | `/api/v2/admin/events` | Bearer | Admin events list (includes archived) |
 
 Query params for `/api/v2/events`: `?brand=root`, `?full=true`
 
@@ -104,19 +109,19 @@ Query params for `/api/v2/events`: `?brand=root`, `?full=true`
 
 Full documentation index: [`docs/INDEX.md`](docs/INDEX.md)
 
-| Section | Path | Contents |
-|---------|------|----------|
+| Section          | Path                 | Contents                                        |
+| ---------------- | -------------------- | ----------------------------------------------- |
 | **Architecture** | `docs/architecture/` | System design, API contracts, integration flows |
-| **Security** | `docs/security/` | Baselines, hardening, access control (28 files) |
-| **Runbooks** | `docs/runbooks/` | Operational procedures, incident response |
-| **Deployment** | `docs/deployment/` | Deploy guides, environment setup |
-| **QA & Testing** | `docs/qa/` | E2E guides, test matrices, QA flows |
-| **Monitoring** | `docs/monitoring/` | Uptime, synthetic checks, performance |
-| **MVP** | `docs/mvp/` | Scope, surfaces, production readiness |
-| **Migration** | `docs/migration/` | Phase 1→2→3 migration guides |
-| **Stories** | `docs/stories/` | Epic and story specifications |
-| **Audits** | `docs/audits/` | System and frontend audit reports |
-| **Archive** | `archive/` | Historical docs, legacy code (189 files) |
+| **Security**     | `docs/security/`     | Baselines, hardening, access control (28 files) |
+| **Runbooks**     | `docs/runbooks/`     | Operational procedures, incident response       |
+| **Deployment**   | `docs/deployment/`   | Deploy guides, environment setup                |
+| **QA & Testing** | `docs/qa/`           | E2E guides, test matrices, QA flows             |
+| **Monitoring**   | `docs/monitoring/`   | Uptime, synthetic checks, performance           |
+| **MVP**          | `docs/mvp/`          | Scope, surfaces, production readiness           |
+| **Migration**    | `docs/migration/`    | Phase 1→2→3 migration guides                    |
+| **Stories**      | `docs/stories/`      | Epic and story specifications                   |
+| **Audits**       | `docs/audits/`       | System and frontend audit reports               |
+| **Archive**      | `archive/`           | Historical docs, legacy code (189 files)        |
 
 ---
 
@@ -165,6 +170,7 @@ Push to `main` → deploys to `stg.oursharedevents.com` + E2E smoke tests
 Tag `vX.Y.Z` → deploys to `oursharedevents.com` + E2E smoke tests
 
 **Required GitHub secrets:**
+
 - `CLOUDFLARE_API_TOKEN`
 - `CLOUDFLARE_ACCOUNT_ID`
 - `ADMIN_KEY`

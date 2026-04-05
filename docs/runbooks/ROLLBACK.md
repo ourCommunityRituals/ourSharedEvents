@@ -43,16 +43,16 @@ node scripts/rollback-worker.mjs staging --verify
 
 ## Quick Reference
 
-| Issue | Rollback Target | Command |
-|-------|-----------------|---------|
-| Worker issue (staging) | Previous Worker | `npm run rollback:staging` |
-| Worker issue (production) | Previous Worker | `npm run rollback:prod` |
-| Worker issue (both envs) | Previous Workers | `npm run rollback:all` |
-| GAS HTML leak (blue banner) | Previous Worker | `npm run rollback:prod` |
-| API/RPC errors | Previous GAS deployment | Use Apps Script Editor |
-| Worker routing broken | Previous Worker | `npm run rollback:prod` |
-| Worker-only mode issues | Backend mode rollback | See "Backend Mode Rollback" below |
-| Everything broken | Both GAS + Worker | Full rollback (see below) |
+| Issue                       | Rollback Target         | Command                           |
+| --------------------------- | ----------------------- | --------------------------------- |
+| Worker issue (staging)      | Previous Worker         | `npm run rollback:staging`        |
+| Worker issue (production)   | Previous Worker         | `npm run rollback:prod`           |
+| Worker issue (both envs)    | Previous Workers        | `npm run rollback:all`            |
+| GAS HTML leak (blue banner) | Previous Worker         | `npm run rollback:prod`           |
+| API/RPC errors              | Previous GAS deployment | Use Apps Script Editor            |
+| Worker routing broken       | Previous Worker         | `npm run rollback:prod`           |
+| Worker-only mode issues     | Backend mode rollback   | See "Backend Mode Rollback" below |
+| Everything broken           | Both GAS + Worker       | Full rollback (see below)         |
 
 ## When to Rollback
 
@@ -148,6 +148,7 @@ wrangler deploy --env production
 Use when Worker-only mode (`BACKEND_MODE=worker`) is causing issues but the Worker itself is working.
 
 **Symptoms that indicate Backend Mode rollback:**
+
 - API endpoints return errors from Worker-native code
 - Google Sheets API rate limits or auth issues
 - Features work on staging (mixed mode) but fail on production (worker mode)
@@ -184,11 +185,11 @@ BASE_URL="https://www.eventangle.com" npm run test:api:smoke
 
 **Backend Mode Values:**
 
-| Mode | Behavior | When to Use |
-|------|----------|-------------|
-| `worker` | All routes use Worker-native code | Normal production (Story 6.1+) |
-| `mixed` | Per-route selection based on config | Gradual rollback, testing |
-| `gas` | All routes use GAS | Emergency full rollback |
+| Mode     | Behavior                            | When to Use                    |
+| -------- | ----------------------------------- | ------------------------------ |
+| `worker` | All routes use Worker-native code   | Normal production (Story 6.1+) |
+| `mixed`  | Per-route selection based on config | Gradual rollback, testing      |
+| `gas`    | All routes use GAS                  | Emergency full rollback        |
 
 **Note**: Even with `BACKEND_MODE=gas`, requests still go through the Worker - they're just proxied to GAS instead of handled natively.
 
@@ -206,6 +207,7 @@ clasp deployments
 ```
 
 Then in Apps Script Editor:
+
 - Switch active deployment to the previous version
 
 **Step 2: Update Worker with old GAS ID**
@@ -238,12 +240,12 @@ curl -s "https://www.eventangle.com/?p=status&brand=root" | jq
 
 ### Current Production Configuration
 
-| Component | Location | ID/URL |
-|-----------|----------|--------|
-| GAS Script ID | `.clasp.json` | `1YO4apLOQoAIh208AcAqWO3pWtx_O3yas_QC4z-pkurgMem9UgYOsp86l` |
-| GAS Deployment ID | `wrangler.toml` | Check `[env.production.vars]` |
-| Worker Name | Cloudflare | `eventangle-prod` |
-| Production URL | DNS | `www.eventangle.com` |
+| Component         | Location        | ID/URL                                                      |
+| ----------------- | --------------- | ----------------------------------------------------------- |
+| GAS Script ID     | `.clasp.json`   | `1YO4apLOQoAIh208AcAqWO3pWtx_O3yas_QC4z-pkurgMem9UgYOsp86l` |
+| GAS Deployment ID | `wrangler.toml` | Check `[env.production.vars]`                               |
+| Worker Name       | Cloudflare      | `eventangle-prod`                                           |
+| Production URL    | DNS             | `www.eventangle.com`                                        |
 
 ### Finding Previous Deployment IDs
 
