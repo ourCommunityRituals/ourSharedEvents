@@ -1,7 +1,7 @@
 # Runbook: Collapse to Single Worker Route
 
 > **Epic SEC-4 — Route Hygiene (kill the route sprawl)**
-> Story SEC-4.2 — Collapse to Single Worker Route (eventangle.com/*)
+> Story SEC-4.2 — Collapse to Single Worker Route (eventangle.com/\*)
 >
 > Created: 2025-12-21
 > Last Updated: 2025-12-21
@@ -50,22 +50,22 @@ Reduce all Worker routes to **one edge entrypoint** per domain, with the app own
 
 Worker routes can accumulate over time, creating "route sprawl":
 
-| Problem | Example | Impact |
-|---------|---------|--------|
-| **Path-specific routes** | `/admin/*`, `/public/*`, `/api/*` | 60+ fragments instead of 1 wildcard |
-| **Legacy test routes** | `test.eventangle.com/*` | Dead routes consuming quota |
-| **Duplicate www routes** | `www.eventangle.com/*` | Redundant after SEC-4.1 redirect |
-| **Environment confusion** | Mixed staging/prod patterns | Deployment errors |
+| Problem                   | Example                           | Impact                              |
+| ------------------------- | --------------------------------- | ----------------------------------- |
+| **Path-specific routes**  | `/admin/*`, `/public/*`, `/api/*` | 60+ fragments instead of 1 wildcard |
+| **Legacy test routes**    | `test.eventangle.com/*`           | Dead routes consuming quota         |
+| **Duplicate www routes**  | `www.eventangle.com/*`            | Redundant after SEC-4.1 redirect    |
+| **Environment confusion** | Mixed staging/prod patterns       | Deployment errors                   |
 
 ### 1.3 Benefits of Single Route
 
-| Benefit | Description |
-|---------|-------------|
-| **Simpler deployment** | One route per domain to manage |
-| **Clear ownership** | App router handles all paths internally |
-| **Easier debugging** | No route precedence confusion |
-| **Lower config drift** | Single source of truth in wrangler.toml |
-| **Reduced API quota** | Fewer routes = fewer API calls to manage routes |
+| Benefit                | Description                                     |
+| ---------------------- | ----------------------------------------------- |
+| **Simpler deployment** | One route per domain to manage                  |
+| **Clear ownership**    | App router handles all paths internally         |
+| **Easier debugging**   | No route precedence confusion                   |
+| **Lower config drift** | Single source of truth in wrangler.toml         |
+| **Reduced API quota**  | Fewer routes = fewer API calls to manage routes |
 
 ### 1.4 Architecture: App-Owned Routing
 
@@ -101,13 +101,13 @@ Worker routes can accumulate over time, creating "route sprawl":
 
 ### 1.5 Scope
 
-| Component | In Scope | Notes |
-|-----------|----------|-------|
-| Cloudflare Worker Routes cleanup | Yes | Remove legacy fragments |
-| wrangler.toml route definitions | Yes | Already consolidated |
-| Internal app routing | No | Already handled by router.ts |
-| DNS records | No | Unchanged |
-| Redirect Rules | No | Configured in SEC-4.1 |
+| Component                        | In Scope | Notes                        |
+| -------------------------------- | -------- | ---------------------------- |
+| Cloudflare Worker Routes cleanup | Yes      | Remove legacy fragments      |
+| wrangler.toml route definitions  | Yes      | Already consolidated         |
+| Internal app routing             | No       | Already handled by router.ts |
+| DNS records                      | No       | Unchanged                    |
+| Redirect Rules                   | No       | Configured in SEC-4.1        |
 
 ---
 
@@ -122,14 +122,14 @@ Worker routes can accumulate over time, creating "route sprawl":
 
 ### 2.2 Required Information
 
-| Information | Value | Status |
-|-------------|-------|--------|
-| Domain | `eventangle.com` | |
-| Zone ID | (from Cloudflare dashboard) | |
-| Account ID | (from Cloudflare dashboard) | |
-| API Token | (scoped for Worker Routes) | |
-| Production Worker | `eventangle-router-prod` | |
-| Staging Worker | `eventangle-router-staging` | |
+| Information       | Value                       | Status |
+| ----------------- | --------------------------- | ------ |
+| Domain            | `eventangle.com`            |        |
+| Zone ID           | (from Cloudflare dashboard) |        |
+| Account ID        | (from Cloudflare dashboard) |        |
+| API Token         | (scoped for Worker Routes)  |        |
+| Production Worker | `eventangle-router-prod`    |        |
+| Staging Worker    | `eventangle-router-staging` |        |
 
 ### 2.3 Pre-Flight Checks
 
@@ -143,12 +143,12 @@ Before making any changes:
 
 ### 2.4 Risk Assessment
 
-| Risk | Likelihood | Impact | Mitigation |
-|------|------------|--------|------------|
-| Route removal breaks traffic | Low | High | Export first, incremental removal |
-| App routing doesn't handle path | Low | Medium | Test all routes before removal |
-| Wrong route deleted | Medium | High | Use route IDs, not patterns |
-| Cloudflare propagation delay | Low | Low | Wait 60s between changes |
+| Risk                            | Likelihood | Impact | Mitigation                        |
+| ------------------------------- | ---------- | ------ | --------------------------------- |
+| Route removal breaks traffic    | Low        | High   | Export first, incremental removal |
+| App routing doesn't handle path | Low        | Medium | Test all routes before removal    |
+| Wrong route deleted             | Medium     | High   | Use route IDs, not patterns       |
+| Cloudflare propagation delay    | Low        | Low    | Wait 60s between changes          |
 
 ---
 
@@ -229,17 +229,17 @@ wrangler route list --env staging --json > route-backups/stg_routes_$(date +%Y%m
 
 Before cleanup, typical route sprawl might include:
 
-| Pattern | Worker | Status |
-|---------|--------|--------|
-| `eventangle.com/*` | eventangle-router-prod | KEEP |
-| `www.eventangle.com/*` | eventangle-router-prod | REMOVE (SEC-4.1) |
-| `eventangle.com/admin/*` | eventangle-router-prod | REMOVE (redundant) |
-| `eventangle.com/public/*` | eventangle-router-prod | REMOVE (redundant) |
-| `eventangle.com/api/*` | eventangle-router-prod | REMOVE (redundant) |
-| `api.eventangle.com/*` | eventangle-router-prod | KEEP (API subdomain) |
-| `stg.eventangle.com/*` | eventangle-router-staging | KEEP |
-| `api-stg.eventangle.com/*` | eventangle-router-staging | KEEP |
-| `test.eventangle.com/*` | (various) | REMOVE (legacy) |
+| Pattern                    | Worker                    | Status               |
+| -------------------------- | ------------------------- | -------------------- |
+| `eventangle.com/*`         | eventangle-router-prod    | KEEP                 |
+| `www.eventangle.com/*`     | eventangle-router-prod    | REMOVE (SEC-4.1)     |
+| `eventangle.com/admin/*`   | eventangle-router-prod    | REMOVE (redundant)   |
+| `eventangle.com/public/*`  | eventangle-router-prod    | REMOVE (redundant)   |
+| `eventangle.com/api/*`     | eventangle-router-prod    | REMOVE (redundant)   |
+| `api.eventangle.com/*`     | eventangle-router-prod    | KEEP (API subdomain) |
+| `stg.eventangle.com/*`     | eventangle-router-staging | KEEP                 |
+| `api-stg.eventangle.com/*` | eventangle-router-staging | KEEP                 |
+| `test.eventangle.com/*`    | (various)                 | REMOVE (legacy)      |
 
 ---
 
@@ -271,17 +271,17 @@ routes = [
 
 Any route matching these patterns should be removed:
 
-| Pattern | Reason |
-|---------|--------|
-| `www.eventangle.com/*` | Redirected at edge (SEC-4.1) |
-| `eventangle.com/admin/*` | Covered by `eventangle.com/*` |
-| `eventangle.com/public/*` | Covered by `eventangle.com/*` |
-| `eventangle.com/api/*` | Covered by `eventangle.com/*` |
-| `eventangle.com/display/*` | Covered by `eventangle.com/*` |
-| `eventangle.com/poster/*` | Covered by `eventangle.com/*` |
-| `eventangle.com/report/*` | Covered by `eventangle.com/*` |
-| `*.eventangle.com/specific-path` | Any path-specific routes |
-| `test.*`, `dev.*`, `preview.*` | Legacy/test subdomains |
+| Pattern                          | Reason                        |
+| -------------------------------- | ----------------------------- |
+| `www.eventangle.com/*`           | Redirected at edge (SEC-4.1)  |
+| `eventangle.com/admin/*`         | Covered by `eventangle.com/*` |
+| `eventangle.com/public/*`        | Covered by `eventangle.com/*` |
+| `eventangle.com/api/*`           | Covered by `eventangle.com/*` |
+| `eventangle.com/display/*`       | Covered by `eventangle.com/*` |
+| `eventangle.com/poster/*`        | Covered by `eventangle.com/*` |
+| `eventangle.com/report/*`        | Covered by `eventangle.com/*` |
+| `*.eventangle.com/specific-path` | Any path-specific routes      |
+| `test.*`, `dev.*`, `preview.*`   | Legacy/test subdomains        |
 
 ### 4.4 Decision Matrix
 
@@ -574,17 +574,17 @@ echo ""
 
 ### 6.2 Acceptance Criteria Checklist
 
-| Criterion | Verification Method | Status |
-|-----------|---------------------|--------|
-| Only 4 Worker routes total | API route count ≤4 | [ ] Pass |
-| `eventangle.com/*` works | curl returns 200 | [ ] Pass |
-| `api.eventangle.com/*` works | curl returns 200 | [ ] Pass |
-| `stg.eventangle.com/*` works | curl returns 200 | [ ] Pass |
-| `api-stg.eventangle.com/*` works | curl returns 200 | [ ] Pass |
-| All page routes work (`/admin`, `/public`, etc.) | curl returns 200 | [ ] Pass |
-| All API routes work (`/api/status`, `/api/v2/events`) | curl returns 200 | [ ] Pass |
-| No path-specific routes exist | API route list | [ ] Pass |
-| www redirect still works | curl returns 301 | [ ] Pass |
+| Criterion                                             | Verification Method | Status   |
+| ----------------------------------------------------- | ------------------- | -------- |
+| Only 4 Worker routes total                            | API route count ≤4  | [ ] Pass |
+| `eventangle.com/*` works                              | curl returns 200    | [ ] Pass |
+| `api.eventangle.com/*` works                          | curl returns 200    | [ ] Pass |
+| `stg.eventangle.com/*` works                          | curl returns 200    | [ ] Pass |
+| `api-stg.eventangle.com/*` works                      | curl returns 200    | [ ] Pass |
+| All page routes work (`/admin`, `/public`, etc.)      | curl returns 200    | [ ] Pass |
+| All API routes work (`/api/status`, `/api/v2/events`) | curl returns 200    | [ ] Pass |
+| No path-specific routes exist                         | API route list      | [ ] Pass |
+| www redirect still works                              | curl returns 301    | [ ] Pass |
 
 ### 6.3 wrangler.toml Verification
 
@@ -697,13 +697,13 @@ Is a specific route returning errors?
 
 ### 8.1 Common Issues
 
-| Symptom | Likely Cause | Solution |
-|---------|--------------|----------|
-| 404 on `/admin` after route removal | App router not deployed | Deploy worker: `wrangler deploy --env production` |
-| Route still exists after deletion | Cloudflare propagation delay | Wait 60s, check again |
-| Cannot delete route (403) | API token lacks permission | Check token has `Workers Routes:Edit` |
-| Wrong worker serving route | Multiple routes overlap | Delete more specific routes first |
-| wrangler.toml changes not reflected | Need to redeploy | Run `wrangler deploy --env <env>` |
+| Symptom                             | Likely Cause                 | Solution                                          |
+| ----------------------------------- | ---------------------------- | ------------------------------------------------- |
+| 404 on `/admin` after route removal | App router not deployed      | Deploy worker: `wrangler deploy --env production` |
+| Route still exists after deletion   | Cloudflare propagation delay | Wait 60s, check again                             |
+| Cannot delete route (403)           | API token lacks permission   | Check token has `Workers Routes:Edit`             |
+| Wrong worker serving route          | Multiple routes overlap      | Delete more specific routes first                 |
+| wrangler.toml changes not reflected | Need to redeploy             | Run `wrangler deploy --env <env>`                 |
 
 ### 8.2 Debug Route Configuration
 
@@ -796,6 +796,6 @@ api-stg.eventangle.com/*            (staging API - KEEP)
 
 ## Document History
 
-| Date | Author | Changes |
-|------|--------|---------|
+| Date       | Author      | Changes                   |
+| ---------- | ----------- | ------------------------- |
 | 2025-12-21 | Claude Code | Initial runbook (SEC-4.2) |

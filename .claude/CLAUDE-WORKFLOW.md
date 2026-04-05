@@ -12,11 +12,13 @@
 **Repository:** `ourCommunityRituals/ourSharedEvents`
 
 **Branch Strategy:**
+
 - `main` — production branch
 - `claude/<feature>-<id>` — Claude Code feature branches
 - PRs target `main`
 
 **Runtime:**
+
 - Node.js (for tests, scripts)
 - Cloudflare Workers (wrangler for local dev)
 - D1 SQLite (edge database, Phase 2)
@@ -65,20 +67,21 @@ ourSharedEvents/
 
 ## Archived Paths — Do Not Reference
 
-| Path | Status | Notes |
-|------|--------|-------|
-| `~/ZEVENTBOOKS` | [ARCHIVE] | Legacy project root — replaced by ourSharedEvents |
-| `MVP-EVENT-TOOLKIT` | [ARCHIVE] | Legacy repo name — now ourCommunityRituals/ourSharedEvents |
-| ThinkPad / E16 | [RETIRED HARDWARE] | Development hardware references no longer applicable |
-| `src/mvp/Config.gs` | [ARCHIVE] | Apps Script config — replaced by Cloudflare Worker |
-| `Code.gs` | [ARCHIVE] | Apps Script entry point — replaced by worker/src/index.ts |
-| `.clasp.json` | [ARCHIVE] | clasp config — no longer used |
+| Path                | Status             | Notes                                                      |
+| ------------------- | ------------------ | ---------------------------------------------------------- |
+| `~/ZEVENTBOOKS`     | [ARCHIVE]          | Legacy project root — replaced by ourSharedEvents          |
+| `MVP-EVENT-TOOLKIT` | [ARCHIVE]          | Legacy repo name — now ourCommunityRituals/ourSharedEvents |
+| ThinkPad / E16      | [RETIRED HARDWARE] | Development hardware references no longer applicable       |
+| `src/mvp/Config.gs` | [ARCHIVE]          | Apps Script config — replaced by Cloudflare Worker         |
+| `Code.gs`           | [ARCHIVE]          | Apps Script entry point — replaced by worker/src/index.ts  |
+| `.clasp.json`       | [ARCHIVE]          | clasp config — no longer used                              |
 
 ---
 
 ## CI/CD Pipeline
 
 5-stage pipeline (see `.github/workflows/`):
+
 1. Typecheck
 2. Schema verify
 3. Migration apply + table verify
@@ -89,9 +92,9 @@ ourSharedEvents/
 
 ## Sync Points
 
-| Local (CoWork) | Repo |
-|----------------|------|
-| `C:\Users\mzdan\claude\Inputs\` | `.claude/inputs/` |
+| Local (CoWork)                     | Repo                 |
+| ---------------------------------- | -------------------- |
+| `C:\Users\mzdan\claude\Inputs\`    | `.claude/inputs/`    |
 | `C:\Users\mzdan\claude\Documents\` | `.claude/documents/` |
-| `C:\Users\mzdan\claude\Outputs\` | `.claude/outputs/` |
-| `C:\Users\mzdan\claude\Research\` | `.claude/research/` |
+| `C:\Users\mzdan\claude\Outputs\`   | `.claude/outputs/`   |
+| `C:\Users\mzdan\claude\Research\`  | `.claude/research/`  |

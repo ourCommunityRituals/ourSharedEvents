@@ -99,9 +99,9 @@ describe('Gate 1: Table existence', () => {
 
   test('each table returns 0 rows (empty, not missing)', async () => {
     for (const table of EXPECTED_TABLES) {
-      const result = await env.DB.prepare(
-        `SELECT COUNT(*) as cnt FROM ${table}`
-      ).first<{ cnt: number }>();
+      const result = await env.DB.prepare(`SELECT COUNT(*) as cnt FROM ${table}`).first<{
+        cnt: number;
+      }>();
       expect(result?.cnt).toBe(0);
     }
   });
@@ -138,7 +138,9 @@ describe('Gate 3: PII firewall', () => {
   });
 
   test('no route handler INSERTs PII columns into scans', () => {
-    const sources: Record<string, string> = JSON.parse((env as unknown as TestEnv).TEST_SOURCE_FILES_JSON);
+    const sources: Record<string, string> = JSON.parse(
+      (env as unknown as TestEnv).TEST_SOURCE_FILES_JSON
+    );
     for (const [, content] of Object.entries(sources)) {
       if (/INSERT\s+INTO\s+scans/i.test(content)) {
         expect(content).not.toMatch(/user_email/i);
@@ -153,7 +155,9 @@ describe('Gate 3: PII firewall', () => {
 
 describe('Gate 4: scan_aggregates write protection', () => {
   test('scan_aggregates is NOT writable via user-facing route handlers', () => {
-    const sources: Record<string, string> = JSON.parse((env as unknown as TestEnv).TEST_SOURCE_FILES_JSON);
+    const sources: Record<string, string> = JSON.parse(
+      (env as unknown as TestEnv).TEST_SOURCE_FILES_JSON
+    );
     for (const [, content] of Object.entries(sources)) {
       expect(content).not.toMatch(/INSERT\s+.*scan_aggregates/i);
     }

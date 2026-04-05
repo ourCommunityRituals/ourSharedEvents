@@ -8,11 +8,11 @@
 const DEFAULT_CONFIG = {
   ROLLING_WINDOW: 15,
   THRESHOLD: 5,
-  HYSTERESIS_WINDOWS: 2
+  HYSTERESIS_WINDOWS: 2,
 };
 
-const STANDARD_WEIGHTS = { premium: 0.50, med: 0.30, local: 0.20 };
-const COMPRESSED_WEIGHTS = { premium: 0.40, med: 0.32, local: 0.28 };
+const STANDARD_WEIGHTS = { premium: 0.5, med: 0.3, local: 0.2 };
+const COMPRESSED_WEIGHTS = { premium: 0.4, med: 0.32, local: 0.28 };
 
 function createGovernorState() {
   return {
@@ -20,7 +20,7 @@ function createGovernorState() {
     activated_at: null,
     sub_threshold_windows: 0,
     peak_scan_rate: 0,
-    activation_events: []
+    activation_events: [],
   };
 }
 
@@ -185,7 +185,7 @@ describe('Governor State Machine', () => {
     });
 
     test('premium drops 10pp when governor active', () => {
-      expect(COMPRESSED_WEIGHTS.premium).toBe(STANDARD_WEIGHTS.premium - 0.10);
+      expect(COMPRESSED_WEIGHTS.premium).toBe(STANDARD_WEIGHTS.premium - 0.1);
     });
 
     test('local gains 8pp when governor active', () => {

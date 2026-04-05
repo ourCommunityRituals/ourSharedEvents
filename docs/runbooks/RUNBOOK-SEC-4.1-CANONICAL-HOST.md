@@ -36,22 +36,22 @@ www.eventangle.com/* ──── 301 ────► eventangle.com/*
 
 Having both `www` and non-www hosts active creates problems:
 
-| Issue | Impact |
-|-------|--------|
-| **SEO dilution** | Search engines treat www and non-www as separate sites, splitting page rank |
-| **Cookie confusion** | Cookies set on one host may not be visible on the other |
-| **Cache fragmentation** | CDN caches content separately for each host |
-| **Analytics split** | Traffic is counted separately, making metrics harder to interpret |
-| **SSL certificate sprawl** | Both hosts need certificates (though Cloudflare handles this) |
+| Issue                      | Impact                                                                      |
+| -------------------------- | --------------------------------------------------------------------------- |
+| **SEO dilution**           | Search engines treat www and non-www as separate sites, splitting page rank |
+| **Cookie confusion**       | Cookies set on one host may not be visible on the other                     |
+| **Cache fragmentation**    | CDN caches content separately for each host                                 |
+| **Analytics split**        | Traffic is counted separately, making metrics harder to interpret           |
+| **SSL certificate sprawl** | Both hosts need certificates (though Cloudflare handles this)               |
 
 **One host, one truth.**
 
 ### 1.3 Architecture Decision
 
-| Option | Chosen | Rationale |
-|--------|--------|-----------|
-| `eventangle.com` (apex/naked domain) | **YES** | Shorter, modern, avoids www prefix |
-| `www.eventangle.com` | No | Legacy convention, requires extra subdomain |
+| Option                               | Chosen  | Rationale                                   |
+| ------------------------------------ | ------- | ------------------------------------------- |
+| `eventangle.com` (apex/naked domain) | **YES** | Shorter, modern, avoids www prefix          |
+| `www.eventangle.com`                 | No      | Legacy convention, requires extra subdomain |
 
 ### 1.4 Redirect Mechanism
 
@@ -88,27 +88,27 @@ We use **Cloudflare Redirect Rules** (not Worker code) because:
 
 ### 1.5 Scope
 
-| Component | In Scope | Notes |
-|-----------|----------|-------|
-| Cloudflare Redirect Rule configuration | Yes | Main change |
-| Worker route removal for www | Yes | wrangler.toml updates |
-| DNS records | No | Both A/AAAA records remain (needed for redirect) |
-| SSL certificates | No | Cloudflare handles automatically |
-| CORS configuration | No | Keep www in allowed origins for safety |
+| Component                              | In Scope | Notes                                            |
+| -------------------------------------- | -------- | ------------------------------------------------ |
+| Cloudflare Redirect Rule configuration | Yes      | Main change                                      |
+| Worker route removal for www           | Yes      | wrangler.toml updates                            |
+| DNS records                            | No       | Both A/AAAA records remain (needed for redirect) |
+| SSL certificates                       | No       | Cloudflare handles automatically                 |
+| CORS configuration                     | No       | Keep www in allowed origins for safety           |
 
 ### 1.6 Subdomain Policy
 
 **Subdomains do NOT get www prefixes.** This is intentional route hygiene:
 
-| Host | Status | Rationale |
-|------|--------|-----------|
-| `eventangle.com` | ✅ Canonical | Production site |
-| `www.eventangle.com` | 🔄 Redirects to apex | Legacy support |
-| `stg.eventangle.com` | ✅ Direct | Staging (internal use) |
-| `www.stg.eventangle.com` | ❌ Not supported | Unnecessary sprawl |
-| `api.eventangle.com` | ✅ Direct | API subdomain |
-| `www.api.eventangle.com` | ❌ Not supported | Unnecessary sprawl |
-| `api-stg.eventangle.com` | ✅ Direct | Staging API |
+| Host                     | Status               | Rationale              |
+| ------------------------ | -------------------- | ---------------------- |
+| `eventangle.com`         | ✅ Canonical         | Production site        |
+| `www.eventangle.com`     | 🔄 Redirects to apex | Legacy support         |
+| `stg.eventangle.com`     | ✅ Direct            | Staging (internal use) |
+| `www.stg.eventangle.com` | ❌ Not supported     | Unnecessary sprawl     |
+| `api.eventangle.com`     | ✅ Direct            | API subdomain          |
+| `www.api.eventangle.com` | ❌ Not supported     | Unnecessary sprawl     |
+| `api-stg.eventangle.com` | ✅ Direct            | Staging API            |
 
 **Why no www on subdomains?**
 
@@ -118,6 +118,7 @@ We use **Cloudflare Redirect Rules** (not Worker code) because:
 4. SEC-4's goal is to **reduce** route sprawl, not maintain it
 
 **Friendly URLs work without www:**
+
 - `https://stg.eventangle.com/manage` ✅
 - `https://stg.eventangle.com/admin` ✅
 - `https://stg.eventangle.com/public?brand=abc` ✅
@@ -134,12 +135,12 @@ We use **Cloudflare Redirect Rules** (not Worker code) because:
 
 ### 2.2 Required Information
 
-| Information | Value | Status |
-|-------------|-------|--------|
-| Domain | `eventangle.com` | |
-| Zone ID | (from Cloudflare dashboard) | |
-| Canonical host | `eventangle.com` | Chosen |
-| Redirect host | `www.eventangle.com` | To be redirected |
+| Information    | Value                       | Status           |
+| -------------- | --------------------------- | ---------------- |
+| Domain         | `eventangle.com`            |                  |
+| Zone ID        | (from Cloudflare dashboard) |                  |
+| Canonical host | `eventangle.com`            | Chosen           |
+| Redirect host  | `www.eventangle.com`        | To be redirected |
 
 ### 2.3 Pre-Flight Checks
 
@@ -157,23 +158,23 @@ Before configuring the redirect:
 
 ### 3.1 Decision Record
 
-| Attribute | Value |
-|-----------|-------|
-| Decision | Use `eventangle.com` (apex domain) as canonical host |
-| Date | 2025-12-21 |
-| Rationale | Shorter URL, modern convention, no www prefix needed |
-| Alternatives considered | `www.eventangle.com` (rejected - legacy convention) |
+| Attribute               | Value                                                |
+| ----------------------- | ---------------------------------------------------- |
+| Decision                | Use `eventangle.com` (apex domain) as canonical host |
+| Date                    | 2025-12-21                                           |
+| Rationale               | Shorter URL, modern convention, no www prefix needed |
+| Alternatives considered | `www.eventangle.com` (rejected - legacy convention)  |
 
 ### 3.2 Implications
 
-| Area | Impact |
-|------|--------|
-| **URLs** | All canonical URLs use `eventangle.com` |
-| **Links** | Update external links to use apex domain where possible |
-| **Documentation** | Reference `eventangle.com` in all docs |
-| **Email** | MX records unaffected (mail.eventangle.com or external) |
-| **API** | `api.eventangle.com` remains unchanged |
-| **Staging** | `stg.eventangle.com` remains unchanged |
+| Area              | Impact                                                  |
+| ----------------- | ------------------------------------------------------- |
+| **URLs**          | All canonical URLs use `eventangle.com`                 |
+| **Links**         | Update external links to use apex domain where possible |
+| **Documentation** | Reference `eventangle.com` in all docs                  |
+| **Email**         | MX records unaffected (mail.eventangle.com or external) |
+| **API**           | `api.eventangle.com` remains unchanged                  |
+| **Staging**       | `stg.eventangle.com` remains unchanged                  |
 
 ---
 
@@ -190,11 +191,13 @@ Before configuring the redirect:
 **Rule Name:** `SEC-4.1: www to apex redirect`
 
 **When incoming requests match...**
+
 - Field: `Hostname`
 - Operator: `equals`
 - Value: `www.eventangle.com`
 
 **Then...**
+
 - Type: `Dynamic`
 - Expression: `concat("https://eventangle.com", http.request.uri.path)`
 - Status code: `301` (Permanent Redirect)
@@ -235,21 +238,21 @@ curl -X POST "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/rulesets/phase
 
 ### 4.3 Rule Configuration Details
 
-| Setting | Value | Rationale |
-|---------|-------|-----------|
-| **Status code** | 301 (Permanent) | Tells browsers/search engines this is permanent |
-| **Preserve query string** | Yes | Maintains `?page=admin&brand=root` etc. |
-| **Dynamic expression** | `concat("https://eventangle.com", http.request.uri.path)` | Preserves full path |
+| Setting                   | Value                                                     | Rationale                                       |
+| ------------------------- | --------------------------------------------------------- | ----------------------------------------------- |
+| **Status code**           | 301 (Permanent)                                           | Tells browsers/search engines this is permanent |
+| **Preserve query string** | Yes                                                       | Maintains `?page=admin&brand=root` etc.         |
+| **Dynamic expression**    | `concat("https://eventangle.com", http.request.uri.path)` | Preserves full path                             |
 
 ### 4.4 What the Redirect Covers
 
-| Request | Redirects To |
-|---------|--------------|
-| `https://www.eventangle.com/` | `https://eventangle.com/` |
-| `https://www.eventangle.com/admin` | `https://eventangle.com/admin` |
-| `https://www.eventangle.com/api/v2/events` | `https://eventangle.com/api/v2/events` |
-| `https://www.eventangle.com/public?brand=abc` | `https://eventangle.com/public?brand=abc` |
-| `http://www.eventangle.com/` | `https://eventangle.com/` (via Always Use HTTPS + this rule) |
+| Request                                       | Redirects To                                                 |
+| --------------------------------------------- | ------------------------------------------------------------ |
+| `https://www.eventangle.com/`                 | `https://eventangle.com/`                                    |
+| `https://www.eventangle.com/admin`            | `https://eventangle.com/admin`                               |
+| `https://www.eventangle.com/api/v2/events`    | `https://eventangle.com/api/v2/events`                       |
+| `https://www.eventangle.com/public?brand=abc` | `https://eventangle.com/public?brand=abc`                    |
+| `http://www.eventangle.com/`                  | `https://eventangle.com/` (via Always Use HTTPS + this rule) |
 
 ---
 
@@ -270,6 +273,7 @@ Two files need updates:
 #### worker/wrangler.toml
 
 Change from:
+
 ```toml
 [env.production]
 routes = [
@@ -280,6 +284,7 @@ routes = [
 ```
 
 To:
+
 ```toml
 [env.production]
 routes = [
@@ -414,13 +419,13 @@ echo "=== Verification Complete ==="
 
 ### 6.3 Acceptance Criteria Checklist
 
-| Criterion | Verification Method | Status |
-|-----------|---------------------|--------|
+| Criterion                                       | Verification Method                  | Status   |
+| ----------------------------------------------- | ------------------------------------ | -------- |
 | `www.eventangle.com/*` 301 → `eventangle.com/*` | curl -I shows 301 + correct location | [ ] Pass |
-| Path preserved in redirect | `/admin` → `/admin` | [ ] Pass |
-| Query string preserved | `?brand=abc` → `?brand=abc` | [ ] Pass |
-| No Worker routes for www | Check wrangler.toml | [ ] Pass |
-| Browser follows redirect | Manual test | [ ] Pass |
+| Path preserved in redirect                      | `/admin` → `/admin`                  | [ ] Pass |
+| Query string preserved                          | `?brand=abc` → `?brand=abc`          | [ ] Pass |
+| No Worker routes for www                        | Check wrangler.toml                  | [ ] Pass |
+| Browser follows redirect                        | Manual test                          | [ ] Pass |
 
 ---
 
@@ -461,12 +466,12 @@ Is www.eventangle.com returning errors?
 
 ### 8.1 Common Issues
 
-| Symptom | Likely Cause | Solution |
-|---------|--------------|----------|
-| Redirect loop (too many redirects) | Redirect rule also catches apex domain | Fix rule expression to only match `www` |
-| 404 after redirect | Worker route removed but Worker not deployed | Deploy Worker |
-| www still hits Worker | Redirect rule not active or misconfigured | Check rule status in dashboard |
-| Mixed HTTP/HTTPS in redirect | Always Use HTTPS not enabled | Enable Always Use HTTPS (SEC-3.1) |
+| Symptom                            | Likely Cause                                 | Solution                                |
+| ---------------------------------- | -------------------------------------------- | --------------------------------------- |
+| Redirect loop (too many redirects) | Redirect rule also catches apex domain       | Fix rule expression to only match `www` |
+| 404 after redirect                 | Worker route removed but Worker not deployed | Deploy Worker                           |
+| www still hits Worker              | Redirect rule not active or misconfigured    | Check rule status in dashboard          |
+| Mixed HTTP/HTTPS in redirect       | Always Use HTTPS not enabled                 | Enable Always Use HTTPS (SEC-3.1)       |
 
 ### 8.2 Debug Redirect Rule
 
@@ -524,7 +529,7 @@ After implementing the redirect:
 Ensure HTML pages include:
 
 ```html
-<link rel="canonical" href="https://eventangle.com/page-path">
+<link rel="canonical" href="https://eventangle.com/page-path" />
 ```
 
 This reinforces the canonical host choice.
@@ -542,6 +547,6 @@ This reinforces the canonical host choice.
 
 ## Document History
 
-| Date | Author | Changes |
-|------|--------|---------|
+| Date       | Author      | Changes                   |
+| ---------- | ----------- | ------------------------- |
 | 2025-12-21 | Claude Code | Initial runbook (SEC-4.1) |

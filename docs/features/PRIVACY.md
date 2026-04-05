@@ -36,12 +36,12 @@ Check-in counts (aggregate only)    Sponsors (click/impression tokens)
 
 The scan system stores **presence signal only**. By schema design, no PII can enter:
 
-| What's Stored | How | Purpose |
-|---------------|-----|---------|
-| `scan_bucket` | Hourly time window | When (approximate) |
-| `user_agent_hash` | SHA-256 of user agent | Device class (not individual) |
-| `country_code`, `region_code` | From CF headers | Where (approximate) |
-| `poster_deployment_id` | FK to physical QR placement | Which placement was scanned |
+| What's Stored                 | How                         | Purpose                       |
+| ----------------------------- | --------------------------- | ----------------------------- |
+| `scan_bucket`                 | Hourly time window          | When (approximate)            |
+| `user_agent_hash`             | SHA-256 of user agent       | Device class (not individual) |
+| `country_code`, `region_code` | From CF headers             | Where (approximate)           |
+| `poster_deployment_id`        | FK to physical QR placement | Which placement was scanned   |
 
 **What's explicitly excluded:** email, name, IP address, exact timestamp, cookies, device fingerprint.
 
@@ -56,36 +56,41 @@ When a customer **voluntarily** fills out a form, that data enters a separate sy
 ## PII Handling by Form Type
 
 ### Registration
-| Data | Treatment |
-|------|-----------|
-| Name | Stored as plain text (needed for check-in lists) |
-| Email | SHA-256 hashed immediately — raw email never stored |
-| Timestamp | Bucketed to the hour (e.g., "2026-03-27T14") — no exact times |
-| All fields | Auto-deleted 90 days after event (`expires_at`) |
+
+| Data       | Treatment                                                     |
+| ---------- | ------------------------------------------------------------- |
+| Name       | Stored as plain text (needed for check-in lists)              |
+| Email      | SHA-256 hashed immediately — raw email never stored           |
+| Timestamp  | Bucketed to the hour (e.g., "2026-03-27T14") — no exact times |
+| All fields | Auto-deleted 90 days after event (`expires_at`)               |
 
 ### Check-In
-| Data | Treatment |
-|------|-----------|
+
+| Data  | Treatment                         |
+| ----- | --------------------------------- |
 | Count | Aggregate integer only — zero PII |
 
 ### Survey
-| Data | Treatment |
-|------|-----------|
+
+| Data      | Treatment                                                |
+| --------- | -------------------------------------------------------- |
 | Responses | Stored as JSON, then PII-scrubbed by daily lifecycle job |
-| Timestamp | Bucketed to the hour |
+| Timestamp | Bucketed to the hour                                     |
 
 **Scrub logic (whitelist approach):**
+
 - Numeric values: kept (ratings, scores)
 - Safe key names (rating, score, count, stars, venue, etc.): kept
 - All other string values: replaced with `[SCRUBBED]`
 - Admin only sees scrubbed surveys
 
 ### Email Signup
-| Data | Treatment |
-|------|-----------|
-| Email | SHA-256 hashed (for dedup) + AES-256-GCM encrypted (for retrieval) |
-| Timestamp | Bucketed to the hour |
-| All fields | Auto-deleted 30 days after signup (`retention_expires_at`) |
+
+| Data       | Treatment                                                          |
+| ---------- | ------------------------------------------------------------------ |
+| Email      | SHA-256 hashed (for dedup) + AES-256-GCM encrypted (for retrieval) |
+| Timestamp  | Bucketed to the hour                                               |
+| All fields | Auto-deleted 30 days after signup (`retention_expires_at`)         |
 
 ---
 
@@ -94,6 +99,7 @@ When a customer **voluntarily** fills out a form, that data enters a separate sy
 **Algorithm:** AES-256-GCM via Web Crypto API
 
 **Key derivation:** PBKDF2 with:
+
 - 100,000 iterations
 - SHA-256 hash
 - Static salt: `oursharedevents-forms-v1`
@@ -110,22 +116,28 @@ When a customer **voluntarily** fills out a form, that data enters a separate sy
 A Cloudflare Worker cron trigger runs daily and executes 3 independent phases:
 
 ### Phase 1: Delete Expired Registrations
+
 ```sql
 DELETE FROM form_registrations WHERE expires_at IS NOT NULL AND expires_at < ?
 ```
+
 TTL: 90 days from submission.
 
 ### Phase 2: Scrub Survey PII
+
 ```sql
 SELECT id, responses_json FROM form_surveys WHERE pii_scrubbed = 0 AND created_at < ?
 UPDATE form_surveys SET responses_json = ?, pii_scrubbed = 1 WHERE id = ?
 ```
+
 Runs on all unscrubbed surveys older than the current timestamp.
 
 ### Phase 3: Delete Expired Email Signups
+
 ```sql
 DELETE FROM email_signups WHERE retention_expires_at < ?
 ```
+
 TTL: 30 days from signup.
 
 **Fault tolerance:** Each phase runs independently. A failure in Phase 1 does not prevent Phases 2 and 3 from running. All results are logged as `LIFECYCLE_COMPLETE` events.

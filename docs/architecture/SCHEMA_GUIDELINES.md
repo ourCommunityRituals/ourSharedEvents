@@ -48,12 +48,12 @@ schemas/
 
 ### Schema Categories
 
-| Category | Schemas | Purpose |
-|----------|---------|---------|
-| **API Responses** | `api-envelope`, `list-response`, `bundle-response`, `get-response`, `save-response`, `delete-response`, `analytics-response` | Validate API response structures |
-| **Entities** | `event`, `sponsor`, `shared-analytics` | Validate domain entities |
-| **Flat Responses** | `status`, `status-mvp` | Health endpoint responses (no envelope) |
-| **Utilities** | `form-config`, `deploy-manifest`, etc. | Configuration and tooling |
+| Category           | Schemas                                                                                                                      | Purpose                                 |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------------- | --------------------------------------- |
+| **API Responses**  | `api-envelope`, `list-response`, `bundle-response`, `get-response`, `save-response`, `delete-response`, `analytics-response` | Validate API response structures        |
+| **Entities**       | `event`, `sponsor`, `shared-analytics`                                                                                       | Validate domain entities                |
+| **Flat Responses** | `status`, `status-mvp`                                                                                                       | Health endpoint responses (no envelope) |
+| **Utilities**      | `form-config`, `deploy-manifest`, etc.                                                                                       | Configuration and tooling               |
 
 ---
 
@@ -66,7 +66,7 @@ const {
   validateResponse,
   validateAgainstSchema,
   validateEvent,
-  extendJestWithSchemaMatchers
+  extendJestWithSchemaMatchers,
 } = require('../shared/helpers/schema-validator');
 
 // Option 1: Validate with assertion (throws on failure)
@@ -88,15 +88,15 @@ const { valid, errors } = validateEvent(eventData);
 
 ### Available Validators
 
-| Function | Purpose |
-|----------|---------|
-| `validateResponse(data, schemaId)` | Throws if validation fails |
-| `validateAgainstSchema(data, schemaId)` | Returns `{ valid, errors }` |
+| Function                                   | Purpose                         |
+| ------------------------------------------ | ------------------------------- |
+| `validateResponse(data, schemaId)`         | Throws if validation fails      |
+| `validateAgainstSchema(data, schemaId)`    | Returns `{ valid, errors }`     |
 | `validateEndpointResponse(data, endpoint)` | Auto-selects schema by endpoint |
-| `validateEvent(data)` | Validates event entity |
-| `validateSponsor(data)` | Validates sponsor entity |
-| `validateSharedAnalytics(data)` | Validates analytics data |
-| `validateFlatStatus(data)` | Validates flat status response |
+| `validateEvent(data)`                      | Validates event entity          |
+| `validateSponsor(data)`                    | Validates sponsor entity        |
+| `validateSharedAnalytics(data)`            | Validates analytics data        |
+| `validateFlatStatus(data)`                 | Validates flat status response  |
 
 ### Schema IDs
 
@@ -104,22 +104,22 @@ Use these IDs with validation functions:
 
 ```javascript
 // API Responses
-'api-envelope'        // Generic envelope
-'list-response'       // List with pagination
-'bundle-response'     // Bundle (event + config)
-'get-response'        // Single entity
-'save-response'       // Create/update result
-'delete-response'     // Delete result
-'analytics-response'  // Analytics data
+'api-envelope'; // Generic envelope
+'list-response'; // List with pagination
+'bundle-response'; // Bundle (event + config)
+'get-response'; // Single entity
+'save-response'; // Create/update result
+'delete-response'; // Delete result
+'analytics-response'; // Analytics data
 
 // Entities
-'event'              // Event entity
-'sponsor'            // Sponsor entity
-'shared-analytics'   // Analytics report
+'event'; // Event entity
+'sponsor'; // Sponsor entity
+'shared-analytics'; // Analytics report
 
 // Status (Flat)
-'status'             // Health check
-'status-mvp'         // MVP health check
+'status'; // Health check
+'status-mvp'; // MVP health check
 ```
 
 ---
@@ -128,18 +128,19 @@ Use these IDs with validation functions:
 
 ### Step 1: Identify the Change Type
 
-| Change Type | Impact | Process |
-|-------------|--------|---------|
-| Add optional field | Non-breaking | Update schema, add tests |
-| Add required field | **BREAKING** | Requires migration plan |
-| Remove field | **BREAKING** | Deprecate first, then remove |
-| Change field type | **BREAKING** | Requires migration plan |
-| Rename field | **BREAKING** | Add new field, deprecate old |
+| Change Type        | Impact       | Process                      |
+| ------------------ | ------------ | ---------------------------- |
+| Add optional field | Non-breaking | Update schema, add tests     |
+| Add required field | **BREAKING** | Requires migration plan      |
+| Remove field       | **BREAKING** | Deprecate first, then remove |
+| Change field type  | **BREAKING** | Requires migration plan      |
+| Rename field       | **BREAKING** | Add new field, deprecate old |
 
 ### Step 2: Update the Schema
 
 1. Edit the schema file in `/schemas/`
 2. Add `$comment` with version info:
+
    ```json
    {
      "$comment": "v1.1 updated 2025-12-11: Added optional 'newField' property"
@@ -156,6 +157,7 @@ Use these IDs with validation functions:
 ### Step 3: Update Tests
 
 1. Run existing tests to see failures:
+
    ```bash
    npm run test:schema-validation
    ```
@@ -180,6 +182,7 @@ Use these IDs with validation functions:
 ### Step 5: Create Pull Request
 
 PR must include:
+
 - [ ] Schema file changes
 - [ ] Updated tests
 - [ ] API handler updates
@@ -192,11 +195,13 @@ PR must include:
 Some schemas are **frozen** and require migration for changes:
 
 ### event.schema.json (v1.0 FROZEN - 2025-11-30)
+
 - All MVP-required fields are stable
 - Adding optional V2 fields is allowed
 - Removing/renaming fields requires migration
 
 ### shared-analytics.schema.json (v1.1 FROZEN)
+
 - Summary and surfaces structures are stable
 - Adding optional metrics is allowed
 - Breaking changes require semver bump
@@ -232,6 +237,7 @@ npm run check:guards
 ### CI Pipeline
 
 Schema validation runs automatically in:
+
 - `npm run test` (via check:guards)
 - `npm run test:contract` (includes schema tests)
 - Stage 1 CI pipeline
@@ -259,31 +265,39 @@ PASS  tests/contract/api-schema-validation.contract.test.js
 ## Common Validation Errors
 
 ### Missing Required Field
+
 ```
 Schema validation failed for event:
   [1] /: must have required property 'links'
 ```
+
 **Fix:** Add the missing field to your data.
 
 ### Additional Property
+
 ```
 Schema validation failed for event:
   [1] /: must NOT have additional properties {"additionalProperty":"extraField"}
 ```
+
 **Fix:** Remove the extra field or update the schema.
 
 ### Wrong Type
+
 ```
 Schema validation failed for list-response:
   [1] /value/pagination/total: must be integer
 ```
+
 **Fix:** Ensure the field has the correct type.
 
 ### Pattern Mismatch
+
 ```
 Schema validation failed for event:
   [1] /slug: must match pattern "^[a-z0-9-]+$"
 ```
+
 **Fix:** Ensure string matches the required pattern.
 
 ---
@@ -312,12 +326,12 @@ Schema validation failed for event:
 
 This schema system complements the API contract:
 
-| Contract Rule | Schema Enforcement |
-|---------------|-------------------|
-| Flat endpoints return no envelope | `validateFlatStatus()` checks no `value` wrapper |
-| Envelope endpoints wrap in `value` | `validateAgainstSchema(..., 'api-envelope')` |
-| Error responses have code+message | Error envelope schema requires both |
-| notModified omits value | NotModified variant allows missing value |
+| Contract Rule                      | Schema Enforcement                               |
+| ---------------------------------- | ------------------------------------------------ |
+| Flat endpoints return no envelope  | `validateFlatStatus()` checks no `value` wrapper |
+| Envelope endpoints wrap in `value` | `validateAgainstSchema(..., 'api-envelope')`     |
+| Error responses have code+message  | Error envelope schema requires both              |
+| notModified omits value            | NotModified variant allows missing value         |
 
 See [API_CONTRACT.md](../API_CONTRACT.md) for full contract details.
 
@@ -326,21 +340,26 @@ See [API_CONTRACT.md](../API_CONTRACT.md) for full contract details.
 ## Troubleshooting
 
 ### Schema Not Found
+
 ```
 Error: Unknown schema ID: my-schema
 ```
+
 Check that the schema is registered in `SCHEMA_REGISTRY` in `schema-validator.js`.
 
 ### Tests Fail After Schema Update
+
 1. Clear schema cache: `clearSchemaCache()`
 2. Check for typos in schema file
 3. Validate JSON syntax
 4. Run `npm run test:schema-validation:verbose`
 
 ### AJV Compilation Error
+
 ```
 Error: strict mode: unknown keyword: "$foobar"
 ```
+
 Ensure you're using valid JSON Schema draft 2020-12 keywords.
 
 ---

@@ -18,15 +18,15 @@ Every UEC code has a dedicated color, a single semantic meaning, and a purpose t
 
 ## The 7 Core Codes
 
-| # | Color | Code | Hex | Semantics | Status |
-|---|-------|------|-----|-----------|--------|
-| 01 | **Green** | ENTER | `#1A6B2F` | Go · Access · Safe Passage | KEEP |
-| 02 | **Coral** | LIVE | `#C04048` | Exciting · Warm · Now | UPDATED (was Orange/GAME) |
-| 03 | **Blue** | SPONSOR | `#1A3A8A` | Trust · Commerce · Partnership | KEEP |
-| 04 | **Purple** | ARCHIVE | `#5E1A9A` | Memory · History · Record | KEEP |
-| 05 | **Pink** | HELP | `#B01468` | Care · Assistance · Accessibility | NEW |
-| 06 | **Amber** | FEEDBACK | `#8A5A00` | Voice · Opinion · Response | UPDATED (was Yellow) |
-| 07 | **Charcoal** | UTILITY | `#2A2A3A` | General · Info · Infrastructure | UPDATED (was White) |
+| #   | Color        | Code     | Hex       | Semantics                         | Status                    |
+| --- | ------------ | -------- | --------- | --------------------------------- | ------------------------- |
+| 01  | **Green**    | ENTER    | `#1A6B2F` | Go · Access · Safe Passage        | KEEP                      |
+| 02  | **Coral**    | LIVE     | `#C04048` | Exciting · Warm · Now             | UPDATED (was Orange/GAME) |
+| 03  | **Blue**     | SPONSOR  | `#1A3A8A` | Trust · Commerce · Partnership    | KEEP                      |
+| 04  | **Purple**   | ARCHIVE  | `#5E1A9A` | Memory · History · Record         | KEEP                      |
+| 05  | **Pink**     | HELP     | `#B01468` | Care · Assistance · Accessibility | NEW                       |
+| 06  | **Amber**    | FEEDBACK | `#8A5A00` | Voice · Opinion · Response        | UPDATED (was Yellow)      |
+| 07  | **Charcoal** | UTILITY  | `#2A2A3A` | General · Info · Infrastructure   | UPDATED (was White)       |
 
 ### 01 GREEN — ENTER
 
@@ -120,12 +120,12 @@ WiFi password, schedule PDF, venue map, general announcements, admin quick links
 
 Extensions address specific operational needs beyond the core 7. The core codes handle 95% of all event scenarios.
 
-| Color | Code | Hex | Priority | Use Case |
-|-------|------|-----|----------|----------|
-| **Yellow** | ALERT | `#B8960A` | HIGH | Safety notices, weather delays, venue emergencies |
-| **Red** | STAFF | `#A00020` | HIGH | Staff-only pages, volunteer check-in, backstage access |
-| **Teal** | CHECK-IN | `#006B6B` | MEDIUM | Attendance tracking, membership verification, roster |
-| **Dark Teal** | SHOP | `#1A4A48` | MEDIUM | Merchandise, ticket upgrades, concessions, silent auction |
+| Color         | Code     | Hex       | Priority | Use Case                                                  |
+| ------------- | -------- | --------- | -------- | --------------------------------------------------------- |
+| **Yellow**    | ALERT    | `#B8960A` | HIGH     | Safety notices, weather delays, venue emergencies         |
+| **Red**       | STAFF    | `#A00020` | HIGH     | Staff-only pages, volunteer check-in, backstage access    |
+| **Teal**      | CHECK-IN | `#006B6B` | MEDIUM   | Attendance tracking, membership verification, roster      |
+| **Dark Teal** | SHOP     | `#1A4A48` | MEDIUM   | Merchandise, ticket upgrades, concessions, silent auction |
 
 ### YELLOW — ALERT
 
@@ -164,18 +164,18 @@ Commerce beyond sponsors. Separates buying (transaction) from sponsorship (relat
 
 Every core code works across all verticals — no vertical requires a different system:
 
-| Vertical | All 7 Core | ALERT | STAFF | CHECK-IN | SHOP |
-|----------|:----------:|:-----:|:-----:|:--------:|:----:|
-| Sports | Y | Y | Y | Y | Y |
-| School | Y | Y | Y | Y | - |
-| Church | Y | Y | Y | Y | - |
-| Museum | Y | Y | Y | Y | Y |
-| Rec Center | Y | Y | Y | Y | - |
-| Civic | Y | Y | Y | Y | - |
-| Tourism | Y | Y | - | - | Y |
-| Bars | Y | Y | - | - | Y |
-| Government | Y | Y | Y | - | - |
-| Fundraising | Y | Y | - | - | Y |
+| Vertical    | All 7 Core | ALERT | STAFF | CHECK-IN | SHOP |
+| ----------- | :--------: | :---: | :---: | :------: | :--: |
+| Sports      |     Y      |   Y   |   Y   |    Y     |  Y   |
+| School      |     Y      |   Y   |   Y   |    Y     |  -   |
+| Church      |     Y      |   Y   |   Y   |    Y     |  -   |
+| Museum      |     Y      |   Y   |   Y   |    Y     |  Y   |
+| Rec Center  |     Y      |   Y   |   Y   |    Y     |  -   |
+| Civic       |     Y      |   Y   |   Y   |    Y     |  -   |
+| Tourism     |     Y      |   Y   |   -   |    -     |  Y   |
+| Bars        |     Y      |   Y   |   -   |    -     |  Y   |
+| Government  |     Y      |   Y   |   Y   |    -     |  -   |
+| Fundraising |     Y      |   Y   |   -   |    -     |  Y   |
 
 ---
 
@@ -190,24 +190,24 @@ Every core code works across all verticals — no vertical requires a different 
 
 ### Color Psychology Audit
 
-| Code | Psychology | Cultural Basis |
-|------|-----------|----------------|
-| GREEN | Go, safe, proceed | Only color with same meaning in every culture on Earth |
-| CORAL | Excitement + warmth, no alarm | Midpoint of red energy and orange inclusivity |
-| BLUE | Trust, institution, value | Banks, hospitals, governments worldwide |
-| PURPLE | Permanence, memory, royalty | Thousands of years across Western and Eastern cultures |
-| PINK | Care, assistance, compassion | Healthcare, safety, and compassionate service globally |
-| AMBER | Reflection, warmth, completion | Harvest, gold, invitation without alarm |
-| CHARCOAL | Infrastructure, backstage, utility | Circuit breakers, pipe labels, server racks |
+| Code     | Psychology                         | Cultural Basis                                         |
+| -------- | ---------------------------------- | ------------------------------------------------------ |
+| GREEN    | Go, safe, proceed                  | Only color with same meaning in every culture on Earth |
+| CORAL    | Excitement + warmth, no alarm      | Midpoint of red energy and orange inclusivity          |
+| BLUE     | Trust, institution, value          | Banks, hospitals, governments worldwide                |
+| PURPLE   | Permanence, memory, royalty        | Thousands of years across Western and Eastern cultures |
+| PINK     | Care, assistance, compassion       | Healthcare, safety, and compassionate service globally |
+| AMBER    | Reflection, warmth, completion     | Harvest, gold, invitation without alarm                |
+| CHARCOAL | Infrastructure, backstage, utility | Circuit breakers, pipe labels, server racks            |
 
 ### Changes from v1.0
 
-| v1.0 | v1.1 | Reason |
-|------|------|--------|
-| Orange / GAME | Coral / LIVE | Orange = caution/industrial. GAME too narrow for church/school. |
-| Yellow / FEEDBACK | Amber / FEEDBACK | Yellow fails QR contrast on white. Caution ≠ conversation. |
-| White / UTILITY | Charcoal / UTILITY | White on white = physically impossible to scan. |
-| *(none)* | Pink / HELP | New — ADA, accessibility, human assistance gap filled. |
+| v1.0              | v1.1               | Reason                                                          |
+| ----------------- | ------------------ | --------------------------------------------------------------- |
+| Orange / GAME     | Coral / LIVE       | Orange = caution/industrial. GAME too narrow for church/school. |
+| Yellow / FEEDBACK | Amber / FEEDBACK   | Yellow fails QR contrast on white. Caution ≠ conversation.      |
+| White / UTILITY   | Charcoal / UTILITY | White on white = physically impossible to scan.                 |
+| _(none)_          | Pink / HELP        | New — ADA, accessibility, human assistance gap filled.          |
 
 ### Deployment Checklist
 
@@ -227,18 +227,18 @@ Every core code works across all verticals — no vertical requires a different 
 
 ## How UEC Connects to the Platform
 
-| UEC Code | Platform Feature | Data Generated |
-|----------|-----------------|----------------|
-| ENTER | Registration form, check-in counter | `form_registrations`, `checkin_counts` |
-| LIVE | Display surface (real-time) | `scans`, `scan_aggregates` |
-| SPONSOR | Sponsor placement, attribution | `sponsors`, `source_placement_id` |
-| ARCHIVE | SharedReport surface | `scan_aggregates`, form analytics |
-| HELP | Accessibility services page | Utility — no tracking |
-| FEEDBACK | Survey form, email signup form | `form_surveys`, `email_signups` |
-| UTILITY | General info pages | Utility — minimal tracking |
-| ALERT (ext) | Emergency broadcast | Admin push — no scan tracking |
-| STAFF (ext) | Admin surface | Admin auth required |
-| CHECK-IN (ext) | Attendance tracking | `checkin_counts` with roster |
-| SHOP (ext) | Commerce page | Sponsor click/impression tokens |
+| UEC Code       | Platform Feature                    | Data Generated                         |
+| -------------- | ----------------------------------- | -------------------------------------- |
+| ENTER          | Registration form, check-in counter | `form_registrations`, `checkin_counts` |
+| LIVE           | Display surface (real-time)         | `scans`, `scan_aggregates`             |
+| SPONSOR        | Sponsor placement, attribution      | `sponsors`, `source_placement_id`      |
+| ARCHIVE        | SharedReport surface                | `scan_aggregates`, form analytics      |
+| HELP           | Accessibility services page         | Utility — no tracking                  |
+| FEEDBACK       | Survey form, email signup form      | `form_surveys`, `email_signups`        |
+| UTILITY        | General info pages                  | Utility — minimal tracking             |
+| ALERT (ext)    | Emergency broadcast                 | Admin push — no scan tracking          |
+| STAFF (ext)    | Admin surface                       | Admin auth required                    |
+| CHECK-IN (ext) | Attendance tracking                 | `checkin_counts` with roster           |
+| SHOP (ext)     | Commerce page                       | Sponsor click/impression tokens        |
 
 Every scan through a UEC code feeds the anonymous presence signal system. The `poster_deployments` table stores each physical QR placement with lat/lng. The `scans` table records the time-bucketed, PII-free interaction. SharedReports surface the aggregate results. The UEC color system is the physical-to-digital bridge that makes this data pipeline work.

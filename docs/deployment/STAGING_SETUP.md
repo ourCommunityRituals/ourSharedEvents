@@ -22,18 +22,19 @@ npm run staging:verify
 ## Overview
 
 The staging environment provides a safe sandbox for:
+
 - Destructive tests (load testing, chaos testing)
 - Schema experiments and migrations
 - Integration testing before production
 - Pre-production validation
 
-| Component | Staging | Production |
-|-----------|---------|------------|
-| URL | `https://stg.eventangle.com` | `https://www.eventangle.com` |
-| API | `https://api-stg.eventangle.com` | `https://api.eventangle.com` |
-| GAS Project | Separate Script ID | Production Script ID |
-| Spreadsheets | Staging EVENTS/DIAG | Production EVENTS/DIAG |
-| Cloudflare Env | `--env staging` | `--env events` |
+| Component      | Staging                          | Production                   |
+| -------------- | -------------------------------- | ---------------------------- |
+| URL            | `https://stg.eventangle.com`     | `https://www.eventangle.com` |
+| API            | `https://api-stg.eventangle.com` | `https://api.eventangle.com` |
+| GAS Project    | Separate Script ID               | Production Script ID         |
+| Spreadsheets   | Staging EVENTS/DIAG              | Production EVENTS/DIAG       |
+| Cloudflare Env | `--env staging`                  | `--env events`               |
 
 ---
 
@@ -109,9 +110,9 @@ DEPLOYMENT_ID = "YOUR_STAGING_DEPLOYMENT_ID_HERE"
 
 In Cloudflare DNS for `eventangle.com`, add:
 
-| Type | Name | Content | Proxy |
-|------|------|---------|-------|
-| CNAME | `stg` | `eventangle.workers.dev` | Proxied |
+| Type  | Name      | Content                  | Proxy   |
+| ----- | --------- | ------------------------ | ------- |
+| CNAME | `stg`     | `eventangle.workers.dev` | Proxied |
 | CNAME | `api-stg` | `eventangle.workers.dev` | Proxied |
 
 ### 2.3 Deploy Staging Worker
@@ -129,10 +130,10 @@ npm run deploy:staging:worker
 
 Add these secrets to your GitHub repository:
 
-| Secret Name | Description |
-|-------------|-------------|
-| `STAGING_SCRIPT_ID` | Staging GAS Script ID |
-| `STAGING_DEPLOYMENT_ID` | Staging GAS Deployment ID |
+| Secret Name                 | Description                       |
+| --------------------------- | --------------------------------- |
+| `STAGING_SCRIPT_ID`         | Staging GAS Script ID             |
+| `STAGING_DEPLOYMENT_ID`     | Staging GAS Deployment ID         |
 | `STAGING_OAUTH_CREDENTIALS` | OAuth credentials for staging GAS |
 
 ### 3.2 Environment Variables

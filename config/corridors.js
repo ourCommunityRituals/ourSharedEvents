@@ -54,9 +54,9 @@ const HIERARCHY_LEVELS = Object.freeze({
 // =============================================================================
 
 const GROWTH_PATTERNS = Object.freeze({
-  SPIDERWEB: 'SPIDERWEB',   // Branching outward from route into surrounding communities
-  FRACTAL: 'FRACTAL',       // Self-similar pattern replicating at smaller scale
-  REVERB: 'REVERB',         // Signal echo between connected nodes amplifying engagement
+  SPIDERWEB: 'SPIDERWEB', // Branching outward from route into surrounding communities
+  FRACTAL: 'FRACTAL', // Self-similar pattern replicating at smaller scale
+  REVERB: 'REVERB', // Signal echo between connected nodes amplifying engagement
 });
 
 // =============================================================================
@@ -65,31 +65,31 @@ const GROWTH_PATTERNS = Object.freeze({
 
 const EVENT_VERTICALS = Object.freeze({
   // Wave 1 — NOW (no special legal clearance)
-  SPORTS: 'sports',               // Bocce, rec leagues, pickup games
-  DANCE: 'dance',                 // Dance nights, classes, competitions
-  GYMNASTICS: 'gymnastics',       // Gymnastics events, meets
+  SPORTS: 'sports', // Bocce, rec leagues, pickup games
+  DANCE: 'dance', // Dance nights, classes, competitions
+  GYMNASTICS: 'gymnastics', // Gymnastics events, meets
   SCHOOL_FUNDED: 'school_funded', // School-funded community gatherings
 
   // Wave 2 — RESTRICTED (COPPA compliance required)
   SCHOOL_FUNCTIONS: 'school_functions', // K-12 events, PTA, assemblies
-  YOUTH_EVENTS: 'youth_events',         // Under-18 programs
+  YOUTH_EVENTS: 'youth_events', // Under-18 programs
 
   // Wave 3 — REGULATED (HIPAA/institutional clearance)
-  MUSEUMS: 'museums',             // Museum events, gallery openings
+  MUSEUMS: 'museums', // Museum events, gallery openings
   ART_INSTITUTES: 'art_institutes', // Art institute programs
   COMMUNITY_HEALTH: 'community_health', // Health fairs, wellness events
 
   // Wave 4 — OPEN (general expansion)
-  COMMUNITY: 'community',         // General community gatherings
-  PRIVATE: 'private',             // Private events, parties, corporate
-  PUBLIC: 'public',               // Public festivals, fairs, markets
+  COMMUNITY: 'community', // General community gatherings
+  PRIVATE: 'private', // Private events, parties, corporate
+  PUBLIC: 'public', // Public festivals, fairs, markets
 });
 
 // Legal clearance tiers for event verticals
 const LEGAL_CLEARANCE = Object.freeze({
-  OPEN: 'OPEN',             // sports, dance, general community
+  OPEN: 'OPEN', // sports, dance, general community
   RESTRICTED: 'RESTRICTED', // school functions, youth events (COPPA)
-  REGULATED: 'REGULATED',   // healthcare-adjacent, institutional (HIPAA)
+  REGULATED: 'REGULATED', // healthcare-adjacent, institutional (HIPAA)
 });
 
 // =============================================================================
@@ -150,16 +150,86 @@ const FOUNDING_COMMUNITIES = Object.freeze([
 // =============================================================================
 
 const METRO_NODES = Object.freeze([
-  { id: 'metro-chicago', name: 'Chicago', level: HIERARCHY_LEVELS.METRO, level_label: 'Metro', latitude: 41.8781, longitude: -87.6298 },
-  { id: 'metro-detroit', name: 'Detroit', level: HIERARCHY_LEVELS.METRO, level_label: 'Metro', latitude: 42.3314, longitude: -83.0458 },
-  { id: 'metro-milwaukee', name: 'Milwaukee', level: HIERARCHY_LEVELS.METRO, level_label: 'Metro', latitude: 43.0389, longitude: -87.9065 },
-  { id: 'metro-minneapolis', name: 'Minneapolis', level: HIERARCHY_LEVELS.METRO, level_label: 'Metro', latitude: 44.9778, longitude: -93.2650 },
-  { id: 'metro-st-louis', name: 'St. Louis', level: HIERARCHY_LEVELS.METRO, level_label: 'Metro', latitude: 38.6270, longitude: -90.1994 },
-  { id: 'metro-indianapolis', name: 'Indianapolis', level: HIERARCHY_LEVELS.METRO, level_label: 'Metro', latitude: 39.7684, longitude: -86.1581 },
-  { id: 'metro-louisville', name: 'Louisville', level: HIERARCHY_LEVELS.METRO, level_label: 'Metro', latitude: 38.2527, longitude: -85.7585 },
-  { id: 'metro-nashville', name: 'Nashville', level: HIERARCHY_LEVELS.METRO, level_label: 'Metro', latitude: 36.1627, longitude: -86.7816 },
-  { id: 'metro-galesburg', name: 'Galesburg', level: HIERARCHY_LEVELS.METRO, level_label: 'Metro', latitude: 40.9478, longitude: -90.3712 },
-  { id: 'metro-sw-michigan', name: 'SW Michigan', level: HIERARCHY_LEVELS.METRO, level_label: 'Metro', latitude: 41.8075, longitude: -86.6186 },
+  {
+    id: 'metro-chicago',
+    name: 'Chicago',
+    level: HIERARCHY_LEVELS.METRO,
+    level_label: 'Metro',
+    latitude: 41.8781,
+    longitude: -87.6298,
+  },
+  {
+    id: 'metro-detroit',
+    name: 'Detroit',
+    level: HIERARCHY_LEVELS.METRO,
+    level_label: 'Metro',
+    latitude: 42.3314,
+    longitude: -83.0458,
+  },
+  {
+    id: 'metro-milwaukee',
+    name: 'Milwaukee',
+    level: HIERARCHY_LEVELS.METRO,
+    level_label: 'Metro',
+    latitude: 43.0389,
+    longitude: -87.9065,
+  },
+  {
+    id: 'metro-minneapolis',
+    name: 'Minneapolis',
+    level: HIERARCHY_LEVELS.METRO,
+    level_label: 'Metro',
+    latitude: 44.9778,
+    longitude: -93.265,
+  },
+  {
+    id: 'metro-st-louis',
+    name: 'St. Louis',
+    level: HIERARCHY_LEVELS.METRO,
+    level_label: 'Metro',
+    latitude: 38.627,
+    longitude: -90.1994,
+  },
+  {
+    id: 'metro-indianapolis',
+    name: 'Indianapolis',
+    level: HIERARCHY_LEVELS.METRO,
+    level_label: 'Metro',
+    latitude: 39.7684,
+    longitude: -86.1581,
+  },
+  {
+    id: 'metro-louisville',
+    name: 'Louisville',
+    level: HIERARCHY_LEVELS.METRO,
+    level_label: 'Metro',
+    latitude: 38.2527,
+    longitude: -85.7585,
+  },
+  {
+    id: 'metro-nashville',
+    name: 'Nashville',
+    level: HIERARCHY_LEVELS.METRO,
+    level_label: 'Metro',
+    latitude: 36.1627,
+    longitude: -86.7816,
+  },
+  {
+    id: 'metro-galesburg',
+    name: 'Galesburg',
+    level: HIERARCHY_LEVELS.METRO,
+    level_label: 'Metro',
+    latitude: 40.9478,
+    longitude: -90.3712,
+  },
+  {
+    id: 'metro-sw-michigan',
+    name: 'SW Michigan',
+    level: HIERARCHY_LEVELS.METRO,
+    level_label: 'Metro',
+    latitude: 41.8075,
+    longitude: -86.6186,
+  },
 ]);
 
 // =============================================================================

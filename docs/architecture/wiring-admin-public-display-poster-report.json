@@ -23,27 +23,16 @@
         "api_saveEvent",
         "getSponsorReportQr"
       ],
-      "surfacedLinks": [
-        "display",
-        "poster",
-        "public",
-        "report"
-      ]
+      "surfacedLinks": ["display", "poster", "public", "report"]
     },
     "Public": {
       "file": "Public.html",
       "calls": [],
-      "feedsAnalytics": [
-        "click",
-        "impression",
-        "view"
-      ]
+      "feedsAnalytics": ["click", "impression", "view"]
     },
     "Display": {
       "file": "Display.html",
-      "calls": [
-        "api_getDisplayBundle"
-      ],
+      "calls": ["api_getDisplayBundle"],
       "feedsAnalytics": [
         "blocked_embed",
         "click",
@@ -56,30 +45,13 @@
     },
     "Poster": {
       "file": "Poster.html",
-      "calls": [
-        "api_getPosterBundle"
-      ],
-      "feedsAnalytics": [
-        "click",
-        "impression",
-        "print",
-        "view"
-      ]
+      "calls": ["api_getPosterBundle"],
+      "feedsAnalytics": ["click", "impression", "print", "view"]
     },
     "SharedReport": {
       "file": "SharedReport.html",
-      "calls": [
-        "api_getSharedAnalytics",
-        "api_getSponsorAnalytics",
-        "api_getSponsorReportQr"
-      ],
-      "readsAnalytics": [
-        "events",
-        "sponsors",
-        "summary",
-        "surfaces",
-        "topSponsors"
-      ]
+      "calls": ["api_getSharedAnalytics", "api_getSponsorAnalytics", "api_getSponsorReportQr"],
+      "readsAnalytics": ["events", "sponsors", "summary", "surfaces", "topSponsors"]
     }
   },
   "apiUsage": {
@@ -88,9 +60,7 @@
       "isOrphan": true
     },
     "api_saveEvent": {
-      "usedBy": [
-        "Admin"
-      ],
+      "usedBy": ["Admin"],
       "isOrphan": false
     },
     "api_get": {
@@ -106,28 +76,17 @@
       "isOrphan": true
     },
     "api_getDisplayBundle": {
-      "usedBy": [
-        "Display"
-      ],
+      "usedBy": ["Display"],
       "isOrphan": false
     },
     "api_getPosterBundle": {
-      "usedBy": [
-        "Poster"
-      ],
+      "usedBy": ["Poster"],
       "isOrphan": false
     },
     "api_getSharedAnalytics": {
-      "usedBy": [
-        "SharedReport"
-      ],
+      "usedBy": ["SharedReport"],
       "isOrphan": false
     }
   },
-  "orphanedApis": [
-    "api_getEventTemplates",
-    "api_get",
-    "api_list",
-    "api_getPublicBundle"
-  ]
+  "orphanedApis": ["api_getEventTemplates", "api_get", "api_list", "api_getPublicBundle"]
 }

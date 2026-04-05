@@ -7,14 +7,14 @@
 
 ## Surface Map
 
-| # | Surface | URL | Purpose | Audience |
-|---|---------|-----|---------|----------|
-| 1 | **Landing** | `/` | Marketing + email capture | Visitors |
-| 2 | **Public Events** | `/events` | Browse upcoming events | Attendees |
-| 3 | **Admin Dashboard** | `/admin` | Event management + form data | Organizers |
-| 4 | **Display** | (Phase 2) | TV/kiosk live event view | Venue staff |
-| 5 | **Poster** | (Phase 2) | Printable poster with QR codes | Print |
-| 6 | **Shared Report** | (Phase 2) | Analytics for sponsors | Sponsors |
+| #   | Surface             | URL       | Purpose                        | Audience    |
+| --- | ------------------- | --------- | ------------------------------ | ----------- |
+| 1   | **Landing**         | `/`       | Marketing + email capture      | Visitors    |
+| 2   | **Public Events**   | `/events` | Browse upcoming events         | Attendees   |
+| 3   | **Admin Dashboard** | `/admin`  | Event management + form data   | Organizers  |
+| 4   | **Display**         | (Phase 2) | TV/kiosk live event view       | Venue staff |
+| 5   | **Poster**          | (Phase 2) | Printable poster with QR codes | Print       |
+| 6   | **Shared Report**   | (Phase 2) | Analytics for sponsors         | Sponsors    |
 
 ---
 
@@ -23,6 +23,7 @@
 **What it does:** First impression. Explains the platform and captures email signups.
 
 **User experience:**
+
 - Hero section: "Gather with your neighborhood on Chicago's Southside"
 - Email signup form with inline validation and rate limiting
 - Three feature cards: Shared Events, Local Sponsors, Community First
@@ -31,6 +32,7 @@
 **Accessible at:** `/`, `/home`, `/welcome`, `/landing`
 
 **Email capture:**
+
 - Validates email format client-side before submission
 - Server-side validation: format, max 254 chars, non-empty
 - Rate limited: 10 requests per IP per minute (in-memory sliding window)
@@ -44,12 +46,14 @@
 **What it does:** Shows upcoming events in a clean card layout.
 
 **User experience:**
+
 - Event cards with name, date, and venue
 - Cards sorted by start date (newest first)
 - Only active events shown (archived events hidden)
 - Filtered by brand (default: `root`)
 
 **Data flow:**
+
 - Page loads → JS fetches `/api/v2/events`
 - Events rendered as cards with left-border accent
 - Loading state: "Loading events..." spinner text
@@ -67,16 +71,19 @@
 **Access:** Requires authentication (Cloudflare Access JWT or Bearer token).
 
 **User experience:**
+
 - Table of all events (including archived) with ID, name, date, venue, status
 - Status badges: green "active" / gray "archived"
 - Click any event row → loads forms management panel below
 
 **Forms Management (Card 2):**
 When an event is selected, the forms panel shows:
+
 - **Form links:** 4 clickable cards (Registration, Check-in, Survey, Email List) that open the form page in a new tab
 - **Live counts:** 4 count boxes showing current registrations, check-ins, surveys, and emails for the selected event
 
 **Data flow:**
+
 - Page loads → JS fetches `/api/v2/admin/events` (with auth)
 - Event click → JS fetches 4 admin form count endpoints in parallel
 - All counts update instantly on event selection
@@ -105,20 +112,21 @@ When an event is selected, the forms panel shows:
 
 All surfaces share:
 
-| Property | Value |
-|----------|-------|
-| Font | `system-ui, -apple-system, sans-serif` |
-| Background | `#f8f9fa` |
-| Text | `#212529` |
-| Header background | `#1a1a2e` |
-| Accent | `#4361ee` |
-| Success | `#2f9e44` |
-| Error | `#e03131` |
-| Muted text | `#868e96` |
-| Card radius | `8px` (surfaces) / `12px` (forms) |
-| Card shadow | `0 1px 3px rgba(0,0,0,.08)` |
+| Property          | Value                                  |
+| ----------------- | -------------------------------------- |
+| Font              | `system-ui, -apple-system, sans-serif` |
+| Background        | `#f8f9fa`                              |
+| Text              | `#212529`                              |
+| Header background | `#1a1a2e`                              |
+| Accent            | `#4361ee`                              |
+| Success           | `#2f9e44`                              |
+| Error             | `#e03131`                              |
+| Muted text        | `#868e96`                              |
+| Card radius       | `8px` (surfaces) / `12px` (forms)      |
+| Card shadow       | `0 1px 3px rgba(0,0,0,.08)`            |
 
 **Security headers** on all HTML responses:
+
 - Content-Security-Policy with per-request nonce
 - X-Content-Type-Options: nosniff
 - X-Frame-Options: SAMEORIGIN

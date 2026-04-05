@@ -28,6 +28,7 @@
 ### 1.1 Goal
 
 Eliminate "God mode" API key risk by:
+
 - Removing any usage of Global API Keys (legacy `CF_API_KEY` or `CLOUDFLARE_API_KEY`)
 - Implementing least-privilege scoped API tokens
 - Documenting token ownership and rotation schedules
@@ -36,12 +37,14 @@ Eliminate "God mode" API key risk by:
 ### 1.2 Why This Matters
 
 **Global API Keys are dangerous because they:**
+
 - Have full account access (can modify DNS, Workers, SSL, billing, etc.)
 - Cannot be scoped to specific resources
 - Cannot be individually revoked without affecting all integrations
 - Appear in Cloudflare audit logs as "API Key" (not distinguishable)
 
 **Scoped API Tokens provide:**
+
 - Least-privilege access (only permissions needed)
 - Individual revocation capability
 - Clear audit trail (each token has a unique name)
@@ -50,12 +53,12 @@ Eliminate "God mode" API key risk by:
 
 ### 1.3 Scope
 
-| Component | Status |
-|-----------|--------|
-| CI/CD Worker deployments | Use scoped `CF_DEPLOY_TOKEN` |
-| DNS management | Use scoped `CF_DNS_TOKEN` |
-| Read-only audit/monitoring | Use scoped `CF_AUDIT_TOKEN` |
-| Legacy global API key | **PROHIBITED** |
+| Component                  | Status                       |
+| -------------------------- | ---------------------------- |
+| CI/CD Worker deployments   | Use scoped `CF_DEPLOY_TOKEN` |
+| DNS management             | Use scoped `CF_DNS_TOKEN`    |
+| Read-only audit/monitoring | Use scoped `CF_AUDIT_TOKEN`  |
+| Legacy global API key      | **PROHIBITED**               |
 
 ---
 
@@ -66,21 +69,23 @@ Eliminate "God mode" API key risk by:
 **Global API Key Usage:** ✅ NOT FOUND
 
 After comprehensive codebase review, no legacy global API key patterns were found:
+
 - `CF_API_KEY`: Not present
 - `CLOUDFLARE_API_KEY`: Not present
 - `X-Auth-Key` header usage: Not present
 
 **Current Token Usage:**
+
 - `CLOUDFLARE_API_TOKEN`: Used in stage1.yml and stage2.yml for Worker deployments
 - Token scoping: Needs verification and documentation
 
 ### 2.2 Files Using Cloudflare Credentials
 
-| File | Secret Used | Purpose |
-|------|-------------|---------|
-| `.github/workflows/stage1.yml` | `CLOUDFLARE_API_TOKEN` | Worker deployment |
-| `.github/workflows/stage2.yml` | `CLOUDFLARE_API_TOKEN` | Worker verification |
-| `.github/workflows/archive/*.yml` | `CLOUDFLARE_API_TOKEN` | Legacy (archived) |
+| File                              | Secret Used            | Purpose             |
+| --------------------------------- | ---------------------- | ------------------- |
+| `.github/workflows/stage1.yml`    | `CLOUDFLARE_API_TOKEN` | Worker deployment   |
+| `.github/workflows/stage2.yml`    | `CLOUDFLARE_API_TOKEN` | Worker verification |
+| `.github/workflows/archive/*.yml` | `CLOUDFLARE_API_TOKEN` | Legacy (archived)   |
 
 ---
 
@@ -90,11 +95,11 @@ After comprehensive codebase review, no legacy global API key patterns were foun
 
 The following scoped tokens must be created in Cloudflare:
 
-| Token Name | GitHub Secret | Purpose | Required Permissions |
-|------------|---------------|---------|---------------------|
-| **CI Deploy Token** | `CF_DEPLOY_TOKEN` | Worker/Pages deployment | Workers Scripts: Edit, Workers Routes: Edit |
-| **DNS Token** | `CF_DNS_TOKEN` | DNS record management | DNS: Edit (zone-specific) |
-| **Audit Token** | `CF_AUDIT_TOKEN` | Read-only monitoring | Account: Read, Analytics: Read, Audit Logs: Read |
+| Token Name          | GitHub Secret     | Purpose                 | Required Permissions                             |
+| ------------------- | ----------------- | ----------------------- | ------------------------------------------------ |
+| **CI Deploy Token** | `CF_DEPLOY_TOKEN` | Worker/Pages deployment | Workers Scripts: Edit, Workers Routes: Edit      |
+| **DNS Token**       | `CF_DNS_TOKEN`    | DNS record management   | DNS: Edit (zone-specific)                        |
+| **Audit Token**     | `CF_AUDIT_TOKEN`  | Read-only monitoring    | Account: Read, Analytics: Read, Audit Logs: Read |
 
 ### 3.2 Detailed Permission Matrix
 
@@ -102,17 +107,19 @@ The following scoped tokens must be created in Cloudflare:
 
 **Purpose:** CI/CD pipeline Worker deployments only
 
-| Permission | Level | Scope | Justification |
-|------------|-------|-------|---------------|
-| Workers Scripts | Edit | Account | Deploy Worker code |
-| Workers Routes | Edit | Zone: eventangle.com | Configure Worker routes |
-| Workers KV Storage | Edit | Account | (If using KV) |
-| Account Settings | Read | Account | Verify account ID |
+| Permission         | Level | Scope                | Justification           |
+| ------------------ | ----- | -------------------- | ----------------------- |
+| Workers Scripts    | Edit  | Account              | Deploy Worker code      |
+| Workers Routes     | Edit  | Zone: eventangle.com | Configure Worker routes |
+| Workers KV Storage | Edit  | Account              | (If using KV)           |
+| Account Settings   | Read  | Account              | Verify account ID       |
 
 **Zone Restrictions:**
+
 - Zone: `eventangle.com` (and subdomains)
 
 **IP Restrictions (Optional):**
+
 - GitHub Actions IP ranges (see [GitHub Meta API](https://api.github.com/meta))
 
 **Token TTL:** No expiration (rotated manually per schedule)
@@ -123,14 +130,16 @@ The following scoped tokens must be created in Cloudflare:
 
 **Purpose:** DNS record management for infrastructure changes
 
-| Permission | Level | Scope | Justification |
-|------------|-------|-------|---------------|
-| DNS | Edit | Zone: eventangle.com | Manage DNS records |
+| Permission | Level | Scope                | Justification      |
+| ---------- | ----- | -------------------- | ------------------ |
+| DNS        | Edit  | Zone: eventangle.com | Manage DNS records |
 
 **Zone Restrictions:**
+
 - Zone: `eventangle.com` only
 
 **Use Cases:**
+
 - Updating A/AAAA records
 - Managing CNAME records
 - TXT record updates (SPF, DKIM, etc.)
@@ -145,14 +154,14 @@ The following scoped tokens must be created in Cloudflare:
 
 **Purpose:** Read-only monitoring, analytics, and compliance reporting
 
-| Permission | Level | Scope | Justification |
-|------------|-------|-------|---------------|
-| Account Settings | Read | Account | View account configuration |
-| Analytics | Read | Account | Access analytics data |
-| Audit Logs | Read | Account | View audit trail |
-| Zone | Read | All zones | View zone configuration |
-| DNS | Read | All zones | View DNS records |
-| Workers Scripts | Read | Account | View deployed Workers |
+| Permission       | Level | Scope     | Justification              |
+| ---------------- | ----- | --------- | -------------------------- |
+| Account Settings | Read  | Account   | View account configuration |
+| Analytics        | Read  | Account   | Access analytics data      |
+| Audit Logs       | Read  | Account   | View audit trail           |
+| Zone             | Read  | All zones | View zone configuration    |
+| DNS              | Read  | All zones | View DNS records           |
+| Workers Scripts  | Read  | Account   | View deployed Workers      |
 
 **Zone Restrictions:** None (read-only across all zones)
 
@@ -164,16 +173,16 @@ The following scoped tokens must be created in Cloudflare:
 
 ### 3.3 Token Comparison Summary
 
-| Capability | Deploy Token | DNS Token | Audit Token | Global Key |
-|------------|--------------|-----------|-------------|------------|
-| Deploy Workers | ✅ | ❌ | ❌ | ✅ |
-| Edit DNS | ❌ | ✅ | ❌ | ✅ |
-| View Analytics | ❌ | ❌ | ✅ | ✅ |
-| Manage SSL/TLS | ❌ | ❌ | ❌ | ✅ |
-| Manage Firewall | ❌ | ❌ | ❌ | ✅ |
-| Access Billing | ❌ | ❌ | ❌ | ✅ |
-| Add Members | ❌ | ❌ | ❌ | ✅ |
-| **Blast Radius** | Worker code | DNS only | Read-only | **FULL ACCOUNT** |
+| Capability       | Deploy Token | DNS Token | Audit Token | Global Key       |
+| ---------------- | ------------ | --------- | ----------- | ---------------- |
+| Deploy Workers   | ✅           | ❌        | ❌          | ✅               |
+| Edit DNS         | ❌           | ✅        | ❌          | ✅               |
+| View Analytics   | ❌           | ❌        | ✅          | ✅               |
+| Manage SSL/TLS   | ❌           | ❌        | ❌          | ✅               |
+| Manage Firewall  | ❌           | ❌        | ❌          | ✅               |
+| Access Billing   | ❌           | ❌        | ❌          | ✅               |
+| Add Members      | ❌           | ❌        | ❌          | ✅               |
+| **Blast Radius** | Worker code  | DNS only  | Read-only   | **FULL ACCOUNT** |
 
 ---
 
@@ -186,31 +195,32 @@ The following scoped tokens must be created in Cloudflare:
 ```
 
 **Components:**
+
 - `PROVIDER`: Service provider (CF, GCP, AWS, etc.)
 - `PURPOSE`: What the secret does (DEPLOY, DNS, AUDIT, etc.)
 - `SCOPE`: Optional environment or resource scope
 
 ### 4.2 Cloudflare Token Naming
 
-| Current Name | New Name (Recommended) | Status |
-|--------------|------------------------|--------|
-| `CLOUDFLARE_API_TOKEN` | `CF_DEPLOY_TOKEN` | Migrate |
-| `CLOUDFLARE_ACCOUNT_ID` | `CF_ACCOUNT_ID` | Keep (shorter) |
-| (new) | `CF_DNS_TOKEN` | Create if needed |
-| (new) | `CF_AUDIT_TOKEN` | Create if needed |
+| Current Name            | New Name (Recommended) | Status           |
+| ----------------------- | ---------------------- | ---------------- |
+| `CLOUDFLARE_API_TOKEN`  | `CF_DEPLOY_TOKEN`      | Migrate          |
+| `CLOUDFLARE_ACCOUNT_ID` | `CF_ACCOUNT_ID`        | Keep (shorter)   |
+| (new)                   | `CF_DNS_TOKEN`         | Create if needed |
+| (new)                   | `CF_AUDIT_TOKEN`       | Create if needed |
 
 ### 4.3 Full Secret Inventory
 
-| Secret Name | Provider | Purpose | Required | Stage |
-|-------------|----------|---------|----------|-------|
-| `CF_DEPLOY_TOKEN` | Cloudflare | Worker deployment | Yes | Stage-1 |
-| `CF_ACCOUNT_ID` | Cloudflare | Account identifier | Yes | Stage-1 |
-| `CF_DNS_TOKEN` | Cloudflare | DNS management | No* | Manual |
-| `CF_AUDIT_TOKEN` | Cloudflare | Read-only monitoring | No* | Manual |
-| `CF_ACCESS_CLIENT_ID` | Cloudflare | Access service auth | No | Stage-2 |
-| `CF_ACCESS_CLIENT_SECRET` | Cloudflare | Access service auth | No | Stage-2 |
+| Secret Name               | Provider   | Purpose              | Required | Stage   |
+| ------------------------- | ---------- | -------------------- | -------- | ------- |
+| `CF_DEPLOY_TOKEN`         | Cloudflare | Worker deployment    | Yes      | Stage-1 |
+| `CF_ACCOUNT_ID`           | Cloudflare | Account identifier   | Yes      | Stage-1 |
+| `CF_DNS_TOKEN`            | Cloudflare | DNS management       | No\*     | Manual  |
+| `CF_AUDIT_TOKEN`          | Cloudflare | Read-only monitoring | No\*     | Manual  |
+| `CF_ACCESS_CLIENT_ID`     | Cloudflare | Access service auth  | No       | Stage-2 |
+| `CF_ACCESS_CLIENT_SECRET` | Cloudflare | Access service auth  | No       | Stage-2 |
 
-*Only add to GitHub Secrets if CI/CD automation requires the token.
+\*Only add to GitHub Secrets if CI/CD automation requires the token.
 
 ### 4.4 Naming Rules
 
@@ -221,11 +231,13 @@ The following scoped tokens must be created in Cloudflare:
 5. **Avoid environment suffixes** in secret names (use GitHub Environments instead)
 
 **Good Examples:**
+
 - `CF_DEPLOY_TOKEN` ✅
 - `GCP_SA_PRIVATE_KEY` ✅
 - `ADMIN_KEY_ROOT` ✅
 
 **Bad Examples:**
+
 - `cloudflare-api-token` ❌ (wrong case, hyphens)
 - `TOKEN` ❌ (too generic)
 - `CF_DEPLOY_TOKEN_PROD` ❌ (use environments instead)
@@ -268,6 +280,7 @@ Permissions:
 #### Step 4: Client IP Filtering (Optional)
 
 Add GitHub Actions IP ranges for additional security:
+
 ```
 # Fetch current GitHub Actions IPs
 curl -s https://api.github.com/meta | jq -r '.actions[]'
@@ -324,19 +337,21 @@ Permissions:
 
 ### 6.1 Rotation Schedule
 
-| Token | Rotation Period | Trigger | Owner |
-|-------|-----------------|---------|-------|
-| `CF_DEPLOY_TOKEN` | 90 days | Manual + Compromise | DevOps Lead |
-| `CF_DNS_TOKEN` | 180 days | Manual + Compromise | Infrastructure Lead |
-| `CF_AUDIT_TOKEN` | 180 days | Manual + Compromise | Security Lead |
+| Token             | Rotation Period | Trigger             | Owner               |
+| ----------------- | --------------- | ------------------- | ------------------- |
+| `CF_DEPLOY_TOKEN` | 90 days         | Manual + Compromise | DevOps Lead         |
+| `CF_DNS_TOKEN`    | 180 days        | Manual + Compromise | Infrastructure Lead |
+| `CF_AUDIT_TOKEN`  | 180 days        | Manual + Compromise | Security Lead       |
 
 ### 6.2 Rotation Triggers
 
 **Scheduled Rotation:**
+
 - Follow the rotation period in the table above
 - Set calendar reminders for rotation dates
 
 **Emergency Rotation (Immediate):**
+
 - Token exposure in logs or commits
 - Team member departure with token access
 - Suspicious API activity in audit logs
@@ -379,9 +394,9 @@ CLOUDFLARE_API_TOKEN=<new-token> wrangler deploy --env staging --dry-run
 
 Update the rotation log:
 
-| Token | Previous Rotation | Current Rotation | Next Due | Rotated By |
-|-------|-------------------|------------------|----------|------------|
-| `CF_DEPLOY_TOKEN` | 2025-09-20 | 2025-12-20 | 2026-03-20 | @username |
+| Token             | Previous Rotation | Current Rotation | Next Due   | Rotated By |
+| ----------------- | ----------------- | ---------------- | ---------- | ---------- |
+| `CF_DEPLOY_TOKEN` | 2025-09-20        | 2025-12-20       | 2026-03-20 | @username  |
 
 ### 6.4 Rotation Calendar
 
@@ -419,12 +434,14 @@ Description:
 If renaming secrets, update the workflow files:
 
 **Before:**
+
 ```yaml
 env:
   CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
 ```
 
 **After:**
+
 ```yaml
 env:
   CLOUDFLARE_API_TOKEN: ${{ secrets.CF_DEPLOY_TOKEN }}
@@ -435,6 +452,7 @@ env:
 ### 7.3 Backward Compatibility
 
 During migration, you can keep both secrets pointing to the same token:
+
 - `CLOUDFLARE_API_TOKEN` → Legacy workflows
 - `CF_DEPLOY_TOKEN` → New standard name
 
@@ -446,15 +464,15 @@ After all workflows are updated, remove the legacy secret.
 
 ### 8.1 Acceptance Criteria
 
-| Criterion | How to Verify | Status |
-|-----------|---------------|--------|
-| No global API key usage | Grep codebase for `CF_API_KEY`, `X-Auth-Key` | [ ] Pass |
-| Scoped deploy token created | Cloudflare → API Tokens shows token with correct permissions | [ ] Pass |
-| Token stored in GitHub Secrets | Repository → Settings → Secrets shows `CF_DEPLOY_TOKEN` | [ ] Pass |
-| Workflows use scoped token | Grep shows `secrets.CF_DEPLOY_TOKEN` or `secrets.CLOUDFLARE_API_TOKEN` | [ ] Pass |
-| Token permissions documented | This runbook has complete permission matrix | [ ] Pass |
-| Token ownership documented | Rotation schedule has owner column | [ ] Pass |
-| Rotation plan documented | Section 6 complete | [ ] Pass |
+| Criterion                      | How to Verify                                                          | Status   |
+| ------------------------------ | ---------------------------------------------------------------------- | -------- |
+| No global API key usage        | Grep codebase for `CF_API_KEY`, `X-Auth-Key`                           | [ ] Pass |
+| Scoped deploy token created    | Cloudflare → API Tokens shows token with correct permissions           | [ ] Pass |
+| Token stored in GitHub Secrets | Repository → Settings → Secrets shows `CF_DEPLOY_TOKEN`                | [ ] Pass |
+| Workflows use scoped token     | Grep shows `secrets.CF_DEPLOY_TOKEN` or `secrets.CLOUDFLARE_API_TOKEN` | [ ] Pass |
+| Token permissions documented   | This runbook has complete permission matrix                            | [ ] Pass |
+| Token ownership documented     | Rotation schedule has owner column                                     | [ ] Pass |
+| Rotation plan documented       | Section 6 complete                                                     | [ ] Pass |
 
 ### 8.2 Security Verification
 
@@ -495,16 +513,17 @@ grep -r "CF_API_KEY\|CLOUDFLARE_API_KEY\|X-Auth-Key" \
 
 ### 9.1 Token Not Working
 
-| Symptom | Cause | Solution |
-|---------|-------|----------|
-| `403 Forbidden` | Missing permissions | Add required permissions in Cloudflare |
-| `Invalid token` | Token typo or expired | Regenerate and update secret |
-| `Zone not found` | Zone restrictions wrong | Update zone resources in token |
-| `Account mismatch` | Wrong account ID | Verify `CF_ACCOUNT_ID` matches token's account |
+| Symptom            | Cause                   | Solution                                       |
+| ------------------ | ----------------------- | ---------------------------------------------- |
+| `403 Forbidden`    | Missing permissions     | Add required permissions in Cloudflare         |
+| `Invalid token`    | Token typo or expired   | Regenerate and update secret                   |
+| `Zone not found`   | Zone restrictions wrong | Update zone resources in token                 |
+| `Account mismatch` | Wrong account ID        | Verify `CF_ACCOUNT_ID` matches token's account |
 
 ### 9.2 Workflow Fails After Migration
 
 1. **Check secret name matches workflow:**
+
    ```bash
    grep -n "secrets\." .github/workflows/stage1.yml | grep -i cloud
    ```
@@ -555,18 +574,18 @@ gh secret list
 
 ### Cloudflare Permission Levels
 
-| Level | Description |
-|-------|-------------|
-| Read | View resource configuration |
-| Edit | Create, update, delete resources |
+| Level | Description                       |
+| ----- | --------------------------------- |
+| Read  | View resource configuration       |
+| Edit  | Create, update, delete resources  |
 | Purge | Clear cache (specific to caching) |
 
 ### Zone vs Account Permissions
 
-| Scope | Applies To |
-|-------|------------|
+| Scope   | Applies To               |
+| ------- | ------------------------ |
 | Account | All zones in the account |
-| Zone | Specific zone(s) only |
+| Zone    | Specific zone(s) only    |
 
 ---
 
@@ -575,6 +594,7 @@ gh secret list
 ### View Token Usage
 
 In Cloudflare dashboard:
+
 1. Account → Audit Log
 2. Filter by "Actor Type: API Token"
 3. Search for your token name
@@ -591,8 +611,8 @@ curl -X GET "https://api.cloudflare.com/client/v4/accounts/{account_id}/audit_lo
 
 ## Document History
 
-| Date | Author | Changes |
-|------|--------|---------|
+| Date       | Author      | Changes                   |
+| ---------- | ----------- | ------------------------- |
 | 2025-12-20 | Claude Code | Initial runbook (SEC-1.2) |
 
 ---

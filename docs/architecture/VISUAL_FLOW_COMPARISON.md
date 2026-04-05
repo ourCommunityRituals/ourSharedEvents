@@ -33,7 +33,6 @@
 **Total Time if Smoke Fails:** 21 minutes (all tests run)
 **Feedback:** "Some tests failed" (which stage?)
 
-
 ## NEW: Sequential Progressive Testing (Efficient)
 
 ```
@@ -98,37 +97,40 @@
 ```
 
 **Scenario A - API Fails:**
+
 - Time: 2 minutes (stopped at Gate 1)
 - Savings: 19 minutes saved!
 - Feedback: "API tests failed at stage 1"
 
 **Scenario B - Smoke Fails:**
+
 - Time: 5 minutes (stopped at Gate 2)
 - Savings: 16 minutes saved!
 - Feedback: "Smoke tests failed at stage 2"
 
 **Scenario C - All Pass:**
+
 - Time: 21 minutes (same as before)
 - Savings: 0 minutes (but all tests passed!)
 - Feedback: "All sequential tests passed"
 
-
 ## Time Savings Analysis
 
 ### Old Parallel Approach
-| Scenario | Tests Run | Time | Waste |
-|----------|-----------|------|-------|
-| API Fail | All (parallel) | 21 min | ❌ 19 min wasted |
+
+| Scenario   | Tests Run      | Time   | Waste            |
+| ---------- | -------------- | ------ | ---------------- |
+| API Fail   | All (parallel) | 21 min | ❌ 19 min wasted |
 | Smoke Fail | All (parallel) | 21 min | ❌ 16 min wasted |
-| All Pass | All (parallel) | 21 min | ✅ 0 min wasted |
+| All Pass   | All (parallel) | 21 min | ✅ 0 min wasted  |
 
 ### New Sequential Approach
-| Scenario | Tests Run | Time | Waste |
-|----------|-----------|------|-------|
-| API Fail | API only | 2 min | ✅ 0 min wasted |
-| Smoke Fail | API + Smoke | 5 min | ✅ 0 min wasted |
-| All Pass | All (sequential) | 21 min | ✅ 0 min wasted |
 
+| Scenario   | Tests Run        | Time   | Waste           |
+| ---------- | ---------------- | ------ | --------------- |
+| API Fail   | API only         | 2 min  | ✅ 0 min wasted |
+| Smoke Fail | API + Smoke      | 5 min  | ✅ 0 min wasted |
+| All Pass   | All (sequential) | 21 min | ✅ 0 min wasted |
 
 ## Deployment Flow (No Manual clasp!)
 
@@ -190,6 +192,7 @@ Result:
 ```
 
 **Do NOT change to:**
+
 ```
 ❌ Execute as: User accessing the web app
    └─ This WOULD require Google sign-in!
@@ -198,11 +201,13 @@ Result:
 ## Summary
 
 **Before:**
+
 - Manual `clasp push` commands
 - Parallel testing (waste time on failures)
 - Unclear which stage failed
 
 **After:**
+
 - Automated deployment via GitHub Actions
 - Sequential progressive testing (fail fast)
 - Clear failure stage identification
