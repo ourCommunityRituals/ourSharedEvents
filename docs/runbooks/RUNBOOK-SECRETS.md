@@ -7,13 +7,13 @@
 
 ## Quick Reference
 
-| Action | Command |
-|--------|---------|
-| Verify all secrets | `node scripts/verify-secrets.js` |
-| Verify Stage-1 secrets | `node scripts/verify-secrets.js --stage1` |
-| Verify Stage-2 secrets | `node scripts/verify-secrets.js --stage2` |
-| List Worker secrets | `wrangler secret list --env staging` |
-| Check backend health | `curl -s https://stg.eventangle.com/api/health/backend \| jq` |
+| Action                 | Command                                                       |
+| ---------------------- | ------------------------------------------------------------- |
+| Verify all secrets     | `node scripts/verify-secrets.js`                              |
+| Verify Stage-1 secrets | `node scripts/verify-secrets.js --stage1`                     |
+| Verify Stage-2 secrets | `node scripts/verify-secrets.js --stage2`                     |
+| List Worker secrets    | `wrangler secret list --env staging`                          |
+| Check backend health   | `curl -s https://stg.eventangle.com/api/health/backend \| jq` |
 
 ---
 
@@ -21,26 +21,26 @@
 
 ### GitHub Actions Secrets
 
-| Secret | Purpose | Rotation Period |
-|--------|---------|-----------------|
-| `GOOGLE_CLIENT_EMAIL` | Service account email | 90 days |
-| `GOOGLE_PRIVATE_KEY` | Service account private key | 90 days |
-| `STAGING_SHEETS_SPREADSHEET_ID` | Staging spreadsheet | Static |
-| `CLOUDFLARE_API_TOKEN` | Worker deployment | As needed |
-| `CLOUDFLARE_ACCOUNT_ID` | Account identifier | Static |
-| `ADMIN_KEY_ROOT` | Root admin key | 90 days |
-| `ADMIN_KEY_ABC` | ABC admin key | 90 days |
-| `ADMIN_KEY_CBC` | CBC admin key | 90 days |
-| `ADMIN_KEY_CBL` | CBL admin key | 90 days |
+| Secret                          | Purpose                     | Rotation Period |
+| ------------------------------- | --------------------------- | --------------- |
+| `GOOGLE_CLIENT_EMAIL`           | Service account email       | 90 days         |
+| `GOOGLE_PRIVATE_KEY`            | Service account private key | 90 days         |
+| `STAGING_SHEETS_SPREADSHEET_ID` | Staging spreadsheet         | Static          |
+| `CLOUDFLARE_API_TOKEN`          | Worker deployment           | As needed       |
+| `CLOUDFLARE_ACCOUNT_ID`         | Account identifier          | Static          |
+| `ADMIN_KEY_ROOT`                | Root admin key              | 90 days         |
+| `ADMIN_KEY_ABC`                 | ABC admin key               | 90 days         |
+| `ADMIN_KEY_CBC`                 | CBC admin key               | 90 days         |
+| `ADMIN_KEY_CBL`                 | CBL admin key               | 90 days         |
 
 ### Cloudflare Worker Secrets
 
-| Secret | Purpose | Rotation Period |
-|--------|---------|-----------------|
-| `GOOGLE_SA_CLIENT_EMAIL` | Service account email | 90 days |
-| `GOOGLE_SA_PRIVATE_KEY_PEM` | Private key (PEM) | 90 days |
-| `SHEETS_SPREADSHEET_ID` | Database spreadsheet | Static |
-| `ADMIN_TOKEN` | Admin API authentication | 90 days |
+| Secret                      | Purpose                  | Rotation Period |
+| --------------------------- | ------------------------ | --------------- |
+| `GOOGLE_SA_CLIENT_EMAIL`    | Service account email    | 90 days         |
+| `GOOGLE_SA_PRIVATE_KEY_PEM` | Private key (PEM)        | 90 days         |
+| `SHEETS_SPREADSHEET_ID`     | Database spreadsheet     | Static          |
+| `ADMIN_TOKEN`               | Admin API authentication | 90 days         |
 
 ---
 
@@ -220,6 +220,7 @@ curl -s https://www.eventangle.com/api/health/backend | jq
 ```
 
 **Expected Response:**
+
 ```json
 {
   "ok": true,
@@ -263,6 +264,7 @@ wrangler secret list --env production
 
 **Cause:** Missing service account credentials
 **Fix:**
+
 ```bash
 wrangler secret put GOOGLE_SA_CLIENT_EMAIL --env <env>
 wrangler secret put GOOGLE_SA_PRIVATE_KEY_PEM --env <env>
@@ -272,6 +274,7 @@ wrangler secret put GOOGLE_SA_PRIVATE_KEY_PEM --env <env>
 
 **Cause:** Invalid PEM format or missing line breaks
 **Fix:** Ensure the key includes:
+
 ```
 -----BEGIN PRIVATE KEY-----
 <base64 content>
@@ -287,6 +290,7 @@ wrangler secret put GOOGLE_SA_PRIVATE_KEY_PEM --env <env>
 
 **Cause:** Missing spreadsheet ID secret
 **Fix:**
+
 ```bash
 wrangler secret put SHEETS_SPREADSHEET_ID --env <env>
 ```

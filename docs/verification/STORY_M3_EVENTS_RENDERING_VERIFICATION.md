@@ -18,35 +18,36 @@ The `/events` page HTML loads successfully (HTTP 200), but API calls via POST to
 
 ### 1. GET /events → HTML Page Load
 
-| Test | Result | Details |
-|------|--------|---------|
-| `GET https://stg.eventangle.com/events` | ✅ **200 OK** | Full HTML template loads (5800+ lines) |
-| HTML contains error handling | ✅ | `StateRenderer`, `classifyError()`, `showTemporaryIssue()` present |
-| CSS/JS framework intact | ✅ | All styles, SDK code present |
+| Test                                    | Result        | Details                                                            |
+| --------------------------------------- | ------------- | ------------------------------------------------------------------ |
+| `GET https://stg.eventangle.com/events` | ✅ **200 OK** | Full HTML template loads (5800+ lines)                             |
+| HTML contains error handling            | ✅            | `StateRenderer`, `classifyError()`, `showTemporaryIssue()` present |
+| CSS/JS framework intact                 | ✅            | All styles, SDK code present                                       |
 
 ### 2. GET /ping → Worker Health
 
-| Test | Result | Details |
-|------|--------|---------|
-| `GET https://stg.eventangle.com/ping` | ✅ **200 OK** | `{"status":"ok"}` |
-| Response is JSON | ✅ | Proper content-type |
+| Test                                  | Result        | Details             |
+| ------------------------------------- | ------------- | ------------------- |
+| `GET https://stg.eventangle.com/ping` | ✅ **200 OK** | `{"status":"ok"}`   |
+| Response is JSON                      | ✅            | Proper content-type |
 
 ### 3. GET /status → GAS Health
 
-| Test | Result | Details |
-|------|--------|---------|
+| Test                                    | Result                  | Details                                       |
+| --------------------------------------- | ----------------------- | --------------------------------------------- |
 | `GET https://stg.eventangle.com/status` | ❌ **Permission Error** | GAS returns "You do not have permission" HTML |
-| HTTP Status | 200 | But body is HTML error, not JSON |
+| HTTP Status                             | 200                     | But body is HTML error, not JSON              |
 
 ### 4. POST /api/rpc → API Calls
 
-| Test | Result | Details |
-|------|--------|---------|
-| `POST /api/rpc` with `api_list` | ❌ **502** | `GAS_UPSTREAM_NON_JSON` error |
-| `POST /api/rpc` with `api_getPublicBundle` | ❌ **502** | `GAS_UPSTREAM_NON_JSON` error |
-| Error response structure | ✅ | Properly structured JSON with `corrId` |
+| Test                                       | Result     | Details                                |
+| ------------------------------------------ | ---------- | -------------------------------------- |
+| `POST /api/rpc` with `api_list`            | ❌ **502** | `GAS_UPSTREAM_NON_JSON` error          |
+| `POST /api/rpc` with `api_getPublicBundle` | ❌ **502** | `GAS_UPSTREAM_NON_JSON` error          |
+| Error response structure                   | ✅         | Properly structured JSON with `corrId` |
 
 **Actual Error Response:**
+
 ```json
 {
   "ok": false,
@@ -60,11 +61,11 @@ The `/events` page HTML loads successfully (HTTP 200), but API calls via POST to
 
 ### 5. Direct GAS Deployment Testing
 
-| Test | Result | Details |
-|------|--------|---------|
-| Staging GAS GET (with redirects) | ✅ **200 OK** | `{"status":"ok"}` |
-| Staging GAS POST (with redirects) | ❌ **Permission Error** | "You do not have permission" |
-| Production GAS GET (with redirects) | ✅ **200 OK** | `{"status":"ok"}` |
+| Test                                 | Result                  | Details                      |
+| ------------------------------------ | ----------------------- | ---------------------------- |
+| Staging GAS GET (with redirects)     | ✅ **200 OK**           | `{"status":"ok"}`            |
+| Staging GAS POST (with redirects)    | ❌ **Permission Error** | "You do not have permission" |
+| Production GAS GET (with redirects)  | ✅ **200 OK**           | `{"status":"ok"}`            |
 | Production GAS POST (with redirects) | ❌ **Permission Error** | "You do not have permission" |
 
 **Root Cause Confirmed:** GAS deployments reject POST requests with permission errors.
@@ -145,10 +146,10 @@ The Google Apps Script deployment is configured incorrectly for POST requests. T
 
 ### Current Deployment IDs
 
-| Environment | Deployment ID |
-|-------------|---------------|
-| Staging | `AKfycbwFneYCpkio7wCn7y08eDUb2PRCPc2Tdtbv20L4AbEHvuCvoqY9ks7-ONL0pzPPw4Hm` |
-| Production | `AKfycbz-RVTCdsQsI913wN3TkPtUP8F8EhSjyFAlWIpLVRgzV6WJ-isDyG-ntaV1VjBNaWZLdw` |
+| Environment | Deployment ID                                                                |
+| ----------- | ---------------------------------------------------------------------------- |
+| Staging     | `AKfycbwFneYCpkio7wCn7y08eDUb2PRCPc2Tdtbv20L4AbEHvuCvoqY9ks7-ONL0pzPPw4Hm`   |
+| Production  | `AKfycbz-RVTCdsQsI913wN3TkPtUP8F8EhSjyFAlWIpLVRgzV6WJ-isDyG-ntaV1VjBNaWZLdw` |
 
 ---
 
@@ -171,6 +172,7 @@ A new workflow has been created to automate this fix:
    - Verify end-to-end functionality
 
 **Required Secrets:**
+
 - `OAUTH_CREDENTIALS` - Clasp OAuth credentials (from `~/.clasprc.json`)
 - `CLOUDFLARE_API_TOKEN` - Cloudflare API token
 - `CLOUDFLARE_ACCOUNT_ID` - Cloudflare account ID
@@ -207,19 +209,20 @@ Run locally with clasp authenticated:
 
 ## Exit Criteria Status
 
-| Criterion | Status | Notes |
-|-----------|--------|-------|
-| Happy path: `/events` renders | ⚠️ **Partial** | HTML loads but API fails |
-| Network tab shows clean JSON | ❌ **Failed** | Shows 502 error responses |
-| No hidden 503 behavior | ✅ **Pass** | Errors are explicit 502 with details |
-| Broken backend path: controlled error | ✅ **Pass** | Worker returns structured errors |
-| No crashes, no unhandled exceptions | ✅ **Pass** | Error handling is robust |
+| Criterion                             | Status         | Notes                                |
+| ------------------------------------- | -------------- | ------------------------------------ |
+| Happy path: `/events` renders         | ⚠️ **Partial** | HTML loads but API fails             |
+| Network tab shows clean JSON          | ❌ **Failed**  | Shows 502 error responses            |
+| No hidden 503 behavior                | ✅ **Pass**    | Errors are explicit 502 with details |
+| Broken backend path: controlled error | ✅ **Pass**    | Worker returns structured errors     |
+| No crashes, no unhandled exceptions   | ✅ **Pass**    | Error handling is robust             |
 
 ---
 
 ## Recommendation
 
 **Immediate Action Required:** Redeploy both staging and production GAS with correct permissions:
+
 - Execute as: Me
 - Who has access: Anyone (anonymous)
 

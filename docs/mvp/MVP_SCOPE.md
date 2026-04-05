@@ -16,13 +16,13 @@ This document is the **single source of truth** for MVP scope. Do not expand sco
 
 ## MVP Surfaces (5 Total - LOCKED)
 
-| # | Surface | File | Route | Purpose |
-|---|---------|------|-------|---------|
-| 1 | **Admin** | `Admin.html` | `?page=admin` | Event management control room |
-| 2 | **Public** | `Public.html` | `?page=public` | Mobile-first public event page |
-| 3 | **Display** | `Display.html` | `?page=display` | TV/kiosk live event display |
-| 4 | **Poster** | `Poster.html` | `?page=poster` | Printable poster with QR codes |
-| 5 | **SharedReport** | `SharedReport.html` | `?page=report` | Shareable analytics dashboard |
+| #   | Surface          | File                | Route           | Purpose                        |
+| --- | ---------------- | ------------------- | --------------- | ------------------------------ |
+| 1   | **Admin**        | `Admin.html`        | `?page=admin`   | Event management control room  |
+| 2   | **Public**       | `Public.html`       | `?page=public`  | Mobile-first public event page |
+| 3   | **Display**      | `Display.html`      | `?page=display` | TV/kiosk live event display    |
+| 4   | **Poster**       | `Poster.html`       | `?page=poster`  | Printable poster with QR codes |
+| 5   | **SharedReport** | `SharedReport.html` | `?page=report`  | Shareable analytics dashboard  |
 
 **LOCKED**: No new surfaces may be added to MVP. All other surfaces are v2+.
 
@@ -31,12 +31,14 @@ This document is the **single source of truth** for MVP scope. Do not expand sco
 ## QR Code Rules (LOCKED)
 
 ### Backend: Unlimited QR Flows
+
 - The backend may define and generate **unlimited QR flow types**
 - QR flows are defined in `Code.gs` via `generateQRDataUri_()`
 - New QR types can be added to backend without poster changes
 - Current MVP flows: `public`, `signup`
 
 ### Poster: Maximum 3 Display QRs
+
 - `Poster.html` renders **exactly 3 QR display slots** (no more, no less)
 - If fewer than 3 QR codes exist, empty slots show placeholder message
 - If more than 3 QR codes exist, only first 3 are rendered (extras hidden)
@@ -55,7 +57,9 @@ Poster:  Only renders 3 slots MAX
 ```
 
 ### QR Flow Priority (for Poster)
+
 When backend provides >3 QR flows, poster renders in this priority:
+
 1. **Signup QR** - Primary CTA (if `event.qr.signup` exists)
 2. **Public QR** - Event page (if `event.qr.public` exists)
 3. **Display QR** - TV display URL (if `event.qr.display` exists)
@@ -65,6 +69,7 @@ When backend provides >3 QR flows, poster renders in this priority:
 ## Events-Only Scope (LOCKED)
 
 ### IN SCOPE (MVP)
+
 - Single event CRUD (create, read, update, delete)
 - Event templates (predefined configurations)
 - Basic sponsor management (via Admin)
@@ -72,6 +77,7 @@ When backend provides >3 QR flows, poster renders in this priority:
 - Shared reports (for sponsor/organizer visibility)
 
 ### OUT OF SCOPE (v2+)
+
 - Sponsor self-service dashboards
 - Advanced analytics UI (exports, filtering, custom date ranges)
 - Portfolio/multi-event dashboards
@@ -83,16 +89,16 @@ When backend provides >3 QR flows, poster renders in this priority:
 
 ## API Contract (Core 8 Endpoints)
 
-| Endpoint | Purpose | Surface |
-|----------|---------|---------|
-| `api_getEventTemplates` | List event templates | Admin |
-| `api_saveEvent` | Create/update event | Admin |
-| `api_get` | Get single event | All |
-| `api_list` | List all events | Admin |
-| `api_getPublicBundle` | Public page data | Public |
-| `api_getDisplayBundle` | TV display data | Display |
-| `api_getPosterBundle` | Poster print data | Poster |
-| `api_getSharedAnalytics` | Analytics summary | SharedReport |
+| Endpoint                 | Purpose              | Surface      |
+| ------------------------ | -------------------- | ------------ |
+| `api_getEventTemplates`  | List event templates | Admin        |
+| `api_saveEvent`          | Create/update event  | Admin        |
+| `api_get`                | Get single event     | All          |
+| `api_list`               | List all events      | Admin        |
+| `api_getPublicBundle`    | Public page data     | Public       |
+| `api_getDisplayBundle`   | TV display data      | Display      |
+| `api_getPosterBundle`    | Poster print data    | Poster       |
+| `api_getSharedAnalytics` | Analytics summary    | SharedReport |
 
 ---
 
@@ -151,4 +157,4 @@ Guard Check: npm run check:guards
 
 ---
 
-*MVP Scope Lock v1.0 - Week 1 Baseline*
+_MVP Scope Lock v1.0 - Week 1 Baseline_

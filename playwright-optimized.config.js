@@ -14,13 +14,13 @@
  */
 
 const { defineConfig, devices } = require('@playwright/test');
-const { getCurrentEnvironment } = require('./tests/config/environments');
+const { getCurrentEnvironment } = require('./archive/legacy-tests/tests/config/environments');
 
 // Get the current environment configuration
 const env = getCurrentEnvironment();
 
 module.exports = defineConfig({
-  testDir: './tests/e2e',
+  testDir: './archive/legacy-tests/tests/e2e',
   fullyParallel: false, // Run smoke tests sequentially for fail-fast
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0, // Reduced retries for faster feedback
@@ -29,7 +29,7 @@ module.exports = defineConfig({
   // Timeouts optimized for smoke tests
   timeout: 30000, // 30s per test (smoke tests should be fast)
   expect: {
-    timeout: 5000 // 5s for assertions
+    timeout: 5000, // 5s for assertions
   },
 
   reporter: [
@@ -37,7 +37,7 @@ module.exports = defineConfig({
     ['json', { outputFile: '.test-results/playwright-results.json' }],
     ['list'],
     // Add JUnit for CI/CD integration
-    ['junit', { outputFile: '.test-results/junit-results.xml' }]
+    ['junit', { outputFile: '.test-results/junit-results.xml' }],
   ],
 
   use: {
@@ -48,18 +48,19 @@ module.exports = defineConfig({
 
     // Extra HTTP headers
     extraHTTPHeaders: {
-      'Accept': 'text/html,application/json',
+      Accept: 'text/html,application/json',
     },
 
     // Realistic user agent (avoid bot detection)
-    userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+    userAgent:
+      'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
 
     // Ignore HTTPS errors for QA/staging
     ignoreHTTPSErrors: true,
   },
 
   // Global setup - print environment info before tests
-  globalSetup: require.resolve('./tests/config/global-setup.js'),
+  globalSetup: require.resolve('./archive/legacy-tests/tests/config/global-setup.js'),
 
   // OPTIMIZED: Test projects for cost-effective testing
   projects: [

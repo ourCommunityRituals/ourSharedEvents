@@ -1,342 +1,315 @@
-# MVP Architecture
+# OurSharedEvents — Architecture
 
-**Last Updated:** 2025-12-13
-**Status:** v2.0 - Worker-Only Architecture (GAS Retired)
-**Story:** 5.3 - Decommission Apps Script Project
+**Last Updated:** 2026-03-31
+**Status:** Phase 1 Build Complete / Phase 2 Foundation Laid
+**Story:** HK-4 (OUR-125) — Reconcile ARCHITECTURE.md vs MIGRATION_EPICS.md
+
+---
+
+## GAS Status Declaration
+
+> **LEGACY GAS IMPLEMENTATION IS ARCHIVED.**
+> The Google Apps Script backend is preserved in `archive/gas/` for emergency reference only.
+> **Canonical worker is `workers/oursharedevents/src/`.**
+> No new code should be written to `archive/gas/` or `cloudflare-proxy/`.
+> `MIGRATION_EPICS.md` documents the completed GAS → Cloudflare migration history — it is a closed planning artifact.
 
 ---
 
 ## Architecture Overview
 
-The MVP Event Toolkit has been migrated from Google Apps Script to a **Cloudflare Worker-only architecture**. All API traffic now flows through the Cloudflare Worker which connects directly to Google Sheets via the Sheets API.
+OurSharedEvents is a **Cloudflare Worker + Google Sheets (Phase 1) / D1 (Phase 2)** platform.
+All API and HTML traffic flows through a single TypeScript Worker deployed to `oursharedevents.com`.
 
 ```
-Clients (Admin, Public, Display, Poster, SharedReport)
+Clients (Admin, Public, Display, Poster, SharedReport, Form QR pages)
     │
     ▼
-Cloudflare Worker (edge)
-    ├── /api/v2/status      → Worker health check
-    ├── /api/v2/events      → List events from Sheets
-    ├── /api/v2/events/:id  → Get single event
-    ├── /api/v2/events/:id/bundle/:type → Bundles
-    ├── /admin, /public, /display, /poster → HTML templates
+Cloudflare Worker  —  workers/oursharedevents/src/
+    ├── index.ts          Entry point + scheduled PII lifecycle job (cron 0 3 * * *)
+    ├── router.ts         Route table (30+ endpoints)
+    ├── auth/admin.ts     Admin auth guard (CF Access JWT + Bearer fallback)
+    ├── handlers/         Route handlers (health, events, pages, forms, form-pages, feature-flags)
+    └── lib/              Utilities (google-auth, sheets, forms-db, feature-flags, cors)
     │
-    ▼
-Google Sheets API (via service account)
-    ├── EVENTS sheet        → Event data
-    ├── ANALYTICS sheet     → Event tracking log
-    ├── CONFIG sheet        → Brand configuration
-    └── SHORTLINKS sheet    → URL shortening
-```
-
-**Key Benefits:**
-- Sub-500ms latency (vs 2-3s with GAS)
-- No Google Apps Script quotas
-- Direct control over error handling and observability
-- Simplified CI/CD via Wrangler
-
----
-
-## Legacy GAS Backend (Archived)
-
-> **Note:** The Google Apps Script backend has been archived as of 2025-12-13.
-> See `archive/gas/README.md` for restoration instructions in emergency scenarios.
-
-The legacy backend code is preserved in `archive/gas/` and includes:
-- `Code.gs` - Router + API endpoints (doGet/doPost)
-- `Config.gs` - Brands, environment, templates
-- `TemplateService.gs` - Event templates
-- `ApiSchemas.gs` - JSON Schema validation
-- And 9 other service files
-
----
-
-## Navigation & Integration Diagram
-
-For a comprehensive visual representation of the integration flow, see:
-
-**[NAVIGATION_DIAGRAM.txt](../NAVIGATION_DIAGRAM.txt)** - Master navigation diagram including:
-- **Section 1**: Master Integration Diagram (Admin → Bundles → Surfaces → Analytics)
-- **Section 2**: Analytics Logging Flow (CTA/scan logging endpoints)
-- **Section 3**: SharedReport Analytics Consumption
-- **Section 4**: MVP vs V2 Path Separation (clearly labeled)
-- **Section 5-8**: Entry Points, Router Priority, User Journeys, File Structure
-
-See also: [INTEGRATION-FLOWS.md](./INTEGRATION-FLOWS.md) for detailed API request/response schemas.
-
----
-
-## Backend Services
-
-### Cloudflare Worker (Primary)
-
-The Worker is the sole backend, handling all API requests:
-
-| Route | Method | Purpose |
-|-------|--------|---------|
-| `/api/v2/status` | GET | Health check |
-| `/api/v2/events` | GET | List events |
-| `/api/v2/events/:id` | GET | Get single event |
-| `/api/v2/events/:id/bundle/public` | GET | Public bundle |
-| `/api/v2/events/:id/bundle/display` | GET | Display bundle |
-| `/api/v2/events/:id/bundle/poster` | GET | Poster bundle |
-| `/api/v2/events` | POST | Create event (auth required) |
-| `/api/v2/events/:id` | PUT | Update event (auth required) |
-
-### Worker Source Files
-
-Located in `cloudflare-proxy/`:
-
-| File | Purpose |
-|------|---------|
-| `worker.js` | Main entry point and router |
-| `src/api/events.js` | Events API handlers |
-| `src/api/bundles.js` | Bundle API handlers |
-| `src/api/status.js` | Health check handler |
-| `src/sheets/client.js` | Google Sheets API client |
-| `src/sheets/auth.js` | Service account JWT auth |
-| `src/utils/qr.js` | QR code generation |
-| `src/middleware/auth.js` | Admin auth middleware |
-| `src/middleware/cors.js` | CORS handling |
-
----
-
-## Frontend Surfaces (.html files)
-
-These 5 files are the **only user-visible surfaces** for MVP:
-
-| Surface | Purpose | Key Features |
-|---------|---------|--------------|
-| **Admin.html** | Event management control room | Template picker, section toggles, event lifecycle |
-| **Public.html** | Mobile-first public event page | Map, Calendar, Share, Skeleton loaders, YouTube/Vimeo |
-| **Display.html** | TV/kiosk display layout | Auto-rotate, iframe stage, fallback handling |
-| **Poster.html** | Print/share with QR | QR grid, sponsor strip, print CSS |
-| **SharedReport.html** | Analytics dashboard | 5-metric grid, data tables |
-
-### Supporting HTML (included via templates)
-
-| File | Purpose |
-|------|---------|
-| NUSDK.html | RPC client for API calls |
-| Styles.html | CSS design system |
-| DesignTokens.html | CSS variables (colors, spacing) |
-| DesignAdapter.html | Brand theming |
-| DemoMode.html | Demo/sandbox mode support |
-| SponsorUtils.html | Shared sponsor rendering |
-| Header.html | Page header component |
-| HeaderInit.html | Header initialization |
-| CollapsibleSections.html | Accordion UI component |
-| SharedUtils.html | Utility functions |
-| APIClient.html | API wrapper functions |
-
-### Video Embedding
-
-Both Public.html and Display.html support video embeds:
-
-**Public.html** - Full YouTube/Vimeo handling:
-```javascript
-// YouTube URL validation and embed generation
-const youtubeRegex = /^https?:\/\/(www\.)?(youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11}).*$/;
-const youtubeMatch = videoUrl.match(youtubeRegex);
-if (youtubeMatch) {
-  const videoId = youtubeMatch[3];
-  embedUrl = `https://www.youtube.com/embed/${videoId}`;
-}
-```
-
-**Display.html** - Generic iframe stage:
-```html
-<iframe id="stage"
-  allow="autoplay; fullscreen"
-  sandbox="allow-scripts allow-same-origin allow-popups allow-forms">
-</iframe>
+    ├── Phase 1 data path ────────────────────────────────────────────────
+    │       ▼
+    │   Google Sheets API (service account JWT)
+    │       ├── EVENTS sheet         Event data
+    │       ├── ANALYTICS sheet      Event tracking log
+    │       ├── CONFIG sheet         Brand configuration
+    │       └── SHORTLINKS sheet     URL shortening
+    │
+    └── Phase 2 data path (D1 — foundation laid, not yet provisioned) ────
+            ▼
+        MAIN_DB  (D1 — anonymous scan / event data)
+        FORMS_DB (D1 — PII-bearing forms + feature flags, privacy-isolated)
 ```
 
 ---
 
-## Data Storage
+## Phase Progression
 
-### Google Sheets Structure
+| Phase       | Stack                                              | Status                                               |
+| ----------- | -------------------------------------------------- | ---------------------------------------------------- |
+| **Phase 1** | Cloudflare Worker + Google Sheets                  | Build ✅ complete / Ops blocked (D1 not provisioned) |
+| **Phase 2** | Cloudflare Worker + D1 (edge SQLite)               | Schema + migrations written, infra pending           |
+| **Phase 3** | Firebase Auth + React/Tailwind on Firebase Hosting | Not started                                          |
 
-Each brand has a dedicated spreadsheet with these sheets:
+**Code-first principle:** Worker routes, D1 migrations, and tests are written and CI-verified now.
+Infrastructure (CF zone, D1, Firebase) is the last step, not the first.
 
-| Sheet | Purpose | Auto-created |
-|-------|---------|--------------|
-| EVENTS | Event data storage | Yes |
-| SPONSORS | Sponsor configurations | Yes |
-| ANALYTICS | Usage metrics | Yes |
-| DIAG | Diagnostic logs | Yes |
+---
 
-### Direct Sheets API Access
+## Canonical Worker Location
 
-The Worker connects directly to Google Sheets using a service account:
+```
+workers/oursharedevents/
+├── src/
+│   ├── index.ts              Entry point + scheduled PII lifecycle job
+│   ├── router.ts             Route table (30+ endpoints)
+│   ├── auth/
+│   │   └── admin.ts          Admin auth guard (CF Access JWT + Bearer fallback)
+│   ├── handlers/
+│   │   ├── health.ts         GET /health, GET /api/status
+│   │   ├── events.ts         Events API (Sheets Phase 1)
+│   │   ├── pages.ts          HTML pages (public, admin, landing) + POST /subscribe
+│   │   ├── forms.ts          Form submissions (register, checkin, survey, email-signup)
+│   │   ├── form-pages.ts     Mobile-first QR form landing pages
+│   │   └── feature-flags.ts  Admin flag management (8 endpoints)
+│   └── lib/
+│       ├── google-auth.ts    Google service account JWT (Phase 1)
+│       ├── sheets.ts         Google Sheets client (Phase 1)
+│       ├── forms-db.ts       Privacy utilities (hash, encrypt, bucket)
+│       ├── feature-flags.ts  Flag resolution (3-tier: free / mid / enterprise)
+│       └── cors.ts           CORS allowlist
+├── wrangler.toml             Cloudflare config (dev / staging / production)
+├── migrations/               D1 migrations for MAIN_DB
+└── migrations-forms/         D1 migrations for FORMS_DB
+```
 
-```javascript
-// Service account auth via JWT
-const jwt = await createJWT(env.GOOGLE_CLIENT_EMAIL, env.GOOGLE_PRIVATE_KEY);
-const token = await getAccessToken(jwt);
+> **Retired paths** (do not edit):
+>
+> - `archive/gas/` — archived GAS backend
+> - `cloudflare-proxy/` — superseded by `workers/oursharedevents/`
 
-// Direct Sheets API calls
-const response = await fetch(
-  `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/EVENTS`,
-  { headers: { 'Authorization': `Bearer ${token}` } }
-);
+---
+
+## Domains
+
+| Environment | URL                                              |
+| ----------- | ------------------------------------------------ |
+| Production  | `oursharedevents.com`, `www.oursharedevents.com` |
+| Staging     | `stg.oursharedevents.com`                        |
+| Local dev   | `localhost` via `wrangler dev`                   |
+
+> Old domain `stg.eventangle.com` is retired. All references should use `oursharedevents.com`.
+
+---
+
+## D1 Databases — Two-Database Privacy Architecture
+
+Two separate D1 databases enforce a hard privacy boundary:
+
+| Binding        | Database name (staging) | Purpose                                 |
+| -------------- | ----------------------- | --------------------------------------- |
+| `DB` (MAIN_DB) | `ocr-db-staging`        | Anonymous scan data, events, shortlinks |
+| `FORMS_DB`     | `ocr-forms-db-staging`  | PII-bearing forms data + feature flags  |
+
+**Why two databases?** Forms data contains email addresses and personal identifiers.
+Keeping it in a separate D1 instance means a breach of MAIN_DB exposes zero PII,
+and the FORMS_DB cron job can destroy expired data without touching event analytics.
+
+### PII Lifecycle (cron `0 3 * * *`)
+
+The Worker's scheduled handler runs nightly and:
+
+- Deletes expired registrations
+- Scrubs survey PII fields
+- Removes email signups past 30-day retention
+
+---
+
+## Route Table (30+ endpoints)
+
+### Public
+
+| Method  | Path                                                    | Handler                                |
+| ------- | ------------------------------------------------------- | -------------------------------------- |
+| GET     | `/health`                                               | Health check — `{ ok, env, version }`  |
+| GET     | `/api/status`                                           | Alias for `/health`                    |
+| GET     | `/` `/home` `/welcome` `/landing`                       | Landing page HTML                      |
+| GET     | `/events` `/public`                                     | Public event listing HTML              |
+| GET     | `/api/v2/events`                                        | List active events — `{ ok, items[] }` |
+| GET     | `/api/v2/events/:id`                                    | Single event — `{ ok, item }`          |
+| POST    | `/api/v2/events/:id/forms/register`                     | Submit registration                    |
+| POST    | `/api/v2/events/:id/forms/checkin`                      | Increment check-in                     |
+| POST    | `/api/v2/events/:id/forms/survey`                       | Submit survey                          |
+| POST    | `/api/v2/events/:id/forms/email-signup`                 | Email signup                           |
+| GET     | `/forms/:eventId?type=register\|checkin\|survey\|email` | QR form landing page                   |
+| POST    | `/subscribe`                                            | Email capture (landing page)           |
+| OPTIONS | `*`                                                     | CORS preflight                         |
+
+### Admin (Bearer token / CF Access JWT required)
+
+| Method | Path                                           | Handler                             |
+| ------ | ---------------------------------------------- | ----------------------------------- |
+| GET    | `/admin`                                       | Admin dashboard HTML                |
+| GET    | `/api/v2/admin/events`                         | List all events (includes archived) |
+| GET    | `/api/v2/admin/events/:id/forms/registrations` | List registrations                  |
+| GET    | `/api/v2/admin/events/:id/forms/checkin-count` | Check-in count                      |
+| GET    | `/api/v2/admin/events/:id/forms/surveys`       | Surveys (PII-scrubbed)              |
+| GET    | `/api/v2/admin/events/:id/forms/email-signups` | Email signup count                  |
+| GET    | `/api/v2/admin/flags`                          | List all feature flags              |
+| GET    | `/api/v2/admin/flags/tiers`                    | List tier presets                   |
+| GET    | `/api/v2/admin/flags/current-tier`             | Detect active tier                  |
+| GET    | `/api/v2/admin/flags/resolve`                  | Resolved flags (`?eventId=`)        |
+| PUT    | `/api/v2/admin/flags/:key`                     | Toggle a global flag                |
+| POST   | `/api/v2/admin/flags/apply-tier`               | Apply tier preset                   |
+| PUT    | `/api/v2/admin/events/:id/flags/:key`          | Set event-level override            |
+| DELETE | `/api/v2/admin/events/:id/flags/:key`          | Remove event-level override         |
+
+---
+
+## Feature Flags — 18 Flags, 3 Tiers
+
+Feature flags are stored in `FORMS_DB` and resolved with a 3-tier lookup:
+
+```
+1. Event-scoped:  scope='event', scope_id=eventId  (Enterprise only)
+2. Global:        scope='global', scope_id IS NULL
+3. Default:       no row = flag ON (backwards compatible)
+```
+
+### Tiers
+
+| Tier           | Included flags                                                                                                                                               |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Free**       | forms.register, forms.checkin, forms.survey, forms.email-signup, analytics.shared-report, report.export-json, config.self-serve                              |
+| **Mid**        | Free + report.advanced-metrics, report.export-pdf, report.custom-window, config.event-settings, assets.file-upload, assets.custom-qr, branding.color-palette |
+| **Enterprise** | Mid + report.portfolio, branding.white-label, branding.custom-domain + event-level overrides                                                                 |
+
+### All Flag Keys
+
+```
+forms.register           forms.checkin
+forms.survey             forms.email-signup
+config.self-serve        config.event-settings
+analytics.shared-report  report.export-json
+report.advanced-metrics  report.export-pdf
+report.custom-window     report.portfolio
+assets.file-upload       assets.custom-qr
+branding.white-label     branding.custom-domain
+branding.color-palette
 ```
 
 ---
 
-## API Design
+## 5 HTML Surfaces
 
-### Envelope Pattern
+All surfaces are server-rendered HTML strings embedded in the Worker bundle (~200 KB total — moved to CDN in Phase 3).
 
-All API responses use a consistent envelope:
+| Surface             | URL       | Purpose                           |
+| ------------------- | --------- | --------------------------------- |
+| `admin.html`        | `/admin`  | Event management control room     |
+| `public.html`       | `/events` | Mobile-first public event listing |
+| `display.html`      | (bundle)  | TV/kiosk live event display       |
+| `poster.html`       | (bundle)  | Printable poster with QR codes    |
+| `sharedReport.html` | (bundle)  | Shareable analytics dashboard     |
 
-```javascript
-// Success
-{ "ok": true, "value": { ... } }
+QR codes on posters/displays route to `/forms/:eventId?type=<formType>` — mobile-first form landing pages served by `form-pages.ts`.
 
-// Error
-{ "ok": false, "code": "ERROR_CODE", "message": "Human-readable message" }
+---
+
+## Authentication
+
+| Method                         | Used for                                                       |
+| ------------------------------ | -------------------------------------------------------------- |
+| **CF Access JWT**              | Production admin routes (Cloudflare-issued, validated at edge) |
+| **Bearer token** (`ADMIN_KEY`) | Staging fallback (enabled by `ALLOW_ADMIN_KEY_FALLBACK=true`)  |
+| **Google service account JWT** | Worker → Sheets API (Phase 1)                                  |
+
+---
+
+## CORS
+
+`lib/cors.ts` maintains an allowlist of permitted origins.
+CORS is handled at the Worker level before any route processing.
+Admin routes allow `Authorization` and `Content-Type` headers.
+
+---
+
+## Brand / Ring Framework
+
+### Ring (NCR flywheel — clockwise from 12 o'clock)
+
+```
+          Ads
+        ↙     ↘
+SharedReports  Pre-Events
+      ↑            ↓
+ Post-Events ← Events
 ```
 
-### Authentication Methods
+Five lifecycle stages: **Ads → Pre-Events → Events → Post-Events → SharedReports → (Ads)**
 
-1. **Admin Token** (header) - For admin operations
-   - Header: `Authorization: Bearer <ADMIN_TOKEN>`
-2. **Service Account** - For Worker → Sheets access
-   - JWT-based authentication
+### Triangle
 
-### CORS Configuration
-
-CORS is handled at the Worker level:
-
-```javascript
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization'
-};
+```
+         Events
+        ╱  ·   ╲
+       ╱   ·    ╲
+      ╱  Shared  ╲
+     ╱  Reports   ╲
+    ╱       ·      ╲
+Sponsors ──────── Customers
 ```
 
 ---
 
-## Security Model
+## Testing Strategy
 
-### Request Flow
+| Level    | Framework       | Location          |
+| -------- | --------------- | ----------------- |
+| Unit     | Vitest          | `tests/unit/`     |
+| Contract | Vitest (schema) | `tests/contract/` |
+| E2E      | Playwright      | `tests/e2e/`      |
+| Smoke    | Vitest / Newman | `tests/smoke/`    |
+| Load     | k6              | `tests/load/`     |
 
-```
-Request → Cloudflare Worker
-  ├─ CORS preflight handling
-  ├─ Authentication check (admin routes)
-  ├─ Input validation
-  ├─ Route to handler
-  └─ Google Sheets API call (if needed)
-```
-
-### Input Validation
-
-All user input is validated before use:
-
-```javascript
-function validateEventData(data) {
-  if (!data.name || typeof data.name !== 'string') {
-    throw new Error('Event name is required');
-  }
-  // Additional validation...
-}
-```
+CI gates: typecheck, schema verify, migration apply, table verify, health check, API smoke, UI smoke, prod isolation.
 
 ---
 
-## Templates
+## Reconciliation with MIGRATION_EPICS.md
 
-### Available Templates
+`docs/deployment/MIGRATION_EPICS.md` is the **closed** planning document for the GAS → Cloudflare migration.
+It is preserved for historical reference. Its stories and epics are complete.
 
-The MVP includes 18 event templates:
+Key conflicts now resolved:
 
-| Category | Templates |
-|----------|-----------|
-| **Bar/Restaurant** | Happy Hour, Trivia Night, Live Music |
-| **Recreation** | Tournament, League, Pickup Game |
-| **School** | Sports Event, Fundraiser, Community Event |
-| **Fundraiser** | Charity Event, Auction, Benefit |
-| **Custom** | Generic Event, Custom Template |
+| MIGRATION_EPICS.md (historical)            | Current reality                                             |
+| ------------------------------------------ | ----------------------------------------------------------- |
+| Domain: `stg.eventangle.com`               | Domain: `stg.oursharedevents.com`                           |
+| Worker entry: `cloudflare-proxy/worker.js` | Worker entry: `workers/oursharedevents/src/index.ts`        |
+| Data: Google Sheets only                   | Data: Sheets (Phase 1) + D1 MAIN_DB + D1 FORMS_DB (Phase 2) |
+| No feature flags                           | 18 feature flags, 3-tier system                             |
+| No forms system                            | 4 form types with PII encryption/scrubbing                  |
+| GAS coexistence proxy                      | GAS archived, CF Worker is sole backend                     |
 
----
-
-## Development Workflow
-
-### File Organization
-
-```
-MVP-EVENT-TOOLKIT/
-├── cloudflare-proxy/   # Worker source code
-│   ├── worker.js       # Main entry
-│   ├── src/            # API handlers, utilities
-│   ├── templates/      # HTML templates
-│   └── wrangler.toml   # Cloudflare config
-├── archive/
-│   └── gas/            # Archived GAS backend
-├── docs/               # Documentation
-├── tests/              # Test suites
-├── scripts/            # Build/deploy scripts
-└── .github/            # CI/CD workflows
-```
-
-### Testing Strategy
-
-| Level | Purpose | Location |
-|-------|---------|----------|
-| Unit | Service function testing | tests/unit/ |
-| Contract | API schema validation | tests/contract/ |
-| E2E | Full user flows | tests/e2e/ |
-| Smoke | Critical path validation | tests/smoke/ |
-
----
-
-## Quick Reference
-
-### Key URLs
-
-```
-# Admin (event management)
-https://stg.eventangle.com/admin?brand=root
-
-# Public (event listing)
-https://stg.eventangle.com/events?brand=root
-
-# Display (TV/kiosk)
-https://stg.eventangle.com/display?brand=root
-
-# Poster (print view)
-https://stg.eventangle.com/poster?brand=root&eventId=EVT_xxx
-
-# Status (health check)
-https://stg.eventangle.com/api/v2/status
-```
-
-### API Endpoints
-
-```
-GET  /api/v2/status              # Health check
-GET  /api/v2/events              # List events
-GET  /api/v2/events/:id          # Get event
-GET  /api/v2/events/:id/bundle/public   # Public bundle
-GET  /api/v2/events/:id/bundle/display  # Display bundle
-GET  /api/v2/events/:id/bundle/poster   # Poster bundle
-POST /api/v2/events              # Create event (auth required)
-PUT  /api/v2/events/:id          # Update event (auth required)
-```
+No action needed on MIGRATION_EPICS.md — it is an accurate historical record and should not be modified.
 
 ---
 
 ## Related Documentation
 
-- **[CLOUDFLARE_WORKER_MIGRATION.md](./CLOUDFLARE_WORKER_MIGRATION.md)** - Migration history
-- **[DEPLOYMENT.md](./DEPLOYMENT.md)** - Deployment and CI/CD
-- **[FRIENDLY_URLS.md](./FRIENDLY_URLS.md)** - URL aliasing system
-- **[archive/gas/README.md](../archive/gas/README.md)** - GAS restoration guide
+- **[CLOUDFLARE_WORKER_MIGRATION.md](./CLOUDFLARE_WORKER_MIGRATION.md)** — Migration history
+- **[INTEGRATION-FLOWS.md](./INTEGRATION-FLOWS.md)** — Detailed API request/response schemas
+- **[DEPLOYMENT.md](./DEPLOYMENT.md)** — Deployment and CI/CD
+- **[docs/deployment/MIGRATION_EPICS.md](../deployment/MIGRATION_EPICS.md)** — Closed planning doc (GAS→CF migration history)
+- **[archive/gas/README.md](../../archive/gas/README.md)** — GAS restoration guide (emergency only)
+- **[CLAUDE.md](../../CLAUDE.md)** — Persistent project brain
 
 ---
 
-*MVP Architecture v2.0 - Worker-Only (GAS Retired)*
+_OurSharedEvents Architecture — updated 2026-03-31 (HK-4 / OUR-125)_

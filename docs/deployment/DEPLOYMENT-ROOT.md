@@ -17,11 +17,11 @@ A boring, step-by-step checklist for shipping a release.
 
 > **Quick reference:** See [ENVIRONMENT_MATRIX.md](./ENVIRONMENT_MATRIX.md) for the authoritative environment table.
 
-| Environment | URL | GAS Project | Cloudflare Env | Who Can Deploy |
-|-------------|-----|-------------|----------------|----------------|
-| **Dev** | `http://localhost:3000` | Production (read-only) | N/A | Developers |
-| **Staging** | `https://stg.eventangle.com` | Staging Script | `[env.staging]` | Developers, CI |
-| **Production** | `https://www.eventangle.com` | Production Script | `[env.production]` | **CI ONLY** |
+| Environment    | URL                          | GAS Project            | Cloudflare Env     | Who Can Deploy |
+| -------------- | ---------------------------- | ---------------------- | ------------------ | -------------- |
+| **Dev**        | `http://localhost:3000`      | Production (read-only) | N/A                | Developers     |
+| **Staging**    | `https://stg.eventangle.com` | Staging Script         | `[env.staging]`    | Developers, CI |
+| **Production** | `https://www.eventangle.com` | Production Script      | `[env.production]` | **CI ONLY**    |
 
 ### Environment Configuration (Single Source of Truth)
 
@@ -33,6 +33,7 @@ tests/config/environments.js    # Re-exports from canonical source
 ```
 
 **Key URLs:**
+
 - **Production**: `https://www.eventangle.com`
 - **Staging**: `https://stg.eventangle.com`
 - **QA**: `https://zeventbooks.com`
@@ -40,6 +41,7 @@ tests/config/environments.js    # Re-exports from canonical source
 - **GAS Direct**: `https://script.google.com/macros/s/{DEPLOYMENT_ID}/exec`
 
 **Brands (all environments):**
+
 - `root` - Zeventbook (default)
 - `abc` - American Bocce Co.
 - `cbc` - Community Based Cricket
@@ -55,11 +57,11 @@ tests/config/environments.js    # Re-exports from canonical source
 
 ### How to Deploy to Each Environment
 
-| Environment | Deploy Command | Notes |
-|-------------|----------------|-------|
-| **Staging GAS** | `npm run deploy:staging` | Uses `.clasp-staging.json` |
-| **Staging Worker** | `npm run deploy:staging:worker` | `wrangler deploy --env staging` |
-| **Production** | `git push origin main` (after PR) | **CI only - no manual deploy** |
+| Environment        | Deploy Command                    | Notes                           |
+| ------------------ | --------------------------------- | ------------------------------- |
+| **Staging GAS**    | `npm run deploy:staging`          | Uses `.clasp-staging.json`      |
+| **Staging Worker** | `npm run deploy:staging:worker`   | `wrangler deploy --env staging` |
+| **Production**     | `git push origin main` (after PR) | **CI only - no manual deploy**  |
 
 ---
 
@@ -92,20 +94,20 @@ BASE_URL="https://script.google.com/macros/s/XXX/exec" npm run test:smoke
 
 ### Configuration
 
-| File | Purpose |
-|------|---------|
-| `.clasp.json` | Production GAS project (CI only) |
-| `.clasp-staging.json` | Staging GAS project |
-| `cloudflare-proxy/wrangler.toml` | Worker routes for all environments |
-| `tests/config/environments.js` | Environment detection logic |
-| `tests/shared/config/test.config.js` | Test configuration using BASE_URL |
+| File                                 | Purpose                            |
+| ------------------------------------ | ---------------------------------- |
+| `.clasp.json`                        | Production GAS project (CI only)   |
+| `.clasp-staging.json`                | Staging GAS project                |
+| `cloudflare-proxy/wrangler.toml`     | Worker routes for all environments |
+| `tests/config/environments.js`       | Environment detection logic        |
+| `tests/shared/config/test.config.js` | Test configuration using BASE_URL  |
 
 ### Environment-Specific URLs
 
-| Environment | Status Endpoint | Manage Endpoint |
-|-------------|-----------------|-----------------|
-| Staging | `https://stg.eventangle.com/status` | `https://stg.eventangle.com/manage` |
-| Production | `https://www.eventangle.com/status` | `https://www.eventangle.com/manage` |
+| Environment | Status Endpoint                     | Manage Endpoint                     |
+| ----------- | ----------------------------------- | ----------------------------------- |
+| Staging     | `https://stg.eventangle.com/status` | `https://stg.eventangle.com/manage` |
+| Production  | `https://www.eventangle.com/status` | `https://www.eventangle.com/manage` |
 
 ---
 
@@ -120,6 +122,7 @@ npm run ci:all  # Tests against stg.eventangle.com by default
 **No green on staging, no deploy to prod.**
 
 This unified gate runs all tests required for a release:
+
 1. `test:schemas` — schema synchronization validation
 2. `test:api-contracts` — explicit API contract validation
 3. `test:smoke` — smoke tests (requires Playwright)
@@ -175,6 +178,7 @@ https://script.google.com/macros/s/<DEPLOYMENT_ID>/exec?page=status&brand=root
 ```
 
 Confirm:
+
 - `"ok": true`
 - `"buildId"` matches the version you just deployed (check `src/mvp/Config.gs` for BUILD_ID)
 
@@ -204,6 +208,7 @@ cd cloudflare-proxy && wrangler deploy --env events
 ```
 
 **Important:** The `--env events` flag deploys to the production EventAngle routes:
+
 - `eventangle.com/events*`
 - `www.eventangle.com/events*`
 
@@ -216,6 +221,7 @@ All requests are proxied (not redirected), so `script.google.com` is never user-
 Hit these URLs in a browser to confirm the proxy is working:
 
 **Page routes (HTML via proxy):**
+
 - https://www.eventangle.com/events?page=admin - Admin panel
 - https://www.eventangle.com/events?page=public - Public event listing
 - https://www.eventangle.com/events?page=display - TV/kiosk display
@@ -224,6 +230,7 @@ Hit these URLs in a browser to confirm the proxy is working:
 - https://www.eventangle.com/events?page=status&brand=root - Status/health
 
 **Friendly URL routes:**
+
 - https://www.eventangle.com/manage - Admin (via path)
 - https://www.eventangle.com/display - Display (via path)
 - https://www.eventangle.com/abc/events - Brand-specific public page
@@ -240,6 +247,7 @@ BASE_URL="https://www.eventangle.com/events" npm run test:smoke
 ```
 
 Both should pass. If they fail, check:
+
 - DEPLOYMENT_ID mismatch between GAS and Cloudflare
 - BUILD_ID mismatch between deployed code and local Config.gs
 
@@ -247,17 +255,17 @@ Both should pass. If they fail, check:
 
 ## Quick Reference
 
-| Step | Command | Environment |
-|------|---------|-------------|
-| **Deploy to Prod** | `git push origin main` (after PR merge) | **Production (CI only)** |
-| Pre-flight (gate) | `npm run ci:all` | Staging (default) |
-| Deploy GAS (staging) | `npm run deploy:staging` | Staging |
-| Deploy CF Worker (staging) | `npm run deploy:staging:worker` | Staging |
-| Deploy CF Worker (prod) | `npm run deploy:prod:worker` | Dev/Stage only |
-| Health check (staging) | `npm run test:health` | Staging (default) |
-| Health check (prod) | `npm run test:prod:health` | Production |
-| Smoke test (staging) | `npm run test:smoke` | Staging (default) |
-| Smoke test (prod) | `npm run test:prod:smoke` | Production |
+| Step                       | Command                                 | Environment              |
+| -------------------------- | --------------------------------------- | ------------------------ |
+| **Deploy to Prod**         | `git push origin main` (after PR merge) | **Production (CI only)** |
+| Pre-flight (gate)          | `npm run ci:all`                        | Staging (default)        |
+| Deploy GAS (staging)       | `npm run deploy:staging`                | Staging                  |
+| Deploy CF Worker (staging) | `npm run deploy:staging:worker`         | Staging                  |
+| Deploy CF Worker (prod)    | `npm run deploy:prod:worker`            | Dev/Stage only           |
+| Health check (staging)     | `npm run test:health`                   | Staging (default)        |
+| Health check (prod)        | `npm run test:prod:health`              | Production               |
+| Smoke test (staging)       | `npm run test:smoke`                    | Staging (default)        |
+| Smoke test (prod)          | `npm run test:prod:smoke`               | Production               |
 
 ---
 

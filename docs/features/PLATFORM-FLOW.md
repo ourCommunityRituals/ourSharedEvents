@@ -42,11 +42,11 @@ Five stages in a clockwise flywheel — Ads at 12 o'clock. SharedReports closes 
 
 ## Phase Architecture
 
-| Phase | Stack | Data Layer | Auth | Status |
-|-------|-------|-----------|------|--------|
-| **Phase 1** | Cloudflare Worker | Google Sheets (events) + D1 (forms) | Bearer token | Build complete |
-| **Phase 2** | Cloudflare Worker | D1 edge SQLite (all data) | Bearer token | Foundation laid |
-| **Phase 3** | Firebase Auth + React/Tailwind | D1 + Firebase Hosting | Firebase Auth | Not started |
+| Phase       | Stack                          | Data Layer                          | Auth          | Status          |
+| ----------- | ------------------------------ | ----------------------------------- | ------------- | --------------- |
+| **Phase 1** | Cloudflare Worker              | Google Sheets (events) + D1 (forms) | Bearer token  | Build complete  |
+| **Phase 2** | Cloudflare Worker              | D1 edge SQLite (all data)           | Bearer token  | Foundation laid |
+| **Phase 3** | Firebase Auth + React/Tailwind | D1 + Firebase Hosting               | Firebase Auth | Not started     |
 
 ---
 
@@ -149,14 +149,14 @@ Results logged as LIFECYCLE_COMPLETE structured JSON
 
 Each surface is a self-contained HTML page embedded in the Worker bundle.
 
-| # | Surface | Route | Audience | Phase |
-|---|---------|-------|----------|-------|
-| 1 | **Landing** | `/`, `/home`, `/welcome`, `/landing` | Visitors | Live |
-| 2 | **Public Events** | `/events`, `/public` | Attendees | Live |
-| 3 | **Admin Dashboard** | `/admin` (auth required) | Organizers | Live |
-| 4 | **Display** | `/display` | Venue staff (TV/kiosk) | Phase 2 |
-| 5 | **Poster** | `/poster` | Print (QR codes) | Phase 2 |
-| 6 | **Shared Report** | `/report` | Sponsors | Phase 2 |
+| #   | Surface             | Route                                | Audience               | Phase   |
+| --- | ------------------- | ------------------------------------ | ---------------------- | ------- |
+| 1   | **Landing**         | `/`, `/home`, `/welcome`, `/landing` | Visitors               | Live    |
+| 2   | **Public Events**   | `/events`, `/public`                 | Attendees              | Live    |
+| 3   | **Admin Dashboard** | `/admin` (auth required)             | Organizers             | Live    |
+| 4   | **Display**         | `/display`                           | Venue staff (TV/kiosk) | Phase 2 |
+| 5   | **Poster**          | `/poster`                            | Print (QR codes)       | Phase 2 |
+| 6   | **Shared Report**   | `/report`                            | Sponsors               | Phase 2 |
 
 ### Surface Data Flow
 
@@ -184,23 +184,23 @@ Form Pages (/forms/:eventId?type=X)
 
 ## The 4 Form Types
 
-| Form | UEC Code | PII Collected | Storage | TTL | Tier |
-|------|----------|--------------|---------|-----|------|
-| **Registration** | GREEN | Name (plain) + email (SHA-256 hash) | FORMS_DB | 90 days | All |
-| **Check-in** | GREEN | None — aggregate count only | FORMS_DB | Permanent | All |
-| **Survey** | AMBER | Rating (kept) + comments (scrubbed) | FORMS_DB | Permanent (scrubbed) | Mid+ |
-| **Email Signup** | AMBER | Email (hash + AES-256-GCM encrypted) | FORMS_DB | 30 days | Mid+ |
+| Form             | UEC Code | PII Collected                        | Storage  | TTL                  | Tier |
+| ---------------- | -------- | ------------------------------------ | -------- | -------------------- | ---- |
+| **Registration** | GREEN    | Name (plain) + email (SHA-256 hash)  | FORMS_DB | 90 days              | All  |
+| **Check-in**     | GREEN    | None — aggregate count only          | FORMS_DB | Permanent            | All  |
+| **Survey**       | AMBER    | Rating (kept) + comments (scrubbed)  | FORMS_DB | Permanent (scrubbed) | Mid+ |
+| **Email Signup** | AMBER    | Email (hash + AES-256-GCM encrypted) | FORMS_DB | 30 days              | Mid+ |
 
 ### Feature Flag Gating
 
 Forms are gated by the 3-tier feature flag system:
 
-| Flag Key | Free | Mid | Enterprise |
-|----------|:----:|:---:|:----------:|
-| `forms.register` | ON | ON | ON |
-| `forms.checkin` | ON | ON | ON |
-| `forms.survey` | OFF | ON | ON |
-| `forms.email-signup` | OFF | ON | ON |
+| Flag Key             | Free | Mid | Enterprise |
+| -------------------- | :--: | :-: | :--------: |
+| `forms.register`     |  ON  | ON  |     ON     |
+| `forms.checkin`      |  ON  | ON  |     ON     |
+| `forms.survey`       | OFF  | ON  |     ON     |
+| `forms.email-signup` | OFF  | ON  |     ON     |
 
 The router checks `isFeatureEnabled()` before accepting any form submission. Disabled forms return `403 FORM_DISABLED`.
 
@@ -210,32 +210,32 @@ The router checks `isFeatureEnabled()` before accepting any form submission. Dis
 
 ### Public (no auth)
 
-| Method | Path | Returns |
-|--------|------|---------|
-| GET | `/health` | `{ ok, env, version }` |
-| GET | `/api/v2/events` | Active events list |
-| GET | `/api/v2/events/:id` | Single event |
-| POST | `/api/v2/events/:id/forms/register` | Registration confirmation |
-| POST | `/api/v2/events/:id/forms/checkin` | Check-in count |
-| POST | `/api/v2/events/:id/forms/survey` | Survey confirmation |
-| POST | `/api/v2/events/:id/forms/email-signup` | Signup confirmation |
-| GET | `/forms/:eventId` | Mobile form HTML page |
-| POST | `/subscribe` | Email capture |
+| Method | Path                                    | Returns                   |
+| ------ | --------------------------------------- | ------------------------- |
+| GET    | `/health`                               | `{ ok, env, version }`    |
+| GET    | `/api/v2/events`                        | Active events list        |
+| GET    | `/api/v2/events/:id`                    | Single event              |
+| POST   | `/api/v2/events/:id/forms/register`     | Registration confirmation |
+| POST   | `/api/v2/events/:id/forms/checkin`      | Check-in count            |
+| POST   | `/api/v2/events/:id/forms/survey`       | Survey confirmation       |
+| POST   | `/api/v2/events/:id/forms/email-signup` | Signup confirmation       |
+| GET    | `/forms/:eventId`                       | Mobile form HTML page     |
+| POST   | `/subscribe`                            | Email capture             |
 
 ### Admin (Bearer token or CF Access JWT)
 
-| Method | Path | Returns |
-|--------|------|---------|
-| GET | `/admin` | Admin dashboard HTML |
-| GET | `/api/v2/admin/events` | All events (incl. archived) |
-| GET | `/api/v2/admin/events/:id/forms/registrations` | Registration list |
-| GET | `/api/v2/admin/events/:id/forms/checkin-count` | Check-in integer |
-| GET | `/api/v2/admin/events/:id/forms/surveys` | PII-scrubbed surveys |
-| GET | `/api/v2/admin/events/:id/forms/email-signups` | Signup count |
-| GET | `/api/v2/admin/flags` | All feature flags |
-| PUT | `/api/v2/admin/flags/:key` | Toggle flag |
-| POST | `/api/v2/admin/flags/apply-tier` | Apply tier preset |
-| GET | `/api/v2/admin/flags/resolve` | Resolved flags for event |
+| Method | Path                                           | Returns                     |
+| ------ | ---------------------------------------------- | --------------------------- |
+| GET    | `/admin`                                       | Admin dashboard HTML        |
+| GET    | `/api/v2/admin/events`                         | All events (incl. archived) |
+| GET    | `/api/v2/admin/events/:id/forms/registrations` | Registration list           |
+| GET    | `/api/v2/admin/events/:id/forms/checkin-count` | Check-in integer            |
+| GET    | `/api/v2/admin/events/:id/forms/surveys`       | PII-scrubbed surveys        |
+| GET    | `/api/v2/admin/events/:id/forms/email-signups` | Signup count                |
+| GET    | `/api/v2/admin/flags`                          | All feature flags           |
+| PUT    | `/api/v2/admin/flags/:key`                     | Toggle flag                 |
+| POST   | `/api/v2/admin/flags/apply-tier`               | Apply tier preset           |
+| GET    | `/api/v2/admin/flags/resolve`                  | Resolved flags for event    |
 
 ---
 
@@ -271,15 +271,15 @@ The router checks `isFeatureEnabled()` before accepting any form submission. Dis
 
 ### Privacy Enforcement Points
 
-| Layer | Mechanism |
-|-------|-----------|
-| **Schema** | No PII columns in scans/scan_aggregates tables |
-| **Hashing** | Emails SHA-256 hashed before storage |
-| **Encryption** | Email signups AES-256-GCM encrypted (PBKDF2, 100k iterations) |
-| **Time bucketing** | All timestamps truncated to hour (`2026-03-27T14`) |
+| Layer                   | Mechanism                                                          |
+| ----------------------- | ------------------------------------------------------------------ |
+| **Schema**              | No PII columns in scans/scan_aggregates tables                     |
+| **Hashing**             | Emails SHA-256 hashed before storage                               |
+| **Encryption**          | Email signups AES-256-GCM encrypted (PBKDF2, 100k iterations)      |
+| **Time bucketing**      | All timestamps truncated to hour (`2026-03-27T14`)                 |
 | **Whitelist scrubbing** | Survey responses: numeric + safe keys kept, strings → `[SCRUBBED]` |
-| **TTL deletion** | Registrations: 90 days. Email signups: 30 days. Daily cron. |
-| **Database separation** | FORMS_DB and DB are separate D1 databases with no cross-linking |
+| **TTL deletion**        | Registrations: 90 days. Email signups: 30 days. Daily cron.        |
+| **Database separation** | FORMS_DB and DB are separate D1 databases with no cross-linking    |
 
 ---
 
@@ -312,35 +312,52 @@ workers/oursharedevents/src/
 Every form event emits structured JSON:
 
 ```json
-{ "type": "FORM_EVENT", "formType": "register", "eventId": "bocce-spring-2026",
-  "action": "submit", "timestamp": "...", "id": "uuid", "latencyMs": 45 }
+{
+  "type": "FORM_EVENT",
+  "formType": "register",
+  "eventId": "bocce-spring-2026",
+  "action": "submit",
+  "timestamp": "...",
+  "id": "uuid",
+  "latencyMs": 45
+}
 ```
 
 Feature flag changes emit:
 
 ```json
-{ "type": "FLAG_EVENT", "key": "forms.survey", "enabled": true,
-  "scope": "global", "timestamp": "..." }
+{
+  "type": "FLAG_EVENT",
+  "key": "forms.survey",
+  "enabled": true,
+  "scope": "global",
+  "timestamp": "..."
+}
 ```
 
 Lifecycle job results emit:
 
 ```json
-{ "type": "LIFECYCLE_COMPLETE", "registrationsDeleted": 12,
-  "surveysScrubbed": 8, "emailSignupsDeleted": 3, "timestamp": "..." }
+{
+  "type": "LIFECYCLE_COMPLETE",
+  "registrationsDeleted": 12,
+  "surveysScrubbed": 8,
+  "emailSignupsDeleted": 3,
+  "timestamp": "..."
+}
 ```
 
 ---
 
 ## How the Pillars Connect
 
-| Pillar | Role in the Flow |
-|--------|-----------------|
-| **1. Platform Flow** | This document — the full lifecycle |
-| **2. Anonymous ID** | Schema-level privacy that makes permanent scan data safe |
-| **3. Sponsor Pricing Tier Balancer** | Governs sponsor display priority within events |
-| **4. UEC** | Color-semantic QR codes that bridge physical→digital |
-| **5. NCR Methodology** | Geo-spatial intelligence from accumulated scan data |
+| Pillar                               | Role in the Flow                                         |
+| ------------------------------------ | -------------------------------------------------------- |
+| **1. Platform Flow**                 | This document — the full lifecycle                       |
+| **2. Anonymous ID**                  | Schema-level privacy that makes permanent scan data safe |
+| **3. Sponsor Pricing Tier Balancer** | Governs sponsor display priority within events           |
+| **4. UEC**                           | Color-semantic QR codes that bridge physical→digital     |
+| **5. NCR Methodology**               | Geo-spatial intelligence from accumulated scan data      |
 
 Every scan through a UEC QR code feeds the anonymous presence signal system. The `poster_deployments` table stores each physical QR placement with lat/lng. The `scans` table records the time-bucketed, PII-free interaction. SharedReports surface the aggregate results. At scale, this becomes the NCR dataset — hyperlocal economic intelligence from anonymous presence signal.
 

@@ -12,10 +12,10 @@ The migration from Google Apps Script (GAS) to Cloudflare Workers is **complete*
 
 ### Phase Summary
 
-| Phase | Description | Status |
-|-------|-------------|--------|
-| Phase 1 | Read-Only APIs | ✅ COMPLETE |
-| Phase 2 | Write APIs | ✅ COMPLETE |
+| Phase   | Description    | Status                   |
+| ------- | -------------- | ------------------------ |
+| Phase 1 | Read-Only APIs | ✅ COMPLETE              |
+| Phase 2 | Write APIs     | ✅ COMPLETE              |
 | Phase 3 | GAS Retirement | ✅ COMPLETE (2025-12-13) |
 
 ---
@@ -23,6 +23,7 @@ The migration from Google Apps Script (GAS) to Cloudflare Workers is **complete*
 ## Implementation Status
 
 **Phase 1 (Read-Only APIs): COMPLETE**
+
 - [x] `/api/v2/status` - Worker-native health check
 - [x] `/api/v2/events` - List events directly from Sheets
 - [x] `/api/v2/events/:id` - Get single event from Sheets
@@ -31,10 +32,12 @@ The migration from Google Apps Script (GAS) to Cloudflare Workers is **complete*
 - [x] `/api/v2/events/:id/bundle/poster` - Poster bundle
 
 **Phase 2 (Write APIs): COMPLETE**
+
 - [x] `POST /api/v2/events` - Create event (requires auth)
 - [x] `PUT /api/v2/events/:id` - Update event (requires auth)
 
 **Phase 3 (GAS Retirement): COMPLETE**
+
 - [x] Archive GAS code to `archive/gas/`
 - [x] Update clasp configurations (marked as archived)
 - [x] Disable GAS deployment workflows
@@ -65,6 +68,7 @@ Google Sheets API (via service account)
 ```
 
 **Key Changes from GAS Architecture:**
+
 - ❌ No GAS in request path
 - ✅ All APIs handled by Worker
 - ✅ Direct Sheets API access (service account)
@@ -81,6 +85,7 @@ The GAS backend has been archived but preserved for emergency rollback scenarios
 **Restoration Guide:** `archive/gas/README.md`
 
 ### Archived Files
+
 - `Code.gs` - Router + API endpoints (doGet/doPost)
 - `Config.gs` - Brands, environment, templates
 - `TemplateService.gs` - Event templates
@@ -90,10 +95,11 @@ The GAS backend has been archived but preserved for emergency rollback scenarios
 - And 7 other service files
 
 ### GAS Project IDs (For Reference)
-| Environment | Script ID | Status |
-|-------------|-----------|--------|
-| Staging | `1gHiPuj7eXNk09dDyk17SJ6QsCJg7LMqXBRrkowljL3z2TaAKFIvBLhHJ` | ARCHIVED |
-| Production | `1YO4apLOQoAIh208AcAqWO3pWtx_O3yas_QC4z-pkurgMem9UgYOsp86l` | ARCHIVED |
+
+| Environment | Script ID                                                   | Status   |
+| ----------- | ----------------------------------------------------------- | -------- |
+| Staging     | `1gHiPuj7eXNk09dDyk17SJ6QsCJg7LMqXBRrkowljL3z2TaAKFIvBLhHJ` | ARCHIVED |
+| Production  | `1YO4apLOQoAIh208AcAqWO3pWtx_O3yas_QC4z-pkurgMem9UgYOsp86l` | ARCHIVED |
 
 ---
 
@@ -102,6 +108,7 @@ The GAS backend has been archived but preserved for emergency rollback scenarios
 All endpoints use the `/api/v2/` prefix.
 
 ### GET /api/v2/status
+
 Worker-native health check (no auth required).
 
 ```bash
@@ -109,6 +116,7 @@ curl https://stg.eventangle.com/api/v2/status
 ```
 
 ### GET /api/v2/ping
+
 Simple ping endpoint for uptime monitoring.
 
 ```bash
@@ -116,9 +124,11 @@ curl https://stg.eventangle.com/api/v2/ping
 ```
 
 ### GET /api/v2/events
+
 List all events for a brand.
 
 **Query params:**
+
 - `brand` (optional): Brand ID (root, abc, cbc, cbl). Defaults to "root"
 - `full` (optional): Include full event data. Defaults to "false"
 
@@ -127,6 +137,7 @@ curl "https://stg.eventangle.com/api/v2/events?brand=root"
 ```
 
 ### GET /api/v2/events/:id
+
 Get single event by ID or slug.
 
 ```bash
@@ -134,9 +145,11 @@ curl "https://stg.eventangle.com/api/v2/events/EVT_123?brand=root"
 ```
 
 ### GET /api/v2/events/:id/bundle/:type
+
 Get bundle for specific surface (public, display, poster, admin).
 
 **Bundle Types:**
+
 - `public` - Full event data for public page
 - `display` - Event data for TV/kiosk display
 - `poster` - Event data with QR codes for printable poster
@@ -147,6 +160,7 @@ curl "https://stg.eventangle.com/api/v2/events/EVT_123/bundle/public?brand=root"
 ```
 
 ### POST /api/v2/events
+
 Create a new event (requires admin auth).
 
 ```bash
@@ -157,6 +171,7 @@ curl -X POST "https://stg.eventangle.com/api/v2/events" \
 ```
 
 ### PUT /api/v2/events/:id
+
 Update an existing event (requires admin auth).
 
 ```bash
@@ -198,12 +213,15 @@ cloudflare-proxy/
 ## Security & Auth
 
 ### Service Account (Worker → Sheets)
+
 Worker holds these secrets (via `wrangler secret put`):
+
 - `GOOGLE_CLIENT_EMAIL` - Service account email
 - `GOOGLE_PRIVATE_KEY` - Service account private key (PEM format)
 - `SHEETS_SPREADSHEET_ID` - Target spreadsheet ID
 
 ### Admin Auth (Client → Worker)
+
 - Header: `Authorization: Bearer <ADMIN_TOKEN>`
 - Token stored as Wrangler secret: `ADMIN_TOKEN`
 
@@ -238,17 +256,20 @@ wrangler secret put ADMIN_TOKEN --env staging
 If the Worker-only architecture encounters critical issues:
 
 1. **Restore GAS code:**
+
    ```bash
    cp archive/gas/*.gs src/mvp/
    cp archive/gas/appsscript.json src/mvp/
    ```
 
 2. **Restore clasp configs:**
+
    ```bash
    cp .clasp-production.json.archived .clasp-production.json
    ```
 
 3. **Push to GAS and create deployment:**
+
    ```bash
    clasp login
    clasp push --force
@@ -272,4 +293,4 @@ See `archive/gas/README.md` for detailed restoration instructions.
 
 ---
 
-*Migration Complete - GAS Retired 2025-12-13*
+_Migration Complete - GAS Retired 2025-12-13_

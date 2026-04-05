@@ -8,12 +8,12 @@
 
 ## Executive Summary
 
-| Aspect | Status | Details |
-|--------|--------|---------|
-| Worker Error Handling | **PASS** | Returns 502 + structured JSON for GAS errors |
-| Negative Check | **PASS** | No HTML wrapped in 200/JSON |
-| Positive Check | **BLOCKED** | GAS deployment has permission issues (M1 dependency) |
-| Configuration Parity | **PASS** | `STAGING_WEB_APP_URL` is single source of truth |
+| Aspect                | Status      | Details                                              |
+| --------------------- | ----------- | ---------------------------------------------------- |
+| Worker Error Handling | **PASS**    | Returns 502 + structured JSON for GAS errors         |
+| Negative Check        | **PASS**    | No HTML wrapped in 200/JSON                          |
+| Positive Check        | **BLOCKED** | GAS deployment has permission issues (M1 dependency) |
+| Configuration Parity  | **PASS**    | `STAGING_WEB_APP_URL` is single source of truth      |
 
 ---
 
@@ -71,6 +71,7 @@ x-worker-version: 2.6.0
 ```
 
 **Response Body:**
+
 ```json
 {
   "ok": false,
@@ -108,10 +109,12 @@ content-type: text/html; charset=utf-8
 ```
 
 **Response Body:**
+
 ```html
-<!DOCTYPE html><html>...
-You do not have permission to access the requested document.
-...</html>
+<!DOCTYPE html>
+<html>
+  ... You do not have permission to access the requested document. ...
+</html>
 ```
 
 ### Analysis
@@ -130,12 +133,12 @@ You do not have permission to access the requested document.
 
 ### Result: **PASS** ✅
 
-| What Should Happen | What Actually Happens |
-|--------------------|----------------------|
-| 5xx status code | ✅ HTTP 502 Bad Gateway |
-| Structured JSON error | ✅ JSON with `errorCode`, `message`, `corrId` |
-| No HTML in response | ✅ Pure JSON, no HTML |
-| Clear error indication | ✅ `GAS_UPSTREAM_NON_JSON` error code |
+| What Should Happen     | What Actually Happens                         |
+| ---------------------- | --------------------------------------------- |
+| 5xx status code        | ✅ HTTP 502 Bad Gateway                       |
+| Structured JSON error  | ✅ JSON with `errorCode`, `message`, `corrId` |
+| No HTML in response    | ✅ Pure JSON, no HTML                         |
+| Clear error indication | ✅ `GAS_UPSTREAM_NON_JSON` error code         |
 
 ### Worker Error Handling Breakdown
 
@@ -155,16 +158,16 @@ The Worker code in `cloudflare-proxy/worker.js` correctly:
 
 The Worker adds excellent debugging headers:
 
-| Header | Value | Purpose |
-|--------|-------|---------|
-| `x-proxied-by` | `eventangle-worker` | Identifies proxy |
-| `x-worker-version` | `2.6.0` | Worker code version |
-| `x-worker-build-version` | `stg-2025.12.09` | Build timestamp |
-| `x-worker-env` | `staging` | Environment identifier |
-| `x-backend-status` | `200` | Original GAS status |
-| `x-backend-duration-ms` | `2670` | Upstream latency |
-| `x-proxy-duration-ms` | `2670` | Total proxy time |
-| `x-error-corrid` | `err_...` | Error correlation ID |
+| Header                   | Value               | Purpose                |
+| ------------------------ | ------------------- | ---------------------- |
+| `x-proxied-by`           | `eventangle-worker` | Identifies proxy       |
+| `x-worker-version`       | `2.6.0`             | Worker code version    |
+| `x-worker-build-version` | `stg-2025.12.09`    | Build timestamp        |
+| `x-worker-env`           | `staging`           | Environment identifier |
+| `x-backend-status`       | `200`               | Original GAS status    |
+| `x-backend-duration-ms`  | `2670`              | Upstream latency       |
+| `x-proxy-duration-ms`    | `2670`              | Total proxy time       |
+| `x-error-corrid`         | `err_...`           | Error correlation ID   |
 
 ---
 
@@ -185,12 +188,12 @@ The Worker uses `getGasUrl(env)` function with this priority:
 
 ## Exit Criteria Status
 
-| Criteria | Status | Evidence |
-|----------|--------|----------|
-| Worker uses exact GAS deployment | ✅ PASS | URL matches deploy-manifest.json |
-| Worker doesn't destroy response | ✅ PASS | Returns structured JSON error, not raw HTML |
-| Correct config: Worker → GAS → JSON proven | ⏸️ BLOCKED | Requires M1 fix (GAS permissions) |
-| Bad config: 5xx + structured JSON error | ✅ PASS | Returns 502 + JSON, not 200 + HTML |
+| Criteria                                   | Status     | Evidence                                    |
+| ------------------------------------------ | ---------- | ------------------------------------------- |
+| Worker uses exact GAS deployment           | ✅ PASS    | URL matches deploy-manifest.json            |
+| Worker doesn't destroy response            | ✅ PASS    | Returns structured JSON error, not raw HTML |
+| Correct config: Worker → GAS → JSON proven | ⏸️ BLOCKED | Requires M1 fix (GAS permissions)           |
+| Bad config: 5xx + structured JSON error    | ✅ PASS    | Returns 502 + JSON, not 200 + HTML          |
 
 ---
 
@@ -199,6 +202,7 @@ The Worker uses `getGasUrl(env)` function with this priority:
 Story M2 cannot fully pass until Story M1 is completed:
 
 ### M1 Status (from GAS_BACKEND_VERIFICATION_M1.md)
+
 - **Status:** FAILED - Permissions Issue
 - **Root Cause:** GAS deployment has restricted access (not "Anyone")
 - **Required Fix:** Create new GAS deployment with "Anyone" access
@@ -214,6 +218,7 @@ curl -i -X POST 'https://stg.eventangle.com/api/rpc' \
 ```
 
 **Expected after M1 fix:**
+
 - HTTP 200
 - Content-Type: application/json
 - Body: `{"ok": true, "data": {...events array...}}`
@@ -231,6 +236,7 @@ The Worker at `cloudflare-proxy/worker.js` demonstrates robust error handling:
    - Parses response and validates JSON structure
 
 2. **Error Codes** (line ~1075):
+
    ```javascript
    const GAS_ERROR_CODES = Object.freeze({
      NON_JSON_RESPONSE: 'GAS_UPSTREAM_NON_JSON',
@@ -239,7 +245,7 @@ The Worker at `cloudflare-proxy/worker.js` demonstrates robust error handling:
      HTTP_ERROR: 'GAS_UPSTREAM_HTTP_ERROR',
      TIMEOUT: 'GAS_TIMEOUT',
      NETWORK_ERROR: 'GAS_NETWORK_ERROR',
-     SERVICE_UNAVAILABLE: 'GAS_SERVICE_UNAVAILABLE'
+     SERVICE_UNAVAILABLE: 'GAS_SERVICE_UNAVAILABLE',
    });
    ```
 
@@ -268,11 +274,13 @@ The Worker at `cloudflare-proxy/worker.js` demonstrates robust error handling:
 ## Test Artifacts
 
 ### Timestamp
+
 - Test run: 2025-12-11T20:18:48Z
 - Worker version: 2.6.0
 - Build version: stg-2025.12.09
 
 ### Correlation ID
+
 - `err_20251211201851_48z25e`
 
 ---

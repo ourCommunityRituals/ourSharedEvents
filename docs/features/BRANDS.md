@@ -23,12 +23,12 @@ Local Venue          Regional Brand         National Brand
 
 ### Example Sponsor Profiles
 
-| Sponsor | Scale | Brand ID | Tier | What They Get |
-|---------|-------|----------|------|---------------|
-| **Nicky's Pub** | Local bar hosting trivia night | `root` | Free | Registration + check-in. Events appear on the shared public page. |
-| **American Bocce Co.** | Regional league across 4 venues | `abc` | Mid | Own brand space. All 4 forms. Surveys after matches. Shared report for league sponsors. |
-| **OurRecordNights** | Multi-city vinyl listening events | `orn` | Mid | Own brand. Email signup for mailing list. Event analytics for venue partners. |
-| **National League Corp** | Franchise operating in 12 markets | `nlc` | Enterprise | White-label. Custom domain `events.nlc.com`. Per-event overrides. Portfolio reports across all markets. Custom QR codes with brand logo. |
+| Sponsor                  | Scale                             | Brand ID | Tier       | What They Get                                                                                                                            |
+| ------------------------ | --------------------------------- | -------- | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| **Nicky's Pub**          | Local bar hosting trivia night    | `root`   | Free       | Registration + check-in. Events appear on the shared public page.                                                                        |
+| **American Bocce Co.**   | Regional league across 4 venues   | `abc`    | Mid        | Own brand space. All 4 forms. Surveys after matches. Shared report for league sponsors.                                                  |
+| **OurRecordNights**      | Multi-city vinyl listening events | `orn`    | Mid        | Own brand. Email signup for mailing list. Event analytics for venue partners.                                                            |
+| **National League Corp** | Franchise operating in 12 markets | `nlc`    | Enterprise | White-label. Custom domain `events.nlc.com`. Per-event overrides. Portfolio reports across all markets. Custom QR codes with brand logo. |
 
 ---
 
@@ -38,22 +38,22 @@ Every event belongs to a **brand**. The default brand is `root`. Other brands ar
 
 ### Brand Filtering
 
-| API | Filter | Behavior |
-|-----|--------|----------|
-| `GET /api/v2/events` | `?brand=root` (default) | Only root brand events |
-| `GET /api/v2/events?brand=abc` | `?brand=abc` | Only ABC brand events |
-| `GET /api/v2/admin/events` | `?brand=root` (default) | Admin view, root brand |
-| `GET /api/v2/admin/events?brand=abc` | `?brand=abc` | Admin view, ABC brand |
+| API                                  | Filter                  | Behavior               |
+| ------------------------------------ | ----------------------- | ---------------------- |
+| `GET /api/v2/events`                 | `?brand=root` (default) | Only root brand events |
+| `GET /api/v2/events?brand=abc`       | `?brand=abc`            | Only ABC brand events  |
+| `GET /api/v2/admin/events`           | `?brand=root` (default) | Admin view, root brand |
+| `GET /api/v2/admin/events?brand=abc` | `?brand=abc`            | Admin view, ABC brand  |
 
 ### Data Model
 
 Events have a `brand_id` column (column B in Google Sheets, will be a column in D1):
 
-| Event ID | Brand ID | Name |
-|----------|----------|------|
-| `bocce-spring` | `root` | Spring Bocce Night |
-| `abc-league-1` | `abc` | ABC League Week 1 |
-| `orn-vinyl-night` | `orn` | OurRecordNights Vinyl |
+| Event ID          | Brand ID | Name                  |
+| ----------------- | -------- | --------------------- |
+| `bocce-spring`    | `root`   | Spring Bocce Night    |
+| `abc-league-1`    | `abc`    | ABC League Week 1     |
+| `orn-vinyl-night` | `orn`    | OurRecordNights Vinyl |
 
 ### Dual-Key Pattern
 
@@ -80,18 +80,18 @@ Admin can see which placements drove registrations
 
 ### Sponsors Table (D1, Phase 2)
 
-| Column | Description |
-|--------|-------------|
-| `id` | Sponsor ID |
-| `event_id` | Which event they sponsor |
-| `name` | Sponsor display name |
-| `logo_url` | Brand logo |
-| `website_url` | Sponsor website |
-| `tier` | Sponsor tier (standard, premium, etc.) |
-| `placement_formats` | JSON array of display configurations |
-| `click_token` | Unique token for click tracking |
-| `impression_token` | Unique token for impression tracking |
-| `is_active` | Whether the sponsorship is active |
+| Column              | Description                            |
+| ------------------- | -------------------------------------- |
+| `id`                | Sponsor ID                             |
+| `event_id`          | Which event they sponsor               |
+| `name`              | Sponsor display name                   |
+| `logo_url`          | Brand logo                             |
+| `website_url`       | Sponsor website                        |
+| `tier`              | Sponsor tier (standard, premium, etc.) |
+| `placement_formats` | JSON array of display configurations   |
+| `click_token`       | Unique token for click tracking        |
+| `impression_token`  | Unique token for impression tracking   |
+| `is_active`         | Whether the sponsorship is active      |
 
 ---
 
@@ -99,13 +99,13 @@ Admin can see which placements drove registrations
 
 Friendly URLs support brand-specific paths:
 
-| URL | Maps To |
-|-----|---------|
-| `/events` | Public events (root brand) |
-| `/abc/events` | Public events (ABC brand) |
-| `/abc/manage` | Admin for ABC brand |
-| `/abc/posters` | Posters for ABC brand |
-| `/abc/analytics` | Analytics for ABC brand |
+| URL              | Maps To                    |
+| ---------------- | -------------------------- |
+| `/events`        | Public events (root brand) |
+| `/abc/events`    | Public events (ABC brand)  |
+| `/abc/manage`    | Admin for ABC brand        |
+| `/abc/posters`   | Posters for ABC brand      |
+| `/abc/analytics` | Analytics for ABC brand    |
 
 See [`docs/architecture/FRIENDLY_URLS.md`](../architecture/FRIENDLY_URLS.md) for the full URL system.
 
@@ -113,20 +113,20 @@ See [`docs/architecture/FRIENDLY_URLS.md`](../architecture/FRIENDLY_URLS.md) for
 
 ## What Each Tier Unlocks for Sponsors
 
-| Capability | Free | Mid | Enterprise |
-|-----------|:----:|:---:|:----------:|
-| Events on shared public page | Y | Y | Y |
-| Own brand_id namespace | - | Y | Y |
-| Brand-specific URLs | - | Y | Y |
-| Registration attribution tracking | Y | Y | Y |
-| Shared analytics report | - | Y | Y |
-| Advanced metrics + PDF export | - | Y | Y |
-| Portfolio reports (multi-event) | - | - | Y |
-| White-label (remove ourSharedEvents) | - | - | Y |
-| Custom domain | - | - | Y |
-| Custom color palette | - | - | Y |
-| Custom QR codes with logo | - | - | Y |
-| Per-event feature overrides | - | - | Y |
+| Capability                           | Free | Mid | Enterprise |
+| ------------------------------------ | :--: | :-: | :--------: |
+| Events on shared public page         |  Y   |  Y  |     Y      |
+| Own brand_id namespace               |  -   |  Y  |     Y      |
+| Brand-specific URLs                  |  -   |  Y  |     Y      |
+| Registration attribution tracking    |  Y   |  Y  |     Y      |
+| Shared analytics report              |  -   |  Y  |     Y      |
+| Advanced metrics + PDF export        |  -   |  Y  |     Y      |
+| Portfolio reports (multi-event)      |  -   |  -  |     Y      |
+| White-label (remove ourSharedEvents) |  -   |  -  |     Y      |
+| Custom domain                        |  -   |  -  |     Y      |
+| Custom color palette                 |  -   |  -  |     Y      |
+| Custom QR codes with logo            |  -   |  -  |     Y      |
+| Per-event feature overrides          |  -   |  -  |     Y      |
 
 See [`TIERS.md`](TIERS.md) for the full 17-flag breakdown.
 
@@ -134,14 +134,14 @@ See [`TIERS.md`](TIERS.md) for the full 17-flag breakdown.
 
 ## Current State
 
-| Capability | Status |
-|-----------|--------|
-| Brand filtering on events API | Working |
-| Dual-key isolation in queries | Working (Sheets), Ready (D1) |
-| Sponsor attribution (`source_placement_id`) | Working (registration form) |
-| Sponsors table (D1) | Migration written, not applied |
-| Brand-specific friendly URLs | Designed, not yet routed |
-| White-label branding | Flag exists, UI not implemented |
-| Custom domains | Flag exists, DNS not configured |
-| Custom color palette | Flag exists, CSS not parameterized |
-| Sponsor dashboard surface | Prototyped in archive, not in MVP |
+| Capability                                  | Status                             |
+| ------------------------------------------- | ---------------------------------- |
+| Brand filtering on events API               | Working                            |
+| Dual-key isolation in queries               | Working (Sheets), Ready (D1)       |
+| Sponsor attribution (`source_placement_id`) | Working (registration form)        |
+| Sponsors table (D1)                         | Migration written, not applied     |
+| Brand-specific friendly URLs                | Designed, not yet routed           |
+| White-label branding                        | Flag exists, UI not implemented    |
+| Custom domains                              | Flag exists, DNS not configured    |
+| Custom color palette                        | Flag exists, CSS not parameterized |
+| Sponsor dashboard surface                   | Prototyped in archive, not in MVP  |

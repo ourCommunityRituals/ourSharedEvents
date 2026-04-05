@@ -14,11 +14,11 @@ Don't blow up existing QR flows while you cut over from GAS to Workers. This is 
 
 ## Scope
 
-| Component | Status |
-|-----------|--------|
-| Cloudflare Worker router config | In scope |
-| GAS backend (leave as legacy) | In scope (read-only, no changes) |
-| DNS / routes `stg.eventangle.com` → Worker | In scope |
+| Component                                  | Status                           |
+| ------------------------------------------ | -------------------------------- |
+| Cloudflare Worker router config            | In scope                         |
+| GAS backend (leave as legacy)              | In scope (read-only, no changes) |
+| DNS / routes `stg.eventangle.com` → Worker | In scope                         |
 
 ## Epic Definition of Done
 
@@ -122,6 +122,7 @@ And response body does NOT contain HTML
 **Priority:** P0 (Critical) – Currently BLOCKED
 
 **Notes:**
+
 - Current issue: GAS POST returns HTML permission error
 - Resolution: Requires new deployment with correct access settings
 - GitHub Action "Fix GAS Permissions" available for automation
@@ -159,6 +160,7 @@ And no broken QR is exposed to the user
 **Priority:** P1 (High)
 
 **Files:**
+
 - `tests/api/smoke/worker-gas-routing.spec.ts`
 - `tests/e2e/poster-qr.spec.ts` (new)
 
@@ -188,6 +190,7 @@ And no data loss occurs
 - [ ] Document DNS TTL considerations (currently 60s for stg.eventangle.com)
 
 **Rollback Steps:**
+
 1. Set `USE_WORKER_API=false` in environment
 2. Deploy Worker with v2 routes returning 503
 3. Verify all traffic flows through GAS proxy
@@ -219,14 +222,14 @@ And response times are within SLA (< 3s for GAS, < 500ms for Worker)
 - [ ] Create `tests/smoke/coexistence.spec.ts`
 - [ ] Test matrix:
 
-| Endpoint | Method | Expected Source |
-|----------|--------|-----------------|
-| `/api/rpc {method: api_status}` | POST | GAS proxy |
-| `/api/rpc {method: api_list}` | POST | GAS proxy |
-| `/api/rpc {method: api_getPosterBundle}` | POST | GAS proxy |
-| `/api/v2/status` | GET | Worker-native |
-| `/api/v2/events` | GET | Worker-native |
-| `/api/v2/events/:id/bundle/poster` | GET | Worker-native |
+| Endpoint                                 | Method | Expected Source |
+| ---------------------------------------- | ------ | --------------- |
+| `/api/rpc {method: api_status}`          | POST   | GAS proxy       |
+| `/api/rpc {method: api_list}`            | POST   | GAS proxy       |
+| `/api/rpc {method: api_getPosterBundle}` | POST   | GAS proxy       |
+| `/api/v2/status`                         | GET    | Worker-native   |
+| `/api/v2/events`                         | GET    | Worker-native   |
+| `/api/v2/events/:id/bundle/poster`       | GET    | Worker-native   |
 
 - [ ] Add GitHub Actions workflow: `smoke-coexistence.yml`
 - [ ] Run on every PR to `main`
@@ -269,15 +272,15 @@ And I see latency percentiles by version (p50, p95, p99)
 
 ## Epic 0 Summary
 
-| Story | Points | Priority | Status |
-|-------|--------|----------|--------|
-| 0.1 Coexistence Router Pattern | 3 | P0 | ✅ Done (commit 168deda) |
-| 0.2 Feature Flag | 2 | P0 | Pending |
-| 0.3 GAS Backend Validation | 2 | P0 | ⚠️ Blocked (permissions) |
-| 0.4 QR Invariant Protection | 5 | P1 | Pending |
-| 0.5 Rollback Runbook | 3 | P1 | Pending |
-| 0.6 Smoke Test Suite | 5 | P1 | Pending |
-| 0.7 Observability | 3 | P2 | Pending |
+| Story                          | Points | Priority | Status                   |
+| ------------------------------ | ------ | -------- | ------------------------ |
+| 0.1 Coexistence Router Pattern | 3      | P0       | ✅ Done (commit 168deda) |
+| 0.2 Feature Flag               | 2      | P0       | Pending                  |
+| 0.3 GAS Backend Validation     | 2      | P0       | ⚠️ Blocked (permissions) |
+| 0.4 QR Invariant Protection    | 5      | P1       | Pending                  |
+| 0.5 Rollback Runbook           | 3      | P1       | Pending                  |
+| 0.6 Smoke Test Suite           | 5      | P1       | Pending                  |
+| 0.7 Observability              | 3      | P2       | Pending                  |
 
 **Total Points:** 23
 **Critical Path:** Stories 0.1, 0.2, 0.3 must complete before any traffic shift
@@ -327,26 +330,26 @@ And I see latency percentiles by version (p50, p95, p99)
 
 ## Key Files Reference
 
-| File | Purpose |
-|------|---------|
-| `cloudflare-proxy/worker.js` | Router logic (v1 vs v2) |
-| `cloudflare-proxy/wrangler.toml` | Worker config & routes |
-| `cloudflare-proxy/src/api/` | Worker-native v2 handlers |
-| `src/mvp/Code.gs` | GAS backend (legacy) |
-| `config/brand-config.js` | Frontend feature flags |
-| `deploy-manifest.json` | Deployment configuration |
+| File                             | Purpose                   |
+| -------------------------------- | ------------------------- |
+| `cloudflare-proxy/worker.js`     | Router logic (v1 vs v2)   |
+| `cloudflare-proxy/wrangler.toml` | Worker config & routes    |
+| `cloudflare-proxy/src/api/`      | Worker-native v2 handlers |
+| `src/mvp/Code.gs`                | GAS backend (legacy)      |
+| `config/brand-config.js`         | Frontend feature flags    |
+| `deploy-manifest.json`           | Deployment configuration  |
 
 ---
 
 ## Risk Register (Epic 0)
 
-| Risk | Likelihood | Impact | Mitigation |
-|------|------------|--------|------------|
-| GAS POST permission blocks testing | High | High | Story 0.3: Redeploy with correct settings |
-| QR codes break during cutover | Medium | Critical | Story 0.4: Invariant tests |
-| Worker latency spikes | Low | Medium | Story 0.7: Observability + alerts |
-| Rollback takes too long | Low | High | Story 0.5: Documented runbook |
-| Frontend calls wrong endpoint | Medium | Medium | Story 0.2: Feature flag |
+| Risk                               | Likelihood | Impact   | Mitigation                                |
+| ---------------------------------- | ---------- | -------- | ----------------------------------------- |
+| GAS POST permission blocks testing | High       | High     | Story 0.3: Redeploy with correct settings |
+| QR codes break during cutover      | Medium     | Critical | Story 0.4: Invariant tests                |
+| Worker latency spikes              | Low        | Medium   | Story 0.7: Observability + alerts         |
+| Rollback takes too long            | Low        | High     | Story 0.5: Documented runbook             |
+| Frontend calls wrong endpoint      | Medium     | Medium   | Story 0.2: Feature flag                   |
 
 ---
 
@@ -358,13 +361,13 @@ Shift all read traffic (event listing, retrieval, bundles) from GAS to Worker-na
 
 ## Scope
 
-| Component | Status |
-|-----------|--------|
-| `/api/v2/events` (list) | In scope |
-| `/api/v2/events/:id` (get) | In scope |
-| `/api/v2/events/:id/bundle/*` (public, display, poster) | In scope |
-| Frontend NUSDK updates | In scope |
-| GAS read APIs | Out of scope (leave as fallback) |
+| Component                                               | Status                           |
+| ------------------------------------------------------- | -------------------------------- |
+| `/api/v2/events` (list)                                 | In scope                         |
+| `/api/v2/events/:id` (get)                              | In scope                         |
+| `/api/v2/events/:id/bundle/*` (public, display, poster) | In scope                         |
+| Frontend NUSDK updates                                  | In scope                         |
+| GAS read APIs                                           | Out of scope (leave as fallback) |
 
 ## Epic Definition of Done
 
@@ -411,6 +414,7 @@ And existing behavior is unchanged
 **Priority:** P0 (Critical)
 
 **Files:**
+
 - `config/nusdk.js` - Add v2 fetch path
 - `src/mvp/Public.html` - No changes needed (uses NUSDK)
 - `cloudflare-proxy/src/api/events.js` - Already implemented
@@ -483,6 +487,7 @@ And poster page shows error message (not broken QR)
 **Priority:** P0 (Critical)
 
 **QR Invariant Check:**
+
 - `event.qr.public` must be valid data URI
 - `event.qr.signup` must be valid data URI
 - Both must decode to correct URLs
@@ -580,6 +585,7 @@ And alert fires
 - [ ] Document canary deployment procedure
 
 **Canary Rollout Plan:**
+
 1. Staging: 100% v2 (already done)
 2. Production: 10% → 25% → 50% → 100%
 3. Each step requires 24h stability
@@ -591,14 +597,14 @@ And alert fires
 
 ## Epic 1 Summary
 
-| Story | Points | Priority | Status |
-|-------|--------|----------|--------|
-| 1.1 Events List | 5 | P0 | Pending |
-| 1.2 Single Event | 3 | P0 | Pending |
-| 1.3 Poster Bundle | 5 | P0 | Pending |
-| 1.4 Display Bundle | 3 | P1 | Pending |
-| 1.5 Public Bundle | 2 | P1 | Pending |
-| 1.6 Canary Deployment | 5 | P1 | Pending |
+| Story                 | Points | Priority | Status  |
+| --------------------- | ------ | -------- | ------- |
+| 1.1 Events List       | 5      | P0       | Pending |
+| 1.2 Single Event      | 3      | P0       | Pending |
+| 1.3 Poster Bundle     | 5      | P0       | Pending |
+| 1.4 Display Bundle    | 3      | P1       | Pending |
+| 1.5 Public Bundle     | 2      | P1       | Pending |
+| 1.6 Canary Deployment | 5      | P1       | Pending |
 
 **Total Points:** 23
 **Dependencies:** Epic 0 complete (especially 0.2 Feature Flag, 0.3 GAS Validation)
@@ -607,13 +613,13 @@ And alert fires
 
 ## API Mapping Reference (v1 → v2)
 
-| GAS (v1) | Worker (v2) | Method |
-|----------|-------------|--------|
-| `api_list` | `/api/v2/events` | GET |
-| `api_get` | `/api/v2/events/:id` | GET |
-| `api_getPublicBundle` | `/api/v2/events/:id/bundle/public` | GET |
-| `api_getDisplayBundle` | `/api/v2/events/:id/bundle/display` | GET |
-| `api_getPosterBundle` | `/api/v2/events/:id/bundle/poster` | GET |
+| GAS (v1)               | Worker (v2)                         | Method |
+| ---------------------- | ----------------------------------- | ------ |
+| `api_list`             | `/api/v2/events`                    | GET    |
+| `api_get`              | `/api/v2/events/:id`                | GET    |
+| `api_getPublicBundle`  | `/api/v2/events/:id/bundle/public`  | GET    |
+| `api_getDisplayBundle` | `/api/v2/events/:id/bundle/display` | GET    |
+| `api_getPosterBundle`  | `/api/v2/events/:id/bundle/poster`  | GET    |
 
 ---
 
@@ -625,15 +631,15 @@ Migrate event creation and updates from GAS to Worker-native v2 APIs. This is hi
 
 ## Scope
 
-| Component | Status |
-|-----------|--------|
-| `POST /api/v2/events` (create) | In scope |
-| `PUT /api/v2/events/:id` (update) | In scope |
-| QR code generation (Worker-native) | In scope |
-| Event validation | In scope |
-| Admin authentication | In scope |
-| Analytics tracking | Out of scope (Epic 3) |
-| Form generation | Out of scope (Epic 3) |
+| Component                          | Status                |
+| ---------------------------------- | --------------------- |
+| `POST /api/v2/events` (create)     | In scope              |
+| `PUT /api/v2/events/:id` (update)  | In scope              |
+| QR code generation (Worker-native) | In scope              |
+| Event validation                   | In scope              |
+| Admin authentication               | In scope              |
+| Analytics tracking                 | Out of scope (Epic 3) |
+| Form generation                    | Out of scope (Epic 3) |
 
 ## Epic Definition of Done
 
@@ -683,6 +689,7 @@ And no partial event is created
 **Priority:** P0 (Critical)
 
 **Validation Rules (must match GAS):**
+
 - `name`: required, string, max 200 chars
 - `date`: required, ISO 8601 format
 - `venue`: required, string
@@ -730,6 +737,7 @@ And no data is corrupted
 **Priority:** P0 (Critical)
 
 **Concurrency Handling:**
+
 - Client sends `If-Match: <etag>` header
 - Server rejects if ETag mismatch (409 Conflict)
 - Client must re-fetch and retry
@@ -770,6 +778,7 @@ And error message indicates QR failure
 **Priority:** P0 (Critical)
 
 **QR Spec:**
+
 - Format: PNG, base64 data URI
 - Size: 200x200px minimum
 - Error correction: Level M
@@ -813,6 +822,7 @@ Then response is 403 Forbidden
 **Priority:** P0 (Critical)
 
 **Auth Flow:**
+
 ```
 Authorization: Bearer <ADMIN_TOKEN>
 Token validated against per-brand secret
@@ -889,6 +899,7 @@ And admin sees success (transparent retry)
 - [ ] Add alert: v2 write failure rate > 1%
 
 **Rollout Plan:**
+
 1. Staging: 100% v2 writes
 2. Production: 10% → 25% → 50% → 100%
 3. Minimum 48h at each step
@@ -901,14 +912,14 @@ And admin sees success (transparent retry)
 
 ## Epic 2 Summary
 
-| Story | Points | Priority | Status |
-|-------|--------|----------|--------|
-| 2.1 Event Creation | 8 | P0 | Pending |
-| 2.2 Event Update | 8 | P0 | Pending |
-| 2.3 QR Parity | 3 | P0 | Pending |
-| 2.4 Admin Auth | 3 | P0 | Pending |
-| 2.5 Audit Trail | 5 | P1 | Pending |
-| 2.6 Canary Rollout | 5 | P1 | Pending |
+| Story              | Points | Priority | Status  |
+| ------------------ | ------ | -------- | ------- |
+| 2.1 Event Creation | 8      | P0       | Pending |
+| 2.2 Event Update   | 8      | P0       | Pending |
+| 2.3 QR Parity      | 3      | P0       | Pending |
+| 2.4 Admin Auth     | 3      | P0       | Pending |
+| 2.5 Audit Trail    | 5      | P1       | Pending |
+| 2.6 Canary Rollout | 5      | P1       | Pending |
 
 **Total Points:** 32
 **Dependencies:** Epic 1 complete (read APIs proven stable)
@@ -946,13 +957,13 @@ Remove Google Apps Script from the critical path entirely. This eliminates the l
 
 ## Scope
 
-| Component | Status |
-|-----------|--------|
-| Remove GAS proxy routes from Worker | In scope |
-| Migrate remaining GAS-only features | In scope |
-| Archive GAS codebase | In scope |
-| Update documentation | In scope |
-| DNS changes | Out of scope (no DNS changes needed) |
+| Component                           | Status                               |
+| ----------------------------------- | ------------------------------------ |
+| Remove GAS proxy routes from Worker | In scope                             |
+| Migrate remaining GAS-only features | In scope                             |
+| Archive GAS codebase                | In scope                             |
+| Update documentation                | In scope                             |
+| DNS changes                         | Out of scope (no DNS changes needed) |
 
 ## Epic Definition of Done
 
@@ -1213,15 +1224,15 @@ Then GAS proxy can be re-enabled within 5 minutes
 
 ## Epic 3 Summary
 
-| Story | Points | Priority | Status |
-|-------|--------|----------|--------|
-| 3.1 Analytics Migration | 8 | P1 | Pending |
-| 3.2 Form Generation | 8 | P2 | Pending |
-| 3.3 Shortlinks | 5 | P2 | Pending |
-| 3.4 Remove GAS Proxy | 3 | P0 | Blocked |
-| 3.5 Archive GAS | 2 | P2 | Pending |
-| 3.6 Update Docs | 3 | P2 | Pending |
-| 3.7 Production Cutover | 5 | P0 | Blocked |
+| Story                   | Points | Priority | Status  |
+| ----------------------- | ------ | -------- | ------- |
+| 3.1 Analytics Migration | 8      | P1       | Pending |
+| 3.2 Form Generation     | 8      | P2       | Pending |
+| 3.3 Shortlinks          | 5      | P2       | Pending |
+| 3.4 Remove GAS Proxy    | 3      | P0       | Blocked |
+| 3.5 Archive GAS         | 2      | P2       | Pending |
+| 3.6 Update Docs         | 3      | P2       | Pending |
+| 3.7 Production Cutover  | 5      | P0       | Blocked |
 
 **Total Points:** 34
 **Dependencies:** Epic 2 complete, 14 days stability in staging
@@ -1259,6 +1270,7 @@ Then GAS proxy can be re-enabled within 5 minutes
 ```
 
 **Key Changes:**
+
 - ❌ No GAS in request path
 - ✅ All APIs handled by Worker
 - ✅ Direct Sheets API access (service account)
@@ -1290,30 +1302,30 @@ Risk Containment          Read APIs                 Write APIs                GA
 
 # Appendix: Story Point Reference
 
-| Points | Complexity | Examples |
-|--------|------------|----------|
-| 1-2 | Trivial | Config change, doc update |
-| 3 | Small | Single endpoint, unit tests |
-| 5 | Medium | Feature with tests, integration |
-| 8 | Large | Complex feature, E2E tests |
-| 13+ | Epic-level | Should be broken down |
+| Points | Complexity | Examples                        |
+| ------ | ---------- | ------------------------------- |
+| 1-2    | Trivial    | Config change, doc update       |
+| 3      | Small      | Single endpoint, unit tests     |
+| 5      | Medium     | Feature with tests, integration |
+| 8      | Large      | Complex feature, E2E tests      |
+| 13+    | Epic-level | Should be broken down           |
 
 ---
 
 # Appendix: Risk Register (All Epics)
 
-| Epic | Risk | Likelihood | Impact | Mitigation |
-|------|------|------------|--------|------------|
-| 0 | GAS POST permission | High | High | Redeploy GAS |
-| 0 | QR codes break | Medium | Critical | Invariant tests |
-| 1 | v2 latency spikes | Low | Medium | Canary + monitoring |
-| 1 | Schema mismatch | Medium | High | Schema validation tests |
-| 2 | Data loss on write | Low | Critical | Atomic writes + audit |
-| 2 | QR quality differs | Low | High | Visual regression tests |
-| 3 | Premature GAS removal | Medium | Critical | Traffic verification |
-| 3 | Analytics gap | Medium | Medium | Batch write buffer |
+| Epic | Risk                  | Likelihood | Impact   | Mitigation              |
+| ---- | --------------------- | ---------- | -------- | ----------------------- |
+| 0    | GAS POST permission   | High       | High     | Redeploy GAS            |
+| 0    | QR codes break        | Medium     | Critical | Invariant tests         |
+| 1    | v2 latency spikes     | Low        | Medium   | Canary + monitoring     |
+| 1    | Schema mismatch       | Medium     | High     | Schema validation tests |
+| 2    | Data loss on write    | Low        | Critical | Atomic writes + audit   |
+| 2    | QR quality differs    | Low        | High     | Visual regression tests |
+| 3    | Premature GAS removal | Medium     | Critical | Traffic verification    |
+| 3    | Analytics gap         | Medium     | Medium   | Batch write buffer      |
 
 ---
 
-*Document generated: 2024-12-12*
-*Last updated: See git history*
+_Document generated: 2024-12-12_
+_Last updated: See git history_

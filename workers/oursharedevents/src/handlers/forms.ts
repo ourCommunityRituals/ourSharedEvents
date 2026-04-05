@@ -24,7 +24,14 @@
  *   GET /api/v2/admin/events/:id/forms/email-signups  → list email signups (count only)
  */
 
-import { type FormsDbEnv, hashEmail, bucketTimestamp, encryptEmail, generateId } from '../lib/forms-db';
+import {
+  type FormsDbEnv,
+  hashEmail,
+  bucketTimestamp,
+  encryptEmail,
+  generateId,
+} from '../lib/forms-db';
+import { corsHeaders } from '../lib/cors';
 
 export interface FormsEnv extends FormsDbEnv {
   FORMS_ENCRYPTION_KEY?: string;
@@ -44,20 +51,26 @@ function requestId(): string {
   return crypto.randomUUID ? crypto.randomUUID() : `req-${Date.now()}`;
 }
 
-function jsonResponse(body: Record<string, unknown>, status = 200): Response {
+// EFF-3: Use corsHeaders() from lib/cors.ts so form responses respect the same
+// origin allowlist as the router's OPTIONS preflight — never * bypass.
+function jsonResponse(body: Record<string, unknown>, request: Request, status = 200): Response {
   return Response.json(body, {
     status,
     headers: {
       'X-Request-Id': requestId(),
-      'Access-Control-Allow-Origin': '*',
+      ...corsHeaders(request),
       'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     },
   });
 }
 
-function errorResponse(code: string, message: string, status: number): Response {
-  return jsonResponse({ ok: false, status, code, error: message, timestamp: new Date().toISOString() }, status);
+function errorResponse(code: string, message: string, status: number, request: Request): Response {
+  return jsonResponse(
+    { ok: false, status, code, error: message, timestamp: new Date().toISOString() },
+    request,
+    status
+  );
 }
 
 function isValidEventId(id: string): boolean {
@@ -81,38 +94,56 @@ function logFormEvent(
   formType: FormType,
   eventId: string,
   action: 'submit' | 'admin_read' | 'lifecycle' | 'error',
-  meta: Record<string, unknown> = {},
+  meta: Record<string, unknown> = {}
 ): void {
-  console.log(JSON.stringify({
-    type: 'FORM_EVENT',
-    formType,
-    eventId,
-    action,
-    timestamp: new Date().toISOString(),
-    ...meta,
-  }));
+  console.log(
+    JSON.stringify({
+      type: 'FORM_EVENT',
+      formType,
+      eventId,
+      action,
+      timestamp: new Date().toISOString(),
+      ...meta,
+    })
+  );
 }
 
 /** BE: Consistent D1 error handling — logs and returns 503 */
-function handleDbError(formType: FormType, eventId: string, err: unknown): Response {
+function handleDbError(
+  formType: FormType,
+  eventId: string,
+  err: unknown,
+  request: Request
+): Response {
   const message = err instanceof Error ? err.message : String(err);
   logFormEvent(formType, eventId, 'error', { error: message });
-  return errorResponse('DB_ERROR', 'Service temporarily unavailable', 503);
+  return errorResponse('DB_ERROR', 'Service temporarily unavailable', 503, request);
 }
 
 /** Container: shared pre-processing for all public form submissions. */
 async function validateFormRequest(
   request: Request,
   eventId: string,
-  requireBody: boolean,
+  requireBody: boolean
 ): Promise<{ body: Record<string, unknown> | null; error: Response | null }> {
   if (!isValidEventId(eventId)) {
-    return { body: null, error: errorResponse('INVALID_EVENT_ID', 'Invalid event ID format', 400) };
+    return {
+      body: null,
+      error: errorResponse('INVALID_EVENT_ID', 'Invalid event ID format', 400, request),
+    };
   }
   if (!requireBody) return { body: null, error: null };
   const body = await parseJsonBody(request);
   if (!body) {
-    return { body: null, error: errorResponse('INVALID_BODY', 'Request body must be valid JSON under 16KB', 400) };
+    return {
+      body: null,
+      error: errorResponse(
+        'INVALID_BODY',
+        'Request body must be valid JSON under 16KB',
+        400,
+        request
+      ),
+    };
   }
   return { body, error: null };
 }
@@ -122,7 +153,7 @@ async function validateFormRequest(
 export async function handleFormRegistration(
   request: Request,
   env: FormsEnv,
-  eventId: string,
+  eventId: string
 ): Promise<Response> {
   const start = Date.now();
   const { body, error } = await validateFormRequest(request, eventId, true);
@@ -130,7 +161,8 @@ export async function handleFormRegistration(
 
   const name = typeof body!.name === 'string' ? body!.name.trim().slice(0, 200) : undefined;
   const email = typeof body!.email === 'string' ? body!.email.trim().slice(0, 320) : undefined;
-  const sourcePlacementId = typeof body!.sourcePlacementId === 'string' ? body!.sourcePlacementId.slice(0, 128) : undefined;
+  const sourcePlacementId =
+    typeof body!.sourcePlacementId === 'string' ? body!.sourcePlacementId.slice(0, 128) : undefined;
 
   const emailHash = email ? await hashEmail(email) : undefined;
   const bucket = bucketTimestamp();
@@ -140,16 +172,24 @@ export async function handleFormRegistration(
   try {
     await env.FORMS_DB.prepare(
       `INSERT INTO form_registrations (id, event_id, source_placement_id, attendee_name, attendee_email_hash, registration_bucket, status, expires_at)
-       VALUES (?, ?, ?, ?, ?, ?, 'confirmed', ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, 'confirmed', ?)`
     )
-      .bind(id, eventId, sourcePlacementId ?? null, name ?? null, emailHash ?? null, bucket, expiresAt)
+      .bind(
+        id,
+        eventId,
+        sourcePlacementId ?? null,
+        name ?? null,
+        emailHash ?? null,
+        bucket,
+        expiresAt
+      )
       .run();
   } catch (err) {
-    return handleDbError('register', eventId, err);
+    return handleDbError('register', eventId, err, request);
   }
 
   logFormEvent('register', eventId, 'submit', { id, latencyMs: Date.now() - start });
-  return jsonResponse({ ok: true, id, registrationBucket: bucket });
+  return jsonResponse({ ok: true, id, registrationBucket: bucket }, request);
 }
 
 // ─── Public: Check-in ───────────────────────────────────────────────────────────
@@ -157,7 +197,7 @@ export async function handleFormRegistration(
 export async function handleFormCheckin(
   request: Request,
   env: FormsEnv,
-  eventId: string,
+  eventId: string
 ): Promise<Response> {
   const start = Date.now();
   const { error } = await validateFormRequest(request, eventId, false);
@@ -168,22 +208,22 @@ export async function handleFormCheckin(
     await env.FORMS_DB.prepare(
       `INSERT INTO checkin_counts (id, event_id, total_count, updated_at)
        VALUES (?, ?, 1, datetime('now'))
-       ON CONFLICT(event_id) DO UPDATE SET total_count = total_count + 1, updated_at = datetime('now')`,
+       ON CONFLICT(event_id) DO UPDATE SET total_count = total_count + 1, updated_at = datetime('now')`
     )
       .bind(id, eventId)
       .run();
 
     const result = await env.FORMS_DB.prepare(
-      'SELECT total_count FROM checkin_counts WHERE event_id = ?',
+      'SELECT total_count FROM checkin_counts WHERE event_id = ?'
     )
       .bind(eventId)
       .first<{ total_count: number }>();
 
     const count = result?.total_count ?? 1;
     logFormEvent('checkin', eventId, 'submit', { count, latencyMs: Date.now() - start });
-    return jsonResponse({ ok: true, count });
+    return jsonResponse({ ok: true, count }, request);
   } catch (err) {
-    return handleDbError('checkin', eventId, err);
+    return handleDbError('checkin', eventId, err, request);
   }
 }
 
@@ -192,7 +232,7 @@ export async function handleFormCheckin(
 export async function handleFormSurvey(
   request: Request,
   env: FormsEnv,
-  eventId: string,
+  eventId: string
 ): Promise<Response> {
   const start = Date.now();
   const { body, error } = await validateFormRequest(request, eventId, true);
@@ -200,7 +240,7 @@ export async function handleFormSurvey(
 
   const responses = body!.responses;
   if (!responses || typeof responses !== 'object') {
-    return errorResponse('MISSING_FIELD', 'Missing required field: responses', 400);
+    return errorResponse('MISSING_FIELD', 'Missing required field: responses', 400, request);
   }
 
   const id = generateId();
@@ -209,16 +249,16 @@ export async function handleFormSurvey(
   try {
     await env.FORMS_DB.prepare(
       `INSERT INTO form_surveys (id, event_id, responses_json, submitted_bucket, pii_scrubbed)
-       VALUES (?, ?, ?, ?, 0)`,
+       VALUES (?, ?, ?, ?, 0)`
     )
       .bind(id, eventId, JSON.stringify(responses), bucket)
       .run();
   } catch (err) {
-    return handleDbError('survey', eventId, err);
+    return handleDbError('survey', eventId, err, request);
   }
 
   logFormEvent('survey', eventId, 'submit', { id, latencyMs: Date.now() - start });
-  return jsonResponse({ ok: true, id });
+  return jsonResponse({ ok: true, id }, request);
 }
 
 // ─── Public: Email Signup ───────────────────────────────────────────────────────
@@ -226,30 +266,34 @@ export async function handleFormSurvey(
 export async function handleFormEmailSignup(
   request: Request,
   env: FormsEnv,
-  eventId: string,
+  eventId: string
 ): Promise<Response> {
   const start = Date.now();
   const { body, error } = await validateFormRequest(request, eventId, true);
   if (error) return error;
 
   const email = typeof body!.email === 'string' ? body!.email.trim().slice(0, 320) : '';
-  if (!email) return errorResponse('MISSING_FIELD', 'Missing required field: email', 400);
+  if (!email) return errorResponse('MISSING_FIELD', 'Missing required field: email', 400, request);
 
   const encryptionKey = env.FORMS_ENCRYPTION_KEY;
-  if (!encryptionKey) return errorResponse('CONFIG_ERROR', 'FORMS_ENCRYPTION_KEY not configured', 503);
+  if (!encryptionKey)
+    return errorResponse('CONFIG_ERROR', 'FORMS_ENCRYPTION_KEY not configured', 503, request);
 
   try {
     const emailHash = await hashEmail(email);
 
     const existing = await env.FORMS_DB.prepare(
-      'SELECT id FROM email_signups WHERE event_id = ? AND email_hash = ?',
+      'SELECT id FROM email_signups WHERE event_id = ? AND email_hash = ?'
     )
       .bind(eventId, emailHash)
       .first();
 
     if (existing) {
-      logFormEvent('email-signup', eventId, 'submit', { duplicate: true, latencyMs: Date.now() - start });
-      return jsonResponse({ ok: true, id: existing.id as string, duplicate: true });
+      logFormEvent('email-signup', eventId, 'submit', {
+        duplicate: true,
+        latencyMs: Date.now() - start,
+      });
+      return jsonResponse({ ok: true, id: existing.id as string, duplicate: true }, request);
     }
 
     const encrypted = await encryptEmail(email, encryptionKey);
@@ -259,100 +303,100 @@ export async function handleFormEmailSignup(
 
     await env.FORMS_DB.prepare(
       `INSERT INTO email_signups (id, event_id, email_hash, email_encrypted, signup_bucket, retention_expires_at)
-       VALUES (?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?)`
     )
       .bind(id, eventId, emailHash, encrypted, bucket, retentionExpiresAt)
       .run();
 
     logFormEvent('email-signup', eventId, 'submit', { id, latencyMs: Date.now() - start });
-    return jsonResponse({ ok: true, id });
+    return jsonResponse({ ok: true, id }, request);
   } catch (err) {
-    return handleDbError('email-signup', eventId, err);
+    return handleDbError('email-signup', eventId, err, request);
   }
 }
 
 // ─── Admin: List Registrations ──────────────────────────────────────────────────
 
 export async function handleAdminRegistrations(
-  _request: Request,
+  request: Request,
   env: FormsEnv,
-  eventId: string,
+  eventId: string
 ): Promise<Response> {
   try {
     const result = await env.FORMS_DB.prepare(
-      'SELECT id, event_id, source_placement_id, attendee_name, attendee_email_hash, registration_bucket, status, created_at FROM form_registrations WHERE event_id = ? ORDER BY created_at DESC',
+      'SELECT id, event_id, source_placement_id, attendee_name, attendee_email_hash, registration_bucket, status, created_at FROM form_registrations WHERE event_id = ? ORDER BY created_at DESC'
     )
       .bind(eventId)
       .all();
 
     logFormEvent('register', eventId, 'admin_read', { count: result.results.length });
-    return jsonResponse({ ok: true, items: result.results, count: result.results.length });
+    return jsonResponse({ ok: true, items: result.results, count: result.results.length }, request);
   } catch (err) {
-    return handleDbError('register', eventId, err);
+    return handleDbError('register', eventId, err, request);
   }
 }
 
 // ─── Admin: Check-in Count ──────────────────────────────────────────────────────
 
 export async function handleAdminCheckinCount(
-  _request: Request,
+  request: Request,
   env: FormsEnv,
-  eventId: string,
+  eventId: string
 ): Promise<Response> {
   try {
     const result = await env.FORMS_DB.prepare(
-      'SELECT total_count FROM checkin_counts WHERE event_id = ?',
+      'SELECT total_count FROM checkin_counts WHERE event_id = ?'
     )
       .bind(eventId)
       .first<{ total_count: number }>();
 
     const count = result?.total_count ?? 0;
     logFormEvent('checkin', eventId, 'admin_read', { count });
-    return jsonResponse({ ok: true, count });
+    return jsonResponse({ ok: true, count }, request);
   } catch (err) {
-    return handleDbError('checkin', eventId, err);
+    return handleDbError('checkin', eventId, err, request);
   }
 }
 
 // ─── Admin: List Surveys (PII-scrubbed only) ───────────────────────────────────
 
 export async function handleAdminSurveys(
-  _request: Request,
+  request: Request,
   env: FormsEnv,
-  eventId: string,
+  eventId: string
 ): Promise<Response> {
   try {
     const result = await env.FORMS_DB.prepare(
-      'SELECT id, event_id, responses_json, submitted_bucket, created_at FROM form_surveys WHERE event_id = ? AND pii_scrubbed = 1 ORDER BY created_at DESC',
+      'SELECT id, event_id, responses_json, submitted_bucket, created_at FROM form_surveys WHERE event_id = ? AND pii_scrubbed = 1 ORDER BY created_at DESC'
     )
       .bind(eventId)
       .all();
 
     logFormEvent('survey', eventId, 'admin_read', { count: result.results.length });
-    return jsonResponse({ ok: true, items: result.results, count: result.results.length });
+    return jsonResponse({ ok: true, items: result.results, count: result.results.length }, request);
   } catch (err) {
-    return handleDbError('survey', eventId, err);
+    return handleDbError('survey', eventId, err, request);
   }
 }
 
 // ─── Admin: Email Signup Count ──────────────────────────────────────────────────
 
 export async function handleAdminEmailSignupCount(
-  _request: Request,
+  request: Request,
   env: FormsEnv,
-  eventId: string,
+  eventId: string
 ): Promise<Response> {
   try {
     const result = await env.FORMS_DB.prepare(
-      'SELECT COUNT(*) as cnt FROM email_signups WHERE event_id = ?',
+      'SELECT COUNT(*) as cnt FROM email_signups WHERE event_id = ?'
     )
       .bind(eventId)
       .first<{ cnt: number }>();
 
     const count = result?.cnt ?? 0;
     logFormEvent('email-signup', eventId, 'admin_read', { count });
-    return jsonResponse({ ok: true, count });
+    return jsonResponse({ ok: true, count }, request);
   } catch (err) {
-    return handleDbError('email-signup', eventId, err);
+    return handleDbError('email-signup', eventId, err, request);
   }
 }

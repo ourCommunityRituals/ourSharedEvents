@@ -8,12 +8,12 @@
 
 ## Test Summary
 
-| Test | Result | Details |
-|------|--------|---------|
-| GAS URL Reachable | PASS | HTTP 200 returned |
-| Content-Type JSON | FAIL | `text/html; charset=utf-8` |
-| Valid JSON Body | FAIL | HTML error page returned |
-| api_list Contract | FAIL | Permission denied |
+| Test              | Result | Details                    |
+| ----------------- | ------ | -------------------------- |
+| GAS URL Reachable | PASS   | HTTP 200 returned          |
+| Content-Type JSON | FAIL   | `text/html; charset=utf-8` |
+| Valid JSON Body   | FAIL   | HTML error page returned   |
+| api_list Contract | FAIL   | Permission denied          |
 
 ---
 
@@ -42,12 +42,20 @@ curl -i -X POST 'https://script.google.com/macros/s/AKfycbwFneYCpkio7wCn7y08eDUb
 **Content-Type:** `text/html; charset=utf-8`
 
 **Body:**
+
 ```html
-<!DOCTYPE html><html><head>...</head><body style="margin:20px">
-<div><img alt="Google Apps Script" src="//ssl.gstatic.com/docs/script/images/logo.png"></div>
-<div style="text-align:center;font-family:monospace;margin:50px auto 0;max-width:600px">
-You do not have permission to access the requested document.
-</div></body></html>
+<!DOCTYPE html>
+<html>
+  <head>
+    ...
+  </head>
+  <body style="margin:20px">
+    <div><img alt="Google Apps Script" src="//ssl.gstatic.com/docs/script/images/logo.png" /></div>
+    <div style="text-align:center;font-family:monospace;margin:50px auto 0;max-width:600px">
+      You do not have permission to access the requested document.
+    </div>
+  </body>
+</html>
 ```
 
 ---
@@ -82,6 +90,7 @@ https://script.google.com/home/projects/1gHiPuj7eXNk09dDyk17SJ6QsCJg7LMqXBRrkowl
 ### Step 3: Copy New Deployment ID
 
 The new deployment will have a URL like:
+
 ```
 https://script.google.com/macros/s/AKfycb<NEW_ID>/exec
 ```
@@ -106,6 +115,7 @@ curl -i -X POST 'https://script.google.com/macros/s/<NEW_DEPLOYMENT_ID>/exec' \
 ```
 
 Expected:
+
 - **Content-Type:** `application/json`
 - **Body:** JSON with `ok: true` and events array
 
@@ -113,11 +123,11 @@ Expected:
 
 ## Exit Criteria Status
 
-| Criteria | Status |
-|----------|--------|
-| Confirmed-good GAS URL that returns JSON for api_list | NOT MET |
-| URL documented with no ambiguity | PARTIAL - URL known but not working |
-| Backend handshake is real | NOT MET |
+| Criteria                                              | Status                              |
+| ----------------------------------------------------- | ----------------------------------- |
+| Confirmed-good GAS URL that returns JSON for api_list | NOT MET                             |
+| URL documented with no ambiguity                      | PARTIAL - URL known but not working |
+| Backend handshake is real                             | NOT MET                             |
 
 ---
 

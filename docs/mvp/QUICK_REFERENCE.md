@@ -26,6 +26,7 @@ clasp pull        # ❌ Only for emergencies
 ## 🔍 How to Monitor
 
 1. **GitHub Actions Tab**
+
    ```
    https://github.com/zeventbooks/MVP-EVENT-TOOLKIT/actions
    ```
@@ -35,7 +36,7 @@ clasp pull        # ❌ Only for emergencies
    - Stage 2A: API Tests (~2 min)
    - Gate 1: Check API results
    - Stage 2B: Smoke Tests (~3 min) - only if API passed
-   - Gate 2: Check Smoke results  
+   - Gate 2: Check Smoke results
    - Stage 2C: Expensive Tests (~16 min) - only if Smoke passed
 
 3. **Read Summary**
@@ -45,13 +46,13 @@ clasp pull        # ❌ Only for emergencies
 
 ## 🚨 Troubleshooting
 
-| Problem | Solution |
-|---------|----------|
-| Tests not running | Check if workflow file uploaded correctly |
+| Problem                 | Solution                                                       |
+| ----------------------- | -------------------------------------------------------------- |
+| Tests not running       | Check if workflow file uploaded correctly                      |
 | Google sign-in required | Verify Apps Script: "Execute as: Me", "Who has access: Anyone" |
-| Tests failing | Check test reports in GitHub Actions artifacts |
-| Deployment failing | Check OAUTH_CREDENTIALS secret is set |
-| URL not working | Verify deployment ID in workflow summary |
+| Tests failing           | Check test reports in GitHub Actions artifacts                 |
+| Deployment failing      | Check OAUTH_CREDENTIALS secret is set                          |
+| URL not working         | Verify deployment ID in workflow summary                       |
 
 ## 📊 Test URLs
 
@@ -70,11 +71,13 @@ Test URLs:
 ## 🎯 Quality Gates
 
 **Stage 1 Gates (before deploy):**
+
 - ✅ ESLint passes
 - ✅ Unit tests pass
 - ✅ Contract tests pass
 
 **Stage 2 Gates (after deploy):**
+
 - ✅ Gate 1: API tests pass → Proceed to Smoke
 - ✅ Gate 2: Smoke tests pass → Proceed to Expensive
 - ✅ Final: All tests pass → Approved for QA

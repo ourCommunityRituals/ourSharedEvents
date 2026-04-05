@@ -17,6 +17,7 @@ The EventAngle platform relies on multiple secrets for:
 - **CI/CD Notifications** - Slack/Teams webhooks
 
 **Security Principles:**
+
 - Never store secrets in source code or `wrangler.toml`
 - Use GitHub Secrets for CI/CD and Wrangler secrets for Workers
 - Rotate credentials according to the documented schedule
@@ -28,15 +29,15 @@ The EventAngle platform relies on multiple secrets for:
 
 ### Required GitHub Secrets (Staging)
 
-| Secret | Category | Required For |
-|--------|----------|--------------|
-| `GOOGLE_CLIENT_EMAIL` | Google | Sheets API authentication |
-| `GOOGLE_PRIVATE_KEY` | Google | Sheets API authentication |
-| `STAGING_SHEETS_SPREADSHEET_ID` | Google | Staging database |
-| `CLOUDFLARE_API_TOKEN` | Cloudflare | Worker deployment |
-| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare | Worker deployment |
-| `OAUTH_CREDENTIALS` | Apps Script | GAS deployment |
-| `ADMIN_KEY_ROOT` | Admin | Stage-2 E2E testing |
+| Secret                          | Category    | Required For              |
+| ------------------------------- | ----------- | ------------------------- |
+| `GOOGLE_CLIENT_EMAIL`           | Google      | Sheets API authentication |
+| `GOOGLE_PRIVATE_KEY`            | Google      | Sheets API authentication |
+| `STAGING_SHEETS_SPREADSHEET_ID` | Google      | Staging database          |
+| `CLOUDFLARE_API_TOKEN`          | Cloudflare  | Worker deployment         |
+| `CLOUDFLARE_ACCOUNT_ID`         | Cloudflare  | Worker deployment         |
+| `OAUTH_CREDENTIALS`             | Apps Script | GAS deployment            |
+| `ADMIN_KEY_ROOT`                | Admin       | Stage-2 E2E testing       |
 
 ### Verification
 
@@ -68,15 +69,15 @@ node scripts/verify-secrets.js --json
 
 **Rotation Policy:** Every 90 days
 
-| Secret Name | Description | Required |
-|-------------|-------------|----------|
-| `GOOGLE_SA_CLIENT_EMAIL` | Service account email (new naming) | No* |
-| `GOOGLE_SA_PRIVATE_KEY_PEM` | PEM-formatted private key (new naming) | No* |
-| `GOOGLE_CLIENT_EMAIL` | Service account email (legacy naming) | Yes* |
-| `GOOGLE_PRIVATE_KEY` | Private key (legacy naming) | Yes* |
-| `STAGING_SHEETS_SPREADSHEET_ID` | Staging spreadsheet ID | Yes |
+| Secret Name                     | Description                            | Required |
+| ------------------------------- | -------------------------------------- | -------- |
+| `GOOGLE_SA_CLIENT_EMAIL`        | Service account email (new naming)     | No\*     |
+| `GOOGLE_SA_PRIVATE_KEY_PEM`     | PEM-formatted private key (new naming) | No\*     |
+| `GOOGLE_CLIENT_EMAIL`           | Service account email (legacy naming)  | Yes\*    |
+| `GOOGLE_PRIVATE_KEY`            | Private key (legacy naming)            | Yes\*    |
+| `STAGING_SHEETS_SPREADSHEET_ID` | Staging spreadsheet ID                 | Yes      |
 
-*\* Either new naming (`GOOGLE_SA_*`) or legacy naming (`GOOGLE_CLIENT_EMAIL/GOOGLE_PRIVATE_KEY`) is required. The system supports both with automatic fallback.*
+_\* Either new naming (`GOOGLE*SA*_`) or legacy naming (`GOOGLE_CLIENT_EMAIL/GOOGLE_PRIVATE_KEY`) is required. The system supports both with automatic fallback.\*
 
 **Setting in GitHub:**
 
@@ -125,10 +126,10 @@ cat credentials.json | jq -r '.private_key'
 > Global API keys (`CF_API_KEY`, `CLOUDFLARE_API_KEY`) are **PROHIBITED**.
 > See [RUNBOOK-SEC-1.2-SCOPED-API-TOKENS.md](./RUNBOOK-SEC-1.2-SCOPED-API-TOKENS.md) for details.
 
-| Secret Name | Description | Required |
-|-------------|-------------|----------|
-| `CLOUDFLARE_API_TOKEN` | Scoped API token for Worker deployment | Yes |
-| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare account identifier | Yes |
+| Secret Name             | Description                            | Required |
+| ----------------------- | -------------------------------------- | -------- |
+| `CLOUDFLARE_API_TOKEN`  | Scoped API token for Worker deployment | Yes      |
+| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare account identifier          | Yes      |
 
 **Alternative Naming (SEC-1.2 standard):**
 | Current Name | Recommended Name | Purpose |
@@ -137,14 +138,17 @@ cat credentials.json | jq -r '.private_key'
 | `CLOUDFLARE_ACCOUNT_ID` | `CF_ACCOUNT_ID` | Account identifier |
 
 **Required API Token Permissions (Least-Privilege):**
+
 - Workers Scripts: Edit
 - Workers Routes: Edit
 - Account Settings: Read
 
 **Zone Restrictions:**
+
 - Zone: `eventangle.com` only
 
 **Prohibited Permissions (token MUST NOT have):**
+
 - DNS: Edit (use separate `CF_DNS_TOKEN`)
 - SSL/TLS: Edit
 - Firewall: Edit
@@ -162,6 +166,7 @@ cat credentials.json | jq -r '.private_key'
 7. Add to GitHub Secrets as `CLOUDFLARE_ACCOUNT_ID`
 
 **Verification (SEC-1.2 Compliance):**
+
 ```bash
 # Token should work for Worker operations
 CLOUDFLARE_API_TOKEN=<token> wrangler whoami
@@ -182,13 +187,13 @@ curl -X GET "https://api.cloudflare.com/client/v4/zones/{zone_id}/dns_records" \
 
 **Rotation Policy:** Every 90 days
 
-| Secret Name | Description | Required |
-|-------------|-------------|----------|
-| `ADMIN_KEY_ROOT` | Root brand admin key | Yes (Stage-2) |
-| `ADMIN_KEY_ABC` | ABC brand admin key | No |
-| `ADMIN_KEY_CBC` | CBC brand admin key | No |
-| `ADMIN_KEY_CBL` | CBL brand admin key | No |
-| `ADMIN_TOKEN` | Bearer token for Worker (set via wrangler) | No |
+| Secret Name      | Description                                | Required      |
+| ---------------- | ------------------------------------------ | ------------- |
+| `ADMIN_KEY_ROOT` | Root brand admin key                       | Yes (Stage-2) |
+| `ADMIN_KEY_ABC`  | ABC brand admin key                        | No            |
+| `ADMIN_KEY_CBC`  | CBC brand admin key                        | No            |
+| `ADMIN_KEY_CBL`  | CBL brand admin key                        | No            |
+| `ADMIN_TOKEN`    | Bearer token for Worker (set via wrangler) | No            |
 
 **Multi-Brand Support:**
 
@@ -213,13 +218,13 @@ wrangler secret put ADMIN_TOKEN --env production
 
 **Rotation Policy:** On expiration (OAuth tokens refresh automatically)
 
-| Secret Name | Description | Required |
-|-------------|-------------|----------|
-| `OAUTH_CREDENTIALS` | Clasp OAuth credentials (~/.clasprc.json) | Yes |
-| `STAGING_SCRIPT_ID` | Staging Apps Script project ID | No |
-| `PROD_SCRIPT_ID` | Production Apps Script project ID | No |
-| `STAGING_DEPLOYMENT_ID` | Staging deployment ID | No |
-| `PROD_DEPLOYMENT_ID` | Production deployment ID | No |
+| Secret Name             | Description                               | Required |
+| ----------------------- | ----------------------------------------- | -------- |
+| `OAUTH_CREDENTIALS`     | Clasp OAuth credentials (~/.clasprc.json) | Yes      |
+| `STAGING_SCRIPT_ID`     | Staging Apps Script project ID            | No       |
+| `PROD_SCRIPT_ID`        | Production Apps Script project ID         | No       |
+| `STAGING_DEPLOYMENT_ID` | Staging deployment ID                     | No       |
+| `PROD_DEPLOYMENT_ID`    | Production deployment ID                  | No       |
 
 **Setting Up OAUTH_CREDENTIALS:**
 
@@ -256,10 +261,10 @@ wrangler secret put ADMIN_TOKEN --env production
 
 **Rotation Policy:** As needed
 
-| Secret Name | Description | Required |
-|-------------|-------------|----------|
-| `SLACK_WEBHOOK_URL` | Slack incoming webhook URL | No |
-| `TEAMS_WEBHOOK_URL` | Microsoft Teams webhook URL | No |
+| Secret Name         | Description                 | Required |
+| ------------------- | --------------------------- | -------- |
+| `SLACK_WEBHOOK_URL` | Slack incoming webhook URL  | No       |
+| `TEAMS_WEBHOOK_URL` | Microsoft Teams webhook URL | No       |
 
 **Setting Up Slack:**
 
@@ -278,14 +283,14 @@ wrangler secret put ADMIN_TOKEN --env production
 
 **Rotation Policy:** Not sensitive (can be static)
 
-| Secret Name | Description | Required |
-|-------------|-------------|----------|
-| `SPREADSHEET_ID_ROOT` | Root brand test spreadsheet | No |
-| `SPREADSHEET_ID_ABC` | ABC brand test spreadsheet | No |
-| `SPREADSHEET_ID_CBC` | CBC brand test spreadsheet | No |
-| `SPREADSHEET_ID_CBL` | CBL brand test spreadsheet | No |
-| `CF_ACCESS_CLIENT_ID` | Cloudflare Access client ID | No |
-| `CF_ACCESS_CLIENT_SECRET` | Cloudflare Access secret | No |
+| Secret Name               | Description                 | Required |
+| ------------------------- | --------------------------- | -------- |
+| `SPREADSHEET_ID_ROOT`     | Root brand test spreadsheet | No       |
+| `SPREADSHEET_ID_ABC`      | ABC brand test spreadsheet  | No       |
+| `SPREADSHEET_ID_CBC`      | CBC brand test spreadsheet  | No       |
+| `SPREADSHEET_ID_CBL`      | CBL brand test spreadsheet  | No       |
+| `CF_ACCESS_CLIENT_ID`     | Cloudflare Access client ID | No       |
+| `CF_ACCESS_CLIENT_SECRET` | Cloudflare Access secret    | No       |
 
 ---
 
@@ -293,13 +298,13 @@ wrangler secret put ADMIN_TOKEN --env production
 
 These are configured in workflow files or `wrangler.toml`, not as secrets:
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `BASE_URL` | Target URL for Playwright tests | https://stg.eventangle.com |
-| `CI` | CI environment flag | Set by GitHub Actions |
-| `WORKER_ENV` | Worker environment (staging/production) | Set in wrangler.toml |
-| `BACKEND_MODE` | Backend mode (worker/gas/mixed) | worker |
-| `DEBUG_LEVEL` | Logging level (debug/error) | error |
+| Variable       | Description                             | Default                    |
+| -------------- | --------------------------------------- | -------------------------- |
+| `BASE_URL`     | Target URL for Playwright tests         | https://stg.eventangle.com |
+| `CI`           | CI environment flag                     | Set by GitHub Actions      |
+| `WORKER_ENV`   | Worker environment (staging/production) | Set in wrangler.toml       |
+| `BACKEND_MODE` | Backend mode (worker/gas/mixed)         | worker                     |
+| `DEBUG_LEVEL`  | Logging level (debug/error)             | error                      |
 
 ---
 
@@ -307,12 +312,12 @@ These are configured in workflow files or `wrangler.toml`, not as secrets:
 
 Secrets that must be set in Cloudflare (not GitHub):
 
-| Secret | Description | Command |
-|--------|-------------|---------|
-| `GOOGLE_SA_CLIENT_EMAIL` | Service account email | `wrangler secret put GOOGLE_SA_CLIENT_EMAIL --env staging` |
+| Secret                      | Description              | Command                                                       |
+| --------------------------- | ------------------------ | ------------------------------------------------------------- |
+| `GOOGLE_SA_CLIENT_EMAIL`    | Service account email    | `wrangler secret put GOOGLE_SA_CLIENT_EMAIL --env staging`    |
 | `GOOGLE_SA_PRIVATE_KEY_PEM` | Private key (PEM format) | `wrangler secret put GOOGLE_SA_PRIVATE_KEY_PEM --env staging` |
-| `SHEETS_SPREADSHEET_ID` | Database spreadsheet ID | `wrangler secret put SHEETS_SPREADSHEET_ID --env staging` |
-| `ADMIN_TOKEN` | Admin bearer token | `wrangler secret put ADMIN_TOKEN --env staging` |
+| `SHEETS_SPREADSHEET_ID`     | Database spreadsheet ID  | `wrangler secret put SHEETS_SPREADSHEET_ID --env staging`     |
+| `ADMIN_TOKEN`               | Admin bearer token       | `wrangler secret put ADMIN_TOKEN --env staging`               |
 
 **List Secrets:**
 
@@ -356,24 +361,24 @@ curl -s https://www.eventangle.com/api/health/backend | jq
 
 ### Error Codes
 
-| Error Code | Meaning | Action |
-|------------|---------|--------|
-| `GOOGLE_AUTH_MISSING_SECRET` | Missing credentials | Set `GOOGLE_SA_CLIENT_EMAIL` and `GOOGLE_SA_PRIVATE_KEY_PEM` |
-| `GOOGLE_AUTH_KEY_IMPORT_FAILED` | Invalid PEM format | Check key format and line breaks |
-| `GOOGLE_AUTH_TOKEN_EXCHANGE_FAILED` | OAuth failed | Verify Sheets API is enabled in GCP |
-| `SHEETS_READ_FAILED` | Can't read sheet | Share sheet with service account |
-| `SHEETS_DB_ID_MISSING` | Missing sheet ID | Set `SHEETS_SPREADSHEET_ID` |
+| Error Code                          | Meaning             | Action                                                       |
+| ----------------------------------- | ------------------- | ------------------------------------------------------------ |
+| `GOOGLE_AUTH_MISSING_SECRET`        | Missing credentials | Set `GOOGLE_SA_CLIENT_EMAIL` and `GOOGLE_SA_PRIVATE_KEY_PEM` |
+| `GOOGLE_AUTH_KEY_IMPORT_FAILED`     | Invalid PEM format  | Check key format and line breaks                             |
+| `GOOGLE_AUTH_TOKEN_EXCHANGE_FAILED` | OAuth failed        | Verify Sheets API is enabled in GCP                          |
+| `SHEETS_READ_FAILED`                | Can't read sheet    | Share sheet with service account                             |
+| `SHEETS_DB_ID_MISSING`              | Missing sheet ID    | Set `SHEETS_SPREADSHEET_ID`                                  |
 
 ---
 
 ## Rotation Schedule
 
-| Secret Type | Rotation Period | Next Rotation |
-|-------------|-----------------|---------------|
-| Google Service Account Keys | 90 days | Check GCP Console |
-| Admin Keys | 90 days | Manual tracking |
-| Cloudflare API Token | As needed | On compromise |
-| OAuth Credentials | Auto-refresh | N/A |
+| Secret Type                 | Rotation Period | Next Rotation     |
+| --------------------------- | --------------- | ----------------- |
+| Google Service Account Keys | 90 days         | Check GCP Console |
+| Admin Keys                  | 90 days         | Manual tracking   |
+| Cloudflare API Token        | As needed       | On compromise     |
+| OAuth Credentials           | Auto-refresh    | N/A               |
 
 **Rotation Process:**
 

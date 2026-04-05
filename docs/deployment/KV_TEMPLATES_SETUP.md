@@ -24,6 +24,7 @@ The Cloudflare Worker serves HTML templates from Cloudflare KV storage. This gui
 ```
 
 Templates are:
+
 1. Bundled from GAS source files (`src/mvp/*.html`)
 2. Uploaded to Cloudflare KV storage
 3. Retrieved by the Worker at runtime
@@ -105,6 +106,7 @@ npm run bundle:templates:validate
 ```
 
 This creates files in `cloudflare-proxy/templates/`:
+
 - `public.html` - Public events view
 - `admin.html` - Admin dashboard
 - `display.html` - Display/kiosk mode
@@ -160,6 +162,7 @@ curl https://stg.eventangle.com/__debug/template/public
 **Cause:** The `TEMPLATES_KV` binding is not configured in wrangler.toml
 
 **Fix:**
+
 1. Verify KV namespace exists: `wrangler kv:namespace list`
 2. Check wrangler.toml has the correct namespace ID
 3. Redeploy the worker
@@ -171,6 +174,7 @@ curl https://stg.eventangle.com/__debug/template/public
 **Cause:** Templates were not uploaded to KV
 
 **Fix:**
+
 ```bash
 npm run bundle:templates
 npm run upload:templates:staging  # or production
@@ -183,6 +187,7 @@ npm run upload:templates:staging  # or production
 **Cause:** wrangler.toml has placeholder ID or missing config
 
 **Fix:**
+
 1. Create namespace: `wrangler kv:namespace create "TEMPLATES_KV" --env staging`
 2. Copy the ID to wrangler.toml
 3. Re-run upload
@@ -217,13 +222,13 @@ Templates should be uploaded as part of the deployment pipeline:
 
 ## NPM Scripts Reference
 
-| Script | Description |
-|--------|-------------|
-| `npm run bundle:templates` | Bundle GAS templates to `cloudflare-proxy/templates/` |
-| `npm run bundle:templates:check` | Verify bundles are up-to-date |
-| `npm run bundle:templates:validate` | Validate bundled templates |
-| `npm run upload:templates:staging` | Upload templates to staging KV |
-| `npm run upload:templates:production` | Upload templates to production KV |
+| Script                                | Description                                           |
+| ------------------------------------- | ----------------------------------------------------- |
+| `npm run bundle:templates`            | Bundle GAS templates to `cloudflare-proxy/templates/` |
+| `npm run bundle:templates:check`      | Verify bundles are up-to-date                         |
+| `npm run bundle:templates:validate`   | Validate bundled templates                            |
+| `npm run upload:templates:staging`    | Upload templates to staging KV                        |
+| `npm run upload:templates:production` | Upload templates to production KV                     |
 
 ---
 

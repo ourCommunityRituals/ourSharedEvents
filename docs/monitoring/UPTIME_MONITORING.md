@@ -6,20 +6,22 @@ External uptime monitoring ensures you're alerted immediately when the system go
 
 ## Production Endpoints
 
-| Endpoint | URL | Purpose |
-|----------|-----|---------|
-| **Ping** | `https://www.eventangle.com/ping` | Ultra-simple uptime check (recommended) |
-| **Status** | `https://www.eventangle.com/status` | Detailed status with build info |
-| **Health** | `https://www.eventangle.com/health` | Alias for status |
+| Endpoint   | URL                                 | Purpose                                 |
+| ---------- | ----------------------------------- | --------------------------------------- |
+| **Ping**   | `https://www.eventangle.com/ping`   | Ultra-simple uptime check (recommended) |
+| **Status** | `https://www.eventangle.com/status` | Detailed status with build info         |
+| **Health** | `https://www.eventangle.com/health` | Alias for status                        |
 
 ### Endpoint Responses
 
 **`/ping`** (recommended for uptime monitors):
+
 ```json
-{"status":"ok"}
+{ "status": "ok" }
 ```
 
 **`/status`** (SLO anchor):
+
 ```json
 {
   "ok": true,
@@ -37,11 +39,13 @@ External uptime monitoring ensures you're alerted immediately when the system go
 [UptimeRobot](https://uptimerobot.com/) offers 50 free monitors with 5-minute checks.
 
 ### Step 1: Create Account
+
 1. Go to https://uptimerobot.com/
 2. Sign up for a free account
 3. Verify your email
 
 ### Step 2: Add Monitor
+
 1. Click **"Add New Monitor"**
 2. Configure:
    - **Monitor Type:** HTTP(s)
@@ -50,6 +54,7 @@ External uptime monitoring ensures you're alerted immediately when the system go
    - **Monitoring Interval:** 5 minutes (free) or 1 minute (Pro)
 
 ### Step 3: Configure Alert Contacts
+
 1. Go to **My Settings > Alert Contacts**
 2. Add your preferred notification method:
    - **Email:** Immediate alerts to your inbox
@@ -58,16 +63,19 @@ External uptime monitoring ensures you're alerted immediately when the system go
    - **Webhook:** Custom HTTP POST to any service
 
 ### Step 4: Configure Keyword Monitoring (Optional but Recommended)
+
 1. In monitor settings, enable **Keyword exists**
 2. Set keyword to: `ok`
 3. This ensures the response content is validated, not just the HTTP status
 
 ### Free Plan Limitations
+
 - 5-minute minimum interval
 - 50 monitors max
 - Email alerts only
 
 ### Pro Plan Benefits ($7/month)
+
 - 1-minute intervals
 - SMS alerts
 - More monitors
@@ -80,11 +88,13 @@ External uptime monitoring ensures you're alerted immediately when the system go
 [Pingdom](https://www.pingdom.com/) offers more features but requires a paid plan.
 
 ### Step 1: Create Account
+
 1. Go to https://www.pingdom.com/
 2. Start free trial or purchase a plan
 3. Verify your email
 
 ### Step 2: Add Uptime Check
+
 1. Navigate to **Monitoring > Uptime**
 2. Click **"Add new"**
 3. Configure:
@@ -94,11 +104,13 @@ External uptime monitoring ensures you're alerted immediately when the system go
    - **Request Method:** GET
 
 ### Step 3: Add Content Check
+
 1. In the monitor configuration, add a **Content check**
 2. Set **Should contain:** `ok`
 3. This validates the response body, not just HTTP 200
 
 ### Step 4: Configure Alerting
+
 1. Go to **Alerting > Contacts**
 2. Add your notification preferences:
    - Email addresses
@@ -113,6 +125,7 @@ External uptime monitoring ensures you're alerted immediately when the system go
 Both UptimeRobot and Pingdom support Slack webhooks for instant team alerts.
 
 ### Setup Slack Incoming Webhook
+
 1. Go to https://api.slack.com/apps
 2. Create new app or use existing
 3. Add **Incoming Webhooks** feature
@@ -120,12 +133,14 @@ Both UptimeRobot and Pingdom support Slack webhooks for instant team alerts.
 5. Copy the webhook URL
 
 ### Connect to UptimeRobot
+
 1. Go to **My Settings > Alert Contacts**
 2. Add new contact, select **Slack**
 3. Paste your webhook URL
 4. Test the integration
 
 ### Connect to Pingdom
+
 1. Go to **Alerting > Integrations**
 2. Add **Slack** integration
 3. Paste your webhook URL
@@ -138,6 +153,7 @@ Both UptimeRobot and Pingdom support Slack webhooks for instant team alerts.
 When you receive an uptime alert:
 
 ### Immediate Actions (0-5 minutes)
+
 1. **Acknowledge the alert** to prevent escalation
 2. **Check the ping endpoint manually**:
    ```bash
@@ -149,6 +165,7 @@ When you receive an uptime alert:
    ```
 
 ### Diagnostic Steps (5-15 minutes)
+
 1. **Check Cloudflare status**: https://www.cloudflarestatus.com/
 2. **Check Google Apps Script status**: https://www.google.com/appsstatus
 3. **Check the setup diagnostics**:
@@ -157,7 +174,9 @@ When you receive an uptime alert:
    ```
 
 ### Escalation Path
+
 If you cannot resolve within 15 minutes:
+
 1. Check the [RUNBOOK.md](./RUNBOOK.md) for common issues
 2. Review recent deployments in GitHub Actions
 3. Contact the development team
@@ -167,12 +186,14 @@ If you cannot resolve within 15 minutes:
 ## Viewing Uptime History
 
 ### UptimeRobot
+
 1. Log in to https://uptimerobot.com/
 2. Click on your monitor
 3. View uptime percentage and response time graphs
 4. Export CSV for detailed analysis
 
 ### Pingdom
+
 1. Log in to https://my.pingdom.com/
 2. Go to **Monitoring > Uptime**
 3. Click on your check
@@ -185,13 +206,13 @@ If you cannot resolve within 15 minutes:
 
 For production monitoring, we recommend:
 
-| Setting | Value | Reason |
-|---------|-------|--------|
-| Check Interval | 1 minute | Fast detection |
-| Endpoint | `/ping` | Minimal response, fastest check |
-| Keyword Check | `ok` | Validates response content |
-| Alert Delay | 2 consecutive failures | Reduces false positives |
-| Notification | Slack + Email | Team + personal backup |
+| Setting        | Value                  | Reason                          |
+| -------------- | ---------------------- | ------------------------------- |
+| Check Interval | 1 minute               | Fast detection                  |
+| Endpoint       | `/ping`                | Minimal response, fastest check |
+| Keyword Check  | `ok`                   | Validates response content      |
+| Alert Delay    | 2 consecutive failures | Reduces false positives         |
+| Notification   | Slack + Email          | Team + personal backup          |
 
 ---
 
@@ -200,12 +221,14 @@ For production monitoring, we recommend:
 Both services offer public status pages:
 
 ### UptimeRobot Status Page
+
 1. Go to **My Settings > Public Status Pages**
 2. Create a new status page
 3. Add your EventAngle monitor
 4. Share the URL with stakeholders
 
 ### Pingdom Status Page
+
 1. Go to **Monitoring > Status Pages**
 2. Create new public status page
 3. Configure branding and monitors
@@ -217,10 +240,10 @@ Both services offer public status pages:
 
 If you have staging and production environments:
 
-| Environment | URL | Check Interval |
-|-------------|-----|----------------|
-| Production | `https://www.eventangle.com/ping` | 1 minute |
-| Staging | `https://staging.eventangle.com/ping` | 5 minutes |
+| Environment | URL                                   | Check Interval |
+| ----------- | ------------------------------------- | -------------- |
+| Production  | `https://www.eventangle.com/ping`     | 1 minute       |
+| Staging     | `https://staging.eventangle.com/ping` | 5 minutes      |
 
 ---
 

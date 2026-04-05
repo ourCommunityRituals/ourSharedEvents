@@ -25,6 +25,7 @@
 ### 1.1 Goal
 
 Prevent DNS poisoning and spoofing attacks by:
+
 - Enabling DNSSEC signing in Cloudflare
 - Publishing the DS (Delegation Signer) record at the domain registrar
 - Verifying end-to-end DNSSEC validation is active
@@ -32,6 +33,7 @@ Prevent DNS poisoning and spoofing attacks by:
 ### 1.2 Why This Matters
 
 DNS is the foundation of all internet traffic routing. Without DNSSEC:
+
 - Attackers can forge DNS responses (cache poisoning)
 - Man-in-the-middle attacks can redirect users to malicious servers
 - Phishing sites can appear to be on legitimate domains
@@ -42,13 +44,13 @@ DNS is the foundation of all internet traffic routing. Without DNSSEC:
 
 ### 1.3 Threat Model
 
-| Threat | Attack Vector | Impact | DNSSEC Protection |
-|--------|--------------|--------|-------------------|
-| DNS Cache Poisoning | Attacker injects false records into resolver cache | Traffic redirected to attacker | **BLOCKED** - Signatures fail validation |
-| Man-in-the-Middle | Attacker intercepts and modifies DNS responses | Traffic redirected to attacker | **BLOCKED** - Signatures fail validation |
-| BGP Hijacking + DNS | Attacker hijacks route and spoofs DNS | Traffic redirected to attacker | **BLOCKED** - Signatures fail validation |
-| Authoritative DNS Compromise | Attacker compromises Cloudflare | Legitimate-looking signed records | **NOT PROTECTED** (upstream compromise) |
-| Registrar Compromise | Attacker changes DS records | New keys trusted by resolvers | **NOT PROTECTED** (see SEC-2.1) |
+| Threat                       | Attack Vector                                      | Impact                            | DNSSEC Protection                        |
+| ---------------------------- | -------------------------------------------------- | --------------------------------- | ---------------------------------------- |
+| DNS Cache Poisoning          | Attacker injects false records into resolver cache | Traffic redirected to attacker    | **BLOCKED** - Signatures fail validation |
+| Man-in-the-Middle            | Attacker intercepts and modifies DNS responses     | Traffic redirected to attacker    | **BLOCKED** - Signatures fail validation |
+| BGP Hijacking + DNS          | Attacker hijacks route and spoofs DNS              | Traffic redirected to attacker    | **BLOCKED** - Signatures fail validation |
+| Authoritative DNS Compromise | Attacker compromises Cloudflare                    | Legitimate-looking signed records | **NOT PROTECTED** (upstream compromise)  |
+| Registrar Compromise         | Attacker changes DS records                        | New keys trusted by resolvers     | **NOT PROTECTED** (see SEC-2.1)          |
 
 ### 1.4 How DNSSEC Works
 
@@ -80,24 +82,24 @@ DNS is the foundation of all internet traffic routing. Without DNSSEC:
 
 **Key Components:**
 
-| Component | Purpose | Location |
-|-----------|---------|----------|
-| **ZSK (Zone Signing Key)** | Signs individual DNS records | Cloudflare (DNS provider) |
-| **KSK (Key Signing Key)** | Signs the ZSK (key rotation) | Cloudflare (DNS provider) |
-| **DS (Delegation Signer)** | Hash of KSK, establishes trust chain | Registrar |
-| **RRSIG** | Signature on each DNS record | Cloudflare (DNS provider) |
-| **DNSKEY** | Public keys for verification | Cloudflare (DNS provider) |
+| Component                  | Purpose                              | Location                  |
+| -------------------------- | ------------------------------------ | ------------------------- |
+| **ZSK (Zone Signing Key)** | Signs individual DNS records         | Cloudflare (DNS provider) |
+| **KSK (Key Signing Key)**  | Signs the ZSK (key rotation)         | Cloudflare (DNS provider) |
+| **DS (Delegation Signer)** | Hash of KSK, establishes trust chain | Registrar                 |
+| **RRSIG**                  | Signature on each DNS record         | Cloudflare (DNS provider) |
+| **DNSKEY**                 | Public keys for verification         | Cloudflare (DNS provider) |
 
 ### 1.5 Scope
 
-| Component | In Scope |
-|-----------|----------|
-| Enable DNSSEC in Cloudflare | Yes |
-| Generate DS record in Cloudflare | Yes |
-| Publish DS record at registrar | Yes |
-| Verify DNSSEC chain of trust | Yes |
-| Monitor DNSSEC status | Yes |
-| Key rotation procedures | Yes |
+| Component                        | In Scope |
+| -------------------------------- | -------- |
+| Enable DNSSEC in Cloudflare      | Yes      |
+| Generate DS record in Cloudflare | Yes      |
+| Publish DS record at registrar   | Yes      |
+| Verify DNSSEC chain of trust     | Yes      |
+| Monitor DNSSEC status            | Yes      |
+| Key rotation procedures          | Yes      |
 
 ---
 
@@ -113,26 +115,26 @@ DNS is the foundation of all internet traffic routing. Without DNSSEC:
 
 Before starting, gather:
 
-| Information | Source | Status |
-|-------------|--------|--------|
-| Domain name(s) | Cloudflare dashboard | |
-| Registrar name | Domain registration records | |
-| Registrar login credentials | Password manager | |
-| Cloudflare zone ID | Cloudflare dashboard | |
+| Information                 | Source                      | Status |
+| --------------------------- | --------------------------- | ------ |
+| Domain name(s)              | Cloudflare dashboard        |        |
+| Registrar name              | Domain registration records |        |
+| Registrar login credentials | Password manager            |        |
+| Cloudflare zone ID          | Cloudflare dashboard        |        |
 
 ### 2.3 Registrar DNSSEC Support
 
 Common registrars and their DNSSEC support:
 
-| Registrar | DS Record Support | Interface | Notes |
-|-----------|------------------|-----------|-------|
-| Cloudflare Registrar | Yes (automatic) | Dashboard | Auto-publishes DS record |
-| Namecheap | Yes | Domain > Advanced DNS | Manual DS entry |
-| GoDaddy | Yes | Domain > DNS > DNSSEC | Manual DS entry |
-| Google Domains (Squarespace) | Yes | Security > DNSSEC | Manual DS entry |
-| Porkbun | Yes | Domain > DNSSEC | Manual DS entry |
-| Gandi | Yes | Domain > DNSSEC | Manual DS entry |
-| Name.com | Yes | DNS > DNSSEC | Manual DS entry |
+| Registrar                    | DS Record Support | Interface             | Notes                    |
+| ---------------------------- | ----------------- | --------------------- | ------------------------ |
+| Cloudflare Registrar         | Yes (automatic)   | Dashboard             | Auto-publishes DS record |
+| Namecheap                    | Yes               | Domain > Advanced DNS | Manual DS entry          |
+| GoDaddy                      | Yes               | Domain > DNS > DNSSEC | Manual DS entry          |
+| Google Domains (Squarespace) | Yes               | Security > DNSSEC     | Manual DS entry          |
+| Porkbun                      | Yes               | Domain > DNSSEC       | Manual DS entry          |
+| Gandi                        | Yes               | Domain > DNSSEC       | Manual DS entry          |
+| Name.com                     | Yes               | DNS > DNSSEC          | Manual DS entry          |
 
 ### 2.4 Pre-Flight Checks
 
@@ -186,25 +188,25 @@ eventangle.com. 3600 IN DS 12345 13 2 [digest...]
 
 Record the DS record information:
 
-| Field | Value |
-|-------|-------|
-| Domain | |
-| Key Tag | |
-| Algorithm | 13 |
-| Digest Type | 2 |
-| Digest | |
-| Full DS Record | |
+| Field          | Value |
+| -------------- | ----- |
+| Domain         |       |
+| Key Tag        |       |
+| Algorithm      | 13    |
+| Digest Type    | 2     |
+| Digest         |       |
+| Full DS Record |       |
 
 ### 3.4 Cloudflare DNSSEC Status
 
 After enabling, Cloudflare will show:
 
-| Status | Meaning |
-|--------|---------|
-| **Pending** | DNSSEC enabled, waiting for DS record at registrar |
-| **Active** | DS record detected, DNSSEC fully operational |
-| **Disabled** | DNSSEC not enabled |
-| **Error** | Configuration issue (check DS record) |
+| Status       | Meaning                                            |
+| ------------ | -------------------------------------------------- |
+| **Pending**  | DNSSEC enabled, waiting for DS record at registrar |
+| **Active**   | DS record detected, DNSSEC fully operational       |
+| **Disabled** | DNSSEC not enabled                                 |
+| **Error**    | Configuration issue (check DS record)              |
 
 ---
 
@@ -293,9 +295,9 @@ If your domain is registered with Cloudflare Registrar:
 
 ### 4.7 DS Record Publication Audit Log
 
-| Domain | Registrar | DS Published | Key Tag | Status | Date |
-|--------|-----------|--------------|---------|--------|------|
-| eventangle.com | | [ ] Yes / [ ] No | | | YYYY-MM-DD |
+| Domain         | Registrar | DS Published     | Key Tag | Status | Date       |
+| -------------- | --------- | ---------------- | ------- | ------ | ---------- |
+| eventangle.com |           | [ ] Yes / [ ] No |         |        | YYYY-MM-DD |
 
 ---
 
@@ -303,11 +305,11 @@ If your domain is registered with Cloudflare Registrar:
 
 ### 5.1 Acceptance Criteria Verification
 
-| Criterion | How to Verify | Status |
-|-----------|---------------|--------|
-| **DNSSEC status active in Cloudflare** | Dashboard > DNS > Settings > DNSSEC shows "Active" | [ ] Pass |
-| **DS record present at registrar** | Registrar dashboard shows DS record | [ ] Pass |
-| **DNSSEC validation tools show signed/valid** | External tools confirm chain of trust | [ ] Pass |
+| Criterion                                     | How to Verify                                      | Status   |
+| --------------------------------------------- | -------------------------------------------------- | -------- |
+| **DNSSEC status active in Cloudflare**        | Dashboard > DNS > Settings > DNSSEC shows "Active" | [ ] Pass |
+| **DS record present at registrar**            | Registrar dashboard shows DS record                | [ ] Pass |
+| **DNSSEC validation tools show signed/valid** | External tools confirm chain of trust              | [ ] Pass |
 
 ### 5.2 Cloudflare Dashboard Verification
 
@@ -363,13 +365,13 @@ delv @8.8.8.8 eventangle.com A +rtrace
 
 Use these external tools to verify DNSSEC is properly configured:
 
-| Tool | URL | What It Checks |
-|------|-----|----------------|
-| **DNSViz** | https://dnsviz.net/ | Full DNSSEC chain visualization |
-| **Verisign DNSSEC Debugger** | https://dnssec-debugger.verisignlabs.com/ | Chain of trust validation |
-| **ICANN DNSSEC Analyzer** | https://dnsviz.net/d/[domain]/analyze/ | Comprehensive analysis |
-| **Cloudflare DNSSEC Test** | https://www.cloudflare.com/dns/dnssec/how-dnssec-works/ | Quick validation |
-| **Google DNS Test** | dig @8.8.8.8 +dnssec +cd | Compare with/without validation |
+| Tool                         | URL                                                     | What It Checks                  |
+| ---------------------------- | ------------------------------------------------------- | ------------------------------- |
+| **DNSViz**                   | https://dnsviz.net/                                     | Full DNSSEC chain visualization |
+| **Verisign DNSSEC Debugger** | https://dnssec-debugger.verisignlabs.com/               | Chain of trust validation       |
+| **ICANN DNSSEC Analyzer**    | https://dnsviz.net/d/[domain]/analyze/                  | Comprehensive analysis          |
+| **Cloudflare DNSSEC Test**   | https://www.cloudflare.com/dns/dnssec/how-dnssec-works/ | Quick validation                |
+| **Google DNS Test**          | dig @8.8.8.8 +dnssec +cd                                | Compare with/without validation |
 
 ### 5.5 DNSViz Verification Steps
 
@@ -382,6 +384,7 @@ Use these external tools to verify DNSSEC is properly configured:
    - **Red**: Errors (requires action)
 
 **Expected Result:**
+
 - All nodes should be green
 - Chain should trace from your domain → .com → root
 - No broken signature warnings
@@ -446,12 +449,12 @@ echo "=== Verification Complete ==="
 
 DNSSEC changes may take time to propagate:
 
-| Stage | Typical Time | Maximum Time |
-|-------|--------------|--------------|
-| Cloudflare enables DNSSEC | Immediate | 5 minutes |
-| DS record at registrar | 5-30 minutes | 2 hours |
-| TLD zone update | 15-60 minutes | 24 hours |
-| Global resolver cache | 1-4 hours | 48 hours (depends on TTL) |
+| Stage                     | Typical Time  | Maximum Time              |
+| ------------------------- | ------------- | ------------------------- |
+| Cloudflare enables DNSSEC | Immediate     | 5 minutes                 |
+| DS record at registrar    | 5-30 minutes  | 2 hours                   |
+| TLD zone update           | 15-60 minutes | 24 hours                  |
+| Global resolver cache     | 1-4 hours     | 48 hours (depends on TTL) |
 
 > **Note:** During propagation, some resolvers may see DNSSEC as active while others do not. This is normal.
 
@@ -461,24 +464,25 @@ DNSSEC changes may take time to propagate:
 
 ### 6.1 DNSSEC Status Shows "Pending"
 
-| Cause | Solution |
-|-------|----------|
-| DS record not published at registrar | Add DS record at registrar (Section 4) |
-| DS record incorrect | Verify Key Tag, Algorithm, Digest Type, and Digest match Cloudflare |
-| Propagation delay | Wait up to 24-48 hours for TLD zone update |
-| Registrar doesn't support DNSSEC | Contact registrar or transfer to DNSSEC-supporting registrar |
+| Cause                                | Solution                                                            |
+| ------------------------------------ | ------------------------------------------------------------------- |
+| DS record not published at registrar | Add DS record at registrar (Section 4)                              |
+| DS record incorrect                  | Verify Key Tag, Algorithm, Digest Type, and Digest match Cloudflare |
+| Propagation delay                    | Wait up to 24-48 hours for TLD zone update                          |
+| Registrar doesn't support DNSSEC     | Contact registrar or transfer to DNSSEC-supporting registrar        |
 
 ### 6.2 DNSSEC Validation Failing (SERVFAIL)
 
-| Cause | Solution |
-|-------|----------|
-| DS record mismatch | Re-copy DS record values from Cloudflare exactly |
-| Stale DS record after key rotation | Update DS record at registrar with new values |
-| Multiple conflicting DS records | Remove old DS records, keep only current |
-| Algorithm mismatch | Ensure Algorithm 13 is selected at registrar |
+| Cause                              | Solution                                         |
+| ---------------------------------- | ------------------------------------------------ |
+| DS record mismatch                 | Re-copy DS record values from Cloudflare exactly |
+| Stale DS record after key rotation | Update DS record at registrar with new values    |
+| Multiple conflicting DS records    | Remove old DS records, keep only current         |
+| Algorithm mismatch                 | Ensure Algorithm 13 is selected at registrar     |
 
 **Emergency Recovery:**
 If DNSSEC validation is failing and blocking access:
+
 1. Remove DS record from registrar (disables DNSSEC validation)
 2. Wait for propagation (1-4 hours)
 3. Re-configure correctly
@@ -487,11 +491,13 @@ If DNSSEC validation is failing and blocking access:
 ### 6.3 Website Inaccessible After DNSSEC
 
 **Symptoms:**
+
 - Site loads for some users but not others
 - `SERVFAIL` errors in DNS queries
 - Works with `dig +cd` (checking disabled) but fails with `dig +dnssec`
 
 **Immediate Action:**
+
 ```bash
 # Test if DNSSEC is the issue
 dig @8.8.8.8 eventangle.com +cd    # Should work (CD = Checking Disabled)
@@ -499,6 +505,7 @@ dig @8.8.8.8 eventangle.com +dnssec # Fails if DNSSEC broken
 ```
 
 **Resolution:**
+
 1. Log in to registrar
 2. Remove/delete the DS record
 3. Wait for propagation (check with dig)
@@ -509,11 +516,11 @@ dig @8.8.8.8 eventangle.com +dnssec # Fails if DNSSEC broken
 
 Different registrars may require different formats:
 
-| Format | Example |
-|--------|---------|
+| Format              | Example                                                 |
+| ------------------- | ------------------------------------------------------- |
 | **Separate fields** | Key Tag: 12345, Alg: 13, Digest Type: 2, Digest: abc... |
-| **Single line** | 12345 13 2 abc123def456... |
-| **Full DNS format** | eventangle.com. 3600 IN DS 12345 13 2 abc123... |
+| **Single line**     | 12345 13 2 abc123def456...                              |
+| **Full DNS format** | eventangle.com. 3600 IN DS 12345 13 2 abc123...         |
 
 Ensure you're using the format your registrar expects.
 
@@ -530,38 +537,38 @@ Cloudflare automatically rotates DNSSEC keys. When rotation occurs:
 
 ### 6.6 Common Error Messages
 
-| Error | Meaning | Solution |
-|-------|---------|----------|
-| `SERVFAIL` | DNSSEC validation failed | Check DS record matches, or disable and reconfigure |
-| `no DS record` | DS not published | Add DS record at registrar |
-| `DNSKEY not found` | DNSSEC not enabled at DNS provider | Enable DNSSEC in Cloudflare |
-| `signature expired` | RRSIG expired | Usually auto-resolved; if persistent, disable/re-enable |
-| `algorithm not supported` | Registrar doesn't support Algorithm 13 | Use Algorithm 8 if available, or change registrar |
+| Error                     | Meaning                                | Solution                                                |
+| ------------------------- | -------------------------------------- | ------------------------------------------------------- |
+| `SERVFAIL`                | DNSSEC validation failed               | Check DS record matches, or disable and reconfigure     |
+| `no DS record`            | DS not published                       | Add DS record at registrar                              |
+| `DNSKEY not found`        | DNSSEC not enabled at DNS provider     | Enable DNSSEC in Cloudflare                             |
+| `signature expired`       | RRSIG expired                          | Usually auto-resolved; if persistent, disable/re-enable |
+| `algorithm not supported` | Registrar doesn't support Algorithm 13 | Use Algorithm 8 if available, or change registrar       |
 
 ---
 
 ## Appendix A: DNSSEC Record Types
 
-| Record Type | Purpose | Managed By |
-|-------------|---------|------------|
-| **DNSKEY** | Public keys for zone signing | Cloudflare (automatic) |
-| **DS** | Hash of DNSKEY, links to parent zone | Registrar (manual or auto) |
-| **RRSIG** | Digital signature on each record | Cloudflare (automatic) |
-| **NSEC/NSEC3** | Authenticated denial of existence | Cloudflare (automatic) |
+| Record Type    | Purpose                              | Managed By                 |
+| -------------- | ------------------------------------ | -------------------------- |
+| **DNSKEY**     | Public keys for zone signing         | Cloudflare (automatic)     |
+| **DS**         | Hash of DNSKEY, links to parent zone | Registrar (manual or auto) |
+| **RRSIG**      | Digital signature on each record     | Cloudflare (automatic)     |
+| **NSEC/NSEC3** | Authenticated denial of existence    | Cloudflare (automatic)     |
 
 ---
 
 ## Appendix B: DNSSEC Algorithms
 
-| Algorithm Number | Name | Status |
-|-----------------|------|--------|
-| 5 | RSA/SHA-1 | Deprecated |
-| 7 | RSASHA1-NSEC3-SHA1 | Deprecated |
-| 8 | RSA/SHA-256 | Acceptable |
-| 10 | RSA/SHA-512 | Acceptable |
-| **13** | **ECDSA P-256 with SHA-256** | **Recommended** (Cloudflare default) |
-| 14 | ECDSA P-384 with SHA-384 | Acceptable |
-| 15 | Ed25519 | Future |
+| Algorithm Number | Name                         | Status                               |
+| ---------------- | ---------------------------- | ------------------------------------ |
+| 5                | RSA/SHA-1                    | Deprecated                           |
+| 7                | RSASHA1-NSEC3-SHA1           | Deprecated                           |
+| 8                | RSA/SHA-256                  | Acceptable                           |
+| 10               | RSA/SHA-512                  | Acceptable                           |
+| **13**           | **ECDSA P-256 with SHA-256** | **Recommended** (Cloudflare default) |
+| 14               | ECDSA P-384 with SHA-384     | Acceptable                           |
+| 15               | Ed25519                      | Future                               |
 
 > **Note:** Cloudflare uses Algorithm 13 by default for its efficiency and security.
 
@@ -598,12 +605,12 @@ dig @8.8.8.8 www.eventangle.com A +dnssec
 
 ### Recommended Monitoring Setup
 
-| Check | Frequency | Alert Threshold |
-|-------|-----------|-----------------|
-| DNSSEC status in Cloudflare | Daily | Status != Active |
-| DS record presence at registrar | Weekly | Missing DS record |
-| DNSSEC validation via external tool | Daily | Validation failure |
-| Key rotation notification | On change | New DS required |
+| Check                               | Frequency | Alert Threshold    |
+| ----------------------------------- | --------- | ------------------ |
+| DNSSEC status in Cloudflare         | Daily     | Status != Active   |
+| DS record presence at registrar     | Weekly    | Missing DS record  |
+| DNSSEC validation via external tool | Daily     | Validation failure |
+| Key rotation notification           | On change | New DS required    |
 
 ### External Monitoring Services
 
@@ -616,8 +623,8 @@ dig @8.8.8.8 www.eventangle.com A +dnssec
 
 ## Document History
 
-| Date | Author | Changes |
-|------|--------|---------|
+| Date       | Author      | Changes                   |
+| ---------- | ----------- | ------------------------- |
 | 2025-12-20 | Claude Code | Initial runbook (SEC-2.2) |
 
 ---

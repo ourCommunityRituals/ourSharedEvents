@@ -7,13 +7,13 @@
 
 ## Quick Reference
 
-| Command | Description |
-|---------|-------------|
-| `npm run ci:local` | Full CI (Stage-1 + Stage-2) |
+| Command                   | Description                        |
+| ------------------------- | ---------------------------------- |
+| `npm run ci:local`        | Full CI (Stage-1 + Stage-2)        |
 | `npm run ci:local stage1` | Stage-1 only (hermetic validation) |
-| `npm run ci:local stage2` | Stage-2 only (requires BASE_URL) |
-| `npm run ci:local quick` | Quick CI (critical tests only) |
-| `npm run stage1-local` | Unified Stage-1 script |
+| `npm run ci:local stage2` | Stage-2 only (requires BASE_URL)   |
+| `npm run ci:local quick`  | Quick CI (critical tests only)     |
+| `npm run stage1-local`    | Unified Stage-1 script             |
 
 ---
 
@@ -60,6 +60,7 @@ npm run stage1-local
 ```
 
 **What it runs:**
+
 1. ESLint code quality checks
 2. Jest unit tests (mocked, no network)
 3. Contract tests (schema, API, bundles)
@@ -136,6 +137,7 @@ npm run ci:local quick
 ```
 
 **What it runs:**
+
 1. Lint
 2. Unit tests
 3. Contract tests
@@ -153,11 +155,13 @@ npm run ci:local
 ```
 
 **Flow:**
+
 1. Stage-1 runs first (hermetic validation)
 2. If Stage-1 passes, Stage-2 runs
 3. If Stage-1 fails, Stage-2 is skipped
 
 **Progressive gating:**
+
 - API tests gate smoke tests
 - Smoke tests gate flow/page tests
 
@@ -335,16 +339,19 @@ PLAYWRIGHT_TIMEOUT=60000 npm run test:smoke
 ## Best Practices
 
 1. **Run Stage-1 before pushing** - Catch issues before CI
+
    ```bash
    npm run ci:local stage1
    ```
 
 2. **Use quick CI before committing** - Fast feedback loop
+
    ```bash
    npm run ci:local quick
    ```
 
 3. **Run full CI before creating PR** - Ensure everything passes
+
    ```bash
    npm run ci:local
    ```

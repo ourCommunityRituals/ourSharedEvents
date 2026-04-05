@@ -31,11 +31,11 @@ Sponsor signs up → picks weight class → pool-based share calculation
 
 Screen time is **pool-based**: every sponsor gets `multiplier / sum(all multipliers)`. The ratio between tiers is locked to the multiplier (3:1 premium vs local) regardless of pool size.
 
-| Class | Multiplier | Display Placement | Public Placement |
-|-------|:---------:|-------------------|------------------|
-| **Premium** | 3x | Headers (top banner) | Sidebars |
-| **Mid** | 2x | Headers (top banner) | Sidebars |
-| **Local** | 1x | Sidebars (side panel) | Sidebars |
+| Class       | Multiplier | Display Placement     | Public Placement |
+| ----------- | :--------: | --------------------- | ---------------- |
+| **Premium** |     3x     | Headers (top banner)  | Sidebars         |
+| **Mid**     |     2x     | Headers (top banner)  | Sidebars         |
+| **Local**   |     1x     | Sidebars (side panel) | Sidebars         |
 
 **Multipliers are global** — same for every event type. One set of numbers for the entire platform. Sponsors know exactly what they're buying: "Mid = 2x screen time at every event."
 
@@ -46,6 +46,7 @@ See [GOVERNOR-DESIGN.md](GOVERNOR-DESIGN.md) for the full security, functional, 
 ### What Each Class Gets
 
 **Local ($75 illustrative)**
+
 - Side panel placement on Display (TV/kiosk)
 - Sidebar placement on Public (mobile)
 - Poster/tabletop slot (1 sponsor per physical ad slot)
@@ -53,12 +54,14 @@ See [GOVERNOR-DESIGN.md](GOVERNOR-DESIGN.md) for the full security, functional, 
 - QR trigger impressions tracking
 
 **Mid ($200 illustrative)**
+
 - Header placement on Display (top banner)
 - Sidebar placement on Public (mobile)
 - Everything in Local
 - More rotation time than Local
 
 **Premium ($500 illustrative)**
+
 - Header placement on Display (top banner) with more dwell time
 - Sidebar placement on Public (mobile)
 - Everything in Mid
@@ -84,21 +87,21 @@ INACTIVE ──(scans >= threshold)──→ ACTIVE ──(scans < threshold)─
                                ACTIVE ←──(scans >= threshold)────────────┘
 ```
 
-| State | Effect | Behavior |
-|-------|--------|----------|
-| **INACTIVE** | Standard pool math (3x/2x/1x) | Normal rotation — premium gets 3:1 vs local |
-| **ACTIVE** | 20% share compression on premium | High traffic — premium drops to ~2.2:1, local boosted |
-| **COOLING_DOWN** | Standard pool math | Hysteresis — waits 2 windows before deactivating |
+| State            | Effect                           | Behavior                                              |
+| ---------------- | -------------------------------- | ----------------------------------------------------- |
+| **INACTIVE**     | Standard pool math (3x/2x/1x)    | Normal rotation — premium gets 3:1 vs local           |
+| **ACTIVE**       | 20% share compression on premium | High traffic — premium drops to ~2.2:1, local boosted |
+| **COOLING_DOWN** | Standard pool math               | Hysteresis — waits 2 windows before deactivating      |
 
 ### Configuration
 
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| `ROLLING_WINDOW` | 15 minutes | Scan counting window |
-| `THRESHOLD` | 5 scans | Activation threshold per window |
-| `HYSTERESIS_WINDOWS` | 2 | Consecutive sub-threshold windows before deactivation |
-| `COMPRESSION_PCT` | 20% | Share haircut on premium when governor active |
-| `MIN_DWELL_MS` | 2000 | Minimum display time per sponsor (floor) |
+| Parameter            | Default    | Description                                           |
+| -------------------- | ---------- | ----------------------------------------------------- |
+| `ROLLING_WINDOW`     | 15 minutes | Scan counting window                                  |
+| `THRESHOLD`          | 5 scans    | Activation threshold per window                       |
+| `HYSTERESIS_WINDOWS` | 2          | Consecutive sub-threshold windows before deactivation |
+| `COMPRESSION_PCT`    | 20%        | Share haircut on premium when governor active         |
+| `MIN_DWELL_MS`       | 2000       | Minimum display time per sponsor (floor)              |
 
 ### Why This Matters
 
@@ -112,13 +115,14 @@ The 2-second minimum dwell floor ensures no sponsor's impression drops below the
 
 ### Display (TV/Kiosk)
 
-| Placement | Classes | Element | Size |
-|-----------|---------|---------|------|
-| **Top banner** (`.sponsor-top`) | Premium, Mid | Header strip | Standard logo height |
-| **Side panel** (`#sponsorSide`) | Local | Sidebar cards | Side logo height |
-| **Primary badge** | Premium | 1.6x header, 1.4x sidebar | Enhanced |
+| Placement                       | Classes      | Element                   | Size                 |
+| ------------------------------- | ------------ | ------------------------- | -------------------- |
+| **Top banner** (`.sponsor-top`) | Premium, Mid | Header strip              | Standard logo height |
+| **Side panel** (`#sponsorSide`) | Local        | Sidebar cards             | Side logo height     |
+| **Primary badge**               | Premium      | 1.6x header, 1.4x sidebar | Enhanced             |
 
 **Rotation:** Display supports multi-pane rotation with configurable dwell time per pane:
+
 - Pane types: `public`, `schedule`, `standings`, `sponsors`, `custom`
 - Each pane has a `dwellMs` override — premium sponsors get longer dwell
 - Default rotation interval: 5000ms
@@ -137,6 +141,7 @@ The 2-second minimum dwell floor ensures no sponsor's impression drops below the
 ### SharedReports
 
 All classes see the same anonymous behavioral data:
+
 - QR trigger counts on ads
 - Impression counts from screen time
 - Event registration as impressions
@@ -149,6 +154,7 @@ All classes see the same anonymous behavioral data:
 The total number of sponsors in the pool is the natural governor of the marketplace. More sponsors = each gets less rotation time. The pricing tiers buy a larger share of that rotation.
 
 The pool is self-governing:
+
 - A crowded pool means each sponsor gets less absolute time but the event is more popular
 - A sparse pool means each sponsor gets more time but the event is smaller
 - The governor ensures local sponsors always get a fair share regardless of pool size
@@ -159,13 +165,13 @@ The pool is self-governing:
 
 Sponsor pricing and package structure varies by event type. Event types progress through 5 phases of regulatory clearance:
 
-| Phase | Regulatory Level | Event Types | Sponsor Implications |
-|-------|-----------------|-------------|---------------------|
-| **Phase 1** | Standard | Community gatherings, trivia nights, open tables | Standard sponsor packages |
-| **Phase 2** | Youth sports | Recreational leagues with minors | COPPA compliance on data collection |
-| **Phase 3** | Health/wellness | Fitness events, health screenings | HIPAA considerations for health data |
-| **Phase 4** | Licensed venues | Events at bars, restaurants | Alcohol advertising restrictions |
-| **Phase 5** | Full regulatory | Government-partnered, public safety events | Full compliance stack |
+| Phase       | Regulatory Level | Event Types                                      | Sponsor Implications                 |
+| ----------- | ---------------- | ------------------------------------------------ | ------------------------------------ |
+| **Phase 1** | Standard         | Community gatherings, trivia nights, open tables | Standard sponsor packages            |
+| **Phase 2** | Youth sports     | Recreational leagues with minors                 | COPPA compliance on data collection  |
+| **Phase 3** | Health/wellness  | Fitness events, health screenings                | HIPAA considerations for health data |
+| **Phase 4** | Licensed venues  | Events at bars, restaurants                      | Alcohol advertising restrictions     |
+| **Phase 5** | Full regulatory  | Government-partnered, public safety events       | Full compliance stack                |
 
 **The anonymous-ID-first architecture is designed for this.** Because the scan system collects zero PII, the regulatory burden is significantly lighter at every phase. There's no personal data to protect under HIPAA or COPPA — only anonymous presence signal.
 
@@ -178,6 +184,7 @@ Planning: **47 event types at launch, scaling to 180 by 2028.**
 > **Status:** Concept validated, implementation lost in laptop crash. Needs rebuild.
 
 The selling point: ability to replay QR scan activity on poster/tabletop placements over the days leading up to an event. Shows sponsors:
+
 - Which physical placements generated the most scans
 - When during the day scans peaked
 - How scan activity built over time pre-event
@@ -186,6 +193,7 @@ The selling point: ability to replay QR scan activity on poster/tabletop placeme
 **Key differentiator:** All of this without personal data. The playback shows behavioral patterns of groups — scan density by time bucket, by placement, by region — never individuals. This is possible because the `scans` table stores `scan_bucket` (hourly), `poster_deployment_id` (placement with lat/lng), and `user_agent_hash` (device class) — nothing that identifies a person.
 
 **Data model already supports this:**
+
 - `scans.scan_bucket` — hourly time windows
 - `scans.poster_deployment_id` → `poster_deployments.latitude/longitude`
 - `scan_aggregates.bucket_date` + `bucket_hour` — pre-computed rollups
@@ -194,17 +202,17 @@ The selling point: ability to replay QR scan activity on poster/tabletop placeme
 
 ## Implementation Status
 
-| Component | Status | Location |
-|-----------|--------|----------|
-| Governor state machine | Tested | `tests/unit/worker/governor-state-machine.test.js` |
-| Standard/compressed weights | Tested | `{ premium: 0.50, med: 0.30, local: 0.20 }` / `{ 0.40, 0.32, 0.28 }` |
-| SponsorUtils (render + sort by tier) | Working | `src/mvp/SponsorUtils.html` |
-| Display surface (headers + sidebars) | Working | `src/mvp/Display.html` |
-| Display rotation (multi-pane + dwell) | Working | `schemas/event.schema.json` DisplayRotation |
-| Sponsor schema (multi-placement) | Working | `schemas/sponsor.schema.json` |
-| Monetization hooks (inert) | Working | `worker/src/handlers/monetizationHooks.ts` |
-| Sponsor contract (locked v1.1.0) | Working | `worker/src/domain/sponsor.ts` |
-| QR click playback | **Lost — needs rebuild** | Was in development pre-crash |
-| Actual pricing ($75/$200/$500) | Illustrative | Not in code — will vary by event type |
-| Package slot counts (3/5/9) | Estimates | Not in code — starting numbers |
-| Event type regulatory phases | Planned | Not yet in schema or code |
+| Component                             | Status                   | Location                                                             |
+| ------------------------------------- | ------------------------ | -------------------------------------------------------------------- |
+| Governor state machine                | Tested                   | `tests/unit/worker/governor-state-machine.test.js`                   |
+| Standard/compressed weights           | Tested                   | `{ premium: 0.50, med: 0.30, local: 0.20 }` / `{ 0.40, 0.32, 0.28 }` |
+| SponsorUtils (render + sort by tier)  | Working                  | `src/mvp/SponsorUtils.html`                                          |
+| Display surface (headers + sidebars)  | Working                  | `src/mvp/Display.html`                                               |
+| Display rotation (multi-pane + dwell) | Working                  | `schemas/event.schema.json` DisplayRotation                          |
+| Sponsor schema (multi-placement)      | Working                  | `schemas/sponsor.schema.json`                                        |
+| Monetization hooks (inert)            | Working                  | `worker/src/handlers/monetizationHooks.ts`                           |
+| Sponsor contract (locked v1.1.0)      | Working                  | `worker/src/domain/sponsor.ts`                                       |
+| QR click playback                     | **Lost — needs rebuild** | Was in development pre-crash                                         |
+| Actual pricing ($75/$200/$500)        | Illustrative             | Not in code — will vary by event type                                |
+| Package slot counts (3/5/9)           | Estimates                | Not in code — starting numbers                                       |
+| Event type regulatory phases          | Planned                  | Not yet in schema or code                                            |
