@@ -5,16 +5,10 @@
  *
  *   GET /                        → landing page
  *   GET /admin                   → admin dashboard (auth required)
- *   GET /events, /public         → public events listing
- *   GET /display, /tv, /kiosk, /screen → TV/kiosk display
- *   GET /poster, /posters, /flyers     → printable poster
- *   GET /sharedReport, /report, /analytics, /reports, /insights → shared analytics
  *   GET /health                  → health check
  *   GET /api/status              → alias for /health
  *   GET /api/v2/events           → list active events
  *   GET /api/v2/events/:id       → single event
- *   GET /api/events              → alias for /api/v2/events (legacy)
- *   GET /api/events/:id          → alias for /api/v2/events/:id (legacy)
  *   GET /api/v2/admin/events     → admin event list (auth required)
  *
  *   POST /api/v2/events/:id/forms/register      → submit registration (public)
@@ -53,11 +47,9 @@ import {
   handleAdminPage,
   handleLandingPage,
   handleSubscribe,
-  handleDisplayPage,
-  handlePosterPage,
-  handleSharedReportPage,
   type PagesEnv,
 } from './handlers/pages';
+import { handleBriefingPage } from './handlers/briefing';
 import { requireAdmin, type AdminEnv } from './auth/admin';
 import {
   handleFormRegistration,
@@ -282,40 +274,9 @@ export async function route(request: Request, env: RouterEnv): Promise<Response>
     return handlePublicPage(env);
   }
 
-  // ── Display page (TV / kiosk) ──────────────────────────────────────────────
-  if (
-    pathname === '/display' ||
-    pathname === '/tv' ||
-    pathname === '/kiosk' ||
-    pathname === '/screen'
-  ) {
-    return handleDisplayPage(env);
-  }
-
-  // ── Poster page (printable) ────────────────────────────────────────────────
-  if (pathname === '/poster' || pathname === '/posters' || pathname === '/flyers') {
-    return handlePosterPage(env);
-  }
-
-  // ── Shared report page ─────────────────────────────────────────────────────
-  if (
-    pathname === '/sharedReport' ||
-    pathname === '/report' ||
-    pathname === '/analytics' ||
-    pathname === '/reports' ||
-    pathname === '/insights'
-  ) {
-    return handleSharedReportPage(env);
-  }
-
-  // ── Legacy API alias (/api/events → /api/v2/events) ───────────────────────
-  if (pathname === '/api/events') {
-    return handleListEvents(request, env);
-  }
-
-  const legacyEventMatch = pathname.match(/^\/api\/events\/([^/]+)$/);
-  if (legacyEventMatch) {
-    return handleGetEvent(request, env, legacyEventMatch[1]);
+  // ── CEO Briefing ───────────────────────────────────────────────────────────
+  if (pathname === '/briefing' && method === 'GET') {
+    return handleBriefingPage();
   }
 
   // ── 404 ────────────────────────────────────────────────────────────────────
