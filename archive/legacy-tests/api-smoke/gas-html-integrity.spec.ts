@@ -66,20 +66,12 @@ const GAS_HTML_MARKERS = [
 /**
  * Routes to validate - all user-facing HTML pages
  */
-const HTML_ROUTES_TO_CHECK = [
-  '/events',
-  '/admin',
-  '/display',
-  '/poster',
-  '/public',
-] as const;
+const HTML_ROUTES_TO_CHECK = ['/events', '/admin', '/display', '/poster', '/public'] as const;
 
 /**
  * Optional public event display routes (may need eventId)
  */
-const PUBLIC_DISPLAY_ROUTES = [
-  '/public/{eventId}/display',
-] as const;
+const PUBLIC_DISPLAY_ROUTES = ['/public/{eventId}/display'] as const;
 
 // =============================================================================
 // Test Utilities
@@ -141,16 +133,14 @@ ${html.substring(0, 10000)}
 // =============================================================================
 
 test.describe('GAS HTML Integrity Check (Stage-2)', () => {
-
   test.describe('Primary Routes - Must Not Leak GAS HTML', () => {
-
     for (const route of HTML_ROUTES_TO_CHECK) {
       test(`${route} does NOT contain GAS HTML markers`, async ({ request }) => {
         // Fetch the route
         const response = await request.get(route, {
           headers: {
-            'Accept': 'text/html,application/xhtml+xml'
-          }
+            Accept: 'text/html,application/xhtml+xml',
+          },
         });
 
         // Should return 200
@@ -172,7 +162,7 @@ test.describe('GAS HTML Integrity Check (Stage-2)', () => {
 GAS HTML LEAK DETECTED ON ${route}
 ========================================
 Found markers:
-${foundMarkers.map(m => `  - "${m}"`).join('\n')}
+${foundMarkers.map((m) => `  - "${m}"`).join('\n')}
 
 HTML snippet (first 500 chars):
 ${html.substring(0, 500)}
@@ -181,14 +171,17 @@ ${html.substring(0, 500)}
         }
 
         // CRITICAL ASSERTION: No GAS markers should be found
-        expect(foundMarkers, `Route ${route} leaked GAS HTML! Found: ${foundMarkers.join(', ')}`).toHaveLength(0);
+        expect(
+          foundMarkers,
+          `Route ${route} leaked GAS HTML! Found: ${foundMarkers.join(', ')}`
+        ).toHaveLength(0);
       });
 
       test(`${route} contains valid HTML structure`, async ({ request }) => {
         const response = await request.get(route, {
           headers: {
-            'Accept': 'text/html'
-          }
+            Accept: 'text/html',
+          },
         });
 
         const html = await response.text();
@@ -217,13 +210,10 @@ ${html.substring(0, 500)}
         const proxiedBy = response.headers()['x-proxied-by'];
         expect(proxiedBy).toBe('oursharedevents-worker');
       });
-
     }
-
   });
 
   test.describe('/events Route - Critical Path', () => {
-
     test('/events does NOT contain primary GAS shell message', async ({ request }) => {
       const response = await request.get('/events');
       const html = await response.text();
@@ -245,13 +235,9 @@ ${html.substring(0, 500)}
       const html = await response.text();
 
       // Check for warden (Google's bot detection)
-      const wardenMarkers = [
-        'wardeninit',
-        '/warden/',
-        '_/warden/',
-      ];
+      const wardenMarkers = ['wardeninit', '/warden/', '_/warden/'];
 
-      const foundWarden = wardenMarkers.filter(m => html.includes(m));
+      const foundWarden = wardenMarkers.filter((m) => html.includes(m));
 
       if (foundWarden.length > 0) {
         saveHtmlArtifact('/events-warden', html, foundWarden);
@@ -271,7 +257,7 @@ ${html.substring(0, 500)}
         '/a/google.com/',
       ];
 
-      const foundPatterns = googleScriptPatterns.filter(p => html.includes(p));
+      const foundPatterns = googleScriptPatterns.filter((p) => html.includes(p));
 
       if (foundPatterns.length > 0) {
         saveHtmlArtifact('/events-google-scripts', html, foundPatterns);
@@ -288,17 +274,16 @@ ${html.substring(0, 500)}
       expect(html).not.toContain('<title>Untitled project</title>');
 
       // Should contain EventAngle references
-      const hasEventAngle = html.includes('EventAngle') ||
-                           html.includes('oursharedevents') ||
-                           html.includes('event-angle');
+      const hasEventAngle =
+        html.includes('EventAngle') ||
+        html.includes('oursharedevents') ||
+        html.includes('event-angle');
 
       expect(hasEventAngle).toBe(true);
     });
-
   });
 
   test.describe('Route Aliases - Same Integrity Requirements', () => {
-
     const routeAliases = [
       { alias: '/schedule', canonical: '/events' },
       { alias: '/calendar', canonical: '/events' },
@@ -310,7 +295,9 @@ ${html.substring(0, 500)}
     ];
 
     for (const { alias, canonical } of routeAliases) {
-      test(`${alias} (alias for ${canonical}) does NOT contain GAS markers`, async ({ request }) => {
+      test(`${alias} (alias for ${canonical}) does NOT contain GAS markers`, async ({
+        request,
+      }) => {
         const response = await request.get(alias);
 
         // Should return 200
@@ -326,11 +313,9 @@ ${html.substring(0, 500)}
         expect(foundMarkers).toHaveLength(0);
       });
     }
-
   });
 
   test.describe('Query Parameter Routes', () => {
-
     const queryParamRoutes = [
       { path: '/', params: { page: 'public' } },
       { path: '/', params: { page: 'admin' } },
@@ -361,11 +346,9 @@ ${html.substring(0, 500)}
         }
       });
     }
-
   });
 
   test.describe('Error Pages - Must Be Worker-Generated', () => {
-
     test('404 page is Worker-generated, not GAS', async ({ request }) => {
       const response = await request.get('/nonexistent-route-12345');
 
@@ -390,11 +373,9 @@ ${html.substring(0, 500)}
       const proxiedBy = response.headers()['x-proxied-by'];
       expect(proxiedBy).toBe('oursharedevents-worker');
     });
-
   });
 
   test.describe('Response Headers Validation', () => {
-
     test('all HTML routes have X-Worker-Version header', async ({ request }) => {
       for (const route of HTML_ROUTES_TO_CHECK) {
         const response = await request.get(route);
@@ -411,16 +392,14 @@ ${html.substring(0, 500)}
         const headers = response.headers();
 
         // Google headers would indicate GAS response
-        const googleHeaders = Object.keys(headers).filter(
-          h => h.toLowerCase().startsWith('x-google')
+        const googleHeaders = Object.keys(headers).filter((h) =>
+          h.toLowerCase().startsWith('x-google')
         );
 
         expect(googleHeaders).toHaveLength(0);
       }
     });
-
   });
-
 });
 
 // =============================================================================
@@ -428,7 +407,6 @@ ${html.substring(0, 500)}
 // =============================================================================
 
 test.describe('Comprehensive GAS Marker Scan', () => {
-
   test('full scan of /events for all known GAS markers', async ({ request }) => {
     const response = await request.get('/events');
     const html = await response.text();
@@ -455,7 +433,7 @@ test.describe('Comprehensive GAS Marker Scan', () => {
       'Untitled project',
     ];
 
-    const foundMarkers = extendedMarkers.filter(m => html.includes(m));
+    const foundMarkers = extendedMarkers.filter((m) => html.includes(m));
 
     if (foundMarkers.length > 0) {
       saveHtmlArtifact('/events-full-scan', html, foundMarkers);
@@ -465,7 +443,7 @@ test.describe('Comprehensive GAS Marker Scan', () => {
 COMPREHENSIVE GAS SCAN FAILED
 ========================================
 Found ${foundMarkers.length} GAS markers in /events:
-${foundMarkers.map(m => `  - "${m}"`).join('\n')}
+${foundMarkers.map((m) => `  - "${m}"`).join('\n')}
 ========================================
 HTML artifact saved for debugging.
 `);
@@ -473,5 +451,4 @@ HTML artifact saved for debugging.
 
     expect(foundMarkers, 'GAS markers found in /events response').toHaveLength(0);
   });
-
 });

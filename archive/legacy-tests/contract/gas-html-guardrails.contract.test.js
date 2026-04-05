@@ -69,19 +69,38 @@ const GAS_HTML_MARKERS = Object.freeze([
  * Worker must serve these from templates
  */
 const HTML_ROUTES = Object.freeze([
-  'public', 'events', 'schedule', 'calendar',
-  'admin', 'manage', 'dashboard', 'create', 'docs',
-  'display', 'tv', 'kiosk', 'screen',
-  'poster', 'posters', 'flyers',
-  'report', 'analytics', 'reports', 'insights', 'stats'
+  'public',
+  'events',
+  'schedule',
+  'calendar',
+  'admin',
+  'manage',
+  'dashboard',
+  'create',
+  'docs',
+  'display',
+  'tv',
+  'kiosk',
+  'screen',
+  'poster',
+  'posters',
+  'flyers',
+  'report',
+  'analytics',
+  'reports',
+  'insights',
+  'stats',
 ]);
 
 /**
  * Routes that legitimately proxy to GAS
  */
 const LEGITIMATE_GAS_ROUTES = Object.freeze([
-  'status', 'ping', 'diagnostics',  // JSON status endpoints
-  'r', 'redirect'                    // Shortlink resolution
+  'status',
+  'ping',
+  'diagnostics', // JSON status endpoints
+  'r',
+  'redirect', // Shortlink resolution
 ]);
 
 // =============================================================================
@@ -97,7 +116,6 @@ function readFileContent(filePath) {
 // =============================================================================
 
 describe('GAS HTML Guardrails Contract', () => {
-
   describe('Worker HTML Route Mapping', () => {
     let workerContent;
 
@@ -111,14 +129,20 @@ describe('GAS HTML Guardrails Contract', () => {
 
     test('all HTML routes map to Worker templates, not GAS', () => {
       // Each HTML route should be in the HTML_ROUTE_MAP
-      HTML_ROUTES.forEach(route => {
+      HTML_ROUTES.forEach((route) => {
         const routePattern = new RegExp(`['"]${route}['"]\\s*:\\s*['"]\\w+['"]`);
         const inRouteMap = workerContent.match(/HTML_ROUTE_MAP[\s\S]*?}\)/);
         expect(inRouteMap).toBeTruthy();
         // Route should exist in either HTML_ROUTE_MAP or JSON_ROUTE_MAP
-        const routeMapContent = workerContent.match(/const HTML_ROUTE_MAP = Object\.freeze\(\{[\s\S]*?\}\)/);
-        const jsonRouteMapContent = workerContent.match(/const JSON_ROUTE_MAP = Object\.freeze\(\{[\s\S]*?\}\)/);
-        const gasRouteMapContent = workerContent.match(/const GAS_PROXY_ROUTES = Object\.freeze\(\{[\s\S]*?\}\)/);
+        const routeMapContent = workerContent.match(
+          /const HTML_ROUTE_MAP = Object\.freeze\(\{[\s\S]*?\}\)/
+        );
+        const jsonRouteMapContent = workerContent.match(
+          /const JSON_ROUTE_MAP = Object\.freeze\(\{[\s\S]*?\}\)/
+        );
+        const gasRouteMapContent = workerContent.match(
+          /const GAS_PROXY_ROUTES = Object\.freeze\(\{[\s\S]*?\}\)/
+        );
 
         const allMaps = `${routeMapContent?.[0] || ''} ${jsonRouteMapContent?.[0] || ''} ${gasRouteMapContent?.[0] || ''}`;
 
@@ -147,7 +171,6 @@ describe('GAS HTML Guardrails Contract', () => {
       expect(workerContent).toContain('function renderTemplate(templateContent, params, env)');
       expect(workerContent).toContain('renderTemplate(templateContent, {');
     });
-
   });
 
   describe('Worker GAS Proxy Isolation', () => {
@@ -170,7 +193,7 @@ describe('GAS HTML Guardrails Contract', () => {
       expect(gasRoutes).toContain("'redirect': 'redirect'");
 
       // Should NOT contain HTML routes
-      HTML_ROUTES.forEach(route => {
+      HTML_ROUTES.forEach((route) => {
         expect(gasRoutes).not.toContain(`'${route}'`);
       });
     });
@@ -197,8 +220,10 @@ describe('GAS HTML Guardrails Contract', () => {
 
     test('main fetch handler routes HTML to handleHtmlPageRequest', () => {
       // The main handler should route HTML pages to handleHtmlPageRequest
-      expect(workerContent).toContain("Object.hasOwn(HTML_ROUTE_MAP, routeParams.page)");
-      expect(workerContent).toContain('response = await handleHtmlPageRequest(url, routeParams, env)');
+      expect(workerContent).toContain('Object.hasOwn(HTML_ROUTE_MAP, routeParams.page)');
+      expect(workerContent).toContain(
+        'response = await handleHtmlPageRequest(url, routeParams, env)'
+      );
     });
 
     test('proxyPageRequest is deprecated and not used', () => {
@@ -207,13 +232,10 @@ describe('GAS HTML Guardrails Contract', () => {
       expect(workerContent).toContain('proxyPageRequest_DEPRECATED');
 
       // Should NOT be called in main handler
-      const mainHandler = workerContent.match(
-        /export default \{[\s\S]*?\n\}/
-      );
+      const mainHandler = workerContent.match(/export default \{[\s\S]*?\n\}/);
       expect(mainHandler).toBeTruthy();
       expect(mainHandler[0]).not.toContain('proxyPageRequest(');
     });
-
   });
 
   describe('Template System Configuration', () => {
@@ -230,9 +252,7 @@ describe('GAS HTML Guardrails Contract', () => {
     });
 
     test('getTemplate function fetches from KV storage', () => {
-      const getTemplateMatch = workerContent.match(
-        /async function getTemplate[\s\S]*?^}/m
-      );
+      const getTemplateMatch = workerContent.match(/async function getTemplate[\s\S]*?^}/m);
       expect(getTemplateMatch).toBeTruthy();
 
       expect(workerContent).toContain('env?.TEMPLATES_KV');
@@ -249,7 +269,6 @@ describe('GAS HTML Guardrails Contract', () => {
     test('TemplateError class is defined for error handling', () => {
       expect(workerContent).toContain('class TemplateError extends Error');
     });
-
   });
 
   describe('Observability for Route Tracking', () => {
@@ -285,7 +304,6 @@ describe('GAS HTML Guardrails Contract', () => {
       expect(workerContent).toContain('[JSON_REDIRECT]');
       expect(workerContent).toContain('[API_DEPRECATED]');
     });
-
   });
 
   describe('No GAS HTML Markers in Worker Response Templates', () => {
@@ -305,7 +323,9 @@ describe('GAS HTML Guardrails Contract', () => {
       const errorPageTemplate = errorPageMatch[0];
 
       // GAS shell message should NEVER appear in error page template
-      expect(errorPageTemplate).not.toContain('This application was created by a Google Apps Script user');
+      expect(errorPageTemplate).not.toContain(
+        'This application was created by a Google Apps Script user'
+      );
       expect(errorPageTemplate).not.toContain('script.googleusercontent.com');
       expect(errorPageTemplate).not.toContain('Untitled project');
     });
@@ -320,7 +340,9 @@ describe('GAS HTML Guardrails Contract', () => {
       const notFoundPageTemplate = notFoundPageMatch[0];
 
       // GAS shell message should NEVER appear in 404 page template
-      expect(notFoundPageTemplate).not.toContain('This application was created by a Google Apps Script user');
+      expect(notFoundPageTemplate).not.toContain(
+        'This application was created by a Google Apps Script user'
+      );
       expect(notFoundPageTemplate).not.toContain('script.googleusercontent.com');
       expect(notFoundPageTemplate).not.toContain('Untitled project');
     });
@@ -340,9 +362,7 @@ describe('GAS HTML Guardrails Contract', () => {
       expect(wardenBlock).toBeTruthy();
 
       // The response should specify JSON content type
-      expect(workerContent).toMatch(
-        /startsWith\('\/wardeninit'\)[\s\S]{0,800}'application\/json'/
-      );
+      expect(workerContent).toMatch(/startsWith\('\/wardeninit'\)[\s\S]{0,800}'application\/json'/);
 
       // The warden response body should NOT be HTML
       // Verify there's no <!DOCTYPE or <html in the response definition
@@ -354,8 +374,8 @@ describe('GAS HTML Guardrails Contract', () => {
     test('Worker error pages are self-contained HTML', () => {
       // generateErrorPage should produce valid HTML without GAS references
       expect(workerContent).toContain('function generateErrorPage(options)');
-      expect(workerContent).toContain("<!DOCTYPE html>");
-      expect(workerContent).toContain("<html lang=\"en\">");
+      expect(workerContent).toContain('<!DOCTYPE html>');
+      expect(workerContent).toContain('<html lang="en">');
     });
 
     test('Worker 404 pages are self-contained HTML', () => {
@@ -371,12 +391,11 @@ describe('GAS HTML Guardrails Contract', () => {
         /html = [^;]*script\.googleusercontent\.com/g,
       ];
 
-      htmlOutputPatterns.forEach(pattern => {
+      htmlOutputPatterns.forEach((pattern) => {
         const matches = workerContent.match(pattern);
         expect(matches).toBeNull();
       });
     });
-
   });
 
   describe('Route Validation Contract', () => {
@@ -389,7 +408,7 @@ describe('GAS HTML Guardrails Contract', () => {
     test('validateRoute function rejects unknown routes', () => {
       expect(workerContent).toContain('function validateRoute(url)');
       expect(workerContent).toContain('valid: false');
-      expect(workerContent).toContain("reason: `Unknown");
+      expect(workerContent).toContain('reason: `Unknown');
     });
 
     test('unknown routes return 404, not proxy to GAS', () => {
@@ -404,13 +423,10 @@ describe('GAS HTML Guardrails Contract', () => {
       // Should use local HTML generation
       expect(workerContent).toContain('const html = generate404Page({ path, corrId })');
     });
-
   });
-
 });
 
 describe('GAS HTML Markers Reference', () => {
-
   test('GAS_HTML_MARKERS list is comprehensive', () => {
     // Ensure our marker list covers known GAS indicators
     expect(GAS_HTML_MARKERS).toContain('This application was created by a Google Apps Script user');
@@ -434,12 +450,11 @@ describe('GAS HTML Markers Reference', () => {
     expect(LEGITIMATE_GAS_ROUTES).toContain('status');
     expect(LEGITIMATE_GAS_ROUTES).toContain('r');
   });
-
 });
 
 // Export markers for use by Stage-2 tests
 module.exports = {
   GAS_HTML_MARKERS,
   HTML_ROUTES,
-  LEGITIMATE_GAS_ROUTES
+  LEGITIMATE_GAS_ROUTES,
 };

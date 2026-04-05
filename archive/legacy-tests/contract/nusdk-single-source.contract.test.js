@@ -31,12 +31,12 @@ describe('NUSDK Single Source of Truth', () => {
     'Public.html',
     'Display.html',
     'Poster.html',
-    'SharedReport.html'
+    'SharedReport.html',
   ];
 
   // Files that are allowed to reference window.NU but should NOT define it
   const allowedNUReferences = [
-    'SharedUtils.html',  // Delegates to NU.esc
+    'SharedUtils.html', // Delegates to NU.esc
     'SponsorUtils.html', // Uses NU.safeAnalytics etc.
   ];
 
@@ -51,7 +51,7 @@ describe('NUSDK Single Source of Truth', () => {
 
     test('NUSDK.html should be the ONLY file that defines window.NU = {', () => {
       // Read all .html files in src/mvp
-      const htmlFiles = fs.readdirSync(srcDir).filter(f => f.endsWith('.html'));
+      const htmlFiles = fs.readdirSync(srcDir).filter((f) => f.endsWith('.html'));
 
       const filesDefiningNU = [];
 
@@ -75,12 +75,12 @@ describe('NUSDK Single Source of Truth', () => {
 
       // Required methods per NUSDK documentation
       const requiredMethods = [
-        'rpc',           // Core RPC method
-        'swr',           // Stale-while-revalidate
-        'esc',           // XSS escape
-        'safeRpc',       // Graceful error handling
+        'rpc', // Core RPC method
+        'swr', // Stale-while-revalidate
+        'esc', // XSS escape
+        'safeRpc', // Graceful error handling
         'safeAnalytics', // Fire-and-forget analytics
-        'flush',         // Flush pending requests (v2.0)
+        'flush', // Flush pending requests (v2.0)
       ];
 
       for (const method of requiredMethods) {
@@ -160,7 +160,7 @@ describe('NUSDK Single Source of Truth', () => {
 
   describe('No Duplicate Definitions', () => {
     test('No active src/mvp file should redefine window.NU except NUSDK.html', () => {
-      const htmlFiles = fs.readdirSync(srcDir).filter(f => f.endsWith('.html'));
+      const htmlFiles = fs.readdirSync(srcDir).filter((f) => f.endsWith('.html'));
 
       const violations = [];
 
@@ -180,7 +180,7 @@ describe('NUSDK Single Source of Truth', () => {
     });
 
     test('No file should redefine NU.rpc method', () => {
-      const htmlFiles = fs.readdirSync(srcDir).filter(f => f.endsWith('.html'));
+      const htmlFiles = fs.readdirSync(srcDir).filter((f) => f.endsWith('.html'));
 
       const violations = [];
 
