@@ -9,30 +9,30 @@
 
 ### ourSharedEvents Environments
 
-| Environment | Domain | Worker | D1 Database | Status |
-|-------------|--------|--------|-------------|--------|
-| **Development** | `localhost:8787` | `wrangler dev` | `ocr-db-local` | ✅ Works locally |
-| **Staging** | `stg.oursharedevents.com` | `workers/oursharedevents` | `ocr-db-staging` | ❌ Not provisioned |
-| **Production** | `oursharedevents.com`, `www.*` | `workers/oursharedevents` | `ocr-db-production` | ❌ Not provisioned |
+| Environment     | Domain                         | Worker                    | D1 Database         | Status             |
+| --------------- | ------------------------------ | ------------------------- | ------------------- | ------------------ |
+| **Development** | `localhost:8787`               | `wrangler dev`            | `ocr-db-local`      | ✅ Works locally   |
+| **Staging**     | `stg.oursharedevents.com`      | `workers/oursharedevents` | `ocr-db-staging`    | ❌ Not provisioned |
+| **Production**  | `oursharedevents.com`, `www.*` | `workers/oursharedevents` | `ocr-db-production` | ❌ Not provisioned |
 
 ### Legacy Environments (eventangle.com)
 
-| Environment | Domain | Status |
-|-------------|--------|--------|
-| Staging | `stg.eventangle.com`, `api-stg.eventangle.com` | ⚠️ Active (old domain) |
-| Production | `www.eventangle.com`, `api.eventangle.com` | ⚠️ Active (old domain) |
-| QA | `zeventbooks.com` | ⚠️ Active (old domain) |
+| Environment | Domain                                         | Status                 |
+| ----------- | ---------------------------------------------- | ---------------------- |
+| Staging     | `stg.eventangle.com`, `api-stg.eventangle.com` | ⚠️ Active (old domain) |
+| Production  | `www.eventangle.com`, `api.eventangle.com`     | ⚠️ Active (old domain) |
+| QA          | `zeventbooks.com`                              | ⚠️ Active (old domain) |
 
 ### Environment Parity Matrix
 
-| Config | Dev | Staging | Production |
-|--------|-----|---------|------------|
-| Debug logging | Full | Full | Minimal |
-| Debug endpoints | Yes | Yes | No |
-| Admin key fallback | N/A | ✅ Enabled | ❌ Disabled |
-| Experimental features | On | On | Off |
-| D1 database | Local | Staging | Production |
-| Build version | `dev-local` | `stg-YYYY.MM.DD` | `prod-YYYY.MM.DD` |
+| Config                | Dev         | Staging          | Production        |
+| --------------------- | ----------- | ---------------- | ----------------- |
+| Debug logging         | Full        | Full             | Minimal           |
+| Debug endpoints       | Yes         | Yes              | No                |
+| Admin key fallback    | N/A         | ✅ Enabled       | ❌ Disabled       |
+| Experimental features | On          | On               | Off               |
+| D1 database           | Local       | Staging          | Production        |
+| Build version         | `dev-local` | `stg-YYYY.MM.DD` | `prod-YYYY.MM.DD` |
 
 ---
 
@@ -73,24 +73,24 @@ wrangler d1 migrations apply --env production
 
 ### GitHub Actions Secrets
 
-| Secret | Scope | Rotation | Status |
-|--------|-------|----------|--------|
-| `CLOUDFLARE_API_TOKEN` | Deploy jobs | 90 days | ❌ Not set |
-| `CLOUDFLARE_ACCOUNT_ID` | Deploy jobs | Static | ❌ Not set |
-| `ADMIN_KEY` | E2E tests | 90 days | ❌ Not set |
+| Secret                  | Scope       | Rotation | Status     |
+| ----------------------- | ----------- | -------- | ---------- |
+| `CLOUDFLARE_API_TOKEN`  | Deploy jobs | 90 days  | ❌ Not set |
+| `CLOUDFLARE_ACCOUNT_ID` | Deploy jobs | Static   | ❌ Not set |
+| `ADMIN_KEY`             | E2E tests   | 90 days  | ❌ Not set |
 
 ### Cloudflare Worker Secrets (per env)
 
-| Secret | Purpose | Rotation | Status |
-|--------|---------|----------|--------|
-| `ADMIN_KEY` | Bearer auth | 90 days | ❌ Not set |
-| `SHEETS_SPREADSHEET_ID` | Data source | Static | ❌ Not set |
-| `GOOGLE_SA_CLIENT_EMAIL` | Service account | 90 days | ❌ Not set |
-| `GOOGLE_SA_PRIVATE_KEY_PEM` | Signing key | 90 days | ❌ Not set |
-| `GOOGLE_MAPS_API_KEY` | Maps | 90 days | ❌ Not set |
-| `BIGQUERY_DATASET_ID` | Analytics | Static | ❌ Not set |
-| `GCP_PROJECT_ID` | GCP project | Static | ❌ Not set |
-| `VERTEX_AI_MODEL_ID` | AI features | Static | ❌ Not set |
+| Secret                      | Purpose         | Rotation | Status     |
+| --------------------------- | --------------- | -------- | ---------- |
+| `ADMIN_KEY`                 | Bearer auth     | 90 days  | ❌ Not set |
+| `SHEETS_SPREADSHEET_ID`     | Data source     | Static   | ❌ Not set |
+| `GOOGLE_SA_CLIENT_EMAIL`    | Service account | 90 days  | ❌ Not set |
+| `GOOGLE_SA_PRIVATE_KEY_PEM` | Signing key     | 90 days  | ❌ Not set |
+| `GOOGLE_MAPS_API_KEY`       | Maps            | 90 days  | ❌ Not set |
+| `BIGQUERY_DATASET_ID`       | Analytics       | Static   | ❌ Not set |
+| `GCP_PROJECT_ID`            | GCP project     | Static   | ❌ Not set |
+| `VERTEX_AI_MODEL_ID`        | AI features     | Static   | ❌ Not set |
 
 ### Secret Rotation Runbook
 
@@ -167,14 +167,14 @@ v{MAJOR}.{MINOR}.{PATCH}
 
 ### Active Pipelines
 
-| Workflow | File | Trigger | Deploys |
-|----------|------|---------|---------|
-| **Worker CI/CD** | `oursharedevents-ci.yml` | PR/push/tag | `workers/oursharedevents/` |
-| **Security Scan** | `security-scan.yml` | Push/PR/weekly | N/A (analysis) |
-| **Security Triage** | `security-triage.yml` | Scan failure | N/A (issues) |
-| **SLA Enforcement** | `security-sla-enforcement.yml` | Daily | N/A (labels) |
-| **Human Gate** | `security-human-gate.yml` | Scan blocks | N/A (approval) |
-| **Dependency Review** | `dependency-review.yml` | PR | N/A (review) |
+| Workflow              | File                           | Trigger        | Deploys                    |
+| --------------------- | ------------------------------ | -------------- | -------------------------- |
+| **Worker CI/CD**      | `oursharedevents-ci.yml`       | PR/push/tag    | `workers/oursharedevents/` |
+| **Security Scan**     | `security-scan.yml`            | Push/PR/weekly | N/A (analysis)             |
+| **Security Triage**   | `security-triage.yml`          | Scan failure   | N/A (issues)               |
+| **SLA Enforcement**   | `security-sla-enforcement.yml` | Daily          | N/A (labels)               |
+| **Human Gate**        | `security-human-gate.yml`      | Scan blocks    | N/A (approval)             |
+| **Dependency Review** | `dependency-review.yml`        | PR             | N/A (review)               |
 
 ### Pipeline Flow
 
@@ -191,12 +191,12 @@ PR opened
 
 ### Cleanup Needed
 
-| Item | Action |
-|------|--------|
-| `stage1.yml` | Archive — targets legacy `worker/` |
-| `stage2.yml` | Archive — targets legacy `worker/` |
+| Item                   | Action                                    |
+| ---------------------- | ----------------------------------------- |
+| `stage1.yml`           | Archive — targets legacy `worker/`        |
+| `stage2.yml`           | Archive — targets legacy `worker/`        |
 | `worker/wrangler.toml` | Archive — conflicts with canonical Worker |
-| Root `wrangler.toml` | Archive — points to `worker/` |
+| Root `wrangler.toml`   | Archive — points to `worker/`             |
 
 ---
 
@@ -204,47 +204,67 @@ PR opened
 
 ### Per-Product Infrastructure
 
-| Product | Cloudflare Worker | D1 Database | Firebase | Domain |
-|---------|------------------|-------------|----------|--------|
-| **ourSharedEvents** | ✅ Coded | ✅ Schema ready | Phase 3 | oursharedevents.com |
-| **ourRecNights** | Needed | Shared D1? | Shared Firebase? | ourrecnights.com? |
-| **OurOpenTables** | Needed | Shared D1? | Shared Firebase? | TBD |
-| **OurRecordStories** | Needed | Shared D1? | Shared Firebase? | TBD |
+> **Source of truth**: `OCR-docs/docs/VISION.md` — all product repos derive from that document.
+
+| Code | Product          | Worker        | D1              | Domain              | Status                         |
+| ---- | ---------------- | ------------- | --------------- | ------------------- | ------------------------------ |
+| OSE  | OurSharedEvents  | ✅ Coded      | ✅ Schema ready | oursharedevents.com | Active development             |
+| OW   | OurWKRP          | ✅ Coded      | ✅ Schema ready | ourwkrp.com         | Active development             |
+| OSG  | OurSharedGames   | Needed        | Inherits OSE    | TBD                 | Docs-as-code                   |
+| OSR  | OurSharedRecords | Needed        | Own DB          | TBD                 | Docs-as-code                   |
+| OSP  | OurSharedPulse   | Not required  | Not required    | TBD                 | Human-delivered, tech-optional |
+| OSM  | OurSharedMagnets | Not required  | Not required    | TBD                 | Docs-as-code (Postman/Newman)  |
+| OWL  | OurWhiteList     | Fork template | Per-client      | Per-client          | Docs-as-code                   |
+| OER  | OurEventRings    | Needed        | BigQuery target | TBD                 | Not started                    |
+
+### Key architectural boundaries
+
+- **OSE is anonymized.** Anonymous ID architecture. No PII in database.
+- **OW is not anonymized.** Named identity. Separate D1, separate KV, separate Worker.
+- **OSE + OW converge under OCR** but the identity boundary is architectural and permanent.
+- **All product data flows to BigQuery.** OER accesses via RAG.
 
 ### Shared Infrastructure Decisions Needed
 
-1. **Shared vs. isolated D1:** Do child products get their own D1 databases or share ourSharedEvents D1?
-2. **Shared Firebase project:** One Firebase project for auth across all products, or one per product?
-3. **Domain strategy:** Subdomains of oursharedevents.com or separate domains?
+1. **Shared vs. isolated D1:** Products with code get their own D1. OSE and OW are already separate.
+2. **Shared Firebase project:** One Firebase project for auth across OSE products, or one per product?
+3. **Domain strategy:** Separate domains per product (oursharedevents.com, ourwkrp.com already registered).
 4. **Cloudflare zone:** One zone with multiple Workers, or one zone per product?
 5. **CI/CD template:** Shared reusable workflow or copy-paste per repo?
+6. **BigQuery pipeline:** How product data flows to the warehouse for OER/RAG.
 
-### Recommended Architecture
+### Architecture
 
 ```
 ourCommunityRituals (GitHub Org)
-├── ourSharedEvents (infrastructure platform)
+├── OCR-docs (org brain — VISION.md source of truth)
+├── ourSharedEvents — OSE (anonymous ID platform)
 │   ├── Cloudflare Worker (API + admin)
 │   ├── D1 Database (events, sponsors, customers)
-│   ├── Firebase Auth (shared identity)
-│   └── Firebase Hosting (shared CDN)
-├── ourRecNights (consumer product)
-│   ├── Cloudflare Worker (league-specific API)
-│   ├── D1 Database (league data, references events)
-│   └── Firebase Hosting (league UI)
-└── [other products follow same pattern]
+│   ├── Firebase Auth (Phase 3)
+│   └── Firebase Hosting (Phase 3)
+├── ourWKRP — OW (named identity music platform)
+│   ├── Cloudflare Worker (Spotify + catalog API)
+│   ├── D1 Database (contributors, playlists, tracks)
+│   └── KV (auth state, sessions)
+├── ourSharedGames — OSG (activation format, inherits OSE)
+├── ourSharedRecords — OSR (archive layer)
+├── ourSharedPulse — OSP (consulting, tech-optional)
+├── ourSharedMagnets — OSM (developer/franchise docs)
+├── ourWhiteList — OWL (deployment/white label)
+└── [OurEventRings — OER (analytics, not started)]
 ```
 
 ---
 
 ## Monitoring & Observability (Planned)
 
-| Tool | Purpose | Status |
-|------|---------|--------|
+| Tool                     | Purpose                     | Status                 |
+| ------------------------ | --------------------------- | ---------------------- |
 | **Cloudflare Analytics** | Request volume, error rates | Available after deploy |
-| **Wrangler tail** | Real-time Worker logs | Available after deploy |
-| **Datadog Synthetics** | Endpoint monitoring | Not provisioned |
-| **GitHub Actions** | Pipeline health | ✅ Active |
+| **Wrangler tail**        | Real-time Worker logs       | Available after deploy |
+| **Datadog Synthetics**   | Endpoint monitoring         | Not provisioned        |
+| **GitHub Actions**       | Pipeline health             | ✅ Active              |
 
 ---
 

@@ -7,27 +7,19 @@
 
 ## ourCommunityRituals Ecosystem — Product Map
 
-### Infrastructure Platform
+> **Source of truth**: `OCR-docs/docs/VISION.md` — all product repos derive from that document.
 
-| Product | Repo | Purpose | Code Status |
-|---------|------|---------|-------------|
-| **ourSharedEvents** | `ourCommunityRituals/ourSharedEvents` | Core event platform — API, admin, surfaces | ✅ Active development |
-
-### Consumer Products (all depend on ourSharedEvents)
-
-| Product | Repo | Purpose | Code Status |
-|---------|------|---------|-------------|
-| **ourRecNights** | `ourCommunityRituals/ourRecNights` | Adult Recreation Night — Bocce anchor | ❌ No code yet |
-| **OurRecordStories** | — | Record-night social events / storytelling | ❌ Concept only |
-| **OurOpenTables** | — | Open-table community dinners | ❌ Concept only |
-| **OurSharedRings** | — | Research/data analysis from ourSharedEvents | ❌ Concept only |
-| **ourSharedMagnets** | — | Technical infra (Cloudflare setup) | ❌ Concept only |
-
-### Services
-
-| Product | Repo | Purpose | Code Status |
-|---------|------|---------|-------------|
-| **OurPulse** | — | Community consulting / manual league onboarding | ❌ Service (no code) |
+| Code | Product                 | Repo               | Purpose                                             | Status             |
+| ---- | ----------------------- | ------------------ | --------------------------------------------------- | ------------------ |
+| OCR  | OurCommunityRituals LLC | `OCR-docs`         | Org brain. Governance. Vision.                      | Scaffolded         |
+| OSE  | OurSharedEvents         | `ourSharedEvents`  | **This repo.** Core platform — API, admin, surfaces | Active development |
+| OW   | OurWKRP                 | `ourWKRP`          | Community music curation. Named identity.           | Active development |
+| OSG  | OurSharedGames          | `ourSharedGames`   | Founding activation format. Anchor game nights.     | Docs-as-code       |
+| OSR  | OurSharedRecords        | `ourSharedRecords` | Music, story, and archive layer. Oral history.      | Docs-as-code       |
+| OSP  | OurSharedPulse          | `ourSharedPulse`   | Pre-platform consulting. Human-delivered.           | Docs-as-code       |
+| OSM  | OurSharedMagnets        | `ourSharedMagnets` | Developer and franchise layer. API support.         | Docs-as-code       |
+| OER  | OurEventRings           | —                  | Intelligence and analytics. Long horizon.           | Not started        |
+| OWL  | OurWhiteList            | `ourWhiteList`     | Deployment and white label layer.                   | Docs-as-code       |
 
 ---
 
@@ -44,25 +36,25 @@ Phase 3 FB     ░░░░░░░░░░░░░░░░░░░ NOT STA
 
 ### Story Status (from STORIES.md)
 
-| Story | Title | Status | Notes |
-|-------|-------|--------|-------|
-| P0-1 | Trello board | 📋 | Tracking via Linear now |
-| P1-1 | Worker code | ✅ | `workers/oursharedevents/` |
-| P1-2 | CI/CD pipeline | ✅ | `oursharedevents-ci.yml` |
-| P1-3 | README identity | ✅ | |
-| P1-4 | STORIES.md | ✅ | |
-| P1-5 | E2E launch checklist | ✅ | `E2E-LAUNCH.md` |
-| P1-6 | Infra provisioning | 📋 | **Next up** — Google Cloud + Cloudflare |
-| P1-7 | Secrets + first deploy | 📋 | Blocked by P1-6 |
-| P1-8 | Staging sign-off | 📋 | Blocked by P1-7 |
-| P1-9 | Repo migration | 📋 | Blocked by P1-8 |
-| P1-10 | Production launch v1.0.0 | 📋 | Blocked by P1-9 |
-| P2-1 | D1 schema | 📋 | **Actually partially done** — 7 migrations exist |
-| P2-2 | Sheets → D1 migration | 📋 | |
-| P2-3 | Swap data layer | 📋 | |
-| P2-4 | Remove Google SA creds | 📋 | |
-| P3-1 | Firebase Hosting + React | 📋 | |
-| P3-2 | Firebase Auth | 📋 | |
+| Story | Title                    | Status | Notes                                            |
+| ----- | ------------------------ | ------ | ------------------------------------------------ |
+| P0-1  | Trello board             | 📋     | Tracking via Linear now                          |
+| P1-1  | Worker code              | ✅     | `workers/oursharedevents/`                       |
+| P1-2  | CI/CD pipeline           | ✅     | `oursharedevents-ci.yml`                         |
+| P1-3  | README identity          | ✅     |                                                  |
+| P1-4  | STORIES.md               | ✅     |                                                  |
+| P1-5  | E2E launch checklist     | ✅     | `E2E-LAUNCH.md`                                  |
+| P1-6  | Infra provisioning       | 📋     | **Next up** — Google Cloud + Cloudflare          |
+| P1-7  | Secrets + first deploy   | 📋     | Blocked by P1-6                                  |
+| P1-8  | Staging sign-off         | 📋     | Blocked by P1-7                                  |
+| P1-9  | Repo migration           | 📋     | Blocked by P1-8                                  |
+| P1-10 | Production launch v1.0.0 | 📋     | Blocked by P1-9                                  |
+| P2-1  | D1 schema                | 📋     | **Actually partially done** — 7 migrations exist |
+| P2-2  | Sheets → D1 migration    | 📋     |                                                  |
+| P2-3  | Swap data layer          | 📋     |                                                  |
+| P2-4  | Remove Google SA creds   | 📋     |                                                  |
+| P3-1  | Firebase Hosting + React | 📋     |                                                  |
+| P3-2  | Firebase Auth            | 📋     |                                                  |
 
 ### MVP Scope Lock (from docs/MVP_SCOPE.md)
 
@@ -96,10 +88,10 @@ Sponsors ──── Customers
 
 ### D1 Schema maps to Triangle
 
-| Vertex | Tables |
-|--------|--------|
-| Events | `events` |
-| Sponsors | `sponsors` |
+| Vertex    | Tables                                                                        |
+| --------- | ----------------------------------------------------------------------------- |
+| Events    | `events`                                                                      |
+| Sponsors  | `sponsors`                                                                    |
 | Customers | `scans`, `checkins`, `registrations`, `poster_deployments`, `scan_aggregates` |
 
 ---
@@ -109,6 +101,7 @@ Sponsors ──── Customers
 ### 1. Dual Worker Resolution
 
 **Options:**
+
 - **A) `workers/oursharedevents/` is canonical** — Port needed features from `worker/`, archive the rest. CI already deploys this.
 - **B) `worker/` is canonical** — Move CI to deploy `worker/`, rename `workers/oursharedevents/` to archive. More features immediately.
 - **C) Merge** — Bring `worker/` features into `workers/oursharedevents/` structure. Most work, cleanest result.
@@ -121,29 +114,30 @@ STORIES.md references Trello but .claude/inputs/ has a Linear integration story.
 
 **Decision needed:** Trello or Linear? Current `.claude/sync/LINEAR-MAP.md` suggests Linear.
 
-### 3. ourRecNights MVP
+### 3. Product Line Activation
 
-As the first consumer product, ourRecNights needs:
-- Its own repo under ourCommunityRituals
-- Shared auth with ourSharedEvents (Phase 3 Firebase)
-- Event templates for Bocce leagues
-- Sponsor placement for local businesses
+OSG (OurSharedGames) is the founding activation format. All product repos are scaffolded with CLAUDE.md, SKILL.md, and README.md. Org vision lives in OCR-docs.
 
-**Dependency:** ourSharedEvents must reach at least P1-10 (production launch) before ourRecNights can build on it.
+**Founding corridor targets:**
+
+- Blue Island — RIPH, Eagles Hall — June 1 2026
+- Beverly — Open OutCry — September 2026
+
+**Dependency:** OSE must reach at least P1-10 (production launch) before consumer products can build on it.
 
 ---
 
 ## Product Metrics (targets, not yet measured)
 
-| Metric | Phase 1 Target | Phase 2 Target |
-|--------|---------------|----------------|
-| API latency (p50) | <800ms | <10ms |
-| API latency (p99) | <2s | <50ms |
-| Public page load | <3s | <1s |
-| Admin page load | <3s | <1s |
-| Uptime | 99% | 99.9% |
-| Deploy frequency | Weekly | Daily |
-| Time to first event | 5 min | 2 min |
+| Metric              | Phase 1 Target | Phase 2 Target |
+| ------------------- | -------------- | -------------- |
+| API latency (p50)   | <800ms         | <10ms          |
+| API latency (p99)   | <2s            | <50ms          |
+| Public page load    | <3s            | <1s            |
+| Admin page load     | <3s            | <1s            |
+| Uptime              | 99%            | 99.9%          |
+| Deploy frequency    | Weekly         | Daily          |
+| Time to first event | 5 min          | 2 min          |
 
 ---
 
@@ -158,18 +152,18 @@ As the first consumer product, ourRecNights needs:
 ### Q3 2026
 
 - P2-1 through P2-3: D1 migration (schema already done)
-- ourRecNights repo creation
+- OSG activation at founding corridors
 - Datadog Synthetics setup
-- Newman collections for Worker API
+- Newman collections for Worker API (OSM)
 
 ### Q4 2026
 
 - P2-4: Remove Google SA credentials
 - P3-1: Firebase Hosting + React/Tailwind
-- ourRecNights MVP launch
+- OW (OurWKRP) white label tier activation
 
 ### Q1 2027
 
 - P3-2: Firebase Auth
-- OurOpenTables exploration
+- Cross-product integration testing (OCR system-level)
 - Multi-product admin consolidation
