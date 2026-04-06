@@ -1,15 +1,19 @@
 # OurSharedEvents – CI/CD Pipeline
 #
-# Deploys workers/oursharedevents to Cloudflare and runs existing
-# Playwright API + E2E smoke tests against the new domain.
+# Security-gated pipeline: nothing deploys until security + quality pass.
+# Post-deploy: quality smoke (security bookend) runs parallel with deploy,
+# functional smoke validates the new deployment.
+#
+# Job Flow:
+#   [00 Security Gate] → [02 Deploy ∥ 03 Quality Smoke] → [03b Functional Smoke]
 #
 # Trigger Matrix:
-#   | Event          | TypeCheck | Deploy Staging | E2E Staging | Deploy Prod |
-#   |----------------|-----------|----------------|-------------|-------------|
-#   | PR to main     | ✅        | ❌             | ❌          | ❌          |
-#   | Push to main   | ✅        | ✅             | ✅          | ❌          |
-#   | Tag vX.Y.Z     | ✅        | ❌             | ❌          | ✅          |
-#   | workflow_dispatch | ✅     | optional       | optional    | optional    |
+#   | Event          | 00 Gate | 02 Deploy | 03 QSmoke | 03b FSmoke |
+#   |----------------|---------|-----------|-----------|------------|
+#   | PR to main     | ✅      | ❌        | ❌        | ❌         |
+#   | Push to main   | ✅      | ✅        | ✅        | ✅         |
+#   | Tag vX.Y.Z     | ✅      | ❌(→prod) | ❌(→prod) | ❌(→prod)  |
+#   | workflow_dispatch | ✅   | optional  | optional  | optional   |
 #
 # Required GitHub Secrets:
 #   - CLOUDFLARE_API_TOKEN      (Cloudflare API token with Workers:Edit permission)
@@ -17,10 +21,8 @@
 #   - ADMIN_KEY                 (Bearer token for /admin routes)
 #
 # Wrangler secrets (set once via wrangler CLI, not GitHub secrets):
-#   wrangler secret put GOOGLE_SA_CLIENT_EMAIL    --env staging
-#   wrangler secret put GOOGLE_SA_PRIVATE_KEY_PEM --env staging
-#   wrangler secret put SHEETS_SPREADSHEET_ID     --env staging
 #   wrangler secret put ADMIN_KEY                 --env staging
+#   wrangler secret put FORMS_ENCRYPTION_KEY      --env staging
 #   # Repeat for --env production
 
 name: OurSharedEvents CI/CD
@@ -31,13 +33,33 @@ on:
       - main
     paths:
       - 'workers/oursharedevents/**'
+      - 'tests/**'
+      - 'config/**'
+      - 'scripts/**'
+      - 'schemas/**'
+      - 'playwright.*.config.*'
       - '.github/workflows/oursharedevents-ci.yml'
+    paths-ignore:
+      - '*.md'
+      - 'docs/**'
+      - 'archive/**'
+      - '.claude/**'
   push:
     branches:
       - main
     paths:
       - 'workers/oursharedevents/**'
+      - 'tests/**'
+      - 'config/**'
+      - 'scripts/**'
+      - 'schemas/**'
+      - 'playwright.*.config.*'
       - '.github/workflows/oursharedevents-ci.yml'
+    paths-ignore:
+      - '*.md'
+      - 'docs/**'
+      - 'archive/**'
+      - '.claude/**'
     tags:
       - 'v*.*.*'
   workflow_dispatch:
@@ -63,10 +85,14 @@ env:
 
 jobs:
   # ============================================================================
-  # QUALITY GATE: TypeScript compile check
+  # 00 SECURITY GATE — Nothing gets in until this passes
+  #
+  # Batched into one job for cost efficiency (1 runner, 1 checkout, 1 npm ci).
+  # Security checks run FIRST (banned-origins, unit security), then quality
+  # checks (lint, typecheck, unit, contract, guards).
   # ============================================================================
-  typecheck:
-    name: '01 TypeCheck Worker'
+  security-gate:
+    name: '00 Security Gate'
     runs-on: ubuntu-latest
 
     steps:
@@ -76,47 +102,45 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
-          cache-dependency-path: '${{ env.WORKER_DIR }}/package.json'
+
+      # --- Security checks (fail fast) ---
+
+      - name: Install root dependencies
+        run: npm ci
+
+      - name: 'Security: Banned origins check'
+        run: npm run check:banned-origins
+
+      - name: 'Security: Unit security tests'
+        run: npx vitest run tests/unit/security-middleware_MOCK.test.js tests/unit/worker/sec-iac-03-adminOAuth.test.js tests/unit/worker/sec-iac-04-public-read-only.test.js tests/unit/worker/sec-iac-05-signed-mutations.test.js tests/unit/worker/sec-iac-07-iac-smoke.test.js
+
+      # --- Quality checks ---
+
+      - name: 'Quality: Lint (zero warnings)'
+        run: npm run lint:ci
 
       - name: Install worker dependencies
         run: npm ci
         working-directory: ${{ env.WORKER_DIR }}
 
-      - name: TypeScript type check
+      - name: 'Quality: TypeScript type check'
         run: npx tsc --noEmit
         working-directory: ${{ env.WORKER_DIR }}
 
-  # ============================================================================
-  # SCHEMA GATE: D1 migration verification (runs against local D1)
-  # ============================================================================
-  schema-verify:
-    name: '01b Schema Verify'
-    runs-on: ubuntu-latest
+      - name: 'Quality: Unit + Contract + Guards'
+        run: npm test
 
-    steps:
-      - uses: actions/checkout@v6
-
-      - uses: actions/setup-node@v6
-        with:
-          node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: '${{ env.WORKER_DIR }}/package.json'
-
-      - name: Install worker dependencies
-        run: npm ci
-        working-directory: ${{ env.WORKER_DIR }}
-
-      - name: Run D1 schema + constraint verification tests (main DB + forms DB)
-        run: npm run test
+      - name: 'Quality: Worker D1 schema + forms security'
+        run: npm test
         working-directory: ${{ env.WORKER_DIR }}
 
   # ============================================================================
-  # DEPLOY: Staging (push to main)
+  # 02 DEPLOY → Staging (push to main only)
   # ============================================================================
   deploy-staging:
     name: '02 Deploy → Staging'
     runs-on: ubuntu-latest
-    needs: [typecheck, schema-verify]
+    needs: [security-gate]
     if: |
       (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
       (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_staging == 'true')
@@ -181,6 +205,14 @@ jobs:
           fi
           echo "✓ All 5 tables verified in staging forms D1"
 
+      - name: Stamp build version
+        working-directory: ${{ env.WORKER_DIR }}
+        run: |
+          SHORT_SHA=$(git rev-parse --short HEAD)
+          VERSION="stg-${SHORT_SHA}-$(date -u +%Y%m%d)"
+          echo "Setting WORKER_BUILD_VERSION=$VERSION"
+          sed -i "s/WORKER_BUILD_VERSION = \"stg-.*\"/WORKER_BUILD_VERSION = \"$VERSION\"/" wrangler.toml
+
       - name: Deploy to staging
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -202,12 +234,89 @@ jobs:
           echo "Health check passed (HTTP $HTTP)"
 
   # ============================================================================
-  # E2E: API + UI smoke tests against staging (runs after staging deploy)
+  # 03 QUALITY SMOKE → Staging (security bookend — runs parallel with deploy)
+  #
+  # Tests security + contracts against the EXISTING staging deployment.
+  # This is the closing bookend: validates live what 00 validated statically.
   # ============================================================================
-  e2e-staging:
-    name: '03 E2E → Staging'
+  quality-smoke-staging:
+    name: '03 Quality Smoke → Staging'
     runs-on: ubuntu-latest
-    needs: deploy-staging
+    needs: [security-gate]
+    if: |
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_staging == 'true')
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install root dependencies
+        run: npm ci
+
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            playwright-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}
+
+      - name: Install Playwright browsers
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: npx playwright install chromium --with-deps
+
+      - name: Install Playwright OS dependencies only (cached browsers)
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium
+
+      - name: 'Security smoke: XSS, injection, auth boundaries'
+        id: security-smoke
+        env:
+          BASE_URL: ${{ env.STG_BASE_URL }}
+          ADMIN_KEY: ${{ secrets.ADMIN_KEY }}
+        run: npx playwright test tests/e2e/1-smoke/security-smoke.spec.js
+        timeout-minutes: 10
+        continue-on-error: true
+
+      - name: 'Security smoke: IAC security verification'
+        id: iac-smoke
+        env:
+          BASE_URL: ${{ env.STG_BASE_URL }}
+          ADMIN_KEY: ${{ secrets.ADMIN_KEY }}
+        run: npx playwright test --config=playwright.smoke.config.ts tests/api/smoke/sec-iac-07-smoke.spec.ts
+        timeout-minutes: 10
+        continue-on-error: true
+
+      - name: Upload quality smoke artifacts
+        uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: quality-smoke-staging-${{ github.run_number }}
+          path: |
+            playwright-report-smoke/
+            .test-results/
+            test-results/
+          retention-days: 14
+
+      - name: Fail if security smoke failed
+        if: steps.security-smoke.outcome == 'failure' || steps.iac-smoke.outcome == 'failure'
+        run: |
+          echo "::error::Quality smoke failed — Security: ${{ steps.security-smoke.outcome }}, IAC: ${{ steps.iac-smoke.outcome }}"
+          exit 1
+
+  # ============================================================================
+  # 03b FUNCTIONAL SMOKE → Staging (validates the NEW deploy)
+  # ============================================================================
+  functional-smoke-staging:
+    name: '03b Functional Smoke → Staging'
+    runs-on: ubuntu-latest
+    needs: [deploy-staging]
     permissions:
       contents: read
       checks: write  # Required for dorny/test-reporter PR annotations
@@ -262,7 +371,7 @@ jobs:
         uses: actions/upload-artifact@v7
         if: always()
         with:
-          name: e2e-staging-${{ github.run_number }}
+          name: functional-smoke-staging-${{ github.run_number }}
           path: |
             playwright-report-smoke/
             playwright-report-ui-smoke/
@@ -270,12 +379,12 @@ jobs:
             test-results/
           retention-days: 14
 
-      - name: Report staging E2E results in PR
+      - name: Report staging results in PR
         if: always() && github.event_name == 'pull_request'
         uses: dorny/test-reporter@v3
         continue-on-error: true
         with:
-          name: "E2E Staging Results"
+          name: "Functional Smoke Staging Results"
           path: ".test-results/*-junit.xml"
           reporter: jest-junit
           fail-on-error: false
@@ -283,13 +392,13 @@ jobs:
       - name: Fail if tests failed
         if: steps.api-tests.outcome == 'failure' || steps.ui-tests.outcome == 'failure'
         run: |
-          echo "::error::E2E staging tests failed — API: ${{ steps.api-tests.outcome }}, UI: ${{ steps.ui-tests.outcome }}"
+          echo "::error::Functional smoke failed — API: ${{ steps.api-tests.outcome }}, UI: ${{ steps.ui-tests.outcome }}"
           exit 1
 
       - name: Summary
         if: always()
         run: |
-          echo "## OurSharedEvents E2E – Staging" >> $GITHUB_STEP_SUMMARY
+          echo "## OurSharedEvents Functional Smoke – Staging" >> $GITHUB_STEP_SUMMARY
           echo "| Suite | Result |" >> $GITHUB_STEP_SUMMARY
           echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
           echo "| API Smoke | \`${{ steps.api-tests.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
@@ -298,12 +407,12 @@ jobs:
           echo "**URL:** $STG_BASE_URL" >> $GITHUB_STEP_SUMMARY
 
   # ============================================================================
-  # DEPLOY: Production (on tag vX.Y.Z only)
+  # 04 DEPLOY → Production (on tag vX.Y.Z only)
   # ============================================================================
   deploy-production:
     name: '04 Deploy → Production'
     runs-on: ubuntu-latest
-    needs: [typecheck, schema-verify]
+    needs: [security-gate]
     if: |
       (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) ||
       (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_production == 'PRODUCTION')
@@ -328,7 +437,6 @@ jobs:
         working-directory: ${{ env.WORKER_DIR }}
         run: |
           echo "Checking wrangler.toml for cross-env contamination..."
-          # Extract the production d1 section and verify it points to ocr-db-production
           if grep -A5 '\[env\.production' wrangler.toml | grep -q 'ocr-db-staging'; then
             echo "::error::Production config references staging database — cross-env contamination detected"
             exit 1
@@ -387,6 +495,13 @@ jobs:
           fi
           echo "✓ All 5 tables verified in production forms D1"
 
+      - name: Stamp build version
+        working-directory: ${{ env.WORKER_DIR }}
+        run: |
+          VERSION="${GITHUB_REF_NAME:-prod-$(git rev-parse --short HEAD)}"
+          echo "Setting WORKER_BUILD_VERSION=$VERSION"
+          sed -i "s/WORKER_BUILD_VERSION = \"prod-.*\"/WORKER_BUILD_VERSION = \"$VERSION\"/" wrangler.toml
+
       - name: Deploy to production
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -408,12 +523,86 @@ jobs:
           echo "Health check passed (HTTP $HTTP)"
 
   # ============================================================================
-  # E2E: Smoke tests against production (post-deploy verification)
+  # 05 QUALITY SMOKE → Production (security bookend — parallel with deploy)
   # ============================================================================
-  e2e-production:
-    name: '05 E2E → Production'
+  quality-smoke-production:
+    name: '05 Quality Smoke → Production'
     runs-on: ubuntu-latest
-    needs: deploy-production
+    needs: [security-gate]
+    if: |
+      (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_production == 'PRODUCTION')
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install root dependencies
+        run: npm ci
+
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            playwright-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}
+
+      - name: Install Playwright browsers
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: npx playwright install chromium --with-deps
+
+      - name: Install Playwright OS dependencies only (cached browsers)
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium
+
+      - name: 'Security smoke: XSS, injection, auth boundaries'
+        id: security-smoke
+        env:
+          BASE_URL: ${{ env.PROD_BASE_URL }}
+          ADMIN_KEY: ${{ secrets.ADMIN_KEY }}
+        run: npx playwright test tests/e2e/1-smoke/security-smoke.spec.js
+        timeout-minutes: 10
+        continue-on-error: true
+
+      - name: 'Security smoke: IAC security verification'
+        id: iac-smoke
+        env:
+          BASE_URL: ${{ env.PROD_BASE_URL }}
+          ADMIN_KEY: ${{ secrets.ADMIN_KEY }}
+        run: npx playwright test --config=playwright.smoke.config.ts tests/api/smoke/sec-iac-07-smoke.spec.ts
+        timeout-minutes: 10
+        continue-on-error: true
+
+      - name: Upload quality smoke artifacts
+        uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: quality-smoke-production-${{ github.run_number }}
+          path: |
+            playwright-report-smoke/
+            .test-results/
+            test-results/
+          retention-days: 30
+
+      - name: Fail if security smoke failed
+        if: steps.security-smoke.outcome == 'failure' || steps.iac-smoke.outcome == 'failure'
+        run: |
+          echo "::error::Quality smoke failed — Security: ${{ steps.security-smoke.outcome }}, IAC: ${{ steps.iac-smoke.outcome }}"
+          exit 1
+
+  # ============================================================================
+  # 05b FUNCTIONAL SMOKE → Production (validates the NEW deploy)
+  # ============================================================================
+  functional-smoke-production:
+    name: '05b Functional Smoke → Production'
+    runs-on: ubuntu-latest
+    needs: [deploy-production]
 
     steps:
       - uses: actions/checkout@v6
@@ -465,7 +654,7 @@ jobs:
         uses: actions/upload-artifact@v7
         if: always()
         with:
-          name: e2e-production-${{ github.run_number }}
+          name: functional-smoke-production-${{ github.run_number }}
           path: |
             playwright-report-smoke/
             playwright-report-ui-smoke/
@@ -476,13 +665,13 @@ jobs:
       - name: Fail if tests failed
         if: steps.api-tests.outcome == 'failure' || steps.ui-tests.outcome == 'failure'
         run: |
-          echo "::error::E2E production tests failed — API: ${{ steps.api-tests.outcome }}, UI: ${{ steps.ui-tests.outcome }}"
+          echo "::error::Functional smoke failed — API: ${{ steps.api-tests.outcome }}, UI: ${{ steps.ui-tests.outcome }}"
           exit 1
 
       - name: Summary
         if: always()
         run: |
-          echo "## OurSharedEvents E2E – Production" >> $GITHUB_STEP_SUMMARY
+          echo "## OurSharedEvents Functional Smoke – Production" >> $GITHUB_STEP_SUMMARY
           echo "| Suite | Result |" >> $GITHUB_STEP_SUMMARY
           echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
           echo "| API Smoke | \`${{ steps.api-tests.outcome }}\` |" >> $GITHUB_STEP_SUMMARY

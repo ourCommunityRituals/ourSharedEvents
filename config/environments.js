@@ -35,7 +35,7 @@ const {
   PROD_SCRIPT_ID,
   PROD_DEPLOYMENT_ID,
   PROD_WEB_APP_URL,
-  PROD_GAS_EDIT_URL
+  PROD_GAS_EDIT_URL,
 } = require('./deployment-ids');
 
 // Legacy aliases for backward compatibility
@@ -78,12 +78,9 @@ const QA_URL = 'https://zeventbooks.com';
  */
 const LOCAL_URL = 'http://localhost:3000';
 
-/**
- * Direct Google Apps Script URL (for debugging)
- * Using standardized web app URLs from deployment-ids.js
- */
-const GAS_PRODUCTION_URL = PROD_WEB_APP_URL;
-const GAS_STAGING_URL = STAGING_WEB_APP_URL;
+// Legacy GAS URL stubs (archived — kept for backward compatibility)
+const GAS_PRODUCTION_URL = '';
+const GAS_STAGING_URL = '';
 
 // =============================================================================
 // Brand Configuration
@@ -116,7 +113,7 @@ const ENVIRONMENTS = Object.freeze({
     gasUrl: GAS_PRODUCTION_URL,
     deploymentId: PRODUCTION_DEPLOYMENT_ID,
     brands: VALID_BRANDS,
-    isDefault: false
+    isDefault: false,
   },
 
   /**
@@ -131,7 +128,7 @@ const ENVIRONMENTS = Object.freeze({
     gasUrl: GAS_STAGING_URL,
     deploymentId: STAGING_DEPLOYMENT_ID,
     brands: VALID_BRANDS,
-    isDefault: true
+    isDefault: true,
   },
 
   /**
@@ -143,7 +140,7 @@ const ENVIRONMENTS = Object.freeze({
     baseUrl: OUR_SHARED_EVENTS_STAGING_URL,
     description: 'OurSharedEvents staging via Cloudflare Workers (stg.oursharedevents.com)',
     brands: VALID_BRANDS,
-    isDefault: false
+    isDefault: false,
   },
 
   /**
@@ -155,7 +152,7 @@ const ENVIRONMENTS = Object.freeze({
     baseUrl: OUR_SHARED_EVENTS_PROD_URL,
     description: 'OurSharedEvents production via Cloudflare Workers (oursharedevents.com)',
     brands: VALID_BRANDS,
-    isDefault: false
+    isDefault: false,
   },
 
   /**
@@ -167,7 +164,7 @@ const ENVIRONMENTS = Object.freeze({
     baseUrl: QA_URL,
     description: 'QA environment via Cloudflare Workers (zeventbooks.com)',
     brands: VALID_BRANDS,
-    isDefault: false
+    isDefault: false,
   },
 
   /**
@@ -179,21 +176,8 @@ const ENVIRONMENTS = Object.freeze({
     baseUrl: LOCAL_URL,
     description: 'Local development server',
     brands: VALID_BRANDS,
-    isDefault: false
+    isDefault: false,
   },
-
-  /**
-   * Google Apps Script - Direct access (debugging)
-   * URL: https://script.google.com/macros/s/{ID}/exec
-   */
-  googleAppsScript: {
-    name: 'Google Apps Script (Direct)',
-    baseUrl: GAS_PRODUCTION_URL,
-    description: 'Direct Google Apps Script (bypasses Cloudflare proxy)',
-    deploymentId: PRODUCTION_DEPLOYMENT_ID,
-    brands: VALID_BRANDS,
-    isDefault: false
-  }
 });
 
 // =============================================================================
@@ -238,12 +222,12 @@ function detectEnvironmentFromUrl(url) {
       return { ...ENVIRONMENTS.ourSharedEvents, baseUrl: url };
     }
 
-    if (hostname === 'zeventbooks.com' || hostname === 'www.zeventbooks.com' || hostname === 'qa.zeventbooks.com') {
+    if (
+      hostname === 'zeventbooks.com' ||
+      hostname === 'www.zeventbooks.com' ||
+      hostname === 'qa.zeventbooks.com'
+    ) {
       return { ...ENVIRONMENTS.qa, baseUrl: url };
-    }
-
-    if (hostname === 'script.google.com') {
-      return { ...ENVIRONMENTS.googleAppsScript, baseUrl: url };
     }
 
     if (hostname === 'localhost' || hostname === '127.0.0.1') {
@@ -256,7 +240,7 @@ function detectEnvironmentFromUrl(url) {
       baseUrl: url,
       description: 'Custom environment',
       brands: VALID_BRANDS,
-      isDefault: false
+      isDefault: false,
     };
   } catch (_error) {
     console.warn(`Invalid URL format: ${url}`);
@@ -321,8 +305,8 @@ function getBaseUrl() {
 function getBrandUrl(brand = 'root', page = 'status') {
   const env = getEnvironment();
   const pageAliasMap = {
-    'admin': 'manage',
-    'public': 'events'
+    admin: 'manage',
+    public: 'events',
   };
   const alias = pageAliasMap[page] || page;
   const path = brand === 'root' ? `/${alias}` : `/${brand}/${alias}`;
@@ -337,24 +321,10 @@ function getBrandUrl(brand = 'root', page = 'status') {
  */
 function getAllBrandUrls(page = 'status') {
   const urls = {};
-  VALID_BRANDS.forEach(brand => {
+  VALID_BRANDS.forEach((brand) => {
     urls[brand] = getBrandUrl(brand, page);
   });
   return urls;
-}
-
-/**
- * Check if current environment is Google Apps Script (direct)
- * @returns {boolean} True if testing against GAS directly
- */
-function isGoogleAppsScript() {
-  const env = getEnvironment();
-  try {
-    const url = new URL(env.baseUrl);
-    return url.hostname === 'script.google.com';
-  } catch {
-    return false;
-  }
 }
 
 /**
@@ -365,9 +335,11 @@ function isOurSharedEvents() {
   const env = getEnvironment();
   try {
     const url = new URL(env.baseUrl);
-    return url.hostname === 'oursharedevents.com'
-      || url.hostname === 'www.oursharedevents.com'
-      || url.hostname === 'stg.oursharedevents.com';
+    return (
+      url.hostname === 'oursharedevents.com' ||
+      url.hostname === 'www.oursharedevents.com' ||
+      url.hostname === 'stg.oursharedevents.com'
+    );
   } catch {
     return false;
   }
@@ -434,7 +406,7 @@ function printEnvironmentInfo() {
   console.log(`Is Default: ${env.isDefault}`);
   console.log(`Brands: ${env.brands.join(', ')}`);
   console.log('\nBrand URLs (status page):');
-  VALID_BRANDS.forEach(brand => {
+  VALID_BRANDS.forEach((brand) => {
     console.log(`  ${brand}: ${getBrandUrl(brand, 'status')}`);
   });
   console.log('==============================================\n');
@@ -490,7 +462,6 @@ module.exports = {
   getUrlWithParams,
 
   // Environment detection helpers
-  isGoogleAppsScript,
   isProduction,
   isStaging,
   isOurSharedEvents,
@@ -518,5 +489,5 @@ module.exports = {
   getEnvironmentFlags: featureFlags.getEnvironmentFlags,
   isDebugEnabled: featureFlags.isDebugEnabled,
   areDebugEndpointsEnabled: featureFlags.areDebugEndpointsEnabled,
-  compareEnvironmentFlags: featureFlags.compareEnvironmentFlags
+  compareEnvironmentFlags: featureFlags.compareEnvironmentFlags,
 };

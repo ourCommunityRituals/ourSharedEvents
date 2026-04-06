@@ -6,15 +6,13 @@
  *
  * ARCHITECTURE:
  *   - Brand metadata (id, name, type) → Defined HERE (config)
- *   - Secrets (adminKey, spreadsheetId) → Environment variables (runtime)
- *   - Backend implementation → src/mvp/Config.gs (must stay in sync)
+ *   - Secrets (adminKey) → Environment variables (runtime)
+ *   - Backend implementation → Cloudflare Worker (workers/oursharedevents/)
  *
  * HOW TO ADD A NEW BRAND:
  *   1. Add brand object to BRAND_METADATA below
- *   2. Update src/mvp/Config.gs BRANDS array to match
- *   3. Update cloudflare-proxy/worker.js VALID_BRANDS if needed
- *   4. Set environment variables: ADMIN_KEY_{BRAND}, SPREADSHEET_ID_{BRAND}
- *   5. Run validation tests: npm run test -- tests/unit/brand-config.test.js
+ *   2. Set environment variables: ADMIN_KEY_{BRAND}
+ *   3. Run validation tests: npm run test -- tests/unit/brand-config.test.js
  *
  * @module config/brand-config
  */
@@ -41,9 +39,9 @@ const BRAND_METADATA = Object.freeze({
     description: 'Default platform brand',
     // Feature flags - Dark Launch / Kill Switch for non-critical features
     features: {
-      sharedReportEnabled: true,     // SharedReport analytics page
-      sponsorAnalyticsEnabled: true  // Sponsor-specific analytics APIs
-    }
+      sharedReportEnabled: true, // SharedReport analytics page
+      sponsorAnalyticsEnabled: true, // Sponsor-specific analytics APIs
+    },
   },
   abc: {
     id: 'abc',
@@ -53,8 +51,8 @@ const BRAND_METADATA = Object.freeze({
     description: 'Parent organization for bocce brands',
     features: {
       sharedReportEnabled: true,
-      sponsorAnalyticsEnabled: true
-    }
+      sponsorAnalyticsEnabled: true,
+    },
   },
   cbc: {
     id: 'cbc',
@@ -65,8 +63,8 @@ const BRAND_METADATA = Object.freeze({
     description: 'Community bocce club in Chicago',
     features: {
       sharedReportEnabled: true,
-      sponsorAnalyticsEnabled: true
-    }
+      sponsorAnalyticsEnabled: true,
+    },
   },
   cbl: {
     id: 'cbl',
@@ -77,9 +75,9 @@ const BRAND_METADATA = Object.freeze({
     description: 'Competitive bocce league in Chicago',
     features: {
       sharedReportEnabled: true,
-      sponsorAnalyticsEnabled: true
-    }
-  }
+      sponsorAnalyticsEnabled: true,
+    },
+  },
 });
 
 /**
@@ -94,12 +92,6 @@ const VALID_BRANDS = Object.freeze(Object.keys(BRAND_METADATA));
  */
 const DEFAULT_BRAND = 'root';
 
-/**
- * Default spreadsheet ID (matches Config.gs DEFAULT_SPREADSHEET_ID)
- * Used when no brand-specific or shared spreadsheet is configured
- */
-const DEFAULT_SPREADSHEET_ID = '1SV1oZMq4GbZBaRc0YmTeV02Tl5KXWD8R6FZXC7TwVCQ';
-
 // =============================================================================
 // Environment Variable Helpers
 // =============================================================================
@@ -111,15 +103,6 @@ const DEFAULT_SPREADSHEET_ID = '1SV1oZMq4GbZBaRc0YmTeV02Tl5KXWD8R6FZXC7TwVCQ';
  */
 function getAdminKeyEnvVar(brandId) {
   return `ADMIN_KEY_${brandId.toUpperCase()}`;
-}
-
-/**
- * Get the environment variable name for a brand's spreadsheet ID
- * @param {string} brandId - Brand identifier
- * @returns {string} Environment variable name (e.g., 'SPREADSHEET_ID_ROOT')
- */
-function getSpreadsheetIdEnvVar(brandId) {
-  return `SPREADSHEET_ID_${brandId.toUpperCase()}`;
 }
 
 // =============================================================================
@@ -163,7 +146,7 @@ function getBrandName(brandId) {
  */
 function getAllBrandMetadata() {
   const result = {};
-  VALID_BRANDS.forEach(brandId => {
+  VALID_BRANDS.forEach((brandId) => {
     result[brandId] = getBrandMetadata(brandId);
   });
   return result;
@@ -195,7 +178,7 @@ function getParentBrand(childBrandId) {
  * @returns {string[]} Array of brand IDs matching the type
  */
 function getBrandsByType(type) {
-  return VALID_BRANDS.filter(brandId => BRAND_METADATA[brandId].type === type);
+  return VALID_BRANDS.filter((brandId) => BRAND_METADATA[brandId].type === type);
 }
 
 // =============================================================================
@@ -208,7 +191,7 @@ function getBrandsByType(type) {
  */
 const DEFAULT_FEATURES = Object.freeze({
   sharedReportEnabled: true,
-  sponsorAnalyticsEnabled: true
+  sponsorAnalyticsEnabled: true,
 });
 
 /**
@@ -223,7 +206,7 @@ function getBrandFeatures(brandId) {
   }
   return {
     ...DEFAULT_FEATURES,
-    ...(metadata.features || {})
+    ...(metadata.features || {}),
   };
 }
 
@@ -259,17 +242,8 @@ function getBrandConfig(brandId) {
   const metadata = getBrandMetadata(brandId);
   const upperBrand = brandId.toUpperCase();
 
-  // Get spreadsheet ID with priority: brand-specific > shared > default
-  const spreadsheetId =
-    process.env[`SPREADSHEET_ID_${upperBrand}`] ||
-    process.env.SPREADSHEET_ID ||
-    DEFAULT_SPREADSHEET_ID;
-
   // Get admin key with priority: brand-specific > shared
-  const adminKey =
-    process.env[`ADMIN_KEY_${upperBrand}`] ||
-    process.env.ADMIN_KEY ||
-    null;
+  const adminKey = process.env[`ADMIN_KEY_${upperBrand}`] || process.env.ADMIN_KEY || null;
 
   return {
     // Static metadata
@@ -284,13 +258,11 @@ function getBrandConfig(brandId) {
     features: getBrandFeatures(brandId),
 
     // Runtime configuration (from env)
-    spreadsheetId,
     adminKey,
 
     // Derived flags
     hasAdminKey: !!adminKey,
-    hasDedicatedSpreadsheet: !!process.env[`SPREADSHEET_ID_${upperBrand}`],
-    isConfigured: !!adminKey && !!spreadsheetId
+    isConfigured: !!adminKey,
   };
 }
 
@@ -300,7 +272,7 @@ function getBrandConfig(brandId) {
  */
 function getAllBrandConfigs() {
   const configs = {};
-  VALID_BRANDS.forEach(brandId => {
+  VALID_BRANDS.forEach((brandId) => {
     configs[brandId] = getBrandConfig(brandId);
   });
   return configs;
@@ -311,15 +283,7 @@ function getAllBrandConfigs() {
  * @returns {string[]} Array of configured brand IDs
  */
 function getConfiguredBrands() {
-  return VALID_BRANDS.filter(brandId => getBrandConfig(brandId).hasAdminKey);
-}
-
-/**
- * Get list of brands with dedicated spreadsheets
- * @returns {string[]} Array of brand IDs with dedicated spreadsheets
- */
-function getBrandsWithDedicatedSpreadsheets() {
-  return VALID_BRANDS.filter(brandId => getBrandConfig(brandId).hasDedicatedSpreadsheet);
+  return VALID_BRANDS.filter((brandId) => getBrandConfig(brandId).hasAdminKey);
 }
 
 /**
@@ -347,12 +311,10 @@ function createBrandTestMatrix(options = {}) {
   let brandsToTest = [...VALID_BRANDS];
 
   if (onlyConfigured) {
-    brandsToTest = brandsToTest.filter(brandId =>
-      getBrandConfig(brandId).hasAdminKey
-    );
+    brandsToTest = brandsToTest.filter((brandId) => getBrandConfig(brandId).hasAdminKey);
   }
 
-  return brandsToTest.map(brandId => [brandId, getBrandConfig(brandId)]);
+  return brandsToTest.map((brandId) => [brandId, getBrandConfig(brandId)]);
 }
 
 /**
@@ -369,15 +331,13 @@ function forEachBrand(testFn, options = {}) {
   let brandsToTest = brands || [...VALID_BRANDS];
 
   if (onlyConfigured) {
-    brandsToTest = brandsToTest.filter(brandId =>
-      getBrandConfig(brandId).hasAdminKey
-    );
+    brandsToTest = brandsToTest.filter((brandId) => getBrandConfig(brandId).hasAdminKey);
   }
 
-  return brandsToTest.map(brandId => ({
+  return brandsToTest.map((brandId) => ({
     brandId,
     config: getBrandConfig(brandId),
-    run: () => testFn(getBrandConfig(brandId))
+    run: () => testFn(getBrandConfig(brandId)),
   }));
 }
 
@@ -392,25 +352,21 @@ function printBrandConfigSummary() {
   console.log('\n=== Brand Configuration Summary ===\n');
 
   console.log('Registered Brands:');
-  VALID_BRANDS.forEach(brandId => {
+  VALID_BRANDS.forEach((brandId) => {
     const metadata = getBrandMetadata(brandId);
     const config = getBrandConfig(brandId);
-    const typeLabel = metadata.type === 'child'
-      ? `child of ${metadata.parentBrand}`
-      : metadata.type;
+    const typeLabel =
+      metadata.type === 'child' ? `child of ${metadata.parentBrand}` : metadata.type;
 
     console.log(`  ${brandId.toUpperCase()} - ${metadata.name}`);
     console.log(`    Type: ${typeLabel}`);
     console.log(`    Admin Key: ${config.hasAdminKey ? 'configured' : '(not set)'}`);
-    console.log(`    Spreadsheet: ${config.hasDedicatedSpreadsheet ? 'dedicated' : 'shared'}`);
   });
 
   console.log('\nEnvironment Variables:');
-  console.log(`  SPREADSHEET_ID (shared): ${process.env.SPREADSHEET_ID || '(not set)'}`);
   console.log(`  ADMIN_KEY (shared): ${process.env.ADMIN_KEY ? '****' : '(not set)'}`);
 
   console.log('\nConfigured brands:', getConfiguredBrands().join(', ') || 'none');
-  console.log('Brands with dedicated spreadsheets:', getBrandsWithDedicatedSpreadsheets().join(', ') || 'none');
   console.log('\n=== End Summary ===\n');
 }
 
@@ -424,7 +380,6 @@ module.exports = {
   BRANDS: VALID_BRANDS,
   BRAND_METADATA,
   DEFAULT_BRAND,
-  DEFAULT_SPREADSHEET_ID,
 
   // Validation
   isValidBrand,
@@ -439,13 +394,11 @@ module.exports = {
 
   // Environment variable helpers
   getAdminKeyEnvVar,
-  getSpreadsheetIdEnvVar,
 
   // Runtime configuration (includes env vars)
   getBrandConfig,
   getAllBrandConfigs,
   getConfiguredBrands,
-  getBrandsWithDedicatedSpreadsheets,
   isBrandConfigured,
 
   // Feature flags (Dark Launch / Kill Switch)
@@ -458,5 +411,5 @@ module.exports = {
   forEachBrand,
 
   // Debug
-  printBrandConfigSummary
+  printBrandConfigSummary,
 };
