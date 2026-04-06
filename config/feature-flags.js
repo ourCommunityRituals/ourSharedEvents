@@ -77,12 +77,12 @@ function detectEnvironment() {
       const hostname = parsedUrl.hostname.toLowerCase();
 
       // Check for staging hostname (must be exact match)
-      if (hostname === 'stg.eventangle.com' || hostname === 'api-stg.eventangle.com') {
+      if (hostname === 'stg.oursharedevents.com') {
         return 'staging';
       }
 
       // Check for production hostname (must be exact match)
-      if (hostname === 'eventangle.com' || hostname === 'www.eventangle.com' || hostname === 'api.eventangle.com') {
+      if (hostname === 'oursharedevents.com' || hostname === 'www.oursharedevents.com') {
         return 'production';
       }
     } catch {
@@ -110,7 +110,7 @@ const DEFAULT_FLAGS = {
       ANALYTICS: true,
       FORMS: true,
       SHORTLINKS: true,
-      PORTFOLIO_ANALYTICS: true
+      PORTFOLIO_ANALYTICS: true,
     },
     testingFeatures: {
       DEMO_MODE_ENABLED: true,
@@ -119,17 +119,17 @@ const DEFAULT_FLAGS = {
       ERROR_DETAILS: true,
       SAMPLE_DATA_PREFILL: true,
       FEATURE_HIGHLIGHTING: true,
-      CONSOLE_LOGGING: true
+      CONSOLE_LOGGING: true,
     },
     v2Features: {
       TEMPLATE_MANAGEMENT_V2: false,
-      PORTFOLIO_V2: false
+      PORTFOLIO_V2: false,
     },
     experimentalFeatures: {
       NEW_UI_COMPONENTS: true,
       ENHANCED_VALIDATION: true,
-      PERFORMANCE_MONITORING: true
-    }
+      PERFORMANCE_MONITORING: true,
+    },
   },
   production: {
     mvpFeatures: {
@@ -138,7 +138,7 @@ const DEFAULT_FLAGS = {
       ANALYTICS: true,
       FORMS: true,
       SHORTLINKS: true,
-      PORTFOLIO_ANALYTICS: true
+      PORTFOLIO_ANALYTICS: true,
     },
     testingFeatures: {
       DEMO_MODE_ENABLED: false,
@@ -147,18 +147,18 @@ const DEFAULT_FLAGS = {
       ERROR_DETAILS: false,
       SAMPLE_DATA_PREFILL: false,
       FEATURE_HIGHLIGHTING: false,
-      CONSOLE_LOGGING: false
+      CONSOLE_LOGGING: false,
     },
     v2Features: {
       TEMPLATE_MANAGEMENT_V2: false,
-      PORTFOLIO_V2: false
+      PORTFOLIO_V2: false,
     },
     experimentalFeatures: {
       NEW_UI_COMPONENTS: false,
       ENHANCED_VALIDATION: false,
-      PERFORMANCE_MONITORING: false
-    }
-  }
+      PERFORMANCE_MONITORING: false,
+    },
+  },
 };
 
 // =============================================================================
@@ -318,7 +318,7 @@ function compareEnvironmentFlags() {
     intentionalDifferences: [],
     unexpectedDifferences: [],
     stagingOnly: [],
-    productionOnly: []
+    productionOnly: [],
   };
 
   // Define which flags are expected to differ
@@ -332,7 +332,7 @@ function compareEnvironmentFlags() {
     'CONSOLE_LOGGING',
     'NEW_UI_COMPONENTS',
     'ENHANCED_VALIDATION',
-    'PERFORMANCE_MONITORING'
+    'PERFORMANCE_MONITORING',
   ]);
 
   // Get all keys
@@ -353,22 +353,23 @@ function compareEnvironmentFlags() {
         key,
         staging: staging[key],
         production: production[key],
-        reason: 'Testing/experimental feature'
+        reason: 'Testing/experimental feature',
       });
     } else {
       result.unexpectedDifferences.push({
         key,
         staging: staging[key],
-        production: production[key]
+        production: production[key],
       });
     }
   }
 
-  result.parityStatus = result.unexpectedDifferences.length === 0 &&
-                        result.stagingOnly.length === 0 &&
-                        result.productionOnly.length === 0
-    ? 'PASS'
-    : 'REVIEW_REQUIRED';
+  result.parityStatus =
+    result.unexpectedDifferences.length === 0 &&
+    result.stagingOnly.length === 0 &&
+    result.productionOnly.length === 0
+      ? 'PASS'
+      : 'REVIEW_REQUIRED';
 
   return result;
 }
@@ -436,5 +437,5 @@ module.exports = {
   printFeatureFlagInfo,
 
   // Constants
-  DEFAULT_FLAGS
+  DEFAULT_FLAGS,
 };

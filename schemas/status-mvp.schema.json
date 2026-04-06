@@ -1,10 +1,17 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://eventangle.com/schemas/status-mvp.schema.json",
+  "$id": "https://oursharedevents.com/schemas/status-mvp.schema.json",
   "title": "MVP Status Response",
   "description": "MVP status endpoint response contract with analytics health checks. Returns 'green' status only when all analytics systems are operational.",
   "type": "object",
-  "required": ["ok", "buildId", "brandId", "time", "analyticsSheetHealthy", "sharedAnalyticsContractOk"],
+  "required": [
+    "ok",
+    "buildId",
+    "brandId",
+    "time",
+    "analyticsSheetHealthy",
+    "sharedAnalyticsContractOk"
+  ],
   "additionalProperties": false,
   "properties": {
     "ok": {

@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://eventangle.com/schemas/status.schema.json",
+  "$id": "https://oursharedevents.com/schemas/status.schema.json",
   "title": "Status Response",
   "description": "Canonical status endpoint response contract for health checks and monitoring. This is the single source of truth for BUILD_ID and BRAND_ID. External uptime / SLO is measured via ?p=status.",
   "type": "object",

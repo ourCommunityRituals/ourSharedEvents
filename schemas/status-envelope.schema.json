@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://eventangle.com/schemas/status-envelope.schema.json",
+  "$id": "https://oursharedevents.com/schemas/status-envelope.schema.json",
   "title": "Status Envelope Response",
   "description": "Envelope-wrapped status response from api_status() with database connectivity info. Use status.schema.json for api_statusPure() flat responses.",
   "type": "object",

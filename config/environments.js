@@ -22,50 +22,20 @@
  */
 
 // =============================================================================
-// Deployment IDs - Import from canonical source
-// =============================================================================
-const {
-  // Staging identifiers
-  STAGING_SCRIPT_ID,
-  STAGING_DEPLOYMENT_ID,
-  STAGING_WEB_APP_URL,
-  STAGING_GAS_EDIT_URL,
-
-  // Production identifiers
-  PROD_SCRIPT_ID,
-  PROD_DEPLOYMENT_ID,
-  PROD_WEB_APP_URL,
-  PROD_GAS_EDIT_URL,
-} = require('./deployment-ids');
-
-// Legacy aliases for backward compatibility
-const PRODUCTION_DEPLOYMENT_ID = PROD_DEPLOYMENT_ID;
-
-// =============================================================================
 // Environment URLs - Single Source of Truth
 // =============================================================================
 
 /**
- * Production URL - eventangle.com via Cloudflare Workers
+ * Production URL - oursharedevents.com via Cloudflare Workers
  * This is the customer-facing production environment.
  */
-const PRODUCTION_URL = 'https://www.eventangle.com';
+const PRODUCTION_URL = 'https://oursharedevents.com';
 
 /**
- * Staging URL - stg.eventangle.com via Cloudflare Workers
+ * Staging URL - stg.oursharedevents.com via Cloudflare Workers
  * DEFAULT for all test commands. Safe sandbox for testing.
  */
-const STAGING_URL = 'https://stg.eventangle.com';
-
-/**
- * OurSharedEvents staging URL - stg.oursharedevents.com via Cloudflare Workers
- */
-const OUR_SHARED_EVENTS_STAGING_URL = 'https://stg.oursharedevents.com';
-
-/**
- * OurSharedEvents production URL - oursharedevents.com via Cloudflare Workers
- */
-const OUR_SHARED_EVENTS_PROD_URL = 'https://oursharedevents.com';
+const STAGING_URL = 'https://stg.oursharedevents.com';
 
 /**
  * QA URL - zeventbooks.com via Cloudflare Workers
@@ -77,10 +47,6 @@ const QA_URL = 'https://zeventbooks.com';
  * Local development URL
  */
 const LOCAL_URL = 'http://localhost:3000';
-
-// Legacy GAS URL stubs (archived — kept for backward compatibility)
-const GAS_PRODUCTION_URL = '';
-const GAS_STAGING_URL = '';
 
 // =============================================================================
 // Brand Configuration
@@ -102,57 +68,27 @@ const { BRANDS: VALID_BRANDS, DEFAULT_BRAND } = require('./brand-config');
  */
 const ENVIRONMENTS = Object.freeze({
   /**
-   * Production - Customer-facing via Cloudflare
-   * URL: https://www.eventangle.com
-   * Deploy: CI only (git push to main)
+   * Production - oursharedevents.com via Cloudflare Workers
+   * Deploy: CI only (tag v*.*.*)
    */
   production: {
     name: 'Production',
     baseUrl: PRODUCTION_URL,
-    description: 'Production via Cloudflare Workers (eventangle.com)',
-    gasUrl: GAS_PRODUCTION_URL,
-    deploymentId: PRODUCTION_DEPLOYMENT_ID,
+    description: 'Production via Cloudflare Workers (oursharedevents.com)',
     brands: VALID_BRANDS,
     isDefault: false,
   },
 
   /**
-   * Staging - Safe sandbox for testing (DEFAULT)
-   * URL: https://stg.eventangle.com
-   * Deploy: npm run deploy:staging
+   * Staging - stg.oursharedevents.com via Cloudflare Workers (DEFAULT)
+   * Deploy: CI (push to main)
    */
   staging: {
     name: 'Staging',
     baseUrl: STAGING_URL,
-    description: 'Staging via Cloudflare Workers (stg.eventangle.com)',
-    gasUrl: GAS_STAGING_URL,
-    deploymentId: STAGING_DEPLOYMENT_ID,
+    description: 'Staging via Cloudflare Workers (stg.oursharedevents.com)',
     brands: VALID_BRANDS,
     isDefault: true,
-  },
-
-  /**
-   * OurSharedEvents Staging - stg.oursharedevents.com
-   * URL: https://stg.oursharedevents.com
-   */
-  ourSharedEventsStaging: {
-    name: 'OurSharedEvents Staging',
-    baseUrl: OUR_SHARED_EVENTS_STAGING_URL,
-    description: 'OurSharedEvents staging via Cloudflare Workers (stg.oursharedevents.com)',
-    brands: VALID_BRANDS,
-    isDefault: false,
-  },
-
-  /**
-   * OurSharedEvents Production - oursharedevents.com
-   * URL: https://oursharedevents.com
-   */
-  ourSharedEvents: {
-    name: 'OurSharedEvents Production',
-    baseUrl: OUR_SHARED_EVENTS_PROD_URL,
-    description: 'OurSharedEvents production via Cloudflare Workers (oursharedevents.com)',
-    brands: VALID_BRANDS,
-    isDefault: false,
   },
 
   /**
@@ -206,20 +142,12 @@ function detectEnvironmentFromUrl(url) {
     const parsedUrl = new URL(url);
     const hostname = parsedUrl.hostname;
 
-    if (hostname === 'stg.eventangle.com' || hostname === 'api-stg.eventangle.com') {
+    if (hostname === 'stg.oursharedevents.com') {
       return { ...ENVIRONMENTS.staging, baseUrl: url };
     }
 
-    if (hostname === 'eventangle.com' || hostname === 'www.eventangle.com') {
-      return { ...ENVIRONMENTS.production, baseUrl: url };
-    }
-
-    if (hostname === 'stg.oursharedevents.com') {
-      return { ...ENVIRONMENTS.ourSharedEventsStaging, baseUrl: url };
-    }
-
     if (hostname === 'oursharedevents.com' || hostname === 'www.oursharedevents.com') {
-      return { ...ENVIRONMENTS.ourSharedEvents, baseUrl: url };
+      return { ...ENVIRONMENTS.production, baseUrl: url };
     }
 
     if (
@@ -328,32 +256,22 @@ function getAllBrandUrls(page = 'status') {
 }
 
 /**
- * Check if current environment is OurSharedEvents (oursharedevents.com)
- * @returns {boolean} True if testing against oursharedevents.com
+ * Check if current environment is OurSharedEvents (any oursharedevents.com domain)
+ * @returns {boolean} True if testing against oursharedevents.com (staging or production)
  */
 function isOurSharedEvents() {
-  const env = getEnvironment();
-  try {
-    const url = new URL(env.baseUrl);
-    return (
-      url.hostname === 'oursharedevents.com' ||
-      url.hostname === 'www.oursharedevents.com' ||
-      url.hostname === 'stg.oursharedevents.com'
-    );
-  } catch {
-    return false;
-  }
+  return isProduction() || isStaging();
 }
 
 /**
- * Check if current environment is production (eventangle.com)
+ * Check if current environment is production (oursharedevents.com)
  * @returns {boolean} True if testing against production
  */
 function isProduction() {
   const env = getEnvironment();
   try {
     const url = new URL(env.baseUrl);
-    return url.hostname === 'eventangle.com' || url.hostname === 'www.eventangle.com';
+    return url.hostname === 'oursharedevents.com' || url.hostname === 'www.oursharedevents.com';
   } catch {
     return false;
   }
@@ -367,7 +285,7 @@ function isStaging() {
   const env = getEnvironment();
   try {
     const url = new URL(env.baseUrl);
-    return url.hostname === 'stg.eventangle.com';
+    return url.hostname === 'stg.oursharedevents.com';
   } catch {
     return false;
   }
@@ -427,32 +345,15 @@ module.exports = {
   // Environment map
   ENVIRONMENTS,
 
-  // Brand constants (VALID_BRANDS exported as BRANDS for backward compatibility)
+  // Brand constants
   BRANDS: VALID_BRANDS,
   DEFAULT_BRAND,
 
   // URL constants
   PRODUCTION_URL,
   STAGING_URL,
-  OUR_SHARED_EVENTS_STAGING_URL,
-  OUR_SHARED_EVENTS_PROD_URL,
   QA_URL,
   LOCAL_URL,
-  GAS_PRODUCTION_URL,
-  GAS_STAGING_URL,
-
-  // Deployment IDs (standardized naming)
-  STAGING_SCRIPT_ID,
-  STAGING_DEPLOYMENT_ID,
-  STAGING_WEB_APP_URL,
-  STAGING_GAS_EDIT_URL,
-  PROD_SCRIPT_ID,
-  PROD_DEPLOYMENT_ID,
-  PROD_WEB_APP_URL,
-  PROD_GAS_EDIT_URL,
-
-  // Legacy aliases
-  PRODUCTION_DEPLOYMENT_ID,
 
   // Primary functions for tests
   getEnvironment,
@@ -470,16 +371,11 @@ module.exports = {
   // Debugging
   printEnvironmentInfo,
 
-  // Legacy aliases (for backward compatibility with test code)
+  // Aliases (for backward compatibility with test code)
   getCurrentEnvironment: getEnvironment,
-  APP_URL: getBaseUrl(),
-  DEFAULT_GAS_URL: GAS_PRODUCTION_URL,
-  DEFAULT_DEPLOYMENT_ID: PRODUCTION_DEPLOYMENT_ID,
-  DEFAULT_PRODUCTION_URL: PRODUCTION_URL,
-  DEFAULT_STAGING_URL: STAGING_URL,
+  isEventangle: isProduction,
   CANONICAL_EVENTS_URL: `${PRODUCTION_URL}/events`,
   CANONICAL_STAGING_URL: `${STAGING_URL}/events`,
-  isEventangle: isProduction,
 
   // Feature Flags (Story 1.4) - Re-exported from feature-flags.js
   isFeatureEnabled: featureFlags.isFeatureEnabled,

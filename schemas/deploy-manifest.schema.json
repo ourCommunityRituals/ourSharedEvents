@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://eventangle.com/schemas/deploy-manifest.schema.json",
+  "$id": "https://oursharedevents.com/schemas/deploy-manifest.schema.json",
   "title": "Deployment Manifest Schema",
   "description": "Schema for validating deploy-manifest.json - centralized environment configuration (Story 1.4)",
   "type": "object",

@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://eventangle.com/schemas/setupcheck.schema.json",
+  "$id": "https://oursharedevents.com/schemas/setupcheck.schema.json",
   "title": "SetupCheck Response",
   "description": "Setup verification response from api_setupCheck() with diagnostic checks and actionable guidance.",
   "type": "object",

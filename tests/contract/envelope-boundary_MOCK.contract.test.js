@@ -25,10 +25,11 @@ const {
   ERROR_CODES,
 } = require('../shared/helpers/test.helpers');
 
-// --- CI Detection ---
-const isCI = process.env.CI === 'true' || process.env.CI === true;
-const skipNetworkTests = isCI || process.env.SKIP_NETWORK_TESTS === 'true';
-const describeNetwork = skipNetworkTests ? describe.skip : describe;
+// --- Network test gate ---
+// Network tests require a live deployment. Skip unless explicitly enabled
+// via RUN_NETWORK_TESTS=true (opt-in, not opt-out).
+const runNetworkTests = process.env.RUN_NETWORK_TESTS === 'true';
+const describeNetwork = runNetworkTests ? describe : describe.skip;
 
 // --- Test Configuration ---
 const { getBaseUrl } = require('../config/environments');
