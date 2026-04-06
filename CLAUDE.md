@@ -1,5 +1,7 @@
 # CLAUDE.md — Persistent Brain for ourSharedEvents
 
+> **Org-level vision lives in `OCR-docs/docs/VISION.md`.** This file governs OSE only. OSE is one product in the OCR product line — not the org brain.
+
 > **Session protocol**: Read this file → Read STORIES.md → Find next unstarted story → Implement complete solution → Create PR. No other instruction needed.
 
 ---
@@ -103,15 +105,19 @@ workers/oursharedevents/src/
 
 ## 2. ourCommunityRituals Ecosystem
 
-| Product             | Repo                                  | Purpose                                          |
-| ------------------- | ------------------------------------- | ------------------------------------------------ |
-| **ourSharedEvents** | `ourCommunityRituals/ourSharedEvents` | Core platform — event infrastructure, API, admin |
-| **ourRecNights**    | `ourCommunityRituals/ourRecNights`    | Recreational night leagues                       |
-| **OurRecordNights** | —                                     | Record-night social events                       |
-| **OurOpenTables**   | —                                     | Open-table community dinners                     |
-| **ourEventRings**   | —                                     | Research/data analysis from ourSharedEvents      |
-| **OurMagnets**      | —                                     | Technical infra (Cloudflare setup)               |
-| **OurPulse**        | —                                     | Consulting/manual league onboarding              |
+> **Source of truth**: `OCR-docs/docs/VISION.md` — all product repos derive from that document.
+
+| Code | Product                 | Repo                                   | Purpose                                                         |
+| ---- | ----------------------- | -------------------------------------- | --------------------------------------------------------------- |
+| OCR  | OurCommunityRituals LLC | `ourCommunityRituals/OCR-docs`         | Holding company. Org brain. Governance.                         |
+| OSE  | OurSharedEvents         | `ourCommunityRituals/ourSharedEvents`  | **This repo.** Core platform — event infrastructure, API, admin |
+| OW   | OurWKRP                 | `ourCommunityRituals/ourWKRP`          | Community music curation. Named identity. White label tiers.    |
+| OSG  | OurSharedGames          | `ourCommunityRituals/ourSharedGames`   | Founding activation format. Anchor game nights.                 |
+| OSR  | OurSharedRecords        | `ourCommunityRituals/ourSharedRecords` | Music, story, and archive layer. Oral history.                  |
+| OSP  | OurSharedPulse          | `ourCommunityRituals/ourSharedPulse`   | Pre-platform consulting. Human-delivered entry point.           |
+| OSM  | OurSharedMagnets        | `ourCommunityRituals/ourSharedMagnets` | Developer and franchise layer. API and white label support.     |
+| OER  | OurEventRings           | —                                      | Intelligence and analytics. Long horizon.                       |
+| OWL  | OurWhiteList            | `ourCommunityRituals/ourWhiteList`     | Deployment and white label layer. Client fork template.         |
 
 ---
 
