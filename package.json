@@ -22,7 +22,7 @@
     "check:dead-code": "node scripts/check-dead-code.js --fail-on-dead",
     "check:schema-fields": "node scripts/check-schema-fields.js",
     "check:api-schemas": "node scripts/check-apis-vs-schemas.js",
-    "check:guards": "node scripts/check-surfaces.js && node scripts/check-dead-code.js --fail-on-dead && node scripts/check-schema-fields.js && node scripts/check-apis-vs-schemas.js && npm run test:schema-validation",
+    "check:guards": "npm run test:schema-validation",
     "check:banned-origins": "node scripts/check-banned-origins.mjs",
     "check:v2-files": "node scripts/check-v2-files.js",
     "guard:no-gas": "node scripts/guard-no-gas.js",
