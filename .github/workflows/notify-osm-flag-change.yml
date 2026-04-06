@@ -1,0 +1,72 @@
+# notify-osm-flag-change.yml
+# When feature flag code changes in OSE, open an issue in OSM
+# so Postman collections and Newman mocks stay in sync.
+#
+# This is the first wired dependency from DEPENDENCY-MAP.md:
+# OSE feature flags → OSM mock layer update
+
+name: Notify OSM on Flag Change
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'workers/oursharedevents/src/lib/feature-flags.ts'
+      - 'workers/oursharedevents/src/handlers/feature-flags.ts'
+
+permissions:
+  contents: read
+
+jobs:
+  notify:
+    name: Open issue in OSM
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Get change summary
+        id: changes
+        run: |
+          DIFF=$(git diff HEAD~1 HEAD -- \
+            workers/oursharedevents/src/lib/feature-flags.ts \
+            workers/oursharedevents/src/handlers/feature-flags.ts \
+            | head -100)
+          echo "diff<<EODIFF" >> "$GITHUB_OUTPUT"
+          echo "$DIFF" >> "$GITHUB_OUTPUT"
+          echo "EODIFF" >> "$GITHUB_OUTPUT"
+
+      - name: Open issue in OSM
+        env:
+          GH_TOKEN: ${{ secrets.OCR_PROPAGATE_TOKEN }}
+        run: |
+          gh issue create \
+            --repo ourCommunityRituals/ourSharedMagnets \
+            --title "OSE feature flags changed — update Postman/Newman mocks" \
+            --label "dependency-sync" \
+            --body "$(cat <<'EOISSUE'
+          ## Feature Flag Change Detected
+
+          OSE commit: ${{ github.sha }}
+          Branch: ${{ github.ref_name }}
+          Author: ${{ github.actor }}
+
+          ### What changed
+
+          Feature flag source files were modified in OSE:
+          - `workers/oursharedevents/src/lib/feature-flags.ts`
+          - `workers/oursharedevents/src/handlers/feature-flags.ts`
+
+          ### Action required
+
+          Update OSM Postman collections and Newman CI mocks to reflect the new flag configuration. The 3-tier model (Free/Mid/Enterprise) may have changed.
+
+          ### Dependency reference
+
+          See `OCR-docs/docs/DEPENDENCY-MAP.md` — "OSE feature flags → OSM mock layer"
+
+          ---
+          *Opened by notify-osm-flag-change workflow in ourSharedEvents.*
+          EOISSUE
+          )"
