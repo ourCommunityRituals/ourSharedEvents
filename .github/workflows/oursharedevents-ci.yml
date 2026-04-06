@@ -39,11 +39,6 @@ on:
       - 'schemas/**'
       - 'playwright.*.config.*'
       - '.github/workflows/oursharedevents-ci.yml'
-    paths-ignore:
-      - '*.md'
-      - 'docs/**'
-      - 'archive/**'
-      - '.claude/**'
   push:
     branches:
       - main
@@ -55,11 +50,6 @@ on:
       - 'schemas/**'
       - 'playwright.*.config.*'
       - '.github/workflows/oursharedevents-ci.yml'
-    paths-ignore:
-      - '*.md'
-      - 'docs/**'
-      - 'archive/**'
-      - '.claude/**'
     tags:
       - 'v*.*.*'
   workflow_dispatch:
