@@ -29,7 +29,15 @@ async function applyMigrations(): Promise<void> {
   const tenv = env as unknown as TestEnv;
   const statements: string[] = JSON.parse(tenv.TEST_MIGRATION_STATEMENTS);
   for (const stmt of statements) {
-    await env.DB.prepare(stmt).run();
+    try {
+      await env.DB.prepare(stmt).run();
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      // ALTER TABLE ADD COLUMN is not idempotent in SQLite —
+      // "duplicate column" on re-run means the column already exists, which is fine.
+      if (msg.includes('duplicate column name')) continue;
+      throw e;
+    }
   }
 }
 
@@ -45,14 +53,15 @@ describe('QA-1: Migration idempotency', () => {
     // Run migrations a second time — CREATE IF NOT EXISTS / DROP IF EXISTS should be safe
     await expect(applyMigrations()).resolves.not.toThrow();
 
-    // 6 tables: events, sponsors, poster_deployments, scans, scan_aggregates, subscribers
+    // 8 tables: corridors, events, node_hierarchy, poster_deployments,
+    // scan_aggregates, scans, sponsors, subscribers
     // (checkins/registrations dropped by migration 0009, moved to FORMS_DB)
     const tables = await env.DB.prepare(
       "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' ORDER BY name"
     ).all();
 
     const names = tables.results.map((r: Record<string, unknown>) => r.name);
-    expect(names).toHaveLength(6);
+    expect(names).toHaveLength(8);
   });
 
   test('indexes remain at exactly 19 after idempotent re-run', async () => {

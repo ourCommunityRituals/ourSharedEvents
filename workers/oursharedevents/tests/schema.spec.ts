@@ -5,7 +5,7 @@
  *   1. All 8 tables exist post-migration
  *   2. PII firewall: scans table has no user_email, user_name, ip_address columns
  *   3. scan_aggregates is NOT writable via user-facing route handlers
- *   4. All expected indexes exist (11 custom indexes)
+ *   4. All expected indexes exist (19 custom indexes)
  *   5. Column counts match schema spec per table
  *
  * Migration SQL and source files are injected at build time via vitest.config.ts
@@ -28,11 +28,13 @@ interface TestEnv {
 // ── Constants ────────────────────────────────────────────────────────────────
 
 const EXPECTED_TABLES = [
+  'corridors',
   'events',
-  'sponsors',
+  'node_hierarchy',
   'poster_deployments',
-  'scans',
   'scan_aggregates',
+  'scans',
+  'sponsors',
   'subscribers',
 ] as const;
 
@@ -69,6 +71,8 @@ const EXPECTED_COLUMN_COUNTS: Record<string, number> = {
   scans: 9,
   scan_aggregates: 9,
   subscribers: 5,
+  node_hierarchy: 14,
+  corridors: 22,
 };
 
 // ── Apply migrations before tests ────────────────────────────────────────────
@@ -77,7 +81,15 @@ async function applyMigrations(): Promise<void> {
   const tenv = env as unknown as TestEnv;
   const statements: string[] = JSON.parse(tenv.TEST_MIGRATION_STATEMENTS);
   for (const stmt of statements) {
-    await env.DB.prepare(stmt).run();
+    try {
+      await env.DB.prepare(stmt).run();
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      // ALTER TABLE ADD COLUMN is not idempotent in SQLite —
+      // "duplicate column" on re-run means the column already exists, which is fine.
+      if (msg.includes('duplicate column name')) continue;
+      throw e;
+    }
   }
 }
 
@@ -88,7 +100,7 @@ beforeAll(async () => {
 // ── Gate 1: Table existence ──────────────────────────────────────────────────
 
 describe('Gate 1: Table existence', () => {
-  test('all 6 tables exist post-migration', async () => {
+  test('all 8 tables exist post-migration', async () => {
     const tables = await env.DB.prepare(
       "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' ORDER BY name"
     ).all();

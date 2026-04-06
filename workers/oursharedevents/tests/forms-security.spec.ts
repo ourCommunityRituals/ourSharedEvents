@@ -39,12 +39,24 @@ beforeAll(async () => {
   // Apply main DB migrations
   const mainStmts: string[] = JSON.parse(tenv().TEST_MIGRATION_STATEMENTS);
   for (const stmt of mainStmts) {
-    await tenv().DB.prepare(stmt).run();
+    try {
+      await tenv().DB.prepare(stmt).run();
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (msg.includes('duplicate column name')) continue;
+      throw e;
+    }
   }
   // Apply forms DB migrations
   const formsStmts: string[] = JSON.parse(tenv().TEST_FORMS_MIGRATION_STATEMENTS);
   for (const stmt of formsStmts) {
-    await tenv().FORMS_DB.prepare(stmt).run();
+    try {
+      await tenv().FORMS_DB.prepare(stmt).run();
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (msg.includes('duplicate column name')) continue;
+      throw e;
+    }
   }
 });
 
@@ -137,32 +149,41 @@ describe('S5: Registration destruction after expiry', () => {
     const futureDate = '2099-01-01T00:00:00.000Z';
 
     // Insert one expired and one active registration
-    await tenv().FORMS_DB.prepare(
-      `INSERT INTO form_registrations (id, event_id, registration_bucket, expires_at)
-       VALUES ('reg_expired', 'evt_sec_test', '2026-03-27T14', ?)`,
-    ).bind(pastDate).run();
+    await tenv()
+      .FORMS_DB.prepare(
+        `INSERT INTO form_registrations (id, event_id, registration_bucket, expires_at)
+       VALUES ('reg_expired', 'evt_sec_test', '2026-03-27T14', ?)`
+      )
+      .bind(pastDate)
+      .run();
 
-    await tenv().FORMS_DB.prepare(
-      `INSERT INTO form_registrations (id, event_id, registration_bucket, expires_at)
-       VALUES ('reg_active', 'evt_sec_test', '2026-03-27T14', ?)`,
-    ).bind(futureDate).run();
+    await tenv()
+      .FORMS_DB.prepare(
+        `INSERT INTO form_registrations (id, event_id, registration_bucket, expires_at)
+       VALUES ('reg_active', 'evt_sec_test', '2026-03-27T14', ?)`
+      )
+      .bind(futureDate)
+      .run();
 
     // Simulate lifecycle deletion
     const now = new Date().toISOString();
-    await tenv().FORMS_DB.prepare(
-      'DELETE FROM form_registrations WHERE expires_at IS NOT NULL AND expires_at < ?',
-    ).bind(now).run();
+    await tenv()
+      .FORMS_DB.prepare(
+        'DELETE FROM form_registrations WHERE expires_at IS NOT NULL AND expires_at < ?'
+      )
+      .bind(now)
+      .run();
 
     // Expired should be gone
-    const expired = await tenv().FORMS_DB.prepare(
-      "SELECT id FROM form_registrations WHERE id = 'reg_expired'",
-    ).first();
+    const expired = await tenv()
+      .FORMS_DB.prepare("SELECT id FROM form_registrations WHERE id = 'reg_expired'")
+      .first();
     expect(expired).toBeNull();
 
     // Active should remain
-    const active = await tenv().FORMS_DB.prepare(
-      "SELECT id FROM form_registrations WHERE id = 'reg_active'",
-    ).first();
+    const active = await tenv()
+      .FORMS_DB.prepare("SELECT id FROM form_registrations WHERE id = 'reg_active'")
+      .first();
     expect(active).not.toBeNull();
   });
 });
@@ -172,29 +193,36 @@ describe('S6: Email signup retention enforcement', () => {
     const pastDate = '2020-01-01T00:00:00.000Z';
     const futureDate = '2099-01-01T00:00:00.000Z';
 
-    await tenv().FORMS_DB.prepare(
-      `INSERT INTO email_signups (id, event_id, email_hash, email_encrypted, signup_bucket, retention_expires_at)
-       VALUES ('es_expired', 'evt_sec_test', 'hash1', 'enc1', '2026-03-27T14', ?)`,
-    ).bind(pastDate).run();
+    await tenv()
+      .FORMS_DB.prepare(
+        `INSERT INTO email_signups (id, event_id, email_hash, email_encrypted, signup_bucket, retention_expires_at)
+       VALUES ('es_expired', 'evt_sec_test', 'hash1', 'enc1', '2026-03-27T14', ?)`
+      )
+      .bind(pastDate)
+      .run();
 
-    await tenv().FORMS_DB.prepare(
-      `INSERT INTO email_signups (id, event_id, email_hash, email_encrypted, signup_bucket, retention_expires_at)
-       VALUES ('es_active', 'evt_sec_test', 'hash2', 'enc2', '2026-03-27T14', ?)`,
-    ).bind(futureDate).run();
+    await tenv()
+      .FORMS_DB.prepare(
+        `INSERT INTO email_signups (id, event_id, email_hash, email_encrypted, signup_bucket, retention_expires_at)
+       VALUES ('es_active', 'evt_sec_test', 'hash2', 'enc2', '2026-03-27T14', ?)`
+      )
+      .bind(futureDate)
+      .run();
 
     const now = new Date().toISOString();
-    await tenv().FORMS_DB.prepare(
-      'DELETE FROM email_signups WHERE retention_expires_at < ?',
-    ).bind(now).run();
+    await tenv()
+      .FORMS_DB.prepare('DELETE FROM email_signups WHERE retention_expires_at < ?')
+      .bind(now)
+      .run();
 
-    const expired = await tenv().FORMS_DB.prepare(
-      "SELECT id FROM email_signups WHERE id = 'es_expired'",
-    ).first();
+    const expired = await tenv()
+      .FORMS_DB.prepare("SELECT id FROM email_signups WHERE id = 'es_expired'")
+      .first();
     expect(expired).toBeNull();
 
-    const active = await tenv().FORMS_DB.prepare(
-      "SELECT id FROM email_signups WHERE id = 'es_active'",
-    ).first();
+    const active = await tenv()
+      .FORMS_DB.prepare("SELECT id FROM email_signups WHERE id = 'es_active'")
+      .first();
     expect(active).not.toBeNull();
   });
 });
@@ -211,15 +239,20 @@ describe('S7: Survey PII scrub actually removes data', () => {
       speaker_quality: 3,
     });
 
-    await tenv().FORMS_DB.prepare(
-      `INSERT INTO form_surveys (id, event_id, responses_json, submitted_bucket, pii_scrubbed)
-       VALUES ('survey_pii_test', 'evt_sec_test', ?, '2026-03-27T14', 0)`,
-    ).bind(responsesWithPii).run();
+    await tenv()
+      .FORMS_DB.prepare(
+        `INSERT INTO form_surveys (id, event_id, responses_json, submitted_bucket, pii_scrubbed)
+       VALUES ('survey_pii_test', 'evt_sec_test', ?, '2026-03-27T14', 0)`
+      )
+      .bind(responsesWithPii)
+      .run();
 
     // Verify unscrubbed data has PII
-    const before = await tenv().FORMS_DB.prepare(
-      "SELECT responses_json, pii_scrubbed FROM form_surveys WHERE id = 'survey_pii_test'",
-    ).first<{ responses_json: string; pii_scrubbed: number }>();
+    const before = await tenv()
+      .FORMS_DB.prepare(
+        "SELECT responses_json, pii_scrubbed FROM form_surveys WHERE id = 'survey_pii_test'"
+      )
+      .first<{ responses_json: string; pii_scrubbed: number }>();
 
     expect(before?.pii_scrubbed).toBe(0);
     const beforeData = JSON.parse(before!.responses_json);
@@ -227,7 +260,8 @@ describe('S7: Survey PII scrub actually removes data', () => {
     expect(beforeData.email).toBe('john@example.com');
 
     // Simulate PII scrub (whitelist approach — same as lifecycle job)
-    const SAFE_KEYS = /^(rating|score|count|number|rank|order|id|uuid|type|category|topic|session|duration|index|overall|venue|speaker|event|quality|value|level|tier|scale|stars?|thumbs?).*$/i;
+    const SAFE_KEYS =
+      /^(rating|score|count|number|rank|order|id|uuid|type|category|topic|session|duration|index|overall|venue|speaker|event|quality|value|level|tier|scale|stars?|thumbs?).*$/i;
     const parsed = JSON.parse(before!.responses_json) as Record<string, unknown>;
     const scrubbed: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(parsed)) {
@@ -242,14 +276,19 @@ describe('S7: Survey PII scrub actually removes data', () => {
       }
     }
 
-    await tenv().FORMS_DB.prepare(
-      "UPDATE form_surveys SET responses_json = ?, pii_scrubbed = 1 WHERE id = 'survey_pii_test'",
-    ).bind(JSON.stringify(scrubbed)).run();
+    await tenv()
+      .FORMS_DB.prepare(
+        "UPDATE form_surveys SET responses_json = ?, pii_scrubbed = 1 WHERE id = 'survey_pii_test'"
+      )
+      .bind(JSON.stringify(scrubbed))
+      .run();
 
     // Verify PII is gone but ratings remain
-    const after = await tenv().FORMS_DB.prepare(
-      "SELECT responses_json, pii_scrubbed FROM form_surveys WHERE id = 'survey_pii_test'",
-    ).first<{ responses_json: string; pii_scrubbed: number }>();
+    const after = await tenv()
+      .FORMS_DB.prepare(
+        "SELECT responses_json, pii_scrubbed FROM form_surveys WHERE id = 'survey_pii_test'"
+      )
+      .first<{ responses_json: string; pii_scrubbed: number }>();
 
     expect(after?.pii_scrubbed).toBe(1);
     const afterData = JSON.parse(after!.responses_json);
@@ -266,26 +305,32 @@ describe('S7: Survey PII scrub actually removes data', () => {
 describe('S8: Surveys invisible until PII-scrubbed', () => {
   test('admin survey query returns ZERO results for unscrubbed surveys', async () => {
     // Insert unscrubbed survey
-    await tenv().FORMS_DB.prepare(
-      `INSERT INTO form_surveys (id, event_id, responses_json, submitted_bucket, pii_scrubbed)
-       VALUES ('survey_hidden', 'evt_vis_test', '{"rating": 5}', '2026-03-27T14', 0)`,
-    ).run();
+    await tenv()
+      .FORMS_DB.prepare(
+        `INSERT INTO form_surveys (id, event_id, responses_json, submitted_bucket, pii_scrubbed)
+       VALUES ('survey_hidden', 'evt_vis_test', '{"rating": 5}', '2026-03-27T14', 0)`
+      )
+      .run();
 
     // Admin query (same as handleAdminSurveys) — only pii_scrubbed = 1
-    const result = await tenv().FORMS_DB.prepare(
-      "SELECT id FROM form_surveys WHERE event_id = 'evt_vis_test' AND pii_scrubbed = 1",
-    ).all();
+    const result = await tenv()
+      .FORMS_DB.prepare(
+        "SELECT id FROM form_surveys WHERE event_id = 'evt_vis_test' AND pii_scrubbed = 1"
+      )
+      .all();
 
     expect(result.results).toHaveLength(0);
 
     // After scrub, it becomes visible
-    await tenv().FORMS_DB.prepare(
-      "UPDATE form_surveys SET pii_scrubbed = 1 WHERE id = 'survey_hidden'",
-    ).run();
+    await tenv()
+      .FORMS_DB.prepare("UPDATE form_surveys SET pii_scrubbed = 1 WHERE id = 'survey_hidden'")
+      .run();
 
-    const afterScrub = await tenv().FORMS_DB.prepare(
-      "SELECT id FROM form_surveys WHERE event_id = 'evt_vis_test' AND pii_scrubbed = 1",
-    ).all();
+    const afterScrub = await tenv()
+      .FORMS_DB.prepare(
+        "SELECT id FROM form_surveys WHERE event_id = 'evt_vis_test' AND pii_scrubbed = 1"
+      )
+      .all();
 
     expect(afterScrub.results).toHaveLength(1);
   });
@@ -319,7 +364,7 @@ describe('S10: Email hash non-reversibility', () => {
     expect(email).not.toMatch(/^[a-f0-9]{64}$/);
     // And any SHA-256 output WILL match this pattern
     expect('973dfe463ec85785f5f95af5ba3906eedb2d931c24e69824a89ea65dba4e813b').toMatch(
-      /^[a-f0-9]{64}$/,
+      /^[a-f0-9]{64}$/
     );
   });
 });
@@ -418,12 +463,12 @@ describe('S17: Feature flag validation — only known keys accepted', () => {
 describe('S18: Feature flag seed uses safe defaults (free tier)', () => {
   test('free tier seed has forms.register ON, forms.survey OFF, assets OFF, branding OFF', async () => {
     // Verify the seed migration applied correctly — free tier is the safe default
-    const flags = await tenv().FORMS_DB.prepare(
-      "SELECT flag_key, enabled FROM feature_flags WHERE scope = 'global'",
-    ).all();
+    const flags = await tenv()
+      .FORMS_DB.prepare("SELECT flag_key, enabled FROM feature_flags WHERE scope = 'global'")
+      .all();
 
     const flagMap = Object.fromEntries(
-      flags.results.map((r: Record<string, unknown>) => [r.flag_key, r.enabled]),
+      flags.results.map((r: Record<string, unknown>) => [r.flag_key, r.enabled])
     );
 
     // Free tier: only basic forms enabled
@@ -463,9 +508,11 @@ describe('S19: Tier definitions enforce principle of least privilege', () => {
 
 describe('S14: Main DB has no form tables after migration 0008', () => {
   test('DB does not contain checkins, registrations, or any form_* tables', async () => {
-    const tables = await tenv().DB.prepare(
-      "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%'",
-    ).all();
+    const tables = await tenv()
+      .DB.prepare(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%'"
+      )
+      .all();
 
     const names = tables.results.map((r: Record<string, unknown>) => r.name);
     expect(names).not.toContain('checkins');

@@ -55,10 +55,26 @@ function adminHeaders(): Record<string, string> {
 
 beforeAll(async () => {
   const mainStmts: string[] = JSON.parse(tenv().TEST_MIGRATION_STATEMENTS);
-  for (const stmt of mainStmts) await mainDb().prepare(stmt).run();
+  for (const stmt of mainStmts) {
+    try {
+      await mainDb().prepare(stmt).run();
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (msg.includes('duplicate column name')) continue;
+      throw e;
+    }
+  }
 
   const formsStmts: string[] = JSON.parse(tenv().TEST_FORMS_MIGRATION_STATEMENTS);
-  for (const stmt of formsStmts) await formsDb().prepare(stmt).run();
+  for (const stmt of formsStmts) {
+    try {
+      await formsDb().prepare(stmt).run();
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (msg.includes('duplicate column name')) continue;
+      throw e;
+    }
+  }
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -72,7 +88,7 @@ describe('Scenario 1: Free tier seed migration', () => {
     // Should have all 17 flag keys
     expect(flags.length).toBe(17);
 
-    const flagMap = Object.fromEntries(flags.map(f => [f.flag_key, f.enabled]));
+    const flagMap = Object.fromEntries(flags.map((f) => [f.flag_key, f.enabled]));
 
     // Free tier: 3 ON
     expect(flagMap['forms.register']).toBe(1);
@@ -246,7 +262,7 @@ describe('Scenario 6: Admin flag CRUD via HTTP', () => {
     expect(body.ok).toBe(true);
     expect(body.count).toBe(3);
     const items = body.items as { tier: string }[];
-    expect(items.map(i => i.tier)).toEqual(['free', 'mid', 'enterprise']);
+    expect(items.map((i) => i.tier)).toEqual(['free', 'mid', 'enterprise']);
   });
 
   test('POST /api/v2/admin/flags/apply-tier → apply mid tier', async () => {
@@ -307,11 +323,14 @@ describe('Scenario 6: Admin flag CRUD via HTTP', () => {
   });
 
   test('PUT /api/v2/admin/events/:id/flags/:key → set event override', async () => {
-    const res = await SELF.fetch('https://t.test/api/v2/admin/events/evt-http/flags/assets.file-upload', {
-      method: 'PUT',
-      headers: { ...adminHeaders(), 'Content-Type': 'application/json' },
-      body: JSON.stringify({ enabled: true }),
-    });
+    const res = await SELF.fetch(
+      'https://t.test/api/v2/admin/events/evt-http/flags/assets.file-upload',
+      {
+        method: 'PUT',
+        headers: { ...adminHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled: true }),
+      }
+    );
     expect(res.status).toBe(200);
     const body = await json(res);
     expect(body.ok).toBe(true);
@@ -325,10 +344,13 @@ describe('Scenario 6: Admin flag CRUD via HTTP', () => {
     // Set event flag directly to ensure it exists before deleting via HTTP
     await setEventFlag(formsDb(), 'evt-http-del', 'assets.file-upload', true);
 
-    const res = await SELF.fetch('https://t.test/api/v2/admin/events/evt-http-del/flags/assets.file-upload', {
-      method: 'DELETE',
-      headers: adminHeaders(),
-    });
+    const res = await SELF.fetch(
+      'https://t.test/api/v2/admin/events/evt-http-del/flags/assets.file-upload',
+      {
+        method: 'DELETE',
+        headers: adminHeaders(),
+      }
+    );
     expect(res.status).toBe(200);
     const body = await json(res);
     expect(body.ok).toBe(true);
