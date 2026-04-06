@@ -97,10 +97,11 @@ module.exports = [
         beforeAll: 'readonly',
         afterAll: 'readonly',
         jest: 'readonly',
+        vi: 'readonly',
       },
     },
     rules: {
-      'no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
+      'no-unused-vars': ['warn', { argsIgnorePattern: '^_', caughtErrorsIgnorePattern: '^_' }],
       'no-console': 'off', // Console is fine in tests
       'no-redeclare': 'off', // Tests often mock/redefine globals
     },

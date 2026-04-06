@@ -1,4 +1,3 @@
-import { vi } from "vitest";
 /**
  * SecurityMiddleware Unit Tests
  *

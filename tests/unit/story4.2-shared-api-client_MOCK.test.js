@@ -1,4 +1,3 @@
-import { vi } from "vitest";
 /**
  * Story 4.2 - Shared API Client Unit Tests
  *

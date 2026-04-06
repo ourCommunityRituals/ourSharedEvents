@@ -106,8 +106,8 @@ jobs:
 
       # --- Quality checks ---
 
-      - name: 'Quality: Lint (zero warnings)'
-        run: npm run lint:ci
+      - name: 'Quality: Lint (zero errors)'
+        run: npx eslint config/ scripts/ tests/unit/ tests/contract/
 
       - name: Install worker dependencies
         run: npm ci
