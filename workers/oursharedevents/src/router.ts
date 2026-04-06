@@ -21,6 +21,9 @@
  *   GET  /api/v2/admin/events/:id/forms/email-signups  → email signup count (admin)
  *   GET  /forms/:eventId?type=register|checkin|survey|email  → public form page (QR landing)
  *   POST /subscribe              → email capture
+ *   GET /display                  → TV/kiosk live event display
+ *   GET /poster                   → printable poster with QR codes
+ *   GET /sharedReport             → shareable analytics dashboard
  *
  *   Feature Flag Admin (auth required):
  *   GET    /api/v2/admin/flags              → list all flags
@@ -47,6 +50,9 @@ import {
   handleAdminPage,
   handleLandingPage,
   handleSubscribe,
+  handleDisplayPage,
+  handlePosterPage,
+  handleSharedReportPage,
   type PagesEnv,
 } from './handlers/pages';
 import { handleBriefingPage } from './handlers/briefing';
@@ -277,6 +283,19 @@ export async function route(request: Request, env: RouterEnv): Promise<Response>
   // ── CEO Briefing ───────────────────────────────────────────────────────────
   if (pathname === '/briefing' && method === 'GET') {
     return handleBriefingPage();
+  }
+
+  // ── MVP surfaces (display, poster, shared report) ─────────────────────────
+  if (pathname === '/display') {
+    return handleDisplayPage(env);
+  }
+
+  if (pathname === '/poster') {
+    return handlePosterPage(env);
+  }
+
+  if (pathname === '/sharedReport') {
+    return handleSharedReportPage(env);
   }
 
   // ── 404 ────────────────────────────────────────────────────────────────────
