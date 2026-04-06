@@ -1,17 +1,15 @@
 /**
- * Unit Tests for Story 1.1 Central Worker Router
+ * Unit Tests for Story 1.1 - Worker Central Router
  *
- * Tests the router.ts implementation that handles all request routing.
- * Validates:
- * - Route matching for /api/* endpoints
- * - Route matching for HTML page routes
- * - 404 handling for unknown routes
- * - Structured logging integration
- * - Response shapes match acceptance criteria
+ * Source-reading tests that validate the router module structure,
+ * route coverage, auth gating, CORS handling, and error responses.
  *
- * @see worker/src/router.ts
- * @see worker/src/logger.ts
- * @see Story 1.1 - Create Central Worker Router
+ * These are infrastructure-as-code tests — they verify that security
+ * patterns exist in the source code. The "back validates the front."
+ *
+ * @see workers/oursharedevents/src/router.ts
+ * @see workers/oursharedevents/src/index.ts
+ * @see workers/oursharedevents/wrangler.toml
  */
 
 const fs = require('fs');
@@ -22,681 +20,454 @@ const path = require('path');
 // =============================================================================
 
 const routerPath = path.join(__dirname, '../../../workers/oursharedevents/src/router.ts');
-const loggerPath = path.join(__dirname, '../../../workers/oursharedevents/src/logger.ts');
-const mainIndexPath = path.join(__dirname, '../../../workers/oursharedevents/src/index.ts');
-const wranglerPath = path.join(__dirname, '../../../workers/oursharedevents/wrangler.toml');
+const indexPath = path.join(__dirname, '../../../workers/oursharedevents/src/index.ts');
+const wranglerTomlPath = path.join(__dirname, '../../../workers/oursharedevents/wrangler.toml');
 
 let routerSource = '';
-let loggerSource = '';
-let mainIndexSource = '';
-let wranglerSource = '';
+let indexSource = '';
+let wranglerTomlSource = '';
 
 beforeAll(() => {
   try {
     routerSource = fs.readFileSync(routerPath, 'utf8');
-    loggerSource = fs.readFileSync(loggerPath, 'utf8');
-    mainIndexSource = fs.readFileSync(mainIndexPath, 'utf8');
-    wranglerSource = fs.readFileSync(wranglerPath, 'utf8');
+    indexSource = fs.readFileSync(indexPath, 'utf8');
+    wranglerTomlSource = fs.readFileSync(wranglerTomlPath, 'utf8');
   } catch (error) {
     console.error('Failed to read source files:', error.message);
   }
 });
 
 // =============================================================================
-// Router Module Structure Tests
+// Module Structure
 // =============================================================================
 
 describe('Router Module Structure (Story 1.1)', () => {
-  describe('Module Exports', () => {
-    it('should export handleRequest function', () => {
-      expect(routerSource).toContain('export async function handleRequest(');
+  describe('Source Files Exist', () => {
+    it('router.ts exists', () => {
+      expect(routerSource.length).toBeGreaterThan(0);
     });
 
-    it('should export ROUTER_VERSION constant', () => {
-      expect(routerSource).toContain('export const ROUTER_VERSION');
+    it('index.ts exists', () => {
+      expect(indexSource.length).toBeGreaterThan(0);
+    });
+
+    it('wrangler.toml exists', () => {
+      expect(wranglerTomlSource.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('Module Exports', () => {
+    it('should export route function', () => {
+      expect(routerSource).toContain('export async function route(');
     });
 
     it('should export RouterEnv type', () => {
-      expect(routerSource).toContain('export interface RouterEnv');
+      expect(routerSource).toContain('export type RouterEnv');
     });
 
-    it('should export default Worker handler', () => {
-      expect(routerSource).toContain('export default');
-      expect(routerSource).toContain('async fetch(request: Request, env: RouterEnv');
+    it('RouterEnv should compose PagesEnv, AdminEnv, FormsEnv, FormPagesEnv', () => {
+      expect(routerSource).toContain('PagesEnv');
+      expect(routerSource).toContain('AdminEnv');
+      expect(routerSource).toContain('FormsEnv');
+      expect(routerSource).toContain('FormPagesEnv');
+    });
+
+    it('RouterEnv should include WORKER_ENV and WORKER_BUILD_VERSION', () => {
+      expect(routerSource).toContain('WORKER_ENV?: string');
+      expect(routerSource).toContain('WORKER_BUILD_VERSION?: string');
     });
   });
 
   describe('Module Imports', () => {
-    it('should import RouterLogger from logger', () => {
-      expect(routerSource).toContain('import { RouterLogger');
-      expect(routerSource).toContain("from './logger'");
+    it('should import handleHealth from handlers/health', () => {
+      expect(routerSource).toContain("import { handleHealth } from './handlers/health'");
     });
 
-    it('should import createLogger from logger', () => {
-      expect(routerSource).toContain('createLogger');
+    it('should import event handlers from handlers/events', () => {
+      expect(routerSource).toContain('handleListEvents');
+      expect(routerSource).toContain('handleGetEvent');
+      expect(routerSource).toContain('handleAdminListEvents');
     });
 
-    it('should import handleStatus from handlers', () => {
-      expect(routerSource).toContain('import { handleStatus');
-      expect(routerSource).toContain("from './handlers/status'");
-    });
-  });
-});
-
-// =============================================================================
-// Route Matching Tests
-// =============================================================================
-
-describe('Route Matching (Story 1.1)', () => {
-  describe('API Routes', () => {
-    it('should handle /api/status route', () => {
-      expect(routerSource).toContain("'/api/status'");
-      expect(routerSource).toContain("handler: 'status'");
+    it('should import page handlers from handlers/pages', () => {
+      expect(routerSource).toContain('handlePublicPage');
+      expect(routerSource).toContain('handleAdminPage');
+      expect(routerSource).toContain('handleLandingPage');
+      expect(routerSource).toContain('handleDisplayPage');
+      expect(routerSource).toContain('handlePosterPage');
+      expect(routerSource).toContain('handleSharedReportPage');
+      expect(routerSource).toContain('handleSubscribe');
     });
 
-    it('should handle /api/events route', () => {
-      expect(routerSource).toContain("apiPath === '/events'");
-      expect(routerSource).toContain("handler: 'events'");
+    it('should import requireAdmin from auth/admin', () => {
+      expect(routerSource).toContain('requireAdmin');
+      expect(routerSource).toContain("from './auth/admin'");
     });
 
-    it('should handle /api/events/:id route', () => {
-      expect(routerSource).toContain('apiPath.match(/^\\/events\\/([^/]+)$/)');
-      expect(routerSource).toContain("handler: 'event'");
+    it('should import form handlers from handlers/forms', () => {
+      expect(routerSource).toContain('handleFormRegistration');
+      expect(routerSource).toContain('handleFormCheckin');
+      expect(routerSource).toContain('handleFormSurvey');
+      expect(routerSource).toContain('handleFormEmailSignup');
+      expect(routerSource).toContain('handleAdminRegistrations');
+      expect(routerSource).toContain('handleAdminCheckinCount');
+      expect(routerSource).toContain('handleAdminSurveys');
+      expect(routerSource).toContain('handleAdminEmailSignupCount');
     });
 
-    it('should handle /api/events/:id/publicBundle route', () => {
-      expect(routerSource).toContain('apiPath.match(/^\\/events\\/([^/]+)\\/publicBundle$/)');
-      expect(routerSource).toContain("handler: 'publicBundle'");
+    it('should import handleFormPage from handlers/form-pages', () => {
+      expect(routerSource).toContain('handleFormPage');
+      expect(routerSource).toContain("from './handlers/form-pages'");
     });
 
-    it('should handle /api/events/:id/adminBundle route', () => {
-      expect(routerSource).toContain('apiPath.match(/^\\/events\\/([^/]+)\\/adminBundle$/)');
-      expect(routerSource).toContain("handler: 'adminBundle'");
+    it('should import isFeatureEnabled from lib/feature-flags', () => {
+      expect(routerSource).toContain('isFeatureEnabled');
+      expect(routerSource).toContain("from './lib/feature-flags'");
     });
 
-    it('should handle /api/events/:id/displayBundle route', () => {
-      expect(routerSource).toContain("handler: 'displayBundle'");
+    it('should import feature flag handlers', () => {
+      expect(routerSource).toContain('handleListFlags');
+      expect(routerSource).toContain('handleListTiers');
+      expect(routerSource).toContain('handleGetCurrentTier');
+      expect(routerSource).toContain('handleResolveFlags');
+      expect(routerSource).toContain('handleSetFlag');
+      expect(routerSource).toContain('handleApplyTier');
+      expect(routerSource).toContain('handleSetEventFlag');
+      expect(routerSource).toContain('handleRemoveEventFlag');
     });
 
-    it('should handle /api/events/:id/posterBundle route', () => {
-      expect(routerSource).toContain("handler: 'posterBundle'");
-    });
-  });
-
-  describe('HTML Page Routes', () => {
-    it('should define HTML_ROUTE_MAP', () => {
-      expect(routerSource).toContain('const HTML_ROUTE_MAP');
+    it('should import corsOrigin from lib/cors', () => {
+      expect(routerSource).toContain('corsOrigin');
+      expect(routerSource).toContain("from './lib/cors'");
     });
 
-    it('should route /public to public page', () => {
-      expect(routerSource).toContain("'/public': 'public'");
-    });
-
-    it('should route /events to public page', () => {
-      expect(routerSource).toContain("'/events': 'public'");
-    });
-
-    it('should route /schedule to public page', () => {
-      expect(routerSource).toContain("'/schedule': 'public'");
-    });
-
-    it('should route /calendar to public page', () => {
-      expect(routerSource).toContain("'/calendar': 'public'");
-    });
-
-    it('should route /admin to admin page', () => {
-      expect(routerSource).toContain("'/admin': 'admin'");
-    });
-
-    it('should route /manage to admin page', () => {
-      expect(routerSource).toContain("'/manage': 'admin'");
-    });
-
-    it('should route /dashboard to admin page', () => {
-      expect(routerSource).toContain("'/dashboard': 'admin'");
-    });
-
-    it('should route /create to admin page', () => {
-      expect(routerSource).toContain("'/create': 'admin'");
-    });
-
-    it('should route /display to display page', () => {
-      expect(routerSource).toContain("'/display': 'display'");
-    });
-
-    it('should route /tv to display page', () => {
-      expect(routerSource).toContain("'/tv': 'display'");
-    });
-
-    it('should route /kiosk to display page', () => {
-      expect(routerSource).toContain("'/kiosk': 'display'");
-    });
-
-    it('should route /screen to display page', () => {
-      expect(routerSource).toContain("'/screen': 'display'");
-    });
-
-    it('should route /poster to poster page', () => {
-      expect(routerSource).toContain("'/poster': 'poster'");
-    });
-
-    it('should route /posters to poster page', () => {
-      expect(routerSource).toContain("'/posters': 'poster'");
-    });
-
-    it('should route /flyers to poster page', () => {
-      expect(routerSource).toContain("'/flyers': 'poster'");
-    });
-
-    it('should route /report to report page', () => {
-      expect(routerSource).toContain("'/report': 'report'");
-    });
-
-    it('should route /analytics to report page', () => {
-      expect(routerSource).toContain("'/analytics': 'report'");
-    });
-
-    it('should route /reports to report page', () => {
-      expect(routerSource).toContain("'/reports': 'report'");
-    });
-
-    it('should route /insights to report page', () => {
-      expect(routerSource).toContain("'/insights': 'report'");
-    });
-  });
-
-  describe('Brand Routing', () => {
-    it('should define valid brands', () => {
-      expect(routerSource).toContain("const VALID_BRANDS = ['root', 'abc', 'cbc', 'cbl']");
-    });
-
-    it('should extract brand from path', () => {
-      expect(routerSource).toContain('function extractBrand(pathname: string)');
-    });
-
-    it('should default to root brand', () => {
-      expect(routerSource).toContain("brand: 'root'");
+    it('should import handleBriefingPage from handlers/briefing', () => {
+      expect(routerSource).toContain('handleBriefingPage');
+      expect(routerSource).toContain("from './handlers/briefing'");
     });
   });
 });
 
 // =============================================================================
-// 404 Handling Tests
+// Route Coverage
 // =============================================================================
 
-describe('404 Not Found Handling (Story 1.1)', () => {
-  describe('404 Response Shape', () => {
-    it('should return ok: false for 404', () => {
-      expect(routerSource).toContain('ok: false');
+describe('Route Coverage (Story 1.1)', () => {
+  describe('Health / Status Routes', () => {
+    it('should route /health to handleHealth', () => {
+      expect(routerSource).toContain("pathname === '/health'");
+      expect(routerSource).toContain('handleHealth(env)');
     });
 
-    it('should return status: 404', () => {
-      expect(routerSource).toContain('status: 404');
-    });
-
-    it('should return error message', () => {
-      expect(routerSource).toContain("error: 'Not Found'");
-    });
-
-    it('should include path in 404 response', () => {
-      expect(routerSource).toContain('path,');
-    });
-
-    it('should include timestamp in 404 response', () => {
-      expect(routerSource).toContain('timestamp: new Date().toISOString()');
+    it('should route /api/status as alias for health', () => {
+      expect(routerSource).toContain("pathname === '/api/status'");
     });
   });
 
-  describe('404 Function', () => {
-    it('should define create404Response function', () => {
-      expect(routerSource).toContain('function create404Response(path: string');
+  describe('Public API Routes', () => {
+    it('should route /api/v2/events to handleListEvents', () => {
+      expect(routerSource).toContain("pathname === '/api/v2/events'");
+      expect(routerSource).toContain('handleListEvents(request, env)');
     });
 
-    it('should log 404 with logger.notFound', () => {
-      expect(routerSource).toContain('logger.notFound(path)');
-    });
-
-    it('should return JSON Content-Type', () => {
-      expect(routerSource).toContain("'Content-Type': 'application/json'");
+    it('should route /api/v2/events/:id to handleGetEvent', () => {
+      expect(routerSource).toContain('/api/v2/events/');
+      expect(routerSource).toContain('handleGetEvent(request, env,');
     });
   });
 
-  describe('Unknown Route Handling', () => {
-    it('should return not_found type for unknown routes', () => {
-      expect(routerSource).toContain("type: 'not_found'");
+  describe('Admin Routes (Auth-Gated)', () => {
+    it('should route /admin to handleAdminPage with auth', () => {
+      expect(routerSource).toContain("pathname === '/admin'");
+      expect(routerSource).toContain('handleAdminPage(env)');
     });
 
-    it('should create 404 response for not_found routes', () => {
-      expect(routerSource).toContain("case 'not_found'");
-      expect(routerSource).toContain('create404Response(url.pathname, logger)');
+    it('should route /api/v2/admin/events with auth', () => {
+      expect(routerSource).toContain("pathname === '/api/v2/admin/events'");
+      expect(routerSource).toContain('handleAdminListEvents(request, env)');
+    });
+
+    it('should gate all admin routes with requireAdmin', () => {
+      // Count requireAdmin calls — should be at every admin route
+      const adminCalls = (routerSource.match(/requireAdmin\(request, env/g) || []).length;
+      // At least: /admin, /api/v2/admin/events, admin forms, 6 flag endpoints
+      expect(adminCalls).toBeGreaterThanOrEqual(8);
+    });
+  });
+
+  describe('Public Form Routes', () => {
+    it('should match public form submit pattern', () => {
+      expect(routerSource).toContain('/api/v2/events/');
+      expect(routerSource).toContain('register');
+      expect(routerSource).toContain('checkin');
+      expect(routerSource).toContain('survey');
+      expect(routerSource).toContain('email-signup');
+    });
+
+    it('should require POST for form submissions', () => {
+      expect(routerSource).toContain("method === 'POST'");
+    });
+
+    it('should check feature flags before form submission', () => {
+      expect(routerSource).toContain('isFeatureEnabled');
+      expect(routerSource).toContain('FORM_DISABLED');
+    });
+
+    it('should route each form type to its handler', () => {
+      expect(routerSource).toContain("case 'register':");
+      expect(routerSource).toContain('handleFormRegistration(request, env, eventId)');
+      expect(routerSource).toContain("case 'checkin':");
+      expect(routerSource).toContain('handleFormCheckin(request, env, eventId)');
+      expect(routerSource).toContain("case 'survey':");
+      expect(routerSource).toContain('handleFormSurvey(request, env, eventId)');
+      expect(routerSource).toContain("case 'email-signup':");
+      expect(routerSource).toContain('handleFormEmailSignup(request, env, eventId)');
+    });
+  });
+
+  describe('Admin Form Routes (Auth-Gated)', () => {
+    it('should match admin form endpoints', () => {
+      expect(routerSource).toContain("'registrations'");
+      expect(routerSource).toContain("'checkin-count'");
+      expect(routerSource).toContain("'surveys'");
+      expect(routerSource).toContain("'email-signups'");
+    });
+
+    it('should route admin form types to handlers', () => {
+      expect(routerSource).toContain('handleAdminRegistrations(request, env, eventId)');
+      expect(routerSource).toContain('handleAdminCheckinCount(request, env, eventId)');
+      expect(routerSource).toContain('handleAdminSurveys(request, env, eventId)');
+      expect(routerSource).toContain('handleAdminEmailSignupCount(request, env, eventId)');
+    });
+  });
+
+  describe('Feature Flag Admin Routes', () => {
+    it('should route flag listing endpoints', () => {
+      expect(routerSource).toContain("'/api/v2/admin/flags'");
+      expect(routerSource).toContain("'/api/v2/admin/flags/tiers'");
+      expect(routerSource).toContain("'/api/v2/admin/flags/current-tier'");
+      expect(routerSource).toContain("'/api/v2/admin/flags/resolve'");
+    });
+
+    it('should route flag mutation endpoints', () => {
+      expect(routerSource).toContain("'/api/v2/admin/flags/apply-tier'");
+      expect(routerSource).toContain('handleSetFlag(request, env,');
+      expect(routerSource).toContain('handleSetEventFlag(request, env,');
+      expect(routerSource).toContain('handleRemoveEventFlag(env,');
+    });
+  });
+
+  describe('Form Page Routes (QR Landing)', () => {
+    it('should route /forms/:eventId to handleFormPage', () => {
+      expect(routerSource).toContain('/forms/');
+      expect(routerSource).toContain('handleFormPage(request, env,');
+    });
+  });
+
+  describe('MVP Surface Routes', () => {
+    it('should route /display to handleDisplayPage', () => {
+      expect(routerSource).toContain("pathname === '/display'");
+      expect(routerSource).toContain('handleDisplayPage(env)');
+    });
+
+    it('should route /poster to handlePosterPage', () => {
+      expect(routerSource).toContain("pathname === '/poster'");
+      expect(routerSource).toContain('handlePosterPage(env)');
+    });
+
+    it('should route /sharedReport to handleSharedReportPage', () => {
+      expect(routerSource).toContain("pathname === '/sharedReport'");
+      expect(routerSource).toContain('handleSharedReportPage(env)');
+    });
+  });
+
+  describe('Landing and Public Pages', () => {
+    it('should route / to handleLandingPage', () => {
+      expect(routerSource).toContain("pathname === '/'");
+      expect(routerSource).toContain('handleLandingPage(env)');
+    });
+
+    it('should route /events and /public to handlePublicPage', () => {
+      expect(routerSource).toContain("pathname === '/events'");
+      expect(routerSource).toContain("pathname === '/public'");
+      expect(routerSource).toContain('handlePublicPage(env)');
+    });
+
+    it('should route /briefing to handleBriefingPage', () => {
+      expect(routerSource).toContain("pathname === '/briefing'");
+      expect(routerSource).toContain('handleBriefingPage()');
+    });
+
+    it('should route /subscribe POST to handleSubscribe', () => {
+      expect(routerSource).toContain("pathname === '/subscribe'");
+      expect(routerSource).toContain('handleSubscribe(request, env)');
     });
   });
 });
 
 // =============================================================================
-// /api/status Endpoint Tests
+// Security Properties
 // =============================================================================
 
-describe('/api/status Endpoint (Story 1.1)', () => {
-  describe('Status Handler Integration', () => {
-    it('should define handleApiStatus function', () => {
-      expect(routerSource).toContain('async function handleApiStatus(');
-    });
-
-    it('should call handleStatus from handlers', () => {
-      expect(routerSource).toContain('await handleStatus(env)');
-    });
-
-    it('should log API request', () => {
-      expect(routerSource).toContain("logger.apiRequest('GET', '/api/status'");
-    });
-
-    it('should track duration', () => {
-      expect(routerSource).toContain('const startTime = Date.now()');
-      expect(routerSource).toContain('const durationMs = Date.now() - startTime');
-    });
-  });
-
-  describe('Status Route Match', () => {
-    it('should match /api/status route', () => {
-      expect(routerSource).toContain("apiPath === '/status'");
-    });
-
-    it('should return handler: status', () => {
-      expect(routerSource).toContain("handler: 'status'");
-    });
-  });
-});
-
-// =============================================================================
-// Structured Logging Tests
-// =============================================================================
-
-describe('Structured Logging (Story 1.1)', () => {
-  describe('Logger Module Structure', () => {
-    it('should export RouterLogger class', () => {
-      expect(loggerSource).toContain('export class RouterLogger');
-    });
-
-    it('should export createLogger function', () => {
-      expect(loggerSource).toContain('export function createLogger(');
-    });
-
-    it('should export LogLevel type', () => {
-      expect(loggerSource).toContain("export type LogLevel = 'debug' | 'info' | 'warn' | 'error'");
-    });
-
-    it('should export LogEntry interface', () => {
-      expect(loggerSource).toContain('export interface LogEntry');
-    });
-
-    it('should export LoggerConfig interface', () => {
-      expect(loggerSource).toContain('export interface LoggerConfig');
-    });
-  });
-
-  describe('Log Prefixes', () => {
-    it('should define [ROUTE] prefix', () => {
-      expect(loggerSource).toContain("ROUTE: '[ROUTE]'");
-    });
-
-    it('should define [API] prefix', () => {
-      expect(loggerSource).toContain("API: '[API]'");
-    });
-
-    it('should define [404] prefix', () => {
-      expect(loggerSource).toContain("NOT_FOUND: '[404]'");
-    });
-
-    it('should define [ERROR] prefix', () => {
-      expect(loggerSource).toContain("ERROR: '[ERROR]'");
-    });
-
-    it('should define [ROUTER] prefix', () => {
-      expect(loggerSource).toContain("ROUTER: '[ROUTER]'");
-    });
-  });
-
-  describe('Logger Methods', () => {
-    it('should have routeResolved method', () => {
-      expect(loggerSource).toContain('routeResolved(');
-    });
-
-    it('should have apiRequest method', () => {
-      expect(loggerSource).toContain('apiRequest(');
-    });
-
-    it('should have notFound method', () => {
-      expect(loggerSource).toContain('notFound(');
-    });
-
-    it('should have error method', () => {
-      expect(loggerSource).toContain('error(message: string');
-    });
-
-    it('should have warn method', () => {
-      expect(loggerSource).toContain('warn(message: string');
-    });
-
-    it('should have debug method', () => {
-      expect(loggerSource).toContain('debug(message: string');
-    });
-
-    it('should have info method', () => {
-      expect(loggerSource).toContain('info(message: string');
-    });
-
-    it('should have incomingRequest method', () => {
-      expect(loggerSource).toContain('incomingRequest(');
-    });
-
-    it('should have routerInit method', () => {
-      expect(loggerSource).toContain('routerInit(');
-    });
-  });
-
-  describe('Request ID Tracking', () => {
-    it('should generate request ID', () => {
-      expect(loggerSource).toContain('generateRequestId()');
-    });
-
-    it('should get request ID', () => {
-      expect(loggerSource).toContain('getRequestId()');
-    });
-
-    it('should set request ID', () => {
-      expect(loggerSource).toContain('setRequestId(id: string)');
-    });
-  });
-
-  describe('JSON vs Human Readable Output', () => {
-    it('should support JSON output', () => {
-      expect(loggerSource).toContain('jsonOutput: boolean');
-    });
-
-    it('should output JSON when jsonOutput is true', () => {
-      expect(loggerSource).toContain('JSON.stringify(fullEntry)');
-    });
-  });
-});
-
-// =============================================================================
-// Response Headers Tests
-// =============================================================================
-
-describe('Response Headers (Story 1.1)', () => {
-  describe('Standard Headers', () => {
-    it('should include X-Router-Version header', () => {
-      expect(routerSource).toContain("'X-Router-Version': ROUTER_VERSION");
-    });
-
-    it('should include X-Request-Id header', () => {
-      expect(routerSource).toContain("'X-Request-Id': logger.getRequestId()");
-    });
-
-    it('should add standard headers function', () => {
-      expect(routerSource).toContain('function addStandardHeaders(');
-    });
-  });
-
-  describe('CORS Headers', () => {
-    it('should define addCorsHeaders function', () => {
-      expect(routerSource).toContain('function addCorsHeaders(');
-    });
-
-    it('should set Access-Control-Allow-Origin', () => {
-      expect(routerSource).toContain("'Access-Control-Allow-Origin', '*'");
-    });
-
-    it('should set Access-Control-Allow-Methods', () => {
-      expect(routerSource).toContain(
-        "'Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS'"
-      );
-    });
-
-    it('should set Access-Control-Allow-Headers', () => {
-      expect(routerSource).toContain(
-        "'Access-Control-Allow-Headers', 'Content-Type, Authorization'"
-      );
-    });
-  });
-
-  describe('OPTIONS Preflight', () => {
-    it('should handle OPTIONS requests', () => {
+describe('Security Properties (Story 1.1)', () => {
+  describe('CORS Preflight', () => {
+    it('should handle OPTIONS method', () => {
       expect(routerSource).toContain("method === 'OPTIONS'");
-      expect(routerSource).toContain('handleOptions(request, logger)');
     });
 
-    it('should return 204 for OPTIONS', () => {
+    it('should return 204 for preflight', () => {
       expect(routerSource).toContain('status: 204');
     });
-  });
-});
 
-// =============================================================================
-// Error Handling Tests
-// =============================================================================
-
-describe('Error Handling (Story 1.1)', () => {
-  describe('500 Error Response', () => {
-    it('should define create500Response function', () => {
-      expect(routerSource).toContain('function create500Response(');
+    it('should use corsOrigin for origin validation', () => {
+      expect(routerSource).toContain('corsOrigin(request)');
     });
 
-    it('should return status 500', () => {
-      expect(routerSource).toContain('status: 500');
-    });
-
-    it('should return Internal Server Error message', () => {
-      expect(routerSource).toContain("error: 'Internal Server Error'");
+    it('should set CORS headers on preflight', () => {
+      expect(routerSource).toContain('Access-Control-Allow-Methods');
+      expect(routerSource).toContain('Access-Control-Allow-Headers');
+      expect(routerSource).toContain('Access-Control-Max-Age');
+      expect(routerSource).toContain('Vary');
     });
   });
 
-  describe('405 Method Not Allowed', () => {
-    it('should define create405Response function', () => {
-      expect(routerSource).toContain('function create405Response(');
+  describe('HTTPS Redirect', () => {
+    it('should redirect HTTP to HTTPS', () => {
+      expect(routerSource).toContain("url.protocol === 'http:'");
+      expect(routerSource).toContain("url.protocol = 'https:'");
+      expect(routerSource).toContain('Response.redirect');
+      expect(routerSource).toContain('301');
+    });
+  });
+
+  describe('Auth Gating', () => {
+    it('should use requireAdmin for all admin routes', () => {
+      expect(routerSource).toContain('requireAdmin(request, env,');
     });
 
-    it('should return status 405', () => {
+    it('should generate request IDs for auth', () => {
+      expect(routerSource).toContain('crypto.randomUUID');
+    });
+
+    it('should return deny response if auth fails', () => {
+      expect(routerSource).toContain('if (deny) return deny');
+    });
+  });
+
+  describe('Feature Flag Gating', () => {
+    it('should check feature flags on public form submissions', () => {
+      expect(routerSource).toContain('isFeatureEnabled(env.FORMS_DB, flagKey, eventId)');
+    });
+
+    it('should return 403 FORM_DISABLED when flag is off', () => {
+      expect(routerSource).toContain("code: 'FORM_DISABLED'");
+      expect(routerSource).toContain('status: 403');
+    });
+  });
+
+  describe('404 Handling', () => {
+    it('should return 404 JSON for unknown routes', () => {
+      expect(routerSource).toContain("error: 'Not found'");
+      expect(routerSource).toContain('status: 404');
+    });
+  });
+
+  describe('Subscribe Method Enforcement', () => {
+    it('should return 405 for non-POST /subscribe', () => {
+      expect(routerSource).toContain("error: 'Method not allowed'");
       expect(routerSource).toContain('status: 405');
-    });
-
-    it('should return Method Not Allowed message', () => {
-      expect(routerSource).toContain("error: 'Method Not Allowed'");
-    });
-
-    it('should include Allow header', () => {
-      expect(routerSource).toContain("'Allow': 'GET, POST, PUT, DELETE, OPTIONS'");
-    });
-  });
-
-  describe('Try-Catch Error Handling', () => {
-    it('should wrap main handler in try-catch', () => {
-      expect(routerSource).toContain('} catch (error)');
-    });
-
-    it('should return 500 on unexpected errors', () => {
-      expect(routerSource).toContain('create500Response(');
+      expect(routerSource).toContain("Allow: 'POST'");
     });
   });
 });
 
 // =============================================================================
-// Wrangler Configuration Tests
+// Index Entry Point
+// =============================================================================
+
+describe('Index Entry Point (Story 1.1)', () => {
+  it('should import route from router', () => {
+    expect(indexSource).toContain('import { route');
+    expect(indexSource).toContain("from './router'");
+  });
+
+  it('should export RouterEnv as Env', () => {
+    expect(indexSource).toContain('export type { RouterEnv as Env }');
+  });
+
+  it('should export default fetch handler', () => {
+    expect(indexSource).toContain('async fetch(request: Request, env: RouterEnv');
+  });
+
+  it('should call route() in fetch handler', () => {
+    expect(indexSource).toContain('return await route(request, env)');
+  });
+
+  it('should catch unhandled errors', () => {
+    expect(indexSource).toContain('} catch (err)');
+    expect(indexSource).toContain("type: 'UNHANDLED_ERROR'");
+    expect(indexSource).toContain('status: 500');
+  });
+
+  it('should export scheduled handler for cron', () => {
+    expect(indexSource).toContain('async scheduled(');
+    expect(indexSource).toContain('runFormDataLifecycle(env)');
+  });
+
+  it('should implement PII lifecycle phases', () => {
+    expect(indexSource).toContain('LIFECYCLE_COMPLETE');
+    expect(indexSource).toContain('registrationsDeleted');
+    expect(indexSource).toContain('surveysScrubbed');
+    expect(indexSource).toContain('emailSignupsDeleted');
+  });
+
+  it('should use whitelist approach for PII scrubbing', () => {
+    expect(indexSource).toContain('SAFE_KEY_PATTERNS');
+    expect(indexSource).toContain('[SCRUBBED]');
+  });
+});
+
+// =============================================================================
+// Wrangler Configuration
 // =============================================================================
 
 describe('Wrangler Configuration (Story 1.1)', () => {
-  describe('Worker Configuration', () => {
-    it('should set main entry to router.ts', () => {
-      expect(wranglerSource).toContain('main = "src/router.ts"');
-    });
-
-    it('should set worker name', () => {
-      expect(wranglerSource).toContain('name = "oursharedevents-router"');
-    });
-
-    it('should set compatibility date', () => {
-      expect(wranglerSource).toContain('compatibility_date = "2024-01-01"');
-    });
+  it('should set main entry point to src/index.ts', () => {
+    expect(wranglerTomlSource).toContain('main = "src/index.ts"');
   });
 
-  describe('Staging Environment', () => {
-    it('should define staging environment', () => {
-      expect(wranglerSource).toContain('[env.staging]');
-    });
-
-    it('should route to stg.oursharedevents.com', () => {
-      expect(wranglerSource).toContain('stg.oursharedevents.com/*');
-    });
-
-    it('should set WORKER_ENV to staging', () => {
-      expect(wranglerSource).toContain('WORKER_ENV = "staging"');
-    });
-
-    it('should set DEBUG_LEVEL for staging', () => {
-      expect(wranglerSource).toContain('DEBUG_LEVEL = "debug"');
-    });
+  it('should set worker name', () => {
+    expect(wranglerTomlSource).toContain('name = "oursharedevents"');
   });
 
-  describe('Production Environment', () => {
-    it('should define production environment', () => {
-      expect(wranglerSource).toContain('[env.production]');
-    });
-
-    it('should route to oursharedevents.com', () => {
-      expect(wranglerSource).toContain('oursharedevents.com/*');
-    });
-
-    it('should set WORKER_ENV to production', () => {
-      expect(wranglerSource).toContain('WORKER_ENV = "production"');
-    });
-
-    it('should set DEBUG_LEVEL to error for production', () => {
-      expect(wranglerSource).toContain('DEBUG_LEVEL = "error"');
-    });
-  });
-});
-
-// =============================================================================
-// Main Index Integration Tests
-// =============================================================================
-
-describe('Main Index Integration (Story 1.1)', () => {
-  it('should export handleRequest from main index', () => {
-    expect(mainIndexSource).toContain('handleRequest');
+  it('should configure staging environment', () => {
+    expect(wranglerTomlSource).toContain('[env.staging]');
+    expect(wranglerTomlSource).toContain('stg.oursharedevents.com');
   });
 
-  it('should export ROUTER_VERSION from main index', () => {
-    expect(mainIndexSource).toContain('ROUTER_VERSION');
+  it('should configure production environment', () => {
+    expect(wranglerTomlSource).toContain('[env.production]');
+    expect(wranglerTomlSource).toContain('oursharedevents.com/*');
   });
 
-  it('should export RouterEnv type from main index', () => {
-    expect(mainIndexSource).toContain('type RouterEnv');
+  it('should configure D1 bindings for main DB and forms DB', () => {
+    expect(wranglerTomlSource).toContain('binding = "DB"');
+    expect(wranglerTomlSource).toContain('binding = "FORMS_DB"');
   });
 
-  it('should export RouterLogger from main index', () => {
-    expect(mainIndexSource).toContain('RouterLogger');
+  it('should configure cron trigger for lifecycle job', () => {
+    expect(wranglerTomlSource).toContain('[triggers]');
+    expect(wranglerTomlSource).toContain('crons = ["0 3 * * *"]');
   });
 
-  it('should export createLogger from main index', () => {
-    expect(mainIndexSource).toContain('createLogger');
+  it('should set WORKER_ENV per environment', () => {
+    expect(wranglerTomlSource).toContain('WORKER_ENV = "development"');
+    expect(wranglerTomlSource).toContain('WORKER_ENV = "staging"');
+    expect(wranglerTomlSource).toContain('WORKER_ENV = "production"');
   });
 
-  it('should reference Story 1.1 in comments', () => {
-    expect(mainIndexSource).toContain('Story 1.1');
-  });
-});
-
-// =============================================================================
-// Acceptance Criteria Validation
-// =============================================================================
-
-describe('Story 1.1 Acceptance Criteria', () => {
-  describe('AC: router.ts handles all /api/* routes', () => {
-    it('should check if path starts with /api/', () => {
-      expect(routerSource).toContain("normalizedPath.startsWith('/api/')");
-    });
-
-    it('should handle API routes in switch statement', () => {
-      expect(routerSource).toContain("case 'api':");
-    });
-  });
-
-  describe('AC: router.ts handles static page routes', () => {
-    it('should handle page routes in switch statement', () => {
-      expect(routerSource).toContain("case 'page':");
-    });
-
-    it('should call handlePage for page routes', () => {
-      expect(routerSource).toContain('handlePage(request, env, logger');
-    });
-  });
-
-  describe('AC: Unknown route returns {ok:false, status:404}', () => {
-    it('should return ok: false', () => {
-      expect(routerSource).toContain('ok: false');
-    });
-
-    it('should return status: 404', () => {
-      expect(routerSource).toContain('status: 404');
-    });
-  });
-
-  describe('AC: /api/status returns correct Worker response', () => {
-    it('should have backend: worker marker', () => {
-      // The status handler returns backend: 'worker'
-      expect(routerSource).toContain('handleStatus(env)');
-    });
-
-    it('should route /api/status to status handler', () => {
-      expect(routerSource).toContain("case 'status':");
-      expect(routerSource).toContain('handleApiStatus(request, env, logger)');
-    });
-  });
-
-  describe('AC: Router logs structured events', () => {
-    it('should create logger for each request', () => {
-      expect(routerSource).toContain('const logger = createLogger(env)');
-    });
-
-    it('should log incoming requests', () => {
-      expect(routerSource).toContain('logger.incomingRequest(method, url.toString())');
-    });
-
-    it('should log route resolution', () => {
-      expect(routerSource).toContain('logger.routeResolved(');
-    });
-
-    it('should log API requests', () => {
-      expect(routerSource).toContain('logger.apiRequest(');
-    });
-
-    it('should log 404s', () => {
-      expect(routerSource).toContain('logger.notFound(');
-    });
-
-    it('should log errors', () => {
-      expect(routerSource).toContain('logger.error(');
-    });
-  });
-});
-
-// =============================================================================
-// DevOps: CI/CD Integration
-// =============================================================================
-
-describe('DevOps: CI/CD Integration (Story 1.1)', () => {
-  describe('Stage-1 CI Requirements', () => {
-    it('should have TypeScript entry point for wrangler', () => {
-      expect(wranglerSource).toContain('main = "src/router.ts"');
-    });
-
-    it('should have staging environment configured', () => {
-      expect(wranglerSource).toContain('[env.staging]');
-    });
-
-    it('should have production environment configured', () => {
-      expect(wranglerSource).toContain('[env.production]');
-    });
+  it('should document required secrets', () => {
+    expect(wranglerTomlSource).toContain('ADMIN_KEY');
+    expect(wranglerTomlSource).toContain('FORMS_ENCRYPTION_KEY');
   });
 });
