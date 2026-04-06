@@ -25,7 +25,7 @@ import { defineConfig, devices } from '@playwright/test';
 const { getBaseUrl } = require('./config/environments');
 
 export default defineConfig({
-  testDir: './archive/legacy-tests/tests/ui/smoke',
+  testDir: './tests/ui/smoke',
 
   // UI smoke tests run sequentially to avoid race conditions
   fullyParallel: false,
@@ -39,7 +39,7 @@ export default defineConfig({
   // Single worker - smoke tests are sequential health checks
   workers: 1,
 
-  // UI tests need more time for page loads (GAS cold starts)
+  // UI tests need more time for page loads
   timeout: 60000,
 
   // Expect timeout for assertions (longer for dynamic content)

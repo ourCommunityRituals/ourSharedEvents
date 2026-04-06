@@ -13,7 +13,7 @@
  */
 
 const { defineConfig, devices } = require('@playwright/test');
-const { STAGING_URL } = require('./archive/legacy-tests/tests/config/environments');
+const { STAGING_URL } = require('./tests/config/environments');
 
 // Staging-specific environment settings
 const stagingEnv = {
@@ -22,7 +22,7 @@ const stagingEnv = {
 };
 
 module.exports = defineConfig({
-  testDir: './archive/legacy-tests/tests/e2e',
+  testDir: './tests/e2e',
 
   // Parallelization: Sequential in staging for stability
   // Parallel execution can cause race conditions with shared test data

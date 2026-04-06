@@ -13,11 +13,9 @@
 #   - wrangler CLI installed and authenticated (wrangler login)
 #   - Cloudflare Worker already created for the target environment
 #
-# Required secrets (Phase 1 — Google Sheets backend):
-#   GOOGLE_SA_CLIENT_EMAIL    — Service account email from GCP JSON key
-#   GOOGLE_SA_PRIVATE_KEY_PEM — Full PEM private key (-----BEGIN...-----END-----)
-#   SHEETS_SPREADSHEET_ID     — Google Sheets document ID (from URL)
+# Required secrets:
 #   ADMIN_KEY                 — Bearer token for /admin routes (openssl rand -hex 32)
+#   FORMS_ENCRYPTION_KEY      — AES-GCM key for email signup encryption (min 32 chars)
 #
 # Ref: E2E-LAUNCH.md Part 5
 
@@ -50,10 +48,8 @@ if [[ ! -f "$WORKER_DIR/wrangler.toml" ]]; then
 fi
 
 SECRETS=(
-  "GOOGLE_SA_CLIENT_EMAIL"
-  "GOOGLE_SA_PRIVATE_KEY_PEM"
-  "SHEETS_SPREADSHEET_ID"
   "ADMIN_KEY"
+  "FORMS_ENCRYPTION_KEY"
 )
 
 echo "════════════════════════════════════════════════════════════"
@@ -81,7 +77,7 @@ echo ""
 wrangler secret list --env "$ENV"
 
 echo ""
-echo "Done. All 4 secrets set for --env $ENV."
+echo "Done. All ${#SECRETS[@]} secrets set for --env $ENV."
 echo ""
 echo "Next steps:"
 if [[ "$ENV" == "staging" ]]; then

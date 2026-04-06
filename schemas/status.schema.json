@@ -40,7 +40,7 @@
       "properties": {
         "ok": {
           "type": "boolean",
-          "description": "True if the backend datastore (spreadsheet) is accessible."
+          "description": "True if the backend datastore is accessible."
         }
       }
     },

@@ -69,7 +69,7 @@
         },
         "id": {
           "type": "string",
-          "description": "Spreadsheet ID"
+          "description": "Database identifier"
         }
       }
     },

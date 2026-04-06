@@ -38,13 +38,8 @@
  *   *                            → 404
  */
 
-import { handleHealth, type HealthEnv } from './handlers/health';
-import {
-  handleListEvents,
-  handleGetEvent,
-  handleAdminListEvents,
-  type EventsEnv,
-} from './handlers/events';
+import { handleHealth } from './handlers/health';
+import { handleListEvents, handleGetEvent, handleAdminListEvents } from './handlers/events';
 import {
   handlePublicPage,
   handleAdminPage,
@@ -82,9 +77,7 @@ import {
 } from './handlers/feature-flags';
 import { corsOrigin } from './lib/cors';
 
-export type RouterEnv = HealthEnv &
-  EventsEnv &
-  PagesEnv &
+export type RouterEnv = PagesEnv &
   AdminEnv &
   FormsEnv &
   FormPagesEnv & {

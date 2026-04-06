@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://zeventbook.com/schemas/form-config.schema.json",
+  "$id": "https://oursharedevents.com/schemas/form-config.schema.json",
   "title": "FormConfig",
-  "description": "MVP FormConfig Contract v1.0 (MVP-frozen) - Shape for signup form integration in Admin.html and SharedReport.html",
+  "description": "FormConfig Contract v2.0 — Shape for form integration in Admin and SharedReport surfaces. Forms are served by the Worker and stored in D1.",
   "type": "object",
   "required": ["formId", "signupUrl", "totalResponses"],
   "additionalProperties": false,
@@ -10,26 +10,26 @@
     "formId": {
       "type": "string",
       "minLength": 1,
-      "description": "MVP REQUIRED - Google Form ID"
+      "description": "Form identifier (event-scoped, stored in D1)"
     },
     "signupUrl": {
       "type": "string",
       "pattern": "^https?://.+",
-      "description": "MVP REQUIRED - Published form URL (Google Forms viewform URL)"
+      "description": "Published form URL (Worker QR landing page, e.g. /forms/:eventId?type=register)"
     },
     "shortLink": {
       "type": ["string", "null"],
       "pattern": "^https?://.+",
-      "description": "MVP OPTIONAL - Shortened URL for sharing (if generated)"
+      "description": "Shortened URL for sharing (if generated)"
     },
     "qrB64": {
       "type": ["string", "null"],
-      "description": "MVP OPTIONAL - QR code as base64-encoded PNG data URI (if generated)"
+      "description": "QR code as base64-encoded PNG data URI (if generated)"
     },
     "totalResponses": {
       "type": "integer",
       "minimum": 0,
-      "description": "MVP REQUIRED - Total response count from linked response spreadsheet"
+      "description": "Total response count from D1 form submissions"
     }
   }
 }

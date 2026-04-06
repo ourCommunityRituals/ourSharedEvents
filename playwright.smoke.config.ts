@@ -24,7 +24,7 @@ import { defineConfig, devices } from '@playwright/test';
 const { getBaseUrl } = require('./config/environments');
 
 export default defineConfig({
-  testDir: './archive/legacy-tests/tests/api/smoke',
+  testDir: './tests/api/smoke',
 
   // Smoke tests run sequentially to avoid overwhelming the API
   fullyParallel: false,

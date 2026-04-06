@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://eventangle.com/schemas/checkpermissions.schema.json",
+  "$id": "https://oursharedevents.com/schemas/checkpermissions.schema.json",
   "title": "CheckPermissions Response",
-  "description": "Permission verification response from api_checkPermissions() with detailed diagnostics and recommendations.",
+  "description": "Permission verification response with detailed diagnostics and recommendations. Validates Worker auth and D1 database access.",
   "type": "object",
   "required": ["ok"],
   "additionalProperties": false,
@@ -59,7 +59,7 @@
     },
     "PermissionDetails": {
       "type": "object",
-      "required": ["brand", "deployment", "spreadsheet", "oauth"],
+      "required": ["brand", "deployment", "database", "auth"],
       "additionalProperties": true,
       "properties": {
         "brand": {
@@ -68,11 +68,11 @@
         "deployment": {
           "$ref": "#/$defs/DeploymentInfo"
         },
-        "spreadsheet": {
-          "$ref": "#/$defs/SpreadsheetInfo"
+        "database": {
+          "$ref": "#/$defs/DatabaseInfo"
         },
-        "oauth": {
-          "$ref": "#/$defs/OAuthInfo"
+        "auth": {
+          "$ref": "#/$defs/AuthInfo"
         },
         "recommendations": {
           "type": "array",
@@ -83,7 +83,7 @@
     },
     "BrandInfo": {
       "type": "object",
-      "required": ["id", "name", "spreadsheetId"],
+      "required": ["id", "name"],
       "additionalProperties": false,
       "properties": {
         "id": {
@@ -93,10 +93,6 @@
         "name": {
           "type": "string",
           "description": "Brand display name"
-        },
-        "spreadsheetId": {
-          "type": "string",
-          "description": "Configured spreadsheet ID or 'not configured'"
         }
       }
     },
@@ -119,22 +115,22 @@
         }
       }
     },
-    "SpreadsheetInfo": {
+    "DatabaseInfo": {
       "type": "object",
       "required": ["accessible", "message"],
       "additionalProperties": false,
       "properties": {
         "accessible": {
           "type": "boolean",
-          "description": "Whether spreadsheet is accessible"
+          "description": "Whether D1 database is accessible"
         },
         "name": {
           "type": "string",
-          "description": "Spreadsheet name (if accessible)"
+          "description": "Database name (if accessible)"
         },
         "id": {
           "type": "string",
-          "description": "Spreadsheet ID (if accessible)"
+          "description": "Database ID (if accessible)"
         },
         "message": {
           "type": "string",
@@ -146,39 +142,23 @@
         }
       }
     },
-    "OAuthInfo": {
+    "AuthInfo": {
       "type": "object",
-      "required": ["scopes", "allGranted"],
+      "required": ["authenticated"],
       "additionalProperties": false,
       "properties": {
-        "scopes": {
-          "type": "array",
-          "items": { "$ref": "#/$defs/ScopeTest" },
-          "description": "Individual scope test results"
-        },
-        "allGranted": {
+        "authenticated": {
           "type": "boolean",
-          "description": "Whether all required scopes are granted"
-        }
-      }
-    },
-    "ScopeTest": {
-      "type": "object",
-      "required": ["scope", "granted"],
-      "additionalProperties": false,
-      "properties": {
-        "scope": {
+          "description": "Whether admin auth (Bearer token) is valid"
+        },
+        "method": {
           "type": "string",
-          "enum": ["spreadsheets", "external_request"],
-          "description": "OAuth scope being tested"
-        },
-        "granted": {
-          "type": "boolean",
-          "description": "Whether scope is granted"
+          "enum": ["bearer", "cf_access"],
+          "description": "Authentication method used"
         },
         "error": {
           "type": "string",
-          "description": "Error message if scope test failed"
+          "description": "Error message if auth check failed"
         }
       }
     },
@@ -197,31 +177,27 @@
         "details": {
           "brand": {
             "id": "root",
-            "name": "Default Brand",
-            "spreadsheetId": "1abc123def456"
+            "name": "Default Brand"
           },
           "deployment": {
-            "url": "https://script.google.com/macros/s/xxx/exec",
+            "url": "https://oursharedevents.com",
             "configured": true
           },
-          "spreadsheet": {
+          "database": {
             "accessible": true,
-            "name": "Events Database",
-            "id": "1abc123def456",
-            "message": "Spreadsheet access granted"
+            "name": "ocr-db-production",
+            "id": "d1-database-id",
+            "message": "D1 database access granted"
           },
-          "oauth": {
-            "scopes": [
-              { "scope": "spreadsheets", "granted": true },
-              { "scope": "external_request", "granted": true }
-            ],
-            "allGranted": true
+          "auth": {
+            "authenticated": true,
+            "method": "bearer"
           },
           "recommendations": []
         },
         "nextSteps": [
           "Your deployment is ready to use",
-          "Test the API: https://script.google.com/macros/s/xxx/exec?page=status&brand=root"
+          "Test the API: https://oursharedevents.com/health"
         ]
       }
     },
@@ -233,35 +209,31 @@
         "details": {
           "brand": {
             "id": "root",
-            "name": "Default Brand",
-            "spreadsheetId": "1abc123def456"
+            "name": "Default Brand"
           },
           "deployment": {
             "configured": false,
-            "error": "Could not get deployment URL"
+            "error": "Worker not deployed"
           },
-          "spreadsheet": {
+          "database": {
             "accessible": false,
-            "message": "Permission denied",
-            "error": "You do not have permission to access this spreadsheet"
+            "message": "D1 database not provisioned",
+            "error": "Database binding not found"
           },
-          "oauth": {
-            "scopes": [
-              { "scope": "spreadsheets", "granted": false, "error": "Spreadsheet access not authorized" },
-              { "scope": "external_request", "granted": true }
-            ],
-            "allGranted": false
+          "auth": {
+            "authenticated": false,
+            "error": "ADMIN_KEY not configured"
           },
           "recommendations": [
-            "Deploy the script as a web app",
-            "The deployment needs to be authorized to access spreadsheets"
+            "Deploy the Worker with wrangler deploy --env staging",
+            "Provision D1 database and apply migrations"
           ]
         },
         "recommendations": [
-          "Deploy the script as a web app",
-          "The deployment needs to be authorized to access spreadsheets"
+          "Deploy the Worker with wrangler deploy --env staging",
+          "Provision D1 database and apply migrations"
         ],
-        "helpUrl": "See APPS_SCRIPT_DEPLOYMENT_GUIDE.md for detailed instructions"
+        "helpUrl": "See docs/deployment/DEPLOYMENT.md for detailed instructions"
       }
     },
     {

@@ -26,7 +26,17 @@
   "$defs": {
     "SetupCheckValue": {
       "type": "object",
-      "required": ["status", "message", "brand", "timestamp", "checks", "issues", "warnings", "fixes", "nextSteps"],
+      "required": [
+        "status",
+        "message",
+        "brand",
+        "timestamp",
+        "checks",
+        "issues",
+        "warnings",
+        "fixes",
+        "nextSteps"
+      ],
       "additionalProperties": false,
       "properties": {
         "status": {
@@ -83,10 +93,9 @@
           "type": "string",
           "enum": [
             "Brand Configuration",
-            "Spreadsheet Access",
+            "Database Access",
             "Admin Secrets",
             "Deployment Configuration",
-            "OAuth Scopes",
             "Database Structure"
           ],
           "description": "Name of the diagnostic check"
@@ -96,11 +105,7 @@
           "description": "Status of this check"
         },
         "details": {
-          "oneOf": [
-            { "type": "string" },
-            { "type": "array" },
-            { "type": "object" }
-          ],
+          "oneOf": [{ "type": "string" }, { "type": "array" }, { "type": "object" }],
           "description": "Additional details about the check"
         },
         "error": {
@@ -148,20 +153,33 @@
         "brand": "root",
         "timestamp": "2025-11-28T12:00:00.000Z",
         "checks": [
-          { "name": "Brand Configuration", "status": "ok", "details": "Brand: Default Brand (root)" },
-          { "name": "Spreadsheet Access", "status": "ok", "details": "Connected to: \"Events\" (1abc123)", "permissions": "owner/editor" },
+          {
+            "name": "Brand Configuration",
+            "status": "ok",
+            "details": "Brand: Default Brand (root)"
+          },
+          {
+            "name": "Database Access",
+            "status": "ok",
+            "details": "Connected to D1 database",
+            "permissions": "owner/editor"
+          },
           { "name": "Admin Secrets", "status": "ok", "details": "Configured (length: 32 chars)" },
-          { "name": "Deployment Configuration", "status": "ok", "details": "https://script.google.com/macros/s/xxx/exec" },
-          { "name": "OAuth Scopes", "status": "ok", "details": "All required scopes authorized" },
-          { "name": "Database Structure", "status": "ok", "details": "All required sheets present" }
+          {
+            "name": "Deployment Configuration",
+            "status": "ok",
+            "details": "Cloudflare Worker deployed"
+          },
+          {
+            "name": "Database Structure",
+            "status": "ok",
+            "details": "All required D1 tables present"
+          }
         ],
         "issues": [],
         "warnings": [],
         "fixes": [],
-        "nextSteps": [
-          "Your setup is complete!",
-          "Test the API: https://script.google.com/macros/s/xxx/exec?page=status&brand=root"
-        ]
+        "nextSteps": ["Your setup is complete!", "Test the API: https://oursharedevents.com/health"]
       }
     },
     {

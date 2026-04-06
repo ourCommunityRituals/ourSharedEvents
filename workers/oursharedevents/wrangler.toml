@@ -80,9 +80,6 @@ ALLOW_ADMIN_KEY_FALLBACK = "true"
 
 # Required secrets for staging (set with wrangler secret put … --env staging):
 #   ADMIN_KEY
-#   SHEETS_SPREADSHEET_ID
-#   GOOGLE_SA_CLIENT_EMAIL
-#   GOOGLE_SA_PRIVATE_KEY_PEM
 #   FORMS_ENCRYPTION_KEY          (AES-GCM key for email signup encryption — min 32 chars)
 #   GOOGLE_MAPS_API_KEY          (Google Maps for SharedReports venue maps)
 #   BIGQUERY_DATASET_ID           (BigQuery dataset for data backup)
@@ -120,9 +117,6 @@ WORKER_BUILD_VERSION = "prod-2026.03.22"
 
 # Required secrets for production (set with wrangler secret put … --env production):
 #   ADMIN_KEY
-#   SHEETS_SPREADSHEET_ID
-#   GOOGLE_SA_CLIENT_EMAIL
-#   GOOGLE_SA_PRIVATE_KEY_PEM
 #   FORMS_ENCRYPTION_KEY          (AES-GCM key for email signup encryption — min 32 chars)
 #   GOOGLE_MAPS_API_KEY          (Google Maps for SharedReports venue maps)
 #   BIGQUERY_DATASET_ID           (BigQuery dataset for data backup)
