@@ -269,8 +269,20 @@ export async function route(request: Request, env: RouterEnv): Promise<Response>
   }
 
   // ── Public pages ───────────────────────────────────────────────────────────
-  if (pathname === '/events' || pathname === '/public') {
+  if (
+    pathname === '/events' ||
+    pathname === '/public' ||
+    pathname === '/schedule' ||
+    pathname === '/calendar'
+  ) {
     return handlePublicPage(env);
+  }
+
+  // ── Admin aliases ─────────────────────────────────────────────────────────
+  if (pathname === '/manage' || pathname === '/dashboard' || pathname === '/create') {
+    const deny = requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
+    if (deny) return deny;
+    return handleAdminPage(env);
   }
 
   // ── CEO Briefing ───────────────────────────────────────────────────────────
@@ -279,15 +291,26 @@ export async function route(request: Request, env: RouterEnv): Promise<Response>
   }
 
   // ── MVP surfaces (display, poster, shared report) ─────────────────────────
-  if (pathname === '/display') {
+  if (
+    pathname === '/display' ||
+    pathname === '/tv' ||
+    pathname === '/kiosk' ||
+    pathname === '/screen'
+  ) {
     return handleDisplayPage(env);
   }
 
-  if (pathname === '/poster') {
+  if (pathname === '/poster' || pathname === '/posters' || pathname === '/flyers') {
     return handlePosterPage(env);
   }
 
-  if (pathname === '/sharedReport') {
+  if (
+    pathname === '/sharedReport' ||
+    pathname === '/report' ||
+    pathname === '/analytics' ||
+    pathname === '/reports' ||
+    pathname === '/insights'
+  ) {
     return handleSharedReportPage(env);
   }
 
