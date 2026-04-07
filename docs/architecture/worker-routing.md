@@ -4,6 +4,8 @@
 **Author:** Discovery / Story 1 & Story 2
 **Purpose:** Document Worker routing architecture and HTML template serving
 
+> **Historical Note:** This document describes the `cloudflare-proxy/worker.js` v2.0 architecture (archival). The current Worker is in `workers/oursharedevents/` and handles all routes directly — no upstream proxy.
+
 ---
 
 ## Architecture Overview (Story 2 Update)
@@ -26,11 +28,11 @@
          [HTML Routes]  [JSON Routes]  [API Routes]  [Shortlinks]
                |              |              |              |
                v              v              v              v
-          Worker-gen      GAS doGet      GAS doPost     GAS doGet
-          (templates)     (proxy)        (proxy)        (proxy)
+          Worker-gen      Worker JSON    Worker API     Worker
+          (templates)     (handler)      (handler)      (shortlink)
                |              |              |              |
                v              v              v              v
-          renderTemplate  ContentService  ContentService  handleRedirect_
+          renderTemplate  handleJson()   handleApi()    handleRedirect_()
 ```
 
 **Worker Entry File:** `cloudflare-proxy/worker.js` (v2.0.0)
@@ -39,21 +41,15 @@
 
 ## Story 2: Explicit HTML Route Map Implementation
 
-### Key Principle: No HTML → GAS
+### Key Principle: No HTML → Proxy
 
-HTML routes are now served directly from Worker templates. GAS is ONLY accessed via:
-
-- `/api/*` JSON RPC endpoints
-- `/status`, `/ping` JSON endpoints
-- `?p=r&t=...` shortlink redirects
-
-This eliminates the "leaky" routing where HTML could come from GAS.
+HTML routes are served directly from Worker templates. All routes are handled by the Worker:
 
 ---
 
 ## Route Categories
 
-### 1. HTML-Returning Routes (Worker Templates - NO GAS)
+### 1. HTML-Returning Routes (Worker Templates)
 
 | URL Pattern               | Aliases                                    | Template       | Handler                   |
 | ------------------------- | ------------------------------------------ | -------------- | ------------------------- |
@@ -97,7 +93,7 @@ const HTML_ROUTE_MAP = Object.freeze({
 });
 ```
 
-### 2. JSON-Returning Routes (Proxied to GAS)
+### 2. JSON-Returning Routes (Worker-handled)
 
 | URL Pattern          | Handler                   | Response          |
 | -------------------- | ------------------------- | ----------------- |
@@ -117,13 +113,13 @@ const JSON_ROUTE_MAP = Object.freeze({
 });
 ```
 
-### 3. API Routes (Proxied to GAS)
+### 3. API Routes (Worker-handled)
 
-| URL Pattern        | Handler                     | Response          |
-| ------------------ | --------------------------- | ----------------- |
-| `POST /api/rpc`    | `handleRpcRequest()` → GAS  | JSON RPC response |
-| `POST /api/<path>` | `handleApiRequest()` → GAS  | JSON API response |
-| `?action=*`        | `proxyToAppsScript()` → GAS | JSON API response |
+| URL Pattern        | Handler              | Response          |
+| ------------------ | -------------------- | ----------------- |
+| `POST /api/rpc`    | `handleRpcRequest()` | JSON RPC response |
+| `POST /api/<path>` | `handleApiRequest()` | JSON API response |
+| `?action=*`        | `handleApiRequest()` | JSON API response |
 
 **Whitelisted API Actions (worker.js:137-164):**
 
@@ -151,17 +147,17 @@ const CANONICAL_API_ACTIONS = [
 ];
 ```
 
-### 4. Shortlink Routes (Proxied to GAS)
+### 4. Shortlink Routes (Worker-handled)
 
 | URL Pattern         | Handler                     | Response          |
 | ------------------- | --------------------------- | ----------------- |
 | `?p=r&t=...`        | `handleShortlinkRedirect()` | Redirect response |
 | `?p=redirect&t=...` | `handleShortlinkRedirect()` | Redirect response |
 
-**GAS_PROXY_ROUTES (worker.js:108-111):**
+**SHORTLINK_ROUTES (worker.js:108-111):**
 
 ```javascript
-const GAS_PROXY_ROUTES = Object.freeze({
+const SHORTLINK_ROUTES = Object.freeze({
   r: 'redirect',
   redirect: 'redirect',
 });
@@ -222,17 +218,17 @@ const VALID_BRANDS = ['root', 'abc', 'cbc', 'cbl'];
    - Returns HTML with Content-Type: text/html
                     |
                     v
-6. Response: public.html rendered by Worker (NO GAS CALL)
+6. Response: public.html rendered by Worker (local render)
 ```
 
 ### Key Difference from Story 1
 
-| Aspect          | Story 1 (Before)           | Story 2 (After)           |
-| --------------- | -------------------------- | ------------------------- |
-| Handler         | `proxyPageRequest()`       | `handleHtmlPageRequest()` |
-| Template Source | GAS `HtmlService`          | Worker KV templates       |
-| GAS Call        | YES - fetch(GAS_URL)       | NO - local render         |
-| Network Latency | +200-500ms (GAS roundtrip) | Eliminated                |
+| Aspect          | Story 1 (Before)         | Story 2 (After)           |
+| --------------- | ------------------------ | ------------------------- |
+| Handler         | `proxyPageRequest()`     | `handleHtmlPageRequest()` |
+| Template Source | Upstream proxy           | Worker KV templates       |
+| Proxy Call      | YES - fetch(upstreamUrl) | NO - local render         |
+| Network Latency | +200-500ms (roundtrip)   | Eliminated                |
 
 ---
 
@@ -240,7 +236,7 @@ const VALID_BRANDS = ['root', 'abc', 'cbc', 'cbl'];
 
 ### Template Bundling
 
-Templates are pre-compiled from GAS source files at build time:
+Templates are pre-compiled from source files at build time:
 
 **Build Script:** `scripts/bundle-worker-templates.js`
 
@@ -266,13 +262,13 @@ npm run bundle:templates:check
 
 Variables replaced at runtime by Worker:
 
-| Variable          | Source                        | Example               |
-| ----------------- | ----------------------------- | --------------------- |
-| `<?= appTitle ?>` | `brandName + ' · ' + scope`   | "EventAngle · events" |
-| `<?= brandId ?>`  | URL path or query param       | "root"                |
-| `<?= scope ?>`    | URL path or brand config      | "events"              |
-| `<?= execUrl ?>`  | `env.GAS_DEPLOYMENT_BASE_URL` | GAS URL for API calls |
-| `<?= demoMode ?>` | `?demo=true` query param      | "true" or "false"     |
+| Variable          | Source                      | Example               |
+| ----------------- | --------------------------- | --------------------- |
+| `<?= appTitle ?>` | `brandName + ' · ' + scope` | "EventAngle · events" |
+| `<?= brandId ?>`  | URL path or query param     | "root"                |
+| `<?= scope ?>`    | URL path or brand config    | "events"              |
+| `<?= execUrl ?>`  | `env.API_BASE_URL`          | API base URL          |
+| `<?= demoMode ?>` | `?demo=true` query param    | "true" or "false"     |
 
 ### Template Loading (worker.js:260-279)
 
@@ -298,7 +294,7 @@ function renderTemplate(templateContent, params, env) {
   const { brandId, brandName, scope, demoMode } = params;
 
   // Get exec URL from environment (for API calls)
-  const execUrl = env.GAS_DEPLOYMENT_BASE_URL || DEFAULT_GAS_URL;
+  const execUrl = env.API_BASE_URL || DEFAULT_API_URL;
 
   // Build app title
   const appTitle = `${brandName} · ${scope}`;
@@ -317,26 +313,18 @@ function renderTemplate(templateContent, params, env) {
 
 ---
 
-## Routes That Touch GAS
+## Route Handler Summary
 
 ### Explicit List (Story 2 Acceptance Criteria)
 
-| Route Type | Route Pattern             | Handler                     | Touches GAS           |
-| ---------- | ------------------------- | --------------------------- | --------------------- |
-| HTML Page  | `/events`, `/admin`, etc. | `handleHtmlPageRequest()`   | **NO**                |
-| JSON Page  | `/status`, `/ping`        | `handleJsonPageRequest()`   | YES                   |
-| API RPC    | `POST /api/*`             | `handleApiRequest()`        | YES                   |
-| Shortlink  | `?p=r&t=...`              | `handleShortlinkRedirect()` | YES                   |
-| Static     | `/static/*`               | `Response.redirect()`       | NO (CDN redirect)     |
-| 404        | Unknown routes            | `create404Response()`       | NO (Worker-generated) |
-
-### GAS No Longer Receives
-
-- Raw HTML page loads from `/events`
-- Raw HTML page loads from `/admin`
-- Raw HTML page loads from `/display`
-- Raw HTML page loads from `/poster`
-- Raw HTML page loads from `/analytics`
+| Route Type | Route Pattern             | Handler                     | Worker-handled         |
+| ---------- | ------------------------- | --------------------------- | ---------------------- |
+| HTML Page  | `/events`, `/admin`, etc. | `handleHtmlPageRequest()`   | YES                    |
+| JSON Page  | `/status`, `/ping`        | `handleJsonPageRequest()`   | YES                    |
+| API RPC    | `POST /api/*`             | `handleApiRequest()`        | YES                    |
+| Shortlink  | `?p=r&t=...`              | `handleShortlinkRedirect()` | YES                    |
+| Static     | `/static/*`               | `Response.redirect()`       | YES (CDN redirect)     |
+| 404        | Unknown routes            | `create404Response()`       | YES (Worker-generated) |
 
 ---
 
@@ -349,9 +337,9 @@ The function `proxyPageRequest()` has been renamed to `proxyPageRequest_DEPRECAT
 **Migration Path:**
 
 - HTML pages → `handleHtmlPageRequest()` (renders from Worker templates)
-- JSON pages → `handleJsonPageRequest()` (proxies to GAS for data)
-- Shortlinks → `handleShortlinkRedirect()` (proxies to GAS for redirect resolution)
-- API calls → `proxyToAppsScript()` (unchanged)
+- JSON pages → `handleJsonPageRequest()` (Worker-handled)
+- Shortlinks → `handleShortlinkRedirect()` (Worker-handled)
+- API calls → `handleApiRequest()` (Worker-handled)
 
 ---
 
@@ -359,13 +347,12 @@ The function `proxyPageRequest()` has been renamed to `proxyPageRequest_DEPRECAT
 
 ### Environment Variables (wrangler.toml)
 
-| Variable                  | Purpose                                     |
-| ------------------------- | ------------------------------------------- |
-| `GAS_DEPLOYMENT_BASE_URL` | Full GAS exec URL (for API calls)           |
-| `DEPLOYMENT_ID`           | GAS deployment ID (fallback)                |
-| `UPSTREAM_TIMEOUT_MS`     | Timeout for GAS requests (default: 30000ms) |
-| `ERROR_LOG_ENDPOINT`      | External error logging URL (optional)       |
-| `TEMPLATES_KV`            | KV binding for template storage             |
+| Variable              | Purpose                                          |
+| --------------------- | ------------------------------------------------ |
+| `API_BASE_URL`        | API base URL (for API calls)                     |
+| `UPSTREAM_TIMEOUT_MS` | Timeout for upstream requests (default: 30000ms) |
+| `ERROR_LOG_ENDPOINT`  | External error logging URL (optional)            |
+| `TEMPLATES_KV`        | KV binding for template storage                  |
 
 ### Deployment Environments
 
@@ -392,12 +379,12 @@ npm run test:unit -- tests/unit/worker-routing.test.js
 - Route validation logic
 - HTML_ROUTE_MAP configuration
 - JSON_ROUTE_MAP configuration
-- GAS_PROXY_ROUTES configuration
+- SHORTLINK_ROUTES configuration
 - handleHtmlPageRequest() function
 - renderTemplate() function
 - extractRouteParams() function
 - Route handling logic
-- GAS isolation guarantee
+- Worker-only routing guarantee
 - Template bundle validation
 
 ### Template Bundle Tests
@@ -407,7 +394,7 @@ Tests verify:
 - Templates directory exists
 - manifest.json is valid
 - All required templates exist
-- Templates have GAS variable placeholders
+- Templates have template variable placeholders
 - Includes are resolved (no `<?!= include()` remaining)
 - Bundle metadata is present
 
@@ -417,7 +404,7 @@ Tests verify:
 
 1. **Worker Role:** Explicit routing with template rendering for HTML pages
 2. **Template Loading:** Worker KV storage with pre-bundled templates
-3. **`/events` Path:** Rendered by Worker (NOT proxied to GAS)
+3. **`/events` Path:** Rendered by Worker (local template render)
 4. **Fallback Behavior:** Unknown routes return Worker-generated 404
-5. **GAS Access:** Only via `/api/*`, `/status`, `/ping`, and shortlinks
-6. **HTML pages are served by Worker** - GAS only receives JSON API calls
+5. **All routes Worker-handled:** No upstream proxy for any route type
+6. **HTML pages served by Worker** — rendered from KV templates
