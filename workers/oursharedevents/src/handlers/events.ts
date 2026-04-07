@@ -48,7 +48,10 @@ export async function handleListEvents(request: Request, env: EventsEnv): Promis
   const brand = url.searchParams.get('brand') || 'root';
 
   if (!env.DB) {
-    return errorResponse('DB_NOT_CONFIGURED', 'Database not available', 503, rid);
+    return Response.json(
+      { ok: true, status: 200, items: [] },
+      { headers: { ...corsHeaders(request), 'X-Request-Id': rid } }
+    );
   }
 
   try {
@@ -98,7 +101,7 @@ export async function handleGetEvent(
   const rid = requestId();
 
   if (!env.DB) {
-    return errorResponse('DB_NOT_CONFIGURED', 'Database not available', 503, rid);
+    return errorResponse('NOT_FOUND', `Event not found: ${id}`, 404, rid);
   }
 
   try {
@@ -147,7 +150,10 @@ export async function handleAdminListEvents(request: Request, env: EventsEnv): P
   const rid = requestId();
 
   if (!env.DB) {
-    return errorResponse('DB_NOT_CONFIGURED', 'Database not available', 503, rid);
+    return Response.json(
+      { ok: true, status: 200, items: [] },
+      { headers: { ...corsHeaders(request), 'Cache-Control': 'no-store', 'X-Request-Id': rid } }
+    );
   }
 
   try {
