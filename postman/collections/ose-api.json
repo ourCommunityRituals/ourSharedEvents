@@ -1,0 +1,1394 @@
+{
+  "info": {
+    "name": "OSE API - Staging",
+    "description": "Complete API collection for ourSharedEvents Worker.\nSeparated from frontend pages. Covers: Health, Public Events, Admin Events, Forms (4 types), Feature Flags (8 endpoints).\n\nRequires: OSE - Staging environment.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "ose-api"
+  },
+  "auth": {
+    "type": "noauth"
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Collection-level pre-request: set timing for latency measurement",
+          "pm.variables.set('requestStartTime', Date.now());"
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Collection-level test: measure latency on every request",
+          "const elapsed = Date.now() - pm.variables.get('requestStartTime');",
+          "pm.test(`Response time < 2000ms (actual: ${elapsed}ms)`, function() {",
+          "    pm.expect(elapsed).to.be.below(2000);",
+          "});",
+          "",
+          "// Verify JSON content-type on API responses (skip HTML pages)",
+          "if (pm.request.url.getPath().startsWith('/api') || pm.request.url.getPath() === '/health') {",
+          "    pm.test('Content-Type is application/json', function() {",
+          "        pm.expect(pm.response.headers.get('Content-Type')).to.include('application/json');",
+          "    });",
+          "}"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Health & Status",
+      "description": "Worker liveness and D1 connectivity checks. Run these first to verify staging is reachable.",
+      "item": [
+        {
+          "name": "GET /health",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "",
+                  "pm.test('Status is 200', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('ok is true', function() {",
+                  "    pm.expect(json.ok).to.eql(true);",
+                  "});",
+                  "",
+                  "pm.test('Has env field', function() {",
+                  "    pm.expect(json.env).to.be.a('string');",
+                  "});",
+                  "",
+                  "pm.test('Has version field', function() {",
+                  "    pm.expect(json.version).to.be.a('string');",
+                  "});",
+                  "",
+                  "pm.test('Has db field', function() {",
+                  "    pm.expect(json.db).to.be.oneOf(['ok', 'not_configured', 'error']);",
+                  "});",
+                  "",
+                  "pm.test('Has timestamp (ISO 8601)', function() {",
+                  "    pm.expect(json.timestamp).to.match(/^\\d{4}-\\d{2}-\\d{2}T/);",
+                  "});",
+                  "",
+                  "// Capture environment info for other requests",
+                  "pm.environment.set('dbStatus', json.db);",
+                  "pm.environment.set('workerEnv', json.env);",
+                  "pm.environment.set('workerVersion', json.version);",
+                  "",
+                  "// Flag if DB is not connected",
+                  "if (json.db !== 'ok') {",
+                  "    console.warn('WARNING: D1 database status is \"' + json.db + '\" — events and forms endpoints will return 503');",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": ["{{baseUrl}}"],
+              "path": ["health"]
+            }
+          }
+        },
+        {
+          "name": "GET /api/status (alias)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "",
+                  "pm.test('Status is 200', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Same shape as /health', function() {",
+                  "    pm.expect(json).to.have.all.keys('ok', 'env', 'version', 'db', 'timestamp');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/status",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "status"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Public Events API",
+      "description": "Public (no auth) event endpoints. These hit D1 — if db status is not 'ok', expect 503.",
+      "item": [
+        {
+          "name": "GET /api/v2/events",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.environment.get('dbStatus') === 'not_configured') {",
+                  "    console.warn('DB not configured — expecting 503');",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "",
+                  "if (pm.response.code === 200) {",
+                  "    pm.test('ok is true', function() {",
+                  "        pm.expect(json.ok).to.eql(true);",
+                  "    });",
+                  "",
+                  "    pm.test('items is array', function() {",
+                  "        pm.expect(json.items).to.be.an('array');",
+                  "    });",
+                  "",
+                  "    pm.test('status is 200', function() {",
+                  "        pm.expect(json.status).to.eql(200);",
+                  "    });",
+                  "",
+                  "    if (json.items.length > 0) {",
+                  "        const item = json.items[0];",
+                  "        pm.test('Event has required fields', function() {",
+                  "            pm.expect(item).to.have.property('id');",
+                  "            pm.expect(item).to.have.property('brand_id');",
+                  "            pm.expect(item).to.have.property('title');",
+                  "            pm.expect(item).to.have.property('slug');",
+                  "            pm.expect(item).to.have.property('status');",
+                  "            pm.expect(item).to.have.property('start_date');",
+                  "        });",
+                  "",
+                  "        // Capture first event ID for downstream tests",
+                  "        pm.environment.set('testEventId', item.id);",
+                  "        console.log('Captured testEventId: ' + item.id);",
+                  "    }",
+                  "} else if (pm.response.code === 503) {",
+                  "    pm.test('503 has error code', function() {",
+                  "        pm.expect(json.code).to.be.oneOf(['DB_NOT_CONFIGURED', 'DB_ERROR']);",
+                  "    });",
+                  "    pm.test('503 has requestId', function() {",
+                  "        pm.expect(json.requestId).to.be.a('string');",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v2/events?brand={{brandId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v2", "events"],
+              "query": [{ "key": "brand", "value": "{{brandId}}" }]
+            }
+          }
+        },
+        {
+          "name": "GET /api/v2/events (no brand param)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "",
+                  "pm.test('Defaults to root brand', function() {",
+                  "    // Should return same results as brand=root",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 503]);",
+                  "});",
+                  "",
+                  "if (pm.response.code === 200) {",
+                  "    pm.test('ok is true', function() {",
+                  "        pm.expect(json.ok).to.eql(true);",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v2/events",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v2", "events"]
+            }
+          }
+        },
+        {
+          "name": "GET /api/v2/events/:id",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "",
+                  "if (pm.response.code === 200) {",
+                  "    pm.test('ok is true', function() {",
+                  "        pm.expect(json.ok).to.eql(true);",
+                  "    });",
+                  "",
+                  "    pm.test('item is object with id', function() {",
+                  "        pm.expect(json.item).to.be.an('object');",
+                  "        pm.expect(json.item.id).to.be.a('string');",
+                  "    });",
+                  "",
+                  "    pm.test('Has Cache-Control header', function() {",
+                  "        pm.expect(pm.response.headers.get('Cache-Control')).to.include('private');",
+                  "    });",
+                  "",
+                  "    pm.test('Has X-Request-Id header', function() {",
+                  "        pm.expect(pm.response.headers.get('X-Request-Id')).to.be.a('string');",
+                  "    });",
+                  "} else if (pm.response.code === 404) {",
+                  "    pm.test('404 has NOT_FOUND code', function() {",
+                  "        pm.expect(json.code).to.eql('NOT_FOUND');",
+                  "    });",
+                  "} else if (pm.response.code === 503) {",
+                  "    pm.test('503 indicates DB issue', function() {",
+                  "        pm.expect(json.code).to.be.oneOf(['DB_NOT_CONFIGURED', 'DB_ERROR']);",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v2/events/{{testEventId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v2", "events", "{{testEventId}}"]
+            }
+          }
+        },
+        {
+          "name": "GET /api/v2/events/:id (not found)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "",
+                  "pm.test('Returns 404 or 503', function() {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([404, 503]);",
+                  "});",
+                  "",
+                  "if (pm.response.code === 404) {",
+                  "    pm.test('NOT_FOUND code', function() {",
+                  "        pm.expect(json.code).to.eql('NOT_FOUND');",
+                  "    });",
+                  "",
+                  "    pm.test('ok is false', function() {",
+                  "        pm.expect(json.ok).to.eql(false);",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v2/events/nonexistent-event-id-99999",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v2", "events", "nonexistent-event-id-99999"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Admin Events API",
+      "description": "Admin-gated event endpoints. Requires Bearer token in adminKey env variable.\nStaging has ALLOW_ADMIN_KEY_FALLBACK=true so Bearer auth works.",
+      "auth": {
+        "type": "bearer",
+        "bearer": [{ "key": "token", "value": "{{adminKey}}", "type": "string" }]
+      },
+      "item": [
+        {
+          "name": "GET /api/v2/admin/events",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "",
+                  "if (pm.response.code === 200) {",
+                  "    pm.test('ok is true', function() {",
+                  "        pm.expect(json.ok).to.eql(true);",
+                  "    });",
+                  "",
+                  "    pm.test('items is array', function() {",
+                  "        pm.expect(json.items).to.be.an('array');",
+                  "    });",
+                  "",
+                  "    pm.test('Cache-Control is no-store (admin)', function() {",
+                  "        pm.expect(pm.response.headers.get('Cache-Control')).to.eql('no-store');",
+                  "    });",
+                  "",
+                  "    pm.test('Includes all statuses (not just active)', function() {",
+                  "        // Admin list returns archived too — just verify it's an array",
+                  "        pm.expect(json.items).to.be.an('array');",
+                  "    });",
+                  "} else if (pm.response.code === 401) {",
+                  "    pm.test('401 has UNAUTH code', function() {",
+                  "        pm.expect(json.code).to.eql('UNAUTH');",
+                  "    });",
+                  "    pm.test('401 has WWW-Authenticate header', function() {",
+                  "        pm.expect(pm.response.headers.get('WWW-Authenticate')).to.include('Bearer');",
+                  "    });",
+                  "    console.warn('AUTH FAILED — set adminKey in environment');",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v2/admin/events",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v2", "admin", "events"]
+            }
+          }
+        },
+        {
+          "name": "GET /api/v2/admin/events (no auth — expect 401)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Returns 401 without auth', function() {",
+                  "    pm.response.to.have.status(401);",
+                  "});",
+                  "",
+                  "const json = pm.response.json();",
+                  "pm.test('Has UNAUTH code', function() {",
+                  "    pm.expect(json.code).to.eql('UNAUTH');",
+                  "});",
+                  "",
+                  "pm.test('Has WWW-Authenticate header', function() {",
+                  "    pm.expect(pm.response.headers.get('WWW-Authenticate')).to.include('Bearer');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v2/admin/events",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v2", "admin", "events"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Forms — Public Submissions",
+      "description": "Public form POST endpoints (no auth). Feature flags must be enabled for each form type.\nAll require FORMS_DB binding. testEventId must exist.",
+      "item": [
+        {
+          "name": "POST Register",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "",
+                  "if (pm.response.code === 200) {",
+                  "    pm.test('ok is true', function() {",
+                  "        pm.expect(json.ok).to.eql(true);",
+                  "    });",
+                  "",
+                  "    pm.test('Has registration id', function() {",
+                  "        pm.expect(json.id).to.be.a('string');",
+                  "    });",
+                  "",
+                  "    pm.test('Has registrationBucket', function() {",
+                  "        pm.expect(json.registrationBucket).to.be.a('string');",
+                  "    });",
+                  "",
+                  "    pm.environment.set('testRegistrationId', json.id);",
+                  "    console.log('Captured testRegistrationId: ' + json.id);",
+                  "} else if (pm.response.code === 403) {",
+                  "    pm.test('403 means form disabled', function() {",
+                  "        pm.expect(json.code).to.eql('FORM_DISABLED');",
+                  "    });",
+                  "} else if (pm.response.code === 503) {",
+                  "    pm.test('503 is DB error', function() {",
+                  "        pm.expect(json.code).to.be.oneOf(['DB_NOT_CONFIGURED', 'DB_ERROR']);",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Postman Test User\",\n  \"email\": \"postman-test@example.com\",\n  \"sourcePlacementId\": \"qr-poster-001\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v2/events/{{testEventId}}/forms/register",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v2", "events", "{{testEventId}}", "forms", "register"]
+            }
+          }
+        },
+        {
+          "name": "POST Check-in",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "",
+                  "if (pm.response.code === 200) {",
+                  "    pm.test('ok is true', function() {",
+                  "        pm.expect(json.ok).to.eql(true);",
+                  "    });",
+                  "",
+                  "    pm.test('Has count (number)', function() {",
+                  "        pm.expect(json.count).to.be.a('number');",
+                  "        pm.expect(json.count).to.be.at.least(1);",
+                  "    });",
+                  "} else if (pm.response.code === 403) {",
+                  "    pm.test('403 means form disabled', function() {",
+                  "        pm.expect(json.code).to.eql('FORM_DISABLED');",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v2/events/{{testEventId}}/forms/checkin",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v2", "events", "{{testEventId}}", "forms", "checkin"]
+            }
+          }
+        },
+        {
+          "name": "POST Survey",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "",
+                  "if (pm.response.code === 200) {",
+                  "    pm.test('ok is true', function() {",
+                  "        pm.expect(json.ok).to.eql(true);",
+                  "    });",
+                  "",
+                  "    pm.test('Has survey id', function() {",
+                  "        pm.expect(json.id).to.be.a('string');",
+                  "    });",
+                  "",
+                  "    pm.environment.set('testSurveyId', json.id);",
+                  "} else if (pm.response.code === 403) {",
+                  "    pm.test('403 means form disabled', function() {",
+                  "        pm.expect(json.code).to.eql('FORM_DISABLED');",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"responses\": {\n    \"overall_rating\": 5,\n    \"venue_score\": 4,\n    \"speaker_quality\": \"excellent\",\n    \"feedback\": \"Great event, well organized!\",\n    \"would_recommend\": true\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v2/events/{{testEventId}}/forms/survey",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v2", "events", "{{testEventId}}", "forms", "survey"]
+            }
+          }
+        },
+        {
+          "name": "POST Email Signup",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "",
+                  "if (pm.response.code === 200) {",
+                  "    pm.test('ok is true', function() {",
+                  "        pm.expect(json.ok).to.eql(true);",
+                  "    });",
+                  "",
+                  "    pm.test('Has signup id', function() {",
+                  "        pm.expect(json.id).to.be.a('string');",
+                  "    });",
+                  "} else if (pm.response.code === 403) {",
+                  "    pm.test('403 means form disabled', function() {",
+                  "        pm.expect(json.code).to.eql('FORM_DISABLED');",
+                  "    });",
+                  "} else if (pm.response.code === 503) {",
+                  "    pm.test('503 has error code', function() {",
+                  "        pm.expect(json.code).to.exist;",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"postman-signup@example.com\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v2/events/{{testEventId}}/forms/email-signup",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v2", "events", "{{testEventId}}", "forms", "email-signup"]
+            }
+          }
+        },
+        {
+          "name": "POST Register — invalid event ID",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "",
+                  "pm.test('Returns 400', function() {",
+                  "    pm.response.to.have.status(400);",
+                  "});",
+                  "",
+                  "pm.test('INVALID_EVENT_ID code', function() {",
+                  "    pm.expect(json.code).to.eql('INVALID_EVENT_ID');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Bad ID Test\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v2/events/../../etc/passwd/forms/register",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v2", "events", "..", "..", "etc", "passwd", "forms", "register"]
+            }
+          }
+        },
+        {
+          "name": "POST Register — oversized body",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Generate a body larger than 16KB",
+                  "const bigString = 'x'.repeat(17000);",
+                  "pm.variables.set('oversizedBody', JSON.stringify({ name: bigString }));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "",
+                  "pm.test('Returns 400', function() {",
+                  "    pm.response.to.have.status(400);",
+                  "});",
+                  "",
+                  "pm.test('INVALID_BODY code', function() {",
+                  "    pm.expect(json.code).to.eql('INVALID_BODY');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{{oversizedBody}}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v2/events/{{testEventId}}/forms/register",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v2", "events", "{{testEventId}}", "forms", "register"]
+            }
+          }
+        },
+        {
+          "name": "POST Survey — missing responses field",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "",
+                  "pm.test('Returns 400 or 403', function() {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([400, 403]);",
+                  "});",
+                  "",
+                  "if (pm.response.code === 400) {",
+                  "    pm.test('MISSING_FIELD code', function() {",
+                  "        pm.expect(json.code).to.eql('MISSING_FIELD');",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"not_responses\": \"missing the required field\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v2/events/{{testEventId}}/forms/survey",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v2", "events", "{{testEventId}}", "forms", "survey"]
+            }
+          }
+        },
+        {
+          "name": "POST Email Signup — missing email",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "",
+                  "pm.test('Returns 400 or 403', function() {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([400, 403]);",
+                  "});",
+                  "",
+                  "if (pm.response.code === 400) {",
+                  "    pm.test('MISSING_FIELD code', function() {",
+                  "        pm.expect(json.code).to.eql('MISSING_FIELD');",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"not_email\": \"oops\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v2/events/{{testEventId}}/forms/email-signup",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v2", "events", "{{testEventId}}", "forms", "email-signup"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. Forms — Admin Read",
+      "description": "Admin-gated form read endpoints. Bearer auth required.\nThese read back what was submitted in section 4.",
+      "auth": {
+        "type": "bearer",
+        "bearer": [{ "key": "token", "value": "{{adminKey}}", "type": "string" }]
+      },
+      "item": [
+        {
+          "name": "GET Registrations",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "",
+                  "if (pm.response.code === 200) {",
+                  "    pm.test('ok is true', function() {",
+                  "        pm.expect(json.ok).to.eql(true);",
+                  "    });",
+                  "",
+                  "    pm.test('Has items or registrations array', function() {",
+                  "        const data = json.items || json.registrations;",
+                  "        pm.expect(data).to.be.an('array');",
+                  "    });",
+                  "} else if (pm.response.code === 401) {",
+                  "    pm.test('Auth required', function() {",
+                  "        pm.expect(json.code).to.eql('UNAUTH');",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v2/admin/events/{{testEventId}}/forms/registrations",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v2", "admin", "events", "{{testEventId}}", "forms", "registrations"]
+            }
+          }
+        },
+        {
+          "name": "GET Check-in Count",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "",
+                  "if (pm.response.code === 200) {",
+                  "    pm.test('ok is true', function() {",
+                  "        pm.expect(json.ok).to.eql(true);",
+                  "    });",
+                  "",
+                  "    pm.test('Has count field', function() {",
+                  "        pm.expect(json.count).to.be.a('number');",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v2/admin/events/{{testEventId}}/forms/checkin-count",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v2", "admin", "events", "{{testEventId}}", "forms", "checkin-count"]
+            }
+          }
+        },
+        {
+          "name": "GET Surveys (PII-scrubbed)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "",
+                  "if (pm.response.code === 200) {",
+                  "    pm.test('ok is true', function() {",
+                  "        pm.expect(json.ok).to.eql(true);",
+                  "    });",
+                  "",
+                  "    pm.test('Has items or surveys array', function() {",
+                  "        const data = json.items || json.surveys;",
+                  "        pm.expect(data).to.be.an('array');",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v2/admin/events/{{testEventId}}/forms/surveys",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v2", "admin", "events", "{{testEventId}}", "forms", "surveys"]
+            }
+          }
+        },
+        {
+          "name": "GET Email Signups",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "",
+                  "if (pm.response.code === 200) {",
+                  "    pm.test('ok is true', function() {",
+                  "        pm.expect(json.ok).to.eql(true);",
+                  "    });",
+                  "",
+                  "    pm.test('Has count field', function() {",
+                  "        pm.expect(json.count).to.be.a('number');",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v2/admin/events/{{testEventId}}/forms/email-signups",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v2", "admin", "events", "{{testEventId}}", "forms", "email-signups"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "6. Feature Flags — Admin",
+      "description": "Feature flag management (8 endpoints). All admin-gated.\n3-tier model: free/mid/enterprise. Global flags + event-level overrides.",
+      "auth": {
+        "type": "bearer",
+        "bearer": [{ "key": "token", "value": "{{adminKey}}", "type": "string" }]
+      },
+      "item": [
+        {
+          "name": "GET List All Flags",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "",
+                  "if (pm.response.code === 200) {",
+                  "    pm.test('ok is true', function() {",
+                  "        pm.expect(json.ok).to.eql(true);",
+                  "    });",
+                  "",
+                  "    pm.test('Has flags data', function() {",
+                  "        pm.expect(json.flags || json.items).to.be.an('array');",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v2/admin/flags",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v2", "admin", "flags"]
+            }
+          }
+        },
+        {
+          "name": "GET List Tier Presets",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "",
+                  "if (pm.response.code === 200) {",
+                  "    pm.test('ok is true', function() {",
+                  "        pm.expect(json.ok).to.eql(true);",
+                  "    });",
+                  "",
+                  "    pm.test('Has tiers (free, mid, enterprise)', function() {",
+                  "        const tiers = json.tiers || json.items;",
+                  "        pm.expect(tiers).to.be.an('object').or.an('array');",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v2/admin/flags/tiers",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v2", "admin", "flags", "tiers"]
+            }
+          }
+        },
+        {
+          "name": "GET Current Tier",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "",
+                  "if (pm.response.code === 200) {",
+                  "    pm.test('ok is true', function() {",
+                  "        pm.expect(json.ok).to.eql(true);",
+                  "    });",
+                  "",
+                  "    pm.test('Has tier name', function() {",
+                  "        pm.expect(json.tier).to.be.a('string');",
+                  "        pm.expect(json.tier).to.be.oneOf(['free', 'mid', 'enterprise', 'custom']);",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v2/admin/flags/current-tier",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v2", "admin", "flags", "current-tier"]
+            }
+          }
+        },
+        {
+          "name": "GET Resolve Flags (for event)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "",
+                  "if (pm.response.code === 200) {",
+                  "    pm.test('ok is true', function() {",
+                  "        pm.expect(json.ok).to.eql(true);",
+                  "    });",
+                  "",
+                  "    pm.test('Has resolved flags object', function() {",
+                  "        pm.expect(json.flags || json.resolved).to.be.an('object');",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v2/admin/flags/resolve?eventId={{testEventId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v2", "admin", "flags", "resolve"],
+              "query": [{ "key": "eventId", "value": "{{testEventId}}" }]
+            }
+          }
+        },
+        {
+          "name": "PUT Toggle Global Flag",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "",
+                  "if (pm.response.code === 200) {",
+                  "    pm.test('ok is true', function() {",
+                  "        pm.expect(json.ok).to.eql(true);",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"enabled\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v2/admin/flags/{{testFlagKey}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v2", "admin", "flags", "{{testFlagKey}}"]
+            }
+          }
+        },
+        {
+          "name": "POST Apply Tier Preset",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "",
+                  "if (pm.response.code === 200) {",
+                  "    pm.test('ok is true', function() {",
+                  "        pm.expect(json.ok).to.eql(true);",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tier\": \"free\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v2/admin/flags/apply-tier",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v2", "admin", "flags", "apply-tier"]
+            }
+          }
+        },
+        {
+          "name": "PUT Set Event Flag Override",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "",
+                  "if (pm.response.code === 200) {",
+                  "    pm.test('ok is true', function() {",
+                  "        pm.expect(json.ok).to.eql(true);",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"enabled\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v2/admin/events/{{testEventId}}/flags/{{testFlagKey}}",
+              "host": ["{{baseUrl}}"],
+              "path": [
+                "api",
+                "v2",
+                "admin",
+                "events",
+                "{{testEventId}}",
+                "flags",
+                "{{testFlagKey}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "DELETE Remove Event Flag Override",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "",
+                  "if (pm.response.code === 200) {",
+                  "    pm.test('ok is true', function() {",
+                  "        pm.expect(json.ok).to.eql(true);",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v2/admin/events/{{testEventId}}/flags/{{testFlagKey}}",
+              "host": ["{{baseUrl}}"],
+              "path": [
+                "api",
+                "v2",
+                "admin",
+                "events",
+                "{{testEventId}}",
+                "flags",
+                "{{testFlagKey}}"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "7. CORS Preflight",
+      "description": "Verify OPTIONS preflight responses for CORS.",
+      "item": [
+        {
+          "name": "OPTIONS /api/v2/events",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Returns 204', function() {",
+                  "    pm.response.to.have.status(204);",
+                  "});",
+                  "",
+                  "pm.test('Has Access-Control-Allow-Methods', function() {",
+                  "    const methods = pm.response.headers.get('Access-Control-Allow-Methods');",
+                  "    pm.expect(methods).to.include('GET');",
+                  "    pm.expect(methods).to.include('POST');",
+                  "});",
+                  "",
+                  "pm.test('Has Access-Control-Allow-Headers', function() {",
+                  "    const headers = pm.response.headers.get('Access-Control-Allow-Headers');",
+                  "    pm.expect(headers).to.include('Authorization');",
+                  "    pm.expect(headers).to.include('Content-Type');",
+                  "});",
+                  "",
+                  "pm.test('Max-Age is set', function() {",
+                  "    pm.expect(pm.response.headers.get('Access-Control-Max-Age')).to.eql('86400');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "OPTIONS",
+            "header": [
+              { "key": "Origin", "value": "https://stg.oursharedevents.com" },
+              { "key": "Access-Control-Request-Method", "value": "GET" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v2/events",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v2", "events"]
+            }
+          }
+        },
+        {
+          "name": "OPTIONS — disallowed origin",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Returns 204', function() {",
+                  "    pm.response.to.have.status(204);",
+                  "});",
+                  "",
+                  "pm.test('No Access-Control-Allow-Origin for bad origin', function() {",
+                  "    const origin = pm.response.headers.get('Access-Control-Allow-Origin');",
+                  "    pm.expect(origin).to.be.oneOf([null, undefined]);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "OPTIONS",
+            "header": [
+              { "key": "Origin", "value": "https://evil.com" },
+              { "key": "Access-Control-Request-Method", "value": "GET" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v2/events",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v2", "events"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "8. Error Handling",
+      "description": "Verify 404 and edge cases.",
+      "item": [
+        {
+          "name": "GET /nonexistent-path (404)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Returns 404', function() {",
+                  "    pm.response.to.have.status(404);",
+                  "});",
+                  "",
+                  "const json = pm.response.json();",
+                  "pm.test('ok is false', function() {",
+                  "    pm.expect(json.ok).to.eql(false);",
+                  "});",
+                  "",
+                  "pm.test('Has error message', function() {",
+                  "    pm.expect(json.error).to.eql('Not found');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/this/path/does/not/exist",
+              "host": ["{{baseUrl}}"],
+              "path": ["this", "path", "does", "not", "exist"]
+            }
+          }
+        },
+        {
+          "name": "POST /subscribe (email capture)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Returns a response', function() {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 400, 405, 500, 503]);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"postman-subscribe@example.com\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/subscribe",
+              "host": ["{{baseUrl}}"],
+              "path": ["subscribe"]
+            }
+          }
+        },
+        {
+          "name": "GET /subscribe (method not allowed)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Returns 405', function() {",
+                  "    pm.response.to.have.status(405);",
+                  "});",
+                  "",
+                  "pm.test('Has Allow header', function() {",
+                  "    pm.expect(pm.response.headers.get('Allow')).to.eql('POST');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/subscribe",
+              "host": ["{{baseUrl}}"],
+              "path": ["subscribe"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

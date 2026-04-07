@@ -1,0 +1,859 @@
+{
+  "info": {
+    "name": "OSE Pages - Staging",
+    "description": "Frontend HTML surface collection for ourSharedEvents.\nSeparated from API. Covers all 5 MVP surfaces + form pages + aliases.\n\nRequires: OSE - Staging environment.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "ose-pages"
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": ["pm.variables.set('requestStartTime', Date.now());"]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "const elapsed = Date.now() - pm.variables.get('requestStartTime');",
+          "pm.test(`Response time < 3000ms (actual: ${elapsed}ms)`, function() {",
+          "    pm.expect(elapsed).to.be.below(3000);",
+          "});"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Landing / Public",
+      "description": "Public-facing HTML pages (no auth).",
+      "item": [
+        {
+          "name": "GET / (landing)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Returns 200', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Content-Type is HTML', function() {",
+                  "    pm.expect(pm.response.headers.get('Content-Type')).to.include('text/html');",
+                  "});",
+                  "",
+                  "pm.test('Has <!DOCTYPE html>', function() {",
+                  "    pm.expect(pm.response.text()).to.include('<!DOCTYPE html>');",
+                  "});",
+                  "",
+                  "pm.test('Has lang attribute', function() {",
+                  "    pm.expect(pm.response.text()).to.match(/lang=[\"']en/);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/",
+              "host": ["{{baseUrl}}"],
+              "path": [""]
+            }
+          }
+        },
+        {
+          "name": "GET /home (alias)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Returns 200', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Is HTML', function() {",
+                  "    pm.expect(pm.response.headers.get('Content-Type')).to.include('text/html');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/home",
+              "host": ["{{baseUrl}}"],
+              "path": ["home"]
+            }
+          }
+        },
+        {
+          "name": "GET /welcome (alias)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Returns 200', function() { pm.response.to.have.status(200); });",
+                  "pm.test('Is HTML', function() { pm.expect(pm.response.headers.get('Content-Type')).to.include('text/html'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/welcome",
+              "host": ["{{baseUrl}}"],
+              "path": ["welcome"]
+            }
+          }
+        },
+        {
+          "name": "GET /landing (alias)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Returns 200', function() { pm.response.to.have.status(200); });",
+                  "pm.test('Is HTML', function() { pm.expect(pm.response.headers.get('Content-Type')).to.include('text/html'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/landing",
+              "host": ["{{baseUrl}}"],
+              "path": ["landing"]
+            }
+          }
+        },
+        {
+          "name": "GET /events (public)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Returns 200', function() { pm.response.to.have.status(200); });",
+                  "pm.test('Is HTML', function() { pm.expect(pm.response.headers.get('Content-Type')).to.include('text/html'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/events",
+              "host": ["{{baseUrl}}"],
+              "path": ["events"]
+            }
+          }
+        },
+        {
+          "name": "GET /public (alias)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Returns 200', function() { pm.response.to.have.status(200); });",
+                  "pm.test('Is HTML', function() { pm.expect(pm.response.headers.get('Content-Type')).to.include('text/html'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/public",
+              "host": ["{{baseUrl}}"],
+              "path": ["public"]
+            }
+          }
+        },
+        {
+          "name": "GET /schedule (alias)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Returns 200', function() { pm.response.to.have.status(200); });",
+                  "pm.test('Is HTML', function() { pm.expect(pm.response.headers.get('Content-Type')).to.include('text/html'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/schedule",
+              "host": ["{{baseUrl}}"],
+              "path": ["schedule"]
+            }
+          }
+        },
+        {
+          "name": "GET /calendar (alias)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Returns 200', function() { pm.response.to.have.status(200); });",
+                  "pm.test('Is HTML', function() { pm.expect(pm.response.headers.get('Content-Type')).to.include('text/html'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/calendar",
+              "host": ["{{baseUrl}}"],
+              "path": ["calendar"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Admin Surface",
+      "description": "Admin dashboard (auth required). Uses Bearer token from env.",
+      "auth": {
+        "type": "bearer",
+        "bearer": [{ "key": "token", "value": "{{adminKey}}", "type": "string" }]
+      },
+      "item": [
+        {
+          "name": "GET /admin",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    pm.test('Returns HTML', function() {",
+                  "        pm.expect(pm.response.headers.get('Content-Type')).to.include('text/html');",
+                  "    });",
+                  "",
+                  "    pm.test('Has admin content', function() {",
+                  "        pm.expect(pm.response.text().toLowerCase()).to.include('admin');",
+                  "    });",
+                  "} else {",
+                  "    pm.test('Returns 401 without valid token', function() {",
+                  "        pm.response.to.have.status(401);",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/admin",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin"]
+            }
+          }
+        },
+        {
+          "name": "GET /manage (alias)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Returns 200 or 401', function() {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 401]);",
+                  "});",
+                  "if (pm.response.code === 200) {",
+                  "    pm.test('Is HTML', function() { pm.expect(pm.response.headers.get('Content-Type')).to.include('text/html'); });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/manage",
+              "host": ["{{baseUrl}}"],
+              "path": ["manage"]
+            }
+          }
+        },
+        {
+          "name": "GET /dashboard (alias)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Returns 200 or 401', function() { pm.expect(pm.response.code).to.be.oneOf([200, 401]); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/dashboard",
+              "host": ["{{baseUrl}}"],
+              "path": ["dashboard"]
+            }
+          }
+        },
+        {
+          "name": "GET /create (alias)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Returns 200 or 401', function() { pm.expect(pm.response.code).to.be.oneOf([200, 401]); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/create",
+              "host": ["{{baseUrl}}"],
+              "path": ["create"]
+            }
+          }
+        },
+        {
+          "name": "GET /admin (no auth — expect 401)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Returns 401', function() {",
+                  "    pm.response.to.have.status(401);",
+                  "});",
+                  "",
+                  "const json = pm.response.json();",
+                  "pm.test('UNAUTH code', function() {",
+                  "    pm.expect(json.code).to.eql('UNAUTH');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/admin",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. MVP Surfaces",
+      "description": "Display (TV/kiosk), Poster, SharedReport — public, no auth.",
+      "item": [
+        {
+          "name": "GET /display",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Returns 200', function() { pm.response.to.have.status(200); });",
+                  "pm.test('Is HTML', function() { pm.expect(pm.response.headers.get('Content-Type')).to.include('text/html'); });",
+                  "pm.test('Has DOCTYPE', function() { pm.expect(pm.response.text()).to.include('<!DOCTYPE html>'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/display",
+              "host": ["{{baseUrl}}"],
+              "path": ["display"]
+            }
+          }
+        },
+        {
+          "name": "GET /tv (alias)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Returns 200', function() { pm.response.to.have.status(200); });",
+                  "pm.test('Is HTML', function() { pm.expect(pm.response.headers.get('Content-Type')).to.include('text/html'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/tv",
+              "host": ["{{baseUrl}}"],
+              "path": ["tv"]
+            }
+          }
+        },
+        {
+          "name": "GET /kiosk (alias)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Returns 200', function() { pm.response.to.have.status(200); });",
+                  "pm.test('Is HTML', function() { pm.expect(pm.response.headers.get('Content-Type')).to.include('text/html'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/kiosk",
+              "host": ["{{baseUrl}}"],
+              "path": ["kiosk"]
+            }
+          }
+        },
+        {
+          "name": "GET /screen (alias)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Returns 200', function() { pm.response.to.have.status(200); });",
+                  "pm.test('Is HTML', function() { pm.expect(pm.response.headers.get('Content-Type')).to.include('text/html'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/screen",
+              "host": ["{{baseUrl}}"],
+              "path": ["screen"]
+            }
+          }
+        },
+        {
+          "name": "GET /poster",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Returns 200', function() { pm.response.to.have.status(200); });",
+                  "pm.test('Is HTML', function() { pm.expect(pm.response.headers.get('Content-Type')).to.include('text/html'); });",
+                  "pm.test('Has DOCTYPE', function() { pm.expect(pm.response.text()).to.include('<!DOCTYPE html>'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/poster",
+              "host": ["{{baseUrl}}"],
+              "path": ["poster"]
+            }
+          }
+        },
+        {
+          "name": "GET /posters (alias)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Returns 200', function() { pm.response.to.have.status(200); });",
+                  "pm.test('Is HTML', function() { pm.expect(pm.response.headers.get('Content-Type')).to.include('text/html'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/posters",
+              "host": ["{{baseUrl}}"],
+              "path": ["posters"]
+            }
+          }
+        },
+        {
+          "name": "GET /flyers (alias)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Returns 200', function() { pm.response.to.have.status(200); });",
+                  "pm.test('Is HTML', function() { pm.expect(pm.response.headers.get('Content-Type')).to.include('text/html'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/flyers",
+              "host": ["{{baseUrl}}"],
+              "path": ["flyers"]
+            }
+          }
+        },
+        {
+          "name": "GET /sharedReport",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Returns 200', function() { pm.response.to.have.status(200); });",
+                  "pm.test('Is HTML', function() { pm.expect(pm.response.headers.get('Content-Type')).to.include('text/html'); });",
+                  "pm.test('Has DOCTYPE', function() { pm.expect(pm.response.text()).to.include('<!DOCTYPE html>'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/sharedReport",
+              "host": ["{{baseUrl}}"],
+              "path": ["sharedReport"]
+            }
+          }
+        },
+        {
+          "name": "GET /report (alias)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Returns 200', function() { pm.response.to.have.status(200); });",
+                  "pm.test('Is HTML', function() { pm.expect(pm.response.headers.get('Content-Type')).to.include('text/html'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/report",
+              "host": ["{{baseUrl}}"],
+              "path": ["report"]
+            }
+          }
+        },
+        {
+          "name": "GET /analytics (alias)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Returns 200', function() { pm.response.to.have.status(200); });",
+                  "pm.test('Is HTML', function() { pm.expect(pm.response.headers.get('Content-Type')).to.include('text/html'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/analytics",
+              "host": ["{{baseUrl}}"],
+              "path": ["analytics"]
+            }
+          }
+        },
+        {
+          "name": "GET /reports (alias)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Returns 200', function() { pm.response.to.have.status(200); });",
+                  "pm.test('Is HTML', function() { pm.expect(pm.response.headers.get('Content-Type')).to.include('text/html'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/reports",
+              "host": ["{{baseUrl}}"],
+              "path": ["reports"]
+            }
+          }
+        },
+        {
+          "name": "GET /insights (alias)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Returns 200', function() { pm.response.to.have.status(200); });",
+                  "pm.test('Is HTML', function() { pm.expect(pm.response.headers.get('Content-Type')).to.include('text/html'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/insights",
+              "host": ["{{baseUrl}}"],
+              "path": ["insights"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Form Pages (QR Landing)",
+      "description": "Mobile-first form pages served at /forms/:eventId?type=...\nThese are the QR code landing pages that customers scan.",
+      "item": [
+        {
+          "name": "GET /forms/:eventId (default=register)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Returns 200', function() { pm.response.to.have.status(200); });",
+                  "pm.test('Is HTML', function() { pm.expect(pm.response.headers.get('Content-Type')).to.include('text/html'); });",
+                  "pm.test('Has form element', function() { pm.expect(pm.response.text().toLowerCase()).to.include('<form'); });",
+                  "pm.test('Has data-testid attributes', function() { pm.expect(pm.response.text()).to.include('data-testid'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/forms/{{testEventId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["forms", "{{testEventId}}"]
+            }
+          }
+        },
+        {
+          "name": "GET /forms/:eventId?type=register",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Returns 200', function() { pm.response.to.have.status(200); });",
+                  "pm.test('Is HTML', function() { pm.expect(pm.response.headers.get('Content-Type')).to.include('text/html'); });",
+                  "pm.test('Has registration form', function() { pm.expect(pm.response.text().toLowerCase()).to.include('register'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/forms/{{testEventId}}?type=register",
+              "host": ["{{baseUrl}}"],
+              "path": ["forms", "{{testEventId}}"],
+              "query": [{ "key": "type", "value": "register" }]
+            }
+          }
+        },
+        {
+          "name": "GET /forms/:eventId?type=checkin",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Returns 200', function() { pm.response.to.have.status(200); });",
+                  "pm.test('Is HTML', function() { pm.expect(pm.response.headers.get('Content-Type')).to.include('text/html'); });",
+                  "pm.test('Has check-in content', function() { pm.expect(pm.response.text().toLowerCase()).to.include('check'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/forms/{{testEventId}}?type=checkin",
+              "host": ["{{baseUrl}}"],
+              "path": ["forms", "{{testEventId}}"],
+              "query": [{ "key": "type", "value": "checkin" }]
+            }
+          }
+        },
+        {
+          "name": "GET /forms/:eventId?type=survey",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Returns 200', function() { pm.response.to.have.status(200); });",
+                  "pm.test('Is HTML', function() { pm.expect(pm.response.headers.get('Content-Type')).to.include('text/html'); });",
+                  "pm.test('Has survey content', function() { pm.expect(pm.response.text().toLowerCase()).to.include('survey'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/forms/{{testEventId}}?type=survey",
+              "host": ["{{baseUrl}}"],
+              "path": ["forms", "{{testEventId}}"],
+              "query": [{ "key": "type", "value": "survey" }]
+            }
+          }
+        },
+        {
+          "name": "GET /forms/:eventId?type=email",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Returns 200', function() { pm.response.to.have.status(200); });",
+                  "pm.test('Is HTML', function() { pm.expect(pm.response.headers.get('Content-Type')).to.include('text/html'); });",
+                  "pm.test('Has email content', function() { pm.expect(pm.response.text().toLowerCase()).to.include('email'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/forms/{{testEventId}}?type=email",
+              "host": ["{{baseUrl}}"],
+              "path": ["forms", "{{testEventId}}"],
+              "query": [{ "key": "type", "value": "email" }]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. Briefing",
+      "description": "CEO briefing page.",
+      "item": [
+        {
+          "name": "GET /briefing",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Returns 200', function() { pm.response.to.have.status(200); });",
+                  "pm.test('Is HTML', function() { pm.expect(pm.response.headers.get('Content-Type')).to.include('text/html'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/briefing",
+              "host": ["{{baseUrl}}"],
+              "path": ["briefing"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

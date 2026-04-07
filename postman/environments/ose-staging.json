@@ -1,0 +1,75 @@
+{
+  "id": "ose-staging",
+  "name": "OSE - Staging (stg.oursharedevents.com)",
+  "values": [
+    {
+      "key": "baseUrl",
+      "value": "https://stg.oursharedevents.com",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "brandId",
+      "value": "root",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "adminKey",
+      "value": "",
+      "type": "secret",
+      "enabled": true
+    },
+    {
+      "key": "testEventId",
+      "value": "test-event-001",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "testEventSlug",
+      "value": "test-event",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "testFlagKey",
+      "value": "forms.register",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "testRegistrationId",
+      "value": "",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "testSurveyId",
+      "value": "",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "dbStatus",
+      "value": "",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "workerEnv",
+      "value": "",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "workerVersion",
+      "value": "",
+      "type": "default",
+      "enabled": true
+    }
+  ],
+  "_postman_variable_scope": "environment",
+  "_postman_exported_at": "2026-04-07T00:00:00.000Z",
+  "_postman_exported_using": "Claude Code"
+}
