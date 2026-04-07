@@ -55,12 +55,16 @@
                 "exec": [
                   "const json = pm.response.json();",
                   "",
-                  "pm.test('Status is 200', function() {",
-                  "    pm.response.to.have.status(200);",
+                  "pm.test('Status is 200 or 503', function() {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 503]);",
                   "});",
                   "",
-                  "pm.test('ok is true', function() {",
-                  "    pm.expect(json.ok).to.eql(true);",
+                  "pm.test('ok matches db state', function() {",
+                  "    if (json.db === 'error') {",
+                  "        pm.expect(json.ok).to.eql(false);",
+                  "    } else {",
+                  "        pm.expect(json.ok).to.eql(true);",
+                  "    }",
                   "});",
                   "",
                   "pm.test('Has env field', function() {",
@@ -84,9 +88,15 @@
                   "pm.environment.set('workerEnv', json.env);",
                   "pm.environment.set('workerVersion', json.version);",
                   "",
-                  "// Flag if DB is not connected",
+                  "// Flag if DB is not connected — abort Collection Runner to avoid cascade failures",
+                  "// Set env var abortOnDbFailure=false to disable abort for manual exploration",
                   "if (json.db !== 'ok') {",
                   "    console.warn('WARNING: D1 database status is \"' + json.db + '\" — events and forms endpoints will return 503');",
+                  "    const shouldAbort = pm.environment.get('abortOnDbFailure') !== 'false';",
+                  "    if (shouldAbort) {",
+                  "        console.warn('ABORTING collection run — set abortOnDbFailure=false to override');",
+                  "        pm.setNextRequest(null);",
+                  "    }",
                   "}"
                 ]
               }
@@ -365,9 +375,11 @@
                   "        pm.expect(pm.response.headers.get('Cache-Control')).to.eql('no-store');",
                   "    });",
                   "",
-                  "    pm.test('Includes all statuses (not just active)', function() {",
-                  "        // Admin list returns archived too — just verify it's an array",
-                  "        pm.expect(json.items).to.be.an('array');",
+                  "    pm.test('Returns items sorted by updated_at DESC', function() {",
+                  "        // Admin list includes archived + active, sorted by updated_at DESC",
+                  "        if (json.items.length >= 2) {",
+                  "            pm.expect(json.items[0].updated_at >= json.items[1].updated_at).to.be.true;",
+                  "        }",
                   "    });",
                   "} else if (pm.response.code === 401) {",
                   "    pm.test('401 has UNAUTH code', function() {",
@@ -616,7 +628,7 @@
           }
         },
         {
-          "name": "POST Register — invalid event ID",
+          "name": "POST Register — invalid event ID (special chars)",
           "event": [
             {
               "listen": "test",
@@ -644,9 +656,9 @@
               "raw": "{\n  \"name\": \"Bad ID Test\"\n}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/v2/events/../../etc/passwd/forms/register",
+              "raw": "{{baseUrl}}/api/v2/events/ev%3Cscript%3E/forms/register",
               "host": ["{{baseUrl}}"],
-              "path": ["api", "v2", "events", "..", "..", "etc", "passwd", "forms", "register"]
+              "path": ["api", "v2", "events", "ev<script>", "forms", "register"]
             }
           }
         },
@@ -660,7 +672,7 @@
                 "exec": [
                   "// Generate a body larger than 16KB",
                   "const bigString = 'x'.repeat(17000);",
-                  "pm.variables.set('oversizedBody', JSON.stringify({ name: bigString }));"
+                  "pm.environment.set('oversizedBody', JSON.stringify({ name: bigString }));"
                 ]
               }
             },
@@ -796,7 +808,7 @@
                   "    });",
                   "",
                   "    pm.test('Has items or registrations array', function() {",
-                  "        const data = json.items || json.registrations;",
+                  "        const data = json.items;",
                   "        pm.expect(data).to.be.an('array');",
                   "    });",
                   "} else if (pm.response.code === 401) {",
@@ -867,7 +879,7 @@
                   "    });",
                   "",
                   "    pm.test('Has items or surveys array', function() {",
-                  "        const data = json.items || json.surveys;",
+                  "        const data = json.items;",
                   "        pm.expect(data).to.be.an('array');",
                   "    });",
                   "}"
@@ -944,7 +956,7 @@
                   "    });",
                   "",
                   "    pm.test('Has flags data', function() {",
-                  "        pm.expect(json.flags || json.items).to.be.an('array');",
+                  "        pm.expect(json.items).to.be.an('array');",
                   "    });",
                   "}"
                 ]
@@ -976,9 +988,9 @@
                   "        pm.expect(json.ok).to.eql(true);",
                   "    });",
                   "",
-                  "    pm.test('Has tiers (free, mid, enterprise)', function() {",
-                  "        const tiers = json.tiers || json.items;",
-                  "        pm.expect(tiers).to.be.an('object').or.an('array');",
+                  "    pm.test('Has tiers items array', function() {",
+                  "        pm.expect(json.items).to.be.an('array');",
+                  "        pm.expect(json.items.length).to.be.at.least(3);",
                   "    });",
                   "}"
                 ]
@@ -1045,7 +1057,7 @@
                   "    });",
                   "",
                   "    pm.test('Has resolved flags object', function() {",
-                  "        pm.expect(json.flags || json.resolved).to.be.an('object');",
+                  "        pm.expect(json.flags).to.be.an('object');",
                   "    });",
                   "}"
                 ]
