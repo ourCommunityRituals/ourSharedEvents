@@ -48,32 +48,47 @@ The migration from Google Apps Script (GAS) to Cloudflare Workers is **complete*
 
 ## Current Architecture
 
+**Phase 1 (active — Sheets):**
+
 ```
-Clients (Admin, Public, Display, Poster, SharedReport)
+Clients (Admin, Public, Display, Poster, SharedReport, Form QR pages)
     │
     ▼
-Cloudflare Worker (edge)
-    ├── /api/v2/status      → Worker health check
-    ├── /api/v2/events      → List events from Sheets
-    ├── /api/v2/events/:id  → Get single event
-    ├── /api/v2/events/:id/bundle/:type → Bundles
-    ├── /admin, /public, /display, /poster → HTML templates
+Cloudflare Worker — workers/oursharedevents/src/
+    ├── /health, /api/status        → Worker health check
+    ├── /api/v2/events              → List events from Sheets
+    ├── /api/v2/events/:id          → Get single event
+    ├── /api/v2/admin/events        → Admin event list (auth required)
+    ├── /api/v2/events/:id/forms/*  → Form submissions
+    ├── /api/v2/admin/flags/*       → Feature flag management
+    ├── /admin, /events, /forms/*   → Server-rendered HTML surfaces
     │
     ▼
-Google Sheets API (via service account)
-    ├── EVENTS sheet        → Event data (id, brandId, dataJSON, etc.)
+Google Sheets API (via service account — lib/google-auth.ts, lib/sheets.ts)
+    ├── EVENTS sheet        → Event data
     ├── ANALYTICS sheet     → Event tracking log
     ├── CONFIG sheet        → Brand configuration
     └── SHORTLINKS sheet    → URL shortening
 ```
 
-**Key Changes from GAS Architecture:**
+**Phase 2 (D1 — schema written, infra pending):**
+
+```
+Cloudflare Worker
+    ▼
+D1 MAIN_DB   (ocr-db-staging)       → Anonymous event/scan data
+D1 FORMS_DB  (ocr-forms-db-staging) → PII-bearing forms + feature flags
+```
+
+Migrations live in `workers/oursharedevents/migrations/` (MAIN_DB) and `migrations-forms/` (FORMS_DB).
+
+**Key changes from GAS architecture:**
 
 - ❌ No GAS in request path
-- ✅ All APIs handled by Worker
-- ✅ Direct Sheets API access (service account)
-- ✅ Sub-500ms latency for all operations
-- ✅ Full control over error handling
+- ✅ All APIs handled by Worker (`workers/oursharedevents/src/`)
+- ✅ Direct Sheets API access (Phase 1)
+- ✅ D1 edge SQLite replacing Sheets (Phase 2)
+- ✅ Full control over error handling, auth, and PII lifecycle
 
 ---
 

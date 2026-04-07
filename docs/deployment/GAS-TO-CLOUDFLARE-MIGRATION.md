@@ -1,6 +1,12 @@
 # GAS to Cloudflare Worker Migration Map
 
-**Purpose:** Reference guide mapping Google Apps Script (GAS) structure to the new Cloudflare Worker architecture.
+> **HISTORICAL DOCUMENT — D1 ERA**
+> This map was written when migration from GAS targeted `cloudflare-proxy/` (now retired).
+> The canonical worker is `workers/oursharedevents/src/` (TypeScript, Hono-style router).
+> See `docs/architecture/ARCHITECTURE.md` for the current architecture.
+> This document is preserved for migration history only — do not use it as a reference for new development.
+
+**Purpose:** Reference guide mapping Google Apps Script (GAS) structure to the (then-new) Cloudflare Worker architecture.
 
 ---
 
@@ -20,16 +26,19 @@
 
 ## Backend Code
 
-| GAS File                | Cloudflare Equivalent                        | Purpose                  |
-| ----------------------- | -------------------------------------------- | ------------------------ |
-| `Code.gs`               | `cloudflare-proxy/src/handlers/*.js`         | Main backend logic       |
-| `Code.gs` → `doGet()`   | `cloudflare-proxy/src/index.js` → `fetch()`  | Request handler          |
-| `ApiSchemas.gs`         | `cloudflare-proxy/src/schemas/*.js`          | API response schemas     |
-| `SecurityMiddleware.gs` | `cloudflare-proxy/src/middleware/auth.js`    | Authentication           |
-| `TemplateService.gs`    | `cloudflare-proxy/src/services/templates.js` | Template management      |
-| `FormService.gs`        | `cloudflare-proxy/src/services/forms.js`     | Google Forms integration |
-| `SponsorService.gs`     | `cloudflare-proxy/src/services/sponsors.js`  | Sponsor management       |
-| `AnalyticsService.gs`   | `cloudflare-proxy/src/services/analytics.js` | Analytics                |
+> **Note (D1 era):** The "Cloudflare Equivalent" paths below map to `cloudflare-proxy/` which is retired.
+> The current canonical equivalents live in `workers/oursharedevents/src/handlers/` and `src/lib/`.
+
+| GAS File                | Historical CF Equivalent (retired)           | Current Canonical Location                       | Purpose              |
+| ----------------------- | -------------------------------------------- | ------------------------------------------------ | -------------------- |
+| `Code.gs`               | `cloudflare-proxy/src/handlers/*.js`         | `workers/oursharedevents/src/handlers/`          | Main backend logic   |
+| `Code.gs` → `doGet()`   | `cloudflare-proxy/src/index.js` → `fetch()`  | `workers/oursharedevents/src/index.ts`           | Request handler      |
+| `ApiSchemas.gs`         | `cloudflare-proxy/src/schemas/*.js`          | `workers/oursharedevents/src/handlers/events.ts` | API response schemas |
+| `SecurityMiddleware.gs` | `cloudflare-proxy/src/middleware/auth.js`    | `workers/oursharedevents/src/auth/admin.ts`      | Authentication       |
+| `TemplateService.gs`    | `cloudflare-proxy/src/services/templates.js` | `workers/oursharedevents/src/handlers/pages.ts`  | Template management  |
+| `FormService.gs`        | `cloudflare-proxy/src/services/forms.js`     | `workers/oursharedevents/src/handlers/forms.ts`  | Form submissions     |
+| `SponsorService.gs`     | `cloudflare-proxy/src/services/sponsors.js`  | (not yet implemented)                            | Sponsor management   |
+| `AnalyticsService.gs`   | `cloudflare-proxy/src/services/analytics.js` | (not yet implemented)                            | Analytics            |
 
 ---
 
@@ -106,10 +115,10 @@ wrangler secret delete ADMIN_KEY_ROOT
 ### Environment-Specific Deployment
 
 ```bash
-# Staging (stg.eventangle.com)
+# Staging (stg.oursharedevents.com)
 wrangler deploy --env staging
 
-# Production (www.eventangle.com)
+# Production (oursharedevents.com)
 wrangler deploy --env production
 ```
 
@@ -127,9 +136,12 @@ wrangler deploy --env production
 
 ## File Structure Comparison
 
+> **Note (D1 era):** The "Cloudflare Structure" below reflects the intermediate `cloudflare-proxy/` era (now retired).
+> Current canonical structure is `workers/oursharedevents/src/` — see `docs/architecture/ARCHITECTURE.md`.
+
 ```
-GAS Structure:                    Cloudflare Structure:
-├── Code.gs                       ├── cloudflare-proxy/
+GAS Structure:                    Historical CF Structure (retired):
+├── Code.gs                       ├── cloudflare-proxy/          ← retired; use workers/oursharedevents/src/
 ├── Config.gs                     │   ├── src/
 ├── ApiSchemas.gs                 │   │   ├── index.js (entry point)
 ├── SecurityMiddleware.gs         │   │   ├── handlers/
@@ -139,7 +151,7 @@ GAS Structure:                    Cloudflare Structure:
 ├── AnalyticsService.gs           │   │   └── config/
 ├── appsscript.json               │   └── wrangler.toml
 │                                 │
-├── Admin.html                    ├── src/mvp/
+├── Admin.html                    ├── src/mvp/                   ← legacy; templates now in workers/oursharedevents/src/
 ├── Public.html                   │   ├── Admin.html
 ├── Display.html                  │   ├── Public.html
 ├── Poster.html                   │   ├── Display.html
@@ -196,7 +208,7 @@ When migrating a GAS feature to Cloudflare:
 - [ ] Replace `google.script.run` with `fetch()` calls
 - [ ] Move secrets to Cloudflare (via `wrangler secret put`)
 - [ ] Update feature flags in `config/feature-flags.js`
-- [ ] Test in staging (`stg.eventangle.com`)
+- [ ] Test in staging (`stg.oursharedevents.com`)
 - [ ] Deploy to production
 
 ---
