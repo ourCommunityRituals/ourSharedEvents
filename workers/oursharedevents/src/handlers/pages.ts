@@ -40,12 +40,12 @@ const PUBLIC_HTML = `<!DOCTYPE html>
   </style>
 </head>
 <body>
-  <header>
+  <header data-testid="public-header">
     <h1>OurSharedEvents</h1>
   </header>
-  <main>
+  <main data-testid="public-main">
     <h2>Upcoming Events</h2>
-    <div id="events"><p class="loading">Loading events&hellip;</p></div>
+    <div id="events" data-testid="public-events"><p class="loading">Loading events&hellip;</p></div>
   </main>
   <script>
     (async () => {
@@ -59,16 +59,16 @@ const PUBLIC_HTML = `<!DOCTYPE html>
           return;
         }
         container.innerHTML = data.items.map(e => \`
-          <div class="event-card">
-            <h3>\${esc(e.name || 'Untitled Event')}</h3>
-            <p class="meta">
+          <div class="event-card" data-testid="public-event-card">
+            <h3 data-testid="public-event-name">\${esc(e.name || 'Untitled Event')}</h3>
+            <p class="meta" data-testid="public-event-meta">
               \${e.startDateISO ? esc(new Date(e.startDateISO).toLocaleDateString('en-US', { weekday:'long', year:'numeric', month:'long', day:'numeric' })) : ''}
               \${e.venue ? ' &middot; ' + esc(e.venue) : ''}
             </p>
           </div>
         \`).join('');
       } catch (err) {
-        container.innerHTML = '<p class="error">Could not load events. Please try again.</p>';
+        container.innerHTML = '<p class="error" data-testid="public-error">Could not load events. Please try again.</p>';
       }
     })();
   </script>
@@ -153,11 +153,11 @@ const ADMIN_HTML = `<!DOCTYPE html>
   </style>
 </head>
 <body>
-  <header>
+  <header data-testid="admin-header">
     <h1>OurSharedEvents<span class="tier-badge" id="tierBadge" data-testid="tier-badge"></span></h1>
     <span>Admin</span>
   </header>
-  <main>
+  <main data-testid="admin-main">
     <h2>All Events</h2>
     <div id="events" data-testid="events-container"><div class="skeleton-table" data-testid="skeleton-events"><div class="skeleton skeleton-row"></div><div class="skeleton skeleton-row"></div><div class="skeleton skeleton-row"></div><div class="skeleton skeleton-row"></div></div></div>
   </main>
@@ -176,28 +176,28 @@ const ADMIN_HTML = `<!DOCTYPE html>
           const safeName = esc(e.name || 'Untitled');
           const safeId = esc(String(e.id));
           return \`
-          <tr onclick="window.loadForms('\${safeId}', '\${safeName.replace(/'/g, "\\\\'")}'); document.querySelectorAll('tr.selected').forEach(r=>r.classList.remove('selected')); this.classList.add('selected');" class="clickable-row">
-            <td>\${safeId}</td>
-            <td>\${safeName}</td>
-            <td>\${e.startDateISO ? esc(new Date(e.startDateISO).toLocaleDateString()) : '—'}</td>
-            <td>\${esc(e.venue || '—')}</td>
-            <td><span class="badge \${esc(e.status)}">\${esc(e.status)}</span></td>
+          <tr onclick="window.loadForms('\${safeId}', '\${safeName.replace(/'/g, "\\\\'")}'); document.querySelectorAll('tr.selected').forEach(r=>r.classList.remove('selected')); this.classList.add('selected');" class="clickable-row" data-testid="event-row-\${safeId}">
+            <td data-testid="event-id">\${safeId}</td>
+            <td data-testid="event-name">\${safeName}</td>
+            <td data-testid="event-date">\${e.startDateISO ? esc(new Date(e.startDateISO).toLocaleDateString()) : '—'}</td>
+            <td data-testid="event-venue">\${esc(e.venue || '—')}</td>
+            <td><span class="badge \${esc(e.status)}" data-testid="event-status">\${esc(e.status)}</span></td>
           </tr>
         \`}).join('');
         container.innerHTML = \`
-          <table>
+          <table data-testid="events-table">
             <thead><tr><th>ID</th><th>Name</th><th>Date</th><th>Venue</th><th>Status</th></tr></thead>
-            <tbody>\${rows}</tbody>
+            <tbody data-testid="events-tbody">\${rows}</tbody>
           </table>
         \`;
       } catch (err) {
-        container.innerHTML = '<div class="card-error" data-testid="events-error"><div class="error-icon">&#9888;</div><div class="error-msg">Could not load events.</div><button class="retry-btn" onclick="location.reload()">Retry</button></div>';
+        container.innerHTML = '<div class="card-error" data-testid="events-error"><div class="error-icon">&#9888;</div><div class="error-msg">Could not load events.</div><button class="retry-btn" data-testid="events-retry" onclick="location.reload()">Retry</button></div>';
       }
     })();
   </script>
 
   <!-- Card 2: Forms Management -->
-  <div class="forms-card">
+  <div class="forms-card" data-testid="forms-card">
     <h2>Forms (Card 2)</h2>
     <div id="forms-panel" data-testid="forms-panel"><p class="loading">Select an event to manage forms&hellip;</p></div>
   </div>
@@ -232,7 +232,7 @@ const ADMIN_HTML = `<!DOCTYPE html>
         const lockedClass = enabled ? '' : ' feature-locked';
         const lockMsg = enabled ? '' : '<div class="lock-overlay">Upgrade to ' + (t.upgradeTier || 'mid') + ' to unlock</div>';
         return '<div class="' + lockedClass + '" data-testid="form-gate-' + t.key + '">' +
-          '<a class="form-link" href="/forms/' + eventId + '?type=' + t.key + '&event=' + encodedName + '" target="_blank">' +
+          '<a class="form-link" href="/forms/' + eventId + '?type=' + t.key + '&event=' + encodedName + '" target="_blank" data-testid="form-link-' + t.key + '">' +
             '<div class="form-type">' + t.label + '</div>' +
             '<div class="form-desc">' + t.desc + '</div>' +
           '</a>' + lockMsg + '</div>';
@@ -259,18 +259,18 @@ const ADMIN_HTML = `<!DOCTYPE html>
       }).join('');
 
       panel.innerHTML =
-        '<div class="forms-grid">' + linksHtml + '</div>' +
-        '<div class="form-counts">' +
+        '<div class="forms-grid" data-testid="forms-grid">' + linksHtml + '</div>' +
+        '<div class="form-counts" data-testid="form-counts">' +
           counts.map((c, i) =>
-            '<div class="count-box"><div class="count-num">' + c + '</div><div class="count-label">' + countLabels[i] + '</div></div>'
+            '<div class="count-box" data-testid="count-' + countLabels[i].toLowerCase().replace(/\s+/g, '-') + '"><div class="count-num" data-testid="count-num">' + c + '</div><div class="count-label">' + countLabels[i] + '</div></div>'
           ).join('') +
         '</div>' +
-        '<div class="config-section">' +
+        '<div class="config-section" data-testid="config-section">' +
           '<h3>Form Config</h3>' +
           configHtml +
         '</div>';
       } catch (err) {
-        panel.innerHTML = '<div class="card-error" data-testid="forms-error"><div class="error-icon">&#9888;</div><div class="error-msg">Could not load forms.</div><button class="retry-btn" onclick="window.loadForms(\'' + eventId + '\',\'' + eventName.replace(/'/g, "\\\\'") + '\')">Retry</button></div>';
+        panel.innerHTML = '<div class="card-error" data-testid="forms-error"><div class="error-icon">&#9888;</div><div class="error-msg">Could not load forms.</div><button class="retry-btn" data-testid="forms-retry" onclick="window.loadForms(\'' + eventId + '\',\'' + eventName.replace(/'/g, "\\\\'") + '\')">Retry</button></div>';
       }
     };
 
@@ -396,25 +396,25 @@ const LANDING_HTML = `<!DOCTYPE html>
   </style>
 </head>
 <body>
-  <header>
-    <span class="logo">OurSharedEvents</span>
-    <nav>
-      <a href="/events">Events</a>
-      <a href="/admin">Admin</a>
+  <header data-testid="landing-header">
+    <span class="logo" data-testid="landing-logo">OurSharedEvents</span>
+    <nav data-testid="landing-nav">
+      <a href="/events" data-testid="nav-events">Events</a>
+      <a href="/admin" data-testid="nav-admin">Admin</a>
     </nav>
   </header>
-  <main>
-    <section class="hero">
+  <main data-testid="landing-main">
+    <section class="hero" data-testid="hero-section">
       <h1>Gather with your neighborhood on Chicago&#x2019;s Southside</h1>
       <p>Community events that bring people together. Stay in the loop and be the first to know when something&#x2019;s happening near you.</p>
-      <form class="subscribe-form" id="subscribe-form" novalidate>
-        <label for="email-input" class="sr-only" class="sr-only">Email address</label>
-        <input type="email" id="email-input" name="email" placeholder="Enter your email" aria-label="Email address" required>
-        <button type="submit">Stay in the Loop</button>
+      <form class="subscribe-form" id="subscribe-form" data-testid="subscribe-form" novalidate>
+        <label for="email-input" class="sr-only">Email address</label>
+        <input type="email" id="email-input" name="email" placeholder="Enter your email" aria-label="Email address" data-testid="subscribe-email" required>
+        <button type="submit" data-testid="subscribe-submit">Stay in the Loop</button>
         <div class="form-message" id="form-message" role="status" aria-live="polite"></div>
       </form>
     </section>
-    <section class="ring-section" aria-label="Focus neighborhoods">
+    <section class="ring-section" aria-label="Focus neighborhoods" data-testid="ring-section">
       <h2>Our Neighborhood Ring</h2>
       <p class="ring-subtitle">Six Southside communities. One connected flywheel.</p>
       <div class="ring-container" data-testid="ring-layout">
@@ -427,25 +427,25 @@ const LANDING_HTML = `<!DOCTYPE html>
         <div class="ring-node n-ol" data-testid="ring-node-ol" aria-label="Oak Lawn neighborhood">Oak Lawn</div>
       </div>
     </section>
-    <section class="features">
-      <div class="feature-card">
+    <section class="features" data-testid="features-section">
+      <div class="feature-card" data-testid="feature-events">
         <div class="feature-icon events" role="img" aria-hidden="true">&#x1F4C5;</div>
         <h3>Shared Events</h3>
         <p>Browse upcoming gatherings, leagues, and community nights happening across the neighborhood.</p>
       </div>
-      <div class="feature-card">
+      <div class="feature-card" data-testid="feature-sponsors">
         <div class="feature-icon sponsors" role="img" aria-hidden="true">&#x1F91D;</div>
         <h3>Local Sponsors</h3>
         <p>Neighborhood businesses supporting the events you love. Real partnerships, real impact.</p>
       </div>
-      <div class="feature-card">
+      <div class="feature-card" data-testid="feature-community">
         <div class="feature-icon community" role="img" aria-hidden="true">&#x1F3D8;</div>
         <h3>Community First</h3>
         <p>Built for the Southside, by the Southside. Every event strengthens the bonds that matter.</p>
       </div>
     </section>
   </main>
-  <footer>
+  <footer data-testid="landing-footer">
     <p>&#xA9; 2026 OurSharedEvents &#xB7; <a href="/events">Browse Events</a></p>
   </footer>
   <script type="module">
@@ -722,14 +722,14 @@ const DISPLAY_HTML = `<!DOCTYPE html>
   </style>
 </head>
 <body>
-  <header>
+  <header data-testid="display-header">
     <h1>OurSharedEvents</h1>
-    <div class="clock" id="clock" aria-live="off"></div>
+    <div class="clock" id="clock" aria-live="off" data-testid="display-clock"></div>
   </header>
-  <main id="main">
+  <main id="main" data-testid="display-main">
     <p class="empty">Loading&hellip;</p>
   </main>
-  <div class="ticker" aria-hidden="true"><span class="ticker-inner" id="ticker">OurSharedEvents &mdash; Community events on Chicago&rsquo;s Southside</span></div>
+  <div class="ticker" aria-hidden="true" data-testid="display-ticker"><span class="ticker-inner" id="ticker">OurSharedEvents &mdash; Community events on Chicago&rsquo;s Southside</span></div>
   <script>
     // Clock
     function updateClock() {
@@ -828,16 +828,16 @@ const POSTER_HTML = `<!DOCTYPE html>
   </style>
 </head>
 <body>
-  <div class="page-header no-print">
+  <div class="page-header no-print" data-testid="poster-header">
     <h1>OurSharedEvents — Poster</h1>
-    <a href="javascript:window.print()">&#x1F5A8; Print</a>
+    <a href="javascript:window.print()" data-testid="poster-print">&#x1F5A8; Print</a>
   </div>
-  <div class="container">
-    <div class="event-select no-print">
+  <div class="container" data-testid="poster-container">
+    <div class="event-select no-print" data-testid="poster-event-select">
       <label for="event-picker">Select Event</label>
-      <select id="event-picker"><option value="">Loading events&hellip;</option></select>
+      <select id="event-picker" data-testid="poster-event-picker"><option value="">Loading events&hellip;</option></select>
     </div>
-    <div id="poster-area"><p class="loading">Loading&hellip;</p></div>
+    <div id="poster-area" data-testid="poster-area"><p class="loading">Loading&hellip;</p></div>
   </div>
   <script>
     const esc = s => { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; };
@@ -932,21 +932,21 @@ const SHARED_REPORT_HTML = `<!DOCTYPE html>
   </style>
 </head>
 <body>
-  <header>
+  <header data-testid="report-header">
     <h1>OurSharedEvents</h1>
     <span>Shared Report</span>
   </header>
-  <main>
+  <main data-testid="report-main">
     <div>
       <div class="section-title">Events Overview</div>
-      <div class="stats-row" id="stats-row">
-        <div class="stat-card"><div class="num" id="stat-total">&mdash;</div><div class="label">Total Events</div></div>
-        <div class="stat-card"><div class="num" id="stat-active">&mdash;</div><div class="label">Active</div></div>
+      <div class="stats-row" id="stats-row" data-testid="report-stats">
+        <div class="stat-card" data-testid="stat-total"><div class="num" id="stat-total">&mdash;</div><div class="label">Total Events</div></div>
+        <div class="stat-card" data-testid="stat-active"><div class="num" id="stat-active">&mdash;</div><div class="label">Active</div></div>
       </div>
     </div>
     <div>
       <div class="section-title">Events</div>
-      <div class="events-list" id="events-list"><p class="loading">Loading&hellip;</p></div>
+      <div class="events-list" id="events-list" data-testid="report-events-list"><p class="loading">Loading&hellip;</p></div>
     </div>
   </main>
   <script>
@@ -964,11 +964,11 @@ const SHARED_REPORT_HTML = `<!DOCTYPE html>
           listEl.innerHTML = '<p class="empty">No events to report.</p>';
           return;
         }
-        listEl.innerHTML = items.map(e => '<div class="event-row">' +
-          '<div class="name">' + esc(e.name || 'Untitled') + '</div>' +
+        listEl.innerHTML = items.map(e => '<div class="event-row" data-testid="report-event-row">' +
+          '<div class="name" data-testid="report-event-name">' + esc(e.name || 'Untitled') + '</div>' +
           '<div class="flex-row">' +
-          '<div class="date">' + esc(fmt(e.startDateISO)) + '</div>' +
-          '<span class="badge ' + esc(e.status || '') + '">' + esc(e.status || '') + '</span>' +
+          '<div class="date" data-testid="report-event-date">' + esc(fmt(e.startDateISO)) + '</div>' +
+          '<span class="badge ' + esc(e.status || '') + '" data-testid="report-event-status">' + esc(e.status || '') + '</span>' +
           '</div></div>').join('');
       } catch {
         listEl.innerHTML = '<p class="empty">Could not load data.</p>';
