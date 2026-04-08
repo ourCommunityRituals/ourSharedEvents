@@ -135,6 +135,10 @@ const ADMIN_HTML = `<!DOCTYPE html>
     .form-counts .count-box { text-align: center; padding: .5rem; background: #f8f9fa; border-radius: 6px; }
     .form-counts .count-num { font-size: 1.5rem; font-weight: 700; color: #1a1a2e; }
     .form-counts .count-label { font-size: .7rem; color: #868e96; text-transform: uppercase; }
+    .clickable-row { cursor: pointer; }
+    .muted-sm { color: #868e96; font-size: .8rem; }
+    .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
+    .flex-row { display: flex; align-items: center; gap: .75rem; }
   </style>
 </head>
 <body>
@@ -161,7 +165,7 @@ const ADMIN_HTML = `<!DOCTYPE html>
           const safeName = esc(e.name || 'Untitled');
           const safeId = esc(String(e.id));
           return \`
-          <tr onclick="window.loadForms('\${safeId}', '\${safeName.replace(/'/g, "\\\\'")}'); document.querySelectorAll('tr.selected').forEach(r=>r.classList.remove('selected')); this.classList.add('selected');" style="cursor:pointer">
+          <tr onclick="window.loadForms('\${safeId}', '\${safeName.replace(/'/g, "\\\\'")}'); document.querySelectorAll('tr.selected').forEach(r=>r.classList.remove('selected')); this.classList.add('selected');" class="clickable-row">
             <td>\${safeId}</td>
             <td>\${safeName}</td>
             <td>\${e.startDateISO ? esc(new Date(e.startDateISO).toLocaleDateString()) : '—'}</td>
@@ -230,7 +234,7 @@ const ADMIN_HTML = `<!DOCTYPE html>
         const checked = eventEnabled ? ' checked' : '';
         return '<div class="form-config" data-testid="form-config-' + t.key + '">' +
           '<div>' +
-            '<div class="form-config-label">' + t.label + ' <span style="color:#868e96;font-size:.8rem">(' + counts[i] + ')</span></div>' +
+            '<div class="form-config-label">' + t.label + ' <span class="muted-sm">(' + counts[i] + ')</span></div>' +
             '<div class="form-config-desc">' + t.desc + (disabled ? ' — requires ' + (t.upgradeTier || 'upgrade') : '') + '</div>' +
           '</div>' +
           '<label class="toggle">' +
@@ -388,7 +392,7 @@ const LANDING_HTML = `<!DOCTYPE html>
       <h1>Gather with your neighborhood on Chicago&#x2019;s Southside</h1>
       <p>Community events that bring people together. Stay in the loop and be the first to know when something&#x2019;s happening near you.</p>
       <form class="subscribe-form" id="subscribe-form" novalidate>
-        <label for="email-input" class="sr-only" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);">Email address</label>
+        <label for="email-input" class="sr-only" class="sr-only">Email address</label>
         <input type="email" id="email-input" name="email" placeholder="Enter your email" aria-label="Email address" required>
         <button type="submit">Stay in the Loop</button>
         <div class="form-message" id="form-message" role="status" aria-live="polite"></div>
@@ -946,7 +950,7 @@ const SHARED_REPORT_HTML = `<!DOCTYPE html>
         }
         listEl.innerHTML = items.map(e => '<div class="event-row">' +
           '<div class="name">' + esc(e.name || 'Untitled') + '</div>' +
-          '<div style="display:flex;align-items:center;gap:.75rem">' +
+          '<div class="flex-row">' +
           '<div class="date">' + esc(fmt(e.startDateISO)) + '</div>' +
           '<span class="badge ' + esc(e.status || '') + '">' + esc(e.status || '') + '</span>' +
           '</div></div>').join('');
