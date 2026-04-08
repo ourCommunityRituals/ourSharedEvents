@@ -182,6 +182,214 @@ describe('ADMIN-13: Skeleton loaders and error states', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// ADMIN-14: Surface link cards (poster, display, public, report)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ── Layer 1: Structure — HTML template contains expected elements ────────────
+
+describe('ADMIN-14 Structure: Surface cards in admin HTML', () => {
+  test('surface-cards container present with data-testid', async () => {
+    const html = await fetchAdminHtml();
+    expect(html).toContain('data-testid="surface-cards"');
+  });
+
+  const surfaces = [
+    { key: 'poster', href: '/poster', title: 'Poster Page' },
+    { key: 'display', href: '/display', title: 'TV Display' },
+    { key: 'public', href: '/', title: 'Public Page' },
+    { key: 'report', href: '/sharedReport', title: 'Shared Report' },
+  ];
+
+  for (const s of surfaces) {
+    test(`${s.key} card has card, link, copy button, and QR hint`, async () => {
+      const html = await fetchAdminHtml();
+      expect(html).toContain(`data-testid="card-${s.key}"`);
+      expect(html).toContain(`data-testid="link-${s.key}"`);
+      expect(html).toContain(`href="${s.href}"`);
+      expect(html).toContain(`data-testid="copy-${s.key}"`);
+      expect(html).toContain(`QR-ready: ${s.href}`);
+      expect(html).toContain(s.title);
+    });
+  }
+
+  test('all links open in new tab (target="_blank")', async () => {
+    const html = await fetchAdminHtml();
+    // Each surface link <a> has target="_blank" — check by matching the full tag
+    const linkTags = html.match(/<a[^>]*data-testid="link-\w+"[^>]*>/g) ?? [];
+    expect(linkTags.length).toBe(4);
+    for (const tag of linkTags) {
+      expect(tag).toContain('target="_blank"');
+    }
+  });
+});
+
+// ── Layer 2: CSS — visual classes defined for card styling ───────────────────
+
+describe('ADMIN-14 CSS: Surface card styles', () => {
+  test('surface card base + per-surface border colors defined', async () => {
+    const html = await fetchAdminHtml();
+    expect(html).toContain('.surface-card {');
+    expect(html).toContain('.surface-card.poster');
+    expect(html).toContain('.surface-card.display');
+    expect(html).toContain('.surface-card.public');
+    expect(html).toContain('.surface-card.report');
+  });
+
+  test('surface cards grid layout defined', async () => {
+    const html = await fetchAdminHtml();
+    expect(html).toContain('.surface-cards {');
+    expect(html).toMatch(/\.surface-cards\s*\{[^}]*grid/);
+  });
+
+  test('QR hint style defined', async () => {
+    const html = await fetchAdminHtml();
+    expect(html).toContain('.qr-hint');
+  });
+});
+
+// ── Layer 3: Integration — linked surfaces respond with 200 HTML ────────────
+
+describe('ADMIN-14 Integration: Surface routes serve content', () => {
+  const surfaceRoutes = [
+    { path: '/poster', name: 'Poster' },
+    { path: '/display', name: 'Display' },
+    { path: '/', name: 'Landing/Public' },
+    { path: '/sharedReport', name: 'SharedReport' },
+  ];
+
+  for (const route of surfaceRoutes) {
+    test(`GET ${route.path} → 200 HTML (${route.name})`, async () => {
+      const res = await SELF.fetch(`https://t.test${route.path}`);
+      expect(res.status).toBe(200);
+      expect(res.headers.get('Content-Type')).toContain('text/html');
+      const html = await res.text();
+      expect(html).toContain('<!DOCTYPE html>');
+      expect(html).toContain('OurSharedEvents');
+    });
+  }
+
+  test('all surfaces have data-testid on their header element', async () => {
+    const paths = ['/poster', '/display', '/sharedReport'];
+    for (const path of paths) {
+      const res = await SELF.fetch(`https://t.test${path}`);
+      const html = await res.text();
+      expect(html).toMatch(/data-testid="(poster|display|report|landing|public)-header"/);
+    }
+  });
+});
+
+// ── Layer 4: Contract — admin card links match actual route paths ────────────
+
+describe('ADMIN-14 Contract: Admin links match real routes', () => {
+  test('every href in surface cards resolves to a live route (not 404)', async () => {
+    const adminHtml = await fetchAdminHtml();
+    const hrefs = ['/poster', '/display', '/', '/sharedReport'];
+    for (const href of hrefs) {
+      expect(adminHtml).toContain(`href="${href}"`);
+      const res = await SELF.fetch(`https://t.test${href}`);
+      expect(res.status).not.toBe(404);
+    }
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ADMIN-15: Copy button feedback
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ── Layer 1: Structure — copy buttons present with correct wiring ────────────
+
+describe('ADMIN-15 Structure: Copy buttons', () => {
+  const surfaces = ['poster', 'display', 'public', 'report'];
+
+  for (const s of surfaces) {
+    test(`copy-${s} button has data-testid and onclick`, async () => {
+      const html = await fetchAdminHtml();
+      expect(html).toContain(`data-testid="copy-${s}"`);
+      expect(html).toMatch(new RegExp(`data-testid="copy-${s}"[^>]*onclick="copyUrl\\(`));
+    });
+  }
+
+  test('copy buttons render as <button> elements (not links)', async () => {
+    const html = await fetchAdminHtml();
+    const copyBtns = html.match(/<button[^>]*class="copy-btn"[^>]*>/g) ?? [];
+    expect(copyBtns.length).toBe(4);
+  });
+});
+
+// ── Layer 2: CSS — copy button states ────────────────────────────────────────
+
+describe('ADMIN-15 CSS: Copy button visual states', () => {
+  test('default copy-btn style defined', async () => {
+    const html = await fetchAdminHtml();
+    expect(html).toContain('.copy-btn {');
+    expect(html).toMatch(/\.copy-btn\s*\{[^}]*cursor:\s*pointer/);
+  });
+
+  test('hover state defined', async () => {
+    const html = await fetchAdminHtml();
+    expect(html).toContain('.copy-btn:hover');
+  });
+
+  test('copied success state with green styling', async () => {
+    const html = await fetchAdminHtml();
+    expect(html).toContain('.copy-btn.copied');
+    expect(html).toMatch(/\.copy-btn\.copied\s*\{[^}]*#d3f9d8/);
+    expect(html).toMatch(/\.copy-btn\.copied\s*\{[^}]*#2f9e44/);
+  });
+});
+
+// ── Layer 3: JS Logic — copyUrl function behavior ───────────────────────────
+
+describe('ADMIN-15 JS: copyUrl function', () => {
+  test('function defined and callable', async () => {
+    const html = await fetchAdminHtml();
+    expect(html).toContain('function copyUrl(path, btn)');
+  });
+
+  test('builds full URL from location.origin + path', async () => {
+    const html = await fetchAdminHtml();
+    expect(html).toContain('location.origin + path');
+  });
+
+  test('uses navigator.clipboard.writeText API', async () => {
+    const html = await fetchAdminHtml();
+    expect(html).toContain('navigator.clipboard.writeText(url)');
+  });
+
+  test('shows "Copied!" text on success', async () => {
+    const html = await fetchAdminHtml();
+    expect(html).toContain("btn.textContent = 'Copied!'");
+  });
+
+  test('adds .copied class on success', async () => {
+    const html = await fetchAdminHtml();
+    expect(html).toContain("btn.classList.add('copied')");
+  });
+
+  test('reverts to "Copy URL" after 2000ms', async () => {
+    const html = await fetchAdminHtml();
+    expect(html).toContain("btn.textContent = 'Copy URL'");
+    expect(html).toContain("btn.classList.remove('copied')");
+    // setTimeout wraps the revert with a 2s delay
+    expect(html).toContain('}, 2000)');
+  });
+
+  test('handles clipboard failure gracefully', async () => {
+    const html = await fetchAdminHtml();
+    expect(html).toContain('.catch(');
+    expect(html).toContain("btn.textContent = 'Failed'");
+  });
+
+  test('each copy button passes the correct path to copyUrl', async () => {
+    const html = await fetchAdminHtml();
+    expect(html).toContain("copyUrl('/poster'");
+    expect(html).toContain("copyUrl('/display'");
+    expect(html).toContain("copyUrl('/'");
+    expect(html).toContain("copyUrl('/sharedReport'");
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // Auth gate: admin page requires auth
 // ═══════════════════════════════════════════════════════════════════════════════
 

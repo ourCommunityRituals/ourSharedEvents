@@ -135,6 +135,20 @@ const ADMIN_HTML = `<!DOCTYPE html>
     .form-counts .count-box { text-align: center; padding: .5rem; background: #f8f9fa; border-radius: 6px; }
     .form-counts .count-num { font-size: 1.5rem; font-weight: 700; color: #1a1a2e; }
     .form-counts .count-label { font-size: .7rem; color: #868e96; text-transform: uppercase; }
+    .surface-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-top: 2rem; }
+    .surface-card { background: #fff; border-radius: 8px; padding: 1rem 1.25rem; box-shadow: 0 1px 3px rgba(0,0,0,.08); border-left: 3px solid #868e96; }
+    .surface-card h3 { font-size: .9rem; font-weight: 600; margin-bottom: .35rem; }
+    .surface-card p { font-size: .8rem; color: #868e96; margin-bottom: .5rem; }
+    .surface-card a { font-size: .8rem; color: #4361ee; text-decoration: none; font-weight: 500; }
+    .surface-card a:hover { text-decoration: underline; }
+    .surface-card.poster  { border-left-color: #d97706; }
+    .surface-card.display { border-left-color: #2563eb; }
+    .surface-card.public  { border-left-color: #16a34a; }
+    .surface-card.report  { border-left-color: #7c3aed; }
+    .qr-hint { font-size: .7rem; color: #adb5bd; margin-top: .25rem; }
+    .copy-btn { display: inline-block; padding: .2rem .5rem; background: #f1f3f5; border: 1px solid #dee2e6; border-radius: 4px; font-size: .75rem; cursor: pointer; color: #495057; margin-left: .5rem; transition: background .2s, color .2s; }
+    .copy-btn:hover { background: #e9ecef; }
+    .copy-btn.copied { background: #d3f9d8; color: #2f9e44; border-color: #b2f2bb; }
     .clickable-row { cursor: pointer; }
     .muted-sm { color: #868e96; font-size: .8rem; }
     .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
@@ -292,6 +306,53 @@ const ADMIN_HTML = `<!DOCTYPE html>
         console.error('Flag toggle failed:', err);
       }
     };
+  </script>
+
+  <!-- Cards 4-7: Surface Links -->
+  <div class="surface-cards" data-testid="surface-cards">
+    <div class="surface-card poster" data-testid="card-poster">
+      <h3>Poster Page</h3>
+      <p>Print-ready event poster with QR codes</p>
+      <a href="/poster" target="_blank" data-testid="link-poster">Open Poster</a>
+      <button class="copy-btn" data-testid="copy-poster" onclick="copyUrl('/poster', this)">Copy URL</button>
+      <div class="qr-hint">QR-ready: /poster</div>
+    </div>
+    <div class="surface-card display" data-testid="card-display">
+      <h3>TV Display</h3>
+      <p>Bar TV / kiosk live event display</p>
+      <a href="/display" target="_blank" data-testid="link-display">Open Display</a>
+      <button class="copy-btn" data-testid="copy-display" onclick="copyUrl('/display', this)">Copy URL</button>
+      <div class="qr-hint">QR-ready: /display</div>
+    </div>
+    <div class="surface-card public" data-testid="card-public">
+      <h3>Public Page</h3>
+      <p>Customer-facing events listing</p>
+      <a href="/" target="_blank" data-testid="link-public">Open Public Page</a>
+      <button class="copy-btn" data-testid="copy-public" onclick="copyUrl('/', this)">Copy URL</button>
+      <div class="qr-hint">QR-ready: /</div>
+    </div>
+    <div class="surface-card report" data-testid="card-report">
+      <h3>Shared Report</h3>
+      <p>Post-event analytics dashboard</p>
+      <a href="/sharedReport" target="_blank" data-testid="link-report">Open Report</a>
+      <button class="copy-btn" data-testid="copy-report" onclick="copyUrl('/sharedReport', this)">Copy URL</button>
+      <div class="qr-hint">QR-ready: /sharedReport</div>
+    </div>
+  </div>
+
+  <!-- Copy URL helper -->
+  <script>
+    function copyUrl(path, btn) {
+      const url = location.origin + path;
+      navigator.clipboard.writeText(url).then(() => {
+        btn.textContent = 'Copied!';
+        btn.classList.add('copied');
+        setTimeout(() => { btn.textContent = 'Copy URL'; btn.classList.remove('copied'); }, 2000);
+      }).catch(() => {
+        btn.textContent = 'Failed';
+        setTimeout(() => { btn.textContent = 'Copy URL'; }, 2000);
+      });
+    }
   </script>
 
   <!-- Tier badge + feature gating -->

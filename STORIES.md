@@ -107,8 +107,8 @@ Stories are ordered by the sequence you work through them. Each row unlocks the 
 | ADMIN-11                                          | —        | ✅ DONE        | Form data export (CSV/JSON)                                           | ADMIN-3          |
 | ADMIN-12                                          | —        | ✅ DONE        | Admin inline styles → CSS classes                                     | —                |
 | ADMIN-13                                          | —        | ✅ DONE        | Skeleton loaders + per-card error states                              | —                |
-| ADMIN-14                                          | —        | 📋 BACKLOG     | Card 5 QR code + Card 7 QR visibility                                 | —                |
-| ADMIN-15                                          | —        | 📋 BACKLOG     | Copy button feedback ("Copied!" 2s state)                             | —                |
+| ADMIN-14                                          | —        | ✅ DONE        | Card 5 QR code + Card 7 QR visibility                                 | —                |
+| ADMIN-15                                          | —        | ✅ DONE        | Copy button feedback ("Copied!" 2s state)                             | —                |
 | ADMIN-16                                          | —        | ✅ DONE        | data-testid complete coverage (all interactive elements)              | —                |
 | ADMIN-17                                          | —        | 📋 BACKLOG     | File upload to R2 (logos, posters, custom QR)                         | ADMIN-1          |
 | ADMIN-18                                          | —        | 📋 BACKLOG     | White-label branding (colors/logo/domain)                             | ADMIN-1          |
