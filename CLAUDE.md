@@ -10,11 +10,11 @@
 
 ### Phase Model (3 Phases)
 
-| Phase       | Stack                                              | Status            |
-| ----------- | -------------------------------------------------- | ----------------- |
-| **Phase 1** | Cloudflare Worker + Google Sheets                  | Build ✅ / Ops 📋 |
-| **Phase 2** | Cloudflare Worker + D1 (edge SQLite)               | Foundation laid   |
-| **Phase 3** | Firebase Auth + React/Tailwind on Firebase Hosting | Not started       |
+| Phase       | Stack                                                | Status            |
+| ----------- | ---------------------------------------------------- | ----------------- |
+| **Phase 1** | Cloudflare Worker + D1 (migrated from Google Sheets) | Build ✅ / Ops 📋 |
+| **Phase 2** | Cloudflare Worker + D1 (edge SQLite)                 | Foundation laid   |
+| **Phase 3** | Firebase Auth + React/Tailwind on Firebase Hosting   | Not started       |
 
 **Key principle**: Code is written and tested NOW, infrastructure is the last step. CC writes Worker routes, tests, migrations, and PRs without needing a live staging URL. CI validates. Infrastructure deployment happens when ready.
 
@@ -88,14 +88,12 @@ workers/oursharedevents/src/
 ├── auth/admin.ts         # Admin auth guard (CF Access JWT + Bearer fallback)
 ├── handlers/
 │   ├── health.ts         # Health check
-│   ├── events.ts         # Events API (Sheets Phase 1)
+│   ├── events.ts         # Events API (D1)
 │   ├── pages.ts          # HTML pages (public, admin, landing)
 │   ├── forms.ts          # Form submissions (register, checkin, survey, email)
 │   ├── form-pages.ts     # Mobile-first QR form landing pages
 │   └── feature-flags.ts  # Admin flag management (8 endpoints)
 └── lib/
-    ├── google-auth.ts    # Google JWT (Phase 1)
-    ├── sheets.ts         # Google Sheets client (Phase 1)
     ├── forms-db.ts       # Privacy utilities (hash, encrypt, bucket)
     ├── feature-flags.ts  # Flag resolution (3-tier: free/mid/enterprise)
     └── cors.ts           # CORS allowlist
@@ -171,7 +169,6 @@ Every story is implemented from all six POVs simultaneously. CC reads all six an
 
 ## 4. Known Constraints
 
-- **Google Sheets latency**: 200-800ms per request (Phase 1 limitation, fixed in Phase 2)
 - **Single admin token**: Shared Bearer token (Phase 1 limitation, fixed in Phase 3)
 - **HTML in Worker bundle**: ~200KB embedded templates (Phase 1, moved to CDN in Phase 3)
 - **No live infrastructure yet**: CF zone, D1, Firebase not provisioned — code-first approach
@@ -272,7 +269,7 @@ Each story should include:
 | `.claude/research/`              | Analysis, references (syncs with CoWork Research/)                              | As needed               |
 | `.claude/skills/`                | Reusable skill definitions                                                      | As needed               |
 | `.claude/skills/ccr-protocol.md` | CCR Protocol — standard for all assessments, reviews, test gating, code reviews | Reference               |
-| `.claude/sync/LINEAR-MAP.md`     | Story ID ↔ Linear `OUR-XXX` mapping                                            | After Linear import     |
+| `.claude/sync/LINEAR-MAP.md`     | Story ID ↔ Linear `OUR-XXX` mapping                                             | After Linear import     |
 | `docs/migration/PHASE-*.md`      | Phase implementation guides                                                     | Per phase               |
 | `docs/stories/*.md`              | Detailed story specs                                                            | Per story               |
 

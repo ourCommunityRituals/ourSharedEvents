@@ -11,11 +11,11 @@ Step-by-step instructions to get the domain live from scratch.
 
 Set these in **GitHub → repo Settings → Secrets and variables → Actions**:
 
-| Secret | Description |
-|--------|-------------|
-| `CLOUDFLARE_API_TOKEN` | Cloudflare API token with Worker deploy permissions |
-| `CLOUDFLARE_ACCOUNT_ID` | Your Cloudflare account ID (dashboard URL: `.../accounts/<id>`) |
-| `ADMIN_KEY` | Bearer token for admin route auth (generate a random 32+ char string) |
+| Secret                  | Description                                                           |
+| ----------------------- | --------------------------------------------------------------------- |
+| `CLOUDFLARE_API_TOKEN`  | Cloudflare API token with Worker deploy permissions                   |
+| `CLOUDFLARE_ACCOUNT_ID` | Your Cloudflare account ID (dashboard URL: `.../accounts/<id>`)       |
+| `ADMIN_KEY`             | Bearer token for admin route auth (generate a random 32+ char string) |
 
 These are used by `.github/workflows/oursharedevents-ci.yml` on every push to `main`.
 
@@ -39,11 +39,11 @@ These are used by `.github/workflows/oursharedevents-ci.yml` on every push to `m
 
 Once the zone is active, add these records in **Cloudflare → DNS → Records**:
 
-| Type  | Name  | Content   | Proxy  | TTL  |
-|-------|-------|-----------|--------|------|
-| A     | @     | 192.0.2.1 | Yes    | Auto |
-| A     | www   | 192.0.2.1 | Yes    | Auto |
-| A     | stg   | 192.0.2.1 | Yes    | Auto |
+| Type | Name | Content   | Proxy | TTL  |
+| ---- | ---- | --------- | ----- | ---- |
+| A    | @    | 192.0.2.1 | Yes   | Auto |
+| A    | www  | 192.0.2.1 | Yes   | Auto |
+| A    | stg  | 192.0.2.1 | Yes   | Auto |
 
 > **Note:** The IP `192.0.2.1` is a dummy — the Worker intercepts all requests
 > before they ever reach an origin server. The A record just needs to exist so
@@ -75,20 +75,16 @@ npm run deploy:prod
 Run these for each environment. You'll be prompted to enter the value securely.
 
 **Staging:**
+
 ```bash
 cd workers/oursharedevents
-wrangler secret put ADMIN_TOKEN             --env staging
-wrangler secret put SHEETS_SPREADSHEET_ID  --env staging
-wrangler secret put GOOGLE_SA_CLIENT_EMAIL --env staging
-wrangler secret put GOOGLE_SA_PRIVATE_KEY_PEM --env staging
+wrangler secret put ADMIN_TOKEN --env staging
 ```
 
 **Production:**
+
 ```bash
-wrangler secret put ADMIN_TOKEN             --env production
-wrangler secret put SHEETS_SPREADSHEET_ID  --env production
-wrangler secret put GOOGLE_SA_CLIENT_EMAIL --env production
-wrangler secret put GOOGLE_SA_PRIVATE_KEY_PEM --env production
+wrangler secret put ADMIN_TOKEN --env production
 ```
 
 ---
@@ -104,6 +100,7 @@ curl https://oursharedevents.com/health
 ```
 
 Expected response:
+
 ```json
 { "ok": true, "env": "staging", "version": "stg-2026.03.22", "timestamp": "..." }
 ```
@@ -113,6 +110,7 @@ Expected response:
 ## Optional – Enable HTTPS redirect
 
 In Cloudflare dashboard:
+
 - **SSL/TLS → Overview** → set mode to **Full (strict)**
 - **SSL/TLS → Edge Certificates** → enable **Always Use HTTPS**
 
@@ -120,9 +118,9 @@ In Cloudflare dashboard:
 
 ## Troubleshooting
 
-| Symptom | Fix |
-|---------|-----|
-| Worker not triggered | Check route pattern in wrangler.toml matches exactly |
-| 1101 error | Worker threw an unhandled exception — check `wrangler tail --env staging` |
-| DNS not resolving | Nameserver change may still be propagating (up to 48h) |
-| Secrets not found | Run `wrangler secret list --env staging` to confirm they're set |
+| Symptom              | Fix                                                                       |
+| -------------------- | ------------------------------------------------------------------------- |
+| Worker not triggered | Check route pattern in wrangler.toml matches exactly                      |
+| 1101 error           | Worker threw an unhandled exception — check `wrangler tail --env staging` |
+| DNS not resolving    | Nameserver change may still be propagating (up to 48h)                    |
+| Secrets not found    | Run `wrangler secret list --env staging` to confirm they're set           |
