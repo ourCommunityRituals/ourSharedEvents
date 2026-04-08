@@ -934,29 +934,7 @@ console.log(result);
 
 ### 8.2 Setting Up Scheduled Backups
 
-To run backups automatically:
-
-```javascript
-// Run once in Apps Script editor to install trigger
-function installBackupTrigger_() {
-  // Check if trigger already exists
-  const triggers = ScriptApp.getProjectTriggers();
-  for (const trigger of triggers) {
-    if (trigger.getHandlerFunction() === 'backupControlSheet') {
-      return 'Trigger already exists';
-    }
-  }
-
-  // Create weekly trigger (Sundays at 3 AM)
-  ScriptApp.newTrigger('backupControlSheet')
-    .timeBased()
-    .onWeekDay(ScriptApp.WeekDay.SUNDAY)
-    .atHour(3)
-    .create();
-
-  return 'Weekly backup trigger installed';
-}
-```
+Scheduled backups are configured via the Cloudflare Worker cron trigger in `wrangler.toml`. No manual installation is required.
 
 ### 8.3 Checking Backup Health
 
