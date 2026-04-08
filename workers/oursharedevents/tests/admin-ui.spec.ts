@@ -138,6 +138,50 @@ describe('ADMIN-12: No inline styles in admin HTML', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// ADMIN-13: Skeleton loaders + error states
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('ADMIN-13: Skeleton loaders and error states', () => {
+  test('skeleton shimmer animation defined in CSS', async () => {
+    const html = await fetchAdminHtml();
+    expect(html).toContain('@keyframes shimmer');
+    expect(html).toContain('.skeleton');
+    expect(html).toContain('.skeleton-table');
+    expect(html).toContain('.skeleton-row');
+  });
+
+  test('events container starts with skeleton loader', async () => {
+    const html = await fetchAdminHtml();
+    expect(html).toContain('data-testid="skeleton-events"');
+    expect(html).toContain('data-testid="events-container"');
+  });
+
+  test('forms panel shows skeleton when loading', async () => {
+    const html = await fetchAdminHtml();
+    expect(html).toContain('data-testid="skeleton-forms"');
+  });
+
+  test('card-error CSS defined with retry button', async () => {
+    const html = await fetchAdminHtml();
+    expect(html).toContain('.card-error');
+    expect(html).toContain('.retry-btn');
+    expect(html).toContain('.error-icon');
+    expect(html).toContain('.error-msg');
+  });
+
+  test('events error state has retry button and data-testid', async () => {
+    const html = await fetchAdminHtml();
+    expect(html).toContain('data-testid="events-error"');
+    expect(html).toContain('location.reload()');
+  });
+
+  test('forms error state has retry button and data-testid', async () => {
+    const html = await fetchAdminHtml();
+    expect(html).toContain('data-testid="forms-error"');
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // Auth gate: admin page requires auth
 // ═══════════════════════════════════════════════════════════════════════════════
 

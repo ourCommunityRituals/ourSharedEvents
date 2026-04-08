@@ -139,6 +139,17 @@ const ADMIN_HTML = `<!DOCTYPE html>
     .muted-sm { color: #868e96; font-size: .8rem; }
     .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
     .flex-row { display: flex; align-items: center; gap: .75rem; }
+    @keyframes shimmer { 0% { background-position: -200px 0; } 100% { background-position: 200px 0; } }
+    .skeleton { background: linear-gradient(90deg, #f1f3f5 25%, #e9ecef 50%, #f1f3f5 75%); background-size: 400px 100%; animation: shimmer 1.5s ease-in-out infinite; border-radius: 4px; }
+    .skeleton-row { height: 1rem; margin-bottom: .5rem; }
+    .skeleton-table { display: flex; flex-direction: column; gap: .5rem; padding: 1.5rem; background: #fff; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+    .skeleton-table .skeleton-row { height: 2.5rem; border-radius: 6px; }
+    .skeleton-table .skeleton-row:first-child { height: 2rem; width: 60%; }
+    .card-error { text-align: center; padding: 1.5rem; background: #fff5f5; border: 1px solid #ffc9c9; border-radius: 8px; color: #c92a2a; }
+    .card-error .error-icon { font-size: 1.5rem; margin-bottom: .5rem; }
+    .card-error .error-msg { font-size: .85rem; }
+    .card-error .retry-btn { display: inline-block; margin-top: .75rem; padding: .4rem 1rem; background: #fff; border: 1px solid #dee2e6; border-radius: 6px; font-size: .8rem; cursor: pointer; color: #495057; }
+    .card-error .retry-btn:hover { background: #f8f9fa; }
   </style>
 </head>
 <body>
@@ -148,7 +159,7 @@ const ADMIN_HTML = `<!DOCTYPE html>
   </header>
   <main>
     <h2>All Events</h2>
-    <div id="events"><p class="loading">Loading&hellip;</p></div>
+    <div id="events" data-testid="events-container"><div class="skeleton-table" data-testid="skeleton-events"><div class="skeleton skeleton-row"></div><div class="skeleton skeleton-row"></div><div class="skeleton skeleton-row"></div><div class="skeleton skeleton-row"></div></div></div>
   </main>
   <script>
     (async () => {
@@ -180,7 +191,7 @@ const ADMIN_HTML = `<!DOCTYPE html>
           </table>
         \`;
       } catch (err) {
-        container.innerHTML = '<p class="error">Could not load events.</p>';
+        container.innerHTML = '<div class="card-error" data-testid="events-error"><div class="error-icon">&#9888;</div><div class="error-msg">Could not load events.</div><button class="retry-btn" onclick="location.reload()">Retry</button></div>';
       }
     })();
   </script>
@@ -188,12 +199,14 @@ const ADMIN_HTML = `<!DOCTYPE html>
   <!-- Card 2: Forms Management -->
   <div class="forms-card">
     <h2>Forms (Card 2)</h2>
-    <div id="forms-panel"><p class="loading">Select an event to manage forms&hellip;</p></div>
+    <div id="forms-panel" data-testid="forms-panel"><p class="loading">Select an event to manage forms&hellip;</p></div>
   </div>
   <script>
     // Forms card — load counts and generate QR links for selected event
     window.loadForms = async function(eventId, eventName) {
       const panel = document.getElementById('forms-panel');
+      panel.innerHTML = '<div class="skeleton-table" data-testid="skeleton-forms"><div class="skeleton skeleton-row"></div><div class="skeleton skeleton-row"></div><div class="skeleton skeleton-row"></div></div>';
+      try {
       const types = [
         { key: 'register', flagKey: 'forms.register', label: 'Registration', desc: 'Pre-event sign-up' },
         { key: 'checkin', flagKey: 'forms.checkin', label: 'Check-in', desc: 'Walk-in door tally' },
@@ -256,6 +269,9 @@ const ADMIN_HTML = `<!DOCTYPE html>
           '<h3>Form Config</h3>' +
           configHtml +
         '</div>';
+      } catch (err) {
+        panel.innerHTML = '<div class="card-error" data-testid="forms-error"><div class="error-icon">&#9888;</div><div class="error-msg">Could not load forms.</div><button class="retry-btn" onclick="window.loadForms(\'' + eventId + '\',\'' + eventName.replace(/'/g, "\\\\'") + '\')">Retry</button></div>';
+      }
     };
 
     // Toggle a form flag for the selected event
