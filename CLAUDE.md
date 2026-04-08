@@ -10,11 +10,11 @@
 
 ### Phase Model (3 Phases)
 
-| Phase       | Stack                                                | Status            |
-| ----------- | ---------------------------------------------------- | ----------------- |
-| **Phase 1** | Cloudflare Worker + D1 (migrated from Google Sheets) | Build ✅ / Ops 📋 |
-| **Phase 2** | Cloudflare Worker + D1 (edge SQLite)                 | Foundation laid   |
-| **Phase 3** | Firebase Auth + React/Tailwind on Firebase Hosting   | Not started       |
+| Phase       | Stack                                                | Status             |
+| ----------- | ---------------------------------------------------- | ------------------ |
+| **Phase 1** | Cloudflare Worker + D1 (migrated from Google Sheets) | Build ✅ / Ops 📋  |
+| **Phase 2** | Cloudflare Worker + D1 (edge SQLite)                 | Code ✅ / Infra 📋 |
+| **Phase 3** | Firebase Auth + React/Tailwind on Firebase Hosting   | Not started        |
 
 **Key principle**: Code is written and tested NOW, infrastructure is the last step. CC writes Worker routes, tests, migrations, and PRs without needing a live staging URL. CI validates. Infrastructure deployment happens when ready.
 
@@ -88,7 +88,7 @@ workers/oursharedevents/src/
 ├── auth/admin.ts         # Admin auth guard (CF Access JWT + Bearer fallback)
 ├── handlers/
 │   ├── health.ts         # Health check
-│   ├── events.ts         # Events API (D1)
+│   ├── events.ts         # Events API (D1 queries)
 │   ├── pages.ts          # HTML pages (public, admin, landing)
 │   ├── forms.ts          # Form submissions (register, checkin, survey, email)
 │   ├── form-pages.ts     # Mobile-first QR form landing pages
@@ -129,14 +129,14 @@ Every story is implemented from all six POVs simultaneously. CC reads all six an
 - Prioritizes backlog
 - Reviews sprint progress in Linear
 - Accepts/rejects completed stories
-- **Current state**: Phase 1 Build complete, Phase 1 Ops blocked on infra (INFRA-1,2,3). 3-tier feature flags implemented. Forms system implemented (4 types). A11Y-1 done. 65 stories across 8 epics tracked. MVP readiness 6.5/10 — staging ready, production blocked.
+- **Current state**: Phase 1 Build complete, Phase 1 Ops blocked on infra (INFRA-1,2,3). Phase 2 (D1 database) complete — data layer is D1-native, no Sheets code remains. 3-tier feature flags implemented. Forms system implemented (4 types). A11Y-1 done. 65 stories across 8 epics tracked. MVP readiness 6.5/10 — staging ready, production blocked.
 
 ### Lead Backend Architect (BE)
 
 - Writes Worker route handlers
 - Implements D1 queries (Phase 2)
 - Owns DB design, API contracts, auth, feature flags, testing pyramid
-- **Current state**: 30 routes implemented, 16 D1 migrations (9 main + 7 forms), 3-tier feature flags working, forms handler with PII encryption/scrubbing. Gaps: anonymous ID (BE-1), rate limiting (BE-2), PII audit log (BE-3), 5 admin endpoints unimplemented.
+- **Current state**: 30 routes implemented, 13 D1 migrations (main DB) + forms DB migrations, 3-tier feature flags working, forms handler with PII encryption/scrubbing. Phase 2 D1 swap complete — all handlers query D1 directly, no Sheets dependency. Gaps: anonymous ID (BE-1), rate limiting (BE-2), PII audit log (BE-3), 5 admin endpoints unimplemented.
 
 ### Lead FE Integration (FD)
 

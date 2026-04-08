@@ -89,6 +89,28 @@ const ADMIN_HTML = `<!DOCTYPE html>
     header { background: #1a1a2e; color: #fff; padding: 1.25rem 2rem; display: flex; align-items: center; justify-content: space-between; }
     header h1 { font-size: 1.4rem; font-weight: 600; }
     header span { font-size: .8rem; opacity: .6; text-transform: uppercase; letter-spacing: .05em; }
+    .tier-badge { display: inline-block; padding: .2rem .6rem; border-radius: 12px; font-size: .7rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; margin-left: .75rem; }
+    .tier-badge.free       { background: #d3f9d8; color: #2f9e44; }
+    .tier-badge.mid        { background: #d0ebff; color: #1971c2; }
+    .tier-badge.enterprise { background: #e8deee; color: #7c3aed; }
+    .feature-locked { position: relative; opacity: .5; }
+    .feature-locked::after { content: '🔒'; position: absolute; top: .5rem; right: .5rem; font-size: 1rem; }
+    .feature-locked .form-link { pointer-events: none; }
+    .lock-overlay { display: none; padding: .5rem .75rem; background: #fff3bf; border-radius: 6px; font-size: .8rem; color: #664d03; margin-top: .5rem; }
+    .feature-locked .lock-overlay { display: block; }
+    .form-config { display: flex; align-items: center; justify-content: space-between; padding: .5rem 0; border-bottom: 1px solid #f1f3f5; }
+    .form-config:last-child { border-bottom: none; }
+    .form-config-label { font-size: .9rem; font-weight: 500; }
+    .form-config-desc { font-size: .75rem; color: #868e96; }
+    .toggle { position: relative; width: 40px; height: 22px; flex-shrink: 0; }
+    .toggle input { opacity: 0; width: 0; height: 0; }
+    .toggle .slider { position: absolute; inset: 0; background: #dee2e6; border-radius: 22px; cursor: pointer; transition: background .2s; }
+    .toggle .slider::before { content: ''; position: absolute; left: 2px; top: 2px; width: 18px; height: 18px; background: #fff; border-radius: 50%; transition: transform .2s; }
+    .toggle input:checked + .slider { background: #4361ee; }
+    .toggle input:checked + .slider::before { transform: translateX(18px); }
+    .toggle input:disabled + .slider { opacity: .4; cursor: not-allowed; }
+    .config-section { margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #e9ecef; }
+    .config-section h3 { font-size: .85rem; font-weight: 600; color: #495057; margin-bottom: .5rem; text-transform: uppercase; letter-spacing: .04em; }
     main { max-width: 1000px; margin: 2rem auto; padding: 0 1rem; }
     h2 { font-size: 1.1rem; font-weight: 600; color: #495057; margin-bottom: 1rem; }
     table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
@@ -117,7 +139,7 @@ const ADMIN_HTML = `<!DOCTYPE html>
 </head>
 <body>
   <header>
-    <h1>OurSharedEvents</h1>
+    <h1>OurSharedEvents<span class="tier-badge" id="tierBadge" data-testid="tier-badge"></span></h1>
     <span>Admin</span>
   </header>
   <main>
@@ -169,36 +191,107 @@ const ADMIN_HTML = `<!DOCTYPE html>
     window.loadForms = async function(eventId, eventName) {
       const panel = document.getElementById('forms-panel');
       const types = [
-        { key: 'register', label: 'Registration', desc: 'Pre-event sign-up' },
-        { key: 'checkin', label: 'Check-in', desc: 'Walk-in door tally' },
-        { key: 'survey', label: 'Survey', desc: 'Post-event feedback' },
-        { key: 'email', label: 'Email List', desc: 'Voluntary opt-in' },
+        { key: 'register', flagKey: 'forms.register', label: 'Registration', desc: 'Pre-event sign-up' },
+        { key: 'checkin', flagKey: 'forms.checkin', label: 'Check-in', desc: 'Walk-in door tally' },
+        { key: 'survey', flagKey: 'forms.survey', label: 'Survey', desc: 'Post-event feedback', upgradeTier: 'mid' },
+        { key: 'email', flagKey: 'forms.email-signup', label: 'Email List', desc: 'Voluntary opt-in', upgradeTier: 'mid' },
       ];
       const encodedName = encodeURIComponent(eventName);
 
-      // Form links
-      const linksHtml = types.map(t =>
-        '<a class="form-link" href="/forms/' + eventId + '?type=' + t.key + '&event=' + encodedName + '" target="_blank">' +
-          '<div class="form-type">' + t.label + '</div>' +
-          '<div class="form-desc">' + t.desc + '</div>' +
-        '</a>'
-      ).join('');
+      // Resolve flags for this specific event
+      const eventFlagsRes = await fetch('/api/v2/admin/flags/resolve?eventId=' + eventId).then(r => r.json()).catch(() => null);
+      const flags = (eventFlagsRes && eventFlagsRes.ok) ? eventFlagsRes.flags : (window._resolvedFlags || {});
 
-      // Fetch counts
+      // Fetch counts in parallel
       const adminPaths = ['registrations', 'checkin-count', 'surveys', 'email-signups'];
       const counts = await Promise.all(adminPaths.map(p =>
         fetch('/api/v2/admin/events/' + eventId + '/forms/' + p).then(r => r.json()).then(d => d.count || 0).catch(() => 0)
       ));
+      const countLabels = ['Registrations', 'Check-ins', 'Surveys', 'Emails'];
+
+      // Form links — locked if flag is off
+      const linksHtml = types.map(t => {
+        const enabled = flags[t.flagKey] !== false;
+        const lockedClass = enabled ? '' : ' feature-locked';
+        const lockMsg = enabled ? '' : '<div class="lock-overlay">Upgrade to ' + (t.upgradeTier || 'mid') + ' to unlock</div>';
+        return '<div class="' + lockedClass + '" data-testid="form-gate-' + t.key + '">' +
+          '<a class="form-link" href="/forms/' + eventId + '?type=' + t.key + '&event=' + encodedName + '" target="_blank">' +
+            '<div class="form-type">' + t.label + '</div>' +
+            '<div class="form-desc">' + t.desc + '</div>' +
+          '</a>' + lockMsg + '</div>';
+      }).join('');
+
+      // Inline form config toggles
+      const configHtml = types.map((t, i) => {
+        const globalEnabled = (window._resolvedFlags || {})[t.flagKey] !== false;
+        const eventEnabled = flags[t.flagKey] !== false;
+        const tierLocked = !globalEnabled && !t.upgradeTier; // truly unavailable
+        const disabled = !globalEnabled ? ' disabled' : '';
+        const checked = eventEnabled ? ' checked' : '';
+        return '<div class="form-config" data-testid="form-config-' + t.key + '">' +
+          '<div>' +
+            '<div class="form-config-label">' + t.label + ' <span style="color:#868e96;font-size:.8rem">(' + counts[i] + ')</span></div>' +
+            '<div class="form-config-desc">' + t.desc + (disabled ? ' — requires ' + (t.upgradeTier || 'upgrade') : '') + '</div>' +
+          '</div>' +
+          '<label class="toggle">' +
+            '<input type="checkbox" data-testid="form-toggle-' + t.key + '" data-flag="' + t.flagKey + '" data-event="' + eventId + '"' + checked + disabled +
+            ' onchange="toggleFormFlag(this)" />' +
+            '<span class="slider"></span>' +
+          '</label>' +
+        '</div>';
+      }).join('');
 
       panel.innerHTML =
         '<div class="forms-grid">' + linksHtml + '</div>' +
         '<div class="form-counts">' +
-          '<div class="count-box"><div class="count-num">' + counts[0] + '</div><div class="count-label">Registrations</div></div>' +
-          '<div class="count-box"><div class="count-num">' + counts[1] + '</div><div class="count-label">Check-ins</div></div>' +
-          '<div class="count-box"><div class="count-num">' + counts[2] + '</div><div class="count-label">Surveys</div></div>' +
-          '<div class="count-box"><div class="count-num">' + counts[3] + '</div><div class="count-label">Emails</div></div>' +
+          counts.map((c, i) =>
+            '<div class="count-box"><div class="count-num">' + c + '</div><div class="count-label">' + countLabels[i] + '</div></div>'
+          ).join('') +
+        '</div>' +
+        '<div class="config-section">' +
+          '<h3>Form Config</h3>' +
+          configHtml +
         '</div>';
     };
+
+    // Toggle a form flag for the selected event
+    window.toggleFormFlag = async function(el) {
+      const flagKey = el.dataset.flag;
+      const eventId = el.dataset.event;
+      const enabled = el.checked;
+      try {
+        const res = await fetch('/api/v2/admin/events/' + eventId + '/flags/' + flagKey, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ enabled }),
+        });
+        const data = await res.json();
+        if (!data.ok) throw new Error(data.error || 'Failed');
+      } catch (err) {
+        el.checked = !enabled; // revert on failure
+        console.error('Flag toggle failed:', err);
+      }
+    };
+  </script>
+
+  <!-- Tier badge + feature gating -->
+  <script>
+    (async () => {
+      // Fetch current tier and resolved flags in parallel
+      const [tierRes, flagsRes] = await Promise.all([
+        fetch('/api/v2/admin/flags/current-tier').then(r => r.json()).catch(() => null),
+        fetch('/api/v2/admin/flags/resolve').then(r => r.json()).catch(() => null),
+      ]);
+
+      // Render tier badge
+      const badge = document.getElementById('tierBadge');
+      const tier = (tierRes && tierRes.ok) ? tierRes.tier : 'free';
+      badge.textContent = tier;
+      badge.className = 'tier-badge ' + tier;
+
+      // Store resolved flags globally for form gating
+      window._resolvedFlags = (flagsRes && flagsRes.ok) ? flagsRes.flags : {};
+    })();
   </script>
 </body>
 </html>`;

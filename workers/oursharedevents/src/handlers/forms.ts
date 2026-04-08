@@ -32,6 +32,7 @@ import {
   generateId,
 } from '../lib/forms-db';
 import { corsHeaders } from '../lib/cors';
+import { getOrCreateAnonId, setAnonCookie } from '../lib/anonymous-id';
 
 export interface FormsEnv extends FormsDbEnv {
   FORMS_ENCRYPTION_KEY?: string;
@@ -159,6 +160,7 @@ export async function handleFormRegistration(
   const { body, error } = await validateFormRequest(request, eventId, true);
   if (error) return error;
 
+  const { anonId, isNew } = getOrCreateAnonId(request);
   const name = typeof body!.name === 'string' ? body!.name.trim().slice(0, 200) : undefined;
   const email = typeof body!.email === 'string' ? body!.email.trim().slice(0, 320) : undefined;
   const sourcePlacementId =
@@ -171,8 +173,8 @@ export async function handleFormRegistration(
 
   try {
     await env.FORMS_DB.prepare(
-      `INSERT INTO form_registrations (id, event_id, source_placement_id, attendee_name, attendee_email_hash, registration_bucket, status, expires_at)
-       VALUES (?, ?, ?, ?, ?, ?, 'confirmed', ?)`
+      `INSERT INTO form_registrations (id, event_id, source_placement_id, attendee_name, attendee_email_hash, registration_bucket, status, expires_at, anonymous_id)
+       VALUES (?, ?, ?, ?, ?, ?, 'confirmed', ?, ?)`
     )
       .bind(
         id,
@@ -181,15 +183,17 @@ export async function handleFormRegistration(
         name ?? null,
         emailHash ?? null,
         bucket,
-        expiresAt
+        expiresAt,
+        anonId
       )
       .run();
   } catch (err) {
     return handleDbError('register', eventId, err, request);
   }
 
-  logFormEvent('register', eventId, 'submit', { id, latencyMs: Date.now() - start });
-  return jsonResponse({ ok: true, id, registrationBucket: bucket }, request);
+  logFormEvent('register', eventId, 'submit', { id, anonId, isNew, latencyMs: Date.now() - start });
+  const res = jsonResponse({ ok: true, id, registrationBucket: bucket }, request);
+  return isNew ? setAnonCookie(res, anonId) : res;
 }
 
 // ─── Public: Check-in ───────────────────────────────────────────────────────────
@@ -203,14 +207,16 @@ export async function handleFormCheckin(
   const { error } = await validateFormRequest(request, eventId, false);
   if (error) return error;
 
+  const { anonId, isNew } = getOrCreateAnonId(request);
+
   try {
     const id = generateId();
     await env.FORMS_DB.prepare(
-      `INSERT INTO checkin_counts (id, event_id, total_count, updated_at)
-       VALUES (?, ?, 1, datetime('now'))
-       ON CONFLICT(event_id) DO UPDATE SET total_count = total_count + 1, updated_at = datetime('now')`
+      `INSERT INTO checkin_counts (id, event_id, total_count, updated_at, last_anonymous_id)
+       VALUES (?, ?, 1, datetime('now'), ?)
+       ON CONFLICT(event_id) DO UPDATE SET total_count = total_count + 1, updated_at = datetime('now'), last_anonymous_id = ?`
     )
-      .bind(id, eventId)
+      .bind(id, eventId, anonId, anonId)
       .run();
 
     const result = await env.FORMS_DB.prepare(
@@ -220,8 +226,14 @@ export async function handleFormCheckin(
       .first<{ total_count: number }>();
 
     const count = result?.total_count ?? 1;
-    logFormEvent('checkin', eventId, 'submit', { count, latencyMs: Date.now() - start });
-    return jsonResponse({ ok: true, count }, request);
+    logFormEvent('checkin', eventId, 'submit', {
+      count,
+      anonId,
+      isNew,
+      latencyMs: Date.now() - start,
+    });
+    const res = jsonResponse({ ok: true, count }, request);
+    return isNew ? setAnonCookie(res, anonId) : res;
   } catch (err) {
     return handleDbError('checkin', eventId, err, request);
   }
@@ -238,6 +250,7 @@ export async function handleFormSurvey(
   const { body, error } = await validateFormRequest(request, eventId, true);
   if (error) return error;
 
+  const { anonId, isNew } = getOrCreateAnonId(request);
   const responses = body!.responses;
   if (!responses || typeof responses !== 'object') {
     return errorResponse('MISSING_FIELD', 'Missing required field: responses', 400, request);
@@ -248,17 +261,18 @@ export async function handleFormSurvey(
 
   try {
     await env.FORMS_DB.prepare(
-      `INSERT INTO form_surveys (id, event_id, responses_json, submitted_bucket, pii_scrubbed)
-       VALUES (?, ?, ?, ?, 0)`
+      `INSERT INTO form_surveys (id, event_id, responses_json, submitted_bucket, pii_scrubbed, anonymous_id)
+       VALUES (?, ?, ?, ?, 0, ?)`
     )
-      .bind(id, eventId, JSON.stringify(responses), bucket)
+      .bind(id, eventId, JSON.stringify(responses), bucket, anonId)
       .run();
   } catch (err) {
     return handleDbError('survey', eventId, err, request);
   }
 
-  logFormEvent('survey', eventId, 'submit', { id, latencyMs: Date.now() - start });
-  return jsonResponse({ ok: true, id }, request);
+  logFormEvent('survey', eventId, 'submit', { id, anonId, isNew, latencyMs: Date.now() - start });
+  const res = jsonResponse({ ok: true, id }, request);
+  return isNew ? setAnonCookie(res, anonId) : res;
 }
 
 // ─── Public: Email Signup ───────────────────────────────────────────────────────
@@ -272,6 +286,7 @@ export async function handleFormEmailSignup(
   const { body, error } = await validateFormRequest(request, eventId, true);
   if (error) return error;
 
+  const { anonId, isNew } = getOrCreateAnonId(request);
   const email = typeof body!.email === 'string' ? body!.email.trim().slice(0, 320) : '';
   if (!email) return errorResponse('MISSING_FIELD', 'Missing required field: email', 400, request);
 
@@ -291,9 +306,11 @@ export async function handleFormEmailSignup(
     if (existing) {
       logFormEvent('email-signup', eventId, 'submit', {
         duplicate: true,
+        anonId,
         latencyMs: Date.now() - start,
       });
-      return jsonResponse({ ok: true, id: existing.id as string, duplicate: true }, request);
+      const res = jsonResponse({ ok: true, id: existing.id as string, duplicate: true }, request);
+      return isNew ? setAnonCookie(res, anonId) : res;
     }
 
     const encrypted = await encryptEmail(email, encryptionKey);
@@ -302,14 +319,20 @@ export async function handleFormEmailSignup(
     const retentionExpiresAt = new Date(Date.now() + EMAIL_RETENTION_MS).toISOString();
 
     await env.FORMS_DB.prepare(
-      `INSERT INTO email_signups (id, event_id, email_hash, email_encrypted, signup_bucket, retention_expires_at)
-       VALUES (?, ?, ?, ?, ?, ?)`
+      `INSERT INTO email_signups (id, event_id, email_hash, email_encrypted, signup_bucket, retention_expires_at, anonymous_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`
     )
-      .bind(id, eventId, emailHash, encrypted, bucket, retentionExpiresAt)
+      .bind(id, eventId, emailHash, encrypted, bucket, retentionExpiresAt, anonId)
       .run();
 
-    logFormEvent('email-signup', eventId, 'submit', { id, latencyMs: Date.now() - start });
-    return jsonResponse({ ok: true, id }, request);
+    logFormEvent('email-signup', eventId, 'submit', {
+      id,
+      anonId,
+      isNew,
+      latencyMs: Date.now() - start,
+    });
+    const res = jsonResponse({ ok: true, id }, request);
+    return isNew ? setAnonCookie(res, anonId) : res;
   } catch (err) {
     return handleDbError('email-signup', eventId, err, request);
   }
@@ -398,5 +421,77 @@ export async function handleAdminEmailSignupCount(
     return jsonResponse({ ok: true, count }, request);
   } catch (err) {
     return handleDbError('email-signup', eventId, err, request);
+  }
+}
+
+// ─── Admin: Export Form Data ──────────────────────────────────────────────────
+
+function toCsv(rows: Record<string, unknown>[]): string {
+  if (rows.length === 0) return '';
+  const headers = Object.keys(rows[0]);
+  const escape = (v: unknown): string => {
+    const s = v === null || v === undefined ? '' : String(v);
+    return s.includes(',') || s.includes('"') || s.includes('\n')
+      ? `"${s.replace(/"/g, '""')}"`
+      : s;
+  };
+  return [headers.join(','), ...rows.map((r) => headers.map((h) => escape(r[h])).join(','))].join(
+    '\n'
+  );
+}
+
+/**
+ * GET /api/v2/admin/events/:id/forms/export?type=registrations|surveys|email-signups&format=csv|json
+ *
+ * Exports form data. Surveys only include PII-scrubbed rows.
+ * Default format: json. CSV returns a downloadable file.
+ */
+export async function handleAdminExport(
+  request: Request,
+  env: FormsEnv,
+  eventId: string
+): Promise<Response> {
+  const url = new URL(request.url);
+  const dataType = url.searchParams.get('type') ?? 'registrations';
+  const format = url.searchParams.get('format') ?? 'json';
+
+  let query: string;
+  switch (dataType) {
+    case 'registrations':
+      query =
+        'SELECT id, event_id, attendee_name, registration_bucket, status, created_at FROM form_registrations WHERE event_id = ? ORDER BY created_at DESC';
+      break;
+    case 'surveys':
+      query =
+        'SELECT id, event_id, responses_json, submitted_bucket, created_at FROM form_surveys WHERE event_id = ? AND pii_scrubbed = 1 ORDER BY created_at DESC';
+      break;
+    case 'email-signups':
+      query =
+        'SELECT id, event_id, signup_bucket, created_at FROM email_signups WHERE event_id = ? ORDER BY created_at DESC';
+      break;
+    default:
+      return errorResponse('INVALID_TYPE', `Unknown export type: ${dataType}`, 400, request);
+  }
+
+  try {
+    const result = await env.FORMS_DB.prepare(query).bind(eventId).all();
+    const rows = (result.results ?? []) as Record<string, unknown>[];
+
+    logFormEvent(dataType as FormType, eventId, 'admin_read', { count: rows.length, format });
+
+    if (format === 'csv') {
+      const csv = toCsv(rows);
+      return new Response(csv, {
+        headers: {
+          'Content-Type': 'text/csv; charset=utf-8',
+          'Content-Disposition': `attachment; filename="${eventId}-${dataType}.csv"`,
+          ...corsHeaders(request),
+        },
+      });
+    }
+
+    return jsonResponse({ ok: true, items: rows, count: rows.length }, request);
+  } catch (err) {
+    return handleDbError(dataType as FormType, eventId, err, request);
   }
 }

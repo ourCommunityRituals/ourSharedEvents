@@ -15,16 +15,18 @@ export default {
     try {
       return await route(request, env);
     } catch (err) {
-      console.error(JSON.stringify({
-        type: 'UNHANDLED_ERROR',
-        error: err instanceof Error ? err.message : String(err),
-        url: request.url,
-        timestamp: new Date().toISOString(),
-      }));
+      console.error(
+        JSON.stringify({
+          type: 'UNHANDLED_ERROR',
+          error: err instanceof Error ? err.message : String(err),
+          url: request.url,
+          timestamp: new Date().toISOString(),
+        })
+      );
 
       return Response.json(
         { ok: false, status: 500, error: 'Internal server error' },
-        { status: 500 },
+        { status: 500 }
       );
     }
   },
@@ -39,7 +41,8 @@ export default {
  * and are safe to keep post-scrub. ALL other string values are scrubbed.
  * This whitelist approach is safer than a PII blacklist.
  */
-const SAFE_KEY_PATTERNS = /^(rating|score|count|number|rank|order|id|uuid|type|category|topic|session|duration|index|overall|venue|speaker|event|quality|value|level|tier|scale|stars?|thumbs?).*$/i;
+const SAFE_KEY_PATTERNS =
+  /^(rating|score|count|number|rank|order|id|uuid|type|category|topic|session|duration|index|overall|venue|speaker|event|quality|value|level|tier|scale|stars?|thumbs?).*$/i;
 
 /**
  * Scrub PII from survey responses JSON using whitelist approach.
@@ -77,6 +80,28 @@ function scrubSurveyPii(responsesJson: string): string {
  * Phase 2: Scrub PII from surveys (whitelist approach)
  * Phase 3: Delete email signups past retention window
  */
+/** Write a row to the PII audit log for compliance evidence. */
+async function logPiiAudit(
+  db: D1Database,
+  phase: string,
+  recordsAffected: number,
+  errors: number,
+  triggeredBy = 'scheduled'
+): Promise<void> {
+  const id = crypto.randomUUID ? crypto.randomUUID() : `audit-${Date.now()}`;
+  try {
+    await db
+      .prepare(
+        `INSERT INTO pii_audit_log (id, phase, triggered_by, records_affected, errors)
+       VALUES (?, ?, ?, ?, ?)`
+      )
+      .bind(id, phase, triggeredBy, recordsAffected, errors)
+      .run();
+  } catch {
+    // Audit log write failure must not break the lifecycle job
+  }
+}
+
 async function runFormDataLifecycle(env: RouterEnv): Promise<void> {
   const now = new Date().toISOString();
   const results: Record<string, unknown> = { timestamp: now };
@@ -84,20 +109,30 @@ async function runFormDataLifecycle(env: RouterEnv): Promise<void> {
   // ── Phase 1: Delete expired registrations ──────────────────────────────
   try {
     const del = await env.FORMS_DB.prepare(
-      'DELETE FROM form_registrations WHERE expires_at IS NOT NULL AND expires_at < ?',
+      'DELETE FROM form_registrations WHERE expires_at IS NOT NULL AND expires_at < ?'
     )
       .bind(now)
       .run();
-    results.registrationsDeleted = del.meta?.changes ?? 0;
+    const count = del.meta?.changes ?? 0;
+    results.registrationsDeleted = count;
+    await logPiiAudit(env.FORMS_DB, 'registrations_delete', count, 0);
   } catch (err) {
     results.registrationsError = err instanceof Error ? err.message : String(err);
-    console.error(JSON.stringify({ type: 'LIFECYCLE_PHASE_ERROR', phase: 'registrations', error: results.registrationsError, timestamp: now }));
+    console.error(
+      JSON.stringify({
+        type: 'LIFECYCLE_PHASE_ERROR',
+        phase: 'registrations',
+        error: results.registrationsError,
+        timestamp: now,
+      })
+    );
+    await logPiiAudit(env.FORMS_DB, 'registrations_delete', 0, 1);
   }
 
   // ── Phase 2: Scrub PII from surveys ────────────────────────────────────
   try {
     const unscrubbed = await env.FORMS_DB.prepare(
-      'SELECT id, responses_json FROM form_surveys WHERE pii_scrubbed = 0 AND created_at < ?',
+      'SELECT id, responses_json FROM form_surveys WHERE pii_scrubbed = 0 AND created_at < ?'
     )
       .bind(now)
       .all();
@@ -108,7 +143,7 @@ async function runFormDataLifecycle(env: RouterEnv): Promise<void> {
       try {
         const cleaned = scrubSurveyPii(row.responses_json as string);
         await env.FORMS_DB.prepare(
-          'UPDATE form_surveys SET responses_json = ?, pii_scrubbed = 1 WHERE id = ?',
+          'UPDATE form_surveys SET responses_json = ?, pii_scrubbed = 1 WHERE id = ?'
         )
           .bind(cleaned, row.id as string)
           .run();
@@ -119,22 +154,41 @@ async function runFormDataLifecycle(env: RouterEnv): Promise<void> {
     }
     results.surveysScrubbed = scrubbed;
     results.surveysScrubErrors = scrubErrors;
+    await logPiiAudit(env.FORMS_DB, 'surveys_scrub', scrubbed, scrubErrors);
   } catch (err) {
     results.surveysError = err instanceof Error ? err.message : String(err);
-    console.error(JSON.stringify({ type: 'LIFECYCLE_PHASE_ERROR', phase: 'surveys', error: results.surveysError, timestamp: now }));
+    console.error(
+      JSON.stringify({
+        type: 'LIFECYCLE_PHASE_ERROR',
+        phase: 'surveys',
+        error: results.surveysError,
+        timestamp: now,
+      })
+    );
+    await logPiiAudit(env.FORMS_DB, 'surveys_scrub', 0, 1);
   }
 
   // ── Phase 3: Delete expired email signups ──────────────────────────────
   try {
     const del = await env.FORMS_DB.prepare(
-      'DELETE FROM email_signups WHERE retention_expires_at < ?',
+      'DELETE FROM email_signups WHERE retention_expires_at < ?'
     )
       .bind(now)
       .run();
-    results.emailSignupsDeleted = del.meta?.changes ?? 0;
+    const count = del.meta?.changes ?? 0;
+    results.emailSignupsDeleted = count;
+    await logPiiAudit(env.FORMS_DB, 'email_signups_delete', count, 0);
   } catch (err) {
     results.emailSignupsError = err instanceof Error ? err.message : String(err);
-    console.error(JSON.stringify({ type: 'LIFECYCLE_PHASE_ERROR', phase: 'email_signups', error: results.emailSignupsError, timestamp: now }));
+    console.error(
+      JSON.stringify({
+        type: 'LIFECYCLE_PHASE_ERROR',
+        phase: 'email_signups',
+        error: results.emailSignupsError,
+        timestamp: now,
+      })
+    );
+    await logPiiAudit(env.FORMS_DB, 'email_signups_delete', 0, 1);
   }
 
   console.log(JSON.stringify({ type: 'LIFECYCLE_COMPLETE', ...results }));

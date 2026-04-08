@@ -180,7 +180,7 @@ describe('Scenario 2: Check-in lifecycle', () => {
     const adminBody = await json(adminRes);
     expect(adminBody.count).toBe(5);
 
-    // ── DB verification: 1 row, 4 columns, zero PII ──────────────────────
+    // ── DB verification: 1 row, 5 columns, zero PII ──────────────────────
     const rows = await formsDb()
       .prepare('SELECT * FROM checkin_counts WHERE event_id = ?')
       .bind(EVENT)
@@ -190,6 +190,7 @@ describe('Scenario 2: Check-in lifecycle', () => {
     expect(Object.keys(rows.results[0]).sort()).toEqual([
       'event_id',
       'id',
+      'last_anonymous_id',
       'total_count',
       'updated_at',
     ]);
