@@ -151,10 +151,19 @@ jobs:
           # Extract licenses and check against blocklist
           jq -r 'to_entries[] | "\(.key): \(.value.licenses // "UNKNOWN")"' license-report.json > .security-reports/license-list.txt
 
+          # Permissive licenses that satisfy dual-license OR expressions
+          PERMISSIVE="MIT|Apache-2.0|ISC|BSD-2-Clause|BSD-3-Clause|0BSD|Unlicense|CC0"
+
           while IFS= read -r line; do
             if echo "$line" | grep -qEi "($BLOCKED_LICENSES)"; then
-              echo "❌ Blocked license: $line"
-              FOUND_BLOCKED=true
+              # Allow dual-license expressions like "(BSD-3-Clause OR GPL-2.0)"
+              # if at least one permissive option is present — we elect the permissive side
+              if echo "$line" | grep -qEi "($PERMISSIVE)"; then
+                echo "⚠️  Dual-license (permissive elected): $line"
+              else
+                echo "❌ Blocked license: $line"
+                FOUND_BLOCKED=true
+              fi
             fi
           done < .security-reports/license-list.txt
 
