@@ -340,6 +340,18 @@ export async function route(request: Request, env: RouterEnv): Promise<Response>
     pathname === '/reports' ||
     pathname === '/insights'
   ) {
+    const reportEnabled = await isFeatureEnabled(env.FORMS_DB, 'analytics.shared-report');
+    if (!reportEnabled) {
+      return Response.json(
+        {
+          ok: false,
+          status: 403,
+          code: 'REPORT_DISABLED',
+          error: 'Shared reports are not enabled for this tier',
+        },
+        { status: 403 }
+      );
+    }
     return handleSharedReportPage(env);
   }
 

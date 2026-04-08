@@ -254,7 +254,6 @@ describe('ADMIN-14 Integration: Surface routes serve content', () => {
     { path: '/poster', name: 'Poster' },
     { path: '/display', name: 'Display' },
     { path: '/', name: 'Landing/Public' },
-    { path: '/sharedReport', name: 'SharedReport' },
   ];
 
   for (const route of surfaceRoutes) {
@@ -268,8 +267,13 @@ describe('ADMIN-14 Integration: Surface routes serve content', () => {
     });
   }
 
-  test('all surfaces have data-testid on their header element', async () => {
-    const paths = ['/poster', '/display', '/sharedReport'];
+  test('GET /sharedReport → gated by analytics.shared-report flag (200 or 403, never 404)', async () => {
+    const res = await SELF.fetch('https://t.test/sharedReport');
+    expect([200, 403]).toContain(res.status);
+  });
+
+  test('all ungated surfaces have data-testid on their header element', async () => {
+    const paths = ['/poster', '/display'];
     for (const path of paths) {
       const res = await SELF.fetch(`https://t.test${path}`);
       const html = await res.text();
@@ -283,12 +287,16 @@ describe('ADMIN-14 Integration: Surface routes serve content', () => {
 describe('ADMIN-14 Contract: Admin links match real routes', () => {
   test('every href in surface cards resolves to a live route (not 404)', async () => {
     const adminHtml = await fetchAdminHtml();
-    const hrefs = ['/poster', '/display', '/', '/sharedReport'];
+    const hrefs = ['/poster', '/display', '/'];
     for (const href of hrefs) {
       expect(adminHtml).toContain(`href="${href}"`);
       const res = await SELF.fetch(`https://t.test${href}`);
       expect(res.status).not.toBe(404);
     }
+    // sharedReport link exists but is flag-gated (403 on free tier, not 404)
+    expect(adminHtml).toContain('href="/sharedReport"');
+    const reportRes = await SELF.fetch('https://t.test/sharedReport');
+    expect(reportRes.status).not.toBe(404);
   });
 });
 

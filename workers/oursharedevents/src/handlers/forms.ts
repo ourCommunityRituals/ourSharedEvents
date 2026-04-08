@@ -78,6 +78,10 @@ function isValidEventId(id: string): boolean {
   return id.length > 0 && id.length <= 128 && /^[a-zA-Z0-9_\-]+$/.test(id);
 }
 
+function isValidEmail(email: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) && email.length <= 320;
+}
+
 async function parseJsonBody(request: Request): Promise<Record<string, unknown> | null> {
   const contentLength = request.headers.get('Content-Length');
   if (contentLength && parseInt(contentLength, 10) > MAX_BODY_BYTES) return null;
@@ -162,7 +166,11 @@ export async function handleFormRegistration(
 
   const { anonId, isNew } = getOrCreateAnonId(request);
   const name = typeof body!.name === 'string' ? body!.name.trim().slice(0, 200) : undefined;
-  const email = typeof body!.email === 'string' ? body!.email.trim().slice(0, 320) : undefined;
+  const rawEmail = typeof body!.email === 'string' ? body!.email.trim().slice(0, 320) : undefined;
+  if (rawEmail && !isValidEmail(rawEmail)) {
+    return errorResponse('INVALID_EMAIL', 'Invalid email format', 400, request);
+  }
+  const email = rawEmail;
   const sourcePlacementId =
     typeof body!.sourcePlacementId === 'string' ? body!.sourcePlacementId.slice(0, 128) : undefined;
 
@@ -173,8 +181,8 @@ export async function handleFormRegistration(
 
   try {
     await env.FORMS_DB.prepare(
-      `INSERT INTO form_registrations (id, event_id, source_placement_id, attendee_name, attendee_email_hash, registration_bucket, status, expires_at, anonymous_id)
-       VALUES (?, ?, ?, ?, ?, ?, 'confirmed', ?, ?)`
+      `INSERT INTO form_registrations (id, event_id, source_placement_id, attendee_name, attendee_email_hash, registration_bucket, status, expires_at, anonymous_id, consent_given_at)
+       VALUES (?, ?, ?, ?, ?, ?, 'confirmed', ?, ?, ?)`
     )
       .bind(
         id,
@@ -184,7 +192,8 @@ export async function handleFormRegistration(
         emailHash ?? null,
         bucket,
         expiresAt,
-        anonId
+        anonId,
+        new Date().toISOString()
       )
       .run();
   } catch (err) {
@@ -261,10 +270,10 @@ export async function handleFormSurvey(
 
   try {
     await env.FORMS_DB.prepare(
-      `INSERT INTO form_surveys (id, event_id, responses_json, submitted_bucket, pii_scrubbed, anonymous_id)
-       VALUES (?, ?, ?, ?, 0, ?)`
+      `INSERT INTO form_surveys (id, event_id, responses_json, submitted_bucket, pii_scrubbed, anonymous_id, consent_given_at)
+       VALUES (?, ?, ?, ?, 0, ?, ?)`
     )
-      .bind(id, eventId, JSON.stringify(responses), bucket, anonId)
+      .bind(id, eventId, JSON.stringify(responses), bucket, anonId, new Date().toISOString())
       .run();
   } catch (err) {
     return handleDbError('survey', eventId, err, request);
@@ -289,6 +298,8 @@ export async function handleFormEmailSignup(
   const { anonId, isNew } = getOrCreateAnonId(request);
   const email = typeof body!.email === 'string' ? body!.email.trim().slice(0, 320) : '';
   if (!email) return errorResponse('MISSING_FIELD', 'Missing required field: email', 400, request);
+  if (!isValidEmail(email))
+    return errorResponse('INVALID_EMAIL', 'Invalid email format', 400, request);
 
   const encryptionKey = env.FORMS_ENCRYPTION_KEY;
   if (!encryptionKey)
@@ -319,10 +330,19 @@ export async function handleFormEmailSignup(
     const retentionExpiresAt = new Date(Date.now() + EMAIL_RETENTION_MS).toISOString();
 
     await env.FORMS_DB.prepare(
-      `INSERT INTO email_signups (id, event_id, email_hash, email_encrypted, signup_bucket, retention_expires_at, anonymous_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO email_signups (id, event_id, email_hash, email_encrypted, signup_bucket, retention_expires_at, anonymous_id, consent_given_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
     )
-      .bind(id, eventId, emailHash, encrypted, bucket, retentionExpiresAt, anonId)
+      .bind(
+        id,
+        eventId,
+        emailHash,
+        encrypted,
+        bucket,
+        retentionExpiresAt,
+        anonId,
+        new Date().toISOString()
+      )
       .run();
 
     logFormEvent('email-signup', eventId, 'submit', {

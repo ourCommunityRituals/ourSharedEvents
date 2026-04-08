@@ -46,13 +46,13 @@ Stories are ordered by the sequence you work through them. Each row unlocks the 
 | A11Y-1                                            | —        | ✅ DONE        | Accessibility foundation — lang, skip links, landmarks, focus styles  | —                |
 | A11Y-2                                            | —        | 📋 BACKLOG     | Form accessibility — labels, errors, `role="alert"`, `autocomplete`   | A11Y-1           |
 | A11Y-3                                            | —        | 📋 BACKLOG     | Table & tab panel accessibility (report.html)                         | A11Y-1           |
-| A11Y-4                                            | —        | 📋 BACKLOG     | Data-testid foundation (all surfaces)                                 | A11Y-1           |
+| A11Y-4                                            | —        | ✅ DONE        | Data-testid foundation (all surfaces)                                 | A11Y-1           |
 | A11Y-5                                            | —        | 📋 BACKLOG     | Color contrast remediation                                            | A11Y-1           |
 | A11Y-6                                            | —        | 📋 BACKLOG     | Keyboard navigation & focus trap                                      | A11Y-1           |
 | A11Y-7                                            | —        | 📋 BACKLOG     | axe-core CI integration                                               | A11Y-1           |
 | A11Y-8                                            | —        | 📋 BACKLOG     | Screen reader testing & polish                                        | A11Y-7           |
 | **Epic SR — SharedReport Hardening**              |          |                |                                                                       |                  |
-| SR-12                                             | —        | 📋 BACKLOG     | Runtime flag gating on sharedReport endpoint                          | —                |
+| SR-12                                             | —        | ✅ DONE        | Runtime flag gating on sharedReport endpoint                          | —                |
 | SR-13                                             | —        | 📋 BACKLOG     | Export JSON button (FE)                                               | SR-12            |
 | SR-14                                             | —        | 📋 BACKLOG     | CSP headers on all remaining surfaces _(subsumes SEC-2)_              | —                |
 | SR-15                                             | —        | 📋 BACKLOG     | Form page CSP (nonce-based) _(subsumes SEC-2)_                        | —                |
@@ -67,9 +67,9 @@ Stories are ordered by the sequence you work through them. Each row unlocks the 
 | SR-24                                             | —        | 📋 BACKLOG     | Report email share (enterprise)                                       | SR-18            |
 | **Epic AS — All-Surface FE Uniformity**           |          |                |                                                                       |                  |
 | AS-1                                              | —        | 📋 BACKLOG     | Uniform DesignTokens across all surfaces _(xref DESIGN-8)_            | —                |
-| AS-2                                              | —        | 📋 BACKLOG     | data-testid on Poster (0→10+) _(xref DESIGN-3)_                       | —                |
-| AS-3                                              | —        | 📋 BACKLOG     | data-testid on Display (1→10+) _(xref DESIGN-3)_                      | —                |
-| AS-4                                              | —        | 📋 BACKLOG     | data-testid on Public (3→15+) _(xref DESIGN-3)_                       | —                |
+| AS-2                                              | —        | ✅ DONE        | data-testid on Poster (0→10+) _(xref DESIGN-3)_                       | —                |
+| AS-3                                              | —        | ✅ DONE        | data-testid on Display (1→10+) _(xref DESIGN-3)_                      | —                |
+| AS-4                                              | —        | ✅ DONE        | data-testid on Public (3→15+) _(xref DESIGN-3)_                       | —                |
 | AS-5                                              | —        | 📋 BACKLOG     | ARIA attributes on Admin                                              | A11Y-1           |
 | AS-6                                              | —        | 📋 BACKLOG     | ARIA attributes on Public                                             | A11Y-1           |
 | AS-7                                              | —        | 📋 BACKLOG     | ARIA attributes on Display                                            | A11Y-1           |
@@ -89,10 +89,10 @@ Stories are ordered by the sequence you work through them. Each row unlocks the 
 | BE-8                                              | —        | 📋 BACKLOG     | Pagination on admin list endpoints                                    | —                |
 | BE-9                                              | —        | 📋 BACKLOG     | Privacy notice at point of collection (GDPR Art. 13)                  | —                |
 | BE-10                                             | —        | 📋 BACKLOG     | Privacy policy link on form pages                                     | —                |
-| BE-11                                             | —        | 📋 BACKLOG     | Email format validation on form submit                                | —                |
+| BE-11                                             | —        | ✅ DONE        | Email format validation on form submit                                | —                |
 | BE-12                                             | —        | 📋 BACKLOG     | Flag resolution optimization (batch query)                            | —                |
 | **Epic SEC — Security**                           |          |                |                                                                       |                  |
-| SEC-1                                             | —        | 📋 BACKLOG     | Fix CORS wildcard in forms.ts (use corsOrigin())                      | —                |
+| SEC-1                                             | —        | ✅ DONE        | Fix CORS wildcard in forms.ts (use corsOrigin())                      | —                |
 | **Epic ADMIN — Admin Page Architecture**          |          |                |                                                                       |                  |
 | ADMIN-1                                           | —        | ✅ DONE        | Feature flag tier model (D1 + API + resolution chain)                 | P2-1             |
 | ADMIN-2                                           | —        | ✅ DONE        | Admin tier badge + gated UI (locked icons, upgrade prompts)           | ADMIN-1          |
@@ -116,7 +116,7 @@ Stories are ordered by the sequence you work through them. Each row unlocks the 
 | ADMIN-20                                          | —        | 📋 BACKLOG     | Cross-surface sponsor integration test suite                          | —                |
 | ADMIN-21                                          | —        | 📋 BACKLOG     | Multi-event aggregate dashboard                                       | ADMIN-1          |
 | ADMIN-22                                          | —        | 📋 BACKLOG     | Sponsor ROI click-through attribution                                 | ADMIN-6          |
-| ADMIN-23                                          | —        | 📋 BACKLOG     | Consent tracking on form submit (privacy notice + timestamp)          | —                |
+| ADMIN-23                                          | —        | ✅ DONE        | Consent tracking on form submit (privacy notice + timestamp)          | —                |
 | **Epic DESIGN — Design System**                   |          |                |                                                                       |                  |
 | DESIGN-1                                          | —        | 📋 BACKLOG     | Viewport meta tags on Admin + Report surfaces                         | —                |
 | DESIGN-2                                          | —        | 📋 BACKLOG     | Breakpoint direction standardization (eliminate max-width)            | —                |
