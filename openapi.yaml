@@ -27,12 +27,10 @@ info:
     url: https://opensource.org/licenses/MIT
 
 servers:
-  - url: https://script.google.com/macros/s/{deploymentId}/exec
+  - url: https://oursharedevents.com
     description: Production server
-    variables:
-      deploymentId:
-        default: YOUR_DEPLOYMENT_ID
-        description: Your Google Apps Script deployment ID
+  - url: https://stg.oursharedevents.com
+    description: Staging server
 
 tags:
   - name: Public

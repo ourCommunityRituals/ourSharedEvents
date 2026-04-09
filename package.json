@@ -81,7 +81,6 @@
     "test:ui:smoke:poster": "playwright test --config=playwright.ui-smoke.config.ts poster.smoke.spec.ts",
     "test:ui:smoke:report": "playwright test --config=playwright.ui-smoke.config.ts sharedreport.smoke.spec.ts",
     "test:ui:smoke:comprehensive": "playwright test --config=playwright.ui-smoke.config.ts comprehensive-surfaces.smoke.spec.ts",
-    "test:ui:smoke:nusdk": "playwright test --config=playwright.ui-smoke.config.ts nu-sdk-integration.smoke.spec.ts",
     "test:fe": "playwright test tests/e2e/1-smoke tests/e2e/2-pages tests/e2e/3-flows",
     "test:smoke": "playwright test tests/e2e/1-smoke",
     "test:smoke:all": "npm run test:api:smoke && npm run test:ui:smoke",

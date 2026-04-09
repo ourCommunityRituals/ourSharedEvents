@@ -25,10 +25,7 @@
 
       "cloudflare": {
         "workerName": "zeventbooks-staging",
-        "routes": [
-          "stg.zeventbooks.io/*",
-          "api-stg.zeventbooks.io/*"
-        ],
+        "routes": ["stg.zeventbooks.io/*", "api-stg.zeventbooks.io/*"],
         "zoneName": "zeventbooks.io",
         "_note": "Primary backend - all traffic served by Cloudflare Worker"
       },
@@ -101,11 +98,7 @@
 
       "cloudflare": {
         "workerName": "zeventbooks-prod",
-        "routes": [
-          "zeventbooks.io/*",
-          "www.zeventbooks.io/*",
-          "api.zeventbooks.io/*"
-        ],
+        "routes": ["zeventbooks.io/*", "www.zeventbooks.io/*", "api.zeventbooks.io/*"],
         "zoneName": "zeventbooks.io",
         "_note": "Primary backend - all traffic served by Cloudflare Worker"
       },
@@ -178,7 +171,7 @@
         "healthUrl": "https://stg.oursharedevents.com/health",
         "eventsApiUrl": "https://stg.oursharedevents.com/api/v2/events"
       },
-      "secrets": ["GOOGLE_SA_CLIENT_EMAIL", "GOOGLE_SA_PRIVATE_KEY_PEM", "SHEETS_SPREADSHEET_ID", "ADMIN_KEY"],
+      "secrets": ["ADMIN_KEY", "FORMS_ENCRYPTION_KEY"],
       "flags": {
         "workerEnv": "staging",
         "allowAdminKeyFallback": true
@@ -198,7 +191,7 @@
         "healthUrl": "https://oursharedevents.com/health",
         "eventsApiUrl": "https://oursharedevents.com/api/v2/events"
       },
-      "secrets": ["GOOGLE_SA_CLIENT_EMAIL", "GOOGLE_SA_PRIVATE_KEY_PEM", "SHEETS_SPREADSHEET_ID", "ADMIN_KEY"],
+      "secrets": ["ADMIN_KEY", "FORMS_ENCRYPTION_KEY"],
       "flags": {
         "workerEnv": "production",
         "allowAdminKeyFallback": false

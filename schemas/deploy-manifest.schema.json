@@ -109,7 +109,7 @@
   "definitions": {
     "environment": {
       "type": "object",
-      "required": ["name", "appsScript", "cloudflare", "urls", "flags"],
+      "required": ["name", "cloudflare", "urls", "flags"],
       "properties": {
         "name": {
           "type": "string",
@@ -120,33 +120,17 @@
         },
         "appsScript": {
           "type": "object",
-          "required": ["scriptId", "deploymentId", "webAppUrl"],
+          "description": "ARCHIVED — GAS backend decommissioned. Kept for schema backward compat with existing manifest files.",
           "properties": {
-            "scriptId": {
-              "type": "string",
-              "pattern": "^[a-zA-Z0-9_-]{40,60}$",
-              "description": "Google Apps Script project ID (permanent)"
-            },
-            "deploymentId": {
-              "type": "string",
-              "pattern": "^AKfycb[a-zA-Z0-9_-]+$",
-              "minLength": 50,
-              "description": "Web app deployment ID (changes per deployment)"
-            },
-            "webAppUrl": {
-              "type": "string",
-              "format": "uri",
-              "pattern": "^https://script\\.google\\.com/macros/s/AKfycb[a-zA-Z0-9_-]+/exec$",
-              "description": "Executable web app URL"
-            },
-            "editUrl": {
-              "type": "string",
-              "format": "uri",
-              "description": "Project editor URL"
-            },
-            "_note": {
-              "type": "string"
-            }
+            "_status": { "type": "string" },
+            "_archivedDate": { "type": "string" },
+            "_story": { "type": "string" },
+            "_note": { "type": "string" },
+            "_security": { "type": "string" },
+            "scriptId": { "type": "string" },
+            "deploymentId": { "type": "string" },
+            "webAppUrl": { "type": "string" },
+            "editUrl": { "type": "string" }
           }
         },
         "cloudflare": {
