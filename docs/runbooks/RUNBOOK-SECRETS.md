@@ -1,183 +1,164 @@
 # Runbook: Rotating Secrets and Verifying Environment Alignment
 
 > **Purpose:** Procedures for rotating secrets and verifying environment configuration.
-> **Last Updated:** 2025-12-17 | **Story:** 6 - Document Baseline & Runbooks
+> **Last Updated:** 2026-04-09 | **Architecture:** D1-native (Phase 2 complete)
+> **Supersedes:** Previous version referencing Google Sheets/GAS secrets
 
 ---
 
 ## Quick Reference
 
-| Action                 | Command                                                       |
-| ---------------------- | ------------------------------------------------------------- |
-| Verify all secrets     | `node scripts/verify-secrets.js`                              |
-| Verify Stage-1 secrets | `node scripts/verify-secrets.js --stage1`                     |
-| Verify Stage-2 secrets | `node scripts/verify-secrets.js --stage2`                     |
-| List Worker secrets    | `wrangler secret list --env staging`                          |
-| Check backend health   | `curl -s https://stg.eventangle.com/api/health/backend \| jq` |
+| Action               | Command                                                |
+| -------------------- | ------------------------------------------------------ |
+| List Worker secrets  | `wrangler secret list --env staging`                   |
+| Check backend health | `curl -s https://stg.oursharedevents.com/health \| jq` |
+| Deploy staging       | `cd workers/oursharedevents && npm run deploy:staging` |
+| Deploy production    | Tag `vX.Y.Z` → CI auto-deploys                         |
 
 ---
 
-## Secrets Inventory
+## Secrets Inventory (D1-Native)
 
 ### GitHub Actions Secrets
 
-| Secret                          | Purpose                     | Rotation Period |
-| ------------------------------- | --------------------------- | --------------- |
-| `GOOGLE_CLIENT_EMAIL`           | Service account email       | 90 days         |
-| `GOOGLE_PRIVATE_KEY`            | Service account private key | 90 days         |
-| `STAGING_SHEETS_SPREADSHEET_ID` | Staging spreadsheet         | Static          |
-| `CLOUDFLARE_API_TOKEN`          | Worker deployment           | As needed       |
-| `CLOUDFLARE_ACCOUNT_ID`         | Account identifier          | Static          |
-| `ADMIN_KEY_ROOT`                | Root admin key              | 90 days         |
-| `ADMIN_KEY_ABC`                 | ABC admin key               | 90 days         |
-| `ADMIN_KEY_CBC`                 | CBC admin key               | 90 days         |
-| `ADMIN_KEY_CBL`                 | CBL admin key               | 90 days         |
+| Secret                  | Purpose                    | Rotation Period |
+| ----------------------- | -------------------------- | --------------- |
+| `CLOUDFLARE_API_TOKEN`  | Worker deployment (scoped) | 90 days         |
+| `CLOUDFLARE_ACCOUNT_ID` | Account identifier         | Static          |
+| `ADMIN_KEY`             | Admin API authentication   | 90 days         |
 
-### Cloudflare Worker Secrets
+### Cloudflare Worker Secrets (set via `wrangler secret put`)
 
-| Secret                      | Purpose                  | Rotation Period |
-| --------------------------- | ------------------------ | --------------- |
-| `GOOGLE_SA_CLIENT_EMAIL`    | Service account email    | 90 days         |
-| `GOOGLE_SA_PRIVATE_KEY_PEM` | Private key (PEM)        | 90 days         |
-| `SHEETS_SPREADSHEET_ID`     | Database spreadsheet     | Static          |
-| `ADMIN_TOKEN`               | Admin API authentication | 90 days         |
+| Secret                 | Purpose                          | Rotation Period |
+| ---------------------- | -------------------------------- | --------------- |
+| `ADMIN_KEY`            | Bearer token for `/admin` routes | 90 days         |
+| `FORMS_ENCRYPTION_KEY` | AES-GCM key for PII encryption   | 90 days         |
 
----
+### Removed Secrets (Phase 2 D1 Migration)
 
-## Rotating Google Service Account Credentials
+These secrets were required when Google Sheets was the data layer. They are **no longer needed**:
 
-### Step 1: Generate New Key in GCP Console
-
-1. Go to [Google Cloud Console](https://console.cloud.google.com/)
-2. Navigate to IAM & Admin > Service Accounts
-3. Find the service account (e.g., `eventangle-worker@project.iam.gserviceaccount.com`)
-4. Click on the service account
-5. Go to Keys tab
-6. Click "Add Key" > "Create new key"
-7. Select JSON format
-8. Download the key file
-
-### Step 2: Extract Key Values
-
-```bash
-# Extract client email
-cat credentials.json | jq -r '.client_email'
-
-# Extract private key (convert \n to real newlines)
-cat credentials.json | jq -r '.private_key'
-```
-
-### Step 3: Update GitHub Secrets
-
-1. Go to GitHub > Repository > Settings > Secrets and variables > Actions
-2. Update `GOOGLE_CLIENT_EMAIL` with new email
-3. Update `GOOGLE_PRIVATE_KEY` with new private key
-
-### Step 4: Update Cloudflare Worker Secrets
-
-```bash
-# Staging
-wrangler secret put GOOGLE_SA_CLIENT_EMAIL --env staging
-# Paste: client_email value
-
-wrangler secret put GOOGLE_SA_PRIVATE_KEY_PEM --env staging
-# Paste: full private key including BEGIN/END markers
-
-# Production
-wrangler secret put GOOGLE_SA_CLIENT_EMAIL --env production
-wrangler secret put GOOGLE_SA_PRIVATE_KEY_PEM --env production
-```
-
-### Step 5: Redeploy Workers
-
-```bash
-# Staging
-wrangler deploy --env staging
-
-# Production
-wrangler deploy --env production
-```
-
-### Step 6: Verify
-
-```bash
-# Check staging
-curl -s https://stg.eventangle.com/api/health/backend | jq
-
-# Check production
-curl -s https://www.eventangle.com/api/health/backend | jq
-
-# Expected response includes:
-# "googleAuth": "service_account"
-# "token": "ok"
-# "sheetsProbe": {"ok": true}
-```
-
-### Step 7: Revoke Old Key
-
-1. Go back to GCP Console > Service Account > Keys
-2. Find the old key (by creation date)
-3. Click trash icon to delete
+| Secret (Removed)                    | Reason                            |
+| ----------------------------------- | --------------------------------- |
+| ~~`GOOGLE_SA_CLIENT_EMAIL`~~        | D1 replaced Sheets — no SA needed |
+| ~~`GOOGLE_SA_PRIVATE_KEY_PEM`~~     | D1 replaced Sheets — no SA needed |
+| ~~`SHEETS_SPREADSHEET_ID`~~         | D1 replaced Sheets                |
+| ~~`GOOGLE_CLIENT_EMAIL`~~           | Legacy GitHub Actions variant     |
+| ~~`GOOGLE_PRIVATE_KEY`~~            | Legacy GitHub Actions variant     |
+| ~~`STAGING_SHEETS_SPREADSHEET_ID`~~ | Legacy staging variant            |
 
 ---
 
-## Rotating Admin Keys
+## Rotating Admin Key
 
-### Step 1: Generate New Admin Key
+### Step 1: Generate New Key
 
 ```bash
-# Generate secure random key
-openssl rand -base64 32
+openssl rand -hex 32
 ```
 
-### Step 2: Update GitHub Secrets
+### Step 2: Update GitHub Actions Secret
 
-1. Go to GitHub > Settings > Secrets
-2. Update `ADMIN_KEY_ROOT` (and brand-specific keys if used)
+1. GitHub repo > Settings > Secrets and variables > Actions
+2. Update `ADMIN_KEY` with new value
 
 ### Step 3: Update Cloudflare Worker Secrets
 
 ```bash
+cd workers/oursharedevents
+
 # Staging
-wrangler secret put ADMIN_TOKEN --env staging
-# Paste new admin key
+wrangler secret put ADMIN_KEY --env staging
+# Paste new key
 
 # Production
-wrangler secret put ADMIN_TOKEN --env production
+wrangler secret put ADMIN_KEY --env production
+# Paste same new key
 ```
 
-### Step 4: Verify
+### Step 4: Redeploy
+
+```bash
+# Staging (immediate)
+npm run deploy:staging
+
+# Production (via CI — tag a release)
+```
+
+### Step 5: Verify
 
 ```bash
 # Test admin endpoint with new key
 curl -s -H "Authorization: Bearer <NEW_KEY>" \
-  https://stg.eventangle.com/api/v2/admin/events | jq '.ok'
+  https://stg.oursharedevents.com/api/v2/admin/events | jq '.ok'
 # Expected: true
+
+# Verify old key is rejected
+curl -s -H "Authorization: Bearer <OLD_KEY>" \
+  https://stg.oursharedevents.com/admin
+# Expected: 401
 ```
+
+---
+
+## Rotating FORMS_ENCRYPTION_KEY
+
+> **WARNING:** Rotating this key means previously encrypted PII data cannot be decrypted.
+> Only rotate if the key is compromised. Plan for data migration if needed.
+
+### Step 1: Generate New Key
+
+```bash
+openssl rand -hex 32
+```
+
+### Step 2: Update Cloudflare Worker Secrets
+
+```bash
+cd workers/oursharedevents
+
+wrangler secret put FORMS_ENCRYPTION_KEY --env staging
+wrangler secret put FORMS_ENCRYPTION_KEY --env production
+```
+
+### Step 3: Redeploy and Verify
+
+```bash
+npm run deploy:staging
+# Submit a test form, verify it encrypts correctly
+```
+
+### Disaster Recovery Note
+
+If FORMS_ENCRYPTION_KEY is lost:
+
+- Encrypted email fields in `email_signups` table become unrecoverable
+- Registration and survey data (hashed, not encrypted) is unaffected
+- The daily PII cron job will still scrub data on schedule
+- Generate a new key and accept data loss on previously encrypted fields
 
 ---
 
 ## Rotating Cloudflare API Token
 
-### Step 1: Create New Token
+### Step 1: Create New Scoped Token
 
-1. Go to [Cloudflare Dashboard](https://dash.cloudflare.com/profile/api-tokens)
-2. Click "Create Token"
-3. Use "Edit Cloudflare Workers" template or custom:
+1. [Cloudflare Dashboard](https://dash.cloudflare.com/profile/api-tokens) > Create Token
+2. Use "Edit Cloudflare Workers" template:
    - Workers Scripts: Edit
    - Workers Routes: Edit
    - Account Settings: Read
+3. Zone restriction: `oursharedevents.com` only
 4. Copy the new token
 
 ### Step 2: Update GitHub Secret
 
-1. Go to GitHub > Settings > Secrets
-2. Update `CLOUDFLARE_API_TOKEN`
+1. GitHub repo > Settings > Secrets > `CLOUDFLARE_API_TOKEN`
+2. Paste new token
 
 ### Step 3: Verify
 
 ```bash
-# Test token (set in environment)
 export CLOUDFLARE_API_TOKEN=<new_token>
 wrangler whoami
 # Should show account info
@@ -185,127 +166,100 @@ wrangler whoami
 
 ### Step 4: Revoke Old Token
 
-1. Go back to Cloudflare API Tokens page
-2. Find old token
-3. Click "Delete"
+1. Cloudflare API Tokens page > find old token > Delete
 
 ---
 
 ## Verifying Environment Alignment
 
-### Verify Secrets Configuration
+### Health Check (D1-Native)
 
 ```bash
-# Full verification
-node scripts/verify-secrets.js
+# Staging
+curl -s https://stg.oursharedevents.com/health | jq
+# Expected:
+# {
+#   "ok": true,
+#   "env": "staging",
+#   "version": "stg-YYYY.MM.DD",
+#   "d1": "ok"
+# }
 
-# Stage-1 only
-node scripts/verify-secrets.js --stage1
-
-# Stage-2 only
-node scripts/verify-secrets.js --stage2
-
-# JSON output
-node scripts/verify-secrets.js --json
-```
-
-### Verify Backend Health
-
-```bash
-# Staging backend
-curl -s https://stg.eventangle.com/api/health/backend | jq
-
-# Production backend
-curl -s https://www.eventangle.com/api/health/backend | jq
-```
-
-**Expected Response:**
-
-```json
-{
-  "ok": true,
-  "env": "staging",
-  "backend": "cloudflare",
-  "googleAuth": "service_account",
-  "token": "ok",
-  "sheetsProbe": {
-    "ok": true,
-    "status": 200,
-    "latencyMs": 245
-  }
-}
-```
-
-### Verify Worker Environment
-
-```bash
-# Check staging worker
-curl -s -I https://stg.eventangle.com/ping | grep -E "x-proxied-by|x-worker-version"
-
-# Check production worker
-curl -s -I https://www.eventangle.com/ping | grep -E "x-proxied-by|x-worker-version"
+# Production
+curl -s https://oursharedevents.com/health | jq
 ```
 
 ### List Current Secrets
 
 ```bash
-# Staging secrets
 wrangler secret list --env staging
+# Expected: ADMIN_KEY, FORMS_ENCRYPTION_KEY
 
-# Production secrets
 wrangler secret list --env production
+# Expected: ADMIN_KEY, FORMS_ENCRYPTION_KEY
+```
+
+### Verify D1 Connectivity
+
+```bash
+# Events API (proves D1 main DB is alive)
+curl -s https://stg.oursharedevents.com/api/v2/events | jq '.ok'
+# Expected: true
+
+# Admin auth (proves ADMIN_KEY is set)
+curl -s -o /dev/null -w "%{http_code}" \
+  -H "Authorization: Bearer <ADMIN_KEY>" \
+  https://stg.oursharedevents.com/admin
+# Expected: 200
 ```
 
 ---
 
 ## Troubleshooting
 
-### Error: GOOGLE_AUTH_MISSING_SECRET
+### Error: D1 query failed / "d1": "error"
 
-**Cause:** Missing service account credentials
+**Cause:** D1 migrations not applied or database not provisioned
 **Fix:**
 
 ```bash
-wrangler secret put GOOGLE_SA_CLIENT_EMAIL --env <env>
-wrangler secret put GOOGLE_SA_PRIVATE_KEY_PEM --env <env>
+cd workers/oursharedevents
+wrangler d1 migrations apply DB --env staging --remote
+wrangler d1 migrations apply FORMS_DB --env staging --remote
 ```
 
-### Error: GOOGLE_AUTH_KEY_IMPORT_FAILED
+### Error: 401 on admin routes
 
-**Cause:** Invalid PEM format or missing line breaks
-**Fix:** Ensure the key includes:
-
-```
------BEGIN PRIVATE KEY-----
-<base64 content>
------END PRIVATE KEY-----
-```
-
-### Error: SHEETS_READ_FAILED
-
-**Cause:** Service account doesn't have access to spreadsheet
-**Fix:** Share the spreadsheet with the service account email
-
-### Error: SHEETS_DB_ID_MISSING
-
-**Cause:** Missing spreadsheet ID secret
+**Cause:** ADMIN_KEY not set or mismatched between GitHub and Wrangler
 **Fix:**
 
 ```bash
-wrangler secret put SHEETS_SPREADSHEET_ID --env <env>
+wrangler secret put ADMIN_KEY --env staging
+# Re-paste the same value used in GitHub Actions
+```
+
+### Error: Form encryption fails
+
+**Cause:** FORMS_ENCRYPTION_KEY not set or invalid
+**Fix:**
+
+```bash
+wrangler secret put FORMS_ENCRYPTION_KEY --env staging
+# Paste a 32+ character hex string
 ```
 
 ### Authentication Failures After Rotation
 
-1. Check secrets are updated in both GitHub AND Cloudflare
-2. Redeploy workers after secret changes
-3. Verify key format (especially newlines in PEM)
-4. Check GCP audit logs for auth failures
+1. Verify secret updated in **both** GitHub Actions AND Wrangler
+2. Redeploy worker after secret changes
+3. Check `wrangler secret list` confirms the secret exists
+4. Use `wrangler tail --env staging` to see real-time error logs
 
 ---
 
 ## Related Documentation
 
-- [BASELINE.md](./BASELINE.md) - System baseline documentation
-- [CLOUDFLARE_SECRETS.md](./CLOUDFLARE_SECRETS.md) - Full secrets reference
-- [.github-secrets-required.json](../.github-secrets-required.json) - Canonical secrets list
+- [INFRA-CHECKLIST.md](../deployment/INFRA-CHECKLIST.md) — Full infrastructure setup
+- [CLOUDFLARE_SECRETS.md](../deployment/CLOUDFLARE_SECRETS.md) — Secrets reference
+- [DISASTER-RECOVERY.md](../runbooks/DISASTER-RECOVERY.md) — DR procedures
+- [.github-secrets-required.json](../../.github-secrets-required.json) — Canonical secrets schema

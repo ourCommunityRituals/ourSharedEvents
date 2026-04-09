@@ -53,6 +53,9 @@ test-dashboard/
 # Test history database (keep local, contains all historical test runs)
 .test-results/test-history.json
 
+# Cloudflare Wrangler local state (D1 SQLite, miniflare)
+.wrangler/
+
 # Build outputs
 dist/
 build/

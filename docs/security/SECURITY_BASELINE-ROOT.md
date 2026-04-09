@@ -4,7 +4,7 @@
 > Epic SEC-0, Story SEC-0.1 — Document Current Edge Surface + Trust Boundaries
 >
 > Created: 2025-12-20
-> Last Updated: 2025-12-20 (SEC-2.2 added)
+> Last Updated: 2026-04-09 (D1 migration — replaced stale Google Sheets references)
 > Status: Active
 
 ---
@@ -89,23 +89,24 @@
                                     │
                                     ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                        GOOGLE SHEETS API                                     │
+│                        CLOUDFLARE D1 (SQLite)                                │
 │                      (Third Trust Boundary)                                  │
 │  ┌─────────────────────────────────────────────────────────────────────────┐│
-│  │  Service Account Authentication (GOOGLE_SA_CLIENT_EMAIL + KEY)         ││
-│  │  Scopes: spreadsheets (read/write)                                     ││
+│  │  D1 Binding Authentication (wrangler.toml database_id)                 ││
+│  │  Access: Worker binding only (no external credentials required)        ││
 │  └─────────────────────────────────────────────────────────────────────────┘│
+│  Note: Previously Google Sheets API with Service Account auth (Phase 1)    │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ### 2.2 Identity Requirements by Zone
 
-| Zone                         | Identity Requirement           | Mechanism                                           |
-| ---------------------------- | ------------------------------ | --------------------------------------------------- |
-| Public Internet → Cloudflare | None                           | DNS resolution                                      |
-| Cloudflare → Worker (Public) | None                           | Route matching                                      |
-| Cloudflare → Worker (Admin)  | **Access JWT or Bearer Token** | `Cf-Access-Jwt-Assertion` or `Authorization` header |
-| Worker → Google Sheets       | **Service Account JWT**        | OAuth 2.0 JWT assertion                             |
+| Zone                         | Identity Requirement           | Mechanism                                                                               |
+| ---------------------------- | ------------------------------ | --------------------------------------------------------------------------------------- |
+| Public Internet → Cloudflare | None                           | DNS resolution                                                                          |
+| Cloudflare → Worker (Public) | None                           | Route matching                                                                          |
+| Cloudflare → Worker (Admin)  | **Access JWT or Bearer Token** | `Cf-Access-Jwt-Assertion` or `Authorization` header                                     |
+| Worker → Cloudflare D1       | **Worker Binding**             | D1 binding in `wrangler.toml` (previously Google Sheets service account JWT in Phase 1) |
 
 ### 2.3 Current Authentication Mechanisms
 
@@ -192,11 +193,12 @@
 
 ### 4.1 Origin Architecture
 
-| Origin Type               | Endpoint                | Status       | Notes                   |
-| ------------------------- | ----------------------- | ------------ | ----------------------- |
-| **Worker-Only (Primary)** | Cloudflare Worker       | **ACTIVE**   | All traffic routes here |
-| **Google Sheets API**     | `sheets.googleapis.com` | **ACTIVE**   | Data backend            |
-| **Google Apps Script**    | `script.google.com`     | **ARCHIVED** | Deprecated in Story 5.2 |
+| Origin Type               | Endpoint                 | Status       | Notes                                                          |
+| ------------------------- | ------------------------ | ------------ | -------------------------------------------------------------- |
+| **Worker-Only (Primary)** | Cloudflare Worker        | **ACTIVE**   | All traffic routes here                                        |
+| **Cloudflare D1**         | D1 binding (edge SQLite) | **ACTIVE**   | Data backend (replaced Google Sheets in Phase 2)               |
+| **Google Sheets API**     | `sheets.googleapis.com`  | **ARCHIVED** | Removed in D1 migration (Phase 2) — previously used in Phase 1 |
+| **Google Apps Script**    | `script.google.com`      | **ARCHIVED** | Deprecated in Story 5.2                                        |
 
 ### 4.2 Backend Mode Configuration
 
@@ -204,11 +206,11 @@
 BACKEND_MODE=worker  (ONLY supported mode in production)
 ```
 
-| Mode     | Status         | Description                               |
-| -------- | -------------- | ----------------------------------------- |
-| `worker` | **ACTIVE**     | All logic in Workers, Sheets API for data |
-| `gas`    | **DEPRECATED** | Legacy GAS backend                        |
-| `mixed`  | **DEPRECATED** | Hybrid mode                               |
+| Mode     | Status         | Description                                                          |
+| -------- | -------------- | -------------------------------------------------------------------- |
+| `worker` | **ACTIVE**     | All logic in Workers, D1 for data (previously Sheets API in Phase 1) |
+| `gas`    | **DEPRECATED** | Legacy GAS backend                                                   |
+| `mixed`  | **DEPRECATED** | Hybrid mode                                                          |
 
 ### 4.3 Origin Bypass Risk Assessment
 
@@ -219,7 +221,7 @@ BACKEND_MODE=worker  (ONLY supported mode in production)
 | API key leakage         | Secrets in Cloudflare | **PROTECTED** |
 | GAS URL discovery       | URLs archived         | **LOW RISK**  |
 
-> **NS-3 Compliance:** Worker-only architecture means no origin to bypass. Google Sheets API is protected by service account auth.
+> **NS-3 Compliance:** Worker-only architecture means no origin to bypass. D1 data is accessed via Worker bindings only (no external credentials). Previously, Google Sheets API was protected by service account auth (Phase 1).
 
 ---
 
@@ -229,26 +231,27 @@ BACKEND_MODE=worker  (ONLY supported mode in production)
 
 #### Cloudflare Worker Secrets
 
-| Secret Name                 | Purpose               | Rotation Schedule | Set Via               |
-| --------------------------- | --------------------- | ----------------- | --------------------- |
-| `GOOGLE_SA_CLIENT_EMAIL`    | Service account email | 90 days           | `wrangler secret put` |
-| `GOOGLE_SA_PRIVATE_KEY_PEM` | Service account key   | 90 days           | `wrangler secret put` |
-| `SHEETS_SPREADSHEET_ID`     | Target spreadsheet    | As needed         | `wrangler secret put` |
-| `ADMIN_TOKEN`               | Legacy admin auth     | 90 days           | `wrangler secret put` |
-| `ADMIN_KEY`                 | V2 admin auth         | 90 days           | `wrangler secret put` |
+| Secret Name                     | Purpose                   | Rotation Schedule | Set Via                                             |
+| ------------------------------- | ------------------------- | ----------------- | --------------------------------------------------- |
+| ~~`GOOGLE_SA_CLIENT_EMAIL`~~    | ~~Service account email~~ | —                 | Removed (D1 migration) — previously used in Phase 1 |
+| ~~`GOOGLE_SA_PRIVATE_KEY_PEM`~~ | ~~Service account key~~   | —                 | Removed (D1 migration) — previously used in Phase 1 |
+| ~~`SHEETS_SPREADSHEET_ID`~~     | ~~Target spreadsheet~~    | —                 | Removed (D1 migration) — previously used in Phase 1 |
+| `ADMIN_TOKEN`                   | Legacy admin auth         | 90 days           | `wrangler secret put`                               |
+| `ADMIN_KEY`                     | V2 admin auth             | 90 days           | `wrangler secret put`                               |
+| `FORMS_ENCRYPTION_KEY`          | AES-GCM PII encryption    | 90 days           | `wrangler secret put`                               |
 
 #### GitHub Actions Secrets
 
-| Secret Name                     | Purpose              | Used In       |
-| ------------------------------- | -------------------- | ------------- |
-| `CLOUDFLARE_API_TOKEN`          | Wrangler deployment  | Stage-1 CI/CD |
-| `CLOUDFLARE_ACCOUNT_ID`         | Account identifier   | Stage-1 CI/CD |
-| `GOOGLE_CLIENT_EMAIL`           | SA email (CI/CD)     | Stage-2 tests |
-| `GOOGLE_PRIVATE_KEY`            | SA key (CI/CD)       | Stage-2 tests |
-| `STAGING_SHEETS_SPREADSHEET_ID` | Staging spreadsheet  | Stage-2 tests |
-| `ADMIN_KEY_ROOT`                | Root admin key       | Stage-2 tests |
-| `CF_ACCESS_CLIENT_ID`           | Access service token | Optional      |
-| `CF_ACCESS_CLIENT_SECRET`       | Access service token | Optional      |
+| Secret Name                         | Purpose                 | Used In                                                |
+| ----------------------------------- | ----------------------- | ------------------------------------------------------ |
+| `CLOUDFLARE_API_TOKEN`              | Wrangler deployment     | Stage-1 CI/CD                                          |
+| `CLOUDFLARE_ACCOUNT_ID`             | Account identifier      | Stage-1 CI/CD                                          |
+| ~~`GOOGLE_CLIENT_EMAIL`~~           | ~~SA email (CI/CD)~~    | Removed (D1 migration) — previously used in Phase 1 CI |
+| ~~`GOOGLE_PRIVATE_KEY`~~            | ~~SA key (CI/CD)~~      | Removed (D1 migration) — previously used in Phase 1 CI |
+| ~~`STAGING_SHEETS_SPREADSHEET_ID`~~ | ~~Staging spreadsheet~~ | Removed (D1 migration) — previously used in Phase 1 CI |
+| `ADMIN_KEY_ROOT`                    | Root admin key          | Stage-2 tests                                          |
+| `CF_ACCESS_CLIENT_ID`               | Access service token    | Optional                                               |
+| `CF_ACCESS_CLIENT_SECRET`           | Access service token    | Optional                                               |
 
 ### 5.2 Secrets Exposure Risks
 
@@ -261,10 +264,10 @@ BACKEND_MODE=worker  (ONLY supported mode in production)
 
 ### 5.3 Secret Verification
 
-| Endpoint              | Check                           | Response                             |
-| --------------------- | ------------------------------- | ------------------------------------ |
-| `/health/origin`      | All upstream secrets configured | `UPSTREAM_NOT_CONFIGURED` if missing |
-| `/api/health/backend` | Google auth secrets             | `secretsConfigured: true/false`      |
+| Endpoint              | Check                           | Response                                                                            |
+| --------------------- | ------------------------------- | ----------------------------------------------------------------------------------- |
+| `/health/origin`      | All upstream secrets configured | `UPSTREAM_NOT_CONFIGURED` if missing                                                |
+| `/api/health/backend` | D1 binding + auth secrets       | `secretsConfigured: true/false` (previously checked Google auth secrets in Phase 1) |
 
 ---
 
@@ -398,10 +401,11 @@ curl -s -H "Authorization: Bearer TOKEN" \
 
 ## Document History
 
-| Date       | Author      | Changes                                                 |
-| ---------- | ----------- | ------------------------------------------------------- |
-| 2025-12-20 | Claude Code | Initial baseline document (SEC-0.1)                     |
-| 2025-12-20 | Claude Code | Added SEC-1.1 runbook reference, updated roadmap status |
-| 2025-12-20 | Claude Code | Added SEC-1.2 scoped API tokens runbook                 |
-| 2025-12-20 | Claude Code | Added SEC-2.1 registrar lock + MFA runbook              |
-| 2025-12-20 | Claude Code | Added SEC-2.2 DNSSEC configuration runbook              |
+| Date       | Author      | Changes                                                                         |
+| ---------- | ----------- | ------------------------------------------------------------------------------- |
+| 2025-12-20 | Claude Code | Initial baseline document (SEC-0.1)                                             |
+| 2025-12-20 | Claude Code | Added SEC-1.1 runbook reference, updated roadmap status                         |
+| 2025-12-20 | Claude Code | Added SEC-1.2 scoped API tokens runbook                                         |
+| 2025-12-20 | Claude Code | Added SEC-2.1 registrar lock + MFA runbook                                      |
+| 2025-12-20 | Claude Code | Added SEC-2.2 DNSSEC configuration runbook                                      |
+| 2026-04-09 | Claude Code | D1 migration: replaced Google Sheets references with D1, marked removed secrets |

@@ -3,6 +3,10 @@
 Everything needed to go from zero to a fully working live site at `oursharedevents.com`.
 Work through each Part in order — each one unlocks the next.
 
+> **SUPERSEDED (2026-04-09):** Parts 1-2 (Google Cloud + Sheets) are obsolete — Phase 2 replaced Sheets with D1.
+> Use **`docs/deployment/INFRA-CHECKLIST.md`** for the corrected, D1-native infrastructure steps.
+> Parts 3-9 (Cloudflare zone, secrets, deploy, sign-off) remain valid but INFRA-CHECKLIST.md consolidates them.
+
 **Estimated time (first time through):** 2–3 hours
 **Recurring deploys after setup:** ~2 minutes (CI/CD handles it automatically)
 

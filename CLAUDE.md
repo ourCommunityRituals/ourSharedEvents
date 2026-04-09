@@ -190,10 +190,24 @@ Every story is implemented from all six POVs simultaneously. CC reads all six an
 │     - Worker route code                             │
 │     - Tests (Jest + Playwright)                     │
 │     - D1 migrations (if applicable)                 │
+│     - CI/CD test ticket (REQUIRED for DONE)         │
 │     - All 6 role POVs satisfied                     │
 │  6. Create PR             → CI runs automatically   │
 │  7. Update STORIES.md     → mark IN PROGRESS        │
 │  8. Update CLAUDE.md §3   → role current states     │
+│                                                     │
+│ DONE GATE (mandatory — full test pyramid)            │
+│  - CI/CD testing ticket must be attached to story   │
+│  - No story reaches ✅ DONE without CI validation   │
+│  - Full pyramid must pass:                          │
+│    1. Security (XSS, injection, auth boundaries)    │
+│    2. Lint (zero errors)                            │
+│    3. Contract (API shape, D1 schema parity)        │
+│    4. Unit (mock tests, privacy, validation)        │
+│    5. Integration (Worker D1 + forms security)      │
+│    6. API (Newman collections against live stg)     │
+│    7. E2E (Playwright — full surface flow)          │
+│  - No partial pyramids — all 7 levels or not DONE   │
 │                                                     │
 │ AFTER MERGE                                         │
 │  9. Update STORIES.md     → mark DONE               │
@@ -222,6 +236,7 @@ Each story should include:
 **Status:** 📋 BACKLOG | 🔄 IN PROGRESS | ✅ DONE
 **Prerequisite:** P<phase>-<number>
 **Sprint:** [cycle number or —]
+**CI/CD Ticket:** [Link or ID — REQUIRED for DONE status]
 
 **PO Acceptance Criteria:**
 
@@ -238,11 +253,22 @@ Each story should include:
 - Which surface(s) affected
 - Component behavior
 
-**QA Test Matrix:**
+**QA Test Pyramid (all levels required for DONE):**
 
-- Unit tests (Jest)
-- E2E tests (Playwright)
-- Edge cases
+- [ ] Security: XSS, injection, auth boundary tests pass
+- [ ] Lint: zero errors
+- [ ] Contract: API shape + D1 schema parity
+- [ ] Unit: mock tests (Vitest)
+- [ ] Integration: Worker D1 + forms security
+- [ ] API: Newman collections pass against live staging
+- [ ] E2E: Playwright full surface flow pass
+
+**E2E Surface Flow Coverage:**
+
+- [ ] stg.oursharedevents.com loads, event types render
+- [ ] Cross-surface: poster → pre-event → event → post-event
+- [ ] All surfaces validated: admin, public, poster, display, sharedReport, sponsor
+- [ ] Config integration verified
 
 **SDET Load Test:**
 
@@ -253,6 +279,10 @@ Each story should include:
 
 - CI checks required
 - Secrets/config needed
+
+> **Standard Protocol:** No story reaches ✅ DONE without a CI/CD testing ticket attached.
+> The ticket proves ALL 7 pyramid levels pass — not just written, but tested.
+> No partial pyramids. If E2E is skipped, the story is not DONE.
 ```
 
 ---

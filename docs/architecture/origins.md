@@ -208,15 +208,15 @@ BACKEND_MODE = "worker"
 
 #### Documentation Files (Mark as Archive)
 
-| File                               | Context             | Status                         |
-| ---------------------------------- | ------------------- | ------------------------------ |
-| `docs/env/staging.md`              | Staging GAS URLs    | **LEGACY** - Update or archive |
-| `docs/env/gas-projects.md`         | GAS project URLs    | **LEGACY** - Archive           |
-| `docs/RUNBOOK.md`                  | GAS debugging URLs  | **LEGACY** - Update            |
-| `RUNBOOK.md`                       | GAS monitoring URLs | **LEGACY** - Update            |
-| `docs/DEPLOYMENT.md`               | GAS deployment URLs | **LEGACY** - Update            |
-| `docs/STAGING_EVENTS_DIAGNOSIS.md` | GAS debugging       | **LEGACY** - Archive           |
-| `docs/STAGING_GAS_PERMISSIONS.md`  | GAS permissions     | **LEGACY** - Archive           |
+| File                               | Context             | Status                    |
+| ---------------------------------- | ------------------- | ------------------------- |
+| `archive/docs/env/staging.md`      | Staging GAS URLs    | **ARCHIVED** (2026-04-09) |
+| `archive/docs/env/gas-projects.md` | GAS project URLs    | **ARCHIVED** (2026-04-09) |
+| `docs/RUNBOOK.md`                  | GAS debugging URLs  | **LEGACY** - Update       |
+| `RUNBOOK.md`                       | GAS monitoring URLs | **LEGACY** - Update       |
+| `docs/DEPLOYMENT.md`               | GAS deployment URLs | **LEGACY** - Update       |
+| `docs/STAGING_EVENTS_DIAGNOSIS.md` | GAS debugging       | **LEGACY** - Archive      |
+| `docs/STAGING_GAS_PERMISSIONS.md`  | GAS permissions     | **LEGACY** - Archive      |
 
 #### Configuration Files (Commented Out - OK)
 
@@ -344,12 +344,12 @@ state.isProduction = isDomain(hostname, 'eventangle.com') && !state.isStaging;
 
 ### 6.3 Low Priority (Archive/Cleanup)
 
-| File                               | Action          | Story |
-| ---------------------------------- | --------------- | ----- |
-| `docs/STAGING_EVENTS_DIAGNOSIS.md` | Move to archive | 1.3   |
-| `docs/STAGING_GAS_PERMISSIONS.md`  | Move to archive | 1.3   |
-| `docs/env/gas-projects.md`         | Move to archive | 1.3   |
-| `postman/environments/*.json`      | Remove GAS URLs | 1.3   |
+| File                               | Action                   | Story |
+| ---------------------------------- | ------------------------ | ----- |
+| `docs/STAGING_EVENTS_DIAGNOSIS.md` | Move to archive          | 1.3   |
+| `docs/STAGING_GAS_PERMISSIONS.md`  | Move to archive          | 1.3   |
+| `archive/docs/env/gas-projects.md` | ✅ Archived (2026-04-09) | 1.3   |
+| `postman/environments/*.json`      | Remove GAS URLs          | 1.3   |
 
 ---
 

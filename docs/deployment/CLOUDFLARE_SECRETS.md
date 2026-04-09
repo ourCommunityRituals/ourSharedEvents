@@ -1,5 +1,7 @@
 # Secrets & Environment Variables Reference
 
+> **Last Updated: 2026-04-09 — corrected for D1-native architecture**
+
 > **Story 2** - Confirm Secrets & Environment Variables
 >
 > This document provides a comprehensive inventory of all secrets and environment
@@ -10,11 +12,11 @@
 
 The EventAngle platform relies on multiple secrets for:
 
-- **Google Sheets API** - Service account authentication for data access
 - **Cloudflare Workers** - Deployment and routing configuration
+- **Cloudflare D1** - Edge SQLite database (replaced Google Sheets in Phase 2)
 - **Admin Authentication** - API endpoint security
-- **Google Apps Script** - Legacy backend deployment
-- **CI/CD Notifications** - Slack/Teams webhooks
+- **Forms Encryption** - AES-GCM encryption for PII in form submissions
+- **CI/CD Notifications** - Slack/Teams webhooks (optional)
 
 **Security Principles:**
 
@@ -27,17 +29,34 @@ The EventAngle platform relies on multiple secrets for:
 
 ## Quick Reference
 
-### Required GitHub Secrets (Staging)
+### Required GitHub Actions Secrets
 
-| Secret                          | Category    | Required For              |
-| ------------------------------- | ----------- | ------------------------- |
-| `GOOGLE_CLIENT_EMAIL`           | Google      | Sheets API authentication |
-| `GOOGLE_PRIVATE_KEY`            | Google      | Sheets API authentication |
-| `STAGING_SHEETS_SPREADSHEET_ID` | Google      | Staging database          |
-| `CLOUDFLARE_API_TOKEN`          | Cloudflare  | Worker deployment         |
-| `CLOUDFLARE_ACCOUNT_ID`         | Cloudflare  | Worker deployment         |
-| `OAUTH_CREDENTIALS`             | Apps Script | GAS deployment            |
-| `ADMIN_KEY_ROOT`                | Admin       | Stage-2 E2E testing       |
+| Secret                  | Category   | Required For      |
+| ----------------------- | ---------- | ----------------- |
+| `CLOUDFLARE_API_TOKEN`  | Cloudflare | Worker deployment |
+| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare | Worker deployment |
+| `ADMIN_KEY`             | Admin      | E2E testing       |
+
+### Required Cloudflare Worker Secrets
+
+| Secret                 | Category   | Required For                        |
+| ---------------------- | ---------- | ----------------------------------- |
+| `ADMIN_KEY`            | Admin      | Bearer token for admin endpoints    |
+| `FORMS_ENCRYPTION_KEY` | Encryption | AES-GCM encryption for PII in forms |
+
+### Removed Secrets (Phase 2 D1 Migration)
+
+The following secrets were removed when the data layer migrated from Google Sheets to Cloudflare D1. They are no longer needed.
+
+| Secret                              | Status                         |
+| ----------------------------------- | ------------------------------ |
+| ~~`GOOGLE_CLIENT_EMAIL`~~           | Removed (Phase 2 D1 migration) |
+| ~~`GOOGLE_PRIVATE_KEY`~~            | Removed (Phase 2 D1 migration) |
+| ~~`GOOGLE_SA_CLIENT_EMAIL`~~        | Removed (Phase 2 D1 migration) |
+| ~~`GOOGLE_SA_PRIVATE_KEY_PEM`~~     | Removed (Phase 2 D1 migration) |
+| ~~`SHEETS_SPREADSHEET_ID`~~         | Removed (Phase 2 D1 migration) |
+| ~~`STAGING_SHEETS_SPREADSHEET_ID`~~ | Removed (Phase 2 D1 migration) |
+| ~~`OAUTH_CREDENTIALS`~~             | Removed (Phase 2 D1 migration) |
 
 ### Verification
 
@@ -61,56 +80,12 @@ node scripts/verify-secrets.js --json
 
 ## Secret Categories
 
-### 1. Google Service Account (Google Sheets API)
+### 1. ~~Google Service Account~~ (Removed — Phase 2 D1 Migration)
 
-**Purpose:** Authenticate with Google Sheets API for backend data access.
-
-**Environment:** Staging + Production (separate credentials recommended)
-
-**Rotation Policy:** Every 90 days
-
-| Secret Name                     | Description                            | Required |
-| ------------------------------- | -------------------------------------- | -------- |
-| `GOOGLE_SA_CLIENT_EMAIL`        | Service account email (new naming)     | No\*     |
-| `GOOGLE_SA_PRIVATE_KEY_PEM`     | PEM-formatted private key (new naming) | No\*     |
-| `GOOGLE_CLIENT_EMAIL`           | Service account email (legacy naming)  | Yes\*    |
-| `GOOGLE_PRIVATE_KEY`            | Private key (legacy naming)            | Yes\*    |
-| `STAGING_SHEETS_SPREADSHEET_ID` | Staging spreadsheet ID                 | Yes      |
-
-_\* Either new naming (`GOOGLE*SA*_`) or legacy naming (`GOOGLE_CLIENT_EMAIL/GOOGLE_PRIVATE_KEY`) is required. The system supports both with automatic fallback.\*
-
-**Setting in GitHub:**
-
-```bash
-# Navigate to: https://github.com/zeventbooks/MVP-EVENT-TOOLKIT/settings/secrets/actions
-# Add new repository secret: GOOGLE_CLIENT_EMAIL
-# Value: your-service-account@project.iam.gserviceaccount.com
-```
-
-**Setting in Cloudflare Worker:**
-
-```bash
-cd worker
-wrangler secret put GOOGLE_SA_CLIENT_EMAIL --env staging
-wrangler secret put GOOGLE_SA_PRIVATE_KEY_PEM --env staging
-wrangler secret put SHEETS_SPREADSHEET_ID --env staging
-```
-
-**Key Format Notes:**
-
-The private key must be in PEM format with proper markers:
-
-```
------BEGIN PRIVATE KEY-----
-MIIEvQ...base64 content...
------END PRIVATE KEY-----
-```
-
-If copying from a JSON key file, convert `\n` to actual newlines:
-
-```bash
-cat credentials.json | jq -r '.private_key'
-```
+> **This entire section is deprecated.** The data layer migrated from Google Sheets
+> to Cloudflare D1 (edge SQLite). All Google Sheets secrets (`GOOGLE_SA_CLIENT_EMAIL`,
+> `GOOGLE_SA_PRIVATE_KEY_PEM`, `SHEETS_SPREADSHEET_ID`) should be **deleted** from
+> both GitHub Secrets and Cloudflare Worker secrets if still present.
 
 ---
 
@@ -183,73 +158,39 @@ curl -X GET "https://api.cloudflare.com/client/v4/zones/{zone_id}/dns_records" \
 
 **Purpose:** Secure admin API endpoints for event management.
 
-**Environment:** Stage-2 testing (Staging + Production)
+**Environment:** Staging + Production
 
 **Rotation Policy:** Every 90 days
 
-| Secret Name      | Description                                | Required      |
-| ---------------- | ------------------------------------------ | ------------- |
-| `ADMIN_KEY_ROOT` | Root brand admin key                       | Yes (Stage-2) |
-| `ADMIN_KEY_ABC`  | ABC brand admin key                        | No            |
-| `ADMIN_KEY_CBC`  | CBC brand admin key                        | No            |
-| `ADMIN_KEY_CBL`  | CBL brand admin key                        | No            |
-| `ADMIN_TOKEN`    | Bearer token for Worker (set via wrangler) | No            |
-
-**Multi-Brand Support:**
-
-The system supports multiple brands with separate admin keys. If brand-specific
-keys are not configured, the system falls back to `ADMIN_KEY_ROOT`.
+| Secret Name            | Description                             | Required |
+| ---------------------- | --------------------------------------- | -------- |
+| `ADMIN_KEY`            | Bearer token for admin endpoints        | Yes      |
+| `FORMS_ENCRYPTION_KEY` | AES-GCM key for PII encryption in forms | Yes      |
 
 **Setting in Cloudflare Worker:**
 
 ```bash
-cd worker
-wrangler secret put ADMIN_TOKEN --env staging
-wrangler secret put ADMIN_TOKEN --env production
+cd workers/oursharedevents
+wrangler secret put ADMIN_KEY --env staging
+wrangler secret put ADMIN_KEY --env production
+wrangler secret put FORMS_ENCRYPTION_KEY --env staging
+wrangler secret put FORMS_ENCRYPTION_KEY --env production
+```
+
+**Setting in GitHub Actions:**
+
+```bash
+# Navigate to: https://github.com/ourCommunityRituals/ourSharedEvents/settings/secrets/actions
+# Add: ADMIN_KEY (same value used for E2E tests against staging)
 ```
 
 ---
 
-### 4. Google Apps Script (Legacy)
+### 4. ~~Google Apps Script~~ (Removed — Phase 2 D1 Migration)
 
-**Purpose:** Deploy to Google Apps Script backend (being phased out in favor of Worker-only mode).
-
-**Environment:** Both
-
-**Rotation Policy:** On expiration (OAuth tokens refresh automatically)
-
-| Secret Name             | Description                               | Required |
-| ----------------------- | ----------------------------------------- | -------- |
-| `OAUTH_CREDENTIALS`     | Clasp OAuth credentials (~/.clasprc.json) | Yes      |
-| `STAGING_SCRIPT_ID`     | Staging Apps Script project ID            | No       |
-| `PROD_SCRIPT_ID`        | Production Apps Script project ID         | No       |
-| `STAGING_DEPLOYMENT_ID` | Staging deployment ID                     | No       |
-| `PROD_DEPLOYMENT_ID`    | Production deployment ID                  | No       |
-
-**Setting Up OAUTH_CREDENTIALS:**
-
-1. Install clasp: `npm install -g @google/clasp`
-2. Login: `clasp login`
-3. Copy the contents of `~/.clasprc.json`
-4. Add to GitHub Secrets as `OAUTH_CREDENTIALS`
-
-**Expected JSON Structure:**
-
-```json
-{
-  "token": {
-    "access_token": "...",
-    "refresh_token": "...",
-    "scope": "...",
-    "token_type": "Bearer",
-    "expiry_date": 1234567890
-  },
-  "oauth2ClientSettings": {
-    "clientId": "...",
-    "clientSecret": "..."
-  }
-}
-```
+> **This entire section is deprecated.** Google Apps Script is no longer used.
+> All related secrets (`OAUTH_CREDENTIALS`, `STAGING_SCRIPT_ID`, `PROD_SCRIPT_ID`,
+> `STAGING_DEPLOYMENT_ID`, `PROD_DEPLOYMENT_ID`) should be **deleted** if still present.
 
 ---
 
@@ -275,9 +216,9 @@ wrangler secret put ADMIN_TOKEN --env production
 
 ---
 
-### 6. Testing Configuration (Stage-2)
+### 6. Testing Configuration
 
-**Purpose:** Configure Playwright tests and test data access.
+**Purpose:** Configure Playwright tests and Cloudflare Access for CI.
 
 **Environment:** CI/CD testing
 
@@ -285,12 +226,10 @@ wrangler secret put ADMIN_TOKEN --env production
 
 | Secret Name               | Description                 | Required |
 | ------------------------- | --------------------------- | -------- |
-| `SPREADSHEET_ID_ROOT`     | Root brand test spreadsheet | No       |
-| `SPREADSHEET_ID_ABC`      | ABC brand test spreadsheet  | No       |
-| `SPREADSHEET_ID_CBC`      | CBC brand test spreadsheet  | No       |
-| `SPREADSHEET_ID_CBL`      | CBL brand test spreadsheet  | No       |
 | `CF_ACCESS_CLIENT_ID`     | Cloudflare Access client ID | No       |
 | `CF_ACCESS_CLIENT_SECRET` | Cloudflare Access secret    | No       |
+
+> **Removed:** All `SPREADSHEET_ID_*` secrets are no longer needed (Phase 2 D1 migration).
 
 ---
 
@@ -312,12 +251,12 @@ These are configured in workflow files or `wrangler.toml`, not as secrets:
 
 Secrets that must be set in Cloudflare (not GitHub):
 
-| Secret                      | Description              | Command                                                       |
-| --------------------------- | ------------------------ | ------------------------------------------------------------- |
-| `GOOGLE_SA_CLIENT_EMAIL`    | Service account email    | `wrangler secret put GOOGLE_SA_CLIENT_EMAIL --env staging`    |
-| `GOOGLE_SA_PRIVATE_KEY_PEM` | Private key (PEM format) | `wrangler secret put GOOGLE_SA_PRIVATE_KEY_PEM --env staging` |
-| `SHEETS_SPREADSHEET_ID`     | Database spreadsheet ID  | `wrangler secret put SHEETS_SPREADSHEET_ID --env staging`     |
-| `ADMIN_TOKEN`               | Admin bearer token       | `wrangler secret put ADMIN_TOKEN --env staging`               |
+| Secret                 | Description                    | Command                                                  |
+| ---------------------- | ------------------------------ | -------------------------------------------------------- |
+| `ADMIN_KEY`            | Admin bearer token             | `wrangler secret put ADMIN_KEY --env staging`            |
+| `FORMS_ENCRYPTION_KEY` | AES-GCM key for PII encryption | `wrangler secret put FORMS_ENCRYPTION_KEY --env staging` |
+
+> **Removed:** ~~`GOOGLE_SA_CLIENT_EMAIL`~~, ~~`GOOGLE_SA_PRIVATE_KEY_PEM`~~, ~~`SHEETS_SPREADSHEET_ID`~~ — no longer needed after Phase 2 D1 migration.
 
 **List Secrets:**
 
@@ -348,37 +287,23 @@ curl -s https://www.eventangle.com/api/health/backend | jq
 {
   "ok": true,
   "env": "staging",
-  "backend": "cloudflare",
-  "googleAuth": "service_account",
-  "token": "ok",
-  "sheetsProbe": {
-    "ok": true,
-    "status": 200,
-    "latencyMs": 245
-  }
+  "version": "1.0.0"
 }
 ```
 
-### Error Codes
-
-| Error Code                          | Meaning             | Action                                                       |
-| ----------------------------------- | ------------------- | ------------------------------------------------------------ |
-| `GOOGLE_AUTH_MISSING_SECRET`        | Missing credentials | Set `GOOGLE_SA_CLIENT_EMAIL` and `GOOGLE_SA_PRIVATE_KEY_PEM` |
-| `GOOGLE_AUTH_KEY_IMPORT_FAILED`     | Invalid PEM format  | Check key format and line breaks                             |
-| `GOOGLE_AUTH_TOKEN_EXCHANGE_FAILED` | OAuth failed        | Verify Sheets API is enabled in GCP                          |
-| `SHEETS_READ_FAILED`                | Can't read sheet    | Share sheet with service account                             |
-| `SHEETS_DB_ID_MISSING`              | Missing sheet ID    | Set `SHEETS_SPREADSHEET_ID`                                  |
+> **Note:** The health endpoint no longer reports `googleAuth` or `sheetsProbe` fields.
+> Those were removed in the Phase 2 D1 migration. The health check validates Worker
+> availability and D1 connectivity.
 
 ---
 
 ## Rotation Schedule
 
-| Secret Type                 | Rotation Period | Next Rotation     |
-| --------------------------- | --------------- | ----------------- |
-| Google Service Account Keys | 90 days         | Check GCP Console |
-| Admin Keys                  | 90 days         | Manual tracking   |
-| Cloudflare API Token        | As needed       | On compromise     |
-| OAuth Credentials           | Auto-refresh    | N/A               |
+| Secret Type          | Rotation Period   | Next Rotation   |
+| -------------------- | ----------------- | --------------- |
+| Admin Key            | 90 days           | Manual tracking |
+| Forms Encryption Key | 90 days           | Manual tracking |
+| Cloudflare API Token | 90 days (SEC-1.2) | On compromise   |
 
 **Rotation Process:**
 
@@ -400,24 +325,11 @@ Cloudflare Workers may need redeployment after secret changes:
 wrangler deploy --env staging
 ```
 
-### Private Key Formatting Issues
-
-If authentication fails, check the key format:
-
-```bash
-# Extract and verify key from JSON
-cat credentials.json | jq -r '.private_key' | head -n 3
-# Should show: -----BEGIN PRIVATE KEY-----
-```
-
 ### Missing Secrets in CI
 
 Run the verification script locally:
 
 ```bash
-# Set environment variables for testing
-export GOOGLE_CLIENT_EMAIL="test@example.iam.gserviceaccount.com"
-export GOOGLE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----"
 node scripts/verify-secrets.js --json
 ```
 
@@ -426,10 +338,10 @@ node scripts/verify-secrets.js --json
 ## Security Best Practices
 
 1. **Never commit secrets** - Use `.gitignore` to exclude credential files
-2. **Use separate service accounts** - One per environment (staging/production)
+2. **Separate staging/production secrets** - Use distinct values per environment
 3. **Principle of least privilege** - Only grant necessary permissions
 4. **Rotate regularly** - Follow the rotation schedule above
-5. **Audit access** - Review Google Cloud audit logs periodically
+5. **Audit access** - Review Cloudflare audit logs periodically
 6. **Mask in logs** - GitHub Actions automatically masks secret values
 
 ---
@@ -438,7 +350,6 @@ node scripts/verify-secrets.js --json
 
 - [RUNBOOK-SEC-1.2-SCOPED-API-TOKENS.md](./RUNBOOK-SEC-1.2-SCOPED-API-TOKENS.md) - Scoped API tokens runbook (SEC-1.2)
 - [RUNBOOK-SEC-1-CLOUDFLARE-ACCOUNT.md](./RUNBOOK-SEC-1-CLOUDFLARE-ACCOUNT.md) - MFA enforcement runbook (SEC-1.1)
-- [APPS_SCRIPT_API_SETUP.md](./APPS_SCRIPT_API_SETUP.md) - Google Apps Script setup
 - [RUNBOOK.md](./RUNBOOK.md) - Operations runbook
 - [ci-cd-architecture.md](./ci-cd-architecture.md) - CI/CD pipeline documentation
 - [Wrangler Secrets Documentation](https://developers.cloudflare.com/workers/configuration/secrets/)
@@ -446,4 +357,4 @@ node scripts/verify-secrets.js --json
 
 ---
 
-**Last Updated:** 2025-12-20 (SEC-1.2 - Scoped API Tokens)
+**Last Updated:** 2026-04-09 (Phase 2 D1 migration cleanup, SEC-1.2 scoped tokens retained)
