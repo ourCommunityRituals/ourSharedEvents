@@ -23,7 +23,7 @@ Skills for working in the [Product Name] repo.
 User says: "[trigger phrase 1]", "[trigger phrase 2]"
 
 ### Steps
-1. Read OCR-docs `docs/VISION.md` for [CODE]'s role
+1. Read OCR-docs `docs/OCR_VISION.md` for [CODE]'s role
 2. [Step 2]
 3. [Step 3]
 4. Document in `docs/[location]/`
@@ -48,7 +48,7 @@ User says: "[trigger phrase 1]", "[trigger phrase 2]"
 User says: "ose integration", "platform integration", "connect to ose"
 
 ### Steps
-1. Read OCR-docs `docs/VISION.md` for product registry
+1. Read OCR-docs `docs/OCR_VISION.md` for product registry
 2. Read OSE `CLAUDE.md` for API contract and event model
 3. Define how [CODE] integrates with OSE: [describe integration points]
 4. Document in `docs/integration/`
@@ -63,11 +63,11 @@ User says: "ose integration", "platform integration", "connect to ose"
 | OW (OurWKRP) | [Describe] |
 | [Other products as relevant] | [Describe] |
 
-Vision lives in OCR-docs `docs/VISION.md` only.
+Vision lives in OCR-docs `docs/OCR_VISION.md` only.
 
 ---
 
-*Derived from OCR-docs/docs/VISION.md*
+*Derived from OCR-docs/docs/OCR_VISION.md*
 *Last updated: [DATE]*
 *Owner: Matt*
 *Status: ACTIVE*
