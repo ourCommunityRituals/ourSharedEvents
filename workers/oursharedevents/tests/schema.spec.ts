@@ -29,6 +29,7 @@ interface TestEnv {
 
 const EXPECTED_TABLES = [
   'corridors',
+  'event_templates',
   'events',
   'node_hierarchy',
   'poster_deployments',
@@ -62,13 +63,17 @@ const EXPECTED_INDEXES = [
   'idx_corridors_directionality',
   'idx_corridors_temporal',
   'idx_node_hierarchy_ring_role',
+  // Event templates (migration 0014)
+  'idx_event_templates_category',
+  // Anonymous ID (migration 0016)
+  'idx_scans_anonymous',
 ] as const;
 
 const EXPECTED_COLUMN_COUNTS: Record<string, number> = {
-  events: 16,
+  events: 17,
   sponsors: 12,
   poster_deployments: 10,
-  scans: 9,
+  scans: 10,
   scan_aggregates: 9,
   subscribers: 5,
   node_hierarchy: 14,
@@ -179,13 +184,13 @@ describe('Gate 4: scan_aggregates write protection', () => {
 // ── Gate 5: Index verification ───────────────────────────────────────────────
 
 describe('Gate 5: Index verification', () => {
-  test('all 19 custom indexes exist', async () => {
+  test('all 21 custom indexes exist', async () => {
     const indexes = await env.DB.prepare(
       "SELECT name FROM sqlite_master WHERE type='index' AND name LIKE 'idx_%' ORDER BY name"
     ).all();
 
     const names = indexes.results.map((r: Record<string, unknown>) => r.name);
-    expect(names.length).toBe(19);
+    expect(names.length).toBe(21);
     EXPECTED_INDEXES.forEach((idx) => expect(names).toContain(idx));
   });
 });

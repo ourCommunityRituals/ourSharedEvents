@@ -56,6 +56,8 @@ const FORM_CSS = `
   .success h2 { color: #2f9e44; font-size: 1.2rem; }
   .success p { color: #868e96; font-size: .9rem; margin-top: .5rem; }
   .error-msg { color: #e03131; font-size: .85rem; margin-bottom: .5rem; display: none; }
+  .privacy-notice { font-size: .75rem; color: #868e96; margin-top: .75rem; line-height: 1.4; }
+  .privacy-notice a { color: #4361ee; }
   .rating-row { display: flex; gap: .5rem; margin-bottom: .75rem; }
   .rating-row button { width: auto; flex: 1; padding: .5rem; font-size: 1.1rem; background: #f1f3f5; color: #495057; border: 2px solid transparent; }
   .rating-row button.selected { background: #4361ee; color: #fff; border-color: #3451d1; }
@@ -106,6 +108,7 @@ function registrationForm(eventId: string): string {
         <label for="email">Email (optional)</label>
         <input type="email" id="email" data-testid="register-email-input" placeholder="jane@example.com" maxlength="320" />
         <button type="submit" data-testid="register-submit">Register</button>
+        <p class="privacy-notice" data-testid="privacy-notice">By submitting, you agree to our data collection practices. Your name is stored temporarily and deleted after the event. Email is hashed for deduplication only.</p>
       </form>
     </div>
     <script>
@@ -173,6 +176,7 @@ function surveyForm(eventId: string): string {
         <label for="comments">Comments (optional)</label>
         <textarea id="comments" data-testid="survey-comments-input" placeholder="Tell us what you thought..." maxlength="1000"></textarea>
         <button type="submit" data-testid="survey-submit">Submit Feedback</button>
+        <p class="privacy-notice" data-testid="privacy-notice">By submitting, you agree to our data collection practices. Ratings are kept for analytics. Comments are scrubbed of personal data within 24 hours.</p>
       </form>
     </div>
     <script>
@@ -207,6 +211,7 @@ function emailSignupForm(eventId: string): string {
         <label for="email">Your email</label>
         <input type="email" id="email" data-testid="email-email-input" placeholder="you@example.com" maxlength="320" required />
         <button type="submit" data-testid="email-submit">Sign me up</button>
+        <p class="privacy-notice" data-testid="privacy-notice">By submitting, you agree to our data collection practices. Your email is encrypted and automatically deleted after 30 days.</p>
       </form>
     </div>
     <script>
@@ -226,10 +231,18 @@ function emailSignupForm(eventId: string): string {
 function formPage(eventId: string, eventName: string, formType: string): string {
   let formHtml: string;
   switch (formType) {
-    case 'checkin': formHtml = checkinForm(eventId); break;
-    case 'survey': formHtml = surveyForm(eventId); break;
-    case 'email': formHtml = emailSignupForm(eventId); break;
-    default: formHtml = registrationForm(eventId); break;
+    case 'checkin':
+      formHtml = checkinForm(eventId);
+      break;
+    case 'survey':
+      formHtml = surveyForm(eventId);
+      break;
+    case 'email':
+      formHtml = emailSignupForm(eventId);
+      break;
+    default:
+      formHtml = registrationForm(eventId);
+      break;
   }
 
   return `<!DOCTYPE html>

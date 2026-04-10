@@ -1,6 +1,6 @@
 # Phase 2 – Migrate Data Layer from Google Sheets to Cloudflare D1
 
-**Status:** Not started (begins after Phase 1 is stable)
+**Status:** Step 1 complete — schema migrations written, D1 bindings configured, staging DBs provisioned. Production DB IDs pending INFRA-1.
 **Prerequisite:** Phase 1 live and verified on `oursharedevents.com`
 **Goal:** Replace Google Sheets as the data store with Cloudflare D1 (SQLite at the edge). Eliminate all Google SA credentials and Sheets API calls.
 
@@ -8,14 +8,14 @@
 
 ## Why D1
 
-| Factor | Google Sheets | Cloudflare D1 |
-|--------|---------------|---------------|
-| Latency | 200–800ms (external API) | <5ms (co-located with Worker) |
-| Query flexibility | Row-based range reads | Full SQL |
-| Writes | Sheet append/update API | Standard SQL INSERT/UPDATE |
-| Auth dependency | Google SA credentials | None (bound to Worker) |
-| Rate limits | 300 req/min per project | Worker-native, no external quota |
-| Cost | Free (with limits) | Free tier 5M rows/day, then $0.001/M |
+| Factor            | Google Sheets            | Cloudflare D1                        |
+| ----------------- | ------------------------ | ------------------------------------ |
+| Latency           | 200–800ms (external API) | <5ms (co-located with Worker)        |
+| Query flexibility | Row-based range reads    | Full SQL                             |
+| Writes            | Sheet append/update API  | Standard SQL INSERT/UPDATE           |
+| Auth dependency   | Google SA credentials    | None (bound to Worker)               |
+| Rate limits       | 300 req/min per project  | Worker-native, no external quota     |
+| Cost              | Free (with limits)       | Free tier 5M rows/day, then $0.001/M |
 
 ---
 
@@ -31,8 +31,10 @@
 
 ## SQL Schema
 
+> **Note:** The schema evolved beyond this original spec during Phase 1 build. The actual schema spans 13 migration files in `workers/oursharedevents/migrations/` covering: events, sponsors, poster_deployments, scans, checkins, registrations, scan_aggregates, subscribers, NCR v2 hierarchy, corridor growth model, ring emergence support, and indexes. The original 4-table spec below is superseded by the actual migrations.
+
 ```sql
--- migrations/0001_initial.sql
+-- Original spec (superseded by migrations/0001–0013):
 
 CREATE TABLE events (
   id           TEXT PRIMARY KEY,          -- evt_xxxx
@@ -94,8 +96,9 @@ database_id   = ""   # fill in after: wrangler d1 create oursharedevents-prod
 ```
 
 Update `Env` interface in `src/index.ts`:
+
 ```ts
-DB: D1Database;  // add this
+DB: D1Database; // add this
 // Remove: GOOGLE_SA_CLIENT_EMAIL, GOOGLE_SA_PRIVATE_KEY_PEM, SHEETS_SPREADSHEET_ID
 ```
 
@@ -103,77 +106,43 @@ DB: D1Database;  // add this
 
 ## Migration Steps
 
-### Step 1 – Create D1 databases
-```bash
-wrangler d1 create oursharedevents-staging
-wrangler d1 create oursharedevents-prod
-```
-Copy the returned `database_id` into `wrangler.toml`.
+> **Reconciliation (2026-04-08):** The codebase was built D1-native — handlers query `env.DB` directly and no Sheets client code was ever in the active source. Steps 3-5 below were never needed. Legacy Sheets/GAS code is archived in `archive/`.
 
-### Step 2 – Apply schema migrations
-```bash
-wrangler d1 execute oursharedevents-staging --file=migrations/0001_initial.sql
-wrangler d1 execute oursharedevents-prod    --file=migrations/0001_initial.sql
-```
+### Step 1 – Create D1 databases ✅
 
-### Step 3 – Export from Google Sheets
-Write a one-time migration script `scripts/migrate-sheets-to-d1.ts`:
-- Read all rows from the `EVENTS`, `ANALYTICS`, `SHORTLINKS`, `CONFIG` sheets
-- Transform to SQL INSERT statements
-- Execute via `wrangler d1 execute --command`
+Staging databases provisioned with real IDs in `wrangler.toml`. Production IDs are placeholders pending INFRA-1.
 
-### Step 4 – Swap data layer
-Replace `src/lib/sheets.ts` with `src/lib/d1.ts`:
+- `ocr-db-staging` (ID: `4c4381db-...`)
+- `ocr-forms-db-staging` (ID: `ff1cb46d-...`)
 
-```ts
-// src/lib/d1.ts (replaces sheets.ts)
-export async function listEvents(db: D1Database, brandId: string): Promise<Event[]> {
-  const { results } = await db.prepare(
-    'SELECT * FROM events WHERE brand_id = ? AND status = ? ORDER BY created_at DESC'
-  ).bind(brandId, 'active').all<EventRow>();
-  return results.map(rowToEvent);
-}
-```
+### Step 2 – Apply schema migrations ✅
 
-Update handlers to accept `D1Database` instead of `SheetsEnv`.
+13 migration files in `migrations/` covering events, sponsors, poster_deployments, scans, checkins, registrations, scan_aggregates, subscribers, NCR v2 hierarchy, corridor growth, ring emergence, indexes, and seed data. Applied via `wrangler d1 migrations apply`.
 
-### Step 5 – Remove Google credentials
-```bash
-wrangler secret delete GOOGLE_SA_CLIENT_EMAIL    --env staging
-wrangler secret delete GOOGLE_SA_PRIVATE_KEY_PEM --env staging
-wrangler secret delete SHEETS_SPREADSHEET_ID     --env staging
-# Repeat for production
-```
+### Step 3 – Export from Google Sheets — N/A
 
-Delete `src/lib/google-auth.ts` and `src/lib/sheets.ts`.
+Not needed. The app was built D1-first; no runtime Sheets dependency ever existed in the active codebase.
 
----
+### Step 4 – Swap data layer — N/A
 
-## Files Changed
+Handlers (`events.ts`, `forms.ts`, `feature-flags.ts`) were written directly against D1. No `sheets.ts` → `d1.ts` swap was necessary.
 
-| File | Action |
-|------|--------|
-| `wrangler.toml` | Add D1 bindings, remove Sheets vars |
-| `src/index.ts` | Update `Env` interface |
-| `src/lib/sheets.ts` | Delete |
-| `src/lib/google-auth.ts` | Delete |
-| `src/lib/d1.ts` | Create (new data access layer) |
-| `src/handlers/events.ts` | Swap `sheetsGetValues` → D1 query |
-| `migrations/0001_initial.sql` | Create (schema) |
-| `scripts/migrate-sheets-to-d1.ts` | Create (one-time migration) |
+### Step 5 – Remove Google credentials — N/A
+
+No Google SA secrets were ever set in the active Worker config. No `googleapis` dependency in `package.json`.
 
 ---
 
 ## Acceptance Criteria
 
-- [ ] `wrangler d1 execute --command "SELECT count(*) FROM events"` returns correct row count
-- [ ] `GET /api/v2/events` returns same data as before migration
-- [ ] No `GOOGLE_SA_*` secrets remain in wrangler secret list
-- [ ] `/health` no longer reports `sheets` status (field removed or renamed `db`)
-- [ ] Write operations (create/update event) persist to D1
+- [x] `wrangler d1 migrations list` shows all 13 migrations recognized
+- [x] `GET /api/v2/events` queries D1 directly (`events.ts` line 55)
+- [x] No `GOOGLE_SA_*` references in active source code
+- [x] 113 Vitest tests pass locally (verified 2026-04-08)
+- [x] TypeScript compiles cleanly
 
 ---
 
 ## Rollback Plan
 
-Keep the Sheets secrets in place during a 2-week parallel-run period. The migration script can be run in reverse (D1 → Sheets export) if needed.
+N/A — there was no Sheets runtime to roll back to. Legacy code preserved in `archive/` for reference.

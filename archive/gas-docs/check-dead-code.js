@@ -26,13 +26,13 @@ const SRC_MVP = path.join(ROOT, 'src', 'mvp');
 
 // Known entrypoints that are called by Google Apps Script runtime (not from code)
 const GAS_RUNTIME_ENTRYPOINTS = [
-  'doGet',           // HTTP GET handler
-  'doPost',          // HTTP POST handler
-  'onOpen',          // Spreadsheet open trigger
-  'onEdit',          // Spreadsheet edit trigger
-  'onInstall',       // Add-on install trigger
-  'onFormSubmit',    // Form submit trigger
-  'include'          // Template include function (called from HTML templates)
+  'doGet', // HTTP GET handler
+  'doPost', // HTTP POST handler
+  'onOpen', // Spreadsheet open trigger
+  'onEdit', // Spreadsheet edit trigger
+  'onInstall', // Add-on install trigger
+  'onFormSubmit', // Form submit trigger
+  'include', // Template include function (called from HTML templates)
 ];
 
 // Known exported functions that are used by HTML templates via NUSDK
@@ -56,12 +56,12 @@ const NUSDK_API_FUNCTIONS = [
   'api_statusPure',
   'api_setupCheck',
   'api_checkPermissions',
-  'api_generateToken'
+  'api_generateToken',
 ];
 
 // Functions that are private helpers (underscore suffix convention)
 // These are expected to be called only from within Code.gs
-const PRIVATE_FUNCTION_PATTERN = /^_.*_$/;  // e.g., _helperFunction_
+const PRIVATE_FUNCTION_PATTERN = /^_.*_$/; // e.g., _helperFunction_
 
 // ============================================================================
 // Parse functions from .gs files
@@ -85,17 +85,17 @@ function extractFunctions(content) {
     /^(?:function\s+)([a-zA-Z_$][a-zA-Z0-9_$]*)\s*\(/,
     /^(?:const|let|var)\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*=\s*function\s*\(/,
     /^(?:const|let|var)\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*=\s*\([^)]*\)\s*=>/,
-    /^(?:const|let|var)\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*=\s*[a-zA-Z_$][a-zA-Z0-9_$]*\s*=>/
+    /^(?:const|let|var)\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*=\s*[a-zA-Z_$][a-zA-Z0-9_$]*\s*=>/,
   ];
 
   lines.forEach((line, index) => {
     const trimmed = line.trim();
-    patterns.forEach(pattern => {
+    patterns.forEach((pattern) => {
       const match = trimmed.match(pattern);
       if (match) {
         functions.push({
           name: match[1],
-          line: index + 1
+          line: index + 1,
         });
       }
     });
@@ -154,7 +154,7 @@ function analyzeCodeGs() {
   // Get all defined functions in Code.gs
   const definedFunctions = extractFunctions(codeGsContent);
   const defined = new Map();
-  definedFunctions.forEach(fn => {
+  definedFunctions.forEach((fn) => {
     defined.set(fn.name, fn);
   });
 
@@ -164,31 +164,33 @@ function analyzeCodeGs() {
   const allRefs = new Set();
 
   // Add runtime entrypoints (always considered "used")
-  GAS_RUNTIME_ENTRYPOINTS.forEach(fn => allRefs.add(fn));
+  GAS_RUNTIME_ENTRYPOINTS.forEach((fn) => allRefs.add(fn));
 
   // Add NUSDK API functions (called from frontend via google.script.run)
-  NUSDK_API_FUNCTIONS.forEach(fn => allRefs.add(fn));
+  NUSDK_API_FUNCTIONS.forEach((fn) => allRefs.add(fn));
 
   // Scan all .gs files for internal references
-  const gsFiles = fs.readdirSync(SRC_MVP)
-    .filter(f => f.endsWith('.gs'))
-    .map(f => path.join(SRC_MVP, f));
+  const gsFiles = fs
+    .readdirSync(SRC_MVP)
+    .filter((f) => f.endsWith('.gs'))
+    .map((f) => path.join(SRC_MVP, f));
 
-  gsFiles.forEach(filePath => {
+  gsFiles.forEach((filePath) => {
     const content = fs.readFileSync(filePath, 'utf8');
     const refs = findFunctionReferences(content);
-    refs.forEach(ref => allRefs.add(ref));
+    refs.forEach((ref) => allRefs.add(ref));
   });
 
   // Scan all .html files for function references
-  const htmlFiles = fs.readdirSync(SRC_MVP)
-    .filter(f => f.endsWith('.html'))
-    .map(f => path.join(SRC_MVP, f));
+  const htmlFiles = fs
+    .readdirSync(SRC_MVP)
+    .filter((f) => f.endsWith('.html'))
+    .map((f) => path.join(SRC_MVP, f));
 
-  htmlFiles.forEach(filePath => {
+  htmlFiles.forEach((filePath) => {
     const content = fs.readFileSync(filePath, 'utf8');
     const refs = findFunctionReferences(content);
-    refs.forEach(ref => allRefs.add(ref));
+    refs.forEach((ref) => allRefs.add(ref));
   });
 
   console.log(`📂 Found ${allRefs.size} total function references across codebase\n`);
@@ -209,7 +211,7 @@ function analyzeCodeGs() {
     dead.push({
       name,
       line: fn.line,
-      file: 'Code.gs'
+      file: 'Code.gs',
     });
   });
 
@@ -224,26 +226,28 @@ function analyzeOtherGsFiles() {
   const dead = [];
 
   // Get all .gs files except Code.gs
-  const gsFiles = fs.readdirSync(SRC_MVP)
-    .filter(f => f.endsWith('.gs') && f !== 'Code.gs')
-    .map(f => ({ name: f, path: path.join(SRC_MVP, f) }));
+  const gsFiles = fs
+    .readdirSync(SRC_MVP)
+    .filter((f) => f.endsWith('.gs') && f !== 'Code.gs')
+    .map((f) => ({ name: f, path: path.join(SRC_MVP, f) }));
 
   // Collect all references from all source files
   const allRefs = new Set();
 
   // Add runtime entrypoints
-  GAS_RUNTIME_ENTRYPOINTS.forEach(fn => allRefs.add(fn));
-  NUSDK_API_FUNCTIONS.forEach(fn => allRefs.add(fn));
+  GAS_RUNTIME_ENTRYPOINTS.forEach((fn) => allRefs.add(fn));
+  NUSDK_API_FUNCTIONS.forEach((fn) => allRefs.add(fn));
 
   // Scan all files for references
-  const allFiles = fs.readdirSync(SRC_MVP)
-    .filter(f => f.endsWith('.gs') || f.endsWith('.html'))
-    .map(f => path.join(SRC_MVP, f));
+  const allFiles = fs
+    .readdirSync(SRC_MVP)
+    .filter((f) => f.endsWith('.gs') || f.endsWith('.html'))
+    .map((f) => path.join(SRC_MVP, f));
 
-  allFiles.forEach(filePath => {
+  allFiles.forEach((filePath) => {
     const content = fs.readFileSync(filePath, 'utf8');
     const refs = findFunctionReferences(content);
-    refs.forEach(ref => allRefs.add(ref));
+    refs.forEach((ref) => allRefs.add(ref));
   });
 
   // Check each non-Code.gs file
@@ -251,7 +255,7 @@ function analyzeOtherGsFiles() {
     const content = fs.readFileSync(filePath, 'utf8');
     const definedFunctions = extractFunctions(content);
 
-    definedFunctions.forEach(fn => {
+    definedFunctions.forEach((fn) => {
       // Skip private functions
       if (PRIVATE_FUNCTION_PATTERN.test(fn.name)) {
         return;
@@ -261,7 +265,7 @@ function analyzeOtherGsFiles() {
         dead.push({
           name: fn.name,
           line: fn.line,
-          file: name
+          file: name,
         });
       }
     });
@@ -292,7 +296,7 @@ function main() {
 
   // Group by file
   const byFile = {};
-  allDead.forEach(fn => {
+  allDead.forEach((fn) => {
     if (!byFile[fn.file]) {
       byFile[fn.file] = [];
     }
@@ -309,9 +313,11 @@ function main() {
 
     Object.entries(byFile).forEach(([file, functions]) => {
       console.log(`📄 ${file}:`);
-      functions.sort((a, b) => a.line - b.line).forEach(fn => {
-        console.log(`   Line ${fn.line}: ${fn.name}()`);
-      });
+      functions
+        .sort((a, b) => a.line - b.line)
+        .forEach((fn) => {
+          console.log(`   Line ${fn.line}: ${fn.name}()`);
+        });
       console.log('');
     });
 

@@ -130,7 +130,7 @@ describe('S4: Lifecycle job isolation', () => {
         const lifecycleSection = content.slice(content.indexOf('runFormDataLifecycle'));
         if (lifecycleSection) {
           expect(lifecycleSection).not.toMatch(/env\.DB\.prepare/);
-          expect(lifecycleSection).not.toMatch(/INSERT\s+INTO\s+(?!form_|checkin_|email_)/i);
+          expect(lifecycleSection).not.toMatch(/INSERT\s+INTO\s+(?!form_|checkin_|email_|pii_)/i);
           expect(lifecycleSection).not.toMatch(/UPDATE\s+(?!form_)/i);
           expect(lifecycleSection).not.toMatch(/DELETE\s+FROM\s+(?!form_|email_)/i);
         }
@@ -370,16 +370,17 @@ describe('S10: Email hash non-reversibility', () => {
 });
 
 describe('S12: Check-in stores zero PII', () => {
-  test('checkin_counts table has exactly 4 columns: id, event_id, total_count, updated_at', async () => {
+  test('checkin_counts table has exactly 5 columns: id, event_id, total_count, updated_at, last_anonymous_id', async () => {
     const info = await tenv().FORMS_DB.prepare('PRAGMA table_info(checkin_counts)').all();
     const cols = info.results.map((r: Record<string, unknown>) => r.name);
 
-    expect(cols).toHaveLength(4);
+    expect(cols).toHaveLength(5);
     expect(cols).toContain('id');
     expect(cols).toContain('event_id');
     expect(cols).toContain('total_count');
     expect(cols).toContain('updated_at');
-    // Nothing else — verified exhaustively
+    expect(cols).toContain('last_anonymous_id');
+    // last_anonymous_id is NOT PII — it's a random UUID with no personal data
   });
 
   test('check-in INSERT uses only id, event_id, total_count — no PII in SQL', () => {

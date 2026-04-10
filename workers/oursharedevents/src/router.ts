@@ -39,7 +39,13 @@
  */
 
 import { handleHealth } from './handlers/health';
-import { handleListEvents, handleGetEvent, handleAdminListEvents } from './handlers/events';
+import {
+  handleListEvents,
+  handleGetEvent,
+  handleAdminListEvents,
+  handleCreateEvent,
+  handleUpdateEvent,
+} from './handlers/events';
 import {
   handlePublicPage,
   handleAdminPage,
@@ -61,6 +67,7 @@ import {
   handleAdminCheckinCount,
   handleAdminSurveys,
   handleAdminEmailSignupCount,
+  handleAdminExport,
   type FormsEnv,
 } from './handlers/forms';
 import { handleFormPage, type FormPagesEnv } from './handlers/form-pages';
@@ -102,7 +109,7 @@ export async function route(request: Request, env: RouterEnv): Promise<Response>
       status: 204,
       headers: {
         ...(origin ? { 'Access-Control-Allow-Origin': origin } : {}),
-        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+        'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
         'Access-Control-Allow-Headers': 'Authorization, Content-Type',
         'Access-Control-Max-Age': '86400',
         Vary: 'Origin',
@@ -122,10 +129,32 @@ export async function route(request: Request, env: RouterEnv): Promise<Response>
     return handleAdminPage(env);
   }
 
-  if (pathname === '/api/v2/admin/events') {
+  if (pathname === '/api/v2/admin/events' && method === 'GET') {
     const deny = requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
     if (deny) return deny;
     return handleAdminListEvents(request, env);
+  }
+
+  if (pathname === '/api/v2/admin/events' && method === 'POST') {
+    const deny = requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
+    if (deny) return deny;
+    return handleCreateEvent(request, env);
+  }
+
+  // PUT /api/v2/admin/events/:id — update event
+  const adminEventMatch = pathname.match(/^\/api\/v2\/admin\/events\/([^/]+)$/);
+  if (adminEventMatch && method === 'PUT') {
+    const deny = requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
+    if (deny) return deny;
+    return handleUpdateEvent(request, env, adminEventMatch[1]);
+  }
+
+  // ── Admin form export (auth-gated) ─────────────────────────────────────────
+  const adminExportMatch = pathname.match(/^\/api\/v2\/admin\/events\/([^/]+)\/forms\/export$/);
+  if (adminExportMatch && method === 'GET') {
+    const deny = requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
+    if (deny) return deny;
+    return handleAdminExport(request, env, adminExportMatch[1]);
   }
 
   // ── Admin form endpoints (auth-gated) ──────────────────────────────────────
@@ -311,6 +340,18 @@ export async function route(request: Request, env: RouterEnv): Promise<Response>
     pathname === '/reports' ||
     pathname === '/insights'
   ) {
+    const reportEnabled = await isFeatureEnabled(env.FORMS_DB, 'analytics.shared-report');
+    if (!reportEnabled) {
+      return Response.json(
+        {
+          ok: false,
+          status: 403,
+          code: 'REPORT_DISABLED',
+          error: 'Shared reports are not enabled for this tier',
+        },
+        { status: 403 }
+      );
+    }
     return handleSharedReportPage(env);
   }
 

@@ -10,11 +10,11 @@
 
 ### Phase Model (3 Phases)
 
-| Phase       | Stack                                              | Status            |
-| ----------- | -------------------------------------------------- | ----------------- |
-| **Phase 1** | Cloudflare Worker + Google Sheets                  | Build ✅ / Ops 📋 |
-| **Phase 2** | Cloudflare Worker + D1 (edge SQLite)               | Foundation laid   |
-| **Phase 3** | Firebase Auth + React/Tailwind on Firebase Hosting | Not started       |
+| Phase       | Stack                                                | Status             |
+| ----------- | ---------------------------------------------------- | ------------------ |
+| **Phase 1** | Cloudflare Worker + D1 (migrated from Google Sheets) | Build ✅ / Ops 📋  |
+| **Phase 2** | Cloudflare Worker + D1 (edge SQLite)                 | Code ✅ / Infra 📋 |
+| **Phase 3** | Firebase Auth + React/Tailwind on Firebase Hosting   | Not started        |
 
 **Key principle**: Code is written and tested NOW, infrastructure is the last step. CC writes Worker routes, tests, migrations, and PRs without needing a live staging URL. CI validates. Infrastructure deployment happens when ready.
 
@@ -88,14 +88,12 @@ workers/oursharedevents/src/
 ├── auth/admin.ts         # Admin auth guard (CF Access JWT + Bearer fallback)
 ├── handlers/
 │   ├── health.ts         # Health check
-│   ├── events.ts         # Events API (Sheets Phase 1)
+│   ├── events.ts         # Events API (D1 queries)
 │   ├── pages.ts          # HTML pages (public, admin, landing)
 │   ├── forms.ts          # Form submissions (register, checkin, survey, email)
 │   ├── form-pages.ts     # Mobile-first QR form landing pages
 │   └── feature-flags.ts  # Admin flag management (8 endpoints)
 └── lib/
-    ├── google-auth.ts    # Google JWT (Phase 1)
-    ├── sheets.ts         # Google Sheets client (Phase 1)
     ├── forms-db.ts       # Privacy utilities (hash, encrypt, bucket)
     ├── feature-flags.ts  # Flag resolution (3-tier: free/mid/enterprise)
     └── cors.ts           # CORS allowlist
@@ -131,14 +129,14 @@ Every story is implemented from all six POVs simultaneously. CC reads all six an
 - Prioritizes backlog
 - Reviews sprint progress in Linear
 - Accepts/rejects completed stories
-- **Current state**: Phase 1 Build complete, Phase 1 Ops blocked on infra (INFRA-1,2,3). 3-tier feature flags implemented. Forms system implemented (4 types). A11Y-1 done. 65 stories across 8 epics tracked. MVP readiness 6.5/10 — staging ready, production blocked.
+- **Current state**: Phase 1 Build complete, Phase 1 Ops blocked on infra (INFRA-1,2,3). Phase 2 (D1 database) complete — data layer is D1-native, no Sheets code remains. 3-tier feature flags implemented. Forms system implemented (4 types). A11Y-1 done. 65 stories across 8 epics tracked. MVP readiness 6.5/10 — staging ready, production blocked.
 
 ### Lead Backend Architect (BE)
 
 - Writes Worker route handlers
 - Implements D1 queries (Phase 2)
 - Owns DB design, API contracts, auth, feature flags, testing pyramid
-- **Current state**: 30 routes implemented, 16 D1 migrations (9 main + 7 forms), 3-tier feature flags working, forms handler with PII encryption/scrubbing. Gaps: anonymous ID (BE-1), rate limiting (BE-2), PII audit log (BE-3), 5 admin endpoints unimplemented.
+- **Current state**: 30 routes implemented, 13 D1 migrations (main DB) + forms DB migrations, 3-tier feature flags working, forms handler with PII encryption/scrubbing. Phase 2 D1 swap complete — all handlers query D1 directly, no Sheets dependency. Gaps: anonymous ID (BE-1), rate limiting (BE-2), PII audit log (BE-3), 5 admin endpoints unimplemented.
 
 ### Lead FE Integration (FD)
 
@@ -171,7 +169,6 @@ Every story is implemented from all six POVs simultaneously. CC reads all six an
 
 ## 4. Known Constraints
 
-- **Google Sheets latency**: 200-800ms per request (Phase 1 limitation, fixed in Phase 2)
 - **Single admin token**: Shared Bearer token (Phase 1 limitation, fixed in Phase 3)
 - **HTML in Worker bundle**: ~200KB embedded templates (Phase 1, moved to CDN in Phase 3)
 - **No live infrastructure yet**: CF zone, D1, Firebase not provisioned — code-first approach
@@ -193,10 +190,24 @@ Every story is implemented from all six POVs simultaneously. CC reads all six an
 │     - Worker route code                             │
 │     - Tests (Jest + Playwright)                     │
 │     - D1 migrations (if applicable)                 │
+│     - CI/CD test ticket (REQUIRED for DONE)         │
 │     - All 6 role POVs satisfied                     │
 │  6. Create PR             → CI runs automatically   │
 │  7. Update STORIES.md     → mark IN PROGRESS        │
 │  8. Update CLAUDE.md §3   → role current states     │
+│                                                     │
+│ DONE GATE (mandatory — full test pyramid)            │
+│  - CI/CD testing ticket must be attached to story   │
+│  - No story reaches ✅ DONE without CI validation   │
+│  - Full pyramid must pass:                          │
+│    1. Security (XSS, injection, auth boundaries)    │
+│    2. Lint (zero errors)                            │
+│    3. Contract (API shape, D1 schema parity)        │
+│    4. Unit (mock tests, privacy, validation)        │
+│    5. Integration (Worker D1 + forms security)      │
+│    6. API (Newman collections against live stg)     │
+│    7. E2E (Playwright — full surface flow)          │
+│  - No partial pyramids — all 7 levels or not DONE   │
 │                                                     │
 │ AFTER MERGE                                         │
 │  9. Update STORIES.md     → mark DONE               │
@@ -225,6 +236,7 @@ Each story should include:
 **Status:** 📋 BACKLOG | 🔄 IN PROGRESS | ✅ DONE
 **Prerequisite:** P<phase>-<number>
 **Sprint:** [cycle number or —]
+**CI/CD Ticket:** [Link or ID — REQUIRED for DONE status]
 
 **PO Acceptance Criteria:**
 
@@ -241,11 +253,22 @@ Each story should include:
 - Which surface(s) affected
 - Component behavior
 
-**QA Test Matrix:**
+**QA Test Pyramid (all levels required for DONE):**
 
-- Unit tests (Jest)
-- E2E tests (Playwright)
-- Edge cases
+- [ ] Security: XSS, injection, auth boundary tests pass
+- [ ] Lint: zero errors
+- [ ] Contract: API shape + D1 schema parity
+- [ ] Unit: mock tests (Vitest)
+- [ ] Integration: Worker D1 + forms security
+- [ ] API: Newman collections pass against live staging
+- [ ] E2E: Playwright full surface flow pass
+
+**E2E Surface Flow Coverage:**
+
+- [ ] stg.oursharedevents.com loads, event types render
+- [ ] Cross-surface: poster → pre-event → event → post-event
+- [ ] All surfaces validated: admin, public, poster, display, sharedReport, sponsor
+- [ ] Config integration verified
 
 **SDET Load Test:**
 
@@ -256,6 +279,10 @@ Each story should include:
 
 - CI checks required
 - Secrets/config needed
+
+> **Standard Protocol:** No story reaches ✅ DONE without a CI/CD testing ticket attached.
+> The ticket proves ALL 7 pyramid levels pass — not just written, but tested.
+> No partial pyramids. If E2E is skipped, the story is not DONE.
 ```
 
 ---
@@ -272,7 +299,7 @@ Each story should include:
 | `.claude/research/`              | Analysis, references (syncs with CoWork Research/)                              | As needed               |
 | `.claude/skills/`                | Reusable skill definitions                                                      | As needed               |
 | `.claude/skills/ccr-protocol.md` | CCR Protocol — standard for all assessments, reviews, test gating, code reviews | Reference               |
-| `.claude/sync/LINEAR-MAP.md`     | Story ID ↔ Linear `OUR-XXX` mapping                                            | After Linear import     |
+| `.claude/sync/LINEAR-MAP.md`     | Story ID ↔ Linear `OUR-XXX` mapping                                             | After Linear import     |
 | `docs/migration/PHASE-*.md`      | Phase implementation guides                                                     | Per phase               |
 | `docs/stories/*.md`              | Detailed story specs                                                            | Per story               |
 

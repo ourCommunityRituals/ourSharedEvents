@@ -38,6 +38,12 @@ database_name = "ocr-forms-db-local"
 database_id = "local-forms"
 migrations_dir = "migrations-forms"
 
+# ── Observability: structured logs and traces ────────────────────
+# Enables Workers Logs in CF Dashboard (real-time + historical)
+# See: https://developers.cloudflare.com/workers/observability/
+[observability]
+enabled = true
+
 # ── Cron trigger: data lifecycle job (destroy expired forms data) ──
 # Runs daily at 3 AM UTC. Deletes expired registrations, scrubs survey PII,
 # removes email signups past 30-day retention.

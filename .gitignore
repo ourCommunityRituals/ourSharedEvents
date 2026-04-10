@@ -53,6 +53,9 @@ test-dashboard/
 # Test history database (keep local, contains all historical test runs)
 .test-results/test-history.json
 
+# Cloudflare Wrangler local state (D1 SQLite, miniflare)
+.wrangler/
+
 # Build outputs
 dist/
 build/
@@ -73,3 +76,11 @@ id_rsa*
 .claude/settings.local.json
 .claude/agents/
 .claude/worktrees/
+
+# Generated audit/report files
+dependabot-alerts.json
+npm-audit.json
+
+# Postman desktop sync artifacts
+postman/.postman/
+postman/postman/

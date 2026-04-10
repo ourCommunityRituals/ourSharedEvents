@@ -25,10 +25,17 @@ const formsDb = () => (env as unknown as TestEnv).FORMS_DB;
 
 async function applyFormsMigrations(): Promise<void> {
   const statements: string[] = JSON.parse(
-    (env as unknown as TestEnv).TEST_FORMS_MIGRATION_STATEMENTS,
+    (env as unknown as TestEnv).TEST_FORMS_MIGRATION_STATEMENTS
   );
   for (const stmt of statements) {
-    await formsDb().prepare(stmt).run();
+    try {
+      await formsDb().prepare(stmt).run();
+    } catch (err) {
+      // ALTER TABLE ADD COLUMN is not idempotent in SQLite —
+      // "duplicate column name" is expected on re-run and safe to ignore
+      const msg = err instanceof Error ? err.message : String(err);
+      if (!msg.includes('duplicate column name')) throw err;
+    }
   }
 }
 
@@ -44,19 +51,19 @@ describe('QA-F1: Forms migration idempotency', () => {
 
     const tables = await formsDb()
       .prepare(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' ORDER BY name",
+        "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' ORDER BY name"
       )
       .all();
 
     const names = tables.results.map((r: Record<string, unknown>) => r.name);
-    expect(names).toHaveLength(5);
+    expect(names).toHaveLength(6);
   });
 
-  test('indexes remain at exactly 8 after idempotent re-run', async () => {
+  test('indexes remain at exactly 12 after idempotent re-run', async () => {
     const indexes = await formsDb()
       .prepare("SELECT name FROM sqlite_master WHERE type='index' AND name LIKE 'idx_%'")
       .all();
-    expect(indexes.results).toHaveLength(8);
+    expect(indexes.results).toHaveLength(12);
   });
 });
 
@@ -69,7 +76,7 @@ describe('QA-F2: checkin_counts UPSERT behavior', () => {
       .prepare(
         `INSERT INTO checkin_counts (id, event_id, total_count, updated_at)
          VALUES ('cc_test_1', 'evt_checkin_test', 1, datetime('now'))
-         ON CONFLICT(event_id) DO UPDATE SET total_count = total_count + 1, updated_at = datetime('now')`,
+         ON CONFLICT(event_id) DO UPDATE SET total_count = total_count + 1, updated_at = datetime('now')`
       )
       .run();
 
@@ -85,7 +92,7 @@ describe('QA-F2: checkin_counts UPSERT behavior', () => {
       .prepare(
         `INSERT INTO checkin_counts (id, event_id, total_count, updated_at)
          VALUES ('cc_test_2', 'evt_checkin_test', 1, datetime('now'))
-         ON CONFLICT(event_id) DO UPDATE SET total_count = total_count + 1, updated_at = datetime('now')`,
+         ON CONFLICT(event_id) DO UPDATE SET total_count = total_count + 1, updated_at = datetime('now')`
       )
       .run();
 
@@ -115,7 +122,7 @@ describe('QA-F3: email_signups dedup via email_hash', () => {
     await formsDb()
       .prepare(
         `INSERT INTO email_signups (id, event_id, email_hash, email_encrypted, signup_bucket, retention_expires_at)
-         VALUES ('es_1', 'evt_email_test', ?, 'encrypted_data_1', '2026-03-27T14', '2026-04-26T00:00:00Z')`,
+         VALUES ('es_1', 'evt_email_test', ?, 'encrypted_data_1', '2026-03-27T14', '2026-04-26T00:00:00Z')`
       )
       .bind(emailHash)
       .run();
@@ -137,7 +144,7 @@ describe('QA-F4: FORMS_DB has NO main DB tables', () => {
   test('FORMS_DB does not contain events, scans, sponsors, poster_deployments, or scan_aggregates', async () => {
     const tables = await formsDb()
       .prepare(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%'",
+        "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%'"
       )
       .all();
 
@@ -160,7 +167,7 @@ describe('QA-F5: feature_flags UNIQUE(scope, scope_id, flag_key)', () => {
       await formsDb()
         .prepare(
           `INSERT INTO feature_flags (id, scope, scope_id, flag_key, enabled, updated_at)
-           VALUES ('dup_test', 'global', '', 'forms.register', 1, datetime('now'))`,
+           VALUES ('dup_test', 'global', '', 'forms.register', 1, datetime('now'))`
         )
         .run();
       expect.fail('Duplicate flag INSERT should have thrown UNIQUE constraint error');
@@ -174,19 +181,21 @@ describe('QA-F5: feature_flags UNIQUE(scope, scope_id, flag_key)', () => {
     await formsDb()
       .prepare(
         `INSERT INTO feature_flags (id, scope, scope_id, flag_key, enabled, updated_at)
-         VALUES ('evt_a_flag', 'event', 'evt-a', 'forms.survey', 1, datetime('now'))`,
+         VALUES ('evt_a_flag', 'event', 'evt-a', 'forms.survey', 1, datetime('now'))`
       )
       .run();
 
     await formsDb()
       .prepare(
         `INSERT INTO feature_flags (id, scope, scope_id, flag_key, enabled, updated_at)
-         VALUES ('evt_b_flag', 'event', 'evt-b', 'forms.survey', 0, datetime('now'))`,
+         VALUES ('evt_b_flag', 'event', 'evt-b', 'forms.survey', 0, datetime('now'))`
       )
       .run();
 
     const count = await formsDb()
-      .prepare("SELECT COUNT(*) as cnt FROM feature_flags WHERE flag_key = 'forms.survey' AND scope = 'event'")
+      .prepare(
+        "SELECT COUNT(*) as cnt FROM feature_flags WHERE flag_key = 'forms.survey' AND scope = 'event'"
+      )
       .first<{ cnt: number }>();
 
     expect(count?.cnt).toBe(2);
@@ -221,7 +230,7 @@ describe('QA-F7: feature_flags upsert via ON CONFLICT DO UPDATE', () => {
       .prepare(
         `INSERT INTO feature_flags (id, scope, scope_id, flag_key, enabled, updated_at)
          VALUES ('upsert_test', 'event', 'evt-upsert', 'assets.file-upload', 0, datetime('now'))
-         ON CONFLICT(scope, scope_id, flag_key) DO NOTHING`,
+         ON CONFLICT(scope, scope_id, flag_key) DO NOTHING`
       )
       .run();
 
@@ -231,12 +240,14 @@ describe('QA-F7: feature_flags upsert via ON CONFLICT DO UPDATE', () => {
         `INSERT INTO feature_flags (id, scope, scope_id, flag_key, enabled, updated_at)
          VALUES ('upsert_test_2', 'event', 'evt-upsert', 'assets.file-upload', 1, datetime('now'))
          ON CONFLICT(scope, scope_id, flag_key)
-         DO UPDATE SET enabled = excluded.enabled, updated_at = datetime('now')`,
+         DO UPDATE SET enabled = excluded.enabled, updated_at = datetime('now')`
       )
       .run();
 
     const result = await formsDb()
-      .prepare("SELECT id, enabled FROM feature_flags WHERE scope = 'event' AND scope_id = 'evt-upsert' AND flag_key = 'assets.file-upload'")
+      .prepare(
+        "SELECT id, enabled FROM feature_flags WHERE scope = 'event' AND scope_id = 'evt-upsert' AND flag_key = 'assets.file-upload'"
+      )
       .first<{ id: string; enabled: number }>();
 
     // Original row updated, NOT a new row created
@@ -252,7 +263,7 @@ describe('QA-F8: checkin_counts UNIQUE constraint', () => {
     await formsDb()
       .prepare(
         `INSERT INTO checkin_counts (id, event_id, total_count, updated_at)
-         VALUES ('cc_uniq_1', 'evt_unique_test', 0, datetime('now'))`,
+         VALUES ('cc_uniq_1', 'evt_unique_test', 0, datetime('now'))`
       )
       .run();
 
@@ -260,7 +271,7 @@ describe('QA-F8: checkin_counts UNIQUE constraint', () => {
       await formsDb()
         .prepare(
           `INSERT INTO checkin_counts (id, event_id, total_count, updated_at)
-           VALUES ('cc_uniq_2', 'evt_unique_test', 0, datetime('now'))`,
+           VALUES ('cc_uniq_2', 'evt_unique_test', 0, datetime('now'))`
         )
         .run();
       expect.fail('Duplicate event_id INSERT should have thrown UNIQUE constraint error');

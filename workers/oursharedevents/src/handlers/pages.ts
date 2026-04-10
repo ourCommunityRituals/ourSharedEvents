@@ -40,12 +40,12 @@ const PUBLIC_HTML = `<!DOCTYPE html>
   </style>
 </head>
 <body>
-  <header>
+  <header data-testid="public-header">
     <h1>OurSharedEvents</h1>
   </header>
-  <main>
+  <main data-testid="public-main">
     <h2>Upcoming Events</h2>
-    <div id="events"><p class="loading">Loading events&hellip;</p></div>
+    <div id="events" data-testid="public-events"><p class="loading">Loading events&hellip;</p></div>
   </main>
   <script>
     (async () => {
@@ -59,16 +59,16 @@ const PUBLIC_HTML = `<!DOCTYPE html>
           return;
         }
         container.innerHTML = data.items.map(e => \`
-          <div class="event-card">
-            <h3>\${esc(e.name || 'Untitled Event')}</h3>
-            <p class="meta">
+          <div class="event-card" data-testid="public-event-card">
+            <h3 data-testid="public-event-name">\${esc(e.name || 'Untitled Event')}</h3>
+            <p class="meta" data-testid="public-event-meta">
               \${e.startDateISO ? esc(new Date(e.startDateISO).toLocaleDateString('en-US', { weekday:'long', year:'numeric', month:'long', day:'numeric' })) : ''}
               \${e.venue ? ' &middot; ' + esc(e.venue) : ''}
             </p>
           </div>
         \`).join('');
       } catch (err) {
-        container.innerHTML = '<p class="error">Could not load events. Please try again.</p>';
+        container.innerHTML = '<p class="error" data-testid="public-error">Could not load events. Please try again.</p>';
       }
     })();
   </script>
@@ -89,6 +89,28 @@ const ADMIN_HTML = `<!DOCTYPE html>
     header { background: #1a1a2e; color: #fff; padding: 1.25rem 2rem; display: flex; align-items: center; justify-content: space-between; }
     header h1 { font-size: 1.4rem; font-weight: 600; }
     header span { font-size: .8rem; opacity: .6; text-transform: uppercase; letter-spacing: .05em; }
+    .tier-badge { display: inline-block; padding: .2rem .6rem; border-radius: 12px; font-size: .7rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; margin-left: .75rem; }
+    .tier-badge.free       { background: #d3f9d8; color: #2f9e44; }
+    .tier-badge.mid        { background: #d0ebff; color: #1971c2; }
+    .tier-badge.enterprise { background: #e8deee; color: #7c3aed; }
+    .feature-locked { position: relative; opacity: .5; }
+    .feature-locked::after { content: '🔒'; position: absolute; top: .5rem; right: .5rem; font-size: 1rem; }
+    .feature-locked .form-link { pointer-events: none; }
+    .lock-overlay { display: none; padding: .5rem .75rem; background: #fff3bf; border-radius: 6px; font-size: .8rem; color: #664d03; margin-top: .5rem; }
+    .feature-locked .lock-overlay { display: block; }
+    .form-config { display: flex; align-items: center; justify-content: space-between; padding: .5rem 0; border-bottom: 1px solid #f1f3f5; }
+    .form-config:last-child { border-bottom: none; }
+    .form-config-label { font-size: .9rem; font-weight: 500; }
+    .form-config-desc { font-size: .75rem; color: #868e96; }
+    .toggle { position: relative; width: 40px; height: 22px; flex-shrink: 0; }
+    .toggle input { opacity: 0; width: 0; height: 0; }
+    .toggle .slider { position: absolute; inset: 0; background: #dee2e6; border-radius: 22px; cursor: pointer; transition: background .2s; }
+    .toggle .slider::before { content: ''; position: absolute; left: 2px; top: 2px; width: 18px; height: 18px; background: #fff; border-radius: 50%; transition: transform .2s; }
+    .toggle input:checked + .slider { background: #4361ee; }
+    .toggle input:checked + .slider::before { transform: translateX(18px); }
+    .toggle input:disabled + .slider { opacity: .4; cursor: not-allowed; }
+    .config-section { margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #e9ecef; }
+    .config-section h3 { font-size: .85rem; font-weight: 600; color: #495057; margin-bottom: .5rem; text-transform: uppercase; letter-spacing: .04em; }
     main { max-width: 1000px; margin: 2rem auto; padding: 0 1rem; }
     h2 { font-size: 1.1rem; font-weight: 600; color: #495057; margin-bottom: 1rem; }
     table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
@@ -113,16 +135,45 @@ const ADMIN_HTML = `<!DOCTYPE html>
     .form-counts .count-box { text-align: center; padding: .5rem; background: #f8f9fa; border-radius: 6px; }
     .form-counts .count-num { font-size: 1.5rem; font-weight: 700; color: #1a1a2e; }
     .form-counts .count-label { font-size: .7rem; color: #868e96; text-transform: uppercase; }
+    .surface-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-top: 2rem; }
+    .surface-card { background: #fff; border-radius: 8px; padding: 1rem 1.25rem; box-shadow: 0 1px 3px rgba(0,0,0,.08); border-left: 3px solid #868e96; }
+    .surface-card h3 { font-size: .9rem; font-weight: 600; margin-bottom: .35rem; }
+    .surface-card p { font-size: .8rem; color: #868e96; margin-bottom: .5rem; }
+    .surface-card a { font-size: .8rem; color: #4361ee; text-decoration: none; font-weight: 500; }
+    .surface-card a:hover { text-decoration: underline; }
+    .surface-card.poster  { border-left-color: #d97706; }
+    .surface-card.display { border-left-color: #2563eb; }
+    .surface-card.public  { border-left-color: #16a34a; }
+    .surface-card.report  { border-left-color: #7c3aed; }
+    .qr-hint { font-size: .7rem; color: #adb5bd; margin-top: .25rem; }
+    .copy-btn { display: inline-block; padding: .2rem .5rem; background: #f1f3f5; border: 1px solid #dee2e6; border-radius: 4px; font-size: .75rem; cursor: pointer; color: #495057; margin-left: .5rem; transition: background .2s, color .2s; }
+    .copy-btn:hover { background: #e9ecef; }
+    .copy-btn.copied { background: #d3f9d8; color: #2f9e44; border-color: #b2f2bb; }
+    .clickable-row { cursor: pointer; }
+    .muted-sm { color: #868e96; font-size: .8rem; }
+    .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
+    .flex-row { display: flex; align-items: center; gap: .75rem; }
+    @keyframes shimmer { 0% { background-position: -200px 0; } 100% { background-position: 200px 0; } }
+    .skeleton { background: linear-gradient(90deg, #f1f3f5 25%, #e9ecef 50%, #f1f3f5 75%); background-size: 400px 100%; animation: shimmer 1.5s ease-in-out infinite; border-radius: 4px; }
+    .skeleton-row { height: 1rem; margin-bottom: .5rem; }
+    .skeleton-table { display: flex; flex-direction: column; gap: .5rem; padding: 1.5rem; background: #fff; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+    .skeleton-table .skeleton-row { height: 2.5rem; border-radius: 6px; }
+    .skeleton-table .skeleton-row:first-child { height: 2rem; width: 60%; }
+    .card-error { text-align: center; padding: 1.5rem; background: #fff5f5; border: 1px solid #ffc9c9; border-radius: 8px; color: #c92a2a; }
+    .card-error .error-icon { font-size: 1.5rem; margin-bottom: .5rem; }
+    .card-error .error-msg { font-size: .85rem; }
+    .card-error .retry-btn { display: inline-block; margin-top: .75rem; padding: .4rem 1rem; background: #fff; border: 1px solid #dee2e6; border-radius: 6px; font-size: .8rem; cursor: pointer; color: #495057; }
+    .card-error .retry-btn:hover { background: #f8f9fa; }
   </style>
 </head>
 <body>
-  <header>
-    <h1>OurSharedEvents</h1>
+  <header data-testid="admin-header">
+    <h1>OurSharedEvents<span class="tier-badge" id="tierBadge" data-testid="tier-badge"></span></h1>
     <span>Admin</span>
   </header>
-  <main>
+  <main data-testid="admin-main">
     <h2>All Events</h2>
-    <div id="events"><p class="loading">Loading&hellip;</p></div>
+    <div id="events" data-testid="events-container"><div class="skeleton-table" data-testid="skeleton-events"><div class="skeleton skeleton-row"></div><div class="skeleton skeleton-row"></div><div class="skeleton skeleton-row"></div><div class="skeleton skeleton-row"></div></div></div>
   </main>
   <script>
     (async () => {
@@ -139,66 +190,189 @@ const ADMIN_HTML = `<!DOCTYPE html>
           const safeName = esc(e.name || 'Untitled');
           const safeId = esc(String(e.id));
           return \`
-          <tr onclick="window.loadForms('\${safeId}', '\${safeName.replace(/'/g, "\\\\'")}'); document.querySelectorAll('tr.selected').forEach(r=>r.classList.remove('selected')); this.classList.add('selected');" style="cursor:pointer">
-            <td>\${safeId}</td>
-            <td>\${safeName}</td>
-            <td>\${e.startDateISO ? esc(new Date(e.startDateISO).toLocaleDateString()) : '—'}</td>
-            <td>\${esc(e.venue || '—')}</td>
-            <td><span class="badge \${esc(e.status)}">\${esc(e.status)}</span></td>
+          <tr onclick="window.loadForms('\${safeId}', '\${safeName.replace(/'/g, "\\\\'")}'); document.querySelectorAll('tr.selected').forEach(r=>r.classList.remove('selected')); this.classList.add('selected');" class="clickable-row" data-testid="event-row-\${safeId}">
+            <td data-testid="event-id">\${safeId}</td>
+            <td data-testid="event-name">\${safeName}</td>
+            <td data-testid="event-date">\${e.startDateISO ? esc(new Date(e.startDateISO).toLocaleDateString()) : '—'}</td>
+            <td data-testid="event-venue">\${esc(e.venue || '—')}</td>
+            <td><span class="badge \${esc(e.status)}" data-testid="event-status">\${esc(e.status)}</span></td>
           </tr>
         \`}).join('');
         container.innerHTML = \`
-          <table>
+          <table data-testid="events-table">
             <thead><tr><th>ID</th><th>Name</th><th>Date</th><th>Venue</th><th>Status</th></tr></thead>
-            <tbody>\${rows}</tbody>
+            <tbody data-testid="events-tbody">\${rows}</tbody>
           </table>
         \`;
       } catch (err) {
-        container.innerHTML = '<p class="error">Could not load events.</p>';
+        container.innerHTML = '<div class="card-error" data-testid="events-error"><div class="error-icon">&#9888;</div><div class="error-msg">Could not load events.</div><button class="retry-btn" data-testid="events-retry" onclick="location.reload()">Retry</button></div>';
       }
     })();
   </script>
 
   <!-- Card 2: Forms Management -->
-  <div class="forms-card">
+  <div class="forms-card" data-testid="forms-card">
     <h2>Forms (Card 2)</h2>
-    <div id="forms-panel"><p class="loading">Select an event to manage forms&hellip;</p></div>
+    <div id="forms-panel" data-testid="forms-panel"><p class="loading">Select an event to manage forms&hellip;</p></div>
   </div>
   <script>
     // Forms card — load counts and generate QR links for selected event
     window.loadForms = async function(eventId, eventName) {
       const panel = document.getElementById('forms-panel');
+      panel.innerHTML = '<div class="skeleton-table" data-testid="skeleton-forms"><div class="skeleton skeleton-row"></div><div class="skeleton skeleton-row"></div><div class="skeleton skeleton-row"></div></div>';
+      try {
       const types = [
-        { key: 'register', label: 'Registration', desc: 'Pre-event sign-up' },
-        { key: 'checkin', label: 'Check-in', desc: 'Walk-in door tally' },
-        { key: 'survey', label: 'Survey', desc: 'Post-event feedback' },
-        { key: 'email', label: 'Email List', desc: 'Voluntary opt-in' },
+        { key: 'register', flagKey: 'forms.register', label: 'Registration', desc: 'Pre-event sign-up' },
+        { key: 'checkin', flagKey: 'forms.checkin', label: 'Check-in', desc: 'Walk-in door tally' },
+        { key: 'survey', flagKey: 'forms.survey', label: 'Survey', desc: 'Post-event feedback', upgradeTier: 'mid' },
+        { key: 'email', flagKey: 'forms.email-signup', label: 'Email List', desc: 'Voluntary opt-in', upgradeTier: 'mid' },
       ];
       const encodedName = encodeURIComponent(eventName);
 
-      // Form links
-      const linksHtml = types.map(t =>
-        '<a class="form-link" href="/forms/' + eventId + '?type=' + t.key + '&event=' + encodedName + '" target="_blank">' +
-          '<div class="form-type">' + t.label + '</div>' +
-          '<div class="form-desc">' + t.desc + '</div>' +
-        '</a>'
-      ).join('');
+      // Resolve flags for this specific event
+      const eventFlagsRes = await fetch('/api/v2/admin/flags/resolve?eventId=' + eventId).then(r => r.json()).catch(() => null);
+      const flags = (eventFlagsRes && eventFlagsRes.ok) ? eventFlagsRes.flags : (window._resolvedFlags || {});
 
-      // Fetch counts
+      // Fetch counts in parallel
       const adminPaths = ['registrations', 'checkin-count', 'surveys', 'email-signups'];
       const counts = await Promise.all(adminPaths.map(p =>
         fetch('/api/v2/admin/events/' + eventId + '/forms/' + p).then(r => r.json()).then(d => d.count || 0).catch(() => 0)
       ));
+      const countLabels = ['Registrations', 'Check-ins', 'Surveys', 'Emails'];
+
+      // Form links — locked if flag is off
+      const linksHtml = types.map(t => {
+        const enabled = flags[t.flagKey] !== false;
+        const lockedClass = enabled ? '' : ' feature-locked';
+        const lockMsg = enabled ? '' : '<div class="lock-overlay">Upgrade to ' + (t.upgradeTier || 'mid') + ' to unlock</div>';
+        return '<div class="' + lockedClass + '" data-testid="form-gate-' + t.key + '">' +
+          '<a class="form-link" href="/forms/' + eventId + '?type=' + t.key + '&event=' + encodedName + '" target="_blank" data-testid="form-link-' + t.key + '">' +
+            '<div class="form-type">' + t.label + '</div>' +
+            '<div class="form-desc">' + t.desc + '</div>' +
+          '</a>' + lockMsg + '</div>';
+      }).join('');
+
+      // Inline form config toggles
+      const configHtml = types.map((t, i) => {
+        const globalEnabled = (window._resolvedFlags || {})[t.flagKey] !== false;
+        const eventEnabled = flags[t.flagKey] !== false;
+        const tierLocked = !globalEnabled && !t.upgradeTier; // truly unavailable
+        const disabled = !globalEnabled ? ' disabled' : '';
+        const checked = eventEnabled ? ' checked' : '';
+        return '<div class="form-config" data-testid="form-config-' + t.key + '">' +
+          '<div>' +
+            '<div class="form-config-label">' + t.label + ' <span class="muted-sm">(' + counts[i] + ')</span></div>' +
+            '<div class="form-config-desc">' + t.desc + (disabled ? ' — requires ' + (t.upgradeTier || 'upgrade') : '') + '</div>' +
+          '</div>' +
+          '<label class="toggle">' +
+            '<input type="checkbox" data-testid="form-toggle-' + t.key + '" data-flag="' + t.flagKey + '" data-event="' + eventId + '"' + checked + disabled +
+            ' onchange="toggleFormFlag(this)" />' +
+            '<span class="slider"></span>' +
+          '</label>' +
+        '</div>';
+      }).join('');
 
       panel.innerHTML =
-        '<div class="forms-grid">' + linksHtml + '</div>' +
-        '<div class="form-counts">' +
-          '<div class="count-box"><div class="count-num">' + counts[0] + '</div><div class="count-label">Registrations</div></div>' +
-          '<div class="count-box"><div class="count-num">' + counts[1] + '</div><div class="count-label">Check-ins</div></div>' +
-          '<div class="count-box"><div class="count-num">' + counts[2] + '</div><div class="count-label">Surveys</div></div>' +
-          '<div class="count-box"><div class="count-num">' + counts[3] + '</div><div class="count-label">Emails</div></div>' +
+        '<div class="forms-grid" data-testid="forms-grid">' + linksHtml + '</div>' +
+        '<div class="form-counts" data-testid="form-counts">' +
+          counts.map((c, i) =>
+            '<div class="count-box" data-testid="count-' + countLabels[i].toLowerCase().replace(/\s+/g, '-') + '"><div class="count-num" data-testid="count-num">' + c + '</div><div class="count-label">' + countLabels[i] + '</div></div>'
+          ).join('') +
+        '</div>' +
+        '<div class="config-section" data-testid="config-section">' +
+          '<h3>Form Config</h3>' +
+          configHtml +
         '</div>';
+      } catch (err) {
+        panel.innerHTML = '<div class="card-error" data-testid="forms-error"><div class="error-icon">&#9888;</div><div class="error-msg">Could not load forms.</div><button class="retry-btn" data-testid="forms-retry" onclick="window.loadForms(\'' + eventId + '\',\'' + eventName.replace(/'/g, "\\\\'") + '\')">Retry</button></div>';
+      }
     };
+
+    // Toggle a form flag for the selected event
+    window.toggleFormFlag = async function(el) {
+      const flagKey = el.dataset.flag;
+      const eventId = el.dataset.event;
+      const enabled = el.checked;
+      try {
+        const res = await fetch('/api/v2/admin/events/' + eventId + '/flags/' + flagKey, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ enabled }),
+        });
+        const data = await res.json();
+        if (!data.ok) throw new Error(data.error || 'Failed');
+      } catch (err) {
+        el.checked = !enabled; // revert on failure
+        console.error('Flag toggle failed:', err);
+      }
+    };
+  </script>
+
+  <!-- Cards 4-7: Surface Links -->
+  <div class="surface-cards" data-testid="surface-cards">
+    <div class="surface-card poster" data-testid="card-poster">
+      <h3>Poster Page</h3>
+      <p>Print-ready event poster with QR codes</p>
+      <a href="/poster" target="_blank" data-testid="link-poster">Open Poster</a>
+      <button class="copy-btn" data-testid="copy-poster" onclick="copyUrl('/poster', this)">Copy URL</button>
+      <div class="qr-hint">QR-ready: /poster</div>
+    </div>
+    <div class="surface-card display" data-testid="card-display">
+      <h3>TV Display</h3>
+      <p>Bar TV / kiosk live event display</p>
+      <a href="/display" target="_blank" data-testid="link-display">Open Display</a>
+      <button class="copy-btn" data-testid="copy-display" onclick="copyUrl('/display', this)">Copy URL</button>
+      <div class="qr-hint">QR-ready: /display</div>
+    </div>
+    <div class="surface-card public" data-testid="card-public">
+      <h3>Public Page</h3>
+      <p>Customer-facing events listing</p>
+      <a href="/" target="_blank" data-testid="link-public">Open Public Page</a>
+      <button class="copy-btn" data-testid="copy-public" onclick="copyUrl('/', this)">Copy URL</button>
+      <div class="qr-hint">QR-ready: /</div>
+    </div>
+    <div class="surface-card report" data-testid="card-report">
+      <h3>Shared Report</h3>
+      <p>Post-event analytics dashboard</p>
+      <a href="/sharedReport" target="_blank" data-testid="link-report">Open Report</a>
+      <button class="copy-btn" data-testid="copy-report" onclick="copyUrl('/sharedReport', this)">Copy URL</button>
+      <div class="qr-hint">QR-ready: /sharedReport</div>
+    </div>
+  </div>
+
+  <!-- Copy URL helper -->
+  <script>
+    function copyUrl(path, btn) {
+      const url = location.origin + path;
+      navigator.clipboard.writeText(url).then(() => {
+        btn.textContent = 'Copied!';
+        btn.classList.add('copied');
+        setTimeout(() => { btn.textContent = 'Copy URL'; btn.classList.remove('copied'); }, 2000);
+      }).catch(() => {
+        btn.textContent = 'Failed';
+        setTimeout(() => { btn.textContent = 'Copy URL'; }, 2000);
+      });
+    }
+  </script>
+
+  <!-- Tier badge + feature gating -->
+  <script>
+    (async () => {
+      // Fetch current tier and resolved flags in parallel
+      const [tierRes, flagsRes] = await Promise.all([
+        fetch('/api/v2/admin/flags/current-tier').then(r => r.json()).catch(() => null),
+        fetch('/api/v2/admin/flags/resolve').then(r => r.json()).catch(() => null),
+      ]);
+
+      // Render tier badge
+      const badge = document.getElementById('tierBadge');
+      const tier = (tierRes && tierRes.ok) ? tierRes.tier : 'free';
+      badge.textContent = tier;
+      badge.className = 'tier-badge ' + tier;
+
+      // Store resolved flags globally for form gating
+      window._resolvedFlags = (flagsRes && flagsRes.ok) ? flagsRes.flags : {};
+    })();
   </script>
 </body>
 </html>`;
@@ -283,25 +457,25 @@ const LANDING_HTML = `<!DOCTYPE html>
   </style>
 </head>
 <body>
-  <header>
-    <span class="logo">OurSharedEvents</span>
-    <nav>
-      <a href="/events">Events</a>
-      <a href="/admin">Admin</a>
+  <header data-testid="landing-header">
+    <span class="logo" data-testid="landing-logo">OurSharedEvents</span>
+    <nav data-testid="landing-nav">
+      <a href="/events" data-testid="nav-events">Events</a>
+      <a href="/admin" data-testid="nav-admin">Admin</a>
     </nav>
   </header>
-  <main>
-    <section class="hero">
+  <main data-testid="landing-main">
+    <section class="hero" data-testid="hero-section">
       <h1>Gather with your neighborhood on Chicago&#x2019;s Southside</h1>
       <p>Community events that bring people together. Stay in the loop and be the first to know when something&#x2019;s happening near you.</p>
-      <form class="subscribe-form" id="subscribe-form" novalidate>
-        <label for="email-input" class="sr-only" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);">Email address</label>
-        <input type="email" id="email-input" name="email" placeholder="Enter your email" aria-label="Email address" required>
-        <button type="submit">Stay in the Loop</button>
+      <form class="subscribe-form" id="subscribe-form" data-testid="subscribe-form" novalidate>
+        <label for="email-input" class="sr-only">Email address</label>
+        <input type="email" id="email-input" name="email" placeholder="Enter your email" aria-label="Email address" data-testid="subscribe-email" required>
+        <button type="submit" data-testid="subscribe-submit">Stay in the Loop</button>
         <div class="form-message" id="form-message" role="status" aria-live="polite"></div>
       </form>
     </section>
-    <section class="ring-section" aria-label="Focus neighborhoods">
+    <section class="ring-section" aria-label="Focus neighborhoods" data-testid="ring-section">
       <h2>Our Neighborhood Ring</h2>
       <p class="ring-subtitle">Six Southside communities. One connected flywheel.</p>
       <div class="ring-container" data-testid="ring-layout">
@@ -314,25 +488,25 @@ const LANDING_HTML = `<!DOCTYPE html>
         <div class="ring-node n-ol" data-testid="ring-node-ol" aria-label="Oak Lawn neighborhood">Oak Lawn</div>
       </div>
     </section>
-    <section class="features">
-      <div class="feature-card">
+    <section class="features" data-testid="features-section">
+      <div class="feature-card" data-testid="feature-events">
         <div class="feature-icon events" role="img" aria-hidden="true">&#x1F4C5;</div>
         <h3>Shared Events</h3>
         <p>Browse upcoming gatherings, leagues, and community nights happening across the neighborhood.</p>
       </div>
-      <div class="feature-card">
+      <div class="feature-card" data-testid="feature-sponsors">
         <div class="feature-icon sponsors" role="img" aria-hidden="true">&#x1F91D;</div>
         <h3>Local Sponsors</h3>
         <p>Neighborhood businesses supporting the events you love. Real partnerships, real impact.</p>
       </div>
-      <div class="feature-card">
+      <div class="feature-card" data-testid="feature-community">
         <div class="feature-icon community" role="img" aria-hidden="true">&#x1F3D8;</div>
         <h3>Community First</h3>
         <p>Built for the Southside, by the Southside. Every event strengthens the bonds that matter.</p>
       </div>
     </section>
   </main>
-  <footer>
+  <footer data-testid="landing-footer">
     <p>&#xA9; 2026 OurSharedEvents &#xB7; <a href="/events">Browse Events</a></p>
   </footer>
   <script type="module">
@@ -609,14 +783,14 @@ const DISPLAY_HTML = `<!DOCTYPE html>
   </style>
 </head>
 <body>
-  <header>
+  <header data-testid="display-header">
     <h1>OurSharedEvents</h1>
-    <div class="clock" id="clock" aria-live="off"></div>
+    <div class="clock" id="clock" aria-live="off" data-testid="display-clock"></div>
   </header>
-  <main id="main">
+  <main id="main" data-testid="display-main">
     <p class="empty">Loading&hellip;</p>
   </main>
-  <div class="ticker" aria-hidden="true"><span class="ticker-inner" id="ticker">OurSharedEvents &mdash; Community events on Chicago&rsquo;s Southside</span></div>
+  <div class="ticker" aria-hidden="true" data-testid="display-ticker"><span class="ticker-inner" id="ticker">OurSharedEvents &mdash; Community events on Chicago&rsquo;s Southside</span></div>
   <script>
     // Clock
     function updateClock() {
@@ -715,16 +889,16 @@ const POSTER_HTML = `<!DOCTYPE html>
   </style>
 </head>
 <body>
-  <div class="page-header no-print">
+  <div class="page-header no-print" data-testid="poster-header">
     <h1>OurSharedEvents — Poster</h1>
-    <a href="javascript:window.print()">&#x1F5A8; Print</a>
+    <a href="javascript:window.print()" data-testid="poster-print">&#x1F5A8; Print</a>
   </div>
-  <div class="container">
-    <div class="event-select no-print">
+  <div class="container" data-testid="poster-container">
+    <div class="event-select no-print" data-testid="poster-event-select">
       <label for="event-picker">Select Event</label>
-      <select id="event-picker"><option value="">Loading events&hellip;</option></select>
+      <select id="event-picker" data-testid="poster-event-picker"><option value="">Loading events&hellip;</option></select>
     </div>
-    <div id="poster-area"><p class="loading">Loading&hellip;</p></div>
+    <div id="poster-area" data-testid="poster-area"><p class="loading">Loading&hellip;</p></div>
   </div>
   <script>
     const esc = s => { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; };
@@ -819,21 +993,21 @@ const SHARED_REPORT_HTML = `<!DOCTYPE html>
   </style>
 </head>
 <body>
-  <header>
+  <header data-testid="report-header">
     <h1>OurSharedEvents</h1>
     <span>Shared Report</span>
   </header>
-  <main>
+  <main data-testid="report-main">
     <div>
       <div class="section-title">Events Overview</div>
-      <div class="stats-row" id="stats-row">
-        <div class="stat-card"><div class="num" id="stat-total">&mdash;</div><div class="label">Total Events</div></div>
-        <div class="stat-card"><div class="num" id="stat-active">&mdash;</div><div class="label">Active</div></div>
+      <div class="stats-row" id="stats-row" data-testid="report-stats">
+        <div class="stat-card" data-testid="stat-total"><div class="num" id="stat-total">&mdash;</div><div class="label">Total Events</div></div>
+        <div class="stat-card" data-testid="stat-active"><div class="num" id="stat-active">&mdash;</div><div class="label">Active</div></div>
       </div>
     </div>
     <div>
       <div class="section-title">Events</div>
-      <div class="events-list" id="events-list"><p class="loading">Loading&hellip;</p></div>
+      <div class="events-list" id="events-list" data-testid="report-events-list"><p class="loading">Loading&hellip;</p></div>
     </div>
   </main>
   <script>
@@ -851,11 +1025,11 @@ const SHARED_REPORT_HTML = `<!DOCTYPE html>
           listEl.innerHTML = '<p class="empty">No events to report.</p>';
           return;
         }
-        listEl.innerHTML = items.map(e => '<div class="event-row">' +
-          '<div class="name">' + esc(e.name || 'Untitled') + '</div>' +
-          '<div style="display:flex;align-items:center;gap:.75rem">' +
-          '<div class="date">' + esc(fmt(e.startDateISO)) + '</div>' +
-          '<span class="badge ' + esc(e.status || '') + '">' + esc(e.status || '') + '</span>' +
+        listEl.innerHTML = items.map(e => '<div class="event-row" data-testid="report-event-row">' +
+          '<div class="name" data-testid="report-event-name">' + esc(e.name || 'Untitled') + '</div>' +
+          '<div class="flex-row">' +
+          '<div class="date" data-testid="report-event-date">' + esc(fmt(e.startDateISO)) + '</div>' +
+          '<span class="badge ' + esc(e.status || '') + '" data-testid="report-event-status">' + esc(e.status || '') + '</span>' +
           '</div></div>').join('');
       } catch {
         listEl.innerHTML = '<p class="empty">Could not load data.</p>';

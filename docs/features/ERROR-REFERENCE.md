@@ -48,13 +48,18 @@ Some endpoints also include `requestId` for tracing.
 
 ### Data Source Errors
 
-| Code                   | HTTP | Meaning                             | What to Do                                       |
-| ---------------------- | ---- | ----------------------------------- | ------------------------------------------------ |
-| `SHEETS_DB_ID_MISSING` | 503  | Spreadsheet ID not configured       | Set `SHEETS_SPREADSHEET_ID` secret               |
-| `SHEETS_READ_FAILED`   | 503  | Google Sheets API returned an error | Check Google SA credentials and Sheets API quota |
-| `DB_ERROR`             | 503  | D1 database temporarily unavailable | Retry after a moment — transient error           |
-| `CONFIG_ERROR`         | 503  | Encryption key not configured       | Set `FORMS_ENCRYPTION_KEY` secret                |
-| `NOT_FOUND`            | 404  | Event, resource, or route not found | Check the event ID or URL                        |
+| Code           | HTTP | Meaning                             | What to Do                             |
+| -------------- | ---- | ----------------------------------- | -------------------------------------- |
+| `DB_ERROR`     | 503  | D1 database temporarily unavailable | Retry after a moment — transient error |
+| `CONFIG_ERROR` | 503  | Encryption key not configured       | Set `FORMS_ENCRYPTION_KEY` secret      |
+| `NOT_FOUND`    | 404  | Event, resource, or route not found | Check the event ID or URL              |
+
+**Removed error codes (Phase 2 D1 migration):**
+
+| Code (Removed)             | Reason                                               |
+| -------------------------- | ---------------------------------------------------- |
+| ~~`SHEETS_DB_ID_MISSING`~~ | D1 replaced Google Sheets — no spreadsheet ID needed |
+| ~~`SHEETS_READ_FAILED`~~   | D1 replaced Google Sheets — no Sheets API calls      |
 
 ### Rate Limiting
 
@@ -79,24 +84,22 @@ GET /health
 GET /api/status
 ```
 
-Returns system health including Google Sheets connectivity:
+Returns system health including D1 connectivity:
 
 ```json
 {
   "ok": true,
   "env": "staging",
-  "version": "1.0.0",
-  "sheets": "ok",
-  "sheetsLatencyMs": 245,
+  "version": "stg-2026.03.22",
+  "d1": "ok",
   "timestamp": "2026-03-27T14:37:22.891Z"
 }
 ```
 
-| `sheets` value   | Meaning                                            |
-| ---------------- | -------------------------------------------------- |
-| `ok`             | Sheets API is reachable and responding             |
-| `error`          | Sheets API returned an error (check `sheetsError`) |
-| `not_configured` | Google SA credentials not set up                   |
+| `d1` value | Meaning                                   |
+| ---------- | ----------------------------------------- |
+| `ok`       | D1 database is reachable and responding   |
+| `error`    | D1 query failed — check migrations/config |
 
 ---
 
@@ -106,7 +109,7 @@ Returns system health including Google Sheets connectivity:
 | ----------------------------------------- | ------------------------------------------------------- |
 | All admin routes return 401               | Is `ALLOW_ADMIN_KEY_FALLBACK=true`? Is `ADMIN_KEY` set? |
 | Form submission returns 403               | Is this form type enabled for the event's tier?         |
-| Events page shows "Could not load events" | Is `SHEETS_SPREADSHEET_ID` configured? Check `/health`  |
+| Events page shows "Could not load events" | Check D1 connectivity via `/health` — is `d1: "ok"`?    |
 | Email signup returns 503 CONFIG_ERROR     | Is `FORMS_ENCRYPTION_KEY` set?                          |
 | Survey admin shows no results             | Surveys only show after PII scrub job runs (daily)      |
 | Duplicate email signup returns success    | By design — returns `{ "duplicate": true }` for privacy |

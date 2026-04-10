@@ -399,15 +399,6 @@ Logger.log(listUrlAliases_('abc', true));
 3. **Test with query params:** Try `?p=public&brand=abc` to isolate routing
 4. **Check console logs:** Look for routing errors in Apps Script logs
 
-### How to Debug
-
-```javascript
-// Add to doGet for debugging
-Logger.log('Path Info:', e.pathInfo);
-Logger.log('Resolved Alias:', resolveUrlAlias_(aliasFromPath, brand.id));
-Logger.log('Final Page:', page);
-```
-
 ---
 
 ## Migration from Query Parameters

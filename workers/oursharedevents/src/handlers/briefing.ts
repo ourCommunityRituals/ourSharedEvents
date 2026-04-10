@@ -16,7 +16,6 @@ const BRIEFING_HTML = `<!DOCTYPE html>
 <title>ourCommunityRituals — CEO Briefing</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.26.9/babel.min.js"></script>
 <style>
 :root{--bg:#0a0f1a;--card:#111827;--card2:#1a2332;--t1:#f0f4f8;--t2:#94a3b8;--t3:#64748b;--blue:#3b82f6;--green:#10b981;--amber:#f59e0b;--red:#ef4444;--purple:#8b5cf6;--border:#1e293b}
 *{margin:0;padding:0;box-sizing:border-box}
@@ -69,7 +68,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display',system-ui,san
 </head>
 <body>
 <div id="root"></div>
-<script type="text/babel">
+<script>
+const h=React.createElement;
 const {useState}=React;
 const PIN="2026";
 
@@ -229,86 +229,78 @@ function Pin({onUnlock}){
   const[pin,setPin]=useState("");
   const[err,setErr]=useState("");
   const hit=d=>{if(pin.length>=4)return;const n=pin+d;setPin(n);setErr("");if(n.length===4){if(n===PIN)onUnlock();else setTimeout(()=>{setPin("");setErr("Incorrect PIN")},300)}};
-  return(
-    <div className="pin-s">
-      <h1>ourCommunityRituals</h1>
-      <p>CEO Briefing — Confidential</p>
-      <div className="pin-d">{[0,1,2,3].map(i=><div key={i} className={\`dot \${i<pin.length?'f':''}\`}/>)}</div>
-      <div className="pad">
-        {[1,2,3,4,5,6,7,8,9].map(d=><button key={d} className="pb" onClick={()=>hit(String(d))}>{d}</button>)}
-        <div/>
-        <button className="pb" onClick={()=>hit("0")}>0</button>
-        <button className="pb" style={{fontSize:'1rem'}} onClick={()=>{setPin(p=>p.slice(0,-1));setErr("")}}>←</button>
-      </div>
-      <div className="pe">{err}</div>
-    </div>
+  return h('div',{className:'pin-s'},
+    h('h1',null,'ourCommunityRituals'),
+    h('p',null,'CEO Briefing — Confidential'),
+    h('div',{className:'pin-d'},[0,1,2,3].map(i=>h('div',{key:i,className:'dot '+(i<pin.length?'f':'')}))),
+    h('div',{className:'pad'},
+      [1,2,3,4,5,6,7,8,9].map(d=>h('button',{key:d,className:'pb',onClick:()=>hit(String(d))},d)),
+      h('div',null),
+      h('button',{className:'pb',onClick:()=>hit('0')},'0'),
+      h('button',{className:'pb',style:{fontSize:'1rem'},onClick:()=>{setPin(p=>p.slice(0,-1));setErr('')}},'←')
+    ),
+    h('div',{className:'pe'},err)
   );
 }
 
 function Home({go}){
-  return(
-    <div className="app">
-      <div className="hdr">
-        <h1>ourCommunityRituals</h1>
-        <div className="sub">CEO Briefing — April 2026</div>
-      </div>
-      <div className="sec">
-        <div className="sg">
-          <div className="sb"><div className="sn" style={{color:'var(--green)'}}>7</div><div className="sl">Products</div></div>
-          <div className="sb"><div className="sn" style={{color:'var(--blue)'}}>~90</div><div className="sl">Event Types at Scale</div></div>
-          <div className="sb"><div className="sn" style={{color:'var(--purple)'}}>10</div><div className="sl">IP Innovations</div></div>
-          <div className="sb"><div className="sn" style={{color:'var(--amber)'}}>5</div><div className="sl">Regulatory Phases</div></div>
-        </div>
-      </div>
-      {SECTIONS.map(s=>(
-        <div key={s.id} className="sec" style={{paddingTop:0}}>
-          <div className="c" onClick={()=>go(s.id)}>
-            <div className="ct">{s.title}</div>
-            <div className="cd">{s.card}</div>
-            <span className={\`tg \${s.tagCls}\`}>{s.tag}</span>
-          </div>
-        </div>
-      ))}
-    </div>
+  return h('div',{className:'app'},
+    h('div',{className:'hdr'},
+      h('h1',null,'ourCommunityRituals'),
+      h('div',{className:'sub'},'CEO Briefing — April 2026')
+    ),
+    h('div',{className:'sec'},
+      h('div',{className:'sg'},
+        h('div',{className:'sb'},h('div',{className:'sn',style:{color:'var(--green)'}},'7'),h('div',{className:'sl'},'Products')),
+        h('div',{className:'sb'},h('div',{className:'sn',style:{color:'var(--blue)'}},'~90'),h('div',{className:'sl'},'Event Types at Scale')),
+        h('div',{className:'sb'},h('div',{className:'sn',style:{color:'var(--purple)'}},'10'),h('div',{className:'sl'},'IP Innovations')),
+        h('div',{className:'sb'},h('div',{className:'sn',style:{color:'var(--amber)'}},'5'),h('div',{className:'sl'},'Regulatory Phases'))
+      )
+    ),
+    SECTIONS.map(s=>
+      h('div',{key:s.id,className:'sec',style:{paddingTop:0}},
+        h('div',{className:'c',onClick:()=>go(s.id)},
+          h('div',{className:'ct'},s.title),
+          h('div',{className:'cd'},s.card),
+          h('span',{className:'tg '+s.tagCls},s.tag)
+        )
+      )
+    )
   );
 }
 
 function Detail({section,goBack}){
   const s=SECTIONS.find(x=>x.id===section);
   if(!s)return null;
-  return(
-    <div className="app">
-      <div className="hdr">
-        <button className="back" onClick={goBack}>← Back</button>
-        <h1>{s.title}</h1>
-        <div className="sub"><span className={\`tg \${s.tagCls}\`}>{s.tag}</span></div>
-      </div>
-      <div className="dp">
-        <div className="ld">{s.lead}</div>
-        {s.blocks.map((b,i)=>{
-          if(b.q) return <div key={i} className="q-prompt">{b.q}</div>;
-          return(
-            <div key={i} className="ds">
-              <h3>{b.h}</h3>
-              {b.p && b.p.split('\\n\\n').map((para,j)=><p key={j} style={{marginBottom:'.75rem'}}>{para}</p>)}
-              {b.list && <ul>{b.list.map((li,j)=><li key={j}>{li}</li>)}</ul>}
-            </div>
-          );
-        })}
-      </div>
-    </div>
+  return h('div',{className:'app'},
+    h('div',{className:'hdr'},
+      h('button',{className:'back',onClick:goBack},'← Back'),
+      h('h1',null,s.title),
+      h('div',{className:'sub'},h('span',{className:'tg '+s.tagCls},s.tag))
+    ),
+    h('div',{className:'dp'},
+      h('div',{className:'ld'},s.lead),
+      s.blocks.map((b,i)=>{
+        if(b.q) return h('div',{key:i,className:'q-prompt'},b.q);
+        return h('div',{key:i,className:'ds'},
+          h('h3',null,b.h),
+          b.p && b.p.split('\\n\\n').map((para,j)=>h('p',{key:j,style:{marginBottom:'.75rem'}},para)),
+          b.list && h('ul',null,b.list.map((li,j)=>h('li',{key:j},li)))
+        );
+      })
+    )
   );
 }
 
 function App(){
   const[u,setU]=useState(false);
   const[v,setV]=useState(null);
-  if(!u)return <Pin onUnlock={()=>setU(true)}/>;
-  if(v)return <Detail section={v} goBack={()=>setV(null)}/>;
-  return <Home go={setV}/>;
+  if(!u)return h(Pin,{onUnlock:()=>setU(true)});
+  if(v)return h(Detail,{section:v,goBack:()=>setV(null)});
+  return h(Home,{go:setV});
 }
 
-ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+ReactDOM.createRoot(document.getElementById('root')).render(h(App,null));
 </script>
 </body>
 </html>`;

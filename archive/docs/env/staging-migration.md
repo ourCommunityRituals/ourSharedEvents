@@ -1,9 +1,14 @@
 # Staging Backend Migration Guide
 
+> **SUPERSEDED — D1 ERA**
+> This guide described setting up a GAS-owned staging backend (Story 1.1.2).
+> The GAS backend has been archived. The staging environment is now the Cloudflare Worker at `stg.oursharedevents.com`.
+> No action needed from this document. Preserved for historical reference only.
+
 **Story:** 1.1.2 - Create new staging GAS backend owned by zeventbook
 **Epic:** Backend Identity Consolidation
 **Last Updated:** 2025-12-11
-**Status:** PENDING USER ACTION
+**Status:** ~~PENDING USER ACTION~~ SUPERSEDED
 
 ---
 
@@ -26,11 +31,11 @@ Before starting, ensure you have:
 
 ## Deprecated Project (DO NOT USE)
 
-| Property | Value |
-|----------|-------|
-| **Script ID** | `1gHiPuj7eXNk09dDyk17SJ6QsCJg7LMqXBRrkowljL3z2TaAKFIvBLhHJ` |
-| **Former Owner** | `mzdano@gmail.com` |
-| **Status** | **DEPRECATED** |
+| Property         | Value                                                       |
+| ---------------- | ----------------------------------------------------------- |
+| **Script ID**    | `1gHiPuj7eXNk09dDyk17SJ6QsCJg7LMqXBRrkowljL3z2TaAKFIvBLhHJ` |
+| **Former Owner** | `mzdano@gmail.com`                                          |
+| **Status**       | **DEPRECATED**                                              |
 
 > **WARNING:** Do not deploy to this project. It is marked for deprecation.
 
@@ -50,6 +55,7 @@ Before starting, ensure you have:
 6. Verify **Owner** shows `zeventbook@gmail.com`
 
 **Record the new Script ID:**
+
 ```
 NEW_SCRIPT_ID: _________________________________
 ```
@@ -83,24 +89,25 @@ rm .clasp.temp.json
 
 Copy these files from `src/mvp/` to the new project:
 
-| File | Description |
-|------|-------------|
-| `Code.gs` | Main application entry point |
-| `Config.gs` | Configuration constants |
-| `SecurityMiddleware.gs` | Security middleware |
-| `SponsorService.gs` | Sponsor management |
-| `TemplateService.gs` | Template handling |
-| `FormService.gs` | Form processing |
-| `SharedReporting.gs` | Reporting utilities |
-| `AnalyticsService.gs` | Analytics |
-| `ApiSchemas.gs` | API schemas |
-| `DataHealthChecker.gs` | Data health checks |
-| `AnalyticsRollup.gs` | Analytics rollup |
-| `BackupService.gs` | Backup service |
-| `DiagArchiver.gs` | Diagnostic archiver |
-| `TemplateManagementService.gs` | Template management v2 |
+| File                           | Description                  |
+| ------------------------------ | ---------------------------- |
+| `Code.gs`                      | Main application entry point |
+| `Config.gs`                    | Configuration constants      |
+| `SecurityMiddleware.gs`        | Security middleware          |
+| `SponsorService.gs`            | Sponsor management           |
+| `TemplateService.gs`           | Template handling            |
+| `FormService.gs`               | Form processing              |
+| `SharedReporting.gs`           | Reporting utilities          |
+| `AnalyticsService.gs`          | Analytics                    |
+| `ApiSchemas.gs`                | API schemas                  |
+| `DataHealthChecker.gs`         | Data health checks           |
+| `AnalyticsRollup.gs`           | Analytics rollup             |
+| `BackupService.gs`             | Backup service               |
+| `DiagArchiver.gs`              | Diagnostic archiver          |
+| `TemplateManagementService.gs` | Template management v2       |
 
 Also copy HTML files:
+
 - `Admin.html`
 - `NUSDK.html`
 - Other `.html` templates
@@ -119,6 +126,7 @@ Also copy HTML files:
 5. Copy the **Deployment ID** (starts with `AKfycb...`)
 
 **Record the new Deployment ID:**
+
 ```
 NEW_DEPLOYMENT_ID: _________________________________
 ```
@@ -259,15 +267,15 @@ If issues occur with the new staging backend:
 
 ## Files Modified by This Migration
 
-| File | Change |
-|------|--------|
-| `.clasp.json` | New staging scriptId |
-| `.clasp-staging.json` | New staging scriptId and deploymentId |
-| `deploy-manifest.json` | New staging appsScript values |
-| `config/deployment-ids.js` | New staging IDs |
-| `docs/env/gas-projects.md` | Updated inventory and deprecated old project |
-| `docs/env/staging-migration.md` | This migration guide |
-| `cloudflare-proxy/wrangler.toml` | New deployment ID (if applicable) |
+| File                             | Change                                       |
+| -------------------------------- | -------------------------------------------- |
+| `.clasp.json`                    | New staging scriptId                         |
+| `.clasp-staging.json`            | New staging scriptId and deploymentId        |
+| `deploy-manifest.json`           | New staging appsScript values                |
+| `config/deployment-ids.js`       | New staging IDs                              |
+| `docs/env/gas-projects.md`       | Updated inventory and deprecated old project |
+| `docs/env/staging-migration.md`  | This migration guide                         |
+| `cloudflare-proxy/wrangler.toml` | New deployment ID (if applicable)            |
 
 ---
 
@@ -282,6 +290,6 @@ If issues occur with the new staging backend:
 
 ## Change Log
 
-| Date | Change | Author |
-|------|--------|--------|
+| Date       | Change                                        | Author |
+| ---------- | --------------------------------------------- | ------ |
 | 2025-12-11 | Initial migration guide created (Story 1.1.2) | Claude |

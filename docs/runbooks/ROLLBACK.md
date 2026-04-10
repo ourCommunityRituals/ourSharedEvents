@@ -1,334 +1,237 @@
 # Production Rollback Procedures
 
-This document describes rollback procedures for production deployments when Story 7 sanity checks fail or other deployment issues occur.
+> **Architecture:** Cloudflare Worker + D1 (Phase 2 complete)
+> **Last Updated:** 2026-04-09
+> **Supersedes:** Previous version referencing eventangle.com, GAS, and Google Sheets
 
-## Quick Rollback (Story 5.3)
+---
 
-**Single-command rollback to N-1 deployment:**
-
-```bash
-# Rollback staging to previous version
-npm run rollback:staging
-
-# Rollback production to previous version
-npm run rollback:prod
-
-# Rollback BOTH staging and production
-npm run rollback:all
-```
-
-**List deployments to see version history:**
+## Quick Rollback
 
 ```bash
-# List all environments
-npm run rollback:list
+# Rollback staging Worker to previous version
+wrangler rollback --env staging
 
-# List specific environment
-npm run rollback:list:staging
-npm run rollback:list:prod
-```
-
-**Additional options:**
-
-```bash
-# Dry run (see what would happen)
-node scripts/rollback-worker.mjs production --dry-run
-
-# Force rollback (skip confirmation)
-node scripts/rollback-worker.mjs production --force
-
-# Rollback with health verification
-node scripts/rollback-worker.mjs staging --verify
+# Rollback production Worker to previous version
+wrangler rollback --env production
 ```
 
 ## Quick Reference
 
-| Issue                       | Rollback Target         | Command                           |
-| --------------------------- | ----------------------- | --------------------------------- |
-| Worker issue (staging)      | Previous Worker         | `npm run rollback:staging`        |
-| Worker issue (production)   | Previous Worker         | `npm run rollback:prod`           |
-| Worker issue (both envs)    | Previous Workers        | `npm run rollback:all`            |
-| GAS HTML leak (blue banner) | Previous Worker         | `npm run rollback:prod`           |
-| API/RPC errors              | Previous GAS deployment | Use Apps Script Editor            |
-| Worker routing broken       | Previous Worker         | `npm run rollback:prod`           |
-| Worker-only mode issues     | Backend mode rollback   | See "Backend Mode Rollback" below |
-| Everything broken           | Both GAS + Worker       | Full rollback (see below)         |
+| Issue                         | Rollback Target         | Command / Action                   |
+| ----------------------------- | ----------------------- | ---------------------------------- |
+| Worker code regression        | Previous Worker version | `wrangler rollback --env <env>`    |
+| Bad D1 migration (staging)    | Drop + recreate DB      | See "D1 Migration Rollback" below  |
+| Bad D1 migration (production) | Surgical fix or restore | See "D1 Migration Rollback" below  |
+| Broken secrets                | Re-set secrets + deploy | See RUNBOOK-SECRETS.md             |
+| DNS / routing broken          | CF Dashboard            | Verify DNS records + Worker routes |
+| Everything broken             | Full rollback           | Worker rollback + D1 restore       |
 
 ## When to Rollback
 
 Rollback is required when any of these conditions occur:
 
-1. **Stage-2 production validation fails**
-   - GAS HTML integrity check fails (blue banner visible)
-   - UI smoke tests fail
-   - API smoke tests fail
+1. **Health check fails after deployment**
+   - `/health` returns non-200 or `"d1": "error"`
+   - Events API returns errors
 
-2. **Production sanity checks fail (Story 7)**
-   - `/events` shows GAS blue banner
-   - Admin UI not visible on `/admin`
-   - Network calls bypass `/api/*` endpoints
-   - QR codes not resolving correctly
+2. **CI smoke tests fail after staging deploy**
+   - Security gate failures
+   - Functional smoke test failures
 
-3. **Error rate increase**
-   - Worker error logs spike
-   - GAS error logs spike
-   - User reports increase
+3. **Admin access broken**
+   - `/admin` returns 401 with correct token
+   - Admin API endpoints unreachable
+
+4. **Data integrity issues**
+   - D1 migration corrupted table data
+   - Feature flags in unexpected state
+
+---
 
 ## Rollback Procedures
 
-### Option A: Cloudflare Worker Rollback (Fast) - RECOMMENDED
+### Option A: Worker Version Rollback (Fast, Recommended)
 
-Use this when Worker routing is broken but GAS is working.
+Use when Worker code is broken but D1 data is fine.
 
-**Via npm script (Story 5.3 - Single Command):**
-
-```bash
-# Staging rollback
-npm run rollback:staging
-
-# Production rollback
-npm run rollback:prod
-
-# Both environments
-npm run rollback:all
-```
-
-**Via Wrangler CLI (Manual):**
+**Via Wrangler CLI:**
 
 ```bash
-# 1. Check current deployment
-wrangler deployments list --env production
+# 1. List recent deployments
+wrangler deployments list --env staging
 
-# 2. Identify previous working version
-# Note the deployment ID (e.g., abc123)
+# 2. Rollback to previous version
+wrangler rollback --env staging
 
-# 3. Rollback to previous version
-wrangler rollback --env production
-
-# 4. Verify rollback
-curl -s https://www.eventangle.com/events -I | grep x-worker-version
+# 3. Verify
+curl -s https://stg.oursharedevents.com/health | jq
 ```
 
 **Via Cloudflare Dashboard:**
 
-1. Go to [Cloudflare Dashboard](https://dash.cloudflare.com)
-2. Select account → Workers & Pages → eventangle-prod
-3. Go to Deployments tab
-4. Find previous working deployment
-5. Click "Rollback to this deployment"
+1. dash.cloudflare.com > Workers & Pages > oursharedevents-staging
+2. Deployments tab
+3. Find previous working deployment
+4. Click "Rollback to this deployment"
 
-### Option B: GAS Deployment Rollback
-
-Use this when GAS (API/data) is broken but Worker is working.
-
-**Via Apps Script Editor:**
-
-1. Go to [Google Apps Script](https://script.google.com/)
-2. Open the Production project (Script ID: `1YO4apLOQoAIh208AcAqWO3pWtx_O3yas_QC4z-pkurgMem9UgYOsp86l`)
-3. Click Deploy → Manage deployments
-4. Find previous working deployment
-5. Click the three dots (⋮) → Use as active deployment
-
-**After GAS Rollback:**
-
-Update the Worker to use the old GAS deployment ID:
+**Via git revert (if you want the rollback in source):**
 
 ```bash
-cd cloudflare-proxy
-
-# Update wrangler.toml with old deployment ID
-# Edit [env.production.vars] DEPLOYMENT_ID
-
-# Redeploy worker
-wrangler deploy --env production
+git revert HEAD
+git push origin main
+# CI auto-deploys the reverted code to staging
 ```
 
-### Option C: Backend Mode Rollback (Story 6.1)
+### Option B: D1 Migration Rollback
 
-Use when Worker-only mode (`BACKEND_MODE=worker`) is causing issues but the Worker itself is working.
+Use when a D1 migration corrupted data or schema.
 
-**Symptoms that indicate Backend Mode rollback:**
-
-- API endpoints return errors from Worker-native code
-- Google Sheets API rate limits or auth issues
-- Features work on staging (mixed mode) but fail on production (worker mode)
-
-**Step 1: Change BACKEND_MODE**
-
-Edit `cloudflare-proxy/wrangler.toml`:
-
-```toml
-[env.production.vars]
-# Change from 'worker' to 'mixed' or 'gas'
-BACKEND_MODE = "mixed"  # Per-route selection (safer)
-# or
-BACKEND_MODE = "gas"    # All routes use GAS (full rollback)
-```
-
-**Step 2: Deploy the change**
+**Staging (self-service — destructive is OK):**
 
 ```bash
-cd cloudflare-proxy
-wrangler deploy --env production
+cd workers/oursharedevents
+
+# Option 1: Drop and recreate (fastest, loses all staging data)
+wrangler d1 delete ocr-db-staging
+wrangler d1 create ocr-db-staging
+# Update database_id in wrangler.toml if it changed
+wrangler d1 migrations apply DB --env staging --remote
+
+# Option 2: Surgical fix (if you know the exact issue)
+wrangler d1 execute DB --env staging --command "DROP TABLE IF EXISTS <broken_table>"
+wrangler d1 migrations apply DB --env staging --remote
 ```
 
-**Step 3: Verify**
+**Production (requires careful handling):**
+
+> **STOP.** Production D1 rollback is destructive. Assess whether the issue can be fixed forward instead.
 
 ```bash
-# Check backend mode
-curl -s https://www.eventangle.com/api/status | jq '.backendMode'
-# Expected: "mixed" or "gas"
+# 1. Assess the damage
+wrangler d1 execute DB --env production --command ".tables"
+wrangler d1 execute DB --env production --command "SELECT COUNT(*) FROM events"
 
-# Run smoke tests
-BASE_URL="https://www.eventangle.com" npm run test:api:smoke
+# 2. If a specific migration broke things, write a corrective migration
+#    Add a new migration file: migrations/0018_fix_<description>.sql
+#    Apply it:
+wrangler d1 migrations apply DB --env production --remote
+
+# 3. If data is corrupted beyond repair:
+#    - Export what you can first (see DISASTER-RECOVERY.md)
+#    - Then drop + recreate + re-apply all migrations
+#    - Re-seed any critical data
 ```
 
-**Backend Mode Values:**
+**See also:** `workers/oursharedevents/migrations/ROLLBACK_PLAN.md` for the migration-specific rollback plan.
 
-| Mode     | Behavior                            | When to Use                    |
-| -------- | ----------------------------------- | ------------------------------ |
-| `worker` | All routes use Worker-native code   | Normal production (Story 6.1+) |
-| `mixed`  | Per-route selection based on config | Gradual rollback, testing      |
-| `gas`    | All routes use GAS                  | Emergency full rollback        |
-
-**Note**: Even with `BACKEND_MODE=gas`, requests still go through the Worker - they're just proxied to GAS instead of handled natively.
-
-### Option D: Full Rollback (Both GAS + Worker)
+### Option C: Full Rollback (Worker + D1)
 
 Use when everything is broken.
 
-**Step 1: Rollback GAS**
+**Step 1: Rollback Worker**
 
 ```bash
-# List recent deployments
-clasp deployments
-
-# Note the previous working deployment ID (AKfycb...)
+wrangler rollback --env staging
 ```
 
-Then in Apps Script Editor:
-
-- Switch active deployment to the previous version
-
-**Step 2: Update Worker with old GAS ID**
+**Step 2: Verify D1 state**
 
 ```bash
-cd cloudflare-proxy
-
-# Update wrangler.toml
-sed -i 's/DEPLOYMENT_ID = ".*"/DEPLOYMENT_ID = "OLD_DEPLOYMENT_ID"/' wrangler.toml
-
-# Deploy worker
-wrangler deploy --env production
+wrangler d1 execute DB --env staging --command ".tables"
+wrangler d1 execute DB --env staging --command "SELECT COUNT(*) FROM events"
 ```
 
-**Step 3: Verify**
+**Step 3: If D1 is also broken, restore**
 
 ```bash
-# Check Worker
-curl -s https://www.eventangle.com/events -I
-
-# Should see:
-# x-proxied-by: eventangle-worker
-# x-worker-version: X.X.X
-
-# Check GAS (Status API)
-curl -s "https://www.eventangle.com/?p=status&brand=root" | jq
+# Drop and recreate
+wrangler d1 delete ocr-db-staging
+wrangler d1 create ocr-db-staging
+# Update wrangler.toml with new ID
+wrangler d1 migrations apply DB --env staging --remote
+wrangler d1 migrations apply FORMS_DB --env staging --remote
 ```
 
-## Deployment IDs Reference
-
-### Current Production Configuration
-
-| Component         | Location        | ID/URL                                                      |
-| ----------------- | --------------- | ----------------------------------------------------------- |
-| GAS Script ID     | `.clasp.json`   | `1YO4apLOQoAIh208AcAqWO3pWtx_O3yas_QC4z-pkurgMem9UgYOsp86l` |
-| GAS Deployment ID | `wrangler.toml` | Check `[env.production.vars]`                               |
-| Worker Name       | Cloudflare      | `eventangle-prod`                                           |
-| Production URL    | DNS             | `www.eventangle.com`                                        |
-
-### Finding Previous Deployment IDs
-
-**GAS Deployment IDs:**
+**Step 4: Redeploy known-good Worker**
 
 ```bash
-# Via clasp
-clasp deployments
+# Check out last known good commit
+git log --oneline -10
+git checkout <good-commit-hash>
 
-# Output shows all deployments with IDs
+# Deploy directly
+cd workers/oursharedevents
+npm run deploy:staging
 ```
 
-**Worker Deployment IDs:**
+**Step 5: Verify**
 
 ```bash
-# Via wrangler
-wrangler deployments list --env production
+curl -s https://stg.oursharedevents.com/health | jq
+curl -s https://stg.oursharedevents.com/api/v2/events | jq
 ```
+
+---
 
 ## Verification After Rollback
 
-After any rollback, verify the following:
-
-### 1. No GAS Blue Banner
+Run all checks after any rollback:
 
 ```bash
-# Should NOT contain "Google Apps Script user"
-curl -s https://www.eventangle.com/events | grep -c "Google Apps Script user"
-# Expected: 0
+# 1. Health check (D1 connectivity)
+curl -s https://stg.oursharedevents.com/health | jq
+# Expected: { "ok": true, "env": "staging", "d1": "ok" }
+
+# 2. Events API (data layer working)
+curl -s https://stg.oursharedevents.com/api/v2/events | jq '.ok'
+# Expected: true
+
+# 3. Public page loads
+curl -s -o /dev/null -w "%{http_code}" https://stg.oursharedevents.com/
+# Expected: 200
+
+# 4. Admin auth works
+curl -s -o /dev/null -w "%{http_code}" \
+  -H "Authorization: Bearer <ADMIN_KEY>" \
+  https://stg.oursharedevents.com/admin
+# Expected: 200
+
+# 5. Admin rejects bad auth
+curl -s -o /dev/null -w "%{http_code}" https://stg.oursharedevents.com/admin
+# Expected: 401
 ```
 
-### 2. Worker Headers Present
-
-```bash
-curl -s https://www.eventangle.com/events -I | grep -E "x-proxied-by|x-worker-version"
-# Expected:
-# x-proxied-by: eventangle-worker
-# x-worker-version: X.X.X
-```
-
-### 3. Status API Working
-
-```bash
-curl -s "https://www.eventangle.com/?p=status&brand=root" | jq
-# Expected: {"ok": true, "buildId": "...", ...}
-```
-
-### 4. Admin UI Loads
-
-```bash
-curl -s https://www.eventangle.com/admin | grep -c "Create Event"
-# Expected: > 0
-```
-
-### 5. Run Smoke Tests
-
-```bash
-BASE_URL="https://www.eventangle.com" npm run test:api:smoke
-```
+---
 
 ## Prevention Checklist
 
 Before any production deployment:
 
-- [ ] Stage-1 validation passes
+- [ ] Security gate passes (lint, typecheck, unit tests)
 - [ ] Staging deploy succeeds
-- [ ] Stage-2 staging validation passes
-- [ ] GAS HTML integrity check passes
-- [ ] All smoke tests pass on staging
-- [ ] Tag follows semver format (vX.Y.Z)
+- [ ] D1 migrations applied cleanly to staging
+- [ ] Health check passes on staging
+- [ ] Functional smoke tests pass on staging
+- [ ] Tag follows semver format (`vX.Y.Z`)
 
-## Contact & Escalation
+---
+
+## Escalation
 
 If rollback fails or issues persist:
 
 1. Check Cloudflare Dashboard for Worker errors
-2. Check Google Cloud Console for GAS errors
+2. Use `wrangler tail --env staging` for real-time logs
 3. Review GitHub Actions logs for deployment details
-4. Check `#deployment` channel for team updates
+4. Check D1 console in Cloudflare Dashboard for database health
+
+---
 
 ## Related Documentation
 
-- [DEPLOYMENT.md](./DEPLOYMENT.md) - Deployment procedures
-- [worker-routing.md](./worker-routing.md) - Worker routing architecture
-- [ci-cd-architecture.md](./ci-cd-architecture.md) - CI/CD pipeline details
-- [scripts/rollback-worker.mjs](../scripts/rollback-worker.mjs) - Rollback script (Story 5.3)
+- [DISASTER-RECOVERY.md](./DISASTER-RECOVERY.md) — Full DR procedures
+- [RUNBOOK.md](./RUNBOOK.md) — Operational runbook
+- [RUNBOOK-SECRETS.md](./RUNBOOK-SECRETS.md) — Secret rotation
+- [INFRA-CHECKLIST.md](../deployment/INFRA-CHECKLIST.md) — Infrastructure setup
+- [migrations/ROLLBACK_PLAN.md](../../workers/oursharedevents/migrations/ROLLBACK_PLAN.md) — D1 migration rollback

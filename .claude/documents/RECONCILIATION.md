@@ -197,3 +197,50 @@ These are documented as separate repos under the ourCommunityRituals org. ourSha
 8. **Ecosystem repos**: Create skeleton repos for ourRecNights, OurOpenTables, etc. with shared auth/API patterns
 9. **Newman CI integration**: Add Postman/Newman run to `oursharedevents-ci.yml`
 10. **Datadog integration**: Set up synthetic checks for `/health`, `/api/v2/events`, `/admin` auth flow
+
+---
+
+## Reconciliation Update — 2026-04-09
+
+### D1 Migration Documentation Sweep
+
+**Trigger:** CCR prod readiness assessment revealed 7+ documentation files actively contradicting the current D1-native architecture by referencing Google Sheets as the current data layer.
+
+### What Changed
+
+| File                                            | Action                | Scope                                                        |
+| ----------------------------------------------- | --------------------- | ------------------------------------------------------------ |
+| `README.md`                                     | **Rewritten**         | Phase 1 → D1, Quick Start secrets corrected, API ref updated |
+| `STORIES.md`                                    | **Corrected**         | P1-6 and P1-7 acceptance criteria updated for D1             |
+| `.claude/skills/backend-architect.knowledge.md` | **Rewritten**         | Data layer, secrets, file tree, known gaps all updated       |
+| `docs/qa/E2E-LAUNCH.md`                         | **Superseded notice** | Parts 1-2 marked obsolete, points to INFRA-CHECKLIST.md      |
+| `docs/runbooks/RUNBOOK.md`                      | **Full rewrite**      | Removed all eventangle.com/GAS references, D1-native         |
+| `docs/runbooks/RUNBOOK-SECRETS.md`              | **Full rewrite**      | Google SA secrets removed, D1 secrets documented             |
+| `docs/runbooks/ROLLBACK.md`                     | **Full rewrite**      | GAS rollback → D1/Worker rollback procedures                 |
+| `docs/security/WORKER_VARS_AUDIT.md`            | **Updated**           | Stale secrets marked removed, FORMS_ENCRYPTION_KEY added     |
+| `docs/security/SECURITY_BASELINE-ROOT.md`       | **Updated**           | Trust boundary 3 changed from Sheets to D1                   |
+| `docs/security/SECURITY_BASELINE.md`            | **Updated**           | Auth model and data layer corrected                          |
+| `docs/deployment/CLOUDFLARE_SECRETS.md`         | **Updated**           | Google secrets removed, D1 secrets documented                |
+| `docs/features/ERROR-REFERENCE.md`              | **Updated**           | SHEETS\_\* error codes removed, health check corrected       |
+
+### New Files Created
+
+| File                                 | Purpose                                                       |
+| ------------------------------------ | ------------------------------------------------------------- |
+| `docs/deployment/INFRA-CHECKLIST.md` | Copy-paste-ready infrastructure setup (P1-6/7/8)              |
+| `docs/runbooks/DISASTER-RECOVERY.md` | DR protocol with 5 scenarios, backup strategy, drill schedule |
+
+### Traffic Light Update
+
+| Area               | March 27 Status      | April 9 Status          | Notes                                               |
+| ------------------ | -------------------- | ----------------------- | --------------------------------------------------- |
+| **D1 Schema**      | 🟡 Ahead of docs     | 🟢 Aligned              | 17 migrations, docs updated                         |
+| **Dual Worker**    | 🔴 Gap               | 🟡 Resolved in practice | `workers/oursharedevents/` is canonical, 30+ routes |
+| **CI/CD**          | 🟡 Mixed             | 🟢 Aligned              | 697-line pipeline, 8 gates                          |
+| **Postman/Newman** | 🟡 Stale             | 🟢 Aligned              | Collections wired into CI                           |
+| **Documentation**  | 🟡 Stale Sheets refs | 🟢 Aligned              | This sweep corrected all active lies                |
+| **DR/Rollback**    | 🟡 GAS-era           | 🟢 Aligned              | D1-native DR + rollback docs                        |
+
+### DAC Compliance Note
+
+This reconciliation follows the VISION.md DAC principle: documentation and code move together. The 13-day gap between Phase 2 completion and documentation correction (March 27 → April 9) is the type of drift this protocol exists to prevent. Going forward, every phase migration MUST include a documentation sweep as part of the story acceptance criteria.

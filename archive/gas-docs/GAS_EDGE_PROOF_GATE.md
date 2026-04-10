@@ -3,7 +3,7 @@
 > **PROMPTSPEC-SEC-8.2** — GAS Edge Proof Gate
 > Role: Director of Security + Lead Networking Consultant
 > Created: 2026-01-05
-> Status: **ACTIVE**
+> Status: **ARCHIVED** — current architecture is Worker-only; GAS is not in use
 
 ---
 
@@ -11,11 +11,11 @@
 
 Define query-based signature enforcement that ensures **direct GAS URL access must fail** unless the request has been signed by the Cloudflare Worker at the edge. This provides cryptographic proof that requests have passed through the trusted edge layer.
 
-| Attribute | Value |
-|-----------|-------|
-| **Scope** | Google Apps Script endpoints (if GAS is still used in legacy scenarios) |
+| Attribute         | Value                                                                                  |
+| ----------------- | -------------------------------------------------------------------------------------- |
+| **Scope**         | Google Apps Script endpoints (if GAS is still used in legacy scenarios)                |
 | **Prerequisites** | Security Baseline (SEC-0.1), Service Auth Pattern (SEC-5.3), NO_GAS_GUARD (SEC-IAC-01) |
-| **Constraints** | GAS cannot reliably inspect HTTP headers; **query parameter signatures are required** |
+| **Constraints**   | GAS cannot reliably inspect HTTP headers; **query parameter signatures are required**  |
 
 ---
 
@@ -29,11 +29,11 @@ The EventAngle MVP uses a **Worker-only architecture** (no GAS runtime). This do
 2. **Hybrid deployments** temporarily routing to GAS
 3. **Defense-in-depth** if GAS endpoints are accidentally exposed
 
-| Architecture State | GAS Edge Proof Requirement |
-|--------------------|----------------------------|
-| **Worker-only (current)** | N/A — GAS not in use |
+| Architecture State        | GAS Edge Proof Requirement                       |
+| ------------------------- | ------------------------------------------------ |
+| **Worker-only (current)** | N/A — GAS not in use                             |
 | **Hybrid (transitional)** | **Required** — GAS must validate edge signatures |
-| **GAS-primary (legacy)** | **Critical** — primary access control mechanism |
+| **GAS-primary (legacy)**  | **Critical** — primary access control mechanism  |
 
 ### 2.2 Core Invariant
 
@@ -70,25 +70,25 @@ The EventAngle MVP uses a **Worker-only architecture** (no GAS runtime). This do
 
 Google Apps Script has **inconsistent and unreliable header handling**:
 
-| Issue | Description | Impact |
-|-------|-------------|--------|
-| **Header stripping** | Google infrastructure may strip custom headers | Signatures lost in transit |
-| **Header case sensitivity** | Header names may be normalized unpredictably | Signature verification fails |
-| **Content-Type limitations** | Some headers cannot be set or read reliably | Limited metadata options |
-| **CORS preflight** | OPTIONS requests don't reach `doGet/doPost` | Headers not inspectable |
-| **Cache behavior** | Cached responses may not include request headers | State lost |
+| Issue                        | Description                                      | Impact                       |
+| ---------------------------- | ------------------------------------------------ | ---------------------------- |
+| **Header stripping**         | Google infrastructure may strip custom headers   | Signatures lost in transit   |
+| **Header case sensitivity**  | Header names may be normalized unpredictably     | Signature verification fails |
+| **Content-Type limitations** | Some headers cannot be set or read reliably      | Limited metadata options     |
+| **CORS preflight**           | OPTIONS requests don't reach `doGet/doPost`      | Headers not inspectable      |
+| **Cache behavior**           | Cached responses may not include request headers | State lost                   |
 
 ### 3.2 Query Parameters: The Reliable Choice
 
 Query parameters are:
 
-| Advantage | Description |
-|-----------|-------------|
-| **Preserved** | Always passed through to GAS `doGet(e)`/`doPost(e)` |
-| **Accessible** | Available via `e.parameter` in GAS |
-| **Cacheable** | Can be part of cache key if needed |
-| **Inspectable** | Visible in GAS logs for debugging |
-| **Cross-origin** | No CORS preflight required for simple requests |
+| Advantage        | Description                                         |
+| ---------------- | --------------------------------------------------- |
+| **Preserved**    | Always passed through to GAS `doGet(e)`/`doPost(e)` |
+| **Accessible**   | Available via `e.parameter` in GAS                  |
+| **Cacheable**    | Can be part of cache key if needed                  |
+| **Inspectable**  | Visible in GAS logs for debugging                   |
+| **Cross-origin** | No CORS preflight required for simple requests      |
 
 > **EXPLICIT LIMITATION:** Header-based signatures are **NOT recommended** for GAS endpoints due to the above issues. Always prefer query parameter signatures.
 
@@ -100,12 +100,12 @@ Query parameters are:
 
 The signature binds the request to a specific timestamp and path:
 
-| Input | Description | Example |
-|-------|-------------|---------|
-| **path** | Full request path (normalized) | `/macros/s/.../exec` |
-| **ts** | Unix timestamp (seconds) | `1704470400` |
-| **action** | API action (if applicable) | `api_getEvents` |
-| **nonce** | Optional: unique request ID | `abc123` |
+| Input      | Description                    | Example              |
+| ---------- | ------------------------------ | -------------------- |
+| **path**   | Full request path (normalized) | `/macros/s/.../exec` |
+| **ts**     | Unix timestamp (seconds)       | `1704470400`         |
+| **action** | API action (if applicable)     | `api_getEvents`      |
+| **nonce**  | Optional: unique request ID    | `abc123`             |
 
 ### 4.2 Canonical String Definition
 
@@ -157,13 +157,7 @@ async function signGASRequest(
   secret: string
 ): Promise<string> {
   // Step 1: Build canonical string
-  const canonical = [
-    'v1',
-    path,
-    timestamp.toString(),
-    action || '',
-    nonce || ''
-  ].join('|');
+  const canonical = ['v1', path, timestamp.toString(), action || '', nonce || ''].join('|');
 
   // Step 2: Compute HMAC-SHA256
   const key = await crypto.subtle.importKey(
@@ -174,11 +168,7 @@ async function signGASRequest(
     ['sign']
   );
 
-  const signature = await crypto.subtle.sign(
-    'HMAC',
-    key,
-    new TextEncoder().encode(canonical)
-  );
+  const signature = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(canonical));
 
   // Step 3: Encode as Base64URL
   const base64 = btoa(String.fromCharCode(...new Uint8Array(signature)));
@@ -193,12 +183,12 @@ async function signGASRequest(
 
 The signed request includes these query parameters:
 
-| Parameter | Description | Required |
-|-----------|-------------|----------|
-| `_ts` | Unix timestamp (seconds) | **Yes** |
-| `_sig` | Base64URL signature | **Yes** |
-| `_nonce` | Unique request identifier | Recommended |
-| `action` | API action identifier | Depends on API |
+| Parameter | Description               | Required       |
+| --------- | ------------------------- | -------------- |
+| `_ts`     | Unix timestamp (seconds)  | **Yes**        |
+| `_sig`    | Base64URL signature       | **Yes**        |
+| `_nonce`  | Unique request identifier | Recommended    |
+| `action`  | API action identifier     | Depends on API |
 
 **Example Signed URL:**
 
@@ -219,11 +209,11 @@ https://script.google.com/macros/s/AKfycbx.../exec?action=api_getEvents&_ts=1704
 
 Requests are rejected if the timestamp is outside the acceptable window.
 
-| Parameter | Value | Rationale |
-|-----------|-------|-----------|
-| **Max age** | 300 seconds (5 minutes) | Prevents capture-and-replay |
-| **Max future** | 60 seconds | Allows minor clock drift |
-| **Window** | `ts >= (now - 300) AND ts <= (now + 60)` | Asymmetric window |
+| Parameter      | Value                                    | Rationale                   |
+| -------------- | ---------------------------------------- | --------------------------- |
+| **Max age**    | 300 seconds (5 minutes)                  | Prevents capture-and-replay |
+| **Max future** | 60 seconds                               | Allows minor clock drift    |
+| **Window**     | `ts >= (now - 300) AND ts <= (now + 60)` | Asymmetric window           |
 
 **GAS Validation Logic:**
 
@@ -251,14 +241,14 @@ function isTimestampValid(ts) {
 ```javascript
 // GAS response for expired signature
 function rejectExpired() {
-  return ContentService
-    .createTextOutput(JSON.stringify({
+  return ContentService.createTextOutput(
+    JSON.stringify({
       ok: false,
       status: 403,
       code: 'SIGNATURE_EXPIRED',
-      message: 'Request signature has expired'
-    }))
-    .setMimeType(ContentService.MimeType.JSON);
+      message: 'Request signature has expired',
+    })
+  ).setMimeType(ContentService.MimeType.JSON);
 }
 ```
 
@@ -278,22 +268,22 @@ A replay attack occurs when an attacker captures a valid signed request and resu
 
 ### 6.2 Replay Prevention Strategies
 
-| Strategy | Complexity | Effectiveness | Recommended For |
-|----------|------------|---------------|-----------------|
-| **Timestamp-only** | Low | Medium | Read-only endpoints |
-| **Timestamp + Nonce (GAS Cache)** | Medium | High | Most use cases |
-| **Timestamp + Nonce (External Store)** | High | Highest | Critical mutations |
+| Strategy                               | Complexity | Effectiveness | Recommended For     |
+| -------------------------------------- | ---------- | ------------- | ------------------- |
+| **Timestamp-only**                     | Low        | Medium        | Read-only endpoints |
+| **Timestamp + Nonce (GAS Cache)**      | Medium     | High          | Most use cases      |
+| **Timestamp + Nonce (External Store)** | High       | Highest       | Critical mutations  |
 
 ### 6.3 Strategy A: Timestamp-Only (Read Endpoints)
 
 For **read-only endpoints**, timestamp expiration alone may be sufficient:
 
-| Characteristic | Value |
-|----------------|-------|
-| **Use case** | `api_getEvents`, `api_getStatus` |
-| **Risk** | Replayed reads are idempotent |
-| **Protection** | 5-minute window limits replay duration |
-| **Implementation** | Validate `_ts` only |
+| Characteristic     | Value                                  |
+| ------------------ | -------------------------------------- |
+| **Use case**       | `api_getEvents`, `api_getStatus`       |
+| **Risk**           | Replayed reads are idempotent          |
+| **Protection**     | 5-minute window limits replay duration |
+| **Implementation** | Validate `_ts` only                    |
 
 ### 6.4 Strategy B: Nonce with GAS CacheService
 
@@ -321,12 +311,12 @@ function checkAndStoreNonce(nonce) {
 
 **GAS CacheService Limitations:**
 
-| Limitation | Impact | Mitigation |
-|------------|--------|------------|
-| **6-hour max TTL** | Cannot track nonces longer | Timestamp window is 5 min anyway |
-| **100KB value limit** | N/A for nonce storage | Store minimal value ('1') |
-| **Shared quota** | High traffic may evict entries | Use short nonce TTL |
-| **No atomic operations** | Rare race condition possible | Accept minimal risk |
+| Limitation               | Impact                         | Mitigation                       |
+| ------------------------ | ------------------------------ | -------------------------------- |
+| **6-hour max TTL**       | Cannot track nonces longer     | Timestamp window is 5 min anyway |
+| **100KB value limit**    | N/A for nonce storage          | Store minimal value ('1')        |
+| **Shared quota**         | High traffic may evict entries | Use short nonce TTL              |
+| **No atomic operations** | Rare race condition possible   | Accept minimal risk              |
 
 ### 6.5 Strategy C: External Nonce Store
 
@@ -335,15 +325,12 @@ For **high-security mutations**, use external nonce storage:
 ```javascript
 // GAS nonce validation using external store (via UrlFetchApp)
 function checkNonceExternal(nonce) {
-  var response = UrlFetchApp.fetch(
-    'https://nonce-store.example.com/check',
-    {
-      method: 'POST',
-      contentType: 'application/json',
-      payload: JSON.stringify({ nonce: nonce }),
-      muteHttpExceptions: true
-    }
-  );
+  var response = UrlFetchApp.fetch('https://nonce-store.example.com/check', {
+    method: 'POST',
+    contentType: 'application/json',
+    payload: JSON.stringify({ nonce: nonce }),
+    muteHttpExceptions: true,
+  });
 
   var result = JSON.parse(response.getContentText());
   return result;
@@ -354,12 +341,12 @@ function checkNonceExternal(nonce) {
 
 ### 6.6 Nonce Requirements
 
-| Requirement | Specification |
-|-------------|---------------|
-| **Format** | Alphanumeric, 8-32 characters |
-| **Uniqueness** | Caller must ensure uniqueness per request |
+| Requirement    | Specification                              |
+| -------------- | ------------------------------------------ |
+| **Format**     | Alphanumeric, 8-32 characters              |
+| **Uniqueness** | Caller must ensure uniqueness per request  |
 | **Generation** | Use crypto.randomUUID() or similar at edge |
-| **Validation** | Regex: `/^[a-zA-Z0-9]{8,32}$/` |
+| **Validation** | Regex: `/^[a-zA-Z0-9]{8,32}$/`             |
 
 ---
 
@@ -389,7 +376,7 @@ function validateEdgeProof(e) {
     return {
       valid: false,
       reason: 'MISSING_SIGNATURE',
-      response: createErrorResponse(401, 'MISSING_SIGNATURE', 'Missing _ts or _sig parameter')
+      response: createErrorResponse(401, 'MISSING_SIGNATURE', 'Missing _ts or _sig parameter'),
     };
   }
 
@@ -399,7 +386,7 @@ function validateEdgeProof(e) {
     return {
       valid: false,
       reason: 'INVALID_TIMESTAMP',
-      response: createErrorResponse(403, 'INVALID_TIMESTAMP', 'Timestamp is not a valid number')
+      response: createErrorResponse(403, 'INVALID_TIMESTAMP', 'Timestamp is not a valid number'),
     };
   }
 
@@ -408,7 +395,7 @@ function validateEdgeProof(e) {
     return {
       valid: false,
       reason: tsResult.reason,
-      response: createErrorResponse(403, tsResult.reason, 'Timestamp validation failed')
+      response: createErrorResponse(403, tsResult.reason, 'Timestamp validation failed'),
     };
   }
 
@@ -419,7 +406,7 @@ function validateEdgeProof(e) {
       return {
         valid: false,
         reason: nonceResult.reason,
-        response: createErrorResponse(403, 'NONCE_REPLAYED', 'Request nonce has already been used')
+        response: createErrorResponse(403, 'NONCE_REPLAYED', 'Request nonce has already been used'),
       };
     }
   }
@@ -433,7 +420,7 @@ function validateEdgeProof(e) {
     return {
       valid: false,
       reason: 'INVALID_SIGNATURE',
-      response: createErrorResponse(403, 'INVALID_SIGNATURE', 'Signature verification failed')
+      response: createErrorResponse(403, 'INVALID_SIGNATURE', 'Signature verification failed'),
     };
   }
 
@@ -476,14 +463,14 @@ function constantTimeEquals(a, b) {
  * Create standardized error response
  */
 function createErrorResponse(status, code, message) {
-  return ContentService
-    .createTextOutput(JSON.stringify({
+  return ContentService.createTextOutput(
+    JSON.stringify({
       ok: false,
       status: status,
       code: code,
-      message: message
-    }))
-    .setMimeType(ContentService.MimeType.JSON);
+      message: message,
+    })
+  ).setMimeType(ContentService.MimeType.JSON);
 }
 
 /**
@@ -594,13 +581,7 @@ export async function signGASRequest(
   const nonce = crypto.randomUUID().replace(/-/g, '').substring(0, 16);
 
   // Compute signature
-  const signature = await computeGASSignature(
-    config.path,
-    timestamp,
-    action,
-    nonce,
-    config.secret
-  );
+  const signature = await computeGASSignature(config.path, timestamp, action, nonce, config.secret);
 
   // Build URL with all parameters
   const url = new URL(baseUrl);
@@ -637,11 +618,7 @@ async function computeGASSignature(
     ['sign']
   );
 
-  const signature = await crypto.subtle.sign(
-    'HMAC',
-    key,
-    new TextEncoder().encode(canonical)
-  );
+  const signature = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(canonical));
 
   const base64 = btoa(String.fromCharCode(...new Uint8Array(signature)));
   const base64url = base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
@@ -688,15 +665,18 @@ export async function handleGASProxy(
 ): Promise<Response> {
   // Ensure GAS proxy is configured
   if (!env.GAS_BASE_URL || !env.GAS_EDGE_PROOF_SECRET) {
-    return new Response(JSON.stringify({
-      ok: false,
-      status: 503,
-      code: 'GAS_PROXY_NOT_CONFIGURED',
-      message: 'GAS proxy is not configured'
-    }), {
-      status: 503,
-      headers: { 'Content-Type': 'application/json' }
-    });
+    return new Response(
+      JSON.stringify({
+        ok: false,
+        status: 503,
+        code: 'GAS_PROXY_NOT_CONFIGURED',
+        message: 'GAS proxy is not configured',
+      }),
+      {
+        status: 503,
+        headers: { 'Content-Type': 'application/json' },
+      }
+    );
   }
 
   const url = new URL(request.url);
@@ -709,7 +689,7 @@ export async function handleGASProxy(
     Object.fromEntries(url.searchParams),
     {
       secret: env.GAS_EDGE_PROOF_SECRET,
-      path: env.GAS_SCRIPT_PATH || new URL(env.GAS_BASE_URL).pathname
+      path: env.GAS_SCRIPT_PATH || new URL(env.GAS_BASE_URL).pathname,
     }
   );
 
@@ -717,8 +697,8 @@ export async function handleGASProxy(
   const gasResponse = await fetch(signedUrl, {
     method: request.method,
     headers: {
-      'Content-Type': 'application/json'
-    }
+      'Content-Type': 'application/json',
+    },
   });
 
   // Return GAS response
@@ -726,8 +706,8 @@ export async function handleGASProxy(
     status: gasResponse.status,
     headers: {
       'Content-Type': 'application/json',
-      'X-Proxied-Via': 'cf-worker'
-    }
+      'X-Proxied-Via': 'cf-worker',
+    },
   });
 }
 ```
@@ -740,34 +720,34 @@ export async function handleGASProxy(
 
 > **EXPLICIT LIMITATION:** Header-based authentication is **NOT reliable** for GAS endpoints.
 
-| Limitation | Details |
-|------------|---------|
-| **Custom headers stripped** | Google's infrastructure may remove `X-` prefixed headers |
+| Limitation                    | Details                                                    |
+| ----------------------------- | ---------------------------------------------------------- |
+| **Custom headers stripped**   | Google's infrastructure may remove `X-` prefixed headers   |
 | **Header case normalization** | Header names may be lowercased or titlecased unpredictably |
-| **Authorization header** | May be stripped by Google's proxy layer |
-| **Content-Type restrictions** | Only standard content types reliably pass through |
-| **CORS complications** | Preflight requests don't reach GAS handlers |
+| **Authorization header**      | May be stripped by Google's proxy layer                    |
+| **Content-Type restrictions** | Only standard content types reliably pass through          |
+| **CORS complications**        | Preflight requests don't reach GAS handlers                |
 
 **Recommendation:** Always use query parameter signatures for GAS endpoints.
 
 ### 9.2 GAS Runtime Limitations
 
-| Limitation | Impact | Mitigation |
-|------------|--------|------------|
-| **6-minute execution limit** | Long operations may timeout | Keep operations short |
-| **CacheService quotas** | High traffic may exhaust cache | Use short TTLs |
-| **No true atomic operations** | Race conditions possible | Accept minimal risk |
-| **Single-threaded execution** | No parallel signature verification | Keep validation fast |
-| **PropertiesService limits** | 9KB per property | Secret fits easily |
+| Limitation                    | Impact                             | Mitigation            |
+| ----------------------------- | ---------------------------------- | --------------------- |
+| **6-minute execution limit**  | Long operations may timeout        | Keep operations short |
+| **CacheService quotas**       | High traffic may exhaust cache     | Use short TTLs        |
+| **No true atomic operations** | Race conditions possible           | Accept minimal risk   |
+| **Single-threaded execution** | No parallel signature verification | Keep validation fast  |
+| **PropertiesService limits**  | 9KB per property                   | Secret fits easily    |
 
 ### 9.3 Security Limitations
 
-| Limitation | Details | Mitigation |
-|------------|---------|------------|
-| **Secret in PropertiesService** | Accessible to script editors | Limit GAS editor access |
-| **No HSM support** | Software-based secret storage | Regular rotation |
-| **Logging visibility** | GAS logs may expose parameters | Avoid logging signatures |
-| **URL visibility** | Signed URLs in browser history | Use POST for mutations |
+| Limitation                      | Details                        | Mitigation               |
+| ------------------------------- | ------------------------------ | ------------------------ |
+| **Secret in PropertiesService** | Accessible to script editors   | Limit GAS editor access  |
+| **No HSM support**              | Software-based secret storage  | Regular rotation         |
+| **Logging visibility**          | GAS logs may expose parameters | Avoid logging signatures |
+| **URL visibility**              | Signed URLs in browser history | Use POST for mutations   |
 
 ---
 
@@ -896,32 +876,32 @@ fi
 
 ### 11.1 Primary Acceptance Criteria
 
-| ID | Criterion | Verification | Status |
-|----|-----------|--------------|--------|
-| **AC-1** | Direct GAS URL access returns 401 or 403 | Test 10.1 | |
-| **AC-2** | Expired signatures (>5 min) are rejected | Test 10.2 | |
-| **AC-3** | Invalid signatures are rejected | Test 10.3 | |
-| **AC-4** | Replayed nonces are rejected (when nonce provided) | Test 10.4 | |
-| **AC-5** | Valid edge-signed requests succeed | Test 10.5 | |
+| ID       | Criterion                                          | Verification | Status |
+| -------- | -------------------------------------------------- | ------------ | ------ |
+| **AC-1** | Direct GAS URL access returns 401 or 403           | Test 10.1    |        |
+| **AC-2** | Expired signatures (>5 min) are rejected           | Test 10.2    |        |
+| **AC-3** | Invalid signatures are rejected                    | Test 10.3    |        |
+| **AC-4** | Replayed nonces are rejected (when nonce provided) | Test 10.4    |        |
+| **AC-5** | Valid edge-signed requests succeed                 | Test 10.5    |        |
 
 ### 11.2 Security Acceptance Criteria
 
-| ID | Criterion | Verification |
-|----|-----------|--------------|
-| **SEC-1** | Shared secret is at least 32 bytes | Configuration audit |
-| **SEC-2** | Signature uses constant-time comparison | Code review |
-| **SEC-3** | Nonce TTL exceeds timestamp window | CacheService TTL = 600s |
-| **SEC-4** | Query parameters used (not headers) | Code review |
+| ID        | Criterion                               | Verification            |
+| --------- | --------------------------------------- | ----------------------- |
+| **SEC-1** | Shared secret is at least 32 bytes      | Configuration audit     |
+| **SEC-2** | Signature uses constant-time comparison | Code review             |
+| **SEC-3** | Nonce TTL exceeds timestamp window      | CacheService TTL = 600s |
+| **SEC-4** | Query parameters used (not headers)     | Code review             |
 
 ### 11.3 Documentation Criteria
 
-| ID | Criterion | Location |
-|----|-----------|----------|
-| **DOC-1** | Query-signing scheme documented | Section 4 |
-| **DOC-2** | Expiration window specified | Section 5 |
-| **DOC-3** | Replay handling guidance provided | Section 6 |
-| **DOC-4** | GAS validation code outlined | Section 7 |
-| **DOC-5** | Worker signing code outlined | Section 8 |
+| ID        | Criterion                            | Location  |
+| --------- | ------------------------------------ | --------- |
+| **DOC-1** | Query-signing scheme documented      | Section 4 |
+| **DOC-2** | Expiration window specified          | Section 5 |
+| **DOC-3** | Replay handling guidance provided    | Section 6 |
+| **DOC-4** | GAS validation code outlined         | Section 7 |
+| **DOC-5** | Worker signing code outlined         | Section 8 |
 | **DOC-6** | Header limitations explicitly stated | Section 9 |
 
 ---
@@ -966,47 +946,47 @@ fi
 
 ## 13. Related Documents
 
-| Document | Path | Relationship |
-|----------|------|--------------|
-| Security Baseline | `docs/security/SECURITY_BASELINE.md` | Parent policy |
-| Origin Bypass Prevention | `docs/security/ORIGIN_BYPASS_PREVENTION.md` | Sibling (SEC-8.1) |
-| Service Auth Pattern | `docs/security/SERVICE_AUTH_PATTERN.md` | Related HMAC pattern |
-| NO_GAS_GUARD | `docs/security/NO_GAS_GUARD.md` | GAS deprecation guard |
-| Secrets Policy | `docs/security/SECRETS_POLICY.md` | Secret management |
+| Document                 | Path                                        | Relationship          |
+| ------------------------ | ------------------------------------------- | --------------------- |
+| Security Baseline        | `docs/security/SECURITY_BASELINE.md`        | Parent policy         |
+| Origin Bypass Prevention | `docs/security/ORIGIN_BYPASS_PREVENTION.md` | Sibling (SEC-8.1)     |
+| Service Auth Pattern     | `docs/security/SERVICE_AUTH_PATTERN.md`     | Related HMAC pattern  |
+| NO_GAS_GUARD             | `docs/security/NO_GAS_GUARD.md`             | GAS deprecation guard |
+| Secrets Policy           | `docs/security/SECRETS_POLICY.md`           | Secret management     |
 
 ---
 
 ## 14. Summary
 
-| Aspect | Value |
-|--------|-------|
-| **Core Invariant** | Direct GAS URL access MUST return 401/403 |
-| **Signing Method** | Query parameters (`_ts`, `_sig`, `_nonce`) |
-| **Algorithm** | HMAC-SHA256 with Base64URL encoding |
-| **Canonical String** | `v1|path|timestamp|action|nonce` |
-| **Timestamp Window** | 5 minutes past, 1 minute future |
-| **Replay Prevention** | Nonce storage in CacheService (600s TTL) |
-| **Header Limitation** | Headers NOT recommended; use query params |
-| **Primary AC** | Direct GAS URL access returns 401/403 |
+| Aspect                | Value                                      |
+| --------------------- | ------------------------------------------ | ---- | --------- | ------ | ------ |
+| **Core Invariant**    | Direct GAS URL access MUST return 401/403  |
+| **Signing Method**    | Query parameters (`_ts`, `_sig`, `_nonce`) |
+| **Algorithm**         | HMAC-SHA256 with Base64URL encoding        |
+| **Canonical String**  | `v1                                        | path | timestamp | action | nonce` |
+| **Timestamp Window**  | 5 minutes past, 1 minute future            |
+| **Replay Prevention** | Nonce storage in CacheService (600s TTL)   |
+| **Header Limitation** | Headers NOT recommended; use query params  |
+| **Primary AC**        | Direct GAS URL access returns 401/403      |
 
 ---
 
 ## 15. Glossary
 
-| Term | Definition |
-|------|------------|
-| **GAS** | Google Apps Script |
-| **Edge Proof** | Cryptographic signature added by Worker at edge |
-| **Canonical String** | Standardized string format for signature computation |
-| **Base64URL** | URL-safe Base64 encoding (RFC 4648 §5) |
-| **Nonce** | Number used once; prevents replay attacks |
-| **CacheService** | GAS built-in caching API |
-| **PropertiesService** | GAS built-in key-value storage for secrets |
+| Term                  | Definition                                           |
+| --------------------- | ---------------------------------------------------- |
+| **GAS**               | Google Apps Script                                   |
+| **Edge Proof**        | Cryptographic signature added by Worker at edge      |
+| **Canonical String**  | Standardized string format for signature computation |
+| **Base64URL**         | URL-safe Base64 encoding (RFC 4648 §5)               |
+| **Nonce**             | Number used once; prevents replay attacks            |
+| **CacheService**      | GAS built-in caching API                             |
+| **PropertiesService** | GAS built-in key-value storage for secrets           |
 
 ---
 
 ## Document History
 
-| Date | Author | Changes |
-|------|--------|---------|
+| Date       | Author      | Changes                                        |
+| ---------- | ----------- | ---------------------------------------------- |
 | 2026-01-05 | Claude Code | Initial PROMPTSPEC-SEC-8.2 GAS edge proof gate |
