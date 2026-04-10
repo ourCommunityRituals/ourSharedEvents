@@ -76,3 +76,11 @@ id_rsa*
 .claude/settings.local.json
 .claude/agents/
 .claude/worktrees/
+
+# Generated audit/report files
+dependabot-alerts.json
+npm-audit.json
+
+# Postman desktop sync artifacts
+postman/.postman/
+postman/postman/
