@@ -19,7 +19,9 @@
 #   - CLOUDFLARE_API_TOKEN_OSE      (Cloudflare API token with Workers:Edit permission)
 #   - CLOUDFLARE_ACCOUNT_ID     (Cloudflare account ID)
 #   - ADMIN_KEY                 (Bearer token for /admin routes)
-#   - X_OCR_INTERNAL       (CI/CD auth secret for X-OCR-Internal header)
+#   - X_OCR_INTERNAL            (CI/CD auth secret for X-OCR-Internal header)
+#   - CF_ACCESS_CLIENT_ID       (Cloudflare Access service token — bypasses bot mgmt for health checks)
+#   - CF_ACCESS_CLIENT_SECRET   (Cloudflare Access service token secret)
 #
 # Wrangler secrets (set once via wrangler CLI, not GitHub secrets):
 #   wrangler secret put ADMIN_KEY                 --env staging
@@ -217,12 +219,13 @@ jobs:
 
       - name: Health check staging
         env:
-          X_OCR_INTERNAL: ${{ secrets.X_OCR_INTERNAL }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
         run: |
           echo "Checking https://stg.oursharedevents.com/health ..."
           HTTP=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 \
-            -H "User-Agent: OurSharedEvents-CI/1.0" \
-            -H "X-OCR-Internal: $X_OCR_INTERNAL" \
+            -H "CF-Access-Client-Id: $CF_ACCESS_CLIENT_ID" \
+            -H "CF-Access-Client-Secret: $CF_ACCESS_CLIENT_SECRET" \
             "$STG_BASE_URL/health")
           if [ "$HTTP" != "200" ]; then
             echo "::error::Health check failed – HTTP $HTTP"
@@ -543,12 +546,13 @@ jobs:
 
       - name: Health check production
         env:
-          X_OCR_INTERNAL: ${{ secrets.X_OCR_INTERNAL }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
         run: |
           echo "Checking https://oursharedevents.com/health ..."
           HTTP=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 \
-            -H "User-Agent: OurSharedEvents-CI/1.0" \
-            -H "X-OCR-Internal: $X_OCR_INTERNAL" \
+            -H "CF-Access-Client-Id: $CF_ACCESS_CLIENT_ID" \
+            -H "CF-Access-Client-Secret: $CF_ACCESS_CLIENT_SECRET" \
             "$PROD_BASE_URL/health")
           if [ "$HTTP" != "200" ]; then
             echo "::error::Production health check failed – HTTP $HTTP"
