@@ -35,6 +35,19 @@ const TIMEOUT = 30000;
 // Admin key for authorized requests (from environment)
 const ADMIN_KEY = process.env.ADMIN_KEY || process.env.ADMIN_TOKEN || '';
 
+// CI/CD internal auth secret (X-OCR-Internal header)
+const OCR_INTERNAL_SECRET = process.env.OCR_INTERNAL_SECRET || '';
+
+/** Check if any auth credentials are configured */
+const hasAuthCredentials = (): boolean => Boolean(OCR_INTERNAL_SECRET || ADMIN_KEY);
+
+/** Get auth headers — prefers X-OCR-Internal, falls back to Bearer */
+const getAuthHeaders = (): Record<string, string> => {
+  if (OCR_INTERNAL_SECRET) return { 'X-OCR-Internal': OCR_INTERNAL_SECRET };
+  if (ADMIN_KEY) return { Authorization: `Bearer ${ADMIN_KEY}` };
+  return {};
+};
+
 test.describe('Story C3: Admin Create Event - POST /api/v2/admin/events', () => {
   test.describe('Unauthorized Requests (AC: Unauthorized create returns 401)', () => {
     test('returns 401 when Authorization header is missing', async ({ request }) => {
@@ -69,7 +82,7 @@ test.describe('Story C3: Admin Create Event - POST /api/v2/admin/events', () => 
 
   test.describe('Validation Errors', () => {
     test('returns 400 when name is missing', async ({ request }) => {
-      test.skip(!ADMIN_KEY, 'ADMIN_KEY not configured');
+      test.skip(!hasAuthCredentials(), 'No auth credentials configured');
 
       const response = await request.post(`/api/v2/admin/events`, {
         timeout: TIMEOUT,
@@ -78,7 +91,7 @@ test.describe('Story C3: Admin Create Event - POST /api/v2/admin/events', () => 
           startDateISO: '2025-12-31',
         },
         headers: {
-          Authorization: `Bearer ${ADMIN_KEY}`,
+          ...getAuthHeaders(),
         },
       });
 
@@ -91,7 +104,7 @@ test.describe('Story C3: Admin Create Event - POST /api/v2/admin/events', () => 
     });
 
     test('returns 400 when name is empty string', async ({ request }) => {
-      test.skip(!ADMIN_KEY, 'ADMIN_KEY not configured');
+      test.skip(!hasAuthCredentials(), 'No auth credentials configured');
 
       const response = await request.post(`/api/v2/admin/events`, {
         timeout: TIMEOUT,
@@ -99,7 +112,7 @@ test.describe('Story C3: Admin Create Event - POST /api/v2/admin/events', () => 
           name: '',
         },
         headers: {
-          Authorization: `Bearer ${ADMIN_KEY}`,
+          ...getAuthHeaders(),
         },
       });
 
@@ -111,7 +124,7 @@ test.describe('Story C3: Admin Create Event - POST /api/v2/admin/events', () => 
     });
 
     test('returns 400 when startDateISO has invalid format', async ({ request }) => {
-      test.skip(!ADMIN_KEY, 'ADMIN_KEY not configured');
+      test.skip(!hasAuthCredentials(), 'No auth credentials configured');
 
       const response = await request.post(`/api/v2/admin/events`, {
         timeout: TIMEOUT,
@@ -120,7 +133,7 @@ test.describe('Story C3: Admin Create Event - POST /api/v2/admin/events', () => 
           startDateISO: 'not-a-date',
         },
         headers: {
-          Authorization: `Bearer ${ADMIN_KEY}`,
+          ...getAuthHeaders(),
         },
       });
 
@@ -133,7 +146,7 @@ test.describe('Story C3: Admin Create Event - POST /api/v2/admin/events', () => 
     });
 
     test('returns 400 when brand is invalid', async ({ request }) => {
-      test.skip(!ADMIN_KEY, 'ADMIN_KEY not configured');
+      test.skip(!hasAuthCredentials(), 'No auth credentials configured');
 
       const response = await request.post(`/api/v2/admin/events`, {
         timeout: TIMEOUT,
@@ -142,7 +155,7 @@ test.describe('Story C3: Admin Create Event - POST /api/v2/admin/events', () => 
           brand: 'invalid-brand-xyz',
         },
         headers: {
-          Authorization: `Bearer ${ADMIN_KEY}`,
+          ...getAuthHeaders(),
         },
       });
 
@@ -155,14 +168,14 @@ test.describe('Story C3: Admin Create Event - POST /api/v2/admin/events', () => 
     });
 
     test('returns 400 with BAD_JSON for invalid JSON body', async ({ request }) => {
-      test.skip(!ADMIN_KEY, 'ADMIN_KEY not configured');
+      test.skip(!hasAuthCredentials(), 'No auth credentials configured');
 
       // Use fetch directly to send raw invalid JSON
       const response = await request.fetch(`/api/v2/admin/events`, {
         method: 'POST',
         timeout: TIMEOUT,
         headers: {
-          Authorization: `Bearer ${ADMIN_KEY}`,
+          ...getAuthHeaders(),
           'Content-Type': 'application/json',
         },
         data: '{not valid json}',
@@ -176,13 +189,13 @@ test.describe('Story C3: Admin Create Event - POST /api/v2/admin/events', () => 
     });
 
     test('returns 400 when Content-Type is not application/json', async ({ request }) => {
-      test.skip(!ADMIN_KEY, 'ADMIN_KEY not configured');
+      test.skip(!hasAuthCredentials(), 'No auth credentials configured');
 
       const response = await request.fetch(`/api/v2/admin/events`, {
         method: 'POST',
         timeout: TIMEOUT,
         headers: {
-          Authorization: `Bearer ${ADMIN_KEY}`,
+          ...getAuthHeaders(),
           'Content-Type': 'text/plain',
         },
         data: JSON.stringify({ name: 'Test Event' }),
@@ -198,7 +211,7 @@ test.describe('Story C3: Admin Create Event - POST /api/v2/admin/events', () => 
 
   test.describe('Successful Event Creation (AC: Authorized create returns 201)', () => {
     test('returns 201 with valid name only (minimal request)', async ({ request }) => {
-      test.skip(!ADMIN_KEY, 'ADMIN_KEY not configured');
+      test.skip(!hasAuthCredentials(), 'No auth credentials configured');
 
       const uniqueName = `Test Event ${Date.now()}`;
 
@@ -208,7 +221,7 @@ test.describe('Story C3: Admin Create Event - POST /api/v2/admin/events', () => 
           name: uniqueName,
         },
         headers: {
-          Authorization: `Bearer ${ADMIN_KEY}`,
+          ...getAuthHeaders(),
         },
       });
 
@@ -221,7 +234,7 @@ test.describe('Story C3: Admin Create Event - POST /api/v2/admin/events', () => 
     });
 
     test('returns created event with all required fields', async ({ request }) => {
-      test.skip(!ADMIN_KEY, 'ADMIN_KEY not configured');
+      test.skip(!hasAuthCredentials(), 'No auth credentials configured');
 
       const uniqueName = `Test Event Fields ${Date.now()}`;
 
@@ -231,7 +244,7 @@ test.describe('Story C3: Admin Create Event - POST /api/v2/admin/events', () => 
           name: uniqueName,
         },
         headers: {
-          Authorization: `Bearer ${ADMIN_KEY}`,
+          ...getAuthHeaders(),
         },
       });
 
@@ -262,7 +275,7 @@ test.describe('Story C3: Admin Create Event - POST /api/v2/admin/events', () => 
     });
 
     test('returns 201 with all optional fields provided', async ({ request }) => {
-      test.skip(!ADMIN_KEY, 'ADMIN_KEY not configured');
+      test.skip(!hasAuthCredentials(), 'No auth credentials configured');
 
       const uniqueName = `Full Event ${Date.now()}`;
 
@@ -277,7 +290,7 @@ test.describe('Story C3: Admin Create Event - POST /api/v2/admin/events', () => 
           elimType: 'single',
         },
         headers: {
-          Authorization: `Bearer ${ADMIN_KEY}`,
+          ...getAuthHeaders(),
         },
       });
 
@@ -294,7 +307,7 @@ test.describe('Story C3: Admin Create Event - POST /api/v2/admin/events', () => 
     });
 
     test('defaults brand to root when not provided', async ({ request }) => {
-      test.skip(!ADMIN_KEY, 'ADMIN_KEY not configured');
+      test.skip(!hasAuthCredentials(), 'No auth credentials configured');
 
       const uniqueName = `Default Brand Event ${Date.now()}`;
 
@@ -304,7 +317,7 @@ test.describe('Story C3: Admin Create Event - POST /api/v2/admin/events', () => 
           name: uniqueName,
         },
         headers: {
-          Authorization: `Bearer ${ADMIN_KEY}`,
+          ...getAuthHeaders(),
         },
       });
 
@@ -315,7 +328,7 @@ test.describe('Story C3: Admin Create Event - POST /api/v2/admin/events', () => 
     });
 
     test('generates slug from name when not provided', async ({ request }) => {
-      test.skip(!ADMIN_KEY, 'ADMIN_KEY not configured');
+      test.skip(!hasAuthCredentials(), 'No auth credentials configured');
 
       const uniqueName = `Slug Test Event ${Date.now()}`;
 
@@ -325,7 +338,7 @@ test.describe('Story C3: Admin Create Event - POST /api/v2/admin/events', () => 
           name: uniqueName,
         },
         headers: {
-          Authorization: `Bearer ${ADMIN_KEY}`,
+          ...getAuthHeaders(),
         },
       });
 
@@ -336,7 +349,7 @@ test.describe('Story C3: Admin Create Event - POST /api/v2/admin/events', () => 
     });
 
     test('uses provided slug when specified', async ({ request }) => {
-      test.skip(!ADMIN_KEY, 'ADMIN_KEY not configured');
+      test.skip(!hasAuthCredentials(), 'No auth credentials configured');
 
       const uniqueName = `Custom Slug Event ${Date.now()}`;
       const customSlug = `my-custom-slug-${Date.now()}`;
@@ -348,7 +361,7 @@ test.describe('Story C3: Admin Create Event - POST /api/v2/admin/events', () => 
           slug: customSlug,
         },
         headers: {
-          Authorization: `Bearer ${ADMIN_KEY}`,
+          ...getAuthHeaders(),
         },
       });
 
@@ -359,7 +372,7 @@ test.describe('Story C3: Admin Create Event - POST /api/v2/admin/events', () => 
     });
 
     test('success response includes requestId in body', async ({ request }) => {
-      test.skip(!ADMIN_KEY, 'ADMIN_KEY not configured');
+      test.skip(!hasAuthCredentials(), 'No auth credentials configured');
 
       const uniqueName = `RequestId Body Test ${Date.now()}`;
 
@@ -369,7 +382,7 @@ test.describe('Story C3: Admin Create Event - POST /api/v2/admin/events', () => 
           name: uniqueName,
         },
         headers: {
-          Authorization: `Bearer ${ADMIN_KEY}`,
+          ...getAuthHeaders(),
         },
       });
 
@@ -384,7 +397,7 @@ test.describe('Story C3: Admin Create Event - POST /api/v2/admin/events', () => 
 
   test.describe('Event Appears in List (AC: New event appears in /api/v2/events)', () => {
     test('created event appears in /api/v2/events list', async ({ request }) => {
-      test.skip(!ADMIN_KEY, 'ADMIN_KEY not configured');
+      test.skip(!hasAuthCredentials(), 'No auth credentials configured');
 
       const uniqueName = `List Test Event ${Date.now()}`;
 
@@ -396,7 +409,7 @@ test.describe('Story C3: Admin Create Event - POST /api/v2/admin/events', () => 
           brand: BRAND,
         },
         headers: {
-          Authorization: `Bearer ${ADMIN_KEY}`,
+          ...getAuthHeaders(),
         },
       });
 
@@ -420,7 +433,7 @@ test.describe('Story C3: Admin Create Event - POST /api/v2/admin/events', () => 
     });
 
     test('created event with full data appears correctly in list', async ({ request }) => {
-      test.skip(!ADMIN_KEY, 'ADMIN_KEY not configured');
+      test.skip(!hasAuthCredentials(), 'No auth credentials configured');
 
       const uniqueName = `Full List Test Event ${Date.now()}`;
 
@@ -434,7 +447,7 @@ test.describe('Story C3: Admin Create Event - POST /api/v2/admin/events', () => 
           slug: `full-list-test-${Date.now()}`,
         },
         headers: {
-          Authorization: `Bearer ${ADMIN_KEY}`,
+          ...getAuthHeaders(),
         },
       });
 
@@ -459,7 +472,7 @@ test.describe('Story C3: Admin Create Event - POST /api/v2/admin/events', () => 
 
   test.describe('Response Headers', () => {
     test('returns X-Request-Id header on success', async ({ request }) => {
-      test.skip(!ADMIN_KEY, 'ADMIN_KEY not configured');
+      test.skip(!hasAuthCredentials(), 'No auth credentials configured');
 
       const response = await request.post(`/api/v2/admin/events`, {
         timeout: TIMEOUT,
@@ -467,7 +480,7 @@ test.describe('Story C3: Admin Create Event - POST /api/v2/admin/events', () => 
           name: `Header Test ${Date.now()}`,
         },
         headers: {
-          Authorization: `Bearer ${ADMIN_KEY}`,
+          ...getAuthHeaders(),
         },
       });
 
@@ -479,7 +492,7 @@ test.describe('Story C3: Admin Create Event - POST /api/v2/admin/events', () => 
     });
 
     test('returns application/json content type', async ({ request }) => {
-      test.skip(!ADMIN_KEY, 'ADMIN_KEY not configured');
+      test.skip(!hasAuthCredentials(), 'No auth credentials configured');
 
       const response = await request.post(`/api/v2/admin/events`, {
         timeout: TIMEOUT,
@@ -487,7 +500,7 @@ test.describe('Story C3: Admin Create Event - POST /api/v2/admin/events', () => 
           name: `Content Type Test ${Date.now()}`,
         },
         headers: {
-          Authorization: `Bearer ${ADMIN_KEY}`,
+          ...getAuthHeaders(),
         },
       });
 
@@ -498,7 +511,7 @@ test.describe('Story C3: Admin Create Event - POST /api/v2/admin/events', () => 
     });
 
     test('returns cache-control header preventing caching', async ({ request }) => {
-      test.skip(!ADMIN_KEY, 'ADMIN_KEY not configured');
+      test.skip(!hasAuthCredentials(), 'No auth credentials configured');
 
       const response = await request.post(`/api/v2/admin/events`, {
         timeout: TIMEOUT,
@@ -506,7 +519,7 @@ test.describe('Story C3: Admin Create Event - POST /api/v2/admin/events', () => 
           name: `Cache Test ${Date.now()}`,
         },
         headers: {
-          Authorization: `Bearer ${ADMIN_KEY}`,
+          ...getAuthHeaders(),
         },
       });
 
@@ -519,7 +532,7 @@ test.describe('Story C3: Admin Create Event - POST /api/v2/admin/events', () => 
 
   test.describe('CORS Support', () => {
     test('success response includes CORS headers', async ({ request }) => {
-      test.skip(!ADMIN_KEY, 'ADMIN_KEY not configured');
+      test.skip(!hasAuthCredentials(), 'No auth credentials configured');
 
       const response = await request.post(`/api/v2/admin/events`, {
         timeout: TIMEOUT,
@@ -527,7 +540,7 @@ test.describe('Story C3: Admin Create Event - POST /api/v2/admin/events', () => 
           name: `CORS Test ${Date.now()}`,
         },
         headers: {
-          Authorization: `Bearer ${ADMIN_KEY}`,
+          ...getAuthHeaders(),
         },
       });
 
@@ -570,13 +583,13 @@ test.describe('Story C3: Admin Create Event - POST /api/v2/admin/events', () => 
     });
 
     test('validation error includes descriptive message', async ({ request }) => {
-      test.skip(!ADMIN_KEY, 'ADMIN_KEY not configured');
+      test.skip(!hasAuthCredentials(), 'No auth credentials configured');
 
       const response = await request.post(`/api/v2/admin/events`, {
         timeout: TIMEOUT,
         data: {},
         headers: {
-          Authorization: `Bearer ${ADMIN_KEY}`,
+          ...getAuthHeaders(),
         },
       });
 

@@ -1,8 +1,9 @@
 /**
  * Admin authentication guard.
  *
- * Primary:  Cloudflare Access JWT (Cf-Access-Jwt-Assertion header)
- * Fallback: Bearer token against ADMIN_KEY (only when ALLOW_ADMIN_KEY_FALLBACK=true)
+ * Method 1: Cloudflare Access JWT (Cf-Access-Jwt-Assertion header)
+ * Method 2: X-OCR-Internal header against OCR_INTERNAL_SECRET (when ALLOW_OCR_INTERNAL=true)
+ * Method 3: Bearer token against ADMIN_KEY (when ALLOW_ADMIN_KEY_FALLBACK=true)
  *
  * Usage:
  *   const deny = requireAdmin(request, env, requestId);
@@ -11,8 +12,10 @@
 
 export interface AdminEnv {
   ADMIN_KEY?: string;
-  ADMIN_TOKEN?: string;            // legacy alias
+  ADMIN_TOKEN?: string; // legacy alias
   ALLOW_ADMIN_KEY_FALLBACK?: string;
+  OCR_INTERNAL_SECRET?: string; // CI/CD internal auth secret
+  ALLOW_OCR_INTERNAL?: string; // gate for X-OCR-Internal header
 }
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
@@ -38,7 +41,10 @@ function decodeCfAccessJwt(jwt: string): boolean {
     const parts = jwt.split('.');
     if (parts.length !== 3) return false;
     const padding = '='.repeat((4 - (parts[1].length % 4)) % 4);
-    const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/') + padding)) as { exp?: number; iat?: number };
+    const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/') + padding)) as {
+      exp?: number;
+      iat?: number;
+    };
     if (!payload.exp || !payload.iat) return false;
     return payload.exp > Math.floor(Date.now() / 1000);
   } catch {
@@ -53,7 +59,14 @@ export function requireAdmin(request: Request, env: AdminEnv, requestId: string)
   const cfJwt = request.headers.get('Cf-Access-Jwt-Assertion');
   if (cfJwt && decodeCfAccessJwt(cfJwt)) return null;
 
-  // Method 2: Bearer token fallback
+  // Method 2: X-OCR-Internal header (CI/CD automation)
+  if (env.ALLOW_OCR_INTERNAL === 'true') {
+    const ocrSecret = env.OCR_INTERNAL_SECRET?.trim() ?? null;
+    const ocrHeader = request.headers.get('X-OCR-Internal');
+    if (ocrSecret && ocrHeader && constantTimeEqual(ocrHeader, ocrSecret)) return null;
+  }
+
+  // Method 3: Bearer token fallback
   if (env.ALLOW_ADMIN_KEY_FALLBACK === 'true') {
     const key = getAdminKey(env);
     const token = extractBearer(request.headers.get('Authorization'));

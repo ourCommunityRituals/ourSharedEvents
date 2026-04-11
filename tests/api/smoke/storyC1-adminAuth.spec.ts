@@ -35,21 +35,30 @@ const CF_ACCESS_CLIENT_SECRET = process.env.CF_ACCESS_CLIENT_SECRET || '';
 // Only works when ALLOW_ADMIN_KEY_FALLBACK=true on worker
 const ADMIN_KEY = process.env.ADMIN_KEY || process.env.ADMIN_TOKEN || '';
 
+// CI/CD internal auth secret (Story X-OCR-Internal)
+// Only works when ALLOW_OCR_INTERNAL=true on worker
+const OCR_INTERNAL_SECRET = process.env.OCR_INTERNAL_SECRET || '';
+
 /**
  * Check if any auth credentials are configured
  */
 const hasAuthCredentials = (): boolean =>
-  Boolean((CF_ACCESS_CLIENT_ID && CF_ACCESS_CLIENT_SECRET) || ADMIN_KEY);
+  Boolean((CF_ACCESS_CLIENT_ID && CF_ACCESS_CLIENT_SECRET) || OCR_INTERNAL_SECRET || ADMIN_KEY);
 
 /**
  * Get auth headers for authenticated requests
- * Prefers Cloudflare Access, falls back to Bearer token
+ * Priority: Cloudflare Access > X-OCR-Internal > Bearer token
  */
 const getAuthHeaders = (): Record<string, string> => {
   if (CF_ACCESS_CLIENT_ID && CF_ACCESS_CLIENT_SECRET) {
     return {
       'CF-Access-Client-Id': CF_ACCESS_CLIENT_ID,
       'CF-Access-Client-Secret': CF_ACCESS_CLIENT_SECRET,
+    };
+  }
+  if (OCR_INTERNAL_SECRET) {
+    return {
+      'X-OCR-Internal': OCR_INTERNAL_SECRET,
     };
   }
   if (ADMIN_KEY) {
@@ -212,6 +221,34 @@ test.describe('Story C1: Admin Auth Gate - V2 Admin Endpoints', () => {
 
       // Response should have 'ok' property
       expect(json).toHaveProperty('ok');
+    });
+  });
+
+  test.describe('POST /api/v2/admin/events - X-OCR-Internal Auth', () => {
+    test('returns success with X-OCR-Internal header', async ({ request }) => {
+      test.skip(!OCR_INTERNAL_SECRET, 'OCR_INTERNAL_SECRET not configured');
+
+      const response = await request.post(`/api/v2/admin/events?brand=${BRAND}`, {
+        timeout: TIMEOUT,
+        data: {
+          title: `OCR-Internal Test ${Date.now()}`,
+          date: new Date().toISOString().split('T')[0],
+        },
+        headers: { 'X-OCR-Internal': OCR_INTERNAL_SECRET },
+      });
+
+      expect(response.status()).not.toBe(401);
+      expect([200, 201, 400]).toContain(response.status());
+    });
+
+    test('returns 401 with invalid X-OCR-Internal header', async ({ request }) => {
+      const response = await request.post(`/api/v2/admin/events?brand=${BRAND}`, {
+        timeout: TIMEOUT,
+        data: { title: 'Test Event' },
+        headers: { 'X-OCR-Internal': 'invalid-secret-value' },
+      });
+
+      expect(response.status()).toBe(401);
     });
   });
 

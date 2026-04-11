@@ -75,6 +75,14 @@ describe('Admin Auth Module Structure (Story 3.1)', () => {
     it('should include ALLOW_ADMIN_KEY_FALLBACK', () => {
       expect(adminAuthSource).toContain('ALLOW_ADMIN_KEY_FALLBACK?: string');
     });
+
+    it('should include OCR_INTERNAL_SECRET', () => {
+      expect(adminAuthSource).toContain('OCR_INTERNAL_SECRET?: string');
+    });
+
+    it('should include ALLOW_OCR_INTERNAL', () => {
+      expect(adminAuthSource).toContain('ALLOW_OCR_INTERNAL?: string');
+    });
   });
 });
 
@@ -113,7 +121,31 @@ describe('Authentication Methods (Story 3.1)', () => {
     });
   });
 
-  describe('Method 2: Bearer Token Fallback', () => {
+  describe('Method 2: X-OCR-Internal Header (CI/CD)', () => {
+    it('should check ALLOW_OCR_INTERNAL gate', () => {
+      expect(adminAuthSource).toContain("env.ALLOW_OCR_INTERNAL === 'true'");
+    });
+
+    it('should read X-OCR-Internal header', () => {
+      expect(adminAuthSource).toContain("'X-OCR-Internal'");
+    });
+
+    it('should read OCR_INTERNAL_SECRET from env', () => {
+      expect(adminAuthSource).toContain('env.OCR_INTERNAL_SECRET');
+    });
+
+    it('should use constantTimeEqual for X-OCR-Internal comparison', () => {
+      expect(adminAuthSource).toContain('constantTimeEqual(ocrHeader, ocrSecret)');
+    });
+
+    it('should return null (allow) on valid X-OCR-Internal match', () => {
+      expect(adminAuthSource).toContain(
+        'if (ocrSecret && ocrHeader && constantTimeEqual(ocrHeader, ocrSecret)) return null'
+      );
+    });
+  });
+
+  describe('Method 3: Bearer Token Fallback', () => {
     it('should only allow fallback when ALLOW_ADMIN_KEY_FALLBACK is true', () => {
       expect(adminAuthSource).toContain("env.ALLOW_ADMIN_KEY_FALLBACK === 'true'");
     });

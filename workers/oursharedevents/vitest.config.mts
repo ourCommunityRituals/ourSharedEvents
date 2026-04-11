@@ -79,6 +79,8 @@ export default defineConfig({
           TEST_WRANGLER_TOML: wranglerToml,
           ADMIN_KEY: 'test-admin-key-e2e-2026',
           ALLOW_ADMIN_KEY_FALLBACK: 'true',
+          OCR_INTERNAL_SECRET: 'test-ocr-internal-secret-2026',
+          ALLOW_OCR_INTERNAL: 'true',
           FORMS_ENCRYPTION_KEY: 'test-forms-encryption-secret-32ch',
           WORKER_ENV: 'test',
           WORKER_BUILD_VERSION: 'e2e-mock',

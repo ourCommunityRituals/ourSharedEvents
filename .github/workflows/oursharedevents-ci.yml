@@ -19,10 +19,12 @@
 #   - CLOUDFLARE_API_TOKEN_OSE      (Cloudflare API token with Workers:Edit permission)
 #   - CLOUDFLARE_ACCOUNT_ID     (Cloudflare account ID)
 #   - ADMIN_KEY                 (Bearer token for /admin routes)
+#   - OCR_INTERNAL_SECRET       (CI/CD auth secret for X-OCR-Internal header)
 #
 # Wrangler secrets (set once via wrangler CLI, not GitHub secrets):
 #   wrangler secret put ADMIN_KEY                 --env staging
 #   wrangler secret put FORMS_ENCRYPTION_KEY      --env staging
+#   wrangler secret put OCR_INTERNAL_SECRET       --env staging
 #   # Repeat for --env production
 
 name: OurSharedEvents CI/CD
@@ -270,6 +272,7 @@ jobs:
         env:
           BASE_URL: ${{ env.STG_BASE_URL }}
           ADMIN_KEY: ${{ secrets.ADMIN_KEY }}
+          OCR_INTERNAL_SECRET: ${{ secrets.OCR_INTERNAL_SECRET }}
         run: npx playwright test tests/e2e/1-smoke/security-smoke.spec.js
         timeout-minutes: 10
         continue-on-error: true
@@ -279,6 +282,7 @@ jobs:
         env:
           BASE_URL: ${{ env.STG_BASE_URL }}
           ADMIN_KEY: ${{ secrets.ADMIN_KEY }}
+          OCR_INTERNAL_SECRET: ${{ secrets.OCR_INTERNAL_SECRET }}
         run: npx playwright test --config=playwright.smoke.config.ts tests/api/smoke/sec-iac-07-smoke.spec.ts
         timeout-minutes: 10
         continue-on-error: true
@@ -344,6 +348,7 @@ jobs:
         env:
           BASE_URL: ${{ env.STG_BASE_URL }}
           ADMIN_KEY: ${{ secrets.ADMIN_KEY }}
+          OCR_INTERNAL_SECRET: ${{ secrets.OCR_INTERNAL_SECRET }}
         run: npm run test:api:smoke
         timeout-minutes: 10
         continue-on-error: true
@@ -353,6 +358,7 @@ jobs:
         env:
           BASE_URL: ${{ env.STG_BASE_URL }}
           ADMIN_KEY: ${{ secrets.ADMIN_KEY }}
+          OCR_INTERNAL_SECRET: ${{ secrets.OCR_INTERNAL_SECRET }}
         run: npm run test:ui:smoke
         timeout-minutes: 15
         continue-on-error: true
@@ -361,10 +367,12 @@ jobs:
         id: newman-api
         env:
           ADMIN_KEY: ${{ secrets.ADMIN_KEY }}
+          OCR_INTERNAL_SECRET: ${{ secrets.OCR_INTERNAL_SECRET }}
         run: |
           npx newman run postman/collections/ose-api.json \
             -e postman/environments/ose-staging.json \
             --env-var "adminKey=$ADMIN_KEY" \
+            --env-var "ocrInternalSecret=$OCR_INTERNAL_SECRET" \
             --bail \
             --reporters cli,junit \
             --reporter-junit-export .test-results/newman-api-junit.xml
@@ -582,6 +590,7 @@ jobs:
         env:
           BASE_URL: ${{ env.PROD_BASE_URL }}
           ADMIN_KEY: ${{ secrets.ADMIN_KEY }}
+          OCR_INTERNAL_SECRET: ${{ secrets.OCR_INTERNAL_SECRET }}
         run: npx playwright test tests/e2e/1-smoke/security-smoke.spec.js
         timeout-minutes: 10
         continue-on-error: true
@@ -591,6 +600,7 @@ jobs:
         env:
           BASE_URL: ${{ env.PROD_BASE_URL }}
           ADMIN_KEY: ${{ secrets.ADMIN_KEY }}
+          OCR_INTERNAL_SECRET: ${{ secrets.OCR_INTERNAL_SECRET }}
         run: npx playwright test --config=playwright.smoke.config.ts tests/api/smoke/sec-iac-07-smoke.spec.ts
         timeout-minutes: 10
         continue-on-error: true
@@ -653,6 +663,7 @@ jobs:
         env:
           BASE_URL: ${{ env.PROD_BASE_URL }}
           ADMIN_KEY: ${{ secrets.ADMIN_KEY }}
+          OCR_INTERNAL_SECRET: ${{ secrets.OCR_INTERNAL_SECRET }}
         run: npm run test:api:smoke
         timeout-minutes: 10
         continue-on-error: true
@@ -662,6 +673,7 @@ jobs:
         env:
           BASE_URL: ${{ env.PROD_BASE_URL }}
           ADMIN_KEY: ${{ secrets.ADMIN_KEY }}
+          OCR_INTERNAL_SECRET: ${{ secrets.OCR_INTERNAL_SECRET }}
         run: npm run test:ui:smoke
         timeout-minutes: 15
         continue-on-error: true

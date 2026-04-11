@@ -84,9 +84,12 @@ WORKER_ENV = "staging"
 WORKER_BUILD_VERSION = "stg-2026.03.22"
 # Allow Bearer token fallback in staging (for local testing without CF Access)
 ALLOW_ADMIN_KEY_FALLBACK = "true"
+# Allow X-OCR-Internal header for CI/CD automation
+ALLOW_OCR_INTERNAL = "true"
 
 # Required secrets for staging (set with wrangler secret put … --env staging):
 #   ADMIN_KEY
+#   OCR_INTERNAL_SECRET           (CI/CD auth secret for X-OCR-Internal header)
 #   FORMS_ENCRYPTION_KEY          (AES-GCM key for email signup encryption — min 32 chars)
 #   GOOGLE_MAPS_API_KEY          (Google Maps for SharedReports venue maps)
 #   BIGQUERY_DATASET_ID           (BigQuery dataset for data backup)
@@ -121,9 +124,12 @@ migrations_dir = "migrations-forms"
 [env.production.vars]
 WORKER_ENV = "production"
 WORKER_BUILD_VERSION = "prod-2026.03.22"
+# Allow X-OCR-Internal header for CI/CD automation
+ALLOW_OCR_INTERNAL = "true"
 
 # Required secrets for production (set with wrangler secret put … --env production):
 #   ADMIN_KEY
+#   OCR_INTERNAL_SECRET           (CI/CD auth secret for X-OCR-Internal header)
 #   FORMS_ENCRYPTION_KEY          (AES-GCM key for email signup encryption — min 32 chars)
 #   GOOGLE_MAPS_API_KEY          (Google Maps for SharedReports venue maps)
 #   BIGQUERY_DATASET_ID           (BigQuery dataset for data backup)

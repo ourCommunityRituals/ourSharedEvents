@@ -15,7 +15,13 @@
         "type": "text/javascript",
         "exec": [
           "// Collection-level pre-request: set timing for latency measurement",
-          "pm.variables.set('requestStartTime', Date.now());"
+          "pm.variables.set('requestStartTime', Date.now());",
+          "",
+          "// If ocrInternalSecret is set, prefer X-OCR-Internal header over Bearer",
+          "var ocrSecret = pm.environment.get('ocrInternalSecret');",
+          "if (ocrSecret) {",
+          "    pm.request.headers.upsert({ key: 'X-OCR-Internal', value: ocrSecret });",
+          "}"
         ]
       }
     },
