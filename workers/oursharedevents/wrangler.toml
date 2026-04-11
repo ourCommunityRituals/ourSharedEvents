@@ -57,7 +57,7 @@ WORKER_BUILD_VERSION = "dev-local"
 
 # ── Staging: stg.oursharedevents.com ─────────────────────────────
 [env.staging]
-name = "oursharedevents-staging"
+name = "oursharedevents-stg"
 routes = [
   { pattern = "stg.oursharedevents.com/*", zone_name = "oursharedevents.com" }
 ]
