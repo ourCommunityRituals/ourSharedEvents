@@ -18,7 +18,7 @@
  */
 
 const { test, expect } = require('@playwright/test');
-const { getBaseUrl } = require('../../config/environments');
+const { getBaseUrl } = require('../../../config/environments');
 
 // Use centralized BASE_URL config (defaults to oursharedevents.com)
 const BASE_URL = getBaseUrl();

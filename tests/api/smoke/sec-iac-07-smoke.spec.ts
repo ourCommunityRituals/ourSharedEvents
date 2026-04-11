@@ -27,6 +27,21 @@ import { test, expect } from '@playwright/test';
 const BRAND = process.env.TEST_BRAND || 'root';
 const TIMEOUT = 30000;
 
+// CF Access service token — bypasses Cloudflare Access edge so requests reach the worker
+const CF_ACCESS_CLIENT_ID = process.env.CF_ACCESS_CLIENT_ID || '';
+const CF_ACCESS_CLIENT_SECRET = process.env.CF_ACCESS_CLIENT_SECRET || '';
+
+/** Headers to bypass Cloudflare Access (but NOT worker auth) */
+const getCfAccessHeaders = (): Record<string, string> => {
+  if (CF_ACCESS_CLIENT_ID && CF_ACCESS_CLIENT_SECRET) {
+    return {
+      'CF-Access-Client-Id': CF_ACCESS_CLIENT_ID,
+      'CF-Access-Client-Secret': CF_ACCESS_CLIENT_SECRET,
+    };
+  }
+  return {};
+};
+
 test.describe('SEC-IAC-07: IAC Smoke Tests', () => {
   /**
    * Test 1: Admin route without authentication returns 401
@@ -44,7 +59,8 @@ test.describe('SEC-IAC-07: IAC Smoke Tests', () => {
           title: 'Test Event',
           date: new Date().toISOString().split('T')[0],
         },
-        // No Authorization header - unauthenticated
+        // CF Access headers bypass the edge; no worker auth → 401 from requireAdmin()
+        headers: getCfAccessHeaders(),
       });
 
       expect(response.status()).toBe(401);
@@ -54,6 +70,7 @@ test.describe('SEC-IAC-07: IAC Smoke Tests', () => {
       const response = await request.post(`/api/v2/admin/events?brand=${BRAND}`, {
         timeout: TIMEOUT,
         data: { title: 'Test Event' },
+        headers: getCfAccessHeaders(),
       });
 
       expect(response.status()).toBe(401);
@@ -75,6 +92,7 @@ test.describe('SEC-IAC-07: IAC Smoke Tests', () => {
       const response = await request.post(`/api/v2/admin/events?brand=${BRAND}`, {
         timeout: TIMEOUT,
         data: { title: 'Test Event' },
+        headers: getCfAccessHeaders(),
       });
 
       expect(response.status()).toBe(401);
@@ -101,7 +119,7 @@ test.describe('SEC-IAC-07: IAC Smoke Tests', () => {
           title: 'Test Event',
           date: new Date().toISOString().split('T')[0],
         },
-        // No X-Mutation-Token header
+        headers: getCfAccessHeaders(),
       });
 
       // Should be 403 when signed mutations are configured
@@ -127,6 +145,7 @@ test.describe('SEC-IAC-07: IAC Smoke Tests', () => {
       const response = await request.post(`/api/v2/events?brand=${BRAND}`, {
         timeout: TIMEOUT,
         data: { title: 'Test Event' },
+        headers: getCfAccessHeaders(),
       });
 
       // Skip validation if signed mutations not configured (405/other)
