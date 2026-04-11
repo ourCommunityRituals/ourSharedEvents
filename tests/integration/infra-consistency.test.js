@@ -60,10 +60,12 @@ describe('CLOUDFLARE_API_TOKEN_ESE naming consistency', () => {
     expect(staleMatches).toBeNull();
   });
 
-  test('CLOUDFLARE_API_TOKEN_ESE exists in active CI workflow', () => {
+  test('CI workflow sources from secrets.CLOUDFLARE_API_TOKEN_ESE', () => {
     const content = readFile('.github/workflows/oursharedevents-ci.yml');
-    expect(content).toContain('CLOUDFLARE_API_TOKEN_ESE');
     expect(content).toContain('secrets.CLOUDFLARE_API_TOKEN_ESE');
+    // Env var must be CLOUDFLARE_API_TOKEN (wrangler expects this name)
+    // sourced from the _ESE secret
+    expect(content).toContain('CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_ESE }}');
   });
 });
 

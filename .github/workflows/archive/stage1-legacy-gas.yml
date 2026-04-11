@@ -31,7 +31,7 @@
 #   - GOOGLE_CLIENT_EMAIL: Service account email for Sheets API
 #   - GOOGLE_PRIVATE_KEY: Service account private key (PEM format)
 #   - STAGING_SHEETS_SPREADSHEET_ID: Google Sheets ID for staging tests
-#   - CLOUDFLARE_API_TOKEN_ESE_ESE: Cloudflare API token for Worker deployments
+#   - CLOUDFLARE_API_TOKEN_ESE: Cloudflare API token for Worker deployments
 #   - CLOUDFLARE_ACCOUNT_ID: Cloudflare account identifier
 #
 # @see docs/ci-cd-architecture.md - Architecture documentation
@@ -1567,7 +1567,7 @@ jobs:
   #   - Stage-2 consumes this artifact for post-deploy E2E testing
   #
   # Required secrets for Cloudflare Worker deployment:
-  #   - CLOUDFLARE_API_TOKEN_ESE_ESE: API token with Worker deployment permissions
+  #   - CLOUDFLARE_API_TOKEN_ESE: API token with Worker deployment permissions
   #   - CLOUDFLARE_ACCOUNT_ID: Cloudflare account ID
   # ============================================================================
   staging-deploy:
@@ -2035,14 +2035,14 @@ jobs:
       - name: Deploy Cloudflare Worker (staging)
         if: steps.gate-check.outputs.should_execute == 'true'
         env:
-          CLOUDFLARE_API_TOKEN_ESE_ESE: ${{ secrets.CLOUDFLARE_API_TOKEN_ESE_ESE }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_ESE }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           DEPLOYMENT_ID: ${{ steps.deploy.outputs.deployment_id }}
         run: |
-          if [ -z "$CLOUDFLARE_API_TOKEN_ESE_ESE" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+          if [ -z "$CLOUDFLARE_API_TOKEN_ESE" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
             echo "::warning::Cloudflare secrets not configured - skipping worker update"
             echo "To enable staging URL (stg.oursharedevents.com), configure:"
-            echo "  - CLOUDFLARE_API_TOKEN_ESE_ESE secret"
+            echo "  - CLOUDFLARE_API_TOKEN_ESE secret"
             echo "  - CLOUDFLARE_ACCOUNT_ID secret"
             echo ""
             echo "Stage-2 smoke tests will likely fail without Cloudflare Worker deployment."
@@ -2106,7 +2106,7 @@ jobs:
         if: steps.gate-check.outputs.should_execute == 'true'
         id: verify-staging
         env:
-          CLOUDFLARE_API_TOKEN_ESE_ESE: ${{ secrets.CLOUDFLARE_API_TOKEN_ESE_ESE }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_ESE }}
         run: |
           echo "=============================================="
           echo "STORY 1.1: STAGING ENVIRONMENT VERIFICATION"
@@ -2204,7 +2204,7 @@ jobs:
       - name: Create deployment summary
         if: always()
         env:
-          CLOUDFLARE_API_TOKEN_ESE_ESE: ${{ secrets.CLOUDFLARE_API_TOKEN_ESE_ESE }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_ESE }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           echo "## Stage-1 Staging Deployment" >> $GITHUB_STEP_SUMMARY
@@ -2228,7 +2228,7 @@ jobs:
           fi
 
           # Determine Cloudflare Worker status
-          if [ -n "$CLOUDFLARE_API_TOKEN_ESE_ESE" ] && [ -n "$CLOUDFLARE_ACCOUNT_ID" ]; then
+          if [ -n "$CLOUDFLARE_API_TOKEN_ESE" ] && [ -n "$CLOUDFLARE_ACCOUNT_ID" ]; then
             CF_STATUS="Deployed"
           else
             CF_STATUS="Skipped (secrets not configured)"
@@ -2267,7 +2267,7 @@ jobs:
               echo "\`stg.oursharedevents.com\` was not updated with the new deployment ID." >> $GITHUB_STEP_SUMMARY
               echo "" >> $GITHUB_STEP_SUMMARY
               echo "To fix this, configure the following secrets in GitHub:" >> $GITHUB_STEP_SUMMARY
-              echo "- \`CLOUDFLARE_API_TOKEN_ESE_ESE\`: API token with Worker deployment permissions" >> $GITHUB_STEP_SUMMARY
+              echo "- \`CLOUDFLARE_API_TOKEN_ESE\`: API token with Worker deployment permissions" >> $GITHUB_STEP_SUMMARY
               echo "- \`CLOUDFLARE_ACCOUNT_ID\`: Your Cloudflare account ID" >> $GITHUB_STEP_SUMMARY
               echo "" >> $GITHUB_STEP_SUMMARY
             fi
@@ -2769,14 +2769,14 @@ jobs:
       # ========================================================================
       - name: Deploy Cloudflare Worker (production)
         env:
-          CLOUDFLARE_API_TOKEN_ESE_ESE: ${{ secrets.CLOUDFLARE_API_TOKEN_ESE_ESE }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_ESE }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           DEPLOYMENT_ID: ${{ steps.deploy.outputs.deployment_id }}
         run: |
-          if [ -z "$CLOUDFLARE_API_TOKEN_ESE_ESE" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+          if [ -z "$CLOUDFLARE_API_TOKEN_ESE" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
             echo "::warning::Cloudflare secrets not configured - skipping worker deployment"
             echo "To enable full production deployment, configure:"
-            echo "  - CLOUDFLARE_API_TOKEN_ESE_ESE secret"
+            echo "  - CLOUDFLARE_API_TOKEN_ESE secret"
             echo "  - CLOUDFLARE_ACCOUNT_ID secret"
             echo ""
             echo "NOTE: Without Worker deployment, HTML routes may not work correctly!"
@@ -2848,7 +2848,7 @@ jobs:
       - name: Verify production environment isolation
         id: verify-production
         env:
-          CLOUDFLARE_API_TOKEN_ESE_ESE: ${{ secrets.CLOUDFLARE_API_TOKEN_ESE_ESE }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_ESE }}
         run: |
           echo "=============================================="
           echo "STORY 1.1: PRODUCTION ENVIRONMENT VERIFICATION"
@@ -3038,14 +3038,14 @@ jobs:
       - name: Create deployment summary
         if: always()
         env:
-          CLOUDFLARE_API_TOKEN_ESE_ESE: ${{ secrets.CLOUDFLARE_API_TOKEN_ESE_ESE }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_ESE }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           echo "## Stage-1 Production Deployment" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
 
           # Determine Cloudflare Worker status
-          if [ -n "$CLOUDFLARE_API_TOKEN_ESE_ESE" ] && [ -n "$CLOUDFLARE_ACCOUNT_ID" ]; then
+          if [ -n "$CLOUDFLARE_API_TOKEN_ESE" ] && [ -n "$CLOUDFLARE_ACCOUNT_ID" ]; then
             CF_STATUS="Deployed"
           else
             CF_STATUS="Skipped (secrets not configured)"

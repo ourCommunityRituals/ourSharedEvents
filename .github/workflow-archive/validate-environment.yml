@@ -174,10 +174,10 @@ jobs:
 
       - name: Check Cloudflare secrets (optional)
         env:
-          CLOUDFLARE_API_TOKEN_ESE_ESE: ${{ secrets.CLOUDFLARE_API_TOKEN_ESE_ESE }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_ESE }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
-          if [ -z "$CLOUDFLARE_API_TOKEN_ESE_ESE" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+          if [ -z "$CLOUDFLARE_API_TOKEN_ESE" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
             echo "ℹ️ Cloudflare secrets not configured (optional)"
             echo "   Worker updates will be skipped"
           else
