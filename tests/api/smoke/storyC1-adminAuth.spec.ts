@@ -37,13 +37,13 @@ const ADMIN_KEY = process.env.ADMIN_KEY || process.env.ADMIN_TOKEN || '';
 
 // CI/CD internal auth secret (Story X-OCR-Internal)
 // Only works when ALLOW_OCR_INTERNAL=true on worker
-const OCR_INTERNAL_SECRET = process.env.OCR_INTERNAL_SECRET || '';
+const X_OCR_INTERNAL = process.env.X_OCR_INTERNAL || '';
 
 /**
  * Check if any auth credentials are configured
  */
 const hasAuthCredentials = (): boolean =>
-  Boolean((CF_ACCESS_CLIENT_ID && CF_ACCESS_CLIENT_SECRET) || OCR_INTERNAL_SECRET || ADMIN_KEY);
+  Boolean((CF_ACCESS_CLIENT_ID && CF_ACCESS_CLIENT_SECRET) || X_OCR_INTERNAL || ADMIN_KEY);
 
 /**
  * Get auth headers for authenticated requests
@@ -56,9 +56,9 @@ const getAuthHeaders = (): Record<string, string> => {
       'CF-Access-Client-Secret': CF_ACCESS_CLIENT_SECRET,
     };
   }
-  if (OCR_INTERNAL_SECRET) {
+  if (X_OCR_INTERNAL) {
     return {
-      'X-OCR-Internal': OCR_INTERNAL_SECRET,
+      'X-OCR-Internal': X_OCR_INTERNAL,
     };
   }
   if (ADMIN_KEY) {
@@ -226,7 +226,7 @@ test.describe('Story C1: Admin Auth Gate - V2 Admin Endpoints', () => {
 
   test.describe('POST /api/v2/admin/events - X-OCR-Internal Auth', () => {
     test('returns success with X-OCR-Internal header', async ({ request }) => {
-      test.skip(!OCR_INTERNAL_SECRET, 'OCR_INTERNAL_SECRET not configured');
+      test.skip(!X_OCR_INTERNAL, 'X_OCR_INTERNAL not configured');
 
       const response = await request.post(`/api/v2/admin/events?brand=${BRAND}`, {
         timeout: TIMEOUT,
@@ -234,7 +234,7 @@ test.describe('Story C1: Admin Auth Gate - V2 Admin Endpoints', () => {
           title: `OCR-Internal Test ${Date.now()}`,
           date: new Date().toISOString().split('T')[0],
         },
-        headers: { 'X-OCR-Internal': OCR_INTERNAL_SECRET },
+        headers: { 'X-OCR-Internal': X_OCR_INTERNAL },
       });
 
       expect(response.status()).not.toBe(401);

@@ -34,14 +34,14 @@ const TIMEOUT = 30000;
 const ADMIN_KEY = process.env.ADMIN_KEY || process.env.ADMIN_TOKEN || '';
 
 // CI/CD internal auth secret (X-OCR-Internal header)
-const OCR_INTERNAL_SECRET = process.env.OCR_INTERNAL_SECRET || '';
+const X_OCR_INTERNAL = process.env.X_OCR_INTERNAL || '';
 
 /** Check if any auth credentials are configured */
-const hasAuthCredentials = (): boolean => Boolean(OCR_INTERNAL_SECRET || ADMIN_KEY);
+const hasAuthCredentials = (): boolean => Boolean(X_OCR_INTERNAL || ADMIN_KEY);
 
 /** Get auth headers — prefers X-OCR-Internal, falls back to Bearer */
 const getAuthHeaders = (): Record<string, string> => {
-  if (OCR_INTERNAL_SECRET) return { 'X-OCR-Internal': OCR_INTERNAL_SECRET };
+  if (X_OCR_INTERNAL) return { 'X-OCR-Internal': X_OCR_INTERNAL };
   if (ADMIN_KEY) return { Authorization: `Bearer ${ADMIN_KEY}` };
   return {};
 };

@@ -2,7 +2,7 @@
  * Admin authentication guard.
  *
  * Method 1: Cloudflare Access JWT (Cf-Access-Jwt-Assertion header)
- * Method 2: X-OCR-Internal header against OCR_INTERNAL_SECRET (when ALLOW_OCR_INTERNAL=true)
+ * Method 2: X-OCR-Internal header against X_OCR_INTERNAL (when ALLOW_OCR_INTERNAL=true)
  * Method 3: Bearer token against ADMIN_KEY (when ALLOW_ADMIN_KEY_FALLBACK=true)
  *
  * Usage:
@@ -14,7 +14,7 @@ export interface AdminEnv {
   ADMIN_KEY?: string;
   ADMIN_TOKEN?: string; // legacy alias
   ALLOW_ADMIN_KEY_FALLBACK?: string;
-  OCR_INTERNAL_SECRET?: string; // CI/CD internal auth secret
+  X_OCR_INTERNAL?: string; // CI/CD internal auth secret
   ALLOW_OCR_INTERNAL?: string; // gate for X-OCR-Internal header
 }
 
@@ -61,7 +61,7 @@ export function requireAdmin(request: Request, env: AdminEnv, requestId: string)
 
   // Method 2: X-OCR-Internal header (CI/CD automation)
   if (env.ALLOW_OCR_INTERNAL === 'true') {
-    const ocrSecret = env.OCR_INTERNAL_SECRET?.trim() ?? null;
+    const ocrSecret = env.X_OCR_INTERNAL?.trim() ?? null;
     const ocrHeader = request.headers.get('X-OCR-Internal');
     if (ocrSecret && ocrHeader && constantTimeEqual(ocrHeader, ocrSecret)) return null;
   }

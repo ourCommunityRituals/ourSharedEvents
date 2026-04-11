@@ -89,7 +89,7 @@ ALLOW_OCR_INTERNAL = "true"
 
 # Required secrets for staging (set with wrangler secret put … --env staging):
 #   ADMIN_KEY
-#   OCR_INTERNAL_SECRET           (CI/CD auth secret for X-OCR-Internal header)
+#   X_OCR_INTERNAL           (CI/CD auth secret for X-OCR-Internal header)
 #   FORMS_ENCRYPTION_KEY          (AES-GCM key for email signup encryption — min 32 chars)
 #   GOOGLE_MAPS_API_KEY          (Google Maps for SharedReports venue maps)
 #   BIGQUERY_DATASET_ID           (BigQuery dataset for data backup)
@@ -129,7 +129,7 @@ ALLOW_OCR_INTERNAL = "true"
 
 # Required secrets for production (set with wrangler secret put … --env production):
 #   ADMIN_KEY
-#   OCR_INTERNAL_SECRET           (CI/CD auth secret for X-OCR-Internal header)
+#   X_OCR_INTERNAL           (CI/CD auth secret for X-OCR-Internal header)
 #   FORMS_ENCRYPTION_KEY          (AES-GCM key for email signup encryption — min 32 chars)
 #   GOOGLE_MAPS_API_KEY          (Google Maps for SharedReports venue maps)
 #   BIGQUERY_DATASET_ID           (BigQuery dataset for data backup)

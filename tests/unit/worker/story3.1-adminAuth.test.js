@@ -76,8 +76,8 @@ describe('Admin Auth Module Structure (Story 3.1)', () => {
       expect(adminAuthSource).toContain('ALLOW_ADMIN_KEY_FALLBACK?: string');
     });
 
-    it('should include OCR_INTERNAL_SECRET', () => {
-      expect(adminAuthSource).toContain('OCR_INTERNAL_SECRET?: string');
+    it('should include X_OCR_INTERNAL', () => {
+      expect(adminAuthSource).toContain('X_OCR_INTERNAL?: string');
     });
 
     it('should include ALLOW_OCR_INTERNAL', () => {
@@ -130,8 +130,8 @@ describe('Authentication Methods (Story 3.1)', () => {
       expect(adminAuthSource).toContain("'X-OCR-Internal'");
     });
 
-    it('should read OCR_INTERNAL_SECRET from env', () => {
-      expect(adminAuthSource).toContain('env.OCR_INTERNAL_SECRET');
+    it('should read X_OCR_INTERNAL from env', () => {
+      expect(adminAuthSource).toContain('env.X_OCR_INTERNAL');
     });
 
     it('should use constantTimeEqual for X-OCR-Internal comparison', () => {

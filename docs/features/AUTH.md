@@ -36,7 +36,7 @@ When `ALLOW_OCR_INTERNAL=true`, the Worker accepts the `X-OCR-Internal` header f
 X-OCR-Internal: your-ocr-internal-secret-here
 ```
 
-The secret is compared against `OCR_INTERNAL_SECRET` using constant-time comparison. This is the preferred method for automated smoke tests in GitHub Actions.
+The secret is compared against `X_OCR_INTERNAL` using constant-time comparison. This is the preferred method for automated smoke tests in GitHub Actions.
 
 ### Fallback: Bearer Token
 
@@ -91,5 +91,5 @@ When multiple auth headers are present, the Worker checks in this order:
 | `ADMIN_KEY`                | Bearer token for admin API access             |
 | `ADMIN_TOKEN`              | Legacy alias for `ADMIN_KEY`                  |
 | `ALLOW_ADMIN_KEY_FALLBACK` | Set to `"true"` to enable Bearer token auth   |
-| `OCR_INTERNAL_SECRET`      | CI/CD auth secret for `X-OCR-Internal` header |
+| `X_OCR_INTERNAL`           | CI/CD auth secret for `X-OCR-Internal` header |
 | `ALLOW_OCR_INTERNAL`       | Set to `"true"` to enable X-OCR-Internal auth |
