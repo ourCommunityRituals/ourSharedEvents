@@ -96,7 +96,7 @@ Go to **GitHub repo > Settings > Secrets and variables > Actions > New repositor
 
 | Secret Name                | Value          |
 | -------------------------- | -------------- |
-| `CLOUDFLARE_API_TOKEN_ESE` | From step A6.2 |
+| `CLOUDFLARE_API_TOKEN_OSE` | From step A6.2 |
 | `CLOUDFLARE_ACCOUNT_ID`    | From step A6.1 |
 | `ADMIN_KEY`                | From step A6.3 |
 
@@ -238,7 +238,7 @@ Check the Actions tab — all stages green = CI is real.
 
 | Secret                     | Where                     | Purpose                    | Generate                  |
 | -------------------------- | ------------------------- | -------------------------- | ------------------------- |
-| `CLOUDFLARE_API_TOKEN_ESE` | GitHub Actions            | CI deploys worker          | CF Dashboard > API Tokens |
+| `CLOUDFLARE_API_TOKEN_OSE` | GitHub Actions            | CI deploys worker          | CF Dashboard > API Tokens |
 | `CLOUDFLARE_ACCOUNT_ID`    | GitHub Actions            | CI targets correct account | CF Dashboard > Overview   |
 | `ADMIN_KEY`                | GitHub Actions + Wrangler | Bearer token for `/admin`  | `openssl rand -hex 32`    |
 | `FORMS_ENCRYPTION_KEY`     | Wrangler only             | AES-GCM for PII fields     | `openssl rand -hex 32`    |

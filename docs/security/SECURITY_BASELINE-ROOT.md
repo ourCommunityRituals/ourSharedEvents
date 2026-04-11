@@ -244,7 +244,7 @@ BACKEND_MODE=worker  (ONLY supported mode in production)
 
 | Secret Name                         | Purpose                 | Used In                                                |
 | ----------------------------------- | ----------------------- | ------------------------------------------------------ |
-| `CLOUDFLARE_API_TOKEN_ESE`          | Wrangler deployment     | Stage-1 CI/CD                                          |
+| `CLOUDFLARE_API_TOKEN_OSE`          | Wrangler deployment     | Stage-1 CI/CD                                          |
 | `CLOUDFLARE_ACCOUNT_ID`             | Account identifier      | Stage-1 CI/CD                                          |
 | ~~`GOOGLE_CLIENT_EMAIL`~~           | ~~SA email (CI/CD)~~    | Removed (D1 migration) — previously used in Phase 1 CI |
 | ~~`GOOGLE_PRIVATE_KEY`~~            | ~~SA key (CI/CD)~~      | Removed (D1 migration) — previously used in Phase 1 CI |

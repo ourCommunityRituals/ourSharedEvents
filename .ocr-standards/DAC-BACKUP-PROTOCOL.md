@@ -103,7 +103,7 @@ Secrets are NOT stored in documentation. They are backed up separately:
 | -------------------------- | ------------------------- | ------------------------------------ |
 | `ADMIN_KEY`                | Cloudflare Worker secrets | Doppler / secure vault               |
 | `FORMS_ENCRYPTION_KEY`     | Cloudflare Worker secrets | Doppler / secure vault               |
-| `CLOUDFLARE_API_TOKEN_ESE` | GitHub Actions secrets    | Doppler / secure vault               |
+| `CLOUDFLARE_API_TOKEN_OSE` | GitHub Actions secrets    | Doppler / secure vault               |
 | `CLOUDFLARE_ACCOUNT_ID`    | GitHub Actions secrets    | Documented in wrangler.toml comments |
 
 **Rule:** If a secret is lost and no backup exists, generate a new one. Accept data loss on encrypted fields if the encryption key is unrecoverable. Document the incident.

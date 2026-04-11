@@ -151,12 +151,12 @@ Configure notifications in Cloudflare Dashboard:
 ```bash
 # List health checks
 curl -X GET "https://api.cloudflare.com/client/v4/zones/{zone_id}/healthchecks" \
-  -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN_ESE" \
+  -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN_OSE" \
   -H "Content-Type: application/json"
 
 # Create health check
 curl -X POST "https://api.cloudflare.com/client/v4/zones/{zone_id}/healthchecks" \
-  -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN_ESE" \
+  -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN_OSE" \
   -H "Content-Type: application/json" \
   --data '{
     "name": "eventangle-staging-health-origin",
@@ -439,7 +439,7 @@ When intentionally taking down upstream:
 ```bash
 # Cloudflare: Update health check to increase failure threshold
 curl -X PATCH "https://api.cloudflare.com/client/v4/zones/{zone_id}/healthchecks/{healthcheck_id}" \
-  -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN_ESE" \
+  -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN_OSE" \
   -H "Content-Type: application/json" \
   --data '{"consecutive_fails": 5}'
 ```

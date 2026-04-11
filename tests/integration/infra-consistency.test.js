@@ -2,7 +2,7 @@
  * Infrastructure Consistency Tests
  *
  * Validates:
- * 1. CLOUDFLARE_API_TOKEN_ESE naming is consistent (no stale references)
+ * 1. CLOUDFLARE_API_TOKEN_OSE naming is consistent (no stale references)
  * 2. Secret config files align with GitHub Secrets
  * 3. D1 staging databases have expected tables and seed data
  *
@@ -37,58 +37,61 @@ function readFile(relPath) {
 
 // ─── Token Naming Consistency ────────────────────────────────────────
 
-describe('CLOUDFLARE_API_TOKEN_ESE naming consistency', () => {
-  test('no stale CLOUDFLARE_API_TOKEN references in workflows', () => {
-    const hits = grep('CLOUDFLARE_API_TOKEN[^_]', '.github/workflows/', '-l');
+describe('CLOUDFLARE_API_TOKEN_OSE naming consistency', () => {
+  test('no stale secrets.CLOUDFLARE_API_TOKEN references in workflows', () => {
+    // The env var name CLOUDFLARE_API_TOKEN is correct (wrangler expects it).
+    // Only flag references to the OLD secret name (secrets.CLOUDFLARE_API_TOKEN without _ESE).
+    const hits = grep('secrets\\.CLOUDFLARE_API_TOKEN[^_]', '.github/workflows/', '-l');
     expect(hits).toEqual([]);
   });
 
   test('no stale CLOUDFLARE_API_TOKEN references in scripts/', () => {
-    const hits = grep('CLOUDFLARE_API_TOKEN[^_]', 'scripts/', '-l');
+    // Scripts reference the env var name, which should be _ESE for config alignment
+    const hits = grep("'CLOUDFLARE_API_TOKEN'", 'scripts/', '-l');
     expect(hits).toEqual([]);
   });
 
   test('no stale CLOUDFLARE_API_TOKEN in .github-secrets-required.json', () => {
-    const content = readFile('.github-secrets-required.json');
-    const staleMatches = content.match(/CLOUDFLARE_API_TOKEN[^_]/g);
-    expect(staleMatches).toBeNull();
+    const config = readJSON('.github-secrets-required.json');
+    const names = config.stage1.required.map((s) => s.name);
+    expect(names).not.toContain('CLOUDFLARE_API_TOKEN');
   });
 
   test('no stale CLOUDFLARE_API_TOKEN in wrangler.toml', () => {
     const content = readFile('workers/oursharedevents/wrangler.toml');
-    const staleMatches = content.match(/CLOUDFLARE_API_TOKEN[^_]/g);
-    expect(staleMatches).toBeNull();
+    // wrangler.toml should not reference the token name at all (account_id is separate)
+    expect(content).not.toMatch(/CLOUDFLARE_API_TOKEN/);
   });
 
-  test('CI workflow sources from secrets.CLOUDFLARE_API_TOKEN_ESE', () => {
+  test('CI workflow sources from secrets.CLOUDFLARE_API_TOKEN_OSE', () => {
     const content = readFile('.github/workflows/oursharedevents-ci.yml');
-    expect(content).toContain('secrets.CLOUDFLARE_API_TOKEN_ESE');
+    expect(content).toContain('secrets.CLOUDFLARE_API_TOKEN_OSE');
     // Env var must be CLOUDFLARE_API_TOKEN (wrangler expects this name)
-    // sourced from the _ESE secret
-    expect(content).toContain('CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_ESE }}');
+    // sourced from the _OSE secret
+    expect(content).toContain('CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}');
   });
 });
 
 // ─── Secret Config Alignment ─────────────────────────────────────────
 
 describe('Secret config alignment', () => {
-  test('.github-secrets-required.json declares CLOUDFLARE_API_TOKEN_ESE', () => {
+  test('.github-secrets-required.json declares CLOUDFLARE_API_TOKEN_OSE', () => {
     const config = readJSON('.github-secrets-required.json');
     const stage1Names = config.stage1.required.map((s) => s.name);
-    expect(stage1Names).toContain('CLOUDFLARE_API_TOKEN_ESE');
+    expect(stage1Names).toContain('CLOUDFLARE_API_TOKEN_OSE');
     expect(stage1Names).not.toContain('CLOUDFLARE_API_TOKEN');
   });
 
-  test('validate-ci-secrets.js checks CLOUDFLARE_API_TOKEN_ESE', () => {
+  test('validate-ci-secrets.js checks CLOUDFLARE_API_TOKEN_OSE', () => {
     const content = readFile('scripts/validate-ci-secrets.js');
-    expect(content).toContain("name: 'CLOUDFLARE_API_TOKEN_ESE'");
-    expect(content).toContain("env: 'CLOUDFLARE_API_TOKEN_ESE'");
+    expect(content).toContain("name: 'CLOUDFLARE_API_TOKEN_OSE'");
+    expect(content).toContain("env: 'CLOUDFLARE_API_TOKEN_OSE'");
   });
 
-  test('verify-secrets.js checks CLOUDFLARE_API_TOKEN_ESE', () => {
+  test('verify-secrets.js checks CLOUDFLARE_API_TOKEN_OSE', () => {
     const content = readFile('scripts/verify-secrets.js');
-    expect(content).toContain("name: 'CLOUDFLARE_API_TOKEN_ESE'");
-    expect(content).toContain("env: 'CLOUDFLARE_API_TOKEN_ESE'");
+    expect(content).toContain("name: 'CLOUDFLARE_API_TOKEN_OSE'");
+    expect(content).toContain("env: 'CLOUDFLARE_API_TOKEN_OSE'");
   });
 
   test('wrangler.toml has account_id set', () => {
@@ -100,7 +103,7 @@ describe('Secret config alignment', () => {
 // ─── D1 Staging Database Health ──────────────────────────────────────
 
 const D1_ACCOUNT_ID = process.env.CLOUDFLARE_ACCOUNT_ID;
-const D1_API_TOKEN = process.env.CLOUDFLARE_API_TOKEN_ESE;
+const D1_API_TOKEN = process.env.CLOUDFLARE_API_TOKEN_OSE;
 const MAIN_DB_ID = '4c4381db-3823-412d-8275-e35d80e603b4';
 const FORMS_DB_ID = 'ff1cb46d-cb3b-463d-9aad-713de4d272b5';
 

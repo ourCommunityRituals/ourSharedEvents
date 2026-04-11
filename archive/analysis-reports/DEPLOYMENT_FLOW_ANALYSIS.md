@@ -232,7 +232,7 @@ DEPLOYMENT_ID = "AKfycby355Xo-XVv3ibfYsf9SUPQo0rGvBS3ex1sNvfpiQ6g"
     echo "DEPLOYMENT_ID=${DEPLOYMENT_ID}" > .env
     wrangler deploy
   env:
-    CLOUDFLARE_API_TOKEN_ESE: ${{ secrets.CLOUDFLARE_API_TOKEN_ESE }}
+    CLOUDFLARE_API_TOKEN_OSE: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
 ```
 
 **Recommendation:** **Do This in Phase 2** (after optimizing current flow)

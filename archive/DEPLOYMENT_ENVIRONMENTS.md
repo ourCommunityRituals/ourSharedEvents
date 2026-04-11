@@ -200,7 +200,7 @@ Tests run in sequence:
 
 **For Phase 2 (Cloudflare):**
 
-- `CLOUDFLARE_API_TOKEN_ESE` - API token for KV updates
+- `CLOUDFLARE_API_TOKEN_OSE` - API token for KV updates
 - `CLOUDFLARE_ACCOUNT_ID` - Cloudflare account ID
 - `CLOUDFLARE_KV_NAMESPACE_ID` - KV namespace ID
 

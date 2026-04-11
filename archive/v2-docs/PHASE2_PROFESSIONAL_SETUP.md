@@ -225,7 +225,7 @@ KV = Key-Value store for configuration data.
 2. **Add to GitHub Secrets:**
    - Go to GitHub repo → **Settings** → **Secrets and variables** → **Actions**
    - Click **New repository secret**:
-     - Name: `CLOUDFLARE_API_TOKEN_ESE`
+     - Name: `CLOUDFLARE_API_TOKEN_OSE`
      - Value: [paste token]
    - Click **Add secret**
 
@@ -262,7 +262,7 @@ Add this step to `.github/workflows/stage1-deploy.yml` after deployment:
     # Update Cloudflare KV with new deployment URL
     curl -X PUT \
       "https://api.cloudflare.com/client/v4/accounts/${{ secrets.CLOUDFLARE_ACCOUNT_ID }}/storage/kv/namespaces/${{ secrets.CLOUDFLARE_KV_NAMESPACE_ID }}/values/qa_deployment_url" \
-      -H "Authorization: Bearer ${{ secrets.CLOUDFLARE_API_TOKEN_ESE }}" \
+      -H "Authorization: Bearer ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}" \
       -H "Content-Type: text/plain" \
       -d "$DEPLOYMENT_URL"
 

@@ -130,7 +130,7 @@ Configure in: `Settings → Secrets and variables → Actions`
 | `OAUTH_CREDENTIALS`        | Google OAuth credentials (clasp)        | `cat ~/.clasprc.json`    |
 | `DEPLOYMENT_ID`            | Existing deployment ID to update        | From `clasp deployments` |
 | `ADMIN_KEY_ROOT`           | Admin secret for E2E testing            | From Config.gs           |
-| `CLOUDFLARE_API_TOKEN_ESE` | Cloudflare API token for Worker deploys | Cloudflare dashboard     |
+| `CLOUDFLARE_API_TOKEN_OSE` | Cloudflare API token for Worker deploys | Cloudflare dashboard     |
 | `CLOUDFLARE_ACCOUNT_ID`    | Cloudflare account ID                   | Cloudflare dashboard     |
 
 **Getting OAUTH_CREDENTIALS:**
@@ -164,7 +164,7 @@ cat ~/.clasprc.json
 #    - Workers & Pages → Overview → Account ID (right sidebar)
 
 # 3. Add to GitHub Secrets:
-#    - CLOUDFLARE_API_TOKEN_ESE
+#    - CLOUDFLARE_API_TOKEN_OSE
 #    - CLOUDFLARE_ACCOUNT_ID
 ```
 
@@ -605,7 +605,7 @@ clasp login
 ### Cloudflare Worker Not Updated
 
 1. Verify Cloudflare secrets are configured:
-   - `CLOUDFLARE_API_TOKEN_ESE`
+   - `CLOUDFLARE_API_TOKEN_OSE`
    - `CLOUDFLARE_ACCOUNT_ID`
 2. Check API token has Workers permissions
 3. Manual update:

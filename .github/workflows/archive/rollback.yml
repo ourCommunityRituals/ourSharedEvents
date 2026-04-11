@@ -19,7 +19,7 @@
 #   - Clear deployment history visibility
 #
 # Required Secrets:
-#   - CLOUDFLARE_API_TOKEN_ESE: Cloudflare API token for Worker deployment
+#   - CLOUDFLARE_API_TOKEN_OSE: Cloudflare API token for Worker deployment
 
 name: Manual Rollback
 
@@ -70,11 +70,11 @@ jobs:
     steps:
       - name: Validate Cloudflare secrets
         run: |
-          if [ -z "${{ secrets.CLOUDFLARE_API_TOKEN_ESE }}" ]; then
-            echo "::error::Missing required secret: CLOUDFLARE_API_TOKEN_ESE"
+          if [ -z "${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}" ]; then
+            echo "::error::Missing required secret: CLOUDFLARE_API_TOKEN_OSE"
             exit 1
           fi
-          echo "CLOUDFLARE_API_TOKEN_ESE is set"
+          echo "CLOUDFLARE_API_TOKEN_OSE is set"
 
       - name: Determine rollback targets
         id: check
@@ -132,7 +132,7 @@ jobs:
 
       - name: List staging deployments
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_ESE }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
         run: |
           echo "=============================================="
           echo "STAGING DEPLOYMENT HISTORY"
@@ -145,7 +145,7 @@ jobs:
       - name: Execute staging rollback
         if: github.event.inputs.dry_run != 'true'
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_ESE }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
         run: |
           echo "=============================================="
           echo "ROLLING BACK STAGING"
@@ -231,7 +231,7 @@ jobs:
 
       - name: List production deployments
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_ESE }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
         run: |
           echo "=============================================="
           echo "PRODUCTION DEPLOYMENT HISTORY"
@@ -244,7 +244,7 @@ jobs:
       - name: Execute production rollback
         if: github.event.inputs.dry_run != 'true'
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_ESE }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
         run: |
           echo "=============================================="
           echo "ROLLING BACK PRODUCTION"

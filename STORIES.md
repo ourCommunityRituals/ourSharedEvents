@@ -280,7 +280,7 @@ _Work through P1-6 through P1-10 in order. Each story is a gate — don't start 
 **Description:** Add all credentials to GitHub Actions and Cloudflare Worker, then trigger the first deploy to `stg.oursharedevents.com`. D1-native — no Google Sheets secrets needed.
 **Acceptance criteria:**
 
-- 3 GitHub Actions secrets set: `CLOUDFLARE_API_TOKEN_ESE`, `CLOUDFLARE_ACCOUNT_ID`, `ADMIN_KEY`
+- 3 GitHub Actions secrets set: `CLOUDFLARE_API_TOKEN_OSE`, `CLOUDFLARE_ACCOUNT_ID`, `ADMIN_KEY`
 - 2 Wrangler staging secrets set: `ADMIN_KEY`, `FORMS_ENCRYPTION_KEY`
 - `wrangler secret list --env staging` shows both secrets
 - D1 migrations applied to staging: `wrangler d1 migrations apply DB --env staging --remote` + `wrangler d1 migrations apply FORMS_DB --env staging --remote`

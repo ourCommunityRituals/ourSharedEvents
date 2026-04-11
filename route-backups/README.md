@@ -8,7 +8,7 @@ Before making route changes (SEC-4.2), export current routes to create a rollbac
 
 ```bash
 export CLOUDFLARE_ZONE_ID=your-zone-id
-export CLOUDFLARE_API_TOKEN_ESE=your-api-token
+export CLOUDFLARE_API_TOKEN_OSE=your-api-token
 npm run routes:export
 ```
 

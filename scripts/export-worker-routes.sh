@@ -8,7 +8,7 @@
 #
 # Environment Variables:
 #   CLOUDFLARE_ZONE_ID     - Zone ID (required)
-#   CLOUDFLARE_API_TOKEN_ESE   - API token with Zone:Read permission (required)
+#   CLOUDFLARE_API_TOKEN_OSE   - API token with Zone:Read permission (required)
 #
 # Output:
 #   Creates timestamped backup in ./route-backups/
@@ -19,7 +19,7 @@ set -e
 
 # Configuration
 ZONE_ID="${CLOUDFLARE_ZONE_ID:-}"
-CF_API_TOKEN="${CLOUDFLARE_API_TOKEN_ESE:-}"
+CF_API_TOKEN="${CLOUDFLARE_API_TOKEN_OSE:-}"
 EXPORT_DIR="./route-backups"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 EXPORT_FILE="${EXPORT_DIR}/routes_backup_${TIMESTAMP}.json"
@@ -35,17 +35,17 @@ if [ -z "$ZONE_ID" ]; then
     echo ""
     echo "Usage:"
     echo "  export CLOUDFLARE_ZONE_ID=your-zone-id"
-    echo "  export CLOUDFLARE_API_TOKEN_ESE=your-api-token"
+    echo "  export CLOUDFLARE_API_TOKEN_OSE=your-api-token"
     echo "  ./scripts/export-worker-routes.sh"
     exit 1
 fi
 
 if [ -z "$CF_API_TOKEN" ]; then
-    echo "Error: CLOUDFLARE_API_TOKEN_ESE not set"
+    echo "Error: CLOUDFLARE_API_TOKEN_OSE not set"
     echo ""
     echo "Usage:"
     echo "  export CLOUDFLARE_ZONE_ID=your-zone-id"
-    echo "  export CLOUDFLARE_API_TOKEN_ESE=your-api-token"
+    echo "  export CLOUDFLARE_API_TOKEN_OSE=your-api-token"
     echo "  ./scripts/export-worker-routes.sh"
     exit 1
 fi

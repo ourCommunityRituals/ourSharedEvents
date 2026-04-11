@@ -198,7 +198,7 @@ Only **2 Vitest files** test the canonical deployed Worker (`workers/oursharedev
 
 | Secret                     | Used By        | Rotation |
 | -------------------------- | -------------- | -------- |
-| `CLOUDFLARE_API_TOKEN_ESE` | Deploy jobs    | 90 days  |
+| `CLOUDFLARE_API_TOKEN_OSE` | Deploy jobs    | 90 days  |
 | `CLOUDFLARE_ACCOUNT_ID`    | Deploy jobs    | Static   |
 | `ADMIN_KEY`                | E2E auth tests | 90 days  |
 

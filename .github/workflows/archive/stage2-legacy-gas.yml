@@ -780,7 +780,7 @@ jobs:
       - name: Pre-flight health check
         id: health-check
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_ESE }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           echo "=============================================="
@@ -925,12 +925,12 @@ jobs:
             fi
 
             # Check if Cloudflare credentials are available
-            if [ -z "$CLOUDFLARE_API_TOKEN_ESE" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
-              echo "⚠️ CLOUDFLARE_API_TOKEN_ESE or CLOUDFLARE_ACCOUNT_ID not set."
+            if [ -z "$CLOUDFLARE_API_TOKEN_OSE" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+              echo "⚠️ CLOUDFLARE_API_TOKEN_OSE or CLOUDFLARE_ACCOUNT_ID not set."
               echo "Cannot verify worker via API fallback."
               echo ""
               echo "To enable API fallback, add these secrets to your repository:"
-              echo "  - CLOUDFLARE_API_TOKEN_ESE"
+              echo "  - CLOUDFLARE_API_TOKEN_OSE"
               echo "  - CLOUDFLARE_ACCOUNT_ID"
               echo ""
               echo "Recommended actions:"
@@ -972,7 +972,7 @@ jobs:
                 echo "$DEPLOY_OUTPUT"
                 echo ""
                 echo "Possible causes:"
-                echo "  - Invalid CLOUDFLARE_API_TOKEN_ESE"
+                echo "  - Invalid CLOUDFLARE_API_TOKEN_OSE"
                 echo "  - Worker not deployed to $WRANGLER_ENV environment"
                 echo "  - Cloudflare API connectivity issue"
                 echo "=============================================="

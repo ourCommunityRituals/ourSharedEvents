@@ -74,7 +74,7 @@ This document defines consistent naming conventions and storage rules for CI/CD 
 
 | Legacy Name                | New Name          | Migration Status |
 | -------------------------- | ----------------- | ---------------- |
-| `CLOUDFLARE_API_TOKEN_ESE` | `CF_DEPLOY_TOKEN` | Alias supported  |
+| `CLOUDFLARE_API_TOKEN_OSE` | `CF_DEPLOY_TOKEN` | Alias supported  |
 | `CLOUDFLARE_ACCOUNT_ID`    | `CF_ACCOUNT_ID`   | Alias supported  |
 
 ### 3.2 Google Cloud Secrets
@@ -183,7 +183,7 @@ jobs:
     steps:
       - name: Deploy
         env:
-          CLOUDFLARE_API_TOKEN_ESE: ${{ secrets.CF_DEPLOY_TOKEN }}
+          CLOUDFLARE_API_TOKEN_OSE: ${{ secrets.CF_DEPLOY_TOKEN }}
           # Uses staging-scoped CF_DEPLOY_TOKEN
 ```
 
@@ -241,7 +241,7 @@ jobs:
 
       - name: Deploy to Cloudflare
         env:
-          CLOUDFLARE_API_TOKEN_ESE: ${{ secrets.CF_DEPLOY_TOKEN }}
+          CLOUDFLARE_API_TOKEN_OSE: ${{ secrets.CF_DEPLOY_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
         run: |
           npx wrangler deploy --env staging
@@ -253,7 +253,7 @@ GitHub automatically masks secrets in logs. Ensure custom scripts don't accident
 
 ```bash
 # Bad - might print secret
-echo "Token: $CLOUDFLARE_API_TOKEN_ESE"
+echo "Token: $CLOUDFLARE_API_TOKEN_OSE"
 
 # Good - verify without printing
 wrangler whoami

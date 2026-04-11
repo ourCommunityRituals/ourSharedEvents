@@ -360,7 +360,7 @@ All HTML responses must:
 | `GOOGLE_CLIENT_EMAIL`           | Google      | Service account email             | 90 days      |
 | `GOOGLE_PRIVATE_KEY`            | Google      | Service account private key (PEM) | 90 days      |
 | `STAGING_SHEETS_SPREADSHEET_ID` | Google      | Staging spreadsheet ID            | Static       |
-| `CLOUDFLARE_API_TOKEN_ESE`      | Cloudflare  | Worker deployment                 | As needed    |
+| `CLOUDFLARE_API_TOKEN_OSE`      | Cloudflare  | Worker deployment                 | As needed    |
 | `CLOUDFLARE_ACCOUNT_ID`         | Cloudflare  | Account identifier                | Static       |
 | `OAUTH_CREDENTIALS`             | Apps Script | Clasp OAuth (legacy)              | Auto-refresh |
 

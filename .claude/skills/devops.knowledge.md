@@ -75,7 +75,7 @@ wrangler d1 migrations apply --env production
 
 | Secret                     | Scope       | Rotation | Status     |
 | -------------------------- | ----------- | -------- | ---------- |
-| `CLOUDFLARE_API_TOKEN_ESE` | Deploy jobs | 90 days  | ❌ Not set |
+| `CLOUDFLARE_API_TOKEN_OSE` | Deploy jobs | 90 days  | ❌ Not set |
 | `CLOUDFLARE_ACCOUNT_ID`    | Deploy jobs | Static   | ❌ Not set |
 | `ADMIN_KEY`                | E2E tests   | 90 days  | ❌ Not set |
 

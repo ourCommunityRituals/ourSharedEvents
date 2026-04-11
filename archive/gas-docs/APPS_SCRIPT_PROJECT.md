@@ -351,7 +351,7 @@ The automation scripts include:
 | `ADMIN_KEY_CBC`            | Optional    | CBC brand admin key                         |
 | `ADMIN_KEY_CBL`            | Optional    | CBL brand admin key                         |
 | `SPREADSHEET_ID`           | Optional    | Fallback spreadsheet ID                     |
-| `CLOUDFLARE_API_TOKEN_ESE` | Optional    | Cloudflare Worker updates                   |
+| `CLOUDFLARE_API_TOKEN_OSE` | Optional    | Cloudflare Worker updates                   |
 | `CLOUDFLARE_ACCOUNT_ID`    | Optional    | Cloudflare Worker updates                   |
 
 ---

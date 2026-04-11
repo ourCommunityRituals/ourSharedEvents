@@ -172,7 +172,7 @@ Before removing any routes, create a complete backup:
 
 # Configuration
 ZONE_ID="${CLOUDFLARE_ZONE_ID:-your-zone-id}"
-CF_API_TOKEN="${CLOUDFLARE_API_TOKEN_ESE:-your-api-token}"
+CF_API_TOKEN="${CLOUDFLARE_API_TOKEN_OSE:-your-api-token}"
 EXPORT_DIR="./route-backups"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 EXPORT_FILE="${EXPORT_DIR}/routes_backup_${TIMESTAMP}.json"
@@ -342,7 +342,7 @@ done
 # identify-routes-to-delete.sh
 
 ZONE_ID="${CLOUDFLARE_ZONE_ID}"
-CF_API_TOKEN="${CLOUDFLARE_API_TOKEN_ESE}"
+CF_API_TOKEN="${CLOUDFLARE_API_TOKEN_OSE}"
 
 # Target routes to KEEP
 KEEP_PATTERNS=(
@@ -386,7 +386,7 @@ done
 # CAUTION: Review output of identify-routes-to-delete.sh first!
 
 ZONE_ID="${CLOUDFLARE_ZONE_ID}"
-CF_API_TOKEN="${CLOUDFLARE_API_TOKEN_ESE}"
+CF_API_TOKEN="${CLOUDFLARE_API_TOKEN_OSE}"
 
 # Route IDs to delete (from identify script)
 # IMPORTANT: Populate this array with actual route IDs
@@ -451,7 +451,7 @@ set -e
 DOMAIN="${1:-eventangle.com}"
 STAGING_DOMAIN="stg.eventangle.com"
 ZONE_ID="${CLOUDFLARE_ZONE_ID:-}"
-CF_API_TOKEN="${CLOUDFLARE_API_TOKEN_ESE:-}"
+CF_API_TOKEN="${CLOUDFLARE_API_TOKEN_OSE:-}"
 
 echo "========================================"
 echo "SEC-4.2 Single Worker Route Verification"
@@ -475,7 +475,7 @@ if [ -n "$ZONE_ID" ] && [ -n "$CF_API_TOKEN" ]; then
         echo "   Run: ./scripts/identify-routes-to-delete.sh"
     fi
 else
-    echo "   ⚠️ SKIP: CLOUDFLARE_ZONE_ID or CLOUDFLARE_API_TOKEN_ESE not set"
+    echo "   ⚠️ SKIP: CLOUDFLARE_ZONE_ID or CLOUDFLARE_API_TOKEN_OSE not set"
 fi
 echo ""
 
@@ -613,7 +613,7 @@ grep -A4 '\[env.staging\]' cloudflare-proxy/wrangler.toml | head -10
 
 BACKUP_FILE="$1"
 ZONE_ID="${CLOUDFLARE_ZONE_ID}"
-CF_API_TOKEN="${CLOUDFLARE_API_TOKEN_ESE}"
+CF_API_TOKEN="${CLOUDFLARE_API_TOKEN_OSE}"
 
 if [ -z "$BACKUP_FILE" ]; then
     echo "Usage: $0 <backup-file.json>"

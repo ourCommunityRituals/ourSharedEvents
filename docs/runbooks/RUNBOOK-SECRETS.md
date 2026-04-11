@@ -23,7 +23,7 @@
 
 | Secret                     | Purpose                    | Rotation Period |
 | -------------------------- | -------------------------- | --------------- |
-| `CLOUDFLARE_API_TOKEN_ESE` | Worker deployment (scoped) | 90 days         |
+| `CLOUDFLARE_API_TOKEN_OSE` | Worker deployment (scoped) | 90 days         |
 | `CLOUDFLARE_ACCOUNT_ID`    | Account identifier         | Static          |
 | `ADMIN_KEY`                | Admin API authentication   | 90 days         |
 
@@ -153,13 +153,13 @@ If FORMS_ENCRYPTION_KEY is lost:
 
 ### Step 2: Update GitHub Secret
 
-1. GitHub repo > Settings > Secrets > `CLOUDFLARE_API_TOKEN_ESE`
+1. GitHub repo > Settings > Secrets > `CLOUDFLARE_API_TOKEN_OSE`
 2. Paste new token
 
 ### Step 3: Verify
 
 ```bash
-export CLOUDFLARE_API_TOKEN_ESE=<new_token>
+export CLOUDFLARE_API_TOKEN_OSE=<new_token>
 wrangler whoami
 # Should show account info
 ```

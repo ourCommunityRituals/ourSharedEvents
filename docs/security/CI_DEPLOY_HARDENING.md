@@ -312,7 +312,7 @@ curl -X GET "https://api.cloudflare.com/client/v4/accounts/{account_id}/audit_lo
 gh secret set CF_DEPLOY_TOKEN --body "<new-token-value>"
 
 # 6. Verify new token works
-CLOUDFLARE_API_TOKEN_ESE="<new-token>" wrangler whoami
+CLOUDFLARE_API_TOKEN_OSE="<new-token>" wrangler whoami
 ```
 
 **VERIFICATION (< 1 hour):**
@@ -421,13 +421,13 @@ curl -X GET "https://api.cloudflare.com/client/v4/accounts/{account_id}/members"
 
 ```bash
 # Verify Worker deployment capability
-CLOUDFLARE_API_TOKEN_ESE=$CF_DEPLOY_TOKEN wrangler whoami
+CLOUDFLARE_API_TOKEN_OSE=$CF_DEPLOY_TOKEN wrangler whoami
 
 # EXPECTED: Shows account email and account ID
 # This confirms the token has the necessary Worker permissions
 
 # Dry-run deployment test
-CLOUDFLARE_API_TOKEN_ESE=$CF_DEPLOY_TOKEN wrangler deploy --env staging --dry-run
+CLOUDFLARE_API_TOKEN_OSE=$CF_DEPLOY_TOKEN wrangler deploy --env staging --dry-run
 
 # EXPECTED: Deployment preview without errors
 ```
@@ -478,7 +478,7 @@ fi
 
 # Test Workers (should succeed)
 echo -n "Workers permission: "
-WORKERS_RESULT=$(CLOUDFLARE_API_TOKEN_ESE=$TOKEN wrangler whoami 2>&1)
+WORKERS_RESULT=$(CLOUDFLARE_API_TOKEN_OSE=$TOKEN wrangler whoami 2>&1)
 if echo "$WORKERS_RESULT" | grep -q "Account"; then
   echo "ALLOWED (correct)"
 else

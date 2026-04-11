@@ -177,7 +177,7 @@ Tag `vX.Y.Z` → deploys to `oursharedevents.com` + E2E smoke tests
 
 **Required GitHub secrets:**
 
-- `CLOUDFLARE_API_TOKEN_ESE`
+- `CLOUDFLARE_API_TOKEN_OSE`
 - `CLOUDFLARE_ACCOUNT_ID`
 - `ADMIN_KEY`
 

@@ -237,7 +237,7 @@ Immediately rotate if any of these occur:
 gh secret set CF_DEPLOY_TOKEN --body "<new-token-value>"
 
 # For local verification
-CLOUDFLARE_API_TOKEN_ESE=<new-token> wrangler whoami
+CLOUDFLARE_API_TOKEN_OSE=<new-token> wrangler whoami
 ```
 
 **Step 4: Verify and Document (< 15 minutes)**
@@ -374,7 +374,7 @@ Before deploying a new READONLY_AUDIT token, verify:
 **Test 1: Token CAN deploy Workers**
 
 ```bash
-CLOUDFLARE_API_TOKEN_ESE=$CF_DEPLOY_TOKEN wrangler whoami
+CLOUDFLARE_API_TOKEN_OSE=$CF_DEPLOY_TOKEN wrangler whoami
 # Expected: Shows account email and account ID
 ```
 
@@ -410,7 +410,7 @@ curl -X GET "https://api.cloudflare.com/client/v4/zones/{zone_id}/dns_records" \
 **Test 2: Token CANNOT deploy Workers**
 
 ```bash
-CLOUDFLARE_API_TOKEN_ESE=$CF_DNS_TOKEN wrangler whoami
+CLOUDFLARE_API_TOKEN_OSE=$CF_DNS_TOKEN wrangler whoami
 # Expected: Error or limited account info (no Worker permissions)
 ```
 

@@ -11,7 +11,7 @@
 #
 # Environment Variables:
 #   CLOUDFLARE_ZONE_ID     - Zone ID for API checks (optional)
-#   CLOUDFLARE_API_TOKEN_ESE   - API token with Zone:Read permission (optional)
+#   CLOUDFLARE_API_TOKEN_OSE   - API token with Zone:Read permission (optional)
 #
 # See docs/RUNBOOK-SEC-4.2-SINGLE-WORKER-ROUTE.md for full documentation
 
@@ -30,13 +30,13 @@ if [ "$1" = "--current-state" ]; then
     echo "============================================"
     echo ""
 
-    if [ -n "$CLOUDFLARE_ZONE_ID" ] && [ -n "$CLOUDFLARE_API_TOKEN_ESE" ]; then
+    if [ -n "$CLOUDFLARE_ZONE_ID" ] && [ -n "$CLOUDFLARE_API_TOKEN_OSE" ]; then
         echo "Fetching routes from Cloudflare API..."
         echo ""
 
         ROUTES=$(curl -s -X GET \
             "https://api.cloudflare.com/client/v4/zones/$CLOUDFLARE_ZONE_ID/workers/routes" \
-            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN_ESE" \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN_OSE" \
             -H "Content-Type: application/json")
 
         ROUTE_COUNT=$(echo "$ROUTES" | jq '.result | length')
@@ -63,7 +63,7 @@ if [ "$1" = "--current-state" ]; then
         echo ""
         echo "Set environment variables:"
         echo "  export CLOUDFLARE_ZONE_ID=your-zone-id"
-        echo "  export CLOUDFLARE_API_TOKEN_ESE=your-api-token"
+        echo "  export CLOUDFLARE_API_TOKEN_OSE=your-api-token"
         echo ""
         echo "Showing wrangler.toml routes instead:"
         echo ""
@@ -91,10 +91,10 @@ echo ""
 # Test 1: Route Count Check (if API available)
 # ===========================================
 echo "1. Checking route count via Cloudflare API..."
-if [ -n "$CLOUDFLARE_ZONE_ID" ] && [ -n "$CLOUDFLARE_API_TOKEN_ESE" ]; then
+if [ -n "$CLOUDFLARE_ZONE_ID" ] && [ -n "$CLOUDFLARE_API_TOKEN_OSE" ]; then
     ROUTES=$(curl -s -X GET \
         "https://api.cloudflare.com/client/v4/zones/$CLOUDFLARE_ZONE_ID/workers/routes" \
-        -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN_ESE" \
+        -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN_OSE" \
         -H "Content-Type: application/json" 2>/dev/null)
 
     ROUTE_COUNT=$(echo "$ROUTES" | jq '.result | length' 2>/dev/null || echo "0")
@@ -108,7 +108,7 @@ if [ -n "$CLOUDFLARE_ZONE_ID" ] && [ -n "$CLOUDFLARE_API_TOKEN_ESE" ]; then
         ((FAIL_COUNT++))
     fi
 else
-    echo "   ⚠️  SKIP: CLOUDFLARE_ZONE_ID or CLOUDFLARE_API_TOKEN_ESE not set"
+    echo "   ⚠️  SKIP: CLOUDFLARE_ZONE_ID or CLOUDFLARE_API_TOKEN_OSE not set"
     ((WARN_COUNT++))
 fi
 echo ""
