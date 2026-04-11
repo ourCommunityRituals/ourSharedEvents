@@ -21,11 +21,11 @@
 
 ### GitHub Actions Secrets
 
-| Secret                  | Purpose                    | Rotation Period |
-| ----------------------- | -------------------------- | --------------- |
-| `CLOUDFLARE_API_TOKEN`  | Worker deployment (scoped) | 90 days         |
-| `CLOUDFLARE_ACCOUNT_ID` | Account identifier         | Static          |
-| `ADMIN_KEY`             | Admin API authentication   | 90 days         |
+| Secret                     | Purpose                    | Rotation Period |
+| -------------------------- | -------------------------- | --------------- |
+| `CLOUDFLARE_API_TOKEN_ESE` | Worker deployment (scoped) | 90 days         |
+| `CLOUDFLARE_ACCOUNT_ID`    | Account identifier         | Static          |
+| `ADMIN_KEY`                | Admin API authentication   | 90 days         |
 
 ### Cloudflare Worker Secrets (set via `wrangler secret put`)
 
@@ -153,13 +153,13 @@ If FORMS_ENCRYPTION_KEY is lost:
 
 ### Step 2: Update GitHub Secret
 
-1. GitHub repo > Settings > Secrets > `CLOUDFLARE_API_TOKEN`
+1. GitHub repo > Settings > Secrets > `CLOUDFLARE_API_TOKEN_ESE`
 2. Paste new token
 
 ### Step 3: Verify
 
 ```bash
-export CLOUDFLARE_API_TOKEN=<new_token>
+export CLOUDFLARE_API_TOKEN_ESE=<new_token>
 wrangler whoami
 # Should show account info
 ```

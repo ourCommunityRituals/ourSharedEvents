@@ -11,12 +11,12 @@
 
 Define least-privilege boundaries for CI/CD deployment pipelines, ensuring that a compromised deploy token cannot modify DNS records, Cloudflare Access policies, or account-level settings.
 
-| Attribute | Value |
-|-----------|-------|
-| **Scope** | GitHub Actions workflows, Cloudflare API tokens used in CI |
-| **Objective** | CI can deploy Workers but cannot modify DNS/Access/account |
+| Attribute         | Value                                                          |
+| ----------------- | -------------------------------------------------------------- |
+| **Scope**         | GitHub Actions workflows, Cloudflare API tokens used in CI     |
+| **Objective**     | CI can deploy Workers but cannot modify DNS/Access/account     |
 | **Prerequisites** | CF_API_TOKENS_POLICY.md (SEC-1.2), SECRETS_POLICY.md (SEC-7.1) |
-| **Compliance** | Mandatory for all CI/CD pipelines with Cloudflare access |
+| **Compliance**    | Mandatory for all CI/CD pipelines with Cloudflare access       |
 
 ---
 
@@ -24,22 +24,22 @@ Define least-privilege boundaries for CI/CD deployment pipelines, ensuring that 
 
 ### 2.1 Attack Scenarios
 
-| Scenario | Description | Impact Without Hardening |
-|----------|-------------|--------------------------|
-| **Leaked Deploy Token** | Token exposed in logs, commit, or error message | Full Worker + DNS + Access control |
-| **Compromised CI Runner** | Attacker gains shell on GitHub Actions runner | Exfiltration of all secrets in workflow |
-| **Malicious PR** | Attacker submits PR with modified workflow | Token used to deploy malicious code |
-| **Supply Chain Attack** | Compromised GitHub Action | Token exfiltration via malicious action |
+| Scenario                  | Description                                     | Impact Without Hardening                |
+| ------------------------- | ----------------------------------------------- | --------------------------------------- |
+| **Leaked Deploy Token**   | Token exposed in logs, commit, or error message | Full Worker + DNS + Access control      |
+| **Compromised CI Runner** | Attacker gains shell on GitHub Actions runner   | Exfiltration of all secrets in workflow |
+| **Malicious PR**          | Attacker submits PR with modified workflow      | Token used to deploy malicious code     |
+| **Supply Chain Attack**   | Compromised GitHub Action                       | Token exfiltration via malicious action |
 
 ### 2.2 Protection Goals
 
-| Goal | Mechanism | Section |
-|------|-----------|---------|
-| **Token Scope Limitation** | Cloudflare scoped API tokens | Section 3 |
-| **Branch Protection** | GitHub branch protection rules | Section 4 |
-| **Required Checks** | Status checks before merge | Section 4 |
-| **Token Rotation** | Regular and emergency rotation | Section 5 |
-| **Incident Response** | Rapid revoke procedures | Section 6 |
+| Goal                       | Mechanism                      | Section   |
+| -------------------------- | ------------------------------ | --------- |
+| **Token Scope Limitation** | Cloudflare scoped API tokens   | Section 3 |
+| **Branch Protection**      | GitHub branch protection rules | Section 4 |
+| **Required Checks**        | Status checks before merge     | Section 4 |
+| **Token Rotation**         | Regular and emergency rotation | Section 5 |
+| **Incident Response**      | Rapid revoke procedures        | Section 6 |
 
 ---
 
@@ -49,27 +49,27 @@ Define least-privilege boundaries for CI/CD deployment pipelines, ensuring that 
 
 The CI deploy token (`CF_DEPLOY_TOKEN`) **MAY** perform:
 
-| Capability | API Permission | Scope | Justification |
-|------------|----------------|-------|---------------|
-| Deploy Worker code | Workers Scripts: Edit | Account | Core deployment function |
-| Update Worker routes | Workers Routes: Edit | Zone: eventangle.com | Route traffic to Workers |
-| Read/Write KV namespaces | Workers KV Storage: Edit | Account | Application data storage |
-| View account settings | Account Settings: Read | Account | Verify deployment context |
+| Capability               | API Permission           | Scope                | Justification             |
+| ------------------------ | ------------------------ | -------------------- | ------------------------- |
+| Deploy Worker code       | Workers Scripts: Edit    | Account              | Core deployment function  |
+| Update Worker routes     | Workers Routes: Edit     | Zone: eventangle.com | Route traffic to Workers  |
+| Read/Write KV namespaces | Workers KV Storage: Edit | Account              | Application data storage  |
+| View account settings    | Account Settings: Read   | Account              | Verify deployment context |
 
 ### 3.2 Prohibited Capabilities (Denylist)
 
 The CI deploy token **MUST NOT** be able to:
 
-| Capability | Why Prohibited | Verification |
-|------------|----------------|--------------|
-| Edit DNS records | DNS hijacking enables phishing | Test 1 (Section 7.1) |
+| Capability               | Why Prohibited                           | Verification         |
+| ------------------------ | ---------------------------------------- | -------------------- |
+| Edit DNS records         | DNS hijacking enables phishing           | Test 1 (Section 7.1) |
 | Manage Cloudflare Access | Access bypass enables unauthorized entry | Test 2 (Section 7.2) |
-| Configure SSL/TLS | Certificate manipulation enables MITM | Test 3 (Section 7.3) |
-| Manage WAF rules | WAF bypass exposes vulnerabilities | Test 4 (Section 7.4) |
-| Modify account members | Privilege escalation risk | Test 5 (Section 7.5) |
-| Access billing | Financial data exposure | Token scope design |
-| Create new zones | Infrastructure sprawl | Token scope design |
-| Manage Page Rules | Traffic redirection risk | Token scope design |
+| Configure SSL/TLS        | Certificate manipulation enables MITM    | Test 3 (Section 7.3) |
+| Manage WAF rules         | WAF bypass exposes vulnerabilities       | Test 4 (Section 7.4) |
+| Modify account members   | Privilege escalation risk                | Test 5 (Section 7.5) |
+| Access billing           | Financial data exposure                  | Token scope design   |
+| Create new zones         | Infrastructure sprawl                    | Token scope design   |
+| Manage Page Rules        | Traffic redirection risk                 | Token scope design   |
 
 ### 3.3 Token Configuration Specification
 
@@ -100,18 +100,20 @@ TTL: (Optional)
 
 ### 3.4 Blast Radius Comparison
 
-| Token Type | Compromised Impact | Recovery Time |
-|------------|-------------------|---------------|
-| **Global API Key** | Full account compromise: DNS, Access, WAF, billing, all zones | Days to weeks |
-| **Over-scoped Token** | DNS hijacking + Access bypass + Worker malware | Hours to days |
-| **Properly Scoped Token** | Worker code modification only (this policy) | Minutes to hours |
+| Token Type                | Compromised Impact                                            | Recovery Time    |
+| ------------------------- | ------------------------------------------------------------- | ---------------- |
+| **Global API Key**        | Full account compromise: DNS, Access, WAF, billing, all zones | Days to weeks    |
+| **Over-scoped Token**     | DNS hijacking + Access bypass + Worker malware                | Hours to days    |
+| **Properly Scoped Token** | Worker code modification only (this policy)                   | Minutes to hours |
 
 **Properly scoped token impact is limited to:**
+
 - Malicious code in Worker (mitigated by code review, branch protection)
 - Worker route manipulation within allowed zone
 - KV data modification (if KV permission granted)
 
 **Properly scoped token CANNOT:**
+
 - Redirect DNS to attacker-controlled servers
 - Create Access policies granting attacker entry
 - Disable WAF protections
@@ -125,28 +127,28 @@ TTL: (Optional)
 
 Configure the following on the default branch (`main` or `master`):
 
-| Setting | Value | Purpose |
-|---------|-------|---------|
-| **Require pull request reviews** | Enabled, 1+ approval | Prevent direct pushes |
-| **Dismiss stale approvals** | Enabled | Require re-review after changes |
-| **Require status checks** | Enabled | Enforce CI passes |
-| **Require branches be up to date** | Enabled | Prevent merge conflicts |
-| **Restrict pushes** | Enabled | Only merge via PR |
-| **Include administrators** | Enabled | No bypass for admins |
-| **Allow force pushes** | Disabled | Prevent history rewriting |
-| **Allow deletions** | Disabled | Prevent branch deletion |
+| Setting                            | Value                | Purpose                         |
+| ---------------------------------- | -------------------- | ------------------------------- |
+| **Require pull request reviews**   | Enabled, 1+ approval | Prevent direct pushes           |
+| **Dismiss stale approvals**        | Enabled              | Require re-review after changes |
+| **Require status checks**          | Enabled              | Enforce CI passes               |
+| **Require branches be up to date** | Enabled              | Prevent merge conflicts         |
+| **Restrict pushes**                | Enabled              | Only merge via PR               |
+| **Include administrators**         | Enabled              | No bypass for admins            |
+| **Allow force pushes**             | Disabled             | Prevent history rewriting       |
+| **Allow deletions**                | Disabled             | Prevent branch deletion         |
 
 ### 4.2 Required Status Checks
 
 Configure these checks as required before merge:
 
-| Check Name | Purpose | Blocks Deploy If Failed |
-|------------|---------|------------------------|
-| `test` | Unit and integration tests | Yes |
-| `lint` | Code quality and formatting | Yes |
-| `typecheck` | TypeScript type validation | Yes |
-| `security-scan` | Vulnerability detection | Yes |
-| `build` | Verify code compiles | Yes |
+| Check Name      | Purpose                     | Blocks Deploy If Failed |
+| --------------- | --------------------------- | ----------------------- |
+| `test`          | Unit and integration tests  | Yes                     |
+| `lint`          | Code quality and formatting | Yes                     |
+| `typecheck`     | TypeScript type validation  | Yes                     |
+| `security-scan` | Vulnerability detection     | Yes                     |
+| `build`         | Verify code compiles        | Yes                     |
 
 ### 4.3 GitHub Environments
 
@@ -185,9 +187,9 @@ Prevent unauthorized workflow modifications:
 
 Add workflow file to branch protection:
 
-| Setting | Configuration |
-|---------|---------------|
-| **Restrict changes to workflow files** | Require PR approval for .github/workflows/* |
+| Setting                                | Configuration                                |
+| -------------------------------------- | -------------------------------------------- |
+| **Restrict changes to workflow files** | Require PR approval for .github/workflows/\* |
 
 ---
 
@@ -195,9 +197,9 @@ Add workflow file to branch protection:
 
 ### 5.1 Standard Rotation
 
-| Token | Rotation Frequency | Next Rotation | Owner |
-|-------|-------------------|---------------|-------|
-| `CF_DEPLOY_TOKEN` | Every 90 days | Per calendar schedule | DevOps Lead |
+| Token             | Rotation Frequency | Next Rotation         | Owner       |
+| ----------------- | ------------------ | --------------------- | ----------- |
+| `CF_DEPLOY_TOKEN` | Every 90 days      | Per calendar schedule | DevOps Lead |
 
 ### 5.2 Rotation Procedure
 
@@ -261,15 +263,15 @@ Record in rotation log:
 
 Immediately revoke and rotate if ANY of these occur:
 
-| Trigger | Severity | Response Time |
-|---------|----------|---------------|
-| Token exposed in git commit | **CRITICAL** | < 15 minutes |
-| Token exposed in CI logs | **CRITICAL** | < 15 minutes |
-| Token exposed in error message | **HIGH** | < 1 hour |
-| Suspicious Cloudflare API activity | **HIGH** | < 1 hour |
-| CI runner compromise suspected | **HIGH** | < 1 hour |
-| Team member with access departs | **MEDIUM** | < 24 hours |
-| GitHub security advisory on Actions | **MEDIUM** | < 24 hours |
+| Trigger                             | Severity     | Response Time |
+| ----------------------------------- | ------------ | ------------- |
+| Token exposed in git commit         | **CRITICAL** | < 15 minutes  |
+| Token exposed in CI logs            | **CRITICAL** | < 15 minutes  |
+| Token exposed in error message      | **HIGH**     | < 1 hour      |
+| Suspicious Cloudflare API activity  | **HIGH**     | < 1 hour      |
+| CI runner compromise suspected      | **HIGH**     | < 1 hour      |
+| Team member with access departs     | **MEDIUM**   | < 24 hours    |
+| GitHub security advisory on Actions | **MEDIUM**   | < 24 hours    |
 
 ### 6.2 Emergency Revocation Steps
 
@@ -296,6 +298,7 @@ curl -X GET "https://api.cloudflare.com/client/v4/accounts/{account_id}/audit_lo
 ```
 
 **Review audit logs for:**
+
 - Unexpected Worker deployments
 - Worker route modifications
 - KV namespace changes
@@ -309,7 +312,7 @@ curl -X GET "https://api.cloudflare.com/client/v4/accounts/{account_id}/audit_lo
 gh secret set CF_DEPLOY_TOKEN --body "<new-token-value>"
 
 # 6. Verify new token works
-CLOUDFLARE_API_TOKEN="<new-token>" wrangler whoami
+CLOUDFLARE_API_TOKEN_ESE="<new-token>" wrangler whoami
 ```
 
 **VERIFICATION (< 1 hour):**
@@ -324,12 +327,12 @@ curl -sf "https://eventangle.com/?page=status"
 
 ### 6.3 Incident Notification Matrix
 
-| Exposure Type | Notify Immediately | Notify Within 24h |
-|---------------|-------------------|-------------------|
-| Token in public repo | Security Lead, DevOps Lead, Management | Full engineering team |
-| Token in private repo/logs | Security Lead, DevOps Lead | Relevant team members |
-| Suspected CI compromise | Security Lead, DevOps Lead, Management | Full engineering team |
-| Team departure | DevOps Lead | — |
+| Exposure Type              | Notify Immediately                     | Notify Within 24h     |
+| -------------------------- | -------------------------------------- | --------------------- |
+| Token in public repo       | Security Lead, DevOps Lead, Management | Full engineering team |
+| Token in private repo/logs | Security Lead, DevOps Lead             | Relevant team members |
+| Suspected CI compromise    | Security Lead, DevOps Lead, Management | Full engineering team |
+| Team departure             | DevOps Lead                            | —                     |
 
 ### 6.4 Post-Incident Checklist
 
@@ -418,13 +421,13 @@ curl -X GET "https://api.cloudflare.com/client/v4/accounts/{account_id}/members"
 
 ```bash
 # Verify Worker deployment capability
-CLOUDFLARE_API_TOKEN=$CF_DEPLOY_TOKEN wrangler whoami
+CLOUDFLARE_API_TOKEN_ESE=$CF_DEPLOY_TOKEN wrangler whoami
 
 # EXPECTED: Shows account email and account ID
 # This confirms the token has the necessary Worker permissions
 
 # Dry-run deployment test
-CLOUDFLARE_API_TOKEN=$CF_DEPLOY_TOKEN wrangler deploy --env staging --dry-run
+CLOUDFLARE_API_TOKEN_ESE=$CF_DEPLOY_TOKEN wrangler deploy --env staging --dry-run
 
 # EXPECTED: Deployment preview without errors
 ```
@@ -475,7 +478,7 @@ fi
 
 # Test Workers (should succeed)
 echo -n "Workers permission: "
-WORKERS_RESULT=$(CLOUDFLARE_API_TOKEN=$TOKEN wrangler whoami 2>&1)
+WORKERS_RESULT=$(CLOUDFLARE_API_TOKEN_ESE=$TOKEN wrangler whoami 2>&1)
 if echo "$WORKERS_RESULT" | grep -q "Account"; then
   echo "ALLOWED (correct)"
 else
@@ -499,7 +502,7 @@ name: Deploy Worker
 
 on:
   push:
-    branches: [main]  # Only deploy from protected branch
+    branches: [main] # Only deploy from protected branch
   workflow_dispatch:
     inputs:
       environment:
@@ -509,7 +512,7 @@ on:
 
 # Limit workflow permissions
 permissions:
-  contents: read  # Minimal permissions
+  contents: read # Minimal permissions
 
 jobs:
   deploy:
@@ -524,7 +527,7 @@ jobs:
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CF_DEPLOY_TOKEN }}
-          accountId: ${{ vars.CF_ACCOUNT_ID }}  # Use vars for non-secret
+          accountId: ${{ vars.CF_ACCOUNT_ID }} # Use vars for non-secret
 ```
 
 ### 8.2 Security Checklist
@@ -547,32 +550,32 @@ WORKFLOW SECURITY CHECKLIST
 
 ## 9. Acceptance Criteria
 
-| # | Criterion | Verification Method | Status |
-|---|-----------|---------------------|--------|
-| **AC-1** | Compromised deploy token cannot alter DNS | Test 7.1 returns 403 | |
-| **AC-2** | Compromised deploy token cannot alter Access | Test 7.2 returns 403 | |
-| **AC-3** | Protected branches require PR review | GitHub settings audit | |
-| **AC-4** | Required checks block merge on failure | GitHub settings audit | |
-| **AC-5** | Token rotation procedure documented | Section 5 review | |
-| **AC-6** | Emergency revoke procedure documented | Section 6 review | |
-| **AC-7** | Verification tests executable | Run Section 7 tests | |
+| #        | Criterion                                    | Verification Method   | Status |
+| -------- | -------------------------------------------- | --------------------- | ------ |
+| **AC-1** | Compromised deploy token cannot alter DNS    | Test 7.1 returns 403  |        |
+| **AC-2** | Compromised deploy token cannot alter Access | Test 7.2 returns 403  |        |
+| **AC-3** | Protected branches require PR review         | GitHub settings audit |        |
+| **AC-4** | Required checks block merge on failure       | GitHub settings audit |        |
+| **AC-5** | Token rotation procedure documented          | Section 5 review      |        |
+| **AC-6** | Emergency revoke procedure documented        | Section 6 review      |        |
+| **AC-7** | Verification tests executable                | Run Section 7 tests   |        |
 
 ---
 
 ## 10. Related Documents
 
-| Document | Path | Relationship |
-|----------|------|--------------|
-| API Tokens Policy | `docs/security/CF_API_TOKENS_POLICY.md` | Token scope definitions (SEC-1.2) |
-| Secrets Policy | `docs/security/SECRETS_POLICY.md` | Secret classification (SEC-7.1) |
-| CI Secret Naming | `docs/security/CI_SECRET_NAMING.md` | Naming conventions |
-| Account Hardening | `docs/security/CF_ACCOUNT_HARDENING_RUNBOOK.md` | Account-level security (SEC-1.1) |
-| Security Baseline | `docs/security/SECURITY_BASELINE.md` | Overall security model |
+| Document          | Path                                            | Relationship                      |
+| ----------------- | ----------------------------------------------- | --------------------------------- |
+| API Tokens Policy | `docs/security/CF_API_TOKENS_POLICY.md`         | Token scope definitions (SEC-1.2) |
+| Secrets Policy    | `docs/security/SECRETS_POLICY.md`               | Secret classification (SEC-7.1)   |
+| CI Secret Naming  | `docs/security/CI_SECRET_NAMING.md`             | Naming conventions                |
+| Account Hardening | `docs/security/CF_ACCOUNT_HARDENING_RUNBOOK.md` | Account-level security (SEC-1.1)  |
+| Security Baseline | `docs/security/SECURITY_BASELINE.md`            | Overall security model            |
 
 ---
 
 ## Document History
 
-| Date | Author | Changes |
-|------|--------|---------|
+| Date       | Author      | Changes                                               |
+| ---------- | ----------- | ----------------------------------------------------- |
 | 2026-01-05 | Claude Code | Initial PROMPTSPEC-SEC-7.2 CI deploy hardening policy |

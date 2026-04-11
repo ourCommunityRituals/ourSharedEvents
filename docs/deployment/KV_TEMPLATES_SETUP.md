@@ -215,7 +215,7 @@ Templates should be uploaded as part of the deployment pipeline:
     npm run bundle:templates
     npm run upload:templates:staging
   env:
-    CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    CLOUDFLARE_API_TOKEN_ESE: ${{ secrets.CLOUDFLARE_API_TOKEN_ESE }}
 ```
 
 ---

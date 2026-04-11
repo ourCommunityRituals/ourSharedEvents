@@ -8,7 +8,7 @@
 #
 # Environment Variables:
 #   CLOUDFLARE_ZONE_ID     - Zone ID (required)
-#   CLOUDFLARE_API_TOKEN   - API token with Workers Routes:Edit permission (required)
+#   CLOUDFLARE_API_TOKEN_ESE   - API token with Workers Routes:Edit permission (required)
 #
 # See docs/RUNBOOK-SEC-4.2-SINGLE-WORKER-ROUTE.md for full documentation
 
@@ -17,7 +17,7 @@ set -e
 # Configuration
 BACKUP_FILE="$1"
 ZONE_ID="${CLOUDFLARE_ZONE_ID:-}"
-CF_API_TOKEN="${CLOUDFLARE_API_TOKEN:-}"
+CF_API_TOKEN="${CLOUDFLARE_API_TOKEN_ESE:-}"
 
 echo "============================================"
 echo "SEC-4.2 Worker Routes Restore"
@@ -45,7 +45,7 @@ if [ -z "$ZONE_ID" ]; then
 fi
 
 if [ -z "$CF_API_TOKEN" ]; then
-    echo "Error: CLOUDFLARE_API_TOKEN not set"
+    echo "Error: CLOUDFLARE_API_TOKEN_ESE not set"
     exit 1
 fi
 

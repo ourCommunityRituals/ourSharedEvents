@@ -174,7 +174,7 @@ A new workflow has been created to automate this fix:
 **Required Secrets:**
 
 - `OAUTH_CREDENTIALS` - Clasp OAuth credentials (from `~/.clasprc.json`)
-- `CLOUDFLARE_API_TOKEN` - Cloudflare API token
+- `CLOUDFLARE_API_TOKEN_ESE` - Cloudflare API token
 - `CLOUDFLARE_ACCOUNT_ID` - Cloudflare account ID
 
 ### Option 2: Manual Script

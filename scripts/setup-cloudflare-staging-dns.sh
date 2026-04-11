@@ -7,11 +7,11 @@
 #   - api-stg.oursharedevents.com -> Proxied to Cloudflare Worker
 #
 # Prerequisites:
-#   1. CLOUDFLARE_API_TOKEN environment variable set (with Zone:DNS:Edit permission)
+#   1. CLOUDFLARE_API_TOKEN_ESE environment variable set (with Zone:DNS:Edit permission)
 #   2. CLOUDFLARE_ZONE_ID environment variable set (optional, will be auto-detected)
 #
 # Usage:
-#   export CLOUDFLARE_API_TOKEN="your-api-token"
+#   export CLOUDFLARE_API_TOKEN_ESE="your-api-token"
 #   ./scripts/setup-cloudflare-staging-dns.sh
 #
 #   Or with explicit zone ID:
@@ -52,8 +52,8 @@ echo "========================================"
 echo ""
 
 # Check for API token
-if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
-    echo -e "${RED}Error: CLOUDFLARE_API_TOKEN environment variable is not set${NC}"
+if [ -z "$CLOUDFLARE_API_TOKEN_ESE" ]; then
+    echo -e "${RED}Error: CLOUDFLARE_API_TOKEN_ESE environment variable is not set${NC}"
     echo ""
     echo "To create an API token:"
     echo "  1. Go to https://dash.cloudflare.com/profile/api-tokens"
@@ -61,7 +61,7 @@ if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
     echo "  3. Use template: 'Edit zone DNS'"
     echo "  4. Select zone: oursharedevents.com"
     echo "  5. Copy the token and set:"
-    echo "     export CLOUDFLARE_API_TOKEN='your-token'"
+    echo "     export CLOUDFLARE_API_TOKEN_ESE='your-token'"
     echo ""
     exit 1
 fi
@@ -71,7 +71,7 @@ if [ -z "$CLOUDFLARE_ZONE_ID" ]; then
     echo "Looking up Zone ID for ${ZONE_NAME}..."
 
     ZONE_RESPONSE=$(curl -s -X GET "${API_BASE}/zones?name=${ZONE_NAME}" \
-        -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+        -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN_ESE}" \
         -H "Content-Type: application/json")
 
     # Check for errors
@@ -106,7 +106,7 @@ create_dns_record() {
 
     # Check if record already exists
     EXISTING=$(curl -s -X GET "${API_BASE}/zones/${CLOUDFLARE_ZONE_ID}/dns_records?type=A&name=${record_name}" \
-        -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+        -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN_ESE}" \
         -H "Content-Type: application/json")
 
     EXISTING_ID=$(extract_result_id "$EXISTING")
@@ -130,14 +130,14 @@ EOF
         # Create new record
         echo "  Creating new DNS record..."
         RESPONSE=$(curl -s -X POST "${API_BASE}/zones/${CLOUDFLARE_ZONE_ID}/dns_records" \
-            -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+            -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN_ESE}" \
             -H "Content-Type: application/json" \
             --data "$DNS_DATA")
     else
         # Update existing record
         echo "  Updating existing DNS record (ID: ${EXISTING_ID})..."
         RESPONSE=$(curl -s -X PUT "${API_BASE}/zones/${CLOUDFLARE_ZONE_ID}/dns_records/${EXISTING_ID}" \
-            -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+            -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN_ESE}" \
             -H "Content-Type: application/json" \
             --data "$DNS_DATA")
     fi

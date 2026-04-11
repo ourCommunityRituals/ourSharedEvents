@@ -16,7 +16,7 @@
 #   --force           Skip confirmation prompt
 #
 # Environment Variables:
-#   CLOUDFLARE_API_TOKEN   - API token with Workers permissions (required)
+#   CLOUDFLARE_API_TOKEN_ESE   - API token with Workers permissions (required)
 #   CLOUDFLARE_ACCOUNT_ID  - Cloudflare account ID (required)
 #
 # Examples:
@@ -98,11 +98,11 @@ if [ -z "$WRANGLER_ENV" ]; then
 fi
 
 # Validate environment variables
-if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
-  echo -e "${RED}❌ ERROR: CLOUDFLARE_API_TOKEN environment variable is required${NC}"
+if [ -z "$CLOUDFLARE_API_TOKEN_ESE" ]; then
+  echo -e "${RED}❌ ERROR: CLOUDFLARE_API_TOKEN_ESE environment variable is required${NC}"
   echo ""
   echo "Set it with:"
-  echo "  export CLOUDFLARE_API_TOKEN=your_token"
+  echo "  export CLOUDFLARE_API_TOKEN_ESE=your_token"
   exit 1
 fi
 
@@ -241,7 +241,7 @@ for DEPLOY_ID in $TO_DELETE; do
 
   # Use Cloudflare API to delete deployment
   DELETE_RESPONSE=$(curl -s -X DELETE \
-    -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+    -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN_ESE" \
     -H "Content-Type: application/json" \
     -w "\n%{http_code}" \
     "${API_BASE}/${DEPLOY_ID}")

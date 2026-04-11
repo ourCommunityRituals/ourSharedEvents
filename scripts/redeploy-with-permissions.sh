@@ -15,7 +15,7 @@
 #
 # Requirements:
 #   - clasp authenticated (~/.clasprc.json or OAUTH_CREDENTIALS env)
-#   - wrangler authenticated (CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID)
+#   - wrangler authenticated (CLOUDFLARE_API_TOKEN_ESE and CLOUDFLARE_ACCOUNT_ID)
 #
 # The root cause of "permission denied" errors on POST requests is that
 # GAS deployments have IMMUTABLE access settings. Once created with wrong
@@ -329,11 +329,11 @@ echo -e "${CYAN}Step 7: Deploying Cloudflare Worker${NC}"
 echo "────────────────────────────────────────────────────────────────────"
 
 # Check for Cloudflare credentials
-if [ -z "${CLOUDFLARE_API_TOKEN:-}" ] || [ -z "${CLOUDFLARE_ACCOUNT_ID:-}" ]; then
+if [ -z "${CLOUDFLARE_API_TOKEN_ESE:-}" ] || [ -z "${CLOUDFLARE_ACCOUNT_ID:-}" ]; then
     echo -e "${YELLOW}⚠ Cloudflare credentials not set${NC}"
     echo ""
     echo "To deploy the Worker, set these environment variables:"
-    echo "  export CLOUDFLARE_API_TOKEN=your_token"
+    echo "  export CLOUDFLARE_API_TOKEN_ESE=your_token"
     echo "  export CLOUDFLARE_ACCOUNT_ID=your_account_id"
     echo ""
     echo "Or run wrangler manually:"
@@ -454,7 +454,7 @@ else
     echo ""
     echo "Next steps:"
     echo "  1. Set Cloudflare credentials:"
-    echo "     export CLOUDFLARE_API_TOKEN=xxx"
+    echo "     export CLOUDFLARE_API_TOKEN_ESE=xxx"
     echo "     export CLOUDFLARE_ACCOUNT_ID=xxx"
     echo ""
     echo "  2. Deploy Worker:"

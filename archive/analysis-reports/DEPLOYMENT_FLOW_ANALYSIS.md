@@ -13,6 +13,7 @@ Your deployment architecture is **already sophisticated** with GitHub Actions CI
 **Key Finding:** You can achieve 93% of the desired improvements by **optimizing your current flow** rather than migrating to new infrastructure.
 
 **ROI Comparison:**
+
 - 🏆 **Optimize Current Flow:** 17.5 hrs/month saved, 1.4 month payback
 - ⚠️ **Migrate to Cloudflare Workers:** 12 hrs/month saved, 3 month payback
 - ❌ **Migrate to Firebase/Vercel:** 8 hrs/month saved, 12-18 month payback
@@ -86,50 +87,58 @@ Your deployment architecture is **already sophisticated** with GitHub Actions CI
 
 ### Current Metrics
 
-| Metric | Value | Status |
-|--------|-------|--------|
-| **Deployment Frequency** | 2-3 per week | 🟢 Good |
-| **Build Time** | 5-7 minutes | 🟢 Good |
-| **Test Coverage** | 85% | 🟢 Good |
-| **Manual Steps** | 2 (Hostinger update + verify) | 🔴 **Pain Point** |
-| **Deployment Failures** | 15% (mostly sync issues) | 🟡 **Improvable** |
-| **Time per Deployment** | 18-25 minutes | 🟡 **Improvable** |
-| **MTTR (Mean Time to Repair)** | 45-60 minutes | 🔴 **Pain Point** |
+| Metric                         | Value                         | Status            |
+| ------------------------------ | ----------------------------- | ----------------- |
+| **Deployment Frequency**       | 2-3 per week                  | 🟢 Good           |
+| **Build Time**                 | 5-7 minutes                   | 🟢 Good           |
+| **Test Coverage**              | 85%                           | 🟢 Good           |
+| **Manual Steps**               | 2 (Hostinger update + verify) | 🔴 **Pain Point** |
+| **Deployment Failures**        | 15% (mostly sync issues)      | 🟡 **Improvable** |
+| **Time per Deployment**        | 18-25 minutes                 | 🟡 **Improvable** |
+| **MTTR (Mean Time to Repair)** | 45-60 minutes                 | 🔴 **Pain Point** |
 
 ### Pain Points Identified
 
 #### 🔴 Critical: Deployment ID Synchronization
+
 **Problem:** Apps Script generates new deployment ID → Must manually update Hostinger `index.php`
 
 **Evidence:**
+
 - Commit `aaa9167`: "fix: Update Hostinger proxy to correct Apps Script deployment ID"
 - Commit `4185dfa`: "fix: Update Google Apps Script deployment ID in Hostinger proxy"
 - Current wrong ID: `AKfycbx89HcV07ze-1OlQDEByqlF5TBPZRfabwHUdQN1865Iyi9KJw0hKIm9p3I-ceqJyH-t3Q`
 - Correct ID: `AKfycby355Xo-XVv3ibfYsf9SUPQo0rGvBS3ex1sNvfpiQ6g`
 
 **Impact:**
+
 - 15% deployment failure rate
 - 10 minutes wasted per deployment
 - User confusion (Gmail sign-in screens instead of admin page)
 
 #### 🟡 Moderate: No Deployment Verification
+
 **Problem:** No automated health check after Hostinger update
 
 **Impact:**
+
 - Failures discovered by users, not automation
 - 45-60 minute MTTR
 - Rollback requires manual intervention
 
 #### 🟡 Moderate: Multi-Environment Complexity
+
 **Problem:** Multiple deployment targets, unclear which to test
 
 **Evidence:**
+
 - `DEPLOYMENT_QUICK_START.md` (150 lines)
 - `DEVOPS-WORKFLOW.md` (100+ lines)
 - `QA_DEPLOYMENT_GUIDE.md` (step-by-step)
 - `GITHUB_ACTIONS_DEPLOYMENT.md` (required reading)
 
 **Impact:**
+
 - New developers confused
 - Inconsistent testing practices
 - 20% of deployments go to wrong environment
@@ -140,14 +149,14 @@ Your deployment architecture is **already sophisticated** with GitHub Actions CI
 
 ### Comparison Matrix
 
-| Approach | Migration Effort | Monthly Cost | Complexity | Performance | DX | Scalability | **Recommendation** |
-|----------|-----------------|--------------|------------|-------------|----|--------------|--------------------|
-| **Current (Apps Script + Hostinger)** | - | $5 | ⭐⭐⭐ | ⭐⭐ | ⭐⭐⭐ | ⭐⭐ | ✅ **Optimize First** |
-| **Cloudflare Workers** | 1-2 weeks | $0-5 | ⭐⭐ | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | 🏆 **Phase 2 Upgrade** |
-| **Firebase Hosting + Functions** | 4-6 weeks | $0-10 | ⭐⭐⭐ | ⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | ⏭️ Consider for V2 |
-| **Vercel/Netlify** | 6-8 weeks | $0-20 | ⭐⭐⭐ | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | ⏭️ If rewriting frontend |
-| **AWS Lambda** | 3-4 months | $5-50 | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | ⭐⭐ | ⭐⭐⭐⭐⭐ | ❌ Overkill |
-| **Google Cloud Run** | 6-8 weeks | $0-20 | ⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | ⏭️ When outgrowing Apps Script |
+| Approach                              | Migration Effort | Monthly Cost | Complexity | Performance | DX         | Scalability | **Recommendation**             |
+| ------------------------------------- | ---------------- | ------------ | ---------- | ----------- | ---------- | ----------- | ------------------------------ |
+| **Current (Apps Script + Hostinger)** | -                | $5           | ⭐⭐⭐     | ⭐⭐        | ⭐⭐⭐     | ⭐⭐        | ✅ **Optimize First**          |
+| **Cloudflare Workers**                | 1-2 weeks        | $0-5         | ⭐⭐       | ⭐⭐⭐⭐⭐  | ⭐⭐⭐⭐   | ⭐⭐⭐⭐⭐  | 🏆 **Phase 2 Upgrade**         |
+| **Firebase Hosting + Functions**      | 4-6 weeks        | $0-10        | ⭐⭐⭐     | ⭐⭐⭐⭐    | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐  | ⏭️ Consider for V2             |
+| **Vercel/Netlify**                    | 6-8 weeks        | $0-20        | ⭐⭐⭐     | ⭐⭐⭐⭐⭐  | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐  | ⏭️ If rewriting frontend       |
+| **AWS Lambda**                        | 3-4 months       | $5-50        | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐  | ⭐⭐       | ⭐⭐⭐⭐⭐  | ❌ Overkill                    |
+| **Google Cloud Run**                  | 6-8 weeks        | $0-20        | ⭐⭐⭐⭐   | ⭐⭐⭐⭐⭐  | ⭐⭐⭐⭐   | ⭐⭐⭐⭐⭐  | ⏭️ When outgrowing Apps Script |
 
 ### Detailed Alternative Analysis
 
@@ -156,12 +165,14 @@ Your deployment architecture is **already sophisticated** with GitHub Actions CI
 **What It Is:** Replace Hostinger PHP proxy with Cloudflare Workers edge computing
 
 **Architecture Change:**
+
 ```
 BEFORE: User → Hostinger PHP → Apps Script
 AFTER:  User → Cloudflare Workers → Apps Script
 ```
 
 **Pros:**
+
 - ✅ **10-50x faster** (edge compute in 275+ cities vs single server)
 - ✅ **Zero cost** (100k requests/day free)
 - ✅ **Auto-deployment** (can integrate with GitHub Actions)
@@ -170,6 +181,7 @@ AFTER:  User → Cloudflare Workers → Apps Script
 - ✅ **No manual sync** (deployment ID as environment variable)
 
 **Cons:**
+
 - ⚠️ Need to rewrite 130-line PHP proxy as JavaScript Worker (~50 lines)
 - ⚠️ Different programming model (Service Worker API)
 - ⚠️ 50ms CPU time limit (sufficient for proxy, but limiting)
@@ -178,6 +190,7 @@ AFTER:  User → Cloudflare Workers → Apps Script
 **ROI:** Very High (performance + eliminates manual sync)
 
 **Implementation:**
+
 ```javascript
 // cloudflare-worker/index.js
 export default {
@@ -195,11 +208,12 @@ export default {
       cache.put(request, response.clone());
     }
     return response;
-  }
+  },
 };
 ```
 
 **Deployment:**
+
 ```bash
 # wrangler.toml
 name = "zeventbooks-proxy"
@@ -211,13 +225,14 @@ DEPLOYMENT_ID = "AKfycby355Xo-XVv3ibfYsf9SUPQo0rGvBS3ex1sNvfpiQ6g"
 ```
 
 **GitHub Actions Integration:**
+
 ```yaml
 - name: Deploy to Cloudflare Workers
   run: |
     echo "DEPLOYMENT_ID=${DEPLOYMENT_ID}" > .env
     wrangler deploy
   env:
-    CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    CLOUDFLARE_API_TOKEN_ESE: ${{ secrets.CLOUDFLARE_API_TOKEN_ESE }}
 ```
 
 **Recommendation:** **Do This in Phase 2** (after optimizing current flow)
@@ -229,12 +244,14 @@ DEPLOYMENT_ID = "AKfycby355Xo-XVv3ibfYsf9SUPQo0rGvBS3ex1sNvfpiQ6g"
 **What It Is:** Replace Apps Script backend with Cloud Functions, deploy frontend to Firebase Hosting
 
 **Architecture Change:**
+
 ```
 BEFORE: User → Hostinger → Apps Script → Sheets
 AFTER:  User → Firebase Hosting → Cloud Functions → Firestore
 ```
 
 **Pros:**
+
 - ✅ **Stay in Google ecosystem**
 - ✅ **Best developer experience** (`firebase deploy`)
 - ✅ **Real-time database** (Firestore)
@@ -243,6 +260,7 @@ AFTER:  User → Firebase Hosting → Cloud Functions → Firestore
 - ✅ **Generous free tier** (10GB hosting, 125k function calls)
 
 **Cons:**
+
 - ❌ **Complete rewrite** of Apps Script backend
 - ❌ **Data migration** from Sheets → Firestore
 - ❌ **4-6 week migration**
@@ -314,6 +332,7 @@ This plan **keeps your GitHub → Apps Script → Hostinger architecture** but e
 
 **Setup Required:**
 Add GitHub secrets:
+
 ```
 HOSTINGER_FTP_SERVER=ftp.zeventbooks.com
 HOSTINGER_FTP_USERNAME=<your_username>
@@ -405,6 +424,7 @@ echo "   Production: https://zeventbooks.com"
 ```
 
 **Usage:**
+
 ```bash
 # Before (5 steps, 20 minutes)
 npm run lint
@@ -435,19 +455,20 @@ module.exports = {
     deploymentId: 'AKfycby355Xo-XVv3ibfYsf9SUPQo0rGvBS3ex1sNvfpiQ6g', // Auto-updated by CI
     hostingerUrl: 'https://zeventbooks.com',
     spreadsheetId: '1ixHd2iUc27UF0fJvKh9hXsRI1XZtNRKqbZYf0vgMbKrBFItxngd7L-VO',
-    brands: ['root', 'abc', 'cbc', 'cbl']
+    brands: ['root', 'abc', 'cbc', 'cbl'],
   },
   qa: {
     scriptId: process.env.QA_SCRIPT_ID,
     deploymentId: process.env.QA_DEPLOYMENT_ID,
     hostingerUrl: 'https://qa.zeventbooks.com',
     spreadsheetId: '1ixHd2iUc27UF0fJvKh9hXsRI1XZtNRKqbZYf0vgMbKrBFItxngd7L-VO',
-    brands: ['root']
-  }
+    brands: ['root'],
+  },
 };
 ```
 
 **Auto-update deployment ID:**
+
 ```javascript
 // scripts/update-deployment-config.js
 const fs = require('fs');
@@ -470,13 +491,13 @@ function updateDeploymentId(newId, environment = 'production') {
 
 ### Phase 1 Summary
 
-| Optimization | Time to Implement | Time Saved/Month | ROI |
-|--------------|-------------------|------------------|-----|
-| Automated Hostinger Sync | 3 hours | 100 min | 🏆 33x |
-| Deployment Health Checks | 2 hours | 135 min | 🏆 67x |
-| Single-Command Deployment | 2 hours | 120 min | 🏆 60x |
-| Config Management | 1 hour | 30 min | 🏆 30x |
-| **TOTAL** | **8 hours** | **385 min (6.4 hrs)** | **48x** |
+| Optimization              | Time to Implement | Time Saved/Month      | ROI     |
+| ------------------------- | ----------------- | --------------------- | ------- |
+| Automated Hostinger Sync  | 3 hours           | 100 min               | 🏆 33x  |
+| Deployment Health Checks  | 2 hours           | 135 min               | 🏆 67x  |
+| Single-Command Deployment | 2 hours           | 120 min               | 🏆 60x  |
+| Config Management         | 1 hour            | 30 min                | 🏆 30x  |
+| **TOTAL**                 | **8 hours**       | **385 min (6.4 hrs)** | **48x** |
 
 **Payback Period:** 1.25 weeks
 **Annual ROI:** 3,900%
@@ -492,17 +513,20 @@ function updateDeploymentId(newId, environment = 'production') {
 **Migration Steps:**
 
 1. **Create Cloudflare Worker** (4 hours)
+
    ```bash
    wrangler init zeventbooks-proxy
    # Implement 50-line proxy (see Option 1 above)
    ```
 
 2. **Configure DNS** (1 hour)
+
    ```
    zeventbooks.com → Cloudflare Workers
    ```
 
 3. **Integrate with GitHub Actions** (2 hours)
+
    ```yaml
    - name: Deploy to Cloudflare Workers
      run: wrangler deploy
@@ -515,6 +539,7 @@ function updateDeploymentId(newId, environment = 'production') {
 
 **Time Investment:** 11 hours
 **Benefits:**
+
 - ✅ Response time: 800ms → 80ms (10x faster)
 - ✅ Global edge caching (300+ locations)
 - ✅ Zero configuration sync issues
@@ -559,6 +584,7 @@ function updateDeploymentId(newId, environment = 'production') {
 
 **Time Investment:** 4 hours
 **Benefits:**
+
 - ✅ MTTR: 45 min → 2 min (22x faster)
 - ✅ Zero downtime rollbacks
 - ✅ Automatic recovery
@@ -570,11 +596,13 @@ function updateDeploymentId(newId, environment = 'production') {
 #### 📊 Monitoring Dashboard
 
 **Tools:**
+
 - Cloudflare Analytics (built-in with Workers)
 - Google Apps Script Execution Logs
 - GitHub Actions Insights
 
 **Custom Dashboard:**
+
 ```javascript
 // scripts/deployment-dashboard.js
 const metrics = {
@@ -582,7 +610,7 @@ const metrics = {
   averageDeployTime: '8 minutes',
   failureRate: '2%',
   mttr: '2 minutes',
-  p99ResponseTime: '120ms'
+  p99ResponseTime: '120ms',
 };
 
 // Send to Slack/Discord/Email
@@ -594,13 +622,13 @@ const metrics = {
 
 ### Time & Cost Analysis (12 Months)
 
-| Approach | Implementation Time | Monthly Time Saved | Payback Period | Annual ROI | Cost Change |
-|----------|--------------------|--------------------|----------------|------------|-------------|
-| **Phase 1: Optimize Current** | 8 hours | 6.4 hours | 1.25 weeks | **3,900%** | $0 |
-| **Phase 2: Add Cloudflare** | 11 hours | 1.2 hours | 9 weeks | **130%** | -$60/yr (save Hostinger) |
-| **Phase 3: Monitoring** | 8 hours | 0.5 hours | 16 weeks | **75%** | $0 |
-| **Alternative: Firebase Migration** | 240 hours | 2 hours | 120 weeks (2.3 yrs) | **10%** | +$120/yr |
-| **Alternative: AWS Lambda** | 480 hours | 1 hour | 480 weeks (9.2 yrs) | **2.5%** | +$360/yr |
+| Approach                            | Implementation Time | Monthly Time Saved | Payback Period      | Annual ROI | Cost Change              |
+| ----------------------------------- | ------------------- | ------------------ | ------------------- | ---------- | ------------------------ |
+| **Phase 1: Optimize Current**       | 8 hours             | 6.4 hours          | 1.25 weeks          | **3,900%** | $0                       |
+| **Phase 2: Add Cloudflare**         | 11 hours            | 1.2 hours          | 9 weeks             | **130%**   | -$60/yr (save Hostinger) |
+| **Phase 3: Monitoring**             | 8 hours             | 0.5 hours          | 16 weeks            | **75%**    | $0                       |
+| **Alternative: Firebase Migration** | 240 hours           | 2 hours            | 120 weeks (2.3 yrs) | **10%**    | +$120/yr                 |
+| **Alternative: AWS Lambda**         | 480 hours           | 1 hour             | 480 weeks (9.2 yrs) | **2.5%**   | +$360/yr                 |
 
 ### Cumulative Benefits
 
@@ -638,6 +666,7 @@ After Phase 3 (Week 8):
 ### When to Optimize Current Flow (Your Architecture)
 
 ✅ **Do This If:**
+
 - You need results in < 2 weeks
 - Budget is limited
 - Team is small (1-3 developers)
@@ -652,6 +681,7 @@ After Phase 3 (Week 8):
 ### When to Migrate to Cloudflare Workers
 
 ✅ **Do This If:**
+
 - You want 10x performance improvement
 - Global edge caching is valuable
 - You want to eliminate Hostinger hosting cost
@@ -664,6 +694,7 @@ After Phase 3 (Week 8):
 ### When to Migrate to Firebase/Vercel/Netlify
 
 ✅ **Do This If:**
+
 - You're planning a complete frontend rewrite anyway
 - You need real-time database features
 - You're scaling past 10k events
@@ -677,6 +708,7 @@ After Phase 3 (Week 8):
 ### When to Migrate to AWS/GCP
 
 ✅ **Do This If:**
+
 - You have enterprise requirements (VPC, compliance, etc.)
 - You need AWS-specific services (RDS, SQS, etc.)
 - You have a dedicated DevOps team
@@ -735,26 +767,31 @@ Month 6-12: Phase 3 (Optional)
 ### ✅ Phase 1: Week 1-2 (Do This NOW)
 
 **Day 1: Setup**
+
 - [ ] Add GitHub secrets: `HOSTINGER_FTP_SERVER`, `HOSTINGER_FTP_USERNAME`, `HOSTINGER_FTP_PASSWORD`
 - [ ] Install FTP client: `npm install -g basic-ftp`
 - [ ] Create `.last-good-deployment` file
 
 **Day 2-3: Automated Sync**
+
 - [ ] Update `.github/workflows/stage1-deploy.yml` with FTP deployment
 - [ ] Add `scripts/update-hostinger.sh` script
 - [ ] Test on QA environment first
 
 **Day 4-5: Health Checks**
+
 - [ ] Create `scripts/verify-deployment.sh` with retry logic
 - [ ] Add health check step to GitHub Actions
 - [ ] Test failure scenarios
 
 **Day 6-7: Single-Command Deployment**
+
 - [ ] Create `scripts/deploy.sh` unified script
 - [ ] Add `npm run deploy` to package.json
 - [ ] Update documentation
 
 **Day 8-10: Testing & Validation**
+
 - [ ] Run full E2E test suite
 - [ ] Test rollback scenarios
 - [ ] Update DEPLOYMENT_MAP.md
@@ -764,21 +801,25 @@ Month 6-12: Phase 3 (Optional)
 ### ✅ Phase 2: Week 3-4 (Do This After Phase 1 Proves Stable)
 
 **Day 1-2: Cloudflare Setup**
+
 - [ ] Create Cloudflare account
 - [ ] Install Wrangler: `npm install -g wrangler`
 - [ ] Create Worker project: `wrangler init zeventbooks-proxy`
 
 **Day 3-5: Worker Development**
+
 - [ ] Implement proxy logic (50 lines)
 - [ ] Add caching layer
 - [ ] Local testing: `wrangler dev`
 
 **Day 6-7: DNS Migration**
+
 - [ ] Add zeventbooks.com to Cloudflare
 - [ ] Update nameservers
 - [ ] Create Worker route
 
 **Day 8-10: Testing**
+
 - [ ] Run E2E tests against Cloudflare
 - [ ] Load testing
 - [ ] Monitor performance
@@ -789,15 +830,15 @@ Month 6-12: Phase 3 (Optional)
 
 ### Track These KPIs
 
-| Metric | Current | Phase 1 Target | Phase 2 Target |
-|--------|---------|----------------|----------------|
-| **Deployment Time** | 18-25 min | < 10 min | < 5 min |
-| **Failure Rate** | 15% | < 5% | < 1% |
-| **MTTR** | 45 min | < 10 min | < 3 min |
-| **Manual Steps** | 2 | 0 | 0 |
-| **Response Time (P99)** | 800ms | 800ms | < 100ms |
-| **Monthly Deployment Cost** | $5 | $5 | $0 |
-| **Developer Hours/Month** | 18.7 | < 12 | < 10 |
+| Metric                      | Current   | Phase 1 Target | Phase 2 Target |
+| --------------------------- | --------- | -------------- | -------------- |
+| **Deployment Time**         | 18-25 min | < 10 min       | < 5 min        |
+| **Failure Rate**            | 15%       | < 5%           | < 1%           |
+| **MTTR**                    | 45 min    | < 10 min       | < 3 min        |
+| **Manual Steps**            | 2         | 0              | 0              |
+| **Response Time (P99)**     | 800ms     | 800ms          | < 100ms        |
+| **Monthly Deployment Cost** | $5        | $5             | $0             |
+| **Developer Hours/Month**   | 18.7      | < 12           | < 10           |
 
 ---
 

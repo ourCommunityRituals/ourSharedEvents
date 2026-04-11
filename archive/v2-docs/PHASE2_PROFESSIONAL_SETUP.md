@@ -1,6 +1,7 @@
 # Phase 2: Professional Setup - Cloudflare Automation
 
 ## 🎯 Goal
+
 Fully automate the deployment pipeline so Stage 1 automatically updates environment URLs and Stage 2 runs seamlessly.
 
 **Time estimate:** 4-6 hours (one-time setup)
@@ -11,16 +12,16 @@ Fully automate the deployment pipeline so Stage 1 automatically updates environm
 
 **vs. Hostinger Redirects:**
 
-| Feature | Hostinger Redirects | Cloudflare Workers |
-|---------|-------------------|-------------------|
-| **Automation** | Limited API | Full API support |
-| **URL in Browser** | Changes to Apps Script URL | Stays as your domain |
-| **Performance** | Single redirect | Global CDN |
-| **SSL/TLS** | Basic | Free + Auto-renew |
-| **DDoS Protection** | None | Included |
-| **Rate Limiting** | None | Programmable |
-| **Analytics** | Basic | Advanced |
-| **Cost** | Included | **FREE** (up to 100k requests/day) |
+| Feature             | Hostinger Redirects        | Cloudflare Workers                 |
+| ------------------- | -------------------------- | ---------------------------------- |
+| **Automation**      | Limited API                | Full API support                   |
+| **URL in Browser**  | Changes to Apps Script URL | Stays as your domain               |
+| **Performance**     | Single redirect            | Global CDN                         |
+| **SSL/TLS**         | Basic                      | Free + Auto-renew                  |
+| **DDoS Protection** | None                       | Included                           |
+| **Rate Limiting**   | None                       | Programmable                       |
+| **Analytics**       | Basic                      | Advanced                           |
+| **Cost**            | Included                   | **FREE** (up to 100k requests/day) |
 
 **Bottom line:** Cloudflare gives you a production-grade infrastructure for free.
 
@@ -54,6 +55,7 @@ Fully automate the deployment pipeline so Stage 1 automatically updates environm
 ```
 
 **User Experience:**
+
 - User visits: `https://qa.zeventbooks.com`
 - Cloudflare Worker proxies to: latest deployment URL
 - Browser URL stays: `https://qa.zeventbooks.com` (clean!)
@@ -117,10 +119,7 @@ export default {
     const deploymentUrl = await env.DEPLOYMENT_URLS.get(kvKey);
 
     if (!deploymentUrl) {
-      return new Response(
-        `Environment not configured. KV key: ${kvKey}`,
-        { status: 503 }
-      );
+      return new Response(`Environment not configured. KV key: ${kvKey}`, { status: 503 });
     }
 
     // Build target URL with original query parameters
@@ -131,7 +130,7 @@ export default {
       method: request.method,
       headers: request.headers,
       body: request.body,
-      redirect: 'follow'
+      redirect: 'follow',
     });
 
     // Fetch from Apps Script
@@ -141,9 +140,9 @@ export default {
     return new Response(response.body, {
       status: response.status,
       statusText: response.statusText,
-      headers: response.headers
+      headers: response.headers,
     });
-  }
+  },
 };
 ```
 
@@ -226,7 +225,7 @@ KV = Key-Value store for configuration data.
 2. **Add to GitHub Secrets:**
    - Go to GitHub repo → **Settings** → **Secrets and variables** → **Actions**
    - Click **New repository secret**:
-     - Name: `CLOUDFLARE_API_TOKEN`
+     - Name: `CLOUDFLARE_API_TOKEN_ESE`
      - Value: [paste token]
    - Click **Add secret**
 
@@ -263,7 +262,7 @@ Add this step to `.github/workflows/stage1-deploy.yml` after deployment:
     # Update Cloudflare KV with new deployment URL
     curl -X PUT \
       "https://api.cloudflare.com/client/v4/accounts/${{ secrets.CLOUDFLARE_ACCOUNT_ID }}/storage/kv/namespaces/${{ secrets.CLOUDFLARE_KV_NAMESPACE_ID }}/values/qa_deployment_url" \
-      -H "Authorization: Bearer ${{ secrets.CLOUDFLARE_API_TOKEN }}" \
+      -H "Authorization: Bearer ${{ secrets.CLOUDFLARE_API_TOKEN_ESE }}" \
       -H "Content-Type: text/plain" \
       -d "$DEPLOYMENT_URL"
 
@@ -284,6 +283,7 @@ Stage 2 already defaults to `https://qa.zeventbooks.com`, so no changes needed!
 ### End-to-End Test:
 
 1. **Make a code change:**
+
    ```bash
    git add .
    git commit -m "test: Verify Phase 2 automation"
@@ -297,6 +297,7 @@ Stage 2 already defaults to `https://qa.zeventbooks.com`, so no changes needed!
    - ✅ Updates `qa.zeventbooks.com` via Cloudflare API
 
 3. **Verify QA URL:**
+
    ```bash
    curl https://qa.zeventbooks.com?p=events&brand=root
    ```
@@ -326,13 +327,13 @@ Stage 2 already defaults to `https://qa.zeventbooks.com`, so no changes needed!
 
 ## Cost Analysis
 
-| Service | Free Tier | Your Usage | Cost |
-|---------|-----------|------------|------|
-| Cloudflare Worker | 100k requests/day | ~1k/day | **$0** |
-| Cloudflare KV | 100k reads/day | ~500/day | **$0** |
-| Cloudflare DNS | Unlimited | 3 subdomains | **$0** |
-| Cloudflare SSL | Unlimited | 1 domain | **$0** |
-| **TOTAL** | | | **$0/month** |
+| Service           | Free Tier         | Your Usage   | Cost         |
+| ----------------- | ----------------- | ------------ | ------------ |
+| Cloudflare Worker | 100k requests/day | ~1k/day      | **$0**       |
+| Cloudflare KV     | 100k reads/day    | ~500/day     | **$0**       |
+| Cloudflare DNS    | Unlimited         | 3 subdomains | **$0**       |
+| Cloudflare SSL    | Unlimited         | 1 domain     | **$0**       |
+| **TOTAL**         |                   |              | **$0/month** |
 
 **Even at scale (10k users):** Still free tier!
 
@@ -369,21 +370,25 @@ Once fully automated, you can:
 ## Troubleshooting
 
 ### Worker not routing correctly
+
 - Check KV binding name matches code (`DEPLOYMENT_URLS`)
 - Verify KV key exists: `qa_deployment_url`
 - Check Worker logs in Cloudflare dashboard
 
 ### DNS not resolving
+
 - Wait for DNS propagation (up to 24 hours, usually <1 hour)
 - Check: https://dnschecker.org/#CNAME/qa.zeventbooks.com
 - Verify nameservers updated in Hostinger
 
 ### Cloudflare API failing
+
 - Verify API token has correct permissions
 - Check Account ID and KV Namespace ID are correct
 - Look at GitHub Actions logs for error details
 
 ### Apps Script returning errors
+
 - Verify deployment URL in KV is correct
 - Test Apps Script URL directly (bypass Cloudflare)
 - Check Apps Script quota limits

@@ -198,7 +198,7 @@ Once the zone is active (you got the Cloudflare email), add these records:
   - Click **Continue to summary** → **Create Token**
   - **Copy the token now** — Cloudflare only shows it once
 
-  Save it — this becomes `CLOUDFLARE_API_TOKEN`.
+  Save it — this becomes `CLOUDFLARE_API_TOKEN_ESE`.
 
   > To verify it works: `curl -H "Authorization: Bearer <your_token>" https://api.cloudflare.com/client/v4/user/tokens/verify` — should return `"status": "active"`
 
@@ -217,11 +217,11 @@ Once the zone is active (you got the Cloudflare email), add these records:
 - [ ] **4.1** Go to your GitHub repo → **Settings** → **Secrets and variables** → **Actions** → **New repository secret**
 - [ ] **4.2** Add these 3 secrets one at a time:
 
-  | Secret name             | Value                         | Where you got it         |
-  | ----------------------- | ----------------------------- | ------------------------ |
-  | `CLOUDFLARE_API_TOKEN`  | The token from step 3.9       | Cloudflare API Tokens    |
-  | `CLOUDFLARE_ACCOUNT_ID` | The ID from step 3.8          | Cloudflare dashboard URL |
-  | `ADMIN_KEY`             | The hex string from step 3.10 | `openssl rand -hex 32`   |
+  | Secret name                | Value                         | Where you got it         |
+  | -------------------------- | ----------------------------- | ------------------------ |
+  | `CLOUDFLARE_API_TOKEN_ESE` | The token from step 3.9       | Cloudflare API Tokens    |
+  | `CLOUDFLARE_ACCOUNT_ID`    | The ID from step 3.8          | Cloudflare dashboard URL |
+  | `ADMIN_KEY`                | The hex string from step 3.10 | `openssl rand -hex 32`   |
 
   > These secrets are used by `.github/workflows/oursharedevents-ci.yml` each time CI runs.
 
@@ -414,7 +414,7 @@ You've validated the product works. Now give it the right home before launching 
 - [ ] **8.4** In the new repo on GitHub → **Settings** → **General** → set **Default branch** to `main`
 
 - [ ] **8.5** Re-add the 3 GitHub Actions secrets in the new repo (Settings → Secrets → Actions):
-  - `CLOUDFLARE_API_TOKEN` (from step 3.9)
+  - `CLOUDFLARE_API_TOKEN_ESE` (from step 3.9)
   - `CLOUDFLARE_ACCOUNT_ID` (from step 3.8)
   - `ADMIN_KEY` (from step 3.10)
 
@@ -490,7 +490,7 @@ Do this from the new `ourCommunityRituals/ourSharedEvents` repo.
 
 | Secret                      | Stored in                  | Step created | Value source                                          |
 | --------------------------- | -------------------------- | ------------ | ----------------------------------------------------- |
-| `CLOUDFLARE_API_TOKEN`      | GitHub Actions             | 3.9          | Cloudflare → My Profile → API Tokens                  |
+| `CLOUDFLARE_API_TOKEN_ESE`  | GitHub Actions             | 3.9          | Cloudflare → My Profile → API Tokens                  |
 | `CLOUDFLARE_ACCOUNT_ID`     | GitHub Actions             | 3.8          | Cloudflare dashboard URL                              |
 | `ADMIN_KEY`                 | GitHub Actions + Wrangler  | 3.10         | `openssl rand -hex 32`                                |
 | `GOOGLE_SA_CLIENT_EMAIL`    | Wrangler (CF secret store) | 1.6          | Service account JSON → `client_email`                 |

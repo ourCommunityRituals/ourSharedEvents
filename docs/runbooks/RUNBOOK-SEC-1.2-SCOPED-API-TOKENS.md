@@ -76,16 +76,16 @@ After comprehensive codebase review, no legacy global API key patterns were foun
 
 **Current Token Usage:**
 
-- `CLOUDFLARE_API_TOKEN`: Used in stage1.yml and stage2.yml for Worker deployments
+- `CLOUDFLARE_API_TOKEN_ESE`: Used in stage1.yml and stage2.yml for Worker deployments
 - Token scoping: Needs verification and documentation
 
 ### 2.2 Files Using Cloudflare Credentials
 
-| File                              | Secret Used            | Purpose             |
-| --------------------------------- | ---------------------- | ------------------- |
-| `.github/workflows/stage1.yml`    | `CLOUDFLARE_API_TOKEN` | Worker deployment   |
-| `.github/workflows/stage2.yml`    | `CLOUDFLARE_API_TOKEN` | Worker verification |
-| `.github/workflows/archive/*.yml` | `CLOUDFLARE_API_TOKEN` | Legacy (archived)   |
+| File                              | Secret Used                | Purpose             |
+| --------------------------------- | -------------------------- | ------------------- |
+| `.github/workflows/stage1.yml`    | `CLOUDFLARE_API_TOKEN_ESE` | Worker deployment   |
+| `.github/workflows/stage2.yml`    | `CLOUDFLARE_API_TOKEN_ESE` | Worker verification |
+| `.github/workflows/archive/*.yml` | `CLOUDFLARE_API_TOKEN_ESE` | Legacy (archived)   |
 
 ---
 
@@ -202,12 +202,12 @@ The following scoped tokens must be created in Cloudflare:
 
 ### 4.2 Cloudflare Token Naming
 
-| Current Name            | New Name (Recommended) | Status           |
-| ----------------------- | ---------------------- | ---------------- |
-| `CLOUDFLARE_API_TOKEN`  | `CF_DEPLOY_TOKEN`      | Migrate          |
-| `CLOUDFLARE_ACCOUNT_ID` | `CF_ACCOUNT_ID`        | Keep (shorter)   |
-| (new)                   | `CF_DNS_TOKEN`         | Create if needed |
-| (new)                   | `CF_AUDIT_TOKEN`       | Create if needed |
+| Current Name               | New Name (Recommended) | Status           |
+| -------------------------- | ---------------------- | ---------------- |
+| `CLOUDFLARE_API_TOKEN_ESE` | `CF_DEPLOY_TOKEN`      | Migrate          |
+| `CLOUDFLARE_ACCOUNT_ID`    | `CF_ACCOUNT_ID`        | Keep (shorter)   |
+| (new)                      | `CF_DNS_TOKEN`         | Create if needed |
+| (new)                      | `CF_AUDIT_TOKEN`       | Create if needed |
 
 ### 4.3 Full Secret Inventory
 
@@ -377,10 +377,10 @@ Permissions:
 ```bash
 # Test Worker deployment (dry run)
 cd worker
-CLOUDFLARE_API_TOKEN=<new-token> wrangler whoami
+CLOUDFLARE_API_TOKEN_ESE=<new-token> wrangler whoami
 
 # Run a test deployment to staging
-CLOUDFLARE_API_TOKEN=<new-token> wrangler deploy --env staging --dry-run
+CLOUDFLARE_API_TOKEN_ESE=<new-token> wrangler deploy --env staging --dry-run
 ```
 
 #### Step 4: Revoke Old Token
@@ -422,7 +422,7 @@ Description:
 
 - [ ] Create new scoped `CF_DEPLOY_TOKEN` in Cloudflare
 - [ ] Add `CF_DEPLOY_TOKEN` to GitHub Secrets
-- [ ] Update workflows to use new secret name (or keep `CLOUDFLARE_API_TOKEN` as alias)
+- [ ] Update workflows to use new secret name (or keep `CLOUDFLARE_API_TOKEN_ESE` as alias)
 - [ ] Verify staging deployment works
 - [ ] Verify production deployment works
 - [ ] Revoke old token (if different)
@@ -437,23 +437,23 @@ If renaming secrets, update the workflow files:
 
 ```yaml
 env:
-  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  CLOUDFLARE_API_TOKEN_ESE: ${{ secrets.CLOUDFLARE_API_TOKEN_ESE }}
 ```
 
 **After:**
 
 ```yaml
 env:
-  CLOUDFLARE_API_TOKEN: ${{ secrets.CF_DEPLOY_TOKEN }}
+  CLOUDFLARE_API_TOKEN_ESE: ${{ secrets.CF_DEPLOY_TOKEN }}
 ```
 
-> **Note:** The environment variable name `CLOUDFLARE_API_TOKEN` is used by wrangler CLI and should remain unchanged. Only the secret name changes.
+> **Note:** The environment variable name `CLOUDFLARE_API_TOKEN_ESE` is used by wrangler CLI and should remain unchanged. Only the secret name changes.
 
 ### 7.3 Backward Compatibility
 
 During migration, you can keep both secrets pointing to the same token:
 
-- `CLOUDFLARE_API_TOKEN` → Legacy workflows
+- `CLOUDFLARE_API_TOKEN_ESE` → Legacy workflows
 - `CF_DEPLOY_TOKEN` → New standard name
 
 After all workflows are updated, remove the legacy secret.
@@ -464,15 +464,15 @@ After all workflows are updated, remove the legacy secret.
 
 ### 8.1 Acceptance Criteria
 
-| Criterion                      | How to Verify                                                          | Status   |
-| ------------------------------ | ---------------------------------------------------------------------- | -------- |
-| No global API key usage        | Grep codebase for `CF_API_KEY`, `X-Auth-Key`                           | [ ] Pass |
-| Scoped deploy token created    | Cloudflare → API Tokens shows token with correct permissions           | [ ] Pass |
-| Token stored in GitHub Secrets | Repository → Settings → Secrets shows `CF_DEPLOY_TOKEN`                | [ ] Pass |
-| Workflows use scoped token     | Grep shows `secrets.CF_DEPLOY_TOKEN` or `secrets.CLOUDFLARE_API_TOKEN` | [ ] Pass |
-| Token permissions documented   | This runbook has complete permission matrix                            | [ ] Pass |
-| Token ownership documented     | Rotation schedule has owner column                                     | [ ] Pass |
-| Rotation plan documented       | Section 6 complete                                                     | [ ] Pass |
+| Criterion                      | How to Verify                                                              | Status   |
+| ------------------------------ | -------------------------------------------------------------------------- | -------- |
+| No global API key usage        | Grep codebase for `CF_API_KEY`, `X-Auth-Key`                               | [ ] Pass |
+| Scoped deploy token created    | Cloudflare → API Tokens shows token with correct permissions               | [ ] Pass |
+| Token stored in GitHub Secrets | Repository → Settings → Secrets shows `CF_DEPLOY_TOKEN`                    | [ ] Pass |
+| Workflows use scoped token     | Grep shows `secrets.CF_DEPLOY_TOKEN` or `secrets.CLOUDFLARE_API_TOKEN_ESE` | [ ] Pass |
+| Token permissions documented   | This runbook has complete permission matrix                                | [ ] Pass |
+| Token ownership documented     | Rotation schedule has owner column                                         | [ ] Pass |
+| Rotation plan documented       | Section 6 complete                                                         | [ ] Pass |
 
 ### 8.2 Security Verification
 
@@ -491,7 +491,7 @@ curl -X GET "https://api.cloudflare.com/client/v4/zones/{zone_id}/dns_records" \
 
 ```bash
 # Should succeed
-CLOUDFLARE_API_TOKEN=$CF_DEPLOY_TOKEN wrangler whoami
+CLOUDFLARE_API_TOKEN_ESE=$CF_DEPLOY_TOKEN wrangler whoami
 ```
 
 **Expected:** Shows account email and account ID
@@ -534,7 +534,7 @@ grep -r "CF_API_KEY\|CLOUDFLARE_API_KEY\|X-Auth-Key" \
 
 3. **Test token locally:**
    ```bash
-   export CLOUDFLARE_API_TOKEN="<paste-token>"
+   export CLOUDFLARE_API_TOKEN_ESE="<paste-token>"
    wrangler whoami
    ```
 

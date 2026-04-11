@@ -38,7 +38,7 @@
 #   - See: docs/ROLLBACK.md
 #
 # Required Secrets:
-#   - CLOUDFLARE_API_TOKEN: For production deployment (wrangler deploy --env production)
+#   - CLOUDFLARE_API_TOKEN_ESE_ESE: For production deployment (wrangler deploy --env production)
 #   - DATADOG_API_KEY: (Optional) For synthetic test triggers
 #   - DATADOG_APP_KEY: (Optional) For synthetic test triggers
 
@@ -1023,7 +1023,7 @@ jobs:
 
       - name: Rollback staging to previous version
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_API_TOKEN_ESE_ESE: ${{ secrets.CLOUDFLARE_API_TOKEN_ESE_ESE }}
         run: |
           echo "=============================================="
           echo "ROLLBACK: Reverting staging to previous version"
@@ -1201,16 +1201,16 @@ jobs:
 
       - name: Validate Cloudflare secrets
         run: |
-          if [ -z "${{ secrets.CLOUDFLARE_API_TOKEN }}" ]; then
-            echo "::error::Missing required secret: CLOUDFLARE_API_TOKEN"
+          if [ -z "${{ secrets.CLOUDFLARE_API_TOKEN_ESE_ESE }}" ]; then
+            echo "::error::Missing required secret: CLOUDFLARE_API_TOKEN_ESE_ESE"
             exit 1
           fi
-          echo "CLOUDFLARE_API_TOKEN is set"
+          echo "CLOUDFLARE_API_TOKEN_ESE_ESE is set"
 
       - name: Deploy Worker to Production
         working-directory: cloudflare-proxy
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_API_TOKEN_ESE_ESE: ${{ secrets.CLOUDFLARE_API_TOKEN_ESE_ESE }}
         run: |
           echo "=============================================="
           echo "DEPLOYING TO PRODUCTION"

@@ -342,17 +342,17 @@ The automation scripts include:
 
 ### Required GitHub Secrets
 
-| Secret                  | Required    | Purpose                                     |
-| ----------------------- | ----------- | ------------------------------------------- |
-| `OAUTH_CREDENTIALS`     | ✅ Yes      | Clasp authentication (zeventbook@gmail.com) |
-| `DEPLOYMENT_ID`         | Optional    | Production deployment ID                    |
-| `ADMIN_KEY_ROOT`        | For Stage 2 | Root brand admin key                        |
-| `ADMIN_KEY_ABC`         | Optional    | ABC brand admin key                         |
-| `ADMIN_KEY_CBC`         | Optional    | CBC brand admin key                         |
-| `ADMIN_KEY_CBL`         | Optional    | CBL brand admin key                         |
-| `SPREADSHEET_ID`        | Optional    | Fallback spreadsheet ID                     |
-| `CLOUDFLARE_API_TOKEN`  | Optional    | Cloudflare Worker updates                   |
-| `CLOUDFLARE_ACCOUNT_ID` | Optional    | Cloudflare Worker updates                   |
+| Secret                     | Required    | Purpose                                     |
+| -------------------------- | ----------- | ------------------------------------------- |
+| `OAUTH_CREDENTIALS`        | ✅ Yes      | Clasp authentication (zeventbook@gmail.com) |
+| `DEPLOYMENT_ID`            | Optional    | Production deployment ID                    |
+| `ADMIN_KEY_ROOT`           | For Stage 2 | Root brand admin key                        |
+| `ADMIN_KEY_ABC`            | Optional    | ABC brand admin key                         |
+| `ADMIN_KEY_CBC`            | Optional    | CBC brand admin key                         |
+| `ADMIN_KEY_CBL`            | Optional    | CBL brand admin key                         |
+| `SPREADSHEET_ID`           | Optional    | Fallback spreadsheet ID                     |
+| `CLOUDFLARE_API_TOKEN_ESE` | Optional    | Cloudflare Worker updates                   |
+| `CLOUDFLARE_ACCOUNT_ID`    | Optional    | Cloudflare Worker updates                   |
 
 ---
 

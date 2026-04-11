@@ -116,7 +116,7 @@ wrangler secret put FORMS_ENCRYPTION_KEY --env production
 # WARNING: Previously encrypted email data becomes unreadable
 # Accept data loss — security takes priority
 
-# 4. If CLOUDFLARE_API_TOKEN compromised:
+# 4. If CLOUDFLARE_API_TOKEN_ESE compromised:
 # Create new token in CF Dashboard, revoke old one
 # Update GitHub Actions secret
 
@@ -195,7 +195,7 @@ npm run deploy:staging
 | ---------------------------- | -------------------------------------- | ----------------------- |
 | `ADMIN_KEY` value            | Doppler / 1Password / secure vault     | On every rotation       |
 | `FORMS_ENCRYPTION_KEY` value | Doppler / 1Password / secure vault     | On every rotation       |
-| `CLOUDFLARE_API_TOKEN`       | Doppler / 1Password / secure vault     | On every rotation       |
+| `CLOUDFLARE_API_TOKEN_ESE`   | Doppler / 1Password / secure vault     | On every rotation       |
 | `CLOUDFLARE_ACCOUNT_ID`      | Documented in `wrangler.toml` comments | Static                  |
 | Production D1 database IDs   | In `wrangler.toml` (committed)         | After provisioning      |
 | Critical event data          | Manual D1 export (see below)           | Before major migrations |

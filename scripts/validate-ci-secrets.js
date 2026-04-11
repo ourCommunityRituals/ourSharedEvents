@@ -31,9 +31,9 @@ const SECRETS = {
   stage1: {
     required: [
       {
-        name: 'CLOUDFLARE_API_TOKEN',
-        env: 'CLOUDFLARE_API_TOKEN',
-        description: 'Cloudflare API token for Worker deployment',
+        name: 'CLOUDFLARE_API_TOKEN_ESE',
+        env: 'CLOUDFLARE_API_TOKEN_ESE',
+        description: 'Cloudflare API token for Worker deployment (OurSharedEvents)',
       },
       {
         name: 'CLOUDFLARE_ACCOUNT_ID',

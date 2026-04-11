@@ -94,11 +94,11 @@ Then update `wrangler.toml` — replace the placeholder IDs:
 
 Go to **GitHub repo > Settings > Secrets and variables > Actions > New repository secret**:
 
-| Secret Name             | Value          |
-| ----------------------- | -------------- |
-| `CLOUDFLARE_API_TOKEN`  | From step A6.2 |
-| `CLOUDFLARE_ACCOUNT_ID` | From step A6.1 |
-| `ADMIN_KEY`             | From step A6.3 |
+| Secret Name                | Value          |
+| -------------------------- | -------------- |
+| `CLOUDFLARE_API_TOKEN_ESE` | From step A6.2 |
+| `CLOUDFLARE_ACCOUNT_ID`    | From step A6.1 |
+| `ADMIN_KEY`                | From step A6.3 |
 
 ### B2. Wrangler login
 
@@ -236,12 +236,12 @@ Check the Actions tab — all stages green = CI is real.
 
 ## Secrets Summary (D1-Native)
 
-| Secret                  | Where                     | Purpose                    | Generate                  |
-| ----------------------- | ------------------------- | -------------------------- | ------------------------- |
-| `CLOUDFLARE_API_TOKEN`  | GitHub Actions            | CI deploys worker          | CF Dashboard > API Tokens |
-| `CLOUDFLARE_ACCOUNT_ID` | GitHub Actions            | CI targets correct account | CF Dashboard > Overview   |
-| `ADMIN_KEY`             | GitHub Actions + Wrangler | Bearer token for `/admin`  | `openssl rand -hex 32`    |
-| `FORMS_ENCRYPTION_KEY`  | Wrangler only             | AES-GCM for PII fields     | `openssl rand -hex 32`    |
+| Secret                     | Where                     | Purpose                    | Generate                  |
+| -------------------------- | ------------------------- | -------------------------- | ------------------------- |
+| `CLOUDFLARE_API_TOKEN_ESE` | GitHub Actions            | CI deploys worker          | CF Dashboard > API Tokens |
+| `CLOUDFLARE_ACCOUNT_ID`    | GitHub Actions            | CI targets correct account | CF Dashboard > Overview   |
+| `ADMIN_KEY`                | GitHub Actions + Wrangler | Bearer token for `/admin`  | `openssl rand -hex 32`    |
+| `FORMS_ENCRYPTION_KEY`     | Wrangler only             | AES-GCM for PII fields     | `openssl rand -hex 32`    |
 
 **Removed** (Phase 2 D1 migration):
 

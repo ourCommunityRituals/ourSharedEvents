@@ -30,32 +30,32 @@ Job DAG:
 
 ### Security Pipeline (5 workflows)
 
-| Workflow | Trigger | Purpose |
-|----------|---------|---------|
-| `security-scan.yml` | Push, PR, weekly | CodeQL + npm audit |
-| `security-triage.yml` | Scan failure | Auto-create issues with SLA |
-| `security-sla-enforcement.yml` | Daily | Escalate overdue findings |
-| `security-human-gate.yml` | Scan blocks PR | Require human override label |
-| `security-regression.yml` | PR | Detect regression in security |
-| `advanced-security-scan.yml` | Push, PR | Extended scanning |
-| `dependency-review.yml` | PR | Dependency diff review |
+| Workflow                       | Trigger          | Purpose                       |
+| ------------------------------ | ---------------- | ----------------------------- |
+| `security-scan.yml`            | Push, PR, weekly | CodeQL + npm audit            |
+| `security-triage.yml`          | Scan failure     | Auto-create issues with SLA   |
+| `security-sla-enforcement.yml` | Daily            | Escalate overdue findings     |
+| `security-human-gate.yml`      | Scan blocks PR   | Require human override label  |
+| `security-regression.yml`      | PR               | Detect regression in security |
+| `advanced-security-scan.yml`   | Push, PR         | Extended scanning             |
+| `dependency-review.yml`        | PR               | Dependency diff review        |
 
 ### Security SLAs
 
 | Severity | Response | Fix | Exception Max |
-|----------|----------|-----|---------------|
-| Critical | 1h | 4h | None allowed |
-| High | 4h | 24h | 30 days |
-| Moderate | 24h | 7d | 90 days |
-| Low | 7d | 30d | 180 days |
+| -------- | -------- | --- | ------------- |
+| Critical | 1h       | 4h  | None allowed  |
+| High     | 4h       | 24h | 30 days       |
+| Moderate | 24h      | 7d  | 90 days       |
+| Low      | 7d       | 30d | 180 days      |
 
 ### Legacy Pipelines (still in repo)
 
-| Workflow | Status | Action Needed |
-|----------|--------|---------------|
-| `stage1.yml` | ⚠️ Active | Archive — targets old `worker/` + GAS |
-| `stage2.yml` | ⚠️ Active | Archive — targets old `worker/` + GAS |
-| 20+ in `archive/` | ✅ Archived | No action |
+| Workflow          | Status      | Action Needed                         |
+| ----------------- | ----------- | ------------------------------------- |
+| `stage1.yml`      | ⚠️ Active   | Archive — targets old `worker/` + GAS |
+| `stage2.yml`      | ⚠️ Active   | Archive — targets old `worker/` + GAS |
+| 20+ in `archive/` | ✅ Archived | No action                             |
 
 ---
 
@@ -63,17 +63,17 @@ Job DAG:
 
 ### Current Collections
 
-| Collection | Location | Status |
-|------------|----------|--------|
-| `mvp-event-toolkit-api.json` | `postman/` | ⚠️ Stale — targets GAS endpoints |
-| `mvp-event-toolkit-flows.json` | `postman/` | ⚠️ Stale — targets GAS flows |
+| Collection                     | Location   | Status                           |
+| ------------------------------ | ---------- | -------------------------------- |
+| `mvp-event-toolkit-api.json`   | `postman/` | ⚠️ Stale — targets GAS endpoints |
+| `mvp-event-toolkit-flows.json` | `postman/` | ⚠️ Stale — targets GAS flows     |
 
 ### Environments
 
-| Environment | Location | Status |
-|-------------|----------|--------|
+| Environment                    | Location   | Status          |
+| ------------------------------ | ---------- | --------------- |
 | `mvp-event-toolkit-local.json` | `postman/` | ⚠️ Needs update |
-| `mvp-event-toolkit-dev.json` | `postman/` | ⚠️ Needs update |
+| `mvp-event-toolkit-dev.json`   | `postman/` | ⚠️ Needs update |
 
 ### Newman CI Config
 
@@ -117,9 +117,9 @@ newman-tests:
     - uses: actions/checkout@v4
     - run: npm install -g newman
     - run: newman run postman/oursharedevents-worker-api.json
-           -e postman/oursharedevents-staging.json
-           --reporters cli,junit
-           --reporter-junit-export results/newman.xml
+        -e postman/oursharedevents-staging.json
+        --reporters cli,junit
+        --reporter-junit-export results/newman.xml
 ```
 
 ---
@@ -128,30 +128,30 @@ newman-tests:
 
 ### Endpoints to Monitor
 
-| Check | URL | Frequency | Threshold |
-|-------|-----|-----------|-----------|
-| Health | `GET /health` | 1 min | <500ms, status 200 |
-| Events API | `GET /api/v2/events` | 5 min | <1000ms, status 200 |
-| Public Page | `GET /` | 5 min | <2000ms, status 200 |
-| Admin Auth | `GET /admin` (no token) | 15 min | status 401 |
-| SSL | TLS check | 1 hour | Valid cert, no mixed content |
+| Check       | URL                     | Frequency | Threshold                    |
+| ----------- | ----------------------- | --------- | ---------------------------- |
+| Health      | `GET /health`           | 1 min     | <500ms, status 200           |
+| Events API  | `GET /api/v2/events`    | 5 min     | <1000ms, status 200          |
+| Public Page | `GET /`                 | 5 min     | <2000ms, status 200          |
+| Admin Auth  | `GET /admin` (no token) | 15 min    | status 401                   |
+| SSL         | TLS check               | 1 hour    | Valid cert, no mixed content |
 
 ### Browser Tests (Datadog Synthetic Browser)
 
-| Test | Steps | Frequency |
-|------|-------|-----------|
-| Public Page Load | Navigate → verify event cards render → check mobile viewport | 15 min |
-| Admin Login Flow | Navigate → enter token → verify dashboard loads | 30 min |
-| API Contract | GET /api/v2/events → validate JSON schema → check item count > 0 | 5 min |
+| Test             | Steps                                                            | Frequency |
+| ---------------- | ---------------------------------------------------------------- | --------- |
+| Public Page Load | Navigate → verify event cards render → check mobile viewport     | 15 min    |
+| Admin Login Flow | Navigate → enter token → verify dashboard loads                  | 30 min    |
+| API Contract     | GET /api/v2/events → validate JSON schema → check item count > 0 | 5 min     |
 
 ### Alerting
 
-| Condition | Channel | Severity |
-|-----------|---------|----------|
-| Health check fails 2x | Slack + PagerDuty | P1 |
-| API latency > 2s (3x) | Slack | P2 |
-| SSL cert < 30 days | Email | P3 |
-| Public page fails | Slack | P1 |
+| Condition             | Channel           | Severity |
+| --------------------- | ----------------- | -------- |
+| Health check fails 2x | Slack + PagerDuty | P1       |
+| API latency > 2s (3x) | Slack             | P2       |
+| SSL cert < 30 days    | Email             | P3       |
+| Public page fails     | Slack             | P1       |
 
 ### Prerequisites (not yet provisioned)
 
@@ -165,15 +165,15 @@ newman-tests:
 
 ### Current Test Counts
 
-| Category | Files | Runner | Target |
-|----------|-------|--------|--------|
-| D1 Schema | 2 | Vitest | `workers/oursharedevents/` ✅ |
-| Unit | 40+ | Jest | `worker/` ⚠️ |
-| Contract | 35+ | Jest | `worker/` ⚠️ |
-| API Smoke | 20+ | Playwright | Live endpoints |
-| E2E | 60+ | Playwright | Live surfaces |
-| Integration | 3 | Jest | `worker/` ⚠️ |
-| Triangle | 8 | Jest | `worker/` ⚠️ |
+| Category    | Files | Runner     | Target                        |
+| ----------- | ----- | ---------- | ----------------------------- |
+| D1 Schema   | 2     | Vitest     | `workers/oursharedevents/` ✅ |
+| Unit        | 40+   | Jest       | `worker/` ⚠️                  |
+| Contract    | 35+   | Jest       | `worker/` ⚠️                  |
+| API Smoke   | 20+   | Playwright | Live endpoints                |
+| E2E         | 60+   | Playwright | Live surfaces                 |
+| Integration | 3     | Jest       | `worker/` ⚠️                  |
+| Triangle    | 8     | Jest       | `worker/` ⚠️                  |
 
 ### Coverage Gap
 
@@ -183,12 +183,12 @@ Only **2 Vitest files** test the canonical deployed Worker (`workers/oursharedev
 
 ## Environment URLs
 
-| Environment | Base URL | Status |
-|-------------|----------|--------|
-| Staging | `https://stg.oursharedevents.com` | Not yet provisioned |
-| Production | `https://oursharedevents.com` | Not yet provisioned |
-| Legacy Staging | `https://stg.eventangle.com` | Active (old domain) |
-| Legacy Production | `https://www.eventangle.com` | Active (old domain) |
+| Environment       | Base URL                          | Status              |
+| ----------------- | --------------------------------- | ------------------- |
+| Staging           | `https://stg.oursharedevents.com` | Not yet provisioned |
+| Production        | `https://oursharedevents.com`     | Not yet provisioned |
+| Legacy Staging    | `https://stg.eventangle.com`      | Active (old domain) |
+| Legacy Production | `https://www.eventangle.com`      | Active (old domain) |
 
 ---
 
@@ -196,20 +196,20 @@ Only **2 Vitest files** test the canonical deployed Worker (`workers/oursharedev
 
 ### GitHub Actions Secrets
 
-| Secret | Used By | Rotation |
-|--------|---------|----------|
-| `CLOUDFLARE_API_TOKEN` | Deploy jobs | 90 days |
-| `CLOUDFLARE_ACCOUNT_ID` | Deploy jobs | Static |
-| `ADMIN_KEY` | E2E auth tests | 90 days |
+| Secret                     | Used By        | Rotation |
+| -------------------------- | -------------- | -------- |
+| `CLOUDFLARE_API_TOKEN_ESE` | Deploy jobs    | 90 days  |
+| `CLOUDFLARE_ACCOUNT_ID`    | Deploy jobs    | Static   |
+| `ADMIN_KEY`                | E2E auth tests | 90 days  |
 
 ### Cloudflare Worker Secrets (per env)
 
-| Secret | Purpose | Rotation |
-|--------|---------|----------|
-| `ADMIN_KEY` | Bearer auth | 90 days |
-| `SHEETS_SPREADSHEET_ID` | Data source | Static |
-| `GOOGLE_SA_CLIENT_EMAIL` | Service account | 90 days |
-| `GOOGLE_SA_PRIVATE_KEY_PEM` | Signing key | 90 days |
+| Secret                      | Purpose         | Rotation |
+| --------------------------- | --------------- | -------- |
+| `ADMIN_KEY`                 | Bearer auth     | 90 days  |
+| `SHEETS_SPREADSHEET_ID`     | Data source     | Static   |
+| `GOOGLE_SA_CLIENT_EMAIL`    | Service account | 90 days  |
+| `GOOGLE_SA_PRIVATE_KEY_PEM` | Signing key     | 90 days  |
 
 ---
 

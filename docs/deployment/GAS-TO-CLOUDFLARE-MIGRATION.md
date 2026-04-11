@@ -126,11 +126,11 @@ wrangler deploy --env production
 
 ## CI/CD Workflows
 
-| GAS CI               | Cloudflare CI                 | File            |
-| -------------------- | ----------------------------- | --------------- |
-| `clasp push` in CI   | `wrangler deploy`             | `stage1.yml`    |
-| Service account auth | `CLOUDFLARE_API_TOKEN` secret | GitHub Secrets  |
-| Script ID            | Account ID + Worker name      | `wrangler.toml` |
+| GAS CI               | Cloudflare CI                     | File            |
+| -------------------- | --------------------------------- | --------------- |
+| `clasp push` in CI   | `wrangler deploy`                 | `stage1.yml`    |
+| Service account auth | `CLOUDFLARE_API_TOKEN_ESE` secret | GitHub Secrets  |
+| Script ID            | Account ID + Worker name          | `wrangler.toml` |
 
 ---
 

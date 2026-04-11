@@ -93,18 +93,21 @@ Live Web App URLs
 ### Local Development
 
 1. **Node.js & npm**
+
    ```bash
    node --version  # v18+
    npm --version   # v9+
    ```
 
 2. **Google Clasp CLI**
+
    ```bash
    npm install -g @google/clasp
    clasp login
    ```
 
 3. **Project Dependencies**
+
    ```bash
    npm install
    ```
@@ -122,15 +125,16 @@ Live Web App URLs
 
 Configure in: `Settings → Secrets and variables → Actions`
 
-| Secret Name | Description | How to Get |
-|-------------|-------------|------------|
-| `OAUTH_CREDENTIALS` | Google OAuth credentials (clasp) | `cat ~/.clasprc.json` |
-| `DEPLOYMENT_ID` | Existing deployment ID to update | From `clasp deployments` |
-| `ADMIN_KEY_ROOT` | Admin secret for E2E testing | From Config.gs |
-| `CLOUDFLARE_API_TOKEN` | Cloudflare API token for Worker deploys | Cloudflare dashboard |
-| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare account ID | Cloudflare dashboard |
+| Secret Name                | Description                             | How to Get               |
+| -------------------------- | --------------------------------------- | ------------------------ |
+| `OAUTH_CREDENTIALS`        | Google OAuth credentials (clasp)        | `cat ~/.clasprc.json`    |
+| `DEPLOYMENT_ID`            | Existing deployment ID to update        | From `clasp deployments` |
+| `ADMIN_KEY_ROOT`           | Admin secret for E2E testing            | From Config.gs           |
+| `CLOUDFLARE_API_TOKEN_ESE` | Cloudflare API token for Worker deploys | Cloudflare dashboard     |
+| `CLOUDFLARE_ACCOUNT_ID`    | Cloudflare account ID                   | Cloudflare dashboard     |
 
 **Getting OAUTH_CREDENTIALS:**
+
 ```bash
 # After clasp login
 cat ~/.clasprc.json
@@ -150,6 +154,7 @@ cat ~/.clasprc.json
 ```
 
 **Getting Cloudflare Credentials:**
+
 ```bash
 # 1. Create API Token at https://dash.cloudflare.com/profile/api-tokens
 #    - Use template: "Edit Cloudflare Workers"
@@ -159,7 +164,7 @@ cat ~/.clasprc.json
 #    - Workers & Pages → Overview → Account ID (right sidebar)
 
 # 3. Add to GitHub Secrets:
-#    - CLOUDFLARE_API_TOKEN
+#    - CLOUDFLARE_API_TOKEN_ESE
 #    - CLOUDFLARE_ACCOUNT_ID
 ```
 
@@ -198,6 +203,7 @@ clasp deployments
 ### Cloudflare Workers Deployment
 
 The Cloudflare Worker proxies requests to Google Apps Script, providing:
+
 - Custom domain (eventangle.com)
 - CORS headers for cross-origin requests
 - Edge caching
@@ -219,10 +225,12 @@ curl "https://eventangle.com?p=status&brand=root"
 ```
 
 **Configuration files:**
+
 - `cloudflare-proxy/worker.js` - Worker code
 - `cloudflare-proxy/wrangler.toml` - Deployment configuration
 
 **Environment-specific deployments:**
+
 ```bash
 # Production (eventangle.com)
 wrangler deploy --env production
@@ -261,15 +269,18 @@ npm run test:triangle:all:contract
 ### Pipeline Triggers
 
 **Stage 1 (stage1-deploy.yml):**
+
 - Push to `main` branch → Full pipeline + deployment
 - Push to `claude/**` branches → Tests only (no deploy)
 - Pull requests to `main` → Tests only
 
 **Stage 2 (stage2-testing.yml):**
+
 - Auto-triggered when Stage 1 completes successfully on `main`
 - Manual trigger available with custom deployment URL
 
 **Unit & Contract Tests (unit-contract-tests.yml):**
+
 - Runs on ALL branches (every push)
 - Pull requests to `main`
 
@@ -278,15 +289,18 @@ npm run test:triangle:all:contract
 #### 1.1 Linting (ESLint)
 
 **What it checks:**
+
 - Code style consistency
 - Common errors
 - Best practices
 
 **Files checked:**
+
 - `*.js` (JavaScript)
 - `*.gs` (Google Apps Script)
 
 **How to fix failures:**
+
 ```bash
 npm run lint:fix
 ```
@@ -294,6 +308,7 @@ npm run lint:fix
 #### 1.2 Unit Tests (Jest)
 
 **What it tests:**
+
 - Backend utility functions
 - Input sanitization (XSS prevention)
 - Error envelope creation
@@ -301,6 +316,7 @@ npm run lint:fix
 - Security functions (CSRF, JWT, rate limiting)
 
 **Test files:**
+
 - `tests/unit/backend.test.js`
 - `tests/unit/security.test.js`
 - `tests/unit/validation.test.js`
@@ -315,6 +331,7 @@ npm run lint:fix
 #### 1.3 Contract Tests (Jest)
 
 **What it validates:**
+
 - API response structure
 - OK envelope: `{ ok: true, value: {...} }`
 - Err envelope: `{ ok: false, code: '...', message: '...' }`
@@ -322,6 +339,7 @@ npm run lint:fix
 - Triangle API contracts (before/during/after event phases)
 
 **Test files:**
+
 - `tests/contract/api.contract.test.js`
 - `tests/contract/jwt-security.contract.test.js`
 - `tests/contract/all-endpoints.contract.test.js`
@@ -329,6 +347,7 @@ npm run lint:fix
 #### 1.4 Deployment (Main Branch Only)
 
 **What it does:**
+
 1. Validates OAuth credentials from `OAUTH_CREDENTIALS` secret
 2. Writes credentials to `~/.clasprc.json`
 3. Pushes all files to Apps Script via `clasp push --force`
@@ -337,12 +356,14 @@ npm run lint:fix
 6. Updates Hostinger proxy via FTP (if FTP secrets configured)
 
 **Requirements:**
+
 - Must be on `main` branch
 - Must be a `push` event (not PR)
 - All previous stages passed
 - Valid `OAUTH_CREDENTIALS` secret
 
 **Output:**
+
 - Deployment ID (e.g., `AKfycb...`)
 - Web app URL
 - Hostinger proxy updated
@@ -350,12 +371,14 @@ npm run lint:fix
 #### 1.5 Brand URL Generation
 
 **Supported Brands:**
+
 - `root` - Zeventbook (main brand)
 - `abc` - American Bocce Co.
 - `cbc` - Chicago Bocce Club
 - `cbl` - Chicago Bocce League
 
 **Generated URLs per brand:**
+
 - Status: `?p=status&brand={brand}`
 - Admin: `?page=admin&brand={brand}`
 - Events: `?p=events&brand={brand}`
@@ -372,6 +395,7 @@ Stage 2 uses a progressive testing strategy to **fail fast** and **save test tim
 **Always runs first. If these fail, all other tests are skipped.**
 
 **What it tests:**
+
 - REST API endpoint health
 - Response format validation
 - Authentication endpoints
@@ -389,6 +413,7 @@ Stage 2 uses a progressive testing strategy to **fail fast** and **save test tim
 **Quick validation of deployment. Runs only if API tests pass.**
 
 **What it checks:**
+
 - All pages load (200 status)
 - Core UI elements present
 - No JavaScript errors
@@ -408,12 +433,14 @@ Stage 2 uses a progressive testing strategy to **fail fast** and **save test tim
 **Run in parallel. Only if smoke tests pass.**
 
 **Flow Tests:**
+
 - Multi-step user workflows
 - Admin creates event
 - Public views event
 - Sponsor management flows
 
 **Page Tests:**
+
 - Comprehensive page validation
 - All UI components
 - Cross-browser compatibility
@@ -423,6 +450,7 @@ Stage 2 uses a progressive testing strategy to **fail fast** and **save test tim
 #### 🎯 Quality Gate: Final Validation
 
 All tests must pass for deployment to be validated:
+
 1. API Tests ✅
 2. Smoke Tests ✅
 3. Flow Tests ✅
@@ -434,14 +462,15 @@ All tests must pass for deployment to be validated:
 
 The application is deployed to two platforms:
 
-| Platform | Base URL | Use Case |
-|----------|----------|----------|
-| **Apps Script** | `https://script.google.com/macros/s/{ID}/exec` | Direct Google access |
-| **Cloudflare** | `https://eventangle.com` | Custom domain, Workers proxy |
+| Platform        | Base URL                                       | Use Case                     |
+| --------------- | ---------------------------------------------- | ---------------------------- |
+| **Apps Script** | `https://script.google.com/macros/s/{ID}/exec` | Direct Google access         |
+| **Cloudflare**  | `https://eventangle.com`                       | Custom domain, Workers proxy |
 
 ### Production URLs by Brand
 
 **ROOT (Eventangle):**
+
 ```
 Status:  https://eventangle.com?p=status&brand=root
 Admin:   https://eventangle.com?page=admin&brand=root
@@ -450,6 +479,7 @@ Display: https://eventangle.com?p=display&brand=root
 ```
 
 **ABC (American Bocce Co.):**
+
 ```
 Status:  https://eventangle.com?p=status&brand=abc
 Admin:   https://eventangle.com?page=admin&brand=abc
@@ -463,6 +493,7 @@ Display: https://eventangle.com?p=display&brand=abc
 https://script.google.com/u/0/home/projects/1YO4apLOQoAIh208AcAqWO3pWtx_O3yas_QC4z-pkurgMem9UgYOsp86l/edit
 
 **Get deployment URL:**
+
 ```bash
 clasp deployments
 # Look for: https://script.google.com/macros/s/.../exec
@@ -497,21 +528,27 @@ npm run test:pages
 ### Manual Browser Test
 
 1. **Status Check:**
+
    ```
    {BASE_URL}?p=status&brand=root
    ```
+
    Should return: `{ ok: true, value: { build: "triangle-extended-v1.3" } }`
 
 2. **Admin Page:**
+
    ```
    {BASE_URL}?page=admin&brand=root
    ```
+
    Should show event creation form
 
 3. **Public Events Page:**
+
    ```
    {BASE_URL}?p=events&brand=root
    ```
+
    Should show event listing
 
 4. **Display Page (TV Mode):**
@@ -536,6 +573,7 @@ npm install -g @google/clasp
 ### "Cannot read property 'scriptId'"
 
 Missing `.clasp.json`:
+
 ```bash
 echo '{"scriptId":"1YO4apLOQoAIh208AcAqWO3pWtx_O3yas_QC4z-pkurgMem9UgYOsp86l","rootDir":"."}' > .clasp.json
 ```
@@ -543,6 +581,7 @@ echo '{"scriptId":"1YO4apLOQoAIh208AcAqWO3pWtx_O3yas_QC4z-pkurgMem9UgYOsp86l","r
 ### "Push failed" or "Invalid credentials"
 
 Re-authenticate:
+
 ```bash
 clasp logout
 clasp login
@@ -566,7 +605,7 @@ clasp login
 ### Cloudflare Worker Not Updated
 
 1. Verify Cloudflare secrets are configured:
-   - `CLOUDFLARE_API_TOKEN`
+   - `CLOUDFLARE_API_TOKEN_ESE`
    - `CLOUDFLARE_ACCOUNT_ID`
 2. Check API token has Workers permissions
 3. Manual update:
@@ -580,17 +619,20 @@ clasp login
 ### Development Workflow
 
 1. **Create feature branch from main**
+
    ```bash
    git checkout -b feature/my-feature
    ```
 
 2. **Make changes and test locally**
+
    ```bash
    npm run lint
    npm test
    ```
 
 3. **Commit with conventional commits**
+
    ```bash
    git commit -m "feat: add new feature"
    git commit -m "fix: resolve bug"
@@ -598,6 +640,7 @@ clasp login
    ```
 
 4. **Push to GitHub**
+
    ```bash
    git push -u origin feature/my-feature
    ```
@@ -616,11 +659,13 @@ clasp login
 If deployment fails or has issues:
 
 1. **Find previous deployment:**
+
    ```bash
    clasp deployments
    ```
 
 2. **Undeploy bad version:**
+
    ```bash
    clasp undeploy [DEPLOYMENT_ID]
    ```
@@ -634,6 +679,7 @@ If deployment fails or has issues:
 ### Monitoring
 
 **Check deployment logs:**
+
 ```bash
 clasp logs
 # or
@@ -650,36 +696,36 @@ Check the **Actions** tab for workflow status and logs.
 
 All of these must pass for deployment to succeed:
 
-| Stage | Gate | Tool | Duration | Failure Action |
-|-------|------|------|----------|----------------|
-| 1 | Linting | ESLint | ~10s | Fix code style |
-| 1 | Unit Tests | Jest | ~10s | Fix failing tests |
-| 1 | Contract Tests | Jest | ~5s | Fix API contracts |
-| 1 | Security Tests | Jest | ~5s | Fix security issues |
-| 2 | API Tests | Playwright | ~30s | Fix API endpoints |
-| 2 | Smoke Tests | Playwright | ~60s | Check deployment |
-| 2 | Flow Tests | Playwright | ~2min | Fix user flows |
-| 2 | Page Tests | Playwright | ~2min | Fix page issues |
+| Stage | Gate           | Tool       | Duration | Failure Action      |
+| ----- | -------------- | ---------- | -------- | ------------------- |
+| 1     | Linting        | ESLint     | ~10s     | Fix code style      |
+| 1     | Unit Tests     | Jest       | ~10s     | Fix failing tests   |
+| 1     | Contract Tests | Jest       | ~5s      | Fix API contracts   |
+| 1     | Security Tests | Jest       | ~5s      | Fix security issues |
+| 2     | API Tests      | Playwright | ~30s     | Fix API endpoints   |
+| 2     | Smoke Tests    | Playwright | ~60s     | Check deployment    |
+| 2     | Flow Tests     | Playwright | ~2min    | Fix user flows      |
+| 2     | Page Tests     | Playwright | ~2min    | Fix page issues     |
 
 ## Performance Targets
 
-| Metric | Target | Actual |
-|--------|--------|--------|
-| Status API response | < 500ms | ~200ms |
-| Page load time | < 3s | ~1-2s |
-| Stage 1 pipeline | < 5min | ~3-4min |
-| Stage 2 pipeline | < 10min | ~5-8min |
-| Test coverage | > 60% | 65%+ |
+| Metric              | Target  | Actual  |
+| ------------------- | ------- | ------- |
+| Status API response | < 500ms | ~200ms  |
+| Page load time      | < 3s    | ~1-2s   |
+| Stage 1 pipeline    | < 5min  | ~3-4min |
+| Stage 2 pipeline    | < 10min | ~5-8min |
+| Test coverage       | > 60%   | 65%+    |
 
 ## Workflow Files Reference
 
-| File | Purpose | Trigger |
-|------|---------|---------|
-| `stage1-deploy.yml` | Build, test, deploy | Push to main/claude/** |
-| `stage2-testing.yml` | E2E testing | Auto after Stage 1 |
-| `unit-contract-tests.yml` | Unit/contract tests | All branches |
-| `quality-gates-scenarios.yml` | Scenario testing | Manual |
-| `codeql-analysis.yml` | Security scanning | Push/PR |
+| File                          | Purpose             | Trigger                  |
+| ----------------------------- | ------------------- | ------------------------ |
+| `stage1-deploy.yml`           | Build, test, deploy | Push to main/claude/\*\* |
+| `stage2-testing.yml`          | E2E testing         | Auto after Stage 1       |
+| `unit-contract-tests.yml`     | Unit/contract tests | All branches             |
+| `quality-gates-scenarios.yml` | Scenario testing    | Manual                   |
+| `codeql-analysis.yml`         | Security scanning   | Push/PR                  |
 
 ## Next Steps
 

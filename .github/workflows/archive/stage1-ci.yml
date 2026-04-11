@@ -33,7 +33,7 @@
 #   - PR validation runs gates 1-3 without deployment
 #
 # Required Secrets:
-#   - CLOUDFLARE_API_TOKEN: Cloudflare API token for Worker deployment
+#   - CLOUDFLARE_API_TOKEN_ESE_ESE: Cloudflare API token for Worker deployment
 #   - GOOGLE_CLIENT_EMAIL: Service account email for Sheets connectivity
 #   - GOOGLE_PRIVATE_KEY: Service account private key (PEM format)
 #   - STAGING_SHEETS_SPREADSHEET_ID: Staging spreadsheet ID for connectivity test
@@ -649,8 +649,8 @@ jobs:
 
       - name: Validate Cloudflare secrets
         run: |
-          if [ -z "${{ secrets.CLOUDFLARE_API_TOKEN }}" ]; then
-            echo "::error::Missing: CLOUDFLARE_API_TOKEN"
+          if [ -z "${{ secrets.CLOUDFLARE_API_TOKEN_ESE_ESE }}" ]; then
+            echo "::error::Missing: CLOUDFLARE_API_TOKEN_ESE_ESE"
             exit 1
           fi
           if [ -z "${{ secrets.CLOUDFLARE_ACCOUNT_ID }}" ]; then
@@ -734,7 +734,7 @@ jobs:
         id: deploy
         working-directory: cloudflare-proxy
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_API_TOKEN_ESE_ESE: ${{ secrets.CLOUDFLARE_API_TOKEN_ESE_ESE }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           echo "=================================================="

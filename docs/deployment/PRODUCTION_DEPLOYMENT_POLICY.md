@@ -201,13 +201,13 @@ This policy is enforced by:
 
 The CI pipeline uses these secrets (configured by admins only):
 
-| Secret                  | Purpose                                | Required |
-| ----------------------- | -------------------------------------- | -------- |
-| `OAUTH_CREDENTIALS`     | Clasp OAuth credentials (JSON)         | Yes      |
-| `STAGING_SCRIPT_ID`     | Override staging Script ID (Story 1.3) | Optional |
-| `DEPLOYMENT_ID`         | Production deployment ID               | Optional |
-| `CLOUDFLARE_API_TOKEN`  | Cloudflare Worker deployment           | Optional |
-| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare account                     | Optional |
+| Secret                     | Purpose                                | Required |
+| -------------------------- | -------------------------------------- | -------- |
+| `OAUTH_CREDENTIALS`        | Clasp OAuth credentials (JSON)         | Yes      |
+| `STAGING_SCRIPT_ID`        | Override staging Script ID (Story 1.3) | Optional |
+| `DEPLOYMENT_ID`            | Production deployment ID               | Optional |
+| `CLOUDFLARE_API_TOKEN_ESE` | Cloudflare Worker deployment           | Optional |
+| `CLOUDFLARE_ACCOUNT_ID`    | Cloudflare account                     | Optional |
 
 **Notes:**
 

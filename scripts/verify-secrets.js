@@ -67,9 +67,9 @@ const SECRET_GROUPS = {
     secrets: {
       stage1: [
         {
-          name: 'CLOUDFLARE_API_TOKEN',
-          env: 'CLOUDFLARE_API_TOKEN',
-          description: 'Cloudflare API authentication token',
+          name: 'CLOUDFLARE_API_TOKEN_ESE',
+          env: 'CLOUDFLARE_API_TOKEN_ESE',
+          description: 'Cloudflare API authentication token (OurSharedEvents)',
           required: true,
           rotationPolicy: 'As needed',
         },

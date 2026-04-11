@@ -31,11 +31,11 @@ The EventAngle platform relies on multiple secrets for:
 
 ### Required GitHub Actions Secrets
 
-| Secret                  | Category   | Required For      |
-| ----------------------- | ---------- | ----------------- |
-| `CLOUDFLARE_API_TOKEN`  | Cloudflare | Worker deployment |
-| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare | Worker deployment |
-| `ADMIN_KEY`             | Admin      | E2E testing       |
+| Secret                     | Category   | Required For      |
+| -------------------------- | ---------- | ----------------- |
+| `CLOUDFLARE_API_TOKEN_ESE` | Cloudflare | Worker deployment |
+| `CLOUDFLARE_ACCOUNT_ID`    | Cloudflare | Worker deployment |
+| `ADMIN_KEY`                | Admin      | E2E testing       |
 
 ### Required Cloudflare Worker Secrets
 
@@ -101,15 +101,15 @@ node scripts/verify-secrets.js --json
 > Global API keys (`CF_API_KEY`, `CLOUDFLARE_API_KEY`) are **PROHIBITED**.
 > See [RUNBOOK-SEC-1.2-SCOPED-API-TOKENS.md](./RUNBOOK-SEC-1.2-SCOPED-API-TOKENS.md) for details.
 
-| Secret Name             | Description                            | Required |
-| ----------------------- | -------------------------------------- | -------- |
-| `CLOUDFLARE_API_TOKEN`  | Scoped API token for Worker deployment | Yes      |
-| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare account identifier          | Yes      |
+| Secret Name                | Description                            | Required |
+| -------------------------- | -------------------------------------- | -------- |
+| `CLOUDFLARE_API_TOKEN_ESE` | Scoped API token for Worker deployment | Yes      |
+| `CLOUDFLARE_ACCOUNT_ID`    | Cloudflare account identifier          | Yes      |
 
 **Alternative Naming (SEC-1.2 standard):**
 | Current Name | Recommended Name | Purpose |
 |--------------|------------------|---------|
-| `CLOUDFLARE_API_TOKEN` | `CF_DEPLOY_TOKEN` | CI/CD Worker deployment |
+| `CLOUDFLARE_API_TOKEN_ESE` | `CF_DEPLOY_TOKEN` | CI/CD Worker deployment |
 | `CLOUDFLARE_ACCOUNT_ID` | `CF_ACCOUNT_ID` | Account identifier |
 
 **Required API Token Permissions (Least-Privilege):**
@@ -136,7 +136,7 @@ node scripts/verify-secrets.js --json
 2. Click **Create Token** → **Edit Cloudflare Workers** template
 3. **Verify permissions match least-privilege requirements above**
 4. Set Zone Resources to **Specific zone: eventangle.com**
-5. Add to GitHub Secrets as `CLOUDFLARE_API_TOKEN` (or `CF_DEPLOY_TOKEN`)
+5. Add to GitHub Secrets as `CLOUDFLARE_API_TOKEN_ESE` (or `CF_DEPLOY_TOKEN`)
 6. Find Account ID in the Cloudflare dashboard URL or Overview page
 7. Add to GitHub Secrets as `CLOUDFLARE_ACCOUNT_ID`
 
@@ -144,7 +144,7 @@ node scripts/verify-secrets.js --json
 
 ```bash
 # Token should work for Worker operations
-CLOUDFLARE_API_TOKEN=<token> wrangler whoami
+CLOUDFLARE_API_TOKEN_ESE=<token> wrangler whoami
 
 # Token should NOT work for DNS (expected to fail)
 curl -X GET "https://api.cloudflare.com/client/v4/zones/{zone_id}/dns_records" \

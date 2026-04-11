@@ -11,11 +11,11 @@ Step-by-step instructions to get the domain live from scratch.
 
 Set these in **GitHub → repo Settings → Secrets and variables → Actions**:
 
-| Secret                  | Description                                                           |
-| ----------------------- | --------------------------------------------------------------------- |
-| `CLOUDFLARE_API_TOKEN`  | Cloudflare API token with Worker deploy permissions                   |
-| `CLOUDFLARE_ACCOUNT_ID` | Your Cloudflare account ID (dashboard URL: `.../accounts/<id>`)       |
-| `ADMIN_KEY`             | Bearer token for admin route auth (generate a random 32+ char string) |
+| Secret                     | Description                                                           |
+| -------------------------- | --------------------------------------------------------------------- |
+| `CLOUDFLARE_API_TOKEN_ESE` | Cloudflare API token with Worker deploy permissions                   |
+| `CLOUDFLARE_ACCOUNT_ID`    | Your Cloudflare account ID (dashboard URL: `.../accounts/<id>`)       |
+| `ADMIN_KEY`                | Bearer token for admin route auth (generate a random 32+ char string) |
 
 These are used by `.github/workflows/oursharedevents-ci.yml` on every push to `main`.
 

@@ -17,7 +17,7 @@
 #   --force           Skip confirmation prompt
 #
 # Environment Variables:
-#   CLOUDFLARE_API_TOKEN   - API token with Pages permissions (required)
+#   CLOUDFLARE_API_TOKEN_ESE   - API token with Pages permissions (required)
 #   CLOUDFLARE_ACCOUNT_ID  - Cloudflare account ID (required)
 #   CF_PAGES_PROJECT       - Default project name (optional, can use --project instead)
 #
@@ -102,11 +102,11 @@ echo "=============================================="
 echo ""
 
 # Validate required environment variables
-if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
-  echo -e "${RED}❌ ERROR: CLOUDFLARE_API_TOKEN environment variable is required${NC}"
+if [ -z "$CLOUDFLARE_API_TOKEN_ESE" ]; then
+  echo -e "${RED}❌ ERROR: CLOUDFLARE_API_TOKEN_ESE environment variable is required${NC}"
   echo ""
   echo "Set it with:"
-  echo "  export CLOUDFLARE_API_TOKEN=your_token"
+  echo "  export CLOUDFLARE_API_TOKEN_ESE=your_token"
   echo ""
   echo "Create a token at: https://dash.cloudflare.com/profile/api-tokens"
   echo "Required permissions: Cloudflare Pages (Edit), Account (Read)"
@@ -127,7 +127,7 @@ if [ -z "$PROJECT_NAME" ]; then
   echo "Specify with --project NAME or set CF_PAGES_PROJECT environment variable"
   echo ""
   echo "To list your Pages projects:"
-  echo "  curl -s -H 'Authorization: Bearer \$CLOUDFLARE_API_TOKEN' \\"
+  echo "  curl -s -H 'Authorization: Bearer \$CLOUDFLARE_API_TOKEN_ESE' \\"
   echo "    'https://api.cloudflare.com/client/v4/accounts/\$CLOUDFLARE_ACCOUNT_ID/pages/projects' | jq '.result[].name'"
   exit 1
 fi
@@ -155,7 +155,7 @@ api_call() {
   local endpoint=$2
 
   curl -s -X "$method" \
-    -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+    -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN_ESE" \
     -H "Content-Type: application/json" \
     "${API_BASE}${endpoint}"
 }
@@ -296,7 +296,7 @@ for DEPLOY_ID in $DEPLOYMENT_IDS; do
   fi
 
   DELETE_RESPONSE=$(curl -s -X DELETE \
-    -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+    -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN_ESE" \
     -H "Content-Type: application/json" \
     -w "\n%{http_code}" \
     "${API_BASE}/deployments/${DEPLOY_ID}")
