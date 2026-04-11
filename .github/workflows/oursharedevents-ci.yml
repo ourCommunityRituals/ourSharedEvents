@@ -218,7 +218,7 @@ jobs:
       - name: Health check staging
         run: |
           echo "Checking https://stg.oursharedevents.com/health ..."
-          HTTP=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 "$STG_BASE_URL/health")
+          HTTP=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 -H "User-Agent: OurSharedEvents-CI/1.0" "$STG_BASE_URL/health")
           if [ "$HTTP" != "200" ]; then
             echo "::error::Health check failed – HTTP $HTTP"
             exit 1
@@ -539,7 +539,7 @@ jobs:
       - name: Health check production
         run: |
           echo "Checking https://oursharedevents.com/health ..."
-          HTTP=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 "$PROD_BASE_URL/health")
+          HTTP=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 -H "User-Agent: OurSharedEvents-CI/1.0" "$PROD_BASE_URL/health")
           if [ "$HTTP" != "200" ]; then
             echo "::error::Production health check failed – HTTP $HTTP"
             exit 1
