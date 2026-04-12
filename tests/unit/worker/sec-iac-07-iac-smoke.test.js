@@ -16,7 +16,12 @@ const path = require('path');
 // Test Setup - Read Source Files
 // =============================================================================
 
-const smokeTestPath = path.join(__dirname, '../../../tests/api/smoke/sec-iac-07-smoke.spec.ts');
+// SEC-IAC-07 smoke spec archived — GAS-era tests replaced by D1 Worker admin auth tests
+// Auth coverage now lives in storyC1-adminAuth.spec.ts (401/UNAUTH assertions)
+const smokeTestPath = path.join(
+  __dirname,
+  '../../../tests/api/smoke/archive/sec-iac-07-smoke.spec.ts'
+);
 const ciWorkflowPath = path.join(__dirname, '../../../.github/workflows/oursharedevents-ci.yml');
 const playwrightConfigPath = path.join(__dirname, '../../../playwright.smoke.config.ts');
 
@@ -88,8 +93,9 @@ describe('SEC-IAC-07: CI Workflow Integration', () => {
     expect(ciWorkflowSource).toContain('Quality Smoke');
   });
 
-  it('CI workflow MUST run sec-iac-07-smoke.spec.ts in quality smoke', () => {
-    expect(ciWorkflowSource).toContain('sec-iac-07-smoke.spec.ts');
+  it('CI workflow MUST run admin auth smoke in quality smoke', () => {
+    // Auth coverage migrated from sec-iac-07 to storyC1-adminAuth
+    expect(ciWorkflowSource).toContain('storyC1-adminAuth.spec.ts');
   });
 
   it('CI workflow MUST run security-smoke.spec.js in quality smoke', () => {

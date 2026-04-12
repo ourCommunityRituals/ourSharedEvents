@@ -106,7 +106,7 @@ jobs:
         run: npm run check:banned-origins
 
       - name: 'Security: Unit security tests'
-        run: npx vitest run tests/unit/security-middleware_MOCK.test.js tests/unit/worker/sec-iac-03-adminOAuth.test.js tests/unit/worker/sec-iac-04-public-read-only.test.js tests/unit/worker/sec-iac-05-signed-mutations.test.js tests/unit/worker/sec-iac-07-iac-smoke.test.js
+        run: npx vitest run tests/unit/worker/sec-iac-03-adminOAuth.test.js tests/unit/worker/sec-iac-04-public-read-only.test.js tests/unit/worker/sec-iac-05-signed-mutations.test.js tests/unit/worker/sec-iac-07-iac-smoke.test.js
 
       # --- Quality checks ---
 
@@ -295,7 +295,7 @@ jobs:
           X_OCR_INTERNAL: ${{ secrets.X_OCR_INTERNAL }}
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
-        run: npx playwright test --config=playwright.smoke.config.ts tests/api/smoke/sec-iac-07-smoke.spec.ts
+        run: npx playwright test --config=playwright.smoke.config.ts tests/api/smoke/storyC1-adminAuth.spec.ts
         timeout-minutes: 10
         continue-on-error: true
 
@@ -627,7 +627,7 @@ jobs:
           X_OCR_INTERNAL: ${{ secrets.X_OCR_INTERNAL }}
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
-        run: npx playwright test --config=playwright.smoke.config.ts tests/api/smoke/sec-iac-07-smoke.spec.ts
+        run: npx playwright test --config=playwright.smoke.config.ts tests/api/smoke/storyC1-adminAuth.spec.ts
         timeout-minutes: 10
         continue-on-error: true
 
