@@ -99,9 +99,10 @@ test.describe('Story C5: Create Event Smoke Gate', () => {
     const createResponse = await request.post('/api/v2/admin/events', {
       timeout: TIMEOUT,
       data: {
-        name: uniqueName,
-        brand: BRAND,
+        title: uniqueName,
+        brand_id: BRAND,
         slug: uniqueSlug,
+        status: 'active',
       },
       headers: getAccessHeaders(),
     });
@@ -114,13 +115,13 @@ test.describe('Story C5: Create Event Smoke Gate', () => {
 
     const createJson = await createResponse.json();
 
-    // Assert: Response structure is correct
+    // Assert: Response structure — Worker returns { ok, status, id, slug }
     expect(createJson.ok, 'Create response should have ok=true').toBe(true);
-    expect(createJson.item, 'Create response should have item').toBeDefined();
-    expect(createJson.item.id, 'Created event should have id').toBeDefined();
-    expect(createJson.item.name, 'Created event name mismatch').toBe(uniqueName);
+    expect(createJson.id, 'Created event should have id').toBeDefined();
+    expect(createJson.id).toMatch(/^evt_/);
+    expect(createJson.slug, 'Created event should have slug').toBe(uniqueSlug);
 
-    const createdEventId = createJson.item.id;
+    const createdEventId = createJson.id;
     console.log(`[C5 Gate] Event created: ${createdEventId}`);
 
     // =========================================================================
@@ -149,7 +150,7 @@ test.describe('Story C5: Create Event Smoke Gate', () => {
 
     expect(foundEvent, `Created event ${createdEventId} should appear in list`).toBeDefined();
 
-    expect(foundEvent.name, 'Event name in list should match created name').toBe(uniqueName);
+    expect(foundEvent.title, 'Event title in list should match created title').toBe(uniqueName);
 
     console.log(`[C5 Gate] PASSED: Event ${createdEventId} verified in list`);
   });
