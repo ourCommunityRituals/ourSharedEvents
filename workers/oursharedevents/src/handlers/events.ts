@@ -189,9 +189,30 @@ export async function handleAdminListEvents(request: Request, env: EventsEnv): P
   }
 }
 
-// ─── Admin: Create Event ──────────────────────────────────────────────────────
+// ─── Admin: Create / Update helpers ─────────────────────────────────────────
 
 const MAX_BODY = 16 * 1024;
+
+/** Allowed brand IDs — lowercase alphanumeric, hyphens, underscores */
+const BRAND_PATTERN = /^[a-z0-9_-]{1,64}$/;
+
+/** ISO date: YYYY-MM-DD */
+const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+function isValidBrand(brand: string): boolean {
+  return BRAND_PATTERN.test(brand);
+}
+
+function isValidIsoDate(date: string): boolean {
+  if (!ISO_DATE_PATTERN.test(date)) return false;
+  const parsed = new Date(date + 'T00:00:00Z');
+  return !isNaN(parsed.getTime());
+}
+
+function isValidContentType(request: Request): boolean {
+  const ct = request.headers.get('content-type') || '';
+  return ct.includes('application/json');
+}
 
 function slugify(text: string): string {
   return text
@@ -214,6 +235,11 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
     return errorResponse('DB_NOT_CONFIGURED', 'Database not available', 503, rid);
   }
 
+  // Content-Type check
+  if (!isValidContentType(request)) {
+    return errorResponse('BAD_CONTENT_TYPE', 'Content-Type must be application/json', 400, rid);
+  }
+
   let body: Record<string, unknown>;
   try {
     const text = await request.text();
@@ -230,8 +256,18 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
     return errorResponse('MISSING_FIELD', 'Missing required field: title', 400, rid);
   }
 
-  const id = `evt_${crypto.randomUUID ? crypto.randomUUID() : Date.now()}`;
+  // Brand validation
   const brandId = typeof body.brand_id === 'string' ? body.brand_id.slice(0, 64) : 'root';
+  if (!isValidBrand(brandId)) {
+    return errorResponse(
+      'INVALID_BRAND',
+      'brand_id must be lowercase alphanumeric, hyphens, or underscores (1-64 chars)',
+      400,
+      rid
+    );
+  }
+
+  const id = `evt_${crypto.randomUUID ? crypto.randomUUID() : Date.now()}`;
   const slug = typeof body.slug === 'string' ? body.slug.slice(0, 100) : slugify(title);
   const status =
     typeof body.status === 'string' && ['active', 'draft', 'archived'].includes(body.status)
@@ -239,8 +275,16 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
       : 'draft';
   const description = typeof body.description === 'string' ? body.description.slice(0, 2000) : null;
   const location = typeof body.location === 'string' ? body.location.slice(0, 500) : null;
+
+  // Date validation
   const startDate = typeof body.start_date === 'string' ? body.start_date.slice(0, 30) : null;
+  if (startDate !== null && !isValidIsoDate(startDate)) {
+    return errorResponse('INVALID_DATE', 'start_date must be YYYY-MM-DD format', 400, rid);
+  }
   const endDate = typeof body.end_date === 'string' ? body.end_date.slice(0, 30) : null;
+  if (endDate !== null && !isValidIsoDate(endDate)) {
+    return errorResponse('INVALID_DATE', 'end_date must be YYYY-MM-DD format', 400, rid);
+  }
   const timezone =
     typeof body.timezone === 'string' ? body.timezone.slice(0, 50) : 'America/Chicago';
   const coverImageUrl =
@@ -306,6 +350,11 @@ export async function handleUpdateEvent(
     return errorResponse('DB_NOT_CONFIGURED', 'Database not available', 503, rid);
   }
 
+  // Content-Type check
+  if (!isValidContentType(request)) {
+    return errorResponse('BAD_CONTENT_TYPE', 'Content-Type must be application/json', 400, rid);
+  }
+
   let body: Record<string, unknown>;
   try {
     const text = await request.text();
@@ -315,6 +364,20 @@ export async function handleUpdateEvent(
     body = JSON.parse(text) as Record<string, unknown>;
   } catch {
     return errorResponse('INVALID_BODY', 'Request body must be valid JSON', 400, rid);
+  }
+
+  // Date validation (if provided)
+  if ('start_date' in body && body.start_date !== null) {
+    const sd = typeof body.start_date === 'string' ? body.start_date : '';
+    if (!isValidIsoDate(sd)) {
+      return errorResponse('INVALID_DATE', 'start_date must be YYYY-MM-DD format', 400, rid);
+    }
+  }
+  if ('end_date' in body && body.end_date !== null) {
+    const ed = typeof body.end_date === 'string' ? body.end_date : '';
+    if (!isValidIsoDate(ed)) {
+      return errorResponse('INVALID_DATE', 'end_date must be YYYY-MM-DD format', 400, rid);
+    }
   }
 
   const allowedFields: Record<string, { max: number }> = {

@@ -102,6 +102,50 @@ test.describe('Update Event — PUT /api/v2/admin/events/:id', () => {
       expect(json.ok).toBe(false);
       expect(json.code).toBe('NO_FIELDS');
     });
+
+    test('returns 400 INVALID_DATE for bad start_date', async ({ request }) => {
+      test.skip(!hasAuth(), 'No auth credentials');
+      const eventId = await createTestEvent(request);
+
+      const res = await request.put(`/api/v2/admin/events/${eventId}`, {
+        timeout: TIMEOUT,
+        data: { start_date: 'not-a-date' },
+        headers: authHeaders(),
+      });
+      expect(res.status()).toBe(400);
+      const json = await res.json();
+      expect(json.ok).toBe(false);
+      expect(json.code).toBe('INVALID_DATE');
+    });
+
+    test('returns 400 INVALID_DATE for bad end_date', async ({ request }) => {
+      test.skip(!hasAuth(), 'No auth credentials');
+      const eventId = await createTestEvent(request);
+
+      const res = await request.put(`/api/v2/admin/events/${eventId}`, {
+        timeout: TIMEOUT,
+        data: { end_date: '12/31/2026' },
+        headers: authHeaders(),
+      });
+      expect(res.status()).toBe(400);
+      const json = await res.json();
+      expect(json.ok).toBe(false);
+      expect(json.code).toBe('INVALID_DATE');
+    });
+
+    test('returns 400 BAD_CONTENT_TYPE for text/plain', async ({ request }) => {
+      test.skip(!hasAuth(), 'No auth credentials');
+      const res = await request.fetch('/api/v2/admin/events/evt_fake', {
+        method: 'PUT',
+        timeout: TIMEOUT,
+        headers: { ...authHeaders(), 'Content-Type': 'text/plain' },
+        data: JSON.stringify({ title: 'CT Test' }),
+      });
+      expect(res.status()).toBe(400);
+      const json = await res.json();
+      expect(json.ok).toBe(false);
+      expect(json.code).toBe('BAD_CONTENT_TYPE');
+    });
   });
 
   // ── Successful Update ──────────────────────────────────────────────────────

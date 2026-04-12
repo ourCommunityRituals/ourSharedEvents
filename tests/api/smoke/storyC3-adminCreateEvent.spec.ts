@@ -94,6 +94,59 @@ test.describe('Create Event — POST /api/v2/admin/events', () => {
       expect(json.ok).toBe(false);
       expect(json.code).toBe('INVALID_BODY');
     });
+
+    test('returns 400 INVALID_BRAND for garbage brand_id', async ({ request }) => {
+      test.skip(!hasAuth(), 'No auth credentials');
+      const res = await request.post('/api/v2/admin/events', {
+        timeout: TIMEOUT,
+        data: { title: 'Brand Test', brand_id: '💩🔥 invalid!' },
+        headers: authHeaders(),
+      });
+      expect(res.status()).toBe(400);
+      const json = await res.json();
+      expect(json.ok).toBe(false);
+      expect(json.code).toBe('INVALID_BRAND');
+    });
+
+    test('returns 400 INVALID_DATE for bad start_date', async ({ request }) => {
+      test.skip(!hasAuth(), 'No auth credentials');
+      const res = await request.post('/api/v2/admin/events', {
+        timeout: TIMEOUT,
+        data: { title: 'Date Test', start_date: 'not-a-date' },
+        headers: authHeaders(),
+      });
+      expect(res.status()).toBe(400);
+      const json = await res.json();
+      expect(json.ok).toBe(false);
+      expect(json.code).toBe('INVALID_DATE');
+    });
+
+    test('returns 400 INVALID_DATE for bad end_date', async ({ request }) => {
+      test.skip(!hasAuth(), 'No auth credentials');
+      const res = await request.post('/api/v2/admin/events', {
+        timeout: TIMEOUT,
+        data: { title: 'End Date Test', end_date: '12/31/2026' },
+        headers: authHeaders(),
+      });
+      expect(res.status()).toBe(400);
+      const json = await res.json();
+      expect(json.ok).toBe(false);
+      expect(json.code).toBe('INVALID_DATE');
+    });
+
+    test('returns 400 BAD_CONTENT_TYPE for text/plain', async ({ request }) => {
+      test.skip(!hasAuth(), 'No auth credentials');
+      const res = await request.fetch('/api/v2/admin/events', {
+        method: 'POST',
+        timeout: TIMEOUT,
+        headers: { ...authHeaders(), 'Content-Type': 'text/plain' },
+        data: JSON.stringify({ title: 'CT Test' }),
+      });
+      expect(res.status()).toBe(400);
+      const json = await res.json();
+      expect(json.ok).toBe(false);
+      expect(json.code).toBe('BAD_CONTENT_TYPE');
+    });
   });
 
   // ── Successful Creation ────────────────────────────────────────────────────
