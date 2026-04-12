@@ -177,6 +177,20 @@ const ADMIN_HTML = `<!DOCTYPE html>
     .card-error .error-msg { font-size: .85rem; }
     .card-error .retry-btn { display: inline-block; margin-top: .75rem; padding: .4rem 1rem; background: #fff; border: 1px solid #dee2e6; border-radius: 6px; font-size: .8rem; cursor: pointer; color: #495057; }
     .card-error .retry-btn:hover { background: #f8f9fa; }
+    .create-card { background: #fff; border-radius: 8px; padding: 1.25rem 1.5rem; box-shadow: 0 1px 3px rgba(0,0,0,.08); margin-bottom: 2rem; border-left: 3px solid #16a34a; }
+    .create-card h2 { font-size: 1.1rem; font-weight: 600; color: #495057; margin-bottom: 1rem; }
+    .create-form { display: grid; grid-template-columns: 1fr 1fr; gap: .75rem; }
+    .create-form .full-width { grid-column: 1 / -1; }
+    .create-form label { display: block; font-size: .8rem; font-weight: 600; color: #495057; margin-bottom: .25rem; }
+    .create-form input, .create-form select { width: 100%; padding: .5rem .75rem; border: 1px solid #dee2e6; border-radius: 6px; font-size: .9rem; background: #fff; color: #1e293b; }
+    .create-form input:focus, .create-form select:focus { border-color: #4361ee; outline: none; box-shadow: 0 0 0 3px rgba(67,97,238,.12); }
+    .create-btn { padding: .6rem 1.5rem; background: #16a34a; color: #fff; border: none; border-radius: 6px; font-size: .9rem; font-weight: 600; cursor: pointer; transition: background .2s; }
+    .create-btn:hover { background: #15803d; }
+    .create-btn:disabled { background: #94a3b8; cursor: not-allowed; }
+    .create-msg { font-size: .85rem; margin-top: .5rem; min-height: 1.25rem; }
+    .create-msg.success { color: #16a34a; }
+    .create-msg.error { color: #dc2626; }
+    @media (max-width: 600px) { .create-form { grid-template-columns: 1fr; } }
   </style>
 </head>
 <body>
@@ -185,6 +199,32 @@ const ADMIN_HTML = `<!DOCTYPE html>
     <span>Admin</span>
   </header>
   <main data-testid="admin-main">
+
+    <!-- Create Event Card -->
+    <div class="create-card" data-testid="create-event-card">
+      <h2>Create Event</h2>
+      <form id="create-event-form" data-testid="create-event-form" novalidate>
+        <div class="create-form">
+          <div class="full-width">
+            <label for="create-title">Event Name <span style="color:#dc2626">*</span></label>
+            <input type="text" id="create-title" name="title" data-testid="create-title" placeholder="Summer Block Party" maxlength="200" required />
+          </div>
+          <div>
+            <label for="create-date">Start Date</label>
+            <input type="date" id="create-date" name="start_date" data-testid="create-date" />
+          </div>
+          <div>
+            <label for="create-venue">Venue</label>
+            <input type="text" id="create-venue" name="location" data-testid="create-venue" placeholder="Evergreen Park" maxlength="500" />
+          </div>
+          <div class="full-width" style="display:flex;align-items:end;gap:.75rem;">
+            <button type="submit" class="create-btn" data-testid="create-submit">Create Event</button>
+            <div id="create-msg" class="create-msg" data-testid="create-msg"></div>
+          </div>
+        </div>
+      </form>
+    </div>
+
     <h2>All Events</h2>
     <div id="events" data-testid="events-container"><div class="skeleton-table" data-testid="skeleton-events"><div class="skeleton skeleton-row"></div><div class="skeleton skeleton-row"></div><div class="skeleton skeleton-row"></div><div class="skeleton skeleton-row"></div></div></div>
   </main>
@@ -221,6 +261,54 @@ const ADMIN_HTML = `<!DOCTYPE html>
         container.innerHTML = '<div class="card-error" data-testid="events-error"><div class="error-icon">&#9888;</div><div class="error-msg">Could not load events.</div><button class="retry-btn" data-testid="events-retry" onclick="location.reload()">Retry</button></div>';
       }
     })();
+
+    // ── Create Event form handler ──
+    document.getElementById('create-event-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn = e.target.querySelector('[data-testid="create-submit"]');
+      const msg = document.getElementById('create-msg');
+      const title = document.getElementById('create-title').value.trim();
+      if (!title) { msg.textContent = 'Event name is required.'; msg.className = 'create-msg error'; return; }
+
+      btn.disabled = true;
+      btn.textContent = 'Creating\\u2026';
+      msg.textContent = '';
+      msg.className = 'create-msg';
+
+      try {
+        const body = { title };
+        const dateVal = document.getElementById('create-date').value;
+        if (dateVal) body.start_date = dateVal;
+        const venueVal = document.getElementById('create-venue').value.trim();
+        if (venueVal) body.location = venueVal;
+
+        const res = await fetch('/api/v2/admin/events', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        const data = await res.json();
+
+        if (res.ok && data.ok) {
+          msg.textContent = 'Event created \\u2014 ' + data.id;
+          msg.className = 'create-msg success';
+          document.getElementById('create-title').value = '';
+          document.getElementById('create-date').value = '';
+          document.getElementById('create-venue').value = '';
+          // Reload events table to show the new event
+          location.reload();
+        } else {
+          msg.textContent = data.error || 'Failed to create event.';
+          msg.className = 'create-msg error';
+        }
+      } catch (err) {
+        msg.textContent = 'Network error. Please try again.';
+        msg.className = 'create-msg error';
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Create Event';
+      }
+    });
   </script>
 
   <!-- Card 2: Forms Management -->
