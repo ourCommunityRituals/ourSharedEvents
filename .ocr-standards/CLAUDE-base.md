@@ -1,6 +1,6 @@
 # CLAUDE.md — [Product Name] ([CODE])
 
-> **Session protocol**: Read this file → Read OCR-docs `docs/VISION.md` → Understand [CODE]'s role in the OCR product line → Execute the task.
+> **Session protocol**: Read this file → Read OCR-docs `docs/OCR_VISION.md` → Understand [CODE]'s role in the OCR product line → Execute the task.
 
 ---
 
@@ -53,7 +53,7 @@ This repo is currently [documentation-as-code / active development]. [If docs-as
 | README.md | Public-facing description | Present |
 | SKILL.md | Reusable skills | Present |
 
-Vision lives in OCR-docs `docs/VISION.md` only.
+Vision lives in OCR-docs `docs/OCR_VISION.md` only.
 
 ---
 
@@ -63,7 +63,7 @@ All production-grade decisions follow the CCR (Critical, Conservative, Recursive
 
 ---
 
-*Derived from OCR-docs/docs/VISION.md*
+*Derived from OCR-docs/docs/OCR_VISION.md*
 *Last updated: [DATE]*
 *Owner: Matt*
 *Status: ACTIVE*
