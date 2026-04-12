@@ -22,7 +22,7 @@ const smokeTestPath = path.join(
   __dirname,
   '../../../tests/api/smoke/archive/sec-iac-07-smoke.spec.ts'
 );
-const ciWorkflowPath = path.join(__dirname, '../../../.github/workflows/ose-1-deploy.yml');
+const ciWorkflowPath = path.join(__dirname, '../../../.github/workflows/oursharedevents-ci.yml');
 const playwrightConfigPath = path.join(__dirname, '../../../playwright.smoke.config.ts');
 
 let smokeTestSource = '';
@@ -81,12 +81,25 @@ describe('SEC-IAC-07: Admin Unauthenticated → 401', () => {
 // =============================================================================
 
 describe('SEC-IAC-07: CI Workflow Integration', () => {
-  it('MUST have ose-1-deploy.yml workflow', () => {
+  it('MUST have oursharedevents-ci.yml workflow', () => {
     expect(fs.existsSync(ciWorkflowPath)).toBe(true);
   });
 
   it('CI workflow MUST have Security Gate job', () => {
     expect(ciWorkflowSource).toContain('Security Gate');
+  });
+
+  it('CI workflow MUST have Quality Smoke job for security bookend', () => {
+    expect(ciWorkflowSource).toContain('Quality Smoke');
+  });
+
+  it('CI workflow MUST run IAC health verification in quality smoke', () => {
+    // IAC step validates public endpoints (health + fail-fast gates) behind CF Access
+    expect(ciWorkflowSource).toContain('api-health.spec.ts');
+  });
+
+  it('CI workflow MUST run security-smoke.spec.js in quality smoke', () => {
+    expect(ciWorkflowSource).toContain('security-smoke.spec.js');
   });
 });
 
