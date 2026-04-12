@@ -223,18 +223,106 @@ test.describe('Admin Event Management Flow', () => {
     });
   });
 
-  test.describe('Tier Badge', () => {
-    test('should display tier badge in header after loading', async ({ page }) => {
+  test.describe('Form Toggle Interaction', () => {
+    test('should render form toggles after event selection', async ({ page }) => {
+      const eventsTable = page.locator('[data-testid="events-table"]');
+      await expect(eventsTable).toBeVisible({ timeout: 10000 });
+      const rowCount = await page.locator('[data-testid^="event-row-"]').count();
+      test.skip(rowCount === 0, 'No events available');
+
+      await page.locator('[data-testid^="event-row-"]').first().click();
+      await page.waitForSelector('[data-testid^="form-gate-"]', { timeout: 15000 });
+
+      // Config section should be visible
+      await expect(page.locator('[data-testid="config-section"]')).toBeVisible();
+    });
+
+    test('should render forms-grid container', async ({ page }) => {
+      const eventsTable = page.locator('[data-testid="events-table"]');
+      await expect(eventsTable).toBeVisible({ timeout: 10000 });
+      const rowCount = await page.locator('[data-testid^="event-row-"]').count();
+      test.skip(rowCount === 0, 'No events available');
+
+      await page.locator('[data-testid^="event-row-"]').first().click();
+      await page.waitForSelector('[data-testid^="form-gate-"]', { timeout: 15000 });
+
+      await expect(page.locator('[data-testid="forms-grid"]')).toBeVisible();
+    });
+
+    test('clicking a toggle fires PUT to flags API', async ({ page }) => {
+      const eventsTable = page.locator('[data-testid="events-table"]');
+      await expect(eventsTable).toBeVisible({ timeout: 10000 });
+      const rowCount = await page.locator('[data-testid^="event-row-"]').count();
+      test.skip(rowCount === 0, 'No events available');
+
+      await page.locator('[data-testid^="event-row-"]').first().click();
+      await page.waitForSelector('[data-testid^="form-gate-"]', { timeout: 15000 });
+
+      // Find an enabled toggle (not disabled by tier)
+      const toggle = page.locator('[data-testid="form-toggle-register"]');
+      const isDisabled = await toggle.isDisabled();
+      test.skip(isDisabled, 'Register toggle is disabled by tier — skipping');
+
+      // Track the PUT call
+      let flagPutFired = false;
+      page.on('request', (req) => {
+        if (req.method() === 'PUT' && req.url().includes('/flags/')) {
+          flagPutFired = true;
+        }
+      });
+
+      const wasBefore = await toggle.isChecked();
+      await toggle.click();
+
+      // Wait for network request
+      await page.waitForTimeout(1000);
+      expect(flagPutFired).toBe(true);
+
+      // Revert the toggle to original state
+      await toggle.click();
+      await page.waitForTimeout(500);
+    });
+  });
+
+  test.describe('Copy Button Interaction', () => {
+    test('copy button text changes to "Copied!" after click', async ({ page }) => {
       const eventsTable = page.locator('[data-testid="events-table"]');
       await expect(eventsTable).toBeVisible({ timeout: 10000 });
 
-      const rowCount = await page.locator('[data-testid^="event-row-"]').count();
-      test.skip(rowCount === 0, 'No events available — skipping tier badge test');
+      await page.context().grantPermissions(['clipboard-write']);
+      const copyBtn = page.locator('[data-testid="copy-poster"]');
+      test.skip(!(await copyBtn.isVisible()), 'Copy button not visible');
 
-      await page.locator('[data-testid^="event-row-"]').first().click();
+      await copyBtn.click();
+      await expect(copyBtn).toHaveText('Copied!');
 
+      // Reverts after 2 seconds
+      await expect(copyBtn).toHaveText('Copy URL', { timeout: 3000 });
+    });
+  });
+
+  test.describe('Tier Badge', () => {
+    test('should display tier badge in header after loading', async ({ page }) => {
       const tierBadge = page.locator('[data-testid="tier-badge"]');
-      await expect(tierBadge).toBeVisible({ timeout: 5000 });
+      await expect(tierBadge).toBeVisible({ timeout: 10000 });
+    });
+
+    test('tier badge should have a valid tier class', async ({ page }) => {
+      const tierBadge = page.locator('[data-testid="tier-badge"]');
+      await expect(tierBadge).toBeVisible({ timeout: 10000 });
+
+      const classes = await tierBadge.getAttribute('class');
+      const hasTier =
+        classes?.includes('free') || classes?.includes('mid') || classes?.includes('enterprise');
+      expect(hasTier).toBeTruthy();
+    });
+
+    test('tier badge text should match a known tier', async ({ page }) => {
+      const tierBadge = page.locator('[data-testid="tier-badge"]');
+      await expect(tierBadge).toBeVisible({ timeout: 10000 });
+
+      const text = await tierBadge.textContent();
+      expect(['free', 'mid', 'enterprise']).toContain(text?.trim());
     });
   });
 });

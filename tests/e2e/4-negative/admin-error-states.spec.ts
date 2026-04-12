@@ -109,14 +109,20 @@ test.describe('Admin Error States', () => {
   });
 
   test.describe('Forms API Failure After Event Selection', () => {
-    test('should show forms error state when forms API fails', async ({ page }) => {
-      // Let events load normally, then intercept forms/details API
-      await page.route('**/api/v2/admin/events/*/forms', (route) => {
+    test('should show forms error state when forms APIs fail', async ({ page }) => {
+      // The Worker loads forms data from multiple endpoints in parallel:
+      //   /forms/registrations, /forms/checkin-count, /forms/surveys, /forms/email-signups
+      //   /flags/resolve?eventId=...
+      // Intercept all of them to simulate a full forms failure
+      await page.route('**/api/v2/admin/events/*/forms/**', (route) => {
         route.fulfill({
           status: 500,
           contentType: 'application/json',
-          body: JSON.stringify({ error: 'Forms service unavailable' }),
+          body: JSON.stringify({ ok: false, error: 'Forms service unavailable' }),
         });
+      });
+      await page.route('**/api/v2/admin/flags/resolve**', (route) => {
+        route.abort('failed');
       });
 
       await page.goto('/admin');
@@ -126,20 +132,41 @@ test.describe('Admin Error States', () => {
 
       const firstRow = page.locator('[data-testid^="event-row-"]').first();
       const rowCount = await page.locator('[data-testid^="event-row-"]').count();
-
       test.skip(rowCount === 0, 'No events available to test forms error state');
 
       await firstRow.click();
 
-      // The forms panel should show an error state
-      const formsError = page.locator(
-        '[data-testid="forms-error"], [data-testid="forms-panel"] [class*="error"]'
-      );
-      await expect(formsError).toBeVisible({ timeout: 10000 });
+      // Forms panel should show error card with retry button
+      const formsError = page.locator('[data-testid="forms-error"]');
+      await expect(formsError).toBeVisible({ timeout: 15000 });
+    });
+
+    test('forms error state should include a retry button', async ({ page }) => {
+      await page.route('**/api/v2/admin/events/*/forms/**', (route) => {
+        route.abort('failed');
+      });
+      await page.route('**/api/v2/admin/flags/resolve**', (route) => {
+        route.abort('failed');
+      });
+
+      await page.goto('/admin');
+      const eventsTable = page.locator('[data-testid="events-table"]');
+      await expect(eventsTable).toBeVisible({ timeout: 10000 });
+
+      const rowCount = await page.locator('[data-testid^="event-row-"]').count();
+      test.skip(rowCount === 0, 'No events available');
+
+      await page.locator('[data-testid^="event-row-"]').first().click();
+
+      const formsRetry = page.locator('[data-testid="forms-retry"]');
+      await expect(formsRetry).toBeVisible({ timeout: 15000 });
     });
 
     test('should handle network timeout on forms API gracefully', async ({ page }) => {
-      await page.route('**/api/v2/admin/events/*/forms', (route) => {
+      await page.route('**/api/v2/admin/events/*/forms/**', (route) => {
+        route.abort('timedout');
+      });
+      await page.route('**/api/v2/admin/flags/resolve**', (route) => {
         route.abort('timedout');
       });
 
@@ -148,17 +175,13 @@ test.describe('Admin Error States', () => {
       const eventsTable = page.locator('[data-testid="events-table"]');
       await expect(eventsTable).toBeVisible({ timeout: 10000 });
 
-      const firstRow = page.locator('[data-testid^="event-row-"]').first();
       const rowCount = await page.locator('[data-testid^="event-row-"]').count();
-
       test.skip(rowCount === 0, 'No events available to test timeout handling');
 
-      await firstRow.click();
+      await page.locator('[data-testid^="event-row-"]').first().click();
 
       // Should show error state rather than hanging
-      const formsError = page.locator(
-        '[data-testid="forms-error"], [data-testid="forms-panel"] [class*="error"]'
-      );
+      const formsError = page.locator('[data-testid="forms-error"]');
       await expect(formsError).toBeVisible({ timeout: 15000 });
     });
   });
