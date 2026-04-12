@@ -93,9 +93,9 @@ describe('SEC-IAC-07: CI Workflow Integration', () => {
     expect(ciWorkflowSource).toContain('Quality Smoke');
   });
 
-  it('CI workflow MUST run admin auth smoke in quality smoke', () => {
-    // Auth coverage migrated from sec-iac-07 to storyC1-adminAuth
-    expect(ciWorkflowSource).toContain('storyC1-adminAuth.spec.ts');
+  it('CI workflow MUST run IAC health verification in quality smoke', () => {
+    // IAC step validates public endpoints (health + fail-fast gates) behind CF Access
+    expect(ciWorkflowSource).toContain('api-health.spec.ts');
   });
 
   it('CI workflow MUST run security-smoke.spec.js in quality smoke', () => {

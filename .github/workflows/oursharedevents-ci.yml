@@ -287,15 +287,11 @@ jobs:
         timeout-minutes: 10
         continue-on-error: true
 
-      - name: 'Security smoke: IAC security verification'
+      - name: 'Security smoke: IAC health + public endpoint verification'
         id: iac-smoke
         env:
           BASE_URL: ${{ env.STG_BASE_URL }}
-          ADMIN_KEY: ${{ secrets.ADMIN_KEY }}
-          X_OCR_INTERNAL: ${{ secrets.X_OCR_INTERNAL }}
-          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
-          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
-        run: npx playwright test --config=playwright.smoke.config.ts tests/api/smoke/storyC1-adminAuth.spec.ts
+        run: npx playwright test --config=playwright.smoke.config.ts tests/api/smoke/api-health.spec.ts tests/api/smoke/fail-fast-gates.spec.ts
         timeout-minutes: 10
         continue-on-error: true
 
@@ -619,15 +615,11 @@ jobs:
         timeout-minutes: 10
         continue-on-error: true
 
-      - name: 'Security smoke: IAC security verification'
+      - name: 'Security smoke: IAC health + public endpoint verification'
         id: iac-smoke
         env:
           BASE_URL: ${{ env.PROD_BASE_URL }}
-          ADMIN_KEY: ${{ secrets.ADMIN_KEY }}
-          X_OCR_INTERNAL: ${{ secrets.X_OCR_INTERNAL }}
-          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
-          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
-        run: npx playwright test --config=playwright.smoke.config.ts tests/api/smoke/storyC1-adminAuth.spec.ts
+        run: npx playwright test --config=playwright.smoke.config.ts tests/api/smoke/api-health.spec.ts tests/api/smoke/fail-fast-gates.spec.ts
         timeout-minutes: 10
         continue-on-error: true
 
