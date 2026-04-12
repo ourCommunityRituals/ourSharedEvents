@@ -155,6 +155,34 @@ test.describe('Public Events — Event Cards (Data Present)', () => {
     expect(await cards.count()).toBeGreaterThanOrEqual(1);
   });
 
+  test('each card has a Register CTA link', async ({ page }) => {
+    const ctas = page.locator('[data-testid="public-event-cta"]');
+    const count = await ctas.count();
+    expect(count).toBeGreaterThanOrEqual(1);
+    for (let i = 0; i < count; i++) {
+      await expect(ctas.nth(i)).toContainText('Register');
+      const href = await ctas.nth(i).getAttribute('href');
+      expect(href).toContain('/forms/');
+      expect(href).toContain('type=register');
+    }
+  });
+
+  test('each card has data-event-id attribute', async ({ page }) => {
+    const cards = page.locator('[data-testid="public-event-card"]');
+    const count = await cards.count();
+    for (let i = 0; i < count; i++) {
+      const eventId = await cards.nth(i).getAttribute('data-event-id');
+      expect(eventId?.length, `Card ${i} missing data-event-id`).toBeGreaterThan(0);
+    }
+  });
+
+  test('CTA aria-label includes event name', async ({ page }) => {
+    const cta = page.locator('[data-testid="public-event-cta"]').first();
+    const ariaLabel = await cta.getAttribute('aria-label');
+    expect(ariaLabel).toContain('Register');
+    expect(ariaLabel?.length).toBeGreaterThan(15); // "Register for {name}"
+  });
+
   test('no error message when events load successfully', async ({ page }) => {
     const error = page.locator('[data-testid="public-error"]');
     expect(await error.count()).toBe(0);

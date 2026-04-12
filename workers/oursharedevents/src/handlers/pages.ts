@@ -32,9 +32,14 @@ const PUBLIC_HTML = `<!DOCTYPE html>
     .event-card {
       background: #fff; border-radius: 8px; padding: 1.25rem 1.5rem;
       box-shadow: 0 1px 3px rgba(0,0,0,.08); border-left: 3px solid #4361ee;
+      display: flex; justify-content: space-between; align-items: center; gap: 1rem;
     }
+    .event-card .event-info { flex: 1; min-width: 0; }
     .event-card h3 { font-size: 1rem; font-weight: 600; margin-bottom: .35rem; }
     .event-card .meta { font-size: .85rem; color: #868e96; }
+    .event-card .cta { display: inline-block; padding: .5rem 1.25rem; background: #4361ee; color: #fff; border-radius: 6px; font-size: .85rem; font-weight: 600; text-decoration: none; white-space: nowrap; transition: background .2s; flex-shrink: 0; }
+    .event-card .cta:hover { background: #3451d1; }
+    .event-card .cta:focus-visible { outline: 2px solid #4361ee; outline-offset: 2px; }
     .loading { text-align: center; padding: 3rem; color: #868e96; font-size: .95rem; }
     .error   { text-align: center; padding: 2rem; color: #e03131; }
   </style>
@@ -58,15 +63,23 @@ const PUBLIC_HTML = `<!DOCTYPE html>
           container.innerHTML = '<p class="loading">No events scheduled.</p>';
           return;
         }
-        container.innerHTML = data.items.map(e => \`
-          <div class="event-card" data-testid="public-event-card">
-            <h3 data-testid="public-event-name">\${esc(e.name || 'Untitled Event')}</h3>
-            <p class="meta" data-testid="public-event-meta">
-              \${e.startDateISO ? esc(new Date(e.startDateISO).toLocaleDateString('en-US', { weekday:'long', year:'numeric', month:'long', day:'numeric' })) : ''}
-              \${e.venue ? ' &middot; ' + esc(e.venue) : ''}
-            </p>
-          </div>
-        \`).join('');
+        container.innerHTML = data.items.map(e => {
+          const safeId = esc(String(e.id || ''));
+          const safeName = esc(e.name || e.title || 'Untitled Event');
+          const encodedName = encodeURIComponent(e.name || e.title || 'Event');
+          const dateStr = e.startDateISO || e.start_date
+            ? esc(new Date(e.startDateISO || e.start_date).toLocaleDateString('en-US', { weekday:'long', year:'numeric', month:'long', day:'numeric' }))
+            : '';
+          const venueStr = (e.venue || e.location) ? ' &middot; ' + esc(e.venue || e.location) : '';
+          return \`
+          <div class="event-card" data-testid="public-event-card" data-event-id="\${safeId}">
+            <div class="event-info">
+              <h3 data-testid="public-event-name">\${safeName}</h3>
+              <p class="meta" data-testid="public-event-meta">\${dateStr}\${venueStr}</p>
+            </div>
+            <a class="cta" href="/forms/\${safeId}?type=register&event=\${encodedName}" data-testid="public-event-cta" aria-label="Register for \${safeName}">Register</a>
+          </div>\`;
+        }).join('');
       } catch (err) {
         container.innerHTML = '<p class="error" data-testid="public-error">Could not load events. Please try again.</p>';
       }
