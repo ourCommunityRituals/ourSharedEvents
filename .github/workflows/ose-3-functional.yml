@@ -1,0 +1,169 @@
+# OurSharedEvents — Part 3: Functional Smoke
+#
+# MANUAL ONLY — workflow_dispatch with environment selector.
+# Never auto-triggered. Never scheduled. You push the button.
+#
+# This is the expensive suite: Newman API + Newman Pages + Playwright API + Playwright UI.
+# Run it when you want to thoroughly validate a deployment.
+#
+# Move test sets between Part 2 and Part 3 as you settle on what's nightly vs on-demand.
+
+name: OurSharedEvents Functional
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to test'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - production
+
+concurrency:
+  group: ose-functional-${{ github.event.inputs.environment }}
+  cancel-in-progress: true
+
+env:
+  STG_BASE_URL: 'https://stg.oursharedevents.com'
+  PROD_BASE_URL: 'https://oursharedevents.com'
+
+jobs:
+  # ============================================================================
+  # Functional Smoke
+  # ============================================================================
+  functional-smoke:
+    name: 'Functional Smoke → ${{ github.event.inputs.environment }}'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: write
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install root dependencies
+        run: npm ci
+
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v5
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            playwright-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}
+
+      - name: Install Playwright browsers
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: npx playwright install chromium --with-deps
+
+      - name: Install Playwright OS dependencies only (cached browsers)
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium
+
+      - name: Set BASE_URL
+        run: |
+          if [ "${{ github.event.inputs.environment }}" = "production" ]; then
+            echo "BASE_URL=$PROD_BASE_URL" >> $GITHUB_ENV
+          else
+            echo "BASE_URL=$STG_BASE_URL" >> $GITHUB_ENV
+          fi
+
+      # ── Newman API contract check ──────────────────────────────────────
+      - name: Newman API smoke tests
+        id: newman-api
+        env:
+          ADMIN_KEY: ${{ secrets.ADMIN_KEY }}
+          X_OCR_INTERNAL: ${{ secrets.X_OCR_INTERNAL }}
+        run: |
+          npx newman run postman/collections/ose-api.json \
+            -e postman/environments/ose-staging.json \
+            --env-var "adminKey=$ADMIN_KEY" \
+            --env-var "ocrInternalSecret=$X_OCR_INTERNAL" \
+            --bail \
+            --reporters cli,junit \
+            --reporter-junit-export .test-results/newman-api-junit.xml
+        timeout-minutes: 5
+        continue-on-error: true
+
+      # ── Newman Pages smoke ─────────────────────────────────────────────
+      - name: Newman Pages smoke tests
+        id: newman-pages
+        run: |
+          npx newman run postman/collections/ose-pages.json \
+            -e postman/environments/ose-staging.json \
+            --bail \
+            --reporters cli,junit \
+            --reporter-junit-export .test-results/newman-pages-junit.xml
+        timeout-minutes: 5
+        continue-on-error: true
+
+      # ── Playwright API smoke ───────────────────────────────────────────
+      - name: Playwright API smoke tests
+        id: api-tests
+        env:
+          ADMIN_KEY: ${{ secrets.ADMIN_KEY }}
+          X_OCR_INTERNAL: ${{ secrets.X_OCR_INTERNAL }}
+        run: npm run test:api:smoke
+        timeout-minutes: 10
+        continue-on-error: true
+
+      # ── Playwright UI smoke ────────────────────────────────────────────
+      - name: Playwright UI smoke tests
+        id: ui-tests
+        env:
+          ADMIN_KEY: ${{ secrets.ADMIN_KEY }}
+          X_OCR_INTERNAL: ${{ secrets.X_OCR_INTERNAL }}
+        run: npm run test:ui:smoke
+        timeout-minutes: 15
+        continue-on-error: true
+
+      - name: Upload test artifacts
+        uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: functional-${{ github.event.inputs.environment }}-${{ github.run_number }}
+          path: |
+            playwright-report-smoke/
+            playwright-report-ui-smoke/
+            .test-results/
+            test-results/
+          retention-days: 14
+
+      - name: Report results in PR
+        if: always() && github.event_name == 'pull_request'
+        uses: dorny/test-reporter@v3
+        continue-on-error: true
+        with:
+          name: "Functional Results"
+          path: ".test-results/*-junit.xml"
+          reporter: jest-junit
+          fail-on-error: false
+
+      - name: Fail if tests failed
+        if: steps.newman-api.outcome == 'failure' || steps.newman-pages.outcome == 'failure' || steps.api-tests.outcome == 'failure' || steps.ui-tests.outcome == 'failure'
+        run: |
+          echo "::error::Functional smoke failed — Newman-API: ${{ steps.newman-api.outcome }}, Newman-Pages: ${{ steps.newman-pages.outcome }}, API: ${{ steps.api-tests.outcome }}, UI: ${{ steps.ui-tests.outcome }}"
+          exit 1
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "## OurSharedEvents Functional Smoke – ${{ github.event.inputs.environment }}" >> $GITHUB_STEP_SUMMARY
+          echo "| Suite | Result |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Newman API   | \`${{ steps.newman-api.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Newman Pages | \`${{ steps.newman-pages.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| API Smoke    | \`${{ steps.api-tests.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| UI Smoke     | \`${{ steps.ui-tests.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Environment:** ${{ github.event.inputs.environment }}" >> $GITHUB_STEP_SUMMARY
+          echo "**URL:** ${{ env.BASE_URL }}" >> $GITHUB_STEP_SUMMARY
