@@ -185,8 +185,8 @@ export class SmokeTestHelper {
       return true;
     }
 
-    // XHR-style requests
-    if (urlObj.search.includes('page=')) {
+    // Health endpoint
+    if (urlObj.pathname === '/health') {
       return true;
     }
 

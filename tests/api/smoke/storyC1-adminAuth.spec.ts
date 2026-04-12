@@ -378,13 +378,14 @@ test.describe('Story C1: Public Endpoints - No Auth Required', () => {
     expect([200, 500]).toContain(response.status()); // 200 if healthy, 500 if backend not configured
   });
 
-  test('/api/health/backend does not require auth', async ({ request }) => {
-    const response = await request.get(`/api/health/backend`, {
+  test('/health does not require auth', async ({ request }) => {
+    const response = await request.get('/health', {
       timeout: TIMEOUT,
       // No Authorization header
     });
 
     // Health endpoints should work without auth
     expect(response.status()).not.toBe(401);
+    expect(response.status()).toBe(200);
   });
 });

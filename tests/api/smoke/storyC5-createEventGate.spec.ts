@@ -181,12 +181,12 @@ test.describe('Story C5: Create Event Smoke Gate', () => {
   });
 
   /**
-   * Health endpoint gate: Verify backend health endpoint is accessible
+   * Health endpoint gate: Verify /health is accessible
    *
-   * This is a supplementary check that the health endpoint used by curl gate is working.
+   * Supplementary check — the health endpoint used by CI curl gate.
    */
-  test('GET /api/health/backend returns ok=true', async ({ request }) => {
-    const response = await request.get('/api/health/backend', {
+  test('GET /health returns ok=true', async ({ request }) => {
+    const response = await request.get('/health', {
       timeout: TIMEOUT,
     });
 
@@ -197,8 +197,9 @@ test.describe('Story C5: Create Event Smoke Gate', () => {
 
     const json = await response.json();
 
-    // Assert: ok == true (same check as jq -e '.ok == true')
+    // Assert: ok == true and db is healthy
     expect(json.ok, 'Health response should have ok=true').toBe(true);
+    expect(json.db, 'D1 should be reachable').toBe('ok');
   });
 });
 

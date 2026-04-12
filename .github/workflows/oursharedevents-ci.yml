@@ -355,26 +355,7 @@ jobs:
         if: steps.playwright-cache.outputs.cache-hit == 'true'
         run: npx playwright install-deps chromium
 
-      - name: API smoke tests
-        id: api-tests
-        env:
-          BASE_URL: ${{ env.STG_BASE_URL }}
-          ADMIN_KEY: ${{ secrets.ADMIN_KEY }}
-          X_OCR_INTERNAL: ${{ secrets.X_OCR_INTERNAL }}
-        run: npm run test:api:smoke
-        timeout-minutes: 10
-        continue-on-error: true
-
-      - name: UI smoke tests
-        id: ui-tests
-        env:
-          BASE_URL: ${{ env.STG_BASE_URL }}
-          ADMIN_KEY: ${{ secrets.ADMIN_KEY }}
-          X_OCR_INTERNAL: ${{ secrets.X_OCR_INTERNAL }}
-        run: npm run test:ui:smoke
-        timeout-minutes: 15
-        continue-on-error: true
-
+      # ── Step 1: Newman API contract check (fast, no browser) ──────────────
       - name: Newman API smoke tests
         id: newman-api
         env:
@@ -396,9 +377,32 @@ jobs:
         run: |
           npx newman run postman/collections/ose-pages.json \
             -e postman/environments/ose-staging.json \
+            --bail \
             --reporters cli,junit \
             --reporter-junit-export .test-results/newman-pages-junit.xml
         timeout-minutes: 5
+        continue-on-error: true
+
+      # ── Step 2: Playwright API smoke (deeper validation) ─────────────────
+      - name: API smoke tests
+        id: api-tests
+        env:
+          BASE_URL: ${{ env.STG_BASE_URL }}
+          ADMIN_KEY: ${{ secrets.ADMIN_KEY }}
+          X_OCR_INTERNAL: ${{ secrets.X_OCR_INTERNAL }}
+        run: npm run test:api:smoke
+        timeout-minutes: 10
+        continue-on-error: true
+
+      # ── Step 3: Playwright UI smoke (browser-based surfaces) ─────────────
+      - name: UI smoke tests
+        id: ui-tests
+        env:
+          BASE_URL: ${{ env.STG_BASE_URL }}
+          ADMIN_KEY: ${{ secrets.ADMIN_KEY }}
+          X_OCR_INTERNAL: ${{ secrets.X_OCR_INTERNAL }}
+        run: npm run test:ui:smoke
+        timeout-minutes: 15
         continue-on-error: true
 
       - name: Upload test artifacts
@@ -424,9 +428,9 @@ jobs:
           fail-on-error: false
 
       - name: Fail if tests failed
-        if: steps.api-tests.outcome == 'failure' || steps.ui-tests.outcome == 'failure' || steps.newman-api.outcome == 'failure' || steps.newman-pages.outcome == 'failure'
+        if: steps.newman-api.outcome == 'failure' || steps.newman-pages.outcome == 'failure' || steps.api-tests.outcome == 'failure' || steps.ui-tests.outcome == 'failure'
         run: |
-          echo "::error::Functional smoke failed — API: ${{ steps.api-tests.outcome }}, UI: ${{ steps.ui-tests.outcome }}, Newman-API: ${{ steps.newman-api.outcome }}, Newman-Pages: ${{ steps.newman-pages.outcome }}"
+          echo "::error::Functional smoke failed — Newman-API: ${{ steps.newman-api.outcome }}, Newman-Pages: ${{ steps.newman-pages.outcome }}, API: ${{ steps.api-tests.outcome }}, UI: ${{ steps.ui-tests.outcome }}"
           exit 1
 
       - name: Summary
@@ -435,10 +439,10 @@ jobs:
           echo "## OurSharedEvents Functional Smoke – Staging" >> $GITHUB_STEP_SUMMARY
           echo "| Suite | Result |" >> $GITHUB_STEP_SUMMARY
           echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
-          echo "| API Smoke | \`${{ steps.api-tests.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| UI Smoke  | \`${{ steps.ui-tests.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| Newman API | \`${{ steps.newman-api.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| Newman Pages | \`${{ steps.newman-pages.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| API Smoke | \`${{ steps.api-tests.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| UI Smoke  | \`${{ steps.ui-tests.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**URL:** $STG_BASE_URL" >> $GITHUB_STEP_SUMMARY
 
