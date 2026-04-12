@@ -85,12 +85,12 @@ describe('SEC-IAC-07: CI Workflow Integration', () => {
     expect(fs.existsSync(ciWorkflowPath)).toBe(true);
   });
 
-  it('CI workflow MUST have Security Gate job', () => {
-    expect(ciWorkflowSource).toContain('Security Gate');
+  it('CI workflow MUST have Gate tier', () => {
+    expect(ciWorkflowSource).toContain('T0 Gate');
   });
 
-  it('CI workflow MUST have Quality Smoke job for security bookend', () => {
-    expect(ciWorkflowSource).toContain('Quality Smoke');
+  it('CI workflow MUST have Smoke tier', () => {
+    expect(ciWorkflowSource).toContain('T2 Smoke');
   });
 
   it('CI workflow MUST run IAC health verification in quality smoke', () => {

@@ -1,40 +1,38 @@
 # OurSharedEvents – CI/CD Pipeline
 #
-# Security-gated pipeline: nothing deploys until security + quality pass.
-# Post-deploy: quality smoke (security bookend) runs parallel with deploy,
-# functional smoke validates the new deployment.
+# Test Pyramid in one workflow:
 #
-# Job Flow:
-#   [00 Security Gate] → [02 Deploy ∥ 03 Quality Smoke] → [03b Functional Smoke]
+#   Tier 0: Gate        — Static analysis, unit, contract (every push/PR)
+#   Tier 1: Deploy      — D1 migrations, wrangler deploy, health check (push to main)
+#   Tier 2: Smoke       — Security XSS + IAC health + fail-fast (post-deploy + nightly)
+#   Tier 3: Contract    — Newman API + Pages contract checks (post-deploy)
+#   Tier 4: Functional  — Playwright API + UI full suite (on-demand only)
 #
 # Trigger Matrix:
-#   | Event          | 00 Gate | 02 Deploy | 03 QSmoke | 03b FSmoke |
-#   |----------------|---------|-----------|-----------|------------|
-#   | PR to main     | ✅      | ❌        | ❌        | ❌         |
-#   | Push to main   | ✅      | ✅        | ✅        | ✅         |
-#   | Tag vX.Y.Z     | ✅      | ❌(→prod) | ❌(→prod) | ❌(→prod)  |
-#   | workflow_dispatch | ✅   | optional  | optional  | optional   |
+#   | Event            | Gate | Deploy | Smoke | Contract | Functional |
+#   |------------------|------|--------|-------|----------|------------|
+#   | PR to main       | ✅   | ❌     | ❌    | ❌       | ❌         |
+#   | Push to main     | ✅   | ✅     | ✅    | ✅       | ❌         |
+#   | Tag vX.Y.Z       | ✅   | →prod  | →prod | ❌       | ❌         |
+#   | Schedule (nightly)| ✅  | ❌     | ✅    | ✅       | ❌         |
+#   | Dispatch          | ✅   | opt    | opt   | opt      | opt        |
+#
+# Cost control: Functional (Tier 4) only runs when you check the box.
+# Move tests between Tier 2/3/4 as you settle on nightly vs on-demand.
 #
 # Required GitHub Secrets:
-#   - CLOUDFLARE_API_TOKEN_OSE      (Cloudflare API token with Workers:Edit permission)
-#   - CLOUDFLARE_ACCOUNT_ID     (Cloudflare account ID)
-#   - ADMIN_KEY                 (Bearer token for /admin routes)
-#   - X_OCR_INTERNAL            (CI/CD auth secret for X-OCR-Internal header)
-#   - CF_ACCESS_CLIENT_ID       (Cloudflare Access service token — bypasses bot mgmt for health checks)
-#   - CF_ACCESS_CLIENT_SECRET   (Cloudflare Access service token secret)
-#
-# Wrangler secrets (set once via wrangler CLI, not GitHub secrets):
-#   wrangler secret put ADMIN_KEY                 --env staging
-#   wrangler secret put FORMS_ENCRYPTION_KEY      --env staging
-#   wrangler secret put X_OCR_INTERNAL       --env staging
-#   # Repeat for --env production
+#   - CLOUDFLARE_API_TOKEN_OSE      (Cloudflare API token)
+#   - CLOUDFLARE_ACCOUNT_ID         (Cloudflare account ID)
+#   - ADMIN_KEY                     (Bearer token for /admin routes)
+#   - X_OCR_INTERNAL                (CI/CD auth secret)
+#   - CF_ACCESS_CLIENT_ID           (Cloudflare Access service token)
+#   - CF_ACCESS_CLIENT_SECRET       (Cloudflare Access service token secret)
 
 name: OurSharedEvents CI/CD
 
 on:
   pull_request:
-    branches:
-      - main
+    branches: [main]
     paths:
       - 'workers/oursharedevents/**'
       - 'tests/**'
@@ -44,8 +42,7 @@ on:
       - 'playwright.*.config.*'
       - '.github/workflows/oursharedevents-ci.yml'
   push:
-    branches:
-      - main
+    branches: [main]
     paths:
       - 'workers/oursharedevents/**'
       - 'tests/**'
@@ -56,20 +53,24 @@ on:
       - '.github/workflows/oursharedevents-ci.yml'
     tags:
       - 'v*.*.*'
+  schedule:
+    - cron: '7 3 * * *'  # Nightly 3:07 AM UTC — Gate + Smoke + Contract (no deploy)
   workflow_dispatch:
     inputs:
       deploy_staging:
         description: 'Deploy to staging'
-        required: false
-        default: 'false'
         type: boolean
+        default: false
       deploy_production:
-        description: 'Deploy to production (type PRODUCTION to confirm)'
-        required: false
+        description: 'Deploy to production (type PRODUCTION)'
         type: string
+      run_functional:
+        description: 'Run full functional suite (Tier 4 — expensive)'
+        type: boolean
+        default: false
 
 concurrency:
-  group: oursharedevents-${{ github.event.pull_request.number || github.ref }}
+  group: ose-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 env:
@@ -79,62 +80,52 @@ env:
 
 jobs:
   # ============================================================================
-  # 00 SECURITY GATE — Nothing gets in until this passes
-  #
-  # Batched into one job for cost efficiency (1 runner, 1 checkout, 1 npm ci).
-  # Security checks run FIRST (banned-origins, unit security), then quality
-  # checks (lint, typecheck, unit, contract, guards).
+  # TIER 0: GATE — Every push, every PR
   # ============================================================================
-  security-gate:
-    name: '00 Security Gate'
+  gate:
+    name: 'T0 Gate'
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v6
-
       - uses: actions/setup-node@v6
         with:
           node-version: '20'
           cache: 'npm'
 
-      # --- Security checks (fail fast) ---
-
       - name: Install root dependencies
         run: npm ci
 
-      - name: 'Security: Banned origins check'
+      - name: 'Security: Banned origins'
         run: npm run check:banned-origins
 
-      - name: 'Security: Unit security tests'
+      - name: 'Security: Unit tests'
         run: npx vitest run tests/unit/worker/sec-iac-03-adminOAuth.test.js tests/unit/worker/sec-iac-04-public-read-only.test.js tests/unit/worker/sec-iac-05-signed-mutations.test.js tests/unit/worker/sec-iac-07-iac-smoke.test.js
 
-      # --- Quality checks ---
-
-      - name: 'Quality: Lint (zero errors)'
+      - name: 'Quality: Lint'
         run: npx eslint config/ scripts/ tests/unit/ tests/contract/
 
       - name: Install worker dependencies
         run: npm ci
         working-directory: ${{ env.WORKER_DIR }}
 
-      - name: 'Quality: TypeScript type check'
+      - name: 'Quality: TypeScript'
         run: npx tsc --noEmit
         working-directory: ${{ env.WORKER_DIR }}
 
       - name: 'Quality: Unit + Contract + Guards'
         run: npm test
 
-      - name: 'Quality: Worker D1 schema + forms security'
+      - name: 'Quality: Worker D1 schema'
         run: npm test
         working-directory: ${{ env.WORKER_DIR }}
 
   # ============================================================================
-  # 02 DEPLOY → Staging (push to main only)
+  # TIER 1: DEPLOY — Push to main or dispatch
   # ============================================================================
   deploy-staging:
-    name: '02 Deploy → Staging'
+    name: 'T1 Deploy → Staging'
     runs-on: ubuntu-latest
-    needs: [security-gate]
+    needs: [gate]
     if: |
       (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
       (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_staging == 'true')
@@ -144,7 +135,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v6
-
       - uses: actions/setup-node@v6
         with:
           node-version: '20'
@@ -155,21 +145,21 @@ jobs:
         run: npm ci
         working-directory: ${{ env.WORKER_DIR }}
 
-      - name: Apply D1 migrations to staging (main DB)
+      - name: Apply D1 migrations (main DB)
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         working-directory: ${{ env.WORKER_DIR }}
         run: npx wrangler d1 migrations apply DB --env staging --remote
 
-      - name: Apply D1 migrations to staging (forms DB — separate)
+      - name: Apply D1 migrations (forms DB)
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         working-directory: ${{ env.WORKER_DIR }}
         run: npx wrangler d1 migrations apply FORMS_DB --env staging --remote
 
-      - name: Verify D1 staging tables (main DB)
+      - name: Verify D1 tables (main DB — 6 tables)
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -178,13 +168,10 @@ jobs:
           RESULT=$(npx wrangler d1 execute ocr-db-staging --env staging --remote \
             --command "SELECT COUNT(*) as cnt FROM sqlite_master WHERE type='table' AND name IN ('events','sponsors','poster_deployments','scans','scan_aggregates','subscribers')")
           echo "$RESULT"
-          if ! echo "$RESULT" | grep -q "6"; then
-            echo "::error::D1 staging table verification failed — expected 6 tables in main DB"
-            exit 1
-          fi
-          echo "✓ All 6 tables verified in staging main D1"
+          if ! echo "$RESULT" | grep -q "6"; then echo "::error::Expected 6 tables"; exit 1; fi
+          echo "✓ 6 tables verified"
 
-      - name: Verify D1 staging tables (forms DB)
+      - name: Verify D1 tables (forms DB — 5 tables)
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -193,89 +180,73 @@ jobs:
           RESULT=$(npx wrangler d1 execute ocr-forms-db-staging --env staging --remote \
             --command "SELECT COUNT(*) as cnt FROM sqlite_master WHERE type='table' AND name IN ('form_registrations','checkin_counts','form_surveys','email_signups','feature_flags')")
           echo "$RESULT"
-          if ! echo "$RESULT" | grep -q "5"; then
-            echo "::error::D1 staging forms table verification failed — expected 5 tables in forms DB"
-            exit 1
-          fi
-          echo "✓ All 5 tables verified in staging forms D1"
+          if ! echo "$RESULT" | grep -q "5"; then echo "::error::Expected 5 tables"; exit 1; fi
+          echo "✓ 5 tables verified"
 
       - name: Stamp build version
         working-directory: ${{ env.WORKER_DIR }}
         run: |
           SHORT_SHA=$(git rev-parse --short HEAD)
           VERSION="stg-${SHORT_SHA}-$(date -u +%Y%m%d)"
-          echo "Setting WORKER_BUILD_VERSION=$VERSION"
           sed -i "s/WORKER_BUILD_VERSION = \"stg-.*\"/WORKER_BUILD_VERSION = \"$VERSION\"/" wrangler.toml
 
-      - name: Deploy to staging
+      - name: Deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: npx wrangler deploy --env staging
         working-directory: ${{ env.WORKER_DIR }}
 
-      - name: Wait for worker propagation
-        run: sleep 10
-
-      - name: Health check staging
+      - name: Wait + Health check
         env:
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
         run: |
-          echo "Checking https://stg.oursharedevents.com/health ..."
+          sleep 10
           HTTP=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 \
             -H "CF-Access-Client-Id: $CF_ACCESS_CLIENT_ID" \
             -H "CF-Access-Client-Secret: $CF_ACCESS_CLIENT_SECRET" \
             "$STG_BASE_URL/health")
-          if [ "$HTTP" != "200" ]; then
-            echo "::error::Health check failed – HTTP $HTTP"
-            exit 1
-          fi
-          echo "Health check passed (HTTP $HTTP)"
+          if [ "$HTTP" != "200" ]; then echo "::error::Health check failed – HTTP $HTTP"; exit 1; fi
+          echo "✓ Health check passed"
 
   # ============================================================================
-  # 03 QUALITY SMOKE → Staging (security bookend — runs parallel with deploy)
-  #
-  # Tests security + contracts against the EXISTING staging deployment.
-  # This is the closing bookend: validates live what 00 validated statically.
+  # TIER 2: SMOKE — Post-deploy + nightly + dispatch
   # ============================================================================
-  quality-smoke-staging:
-    name: '03 Quality Smoke → Staging'
+  smoke-staging:
+    name: 'T2 Smoke → Staging'
     runs-on: ubuntu-latest
-    needs: [security-gate]
+    needs: [gate]
     if: |
       (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
-      (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_staging == 'true')
-
+      (github.event_name == 'schedule') ||
+      (github.event_name == 'workflow_dispatch')
     steps:
       - uses: actions/checkout@v6
-
       - uses: actions/setup-node@v6
         with:
           node-version: '20'
           cache: 'npm'
 
-      - name: Install root dependencies
+      - name: Install dependencies
         run: npm ci
 
       - name: Cache Playwright browsers
-        id: playwright-cache
+        id: pw-cache
         uses: actions/cache@v5
         with:
           path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}
-          restore-keys: |
-            playwright-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}
+          key: pw-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}
 
       - name: Install Playwright browsers
-        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        if: steps.pw-cache.outputs.cache-hit != 'true'
         run: npx playwright install chromium --with-deps
 
-      - name: Install Playwright OS dependencies only (cached browsers)
-        if: steps.playwright-cache.outputs.cache-hit == 'true'
+      - name: Install Playwright OS deps (cached)
+        if: steps.pw-cache.outputs.cache-hit == 'true'
         run: npx playwright install-deps chromium
 
-      - name: 'Security smoke: XSS, injection, auth boundaries'
+      - name: 'Security smoke: XSS + auth boundaries'
         id: security-smoke
         env:
           BASE_URL: ${{ env.STG_BASE_URL }}
@@ -287,7 +258,7 @@ jobs:
         timeout-minutes: 10
         continue-on-error: true
 
-      - name: 'Security smoke: IAC health + public endpoint verification'
+      - name: 'IAC: health + fail-fast gates'
         id: iac-smoke
         env:
           BASE_URL: ${{ env.STG_BASE_URL }}
@@ -295,64 +266,45 @@ jobs:
         timeout-minutes: 10
         continue-on-error: true
 
-      - name: Upload quality smoke artifacts
+      - name: Upload artifacts
         uses: actions/upload-artifact@v7
         if: always()
         with:
-          name: quality-smoke-staging-${{ github.run_number }}
+          name: smoke-staging-${{ github.run_number }}
           path: |
             playwright-report-smoke/
             .test-results/
             test-results/
           retention-days: 14
 
-      - name: Fail if security smoke failed
+      - name: Fail check
         if: steps.security-smoke.outcome == 'failure' || steps.iac-smoke.outcome == 'failure'
         run: |
-          echo "::error::Quality smoke failed — Security: ${{ steps.security-smoke.outcome }}, IAC: ${{ steps.iac-smoke.outcome }}"
+          echo "::error::Smoke failed — Security: ${{ steps.security-smoke.outcome }}, IAC: ${{ steps.iac-smoke.outcome }}"
           exit 1
 
   # ============================================================================
-  # 03b FUNCTIONAL SMOKE → Staging (validates the NEW deploy)
+  # TIER 3: CONTRACT — Newman API + Pages (post-deploy + nightly)
   # ============================================================================
-  functional-smoke-staging:
-    name: '03b Functional Smoke → Staging'
+  contract-staging:
+    name: 'T3 Contract → Staging'
     runs-on: ubuntu-latest
-    needs: [deploy-staging]
-    permissions:
-      contents: read
-      checks: write  # Required for dorny/test-reporter PR annotations
-
+    needs: [gate]
+    if: |
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'schedule') ||
+      (github.event_name == 'workflow_dispatch')
     steps:
       - uses: actions/checkout@v6
-
       - uses: actions/setup-node@v6
         with:
           node-version: '20'
           cache: 'npm'
 
-      - name: Install root dependencies
+      - name: Install dependencies
         run: npm ci
 
-      - name: Cache Playwright browsers
-        id: playwright-cache
-        uses: actions/cache@v5
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}
-          restore-keys: |
-            playwright-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}
-
-      - name: Install Playwright browsers
-        if: steps.playwright-cache.outputs.cache-hit != 'true'
-        run: npx playwright install chromium --with-deps
-
-      - name: Install Playwright OS dependencies only (cached browsers)
-        if: steps.playwright-cache.outputs.cache-hit == 'true'
-        run: npx playwright install-deps chromium
-
-      # ── Step 1: Newman API contract check (fast, no browser) ──────────────
-      - name: Newman API smoke tests
+      - name: Newman API smoke
         id: newman-api
         env:
           ADMIN_KEY: ${{ secrets.ADMIN_KEY }}
@@ -368,7 +320,7 @@ jobs:
         timeout-minutes: 5
         continue-on-error: true
 
-      - name: Newman pages smoke tests
+      - name: Newman Pages smoke
         id: newman-pages
         run: |
           npx newman run postman/collections/ose-pages.json \
@@ -379,8 +331,59 @@ jobs:
         timeout-minutes: 5
         continue-on-error: true
 
-      # ── Step 2: Playwright API smoke (deeper validation) ─────────────────
-      - name: API smoke tests
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: contract-staging-${{ github.run_number }}
+          path: .test-results/
+          retention-days: 14
+
+      - name: Fail check
+        if: steps.newman-api.outcome == 'failure' || steps.newman-pages.outcome == 'failure'
+        run: |
+          echo "::error::Contract failed — API: ${{ steps.newman-api.outcome }}, Pages: ${{ steps.newman-pages.outcome }}"
+          exit 1
+
+  # ============================================================================
+  # TIER 4: FUNCTIONAL — Playwright API + UI (on-demand only)
+  # ============================================================================
+  functional-staging:
+    name: 'T4 Functional → Staging'
+    runs-on: ubuntu-latest
+    needs: [gate]
+    if: |
+      github.event_name == 'workflow_dispatch' && github.event.inputs.run_functional == 'true'
+    permissions:
+      contents: read
+      checks: write
+
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Cache Playwright browsers
+        id: pw-cache
+        uses: actions/cache@v5
+        with:
+          path: ~/.cache/ms-playwright
+          key: pw-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}
+
+      - name: Install Playwright browsers
+        if: steps.pw-cache.outputs.cache-hit != 'true'
+        run: npx playwright install chromium --with-deps
+
+      - name: Install Playwright OS deps (cached)
+        if: steps.pw-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium
+
+      - name: Playwright API smoke
         id: api-tests
         env:
           BASE_URL: ${{ env.STG_BASE_URL }}
@@ -390,8 +393,7 @@ jobs:
         timeout-minutes: 10
         continue-on-error: true
 
-      # ── Step 3: Playwright UI smoke (browser-based surfaces) ─────────────
-      - name: UI smoke tests
+      - name: Playwright UI smoke
         id: ui-tests
         env:
           BASE_URL: ${{ env.STG_BASE_URL }}
@@ -401,11 +403,11 @@ jobs:
         timeout-minutes: 15
         continue-on-error: true
 
-      - name: Upload test artifacts
+      - name: Upload artifacts
         uses: actions/upload-artifact@v7
         if: always()
         with:
-          name: functional-smoke-staging-${{ github.run_number }}
+          name: functional-staging-${{ github.run_number }}
           path: |
             playwright-report-smoke/
             playwright-report-ui-smoke/
@@ -413,42 +415,29 @@ jobs:
             test-results/
           retention-days: 14
 
-      - name: Report staging results in PR
-        if: always() && github.event_name == 'pull_request'
+      - name: Report results
+        if: always()
         uses: dorny/test-reporter@v3
         continue-on-error: true
         with:
-          name: "Functional Smoke Staging Results"
+          name: "Functional Results"
           path: ".test-results/*-junit.xml"
           reporter: jest-junit
           fail-on-error: false
 
-      - name: Fail if tests failed
-        if: steps.newman-api.outcome == 'failure' || steps.newman-pages.outcome == 'failure' || steps.api-tests.outcome == 'failure' || steps.ui-tests.outcome == 'failure'
+      - name: Fail check
+        if: steps.api-tests.outcome == 'failure' || steps.ui-tests.outcome == 'failure'
         run: |
-          echo "::error::Functional smoke failed — Newman-API: ${{ steps.newman-api.outcome }}, Newman-Pages: ${{ steps.newman-pages.outcome }}, API: ${{ steps.api-tests.outcome }}, UI: ${{ steps.ui-tests.outcome }}"
+          echo "::error::Functional failed — API: ${{ steps.api-tests.outcome }}, UI: ${{ steps.ui-tests.outcome }}"
           exit 1
 
-      - name: Summary
-        if: always()
-        run: |
-          echo "## OurSharedEvents Functional Smoke – Staging" >> $GITHUB_STEP_SUMMARY
-          echo "| Suite | Result |" >> $GITHUB_STEP_SUMMARY
-          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Newman API | \`${{ steps.newman-api.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| Newman Pages | \`${{ steps.newman-pages.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| API Smoke | \`${{ steps.api-tests.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| UI Smoke  | \`${{ steps.ui-tests.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**URL:** $STG_BASE_URL" >> $GITHUB_STEP_SUMMARY
-
   # ============================================================================
-  # 04 DEPLOY → Production (on tag vX.Y.Z only)
+  # TIER 1P: DEPLOY → Production (tag vX.Y.Z only)
   # ============================================================================
   deploy-production:
-    name: '04 Deploy → Production'
+    name: 'T1 Deploy → Production'
     runs-on: ubuntu-latest
-    needs: [security-gate]
+    needs: [gate]
     if: |
       (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) ||
       (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_production == 'PRODUCTION')
@@ -458,7 +447,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v6
-
       - uses: actions/setup-node@v6
         with:
           node-version: '20'
@@ -472,138 +460,100 @@ jobs:
       - name: Verify production DB isolation
         working-directory: ${{ env.WORKER_DIR }}
         run: |
-          echo "Checking wrangler.toml for cross-env contamination..."
           if grep -A5 '\[env\.production' wrangler.toml | grep -q 'ocr-db-staging'; then
-            echo "::error::Production config references staging database — cross-env contamination detected"
-            exit 1
+            echo "::error::Production config references staging database"; exit 1
           fi
-          if grep -A5 '\[env\.production' wrangler.toml | grep -q 'ocr-db-local'; then
-            echo "::error::Production config references local database — cross-env contamination detected"
-            exit 1
-          fi
-          echo "✓ Production DB isolation verified — no cross-env references"
+          echo "✓ Production DB isolation verified"
 
-      - name: Apply D1 migrations to production (main DB)
+      - name: Apply D1 migrations (main DB)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        working-directory: ${{ env.WORKER_DIR }}
+        run: npx wrangler d1 migrations apply DB --env production --remote
+
+      - name: Apply D1 migrations (forms DB)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        working-directory: ${{ env.WORKER_DIR }}
+        run: npx wrangler d1 migrations apply FORMS_DB --env production --remote
+
+      - name: Verify D1 tables (main — 6, forms — 5)
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         working-directory: ${{ env.WORKER_DIR }}
         run: |
-          echo "⚠️  Applying migrations to PRODUCTION D1 (approved via environment gate)"
-          npx wrangler d1 migrations apply DB --env production --remote
-
-      - name: Apply D1 migrations to production (forms DB — separate)
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        working-directory: ${{ env.WORKER_DIR }}
-        run: |
-          echo "⚠️  Applying forms migrations to PRODUCTION forms D1"
-          npx wrangler d1 migrations apply FORMS_DB --env production --remote
-
-      - name: Verify D1 production tables (main DB)
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        working-directory: ${{ env.WORKER_DIR }}
-        run: |
-          RESULT=$(npx wrangler d1 execute ocr-db-production --env production --remote \
+          R1=$(npx wrangler d1 execute ocr-db-production --env production --remote \
             --command "SELECT COUNT(*) as cnt FROM sqlite_master WHERE type='table' AND name IN ('events','sponsors','poster_deployments','scans','scan_aggregates','subscribers')")
-          echo "$RESULT"
-          if ! echo "$RESULT" | grep -q "6"; then
-            echo "::error::D1 production table verification failed — expected 6 tables in main DB"
-            exit 1
-          fi
-          echo "✓ All 6 tables verified in production main D1"
-
-      - name: Verify D1 production tables (forms DB)
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        working-directory: ${{ env.WORKER_DIR }}
-        run: |
-          RESULT=$(npx wrangler d1 execute ocr-forms-db-production --env production --remote \
+          echo "$R1"
+          if ! echo "$R1" | grep -q "6"; then echo "::error::Expected 6 main tables"; exit 1; fi
+          R2=$(npx wrangler d1 execute ocr-forms-db-production --env production --remote \
             --command "SELECT COUNT(*) as cnt FROM sqlite_master WHERE type='table' AND name IN ('form_registrations','checkin_counts','form_surveys','email_signups','feature_flags')")
-          echo "$RESULT"
-          if ! echo "$RESULT" | grep -q "5"; then
-            echo "::error::D1 production forms table verification failed — expected 5 tables in forms DB"
-            exit 1
-          fi
-          echo "✓ All 5 tables verified in production forms D1"
+          echo "$R2"
+          if ! echo "$R2" | grep -q "5"; then echo "::error::Expected 5 forms tables"; exit 1; fi
+          echo "✓ All tables verified"
 
       - name: Stamp build version
         working-directory: ${{ env.WORKER_DIR }}
         run: |
           VERSION="${GITHUB_REF_NAME:-prod-$(git rev-parse --short HEAD)}"
-          echo "Setting WORKER_BUILD_VERSION=$VERSION"
           sed -i "s/WORKER_BUILD_VERSION = \"prod-.*\"/WORKER_BUILD_VERSION = \"$VERSION\"/" wrangler.toml
 
-      - name: Deploy to production
+      - name: Deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: npx wrangler deploy --env production
         working-directory: ${{ env.WORKER_DIR }}
 
-      - name: Wait for worker propagation
-        run: sleep 10
-
-      - name: Health check production
+      - name: Wait + Health check
         env:
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
         run: |
-          echo "Checking https://oursharedevents.com/health ..."
+          sleep 10
           HTTP=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 \
             -H "CF-Access-Client-Id: $CF_ACCESS_CLIENT_ID" \
             -H "CF-Access-Client-Secret: $CF_ACCESS_CLIENT_SECRET" \
             "$PROD_BASE_URL/health")
-          if [ "$HTTP" != "200" ]; then
-            echo "::error::Production health check failed – HTTP $HTTP"
-            exit 1
-          fi
-          echo "Health check passed (HTTP $HTTP)"
+          if [ "$HTTP" != "200" ]; then echo "::error::Production health check failed – HTTP $HTTP"; exit 1; fi
+          echo "✓ Production health check passed"
 
   # ============================================================================
-  # 05 QUALITY SMOKE → Production (security bookend — parallel with deploy)
+  # TIER 2P: SMOKE → Production (tag only)
   # ============================================================================
-  quality-smoke-production:
-    name: '05 Quality Smoke → Production'
+  smoke-production:
+    name: 'T2 Smoke → Production'
     runs-on: ubuntu-latest
-    needs: [security-gate]
-    if: |
-      (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) ||
-      (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_production == 'PRODUCTION')
-
+    needs: [deploy-production]
     steps:
       - uses: actions/checkout@v6
-
       - uses: actions/setup-node@v6
         with:
           node-version: '20'
           cache: 'npm'
 
-      - name: Install root dependencies
+      - name: Install dependencies
         run: npm ci
 
       - name: Cache Playwright browsers
-        id: playwright-cache
+        id: pw-cache
         uses: actions/cache@v5
         with:
           path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}
-          restore-keys: |
-            playwright-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}
+          key: pw-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}
 
       - name: Install Playwright browsers
-        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        if: steps.pw-cache.outputs.cache-hit != 'true'
         run: npx playwright install chromium --with-deps
 
-      - name: Install Playwright OS dependencies only (cached browsers)
-        if: steps.playwright-cache.outputs.cache-hit == 'true'
+      - name: Install Playwright OS deps (cached)
+        if: steps.pw-cache.outputs.cache-hit == 'true'
         run: npx playwright install-deps chromium
 
-      - name: 'Security smoke: XSS, injection, auth boundaries'
+      - name: 'Security smoke: XSS + auth'
         id: security-smoke
         env:
           BASE_URL: ${{ env.PROD_BASE_URL }}
@@ -615,7 +565,7 @@ jobs:
         timeout-minutes: 10
         continue-on-error: true
 
-      - name: 'Security smoke: IAC health + public endpoint verification'
+      - name: 'IAC: health + fail-fast'
         id: iac-smoke
         env:
           BASE_URL: ${{ env.PROD_BASE_URL }}
@@ -623,104 +573,44 @@ jobs:
         timeout-minutes: 10
         continue-on-error: true
 
-      - name: Upload quality smoke artifacts
+      - name: Upload artifacts
         uses: actions/upload-artifact@v7
         if: always()
         with:
-          name: quality-smoke-production-${{ github.run_number }}
+          name: smoke-production-${{ github.run_number }}
           path: |
             playwright-report-smoke/
             .test-results/
-            test-results/
           retention-days: 30
 
-      - name: Fail if security smoke failed
+      - name: Fail check
         if: steps.security-smoke.outcome == 'failure' || steps.iac-smoke.outcome == 'failure'
         run: |
-          echo "::error::Quality smoke failed — Security: ${{ steps.security-smoke.outcome }}, IAC: ${{ steps.iac-smoke.outcome }}"
+          echo "::error::Production smoke failed — Security: ${{ steps.security-smoke.outcome }}, IAC: ${{ steps.iac-smoke.outcome }}"
           exit 1
 
   # ============================================================================
-  # 05b FUNCTIONAL SMOKE → Production (validates the NEW deploy)
+  # SUMMARY
   # ============================================================================
-  functional-smoke-production:
-    name: '05b Functional Smoke → Production'
+  summary:
+    name: 'Pipeline Summary'
     runs-on: ubuntu-latest
-    needs: [deploy-production]
-
+    needs: [gate, deploy-staging, smoke-staging, contract-staging, functional-staging, deploy-production, smoke-production]
+    if: always()
     steps:
-      - uses: actions/checkout@v6
-
-      - uses: actions/setup-node@v6
-        with:
-          node-version: '20'
-          cache: 'npm'
-
-      - name: Install root dependencies
-        run: npm ci
-
-      - name: Cache Playwright browsers
-        id: playwright-cache
-        uses: actions/cache@v5
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}
-          restore-keys: |
-            playwright-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}
-
-      - name: Install Playwright browsers
-        if: steps.playwright-cache.outputs.cache-hit != 'true'
-        run: npx playwright install chromium --with-deps
-
-      - name: Install Playwright OS dependencies only (cached browsers)
-        if: steps.playwright-cache.outputs.cache-hit == 'true'
-        run: npx playwright install-deps chromium
-
-      - name: API smoke tests
-        id: api-tests
-        env:
-          BASE_URL: ${{ env.PROD_BASE_URL }}
-          ADMIN_KEY: ${{ secrets.ADMIN_KEY }}
-          X_OCR_INTERNAL: ${{ secrets.X_OCR_INTERNAL }}
-        run: npm run test:api:smoke
-        timeout-minutes: 10
-        continue-on-error: true
-
-      - name: UI smoke tests
-        id: ui-tests
-        env:
-          BASE_URL: ${{ env.PROD_BASE_URL }}
-          ADMIN_KEY: ${{ secrets.ADMIN_KEY }}
-          X_OCR_INTERNAL: ${{ secrets.X_OCR_INTERNAL }}
-        run: npm run test:ui:smoke
-        timeout-minutes: 15
-        continue-on-error: true
-
-      - name: Upload test artifacts
-        uses: actions/upload-artifact@v7
-        if: always()
-        with:
-          name: functional-smoke-production-${{ github.run_number }}
-          path: |
-            playwright-report-smoke/
-            playwright-report-ui-smoke/
-            .test-results/
-            test-results/
-          retention-days: 30
-
-      - name: Fail if tests failed
-        if: steps.api-tests.outcome == 'failure' || steps.ui-tests.outcome == 'failure'
-        run: |
-          echo "::error::Functional smoke failed — API: ${{ steps.api-tests.outcome }}, UI: ${{ steps.ui-tests.outcome }}"
-          exit 1
-
       - name: Summary
-        if: always()
         run: |
-          echo "## OurSharedEvents Functional Smoke – Production" >> $GITHUB_STEP_SUMMARY
-          echo "| Suite | Result |" >> $GITHUB_STEP_SUMMARY
-          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
-          echo "| API Smoke | \`${{ steps.api-tests.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| UI Smoke  | \`${{ steps.ui-tests.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "## OurSharedEvents CI/CD Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**URL:** $PROD_BASE_URL" >> $GITHUB_STEP_SUMMARY
+          echo "| Tier | Job | Result |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|-----|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| T0 Gate | gate | \`${{ needs.gate.result }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| T1 Deploy STG | deploy-staging | \`${{ needs.deploy-staging.result }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| T2 Smoke STG | smoke-staging | \`${{ needs.smoke-staging.result }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| T3 Contract STG | contract-staging | \`${{ needs.contract-staging.result }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| T4 Functional STG | functional-staging | \`${{ needs.functional-staging.result }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| T1 Deploy PROD | deploy-production | \`${{ needs.deploy-production.result }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| T2 Smoke PROD | smoke-production | \`${{ needs.smoke-production.result }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Trigger:** \`${{ github.event_name }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Ref:** \`${{ github.ref }}\`" >> $GITHUB_STEP_SUMMARY
