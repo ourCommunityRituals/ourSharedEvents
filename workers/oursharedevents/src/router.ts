@@ -279,7 +279,7 @@ export async function route(request: Request, env: RouterEnv): Promise<Response>
   }
 
   // ── Subscribe (email capture) ─────────────────────────────────────────────
-  if (pathname === '/subscribe') {
+  if (pathname === '/subscribe' || pathname === '/signup' || pathname === '/newsletter') {
     if (method === 'POST') return handleSubscribe(request, env);
     return Response.json(
       { ok: false, error: 'Method not allowed' },
@@ -292,7 +292,9 @@ export async function route(request: Request, env: RouterEnv): Promise<Response>
     pathname === '/' ||
     pathname === '/home' ||
     pathname === '/welcome' ||
-    pathname === '/landing'
+    pathname === '/landing' ||
+    pathname === '/about' ||
+    pathname === '/info'
   ) {
     return handleLandingPage(env);
   }
@@ -302,7 +304,9 @@ export async function route(request: Request, env: RouterEnv): Promise<Response>
     pathname === '/events' ||
     pathname === '/public' ||
     pathname === '/schedule' ||
-    pathname === '/calendar'
+    pathname === '/calendar' ||
+    pathname === '/agenda' ||
+    pathname === '/lineup'
   ) {
     return handlePublicPage(env);
   }
@@ -315,7 +319,10 @@ export async function route(request: Request, env: RouterEnv): Promise<Response>
   }
 
   // ── CEO Briefing ───────────────────────────────────────────────────────────
-  if (pathname === '/briefing' && method === 'GET') {
+  if (
+    (pathname === '/briefing' || pathname === '/overview' || pathname === '/summary') &&
+    method === 'GET'
+  ) {
     return handleBriefingPage();
   }
 
@@ -329,7 +336,14 @@ export async function route(request: Request, env: RouterEnv): Promise<Response>
     return handleDisplayPage(env);
   }
 
-  if (pathname === '/poster' || pathname === '/posters' || pathname === '/flyers') {
+  if (
+    pathname === '/poster' ||
+    pathname === '/posters' ||
+    pathname === '/flyers' ||
+    pathname === '/tabletop' ||
+    pathname === '/tent' ||
+    pathname === '/signage'
+  ) {
     return handlePosterPage(env);
   }
 
@@ -338,7 +352,8 @@ export async function route(request: Request, env: RouterEnv): Promise<Response>
     pathname === '/report' ||
     pathname === '/analytics' ||
     pathname === '/reports' ||
-    pathname === '/insights'
+    pathname === '/insights' ||
+    pathname === '/stats'
   ) {
     const reportEnabled = await isFeatureEnabled(env.FORMS_DB, 'analytics.shared-report');
     if (!reportEnabled) {
