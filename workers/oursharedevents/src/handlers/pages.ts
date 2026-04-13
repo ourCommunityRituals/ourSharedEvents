@@ -921,9 +921,34 @@ const DISPLAY_HTML = `<!DOCTYPE html>
     .display-sponsor-banner:empty { display: none; }
     .display-sponsor-sidebar { position: fixed; right: 0; top: 60px; width: 200px; padding: 1rem; display: flex; flex-direction: column; gap: 1rem; z-index: 10; }
     .display-sponsor-sidebar:empty { display: none; }
-    .display-sponsor-item { display: flex; align-items: center; gap: .5rem; padding: .5rem; background: rgba(255,255,255,.05); border-radius: 6px; border: 1px solid rgba(255,255,255,.06); transition: opacity .5s; }
+    .display-sponsor-item { display: flex; align-items: center; gap: .5rem; padding: .5rem; background: rgba(255,255,255,.05); border-radius: 6px; border: 1px solid rgba(255,255,255,.06); transition: opacity .6s ease-in-out; }
+    .display-sponsor-item.fade-out { opacity: 0; }
     .display-sponsor-item img { height: 36px; width: auto; max-width: 80px; object-fit: contain; filter: brightness(1.1); }
     .display-sponsor-item .name { font-size: .8rem; color: #94a3b8; }
+    .display-sponsor-item[data-tier="title"],
+    .display-sponsor-item[data-tier="platinum"] { border-color: rgba(234,179,8,.4); background: rgba(234,179,8,.08); padding: .625rem .75rem; }
+    .display-sponsor-item[data-tier="title"] img,
+    .display-sponsor-item[data-tier="platinum"] img { height: 48px; max-width: 120px; }
+    .display-sponsor-item[data-tier="title"] .name,
+    .display-sponsor-item[data-tier="platinum"] .name { font-size: .9rem; color: #e2e8f0; font-weight: 600; }
+    .display-sponsor-item[data-tier="gold"] { border-color: rgba(234,179,8,.2); }
+    .display-sponsor-item[data-tier="gold"] img { height: 42px; max-width: 100px; }
+    .sponsor-counter { font-size: .65rem; color: #64748b; text-align: center; margin-top: .25rem; font-variant-numeric: tabular-nums; }
+    @media (min-width: 1920px) {
+      header h1 { font-size: 2rem; }
+      .clock { font-size: 1.4rem; }
+      main { max-width: 1600px; padding: 3rem 2.5rem; gap: 2rem; }
+      .event-card { padding: 3rem 3.5rem; }
+      .event-card h2 { font-size: 3rem; }
+      .event-card .meta { font-size: 1.4rem; }
+      .display-sponsor-sidebar { width: 280px; padding: 1.5rem; top: 80px; }
+      .display-sponsor-item img { height: 48px; max-width: 120px; }
+      .display-sponsor-item[data-tier="title"] img,
+      .display-sponsor-item[data-tier="platinum"] img { height: 64px; max-width: 160px; }
+      .display-sponsor-item .name { font-size: 1rem; }
+      .display-sponsor-banner { padding: 1rem 2rem; gap: 3rem; min-height: 64px; }
+      .ticker { font-size: 1.1rem; padding: .8rem 2rem; }
+    }
   </style>
 </head>
 <body>
@@ -1005,15 +1030,28 @@ const DISPLAY_HTML = `<!DOCTYPE html>
         if (banner && tvTop.length) {
           banner.innerHTML = tvTop.map(s => {
             const logo = s.logo_url ? '<img src="' + esc(s.logo_url) + '" alt="' + esc(s.name) + '">' : '';
-            return '<div class="display-sponsor-item" data-testid="display-sponsor-item">' + logo + '<span class="name">' + esc(s.name) + '</span></div>';
+            return '<div class="display-sponsor-item" data-tier="' + esc(s.tier || 'primary') + '" data-testid="display-sponsor-item">' + logo + '<span class="name">' + esc(s.name) + '</span></div>';
           }).join('');
         }
         if (sidebar && tvSide.length) {
           let idx = 0;
-          function showNext() {
-            const s = tvSide[idx % tvSide.length];
+          const total = tvSide.length;
+          function renderSideItem(s, num) {
             const logo = s.logo_url ? '<img src="' + esc(s.logo_url) + '" alt="' + esc(s.name) + '">' : '';
-            sidebar.innerHTML = '<div class="display-sponsor-item" data-testid="display-sponsor-rotate">' + logo + '<span class="name">' + esc(s.name) + '</span></div>';
+            return '<div class="display-sponsor-item" data-tier="' + esc(s.tier || 'primary') + '" data-testid="display-sponsor-rotate">' + logo + '<span class="name">' + esc(s.name) + '</span></div>' +
+              (total > 1 ? '<div class="sponsor-counter">' + num + '/' + total + '</div>' : '');
+          }
+          function showNext() {
+            const s = tvSide[idx % total];
+            const current = sidebar.querySelector('.display-sponsor-item');
+            if (current && total > 1) {
+              current.classList.add('fade-out');
+              setTimeout(function() {
+                sidebar.innerHTML = renderSideItem(s, (idx % total) + 1);
+              }, 600);
+            } else {
+              sidebar.innerHTML = renderSideItem(s, (idx % total) + 1);
+            }
             idx++;
           }
           showNext();
