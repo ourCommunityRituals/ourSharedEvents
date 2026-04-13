@@ -46,6 +46,13 @@ async function adminFetch(page: any, method: string, path: string, body?: Record
       };
       if (body) opts.body = JSON.stringify(body);
       const res = await fetch(path, opts);
+      const ct = res.headers.get('content-type') || '';
+      if (!ct.includes('application/json')) {
+        return {
+          status: res.status,
+          body: { ok: false, code: 'CF_ACCESS_BLOCKED', error: 'CF Access returned HTML' },
+        };
+      }
       return { status: res.status, body: await res.json() };
     },
     { method, path, body, key: ADMIN_KEY }
@@ -258,11 +265,11 @@ test.describe('Invariant: Geo-Resolution — Template+Geo APIs', () => {
 
     // List sponsors to find one to test with
     const listRes = await adminFetch(page, 'GET', '/api/v2/admin/sponsors');
-    test.skip(!listRes.body.items?.length, 'No sponsors');
+    test.skip(listRes.body?.code === 'CF_ACCESS_BLOCKED', 'CF Access blocked admin API');
+    test.skip(!listRes.body?.items?.length, 'No sponsors');
 
     const sponsorId = listRes.body.items[0].id;
 
-    // GET event-types for sponsor
     const res = await adminFetch(
       page,
       'GET',
@@ -278,7 +285,8 @@ test.describe('Invariant: Geo-Resolution — Template+Geo APIs', () => {
     await page.goto('/display', { waitUntil: 'domcontentloaded', timeout: TIMEOUT });
 
     const listRes = await adminFetch(page, 'GET', '/api/v2/admin/sponsors');
-    test.skip(!listRes.body.items?.length, 'No sponsors');
+    test.skip(listRes.body?.code === 'CF_ACCESS_BLOCKED', 'CF Access blocked admin API');
+    test.skip(!listRes.body?.items?.length, 'No sponsors');
 
     const sponsorId = listRes.body.items[0].id;
 
