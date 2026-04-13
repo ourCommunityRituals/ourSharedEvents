@@ -439,11 +439,11 @@ jobs:
 
       - name: Fail check
         if: |
-          steps.arch-tests.outcome == 'failure' ||
-          steps.journey-tests.outcome == 'failure' ||
-          steps.ui-tests.outcome == 'failure'
+          steps.arch-tests.conclusion == 'failure' ||
+          steps.journey-tests.conclusion == 'failure' ||
+          steps.ui-tests.conclusion == 'failure'
         run: |
-          echo "::error::Functional failed — Arch: ${{ steps.arch-tests.outcome }}, Journeys: ${{ steps.journey-tests.outcome }}, UI: ${{ steps.ui-tests.outcome }}"
+          echo "::error::Functional failed — Arch: ${{ steps.arch-tests.conclusion }}, Journeys: ${{ steps.journey-tests.conclusion }}, UI: ${{ steps.ui-tests.conclusion }}"
           exit 1
 
   # ============================================================================
