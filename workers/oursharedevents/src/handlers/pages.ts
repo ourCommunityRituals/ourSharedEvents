@@ -202,6 +202,8 @@ const ADMIN_HTML = `<!DOCTYPE html>
     .muted-sm { color: #868e96; font-size: .8rem; }
     .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
     .flex-row { display: flex; align-items: center; gap: .75rem; }
+    .form-actions { display: flex; align-items: end; gap: .75rem; }
+    .required-star { color: #dc2626; }
     @keyframes shimmer { 0% { background-position: -200px 0; } 100% { background-position: 200px 0; } }
     .skeleton { background: linear-gradient(90deg, #f1f3f5 25%, #e9ecef 50%, #f1f3f5 75%); background-size: 400px 100%; animation: shimmer 1.5s ease-in-out infinite; border-radius: 4px; }
     .skeleton-row { height: 1rem; margin-bottom: .5rem; }
@@ -242,7 +244,7 @@ const ADMIN_HTML = `<!DOCTYPE html>
       <form id="create-event-form" data-testid="create-event-form" novalidate>
         <div class="create-form">
           <div class="full-width">
-            <label for="create-title">Event Name <span style="color:#dc2626">*</span></label>
+            <label for="create-title">Event Name <span class="required-star">*</span></label>
             <input type="text" id="create-title" name="title" data-testid="create-title" placeholder="Summer Block Party" maxlength="200" required />
           </div>
           <div>
@@ -253,8 +255,8 @@ const ADMIN_HTML = `<!DOCTYPE html>
             <label for="create-venue">Venue</label>
             <input type="text" id="create-venue" name="location" data-testid="create-venue" placeholder="Evergreen Park" maxlength="500" />
           </div>
-          <div class="full-width" style="display:flex;align-items:end;gap:.75rem;">
-            <button type="submit" class="create-btn" data-testid="create-submit">Create Event</button>
+          <div class="full-width form-actions">
+            <button type="submit" id="create-submit-btn" class="create-btn" data-testid="create-submit">Create Event</button>
             <div id="create-msg" class="create-msg" data-testid="create-msg"></div>
           </div>
         </div>
@@ -301,7 +303,7 @@ const ADMIN_HTML = `<!DOCTYPE html>
     // ── Create Event form handler ──
     document.getElementById('create-event-form').addEventListener('submit', async (e) => {
       e.preventDefault();
-      const btn = e.target.querySelector('[data-testid="create-submit"]');
+      const btn = document.getElementById('create-submit-btn');
       const msg = document.getElementById('create-msg');
       const title = document.getElementById('create-title').value.trim();
       if (!title) { msg.textContent = 'Event name is required.'; msg.className = 'create-msg error'; return; }
