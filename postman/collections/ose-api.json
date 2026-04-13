@@ -1336,18 +1336,21 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('Returns 404', function() {",
-                  "    pm.response.to.have.status(404);",
+                  "// CF WAF may return 403 before the Worker returns 404",
+                  "pm.test('Returns 404 or 403 (WAF block)', function() {",
+                  "    pm.expect([403, 404]).to.include(pm.response.code);",
                   "});",
                   "",
-                  "const ct = (pm.response.headers.get('Content-Type') || ''); if (!ct.includes('application/json')) { pm.test('CF Access blocked — admin route protected', function() { pm.expect([200, 302, 403]).to.include(pm.response.code); }); return; } const json = pm.response.json();",
-                  "pm.test('ok is false', function() {",
-                  "    pm.expect(json.ok).to.eql(false);",
-                  "});",
-                  "",
-                  "pm.test('Has error message', function() {",
-                  "    pm.expect(json.error).to.eql('Not found');",
-                  "});"
+                  "const ct = (pm.response.headers.get('Content-Type') || '');",
+                  "if (ct.includes('application/json')) {",
+                  "    const json = pm.response.json();",
+                  "    pm.test('ok is false', function() {",
+                  "        pm.expect(json.ok).to.eql(false);",
+                  "    });",
+                  "    pm.test('Has error message', function() {",
+                  "        pm.expect(json.error).to.eql('Not found');",
+                  "    });",
+                  "}"
                 ]
               }
             }
