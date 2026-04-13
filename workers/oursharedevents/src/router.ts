@@ -25,6 +25,23 @@
  *   GET /poster                   → printable poster with QR codes
  *   GET /sharedReport             → shareable analytics dashboard
  *
+ *   Sponsor Admin (auth required):
+ *   GET    /api/v2/admin/sponsors              → list all sponsors
+ *   GET    /api/v2/admin/sponsors/:id          → get sponsor
+ *   POST   /api/v2/admin/sponsors              → create sponsor
+ *   PUT    /api/v2/admin/sponsors/:id          → update sponsor
+ *   DELETE /api/v2/admin/sponsors/:id          → soft delete
+ *   PUT    /api/v2/admin/sponsors/:id/event-types  → set event type associations
+ *   GET    /api/v2/admin/sponsors/:id/event-types  → get event type associations
+ *   PUT    /api/v2/admin/sponsors/:id/areas    → set service areas
+ *   GET    /api/v2/admin/sponsors/:id/areas    → get service areas
+ *
+ *   Sponsor Public (no auth):
+ *   GET    /api/v2/events/:id/sponsors         → resolved sponsors for event
+ *   GET    /api/v2/events/:id/sponsor-bundle   → sponsor bundle (surface filtering)
+ *   POST   /api/v2/events/:id/sponsors/:sid/impression → log impression
+ *   POST   /api/v2/events/:id/sponsors/:sid/click      → log click
+ *
  *   Feature Flag Admin (auth required):
  *   GET    /api/v2/admin/flags              → list all flags
  *   GET    /api/v2/admin/flags/tiers        → list tier presets
@@ -82,12 +99,29 @@ import {
   handleSetEventFlag,
   handleRemoveEventFlag,
 } from './handlers/feature-flags';
+import {
+  handleAdminListSponsors,
+  handleAdminGetSponsor,
+  handleAdminCreateSponsor,
+  handleAdminUpdateSponsor,
+  handleAdminDeleteSponsor,
+  handleSetSponsorEventTypes,
+  handleGetSponsorEventTypes,
+  handleSetSponsorAreas,
+  handleGetSponsorAreas,
+  handleGetSponsorsForEvent,
+  handleGetSponsorBundle,
+  handleLogImpression,
+  handleLogClick,
+  type SponsorsEnv,
+} from './handlers/sponsors';
 import { corsOrigin } from './lib/cors';
 
 export type RouterEnv = PagesEnv &
   AdminEnv &
   FormsEnv &
-  FormPagesEnv & {
+  FormPagesEnv &
+  SponsorsEnv & {
     WORKER_ENV?: string;
     WORKER_BUILD_VERSION?: string;
   };
@@ -147,6 +181,52 @@ export async function route(request: Request, env: RouterEnv): Promise<Response>
     const deny = requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
     if (deny) return deny;
     return handleUpdateEvent(request, env, adminEventMatch[1]);
+  }
+
+  // ── Admin sponsor routes (auth-gated) ──────────────────────────────────────
+
+  if (pathname === '/api/v2/admin/sponsors' && method === 'GET') {
+    const deny = requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
+    if (deny) return deny;
+    return handleAdminListSponsors(request, env);
+  }
+
+  if (pathname === '/api/v2/admin/sponsors' && method === 'POST') {
+    const deny = requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
+    if (deny) return deny;
+    return handleAdminCreateSponsor(request, env);
+  }
+
+  // PUT/DELETE /api/v2/admin/sponsors/:id/event-types
+  const adminSponsorEventTypesMatch = pathname.match(
+    /^\/api\/v2\/admin\/sponsors\/([^/]+)\/event-types$/
+  );
+  if (adminSponsorEventTypesMatch) {
+    const deny = requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
+    if (deny) return deny;
+    if (method === 'PUT')
+      return handleSetSponsorEventTypes(request, env, adminSponsorEventTypesMatch[1]);
+    if (method === 'GET')
+      return handleGetSponsorEventTypes(request, env, adminSponsorEventTypesMatch[1]);
+  }
+
+  // PUT/GET /api/v2/admin/sponsors/:id/areas
+  const adminSponsorAreasMatch = pathname.match(/^\/api\/v2\/admin\/sponsors\/([^/]+)\/areas$/);
+  if (adminSponsorAreasMatch) {
+    const deny = requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
+    if (deny) return deny;
+    if (method === 'PUT') return handleSetSponsorAreas(request, env, adminSponsorAreasMatch[1]);
+    if (method === 'GET') return handleGetSponsorAreas(request, env, adminSponsorAreasMatch[1]);
+  }
+
+  // GET/PUT/DELETE /api/v2/admin/sponsors/:id
+  const adminSponsorMatch = pathname.match(/^\/api\/v2\/admin\/sponsors\/([^/]+)$/);
+  if (adminSponsorMatch) {
+    const deny = requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
+    if (deny) return deny;
+    if (method === 'GET') return handleAdminGetSponsor(request, env, adminSponsorMatch[1]);
+    if (method === 'PUT') return handleAdminUpdateSponsor(request, env, adminSponsorMatch[1]);
+    if (method === 'DELETE') return handleAdminDeleteSponsor(request, env, adminSponsorMatch[1]);
   }
 
   // ── Admin form export (auth-gated) ─────────────────────────────────────────
@@ -236,6 +316,34 @@ export async function route(request: Request, env: RouterEnv): Promise<Response>
   const eventMatch = pathname.match(/^\/api\/v2\/events\/([^/]+)$/);
   if (eventMatch) {
     return handleGetEvent(request, env, eventMatch[1]);
+  }
+
+  // ── Public sponsor endpoints (no auth) ─────────────────────────────────────
+
+  // GET /api/v2/events/:id/sponsors
+  const eventSponsorsMatch = pathname.match(/^\/api\/v2\/events\/([^/]+)\/sponsors$/);
+  if (eventSponsorsMatch && method === 'GET') {
+    return handleGetSponsorsForEvent(request, env, eventSponsorsMatch[1]);
+  }
+
+  // GET /api/v2/events/:id/sponsor-bundle
+  const sponsorBundleMatch = pathname.match(/^\/api\/v2\/events\/([^/]+)\/sponsor-bundle$/);
+  if (sponsorBundleMatch && method === 'GET') {
+    return handleGetSponsorBundle(request, env, sponsorBundleMatch[1]);
+  }
+
+  // POST /api/v2/events/:id/sponsors/:sid/impression
+  const impressionMatch = pathname.match(
+    /^\/api\/v2\/events\/([^/]+)\/sponsors\/([^/]+)\/impression$/
+  );
+  if (impressionMatch && method === 'POST') {
+    return handleLogImpression(request, env, impressionMatch[1], impressionMatch[2]);
+  }
+
+  // POST /api/v2/events/:id/sponsors/:sid/click
+  const clickMatch = pathname.match(/^\/api\/v2\/events\/([^/]+)\/sponsors\/([^/]+)\/click$/);
+  if (clickMatch && method === 'POST') {
+    return handleLogClick(request, env, clickMatch[1], clickMatch[2]);
   }
 
   // ── Public form endpoints (no auth) ────────────────────────────────────────

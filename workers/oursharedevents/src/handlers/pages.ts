@@ -42,6 +42,12 @@ const PUBLIC_HTML = `<!DOCTYPE html>
     .event-card .cta:focus-visible { outline: 2px solid #4361ee; outline-offset: 2px; }
     .loading { text-align: center; padding: 3rem; color: #868e96; font-size: .95rem; }
     .error   { text-align: center; padding: 2rem; color: #e03131; }
+    .sponsor-strip { display: flex; align-items: center; gap: 1.5rem; padding: .75rem 0; margin-bottom: 1rem; overflow-x: auto; }
+    .sponsor-strip:empty { display: none; }
+    .sponsor-card { display: flex; align-items: center; gap: .5rem; flex-shrink: 0; }
+    .sponsor-card img { height: 32px; width: auto; max-width: 100px; object-fit: contain; }
+    .sponsor-card a { font-size: .8rem; color: #4361ee; text-decoration: none; font-weight: 500; }
+    .sponsor-card a:hover { text-decoration: underline; }
   </style>
 </head>
 <body>
@@ -49,6 +55,7 @@ const PUBLIC_HTML = `<!DOCTYPE html>
     <h1>OurSharedEvents</h1>
   </header>
   <main data-testid="public-main">
+    <div id="sponsor-banner" data-testid="public-sponsor-banner"></div>
     <h2>Upcoming Events</h2>
     <div id="events" data-testid="public-events"><p class="loading">Loading events&hellip;</p></div>
   </main>
@@ -83,6 +90,35 @@ const PUBLIC_HTML = `<!DOCTYPE html>
       } catch (err) {
         container.innerHTML = '<p class="error" data-testid="public-error">Could not load events. Please try again.</p>';
       }
+    })();
+  </script>
+  <script>
+    (async () => {
+      const banner = document.getElementById('sponsor-banner');
+      if (!banner) return;
+      try {
+        const params = new URLSearchParams(window.location.search);
+        const eventId = params.get('event');
+        if (!eventId) return;
+        const res = await fetch('/api/v2/events/' + encodeURIComponent(eventId) + '/sponsor-bundle?surface=public');
+        const data = await res.json();
+        if (!data.ok) return;
+        const sponsors = data.bundle?.surface_sponsors?.mobileBanner || [];
+        if (!sponsors.length) return;
+        const esc = s => { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; };
+        banner.innerHTML = sponsors.map(s => {
+          const logo = s.logo_url ? '<img src="' + esc(s.logo_url) + '" alt="' + esc(s.name) + '">' : '';
+          const link = s.website_url ? '<a href="' + esc(s.website_url) + '" target="_blank" rel="noopener">' + esc(s.name) + '</a>' : '<span>' + esc(s.name) + '</span>';
+          return '<div class="sponsor-card" data-testid="public-sponsor-card">' + logo + link + '</div>';
+        }).join('');
+        banner.classList.add('sponsor-strip');
+        sponsors.forEach(s => {
+          fetch('/api/v2/events/' + encodeURIComponent(eventId) + '/sponsors/' + encodeURIComponent(s.id) + '/impression', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ surface: 'public', placement: 'mobileBanner' })
+          }).catch(() => {});
+        });
+      } catch { /* sponsor loading is non-critical */ }
     })();
   </script>
 </body>
@@ -881,6 +917,13 @@ const DISPLAY_HTML = `<!DOCTYPE html>
     .ticker { background: #1e3a5f; padding: .6rem 2rem; font-size: .85rem; color: #93c5fd; border-top: 1px solid rgba(255,255,255,.06); overflow: hidden; white-space: nowrap; }
     .ticker-inner { display: inline-block; animation: scroll 30s linear infinite; }
     @keyframes scroll { from { transform: translateX(100vw); } to { transform: translateX(-100%); } }
+    .display-sponsor-banner { display: flex; align-items: center; justify-content: center; gap: 2rem; padding: .75rem 1.5rem; background: rgba(255,255,255,.03); border-radius: 8px; border: 1px solid rgba(255,255,255,.06); min-height: 48px; }
+    .display-sponsor-banner:empty { display: none; }
+    .display-sponsor-sidebar { position: fixed; right: 0; top: 60px; width: 200px; padding: 1rem; display: flex; flex-direction: column; gap: 1rem; z-index: 10; }
+    .display-sponsor-sidebar:empty { display: none; }
+    .display-sponsor-item { display: flex; align-items: center; gap: .5rem; padding: .5rem; background: rgba(255,255,255,.05); border-radius: 6px; border: 1px solid rgba(255,255,255,.06); transition: opacity .5s; }
+    .display-sponsor-item img { height: 36px; width: auto; max-width: 80px; object-fit: contain; filter: brightness(1.1); }
+    .display-sponsor-item .name { font-size: .8rem; color: #94a3b8; }
   </style>
 </head>
 <body>
@@ -888,9 +931,11 @@ const DISPLAY_HTML = `<!DOCTYPE html>
     <h1>OurSharedEvents</h1>
     <div class="clock" id="clock" aria-live="off" data-testid="display-clock"></div>
   </header>
+  <aside id="display-sponsor-sidebar" class="display-sponsor-sidebar" data-testid="display-sponsor-sidebar"></aside>
   <main id="main" data-testid="display-main">
     <p class="empty">Loading&hellip;</p>
   </main>
+  <div id="display-sponsor-banner" class="display-sponsor-banner" data-testid="display-sponsor-banner"></div>
   <div class="ticker" aria-hidden="true" data-testid="display-ticker"><span class="ticker-inner" id="ticker">OurSharedEvents &mdash; Community events on Chicago&rsquo;s Southside</span></div>
   <script>
     // Clock
@@ -939,6 +984,52 @@ const DISPLAY_HTML = `<!DOCTYPE html>
     loadEvents();
     // Auto-refresh every 5 minutes
     setInterval(loadEvents, 5 * 60 * 1000);
+
+    // ── Display sponsor loading + rotation ──
+    async function loadDisplaySponsors() {
+      const sidebar = document.getElementById('display-sponsor-sidebar');
+      const banner = document.getElementById('display-sponsor-banner');
+      try {
+        const evRes = await fetch('/api/v2/events');
+        const evData = await evRes.json();
+        const items = (evData.ok && evData.items) ? evData.items : [];
+        if (!items.length || !items[0].id) return;
+        const eventId = items[0].id;
+        const res = await fetch('/api/v2/events/' + encodeURIComponent(eventId) + '/sponsor-bundle?surface=display');
+        const data = await res.json();
+        if (!data.ok) return;
+        const bundle = data.bundle || {};
+        const esc = s => { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; };
+        const tvTop = bundle.surface_sponsors?.tvTop || [];
+        const tvSide = bundle.surface_sponsors?.tvSide || [];
+        if (banner && tvTop.length) {
+          banner.innerHTML = tvTop.map(s => {
+            const logo = s.logo_url ? '<img src="' + esc(s.logo_url) + '" alt="' + esc(s.name) + '">' : '';
+            return '<div class="display-sponsor-item" data-testid="display-sponsor-item">' + logo + '<span class="name">' + esc(s.name) + '</span></div>';
+          }).join('');
+        }
+        if (sidebar && tvSide.length) {
+          let idx = 0;
+          function showNext() {
+            const s = tvSide[idx % tvSide.length];
+            const logo = s.logo_url ? '<img src="' + esc(s.logo_url) + '" alt="' + esc(s.name) + '">' : '';
+            sidebar.innerHTML = '<div class="display-sponsor-item" data-testid="display-sponsor-rotate">' + logo + '<span class="name">' + esc(s.name) + '</span></div>';
+            idx++;
+          }
+          showNext();
+          const ms = bundle.rotation_config?.rotationMs || 5000;
+          setInterval(showNext, ms);
+        }
+        // Log impressions
+        [...tvTop, ...tvSide].forEach(s => {
+          fetch('/api/v2/events/' + encodeURIComponent(eventId) + '/sponsors/' + encodeURIComponent(s.id) + '/impression', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ surface: 'display', placement: s.tvTop ? 'tvTop' : 'tvSide' })
+          }).catch(() => {});
+        });
+      } catch { /* sponsor loading is non-critical */ }
+    }
+    loadDisplaySponsors();
   </script>
 </body>
 </html>`;
@@ -981,6 +1072,12 @@ const POSTER_HTML = `<!DOCTYPE html>
     .event-select { margin-bottom: 1.5rem; }
     .event-select label { display: block; font-size: .875rem; font-weight: 600; color: #374151; margin-bottom: .375rem; }
     .event-select select { width: 100%; padding: .5rem .75rem; border: 1px solid #d1d5db; border-radius: 6px; font-size: .95rem; background: #fff; color: #1e293b; }
+    .poster-sponsors { display: flex; align-items: center; justify-content: center; gap: 1.5rem; padding: 1rem 2rem; flex-wrap: wrap; }
+    .poster-sponsors:empty { display: none; }
+    .poster-sponsor { display: flex; align-items: center; gap: .5rem; }
+    .poster-sponsor img { height: 28px; width: auto; max-width: 80px; object-fit: contain; }
+    .poster-sponsor-name { font-size: .75rem; color: #64748b; font-weight: 500; }
+    .poster-sponsor-label { font-size: .65rem; text-transform: uppercase; letter-spacing: .06em; color: #94a3b8; text-align: center; margin-bottom: .35rem; }
     @media print {
       .page-header, .event-select, .no-print { display: none !important; }
       body { background: #fff; }
@@ -1028,6 +1125,7 @@ const POSTER_HTML = `<!DOCTYPE html>
             '<div class="qr-item"><div class="qr-placeholder">QR codes available after event setup</div><div class="qr-label">Registration</div></div>' +
           '</div>' +
         '</div>' +
+        '<div id="poster-sponsor-strip" class="poster-sponsors" data-testid="poster-sponsor-strip"></div>' +
         '<div class="poster-footer">oursharedevents.com</div>' +
       '</div>';
     }
@@ -1048,13 +1146,33 @@ const POSTER_HTML = `<!DOCTYPE html>
           '<option value="' + i + '">' + esc(e.name || 'Untitled Event') + '</option>'
         ).join('');
         area.innerHTML = renderPoster(items[0]);
+        loadPosterSponsors(items[0].id);
         picker.addEventListener('change', () => {
           const idx = parseInt(picker.value, 10);
-          if (!isNaN(idx) && items[idx]) area.innerHTML = renderPoster(items[idx]);
+          if (!isNaN(idx) && items[idx]) {
+            area.innerHTML = renderPoster(items[idx]);
+            loadPosterSponsors(items[idx].id);
+          }
         });
       } catch {
         area.innerHTML = '<p class="error">Could not load events.</p>';
       }
+    }
+    async function loadPosterSponsors(eventId) {
+      const strip = document.getElementById('poster-sponsor-strip');
+      if (!strip || !eventId) return;
+      try {
+        const res = await fetch('/api/v2/events/' + encodeURIComponent(eventId) + '/sponsor-bundle?surface=poster');
+        const data = await res.json();
+        if (!data.ok) return;
+        const sponsors = data.bundle?.surface_sponsors?.posterTop || [];
+        if (!sponsors.length) { strip.innerHTML = ''; return; }
+        strip.innerHTML = '<div class="poster-sponsor-label">Sponsored By</div>' +
+          sponsors.map(s => {
+            const logo = s.logo_url ? '<img src="' + esc(s.logo_url) + '" alt="' + esc(s.name) + '">' : '';
+            return '<div class="poster-sponsor" data-testid="poster-sponsor-item">' + logo + '<span class="poster-sponsor-name">' + esc(s.name) + '</span></div>';
+          }).join('');
+      } catch { strip.innerHTML = ''; }
     }
     init();
   </script>
@@ -1091,6 +1209,12 @@ const SHARED_REPORT_HTML = `<!DOCTYPE html>
     .badge.archived { background: #f1f3f5; color: #868e96; }
     .loading { text-align: center; padding: 3rem; color: #868e96; }
     .empty { text-align: center; padding: 2rem; color: #868e96; font-size: .95rem; }
+    .sponsor-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; }
+    .sponsor-metrics:empty { display: none; }
+    .sponsor-metric-card { background: #fff; border-radius: 8px; padding: 1rem 1.25rem; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+    .sponsor-metric-card .sponsor-name { font-weight: 600; font-size: .9rem; margin-bottom: .5rem; }
+    .sponsor-metric-card .metric-row { display: flex; justify-content: space-between; font-size: .8rem; color: #6c757d; padding: .15rem 0; }
+    .sponsor-metric-card .metric-val { font-weight: 600; color: #212529; }
   </style>
 </head>
 <body>
@@ -1110,6 +1234,10 @@ const SHARED_REPORT_HTML = `<!DOCTYPE html>
       <div class="section-title">Events</div>
       <div class="events-list" id="events-list" data-testid="report-events-list"><p class="loading">Loading&hellip;</p></div>
     </div>
+    <section id="report-sponsor-section" data-testid="report-sponsor-section">
+      <div class="section-title">Sponsor Overview</div>
+      <div id="sponsor-metrics" class="sponsor-metrics" data-testid="report-sponsor-metrics"></div>
+    </section>
   </main>
   <script>
     (async () => {
@@ -1135,6 +1263,38 @@ const SHARED_REPORT_HTML = `<!DOCTYPE html>
       } catch {
         listEl.innerHTML = '<p class="empty">Could not load data.</p>';
       }
+    })();
+  </script>
+  <script>
+    (async () => {
+      const metricsEl = document.getElementById('sponsor-metrics');
+      const sectionEl = document.getElementById('report-sponsor-section');
+      if (!metricsEl) return;
+      try {
+        const evRes = await fetch('/api/v2/events');
+        const evData = await evRes.json();
+        const items = (evData.ok && evData.items) ? evData.items : [];
+        if (!items.length) { sectionEl.style.display = 'none'; return; }
+        const esc = s => { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; };
+        const allSponsors = [];
+        for (const ev of items.slice(0, 10)) {
+          try {
+            const res = await fetch('/api/v2/events/' + encodeURIComponent(ev.id) + '/sponsors');
+            const data = await res.json();
+            if (data.ok && data.items) {
+              data.items.forEach(s => { if (!allSponsors.find(x => x.id === s.id)) allSponsors.push(s); });
+            }
+          } catch { /* skip */ }
+        }
+        if (!allSponsors.length) { sectionEl.style.display = 'none'; return; }
+        metricsEl.innerHTML = allSponsors.map(s =>
+          '<div class="sponsor-metric-card" data-testid="report-sponsor-card">' +
+            '<div class="sponsor-name">' + esc(s.name) + '</div>' +
+            '<div class="metric-row"><span>Tier</span><span class="metric-val">' + esc(s.tier) + '</span></div>' +
+            '<div class="metric-row"><span>Status</span><span class="metric-val">' + (s.is_active ? 'Active' : 'Inactive') + '</span></div>' +
+          '</div>'
+        ).join('');
+      } catch { if (sectionEl) sectionEl.style.display = 'none'; }
     })();
   </script>
 </body>
