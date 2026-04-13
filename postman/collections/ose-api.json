@@ -36,8 +36,11 @@
           "    pm.expect(elapsed).to.be.below(2000);",
           "});",
           "",
-          "// Verify JSON content-type on API responses (skip HTML pages)",
-          "if (pm.request.url.getPath().startsWith('/api') || pm.request.url.getPath() === '/health') {",
+          "// Verify JSON content-type on API responses (skip HTML pages and CF Access blocked requests)",
+          "const isApiPath = pm.request.url.getPath().startsWith('/api') || pm.request.url.getPath() === '/health';",
+          "const isNoAuth = pm.request.auth && pm.request.auth.type === 'noauth';",
+          "const isCfAccessBlocked = pm.response.code === 302 || (pm.response.headers.get('Content-Type') || '').includes('text/html');",
+          "if (isApiPath && !(isNoAuth && isCfAccessBlocked)) {",
           "    pm.test('Content-Type is application/json', function() {",
           "        pm.expect(pm.response.headers.get('Content-Type')).to.include('application/json');",
           "    });",
@@ -411,24 +414,27 @@
           }
         },
         {
-          "name": "GET /api/v2/admin/events (no auth — expect 401)",
+          "name": "GET /api/v2/admin/events (no auth — blocked by CF Access)",
           "event": [
             {
               "listen": "test",
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('Returns 401 without auth', function() {",
-                  "    pm.response.to.have.status(401);",
+                  "// CF Access intercepts unauthenticated admin requests before they reach the Worker.",
+                  "// The response is either 302 (redirect to login) or 200 (login page HTML after redirect).",
+                  "// The key contract: unauthenticated requests do NOT receive JSON event data.",
+                  "pm.test('Unauthenticated admin request is blocked', function() {",
+                  "    const status = pm.response.code;",
+                  "    pm.expect([200, 302, 401, 403]).to.include(status);",
                   "});",
                   "",
-                  "const json = pm.response.json();",
-                  "pm.test('Has UNAUTH code', function() {",
-                  "    pm.expect(json.code).to.eql('UNAUTH');",
-                  "});",
-                  "",
-                  "pm.test('Has WWW-Authenticate header', function() {",
-                  "    pm.expect(pm.response.headers.get('WWW-Authenticate')).to.include('Bearer');",
+                  "pm.test('Does not return JSON event data', function() {",
+                  "    const ct = pm.response.headers.get('Content-Type') || '';",
+                  "    if (ct.includes('application/json')) {",
+                  "        const json = pm.response.json();",
+                  "        pm.expect(json.ok).to.not.eql(true);",
+                  "    }",
                   "});"
                 ]
               }

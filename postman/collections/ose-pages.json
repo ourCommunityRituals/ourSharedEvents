@@ -360,20 +360,25 @@
           }
         },
         {
-          "name": "GET /admin (no auth — expect 401)",
+          "name": "GET /admin (no auth — blocked by CF Access)",
           "event": [
             {
               "listen": "test",
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('Returns 401', function() {",
-                  "    pm.response.to.have.status(401);",
+                  "// CF Access intercepts /admin without auth and redirects to login.",
+                  "// Newman follows the redirect, landing on the CF Access login page (200 HTML).",
+                  "// The key contract: unauthenticated users never see the admin dashboard.",
+                  "pm.test('Unauthenticated admin request is blocked', function() {",
+                  "    const status = pm.response.code;",
+                  "    pm.expect([200, 302, 401, 403]).to.include(status);",
                   "});",
                   "",
-                  "const json = pm.response.json();",
-                  "pm.test('UNAUTH code', function() {",
-                  "    pm.expect(json.code).to.eql('UNAUTH');",
+                  "pm.test('Does not serve admin dashboard HTML', function() {",
+                  "    const body = pm.response.text();",
+                  "    pm.expect(body).to.not.include('data-testid=\"admin-header\"');",
+                  "    pm.expect(body).to.not.include('data-testid=\"admin-main\"');",
                   "});"
                 ]
               }
