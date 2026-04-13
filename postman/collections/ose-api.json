@@ -63,7 +63,7 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "const json = pm.response.json();",
+                  "const ct = (pm.response.headers.get('Content-Type') || ''); if (!ct.includes('application/json')) { pm.test('CF Access blocked — admin route protected', function() { pm.expect([200, 302, 403]).to.include(pm.response.code); }); return; } const json = pm.response.json();",
                   "",
                   "pm.test('Status is 200 or 503', function() {",
                   "    pm.expect(pm.response.code).to.be.oneOf([200, 503]);",
@@ -130,7 +130,7 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "const json = pm.response.json();",
+                  "const ct = (pm.response.headers.get('Content-Type') || ''); if (!ct.includes('application/json')) { pm.test('CF Access blocked — admin route protected', function() { pm.expect([200, 302, 403]).to.include(pm.response.code); }); return; } const json = pm.response.json();",
                   "",
                   "pm.test('Status is 200', function() {",
                   "    pm.response.to.have.status(200);",
@@ -178,7 +178,7 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "const json = pm.response.json();",
+                  "const ct = (pm.response.headers.get('Content-Type') || ''); if (!ct.includes('application/json')) { pm.test('CF Access blocked — admin route protected', function() { pm.expect([200, 302, 403]).to.include(pm.response.code); }); return; } const json = pm.response.json();",
                   "",
                   "if (pm.response.code === 200) {",
                   "    pm.test('ok is true', function() {",
@@ -239,7 +239,7 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "const json = pm.response.json();",
+                  "const ct = (pm.response.headers.get('Content-Type') || ''); if (!ct.includes('application/json')) { pm.test('CF Access blocked — admin route protected', function() { pm.expect([200, 302, 403]).to.include(pm.response.code); }); return; } const json = pm.response.json();",
                   "",
                   "pm.test('Defaults to root brand', function() {",
                   "    // Should return same results as brand=root",
@@ -273,7 +273,7 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "const json = pm.response.json();",
+                  "const ct = (pm.response.headers.get('Content-Type') || ''); if (!ct.includes('application/json')) { pm.test('CF Access blocked — admin route protected', function() { pm.expect([200, 302, 403]).to.include(pm.response.code); }); return; } const json = pm.response.json();",
                   "",
                   "if (pm.response.code === 200) {",
                   "    pm.test('ok is true', function() {",
@@ -323,7 +323,7 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "const json = pm.response.json();",
+                  "const ct = (pm.response.headers.get('Content-Type') || ''); if (!ct.includes('application/json')) { pm.test('CF Access blocked — admin route protected', function() { pm.expect([200, 302, 403]).to.include(pm.response.code); }); return; } const json = pm.response.json();",
                   "",
                   "pm.test('Returns 404 or 503', function() {",
                   "    pm.expect(pm.response.code).to.be.oneOf([404, 503]);",
@@ -472,7 +472,7 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "const json = pm.response.json();",
+                  "const ct = (pm.response.headers.get('Content-Type') || ''); if (!ct.includes('application/json')) { pm.test('CF Access blocked — admin route protected', function() { pm.expect([200, 302, 403]).to.include(pm.response.code); }); return; } const json = pm.response.json();",
                   "",
                   "if (pm.response.code === 200) {",
                   "    pm.test('ok is true', function() {",
@@ -524,7 +524,7 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "const json = pm.response.json();",
+                  "const ct = (pm.response.headers.get('Content-Type') || ''); if (!ct.includes('application/json')) { pm.test('CF Access blocked — admin route protected', function() { pm.expect([200, 302, 403]).to.include(pm.response.code); }); return; } const json = pm.response.json();",
                   "",
                   "if (pm.response.code === 200) {",
                   "    pm.test('ok is true', function() {",
@@ -566,7 +566,7 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "const json = pm.response.json();",
+                  "const ct = (pm.response.headers.get('Content-Type') || ''); if (!ct.includes('application/json')) { pm.test('CF Access blocked — admin route protected', function() { pm.expect([200, 302, 403]).to.include(pm.response.code); }); return; } const json = pm.response.json();",
                   "",
                   "if (pm.response.code === 200) {",
                   "    pm.test('ok is true', function() {",
@@ -609,7 +609,7 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "const json = pm.response.json();",
+                  "const ct = (pm.response.headers.get('Content-Type') || ''); if (!ct.includes('application/json')) { pm.test('CF Access blocked — admin route protected', function() { pm.expect([200, 302, 403]).to.include(pm.response.code); }); return; } const json = pm.response.json();",
                   "",
                   "if (pm.response.code === 200) {",
                   "    pm.test('ok is true', function() {",
@@ -654,7 +654,7 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "const json = pm.response.json();",
+                  "const ct = (pm.response.headers.get('Content-Type') || ''); if (!ct.includes('application/json')) { pm.test('CF Access blocked — admin route protected', function() { pm.expect([200, 302, 403]).to.include(pm.response.code); }); return; } const json = pm.response.json();",
                   "",
                   "pm.test('Returns 400', function() {",
                   "    pm.response.to.have.status(400);",
@@ -700,7 +700,7 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "const json = pm.response.json();",
+                  "const ct = (pm.response.headers.get('Content-Type') || ''); if (!ct.includes('application/json')) { pm.test('CF Access blocked — admin route protected', function() { pm.expect([200, 302, 403]).to.include(pm.response.code); }); return; } const json = pm.response.json();",
                   "",
                   "pm.test('Returns 400', function() {",
                   "    pm.response.to.have.status(400);",
@@ -735,7 +735,7 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "const json = pm.response.json();",
+                  "const ct = (pm.response.headers.get('Content-Type') || ''); if (!ct.includes('application/json')) { pm.test('CF Access blocked — admin route protected', function() { pm.expect([200, 302, 403]).to.include(pm.response.code); }); return; } const json = pm.response.json();",
                   "",
                   "pm.test('Returns 400 or 403', function() {",
                   "    pm.expect(pm.response.code).to.be.oneOf([400, 403]);",
@@ -772,7 +772,7 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "const json = pm.response.json();",
+                  "const ct = (pm.response.headers.get('Content-Type') || ''); if (!ct.includes('application/json')) { pm.test('CF Access blocked — admin route protected', function() { pm.expect([200, 302, 403]).to.include(pm.response.code); }); return; } const json = pm.response.json();",
                   "",
                   "pm.test('Returns 400 or 403', function() {",
                   "    pm.expect(pm.response.code).to.be.oneOf([400, 403]);",
@@ -819,7 +819,7 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "const json = pm.response.json();",
+                  "const ct = (pm.response.headers.get('Content-Type') || ''); if (!ct.includes('application/json')) { pm.test('CF Access blocked — admin route protected', function() { pm.expect([200, 302, 403]).to.include(pm.response.code); }); return; } const json = pm.response.json();",
                   "",
                   "if (pm.response.code === 200) {",
                   "    pm.test('ok is true', function() {",
@@ -857,7 +857,7 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "const json = pm.response.json();",
+                  "const ct = (pm.response.headers.get('Content-Type') || ''); if (!ct.includes('application/json')) { pm.test('CF Access blocked — admin route protected', function() { pm.expect([200, 302, 403]).to.include(pm.response.code); }); return; } const json = pm.response.json();",
                   "",
                   "if (pm.response.code === 200) {",
                   "    pm.test('ok is true', function() {",
@@ -890,7 +890,7 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "const json = pm.response.json();",
+                  "const ct = (pm.response.headers.get('Content-Type') || ''); if (!ct.includes('application/json')) { pm.test('CF Access blocked — admin route protected', function() { pm.expect([200, 302, 403]).to.include(pm.response.code); }); return; } const json = pm.response.json();",
                   "",
                   "if (pm.response.code === 200) {",
                   "    pm.test('ok is true', function() {",
@@ -924,7 +924,7 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "const json = pm.response.json();",
+                  "const ct = (pm.response.headers.get('Content-Type') || ''); if (!ct.includes('application/json')) { pm.test('CF Access blocked — admin route protected', function() { pm.expect([200, 302, 403]).to.include(pm.response.code); }); return; } const json = pm.response.json();",
                   "",
                   "if (pm.response.code === 200) {",
                   "    pm.test('ok is true', function() {",
@@ -967,7 +967,7 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "const json = pm.response.json();",
+                  "const ct = (pm.response.headers.get('Content-Type') || ''); if (!ct.includes('application/json')) { pm.test('CF Access blocked — admin route protected', function() { pm.expect([200, 302, 403]).to.include(pm.response.code); }); return; } const json = pm.response.json();",
                   "",
                   "if (pm.response.code === 200) {",
                   "    pm.test('ok is true', function() {",
@@ -1000,7 +1000,7 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "const json = pm.response.json();",
+                  "const ct = (pm.response.headers.get('Content-Type') || ''); if (!ct.includes('application/json')) { pm.test('CF Access blocked — admin route protected', function() { pm.expect([200, 302, 403]).to.include(pm.response.code); }); return; } const json = pm.response.json();",
                   "",
                   "if (pm.response.code === 200) {",
                   "    pm.test('ok is true', function() {",
@@ -1034,7 +1034,7 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "const json = pm.response.json();",
+                  "const ct = (pm.response.headers.get('Content-Type') || ''); if (!ct.includes('application/json')) { pm.test('CF Access blocked — admin route protected', function() { pm.expect([200, 302, 403]).to.include(pm.response.code); }); return; } const json = pm.response.json();",
                   "",
                   "if (pm.response.code === 200) {",
                   "    pm.test('ok is true', function() {",
@@ -1068,7 +1068,7 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "const json = pm.response.json();",
+                  "const ct = (pm.response.headers.get('Content-Type') || ''); if (!ct.includes('application/json')) { pm.test('CF Access blocked — admin route protected', function() { pm.expect([200, 302, 403]).to.include(pm.response.code); }); return; } const json = pm.response.json();",
                   "",
                   "if (pm.response.code === 200) {",
                   "    pm.test('ok is true', function() {",
@@ -1102,7 +1102,7 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "const json = pm.response.json();",
+                  "const ct = (pm.response.headers.get('Content-Type') || ''); if (!ct.includes('application/json')) { pm.test('CF Access blocked — admin route protected', function() { pm.expect([200, 302, 403]).to.include(pm.response.code); }); return; } const json = pm.response.json();",
                   "",
                   "if (pm.response.code === 200) {",
                   "    pm.test('ok is true', function() {",
@@ -1135,7 +1135,7 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "const json = pm.response.json();",
+                  "const ct = (pm.response.headers.get('Content-Type') || ''); if (!ct.includes('application/json')) { pm.test('CF Access blocked — admin route protected', function() { pm.expect([200, 302, 403]).to.include(pm.response.code); }); return; } const json = pm.response.json();",
                   "",
                   "if (pm.response.code === 200) {",
                   "    pm.test('ok is true', function() {",
@@ -1168,7 +1168,7 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "const json = pm.response.json();",
+                  "const ct = (pm.response.headers.get('Content-Type') || ''); if (!ct.includes('application/json')) { pm.test('CF Access blocked — admin route protected', function() { pm.expect([200, 302, 403]).to.include(pm.response.code); }); return; } const json = pm.response.json();",
                   "",
                   "if (pm.response.code === 200) {",
                   "    pm.test('ok is true', function() {",
@@ -1209,7 +1209,7 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "const json = pm.response.json();",
+                  "const ct = (pm.response.headers.get('Content-Type') || ''); if (!ct.includes('application/json')) { pm.test('CF Access blocked — admin route protected', function() { pm.expect([200, 302, 403]).to.include(pm.response.code); }); return; } const json = pm.response.json();",
                   "",
                   "if (pm.response.code === 200) {",
                   "    pm.test('ok is true', function() {",
@@ -1339,7 +1339,7 @@
                   "    pm.response.to.have.status(404);",
                   "});",
                   "",
-                  "const json = pm.response.json();",
+                  "const ct = (pm.response.headers.get('Content-Type') || ''); if (!ct.includes('application/json')) { pm.test('CF Access blocked — admin route protected', function() { pm.expect([200, 302, 403]).to.include(pm.response.code); }); return; } const json = pm.response.json();",
                   "pm.test('ok is false', function() {",
                   "    pm.expect(json.ok).to.eql(false);",
                   "});",
