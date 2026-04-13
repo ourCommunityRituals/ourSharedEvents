@@ -58,15 +58,26 @@ async function adminFetch(
         },
       };
       if (body) opts.body = JSON.stringify(body);
-      const res = await fetch(path, opts);
-      const ct = res.headers.get('content-type') || '';
-      if (!ct.includes('application/json')) {
+      try {
+        const res = await fetch(path, opts);
+        const ct = res.headers.get('content-type') || '';
+        if (!ct.includes('application/json')) {
+          return {
+            status: res.status,
+            body: { ok: false, code: 'CF_ACCESS_BLOCKED', error: 'CF Access returned HTML' },
+          };
+        }
+        return { status: res.status, body: await res.json() };
+      } catch {
         return {
-          status: res.status,
-          body: { ok: false, code: 'CF_ACCESS_BLOCKED', error: 'CF Access returned HTML' },
+          status: 0,
+          body: {
+            ok: false,
+            code: 'CF_ACCESS_BLOCKED',
+            error: 'Fetch failed — CF Access likely blocked',
+          },
         };
       }
-      return { status: res.status, body: await res.json() };
     },
     { method, path, body, key: ADMIN_KEY }
   );
