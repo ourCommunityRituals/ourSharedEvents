@@ -39,6 +39,7 @@ on:
       - 'config/**'
       - 'scripts/**'
       - 'schemas/**'
+      - 'postman/**'
       - 'playwright.*.config.*'
       - '.github/workflows/oursharedevents-ci.yml'
   push:
@@ -49,6 +50,7 @@ on:
       - 'config/**'
       - 'scripts/**'
       - 'schemas/**'
+      - 'postman/**'
       - 'playwright.*.config.*'
       - '.github/workflows/oursharedevents-ci.yml'
     tags:
@@ -383,24 +385,34 @@ jobs:
         if: steps.pw-cache.outputs.cache-hit == 'true'
         run: npx playwright install-deps chromium
 
-      - name: Playwright API smoke
-        id: api-tests
+      - name: 'T4a: Architecture Invariants'
+        id: arch-tests
         env:
           BASE_URL: ${{ env.STG_BASE_URL }}
           ADMIN_KEY: ${{ secrets.ADMIN_KEY }}
           X_OCR_INTERNAL: ${{ secrets.X_OCR_INTERNAL }}
-        run: npm run test:api:smoke
-        timeout-minutes: 10
+        run: npx playwright test --config=playwright.e2e-smoke.config.ts tests/e2e/0-architecture/
+        timeout-minutes: 3
         continue-on-error: true
 
-      - name: Playwright UI smoke
+      - name: 'T4b: Core Journeys'
+        id: journey-tests
+        env:
+          BASE_URL: ${{ env.STG_BASE_URL }}
+          ADMIN_KEY: ${{ secrets.ADMIN_KEY }}
+          X_OCR_INTERNAL: ${{ secrets.X_OCR_INTERNAL }}
+        run: npx playwright test --config=playwright.e2e-smoke.config.ts tests/e2e/3-flows/sponsor-journey.spec.ts
+        timeout-minutes: 5
+        continue-on-error: true
+
+      - name: 'T4c: UI Smoke'
         id: ui-tests
         env:
           BASE_URL: ${{ env.STG_BASE_URL }}
           ADMIN_KEY: ${{ secrets.ADMIN_KEY }}
           X_OCR_INTERNAL: ${{ secrets.X_OCR_INTERNAL }}
         run: npm run test:ui:smoke
-        timeout-minutes: 15
+        timeout-minutes: 10
         continue-on-error: true
 
       - name: Upload artifacts
@@ -426,9 +438,12 @@ jobs:
           fail-on-error: false
 
       - name: Fail check
-        if: steps.api-tests.outcome == 'failure' || steps.ui-tests.outcome == 'failure'
+        if: |
+          steps.arch-tests.outcome == 'failure' ||
+          steps.journey-tests.outcome == 'failure' ||
+          steps.ui-tests.outcome == 'failure'
         run: |
-          echo "::error::Functional failed — API: ${{ steps.api-tests.outcome }}, UI: ${{ steps.ui-tests.outcome }}"
+          echo "::error::Functional failed — Arch: ${{ steps.arch-tests.outcome }}, Journeys: ${{ steps.journey-tests.outcome }}, UI: ${{ steps.ui-tests.outcome }}"
           exit 1
 
   # ============================================================================
