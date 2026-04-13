@@ -393,7 +393,6 @@ jobs:
           X_OCR_INTERNAL: ${{ secrets.X_OCR_INTERNAL }}
         run: npx playwright test --config=playwright.e2e-smoke.config.ts tests/e2e/0-architecture/
         timeout-minutes: 3
-        continue-on-error: true
 
       - name: 'T4b: Core Journeys'
         id: journey-tests
@@ -403,7 +402,6 @@ jobs:
           X_OCR_INTERNAL: ${{ secrets.X_OCR_INTERNAL }}
         run: npx playwright test --config=playwright.e2e-smoke.config.ts tests/e2e/3-flows/sponsor-journey.spec.ts
         timeout-minutes: 5
-        continue-on-error: true
 
       - name: 'T4c: UI Smoke'
         id: ui-tests
@@ -413,7 +411,6 @@ jobs:
           X_OCR_INTERNAL: ${{ secrets.X_OCR_INTERNAL }}
         run: npm run test:ui:smoke
         timeout-minutes: 10
-        continue-on-error: true
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v7
@@ -437,14 +434,15 @@ jobs:
           reporter: jest-junit
           fail-on-error: false
 
-      - name: Fail check
-        if: |
-          steps.arch-tests.conclusion == 'failure' ||
-          steps.journey-tests.conclusion == 'failure' ||
-          steps.ui-tests.conclusion == 'failure'
+      - name: Summary
+        if: always()
         run: |
-          echo "::error::Functional failed — Arch: ${{ steps.arch-tests.conclusion }}, Journeys: ${{ steps.journey-tests.conclusion }}, UI: ${{ steps.ui-tests.conclusion }}"
-          exit 1
+          echo "## T4 Functional Results" >> $GITHUB_STEP_SUMMARY
+          echo "| Step | Result |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| T4a Architecture Invariants | \`${{ steps.arch-tests.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| T4b Core Journeys | \`${{ steps.journey-tests.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| T4c UI Smoke | \`${{ steps.ui-tests.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
 
   # ============================================================================
   # TIER 1P: DEPLOY → Production (tag vX.Y.Z only)
