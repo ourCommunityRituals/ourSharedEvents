@@ -1,0 +1,113 @@
+name: Brain contract check
+
+on:
+  pull_request:
+    branches: [main, staging]
+  push:
+    branches: [main, staging]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  contract-check:
+    name: Validate against OCR-docs brain
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout OSE
+        uses: actions/checkout@v4
+        with:
+          path: ose
+
+      - name: Checkout OCR-docs brain (read-only)
+        uses: actions/checkout@v4
+        with:
+          repository: ourCommunityRituals/OCR-docs
+          path: ocr-docs
+          ref: main
+          token: ${{ secrets.OCR_PROPAGATE_TOKEN }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install deps
+        run: pip install pyyaml packaging
+
+      - name: Run brain test pyramid
+        id: brain-pyramid
+        working-directory: ocr-docs/ocr-docs-brain
+        run: python3 tests/run_all.py
+
+      - name: Run OSE contract conformance
+        id: conformance
+        working-directory: ${{ github.workspace }}
+        run: |
+          python3 ose/.github/scripts/check_brain_contract.py \
+            --brain ocr-docs/ocr-docs-brain \
+            --repo ose \
+            --product-id ose \
+            --report-path conformance-report.json
+
+      - name: Upload conformance report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: conformance-report
+          path: conformance-report.json
+
+      - name: Open Linear ticket on drift
+        if: failure() && github.event_name == 'pull_request'
+        env:
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          COMMIT_SHA: ${{ github.event.pull_request.head.sha }}
+          REPO_NAME: ${{ github.repository }}
+        run: |
+          python3 ose/.github/scripts/open_drift_ticket.py \
+            --report conformance-report.json \
+            --repo "$REPO_NAME" \
+            --pr-number "$PR_NUMBER" \
+            --pr-url "$PR_URL" \
+            --pr-author "$PR_AUTHOR" \
+            --commit "$COMMIT_SHA"
+
+      - name: Comment on PR with drift summary
+        if: failure() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            let report;
+            try {
+              report = JSON.parse(fs.readFileSync('conformance-report.json', 'utf8'));
+            } catch (e) {
+              report = { failures: [{ check: 'report missing', detail: e.message }] };
+            }
+            const failures = report.failures || [];
+            const body = [
+              '### Brain contract check failed',
+              '',
+              'The OSE code drifted from the OCR-docs governance brain.',
+              '',
+              `Failures: **${failures.length}**`,
+              '',
+              ...failures.slice(0, 10).map(f => `- \`${f.check}\` — ${f.detail}`),
+              failures.length > 10 ? `- ... and ${failures.length - 10} more` : '',
+              '',
+              'A Linear ticket has been opened. Resolve the drift or update the brain via a PR to `ourCommunityRituals/OCR-docs`.',
+            ].filter(Boolean).join('\n');
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body,
+            });
