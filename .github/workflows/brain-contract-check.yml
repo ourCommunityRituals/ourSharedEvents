@@ -3,9 +3,11 @@ name: Brain contract check
 on:
   pull_request:
     branches: [main, staging]
-  push:
-    branches: [main, staging]
   workflow_dispatch:
+
+concurrency:
+  group: contract-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -15,7 +17,8 @@ permissions:
 jobs:
   contract-check:
     name: Validate against OCR-docs brain
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
+    timeout-minutes: 5
 
     steps:
       - name: Checkout OSE
