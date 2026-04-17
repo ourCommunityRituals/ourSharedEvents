@@ -24,7 +24,10 @@ concurrency:
 jobs:
   review:
     name: "Claude PR Review"
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
+    defaults:
+      run:
+        shell: bash
     # Run on PR events, or on issue comments that mention @claude on a PR
     if: |
       github.event_name == 'pull_request' ||
