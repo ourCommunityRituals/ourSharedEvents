@@ -70,6 +70,10 @@ on:
         description: 'Run full functional suite (Tier 4 — expensive)'
         type: boolean
         default: false
+      force_clean:
+        description: 'Force npm ci regardless of stamp (bust corrupt node_modules)'
+        type: boolean
+        default: false
 
 concurrency:
   group: ose-${{ github.event.pull_request.number || github.ref }}
@@ -101,13 +105,13 @@ jobs:
 
       - name: Install root dependencies
         run: |
-          HASH=$(git hash-object package-lock.json)
+          HASH="$(node --version)-$(git hash-object package-lock.json)"
           STAMP=node_modules/.install-stamp
-          if [ -f "$STAMP" ] && [ "$(cat $STAMP)" = "$HASH" ] && [ -d "node_modules/.bin" ]; then
-            echo "node_modules up-to-date (${HASH:0:8}), skipping npm ci"
+          if [ '${{ inputs.force_clean }}' != 'true' ] && [ -f "$STAMP" ] && [ "$(cat $STAMP)" = "$HASH" ] && [ -f "node_modules/.package-lock.json" ]; then
+            echo "node_modules up-to-date, skipping npm ci"
           else
             npm ci --prefer-offline || npm ci
-            echo "$HASH" > node_modules/.install-stamp
+            echo "$HASH" > "$STAMP"
           fi
 
       - name: 'Security: Banned origins'
@@ -121,13 +125,13 @@ jobs:
 
       - name: Install worker dependencies
         run: |
-          HASH=$(git hash-object package-lock.json)
+          HASH="$(node --version)-$(git hash-object package-lock.json)"
           STAMP=node_modules/.install-stamp
-          if [ -f "$STAMP" ] && [ "$(cat $STAMP)" = "$HASH" ] && [ -d "node_modules/.bin" ]; then
-            echo "worker node_modules up-to-date (${HASH:0:8}), skipping npm ci"
+          if [ '${{ inputs.force_clean }}' != 'true' ] && [ -f "$STAMP" ] && [ "$(cat $STAMP)" = "$HASH" ] && [ -f "node_modules/.package-lock.json" ]; then
+            echo "worker node_modules up-to-date, skipping npm ci"
           else
             npm ci --prefer-offline || npm ci
-            echo "$HASH" > node_modules/.install-stamp
+            echo "$HASH" > "$STAMP"
           fi
         working-directory: ${{ env.WORKER_DIR }}
 
@@ -166,13 +170,13 @@ jobs:
 
       - name: Install worker dependencies
         run: |
-          HASH=$(git hash-object package-lock.json)
+          HASH="$(node --version)-$(git hash-object package-lock.json)"
           STAMP=node_modules/.install-stamp
-          if [ -f "$STAMP" ] && [ "$(cat $STAMP)" = "$HASH" ] && [ -d "node_modules/.bin" ]; then
-            echo "worker node_modules up-to-date (${HASH:0:8}), skipping npm ci"
+          if [ '${{ inputs.force_clean }}' != 'true' ] && [ -f "$STAMP" ] && [ "$(cat $STAMP)" = "$HASH" ] && [ -f "node_modules/.package-lock.json" ]; then
+            echo "worker node_modules up-to-date, skipping npm ci"
           else
             npm ci --prefer-offline || npm ci
-            echo "$HASH" > node_modules/.install-stamp
+            echo "$HASH" > "$STAMP"
           fi
         working-directory: ${{ env.WORKER_DIR }}
 
@@ -262,29 +266,17 @@ jobs:
 
       - name: Install dependencies
         run: |
-          HASH=$(git hash-object package-lock.json)
+          HASH="$(node --version)-$(git hash-object package-lock.json)"
           STAMP=node_modules/.install-stamp
-          if [ -f "$STAMP" ] && [ "$(cat $STAMP)" = "$HASH" ] && [ -d "node_modules/.bin" ]; then
-            echo "node_modules up-to-date (${HASH:0:8}), skipping npm ci"
+          if [ '${{ inputs.force_clean }}' != 'true' ] && [ -f "$STAMP" ] && [ "$(cat $STAMP)" = "$HASH" ] && [ -f "node_modules/.package-lock.json" ]; then
+            echo "node_modules up-to-date, skipping npm ci"
           else
             npm ci --prefer-offline || npm ci
-            echo "$HASH" > node_modules/.install-stamp
+            echo "$HASH" > "$STAMP"
           fi
 
-      - name: Cache Playwright browsers
-        id: pw-cache
-        uses: actions/cache@v5
-        with:
-          path: ~/.cache/ms-playwright
-          key: pw-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}
-
       - name: Install Playwright browsers
-        if: steps.pw-cache.outputs.cache-hit != 'true'
-        run: npx playwright install chromium --with-deps
-
-      - name: Install Playwright OS deps (cached)
-        if: steps.pw-cache.outputs.cache-hit == 'true'
-        run: npx playwright install-deps chromium
+        run: npx playwright install chromium
 
       - name: 'Security smoke: XSS + auth boundaries'
         id: security-smoke
@@ -344,13 +336,13 @@ jobs:
 
       - name: Install dependencies
         run: |
-          HASH=$(git hash-object package-lock.json)
+          HASH="$(node --version)-$(git hash-object package-lock.json)"
           STAMP=node_modules/.install-stamp
-          if [ -f "$STAMP" ] && [ "$(cat $STAMP)" = "$HASH" ] && [ -d "node_modules/.bin" ]; then
-            echo "node_modules up-to-date (${HASH:0:8}), skipping npm ci"
+          if [ '${{ inputs.force_clean }}' != 'true' ] && [ -f "$STAMP" ] && [ "$(cat $STAMP)" = "$HASH" ] && [ -f "node_modules/.package-lock.json" ]; then
+            echo "node_modules up-to-date, skipping npm ci"
           else
             npm ci --prefer-offline || npm ci
-            echo "$HASH" > node_modules/.install-stamp
+            echo "$HASH" > "$STAMP"
           fi
 
       - name: Newman API smoke
@@ -417,29 +409,17 @@ jobs:
 
       - name: Install dependencies
         run: |
-          HASH=$(git hash-object package-lock.json)
+          HASH="$(node --version)-$(git hash-object package-lock.json)"
           STAMP=node_modules/.install-stamp
-          if [ -f "$STAMP" ] && [ "$(cat $STAMP)" = "$HASH" ] && [ -d "node_modules/.bin" ]; then
-            echo "node_modules up-to-date (${HASH:0:8}), skipping npm ci"
+          if [ '${{ inputs.force_clean }}' != 'true' ] && [ -f "$STAMP" ] && [ "$(cat $STAMP)" = "$HASH" ] && [ -f "node_modules/.package-lock.json" ]; then
+            echo "node_modules up-to-date, skipping npm ci"
           else
             npm ci --prefer-offline || npm ci
-            echo "$HASH" > node_modules/.install-stamp
+            echo "$HASH" > "$STAMP"
           fi
 
-      - name: Cache Playwright browsers
-        id: pw-cache
-        uses: actions/cache@v5
-        with:
-          path: ~/.cache/ms-playwright
-          key: pw-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}
-
       - name: Install Playwright browsers
-        if: steps.pw-cache.outputs.cache-hit != 'true'
-        run: npx playwright install chromium --with-deps
-
-      - name: Install Playwright OS deps (cached)
-        if: steps.pw-cache.outputs.cache-hit == 'true'
-        run: npx playwright install-deps chromium
+        run: npx playwright install chromium
 
       - name: 'T4a: Architecture Invariants'
         id: arch-tests
@@ -516,21 +496,19 @@ jobs:
 
     steps:
       - uses: actions/checkout@v6
-        with:
-          clean: false
       - uses: actions/setup-node@v6
         with:
           node-version: '20'
 
       - name: Install worker dependencies
         run: |
-          HASH=$(git hash-object package-lock.json)
+          HASH="$(node --version)-$(git hash-object package-lock.json)"
           STAMP=node_modules/.install-stamp
-          if [ -f "$STAMP" ] && [ "$(cat $STAMP)" = "$HASH" ] && [ -d "node_modules/.bin" ]; then
-            echo "worker node_modules up-to-date (${HASH:0:8}), skipping npm ci"
+          if [ '${{ inputs.force_clean }}' != 'true' ] && [ -f "$STAMP" ] && [ "$(cat $STAMP)" = "$HASH" ] && [ -f "node_modules/.package-lock.json" ]; then
+            echo "worker node_modules up-to-date, skipping npm ci"
           else
             npm ci --prefer-offline || npm ci
-            echo "$HASH" > node_modules/.install-stamp
+            echo "$HASH" > "$STAMP"
           fi
         working-directory: ${{ env.WORKER_DIR }}
 
@@ -615,29 +593,17 @@ jobs:
 
       - name: Install dependencies
         run: |
-          HASH=$(git hash-object package-lock.json)
+          HASH="$(node --version)-$(git hash-object package-lock.json)"
           STAMP=node_modules/.install-stamp
-          if [ -f "$STAMP" ] && [ "$(cat $STAMP)" = "$HASH" ] && [ -d "node_modules/.bin" ]; then
-            echo "node_modules up-to-date (${HASH:0:8}), skipping npm ci"
+          if [ '${{ inputs.force_clean }}' != 'true' ] && [ -f "$STAMP" ] && [ "$(cat $STAMP)" = "$HASH" ] && [ -f "node_modules/.package-lock.json" ]; then
+            echo "node_modules up-to-date, skipping npm ci"
           else
             npm ci --prefer-offline || npm ci
-            echo "$HASH" > node_modules/.install-stamp
+            echo "$HASH" > "$STAMP"
           fi
 
-      - name: Cache Playwright browsers
-        id: pw-cache
-        uses: actions/cache@v5
-        with:
-          path: ~/.cache/ms-playwright
-          key: pw-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}
-
       - name: Install Playwright browsers
-        if: steps.pw-cache.outputs.cache-hit != 'true'
-        run: npx playwright install chromium --with-deps
-
-      - name: Install Playwright OS deps (cached)
-        if: steps.pw-cache.outputs.cache-hit == 'true'
-        run: npx playwright install-deps chromium
+        run: npx playwright install chromium
 
       - name: 'Security smoke: XSS + auth'
         id: security-smoke
