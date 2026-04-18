@@ -128,7 +128,7 @@ User says: "feature flag", "flag", "tier", "free tier", "enterprise"
 | OSR (OurSharedRecords) | Archive records link to OSE event IDs                                    |
 | OSP (OurSharedPulse)   | Onboarded programs migrate to OSE-managed events                         |
 | OSM (OurSharedMagnets) | Postman collections mirror OSE API routes                                |
-| OWL (OurWhiteList)     | OSE is the source that OWL forks for white label clients                 |
+| OA (OurAirwaves)       | OSE is the source that OA forks for white label clients                  |
 | OER (OurEventRings)    | OSE event data feeds BigQuery → RAG analytics                            |
 
 Vision lives in OCR-docs `docs/VISION.md` only.

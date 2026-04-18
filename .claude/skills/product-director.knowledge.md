@@ -19,7 +19,7 @@
 | OSP  | OurSharedPulse          | `ourSharedPulse`   | Pre-platform consulting. Human-delivered.           | Docs-as-code       |
 | OSM  | OurSharedMagnets        | `ourSharedMagnets` | Developer and franchise layer. API support.         | Docs-as-code       |
 | OER  | OurEventRings           | —                  | Intelligence and analytics. Long horizon.           | Not started        |
-| OWL  | OurWhiteList            | `ourWhiteList`     | Deployment and white label layer.                   | Docs-as-code       |
+| OA   | OurAirwaves             | `ourAirwaves`      | Deployment and white label layer.                   | Docs-as-code       |
 
 ---
 
