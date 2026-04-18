@@ -100,6 +100,19 @@ jobs:
       with:
         clean: false
 
+    - name: Shield CodeQL parser from workspace ESM scope
+      # See codeql.yml for full rationale. TL;DR: workspace root has
+      # "type": "module"; CodeQL's CJS parser-wrapper walks up past the
+      # runner directory and crashes. Drop a CJS shim in RUNNER_TOOL_CACHE
+      # to block the upward package.json walk.
+      run: |
+        if [ -n "$RUNNER_TOOL_CACHE" ] && [ -d "$RUNNER_TOOL_CACHE" ]; then
+          printf '{"type":"commonjs"}\n' > "$RUNNER_TOOL_CACHE/package.json"
+          echo "Wrote CJS shim at: $RUNNER_TOOL_CACHE/package.json"
+        else
+          echo "⚠️ RUNNER_TOOL_CACHE not set or missing — skipping shim"
+        fi
+
     - name: Display security scan configuration
       run: |
         echo "=============================================="
