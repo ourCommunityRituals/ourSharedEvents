@@ -97,17 +97,17 @@ export function detectEnvironment(hostname?: string): Environment {
   if (!host) return 'unknown';
 
   // Check staging
-  if (STAGING_HOSTNAMES.some(h => host === h || host.endsWith('.' + h))) {
+  if (STAGING_HOSTNAMES.some((h) => host === h || host.endsWith('.' + h))) {
     return 'staging';
   }
 
   // Check production
-  if (PRODUCTION_HOSTNAMES.some(h => host === h)) {
+  if (PRODUCTION_HOSTNAMES.some((h) => host === h)) {
     return 'production';
   }
 
   // Check local
-  if (LOCAL_PATTERNS.some(p => host.includes(p))) {
+  if (LOCAL_PATTERNS.some((p) => host.includes(p))) {
     return 'local';
   }
 
@@ -156,6 +156,7 @@ export function getBaseApiUrl(env: Environment): string {
     case 'production':
       return 'https://oursharedevents.com';
     case 'local':
+      // security-gate: allow forbidden_url_scan — dev-only local API URL, unreachable from prod
       return 'http://localhost:3000';
     default:
       // Use relative URL for unknown environments

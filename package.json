@@ -306,6 +306,9 @@
   ],
   "author": "Zeventbooks",
   "license": "MIT",
+  "dependencies": {
+    "@ocr/flags": "file:../packages/flags"
+  },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260413.1",
     "@eslint/js": "^9.39.4",

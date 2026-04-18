@@ -65,6 +65,33 @@ URL_SCAN_ALLOWLIST_PREFIXES = (
     'http://localhost.test/',
 )
 
+# Inline-pragma support. A hit is suppressed when the matched line OR the
+# preceding line contains `security-gate: allow <check_name>`. The check
+# name must match exactly (secret_scan, pii_scan, or forbidden_url_scan).
+# Use sparingly — pragmas are auditable in code review and should carry a
+# why-comment next to them. This exists so legitimate local-dev URLs and
+# known benign strings don't force obfuscated source.
+PRAGMA_PATTERN = re.compile(r'security-gate:\s*allow\s+([a-z_]+)')
+
+
+def _has_allow_pragma(text: str, match_start: int, check_name: str) -> bool:
+    line_start = text.rfind('\n', 0, match_start) + 1
+    line_end = text.find('\n', match_start)
+    if line_end == -1:
+        line_end = len(text)
+    same_line = text[line_start:line_end]
+    for m in PRAGMA_PATTERN.finditer(same_line):
+        if m.group(1) == check_name:
+            return True
+    if line_start > 0:
+        prev_line_end = line_start - 1
+        prev_line_start = text.rfind('\n', 0, prev_line_end) + 1
+        prev_line = text[prev_line_start:prev_line_end]
+        for m in PRAGMA_PATTERN.finditer(prev_line):
+            if m.group(1) == check_name:
+                return True
+    return False
+
 
 def _iter_files(root: Path, include: Iterable[str] = DEFAULT_INCLUDE_SUFFIXES,
                 exclude_dirs: Iterable[str] = DEFAULT_EXCLUDE_DIRS) -> Iterable[Path]:
@@ -98,6 +125,8 @@ def _scan(root: Path, patterns, check_name: str, allowlist_names: Iterable[str] 
         for pattern, label in patterns:
             for m in pattern.finditer(text):
                 if match_allowlist_prefixes and any(m.group(0).startswith(p) for p in match_allowlist_prefixes):
+                    continue
+                if _has_allow_pragma(text, m.start(), check_name):
                     continue
                 line_no = text.count('\n', 0, m.start()) + 1
                 rel = f.relative_to(root) if f.is_relative_to(root) else f
