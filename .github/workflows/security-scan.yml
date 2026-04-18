@@ -100,6 +100,8 @@ jobs:
 
     - name: Checkout repository
       uses: actions/checkout@v6
+      with:
+        clean: false
 
     - name: Display security scan configuration
       run: |
@@ -135,12 +137,17 @@ jobs:
       uses: actions/setup-node@v6
       with:
         node-version: '20'
-        cache: 'npm'
 
     - name: Install dependencies
       run: |
-        echo "Installing dependencies for better analysis..."
-        npm ci || npm install
+        HASH="$(node --version)-$(git hash-object package-lock.json)"
+        STAMP=node_modules/.install-stamp
+        if [ '${{ inputs.skip_cache }}' != 'true' ] && [ -f "$STAMP" ] && [ "$(cat $STAMP)" = "$HASH" ] && [ -f "node_modules/.package-lock.json" ]; then
+          echo "node_modules up-to-date, skipping npm ci"
+        else
+          npm ci --prefer-offline || npm ci
+          echo "$HASH" > "$STAMP"
+        fi
 
     - name: Perform CodeQL Analysis
       id: codeql-analyze
@@ -327,15 +334,24 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@v6
+      with:
+        clean: false
 
     - name: Setup Node.js
       uses: actions/setup-node@v6
       with:
         node-version: '20'
-        cache: 'npm'
 
     - name: Install dependencies
-      run: npm ci
+      run: |
+        HASH="$(node --version)-$(git hash-object package-lock.json)"
+        STAMP=node_modules/.install-stamp
+        if [ '${{ inputs.skip_cache }}' != 'true' ] && [ -f "$STAMP" ] && [ "$(cat $STAMP)" = "$HASH" ] && [ -f "node_modules/.package-lock.json" ]; then
+          echo "node_modules up-to-date, skipping npm ci"
+        else
+          npm ci --prefer-offline || npm ci
+          echo "$HASH" > "$STAMP"
+        fi
 
     - name: Run npm audit
       id: npm-audit
