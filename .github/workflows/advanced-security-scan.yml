@@ -56,6 +56,10 @@ jobs:
         with:
           node-version: '20'
 
+      - name: Stage adjacent @ocr/flags package
+        # Must run BEFORE npm ci — package.json links @ocr/flags via file:../packages/flags.
+        run: bash scripts/ci-stage-ocr-workspace.sh
+
       - name: Install dependencies
         run: |
           HASH="$(node --version)-$(git hash-object package-lock.json)"
@@ -65,6 +69,16 @@ jobs:
           else
             npm ci --prefer-offline || npm ci
             echo "$HASH" > "$STAMP"
+          fi
+
+      - name: Install @ocr/flags devDependencies
+        # cyclonedx-npm runs `npm ls --all` which walks into file:-linked packages
+        # and errors on their unmet devDeps. Install them so SBOM generation
+        # can enumerate the full component tree.
+        run: |
+          if [ -d "../packages/flags" ]; then
+            cd ../packages/flags
+            npm install --no-audit --no-fund
           fi
 
       - name: Generate CycloneDX SBOM
@@ -103,6 +117,9 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version: '20'
+
+      - name: Stage adjacent @ocr/flags package
+        run: bash scripts/ci-stage-ocr-workspace.sh
 
       - name: Install dependencies
         run: |

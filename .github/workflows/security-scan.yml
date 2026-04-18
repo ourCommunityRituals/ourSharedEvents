@@ -1,4 +1,4 @@
-# CodeQL Security Analysis (Story 1/4)
+# CodeQL Security Analysis
 #
 # Primary security workflow per ci-cd-architecture.md.
 #
@@ -13,13 +13,10 @@
 #   - Weekly (Sundays 00:00 UTC) - deep vulnerability discovery
 #   - Manual trigger - for security audits
 #
-# Story 1: Validate & Align GitHub Workflows
-#   - This workflow is one of only 3 active workflows
-#   - Runs on push/PR as documented in ci-cd-architecture.md
-#
-# Story 4: Security Scanning
-#   - CodeQL security scan is a required release gate
+# Gate behavior:
+#   - CodeQL security scan is a required release gate on branch protection
 #   - Critical and high severity findings block merges
+#   - Runs on push/PR as documented in ci-cd-architecture.md
 #
 # @see docs/ci-cd-architecture.md - Security scan documentation
 name: CodeQL Security Analysis
@@ -106,7 +103,7 @@ jobs:
     - name: Display security scan configuration
       run: |
         echo "=============================================="
-        echo "CODEQL SECURITY SCAN (Story 1/4)"
+        echo "CODEQL SECURITY SCAN"
         echo "=============================================="
         echo ""
         echo "Primary security workflow per ci-cd-architecture.md"
@@ -122,8 +119,10 @@ jobs:
     - name: Initialize CodeQL
       id: codeql-init
       uses: github/codeql-action/init@v4
-      # Continue on error - Advanced Security may not be enabled
-      continue-on-error: true
+      # Gate must fail closed. A silently-skipped security scan is worse than
+      # no scan — it creates a false green on a "REQUIRED CHECK for branch
+      # protection." If CodeQL can't init (e.g., GHAS misconfigured), the
+      # scan SHOULD fail so the gap is visible, not hidden.
       with:
         languages: ${{ matrix.language }}
         # Custom config with technology-specific queries for our full stack:
@@ -137,6 +136,9 @@ jobs:
       uses: actions/setup-node@v6
       with:
         node-version: '20'
+
+    - name: Stage adjacent @ocr/flags package
+      run: bash scripts/ci-stage-ocr-workspace.sh
 
     - name: Install dependencies
       run: |
@@ -152,8 +154,8 @@ jobs:
     - name: Perform CodeQL Analysis
       id: codeql-analyze
       uses: github/codeql-action/analyze@v4
-      # Continue on error - Advanced Security may not be enabled on all repos
-      continue-on-error: true
+      # Gate fails closed: a failing analyze step fails the job, which blocks
+      # merge via branch protection. See Initialize CodeQL step for rationale.
       with:
         category: "/language:${{matrix.language}}"
         # Upload SARIF results to GitHub Security tab
@@ -161,9 +163,9 @@ jobs:
         # Output results for summary generation
         output: codeql-results
 
-    # Note: CodeQL analyze action will fail if Advanced Security is not enabled
-    # The workflow continues so npm audit can still run
-    # To enable: Settings > Security > Code security and analysis > Advanced Security
+    # If CodeQL analyze fails, the job fails and the merge is blocked. That's
+    # the intended behavior — no silent downgrade to npm audit only.
+    # If GHAS needs enabling: Settings > Security > Code security and analysis
 
     - name: Scan CI/CD workflows for script injection
       if: always()
@@ -342,6 +344,9 @@ jobs:
       with:
         node-version: '20'
 
+    - name: Stage adjacent @ocr/flags package
+      run: bash scripts/ci-stage-ocr-workspace.sh
+
     - name: Install dependencies
       run: |
         HASH="$(node --version)-$(git hash-object package-lock.json)"
@@ -357,7 +362,7 @@ jobs:
       id: npm-audit
       run: |
         echo "=============================================="
-        echo "NPM DEPENDENCY AUDIT (Story 1/4)"
+        echo "NPM DEPENDENCY AUDIT"
         echo "=============================================="
         echo ""
         echo "Dependency vulnerability audit per ci-cd-architecture.md"
@@ -415,7 +420,7 @@ jobs:
           echo "See docs/SECURITY.md for remediation guidance."
           echo "=============================================="
           echo "audit_status=failed" >> $GITHUB_OUTPUT
-          # Story 2.4: High severity vulnerabilities result in non-passing status
+          # High/critical severity vulnerabilities fail the gate (merge-blocking).
           exit 1
         else
           echo ""
@@ -482,5 +487,5 @@ jobs:
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "---" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
-        echo "**Story 1**: This is the canonical security-scan.yml per ci-cd-architecture.md" >> $GITHUB_STEP_SUMMARY
+        echo "This is the canonical security-scan.yml per ci-cd-architecture.md" >> $GITHUB_STEP_SUMMARY
         echo "**Artifact**: \`dependency-audit-report\` contains detailed JSON report." >> $GITHUB_STEP_SUMMARY

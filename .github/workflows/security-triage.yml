@@ -79,15 +79,21 @@ jobs:
         if: steps.existing.outputs.count == '0'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          WORKFLOW: ${{ steps.severity.outputs.workflow }}
+          BRANCH: ${{ steps.severity.outputs.branch }}
+          RUN_URL: ${{ steps.severity.outputs.run_url }}
+          SHORT_SHA: ${{ steps.severity.outputs.short_sha }}
+          SLA: ${{ steps.severity.outputs.sla }}
+          SLA_DEADLINE: ${{ steps.severity.outputs.sla_deadline }}
+          SEVERITY_LABEL: ${{ steps.severity.outputs.label }}
         run: |
-          WORKFLOW="${{ steps.severity.outputs.workflow }}"
-          BRANCH="${{ steps.severity.outputs.branch }}"
-          RUN_URL="${{ steps.severity.outputs.run_url }}"
-          SHORT_SHA="${{ steps.severity.outputs.short_sha }}"
-          SLA="${{ steps.severity.outputs.sla }}"
-          SLA_DEADLINE="${{ steps.severity.outputs.sla_deadline }}"
-
-          BODY=$(cat <<'ISSUEEOF'
+          # Write the issue body to a temp file via heredoc (no $() wrap, no
+          # indent-sensitive terminator). The previous implementation used
+          # BODY=$(cat <<'ISSUEEOF' ... ISSUEEOF) inside a YAML `run: |` block
+          # which left the $() without a matching ')' after the heredoc
+          # terminator, causing "unexpected EOF while looking for matching ')'".
+          BODY_FILE="$(mktemp -t security-triage-body.XXXXXX.md)"
+          cat > "$BODY_FILE" <<'ISSUEEOF'
           ## Security Scan Failure — Requires Immediate Attention
 
           | Field | Value |
@@ -126,19 +132,24 @@ jobs:
           *Auto-created by security-triage workflow. Do not ignore — SLA is binding.*
           ISSUEEOF
 
-          # Replace placeholders
-          BODY="${BODY//WORKFLOW_PLACEHOLDER/$WORKFLOW}"
-          BODY="${BODY//BRANCH_PLACEHOLDER/$BRANCH}"
-          BODY="${BODY//SHA_PLACEHOLDER/$SHORT_SHA}"
-          BODY="${BODY//RUN_URL_PLACEHOLDER/$RUN_URL}"
-          BODY="${BODY//SLA_PLACEHOLDER/$SLA}"
-          BODY="${BODY//SLA_DEADLINE_PLACEHOLDER/$SLA_DEADLINE}"
+          # Substitute placeholders in place. Env-based values avoid shell
+          # injection from GitHub context expressions.
+          sed -i \
+            -e "s|WORKFLOW_PLACEHOLDER|${WORKFLOW}|g" \
+            -e "s|BRANCH_PLACEHOLDER|${BRANCH}|g" \
+            -e "s|SHA_PLACEHOLDER|${SHORT_SHA}|g" \
+            -e "s|RUN_URL_PLACEHOLDER|${RUN_URL}|g" \
+            -e "s|SLA_PLACEHOLDER|${SLA}|g" \
+            -e "s|SLA_DEADLINE_PLACEHOLDER|${SLA_DEADLINE}|g" \
+            "$BODY_FILE"
 
           gh issue create \
-            --title "[SECURITY] $WORKFLOW failure on $BRANCH ($SHORT_SHA)" \
-            --body "$BODY" \
-            --label "security,${{ steps.severity.outputs.label }},auto-triage" \
+            --title "[SECURITY] ${WORKFLOW} failure on ${BRANCH} (${SHORT_SHA})" \
+            --body-file "$BODY_FILE" \
+            --label "security,${SEVERITY_LABEL},auto-triage" \
             --assignee "oursharedevents"
+
+          rm -f "$BODY_FILE"
 
       - name: Comment on existing issue
         if: steps.existing.outputs.count != '0'
