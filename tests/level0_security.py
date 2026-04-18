@@ -60,4 +60,20 @@ if worker_dir.exists():
             check(f'wrangler_no_dangerous:{forbidden[:30]}', forbidden not in text,
                   'absent' if forbidden not in text else f'forbidden flag present: {forbidden}')
 
+# Pragma audit — enforces policy on inline `security-gate: allow <check>`
+# exemptions across the OSE tree. secret_scan pragmas forbidden; other
+# check pragmas capped. Module vendored from OCR-docs/shared/pragma_audit.py.
+try:
+    import pragma_audit  # type: ignore
+    pragma_fails = pragma_audit.run_audit(OSE_REPO)
+    if pragma_fails:
+        for _, _, msg in pragma_fails:
+            check('pragma_audit', False, msg)
+    else:
+        check('pragma_audit', True, 'policy clean')
+except ImportError:
+    check('pragma_audit', False,
+          'vendored pragma_audit.py not importable from tests/_shared/ '
+          '— run `cd OCR-docs && py shared/sync_to_repos.py`')
+
 security_gate.report_and_exit(results, passed, header='LEVEL 0 — SECURITY (OurSharedEvents)')
