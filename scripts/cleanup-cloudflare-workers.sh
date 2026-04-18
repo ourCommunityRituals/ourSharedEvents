@@ -30,7 +30,7 @@
 #   ./scripts/cleanup-cloudflare-workers.sh --env production --keep 10 --force
 #
 # Worker Names (from wrangler.toml):
-#   - staging: oursharedevents-staging
+#   - staging: oursharedevents-stg
 #   - production: oursharedevents-prod
 #
 # ============================================================================
@@ -127,7 +127,7 @@ fi
 # Determine worker name from environment
 case $WRANGLER_ENV in
   staging)
-    WORKER_NAME="oursharedevents-staging"
+    WORKER_NAME="oursharedevents-stg"
     ;;
   production)
     WORKER_NAME="oursharedevents-prod"

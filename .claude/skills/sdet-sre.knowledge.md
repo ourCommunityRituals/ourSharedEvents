@@ -116,8 +116,8 @@ newman-tests:
   steps:
     - uses: actions/checkout@v4
     - run: npm install -g newman
-    - run: newman run postman/oursharedevents-worker-api.json
-        -e postman/oursharedevents-staging.json
+    - run: newman run postman/collections/ose-api.json
+        -e postman/environments/ose-staging.json
         --reporters cli,junit
         --reporter-junit-export results/newman.xml
 ```

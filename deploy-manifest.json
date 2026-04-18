@@ -162,7 +162,7 @@
       "name": "OurSharedEvents Staging",
       "description": "Phase 1 staging – stg.oursharedevents.com",
       "cloudflare": {
-        "workerName": "oursharedevents-staging",
+        "workerName": "oursharedevents-stg",
         "routes": ["stg.oursharedevents.com/*"],
         "zoneName": "oursharedevents.com"
       },

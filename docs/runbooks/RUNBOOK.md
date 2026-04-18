@@ -265,7 +265,7 @@ curl -s https://stg.oursharedevents.com/health | jq
 **Resolution:**
 
 - Verify the cron trigger is deployed: redeploy the Worker
-- Manually trigger the cron in CF Dashboard: Workers > oursharedevents-staging > Triggers > Run Now
+- Manually trigger the cron in CF Dashboard: Workers > oursharedevents-stg > Triggers > Run Now
 
 ---
 
@@ -273,8 +273,8 @@ curl -s https://stg.oursharedevents.com/health | jq
 
 ### Cloudflare Dashboard
 
-- Worker analytics: dash.cloudflare.com > Workers > oursharedevents-staging > Analytics
-- Request logs: Workers > oursharedevents-staging > Logs
+- Worker analytics: dash.cloudflare.com > Workers > oursharedevents-stg > Analytics
+- Request logs: Workers > oursharedevents-stg > Logs
 - D1 metrics: Workers > D1 > ocr-db-staging
 
 ### GitHub Actions
