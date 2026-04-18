@@ -209,3 +209,37 @@ config/environments.js
 
 # Justification: OpenAPI spec with legacy server URL for historical reference
 openapi.yaml
+
+# =============================================================================
+# E2E TEST FILES WITH LEGACY JSDoc EXAMPLES
+# =============================================================================
+# These spec files contain @example JSDoc comments showing the old GAS-based
+# invocation pattern (BASE_URL=https://script.google.com/macros/...) as
+# historical documentation of the pre-Cloudflare setup. No GAS calls are made
+# at runtime — all tests target stg.oursharedevents.com / oursharedevents.com.
+#
+# Justification: JSDoc comment showing legacy invocation — not executed code
+tests/e2e/1-smoke/api-contract.spec.js
+tests/e2e/1-smoke/critical-smoke.spec.js
+tests/e2e/1-smoke/security-smoke.spec.js
+tests/e2e/2-pages/admin-page.spec.js
+tests/e2e/2-pages/config-page.spec.js
+tests/e2e/2-pages/display-page.spec.js
+tests/e2e/3-flows/admin-flows.spec.js
+tests/e2e/3-flows/admin-wizard-flow.spec.js
+tests/e2e/3-flows/advanced-display-features.spec.js
+tests/e2e/3-flows/customer-flows.spec.js
+tests/e2e/3-flows/forms-templates.spec.js
+tests/e2e/3-flows/poster-maps-integration.spec.js
+tests/e2e/3-flows/shared-report-name-resolution.spec.js
+tests/e2e/3-flows/shared-reporting.spec.js
+tests/e2e/3-flows/sponsor-flows.spec.js
+tests/e2e/3-flows/triangle-framework.spec.js
+
+# =============================================================================
+# SMOKE TEST FILES WITH LEGACY JSDoc EXAMPLES
+# =============================================================================
+# Justification: JSDoc comment showing legacy invocation — not executed code
+tests/smoke/api.smoke.test.js
+tests/smoke/components.smoke.test.js
+tests/smoke/pages.smoke.test.js
