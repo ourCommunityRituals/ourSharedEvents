@@ -358,7 +358,7 @@ _Why D1: Sheets latency is 200–800ms. D1 is <5ms. No Google credential depende
 **Description:** Create Cloudflare D1 databases (staging + production). Write and apply SQL schema migration for the `events` table plus indexes.
 **Acceptance criteria:**
 
-- `wrangler d1 list` shows `oursharedevents-staging` and `oursharedevents-prod`
+- `wrangler d1 list` shows `ocr-db-staging` and `ocr-db-production` (plus `ocr-forms-db-staging` / `ocr-forms-db-production` for the FORMS_DB separation per Invariant #1)
 - `SELECT count(*) FROM events` runs without error
 - Index on `(brand_id, status)` exists
   **Files to create:** `workers/oursharedevents/migrations/0001_initial.sql`

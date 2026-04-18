@@ -34,7 +34,7 @@ const PROXY_DIR = join(__dirname, '..', 'cloudflare-proxy');
 const CONFIG = {
   staging: {
     env: 'staging',
-    workerName: 'oursharedevents-staging',
+    workerName: 'oursharedevents-stg',
     healthUrl: 'https://stg.oursharedevents.com/api/status',
     displayName: 'Staging',
   },
@@ -382,7 +382,7 @@ ${colors.bright}USAGE:${colors.reset}
   node scripts/rollback-worker.mjs <environment> [options]
 
 ${colors.bright}ENVIRONMENTS:${colors.reset}
-  staging, stg       Rollback staging worker (oursharedevents-staging)
+  staging, stg       Rollback staging worker (oursharedevents-stg)
   production, prod   Rollback production worker (oursharedevents-prod)
   all, both          Rollback both staging and production
 

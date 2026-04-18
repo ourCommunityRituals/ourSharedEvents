@@ -305,7 +305,7 @@ These 4 secrets live inside Cloudflare's secret store — separate from GitHub. 
   npm run deploy:staging
   ```
 
-  Expected output ends with: `Published oursharedevents-staging`
+  Expected output ends with: `Published oursharedevents-stg`
 
   _Or_ just push to `main` — the CI/CD pipeline deploys staging automatically.
 
