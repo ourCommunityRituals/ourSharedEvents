@@ -11,16 +11,17 @@ from pathlib import Path
 
 THIS_DIR = Path(__file__).parent
 OSE_REPO = THIS_DIR.parent
-SHARED = (OSE_REPO.parent / 'OCR-docs' / 'shared').resolve()
+VENDORED_SHARED = THIS_DIR / '_shared'
 
-sys.path.insert(0, str(SHARED))
+sys.path.insert(0, str(VENDORED_SHARED))
 try:
     import security_gate
 except ImportError as e:
-    print('[FAIL]  shared security_gate.py not importable from OCR-docs/shared/')
-    print(f'        looked at: {SHARED}')
+    print('[FAIL]  vendored security_gate.py not importable from tests/_shared/')
+    print(f'        looked at: {VENDORED_SHARED}')
     print(f'        error: {e}')
-    print('        SECURITY GATE FAILS CLOSED — fix the shared module path before continuing.')
+    print('        SECURITY GATE FAILS CLOSED — restore the vendored module.')
+    print('        From OCR-docs: py shared/sync_to_repos.py')
     sys.exit(1)
 
 results: list[tuple[str, str, str]] = []
