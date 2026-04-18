@@ -578,6 +578,24 @@ jobs:
 
   # ============================================================================
   # TIER 2P: SMOKE → Production (tag only)
+  #
+  # NOTE — stamp cache will ALWAYS miss here, and that is intentional.
+  #
+  # deploy-production (the job that precedes this one) uses the default
+  # clean: true checkout, which runs `git clean -ffdx` and wipes the entire
+  # workspace — including root node_modules/ and its .install-stamp.
+  # By the time smoke-production runs, the stamp file is gone, so the
+  # stamp check below falls through and npm ci always runs fresh.
+  #
+  # This is the correct behaviour for production smoke:
+  #   - deploy-production gets a guaranteed-clean workspace (SRE doctrine)
+  #   - smoke-production inherits that cleanliness — it never tests against
+  #     a stale cached node_modules from a prior unrelated run
+  #   - The "skipping npm ci" log line will never appear in this job
+  #
+  # If you see "skipping npm ci" here, investigate — it means deploy-production
+  # did NOT run before this job (e.g. needs: chain changed) and the previous
+  # run's workspace state leaked in, which would be a bug.
   # ============================================================================
   smoke-production:
     name: 'T2 Smoke → Production'
