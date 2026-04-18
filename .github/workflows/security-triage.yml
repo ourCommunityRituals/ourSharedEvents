@@ -22,10 +22,14 @@ permissions:
   actions: read
   contents: read
 
+defaults:
+  run:
+    shell: bash
+
 jobs:
   triage:
     name: "🚨 Triage Security Findings"
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     # Only triage when the scan failed (findings detected)
     if: github.event.workflow_run.conclusion == 'failure'
     steps:

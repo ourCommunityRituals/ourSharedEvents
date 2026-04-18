@@ -305,7 +305,7 @@ function getAllowlist() {
  * Check if a path should be excluded based on allowlist
  */
 function isAllowlisted(filePath) {
-  const relativePath = relative(ROOT_DIR, filePath);
+  const relativePath = relative(ROOT_DIR, filePath).replace(/\\/g, '/');
   const allowlist = getAllowlist();
 
   // Check exact file matches (from external file + fallback)

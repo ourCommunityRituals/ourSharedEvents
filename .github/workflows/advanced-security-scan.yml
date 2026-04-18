@@ -59,6 +59,10 @@ permissions:
   pull-requests: read
   actions: read
 
+defaults:
+  run:
+    shell: bash
+
 jobs:
   # ============================================================================
   # 1. SBOM GENERATION - Software Bill of Materials
@@ -69,7 +73,7 @@ jobs:
   # ============================================================================
   sbom:
     name: "📦 SBOM Generation"
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
@@ -108,7 +112,7 @@ jobs:
   # ============================================================================
   license-check:
     name: "⚖️ License Compliance"
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
@@ -222,7 +226,7 @@ jobs:
   # ============================================================================
   dependency-review:
     name: "📋 Dependency Review"
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     if: github.event_name == 'pull_request'
     steps:
       - name: Checkout repository
@@ -248,7 +252,7 @@ jobs:
   # ============================================================================
   security-summary:
     name: "📊 Security Summary"
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     if: always()
     needs: [sbom, license-check, dependency-review]
     steps:

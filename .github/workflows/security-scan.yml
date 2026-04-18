@@ -63,6 +63,10 @@ env:
   # Security scan policy - CRITICAL and HIGH findings block merges
   FAIL_ON_SEVERITY: 'critical,high'
 
+defaults:
+  run:
+    shell: bash
+
 jobs:
   # ============================================================================
   # CODEQL SECURITY SCAN
@@ -72,7 +76,7 @@ jobs:
   # ============================================================================
   analyze:
     name: 🔒 CodeQL Security Scan
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     permissions:
       actions: read
       contents: read
@@ -318,7 +322,7 @@ jobs:
   # ============================================================================
   dependency-audit:
     name: 🔍 Dependency Vulnerability Audit
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
 
     steps:
     - name: Checkout repository
