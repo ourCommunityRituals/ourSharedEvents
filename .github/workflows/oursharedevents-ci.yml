@@ -103,6 +103,10 @@ jobs:
         with:
           node-version: '20'
 
+      - name: Stage adjacent @ocr/flags package
+        shell: bash
+        run: bash scripts/ci-stage-ocr-workspace.sh
+
       - name: Install root dependencies
         run: |
           HASH="$(node --version)-$(git hash-object package-lock.json)"
