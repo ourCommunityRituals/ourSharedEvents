@@ -21,13 +21,17 @@ permissions:
   issues: write
   contents: read
 
+defaults:
+  run:
+    shell: bash
+
 jobs:
   # ============================================================================
   # CHECK OVERDUE SECURITY ISSUES
   # ============================================================================
   check-overdue:
     name: "⏰ Check Overdue Security Issues"
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
@@ -163,7 +167,7 @@ jobs:
   # ============================================================================
   check-exceptions:
     name: "📋 Check Security Exceptions"
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6

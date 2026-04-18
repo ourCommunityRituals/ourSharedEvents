@@ -29,10 +29,14 @@ permissions:
   statuses: read
   actions: read
 
+defaults:
+  run:
+    shell: bash
+
 jobs:
   human-gate:
     name: "🛑 Security Human Gate"
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
       - name: Check for security scan failures
         id: check-scans

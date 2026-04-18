@@ -57,6 +57,10 @@ env:
   STAGING_URL: ${{ vars.STAGING_URL || 'https://stg.oursharedevents.com' }}
   PRODUCTION_URL: ${{ vars.PRODUCTION_URL || 'https://oursharedevents.com' }}
 
+defaults:
+  run:
+    shell: bash
+
 jobs:
   # ============================================================================
   # SECURITY REGRESSION CHECKS
@@ -66,7 +70,7 @@ jobs:
   # ============================================================================
   security-regression:
     name: Security Regression Gate
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
 
     # Allow failures on scheduled runs to not block development
     continue-on-error: ${{ github.event_name == 'schedule' }}
@@ -186,7 +190,7 @@ jobs:
   # ============================================================================
   qr-contract-check:
     name: QR-0 Contract Verification
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     needs: security-regression
     # Only run if main security checks pass
     if: ${{ success() || github.event_name == 'schedule' }}
