@@ -50,6 +50,7 @@ jobs:
       - name: Run OSE contract conformance
         id: conformance
         working-directory: ${{ github.workspace }}
+        shell: bash
         run: |
           python3 ose/.github/scripts/check_brain_contract.py \
             --brain ocr-docs/ocr-docs-brain \
@@ -66,6 +67,7 @@ jobs:
 
       - name: Open Linear ticket on drift
         if: failure() && github.event_name == 'pull_request'
+        shell: bash
         env:
           LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
