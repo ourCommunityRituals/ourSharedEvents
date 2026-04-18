@@ -172,6 +172,10 @@ jobs:
         with:
           node-version: '20'
 
+      - name: Stage adjacent @ocr/flags package
+        shell: bash
+        run: bash scripts/ci-stage-ocr-workspace.sh
+
       - name: Install worker dependencies
         run: |
           HASH="$(node --version)-$(git hash-object package-lock.json)"
@@ -268,6 +272,10 @@ jobs:
         with:
           node-version: '20'
 
+      - name: Stage adjacent @ocr/flags package
+        shell: bash
+        run: bash scripts/ci-stage-ocr-workspace.sh
+
       - name: Install dependencies
         run: |
           HASH="$(node --version)-$(git hash-object package-lock.json)"
@@ -337,6 +345,10 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: '20'
+
+      - name: Stage adjacent @ocr/flags package
+        shell: bash
+        run: bash scripts/ci-stage-ocr-workspace.sh
 
       - name: Install dependencies
         run: |
@@ -410,6 +422,10 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: '20'
+
+      - name: Stage adjacent @ocr/flags package
+        shell: bash
+        run: bash scripts/ci-stage-ocr-workspace.sh
 
       - name: Install dependencies
         run: |
@@ -503,6 +519,10 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: '20'
+
+      - name: Stage adjacent @ocr/flags package
+        shell: bash
+        run: bash scripts/ci-stage-ocr-workspace.sh
 
       - name: Install worker dependencies
         run: |
@@ -612,6 +632,10 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: '20'
+
+      - name: Stage adjacent @ocr/flags package
+        shell: bash
+        run: bash scripts/ci-stage-ocr-workspace.sh
 
       - name: Install dependencies
         run: |
