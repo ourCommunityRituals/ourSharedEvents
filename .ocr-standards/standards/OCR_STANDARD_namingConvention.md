@@ -10,13 +10,13 @@
 {Product}_{Type}_{What}_{How}_{Why}
 ```
 
-| Segment | Answers | Required |
-|---------|---------|----------|
-| **Product** | Which repo/product owns this | Always |
-| **Type** | What category of artifact this is | Always |
-| **What** | What this file does or defines | Always |
-| **How** | How it accomplishes it, or what mechanism it uses | When the mechanism matters |
-| **Why** | Why this file exists — the trigger, the story, the constraint | When intent matters |
+| Segment     | Answers                                                       | Required                   |
+| ----------- | ------------------------------------------------------------- | -------------------------- |
+| **Product** | Which repo/product owns this                                  | Always                     |
+| **Type**    | What category of artifact this is                             | Always                     |
+| **What**    | What this file does or defines                                | Always                     |
+| **How**     | How it accomplishes it, or what mechanism it uses             | When the mechanism matters |
+| **Why**     | Why this file exists — the trigger, the story, the constraint | When intent matters        |
 
 Not every file needs all five segments. A migration needs Product, Type, What, and Why. A simple config might only need Product and Type. The rule: **use as many segments as it takes for the name to tell the story without opening the file.**
 
@@ -24,17 +24,17 @@ Not every file needs all five segments. A migration needs Product, Type, What, a
 
 ## Product codes
 
-| Code | Product |
-|------|---------|
+| Code  | Product                         |
+| ----- | ------------------------------- |
 | `OCR` | OurCommunityRituals (org-level) |
-| `OSE` | OurSharedEvents |
-| `OW` | OurWKRP |
-| `OSG` | OurSharedGames |
-| `OSR` | OurSharedRecords |
-| `OSP` | OurSharedPulse |
-| `OSM` | OurSharedMagnets |
-| `OER` | OurEventRings |
-| `OWL` | OurWhiteList |
+| `OSE` | OurSharedEvents                 |
+| `OW`  | OurWKRP                         |
+| `OSG` | OurSharedGames                  |
+| `OSR` | OurSharedRecords                |
+| `OSP` | OurSharedPulse                  |
+| `OSM` | OurSharedMagnets                |
+| `OER` | OurEventRings                   |
+| `OA`  | OurAirwaves                     |
 
 ---
 
@@ -190,13 +190,13 @@ ow-production-secrets.example.env
 
 ## Casing rules
 
-| Context | Casing | Example |
-|---------|--------|---------|
-| Product code | UPPERCASE | `OSE`, `OW`, `OCR` |
-| Type | UPPERCASE | `UNIT`, `MIGRATION`, `STANDARD` |
-| What/How/Why segments | camelCase | `sponsorTierNormalization`, `mockCoercion` |
-| Workflow files | lowercase-hyphenated | `ose-ci-deploy-staging.yml` |
-| Migration files | snake_case after sequence | `0018_OSE_MIGRATION_fixSponsorTierDefault_OSE168.sql` |
+| Context               | Casing                    | Example                                               |
+| --------------------- | ------------------------- | ----------------------------------------------------- |
+| Product code          | UPPERCASE                 | `OSE`, `OW`, `OCR`                                    |
+| Type                  | UPPERCASE                 | `UNIT`, `MIGRATION`, `STANDARD`                       |
+| What/How/Why segments | camelCase                 | `sponsorTierNormalization`, `mockCoercion`            |
+| Workflow files        | lowercase-hyphenated      | `ose-ci-deploy-staging.yml`                           |
+| Migration files       | snake_case after sequence | `0018_OSE_MIGRATION_fixSponsorTierDefault_OSE168.sql` |
 
 ---
 
@@ -274,6 +274,6 @@ A future CI check (planned) will validate file naming against this standard. Unt
 
 ---
 
-*Last updated: April 9 2026*
-*Owner: Matt*
-*Status: ACTIVE*
+_Last updated: April 9 2026_
+_Owner: Matt_
+_Status: ACTIVE_

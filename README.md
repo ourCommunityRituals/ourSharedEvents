@@ -17,7 +17,7 @@ ourSharedEvents powers community leagues and recurring events — from registrat
 | OER  | **OurEventRings**                 | Intelligence and analytics — long horizon                    |
 | OSM  | **OurSharedMagnets**              | Developer and franchise layer — API, white label support     |
 | OSP  | **OurSharedPulse**                | Pre-platform consulting — human-delivered entry point        |
-| OWL  | **OurWhiteList**                  | Deployment and white label layer — client fork template      |
+| OA   | **OurAirwaves**                   | Deployment and white label layer — client fork template      |
 
 ---
 

@@ -139,7 +139,7 @@ wrangler d1 migrations apply FORMS_DB --env staging --remote
 cd workers/oursharedevents
 npm install
 npm run deploy:staging
-# Expected output: "Published oursharedevents-staging"
+# Expected output: "Published oursharedevents-stg"
 ```
 
 ### B6. Health check

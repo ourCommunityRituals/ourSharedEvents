@@ -59,7 +59,7 @@ npm install
 
 # Staging
 npm run deploy:staging
-# → publishes as "oursharedevents-staging"
+# → publishes as "oursharedevents-stg"
 # → serves stg.oursharedevents.com
 
 # Production (after staging is verified)

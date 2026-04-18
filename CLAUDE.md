@@ -115,7 +115,7 @@ workers/oursharedevents/src/
 | OSP  | OurSharedPulse          | `ourCommunityRituals/ourSharedPulse`   | Pre-platform consulting. Human-delivered entry point.           |
 | OSM  | OurSharedMagnets        | `ourCommunityRituals/ourSharedMagnets` | Developer and franchise layer. API and white label support.     |
 | OER  | OurEventRings           | —                                      | Intelligence and analytics. Long horizon.                       |
-| OWL  | OurWhiteList            | `ourCommunityRituals/ourWhiteList`     | Deployment and white label layer. Client fork template.         |
+| OA   | OurAirwaves             | `ourCommunityRituals/ourAirwaves`      | Deployment and white label layer. Client fork template.         |
 
 ---
 

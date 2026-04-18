@@ -70,7 +70,7 @@ curl -s https://stg.oursharedevents.com/health | jq
 
 **Via Cloudflare Dashboard:**
 
-1. dash.cloudflare.com > Workers & Pages > oursharedevents-staging
+1. dash.cloudflare.com > Workers & Pages > oursharedevents-stg
 2. Deployments tab
 3. Find previous working deployment
 4. Click "Rollback to this deployment"

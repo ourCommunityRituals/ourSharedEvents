@@ -1,4 +1,5 @@
 # VISION.md — OurCommunityRituals LLC
+
 ## Org-Level Vision and Architecture
 
 **This is the source of truth.**
@@ -65,77 +66,77 @@ what is already alive.
 
 ## Product registry
 
-OCR  OurCommunityRituals LLC
-     Holding company. Org brain. Governance.
-     Filed Illinois SOS March 2026.
+OCR OurCommunityRituals LLC
+Holding company. Org brain. Governance.
+Filed Illinois SOS March 2026.
 
-OER  OurEventRings
-     Intelligence and analytics layer.
-     Watches event data, sponsor data, and
-     anonymous behavioral data react to
-     reality conditions across every Ring.
-     Long horizon. Earns its place when
-     archive depth is sufficient.
+OER OurEventRings
+Intelligence and analytics layer.
+Watches event data, sponsor data, and
+anonymous behavioral data react to
+reality conditions across every Ring.
+Long horizon. Earns its place when
+archive depth is sufficient.
 
-OSE  OurSharedEvents
-     The platform. Anonymous ID architecture.
-     Sponsor model. SharedReport. Six display
-     surfaces. Pre-event to post-event arc.
-     Domain: oursharedevents.com
+OSE OurSharedEvents
+The platform. Anonymous ID architecture.
+Sponsor model. SharedReport. Six display
+surfaces. Pre-event to post-event arc.
+Domain: oursharedevents.com
 
-OSM  OurSharedMagnets
-     Developer and franchise layer.
-     API and white label support.
-     Postman collections. Newman CI.
-     Ritual execution skill file.
-     The institutional knowledge of the
-     founding team delivered to corridor
-     operators.
+OSM OurSharedMagnets
+Developer and franchise layer.
+API and white label support.
+Postman collections. Newman CI.
+Ritual execution skill file.
+The institutional knowledge of the
+founding team delivered to corridor
+operators.
 
-OSP  OurSharedPulse
-     Keeps it beating.
-     Pre-platform consulting. Works with
-     leagues and recreational programs.
-     Belts. Trophies. Tiered recognition.
-     Community playlist creation.
-     Targets the 2nd and 3rd tier participants.
-     No anonymous ID dependency.
-     Human-delivered. Tech-optional entry point.
+OSP OurSharedPulse
+Keeps it beating.
+Pre-platform consulting. Works with
+leagues and recreational programs.
+Belts. Trophies. Tiered recognition.
+Community playlist creation.
+Targets the 2nd and 3rd tier participants.
+No anonymous ID dependency.
+Human-delivered. Tech-optional entry point.
 
-OSG  OurSharedGames
-     Founding activation format.
-     Anchor game with supporting game activities.
-     The room where community shows up voluntarily
-     on a specific night.
+OSG OurSharedGames
+Founding activation format.
+Anchor game with supporting game activities.
+The room where community shows up voluntarily
+on a specific night.
 
-OSR  OurSharedRecords
-     Music, story, and archive layer.
-     The vinyl. The documentation.
-     The community's record of itself.
-     OurRecordSides oral history format:
-     One person. Five minutes. One story.
-     One record. Just tell us why.
+OSR OurSharedRecords
+Music, story, and archive layer.
+The vinyl. The documentation.
+The community's record of itself.
+OurRecordSides oral history format:
+One person. Five minutes. One story.
+One record. Just tell us why.
 
-OW   OurWKRP
-     Community music curation. Named identity.
-     Not tied to anonymous ID.
-     Groups of music lovers curating playlists
-     together into one collective voice and brand.
-     DJ promotion. Attribution. Sponsorship hooks.
-     White label tiers: community, DJ/artist, venue.
-     Verified artist layer for preferred playlists.
-     Streaming: AppleMusicKit unlimited user.
-     Primary anchor: RIPH — music-centric target.
-     White label venue targets:
-       Reckless Records
-       Smart Bar
-       Hyde Park Records
+OW OurWKRP
+Community music curation. Named identity.
+Not tied to anonymous ID.
+Groups of music lovers curating playlists
+together into one collective voice and brand.
+DJ promotion. Attribution. Sponsorship hooks.
+White label tiers: community, DJ/artist, venue.
+Verified artist layer for preferred playlists.
+Streaming: AppleMusicKit unlimited user.
+Primary anchor: RIPH — music-centric target.
+White label venue targets:
+Reckless Records
+Smart Bar
+Hyde Park Records
 
-OWL  OurWhiteList
-     Deployment and white label layer.
-     Client workspace fork template.
-     Onboarding runbook.
-     Per-client environment schema.
+OA OurAirwaves
+Deployment and white label layer.
+Client workspace fork template.
+Onboarding runbook.
+Per-client environment schema.
 
 ---
 
@@ -151,7 +152,7 @@ Anchor: Open OutCry — Tuesday trivia target
 Role: Archive anchor
 Activation: September 2026
 Note: April 9 formal launch = archive collection start.
-      Platform launch = September.
+Platform launch = September.
 
 📍 BRAINERD
 Role: Research comparator node
@@ -178,10 +179,10 @@ The published academic methodology underlying
 the platform. The geographic experiment running
 simultaneously with the business.
 
-Node:     The specific activation point.
+Node: The specific activation point.
 Corridor: The organic geographic thread
-          connecting nodes. The can span across, through, up to, agaisnt, bypass, etc node by what the geography, culture, and econonmic behavior dictate
-Ring:     The self-sustaining local economic loop of the varying levels of      nodes and corridors permenating the economic geography.
+connecting nodes. The can span across, through, up to, agaisnt, bypass, etc node by what the geography, culture, and econonmic behavior dictate
+Ring: The self-sustaining local economic loop of the varying levels of nodes and corridors permenating the economic geography.
 
 Six-layer geographic hierarchy from hyperlocal
 to macro region. Ring closes when the corridor
@@ -192,6 +193,7 @@ See LOCKED_NCR_Methodology_v1.3 for full doctrine.
 ---
 
 ## Documentation as code (DAC)
+
 The documents and files will be used as living documents to understand the needs the application, event mgr managing it, the sponsors it, and most of all the customers enjoying the experience using the pre event, event, and post event flows. The flows is always to keep the customer's value #1 and it to make the highest quality does not falter. This all stems from keeping in contact between programs through documentation as code so all applications are aware of possible efficiencies across the infrastructure and where most cost savings while proving the highest customer value. DAC along with the Claude, skills, knowledge folder structure will at each level to feed the OCR same structure with the Vision.md
 
 ---
@@ -216,7 +218,7 @@ That is our founding commitment.
 
 ## Open decisions
 
-- OWL repo structure and client fork workflow
+- OA repo structure and client fork workflow
 - OER activation timing and data threshold
 - OSP consulting engagement model formalized
 - Dr. Obia conversation — NCR methodology
@@ -224,6 +226,6 @@ That is our founding commitment.
 
 ---
 
-*Last updated: April 5 2026*
-*Owner: Matt*
-*Status: ACTIVE — source of truth*
+_Last updated: April 5 2026_
+_Owner: Matt_
+_Status: ACTIVE — source of truth_
