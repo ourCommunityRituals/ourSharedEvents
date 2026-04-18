@@ -214,7 +214,7 @@ PR opened
 | OSR  | OurSharedRecords | Needed        | Own DB          | TBD                 | Docs-as-code                   |
 | OSP  | OurSharedPulse   | Not required  | Not required    | TBD                 | Human-delivered, tech-optional |
 | OSM  | OurSharedMagnets | Not required  | Not required    | TBD                 | Docs-as-code (Postman/Newman)  |
-| OWL  | OurWhiteList     | Fork template | Per-client      | Per-client          | Docs-as-code                   |
+| OA   | OurAirwaves      | Fork template | Per-client      | Per-client          | Docs-as-code                   |
 | OER  | OurEventRings    | Needed        | BigQuery target | TBD                 | Not started                    |
 
 ### Key architectural boundaries
@@ -251,7 +251,7 @@ ourCommunityRituals (GitHub Org)
 ├── ourSharedRecords — OSR (archive layer)
 ├── ourSharedPulse — OSP (consulting, tech-optional)
 ├── ourSharedMagnets — OSM (developer/franchise docs)
-├── ourWhiteList — OWL (deployment/white label)
+├── ourAirwaves — OA (deployment/white label)
 └── [OurEventRings — OER (analytics, not started)]
 ```
 
