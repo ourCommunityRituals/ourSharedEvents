@@ -1,0 +1,73 @@
+# .github/workflows/docs-ci.yml
+# Docs-as-code CI: markdown lint + required-file check.
+# Inlined from OCR-docs/.github/workflows/docs-ci.yml because private-to-private
+# workflow_call never resolved (0s failures since 2026-04-05). Keep in sync with
+# OCR-docs reusable; when workflow_call access is unblocked, switch back to a
+# thin wrapper.
+
+name: Docs CI
+
+on:
+  push:
+    branches: [main]
+    paths: ['**/*.md']
+  pull_request:
+    paths: ['**/*.md', '.github/workflows/docs-ci.yml']
+  workflow_dispatch:
+
+# Pin bash for self-hosted Windows runner (default would be PowerShell).
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  lint-and-check:
+    name: Markdown lint + DAC compliance
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check required files exist
+        env:
+          REQUIRED_FILES: 'CLAUDE.md,README.md,SKILL.md'
+        run: |
+          IFS=',' read -ra FILES <<< "$REQUIRED_FILES"
+          MISSING=0
+          for FILE in "${FILES[@]}"; do
+            FILE=$(echo "$FILE" | xargs)
+            if [ ! -f "$FILE" ]; then
+              echo "::error::Required file missing: $FILE"
+              MISSING=$((MISSING + 1))
+            else
+              echo "Found: $FILE"
+            fi
+          done
+          if [ "$MISSING" -gt 0 ]; then
+            echo "::error::$MISSING required file(s) missing"
+            exit 1
+          fi
+
+      - name: Install markdownlint
+        run: npm install -g markdownlint-cli
+
+      - name: Lint markdown files
+        run: |
+          markdownlint '**/*.md' \
+            --disable MD013 MD033 MD024 MD036 MD041 MD025 \
+            || true
+
+      - name: Check for broken internal links
+        run: |
+          # Don't fail — just warn. Cross-repo links are expected unresolvable.
+          # Use -oE (ERE); -oP needs UTF-8 locale which Git-bash on Windows
+          # self-hosted does not provide.
+          grep -roh '\[.*\]([^http][^)]*\.md)' --include='*.md' . \
+            | grep -oE '\(([^)]+)\)' \
+            | tr -d '()' \
+            | sort -u \
+            | while read -r LINK; do
+                if [ ! -f "$LINK" ]; then
+                  echo "::warning::Broken link: $LINK"
+                fi
+              done \
+            || true
