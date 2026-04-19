@@ -55,7 +55,9 @@ export const BIGQUERY_DATASETS: Record<RegulatoryPool, string> = {
  *   - `corridor_id`     — community/geographic corridor the event belongs to
  *   - `venue_id`        — physical or virtual venue identifier
  *   - `event_type`      — category from the OCR event taxonomy
- *   - `uec_code`        — Universal Event Code (e.g. `CR-101`, `MC-204`)
+ *   - `uec_code`        — Universal Electronic Code; one of the 11 standard
+ *                         QR-code types and their associated colors (see
+ *                         `OCR-docs/ocr-docs-brain/event-taxonomy.yaml`)
  *   - `regulatory_pool` — which pool (general|hipaa|coppa) this row routes to
  *   - `product_id`      — originating product (`ose`, `osm`, ...)
  */
