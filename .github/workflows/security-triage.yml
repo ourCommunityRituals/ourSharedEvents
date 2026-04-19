@@ -12,7 +12,12 @@ name: Security Triage
 on:
   workflow_run:
     workflows:
+      # Canonical CodeQL SARIF source (codeql.yml)
+      - "CodeQL"
+      # Bespoke scanners (security-scan.yml) — CI/CD script-injection, wrangler,
+      # and npm audit. Name retained for branch-protection continuity.
       - "CodeQL Security Analysis"
+      # Extended scans (advanced-security-scan.yml)
       - "Advanced Security Scans"
     types:
       - completed
