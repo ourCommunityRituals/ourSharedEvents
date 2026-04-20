@@ -27,12 +27,12 @@ jobs:
 
     steps:
       - name: Checkout OSE
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           path: ose
 
       - name: Checkout OCR-docs brain (read-only)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: ourCommunityRituals/OCR-docs
           path: ocr-docs
@@ -40,7 +40,7 @@ jobs:
           token: ${{ secrets.OCR_PROPAGATE_TOKEN }}
 
       - name: Checkout OCR workspace root (centralized CI scripts)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: ourCommunityRituals/ourCommunityRituals
           path: ocr-workspace

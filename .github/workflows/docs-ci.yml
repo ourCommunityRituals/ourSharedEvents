@@ -25,7 +25,7 @@ jobs:
     name: Markdown lint + DAC compliance
     runs-on: self-hosted
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Check required files exist
         env:
