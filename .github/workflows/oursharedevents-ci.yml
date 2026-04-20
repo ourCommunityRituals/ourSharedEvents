@@ -22,9 +22,10 @@
 #       - Deploy                       → wrangler deploy
 #       - Health check                 → curl /health (HTTP 200)
 #
-#   T2: Smoke — XSS, auth boundaries, fail-fast gates
+#   T2: Smoke — XSS, auth boundaries, fail-fast gates, form endpoints
 #       - Security smoke               → playwright tests/e2e/1-smoke/security-smoke.spec.js
 #       - IAC health + fail-fast       → playwright tests/api/smoke/{api-health,fail-fast-gates}.spec.ts
+#       - Form endpoint smoke          → playwright tests/api/smoke/form-endpoints.spec.ts
 #
 #   T3: Contract — API + Pages spec compliance
 #       - Newman API collection        → newman run postman/collections/ose-api.json
@@ -33,6 +34,7 @@
 #   T4: Functional — End-to-end journeys (dispatch only)
 #       - Architecture invariants      → playwright tests/e2e/0-architecture/
 #       - Core journeys                → playwright tests/e2e/3-flows/sponsor-journey.spec.ts
+#       - Form E2E (4 types + flows)   → playwright tests/e2e/2-pages/form-*.spec.ts + 3-flows + 4-negative
 #       - UI smoke                     → npm run test:ui:smoke
 #
 # Trigger Matrix:
@@ -432,6 +434,15 @@ jobs:
         timeout-minutes: 10
         continue-on-error: true
 
+      - name: 'Forms: endpoint smoke (4 types + admin + validation)'
+        id: forms-smoke
+        env:
+          BASE_URL: ${{ env.STG_BASE_URL }}
+          ADMIN_KEY: ${{ secrets.ADMIN_KEY }}
+        run: npx playwright test --config=playwright.smoke.config.ts tests/api/smoke/form-endpoints.spec.ts
+        timeout-minutes: 5
+        continue-on-error: true
+
       - name: Upload artifacts
         uses: actions/upload-artifact@v7
         if: always()
@@ -444,9 +455,9 @@ jobs:
           retention-days: 14
 
       - name: Fail check
-        if: steps.security-smoke.outcome == 'failure' || steps.iac-smoke.outcome == 'failure'
+        if: steps.security-smoke.outcome == 'failure' || steps.iac-smoke.outcome == 'failure' || steps.forms-smoke.outcome == 'failure'
         run: |
-          echo "::error::Smoke failed — Security: ${{ steps.security-smoke.outcome }}, IAC: ${{ steps.iac-smoke.outcome }}"
+          echo "::error::Smoke failed — Security: ${{ steps.security-smoke.outcome }}, IAC: ${{ steps.iac-smoke.outcome }}, Forms: ${{ steps.forms-smoke.outcome }}"
           exit 1
 
   # ============================================================================
@@ -582,7 +593,22 @@ jobs:
         run: npx playwright test --config=playwright.e2e-smoke.config.ts tests/e2e/3-flows/sponsor-journey.spec.ts
         timeout-minutes: 5
 
-      - name: 'T4c: UI Smoke'
+      - name: 'T4c: Form E2E (4 types + flows + validation)'
+        id: form-e2e-tests
+        env:
+          BASE_URL: ${{ env.STG_BASE_URL }}
+          ADMIN_KEY: ${{ secrets.ADMIN_KEY }}
+        run: |
+          npx playwright test --config=playwright.e2e-smoke.config.ts \
+            tests/e2e/2-pages/form-registration.spec.ts \
+            tests/e2e/2-pages/form-checkin.spec.ts \
+            tests/e2e/2-pages/form-email-signup.spec.ts \
+            tests/e2e/2-pages/form-survey.spec.ts \
+            tests/e2e/3-flows/form-submission-flows.spec.ts \
+            tests/e2e/4-negative/form-validation.spec.ts
+        timeout-minutes: 10
+
+      - name: 'T4d: UI Smoke'
         id: ui-tests
         env:
           BASE_URL: ${{ env.STG_BASE_URL }}
@@ -621,7 +647,8 @@ jobs:
           echo "|------|--------|" >> $GITHUB_STEP_SUMMARY
           echo "| T4a Architecture Invariants | \`${{ steps.arch-tests.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| T4b Core Journeys | \`${{ steps.journey-tests.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| T4c UI Smoke | \`${{ steps.ui-tests.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| T4c Form E2E (4 types) | \`${{ steps.form-e2e-tests.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| T4d UI Smoke | \`${{ steps.ui-tests.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
 
   # ============================================================================
   # TIER 1P: DEPLOY → Production (tag vX.Y.Z only)
