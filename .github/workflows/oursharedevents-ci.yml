@@ -439,6 +439,8 @@ jobs:
         env:
           BASE_URL: ${{ env.STG_BASE_URL }}
           ADMIN_KEY: ${{ secrets.ADMIN_KEY }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
         run: npx playwright test --config=playwright.smoke.config.ts tests/api/smoke/form-endpoints.spec.ts
         timeout-minutes: 5
         continue-on-error: true
