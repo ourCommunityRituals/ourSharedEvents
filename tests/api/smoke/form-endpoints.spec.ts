@@ -27,6 +27,8 @@ import { test, expect } from '@playwright/test';
 
 const TEST_EVENT_ID = 'ci-smoke-test-event';
 const ADMIN_KEY = process.env.ADMIN_KEY || '';
+const CF_ACCESS_CLIENT_ID = process.env.CF_ACCESS_CLIENT_ID || '';
+const CF_ACCESS_CLIENT_SECRET = process.env.CF_ACCESS_CLIENT_SECRET || '';
 const UNIQUE = Date.now().toString(36);
 
 /**
@@ -137,8 +139,10 @@ test.describe('Form Endpoints — Input Validation', () => {
 test.describe('Form Endpoints — Admin Read (auth required)', () => {
   test.skip(!ADMIN_KEY, 'ADMIN_KEY not set');
 
-  const authHeaders = {
+  const authHeaders: Record<string, string> = {
     Authorization: `Bearer ${ADMIN_KEY}`,
+    ...(CF_ACCESS_CLIENT_ID && { 'CF-Access-Client-Id': CF_ACCESS_CLIENT_ID }),
+    ...(CF_ACCESS_CLIENT_SECRET && { 'CF-Access-Client-Secret': CF_ACCESS_CLIENT_SECRET }),
   };
 
   test('GET /forms/registrations returns items array', async ({ request }) => {
