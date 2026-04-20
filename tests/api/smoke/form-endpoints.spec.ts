@@ -136,36 +136,37 @@ test.describe('Form Endpoints — Input Validation', () => {
   });
 });
 
-test.describe('Form Endpoints — Admin Read (auth required)', () => {
-  test.skip(!ADMIN_KEY, 'ADMIN_KEY not set');
+// Admin endpoints are behind CF Access. Probe once to determine if reachable.
+let adminReachable: boolean | null = null;
 
+test.describe('Form Endpoints — Admin Read (auth required)', () => {
   const authHeaders: Record<string, string> = {
     Authorization: `Bearer ${ADMIN_KEY}`,
     ...(CF_ACCESS_CLIENT_ID && { 'CF-Access-Client-Id': CF_ACCESS_CLIENT_ID }),
     ...(CF_ACCESS_CLIENT_SECRET && { 'CF-Access-Client-Secret': CF_ACCESS_CLIENT_SECRET }),
   };
 
-  /** CF Access may block admin routes. Skip test if HTML login page returned. */
-  function skipIfCfAccessBlocked(response: {
-    status: () => number;
-    headers: () => Record<string, string>;
-  }) {
-    const ct = response.headers()['content-type'] || '';
-    if (ct.includes('text/html') && response.status() !== 200) {
-      test.skip(
-        true,
-        'CF Access blocking admin route — service token not authorized for this path'
-      );
+  test.beforeAll(async ({ request }) => {
+    if (!ADMIN_KEY) {
+      adminReachable = false;
+      return;
     }
-  }
+    const probe = await request.get(`/api/v2/admin/events/${TEST_EVENT_ID}/forms/checkin-count`, {
+      headers: authHeaders,
+    });
+    const ct = probe.headers()['content-type'] || '';
+    adminReachable = ct.includes('application/json');
+  });
+
+  test.beforeEach(() => {
+    test.skip(!adminReachable, 'Admin route not reachable (CF Access or ADMIN_KEY missing)');
+  });
 
   test('GET /forms/registrations returns items array', async ({ request }) => {
     const response = await request.get(
       `/api/v2/admin/events/${TEST_EVENT_ID}/forms/registrations`,
       { headers: authHeaders }
     );
-    skipIfCfAccessBlocked(response);
-
     expect(response.status()).toBe(200);
     const json = await response.json();
     expect(json.ok).toBe(true);
@@ -178,8 +179,6 @@ test.describe('Form Endpoints — Admin Read (auth required)', () => {
       `/api/v2/admin/events/${TEST_EVENT_ID}/forms/checkin-count`,
       { headers: authHeaders }
     );
-    skipIfCfAccessBlocked(response);
-
     expect(response.status()).toBe(200);
     const json = await response.json();
     expect(json.ok).toBe(true);
@@ -190,8 +189,6 @@ test.describe('Form Endpoints — Admin Read (auth required)', () => {
     const response = await request.get(`/api/v2/admin/events/${TEST_EVENT_ID}/forms/surveys`, {
       headers: authHeaders,
     });
-    skipIfCfAccessBlocked(response);
-
     expect(response.status()).toBe(200);
     const json = await response.json();
     expect(json.ok).toBe(true);
@@ -203,8 +200,6 @@ test.describe('Form Endpoints — Admin Read (auth required)', () => {
       `/api/v2/admin/events/${TEST_EVENT_ID}/forms/email-signups`,
       { headers: authHeaders }
     );
-    skipIfCfAccessBlocked(response);
-
     expect(response.status()).toBe(200);
     const json = await response.json();
     expect(json.ok).toBe(true);
