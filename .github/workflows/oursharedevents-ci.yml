@@ -1,21 +1,49 @@
 # OurSharedEvents – CI/CD Pipeline
 #
-# Test Pyramid in one workflow:
+# S0 Security → T0 Gate → T1 Deploy → [T2 Smoke, T3 Contract]
+#                                   → T4 Functional (dispatch only)
 #
-#   Tier 0: Gate        — Static analysis, unit, contract (every push/PR)
-#   Tier 1: Deploy      — D1 migrations, wrangler deploy, health check (push to main)
-#   Tier 2: Smoke       — Security XSS + IAC health + fail-fast (post-deploy + nightly)
-#   Tier 3: Contract    — Newman API + Pages contract checks (post-deploy)
-#   Tier 4: Functional  — Playwright API + UI full suite (on-demand only)
+#   S0: Security — Static vulnerability analysis + supply chain inventory
+#       - CodeQL SAST (JS/TS)          → github/codeql-action/analyze@v3
+#       - npm audit (CVE check)        → npm audit --omit=dev --audit-level=high
+#       - SBOM generation              → npx @cyclonedx/cyclonedx-npm --omit dev
+#
+#   T0: Gate — Static quality + unit/contract tests
+#       - Banned origins check         → npm run check:banned-origins
+#       - Security unit tests          → vitest run tests/unit/worker/sec-iac-{03,04,05,07}
+#       - Lint                         → eslint config/ scripts/ tests/unit/ tests/contract/
+#       - TypeScript typecheck         → tsc --noEmit (workers/oursharedevents)
+#       - Unit + contract + guards     → npm test (root)
+#       - Worker D1 schema             → npm test (workers/oursharedevents)
+#
+#   T1: Deploy — Migrations, deploy, health check
+#       - D1 migrations (main + forms) → wrangler d1 migrations apply {DB,FORMS_DB} --remote
+#       - Table count verification     → SELECT COUNT(*) (6 main, 5 forms)
+#       - Deploy                       → wrangler deploy
+#       - Health check                 → curl /health (HTTP 200)
+#
+#   T2: Smoke — XSS, auth boundaries, fail-fast gates
+#       - Security smoke               → playwright tests/e2e/1-smoke/security-smoke.spec.js
+#       - IAC health + fail-fast       → playwright tests/api/smoke/{api-health,fail-fast-gates}.spec.ts
+#
+#   T3: Contract — API + Pages spec compliance
+#       - Newman API collection        → newman run postman/collections/ose-api.json
+#       - Newman Pages collection      → newman run postman/collections/ose-pages.json
+#
+#   T4: Functional — End-to-end journeys (dispatch only)
+#       - Architecture invariants      → playwright tests/e2e/0-architecture/
+#       - Core journeys                → playwright tests/e2e/3-flows/sponsor-journey.spec.ts
+#       - UI smoke                     → npm run test:ui:smoke
 #
 # Trigger Matrix:
-#   | Event            | Gate | Deploy | Smoke | Contract | Functional |
-#   |------------------|------|--------|-------|----------|------------|
-#   | PR to main       | ✅   | ❌     | ❌    | ❌       | ❌         |
-#   | Push to main     | ✅   | ✅     | ✅    | ✅       | ❌         |
-#   | Tag vX.Y.Z       | ✅   | →prod  | →prod | ❌       | ❌         |
-#   | Schedule (nightly)| ✅  | ❌     | ✅    | ✅       | ❌         |
-#   | Dispatch          | ✅   | opt    | opt   | opt      | opt        |
+#   | Event              | Security | Gate | Deploy | Smoke | Contract | Functional |
+#   |--------------------|----------|------|--------|-------|----------|------------|
+#   | PR to main         | ✅       | ✅   | ❌     | ❌    | ❌       | ❌         |
+#   | Push to main       | ✅       | ✅   | ✅     | ✅    | ✅       | ❌         |
+#   | Tag vX.Y.Z         | ✅       | ✅   | →prod  | →prod | ❌       | ❌         |
+#   | Schedule (nightly) | ✅       | ✅   | ❌     | ✅*   | ✅*      | ❌         |
+#   | Dispatch           | ✅       | ✅   | opt    | opt   | opt      | opt        |
+#   * Nightly: runs against live staging without redeploying (environmental drift detection)
 #
 # Cost control: Functional (Tier 4) only runs when you check the box.
 # Move tests between Tier 2/3/4 as you settle on nightly vs on-demand.
@@ -34,25 +62,39 @@ on:
   pull_request:
     branches: [main]
     paths:
+      - '**.js'
+      - '**.ts'
+      - '**.mjs'
+      - '**.cjs'
+      - '**.json'
+      - '**.html'
       - 'workers/oursharedevents/**'
       - 'tests/**'
       - 'config/**'
       - 'scripts/**'
       - 'schemas/**'
       - 'postman/**'
+      - 'packages/**'
       - 'playwright.*.config.*'
-      - '.github/workflows/oursharedevents-ci.yml'
+      - '.github/workflows/**'
   push:
     branches: [main]
     paths:
+      - '**.js'
+      - '**.ts'
+      - '**.mjs'
+      - '**.cjs'
+      - '**.json'
+      - '**.html'
       - 'workers/oursharedevents/**'
       - 'tests/**'
       - 'config/**'
       - 'scripts/**'
       - 'schemas/**'
       - 'postman/**'
+      - 'packages/**'
       - 'playwright.*.config.*'
-      - '.github/workflows/oursharedevents-ci.yml'
+      - '.github/workflows/**'
     tags:
       - 'v*.*.*'
   schedule:
@@ -90,10 +132,89 @@ defaults:
 
 jobs:
   # ============================================================================
+  # S0: SECURITY — CodeQL SAST + SBOM (runs before test pyramid)
+  # ============================================================================
+  security:
+    name: 'S0 Security'
+    runs-on: self-hosted
+    permissions:
+      security-events: write
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          clean: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+
+      - name: Stage adjacent @ocr/flags package
+        shell: bash
+        run: bash scripts/ci-stage-ocr-workspace.sh
+
+      - name: Install dependencies
+        run: |
+          HASH="$(node --version)-$(git hash-object package-lock.json)"
+          STAMP=node_modules/.install-stamp
+          if [ '${{ inputs.force_clean }}' != 'true' ] && [ -f "$STAMP" ] && [ "$(cat $STAMP)" = "$HASH" ] && [ -f "node_modules/.package-lock.json" ]; then
+            echo "node_modules up-to-date, skipping npm ci"
+          else
+            npm ci --prefer-offline || npm ci
+            echo "$HASH" > "$STAMP"
+          fi
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: javascript-typescript
+          build-mode: none
+
+      - name: CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: '/language:javascript-typescript'
+
+      - name: npm audit
+        run: npm audit --omit=dev --audit-level=high
+
+      # file:-linked @ocr/flags exposes its devDependencies to npm ls --all,
+      # causing CycloneDX to fail. Strip them from the installed copy so SBOM
+      # only inventories production dependencies.
+      - name: Fix @ocr/flags for SBOM resolution
+        run: |
+          FLAGS_PKG="node_modules/@ocr/flags/package.json"
+          if [ -f "$FLAGS_PKG" ]; then
+            node -e "
+              const fs = require('fs');
+              const pkg = JSON.parse(fs.readFileSync('$FLAGS_PKG'));
+              delete pkg.devDependencies;
+              fs.writeFileSync('$FLAGS_PKG', JSON.stringify(pkg, null, 2));
+            "
+          fi
+
+      - name: Generate SBOM
+        run: |
+          npx @cyclonedx/cyclonedx-npm --omit dev --output-file sbom.json --output-format JSON --spec-version 1.5
+          COMPONENT_COUNT=$(jq '.components | length' sbom.json 2>/dev/null || echo "unknown")
+          echo "## S0 Security" >> $GITHUB_STEP_SUMMARY
+          echo "- **CodeQL:** passed" >> $GITHUB_STEP_SUMMARY
+          echo "- **npm audit:** passed" >> $GITHUB_STEP_SUMMARY
+          echo "- **SBOM:** $COMPONENT_COUNT components (CycloneDX 1.5)" >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload SBOM
+        uses: actions/upload-artifact@v7
+        with:
+          name: sbom-cyclonedx-${{ github.run_number }}
+          path: sbom.json
+          retention-days: 90
+
+  # ============================================================================
   # TIER 0: GATE — Every push, every PR
   # ============================================================================
   gate:
     name: 'T0 Gate'
+    needs: [security]
     runs-on: self-hosted
     steps:
       - uses: actions/checkout@v6
@@ -156,7 +277,7 @@ jobs:
   deploy-staging:
     name: 'T1 Deploy → Staging'
     runs-on: self-hosted
-    needs: [gate]
+    needs: [security, gate]
     if: |
       (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
       (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_staging == 'true')
@@ -259,11 +380,12 @@ jobs:
   smoke-staging:
     name: 'T2 Smoke → Staging'
     runs-on: self-hosted
-    needs: [gate]
+    needs: [security, gate, deploy-staging]
     if: |
-      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
-      (github.event_name == 'schedule') ||
-      (github.event_name == 'workflow_dispatch')
+      always() &&
+      needs.security.result == 'success' &&
+      needs.gate.result == 'success' &&
+      (needs.deploy-staging.result == 'success' || github.event_name == 'schedule')
     steps:
       - uses: actions/checkout@v6
         with:
@@ -333,11 +455,12 @@ jobs:
   contract-staging:
     name: 'T3 Contract → Staging'
     runs-on: self-hosted
-    needs: [gate]
+    needs: [security, gate, deploy-staging]
     if: |
-      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
-      (github.event_name == 'schedule') ||
-      (github.event_name == 'workflow_dispatch')
+      always() &&
+      needs.security.result == 'success' &&
+      needs.gate.result == 'success' &&
+      (needs.deploy-staging.result == 'success' || github.event_name == 'schedule')
     steps:
       - uses: actions/checkout@v6
         with:
@@ -408,7 +531,7 @@ jobs:
   functional-staging:
     name: 'T4 Functional → Staging'
     runs-on: self-hosted
-    needs: [gate]
+    needs: [security, gate]
     if: |
       github.event_name == 'workflow_dispatch' && github.event.inputs.run_functional == 'true'
     permissions:
@@ -506,7 +629,7 @@ jobs:
   deploy-production:
     name: 'T1 Deploy → Production'
     runs-on: self-hosted
-    needs: [gate]
+    needs: [security, gate]
     if: |
       (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) ||
       (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_production == 'PRODUCTION')
@@ -624,7 +747,7 @@ jobs:
   smoke-production:
     name: 'T2 Smoke → Production'
     runs-on: self-hosted
-    needs: [deploy-production]
+    needs: [security, gate, deploy-production]
     steps:
       - uses: actions/checkout@v6
         with:
@@ -693,7 +816,7 @@ jobs:
   summary:
     name: 'Pipeline Summary'
     runs-on: self-hosted
-    needs: [gate, deploy-staging, smoke-staging, contract-staging, functional-staging, deploy-production, smoke-production]
+    needs: [security, gate, deploy-staging, smoke-staging, contract-staging, functional-staging, deploy-production, smoke-production]
     if: always()
     steps:
       - name: Summary
@@ -702,6 +825,7 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Tier | Job | Result |" >> $GITHUB_STEP_SUMMARY
           echo "|------|-----|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| S0 Security | security | \`${{ needs.security.result }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| T0 Gate | gate | \`${{ needs.gate.result }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| T1 Deploy STG | deploy-staging | \`${{ needs.deploy-staging.result }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| T2 Smoke STG | smoke-staging | \`${{ needs.smoke-staging.result }}\` |" >> $GITHUB_STEP_SUMMARY
