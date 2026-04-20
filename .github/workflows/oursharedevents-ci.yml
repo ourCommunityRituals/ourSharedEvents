@@ -4,7 +4,7 @@
 #                                   → T4 Functional (dispatch only)
 #
 #   S0: Security — Static vulnerability analysis + supply chain inventory
-#       - CodeQL SAST (JS/TS)          → github/codeql-action/analyze@v3
+#       - CodeQL SAST (JS/TS)          → github/codeql-action/analyze@v4
 #       - npm audit (CVE check)        → npm audit --omit=dev --audit-level=high
 #       - SBOM generation              → npx @cyclonedx/cyclonedx-npm --omit dev
 #
@@ -165,13 +165,13 @@ jobs:
           fi
 
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@v3
+        uses: github/codeql-action/init@v4
         with:
           languages: javascript-typescript
           build-mode: none
 
       - name: CodeQL Analysis
-        uses: github/codeql-action/analyze@v3
+        uses: github/codeql-action/analyze@v4
         with:
           category: '/language:javascript-typescript'
 
