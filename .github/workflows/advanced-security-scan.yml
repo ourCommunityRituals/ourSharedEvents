@@ -1,48 +1,19 @@
-# Advanced Security Scans
+# Advanced Security Scans — Weekly deep scan backstop
 #
-# Complementary security workflow providing scans beyond CodeQL + npm audit.
+# Primary SBOM + CodeQL runs in oursharedevents-ci.yml (S0 Security) on every push/PR.
+# This workflow is a weekly-only safety net for license compliance and dependency review.
 #
-# Kept (non-redundant):
+# Kept (non-redundant with S0):
 #   1. SBOM Generation         - Supply chain transparency (advisory)
 #   2. License Compliance      - Detect copyleft/problematic licenses
-#   3. GitHub Dependency Review - PR-scoped dependency diff analysis
+#   3. GitHub Dependency Review - PR-scoped dependency diff analysis (disabled until GHAS)
 #
-# Removed (redundant per research):
-#   - Semgrep SAST       → redundant with CodeQL security-extended + security-and-quality
-#   - Trivy filesystem    → redundant with npm audit for non-container Node.js project
-#   - OSSF Scorecard      → informational repo hygiene, not a vulnerability scanner
-#   - Gitleaks            → stage1.yml grep + CodeQL hardcoded-credentials covers secrets
-#
-# @see .github/workflows/security-scan.yml - Primary CodeQL + npm audit + custom queries
+# @see .github/workflows/oursharedevents-ci.yml - S0 Security (CodeQL + SBOM + npm audit)
 # @see docs/SECURITY.md - Vulnerability remediation guide
 
 name: Advanced Security Scans
 
 on:
-  push:
-    branches:
-      - '**'
-    paths:
-      - '**.js'
-      - '**.ts'
-      - '**.jsx'
-      - '**.tsx'
-      - '**.json'
-      - '**.html'
-      - '**.gs'
-      - '**.mjs'
-      - '**.cjs'
-      - '**.yml'
-      - '**.yaml'
-      - '**.sh'
-      - '**.env*'
-      - 'Dockerfile*'
-      - 'docker-compose*'
-      - 'wrangler.toml'
-      - 'workers/**'
-  pull_request:
-    branches:
-      - '**'
   schedule:
     # Weekly deep scan - Mondays 02:00 UTC (offset from CodeQL Sunday midnight)
     - cron: '0 2 * * 1'
@@ -98,7 +69,7 @@ jobs:
 
       - name: Generate CycloneDX SBOM
         run: |
-          npx @cyclonedx/cyclonedx-npm --output-file sbom.json --output-format JSON --spec-version 1.5
+          npx @cyclonedx/cyclonedx-npm --omit dev --output-file sbom.json --output-format JSON --spec-version 1.5
           echo "## 📦 SBOM Generation" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           COMPONENT_COUNT=$(jq '.components | length' sbom.json 2>/dev/null || echo "unknown")
