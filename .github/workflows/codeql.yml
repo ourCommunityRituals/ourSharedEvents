@@ -30,10 +30,32 @@ jobs:
         include:
           - language: javascript-typescript
             build-mode: none
+        # Python dropped: OSE has no production Python — only .github/scripts/
+        # and tests/*.py. Running CodeQL SAST on CI helpers is noise, and the
+        # Windows self-hosted runner trips the MS-Store python.exe alias on
+        # CodeQL autobuild (exit 9009). Brain-contract conformance still runs
+        # those scripts at runtime so policy coverage is preserved.
 
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+
+      - name: Shield CodeQL parser from workspace ESM scope
+        # CodeQL's typescript-parser-wrapper/main.js is a CommonJS module.
+        # Node walks up from that file looking for the nearest package.json
+        # to decide ESM vs CJS. On this self-hosted runner, actions-runner
+        # lives inside the ourCommunityRituals workspace root, whose
+        # package.json declares "type": "module" — so Node flags the parser
+        # as ESM and crashes on `exports is not defined`. Drop a CJS-scoped
+        # package.json in RUNNER_TOOL_CACHE to block the upward walk before
+        # it escapes the tool directory.
+        run: |
+          if [ -n "$RUNNER_TOOL_CACHE" ] && [ -d "$RUNNER_TOOL_CACHE" ]; then
+            printf '{"type":"commonjs"}\n' > "$RUNNER_TOOL_CACHE/package.json"
+            echo "Wrote CJS shim at: $RUNNER_TOOL_CACHE/package.json"
+          else
+            echo "⚠️ RUNNER_TOOL_CACHE not set or missing — skipping shim"
+          fi
 
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v3

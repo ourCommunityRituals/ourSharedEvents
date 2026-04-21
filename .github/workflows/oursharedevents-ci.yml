@@ -166,6 +166,12 @@ jobs:
             echo "$HASH" > "$STAMP"
           fi
 
+      - name: Shield CodeQL parser from workspace ESM scope
+        run: |
+          if [ -n "$RUNNER_TOOL_CACHE" ] && [ -d "$RUNNER_TOOL_CACHE" ]; then
+            printf '{"type":"commonjs"}\n' > "$RUNNER_TOOL_CACHE/package.json"
+          fi
+
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v3
         with:

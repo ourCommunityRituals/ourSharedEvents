@@ -1,11 +1,17 @@
-# CodeQL Security Analysis (Story 1/4)
+# CodeQL Security Analysis
 #
-# Primary security workflow per ci-cd-architecture.md.
+# Secondary security workflow per ci-cd-architecture.md.
 #
-# This is the CANONICAL security-scan.yml - the only active security workflow.
-# All other security configurations have been archived.
+# CodeQL itself now lives in `.github/workflows/codeql.yml` — the single
+# source of truth for SARIF generation + upload. This workflow keeps the
+# bespoke scanners that don't require CodeQL:
 #
-# Purpose: Security scanning for all code changes and periodic deep scans.
+#   - CI/CD script-injection pattern scanner (grep-based)
+#   - wrangler.toml misconfiguration scanner (grep-based)
+#   - npm dependency audit (npm audit in dependency-audit job)
+#
+# Collapsing to a single CodeQL surface (codeql.yml) avoids SARIF category
+# collisions and duplicate uploads to the same language category.
 #
 # When this runs:
 #   - Push to main or claude/* branches
@@ -13,15 +19,16 @@
 #   - Weekly (Sundays 00:00 UTC) - deep vulnerability discovery
 #   - Manual trigger - for security audits
 #
-# Story 1: Validate & Align GitHub Workflows
-#   - This workflow is one of only 3 active workflows
+# Gate behavior:
+#   - Critical and high severity findings block merges
 #   - Runs on push/PR as documented in ci-cd-architecture.md
 #
-# Story 4: Security Scanning
-#   - CodeQL security scan is a required release gate
-#   - Critical and high severity findings block merges
+# Workflow name (`CodeQL Security Analysis`) and job name (`analyze`) are
+# preserved so existing branch-protection rules and the security-triage
+# workflow_run trigger continue to match without manual reconfiguration.
 #
 # @see docs/ci-cd-architecture.md - Security scan documentation
+# @see .github/workflows/codeql.yml - canonical CodeQL SARIF source
 name: CodeQL Security Analysis
 
 on:
@@ -69,32 +76,26 @@ defaults:
 
 jobs:
   # ============================================================================
-  # CODEQL SECURITY SCAN
+  # BESPOKE SECURITY SCANNERS
   # ============================================================================
-  # Primary security gate using GitHub's CodeQL analysis.
-  # This is a REQUIRED CHECK - configure in branch protection rules.
+  # Custom scanners that don't require CodeQL: CI/CD script-injection patterns
+  # and wrangler.toml misconfig detection. CodeQL SARIF generation itself lives
+  # in codeql.yml — see header comment for rationale.
+  #
+  # Job name (`analyze`) preserved so existing branch-protection rules and the
+  # security-triage workflow_run trigger continue to match.
   # ============================================================================
   analyze:
-    name: 🔒 CodeQL Security Scan
+    name: 🔒 Security Config Audit
     runs-on: self-hosted
     permissions:
       actions: read
       contents: read
-      security-events: write
-      # Required for CodeQL to upload SARIF results
-      pull-requests: read
-
-    strategy:
-      fail-fast: false
-      matrix:
-        language: [ 'javascript' ]
-        # CodeQL supports: 'cpp', 'csharp', 'go', 'java', 'javascript', 'python', 'ruby'
-        # Learn more about CodeQL language support at https://aka.ms/codeql-docs/language-support
 
     steps:
     - name: Harden runner
       uses: step-security/harden-runner@v2
-      continue-on-error: true  # Must not block CodeQL if harden-runner itself fails
+      continue-on-error: true  # Must not block audit if harden-runner itself fails
       with:
         egress-policy: audit
 
@@ -106,11 +107,11 @@ jobs:
     - name: Display security scan configuration
       run: |
         echo "=============================================="
-        echo "CODEQL SECURITY SCAN (Story 1/4)"
+        echo "SECURITY CONFIG AUDIT"
         echo "=============================================="
         echo ""
-        echo "Primary security workflow per ci-cd-architecture.md"
-        echo "This scan is a REQUIRED CHECK for branch protection."
+        echo "Scanners in this job: CI/CD script-injection, wrangler.toml misconfig."
+        echo "CodeQL SARIF generation is in codeql.yml (single source of truth)."
         echo ""
         echo "Trigger: ${{ github.event_name }}"
         echo "Branch: ${{ github.ref_name }}"
@@ -118,52 +119,6 @@ jobs:
         echo ""
         echo "Policy: $FAIL_ON_SEVERITY severity findings block merge"
         echo "=============================================="
-
-    - name: Initialize CodeQL
-      id: codeql-init
-      uses: github/codeql-action/init@v4
-      # Continue on error - Advanced Security may not be enabled
-      continue-on-error: true
-      with:
-        languages: ${{ matrix.language }}
-        # Custom config with technology-specific queries for our full stack:
-        # Cloudflare Workers, D1, Firebase, React, HTML, CI/CD, Playwright,
-        # Postman/Newman, Wrangler — plus security-extended + security-and-quality
-        config-file: .github/codeql/codeql-config.yml
-        # Extended security queries (also in config, but explicit here as fallback)
-        queries: +security-extended,security-and-quality,.github/codeql/custom-queries
-
-    - name: Setup Node.js (for dependency analysis)
-      uses: actions/setup-node@v6
-      with:
-        node-version: '20'
-
-    - name: Install dependencies
-      run: |
-        HASH="$(node --version)-$(git hash-object package-lock.json)"
-        STAMP=node_modules/.install-stamp
-        if [ '${{ inputs.skip_cache }}' != 'true' ] && [ -f "$STAMP" ] && [ "$(cat $STAMP)" = "$HASH" ] && [ -f "node_modules/.package-lock.json" ]; then
-          echo "node_modules up-to-date, skipping npm ci"
-        else
-          npm ci --prefer-offline || npm ci
-          echo "$HASH" > "$STAMP"
-        fi
-
-    - name: Perform CodeQL Analysis
-      id: codeql-analyze
-      uses: github/codeql-action/analyze@v4
-      # Continue on error - Advanced Security may not be enabled on all repos
-      continue-on-error: true
-      with:
-        category: "/language:${{matrix.language}}"
-        # Upload SARIF results to GitHub Security tab
-        upload: true
-        # Output results for summary generation
-        output: codeql-results
-
-    # Note: CodeQL analyze action will fail if Advanced Security is not enabled
-    # The workflow continues so npm audit can still run
-    # To enable: Settings > Security > Code security and analysis > Advanced Security
 
     - name: Scan CI/CD workflows for script injection
       if: always()
@@ -258,68 +213,24 @@ jobs:
     - name: Create analysis summary
       if: always()
       run: |
-        echo "## 🔒 CodeQL Security Analysis" >> $GITHUB_STEP_SUMMARY
+        echo "## 🔒 Security Config Audit" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
-
-        # Check if CodeQL analysis succeeded
-        if [ "${{ steps.codeql-analyze.outcome }}" == "failure" ]; then
-          echo "### ⚠️ CodeQL Analysis Skipped" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "CodeQL analysis could not complete. This typically means:" >> $GITHUB_STEP_SUMMARY
-          echo "- GitHub Advanced Security is not enabled on this repository" >> $GITHUB_STEP_SUMMARY
-          echo "- To enable: Settings > Security > Code security and analysis" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**npm audit will still run below for dependency scanning.**" >> $GITHUB_STEP_SUMMARY
-        else
-          echo "### ✅ CodeQL Analysis Complete" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-
-          # Determine scan type for better context
-          if [ "${{ github.event_name }}" == "schedule" ]; then
-            echo "Regular security audit for vulnerability discovery." >> $GITHUB_STEP_SUMMARY
-          else
-            echo "Security scan for code changes." >> $GITHUB_STEP_SUMMARY
-          fi
-
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Language Analyzed" >> $GITHUB_STEP_SUMMARY
-          echo "- **JavaScript** (includes .js, .gs, .html files)" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Query Packs Used" >> $GITHUB_STEP_SUMMARY
-          echo "- **security-extended**: Extended security queries" >> $GITHUB_STEP_SUMMARY
-          echo "- **security-and-quality**: Security and code quality queries" >> $GITHUB_STEP_SUMMARY
-          echo "- **security-experimental**: Experimental security queries" >> $GITHUB_STEP_SUMMARY
-          echo "- **custom-queries**: Stack-specific security queries" >> $GITHUB_STEP_SUMMARY
-        fi
-
+        echo "Bespoke scanners in this workflow:" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
-        echo "**Note:** This workflow runs on all branches per ci-cd-architecture.md" >> $GITHUB_STEP_SUMMARY
+        echo "- **CI/CD script-injection** — GitHub Actions \${{ }} expressions in \`run:\` blocks" >> $GITHUB_STEP_SUMMARY
+        echo "- **wrangler.toml misconfig** — debug endpoints in prod, hardcoded secrets, risky compat flags" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
-        echo "### Technology Coverage" >> $GITHUB_STEP_SUMMARY
+        echo "### CodeQL (SARIF)" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
-        echo "| Technology | Custom Query | What It Detects |" >> $GITHUB_STEP_SUMMARY
-        echo "|------------|-------------|-----------------|" >> $GITHUB_STEP_SUMMARY
-        echo "| Cloudflare Workers | cloudflare-workers.ql | Unsafe body parsing without try/catch |" >> $GITHUB_STEP_SUMMARY
-        echo "| Cloudflare Workers | cloudflare-cors-wildcard.ql | Permissive CORS origins |" >> $GITHUB_STEP_SUMMARY
-        echo "| Cloudflare Workers | cloudflare-timing-safe.ql | Non-timing-safe token comparison |" >> $GITHUB_STEP_SUMMARY
-        echo "| Cloudflare Workers | cloudflare-insecure-random.ql | Math.random() for security |" >> $GITHUB_STEP_SUMMARY
-        echo "| Cloudflare Workers | cloudflare-debug-endpoints.ql | Debug endpoints in production |" >> $GITHUB_STEP_SUMMARY
-        echo "| D1 Database | d1-sql-injection.ql | SQL injection via string concat |" >> $GITHUB_STEP_SUMMARY
-        echo "| Firebase Auth | firebase-auth-bypass.ql | Client-only auth without server verify |" >> $GITHUB_STEP_SUMMARY
-        echo "| React | react-dangerouslysetinnerhtml.ql | Unsanitized dangerouslySetInnerHTML |" >> $GITHUB_STEP_SUMMARY
-        echo "| HTML Surfaces | html-innerhtml-xss.ql | innerHTML with dynamic content |" >> $GITHUB_STEP_SUMMARY
-        echo "| Wrangler | wrangler-secrets-exposure.ql | Secrets logged to console |" >> $GITHUB_STEP_SUMMARY
-        echo "| CI/CD | cicd-script-injection step | GitHub Actions \${{ }} injection |" >> $GITHUB_STEP_SUMMARY
-        echo "| Playwright | playwright-credential-exposure.ql | Hardcoded creds in tests |" >> $GITHUB_STEP_SUMMARY
-        echo "| Postman | postman-hardcoded-secrets.ql | Real secrets in collections |" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-        echo "### Built-in Security Checks (200+ patterns)" >> $GITHUB_STEP_SUMMARY
-        echo "- SQL Injection, XSS, Command Injection, Path Traversal" >> $GITHUB_STEP_SUMMARY
-        echo "- Insecure Randomness, Hardcoded Credentials, Prototype Pollution" >> $GITHUB_STEP_SUMMARY
-        echo "- Regular Expression DoS (ReDoS), SSRF, Open Redirect" >> $GITHUB_STEP_SUMMARY
+        echo "CodeQL SARIF generation + upload is the single responsibility of" >> $GITHUB_STEP_SUMMARY
+        echo "\`.github/workflows/codeql.yml\` — see that workflow for language coverage," >> $GITHUB_STEP_SUMMARY
+        echo "query packs (security-extended, security-and-quality), and custom" >> $GITHUB_STEP_SUMMARY
+        echo "technology queries for Cloudflare Workers, D1, Firebase, React, HTML," >> $GITHUB_STEP_SUMMARY
+        echo "Wrangler, Playwright, and Postman." >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "### Results" >> $GITHUB_STEP_SUMMARY
-        echo "Check the **Security** tab to view detailed findings." >> $GITHUB_STEP_SUMMARY
+        echo "Check the **Security** tab for CodeQL findings. Findings from this" >> $GITHUB_STEP_SUMMARY
+        echo "workflow's bespoke scanners appear in the step logs above." >> $GITHUB_STEP_SUMMARY
 
   # ============================================================================
   # DEPENDENCY AUDIT (npm audit)
@@ -342,6 +253,9 @@ jobs:
       with:
         node-version: '20'
 
+    - name: Stage adjacent @ocr/flags package
+      run: bash scripts/ci-stage-ocr-workspace.sh
+
     - name: Install dependencies
       run: |
         HASH="$(node --version)-$(git hash-object package-lock.json)"
@@ -357,7 +271,7 @@ jobs:
       id: npm-audit
       run: |
         echo "=============================================="
-        echo "NPM DEPENDENCY AUDIT (Story 1/4)"
+        echo "NPM DEPENDENCY AUDIT"
         echo "=============================================="
         echo ""
         echo "Dependency vulnerability audit per ci-cd-architecture.md"
@@ -415,7 +329,7 @@ jobs:
           echo "See docs/SECURITY.md for remediation guidance."
           echo "=============================================="
           echo "audit_status=failed" >> $GITHUB_OUTPUT
-          # Story 2.4: High severity vulnerabilities result in non-passing status
+          # High/critical severity vulnerabilities fail the gate (merge-blocking).
           exit 1
         else
           echo ""
@@ -482,5 +396,5 @@ jobs:
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "---" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
-        echo "**Story 1**: This is the canonical security-scan.yml per ci-cd-architecture.md" >> $GITHUB_STEP_SUMMARY
+        echo "This is the canonical security-scan.yml per ci-cd-architecture.md" >> $GITHUB_STEP_SUMMARY
         echo "**Artifact**: \`dependency-audit-report\` contains detailed JSON report." >> $GITHUB_STEP_SUMMARY
