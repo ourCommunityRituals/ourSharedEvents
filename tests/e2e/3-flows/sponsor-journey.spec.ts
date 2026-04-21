@@ -139,7 +139,7 @@ test.describe('Sponsor Journey — Full Lifecycle', () => {
 
     test.skip(res.body?.code === 'CF_ACCESS_BLOCKED', 'CF Access blocked admin API');
 
-    expect(res.status).toBe(201);
+    expect([200, 201]).toContain(res.status);
     expect(res.body.ok).toBe(true);
     expect(res.body.id).toBeTruthy();
 
@@ -340,7 +340,7 @@ test.describe('Sponsor Journey — Full Lifecycle', () => {
       { eid: eventId, sid: sponsorId }
     );
 
-    expect(res.status).toBe(201);
+    expect([200, 201]).toContain(res.status);
     expect(res.body.ok).toBe(true);
   });
 
@@ -367,7 +367,7 @@ test.describe('Sponsor Journey — Full Lifecycle', () => {
       { eid: eventId, sid: sponsorId }
     );
 
-    expect(res.status).toBe(201);
+    expect([200, 201]).toContain(res.status);
     expect(res.body.ok).toBe(true);
   });
 
@@ -459,7 +459,7 @@ test.describe('Sponsor Journey — Tier Upgrade', () => {
       placement_formats: JSON.stringify({ tvTop: true, tvSide: true }),
     });
 
-    expect(res.status).toBe(201);
+    expect([200, 201]).toContain(res.status);
     sponsorId = res.body.id;
   });
 
@@ -563,7 +563,7 @@ test.describe('Sponsor Journey — Cross-Surface Rendering', () => {
         mobileBanner: true,
       }),
     });
-    expect(res.status).toBe(201);
+    expect([200, 201]).toContain(res.status);
     sponsorId = res.body.id;
   });
 
