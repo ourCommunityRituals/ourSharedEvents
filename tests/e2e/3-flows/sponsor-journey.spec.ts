@@ -54,14 +54,23 @@ async function adminFetch(
 
   try {
     const response = await request.fetch(path, { method, headers, data: body });
+    const status = response.status();
     const ct = response.headers()['content-type'] || '';
     if (!ct.includes('application/json')) {
+      const text = await response.text();
+      console.log(`[adminFetch] ${method} ${path} → ${status} (non-JSON: ${text.slice(0, 200)})`);
       return {
-        status: response.status(),
+        status,
         body: { ok: false, code: 'CF_ACCESS_BLOCKED', error: 'CF Access returned HTML' },
       };
     }
-    return { status: response.status(), body: await response.json() };
+    const body2 = await response.json();
+    if (method === 'POST' || status !== 200) {
+      console.log(
+        `[adminFetch] ${method} ${path} → ${status} body=${JSON.stringify(body2).slice(0, 300)}`
+      );
+    }
+    return { status, body: body2 };
   } catch {
     return {
       status: 0,
