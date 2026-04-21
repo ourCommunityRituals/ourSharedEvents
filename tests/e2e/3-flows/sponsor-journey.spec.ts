@@ -30,6 +30,8 @@ import { setupCfAccessAuth } from '../helpers/cf-access-auth';
 
 const TIMEOUT = 30_000;
 const ADMIN_KEY = process.env.ADMIN_KEY || process.env.X_OCR_INTERNAL || '';
+const CF_ACCESS_CLIENT_ID = process.env.CF_ACCESS_CLIENT_ID || '';
+const CF_ACCESS_CLIENT_SECRET = process.env.CF_ACCESS_CLIENT_SECRET || '';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -45,19 +47,23 @@ async function adminFetch(
       path,
       body,
       key,
+      cfClientId,
+      cfClientSecret,
     }: {
       method: string;
       path: string;
       body?: Record<string, unknown>;
       key: string;
+      cfClientId: string;
+      cfClientSecret: string;
     }) => {
-      const opts: RequestInit = {
-        method,
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${key}`,
-        },
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${key}`,
       };
+      if (cfClientId) headers['CF-Access-Client-Id'] = cfClientId;
+      if (cfClientSecret) headers['CF-Access-Client-Secret'] = cfClientSecret;
+      const opts: RequestInit = { method, headers };
       if (body) opts.body = JSON.stringify(body);
       try {
         const res = await fetch(path, opts);
@@ -80,7 +86,14 @@ async function adminFetch(
         };
       }
     },
-    { method, path, body, key: ADMIN_KEY }
+    {
+      method,
+      path,
+      body,
+      key: ADMIN_KEY,
+      cfClientId: CF_ACCESS_CLIENT_ID,
+      cfClientSecret: CF_ACCESS_CLIENT_SECRET,
+    }
   );
 }
 
