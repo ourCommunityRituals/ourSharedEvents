@@ -26,7 +26,6 @@
  */
 
 import { test, expect } from '@playwright/test';
-import { setupCfAccessAuth } from '../helpers/cf-access-auth';
 
 const TIMEOUT = 30_000;
 const ADMIN_KEY = process.env.ADMIN_KEY || process.env.X_OCR_INTERNAL || '';
@@ -35,66 +34,40 @@ const CF_ACCESS_CLIENT_SECRET = process.env.CF_ACCESS_CLIENT_SECRET || '';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────────
 
+/**
+ * Admin API fetch using Playwright's request context (not browser).
+ * Bypasses CORS preflight — CF Access headers pass through directly.
+ * The `request` fixture comes from test parameters, not page.evaluate.
+ */
 async function adminFetch(
-  page: ReturnType<typeof test.info>['_test'] extends never ? never : any,
+  request: any,
   method: string,
   path: string,
   body?: Record<string, unknown>
 ) {
-  return page.evaluate(
-    async ({
-      method,
-      path,
-      body,
-      key,
-      cfClientId,
-      cfClientSecret,
-    }: {
-      method: string;
-      path: string;
-      body?: Record<string, unknown>;
-      key: string;
-      cfClientId: string;
-      cfClientSecret: string;
-    }) => {
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${key}`,
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${ADMIN_KEY}`,
+  };
+  if (CF_ACCESS_CLIENT_ID) headers['CF-Access-Client-Id'] = CF_ACCESS_CLIENT_ID;
+  if (CF_ACCESS_CLIENT_SECRET) headers['CF-Access-Client-Secret'] = CF_ACCESS_CLIENT_SECRET;
+
+  try {
+    const response = await request.fetch(path, { method, headers, data: body });
+    const ct = response.headers()['content-type'] || '';
+    if (!ct.includes('application/json')) {
+      return {
+        status: response.status(),
+        body: { ok: false, code: 'CF_ACCESS_BLOCKED', error: 'CF Access returned HTML' },
       };
-      if (cfClientId) headers['CF-Access-Client-Id'] = cfClientId;
-      if (cfClientSecret) headers['CF-Access-Client-Secret'] = cfClientSecret;
-      const opts: RequestInit = { method, headers };
-      if (body) opts.body = JSON.stringify(body);
-      try {
-        const res = await fetch(path, opts);
-        const ct = res.headers.get('content-type') || '';
-        if (!ct.includes('application/json')) {
-          return {
-            status: res.status,
-            body: { ok: false, code: 'CF_ACCESS_BLOCKED', error: 'CF Access returned HTML' },
-          };
-        }
-        return { status: res.status, body: await res.json() };
-      } catch {
-        return {
-          status: 0,
-          body: {
-            ok: false,
-            code: 'CF_ACCESS_BLOCKED',
-            error: 'Fetch failed — CF Access likely blocked',
-          },
-        };
-      }
-    },
-    {
-      method,
-      path,
-      body,
-      key: ADMIN_KEY,
-      cfClientId: CF_ACCESS_CLIENT_ID,
-      cfClientSecret: CF_ACCESS_CLIENT_SECRET,
     }
-  );
+    return { status: response.status(), body: await response.json() };
+  } catch {
+    return {
+      status: 0,
+      body: { ok: false, code: 'FETCH_ERROR', error: 'Request failed' },
+    };
+  }
 }
 
 async function publicFetch(page: any, path: string) {
@@ -114,8 +87,6 @@ const SPONSOR_NAME = `Journey Sponsor ${timestamp}`;
 // ═══════════════════════════════════════════════════════════════════════════════
 
 test.describe('Sponsor Journey — Full Lifecycle', () => {
-  setupCfAccessAuth();
-
   // State shared across serial tests
   let eventId: string;
   let sponsorId: string;
@@ -130,7 +101,7 @@ test.describe('Sponsor Journey — Full Lifecycle', () => {
   // Step 0: Find an event to attach sponsor to
   // ─────────────────────────────────────────────────────────────────────────────
 
-  test('Step 0: Resolve a live event for sponsor attachment', async ({ page }) => {
+  test('Step 0: Resolve a live event for sponsor attachment', async ({ page, request }) => {
     await page.goto('/display', { waitUntil: 'domcontentloaded', timeout: TIMEOUT });
 
     const eventsRes = await publicFetch(page, '/api/v2/events');
@@ -148,11 +119,11 @@ test.describe('Sponsor Journey — Full Lifecycle', () => {
   // Step 1: Admin creates sponsor via API
   // ─────────────────────────────────────────────────────────────────────────────
 
-  test('Step 1: Admin creates sponsor via API', async ({ page }) => {
+  test('Step 1: Admin creates sponsor via API', async ({ page, request }) => {
     test.skip(!eventId, 'No event available');
     await page.goto('/display', { waitUntil: 'domcontentloaded', timeout: TIMEOUT });
 
-    const res = await adminFetch(page, 'POST', '/api/v2/admin/sponsors', {
+    const res = await adminFetch(request, 'POST', '/api/v2/admin/sponsors', {
       name: SPONSOR_NAME,
       event_id: eventId,
       tier: 'gold',
@@ -179,11 +150,11 @@ test.describe('Sponsor Journey — Full Lifecycle', () => {
   // Step 2: Sponsor appears in admin list
   // ─────────────────────────────────────────────────────────────────────────────
 
-  test('Step 2: Sponsor appears in admin list', async ({ page }) => {
+  test('Step 2: Sponsor appears in admin list', async ({ page, request }) => {
     test.skip(!sponsorId, 'Sponsor not created');
     await page.goto('/display', { waitUntil: 'domcontentloaded', timeout: TIMEOUT });
 
-    const res = await adminFetch(page, 'GET', '/api/v2/admin/sponsors');
+    const res = await adminFetch(request, 'GET', '/api/v2/admin/sponsors');
     expect(res.status).toBe(200);
     expect(res.body.ok).toBe(true);
 
@@ -198,7 +169,7 @@ test.describe('Sponsor Journey — Full Lifecycle', () => {
   // Step 3: Sponsor resolves for event (public API)
   // ─────────────────────────────────────────────────────────────────────────────
 
-  test('Step 3: Sponsor resolves for event via public API', async ({ page }) => {
+  test('Step 3: Sponsor resolves for event via public API', async ({ page, request }) => {
     test.skip(!sponsorId || !eventId, 'Missing sponsor or event');
     await page.goto('/display', { waitUntil: 'domcontentloaded', timeout: TIMEOUT });
 
@@ -215,7 +186,7 @@ test.describe('Sponsor Journey — Full Lifecycle', () => {
   // Step 4: Sponsor-bundle returns sponsor with display surface filtering
   // ─────────────────────────────────────────────────────────────────────────────
 
-  test('Step 4: Sponsor-bundle includes sponsor for display surface', async ({ page }) => {
+  test('Step 4: Sponsor-bundle includes sponsor for display surface', async ({ page, request }) => {
     test.skip(!sponsorId || !eventId, 'Missing sponsor or event');
     await page.goto('/display', { waitUntil: 'domcontentloaded', timeout: TIMEOUT });
 
@@ -244,7 +215,10 @@ test.describe('Sponsor Journey — Full Lifecycle', () => {
   // Step 5: Display surface renders sponsor in DOM
   // ─────────────────────────────────────────────────────────────────────────────
 
-  test('Step 5: Display surface renders sponsor in banner and sidebar', async ({ page }) => {
+  test('Step 5: Display surface renders sponsor in banner and sidebar', async ({
+    page,
+    request,
+  }) => {
     test.skip(!sponsorId || !eventId, 'Missing sponsor or event');
 
     await page.goto('/display', { waitUntil: 'networkidle', timeout: TIMEOUT });
@@ -280,7 +254,7 @@ test.describe('Sponsor Journey — Full Lifecycle', () => {
   // Step 6: Poster surface renders sponsor
   // ─────────────────────────────────────────────────────────────────────────────
 
-  test('Step 6: Poster surface renders sponsor', async ({ page }) => {
+  test('Step 6: Poster surface renders sponsor', async ({ page, request }) => {
     test.skip(!sponsorId || !eventId, 'Missing sponsor or event');
 
     await page.goto('/poster', { waitUntil: 'networkidle', timeout: TIMEOUT });
@@ -318,7 +292,7 @@ test.describe('Sponsor Journey — Full Lifecycle', () => {
   // Step 7: SharedReport shows sponsor metrics
   // ─────────────────────────────────────────────────────────────────────────────
 
-  test('Step 7: SharedReport shows sponsor in metrics', async ({ page }) => {
+  test('Step 7: SharedReport shows sponsor in metrics', async ({ page, request }) => {
     test.skip(!sponsorId || !eventId, 'Missing sponsor or event');
 
     await page.goto('/sharedReport', { waitUntil: 'networkidle', timeout: TIMEOUT });
@@ -347,7 +321,7 @@ test.describe('Sponsor Journey — Full Lifecycle', () => {
   // Step 8: Impression logged for displayed sponsor
   // ─────────────────────────────────────────────────────────────────────────────
 
-  test('Step 8: Impression logged for sponsor', async ({ page }) => {
+  test('Step 8: Impression logged for sponsor', async ({ page, request }) => {
     test.skip(!sponsorId || !eventId, 'Missing sponsor or event');
     await page.goto('/display', { waitUntil: 'domcontentloaded', timeout: TIMEOUT });
 
@@ -374,7 +348,7 @@ test.describe('Sponsor Journey — Full Lifecycle', () => {
   // Step 9: Click logged for sponsor
   // ─────────────────────────────────────────────────────────────────────────────
 
-  test('Step 9: Click logged for sponsor', async ({ page }) => {
+  test('Step 9: Click logged for sponsor', async ({ page, request }) => {
     test.skip(!sponsorId || !eventId, 'Missing sponsor or event');
     await page.goto('/display', { waitUntil: 'domcontentloaded', timeout: TIMEOUT });
 
@@ -401,7 +375,7 @@ test.describe('Sponsor Journey — Full Lifecycle', () => {
   // Step 10: Admin soft-deletes sponsor
   // ─────────────────────────────────────────────────────────────────────────────
 
-  test('Step 10: Admin soft-deletes sponsor', async ({ page }) => {
+  test('Step 10: Admin soft-deletes sponsor', async ({ page, request }) => {
     test.skip(!sponsorId, 'Sponsor not created');
     await page.goto('/display', { waitUntil: 'domcontentloaded', timeout: TIMEOUT });
 
@@ -419,7 +393,7 @@ test.describe('Sponsor Journey — Full Lifecycle', () => {
   // Step 11: Deleted sponsor no longer resolves for event
   // ─────────────────────────────────────────────────────────────────────────────
 
-  test('Step 11: Deleted sponsor no longer resolves for event', async ({ page }) => {
+  test('Step 11: Deleted sponsor no longer resolves for event', async ({ page, request }) => {
     test.skip(!sponsorId || !eventId, 'Missing sponsor or event');
     await page.goto('/display', { waitUntil: 'domcontentloaded', timeout: TIMEOUT });
 
@@ -435,7 +409,7 @@ test.describe('Sponsor Journey — Full Lifecycle', () => {
   // Step 12: Display surface no longer shows deleted sponsor
   // ─────────────────────────────────────────────────────────────────────────────
 
-  test('Step 12: Display no longer renders deleted sponsor', async ({ page }) => {
+  test('Step 12: Display no longer renders deleted sponsor', async ({ page, request }) => {
     test.skip(!sponsorId || !eventId, 'Missing sponsor or event');
 
     await page.goto('/display', { waitUntil: 'networkidle', timeout: TIMEOUT });
@@ -457,8 +431,6 @@ test.describe('Sponsor Journey — Full Lifecycle', () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 test.describe('Sponsor Journey — Tier Upgrade', () => {
-  setupCfAccessAuth();
-
   let eventId: string;
   let sponsorId: string;
 
@@ -468,18 +440,18 @@ test.describe('Sponsor Journey — Tier Upgrade', () => {
     test.skip(!ADMIN_KEY, 'ADMIN_KEY not set');
   });
 
-  test('Step 0: Find live event', async ({ page }) => {
+  test('Step 0: Find live event', async ({ page, request }) => {
     await page.goto('/display', { waitUntil: 'domcontentloaded', timeout: TIMEOUT });
     const res = await publicFetch(page, '/api/v2/events');
     test.skip(!res.body.ok || !res.body.items?.length, 'No events');
     eventId = res.body.items[0].id;
   });
 
-  test('Step 1: Create bronze sponsor', async ({ page }) => {
+  test('Step 1: Create bronze sponsor', async ({ page, request }) => {
     test.skip(!eventId, 'No event');
     await page.goto('/display', { waitUntil: 'domcontentloaded', timeout: TIMEOUT });
 
-    const res = await adminFetch(page, 'POST', '/api/v2/admin/sponsors', {
+    const res = await adminFetch(request, 'POST', '/api/v2/admin/sponsors', {
       name: `Tier Upgrade ${timestamp}`,
       event_id: eventId,
       tier: 'bronze',
@@ -491,7 +463,7 @@ test.describe('Sponsor Journey — Tier Upgrade', () => {
     sponsorId = res.body.id;
   });
 
-  test('Step 2: Verify bronze tier on Display', async ({ page }) => {
+  test('Step 2: Verify bronze tier on Display', async ({ page, request }) => {
     test.skip(!sponsorId, 'No sponsor');
     await page.goto('/display', { waitUntil: 'networkidle', timeout: TIMEOUT });
     await page.waitForTimeout(3000);
@@ -509,7 +481,7 @@ test.describe('Sponsor Journey — Tier Upgrade', () => {
     }
   });
 
-  test('Step 3: Upgrade to platinum tier', async ({ page }) => {
+  test('Step 3: Upgrade to platinum tier', async ({ page, request }) => {
     test.skip(!sponsorId, 'No sponsor');
     await page.goto('/display', { waitUntil: 'domcontentloaded', timeout: TIMEOUT });
 
@@ -524,7 +496,10 @@ test.describe('Sponsor Journey — Tier Upgrade', () => {
     expect(res.body.ok).toBe(true);
   });
 
-  test('Step 4: Verify platinum tier renders with gold accent on Display', async ({ page }) => {
+  test('Step 4: Verify platinum tier renders with gold accent on Display', async ({
+    page,
+    request,
+  }) => {
     test.skip(!sponsorId, 'No sponsor');
     await page.goto('/display', { waitUntil: 'networkidle', timeout: TIMEOUT });
     await page.waitForTimeout(3000);
@@ -548,10 +523,10 @@ test.describe('Sponsor Journey — Tier Upgrade', () => {
     }
   });
 
-  test('Cleanup: Delete sponsor', async ({ page }) => {
+  test('Cleanup: Delete sponsor', async ({ page, request }) => {
     test.skip(!sponsorId, 'No sponsor');
     await page.goto('/display', { waitUntil: 'domcontentloaded', timeout: TIMEOUT });
-    await adminFetch(page, 'DELETE', `/api/v2/admin/sponsors/${encodeURIComponent(sponsorId)}`);
+    await adminFetch(request, 'DELETE', `/api/v2/admin/sponsors/${encodeURIComponent(sponsorId)}`);
   });
 });
 
@@ -560,8 +535,6 @@ test.describe('Sponsor Journey — Tier Upgrade', () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 test.describe('Sponsor Journey — Cross-Surface Rendering', () => {
-  setupCfAccessAuth();
-
   let eventId: string;
   let sponsorId: string;
 
@@ -571,14 +544,14 @@ test.describe('Sponsor Journey — Cross-Surface Rendering', () => {
     test.skip(!ADMIN_KEY, 'ADMIN_KEY not set');
   });
 
-  test('Setup: Create sponsor with all surfaces enabled', async ({ page }) => {
+  test('Setup: Create sponsor with all surfaces enabled', async ({ page, request }) => {
     await page.goto('/display', { waitUntil: 'domcontentloaded', timeout: TIMEOUT });
 
     const evRes = await publicFetch(page, '/api/v2/events');
     test.skip(!evRes.body.ok || !evRes.body.items?.length, 'No events');
     eventId = evRes.body.items[0].id;
 
-    const res = await adminFetch(page, 'POST', '/api/v2/admin/sponsors', {
+    const res = await adminFetch(request, 'POST', '/api/v2/admin/sponsors', {
       name: `Cross Surface ${timestamp}`,
       event_id: eventId,
       tier: 'gold',
@@ -594,7 +567,7 @@ test.describe('Sponsor Journey — Cross-Surface Rendering', () => {
     sponsorId = res.body.id;
   });
 
-  test('Display surface: sponsor in bundle', async ({ page }) => {
+  test('Display surface: sponsor in bundle', async ({ page, request }) => {
     test.skip(!sponsorId || !eventId, 'No sponsor/event');
     await page.goto('/display', { waitUntil: 'domcontentloaded', timeout: TIMEOUT });
 
@@ -606,7 +579,7 @@ test.describe('Sponsor Journey — Cross-Surface Rendering', () => {
     expect(tvTop.find((s: any) => s.id === sponsorId)).toBeTruthy();
   });
 
-  test('Poster surface: sponsor in bundle', async ({ page }) => {
+  test('Poster surface: sponsor in bundle', async ({ page, request }) => {
     test.skip(!sponsorId || !eventId, 'No sponsor/event');
     await page.goto('/poster', { waitUntil: 'domcontentloaded', timeout: TIMEOUT });
 
@@ -618,7 +591,7 @@ test.describe('Sponsor Journey — Cross-Surface Rendering', () => {
     expect(posterTop.find((s: any) => s.id === sponsorId)).toBeTruthy();
   });
 
-  test('Public surface: sponsor in bundle', async ({ page }) => {
+  test('Public surface: sponsor in bundle', async ({ page, request }) => {
     test.skip(!sponsorId || !eventId, 'No sponsor/event');
     await page.goto('/public', { waitUntil: 'domcontentloaded', timeout: TIMEOUT });
 
@@ -630,7 +603,7 @@ test.describe('Sponsor Journey — Cross-Surface Rendering', () => {
     expect(mobileBanner.find((s: any) => s.id === sponsorId)).toBeTruthy();
   });
 
-  test('SharedReport surface: sponsor in unfiltered list', async ({ page }) => {
+  test('SharedReport surface: sponsor in unfiltered list', async ({ page, request }) => {
     test.skip(!sponsorId || !eventId, 'No sponsor/event');
     await page.goto('/sharedReport', { waitUntil: 'domcontentloaded', timeout: TIMEOUT });
 
@@ -638,9 +611,9 @@ test.describe('Sponsor Journey — Cross-Surface Rendering', () => {
     expect(res.body.items.find((s: any) => s.id === sponsorId)).toBeTruthy();
   });
 
-  test('Cleanup: Delete sponsor', async ({ page }) => {
+  test('Cleanup: Delete sponsor', async ({ page, request }) => {
     test.skip(!sponsorId, 'No sponsor');
     await page.goto('/display', { waitUntil: 'domcontentloaded', timeout: TIMEOUT });
-    await adminFetch(page, 'DELETE', `/api/v2/admin/sponsors/${encodeURIComponent(sponsorId)}`);
+    await adminFetch(request, 'DELETE', `/api/v2/admin/sponsors/${encodeURIComponent(sponsorId)}`);
   });
 });
