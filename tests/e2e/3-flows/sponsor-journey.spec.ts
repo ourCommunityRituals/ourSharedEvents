@@ -26,6 +26,7 @@
  */
 
 import { test, expect } from '@playwright/test';
+import { setupCfAccessAuth } from '../helpers/cf-access-auth';
 
 const TIMEOUT = 30_000;
 const ADMIN_KEY = process.env.ADMIN_KEY || process.env.X_OCR_INTERNAL || '';
@@ -100,6 +101,8 @@ const SPONSOR_NAME = `Journey Sponsor ${timestamp}`;
 // ═══════════════════════════════════════════════════════════════════════════════
 
 test.describe('Sponsor Journey — Full Lifecycle', () => {
+  setupCfAccessAuth();
+
   // State shared across serial tests
   let eventId: string;
   let sponsorId: string;
@@ -441,6 +444,8 @@ test.describe('Sponsor Journey — Full Lifecycle', () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 test.describe('Sponsor Journey — Tier Upgrade', () => {
+  setupCfAccessAuth();
+
   let eventId: string;
   let sponsorId: string;
 
@@ -542,6 +547,8 @@ test.describe('Sponsor Journey — Tier Upgrade', () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 test.describe('Sponsor Journey — Cross-Surface Rendering', () => {
+  setupCfAccessAuth();
+
   let eventId: string;
   let sponsorId: string;
 

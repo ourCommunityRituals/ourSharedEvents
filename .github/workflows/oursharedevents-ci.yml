@@ -598,6 +598,8 @@ jobs:
           BASE_URL: ${{ env.STG_BASE_URL }}
           ADMIN_KEY: ${{ secrets.ADMIN_KEY }}
           X_OCR_INTERNAL: ${{ secrets.X_OCR_INTERNAL }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
         run: npx playwright test --config=playwright.e2e-smoke.config.ts tests/e2e/3-flows/sponsor-journey.spec.ts
         timeout-minutes: 5
 
@@ -606,6 +608,8 @@ jobs:
         env:
           BASE_URL: ${{ env.STG_BASE_URL }}
           ADMIN_KEY: ${{ secrets.ADMIN_KEY }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
         run: |
           npx playwright test --config=playwright.e2e-smoke.config.ts \
             tests/e2e/2-pages/form-registration.spec.ts \
