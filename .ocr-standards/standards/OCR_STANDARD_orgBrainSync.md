@@ -34,19 +34,19 @@ Three mechanisms keep the org in sync. Each operates at a different frequency an
 ## Mechanism 1: Propagate Standards (push down)
 
 **What:** When OCR-docs standards change, open PRs in all product repos.
-**Trigger:** Push to main touching `templates/`, `skills/`, `docs/OCR_VISION.md`, or `docs/OCR_DEPENDENCY_crossRepo.md`
+**Trigger:** Push to main touching `templates/`, `skills/`, `docs/OCR_VISION.md`, or `docs/references/OCR_DEPENDENCY_crossRepo.md`
 **Workflow:** `.github/workflows/propagate-standards.yml`
 **Frequency:** On change (event-driven)
 
 ### What propagates
 
-| Source in OCR-docs                 | Destination in product repo                       | Content                                       |
-| ---------------------------------- | ------------------------------------------------- | --------------------------------------------- |
-| `templates/`                       | `.ocr-standards/`                                 | CLAUDE-base, SKILL-template, OCR_TEMPLATE_adr |
-| `skills/`                          | `.ocr-standards/skills/`                          | CCR protocol, CCR template, CCR MVP           |
-| `docs/OCR_VISION.md`               | `.ocr-standards/docs/OCR_VISION.md`               | Org-level source of truth                     |
-| `docs/OCR_DEPENDENCY_crossRepo.md` | `.ocr-standards/docs/OCR_DEPENDENCY_crossRepo.md` | Cross-repo dependencies                       |
-| `docs/standards/`                  | `.ocr-standards/standards/`                       | **NEW — naming, testing, D1, org-brain-sync** |
+| Source in OCR-docs | Destination in product repo | Content |
+|---|---|---|
+| `templates/` | `.ocr-standards/` | CLAUDE-base, SKILL-template, OCR_TEMPLATE_adr |
+| `skills/` | `.ocr-standards/skills/` | CCR protocol, CCR template, CCR MVP |
+| `docs/OCR_VISION.md` | `.ocr-standards/docs/OCR_VISION.md` | Org-level source of truth |
+| `docs/references/OCR_DEPENDENCY_crossRepo.md` | `.ocr-standards/docs/OCR_DEPENDENCY_crossRepo.md` | Cross-repo dependencies |
+| `docs/standards/` | `.ocr-standards/standards/` | **NEW — naming, testing, D1, org-brain-sync** |
 
 ### Standards propagation (wired)
 
@@ -72,24 +72,24 @@ Propagation opens PRs. It does not auto-merge. Every product repo owner reviews 
 
 ### What it checks
 
-| Check                              | Severity | What it catches                 |
-| ---------------------------------- | -------- | ------------------------------- |
-| `CLAUDE.md` exists                 | Failure  | Repo has no session protocol    |
-| `README.md` exists                 | Failure  | Repo has no public description  |
-| `SKILL.md` exists                  | Failure  | Repo has no reusable skills     |
-| `docs-ci.yml` exists               | Warning  | No CI pipeline for docs         |
-| `.ocr-standards/` exists           | Warning  | Propagation has never run       |
-| `.ocr-standards/` matches OCR-docs | Warning  | Standards have drifted          |
-| Unmerged propagation PRs           | Warning  | Standards PR waiting for review |
+| Check | Severity | What it catches |
+|---|---|---|
+| `CLAUDE.md` exists | Failure | Repo has no session protocol |
+| `README.md` exists | Failure | Repo has no public description |
+| `SKILL.md` exists | Failure | Repo has no reusable skills |
+| `docs-ci.yml` exists | Warning | No CI pipeline for docs |
+| `.ocr-standards/` exists | Warning | Propagation has never run |
+| `.ocr-standards/` matches OCR-docs | Warning | Standards have drifted |
+| Unmerged propagation PRs | Warning | Standards PR waiting for review |
 
 ### What it should also check (planned)
 
-| Check                                                  | Severity | What it catches                   |
-| ------------------------------------------------------ | -------- | --------------------------------- |
-| File naming matches `OCR_STANDARD_namingConvention.md` | Warning  | Naming drift                      |
-| Test files follow `OCR_STANDARD_testNaming.md`         | Warning  | Test naming drift                 |
-| CCR gate files exist for In Progress stories           | Warning  | Stories moving without governance |
-| Migration files follow `OCR_STANDARD_d1Migration.md`   | Warning  | Schema drift                      |
+| Check | Severity | What it catches |
+|---|---|---|
+| File naming matches `OCR_STANDARD_namingConvention.md` | Warning | Naming drift |
+| Test files follow `OCR_STANDARD_testNaming.md` | Warning | Test naming drift |
+| CCR gate files exist for In Progress stories | Warning | Stories moving without governance |
+| Migration files follow `OCR_STANDARD_d1Migration.md` | Warning | Schema drift |
 
 ---
 
@@ -102,22 +102,22 @@ Propagation opens PRs. It does not auto-merge. Every product repo owner reviews 
 
 ### The three-pass structure
 
-| Pass | Name                     | What it does                                                                                                                |
-| ---- | ------------------------ | --------------------------------------------------------------------------------------------------------------------------- |
-| 1    | **Vision Integrity**     | Reads VISION.md. Checks product registry against Linear teams. Flags drift, boundary violations, and today-specific events. |
-| 2    | **Scrum CCR Efficiency** | Runs CCR loops on all visible teams. Identifies blockers, duplication risks, contradictions. Assigns confidence scores.     |
-| 3    | **Recursive**            | Reconciles Pass 1 and Pass 2. Resolves conflicts. Ranks cross-repo action items.                                            |
+| Pass | Name | What it does |
+|---|---|---|
+| 1 | **Vision Integrity** | Reads VISION.md. Checks product registry against Linear teams. Flags drift, boundary violations, and today-specific events. |
+| 2 | **Scrum CCR Efficiency** | Runs CCR loops on all visible teams. Identifies blockers, duplication risks, contradictions. Assigns confidence scores. |
+| 3 | **Recursive** | Reconciles Pass 1 and Pass 2. Resolves conflicts. Ranks cross-repo action items. |
 
 ### What flows up
 
-| From product repos             | To OCR-docs                    | File                    |
-| ------------------------------ | ------------------------------ | ----------------------- |
-| Linear issue counts and status | Issue snapshot table           | `OCR_STATUS_project.md` |
-| In Progress stories            | Stall detection                | `OCR_STATUS_project.md` |
-| Critical blockers              | Org-wide blocker table         | `OCR_STATUS_project.md` |
-| CCR confidence scores          | Team health (RED/YELLOW/GREEN) | `OCR_LOG_session.md`    |
-| Cross-repo action items        | Prioritized action list        | `OCR_STATUS_project.md` |
-| Boundary violations            | CCR gate flags                 | `docs/ccr-gates/`       |
+| From product repos | To OCR-docs | File |
+|---|---|---|
+| Linear issue counts and status | Issue snapshot table | `OCR_STATUS_project.md` |
+| In Progress stories | Stall detection | `OCR_STATUS_project.md` |
+| Critical blockers | Org-wide blocker table | `OCR_STATUS_project.md` |
+| CCR confidence scores | Team health (RED/YELLOW/GREEN) | `OCR_LOG_session.md` |
+| Cross-repo action items | Prioritized action list | `OCR_STATUS_project.md` |
+| Boundary violations | CCR gate flags | `docs/ccr-gates/` |
 
 ### Bail check
 
@@ -225,7 +225,7 @@ paths:
   - 'templates/**'
   - 'skills/**'
   - 'docs/OCR_VISION.md'
-  - 'docs/OCR_DEPENDENCY_crossRepo.md'
+  - 'docs/references/OCR_DEPENDENCY_crossRepo.md'
 ```
 
 It should also watch:
@@ -235,8 +235,8 @@ paths:
   - 'templates/**'
   - 'skills/**'
   - 'docs/OCR_VISION.md'
-  - 'docs/OCR_DEPENDENCY_crossRepo.md'
-  - 'docs/standards/**' # ← NEW: naming, testing, D1, org-brain-sync
+  - 'docs/references/OCR_DEPENDENCY_crossRepo.md'
+  - 'docs/standards/**'          # ← NEW: naming, testing, D1, org-brain-sync
 ```
 
 And the copy step should include:
@@ -253,12 +253,12 @@ cp -r ocr-docs/docs/standards/* target/.ocr-standards/standards/
 
 The `system-sync-status.md` prompt runs a deeper four-layer drift detection:
 
-| Layer | What it checks          | Scope                                                         |
-| ----- | ----------------------- | ------------------------------------------------------------- |
-| 1     | Story ↔ Code            | Stories marked Done but code missing, code with no story      |
-| 2     | Infrastructure ↔ Code   | wrangler.toml vs actual config, health checks vs data sources |
-| 3     | Documentation ↔ Reality | Docs claim X provisioned but config has placeholders          |
-| 4     | Test Coverage           | Legacy vs canonical test ratios, CI targeting                 |
+| Layer | What it checks | Scope |
+|---|---|---|
+| 1 | Story ↔ Code | Stories marked Done but code missing, code with no story |
+| 2 | Infrastructure ↔ Code | wrangler.toml vs actual config, health checks vs data sources |
+| 3 | Documentation ↔ Reality | Docs claim X provisioned but config has placeholders |
+| 4 | Test Coverage | Legacy vs canonical test ratios, CI targeting |
 
 This is the deepest audit. It should run weekly or before major milestones (e.g., June 1 corridor activation). Its output is a drift report, not a status update — it finds what the nightly check and Bloodraven miss.
 
@@ -266,15 +266,15 @@ This is the deepest audit. It should run weekly or before major milestones (e.g.
 
 ## Frequency summary
 
-| Mechanism              | Frequency              | Direction            | Output                                    |
-| ---------------------- | ---------------------- | -------------------- | ----------------------------------------- |
-| Propagate Standards    | On change              | OCR → product repos  | PRs in product repos                      |
-| Nightly Sync Check     | Daily (midnight CST)   | Product repos → OCR  | GitHub issue in OCR-docs                  |
-| Bloodraven Linear Sync | Daily (or on demand)   | Linear + repos → OCR | OCR_LOG_session.md, OCR_STATUS_project.md |
-| System QA (Layer 5)    | Weekly / pre-milestone | Deep audit per repo  | Drift report in `.claude/outputs/`        |
+| Mechanism | Frequency | Direction | Output |
+|---|---|---|---|
+| Propagate Standards | On change | OCR → product repos | PRs in product repos |
+| Nightly Sync Check | Daily (midnight CST) | Product repos → OCR | GitHub issue in OCR-docs |
+| Bloodraven Linear Sync | Daily (or on demand) | Linear + repos → OCR | OCR_LOG_session.md, OCR_STATUS_project.md |
+| System QA (Layer 5) | Weekly / pre-milestone | Deep audit per repo | Drift report in `.claude/outputs/` |
 
 ---
 
-_Last updated: April 9 2026_
-_Owner: Matt_
-_Status: ACTIVE_
+*Last updated: April 9 2026*
+*Owner: Matt*
+*Status: ACTIVE*

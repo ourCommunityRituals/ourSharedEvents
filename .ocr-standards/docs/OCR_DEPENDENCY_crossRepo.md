@@ -52,26 +52,26 @@ This is not a dependency to manage. It is a constraint to enforce. Any proposed 
 
 ## Dependency Direction Summary
 
-| Source             | Target(s) | Trigger             | Mechanism                                |
-| ------------------ | --------- | ------------------- | ---------------------------------------- |
-| OSE feature flags  | OSM       | Flag config change  | Manual update (Postman/Newman)           |
-| OSE new corridor   | OSG, OSR  | Corridor activation | Manual activation plan                   |
-| OCR-docs standards | All repos | Standards change    | propagate-standards.yml (Phase 3)        |
-| OW ↔ OSE           | —         | —                   | **Never cross. Architectural boundary.** |
+| Source | Target(s) | Trigger | Mechanism |
+|--------|-----------|---------|-----------|
+| OSE feature flags | OSM | Flag config change | Manual update (Postman/Newman) |
+| OSE new corridor | OSG, OSR | Corridor activation | Manual activation plan |
+| OCR-docs standards | All repos | Standards change | propagate-standards.yml (Phase 3) |
+| OW ↔ OSE | — | — | **Never cross. Architectural boundary.** |
 
 ---
 
 ## Planned Dependencies (not yet active)
 
-| Source         | Target(s) | Trigger                | Notes                                           |
-| -------------- | --------- | ---------------------- | ----------------------------------------------- |
-| OSE event data | OER       | Event volume threshold | OER activates when archive depth is sufficient  |
-| OA client fork | OSE       | New white label client | OA forks OSE, configures per-client environment |
-| OSP onboarding | OSG, OSE  | New program onboarded  | OSP hands off to OSG format, OSE platform       |
-| All products   | BigQuery  | Data pipeline built    | All product data flows to warehouse for OER/RAG |
+| Source | Target(s) | Trigger | Notes |
+|--------|-----------|---------|-------|
+| OSE event data | OER | Event volume threshold | OER activates when archive depth is sufficient |
+| OA client fork | OSE | New white label client | OA forks OSE, configures per-client environment |
+| OSP onboarding | OSG, OSE | New program onboarded | OSP hands off to OSG format, OSE platform |
+| All products | BigQuery | Data pipeline built | All product data flows to warehouse for OER/RAG |
 
 ---
 
-_Last updated: April 5 2026_
-_Owner: Matt_
-_Status: ACTIVE_
+*Last updated: April 5 2026*
+*Owner: Matt*
+*Status: ACTIVE*
