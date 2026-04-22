@@ -1469,6 +1469,9 @@ const POSTER_HTML = `<!DOCTYPE html>
       body { background: #fff; }
       .container { margin: 0; max-width: 100%; }
       .poster { box-shadow: none; border: none; }
+      .poster-sponsors { page-break-inside: avoid; border-top: 1px solid #ccc; padding: .75rem 1rem; }
+      .poster-sponsor img { filter: grayscale(1); max-height: 20px; }
+      .poster-sponsor-name, .poster-sponsor-label { color: #000; }
     }
   </style>
 </head>
@@ -1483,7 +1486,7 @@ const POSTER_HTML = `<!DOCTYPE html>
       <label for="event-picker">Select Event</label>
       <select id="event-picker" data-testid="poster-event-picker"><option value="">Loading events&hellip;</option></select>
     </div>
-    <div id="poster-area" data-testid="poster-area"><p class="loading">Loading&hellip;</p></div>
+    <div id="poster-area" data-testid="poster-area"><p class="loading" data-testid="poster-loading" role="status">Loading&hellip;</p></div>
   </div>
   <script>
     const esc = s => { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; };
@@ -1497,23 +1500,23 @@ const POSTER_HTML = `<!DOCTYPE html>
       const startISO = data.startDateISO || event.startDateISO || '';
       const name = data.name || event.name || 'Event';
 
-      return '<div class="poster">' +
-        '<div class="poster-header">' +
-          '<div class="org">OurSharedEvents</div>' +
-          '<h2>' + esc(name) + '</h2>' +
+      return '<div class="poster" data-testid="poster-card" role="article" aria-label="' + esc(name) + ' event poster">' +
+        '<div class="poster-header" data-testid="poster-card-header">' +
+          '<div class="org" data-testid="poster-org">OurSharedEvents</div>' +
+          '<h2 data-testid="poster-title">' + esc(name) + '</h2>' +
         '</div>' +
-        '<div class="poster-body">' +
-          '<div class="poster-meta">' +
-          (startISO ? '<div class="meta-row"><div class="meta-icon">&#x1F4C5;</div><div class="meta-text">' + esc(fmt(startISO)) + (startISO ? ' &mdash; ' + esc(fmtTime(startISO)) : '') + '</div></div>' : '') +
-          (venue ? '<div class="meta-row"><div class="meta-icon">&#x1F4CD;</div><div class="meta-text">' + esc(venue) + (address ? '<br><small>' + esc(address) + '</small>' : '') + '</div></div>' : '') +
+        '<div class="poster-body" data-testid="poster-body">' +
+          '<div class="poster-meta" data-testid="poster-meta">' +
+          (startISO ? '<div class="meta-row" data-testid="poster-meta-date"><div class="meta-icon" aria-hidden="true">&#x1F4C5;</div><div class="meta-text">' + esc(fmt(startISO)) + (startISO ? ' &mdash; ' + esc(fmtTime(startISO)) : '') + '</div></div>' : '') +
+          (venue ? '<div class="meta-row" data-testid="poster-meta-venue"><div class="meta-icon" aria-hidden="true">&#x1F4CD;</div><div class="meta-text">' + esc(venue) + (address ? '<br><small>' + esc(address) + '</small>' : '') + '</div></div>' : '') +
           '</div>' +
-          '<div class="qr-section">' +
-            '<div class="qr-item"><div class="qr-placeholder">QR codes available after event setup</div><div class="qr-label">Event Page</div></div>' +
-            '<div class="qr-item"><div class="qr-placeholder">QR codes available after event setup</div><div class="qr-label">Registration</div></div>' +
+          '<div class="qr-section" data-testid="poster-qr-section">' +
+            '<div class="qr-item" data-testid="poster-qr-event"><div class="qr-placeholder" data-testid="poster-qr-event-placeholder">QR codes available after event setup</div><div class="qr-label" data-testid="poster-qr-event-label">Event Page</div></div>' +
+            '<div class="qr-item" data-testid="poster-qr-register"><div class="qr-placeholder" data-testid="poster-qr-register-placeholder">QR codes available after event setup</div><div class="qr-label" data-testid="poster-qr-register-label">Registration</div></div>' +
           '</div>' +
         '</div>' +
-        '<div id="poster-sponsor-strip" class="poster-sponsors" data-testid="poster-sponsor-strip"></div>' +
-        '<div class="poster-footer">oursharedevents.com</div>' +
+        '<div id="poster-sponsor-strip" class="poster-sponsors" data-testid="poster-sponsor-strip" role="list" aria-label="Event sponsors"></div>' +
+        '<div class="poster-footer" data-testid="poster-footer">oursharedevents.com</div>' +
       '</div>';
     }
 
@@ -1526,7 +1529,7 @@ const POSTER_HTML = `<!DOCTYPE html>
         const items = (data.ok && data.items) ? data.items : [];
         if (!items.length) {
           picker.innerHTML = '<option>No events available</option>';
-          area.innerHTML = '<p class="loading">No events scheduled.</p>';
+          area.innerHTML = '<p class="loading" data-testid="poster-empty" role="status">No events scheduled.</p>';
           return;
         }
         picker.innerHTML = items.map((e, i) =>
@@ -1542,24 +1545,27 @@ const POSTER_HTML = `<!DOCTYPE html>
           }
         });
       } catch {
-        area.innerHTML = '<p class="error">Could not load events.</p>';
+        area.innerHTML = '<p class="error" data-testid="poster-error" role="alert">Could not load events.</p>';
       }
     }
     async function loadPosterSponsors(eventId) {
       const strip = document.getElementById('poster-sponsor-strip');
       if (!strip || !eventId) return;
+      strip.setAttribute('aria-busy', 'true');
+      strip.innerHTML = '<span class="sr-only" data-testid="poster-sponsors-loading">Loading sponsors\u2026</span>';
       try {
         const res = await fetch('/api/v2/events/' + encodeURIComponent(eventId) + '/sponsor-bundle?surface=poster');
         const data = await res.json();
-        if (!data.ok) return;
+        strip.setAttribute('aria-busy', 'false');
+        if (!data.ok) { strip.innerHTML = ''; return; }
         const sponsors = data.bundle?.surface_sponsors?.posterTop || [];
         if (!sponsors.length) { strip.innerHTML = ''; return; }
-        strip.innerHTML = '<div class="poster-sponsor-label">Sponsored By</div>' +
-          sponsors.map(s => {
-            const logo = s.logo_url ? '<img src="' + esc(s.logo_url) + '" alt="' + esc(s.name) + '">' : '';
-            return '<div class="poster-sponsor" data-testid="poster-sponsor-item">' + logo + '<span class="poster-sponsor-name">' + esc(s.name) + '</span></div>';
+        strip.innerHTML = '<div class="poster-sponsor-label" data-testid="poster-sponsor-label">Sponsored By</div>' +
+          sponsors.map(function(s) {
+            const logo = s.logo_url ? '<img src="' + esc(s.logo_url) + '" alt="' + esc(s.name) + ' logo" data-testid="poster-sponsor-logo">' : '';
+            return '<div class="poster-sponsor" data-testid="poster-sponsor-item" role="listitem" aria-label="' + esc(s.name) + '">' + logo + '<span class="poster-sponsor-name" data-testid="poster-sponsor-name">' + esc(s.name) + '</span></div>';
           }).join('');
-      } catch { strip.innerHTML = ''; }
+      } catch { strip.setAttribute('aria-busy', 'false'); strip.innerHTML = ''; }
     }
     init();
   </script>
