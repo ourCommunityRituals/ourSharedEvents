@@ -1,11 +1,23 @@
 # Deployment and CI scripts — execSync/spawn called with hardcoded commands, not user input
 scripts/
 
-# GitHub Actions YAML — ${{ expressions }} in run: blocks are GHA-level concerns, not app code
-.github/workflows/
+# GitHub Actions YAML (active and archived) — ${{ expressions }} in run: blocks are GHA-level
+.github/
 
 # Claude agent worktrees — ephemeral, not application code
 .claude/
+
+# Legacy/archived code — not part of the active application
+archive/
+test/
+
+# Root-level non-Vitest test directories (e2e/integration/unit scripts, not the worker tests)
+tests/e2e/
+tests/integration/
+tests/unit/
+
+# One-off infrastructure fix scripts at repo root
+fix_test_infrastructure.py
 
 # Third-party and generated
 node_modules/
