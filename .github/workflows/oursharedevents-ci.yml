@@ -3,6 +3,11 @@
 # S0 Security → T0 Gate → T1 Deploy → [T2 Smoke, T3 Contract]
 #                                   → T4 Functional (dispatch only)
 #
+# Security runs unconditionally on every PR (no paths filter on pull_request trigger).
+# Gate and all downstream jobs are blocked behind security via needs: — security results
+# determine whether the rest of the pipeline runs at all.
+# Push-to-main keeps paths filtering (deployment is expensive; path-scoping is fine there).
+#
 #   S0: Security — Static vulnerability analysis + supply chain inventory
 #       - CodeQL SAST (JS/TS)          → github/codeql-action/analyze@v4
 #       - Semgrep SAST                 → p/nodejs + p/owasp-top-ten + p/r2c-security-audit
@@ -43,12 +48,14 @@
 # Trigger Matrix:
 #   | Event              | Security | Gate | Deploy | Smoke | Contract | Functional |
 #   |--------------------|----------|------|--------|-------|----------|------------|
-#   | PR to main         | ✅       | ✅   | ❌     | ❌    | ❌       | ❌         |
+#   | PR to main         | ✅ *     | ✅   | ❌     | ❌    | ❌       | ❌         |
 #   | Push to main       | ✅       | ✅   | ✅     | ✅    | ✅       | ❌         |
 #   | Tag vX.Y.Z         | ✅       | ✅   | →prod  | →prod | ❌       | ❌         |
-#   | Schedule (nightly) | ✅       | ✅   | ❌     | ✅*   | ✅*      | ❌         |
+#   | Schedule (nightly) | ✅       | ✅   | ❌     | ✅†   | ✅†      | ❌         |
 #   | Dispatch           | ✅       | ✅   | opt    | opt   | opt      | opt        |
-#   * Nightly: runs against live staging without redeploying (environmental drift detection)
+#   * PR trigger has NO paths filter — security runs on every PR regardless of files changed.
+#     Gate/Deploy/Smoke still skip on non-code PRs via their own paths conditions (see push trigger).
+#   † Nightly: runs against live staging without redeploying (environmental drift detection)
 #
 # Cost control: Functional (Tier 4) only runs when you check the box.
 # Move tests between Tier 2/3/4 as you settle on nightly vs on-demand.
@@ -66,22 +73,8 @@ name: OurSharedEvents CI/CD
 on:
   pull_request:
     branches: [main]
-    paths:
-      - '**.js'
-      - '**.ts'
-      - '**.mjs'
-      - '**.cjs'
-      - '**.json'
-      - '**.html'
-      - 'workers/oursharedevents/**'
-      - 'tests/**'
-      - 'config/**'
-      - 'scripts/**'
-      - 'schemas/**'
-      - 'postman/**'
-      - 'packages/**'
-      - 'playwright.*.config.*'
-      - '.github/workflows/**'
+    # No paths filter — security (S0) must scan every PR unconditionally.
+    # Gate and all downstream jobs are gated behind security via needs:.
   push:
     branches: [main]
     paths:
