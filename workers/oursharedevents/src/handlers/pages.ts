@@ -55,13 +55,13 @@ const PUBLIC_HTML = `<!DOCTYPE html>
 </head>
 <body>
   <a href="#main-content" class="skip-link">Skip to content</a>
-  <header data-testid="public-header">
+  <header data-testid="public-header" role="banner" aria-label="OurSharedEvents">
     <h1>OurSharedEvents</h1>
   </header>
-  <main id="main-content" data-testid="public-main">
-    <div id="sponsor-banner" data-testid="public-sponsor-banner"></div>
-    <h2>Upcoming Events</h2>
-    <div id="events" data-testid="public-events"><p class="loading">Loading events&hellip;</p></div>
+  <main id="main-content" data-testid="public-main" aria-label="Upcoming community events">
+    <div id="sponsor-banner" data-testid="public-sponsor-banner" role="region" aria-label="Event sponsors"></div>
+    <h2 data-testid="public-events-heading" tabindex="-1">Upcoming Events</h2>
+    <div id="events" data-testid="public-events" aria-live="polite" aria-atomic="false"><p class="loading" data-testid="public-loading" role="status">Loading events&hellip;</p></div>
   </main>
   <script>
     (async () => {
@@ -71,7 +71,7 @@ const PUBLIC_HTML = `<!DOCTYPE html>
         const res  = await fetch('/api/v2/events');
         const data = await res.json();
         if (!data.ok || !data.items.length) {
-          container.innerHTML = '<p class="loading">No events scheduled.</p>';
+          container.innerHTML = '<p class="loading" data-testid="public-events-empty" role="status">No events scheduled.</p>';
           return;
         }
         container.innerHTML = data.items.map(e => {
@@ -84,7 +84,7 @@ const PUBLIC_HTML = `<!DOCTYPE html>
           const venueStr = (e.venue || e.location) ? ' &middot; ' + esc(e.venue || e.location) : '';
           return \`
           <div class="event-card" data-testid="public-event-card" data-event-id="\${safeId}">
-            <div class="event-info">
+            <div class="event-info" data-testid="public-event-info">
               <h3 data-testid="public-event-name">\${safeName}</h3>
               <p class="meta" data-testid="public-event-meta">\${dateStr}\${venueStr}</p>
             </div>
@@ -112,7 +112,7 @@ const PUBLIC_HTML = `<!DOCTYPE html>
         const esc = s => { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; };
         banner.innerHTML = sponsors.map(s => {
           const logo = s.logo_url ? '<img src="' + esc(s.logo_url) + '" alt="' + esc(s.name) + '">' : '';
-          const link = s.website_url ? '<a href="' + esc(s.website_url) + '" target="_blank" rel="noopener">' + esc(s.name) + '</a>' : '<span>' + esc(s.name) + '</span>';
+          const link = s.website_url ? '<a href="' + esc(s.website_url) + '" target="_blank" rel="noopener" data-testid="public-sponsor-name">' + esc(s.name) + '</a>' : '<span>' + esc(s.name) + '</span>';
           return '<div class="sponsor-card" data-testid="public-sponsor-card">' + logo + link + '</div>';
         }).join('');
         banner.classList.add('sponsor-strip');
@@ -273,20 +273,20 @@ const ADMIN_HTML = `<!DOCTYPE html>
 </head>
 <body>
   <a href="#main-content" class="skip-link">Skip to content</a>
-  <header data-testid="admin-header">
+  <header data-testid="admin-header" aria-label="OurSharedEvents Admin">
     <h1>OurSharedEvents<span class="tier-badge" id="tierBadge" data-testid="tier-badge"></span></h1>
     <span>Admin</span>
   </header>
-  <main id="main-content" data-testid="admin-main">
+  <main id="main-content" data-testid="admin-main" aria-label="Admin dashboard">
 
     <!-- Create Event Card -->
     <div class="create-card" data-testid="create-event-card">
       <h2>Create Event</h2>
-      <form id="create-event-form" data-testid="create-event-form" novalidate>
+      <form id="create-event-form" data-testid="create-event-form" novalidate aria-label="Create new event">
         <div class="create-form">
           <div class="full-width">
             <label for="create-title">Event Name <span class="required-star">*</span></label>
-            <input type="text" id="create-title" name="title" data-testid="create-title" placeholder="Summer Block Party" maxlength="200" required />
+            <input type="text" id="create-title" name="title" data-testid="create-title" placeholder="Summer Block Party" maxlength="200" required aria-required="true" />
           </div>
           <div>
             <label for="create-date">Start Date</label>
@@ -298,7 +298,7 @@ const ADMIN_HTML = `<!DOCTYPE html>
           </div>
           <div class="full-width form-actions">
             <button type="submit" id="create-submit-btn" class="create-btn" data-testid="create-submit">Create Event</button>
-            <div id="create-msg" class="create-msg" data-testid="create-msg"></div>
+            <div id="create-msg" class="create-msg" data-testid="create-msg" role="status" aria-live="polite"></div>
           </div>
         </div>
       </form>
@@ -634,6 +634,7 @@ const ADMIN_HTML = `<!DOCTYPE html>
         wrap.removeAttribute('hidden');
         btn.setAttribute('aria-expanded', 'true');
         btn.textContent = '\u2715 Cancel';
+        document.getElementById('spon-name').focus();
       }
 
       function doCloseForm() {
@@ -649,6 +650,7 @@ const ADMIN_HTML = `<!DOCTYPE html>
         const ctx = document.getElementById('spon-edit-ctx');
         ctx.hidden = true;
         ctx.textContent = '';
+        document.getElementById('add-spon-toggle').focus();
       }
       window._doCloseForm = doCloseForm;
 
@@ -657,13 +659,21 @@ const ADMIN_HTML = `<!DOCTYPE html>
                   document.getElementById('spon-edit-id').value.trim());
       }
 
+      window._keepEditing = function() {
+        document.getElementById('spon-form-msg').textContent = '';
+        document.getElementById('spon-form-msg').className = 'create-msg';
+        document.getElementById('spon-name').focus();
+      };
+
       function closeForm() {
         if (formHasData()) {
           const msg = document.getElementById('spon-form-msg');
           msg.className = 'create-msg error';
           msg.innerHTML = 'Discard unsaved changes?\u00a0' +
-            '<button class="spon-action-btn spon-ml" onclick="window._doCloseForm()" data-testid="confirm-discard">Yes, discard</button>' +
-            '\u00a0<button class="spon-action-btn" onclick="document.getElementById(\'spon-form-msg\').textContent=\'\';document.getElementById(\'spon-form-msg\').className=\'create-msg\';" data-testid="keep-editing">Keep editing</button>';
+            '<button class="spon-action-btn spon-ml" onclick="window._doCloseForm()" data-testid="confirm-discard" aria-label="Yes, discard changes">Yes, discard</button>' +
+            '\u00a0<button class="spon-action-btn" onclick="window._keepEditing()" data-testid="keep-editing" aria-label="Keep editing">Keep editing</button>';
+          const yesBtn = msg.querySelector("[data-testid='confirm-discard']");
+          if (yesBtn) yesBtn.focus();
           return;
         }
         doCloseForm();
@@ -674,6 +684,12 @@ const ADMIN_HTML = `<!DOCTYPE html>
         if (hidden) { openForm(); loadEventOptions(null); } else { closeForm(); }
       });
       document.getElementById('spon-cancel-btn').addEventListener('click', closeForm);
+
+      document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape' && !document.getElementById('spon-form-wrap').hasAttribute('hidden')) {
+          closeForm();
+        }
+      });
 
       window._editSponsor = async function(id) {
         openForm();
@@ -701,6 +717,7 @@ const ADMIN_HTML = `<!DOCTYPE html>
           ctx.textContent = 'Editing: ' + (s.name || s.id);
           ctx.hidden = false;
           document.getElementById('spon-form-wrap').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+          document.getElementById('spon-name').focus();
         } catch (e) {
           msg.textContent = 'Could not load sponsor data.';
           msg.className = 'create-msg error';
@@ -713,8 +730,10 @@ const ADMIN_HTML = `<!DOCTYPE html>
         const cell = btn.parentElement;
         cell.innerHTML =
           '<span class="muted-sm deact-confirm-lbl">Deactivate?</span>\u00a0' +
-          '<button class="spon-action-btn deactivate" data-testid="confirm-deactivate-' + esc(id) + '" onclick="window._confirmDeactivate(\'' + esc(id) + '\')">Yes</button>' +
-          '\u00a0<button class="spon-action-btn" data-testid="cancel-deactivate-' + esc(id) + '" onclick="window._loadSponsors()">No</button>';
+          '<button class="spon-action-btn deactivate" data-testid="confirm-deactivate-' + esc(id) + '" onclick="window._confirmDeactivate(\'' + esc(id) + '\')" aria-label="Confirm deactivate sponsor">Yes</button>' +
+          '\u00a0<button class="spon-action-btn" data-testid="cancel-deactivate-' + esc(id) + '" onclick="window._loadSponsors()" aria-label="Cancel deactivate">No</button>';
+        const yesBtn = cell.querySelector("[data-testid='confirm-deactivate-" + esc(id) + "']");
+        if (yesBtn) yesBtn.focus();
       };
 
       window._confirmDeactivate = async function(id) {
@@ -1296,13 +1315,13 @@ const DISPLAY_HTML = `<!DOCTYPE html>
 </head>
 <body>
   <a href="#main-content" class="skip-link">Skip to content</a>
-  <header data-testid="display-header">
+  <header data-testid="display-header" aria-label="OurSharedEvents live display">
     <h1>OurSharedEvents</h1>
     <div class="clock" id="clock" aria-live="off" data-testid="display-clock"></div>
   </header>
-  <aside id="display-sponsor-sidebar" class="display-sponsor-sidebar" data-testid="display-sponsor-sidebar"></aside>
-  <main id="main-content" data-testid="display-main">
-    <p class="empty">Loading&hellip;</p>
+  <aside id="display-sponsor-sidebar" class="display-sponsor-sidebar" data-testid="display-sponsor-sidebar" aria-label="Side sponsors"></aside>
+  <main id="main-content" data-testid="display-main" aria-live="polite" aria-atomic="false">
+    <p class="empty" data-testid="display-loading">Loading&hellip;</p>
   </main>
   <div id="display-sponsor-banner" class="display-sponsor-banner" data-testid="display-sponsor-banner"></div>
   <div class="ticker" aria-hidden="true" data-testid="display-ticker"><span class="ticker-inner" id="ticker">OurSharedEvents &mdash; Community events on Chicago&rsquo;s Southside</span></div>
@@ -1329,16 +1348,16 @@ const DISPLAY_HTML = `<!DOCTYPE html>
         const esc = s => { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; };
         const fmt = iso => iso ? new Date(iso).toLocaleDateString('en-US', { weekday:'long', month:'long', day:'numeric' }) : '';
         const [featured, ...rest] = items;
-        let html = '<div class="event-card">' +
+        let html = '<div class="event-card" data-testid="display-featured-card">' +
           '<div class="label">Upcoming Event</div>' +
-          '<h2>' + esc(featured.name || 'Untitled Event') + '</h2>' +
-          '<div class="meta">' +
+          '<h2 data-testid="display-featured-title">' + esc(featured.name || 'Untitled Event') + '</h2>' +
+          '<div class="meta" data-testid="display-featured-meta">' +
           (featured.startDateISO ? '<span>' + esc(fmt(featured.startDateISO)) + '</span>' : '') +
           (featured.venue ? '<span>' + esc(featured.venue) + '</span>' : '') +
           '</div></div>';
         if (rest.length) {
-          html += '<div class="next-events"><h3>Also Coming Up</h3>' +
-            rest.slice(0, 4).map(e => '<div class="next-card"><div class="name">' + esc(e.name || 'Untitled') + '</div>' +
+          html += '<div class="next-events" data-testid="display-upcoming"><h3>Also Coming Up</h3>' +
+            rest.slice(0, 4).map(e => '<div class="next-card" data-testid="display-upcoming-card"><div class="name">' + esc(e.name || 'Untitled') + '</div>' +
               '<div class="date">' + esc(fmt(e.startDateISO)) + '</div></div>').join('') +
             '</div>';
         }
@@ -1347,7 +1366,7 @@ const DISPLAY_HTML = `<!DOCTYPE html>
         const ticker = document.getElementById('ticker');
         if (ticker) ticker.textContent = items.map(e => e.name).filter(Boolean).join(' \u2022 ');
       } catch {
-        main.innerHTML = '<p class="empty">Could not load events.</p>';
+        main.innerHTML = '<p class="empty" data-testid="display-empty">Could not load events.</p>';
       }
     }
     loadEvents();
