@@ -59,8 +59,8 @@ const PUBLIC_HTML = `<!DOCTYPE html>
     <h1>OurSharedEvents</h1>
   </header>
   <main id="main-content" data-testid="public-main" aria-label="Upcoming community events">
-    <div id="sponsor-banner" data-testid="public-sponsor-banner" aria-label="Event sponsors"></div>
-    <h2 data-testid="public-events-heading">Upcoming Events</h2>
+    <div id="sponsor-banner" data-testid="public-sponsor-banner" role="region" aria-label="Event sponsors"></div>
+    <h2 data-testid="public-events-heading" tabindex="-1">Upcoming Events</h2>
     <div id="events" data-testid="public-events" aria-live="polite" aria-atomic="false"><p class="loading" data-testid="public-loading" role="status">Loading events&hellip;</p></div>
   </main>
   <script>
@@ -634,6 +634,7 @@ const ADMIN_HTML = `<!DOCTYPE html>
         wrap.removeAttribute('hidden');
         btn.setAttribute('aria-expanded', 'true');
         btn.textContent = '\u2715 Cancel';
+        document.getElementById('spon-name').focus();
       }
 
       function doCloseForm() {
@@ -649,6 +650,7 @@ const ADMIN_HTML = `<!DOCTYPE html>
         const ctx = document.getElementById('spon-edit-ctx');
         ctx.hidden = true;
         ctx.textContent = '';
+        document.getElementById('add-spon-toggle').focus();
       }
       window._doCloseForm = doCloseForm;
 
@@ -657,13 +659,21 @@ const ADMIN_HTML = `<!DOCTYPE html>
                   document.getElementById('spon-edit-id').value.trim());
       }
 
+      window._keepEditing = function() {
+        document.getElementById('spon-form-msg').textContent = '';
+        document.getElementById('spon-form-msg').className = 'create-msg';
+        document.getElementById('spon-name').focus();
+      };
+
       function closeForm() {
         if (formHasData()) {
           const msg = document.getElementById('spon-form-msg');
           msg.className = 'create-msg error';
           msg.innerHTML = 'Discard unsaved changes?\u00a0' +
-            '<button class="spon-action-btn spon-ml" onclick="window._doCloseForm()" data-testid="confirm-discard">Yes, discard</button>' +
-            '\u00a0<button class="spon-action-btn" onclick="document.getElementById(\'spon-form-msg\').textContent=\'\';document.getElementById(\'spon-form-msg\').className=\'create-msg\';" data-testid="keep-editing">Keep editing</button>';
+            '<button class="spon-action-btn spon-ml" onclick="window._doCloseForm()" data-testid="confirm-discard" aria-label="Yes, discard changes">Yes, discard</button>' +
+            '\u00a0<button class="spon-action-btn" onclick="window._keepEditing()" data-testid="keep-editing" aria-label="Keep editing">Keep editing</button>';
+          const yesBtn = msg.querySelector("[data-testid='confirm-discard']");
+          if (yesBtn) yesBtn.focus();
           return;
         }
         doCloseForm();
@@ -674,6 +684,12 @@ const ADMIN_HTML = `<!DOCTYPE html>
         if (hidden) { openForm(); loadEventOptions(null); } else { closeForm(); }
       });
       document.getElementById('spon-cancel-btn').addEventListener('click', closeForm);
+
+      document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape' && !document.getElementById('spon-form-wrap').hasAttribute('hidden')) {
+          closeForm();
+        }
+      });
 
       window._editSponsor = async function(id) {
         openForm();
@@ -701,6 +717,7 @@ const ADMIN_HTML = `<!DOCTYPE html>
           ctx.textContent = 'Editing: ' + (s.name || s.id);
           ctx.hidden = false;
           document.getElementById('spon-form-wrap').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+          document.getElementById('spon-name').focus();
         } catch (e) {
           msg.textContent = 'Could not load sponsor data.';
           msg.className = 'create-msg error';
@@ -713,8 +730,10 @@ const ADMIN_HTML = `<!DOCTYPE html>
         const cell = btn.parentElement;
         cell.innerHTML =
           '<span class="muted-sm deact-confirm-lbl">Deactivate?</span>\u00a0' +
-          '<button class="spon-action-btn deactivate" data-testid="confirm-deactivate-' + esc(id) + '" onclick="window._confirmDeactivate(\'' + esc(id) + '\')">Yes</button>' +
-          '\u00a0<button class="spon-action-btn" data-testid="cancel-deactivate-' + esc(id) + '" onclick="window._loadSponsors()">No</button>';
+          '<button class="spon-action-btn deactivate" data-testid="confirm-deactivate-' + esc(id) + '" onclick="window._confirmDeactivate(\'' + esc(id) + '\')" aria-label="Confirm deactivate sponsor">Yes</button>' +
+          '\u00a0<button class="spon-action-btn" data-testid="cancel-deactivate-' + esc(id) + '" onclick="window._loadSponsors()" aria-label="Cancel deactivate">No</button>';
+        const yesBtn = cell.querySelector("[data-testid='confirm-deactivate-" + esc(id) + "']");
+        if (yesBtn) yesBtn.focus();
       };
 
       window._confirmDeactivate = async function(id) {
