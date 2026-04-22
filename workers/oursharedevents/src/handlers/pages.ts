@@ -1283,6 +1283,23 @@ const SHARED_REPORT_HTML = `<!DOCTYPE html>
     .btn:disabled { opacity: .45; cursor: not-allowed; }
     .btn-outline { background: #fff; color: #1a1a2e; border: 1.5px solid #dee2e6; box-shadow: 0 1px 2px rgba(0,0,0,.05); }
     .btn:focus-visible { outline: 2px solid #4361ee; outline-offset: 2px; }
+    .tier-badge { display: inline-block; padding: .15rem .45rem; border-radius: 10px; font-size: .65rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; vertical-align: middle; margin-left: .35rem; }
+    .tier-badge.mid { background: #d0ebff; color: #1971c2; }
+    .tier-badge.enterprise { background: #e8deee; color: #7c3aed; }
+    .funnel-card { background: #fff; border-radius: 8px; padding: 1.25rem 1.5rem; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+    .funnel-card h3 { font-size: .85rem; font-weight: 600; color: #495057; margin-bottom: .75rem; text-transform: uppercase; letter-spacing: .04em; }
+    .funnel-table { width: 100%; border-collapse: collapse; font-size: .85rem; }
+    .funnel-table th { text-align: left; padding: .35rem .5rem; font-size: .75rem; color: #6c757d; text-transform: uppercase; letter-spacing: .04em; font-weight: 600; border-bottom: 1px solid #e9ecef; }
+    .funnel-table td { padding: .45rem .5rem; border-bottom: 1px solid #f1f3f5; vertical-align: middle; }
+    .funnel-table tr:last-child td { border-bottom: none; }
+    .bar-cell { width: 80px; }
+    .bar-track { height: 6px; background: #f1f3f5; border-radius: 3px; overflow: hidden; }
+    .bar-fill { height: 100%; border-radius: 3px; background: #4361ee; }
+    .bar-fill.checkin { background: #16a34a; }
+    .rate-val { font-size: .75rem; color: #6c757d; text-align: right; min-width: 36px; }
+    .upgrade-prompt { text-align: center; padding: 2rem 1.5rem; background: #f8f9fa; border-radius: 8px; border: 2px dashed #dee2e6; }
+    .upgrade-prompt strong { color: #1a1a2e; display: block; font-size: .95rem; margin-bottom: .5rem; }
+    .upgrade-prompt p { font-size: .85rem; color: #6c757d; margin: 0; }
     .skip-link { position: absolute; left: -9999px; top: auto; width: 1px; height: 1px; overflow: hidden; }
     .skip-link:focus { position: fixed; top: 0; left: 0; width: auto; height: auto; padding: .5rem 1rem; background: #1a1a2e; color: #fff; font-size: 1rem; z-index: 9999; text-decoration: none; border-bottom: 2px solid #4361ee; }
   </style>
@@ -1313,6 +1330,12 @@ const SHARED_REPORT_HTML = `<!DOCTYPE html>
     <section id="report-sponsor-section" data-testid="report-sponsor-section">
       <div class="section-title">Sponsor Overview</div>
       <div id="sponsor-metrics" class="sponsor-metrics" data-testid="report-sponsor-metrics"></div>
+    </section>
+    <section id="advanced-metrics-section" data-testid="advanced-metrics-section" style="display:none" aria-labelledby="section-advanced-metrics">
+      <div class="section-title" id="section-advanced-metrics">Advanced Metrics <span class="tier-badge mid" data-testid="advanced-metrics-tier-badge">Mid+</span></div>
+      <div id="advanced-metrics-content" data-testid="advanced-metrics-content" class="funnel-card">
+        <p class="loading">Loading&hellip;</p>
+      </div>
     </section>
   </main>
   <script>
@@ -1381,6 +1404,64 @@ const SHARED_REPORT_HTML = `<!DOCTYPE html>
     })();
   </script>
   <script>
+    (async () => {
+      const section = document.getElementById('advanced-metrics-section');
+      const content = document.getElementById('advanced-metrics-content');
+      if (!section || !content) return;
+      let tier = 'free';
+      try {
+        const tr = await fetch('/api/v2/admin/flags/current-tier').then(r => r.json()).catch(() => null);
+        if (tr && tr.ok && tr.tier) tier = tr.tier;
+      } catch { /* stay free */ }
+      section.style.display = '';
+      if (tier === 'free') {
+        content.innerHTML = '<div class="upgrade-prompt" data-testid="advanced-metrics-upgrade"><strong>Upgrade to Mid+ for Advanced Metrics</strong><p>Conversion funnels and per-event trends are available on the Mid+ plan.</p></div>';
+        return;
+      }
+      let events = [];
+      try {
+        const res = await fetch('/api/v2/events');
+        const data = await res.json();
+        events = (data.ok && data.items) ? data.items : [];
+      } catch { /* empty */ }
+      if (!events.length) { content.innerHTML = '<p class="empty">No event data to analyze.</p>'; return; }
+      const esc = s => { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; };
+      const rows = await Promise.all(events.slice(0, 10).map(async ev => {
+        let reg = 0, checkin = 0;
+        try {
+          const [rRes, cRes] = await Promise.all([
+            fetch('/api/v2/admin/events/' + encodeURIComponent(ev.id) + '/forms/registrations').then(r => r.json()).catch(() => null),
+            fetch('/api/v2/admin/events/' + encodeURIComponent(ev.id) + '/forms/checkin-count').then(r => r.json()).catch(() => null),
+          ]);
+          reg = (rRes && rRes.ok) ? (Number(rRes.count) || 0) : 0;
+          checkin = (cRes && cRes.ok) ? (Number(cRes.count) || 0) : 0;
+        } catch { /* zero */ }
+        return { name: ev.name || 'Untitled', reg, checkin };
+      }));
+      const maxReg = Math.max(...rows.map(r => r.reg), 1);
+      content.innerHTML =
+        '<h3>Registration \u2192 Check-in Funnel</h3>' +
+        '<table class="funnel-table" data-testid="funnel-table" aria-label="Conversion funnel per event">' +
+        '<thead><tr>' +
+        '<th scope="col">Event</th>' +
+        '<th scope="col">Registrations</th>' +
+        '<th scope="col" class="bar-cell"></th>' +
+        '<th scope="col">Check-ins</th>' +
+        '<th scope="col">Attendance</th>' +
+        '</tr></thead><tbody>' +
+        rows.map(r => {
+          const pct = r.reg > 0 ? Math.round((r.checkin / r.reg) * 100) : 0;
+          const barW = Math.round((r.reg / maxReg) * 100);
+          return '<tr data-testid="funnel-row">' +
+            '<td data-testid="funnel-event-name">' + esc(r.name) + '</td>' +
+            '<td data-testid="funnel-reg-count">' + r.reg + '</td>' +
+            '<td class="bar-cell"><div class="bar-track"><div class="bar-fill" style="width:' + barW + '%" aria-hidden="true"></div></div></td>' +
+            '<td data-testid="funnel-checkin-count">' + r.checkin + '</td>' +
+            '<td class="rate-val" data-testid="funnel-rate">' + pct + '%</td>' +
+            '</tr>';
+        }).join('') +
+        '</tbody></table>';
+    })();
     document.getElementById('export-json-btn').addEventListener('click', function() {
       const bundle = window.__reportBundle || {};
       const params = new URLSearchParams(location.search);
