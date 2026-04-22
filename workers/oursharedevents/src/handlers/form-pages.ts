@@ -53,10 +53,10 @@ const FORM_CSS = `
   button:disabled { background: #adb5bd; cursor: not-allowed; }
   .success { text-align: center; padding: 2rem 1rem; }
   .success .icon { font-size: 3rem; margin-bottom: .5rem; }
-  .success h2 { color: #2f9e44; font-size: 1.2rem; }
-  .success p { color: #868e96; font-size: .9rem; margin-top: .5rem; }
+  .success h2 { color: #155724; font-size: 1.2rem; }
+  .success p { color: #6c757d; font-size: .9rem; margin-top: .5rem; }
   .error-msg { color: #e03131; font-size: .85rem; margin-bottom: .5rem; display: none; }
-  .privacy-notice { font-size: .75rem; color: #868e96; margin-top: .75rem; line-height: 1.4; }
+  .privacy-notice { font-size: .75rem; color: #6c757d; margin-top: .75rem; line-height: 1.4; }
   .privacy-notice a { color: #4361ee; }
   .rating-row { display: flex; gap: .5rem; margin-bottom: .75rem; }
   .rating-row button { width: auto; flex: 1; padding: .5rem; font-size: 1.1rem; background: #f1f3f5; color: #495057; border: 2px solid transparent; }
@@ -205,7 +205,7 @@ function emailSignupForm(eventId: string): string {
   return `
     <div class="form-card" id="form-area" data-testid="form-email">
       <h2>Stay in the loop</h2>
-      <p style="color:#868e96;font-size:.9rem;margin-bottom:1rem;">Get notified about future events. We'll never share your email.</p>
+      <p style="color:#6c757d;font-size:.9rem;margin-bottom:1rem;">Get notified about future events. We'll never share your email.</p>
       <p id="error-msg" class="error-msg" data-testid="form-error"></p>
       <form onsubmit="handleEmail(event)" data-testid="email-form">
         <label for="email">Your email</label>

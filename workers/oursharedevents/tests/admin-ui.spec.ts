@@ -342,7 +342,7 @@ describe('ADMIN-15 CSS: Copy button visual states', () => {
     const html = await fetchAdminHtml();
     expect(html).toContain('.copy-btn.copied');
     expect(html).toMatch(/\.copy-btn\.copied\s*\{[^}]*#d3f9d8/);
-    expect(html).toMatch(/\.copy-btn\.copied\s*\{[^}]*#2f9e44/);
+    expect(html).toMatch(/\.copy-btn\.copied\s*\{[^}]*#155724/);
   });
 });
 
