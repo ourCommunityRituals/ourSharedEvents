@@ -61,14 +61,14 @@ describe('QA-1: Migration idempotency', () => {
     ).all();
 
     const names = tables.results.map((r: Record<string, unknown>) => r.name);
-    expect(names).toHaveLength(12);
+    expect(names).toHaveLength(14);
   });
 
-  test('indexes remain at exactly 19 after idempotent re-run', async () => {
+  test('indexes remain at exactly 30 after idempotent re-run', async () => {
     const indexes = await env.DB.prepare(
       "SELECT name FROM sqlite_master WHERE type='index' AND name LIKE 'idx_%'"
     ).all();
-    expect(indexes.results).toHaveLength(27);
+    expect(indexes.results).toHaveLength(30);
   });
 });
 

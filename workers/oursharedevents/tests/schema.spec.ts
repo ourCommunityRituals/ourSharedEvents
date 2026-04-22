@@ -2,10 +2,10 @@
  * Schema Verification Tests — runs in CI after every migration apply.
  *
  * Gates:
- *   1. All 12 tables exist post-migration
+ *   1. All 14 tables exist post-migration
  *   2. PII firewall: scans table has no user_email, user_name, ip_address columns
  *   3. scan_aggregates is NOT writable via user-facing route handlers
- *   4. All expected indexes exist (27 custom indexes)
+ *   4. All expected indexes exist (30 custom indexes)
  *   5. Column counts match schema spec per table
  *
  * Migration SQL and source files are injected at build time via vitest.config.ts
@@ -28,8 +28,10 @@ interface TestEnv {
 // ── Constants ────────────────────────────────────────────────────────────────
 
 const EXPECTED_TABLES = [
+  'corridor_regulatory_status',
   'corridors',
   'event_templates',
+  'event_type_registry',
   'events',
   'node_hierarchy',
   'poster_deployments',
@@ -79,10 +81,14 @@ const EXPECTED_INDEXES = [
   // Sponsor impressions (migration 0022)
   'idx_sponsor_impressions_sponsor',
   'idx_sponsor_impressions_event',
+  // Regulatory schema (migration 0023)
+  'idx_event_type_registry_phase',
+  'idx_event_type_registry_uec',
+  'idx_corridor_regulatory_status_corridor',
 ] as const;
 
 const EXPECTED_COLUMN_COUNTS: Record<string, number> = {
-  events: 20,
+  events: 22,
   sponsors: 12,
   poster_deployments: 10,
   scans: 10,
@@ -93,6 +99,8 @@ const EXPECTED_COLUMN_COUNTS: Record<string, number> = {
   sponsor_event_types: 5,
   sponsor_areas: 7,
   sponsor_impressions: 7,
+  event_type_registry: 10,
+  corridor_regulatory_status: 5,
 };
 
 // ── Apply migrations before tests ────────────────────────────────────────────
@@ -120,7 +128,7 @@ beforeAll(async () => {
 // ── Gate 1: Table existence ──────────────────────────────────────────────────
 
 describe('Gate 1: Table existence', () => {
-  test('all 12 tables exist post-migration', async () => {
+  test('all 14 tables exist post-migration', async () => {
     const tables = await env.DB.prepare(
       "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' ORDER BY name"
     ).all();
@@ -199,13 +207,13 @@ describe('Gate 4: scan_aggregates write protection', () => {
 // ── Gate 5: Index verification ───────────────────────────────────────────────
 
 describe('Gate 5: Index verification', () => {
-  test('all 27 custom indexes exist', async () => {
+  test('all 30 custom indexes exist', async () => {
     const indexes = await env.DB.prepare(
       "SELECT name FROM sqlite_master WHERE type='index' AND name LIKE 'idx_%' ORDER BY name"
     ).all();
 
     const names = indexes.results.map((r: Record<string, unknown>) => r.name);
-    expect(names.length).toBe(27);
+    expect(names.length).toBe(30);
     EXPECTED_INDEXES.forEach((idx) => expect(names).toContain(idx));
   });
 });

@@ -95,8 +95,8 @@ describe('Gate F1: Forms table existence', () => {
         `SELECT COUNT(*) as cnt FROM ${table}`
       ).first<{ cnt: number }>();
       if (table === 'feature_flags') {
-        // Seed migration 0007 inserts 17 free-tier default flags
-        expect(result?.cnt).toBe(17);
+        // Seed migration 0007 inserts 17 free-tier flags; 0011 adds 5 regulatory phase flags
+        expect(result?.cnt).toBe(22);
       } else {
         expect(result?.cnt).toBe(0);
       }
@@ -180,12 +180,12 @@ describe('Gate F5: Forms index verification', () => {
 // ── Gate F6: Free tier seed data integrity ──────────────────────────────────
 
 describe('Gate F6: Free tier seed data integrity', () => {
-  test('exactly 17 global flags seeded with correct free-tier defaults', async () => {
+  test('exactly 22 global flags seeded with correct defaults', async () => {
     const flags = await (env as unknown as TestEnv).FORMS_DB.prepare(
       "SELECT flag_key, enabled FROM feature_flags WHERE scope = 'global' ORDER BY flag_key"
     ).all();
 
-    expect(flags.results).toHaveLength(17);
+    expect(flags.results).toHaveLength(22);
 
     // Verify the exact expected state — this is the contract
     const expected: Record<string, number> = {
@@ -201,6 +201,11 @@ describe('Gate F6: Free tier seed data integrity', () => {
       'forms.email-signup': 0,
       'forms.register': 1,
       'forms.survey': 0,
+      'regulatory.phase1.enabled': 1,
+      'regulatory.phase2.commerce': 0,
+      'regulatory.phase3.licensed': 0,
+      'regulatory.phase4.hipaa': 0,
+      'regulatory.phase5.coppa': 0,
       'report.advanced-metrics': 0,
       'report.custom-window': 0,
       'report.export-json': 1,
