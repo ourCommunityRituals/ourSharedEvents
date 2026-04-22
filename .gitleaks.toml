@@ -1,0 +1,34 @@
+# Gitleaks configuration for OurSharedEvents
+# https://github.com/gitleaks/gitleaks
+#
+# Allowlists cover test fixtures and CI seed values that are intentionally
+# static and non-secret (they authenticate against in-memory Miniflare DBs,
+# not any real service).
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Test fixture keys in vitest config and test helpers"
+paths = [
+  # Miniflare/vitest test environment bindings — not real secrets
+  '''vitest\.config\.mts''',
+  '''vitest\.config\.a11y\.mts''',
+  # Test spec files that assert on expected key shapes
+  '''workers/oursharedevents/tests/.*\.spec\.ts''',
+  # Postman/Newman test collections
+  '''postman/.*''',
+  # Wrangler local dev config (non-production, dev-only values)
+  '''\.(dev|local)\.vars''',
+  # Package lock (checksums, not secrets)
+  '''package-lock\.json''',
+]
+
+[[allowlists]]
+description = "CI seed values — authenticate against ephemeral test DBs only"
+regexes = [
+  # Matches our standard test key patterns
+  '''test-admin-key-e2e-\d{4}''',
+  '''test-ocr-internal-secret-\d{4}''',
+  '''test-forms-encryption-secret-\d{2}ch''',
+]

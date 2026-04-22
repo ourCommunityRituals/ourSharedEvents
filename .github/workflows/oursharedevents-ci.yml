@@ -5,7 +5,10 @@
 #
 #   S0: Security — Static vulnerability analysis + supply chain inventory
 #       - CodeQL SAST (JS/TS)          → github/codeql-action/analyze@v4
-#       - npm audit (CVE check)        → npm audit --omit=dev --audit-level=high
+#       - Semgrep SAST                 → p/nodejs + p/owasp-top-ten + p/r2c-security-audit
+#       - gitleaks secret scan         → gitleaks detect (self-hosted Windows binary)
+#       - detect-secrets               → Yelp detect-secrets baseline scan
+#       - npm audit (CVE check)        → npm audit --omit=dev --audit-level=moderate
 #       - SBOM generation              → npx @cyclonedx/cyclonedx-npm --omit dev
 #
 #   T0: Gate — Static quality + unit/contract tests
@@ -183,8 +186,68 @@ jobs:
         with:
           category: '/language:javascript-typescript'
 
+      # ── Semgrep + detect-secrets (Python-based) ──────────────────────────
+      - name: Set up Python for Semgrep + detect-secrets
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Semgrep SAST
+        run: |
+          pip install semgrep --quiet
+          semgrep scan \
+            --config=p/nodejs \
+            --config=p/owasp-top-ten \
+            --config=p/r2c-security-audit \
+            --error \
+            --exclude=node_modules \
+            --exclude=.wrangler \
+            --exclude=coverage \
+            --exclude=dist \
+            --exclude=.claude \
+            --json-output=semgrep-results.json || SEMGREP_EXIT=$?
+          FINDING_COUNT=$(jq '.results | length' semgrep-results.json 2>/dev/null || echo 0)
+          echo "- **Semgrep:** $FINDING_COUNT findings" >> $GITHUB_STEP_SUMMARY
+          exit ${SEMGREP_EXIT:-0}
+
+      - name: detect-secrets baseline scan
+        run: |
+          pip install detect-secrets --quiet
+          detect-secrets scan \
+            --exclude-files 'package-lock\.json' \
+            --exclude-files '\.gitleaks\.toml' \
+            --exclude-files '.*\.spec\.ts' \
+            --exclude-files 'vitest\.config.*' \
+            > .secrets.baseline 2>&1 || true
+          SECRET_COUNT=$(jq '.results | to_entries | map(.value | length) | add // 0' .secrets.baseline 2>/dev/null || echo 0)
+          echo "- **detect-secrets:** $SECRET_COUNT potential secrets found" >> $GITHUB_STEP_SUMMARY
+          if [ "$SECRET_COUNT" -gt "0" ]; then
+            echo "::warning::detect-secrets found $SECRET_COUNT potential secrets — review .secrets.baseline"
+            jq '.results' .secrets.baseline 2>/dev/null || true
+          fi
+
+      # ── gitleaks (Windows binary via GitHub Releases) ────────────────────
+      - name: gitleaks secret scan
+        run: |
+          GITLEAKS_VER=$(curl -sSL "https://api.github.com/repos/gitleaks/gitleaks/releases/latest" \
+            -H "Authorization: Bearer ${{ github.token }}" \
+            | jq -r '.tag_name' | sed 's/v//')
+          GITLEAKS_ZIP="gitleaks_${GITLEAKS_VER}_windows_x64.zip"
+          curl -sSL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VER}/${GITLEAKS_ZIP}" \
+            -o /tmp/gitleaks.zip
+          unzip -q /tmp/gitleaks.zip gitleaks.exe -d /tmp/gitleaks-bin
+          /tmp/gitleaks-bin/gitleaks.exe detect \
+            --source . \
+            --config .gitleaks.toml \
+            --exit-code 1 \
+            --report-format json \
+            --report-path gitleaks-report.json 2>&1 || GITLEAKS_EXIT=$?
+          LEAK_COUNT=$(jq '. | length' gitleaks-report.json 2>/dev/null || echo 0)
+          echo "- **gitleaks:** $LEAK_COUNT secrets detected" >> $GITHUB_STEP_SUMMARY
+          exit ${GITLEAKS_EXIT:-0}
+
       - name: npm audit
-        run: npm audit --omit=dev --audit-level=high
+        run: npm audit --omit=dev --audit-level=moderate
 
       # file:-linked @ocr/flags exposes its devDependencies to npm ls --all,
       # causing CycloneDX to fail. Strip them from the installed copy so SBOM
