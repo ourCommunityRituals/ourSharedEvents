@@ -53,11 +53,14 @@ const FORM_CSS = `
   button:disabled { background: #adb5bd; cursor: not-allowed; }
   .success { text-align: center; padding: 2rem 1rem; }
   .success .icon { font-size: 3rem; margin-bottom: .5rem; }
-  .success h2 { color: #2f9e44; font-size: 1.2rem; }
-  .success p { color: #868e96; font-size: .9rem; margin-top: .5rem; }
+  .success h2 { color: #155724; font-size: 1.2rem; }
+  .success p { color: #6c757d; font-size: .9rem; margin-top: .5rem; }
   .error-msg { color: #e03131; font-size: .85rem; margin-bottom: .5rem; display: none; }
-  .privacy-notice { font-size: .75rem; color: #868e96; margin-top: .75rem; line-height: 1.4; }
+  .privacy-notice { font-size: .75rem; color: #6c757d; margin-top: .75rem; line-height: 1.4; }
   .privacy-notice a { color: #4361ee; }
+  .skip-link { position: absolute; left: -9999px; top: auto; width: 1px; height: 1px; overflow: hidden; }
+  .skip-link:focus { position: fixed; top: 0; left: 0; width: auto; height: auto; padding: .5rem 1rem; background: #1a1a2e; color: #fff; font-size: 1rem; z-index: 9999; text-decoration: none; border-bottom: 2px solid #4361ee; }
+  button:focus-visible { outline: 2px solid #4361ee; outline-offset: 2px; }
   .rating-row { display: flex; gap: .5rem; margin-bottom: .75rem; }
   .rating-row button { width: auto; flex: 1; padding: .5rem; font-size: 1.1rem; background: #f1f3f5; color: #495057; border: 2px solid transparent; }
   .rating-row button.selected { background: #4361ee; color: #fff; border-color: #3451d1; }
@@ -101,12 +104,12 @@ function registrationForm(eventId: string): string {
   return `
     <div class="form-card" id="form-area" data-testid="form-register">
       <h2>Register for this event</h2>
-      <p id="error-msg" class="error-msg" data-testid="form-error"></p>
+      <p id="error-msg" class="error-msg" data-testid="form-error" role="alert" aria-live="assertive"></p>
       <form onsubmit="handleRegister(event)" data-testid="register-form">
         <label for="name">Your name</label>
-        <input type="text" id="name" data-testid="register-name-input" placeholder="Jane Smith" maxlength="200" required />
+        <input type="text" id="name" data-testid="register-name-input" placeholder="Jane Smith" maxlength="200" required autocomplete="name" aria-required="true" />
         <label for="email">Email (optional)</label>
-        <input type="email" id="email" data-testid="register-email-input" placeholder="jane@example.com" maxlength="320" />
+        <input type="email" id="email" data-testid="register-email-input" placeholder="jane@example.com" maxlength="320" autocomplete="email" />
         <button type="submit" data-testid="register-submit">Register</button>
         <p class="privacy-notice" data-testid="privacy-notice">By submitting, you agree to our data collection practices. Your name is stored temporarily and deleted after the event. Email is hashed for deduplication only.</p>
       </form>
@@ -130,7 +133,7 @@ function checkinForm(eventId: string): string {
   return `
     <div class="checkin-tap" id="form-area" data-testid="form-checkin">
       <h2>Check In</h2>
-      <p id="error-msg" class="error-msg" data-testid="form-error"></p>
+      <p id="error-msg" class="error-msg" data-testid="form-error" role="alert" aria-live="assertive"></p>
       <button type="button" id="checkin-btn" data-testid="checkin-submit" ontouchend="handleCheckin(event)" onclick="handleCheckin(event)">Tap to<br/>Check In</button>
       <div class="count" id="count" data-testid="checkin-count"></div>
     </div>
@@ -163,10 +166,10 @@ function surveyForm(eventId: string): string {
   return `
     <div class="form-card" id="form-area" data-testid="form-survey">
       <h2>How was the event?</h2>
-      <p id="error-msg" class="error-msg" data-testid="form-error"></p>
+      <p id="error-msg" class="error-msg" data-testid="form-error" role="alert" aria-live="assertive"></p>
       <form onsubmit="handleSurvey(event)" data-testid="survey-form">
-        <label>Overall rating</label>
-        <div class="rating-row" id="rating-overall" data-testid="survey-rating-overall">
+        <label id="rating-label">Overall rating</label>
+        <div class="rating-row" id="rating-overall" data-testid="survey-rating-overall" role="group" aria-labelledby="rating-label">
           <button type="button" data-testid="survey-rating-1" onclick="setRating('overall',1)">1</button>
           <button type="button" data-testid="survey-rating-2" onclick="setRating('overall',2)">2</button>
           <button type="button" data-testid="survey-rating-3" onclick="setRating('overall',3)">3</button>
@@ -205,11 +208,11 @@ function emailSignupForm(eventId: string): string {
   return `
     <div class="form-card" id="form-area" data-testid="form-email">
       <h2>Stay in the loop</h2>
-      <p style="color:#868e96;font-size:.9rem;margin-bottom:1rem;">Get notified about future events. We'll never share your email.</p>
-      <p id="error-msg" class="error-msg" data-testid="form-error"></p>
+      <p style="color:#6c757d;font-size:.9rem;margin-bottom:1rem;">Get notified about future events. We'll never share your email.</p>
+      <p id="error-msg" class="error-msg" data-testid="form-error" role="alert" aria-live="assertive"></p>
       <form onsubmit="handleEmail(event)" data-testid="email-form">
         <label for="email">Your email</label>
-        <input type="email" id="email" data-testid="email-email-input" placeholder="you@example.com" maxlength="320" required />
+        <input type="email" id="email" data-testid="email-email-input" placeholder="you@example.com" maxlength="320" required autocomplete="email" aria-required="true" />
         <button type="submit" data-testid="email-submit">Sign me up</button>
         <p class="privacy-notice" data-testid="privacy-notice">By submitting, you agree to our data collection practices. Your email is encrypted and automatically deleted after 30 days.</p>
       </form>
@@ -254,11 +257,12 @@ function formPage(eventId: string, eventName: string, formType: string): string 
   <style>${FORM_CSS}</style>
 </head>
 <body>
+  <a href="#main-content" class="skip-link">Skip to content</a>
   <header data-testid="form-header">
     <h1>OurSharedEvents</h1>
     <div class="event-name" data-testid="form-event-name">${eventName}</div>
   </header>
-  <main data-testid="form-main">${formHtml}</main>
+  <main id="main-content" data-testid="form-main">${formHtml}</main>
 </body>
 </html>`;
 }

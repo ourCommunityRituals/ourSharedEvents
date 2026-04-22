@@ -36,11 +36,11 @@ const PUBLIC_HTML = `<!DOCTYPE html>
     }
     .event-card .event-info { flex: 1; min-width: 0; }
     .event-card h3 { font-size: 1rem; font-weight: 600; margin-bottom: .35rem; }
-    .event-card .meta { font-size: .85rem; color: #868e96; }
+    .event-card .meta { font-size: .85rem; color: #6c757d; }
     .event-card .cta { display: inline-block; padding: .5rem 1.25rem; background: #4361ee; color: #fff; border-radius: 6px; font-size: .85rem; font-weight: 600; text-decoration: none; white-space: nowrap; transition: background .2s; flex-shrink: 0; }
     .event-card .cta:hover { background: #3451d1; }
     .event-card .cta:focus-visible { outline: 2px solid #4361ee; outline-offset: 2px; }
-    .loading { text-align: center; padding: 3rem; color: #868e96; font-size: .95rem; }
+    .loading { text-align: center; padding: 3rem; color: #6c757d; font-size: .95rem; }
     .error   { text-align: center; padding: 2rem; color: #e03131; }
     .sponsor-strip { display: flex; align-items: center; gap: 1.5rem; padding: .75rem 0; margin-bottom: 1rem; overflow-x: auto; }
     .sponsor-strip:empty { display: none; }
@@ -48,13 +48,17 @@ const PUBLIC_HTML = `<!DOCTYPE html>
     .sponsor-card img { height: 32px; width: auto; max-width: 100px; object-fit: contain; }
     .sponsor-card a { font-size: .8rem; color: #4361ee; text-decoration: none; font-weight: 500; }
     .sponsor-card a:hover { text-decoration: underline; }
+    .sponsor-card a:focus-visible { outline: 2px solid #4361ee; outline-offset: 2px; }
+    .skip-link { position: absolute; left: -9999px; top: auto; width: 1px; height: 1px; overflow: hidden; }
+    .skip-link:focus { position: fixed; top: 0; left: 0; width: auto; height: auto; padding: .5rem 1rem; background: #1a1a2e; color: #fff; font-size: 1rem; z-index: 9999; text-decoration: none; border-bottom: 2px solid #4361ee; }
   </style>
 </head>
 <body>
+  <a href="#main-content" class="skip-link">Skip to content</a>
   <header data-testid="public-header">
     <h1>OurSharedEvents</h1>
   </header>
-  <main data-testid="public-main">
+  <main id="main-content" data-testid="public-main">
     <div id="sponsor-banner" data-testid="public-sponsor-banner"></div>
     <h2>Upcoming Events</h2>
     <div id="events" data-testid="public-events"><p class="loading">Loading events&hellip;</p></div>
@@ -139,7 +143,7 @@ const ADMIN_HTML = `<!DOCTYPE html>
     header h1 { font-size: 1.4rem; font-weight: 600; }
     header span { font-size: .8rem; opacity: .6; text-transform: uppercase; letter-spacing: .05em; }
     .tier-badge { display: inline-block; padding: .2rem .6rem; border-radius: 12px; font-size: .7rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; margin-left: .75rem; }
-    .tier-badge.free       { background: #d3f9d8; color: #2f9e44; }
+    .tier-badge.free       { background: #d3f9d8; color: #155724; }
     .tier-badge.mid        { background: #d0ebff; color: #1971c2; }
     .tier-badge.enterprise { background: #e8deee; color: #7c3aed; }
     .feature-locked { position: relative; opacity: .5; }
@@ -150,7 +154,7 @@ const ADMIN_HTML = `<!DOCTYPE html>
     .form-config { display: flex; align-items: center; justify-content: space-between; padding: .5rem 0; border-bottom: 1px solid #f1f3f5; }
     .form-config:last-child { border-bottom: none; }
     .form-config-label { font-size: .9rem; font-weight: 500; }
-    .form-config-desc { font-size: .75rem; color: #868e96; }
+    .form-config-desc { font-size: .75rem; color: #6c757d; }
     .toggle { position: relative; width: 40px; height: 22px; flex-shrink: 0; }
     .toggle input { opacity: 0; width: 0; height: 0; }
     .toggle .slider { position: absolute; inset: 0; background: #dee2e6; border-radius: 22px; cursor: pointer; transition: background .2s; }
@@ -169,9 +173,9 @@ const ADMIN_HTML = `<!DOCTYPE html>
     tbody tr:hover { background: #f1f3f5; }
     tbody tr.selected { background: #dbe4ff; }
     .badge { display: inline-block; padding: .15rem .5rem; border-radius: 4px; font-size: .75rem; font-weight: 600; }
-    .badge.active   { background: #d3f9d8; color: #2f9e44; }
-    .badge.archived { background: #f1f3f5; color: #868e96; }
-    .loading { text-align: center; padding: 3rem; color: #868e96; }
+    .badge.active   { background: #d3f9d8; color: #155724; }
+    .badge.archived { background: #f1f3f5; color: #495057; }
+    .loading { text-align: center; padding: 3rem; color: #6c757d; }
     .error   { text-align: center; padding: 2rem; color: #e03131; }
     .forms-card { background: #fff; border-radius: 8px; padding: 1.25rem 1.5rem; box-shadow: 0 1px 3px rgba(0,0,0,.08); margin-top: 2rem; }
     .forms-card h2 { font-size: 1.1rem; font-weight: 600; color: #495057; margin-bottom: .75rem; }
@@ -179,27 +183,27 @@ const ADMIN_HTML = `<!DOCTYPE html>
     .form-link { display: block; padding: .75rem 1rem; background: #f8f9fa; border-radius: 6px; text-decoration: none; color: #212529; border-left: 3px solid #4361ee; }
     .form-link:hover { background: #e9ecef; }
     .form-link .form-type { font-weight: 600; font-size: .9rem; }
-    .form-link .form-desc { font-size: .8rem; color: #868e96; margin-top: .15rem; }
+    .form-link .form-desc { font-size: .8rem; color: #6c757d; margin-top: .15rem; }
     .form-counts { display: grid; grid-template-columns: repeat(4, 1fr); gap: .5rem; margin-top: 1rem; }
     .form-counts .count-box { text-align: center; padding: .5rem; background: #f8f9fa; border-radius: 6px; }
     .form-counts .count-num { font-size: 1.5rem; font-weight: 700; color: #1a1a2e; }
-    .form-counts .count-label { font-size: .7rem; color: #868e96; text-transform: uppercase; }
+    .form-counts .count-label { font-size: .7rem; color: #6c757d; text-transform: uppercase; }
     .surface-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-top: 2rem; }
-    .surface-card { background: #fff; border-radius: 8px; padding: 1rem 1.25rem; box-shadow: 0 1px 3px rgba(0,0,0,.08); border-left: 3px solid #868e96; }
+    .surface-card { background: #fff; border-radius: 8px; padding: 1rem 1.25rem; box-shadow: 0 1px 3px rgba(0,0,0,.08); border-left: 3px solid #6c757d; }
     .surface-card h3 { font-size: .9rem; font-weight: 600; margin-bottom: .35rem; }
-    .surface-card p { font-size: .8rem; color: #868e96; margin-bottom: .5rem; }
+    .surface-card p { font-size: .8rem; color: #6c757d; margin-bottom: .5rem; }
     .surface-card a { font-size: .8rem; color: #4361ee; text-decoration: none; font-weight: 500; }
     .surface-card a:hover { text-decoration: underline; }
     .surface-card.poster  { border-left-color: #d97706; }
     .surface-card.display { border-left-color: #2563eb; }
     .surface-card.public  { border-left-color: #16a34a; }
     .surface-card.report  { border-left-color: #7c3aed; }
-    .qr-hint { font-size: .7rem; color: #adb5bd; margin-top: .25rem; }
+    .qr-hint { font-size: .7rem; color: #64748b; margin-top: .25rem; }
     .copy-btn { display: inline-block; padding: .2rem .5rem; background: #f1f3f5; border: 1px solid #dee2e6; border-radius: 4px; font-size: .75rem; cursor: pointer; color: #495057; margin-left: .5rem; transition: background .2s, color .2s; }
     .copy-btn:hover { background: #e9ecef; }
-    .copy-btn.copied { background: #d3f9d8; color: #2f9e44; border-color: #b2f2bb; }
+    .copy-btn.copied { background: #d3f9d8; color: #155724; border-color: #b2f2bb; }
     .clickable-row { cursor: pointer; }
-    .muted-sm { color: #868e96; font-size: .8rem; }
+    .muted-sm { color: #6c757d; font-size: .8rem; }
     .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
     .flex-row { display: flex; align-items: center; gap: .75rem; }
     .form-actions { display: flex; align-items: end; gap: .75rem; }
@@ -228,15 +232,21 @@ const ADMIN_HTML = `<!DOCTYPE html>
     .create-msg { font-size: .85rem; margin-top: .5rem; min-height: 1.25rem; }
     .create-msg.success { color: #16a34a; }
     .create-msg.error { color: #dc2626; }
+    .skip-link { position: absolute; left: -9999px; top: auto; width: 1px; height: 1px; overflow: hidden; }
+    .skip-link:focus { position: fixed; top: 0; left: 0; width: auto; height: auto; padding: .5rem 1rem; background: #1a1a2e; color: #fff; font-size: 1rem; z-index: 9999; text-decoration: none; border-bottom: 2px solid #4361ee; }
+    button:focus-visible { outline: 2px solid #4361ee; outline-offset: 2px; }
+    .form-link:focus-visible { outline: 2px solid #4361ee; outline-offset: 2px; }
+    .clickable-row:focus-visible { outline: 2px solid #4361ee; outline-offset: -2px; background: #eef2ff; }
     @media (max-width: 600px) { .create-form { grid-template-columns: 1fr; } }
   </style>
 </head>
 <body>
+  <a href="#main-content" class="skip-link">Skip to content</a>
   <header data-testid="admin-header">
     <h1>OurSharedEvents<span class="tier-badge" id="tierBadge" data-testid="tier-badge"></span></h1>
     <span>Admin</span>
   </header>
-  <main data-testid="admin-main">
+  <main id="main-content" data-testid="admin-main">
 
     <!-- Create Event Card -->
     <div class="create-card" data-testid="create-event-card">
@@ -281,7 +291,7 @@ const ADMIN_HTML = `<!DOCTYPE html>
           const safeName = esc(e.name || 'Untitled');
           const safeId = esc(String(e.id));
           return \`
-          <tr onclick="window.loadForms('\${safeId}', '\${safeName.replace(/'/g, "\\\\'")}'); document.querySelectorAll('tr.selected').forEach(r=>r.classList.remove('selected')); this.classList.add('selected');" class="clickable-row" data-testid="event-row-\${safeId}">
+          <tr onclick="window.loadForms('\${safeId}', '\${safeName.replace(/'/g, "\\\\'")}'); document.querySelectorAll('tr.selected').forEach(r=>r.classList.remove('selected')); this.classList.add('selected');" onkeydown="if(event.key==='Enter'||event.key===' '){this.click();event.preventDefault();}" class="clickable-row" tabindex="0" data-testid="event-row-\${safeId}">
             <td data-testid="event-id">\${safeId}</td>
             <td data-testid="event-name">\${safeName}</td>
             <td data-testid="event-date">\${e.startDateISO ? esc(new Date(e.startDateISO).toLocaleDateString()) : '—'}</td>
@@ -533,6 +543,8 @@ const LANDING_HTML = `<!DOCTYPE html>
     nav { display: flex; gap: 1.5rem; }
     nav a { color: rgba(255,255,255,.8); text-decoration: none; font-size: .875rem; font-weight: 500; transition: color 0.2s; }
     nav a:hover { color: #fff; }
+    nav a:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+    .logo:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
     .hero { text-align: center; padding: 5rem 1.5rem 4rem; max-width: 700px; margin: 0 auto; }
     .hero h1 { font-size: clamp(2rem, 5vw, 3rem); font-weight: 800; color: #0f172a; line-height: 1.15; margin-bottom: 1.25rem; }
     .hero p { font-size: 1.125rem; color: #475569; max-width: 540px; margin: 0 auto 2.5rem; }
@@ -541,6 +553,7 @@ const LANDING_HTML = `<!DOCTYPE html>
     .subscribe-form input[type="email"]:focus { border-color: #2563eb; }
     .subscribe-form button[type="submit"] { padding: .75rem 1.5rem; background: #2563eb; color: #fff; border: none; border-radius: 8px; font-size: 1rem; font-weight: 600; cursor: pointer; transition: background 0.2s; white-space: nowrap; }
     .subscribe-form button[type="submit"]:hover { background: #1d4ed8; }
+    .subscribe-form button[type="submit"]:focus-visible { outline: 2px solid #1d4ed8; outline-offset: 2px; }
     .subscribe-form button[type="submit"]:disabled { background: #94a3b8; cursor: not-allowed; }
     .form-message { width: 100%; text-align: center; font-size: .875rem; margin-top: .75rem; min-height: 1.25rem; }
     .form-message.success { color: #059669; }
@@ -592,10 +605,14 @@ const LANDING_HTML = `<!DOCTYPE html>
     footer { background: #1a1a2e; color: rgba(255,255,255,.6); text-align: center; padding: 2rem 1.5rem; font-size: .8rem; }
     footer a { color: rgba(255,255,255,.8); text-decoration: none; }
     footer a:hover { color: #fff; }
+    footer a:focus-visible { outline: 2px solid rgba(255,255,255,.8); outline-offset: 2px; }
+    .skip-link { position: absolute; left: -9999px; top: auto; width: 1px; height: 1px; overflow: hidden; }
+    .skip-link:focus { position: fixed; top: 0; left: 0; width: auto; height: auto; padding: .5rem 1rem; background: #1a1a2e; color: #fff; font-size: 1rem; z-index: 9999; text-decoration: none; border-bottom: 2px solid #4361ee; }
     @media (max-width: 480px) { header { padding: .75rem 1rem; } nav { gap: 1rem; } .hero { padding: 3rem 1rem 2.5rem; } .subscribe-form { flex-direction: column; } .subscribe-form input[type="email"], .subscribe-form button[type="submit"] { width: 100%; flex: none; } .features { padding: 2rem 1rem 3rem; } }
   </style>
 </head>
 <body>
+  <a href="#main-content" class="skip-link">Skip to content</a>
   <header data-testid="landing-header">
     <span class="logo" data-testid="landing-logo">OurSharedEvents</span>
     <nav data-testid="landing-nav">
@@ -603,7 +620,7 @@ const LANDING_HTML = `<!DOCTYPE html>
       <a href="/admin" data-testid="nav-admin">Admin</a>
     </nav>
   </header>
-  <main data-testid="landing-main">
+  <main id="main-content" data-testid="landing-main">
     <section class="hero" data-testid="hero-section">
       <h1>Gather with your neighborhood on Chicago&#x2019;s Southside</h1>
       <p>Community events that bring people together. Stay in the loop and be the first to know when something&#x2019;s happening near you.</p>
@@ -1104,10 +1121,10 @@ const POSTER_HTML = `<!DOCTYPE html>
     .meta-text { font-size: 1rem; color: #334155; }
     .qr-section { display: flex; justify-content: center; gap: 2rem; flex-wrap: wrap; padding: 1.5rem 0; border-top: 1px solid #e2e8f0; border-bottom: 1px solid #e2e8f0; margin-bottom: 1.5rem; }
     .qr-item { text-align: center; }
-    .qr-placeholder { width: 120px; height: 120px; background: #f1f5f9; border: 2px dashed #cbd5e1; border-radius: 8px; display: flex; align-items: center; justify-content: center; margin: 0 auto .5rem; font-size: .7rem; color: #94a3b8; text-align: center; padding: .5rem; }
+    .qr-placeholder { width: 120px; height: 120px; background: #f1f5f9; border: 2px dashed #cbd5e1; border-radius: 8px; display: flex; align-items: center; justify-content: center; margin: 0 auto .5rem; font-size: .7rem; color: #64748b; text-align: center; padding: .5rem; }
     .qr-label { font-size: .75rem; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: .05em; }
-    .poster-footer { text-align: center; padding: 1rem; background: #f8fafc; font-size: .8rem; color: #94a3b8; }
-    .loading { text-align: center; padding: 4rem; color: #94a3b8; }
+    .poster-footer { text-align: center; padding: 1rem; background: #f8fafc; font-size: .8rem; color: #64748b; }
+    .loading { text-align: center; padding: 4rem; color: #64748b; }
     .error { text-align: center; padding: 3rem; color: #dc2626; }
     .event-select { margin-bottom: 1.5rem; }
     .event-select label { display: block; font-size: .875rem; font-weight: 600; color: #374151; margin-bottom: .375rem; }
@@ -1117,7 +1134,11 @@ const POSTER_HTML = `<!DOCTYPE html>
     .poster-sponsor { display: flex; align-items: center; gap: .5rem; }
     .poster-sponsor img { height: 28px; width: auto; max-width: 80px; object-fit: contain; }
     .poster-sponsor-name { font-size: .75rem; color: #64748b; font-weight: 500; }
-    .poster-sponsor-label { font-size: .65rem; text-transform: uppercase; letter-spacing: .06em; color: #94a3b8; text-align: center; margin-bottom: .35rem; }
+    .poster-sponsor-label { font-size: .65rem; text-transform: uppercase; letter-spacing: .06em; color: #64748b; text-align: center; margin-bottom: .35rem; }
+    .page-header a:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+    .event-select select:focus { border-color: #4361ee; outline: none; box-shadow: 0 0 0 3px rgba(67,97,238,.15); }
+    .skip-link { position: absolute; left: -9999px; top: auto; width: 1px; height: 1px; overflow: hidden; }
+    .skip-link:focus { position: fixed; top: 0; left: 0; width: auto; height: auto; padding: .5rem 1rem; background: #1a1a2e; color: #fff; font-size: 1rem; z-index: 9999; text-decoration: none; border-bottom: 2px solid #4361ee; }
     @media print {
       .page-header, .event-select, .no-print { display: none !important; }
       body { background: #fff; }
@@ -1127,11 +1148,12 @@ const POSTER_HTML = `<!DOCTYPE html>
   </style>
 </head>
 <body>
+  <a href="#main-content" class="skip-link">Skip to content</a>
   <div class="page-header no-print" data-testid="poster-header">
     <h1>OurSharedEvents — Poster</h1>
     <a href="javascript:window.print()" data-testid="poster-print">&#x1F5A8; Print</a>
   </div>
-  <div class="container" data-testid="poster-container">
+  <div id="main-content" class="container" data-testid="poster-container">
     <div class="event-select no-print" data-testid="poster-event-select">
       <label for="event-picker">Select Event</label>
       <select id="event-picker" data-testid="poster-event-picker"><option value="">Loading events&hellip;</option></select>
@@ -1245,10 +1267,10 @@ const SHARED_REPORT_HTML = `<!DOCTYPE html>
     .event-row .name { font-weight: 600; font-size: .95rem; }
     .event-row .date { font-size: .8rem; color: #6c757d; white-space: nowrap; }
     .badge { display: inline-block; padding: .15rem .5rem; border-radius: 4px; font-size: .72rem; font-weight: 600; }
-    .badge.active { background: #d3f9d8; color: #2f9e44; }
-    .badge.archived { background: #f1f3f5; color: #868e96; }
-    .loading { text-align: center; padding: 3rem; color: #868e96; }
-    .empty { text-align: center; padding: 2rem; color: #868e96; font-size: .95rem; }
+    .badge.active { background: #d3f9d8; color: #155724; }
+    .badge.archived { background: #f1f3f5; color: #495057; }
+    .loading { text-align: center; padding: 3rem; color: #6c757d; }
+    .empty { text-align: center; padding: 2rem; color: #6c757d; font-size: .95rem; }
     .sponsor-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; }
     .sponsor-metrics:empty { display: none; }
     .sponsor-metric-card { background: #fff; border-radius: 8px; padding: 1rem 1.25rem; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
@@ -1268,17 +1290,48 @@ const SHARED_REPORT_HTML = `<!DOCTYPE html>
     .stat-dl { display: flex; flex-direction: column; }
     .stat-dl dt { font-size: .8rem; color: #6c757d; order: 2; margin-top: .25rem; }
     .stat-dl dd { font-size: 2rem; font-weight: 800; color: #1a1a2e; line-height: 1; order: 1; margin: 0; }
+    .btn:focus-visible { outline: 2px solid #4361ee; outline-offset: 2px; }
+    .tier-badge { display: inline-block; padding: .15rem .45rem; border-radius: 10px; font-size: .65rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; vertical-align: middle; margin-left: .35rem; }
+    .tier-badge.mid { background: #d0ebff; color: #1971c2; }
+    .tier-badge.enterprise { background: #e8deee; color: #7c3aed; }
+    .funnel-card { background: #fff; border-radius: 8px; padding: 1.25rem 1.5rem; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+    .funnel-card h3 { font-size: .85rem; font-weight: 600; color: #495057; margin-bottom: .75rem; text-transform: uppercase; letter-spacing: .04em; }
+    .funnel-table { width: 100%; border-collapse: collapse; font-size: .85rem; }
+    .funnel-table th { text-align: left; padding: .35rem .5rem; font-size: .75rem; color: #6c757d; text-transform: uppercase; letter-spacing: .04em; font-weight: 600; border-bottom: 1px solid #e9ecef; }
+    .funnel-table td { padding: .45rem .5rem; border-bottom: 1px solid #f1f3f5; vertical-align: middle; }
+    .funnel-table tr:last-child td { border-bottom: none; }
+    .bar-cell { width: 80px; }
+    .bar-track { height: 6px; background: #f1f3f5; border-radius: 3px; overflow: hidden; }
+    .bar-fill { height: 100%; border-radius: 3px; background: #4361ee; }
+    .bar-fill.checkin { background: #16a34a; }
+    .rate-val { font-size: .75rem; color: #6c757d; text-align: right; min-width: 36px; }
+    .upgrade-prompt { text-align: center; padding: 2rem 1.5rem; background: #f8f9fa; border-radius: 8px; border: 2px dashed #dee2e6; }
+    .upgrade-prompt strong { color: #1a1a2e; display: block; font-size: .95rem; margin-bottom: .5rem; }
+    .upgrade-prompt p { font-size: .85rem; color: #6c757d; margin: 0; }
+    .skip-link { position: absolute; left: -9999px; top: auto; width: 1px; height: 1px; overflow: hidden; }
+    .skip-link:focus { position: fixed; top: 0; left: 0; width: auto; height: auto; padding: .5rem 1rem; background: #1a1a2e; color: #fff; font-size: 1rem; z-index: 9999; text-decoration: none; border-bottom: 2px solid #4361ee; }
+    @media print {
+      .skip-link, .action-bar { display: none !important; }
+      header { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      .stat-card, .events-list, .sponsor-metric-card, .funnel-card { box-shadow: none; border: 1px solid #e9ecef; }
+      body { background: #fff; }
+      #advanced-metrics-section { display: block !important; }
+    }
   </style>
 </head>
 <body>
+  <a href="#main-content" class="skip-link">Skip to content</a>
   <header data-testid="report-header">
     <h1>OurSharedEvents</h1>
     <span>Shared Report</span>
   </header>
-  <main data-testid="report-main">
+  <main id="main-content" data-testid="report-main">
     <div class="action-bar" data-testid="report-action-bar">
       <button class="btn btn-outline" data-testid="export-json-btn" id="export-json-btn" disabled>
         &#8595; Export JSON
+      </button>
+      <button class="btn btn-outline" data-testid="export-pdf-btn" id="export-pdf-btn" disabled title="Mid+ plan required">
+        &#128438; Export PDF
       </button>
     </div>
     <section aria-labelledby="section-stats">
@@ -1295,6 +1348,12 @@ const SHARED_REPORT_HTML = `<!DOCTYPE html>
     <section id="report-sponsor-section" aria-labelledby="section-sponsors" data-testid="report-sponsor-section">
       <h2 class="section-title" id="section-sponsors">Sponsor Overview</h2>
       <div id="sponsor-metrics" class="sponsor-metrics" data-testid="report-sponsor-metrics"></div>
+    </section>
+    <section id="advanced-metrics-section" data-testid="advanced-metrics-section" style="display:none" aria-labelledby="section-advanced-metrics">
+      <div class="section-title" id="section-advanced-metrics">Advanced Metrics <span class="tier-badge mid" data-testid="advanced-metrics-tier-badge">Mid+</span></div>
+      <div id="advanced-metrics-content" data-testid="advanced-metrics-content" class="funnel-card">
+        <p class="loading">Loading&hellip;</p>
+      </div>
     </section>
   </main>
   <script>
@@ -1370,6 +1429,69 @@ const SHARED_REPORT_HTML = `<!DOCTYPE html>
     })();
   </script>
   <script>
+    (async () => {
+      const section = document.getElementById('advanced-metrics-section');
+      const content = document.getElementById('advanced-metrics-content');
+      if (!section || !content) return;
+      let tier = 'free';
+      try {
+        const tr = await fetch('/api/v2/admin/flags/current-tier').then(r => r.json()).catch(() => null);
+        if (tr && tr.ok && tr.tier) tier = tr.tier;
+      } catch { /* stay free */ }
+      section.style.display = '';
+      const pdfBtn = document.getElementById('export-pdf-btn');
+      if (pdfBtn && tier !== 'free') { pdfBtn.disabled = false; pdfBtn.title = ''; }
+      if (tier === 'free') {
+        content.innerHTML = '<div class="upgrade-prompt" data-testid="advanced-metrics-upgrade"><strong>Upgrade to Mid+ for Advanced Metrics</strong><p>Conversion funnels and per-event trends are available on the Mid+ plan.</p></div>';
+        return;
+      }
+      let events = [];
+      try {
+        const res = await fetch('/api/v2/events');
+        const data = await res.json();
+        events = (data.ok && data.items) ? data.items : [];
+      } catch { /* empty */ }
+      if (!events.length) { content.innerHTML = '<p class="empty">No event data to analyze.</p>'; return; }
+      const esc = s => { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; };
+      const rows = await Promise.all(events.slice(0, 10).map(async ev => {
+        let reg = 0, checkin = 0;
+        try {
+          const [rRes, cRes] = await Promise.all([
+            fetch('/api/v2/admin/events/' + encodeURIComponent(ev.id) + '/forms/registrations').then(r => r.json()).catch(() => null),
+            fetch('/api/v2/admin/events/' + encodeURIComponent(ev.id) + '/forms/checkin-count').then(r => r.json()).catch(() => null),
+          ]);
+          reg = (rRes && rRes.ok) ? (Number(rRes.count) || 0) : 0;
+          checkin = (cRes && cRes.ok) ? (Number(cRes.count) || 0) : 0;
+        } catch { /* zero */ }
+        return { name: ev.name || 'Untitled', reg, checkin };
+      }));
+      const maxReg = Math.max(...rows.map(r => r.reg), 1);
+      content.innerHTML =
+        '<h3>Registration \u2192 Check-in Funnel</h3>' +
+        '<table class="funnel-table" data-testid="funnel-table" aria-label="Conversion funnel per event">' +
+        '<thead><tr>' +
+        '<th scope="col">Event</th>' +
+        '<th scope="col">Registrations</th>' +
+        '<th scope="col" class="bar-cell"></th>' +
+        '<th scope="col">Check-ins</th>' +
+        '<th scope="col">Attendance</th>' +
+        '</tr></thead><tbody>' +
+        rows.map(r => {
+          const pct = r.reg > 0 ? Math.round((r.checkin / r.reg) * 100) : 0;
+          const barW = Math.round((r.reg / maxReg) * 100);
+          return '<tr data-testid="funnel-row">' +
+            '<td data-testid="funnel-event-name">' + esc(r.name) + '</td>' +
+            '<td data-testid="funnel-reg-count">' + r.reg + '</td>' +
+            '<td class="bar-cell"><div class="bar-track"><div class="bar-fill" style="width:' + barW + '%" aria-hidden="true"></div></div></td>' +
+            '<td data-testid="funnel-checkin-count">' + r.checkin + '</td>' +
+            '<td class="rate-val" data-testid="funnel-rate">' + pct + '%</td>' +
+            '</tr>';
+        }).join('') +
+        '</tbody></table>';
+    })();
+    document.getElementById('export-pdf-btn').addEventListener('click', function() {
+      window.print();
+    });
     document.getElementById('export-json-btn').addEventListener('click', function() {
       const bundle = window.__reportBundle || {};
       const params = new URLSearchParams(location.search);
