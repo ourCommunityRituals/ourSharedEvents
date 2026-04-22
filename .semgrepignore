@@ -1,0 +1,13 @@
+# Deployment and CI scripts — execSync/spawn called with hardcoded commands, not user input
+scripts/
+
+# GitHub Actions YAML — ${{ expressions }} in run: blocks are GHA-level concerns, not app code
+.github/workflows/
+
+# Claude agent worktrees — ephemeral, not application code
+.claude/
+
+# Third-party and generated
+node_modules/
+workers/oursharedevents/node_modules/
+dist/
