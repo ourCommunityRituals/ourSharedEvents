@@ -1255,6 +1255,11 @@ const SHARED_REPORT_HTML = `<!DOCTYPE html>
     .sponsor-metric-card .sponsor-name { font-weight: 600; font-size: .9rem; margin-bottom: .5rem; }
     .sponsor-metric-card .metric-row { display: flex; justify-content: space-between; font-size: .8rem; color: #6c757d; padding: .15rem 0; }
     .sponsor-metric-card .metric-val { font-weight: 600; color: #212529; }
+    .action-bar { display: flex; gap: .75rem; justify-content: flex-end; }
+    .btn { display: inline-flex; align-items: center; gap: .4rem; padding: .5rem 1rem; border-radius: 6px; border: none; font-size: .85rem; font-weight: 600; cursor: pointer; transition: opacity .15s; }
+    .btn:hover:not(:disabled) { opacity: .85; }
+    .btn:disabled { opacity: .45; cursor: not-allowed; }
+    .btn-outline { background: #fff; color: #1a1a2e; border: 1.5px solid #dee2e6; box-shadow: 0 1px 2px rgba(0,0,0,.05); }
   </style>
 </head>
 <body>
@@ -1263,6 +1268,11 @@ const SHARED_REPORT_HTML = `<!DOCTYPE html>
     <span>Shared Report</span>
   </header>
   <main data-testid="report-main">
+    <div class="action-bar" data-testid="report-action-bar">
+      <button class="btn btn-outline" data-testid="export-json-btn" id="export-json-btn" disabled>
+        &#8595; Export JSON
+      </button>
+    </div>
     <div>
       <div class="section-title">Events Overview</div>
       <div class="stats-row" id="stats-row" data-testid="report-stats">
@@ -1280,6 +1290,9 @@ const SHARED_REPORT_HTML = `<!DOCTYPE html>
     </section>
   </main>
   <script>
+    window.__reportBundle = { events: [], sponsors: [], generatedAt: null };
+  </script>
+  <script>
     (async () => {
       const esc = s => { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; };
       const fmt = iso => iso ? new Date(iso).toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' }) : '\u2014';
@@ -1288,6 +1301,8 @@ const SHARED_REPORT_HTML = `<!DOCTYPE html>
         const res = await fetch('/api/v2/events');
         const data = await res.json();
         const items = (data.ok && data.items) ? data.items : [];
+        window.__reportBundle.events = items;
+        window.__reportBundle.generatedAt = new Date().toISOString();
         document.getElementById('stat-total').textContent = items.length;
         document.getElementById('stat-active').textContent = items.filter(e => e.status === 'active').length;
         if (!items.length) {
@@ -1300,6 +1315,7 @@ const SHARED_REPORT_HTML = `<!DOCTYPE html>
           '<div class="date" data-testid="report-event-date">' + esc(fmt(e.startDateISO)) + '</div>' +
           '<span class="badge ' + esc(e.status || '') + '" data-testid="report-event-status">' + esc(e.status || '') + '</span>' +
           '</div></div>').join('');
+        document.getElementById('export-json-btn').disabled = false;
       } catch {
         listEl.innerHTML = '<p class="empty">Could not load data.</p>';
       }
@@ -1326,6 +1342,7 @@ const SHARED_REPORT_HTML = `<!DOCTYPE html>
             }
           } catch { /* skip */ }
         }
+        window.__reportBundle.sponsors = allSponsors;
         if (!allSponsors.length) { sectionEl.style.display = 'none'; return; }
         metricsEl.innerHTML = allSponsors.map(s =>
           '<div class="sponsor-metric-card" data-testid="report-sponsor-card">' +
@@ -1336,6 +1353,23 @@ const SHARED_REPORT_HTML = `<!DOCTYPE html>
         ).join('');
       } catch { if (sectionEl) sectionEl.style.display = 'none'; }
     })();
+  </script>
+  <script>
+    document.getElementById('export-json-btn').addEventListener('click', function() {
+      const bundle = window.__reportBundle || {};
+      const params = new URLSearchParams(location.search);
+      const eventId = params.get('id') || 'all';
+      const payload = JSON.stringify({
+        generatedAt: bundle.generatedAt || new Date().toISOString(),
+        events: bundle.events || [],
+        sponsors: bundle.sponsors || []
+      }, null, 2);
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob([payload], { type: 'application/json' }));
+      a.download = 'report-' + eventId + '.json';
+      a.click();
+      URL.revokeObjectURL(a.href);
+    });
   </script>
 </body>
 </html>`;
