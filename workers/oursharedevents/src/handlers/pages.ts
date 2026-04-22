@@ -48,13 +48,17 @@ const PUBLIC_HTML = `<!DOCTYPE html>
     .sponsor-card img { height: 32px; width: auto; max-width: 100px; object-fit: contain; }
     .sponsor-card a { font-size: .8rem; color: #4361ee; text-decoration: none; font-weight: 500; }
     .sponsor-card a:hover { text-decoration: underline; }
+    .sponsor-card a:focus-visible { outline: 2px solid #4361ee; outline-offset: 2px; }
+    .skip-link { position: absolute; left: -9999px; top: auto; width: 1px; height: 1px; overflow: hidden; }
+    .skip-link:focus { position: fixed; top: 0; left: 0; width: auto; height: auto; padding: .5rem 1rem; background: #1a1a2e; color: #fff; font-size: 1rem; z-index: 9999; text-decoration: none; border-bottom: 2px solid #4361ee; }
   </style>
 </head>
 <body>
+  <a href="#main-content" class="skip-link">Skip to content</a>
   <header data-testid="public-header">
     <h1>OurSharedEvents</h1>
   </header>
-  <main data-testid="public-main">
+  <main id="main-content" data-testid="public-main">
     <div id="sponsor-banner" data-testid="public-sponsor-banner"></div>
     <h2>Upcoming Events</h2>
     <div id="events" data-testid="public-events"><p class="loading">Loading events&hellip;</p></div>
@@ -228,15 +232,21 @@ const ADMIN_HTML = `<!DOCTYPE html>
     .create-msg { font-size: .85rem; margin-top: .5rem; min-height: 1.25rem; }
     .create-msg.success { color: #16a34a; }
     .create-msg.error { color: #dc2626; }
+    .skip-link { position: absolute; left: -9999px; top: auto; width: 1px; height: 1px; overflow: hidden; }
+    .skip-link:focus { position: fixed; top: 0; left: 0; width: auto; height: auto; padding: .5rem 1rem; background: #1a1a2e; color: #fff; font-size: 1rem; z-index: 9999; text-decoration: none; border-bottom: 2px solid #4361ee; }
+    button:focus-visible { outline: 2px solid #4361ee; outline-offset: 2px; }
+    .form-link:focus-visible { outline: 2px solid #4361ee; outline-offset: 2px; }
+    .clickable-row:focus-visible { outline: 2px solid #4361ee; outline-offset: -2px; background: #eef2ff; }
     @media (max-width: 600px) { .create-form { grid-template-columns: 1fr; } }
   </style>
 </head>
 <body>
+  <a href="#main-content" class="skip-link">Skip to content</a>
   <header data-testid="admin-header">
     <h1>OurSharedEvents<span class="tier-badge" id="tierBadge" data-testid="tier-badge"></span></h1>
     <span>Admin</span>
   </header>
-  <main data-testid="admin-main">
+  <main id="main-content" data-testid="admin-main">
 
     <!-- Create Event Card -->
     <div class="create-card" data-testid="create-event-card">
@@ -281,7 +291,7 @@ const ADMIN_HTML = `<!DOCTYPE html>
           const safeName = esc(e.name || 'Untitled');
           const safeId = esc(String(e.id));
           return \`
-          <tr onclick="window.loadForms('\${safeId}', '\${safeName.replace(/'/g, "\\\\'")}'); document.querySelectorAll('tr.selected').forEach(r=>r.classList.remove('selected')); this.classList.add('selected');" class="clickable-row" data-testid="event-row-\${safeId}">
+          <tr onclick="window.loadForms('\${safeId}', '\${safeName.replace(/'/g, "\\\\'")}'); document.querySelectorAll('tr.selected').forEach(r=>r.classList.remove('selected')); this.classList.add('selected');" onkeydown="if(event.key==='Enter'||event.key===' '){this.click();event.preventDefault();}" class="clickable-row" tabindex="0" data-testid="event-row-\${safeId}">
             <td data-testid="event-id">\${safeId}</td>
             <td data-testid="event-name">\${safeName}</td>
             <td data-testid="event-date">\${e.startDateISO ? esc(new Date(e.startDateISO).toLocaleDateString()) : '—'}</td>
@@ -533,6 +543,8 @@ const LANDING_HTML = `<!DOCTYPE html>
     nav { display: flex; gap: 1.5rem; }
     nav a { color: rgba(255,255,255,.8); text-decoration: none; font-size: .875rem; font-weight: 500; transition: color 0.2s; }
     nav a:hover { color: #fff; }
+    nav a:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+    .logo:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
     .hero { text-align: center; padding: 5rem 1.5rem 4rem; max-width: 700px; margin: 0 auto; }
     .hero h1 { font-size: clamp(2rem, 5vw, 3rem); font-weight: 800; color: #0f172a; line-height: 1.15; margin-bottom: 1.25rem; }
     .hero p { font-size: 1.125rem; color: #475569; max-width: 540px; margin: 0 auto 2.5rem; }
@@ -541,6 +553,7 @@ const LANDING_HTML = `<!DOCTYPE html>
     .subscribe-form input[type="email"]:focus { border-color: #2563eb; }
     .subscribe-form button[type="submit"] { padding: .75rem 1.5rem; background: #2563eb; color: #fff; border: none; border-radius: 8px; font-size: 1rem; font-weight: 600; cursor: pointer; transition: background 0.2s; white-space: nowrap; }
     .subscribe-form button[type="submit"]:hover { background: #1d4ed8; }
+    .subscribe-form button[type="submit"]:focus-visible { outline: 2px solid #1d4ed8; outline-offset: 2px; }
     .subscribe-form button[type="submit"]:disabled { background: #94a3b8; cursor: not-allowed; }
     .form-message { width: 100%; text-align: center; font-size: .875rem; margin-top: .75rem; min-height: 1.25rem; }
     .form-message.success { color: #059669; }
@@ -592,10 +605,14 @@ const LANDING_HTML = `<!DOCTYPE html>
     footer { background: #1a1a2e; color: rgba(255,255,255,.6); text-align: center; padding: 2rem 1.5rem; font-size: .8rem; }
     footer a { color: rgba(255,255,255,.8); text-decoration: none; }
     footer a:hover { color: #fff; }
+    footer a:focus-visible { outline: 2px solid rgba(255,255,255,.8); outline-offset: 2px; }
+    .skip-link { position: absolute; left: -9999px; top: auto; width: 1px; height: 1px; overflow: hidden; }
+    .skip-link:focus { position: fixed; top: 0; left: 0; width: auto; height: auto; padding: .5rem 1rem; background: #1a1a2e; color: #fff; font-size: 1rem; z-index: 9999; text-decoration: none; border-bottom: 2px solid #4361ee; }
     @media (max-width: 480px) { header { padding: .75rem 1rem; } nav { gap: 1rem; } .hero { padding: 3rem 1rem 2.5rem; } .subscribe-form { flex-direction: column; } .subscribe-form input[type="email"], .subscribe-form button[type="submit"] { width: 100%; flex: none; } .features { padding: 2rem 1rem 3rem; } }
   </style>
 </head>
 <body>
+  <a href="#main-content" class="skip-link">Skip to content</a>
   <header data-testid="landing-header">
     <span class="logo" data-testid="landing-logo">OurSharedEvents</span>
     <nav data-testid="landing-nav">
@@ -603,7 +620,7 @@ const LANDING_HTML = `<!DOCTYPE html>
       <a href="/admin" data-testid="nav-admin">Admin</a>
     </nav>
   </header>
-  <main data-testid="landing-main">
+  <main id="main-content" data-testid="landing-main">
     <section class="hero" data-testid="hero-section">
       <h1>Gather with your neighborhood on Chicago&#x2019;s Southside</h1>
       <p>Community events that bring people together. Stay in the loop and be the first to know when something&#x2019;s happening near you.</p>
@@ -1118,6 +1135,10 @@ const POSTER_HTML = `<!DOCTYPE html>
     .poster-sponsor img { height: 28px; width: auto; max-width: 80px; object-fit: contain; }
     .poster-sponsor-name { font-size: .75rem; color: #64748b; font-weight: 500; }
     .poster-sponsor-label { font-size: .65rem; text-transform: uppercase; letter-spacing: .06em; color: #64748b; text-align: center; margin-bottom: .35rem; }
+    .page-header a:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+    .event-select select:focus { border-color: #4361ee; outline: none; box-shadow: 0 0 0 3px rgba(67,97,238,.15); }
+    .skip-link { position: absolute; left: -9999px; top: auto; width: 1px; height: 1px; overflow: hidden; }
+    .skip-link:focus { position: fixed; top: 0; left: 0; width: auto; height: auto; padding: .5rem 1rem; background: #1a1a2e; color: #fff; font-size: 1rem; z-index: 9999; text-decoration: none; border-bottom: 2px solid #4361ee; }
     @media print {
       .page-header, .event-select, .no-print { display: none !important; }
       body { background: #fff; }
@@ -1127,11 +1148,12 @@ const POSTER_HTML = `<!DOCTYPE html>
   </style>
 </head>
 <body>
+  <a href="#main-content" class="skip-link">Skip to content</a>
   <div class="page-header no-print" data-testid="poster-header">
     <h1>OurSharedEvents — Poster</h1>
     <a href="javascript:window.print()" data-testid="poster-print">&#x1F5A8; Print</a>
   </div>
-  <div class="container" data-testid="poster-container">
+  <div id="main-content" class="container" data-testid="poster-container">
     <div class="event-select no-print" data-testid="poster-event-select">
       <label for="event-picker">Select Event</label>
       <select id="event-picker" data-testid="poster-event-picker"><option value="">Loading events&hellip;</option></select>
@@ -1260,14 +1282,18 @@ const SHARED_REPORT_HTML = `<!DOCTYPE html>
     .btn:hover:not(:disabled) { opacity: .85; }
     .btn:disabled { opacity: .45; cursor: not-allowed; }
     .btn-outline { background: #fff; color: #1a1a2e; border: 1.5px solid #dee2e6; box-shadow: 0 1px 2px rgba(0,0,0,.05); }
+    .btn:focus-visible { outline: 2px solid #4361ee; outline-offset: 2px; }
+    .skip-link { position: absolute; left: -9999px; top: auto; width: 1px; height: 1px; overflow: hidden; }
+    .skip-link:focus { position: fixed; top: 0; left: 0; width: auto; height: auto; padding: .5rem 1rem; background: #1a1a2e; color: #fff; font-size: 1rem; z-index: 9999; text-decoration: none; border-bottom: 2px solid #4361ee; }
   </style>
 </head>
 <body>
+  <a href="#main-content" class="skip-link">Skip to content</a>
   <header data-testid="report-header">
     <h1>OurSharedEvents</h1>
     <span>Shared Report</span>
   </header>
-  <main data-testid="report-main">
+  <main id="main-content" data-testid="report-main">
     <div class="action-bar" data-testid="report-action-bar">
       <button class="btn btn-outline" data-testid="export-json-btn" id="export-json-btn" disabled>
         &#8595; Export JSON
