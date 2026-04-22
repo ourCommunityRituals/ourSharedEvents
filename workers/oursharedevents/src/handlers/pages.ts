@@ -1309,6 +1309,14 @@ const SHARED_REPORT_HTML = `<!DOCTYPE html>
       body { background: #fff; }
       #advanced-metrics-section { display: block !important; }
     }
+    .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border-width: 0; }
+    .report-table { width: 100%; border-collapse: collapse; }
+    .report-table th[scope] { text-align: left; padding: .625rem 1.25rem; font-size: .8rem; color: #6c757d; font-weight: 600; border-bottom: 2px solid #f1f3f5; }
+    .report-table td { padding: .875rem 1.25rem; border-bottom: 1px solid #f1f3f5; font-size: .9rem; }
+    .report-table tr:last-child td { border-bottom: none; }
+    .stat-dl { display: flex; flex-direction: column; }
+    .stat-dl dt { font-size: .8rem; color: #6c757d; order: 2; margin-top: .25rem; }
+    .stat-dl dd { font-size: 2rem; font-weight: 800; color: #1a1a2e; line-height: 1; order: 1; margin: 0; }
   </style>
 </head>
 <body>
@@ -1326,19 +1334,19 @@ const SHARED_REPORT_HTML = `<!DOCTYPE html>
         &#128438; Export PDF
       </button>
     </div>
-    <div>
-      <div class="section-title">Events Overview</div>
+    <section aria-labelledby="section-stats">
+      <h2 class="section-title" id="section-stats">Events Overview</h2>
       <div class="stats-row" id="stats-row" data-testid="report-stats">
-        <div class="stat-card" data-testid="stat-total"><div class="num" id="stat-total">&mdash;</div><div class="label">Total Events</div></div>
-        <div class="stat-card" data-testid="stat-active"><div class="num" id="stat-active">&mdash;</div><div class="label">Active</div></div>
+        <div class="stat-card" data-testid="stat-total"><dl class="stat-dl"><dt>Total Events</dt><dd id="stat-total">&mdash;</dd></dl></div>
+        <div class="stat-card" data-testid="stat-active"><dl class="stat-dl"><dt>Active</dt><dd id="stat-active">&mdash;</dd></dl></div>
       </div>
-    </div>
-    <div>
-      <div class="section-title">Events</div>
+    </section>
+    <section aria-labelledby="section-events">
+      <h2 class="section-title" id="section-events">Events</h2>
       <div class="events-list" id="events-list" data-testid="report-events-list"><p class="loading">Loading&hellip;</p></div>
-    </div>
-    <section id="report-sponsor-section" data-testid="report-sponsor-section">
-      <div class="section-title">Sponsor Overview</div>
+    </section>
+    <section id="report-sponsor-section" aria-labelledby="section-sponsors" data-testid="report-sponsor-section">
+      <h2 class="section-title" id="section-sponsors">Sponsor Overview</h2>
       <div id="sponsor-metrics" class="sponsor-metrics" data-testid="report-sponsor-metrics"></div>
     </section>
     <section id="advanced-metrics-section" data-testid="advanced-metrics-section" style="display:none" aria-labelledby="section-advanced-metrics">
@@ -1368,12 +1376,19 @@ const SHARED_REPORT_HTML = `<!DOCTYPE html>
           listEl.innerHTML = '<p class="empty">No events to report.</p>';
           return;
         }
-        listEl.innerHTML = items.map(e => '<div class="event-row" data-testid="report-event-row">' +
-          '<div class="name" data-testid="report-event-name">' + esc(e.name || 'Untitled') + '</div>' +
-          '<div class="flex-row">' +
-          '<div class="date" data-testid="report-event-date">' + esc(fmt(e.startDateISO)) + '</div>' +
-          '<span class="badge ' + esc(e.status || '') + '" data-testid="report-event-status">' + esc(e.status || '') + '</span>' +
-          '</div></div>').join('');
+        listEl.innerHTML = '<table class="report-table" data-testid="events-table"><caption class="sr-only">Events list</caption>' +
+          '<thead><tr>' +
+          '<th scope="col">Name</th>' +
+          '<th scope="col">Date</th>' +
+          '<th scope="col">Status</th>' +
+          '</tr></thead>' +
+          '<tbody>' +
+          items.map(e => '<tr data-testid="report-event-row">' +
+            '<td data-testid="report-event-name">' + esc(e.name || 'Untitled') + '</td>' +
+            '<td data-testid="report-event-date">' + esc(fmt(e.startDateISO)) + '</td>' +
+            '<td><span class="badge ' + esc(e.status || '') + '" data-testid="report-event-status">' + esc(e.status || '') + '</span></td>' +
+            '</tr>').join('') +
+          '</tbody></table>';
         document.getElementById('export-json-btn').disabled = false;
       } catch {
         listEl.innerHTML = '<p class="empty">Could not load data.</p>';
