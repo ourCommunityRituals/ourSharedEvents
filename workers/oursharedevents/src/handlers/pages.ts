@@ -228,7 +228,7 @@ const ADMIN_HTML = `<!DOCTYPE html>
     .create-form input:focus, .create-form select:focus { border-color: #4361ee; outline: none; box-shadow: 0 0 0 3px rgba(67,97,238,.12); }
     .create-btn { padding: .6rem 1.5rem; background: #16a34a; color: #fff; border: none; border-radius: 6px; font-size: .9rem; font-weight: 600; cursor: pointer; transition: background .2s; }
     .create-btn:hover { background: #15803d; }
-    .create-btn:disabled { background: #94a3b8; cursor: not-allowed; }
+    .create-btn:disabled { background: #64748b; cursor: not-allowed; }
     .create-msg { font-size: .85rem; margin-top: .5rem; min-height: 1.25rem; }
     .create-msg.success { color: #16a34a; }
     .create-msg.error { color: #dc2626; }
@@ -876,7 +876,7 @@ const LANDING_HTML = `<!DOCTYPE html>
     .subscribe-form button[type="submit"] { padding: .75rem 1.5rem; background: #2563eb; color: #fff; border: none; border-radius: 8px; font-size: 1rem; font-weight: 600; cursor: pointer; transition: background 0.2s; white-space: nowrap; }
     .subscribe-form button[type="submit"]:hover { background: #1d4ed8; }
     .subscribe-form button[type="submit"]:focus-visible { outline: 2px solid #1d4ed8; outline-offset: 2px; }
-    .subscribe-form button[type="submit"]:disabled { background: #94a3b8; cursor: not-allowed; }
+    .subscribe-form button[type="submit"]:disabled { background: #64748b; cursor: not-allowed; }
     .form-message { width: 100%; text-align: center; font-size: .875rem; margin-top: .75rem; min-height: 1.25rem; }
     .form-message.success { color: #059669; }
     .form-message.error { color: #dc2626; }
@@ -1245,15 +1245,15 @@ const DISPLAY_HTML = `<!DOCTYPE html>
       background: rgba(255,255,255,.05); border-radius: 12px;
       padding: 2rem 2.5rem; border: 1px solid rgba(255,255,255,.08);
     }
-    .event-card .label { font-size: .75rem; text-transform: uppercase; letter-spacing: .08em; color: #94a3b8; margin-bottom: .5rem; }
+    .event-card .label { font-size: .75rem; text-transform: uppercase; letter-spacing: .08em; color: #64748b; margin-bottom: .5rem; }
     .event-card h2 { font-size: clamp(1.5rem, 4vw, 2.5rem); font-weight: 800; line-height: 1.15; color: #f8fafc; margin-bottom: .75rem; }
-    .event-card .meta { font-size: 1.1rem; color: #94a3b8; display: flex; gap: 1.5rem; flex-wrap: wrap; }
+    .event-card .meta { font-size: 1.1rem; color: #64748b; display: flex; gap: 1.5rem; flex-wrap: wrap; }
     .event-card .meta span::before { content: ""; }
     .next-events { display: grid; gap: 1rem; }
     .next-events h3 { font-size: .8rem; text-transform: uppercase; letter-spacing: .08em; color: #64748b; margin-bottom: .25rem; }
     .next-card { background: rgba(255,255,255,.03); border-radius: 8px; padding: 1rem 1.25rem; border: 1px solid rgba(255,255,255,.06); display: flex; justify-content: space-between; align-items: center; }
     .next-card .name { font-weight: 600; font-size: 1rem; }
-    .next-card .date { font-size: .85rem; color: #94a3b8; }
+    .next-card .date { font-size: .85rem; color: #64748b; }
     .empty { text-align: center; padding: 4rem; color: #475569; font-size: 1.1rem; }
     .ticker { background: #1e3a5f; padding: .6rem 2rem; font-size: .85rem; color: #93c5fd; border-top: 1px solid rgba(255,255,255,.06); overflow: hidden; white-space: nowrap; }
     .ticker-inner { display: inline-block; animation: scroll 30s linear infinite; }
@@ -1265,7 +1265,7 @@ const DISPLAY_HTML = `<!DOCTYPE html>
     .display-sponsor-item { display: flex; align-items: center; gap: .5rem; padding: .5rem; background: rgba(255,255,255,.05); border-radius: 6px; border: 1px solid rgba(255,255,255,.06); transition: opacity .6s ease-in-out; }
     .display-sponsor-item.fade-out { opacity: 0; }
     .display-sponsor-item img { height: 36px; width: auto; max-width: 80px; object-fit: contain; filter: brightness(1.1); }
-    .display-sponsor-item .name { font-size: .8rem; color: #94a3b8; }
+    .display-sponsor-item .name { font-size: .8rem; color: #64748b; }
     .display-sponsor-item[data-tier="title"],
     .display-sponsor-item[data-tier="platinum"] { border-color: rgba(234,179,8,.4); background: rgba(234,179,8,.08); padding: .625rem .75rem; }
     .display-sponsor-item[data-tier="title"] img,
@@ -1460,6 +1460,13 @@ const POSTER_HTML = `<!DOCTYPE html>
     .poster-sponsor img { height: 28px; width: auto; max-width: 80px; object-fit: contain; }
     .poster-sponsor-name { font-size: .75rem; color: #64748b; font-weight: 500; }
     .poster-sponsor-label { font-size: .65rem; text-transform: uppercase; letter-spacing: .06em; color: #64748b; text-align: center; margin-bottom: .35rem; }
+    .poster-sponsor-tier-row { display: flex; align-items: center; justify-content: center; gap: 1rem; flex-wrap: wrap; padding: .2rem 0; }
+    .poster-sponsor-tier-label { font-size: .6rem; text-transform: uppercase; letter-spacing: .06em; color: #64748b; text-align: center; width: 100%; margin-bottom: .15rem; }
+    .poster-sponsor--premium img { height: 36px; }
+    .poster-sponsor--premium .poster-sponsor-name { font-size: .8rem; font-weight: 600; color: #1e293b; }
+    .poster-sponsor--mid img { height: 26px; }
+    .poster-sponsor--local img { height: 20px; }
+    .poster-sponsor--local .poster-sponsor-name { font-size: .65rem; color: #64748b; }
     .page-header a:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
     .event-select select:focus { border-color: #4361ee; outline: none; box-shadow: 0 0 0 3px rgba(67,97,238,.15); }
     .skip-link { position: absolute; left: -9999px; top: auto; width: 1px; height: 1px; overflow: hidden; }
@@ -1497,23 +1504,23 @@ const POSTER_HTML = `<!DOCTYPE html>
       const startISO = data.startDateISO || event.startDateISO || '';
       const name = data.name || event.name || 'Event';
 
-      return '<div class="poster">' +
+      return '<div class="poster" data-testid="poster-card">' +
         '<div class="poster-header">' +
           '<div class="org">OurSharedEvents</div>' +
-          '<h2>' + esc(name) + '</h2>' +
+          '<h2 data-testid="poster-event-title">' + esc(name) + '</h2>' +
         '</div>' +
         '<div class="poster-body">' +
-          '<div class="poster-meta">' +
+          '<div class="poster-meta" data-testid="poster-meta">' +
           (startISO ? '<div class="meta-row"><div class="meta-icon">&#x1F4C5;</div><div class="meta-text">' + esc(fmt(startISO)) + (startISO ? ' &mdash; ' + esc(fmtTime(startISO)) : '') + '</div></div>' : '') +
           (venue ? '<div class="meta-row"><div class="meta-icon">&#x1F4CD;</div><div class="meta-text">' + esc(venue) + (address ? '<br><small>' + esc(address) + '</small>' : '') + '</div></div>' : '') +
           '</div>' +
-          '<div class="qr-section">' +
+          '<div class="qr-section" data-testid="poster-qr">' +
             '<div class="qr-item"><div class="qr-placeholder">QR codes available after event setup</div><div class="qr-label">Event Page</div></div>' +
             '<div class="qr-item"><div class="qr-placeholder">QR codes available after event setup</div><div class="qr-label">Registration</div></div>' +
           '</div>' +
         '</div>' +
         '<div id="poster-sponsor-strip" class="poster-sponsors" data-testid="poster-sponsor-strip"></div>' +
-        '<div class="poster-footer">oursharedevents.com</div>' +
+        '<div class="poster-footer" data-testid="poster-footer">oursharedevents.com</div>' +
       '</div>';
     }
 
@@ -1554,11 +1561,27 @@ const POSTER_HTML = `<!DOCTYPE html>
         if (!data.ok) return;
         const sponsors = data.bundle?.surface_sponsors?.posterTop || [];
         if (!sponsors.length) { strip.innerHTML = ''; return; }
-        strip.innerHTML = '<div class="poster-sponsor-label">Sponsored By</div>' +
-          sponsors.map(s => {
-            const logo = s.logo_url ? '<img src="' + esc(s.logo_url) + '" alt="' + esc(s.name) + '">' : '';
-            return '<div class="poster-sponsor" data-testid="poster-sponsor-item">' + logo + '<span class="poster-sponsor-name">' + esc(s.name) + '</span></div>';
-          }).join('');
+
+        const premium = sponsors.filter(function(s) { return s.tier === 'title' || s.tier === 'platinum'; });
+        const mid = sponsors.filter(function(s) { return s.tier === 'gold' || s.tier === 'silver'; });
+        const local = sponsors.filter(function(s) { return s.tier === 'bronze' || s.tier === 'primary'; });
+
+        function renderTierRow(group, mod, testid, label) {
+          if (!group.length) return '';
+          return '<div class="poster-sponsor-tier-row" data-testid="' + testid + '">' +
+            (label ? '<span class="poster-sponsor-tier-label">' + label + '</span>' : '') +
+            group.map(function(s) {
+              var logo = s.logo_url ? '<img src="' + esc(s.logo_url) + '" alt="' + esc(s.name) + '">' : '';
+              return '<div class="poster-sponsor poster-sponsor--' + mod + '" data-testid="poster-sponsor-item">' +
+                logo + '<span class="poster-sponsor-name">' + esc(s.name) + '</span></div>';
+            }).join('') +
+          '</div>';
+        }
+
+        strip.innerHTML = '<div class="poster-sponsor-label" data-testid="poster-sponsor-label">Sponsored By</div>' +
+          renderTierRow(premium, 'premium', 'poster-sponsor-premium', null) +
+          renderTierRow(mid, 'mid', 'poster-sponsor-mid', null) +
+          renderTierRow(local, 'local', 'poster-sponsor-local', local.length && (premium.length || mid.length) ? 'Supporting Sponsors' : null);
       } catch { strip.innerHTML = ''; }
     }
     init();
