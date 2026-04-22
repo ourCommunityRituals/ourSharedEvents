@@ -107,9 +107,9 @@ function registrationForm(eventId: string): string {
       <p id="error-msg" class="error-msg" data-testid="form-error" role="alert" aria-live="assertive"></p>
       <form onsubmit="handleRegister(event)" data-testid="register-form">
         <label for="name">Your name</label>
-        <input type="text" id="name" data-testid="register-name-input" placeholder="Jane Smith" maxlength="200" required autocomplete="name" aria-required="true" />
+        <input type="text" id="name" data-testid="register-name-input" placeholder="Jane Smith" maxlength="200" required autocomplete="name" aria-required="true" aria-describedby="error-msg" />
         <label for="email">Email (optional)</label>
-        <input type="email" id="email" data-testid="register-email-input" placeholder="jane@example.com" maxlength="320" autocomplete="email" />
+        <input type="email" id="email" data-testid="register-email-input" placeholder="jane@example.com" maxlength="320" autocomplete="email" aria-describedby="error-msg" />
         <button type="submit" data-testid="register-submit">Register</button>
         <p class="privacy-notice" data-testid="privacy-notice">By submitting, you agree to our data collection practices. Your name is stored temporarily and deleted after the event. Email is hashed for deduplication only.</p>
       </form>
@@ -170,14 +170,14 @@ function surveyForm(eventId: string): string {
       <form onsubmit="handleSurvey(event)" data-testid="survey-form">
         <label id="rating-label">Overall rating</label>
         <div class="rating-row" id="rating-overall" data-testid="survey-rating-overall" role="group" aria-labelledby="rating-label">
-          <button type="button" data-testid="survey-rating-1" onclick="setRating('overall',1)">1</button>
-          <button type="button" data-testid="survey-rating-2" onclick="setRating('overall',2)">2</button>
-          <button type="button" data-testid="survey-rating-3" onclick="setRating('overall',3)">3</button>
-          <button type="button" data-testid="survey-rating-4" onclick="setRating('overall',4)">4</button>
-          <button type="button" data-testid="survey-rating-5" onclick="setRating('overall',5)">5</button>
+          <button type="button" data-testid="survey-rating-1" onclick="setRating('overall',1)" aria-label="Rate 1 out of 5">1</button>
+          <button type="button" data-testid="survey-rating-2" onclick="setRating('overall',2)" aria-label="Rate 2 out of 5">2</button>
+          <button type="button" data-testid="survey-rating-3" onclick="setRating('overall',3)" aria-label="Rate 3 out of 5">3</button>
+          <button type="button" data-testid="survey-rating-4" onclick="setRating('overall',4)" aria-label="Rate 4 out of 5">4</button>
+          <button type="button" data-testid="survey-rating-5" onclick="setRating('overall',5)" aria-label="Rate 5 out of 5">5</button>
         </div>
         <label for="comments">Comments (optional)</label>
-        <textarea id="comments" data-testid="survey-comments-input" placeholder="Tell us what you thought..." maxlength="1000"></textarea>
+        <textarea id="comments" data-testid="survey-comments-input" placeholder="Tell us what you thought..." maxlength="1000" aria-describedby="error-msg"></textarea>
         <button type="submit" data-testid="survey-submit">Submit Feedback</button>
         <p class="privacy-notice" data-testid="privacy-notice">By submitting, you agree to our data collection practices. Ratings are kept for analytics. Comments are scrubbed of personal data within 24 hours.</p>
       </form>
@@ -212,7 +212,7 @@ function emailSignupForm(eventId: string): string {
       <p id="error-msg" class="error-msg" data-testid="form-error" role="alert" aria-live="assertive"></p>
       <form onsubmit="handleEmail(event)" data-testid="email-form">
         <label for="email">Your email</label>
-        <input type="email" id="email" data-testid="email-email-input" placeholder="you@example.com" maxlength="320" required autocomplete="email" aria-required="true" />
+        <input type="email" id="email" data-testid="email-email-input" placeholder="you@example.com" maxlength="320" required autocomplete="email" aria-required="true" aria-describedby="error-msg" />
         <button type="submit" data-testid="email-submit">Sign me up</button>
         <p class="privacy-notice" data-testid="privacy-notice">By submitting, you agree to our data collection practices. Your email is encrypted and automatically deleted after 30 days.</p>
       </form>

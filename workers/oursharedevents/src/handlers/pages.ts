@@ -1350,9 +1350,9 @@ const SHARED_REPORT_HTML = `<!DOCTYPE html>
       <div id="sponsor-metrics" class="sponsor-metrics" data-testid="report-sponsor-metrics"></div>
     </section>
     <section id="advanced-metrics-section" data-testid="advanced-metrics-section" style="display:none" aria-labelledby="section-advanced-metrics">
-      <div class="section-title" id="section-advanced-metrics">Advanced Metrics <span class="tier-badge mid" data-testid="advanced-metrics-tier-badge">Mid+</span></div>
+      <h2 class="section-title" id="section-advanced-metrics">Advanced Metrics <span class="tier-badge mid" data-testid="advanced-metrics-tier-badge">Mid+</span></h2>
       <div id="advanced-metrics-content" data-testid="advanced-metrics-content" class="funnel-card">
-        <p class="loading">Loading&hellip;</p>
+        <p class="loading" role="status" aria-live="polite">Loading&hellip;</p>
       </div>
     </section>
   </main>
