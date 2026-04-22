@@ -58,6 +58,9 @@ const FORM_CSS = `
   .error-msg { color: #e03131; font-size: .85rem; margin-bottom: .5rem; display: none; }
   .privacy-notice { font-size: .75rem; color: #6c757d; margin-top: .75rem; line-height: 1.4; }
   .privacy-notice a { color: #4361ee; }
+  .skip-link { position: absolute; left: -9999px; top: auto; width: 1px; height: 1px; overflow: hidden; }
+  .skip-link:focus { position: fixed; top: 0; left: 0; width: auto; height: auto; padding: .5rem 1rem; background: #1a1a2e; color: #fff; font-size: 1rem; z-index: 9999; text-decoration: none; border-bottom: 2px solid #4361ee; }
+  button:focus-visible { outline: 2px solid #4361ee; outline-offset: 2px; }
   .rating-row { display: flex; gap: .5rem; margin-bottom: .75rem; }
   .rating-row button { width: auto; flex: 1; padding: .5rem; font-size: 1.1rem; background: #f1f3f5; color: #495057; border: 2px solid transparent; }
   .rating-row button.selected { background: #4361ee; color: #fff; border-color: #3451d1; }
@@ -254,11 +257,12 @@ function formPage(eventId: string, eventName: string, formType: string): string 
   <style>${FORM_CSS}</style>
 </head>
 <body>
+  <a href="#main-content" class="skip-link">Skip to content</a>
   <header data-testid="form-header">
     <h1>OurSharedEvents</h1>
     <div class="event-name" data-testid="form-event-name">${eventName}</div>
   </header>
-  <main data-testid="form-main">${formHtml}</main>
+  <main id="main-content" data-testid="form-main">${formHtml}</main>
 </body>
 </html>`;
 }
