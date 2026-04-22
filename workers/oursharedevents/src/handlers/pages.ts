@@ -1302,6 +1302,13 @@ const SHARED_REPORT_HTML = `<!DOCTYPE html>
     .upgrade-prompt p { font-size: .85rem; color: #6c757d; margin: 0; }
     .skip-link { position: absolute; left: -9999px; top: auto; width: 1px; height: 1px; overflow: hidden; }
     .skip-link:focus { position: fixed; top: 0; left: 0; width: auto; height: auto; padding: .5rem 1rem; background: #1a1a2e; color: #fff; font-size: 1rem; z-index: 9999; text-decoration: none; border-bottom: 2px solid #4361ee; }
+    @media print {
+      .skip-link, .action-bar { display: none !important; }
+      header { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      .stat-card, .events-list, .sponsor-metric-card, .funnel-card { box-shadow: none; border: 1px solid #e9ecef; }
+      body { background: #fff; }
+      #advanced-metrics-section { display: block !important; }
+    }
   </style>
 </head>
 <body>
@@ -1314,6 +1321,9 @@ const SHARED_REPORT_HTML = `<!DOCTYPE html>
     <div class="action-bar" data-testid="report-action-bar">
       <button class="btn btn-outline" data-testid="export-json-btn" id="export-json-btn" disabled>
         &#8595; Export JSON
+      </button>
+      <button class="btn btn-outline" data-testid="export-pdf-btn" id="export-pdf-btn" disabled title="Mid+ plan required">
+        &#128438; Export PDF
       </button>
     </div>
     <div>
@@ -1414,6 +1424,8 @@ const SHARED_REPORT_HTML = `<!DOCTYPE html>
         if (tr && tr.ok && tr.tier) tier = tr.tier;
       } catch { /* stay free */ }
       section.style.display = '';
+      const pdfBtn = document.getElementById('export-pdf-btn');
+      if (pdfBtn && tier !== 'free') { pdfBtn.disabled = false; pdfBtn.title = ''; }
       if (tier === 'free') {
         content.innerHTML = '<div class="upgrade-prompt" data-testid="advanced-metrics-upgrade"><strong>Upgrade to Mid+ for Advanced Metrics</strong><p>Conversion funnels and per-event trends are available on the Mid+ plan.</p></div>';
         return;
@@ -1462,6 +1474,9 @@ const SHARED_REPORT_HTML = `<!DOCTYPE html>
         }).join('') +
         '</tbody></table>';
     })();
+    document.getElementById('export-pdf-btn').addEventListener('click', function() {
+      window.print();
+    });
     document.getElementById('export-json-btn').addEventListener('click', function() {
       const bundle = window.__reportBundle || {};
       const params = new URLSearchParams(location.search);
