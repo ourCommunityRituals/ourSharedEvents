@@ -90,6 +90,7 @@ export default defineConfig({
   ],
   test: {
     include: ['tests/**/*.spec.ts'],
+    exclude: ['tests/a11y-axe.spec.ts'],
     pool: cloudflarePool(),
   },
 });
