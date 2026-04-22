@@ -59,13 +59,13 @@ describe('REG-6: event_type_registry table', () => {
       .DB.prepare(
         `
       INSERT INTO event_type_registry (id, uec_code, name, description, phase, legal_clearance_tier)
-      VALUES ('etr-bocce-1', 'REC-BOCCE-001', 'Bocce Tournament', 'Recreational bocce league play', 1, 1)
+      VALUES ('etr-test-schema-1', 'TEST-SCHEMA-001', 'Schema Test Event Type', 'Used only to verify CRUD in regulatory-schema tests', 1, 1)
     `
       )
       .run();
 
     const row = await tenv()
-      .DB.prepare("SELECT * FROM event_type_registry WHERE id='etr-bocce-1'")
+      .DB.prepare("SELECT * FROM event_type_registry WHERE id='etr-test-schema-1'")
       .first<{
         uec_code: string;
         phase: number;
@@ -73,7 +73,7 @@ describe('REG-6: event_type_registry table', () => {
         is_active: number;
       }>();
 
-    expect(row?.uec_code).toBe('REC-BOCCE-001');
+    expect(row?.uec_code).toBe('TEST-SCHEMA-001');
     expect(row?.phase).toBe(1);
     expect(row?.legal_clearance_tier).toBe(1);
     expect(row?.is_active).toBe(1);
@@ -85,7 +85,7 @@ describe('REG-6: event_type_registry table', () => {
         .DB.prepare(
           `
         INSERT INTO event_type_registry (id, uec_code, name, phase)
-        VALUES ('etr-bocce-dupe', 'REC-BOCCE-001', 'Bocce Duplicate', 1)
+        VALUES ('etr-test-schema-dupe', 'TEST-SCHEMA-001', 'Schema Test Duplicate', 1)
       `
         )
         .run()
