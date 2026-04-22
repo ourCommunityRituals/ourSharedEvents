@@ -9,13 +9,21 @@
  */
 
 import { describe, test, expect } from 'vitest';
-import { handleAdminPage, handlePosterPage, handleSharedReportPage } from '../src/handlers/pages';
+import {
+  handleAdminPage,
+  handleDisplayPage,
+  handlePosterPage,
+  handleSharedReportPage,
+} from '../src/handlers/pages';
 import { handleFormPage } from '../src/handlers/form-pages';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 function adminHtml(): Promise<string> {
   return handleAdminPage({} as never).text();
+}
+function displayHtml(): Promise<string> {
+  return handleDisplayPage({} as never).text();
 }
 function reportHtml(): Promise<string> {
   return handleSharedReportPage({} as never).text();
@@ -75,6 +83,13 @@ describe('A11Y-6: skip-to-content link present on all pages', () => {
   test('survey form has skip link targeting #main-content', async () => {
     const body = await formHtml('survey');
     expect(body).toContain('href="#main-content"');
+    expect(body).toContain('id="main-content"');
+  });
+
+  test('display page has skip link targeting #main-content (DESIGN-15)', async () => {
+    const body = await displayHtml();
+    expect(body).toContain('href="#main-content"');
+    expect(body).toContain('class="skip-link"');
     expect(body).toContain('id="main-content"');
   });
 });
