@@ -25,6 +25,7 @@ jobs:
   review:
     name: "Claude PR Review"
     runs-on: self-hosted
+    continue-on-error: true  # Advisory — cancellation via concurrency group must not block PRs
     defaults:
       run:
         shell: bash
