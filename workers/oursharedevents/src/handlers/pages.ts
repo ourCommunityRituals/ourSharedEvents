@@ -238,6 +238,37 @@ const ADMIN_HTML = `<!DOCTYPE html>
     .form-link:focus-visible { outline: 2px solid #4361ee; outline-offset: 2px; }
     .clickable-row:focus-visible { outline: 2px solid #4361ee; outline-offset: -2px; background: #eef2ff; }
     @media (max-width: 600px) { .create-form { grid-template-columns: 1fr; } }
+    .sponsors-card { background: #fff; border-radius: 8px; padding: 1.25rem 1.5rem; box-shadow: 0 1px 3px rgba(0,0,0,.08); margin-top: 2rem; }
+    .sponsors-card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; }
+    .sponsors-card-header h2 { margin-bottom: 0; }
+    .add-spon-btn { padding: .4rem 1rem; background: #4361ee; color: #fff; border: none; border-radius: 6px; font-size: .85rem; font-weight: 600; cursor: pointer; transition: background .2s; }
+    .add-spon-btn:hover { background: #3a56d4; }
+    .add-spon-btn:focus-visible { outline: 2px solid #4361ee; outline-offset: 2px; }
+    .cancel-btn { padding: .6rem 1rem; background: #fff; color: #495057; border: 1px solid #dee2e6; border-radius: 6px; font-size: .9rem; cursor: pointer; }
+    .cancel-btn:hover { background: #f8f9fa; }
+    .spon-form-wrap { background: #f8f9fa; border-radius: 6px; padding: 1rem; margin-bottom: 1rem; border-left: 3px solid #4361ee; }
+    .spon-tier-pill { display: inline-block; padding: .15rem .5rem; border-radius: 4px; font-size: .7rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+    .spon-tier-pill.title    { background: #fff9db; color: #7d5a00; }
+    .spon-tier-pill.platinum { background: #e8deee; color: #7c3aed; }
+    .spon-tier-pill.gold     { background: #fff3cd; color: #856404; }
+    .spon-tier-pill.silver   { background: #e9ecef; color: #495057; }
+    .spon-tier-pill.bronze   { background: #fde8d8; color: #9c4221; }
+    .spon-tier-pill.primary  { background: #d0ebff; color: #1971c2; }
+    .placement-pips { display: flex; gap: .25rem; flex-wrap: wrap; }
+    .pip { display: inline-block; padding: .1rem .35rem; border-radius: 3px; font-size: .65rem; font-weight: 700; background: #e9ecef; color: #adb5bd; }
+    .pip.active { background: #4361ee; color: #fff; }
+    .spon-action-btn { padding: .25rem .6rem; border: 1px solid #dee2e6; border-radius: 4px; font-size: .75rem; cursor: pointer; background: #fff; color: #495057; transition: all .15s; }
+    .spon-action-btn:hover { background: #f8f9fa; }
+    .spon-action-btn:focus-visible { outline: 2px solid #4361ee; outline-offset: 2px; }
+    .spon-action-btn.deactivate { border-color: #ffc9c9; color: #c92a2a; }
+    .spon-action-btn.deactivate:hover { background: #fff5f5; }
+    .placements-group { display: flex; gap: 1.25rem; flex-wrap: wrap; margin-top: .25rem; }
+    .placement-check { display: flex; align-items: center; gap: .35rem; font-size: .85rem; cursor: pointer; font-weight: normal; color: #212529; }
+    .placement-check input { cursor: pointer; width: auto; }
+    .spon-edit-ctx { padding: .4rem .75rem; background: #e8f4fd; border-radius: 4px; font-size: .85rem; color: #1971c2; margin-bottom: .75rem; font-weight: 500; }
+    .spon-row-inactive { opacity: .55; }
+    .spon-ml { margin-left: .25rem; }
+    .deact-confirm-lbl { font-size: .8rem; }
   </style>
 </head>
 <body>
@@ -455,6 +486,297 @@ const ADMIN_HTML = `<!DOCTYPE html>
         console.error('Flag toggle failed:', err);
       }
     };
+  </script>
+
+  <!-- Card 3: Sponsor Management (SPON-6) -->
+  <div class="sponsors-card" data-testid="sponsors-card">
+    <div class="sponsors-card-header">
+      <h2>Sponsors</h2>
+      <button class="add-spon-btn" id="add-spon-toggle" data-testid="add-sponsor-toggle"
+        aria-expanded="false" aria-controls="spon-form-wrap">+ Add Sponsor</button>
+    </div>
+
+    <div id="spon-form-wrap" class="spon-form-wrap" hidden data-testid="sponsor-form-wrap">
+      <form id="spon-create-form" data-testid="sponsor-create-form" novalidate>
+        <input type="hidden" id="spon-edit-id" value="" />
+        <div id="spon-edit-ctx" class="spon-edit-ctx" hidden data-testid="sponsor-edit-ctx"></div>
+        <div class="create-form">
+          <div>
+            <label for="spon-name">Name <span class="required-star" aria-hidden="true">*</span></label>
+            <input type="text" id="spon-name" name="name" data-testid="spon-name"
+              placeholder="ACME Corp" maxlength="200" required autocomplete="organization"
+              aria-required="true" />
+          </div>
+          <div>
+            <label for="spon-event">Event <span class="required-star" aria-hidden="true">*</span></label>
+            <select id="spon-event" name="event_id" data-testid="spon-event" required aria-required="true"></select>
+          </div>
+          <div>
+            <label for="spon-tier">Tier</label>
+            <select id="spon-tier" name="tier" data-testid="spon-tier">
+              <option value="primary">Primary</option>
+              <option value="bronze">Bronze</option>
+              <option value="silver">Silver</option>
+              <option value="gold">Gold</option>
+              <option value="platinum">Platinum</option>
+              <option value="title">Title</option>
+            </select>
+          </div>
+          <div>
+            <label for="spon-logo">Logo URL</label>
+            <input type="text" id="spon-logo" name="logo_url" data-testid="spon-logo"
+              placeholder="https://acme.com/logo.png" maxlength="500" />
+          </div>
+          <div class="full-width">
+            <label for="spon-website">Website URL</label>
+            <input type="text" id="spon-website" name="website_url" data-testid="spon-website"
+              placeholder="https://acme.com" maxlength="500" />
+          </div>
+          <div class="full-width">
+            <label>Placements</label>
+            <div class="placements-group" role="group" aria-label="Placement surfaces" data-testid="placements-group">
+              <label class="placement-check"><input type="checkbox" id="spon-placement-poster" data-testid="placement-poster-top" /> Poster Top</label>
+              <label class="placement-check"><input type="checkbox" id="spon-placement-tvtop" data-testid="placement-tv-top" /> TV Top</label>
+              <label class="placement-check"><input type="checkbox" id="spon-placement-tvside" data-testid="placement-tv-side" /> TV Side</label>
+              <label class="placement-check"><input type="checkbox" id="spon-placement-mobile" data-testid="placement-mobile-banner" /> Mobile Banner</label>
+            </div>
+          </div>
+          <div class="full-width form-actions">
+            <button type="submit" id="spon-submit-btn" class="create-btn" data-testid="sponsor-submit">Save Sponsor</button>
+            <button type="button" class="cancel-btn" id="spon-cancel-btn" data-testid="sponsor-cancel">Cancel</button>
+            <div id="spon-form-msg" class="create-msg" role="status" aria-live="polite" data-testid="sponsor-form-msg"></div>
+          </div>
+        </div>
+      </form>
+    </div>
+
+    <div id="sponsors-list" data-testid="sponsors-list">
+      <div class="skeleton-table" data-testid="skeleton-sponsors">
+        <div class="skeleton skeleton-row"></div>
+        <div class="skeleton skeleton-row"></div>
+        <div class="skeleton skeleton-row"></div>
+      </div>
+    </div>
+  </div>
+  <script>
+    (function() {
+      const esc = s => { const d = document.createElement('div'); d.textContent = String(s); return d.innerHTML; };
+
+      function parsePlc(raw) {
+        try { const p = JSON.parse(raw || '{}'); return (p && typeof p === 'object') ? p : {}; } catch (e) { return {}; }
+      }
+
+      function pipHtml(raw) {
+        const p = parsePlc(raw);
+        const defs = [['posterTop','P'],['tvTop','TV'],['tvSide','S'],['mobileBanner','M']];
+        return '<span class="placement-pips">' + defs.map(function(d) {
+          return '<span class="pip' + (p[d[0]] ? ' active' : '') + '" title="' + d[0] + '">' + d[1] + '</span>';
+        }).join('') + '</span>';
+      }
+
+      async function loadEventOptions(selectedId) {
+        const sel = document.getElementById('spon-event');
+        sel.innerHTML = '<option value="" disabled selected>Loading events\u2026</option>';
+        try {
+          const data = await fetch('/api/v2/admin/events').then(function(r) { return r.json(); });
+          const items = (data.ok && data.items) ? data.items : [];
+          sel.innerHTML = items.length
+            ? items.map(function(e) {
+                return '<option value="' + esc(e.id) + '"' + (e.id === selectedId ? ' selected' : '') + '>' + esc(e.name || e.id) + '</option>';
+              }).join('')
+            : '<option value="" disabled>No events found \u2014 create an event first</option>';
+        } catch (e) {
+          sel.innerHTML = '<option value="" disabled>Could not load events</option>';
+        }
+      }
+
+      async function loadSponsors() {
+        const wrap = document.getElementById('sponsors-list');
+        wrap.innerHTML = '<div class="skeleton-table"><div class="skeleton skeleton-row"></div><div class="skeleton skeleton-row"></div><div class="skeleton skeleton-row"></div></div>';
+        try {
+          const data = await fetch('/api/v2/admin/sponsors').then(function(r) { return r.json(); });
+          if (!data.ok) throw new Error(data.error || 'Load failed');
+          const items = data.items || [];
+          if (!items.length) {
+            wrap.innerHTML = '<p class="loading" data-testid="sponsors-empty">No sponsors yet. Click &ldquo;+ Add Sponsor&rdquo; to add the first one.</p>';
+            return;
+          }
+          const rows = items.map(function(s) {
+            const dimStyle = s.is_active ? '' : ' class="spon-row-inactive"';
+            const statusBadge = s.is_active
+              ? '<span class="badge active" data-testid="spon-status-' + esc(s.id) + '">Active</span>'
+              : '<span class="badge archived" data-testid="spon-status-' + esc(s.id) + '">Inactive</span>';
+            const actions = s.is_active
+              ? '<button class="spon-action-btn" data-testid="edit-' + esc(s.id) + '" onclick="window._editSponsor(\'' + esc(s.id) + '\')">Edit</button> ' +
+                '<button class="spon-action-btn deactivate" data-testid="deactivate-' + esc(s.id) + '" onclick="window._deactivateSponsor(\'' + esc(s.id) + '\')">Deactivate</button>'
+              : '<span class="muted-sm">Deactivated</span>';
+            return '<tr data-testid="sponsor-row-' + esc(s.id) + '"' + dimStyle + '>' +
+              '<td data-testid="spon-name-' + esc(s.id) + '">' + esc(s.name) + '</td>' +
+              '<td><span class="spon-tier-pill ' + esc(s.tier) + '" data-testid="spon-tier-' + esc(s.id) + '">' + esc(s.tier) + '</span></td>' +
+              '<td class="muted-sm" data-testid="spon-event-' + esc(s.id) + '">' + esc(s.event_id) + '</td>' +
+              '<td data-testid="spon-placements-' + esc(s.id) + '">' + pipHtml(s.placement_formats) + '</td>' +
+              '<td>' + statusBadge + '</td>' +
+              '<td class="flex-row">' + actions + '</td>' +
+            '</tr>';
+          }).join('');
+          wrap.innerHTML = '<table data-testid="sponsors-table">' +
+            '<thead><tr><th scope="col">Name</th><th scope="col">Tier</th><th scope="col">Event</th><th scope="col">Placements</th><th scope="col">Status</th><th scope="col">Actions</th></tr></thead>' +
+            '<tbody data-testid="sponsors-tbody">' + rows + '</tbody></table>';
+        } catch (err) {
+          wrap.innerHTML = '<div class="card-error" data-testid="sponsors-error"><div class="error-icon">&#9888;</div><div class="error-msg">Could not load sponsors.</div><button class="retry-btn" data-testid="sponsors-retry" onclick="window._loadSponsors()">Retry</button></div>';
+        }
+      }
+      window._loadSponsors = loadSponsors;
+
+      function openForm() {
+        const wrap = document.getElementById('spon-form-wrap');
+        const btn = document.getElementById('add-spon-toggle');
+        wrap.removeAttribute('hidden');
+        btn.setAttribute('aria-expanded', 'true');
+        btn.textContent = '\u2715 Cancel';
+      }
+
+      function doCloseForm() {
+        document.getElementById('spon-form-wrap').setAttribute('hidden', '');
+        document.getElementById('add-spon-toggle').setAttribute('aria-expanded', 'false');
+        document.getElementById('add-spon-toggle').textContent = '+ Add Sponsor';
+        document.getElementById('spon-edit-id').value = '';
+        document.getElementById('spon-create-form').reset();
+        const msg = document.getElementById('spon-form-msg');
+        msg.textContent = '';
+        msg.className = 'create-msg';
+        document.getElementById('spon-submit-btn').textContent = 'Save Sponsor';
+        const ctx = document.getElementById('spon-edit-ctx');
+        ctx.hidden = true;
+        ctx.textContent = '';
+      }
+      window._doCloseForm = doCloseForm;
+
+      function formHasData() {
+        return !!(document.getElementById('spon-name').value.trim() ||
+                  document.getElementById('spon-edit-id').value.trim());
+      }
+
+      function closeForm() {
+        if (formHasData()) {
+          const msg = document.getElementById('spon-form-msg');
+          msg.className = 'create-msg error';
+          msg.innerHTML = 'Discard unsaved changes?\u00a0' +
+            '<button class="spon-action-btn spon-ml" onclick="window._doCloseForm()" data-testid="confirm-discard">Yes, discard</button>' +
+            '\u00a0<button class="spon-action-btn" onclick="document.getElementById(\'spon-form-msg\').textContent=\'\';document.getElementById(\'spon-form-msg\').className=\'create-msg\';" data-testid="keep-editing">Keep editing</button>';
+          return;
+        }
+        doCloseForm();
+      }
+
+      document.getElementById('add-spon-toggle').addEventListener('click', function() {
+        const hidden = document.getElementById('spon-form-wrap').hasAttribute('hidden');
+        if (hidden) { openForm(); loadEventOptions(null); } else { closeForm(); }
+      });
+      document.getElementById('spon-cancel-btn').addEventListener('click', closeForm);
+
+      window._editSponsor = async function(id) {
+        openForm();
+        const msg = document.getElementById('spon-form-msg');
+        msg.textContent = '';
+        msg.className = 'create-msg';
+        try {
+          const data = await fetch('/api/v2/admin/sponsors/' + id).then(function(r) { return r.json(); });
+          if (!data.ok || !data.item) throw new Error('Not found');
+          const s = data.item;
+          await loadEventOptions(s.event_id);
+          document.getElementById('spon-edit-id').value = s.id;
+          document.getElementById('spon-name').value = s.name || '';
+          document.getElementById('spon-event').value = s.event_id || '';
+          document.getElementById('spon-tier').value = s.tier || 'primary';
+          document.getElementById('spon-logo').value = s.logo_url || '';
+          document.getElementById('spon-website').value = s.website_url || '';
+          const p = parsePlc(s.placement_formats);
+          document.getElementById('spon-placement-poster').checked = !!p.posterTop;
+          document.getElementById('spon-placement-tvtop').checked = !!p.tvTop;
+          document.getElementById('spon-placement-tvside').checked = !!p.tvSide;
+          document.getElementById('spon-placement-mobile').checked = !!p.mobileBanner;
+          document.getElementById('spon-submit-btn').textContent = 'Update Sponsor';
+          const ctx = document.getElementById('spon-edit-ctx');
+          ctx.textContent = 'Editing: ' + (s.name || s.id);
+          ctx.hidden = false;
+          document.getElementById('spon-form-wrap').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        } catch (e) {
+          msg.textContent = 'Could not load sponsor data.';
+          msg.className = 'create-msg error';
+        }
+      };
+
+      window._deactivateSponsor = function(id) {
+        const btn = document.querySelector('[data-testid="deactivate-' + id + '"]');
+        if (!btn) return;
+        const cell = btn.parentElement;
+        cell.innerHTML =
+          '<span class="muted-sm deact-confirm-lbl">Deactivate?</span>\u00a0' +
+          '<button class="spon-action-btn deactivate" data-testid="confirm-deactivate-' + esc(id) + '" onclick="window._confirmDeactivate(\'' + esc(id) + '\')">Yes</button>' +
+          '\u00a0<button class="spon-action-btn" data-testid="cancel-deactivate-' + esc(id) + '" onclick="window._loadSponsors()">No</button>';
+      };
+
+      window._confirmDeactivate = async function(id) {
+        try {
+          const res = await fetch('/api/v2/admin/sponsors/' + id, { method: 'DELETE' });
+          const data = await res.json();
+          if (!res.ok || !data.ok) throw new Error(data.error || 'Failed');
+          loadSponsors();
+        } catch (err) {
+          alert('Could not deactivate: ' + (err.message || 'Unknown error'));
+          loadSponsors();
+        }
+      };
+
+      document.getElementById('spon-create-form').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        const btn = document.getElementById('spon-submit-btn');
+        const msg = document.getElementById('spon-form-msg');
+        const editId = document.getElementById('spon-edit-id').value.trim();
+        const name = document.getElementById('spon-name').value.trim();
+        const event_id = document.getElementById('spon-event').value.trim();
+
+        if (!name) { msg.textContent = 'Name is required.'; msg.className = 'create-msg error'; return; }
+        if (!event_id) { msg.textContent = 'Event is required.'; msg.className = 'create-msg error'; return; }
+
+        const placements = JSON.stringify({
+          posterTop: document.getElementById('spon-placement-poster').checked,
+          tvTop: document.getElementById('spon-placement-tvtop').checked,
+          tvSide: document.getElementById('spon-placement-tvside').checked,
+          mobileBanner: document.getElementById('spon-placement-mobile').checked,
+        });
+        const body = { name: name, event_id: event_id, tier: document.getElementById('spon-tier').value, placement_formats: placements };
+        const logoVal = document.getElementById('spon-logo').value.trim();
+        if (logoVal) body.logo_url = logoVal;
+        const siteVal = document.getElementById('spon-website').value.trim();
+        if (siteVal) body.website_url = siteVal;
+
+        btn.disabled = true;
+        btn.textContent = editId ? 'Updating\u2026' : 'Saving\u2026';
+        msg.textContent = '';
+        msg.className = 'create-msg';
+
+        try {
+          const url = editId ? '/api/v2/admin/sponsors/' + editId : '/api/v2/admin/sponsors';
+          const res = await fetch(url, { method: editId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+          const data = await res.json();
+          if (!res.ok || !data.ok) throw new Error(data.error || 'Save failed');
+          msg.className = 'create-msg success';
+          msg.innerHTML = (editId ? 'Sponsor updated.' : 'Sponsor created \u2014 ' + esc(data.id)) +
+            '\u00a0<button class="spon-action-btn spon-ml" onclick="window._doCloseForm()" data-testid="close-after-save">Close</button>';
+          loadSponsors();
+        } catch (err) {
+          msg.textContent = err.message || 'Could not save sponsor.';
+          msg.className = 'create-msg error';
+        } finally {
+          btn.disabled = false;
+          btn.textContent = editId ? 'Update Sponsor' : 'Save Sponsor';
+        }
+      });
+
+      loadSponsors();
+    })();
   </script>
 
   <!-- Cards 4-7: Surface Links -->
@@ -968,15 +1290,18 @@ const DISPLAY_HTML = `<!DOCTYPE html>
       .display-sponsor-banner { padding: 1rem 2rem; gap: 3rem; min-height: 64px; }
       .ticker { font-size: 1.1rem; padding: .8rem 2rem; }
     }
+    .skip-link { position: absolute; left: -9999px; top: auto; width: 1px; height: 1px; overflow: hidden; }
+    .skip-link:focus { position: fixed; top: 0; left: 0; width: auto; height: auto; padding: .5rem 1rem; background: #1a1a2e; color: #fff; font-size: 1rem; z-index: 9999; text-decoration: none; border-bottom: 2px solid #4361ee; }
   </style>
 </head>
 <body>
+  <a href="#main-content" class="skip-link">Skip to content</a>
   <header data-testid="display-header">
     <h1>OurSharedEvents</h1>
     <div class="clock" id="clock" aria-live="off" data-testid="display-clock"></div>
   </header>
   <aside id="display-sponsor-sidebar" class="display-sponsor-sidebar" data-testid="display-sponsor-sidebar"></aside>
-  <main id="main" data-testid="display-main">
+  <main id="main-content" data-testid="display-main">
     <p class="empty">Loading&hellip;</p>
   </main>
   <div id="display-sponsor-banner" class="display-sponsor-banner" data-testid="display-sponsor-banner"></div>
@@ -992,7 +1317,7 @@ const DISPLAY_HTML = `<!DOCTYPE html>
 
     // Events
     async function loadEvents() {
-      const main = document.getElementById('main');
+      const main = document.getElementById('main-content');
       try {
         const res = await fetch('/api/v2/events');
         const data = await res.json();
