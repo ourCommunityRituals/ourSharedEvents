@@ -92,7 +92,7 @@ const EXPECTED_INDEXES = [
 ] as const;
 
 const EXPECTED_COLUMN_COUNTS: Record<string, number> = {
-  events: 22,
+  events: 23,
   sponsors: 12,
   poster_deployments: 10,
   scans: 10,
