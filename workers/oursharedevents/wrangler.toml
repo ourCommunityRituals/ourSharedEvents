@@ -98,13 +98,18 @@ WORKER_BUILD_VERSION = "stg-2026.03.22"
 ALLOW_ADMIN_KEY_FALLBACK = "true"
 # Allow X-OCR-Internal header for CI/CD automation
 ALLOW_OCR_INTERNAL = "true"
-# Google Cloud — non-sensitive WIF config (inherits [vars] defaults, override here if needed)
+# Admin email allowlist (must be explicit per env — not inherited from [vars])
+ALLOWED_ADMIN_EMAILS = ""
+ALLOWED_ADMIN_DOMAINS = ""
+# Google Cloud — non-sensitive WIF config
 GCP_PROJECT_ID     = "project-7cc9adcd-ed55-47aa-958"
 GCP_PROJECT_NUMBER = "295230478705"
 WIF_POOL_ID        = "cf-workers-pool"
 WIF_PROVIDER_ID    = "cf-workers-oidc"
 WIF_ISSUER         = "https://oursharedevents-stg.workers.dev"
 BIGQUERY_DATASET_ID = "oursharedevents_backup"
+VERTEX_AI_MODEL_ID = "gemini-2.0-flash"
+GCP_REGION         = "us-central1"
 
 # Required secrets for staging (set with wrangler secret put … --env staging):
 #   ADMIN_KEY
@@ -147,6 +152,9 @@ WORKER_ENV = "production"
 WORKER_BUILD_VERSION = "prod-2026.03.22"
 # Allow X-OCR-Internal header for CI/CD automation
 ALLOW_OCR_INTERNAL = "true"
+# Admin email allowlist (must be explicit per env — not inherited from [vars])
+ALLOWED_ADMIN_EMAILS = ""
+ALLOWED_ADMIN_DOMAINS = ""
 # Google Cloud — non-sensitive WIF config
 GCP_PROJECT_ID     = "project-7cc9adcd-ed55-47aa-958"
 GCP_PROJECT_NUMBER = "295230478705"
@@ -154,6 +162,8 @@ WIF_POOL_ID        = "cf-workers-pool"
 WIF_PROVIDER_ID    = "cf-workers-oidc"
 WIF_ISSUER         = "https://oursharedevents.com"
 BIGQUERY_DATASET_ID = "oursharedevents_backup"
+VERTEX_AI_MODEL_ID = "gemini-2.0-flash"
+GCP_REGION         = "us-central1"
 
 # Required secrets for production (set with wrangler secret put … --env production):
 #   ADMIN_KEY
