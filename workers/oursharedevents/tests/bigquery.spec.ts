@@ -93,7 +93,7 @@ describe('L2: POST /api/v2/admin/events/:id/backup', () => {
       method: 'POST',
       headers: ADMIN_HEADERS,
     });
-    // Worker env has no GOOGLE_SA_CLIENT_EMAIL → 503
+    // Worker env has no WIF credentials → 503
     expect(res.status).toBe(503);
     const body = (await res.json()) as { code: string };
     expect(body.code).toBe('BQ_NOT_CONFIGURED');

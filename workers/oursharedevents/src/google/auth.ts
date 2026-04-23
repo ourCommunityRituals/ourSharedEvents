@@ -1,13 +1,19 @@
 /**
- * Google Service Account auth — JWT assertion flow (OSE-215 / BE-19)
+ * Google Workload Identity Federation auth (OSE-215 / BE-19)
  *
- * Flow:
- *   1. Build a JWT signed with the SA private key (RS256)
- *   2. POST to Google's token endpoint to get an OAuth2 access token
- *   3. Cache the token in memory with a 60-second expiry buffer
+ * Keyless auth flow — no SA JSON keys required:
+ *   1. Worker signs a JWT with WIF_PRIVATE_KEY_PEM (not a GCP SA key)
+ *   2. Exchanges with GCP STS → short-lived federated access token
+ *   3. Token used directly for BigQuery API calls
  *
- * Token endpoint: https://oauth2.googleapis.com/token
- * Scope: https://www.googleapis.com/auth/bigquery.insertdata
+ * GCP setup required:
+ *   - Workload Identity Pool (cf-workers-pool)
+ *   - OIDC Provider (cf-workers-oidc) with issuer = Worker URL
+ *   - BigQuery IAM binding for the pool principal
+ *
+ * Worker must serve:
+ *   GET /.well-known/openid-configuration
+ *   GET /.well-known/jwks.json  (public key from WIF_PUBLIC_JWKS)
  */
 
 import { importPrivateKeyFromPem, GoogleAuthError } from './pem';
@@ -15,31 +21,50 @@ import { importPrivateKeyFromPem, GoogleAuthError } from './pem';
 export { GoogleAuthError };
 
 export interface GoogleAuthEnv {
-  GOOGLE_SA_CLIENT_EMAIL?: string;
-  GOOGLE_SA_PRIVATE_KEY_PEM?: string;
+  /** RSA private key PEM for signing WIF JWTs (wrangler secret) */
+  WIF_PRIVATE_KEY_PEM?: string;
+  /** JWKS JSON string containing the public key (wrangler var — not secret) */
+  WIF_PUBLIC_JWKS?: string;
+  /** GCP project number (12 digits, different from project ID) */
+  GCP_PROJECT_NUMBER?: string;
+  /** WIF pool ID, e.g. 'cf-workers-pool' */
+  WIF_POOL_ID?: string;
+  /** WIF provider ID, e.g. 'cf-workers-oidc' */
+  WIF_PROVIDER_ID?: string;
+  /** Worker issuer URL, e.g. 'https://oursharedevents.workers.dev' */
+  WIF_ISSUER?: string;
 }
+
+const STS_ENDPOINT = 'https://sts.googleapis.com/v1/token';
+const BQ_SCOPE =
+  'https://www.googleapis.com/auth/bigquery.insertdata https://www.googleapis.com/auth/bigquery.readonly';
+const BUFFER_SECONDS = 60;
 
 interface TokenCache {
   token: string;
-  expiresAt: number; // ms since epoch
+  expiresAt: number;
 }
 
-// Module-level in-memory cache — survives across requests in same isolate
 let _cache: TokenCache | null = null;
 
-const TOKEN_ENDPOINT = 'https://oauth2.googleapis.com/token';
-const SCOPE = 'https://www.googleapis.com/auth/bigquery.insertdata';
-const BUFFER_SECONDS = 60; // refresh 60s before expiry
-
 export function hasGoogleCredentials(env: GoogleAuthEnv): boolean {
-  return Boolean(env.GOOGLE_SA_CLIENT_EMAIL?.trim() && env.GOOGLE_SA_PRIVATE_KEY_PEM?.trim());
+  return Boolean(
+    env.WIF_PRIVATE_KEY_PEM?.trim() &&
+    env.GCP_PROJECT_NUMBER?.trim() &&
+    env.WIF_POOL_ID?.trim() &&
+    env.WIF_PROVIDER_ID?.trim()
+  );
 }
 
 export async function checkGoogleAuthHealth(
   env: GoogleAuthEnv
 ): Promise<{ ok: boolean; reason?: string }> {
   if (!hasGoogleCredentials(env)) {
-    return { ok: false, reason: 'GOOGLE_SA_CLIENT_EMAIL or GOOGLE_SA_PRIVATE_KEY_PEM not set' };
+    return {
+      ok: false,
+      reason:
+        'WIF credentials not fully configured (WIF_PRIVATE_KEY_PEM, GCP_PROJECT_NUMBER, WIF_POOL_ID, WIF_PROVIDER_ID)',
+    };
   }
   try {
     await getGoogleAccessToken(env);
@@ -49,7 +74,6 @@ export async function checkGoogleAuthHealth(
   }
 }
 
-/** Build a base64url-encoded string (no padding) */
 function base64url(data: ArrayBuffer | string): string {
   const bytes = typeof data === 'string' ? new TextEncoder().encode(data) : new Uint8Array(data);
   let binary = '';
@@ -57,15 +81,19 @@ function base64url(data: ArrayBuffer | string): string {
   return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
 }
 
-/** Mint a signed JWT assertion for the Google token endpoint */
-async function mintJwt(clientEmail: string, privateKey: CryptoKey): Promise<string> {
+function buildAudience(env: GoogleAuthEnv): string {
+  return `//iam.googleapis.com/projects/${env.GCP_PROJECT_NUMBER}/locations/global/workloadIdentityPools/${env.WIF_POOL_ID}/providers/${env.WIF_PROVIDER_ID}`;
+}
+
+async function mintWifJwt(env: GoogleAuthEnv, privateKey: CryptoKey): Promise<string> {
   const now = Math.floor(Date.now() / 1000);
-  const header = base64url(JSON.stringify({ alg: 'RS256', typ: 'JWT' }));
+  const issuer = env.WIF_ISSUER?.trim() ?? 'https://oursharedevents.workers.dev';
+  const header = base64url(JSON.stringify({ alg: 'RS256', typ: 'JWT', kid: 'ose-wif-key-1' }));
   const payload = base64url(
     JSON.stringify({
-      iss: clientEmail,
-      scope: SCOPE,
-      aud: TOKEN_ENDPOINT,
+      iss: issuer,
+      sub: 'ose-worker',
+      aud: buildAudience(env),
       exp: now + 3600,
       iat: now,
     })
@@ -79,15 +107,14 @@ async function mintJwt(clientEmail: string, privateKey: CryptoKey): Promise<stri
   return `${signingInput}.${base64url(signature)}`;
 }
 
-/**
- * Get a valid Google access token, using the in-memory cache.
- * Refreshes automatically 60s before expiry.
- */
 export async function getGoogleAccessToken(
   env: GoogleAuthEnv
 ): Promise<{ token: string; fromCache: boolean }> {
-  if (!env.GOOGLE_SA_CLIENT_EMAIL || !env.GOOGLE_SA_PRIVATE_KEY_PEM) {
-    throw new GoogleAuthError('MISSING_SECRET', 'Google SA credentials not configured');
+  if (!hasGoogleCredentials(env)) {
+    throw new GoogleAuthError(
+      'MISSING_SECRET',
+      'WIF credentials not configured — set WIF_PRIVATE_KEY_PEM, GCP_PROJECT_NUMBER, WIF_POOL_ID, WIF_PROVIDER_ID'
+    );
   }
 
   const now = Date.now();
@@ -95,23 +122,19 @@ export async function getGoogleAccessToken(
     return { token: _cache.token, fromCache: true };
   }
 
-  let privateKey: CryptoKey;
-  try {
-    privateKey = await importPrivateKeyFromPem(env.GOOGLE_SA_PRIVATE_KEY_PEM);
-  } catch (err) {
-    throw err instanceof GoogleAuthError
-      ? err
-      : new GoogleAuthError('KEY_IMPORT_FAILED', 'PEM import failed', err);
-  }
+  const privateKey = await importPrivateKeyFromPem(env.WIF_PRIVATE_KEY_PEM!);
+  const jwt = await mintWifJwt(env, privateKey);
 
-  const jwt = await mintJwt(env.GOOGLE_SA_CLIENT_EMAIL, privateKey);
-
-  const res = await fetch(TOKEN_ENDPOINT, {
+  const res = await fetch(STS_ENDPOINT, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
-      assertion: jwt,
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      audience: buildAudience(env),
+      grantType: 'urn:ietf:params:oauth:grant-type:token-exchange',
+      requestedTokenType: 'urn:ietf:params:oauth:token-type:access_token',
+      scope: BQ_SCOPE,
+      subjectTokenType: 'urn:ietf:params:oauth:token-type:jwt',
+      subjectToken: jwt,
     }),
   });
 
@@ -119,7 +142,7 @@ export async function getGoogleAccessToken(
     const body = await res.text().catch(() => '');
     throw new GoogleAuthError(
       'TOKEN_EXCHANGE_FAILED',
-      `Google token exchange failed: ${res.status} ${body}`
+      `GCP STS token exchange failed: ${res.status} ${body}`
     );
   }
 
@@ -131,7 +154,6 @@ export async function getGoogleAccessToken(
   return { token: _cache.token, fromCache: false };
 }
 
-/** Reset the token cache (for testing) */
 export function _resetTokenCache(): void {
   _cache = null;
 }

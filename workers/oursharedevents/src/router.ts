@@ -54,6 +54,9 @@
  *
  *   POST /api/v2/admin/events/:id/backup → handleAdminBackupEvent (auth required)
  *
+ *   GET /.well-known/openid-configuration  → OIDC discovery (WIF)
+ *   GET /.well-known/jwks.json             → WIF public key
+ *
  *   *                            → 404
  */
 
@@ -142,6 +145,26 @@ export async function route(request: Request, env: RouterEnv): Promise<Response>
   if (url.protocol === 'http:') {
     url.protocol = 'https:';
     return Response.redirect(url.toString(), 301);
+  }
+
+  // ── OIDC well-known endpoints (for GCP Workload Identity Federation) ──────────
+  if (method === 'GET' && pathname === '/.well-known/openid-configuration') {
+    const issuer =
+      (env as { WIF_ISSUER?: string }).WIF_ISSUER?.trim() ?? 'https://oursharedevents.workers.dev';
+    return Response.json({
+      issuer,
+      jwks_uri: `${issuer}/.well-known/jwks.json`,
+      response_types_supported: ['id_token'],
+      subject_types_supported: ['public'],
+      id_token_signing_alg_values_supported: ['RS256'],
+    });
+  }
+
+  if (method === 'GET' && pathname === '/.well-known/jwks.json') {
+    const jwks = (env as { WIF_PUBLIC_JWKS?: string }).WIF_PUBLIC_JWKS ?? '{"keys":[]}';
+    return new Response(jwks, {
+      headers: { 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=3600' },
+    });
   }
 
   // ── Public read-only guard (OSE-214) ─────────────────────────────────────

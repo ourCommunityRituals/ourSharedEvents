@@ -30,8 +30,10 @@ export type BigQueryEnv = GoogleAuthEnv & CloudEnv;
 
 export function isBigQueryConfigured(env: BigQueryEnv): boolean {
   return Boolean(
-    env.GOOGLE_SA_CLIENT_EMAIL?.trim() &&
-    env.GOOGLE_SA_PRIVATE_KEY_PEM?.trim() &&
+    env.WIF_PRIVATE_KEY_PEM?.trim() &&
+    env.GCP_PROJECT_NUMBER?.trim() &&
+    env.WIF_POOL_ID?.trim() &&
+    env.WIF_PROVIDER_ID?.trim() &&
     env.GCP_PROJECT_ID?.trim()
   );
 }
