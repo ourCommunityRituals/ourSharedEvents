@@ -3,9 +3,17 @@
 # S0 Security → T0 Gate → T1 Deploy → [T2 Smoke, T3 Contract]
 #                                   → T4 Functional (dispatch only)
 #
+# Security runs unconditionally on every PR (no paths filter on pull_request trigger).
+# Gate and all downstream jobs are blocked behind security via needs: — security results
+# determine whether the rest of the pipeline runs at all.
+# Push-to-main keeps paths filtering (deployment is expensive; path-scoping is fine there).
+#
 #   S0: Security — Static vulnerability analysis + supply chain inventory
 #       - CodeQL SAST (JS/TS)          → github/codeql-action/analyze@v4
-#       - npm audit (CVE check)        → npm audit --omit=dev --audit-level=high
+#       - Semgrep SAST                 → p/nodejs + p/owasp-top-ten + p/r2c-security-audit
+#       - gitleaks secret scan         → gitleaks detect (self-hosted Windows binary)
+#       - detect-secrets               → Yelp detect-secrets baseline scan
+#       - npm audit (CVE check)        → npm audit --omit=dev --audit-level=moderate
 #       - SBOM generation              → npx @cyclonedx/cyclonedx-npm --omit dev
 #
 #   T0: Gate — Static quality + unit/contract tests
@@ -40,12 +48,14 @@
 # Trigger Matrix:
 #   | Event              | Security | Gate | Deploy | Smoke | Contract | Functional |
 #   |--------------------|----------|------|--------|-------|----------|------------|
-#   | PR to main         | ✅       | ✅   | ❌     | ❌    | ❌       | ❌         |
+#   | PR to main         | ✅ *     | ✅   | ❌     | ❌    | ❌       | ❌         |
 #   | Push to main       | ✅       | ✅   | ✅     | ✅    | ✅       | ❌         |
 #   | Tag vX.Y.Z         | ✅       | ✅   | →prod  | →prod | ❌       | ❌         |
-#   | Schedule (nightly) | ✅       | ✅   | ❌     | ✅*   | ✅*      | ❌         |
+#   | Schedule (nightly) | ✅       | ✅   | ❌     | ✅†   | ✅†      | ❌         |
 #   | Dispatch           | ✅       | ✅   | opt    | opt   | opt      | opt        |
-#   * Nightly: runs against live staging without redeploying (environmental drift detection)
+#   * PR trigger has NO paths filter — security runs on every PR regardless of files changed.
+#     Gate/Deploy/Smoke still skip on non-code PRs via their own paths conditions (see push trigger).
+#   † Nightly: runs against live staging without redeploying (environmental drift detection)
 #
 # Cost control: Functional (Tier 4) only runs when you check the box.
 # Move tests between Tier 2/3/4 as you settle on nightly vs on-demand.
@@ -63,22 +73,8 @@ name: OurSharedEvents CI/CD
 on:
   pull_request:
     branches: [main]
-    paths:
-      - '**.js'
-      - '**.ts'
-      - '**.mjs'
-      - '**.cjs'
-      - '**.json'
-      - '**.html'
-      - 'workers/oursharedevents/**'
-      - 'tests/**'
-      - 'config/**'
-      - 'scripts/**'
-      - 'schemas/**'
-      - 'postman/**'
-      - 'packages/**'
-      - 'playwright.*.config.*'
-      - '.github/workflows/**'
+    # No paths filter — security (S0) must scan every PR unconditionally.
+    # Gate and all downstream jobs are gated behind security via needs:.
   push:
     branches: [main]
     paths:
@@ -183,8 +179,73 @@ jobs:
         with:
           category: '/language:javascript-typescript'
 
+      # ── Semgrep + detect-secrets (Python-based) ──────────────────────────
+      - name: Set up Python for Semgrep + detect-secrets
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Semgrep SAST
+        run: |
+          pip install semgrep --quiet
+          semgrep scan \
+            --config=p/nodejs \
+            --config=p/owasp-top-ten \
+            --config=p/r2c-security-audit \
+            --error \
+            --exclude=node_modules \
+            --exclude=.wrangler \
+            --exclude=coverage \
+            --exclude=dist \
+            --exclude=.claude \
+            --json-output=semgrep-results.json || SEMGREP_EXIT=$?
+          FINDING_COUNT=$(jq '.results | length' semgrep-results.json 2>/dev/null || echo 0)
+          echo "- **Semgrep:** $FINDING_COUNT findings" >> $GITHUB_STEP_SUMMARY
+          exit ${SEMGREP_EXIT:-0}
+
+      - name: detect-secrets baseline scan
+        run: |
+          pip install detect-secrets --quiet
+          detect-secrets scan \
+            --exclude-files 'package-lock\.json' \
+            --exclude-files '\.gitleaks\.toml' \
+            --exclude-files '.*\.spec\.ts' \
+            --exclude-files 'vitest\.config.*' \
+            > .secrets.baseline 2>&1 || true
+          SECRET_COUNT=$(jq '.results | to_entries | map(.value | length) | add // 0' .secrets.baseline 2>/dev/null || echo 0)
+          echo "- **detect-secrets:** $SECRET_COUNT potential secrets found" >> $GITHUB_STEP_SUMMARY
+          if [ "$SECRET_COUNT" -gt "0" ]; then
+            echo "::warning::detect-secrets found $SECRET_COUNT potential secrets — review .secrets.baseline"
+            jq '.results' .secrets.baseline 2>/dev/null || true
+          fi
+
+      # ── gitleaks (Windows binary via GitHub Releases) ────────────────────
+      - name: gitleaks secret scan
+        run: |
+          GITLEAKS_VER=$(curl -sSL "https://api.github.com/repos/gitleaks/gitleaks/releases/latest" \
+            -H "Authorization: Bearer ${{ github.token }}" \
+            | jq -r '.tag_name' | sed 's/v//')
+          GITLEAKS_ZIP="gitleaks_${GITLEAKS_VER}_windows_x64.zip"
+          curl -sSL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VER}/${GITLEAKS_ZIP}" \
+            -o /tmp/gitleaks.zip
+          unzip -o -q /tmp/gitleaks.zip gitleaks.exe -d /tmp/gitleaks-bin
+          # Scan only commits introduced by this PR (base..HEAD), not full history.
+          # Full-history scan floods findings with historical test fixture credentials.
+          git fetch origin main --depth=50 2>/dev/null || true
+          BASE=$(git merge-base origin/main HEAD 2>/dev/null || echo "HEAD~1")
+          /tmp/gitleaks-bin/gitleaks.exe detect \
+            --source . \
+            --config .gitleaks.toml \
+            --log-opts="${BASE}..HEAD" \
+            --exit-code 1 \
+            --report-format json \
+            --report-path gitleaks-report.json 2>&1 || GITLEAKS_EXIT=$?
+          LEAK_COUNT=$(jq '. | length' gitleaks-report.json 2>/dev/null || echo 0)
+          echo "- **gitleaks:** $LEAK_COUNT secrets detected in PR commits" >> $GITHUB_STEP_SUMMARY
+          exit ${GITLEAKS_EXIT:-0}
+
       - name: npm audit
-        run: npm audit --omit=dev --audit-level=high
+        run: npm audit --omit=dev --audit-level=moderate
 
       # file:-linked @ocr/flags exposes its devDependencies to npm ls --all,
       # causing CycloneDX to fail. Strip them from the installed copy so SBOM

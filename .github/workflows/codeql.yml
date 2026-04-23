@@ -1,11 +1,18 @@
-# CodeQL — Weekly deep scan backstop
+# CodeQL — Self-hosted SAST on every PR/push to main + weekly deep scan
 #
-# Primary CodeQL runs in oursharedevents-ci.yml (S0 Security) on every push/PR.
-# This workflow is a weekly-only safety net for anything the CI/CD cadence misses.
+# Runs on self-hosted (Bloodraven) to avoid GitHub-hosted billing dependency.
+# By owning the pull_request trigger, GitHub's default code scanning setup is
+# suppressed — preventing billing-blocked "Analyze" jobs from firing on PRs.
+# Python excluded: no production Python in OSE; self-hosted runner trips the
+# MS-Store python.exe alias on CodeQL autobuild (exit 9009).
 
 name: CodeQL
 
 on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
   schedule:
     - cron: '0 2 * * 0'  # Sundays 02:00 UTC
   workflow_dispatch:

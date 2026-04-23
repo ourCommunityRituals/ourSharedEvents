@@ -179,7 +179,7 @@ def run_adjacent_sec_iac(ose_repo: Path) -> list[tuple[str, str, str]]:
         return []
     cmd = ['npx', 'vitest', 'run'] + [str(p) for p in tests_glob]
     try:
-        r = subprocess.run(cmd, cwd=str(ose_repo), capture_output=True, text=True, timeout=120, shell=(sys.platform == 'win32'))
+        r = subprocess.run(cmd, cwd=str(ose_repo), capture_output=True, text=True, timeout=120, shell=(sys.platform == 'win32'))  # nosemgrep: python.lang.security.audit.subprocess-shell-true.subprocess-shell-true
         if r.returncode != 0:
             tail = (r.stdout + r.stderr).strip().splitlines()[-5:]
             return [('sec_iac_shell', 'FAIL', f'vitest exit {r.returncode}: {" | ".join(tail)}')]

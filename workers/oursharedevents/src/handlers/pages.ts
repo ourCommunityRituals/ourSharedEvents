@@ -1099,7 +1099,7 @@ function securityHeaders(nonce: string): Record<string, string> {
 function html(content: string, status = 200): Response {
   const nonce = generateNonce();
   // Inject nonce into all <script> tags (handles <script>, <script type="module">, etc.)
-  const nonced = content.replace(/<script(?=[\s>])/g, `<script nonce="${nonce}"`);
+  const nonced = content.replace(/<script(?=[\s>])/g, `<script nonce="${nonce}"`); // nosemgrep: javascript.lang.security.audit.unknown-value-with-script-tag.unknown-value-with-script-tag
   return new Response(nonced, {
     status,
     headers: securityHeaders(nonce),

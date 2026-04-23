@@ -15,10 +15,21 @@
 
 const js = require('@eslint/js');
 const globals = require('globals');
+const security = require('eslint-plugin-security');
 
 module.exports = [
   // Base recommended config
   js.configs.recommended,
+  // Security rules — catches eval, unsafe regex, child_process injection
+  // detect-object-injection disabled globally: fires on all bracket notation (arr[i], obj[key])
+  // which has near-100% false-positive rate in test/config code; high-signal rules kept active.
+  {
+    ...security.configs.recommended,
+    rules: {
+      ...security.configs.recommended.rules,
+      'security/detect-object-injection': 'off',
+    },
+  },
 
   // Global ignores
   {
@@ -34,9 +45,13 @@ module.exports = [
       'tests/load/**',
       // Archive folder - legacy V2 code not in active use
       'archive/**',
+      // Claude worktrees — isolated git branches, not part of active codebase
+      '.claude/**',
       // Generated files
       '**/*.min.js',
       '**/vendor/**',
+      // Wrangler build output
+      '**/.wrangler/**',
       // TypeScript files - linted by TypeScript compiler, not ESLint
       '**/*.ts',
       '**/*.tsx',
@@ -164,7 +179,7 @@ module.exports = [
 
   // Scripts (Node.js CommonJS)
   {
-    files: ['scripts/**/*.js'],
+    files: ['scripts/**/*.js', '.github/scripts/**/*.js'],
     languageOptions: {
       ecmaVersion: 2021,
       sourceType: 'script',
@@ -174,8 +189,12 @@ module.exports = [
     },
     rules: {
       'no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
-      'no-console': 'off', // Console is expected in CLI scripts
+      'no-console': 'off',
       'no-redeclare': 'off',
+      // Build/CI scripts use variable file paths and bracket notation by design —
+      // high false-positive rate; high-signal rules (eval, child_process, regex) still active.
+      'security/detect-non-literal-fs-filename': 'off',
+      'security/detect-object-injection': 'off',
     },
   },
 

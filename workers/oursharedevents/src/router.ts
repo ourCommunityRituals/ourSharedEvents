@@ -62,6 +62,7 @@ import {
   handleAdminListEvents,
   handleCreateEvent,
   handleUpdateEvent,
+  type EventsEnv,
 } from './handlers/events';
 import {
   handlePublicPage,
@@ -121,7 +122,8 @@ export type RouterEnv = PagesEnv &
   AdminEnv &
   FormsEnv &
   FormPagesEnv &
-  SponsorsEnv & {
+  SponsorsEnv &
+  EventsEnv & {
     WORKER_ENV?: string;
     WORKER_BUILD_VERSION?: string;
   };
@@ -352,6 +354,26 @@ export async function route(request: Request, env: RouterEnv): Promise<Response>
   );
   if (publicFormsMatch && method === 'POST') {
     const [, eventId, formType] = publicFormsMatch;
+
+    // Event lifecycle guard: reject submissions for non-active events.
+    // Only blocks if the event row explicitly exists with a non-active status;
+    // unknown event IDs pass through for backward compat with un-seeded test fixtures.
+    if (env.DB) {
+      const eventRow = await env.DB.prepare('SELECT status FROM events WHERE id = ?')
+        .bind(eventId)
+        .first<{ status: string }>();
+      if (eventRow && eventRow.status !== 'active') {
+        return Response.json(
+          {
+            ok: false,
+            status: 410,
+            code: 'EVENT_ARCHIVED',
+            error: 'This event is no longer accepting submissions',
+          },
+          { status: 410 }
+        );
+      }
+    }
 
     // Feature flag check: is this form type enabled for this event?
     const flagKey = `forms.${formType}`;
