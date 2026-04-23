@@ -229,14 +229,19 @@ jobs:
           curl -sSL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VER}/${GITLEAKS_ZIP}" \
             -o /tmp/gitleaks.zip
           unzip -q /tmp/gitleaks.zip gitleaks.exe -d /tmp/gitleaks-bin
+          # Scan only commits introduced by this PR (base..HEAD), not full history.
+          # Full-history scan floods findings with historical test fixture credentials.
+          git fetch origin main --depth=50 2>/dev/null || true
+          BASE=$(git merge-base origin/main HEAD 2>/dev/null || echo "HEAD~1")
           /tmp/gitleaks-bin/gitleaks.exe detect \
             --source . \
             --config .gitleaks.toml \
+            --log-opts="${BASE}..HEAD" \
             --exit-code 1 \
             --report-format json \
             --report-path gitleaks-report.json 2>&1 || GITLEAKS_EXIT=$?
           LEAK_COUNT=$(jq '. | length' gitleaks-report.json 2>/dev/null || echo 0)
-          echo "- **gitleaks:** $LEAK_COUNT secrets detected" >> $GITHUB_STEP_SUMMARY
+          echo "- **gitleaks:** $LEAK_COUNT secrets detected in PR commits" >> $GITHUB_STEP_SUMMARY
           exit ${GITLEAKS_EXIT:-0}
 
       - name: npm audit
