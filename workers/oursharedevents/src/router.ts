@@ -89,6 +89,7 @@ import {
   type FormsEnv,
 } from './handlers/forms';
 import { handleFormPage, type FormPagesEnv } from './handlers/form-pages';
+import { handlePrivacyPage } from './handlers/privacy';
 import { isFeatureEnabled, type FeatureFlagEnv } from './lib/feature-flags';
 import {
   handleListFlags,
@@ -498,6 +499,11 @@ export async function route(request: Request, env: RouterEnv): Promise<Response>
       );
     }
     return handleSharedReportPage(env);
+  }
+
+  // ── Privacy policy (BE-10) ─────────────────────────────────────────────────
+  if ((pathname === '/privacy' || pathname === '/privacy-policy') && method === 'GET') {
+    return handlePrivacyPage();
   }
 
   // ── 404 ────────────────────────────────────────────────────────────────────
