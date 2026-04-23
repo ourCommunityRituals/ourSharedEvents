@@ -42,6 +42,9 @@
  *   POST   /api/v2/events/:id/sponsors/:sid/impression → log impression
  *   POST   /api/v2/events/:id/sponsors/:sid/click      → log click
  *
+ *   Admin Audit Log (auth required — OSE-212):
+ *   GET    /api/v2/admin/audit-log          → paginated audit entries
+ *
  *   Feature Flag Admin (auth required):
  *   GET    /api/v2/admin/flags              → list all flags
  *   GET    /api/v2/admin/flags/tiers        → list tier presets
@@ -75,7 +78,9 @@ import {
   type PagesEnv,
 } from './handlers/pages';
 import { handleBriefingPage } from './handlers/briefing';
-import { requireAdmin, type AdminEnv } from './auth/admin';
+import { requireAdmin, extractAdminActor, type AdminEnv } from './auth/admin';
+import { logAdminAction, type AuditLogEnv } from './lib/audit-log';
+import { handleListAuditLog, type AuditHandlerEnv } from './handlers/audit';
 import {
   handleFormRegistration,
   handleFormCheckin,
@@ -125,14 +130,43 @@ export type RouterEnv = PagesEnv &
   FormsEnv &
   FormPagesEnv &
   SponsorsEnv &
-  EventsEnv & {
+  EventsEnv &
+  AuditLogEnv &
+  AuditHandlerEnv & {
     WORKER_ENV?: string;
     WORKER_BUILD_VERSION?: string;
   };
 
-export async function route(request: Request, env: RouterEnv): Promise<Response> {
+export async function route(
+  request: Request,
+  env: RouterEnv,
+  ctx: ExecutionContext
+): Promise<Response> {
   const url = new URL(request.url);
   const { pathname, method } = { pathname: url.pathname, method: request.method };
+
+  // ── Audit helpers (OSE-212) ───────────────────────────────────────────────────
+  const _ip = request.headers.get('CF-Connecting-IP') ?? undefined;
+  const _actor = extractAdminActor(request, env);
+  function _audit(
+    reqId: string,
+    action: string,
+    outcome: 'success' | 'denied',
+    resourceType?: string,
+    resourceId?: string
+  ): void {
+    ctx.waitUntil(
+      logAdminAction(env, {
+        action,
+        actor: _actor,
+        resource_type: resourceType,
+        resource_id: resourceId,
+        request_id: reqId,
+        outcome,
+        ip: _ip,
+      })
+    );
+  }
 
   // ── HTTPS redirect ──────────────────────────────────────────────────────
   if (url.protocol === 'http:') {
@@ -178,17 +212,29 @@ export async function route(request: Request, env: RouterEnv): Promise<Response>
   }
 
   if (pathname === '/api/v2/admin/events' && method === 'POST') {
-    const deny = requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
-    if (deny) return deny;
-    return handleCreateEvent(request, env);
+    const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
+    const deny = requireAdmin(request, env, reqId);
+    if (deny) {
+      _audit(reqId, 'CREATE_EVENT', 'denied', 'event');
+      return deny;
+    }
+    const response = await handleCreateEvent(request, env);
+    _audit(reqId, 'CREATE_EVENT', 'success', 'event');
+    return response;
   }
 
   // PUT /api/v2/admin/events/:id — update event
   const adminEventMatch = pathname.match(/^\/api\/v2\/admin\/events\/([^/]+)$/);
   if (adminEventMatch && method === 'PUT') {
-    const deny = requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
-    if (deny) return deny;
-    return handleUpdateEvent(request, env, adminEventMatch[1]);
+    const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
+    const deny = requireAdmin(request, env, reqId);
+    if (deny) {
+      _audit(reqId, 'UPDATE_EVENT', 'denied', 'event', adminEventMatch[1]);
+      return deny;
+    }
+    const response = await handleUpdateEvent(request, env, adminEventMatch[1]);
+    _audit(reqId, 'UPDATE_EVENT', 'success', 'event', adminEventMatch[1]);
+    return response;
   }
 
   // ── Admin sponsor routes (auth-gated) ──────────────────────────────────────
@@ -200,20 +246,49 @@ export async function route(request: Request, env: RouterEnv): Promise<Response>
   }
 
   if (pathname === '/api/v2/admin/sponsors' && method === 'POST') {
-    const deny = requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
-    if (deny) return deny;
-    return handleAdminCreateSponsor(request, env);
+    const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
+    const deny = requireAdmin(request, env, reqId);
+    if (deny) {
+      _audit(reqId, 'CREATE_SPONSOR', 'denied', 'sponsor');
+      return deny;
+    }
+    const response = await handleAdminCreateSponsor(request, env);
+    _audit(reqId, 'CREATE_SPONSOR', 'success', 'sponsor');
+    return response;
   }
 
-  // PUT/DELETE /api/v2/admin/sponsors/:id/event-types
+  // PUT/GET /api/v2/admin/sponsors/:id/event-types
   const adminSponsorEventTypesMatch = pathname.match(
     /^\/api\/v2\/admin\/sponsors\/([^/]+)\/event-types$/
   );
   if (adminSponsorEventTypesMatch) {
-    const deny = requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
-    if (deny) return deny;
-    if (method === 'PUT')
-      return handleSetSponsorEventTypes(request, env, adminSponsorEventTypesMatch[1]);
+    const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
+    const deny = requireAdmin(request, env, reqId);
+    if (deny) {
+      _audit(
+        reqId,
+        'UPDATE_SPONSOR_EVENT_TYPES',
+        'denied',
+        'sponsor',
+        adminSponsorEventTypesMatch[1]
+      );
+      return deny;
+    }
+    if (method === 'PUT') {
+      const response = await handleSetSponsorEventTypes(
+        request,
+        env,
+        adminSponsorEventTypesMatch[1]
+      );
+      _audit(
+        reqId,
+        'UPDATE_SPONSOR_EVENT_TYPES',
+        'success',
+        'sponsor',
+        adminSponsorEventTypesMatch[1]
+      );
+      return response;
+    }
     if (method === 'GET')
       return handleGetSponsorEventTypes(request, env, adminSponsorEventTypesMatch[1]);
   }
@@ -221,20 +296,40 @@ export async function route(request: Request, env: RouterEnv): Promise<Response>
   // PUT/GET /api/v2/admin/sponsors/:id/areas
   const adminSponsorAreasMatch = pathname.match(/^\/api\/v2\/admin\/sponsors\/([^/]+)\/areas$/);
   if (adminSponsorAreasMatch) {
-    const deny = requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
-    if (deny) return deny;
-    if (method === 'PUT') return handleSetSponsorAreas(request, env, adminSponsorAreasMatch[1]);
+    const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
+    const deny = requireAdmin(request, env, reqId);
+    if (deny) {
+      _audit(reqId, 'UPDATE_SPONSOR_AREAS', 'denied', 'sponsor', adminSponsorAreasMatch[1]);
+      return deny;
+    }
+    if (method === 'PUT') {
+      const response = await handleSetSponsorAreas(request, env, adminSponsorAreasMatch[1]);
+      _audit(reqId, 'UPDATE_SPONSOR_AREAS', 'success', 'sponsor', adminSponsorAreasMatch[1]);
+      return response;
+    }
     if (method === 'GET') return handleGetSponsorAreas(request, env, adminSponsorAreasMatch[1]);
   }
 
   // GET/PUT/DELETE /api/v2/admin/sponsors/:id
   const adminSponsorMatch = pathname.match(/^\/api\/v2\/admin\/sponsors\/([^/]+)$/);
   if (adminSponsorMatch) {
-    const deny = requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
-    if (deny) return deny;
+    const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
+    const deny = requireAdmin(request, env, reqId);
+    if (deny) {
+      _audit(reqId, 'SPONSOR_MUTATE', 'denied', 'sponsor', adminSponsorMatch[1]);
+      return deny;
+    }
     if (method === 'GET') return handleAdminGetSponsor(request, env, adminSponsorMatch[1]);
-    if (method === 'PUT') return handleAdminUpdateSponsor(request, env, adminSponsorMatch[1]);
-    if (method === 'DELETE') return handleAdminDeleteSponsor(request, env, adminSponsorMatch[1]);
+    if (method === 'PUT') {
+      const response = await handleAdminUpdateSponsor(request, env, adminSponsorMatch[1]);
+      _audit(reqId, 'UPDATE_SPONSOR', 'success', 'sponsor', adminSponsorMatch[1]);
+      return response;
+    }
+    if (method === 'DELETE') {
+      const response = await handleAdminDeleteSponsor(request, env, adminSponsorMatch[1]);
+      _audit(reqId, 'DELETE_SPONSOR', 'success', 'sponsor', adminSponsorMatch[1]);
+      return response;
+    }
   }
 
   // ── Admin form export (auth-gated) ─────────────────────────────────────────
@@ -270,11 +365,27 @@ export async function route(request: Request, env: RouterEnv): Promise<Response>
   // Event-level flag overrides: PUT/DELETE /api/v2/admin/events/:id/flags/:key
   const eventFlagMatch = pathname.match(/^\/api\/v2\/admin\/events\/([^/]+)\/flags\/([^/]+)$/);
   if (eventFlagMatch && (method === 'PUT' || method === 'DELETE')) {
-    const deny = requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
-    if (deny) return deny;
+    const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
+    const deny = requireAdmin(request, env, reqId);
     const [, eventId, flagKey] = eventFlagMatch;
-    if (method === 'PUT') return handleSetEventFlag(request, env, eventId, flagKey);
-    return handleRemoveEventFlag(env, eventId, flagKey);
+    if (deny) {
+      _audit(
+        reqId,
+        method === 'PUT' ? 'SET_EVENT_FLAG' : 'REMOVE_EVENT_FLAG',
+        'denied',
+        'flag',
+        `${eventId}/${flagKey}`
+      );
+      return deny;
+    }
+    if (method === 'PUT') {
+      const response = await handleSetEventFlag(request, env, eventId, flagKey);
+      _audit(reqId, 'SET_EVENT_FLAG', 'success', 'flag', `${eventId}/${flagKey}`);
+      return response;
+    }
+    const response = await handleRemoveEventFlag(env, eventId, flagKey);
+    _audit(reqId, 'REMOVE_EVENT_FLAG', 'success', 'flag', `${eventId}/${flagKey}`);
+    return response;
   }
 
   if (pathname === '/api/v2/admin/flags' && method === 'GET') {
@@ -304,15 +415,34 @@ export async function route(request: Request, env: RouterEnv): Promise<Response>
   // PUT /api/v2/admin/flags/:key — toggle a global flag
   const flagKeyMatch = pathname.match(/^\/api\/v2\/admin\/flags\/([^/]+)$/);
   if (flagKeyMatch && method === 'PUT') {
-    const deny = requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
-    if (deny) return deny;
-    return handleSetFlag(request, env, flagKeyMatch[1]);
+    const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
+    const deny = requireAdmin(request, env, reqId);
+    if (deny) {
+      _audit(reqId, 'SET_FLAG', 'denied', 'flag', flagKeyMatch[1]);
+      return deny;
+    }
+    const response = await handleSetFlag(request, env, flagKeyMatch[1]);
+    _audit(reqId, 'SET_FLAG', 'success', 'flag', flagKeyMatch[1]);
+    return response;
   }
 
   if (pathname === '/api/v2/admin/flags/apply-tier' && method === 'POST') {
+    const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
+    const deny = requireAdmin(request, env, reqId);
+    if (deny) {
+      _audit(reqId, 'APPLY_TIER', 'denied', 'flag');
+      return deny;
+    }
+    const response = await handleApplyTier(request, env);
+    _audit(reqId, 'APPLY_TIER', 'success', 'flag');
+    return response;
+  }
+
+  // ── Admin audit log (OSE-212) ──────────────────────────────────────────────
+  if (pathname === '/api/v2/admin/audit-log' && method === 'GET') {
     const deny = requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
     if (deny) return deny;
-    return handleApplyTier(request, env);
+    return handleListAuditLog(request, env);
   }
 
   // ── Public API ─────────────────────────────────────────────────────────────

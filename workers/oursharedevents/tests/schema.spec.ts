@@ -85,6 +85,10 @@ const EXPECTED_INDEXES = [
   'idx_event_type_registry_phase',
   'idx_event_type_registry_uec',
   'idx_corridor_regulatory_status_corridor',
+  // Admin audit log (migration 0026 — OSE-212)
+  'idx_admin_audit_log_created_at',
+  'idx_admin_audit_log_actor',
+  'idx_admin_audit_log_resource',
 ] as const;
 
 const EXPECTED_COLUMN_COUNTS: Record<string, number> = {
@@ -207,13 +211,13 @@ describe('Gate 4: scan_aggregates write protection', () => {
 // ── Gate 5: Index verification ───────────────────────────────────────────────
 
 describe('Gate 5: Index verification', () => {
-  test('all 30 custom indexes exist', async () => {
+  test('all 33 custom indexes exist', async () => {
     const indexes = await env.DB.prepare(
       "SELECT name FROM sqlite_master WHERE type='index' AND name LIKE 'idx_%' ORDER BY name"
     ).all();
 
     const names = indexes.results.map((r: Record<string, unknown>) => r.name);
-    expect(names.length).toBe(30);
+    expect(names.length).toBe(33);
     EXPECTED_INDEXES.forEach((idx) => expect(names).toContain(idx));
   });
 });

@@ -53,22 +53,24 @@ describe('QA-1: Migration idempotency', () => {
     // Run migrations a second time — CREATE IF NOT EXISTS / DROP IF EXISTS should be safe
     await expect(applyMigrations()).resolves.not.toThrow();
 
-    // 8 tables: corridors, events, node_hierarchy, poster_deployments,
-    // scan_aggregates, scans, sponsors, subscribers
+    // 15 tables: admin_audit_log (OSE-212), corridors, event_template_*, events,
+    // node_hierarchy, poster_deployments, scan_aggregates, scans, sponsors,
+    // sponsor_areas, sponsor_event_types, sponsor_impressions, subscribers,
+    // event_type_registry, corridor_regulatory_status
     // (checkins/registrations dropped by migration 0009, moved to FORMS_DB)
     const tables = await env.DB.prepare(
       "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' ORDER BY name"
     ).all();
 
     const names = tables.results.map((r: Record<string, unknown>) => r.name);
-    expect(names).toHaveLength(14);
+    expect(names).toHaveLength(15);
   });
 
-  test('indexes remain at exactly 30 after idempotent re-run', async () => {
+  test('indexes remain at exactly 33 after idempotent re-run', async () => {
     const indexes = await env.DB.prepare(
       "SELECT name FROM sqlite_master WHERE type='index' AND name LIKE 'idx_%'"
     ).all();
-    expect(indexes.results).toHaveLength(30);
+    expect(indexes.results).toHaveLength(33);
   });
 });
 

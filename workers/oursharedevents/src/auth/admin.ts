@@ -67,6 +67,36 @@ function extractCfAccessPayload(jwt: string): CfAccessPayload {
 
 // ─── Public API ────────────────────────────────────────────────────────────────
 
+/**
+ * Extract the audit actor identifier from the request without enforcing auth.
+ * Call AFTER requireAdmin passes; used to populate audit log entries.
+ *
+ * Returns:
+ *   - CF Access email string  (Method 1)
+ *   - 'key:ocr-internal'      (Method 2)
+ *   - 'key:admin'             (Method 3)
+ *   - null                    (unauthenticated / unknown)
+ */
+export function extractAdminActor(request: Request, env: AdminEnv): string | null {
+  const cfJwt = request.headers.get('Cf-Access-Jwt-Assertion');
+  if (cfJwt) {
+    const { valid, email } = extractCfAccessPayload(cfJwt);
+    if (valid && email) return email;
+  }
+  if (env.ALLOW_OCR_INTERNAL === 'true') {
+    const ocrSecret = env.X_OCR_INTERNAL?.trim() ?? null;
+    const ocrHeader = request.headers.get('X-OCR-Internal');
+    if (ocrSecret && ocrHeader && constantTimeEqual(ocrHeader, ocrSecret))
+      return 'key:ocr-internal';
+  }
+  if (env.ALLOW_ADMIN_KEY_FALLBACK === 'true') {
+    const key = getAdminKey(env);
+    const token = extractBearer(request.headers.get('Authorization'));
+    if (key && token && constantTimeEqual(token, key)) return 'key:admin';
+  }
+  return null;
+}
+
 export function requireAdmin(request: Request, env: AdminEnv, requestId: string): Response | null {
   // Method 1: Cloudflare Access JWT + email allowlist (OSE-211)
   const cfJwt = request.headers.get('Cf-Access-Jwt-Assertion');
