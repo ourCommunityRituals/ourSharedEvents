@@ -7,6 +7,7 @@
  */
 
 import { route, type RouterEnv } from './router';
+import { backupEvents, isBigQueryConfigured } from './cloud/bigquery';
 
 export type { RouterEnv as Env };
 
@@ -189,6 +190,27 @@ async function runFormDataLifecycle(env: RouterEnv): Promise<void> {
       })
     );
     await logPiiAudit(env.FORMS_DB, 'email_signups_delete', 0, 1);
+  }
+
+  // ── Phase 4: BigQuery event backup ──────────────────────────────────────
+  if (isBigQueryConfigured(env)) {
+    try {
+      const recentEvents = await env.DB.prepare(
+        "SELECT * FROM events WHERE updated_at > datetime('now', '-24 hours')"
+      ).all();
+      const bqResult = await backupEvents(env, recentEvents.results as Record<string, unknown>[]);
+      results.bqEventsBackedUp = bqResult.rowCount ?? 0;
+    } catch (err) {
+      results.bqBackupError = err instanceof Error ? err.message : String(err);
+      console.error(
+        JSON.stringify({
+          type: 'LIFECYCLE_PHASE_ERROR',
+          phase: 'bq_backup',
+          error: results.bqBackupError,
+          timestamp: now,
+        })
+      );
+    }
   }
 
   console.log(JSON.stringify({ type: 'LIFECYCLE_COMPLETE', ...results }));

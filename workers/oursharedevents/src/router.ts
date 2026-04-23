@@ -52,6 +52,8 @@
  *   PUT    /api/v2/admin/events/:id/flags/:key    → set event override
  *   DELETE /api/v2/admin/events/:id/flags/:key    → remove event override
  *
+ *   POST /api/v2/admin/events/:id/backup → handleAdminBackupEvent (auth required)
+ *
  *   *                            → 404
  */
 
@@ -117,6 +119,7 @@ import {
   handleLogClick,
   type SponsorsEnv,
 } from './handlers/sponsors';
+import { handleAdminBackupEvent, type BigQueryHandlerEnv } from './handlers/bigquery';
 import { corsOrigin } from './lib/cors';
 import { guardPublicReadOnly } from './lib/public-readonly';
 
@@ -125,7 +128,8 @@ export type RouterEnv = PagesEnv &
   FormsEnv &
   FormPagesEnv &
   SponsorsEnv &
-  EventsEnv & {
+  EventsEnv &
+  BigQueryHandlerEnv & {
     WORKER_ENV?: string;
     WORKER_BUILD_VERSION?: string;
   };
@@ -189,6 +193,14 @@ export async function route(request: Request, env: RouterEnv): Promise<Response>
     const deny = requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
     if (deny) return deny;
     return handleUpdateEvent(request, env, adminEventMatch[1]);
+  }
+
+  // POST /api/v2/admin/events/:id/backup — BigQuery event backup (OSE-215)
+  if (method === 'POST' && /^\/api\/v2\/admin\/events\/([^/]+)\/backup$/.test(pathname)) {
+    const eventId = pathname.split('/')[5];
+    const authRes = requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
+    if (authRes) return authRes;
+    return handleAdminBackupEvent(request, env, eventId);
   }
 
   // ── Admin sponsor routes (auth-gated) ──────────────────────────────────────
