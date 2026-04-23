@@ -208,11 +208,13 @@ describe('QA-1 Edge-3: Event lifecycle guard — non-active events reject submis
     expect((await j(res)).code).toBe('EVENT_ARCHIVED');
   });
 
-  test('cancelled event returns 410 EVENT_ARCHIVED for survey', async () => {
+  test('archived event returns 410 EVENT_ARCHIVED for survey', async () => {
+    // OSE-199: state machine trigger (migration 0025) only permits draft|ready|active|archived.
+    // 'cancelled' was removed as a valid status; 'archived' is the terminal state.
     const EVENT = 'qa1-cancelled-evt';
     await mainDb()
       .prepare(
-        `INSERT INTO events (id, brand_id, title, slug, status) VALUES (?, 'brand-qa1', 'Cancelled', 'qa1-cancelled', 'cancelled')`
+        `INSERT INTO events (id, brand_id, title, slug, status) VALUES (?, 'brand-qa1', 'Archived', 'qa1-cancelled', 'archived')`
       )
       .bind(EVENT)
       .run();
@@ -367,9 +369,12 @@ describe('QA-1 Edge-5: Input guards', () => {
     await applyTier('free');
   });
 
-  test('invalid event ID (special chars) → 400 INVALID_EVENT_ID', async () => {
+  test('invalid event ID (special chars) → 400/404/405', async () => {
     const res = await postJson('/api/v2/events/bad id!@#/forms/register', { name: 'Test' });
-    // Router won't match the route for IDs with special chars — returns 404
-    expect([400, 404]).toContain(res.status);
+    // The '#' in the URL is treated as a fragment delimiter by the URL parser, so the path
+    // seen by the router is '/api/v2/events/bad id!@' (no /forms/register suffix).
+    // OSE-214: guardPublicReadOnly sees POST on a public events path with no exempt suffix → 405.
+    // Pre-OSE-214 the router returned 404. Both are acceptable; 405 is now the primary outcome.
+    expect([400, 404, 405]).toContain(res.status);
   });
 });

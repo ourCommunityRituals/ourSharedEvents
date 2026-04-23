@@ -52,11 +52,39 @@ function collectTsFiles(dir: string): Record<string, string> {
 const sourceFiles = collectTsFiles(srcDir);
 const wranglerToml = readFileSync(join(rootDir, 'wrangler.toml'), 'utf8');
 
-const migrationStatements = migrationSQL
-  .split(';')
-  .map((s) => s.trim())
-  .filter((s) => s.length > 0)
-  .map((s) => s + ';');
+/**
+ * Split migration SQL into individual statements, correctly handling
+ * SQLite trigger bodies that contain nested BEGIN...END blocks.
+ *
+ * A naive split(';') breaks triggers because SELECT RAISE(...); inside
+ * BEGIN...END also ends with a semicolon, producing an incomplete statement.
+ * This function tracks BEGIN/END depth and only splits at the top level.
+ */
+function splitMigrationSQL(sql: string): string[] {
+  const results: string[] = [];
+  let buffer = '';
+  let depth = 0;
+
+  for (const part of sql.split(';')) {
+    const upper = part.toUpperCase();
+    const begins = (upper.match(/\bBEGIN\b/g) ?? []).length;
+    const ends = (upper.match(/\bEND\b/g) ?? []).length;
+    buffer += (buffer ? ';' : '') + part;
+    depth += begins - ends;
+
+    if (depth <= 0 && buffer.trim().length > 0) {
+      results.push(buffer.trim() + ';');
+      buffer = '';
+      depth = 0;
+    }
+  }
+
+  if (buffer.trim().length > 0) results.push(buffer.trim() + ';');
+
+  return results.filter((s) => s.replace(/;$/, '').trim().length > 0);
+}
+
+const migrationStatements = splitMigrationSQL(migrationSQL);
 
 const formsMigrationStatements = formsMigrationSQL
   .split(';')
@@ -84,6 +112,17 @@ export default defineConfig({
           FORMS_ENCRYPTION_KEY: 'test-forms-encryption-secret-32ch',
           WORKER_ENV: 'test',
           WORKER_BUILD_VERSION: 'e2e-mock',
+          // OSE-211: admin email allowlist (SEC-5)
+          ALLOWED_ADMIN_EMAILS: 'test-admin@example.com',
+          ALLOWED_ADMIN_DOMAINS: 'example.com',
+          // OSE-215: Google Service Account auth + BigQuery (BE-19)
+          GOOGLE_SA_CLIENT_EMAIL: 'sa@test-project.iam.gserviceaccount.com',
+          GOOGLE_SA_PRIVATE_KEY_PEM: 'stub-pem-key-not-real',
+          GCP_PROJECT_ID: 'test-gcp-project',
+          BIGQUERY_DATASET_ID: 'test-dataset',
+          // OSE-216: Vertex AI chatbot (BE-20)
+          VERTEX_AI_MODEL_ID: 'gemini-2.0-flash',
+          GCP_REGION: 'us-central1',
         },
       },
     }),

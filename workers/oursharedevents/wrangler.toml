@@ -55,6 +55,13 @@ crons = ["0 3 * * *"]
 [vars]
 WORKER_ENV = "development"
 WORKER_BUILD_VERSION = "dev-local"
+# Admin email allowlist (OSE-211) — empty = deny all CF Access JWT identities
+ALLOWED_ADMIN_EMAILS = ""
+ALLOWED_ADMIN_DOMAINS = ""
+# Google Cloud (OSE-215/216) — non-sensitive defaults
+GCP_PROJECT_ID = "project-7cc9adcd-ed55-47aa-958"
+VERTEX_AI_MODEL_ID = "gemini-2.0-flash"
+GCP_REGION = "us-central1"
 
 # ── Staging: stg.oursharedevents.com ─────────────────────────────
 [env.staging]
@@ -90,11 +97,17 @@ ALLOW_OCR_INTERNAL = "true"
 # Required secrets for staging (set with wrangler secret put … --env staging):
 #   ADMIN_KEY
 #   X_OCR_INTERNAL           (CI/CD auth secret for X-OCR-Internal header)
-#   FORMS_ENCRYPTION_KEY          (AES-GCM key for email signup encryption — min 32 chars)
-#   GOOGLE_MAPS_API_KEY          (Google Maps for SharedReports venue maps)
-#   BIGQUERY_DATASET_ID           (BigQuery dataset for data backup)
-#   GCP_PROJECT_ID                (defaults to project-7cc9adcd-ed55-47aa-958)
-#   VERTEX_AI_MODEL_ID            (defaults to gemini-2.0-flash)
+#   FORMS_ENCRYPTION_KEY     (AES-GCM key for email signup encryption — min 32 chars)
+#   GOOGLE_MAPS_API_KEY      (Google Maps for SharedReports venue maps)
+#   BIGQUERY_DATASET_ID      (BigQuery dataset for data backup)
+#   GCP_PROJECT_ID           (defaults to project-7cc9adcd-ed55-47aa-958)
+#   VERTEX_AI_MODEL_ID       (defaults to gemini-2.0-flash)
+#   — OSE-211 (SEC-5): Admin email allowlist —
+#   ALLOWED_ADMIN_EMAILS     (CSV: mzdano@gmail.com,ops@oursharedevents.com)
+#   ALLOWED_ADMIN_DOMAINS    (CSV: oursharedevents.com)
+#   — OSE-215 (BE-19): Google Service Account auth + BigQuery —
+#   GOOGLE_SA_CLIENT_EMAIL   (service account email — sa@project.iam.gserviceaccount.com)
+#   GOOGLE_SA_PRIVATE_KEY_PEM (service account private key in PEM format — SECRET)
 
 # ── Production: oursharedevents.com ──────────────────────────────
 [env.production]
@@ -130,8 +143,14 @@ ALLOW_OCR_INTERNAL = "true"
 # Required secrets for production (set with wrangler secret put … --env production):
 #   ADMIN_KEY
 #   X_OCR_INTERNAL           (CI/CD auth secret for X-OCR-Internal header)
-#   FORMS_ENCRYPTION_KEY          (AES-GCM key for email signup encryption — min 32 chars)
-#   GOOGLE_MAPS_API_KEY          (Google Maps for SharedReports venue maps)
-#   BIGQUERY_DATASET_ID           (BigQuery dataset for data backup)
-#   GCP_PROJECT_ID                (defaults to project-7cc9adcd-ed55-47aa-958)
-#   VERTEX_AI_MODEL_ID            (defaults to gemini-2.0-flash)
+#   FORMS_ENCRYPTION_KEY     (AES-GCM key for email signup encryption — min 32 chars)
+#   GOOGLE_MAPS_API_KEY      (Google Maps for SharedReports venue maps)
+#   BIGQUERY_DATASET_ID      (BigQuery dataset for data backup)
+#   GCP_PROJECT_ID           (defaults to project-7cc9adcd-ed55-47aa-958)
+#   VERTEX_AI_MODEL_ID       (defaults to gemini-2.0-flash)
+#   — OSE-211 (SEC-5): Admin email allowlist —
+#   ALLOWED_ADMIN_EMAILS     (CSV: mzdano@gmail.com)
+#   ALLOWED_ADMIN_DOMAINS    (CSV: oursharedevents.com)
+#   — OSE-215 (BE-19): Google Service Account auth + BigQuery —
+#   GOOGLE_SA_CLIENT_EMAIL   (service account email — SECRET)
+#   GOOGLE_SA_PRIVATE_KEY_PEM (service account private key in PEM format — SECRET)

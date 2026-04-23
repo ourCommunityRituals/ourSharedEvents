@@ -118,6 +118,7 @@ import {
   type SponsorsEnv,
 } from './handlers/sponsors';
 import { corsOrigin } from './lib/cors';
+import { guardPublicReadOnly } from './lib/public-readonly';
 
 export type RouterEnv = PagesEnv &
   AdminEnv &
@@ -138,6 +139,10 @@ export async function route(request: Request, env: RouterEnv): Promise<Response>
     url.protocol = 'https:';
     return Response.redirect(url.toString(), 301);
   }
+
+  // ── Public read-only guard (OSE-214) ─────────────────────────────────────
+  const readOnlyBlock = guardPublicReadOnly(method, pathname);
+  if (readOnlyBlock) return readOnlyBlock;
 
   // ── CORS preflight ────────────────────────────────────────────────────────
   if (method === 'OPTIONS') {

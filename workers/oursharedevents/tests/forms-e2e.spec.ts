@@ -438,13 +438,16 @@ describe('Scenario 6: Input guards', () => {
     expect((await json(res)).code).toBe('MISSING_FIELD');
   });
 
-  test('POST to nonexistent form type → 404', async () => {
+  test('POST to nonexistent form type → 405 (OSE-214: public read-only guard blocks unrecognised form types)', async () => {
+    // OSE-214: guardPublicReadOnly only exempts known form types (register/checkin/survey/email-signup).
+    // An unrecognised form type is not in the exemption list, so the guard returns 405 before the
+    // router can return 404. 405 is acceptable here — no information is disclosed about unknown types.
     const res = await SELF.fetch('https://t.test/api/v2/events/evt-x/forms/nonexistent', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: '{}',
     });
-    expect(res.status).toBe(404);
+    expect(res.status).toBe(405);
   });
 
   test('GET to public form route → 404 (POST only)', async () => {
