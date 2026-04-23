@@ -78,10 +78,7 @@ export async function fetchStaticMapImage(
 
   let upstream: Response;
   try {
-    upstream = await fetch(googleUrl, {
-      // Only cache successful responses; never cache 403/429/5xx from Google
-      cf: { cacheEverything: false, cacheTtlByStatus: { '200-299': 86400, '400-599': 0 } },
-    } as RequestInit);
+    upstream = await fetch(googleUrl);
   } catch (err) {
     console.error(
       JSON.stringify({
