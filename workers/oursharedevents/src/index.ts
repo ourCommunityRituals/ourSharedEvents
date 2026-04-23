@@ -7,7 +7,7 @@
  */
 
 import { route, type RouterEnv } from './router';
-import { backupEvents, isBigQueryConfigured } from './cloud/bigquery';
+import { runBigQueryBackup } from './handlers/bigquery';
 
 export type { RouterEnv as Env };
 
@@ -33,7 +33,10 @@ export default {
   },
 
   async scheduled(_event: ScheduledEvent, env: RouterEnv, ctx: ExecutionContext): Promise<void> {
-    ctx.waitUntil(runFormDataLifecycle(env));
+    // runFormDataLifecycle is FORMS_DB-only (PII scrub + retention).
+    // runBigQueryBackup reads from the main DB and is kept separate for
+    // isolation: lifecycle job must never touch the events DB (forms-security gate).
+    ctx.waitUntil(Promise.all([runFormDataLifecycle(env), runBigQueryBackup(env)]));
   },
 };
 
@@ -192,26 +195,13 @@ async function runFormDataLifecycle(env: RouterEnv): Promise<void> {
     await logPiiAudit(env.FORMS_DB, 'email_signups_delete', 0, 1);
   }
 
-  // ── Phase 4: BigQuery event backup ──────────────────────────────────────
-  if (isBigQueryConfigured(env)) {
-    try {
-      const recentEvents = await env.DB.prepare(
-        "SELECT * FROM events WHERE updated_at > datetime('now', '-24 hours')"
-      ).all();
-      const bqResult = await backupEvents(env, recentEvents.results as Record<string, unknown>[]);
-      results.bqEventsBackedUp = bqResult.rowCount ?? 0;
-    } catch (err) {
-      results.bqBackupError = err instanceof Error ? err.message : String(err);
-      console.error(
-        JSON.stringify({
-          type: 'LIFECYCLE_PHASE_ERROR',
-          phase: 'bq_backup',
-          error: results.bqBackupError,
-          timestamp: now,
-        })
-      );
-    }
-  }
-
   console.log(JSON.stringify({ type: 'LIFECYCLE_COMPLETE', ...results }));
 }
+
+/**
+ * BigQuery event backup — runs daily alongside the lifecycle job.
+ *
+ * Kept separate from runFormDataLifecycle so that function remains
+ * FORMS_DB-only (required by the forms-security isolation gate).
+ * This function reads from the main DB (events table) and writes to BigQuery.
+ */

@@ -8,9 +8,12 @@
  *   Replace the embedded strings with a fetch() call to Firebase Hosting URL.
  */
 
+import { isGoogleMapsConfigured } from '../lib/maps';
+
 export interface PagesEnv {
   WORKER_ENV?: string;
   DB?: D1Database;
+  GOOGLE_MAPS_API_KEY?: string;
 }
 
 // ─── Public page ────────────────────────────────────────────────────────────────
@@ -1667,12 +1670,18 @@ const SHARED_REPORT_HTML = `<!DOCTYPE html>
     .upgrade-prompt p { font-size: .85rem; color: #6c757d; margin: 0; }
     .skip-link { position: absolute; left: -9999px; top: auto; width: 1px; height: 1px; overflow: hidden; }
     .skip-link:focus { position: fixed; top: 0; left: 0; width: auto; height: auto; padding: .5rem 1rem; background: #1a1a2e; color: #fff; font-size: 1rem; z-index: 9999; text-decoration: none; border-bottom: 2px solid #4361ee; }
+    .venue-cell { display: flex; flex-direction: column; gap: .3rem; align-items: flex-start; min-width: 140px; }
+    .venue-map { border-radius: 4px; display: block; object-fit: cover; max-width: 200px; height: 80px; width: 100%; }
+    .venue-text { font-size: .75rem; color: #495057; max-width: 200px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .venue-plain { font-size: .85rem; color: #495057; }
+    .no-venue { color: #adb5bd; }
     @media print {
       .skip-link, .action-bar { display: none !important; }
       header { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
       .stat-card, .events-list, .sponsor-metric-card, .funnel-card { box-shadow: none; border: 1px solid #e9ecef; }
       body { background: #fff; }
       #advanced-metrics-section { display: block !important; }
+      .venue-map { display: none !important; }
     }
   </style>
 </head>
@@ -1733,18 +1742,32 @@ const SHARED_REPORT_HTML = `<!DOCTYPE html>
           listEl.innerHTML = '<p class="empty">No events to report.</p>';
           return;
         }
+        const mapsOn = document.body.dataset.mapsConfigured === '1';
         listEl.innerHTML = '<table class="report-table" data-testid="events-table"><caption class="sr-only">Events list</caption>' +
           '<thead><tr>' +
           '<th scope="col">Name</th>' +
           '<th scope="col">Date</th>' +
+          '<th scope="col">Venue</th>' +
           '<th scope="col">Status</th>' +
           '</tr></thead>' +
           '<tbody>' +
-          items.map(e => '<tr data-testid="report-event-row">' +
-            '<td data-testid="report-event-name">' + esc(e.name || 'Untitled') + '</td>' +
-            '<td data-testid="report-event-date">' + esc(fmt(e.startDateISO)) + '</td>' +
-            '<td><span class="badge ' + esc(e.status || '') + '" data-testid="report-event-status">' + esc(e.status || '') + '</span></td>' +
-            '</tr>').join('') +
+          items.map(e => {
+            const venue = e.location || '';
+            const venueInner = (venue && mapsOn)
+              ? '<div class="venue-cell">' +
+                  '<img src="/api/v2/maps/venue-image?venue=' + encodeURIComponent(venue) + '" alt="Map: ' + esc(venue) + '" class="venue-map" width="200" height="80" loading="lazy" />' +
+                  '<span class="venue-text" title="' + esc(venue) + '">' + esc(venue) + '</span>' +
+                '</div>'
+              : venue
+                ? '<span class="venue-plain">' + esc(venue) + '</span>'
+                : '<span class="no-venue">&mdash;</span>';
+            return '<tr data-testid="report-event-row">' +
+              '<td data-testid="report-event-name">' + esc(e.title || e.name || 'Untitled') + '</td>' +
+              '<td data-testid="report-event-date">' + esc(fmt(e.start_date || e.startDateISO)) + '</td>' +
+              '<td data-testid="report-event-venue">' + venueInner + '</td>' +
+              '<td><span class="badge ' + esc(e.status || '') + '" data-testid="report-event-status">' + esc(e.status || '') + '</span></td>' +
+              '</tr>';
+          }).join('') +
           '</tbody></table>';
         document.getElementById('export-json-btn').disabled = false;
       } catch {
@@ -1876,6 +1899,10 @@ export function handlePosterPage(_env: PagesEnv): Response {
   return html(POSTER_HTML);
 }
 
-export function handleSharedReportPage(_env: PagesEnv): Response {
-  return html(SHARED_REPORT_HTML);
+export function handleSharedReportPage(env: PagesEnv): Response {
+  // Inject data-maps-configured so client-side JS knows whether to render
+  // map thumbnails via the /api/v2/maps/venue-image proxy endpoint.
+  const mapsAttr = isGoogleMapsConfigured(env) ? ' data-maps-configured="1"' : '';
+  const content = SHARED_REPORT_HTML.replace('<body>', `<body${mapsAttr}>`);
+  return html(content);
 }

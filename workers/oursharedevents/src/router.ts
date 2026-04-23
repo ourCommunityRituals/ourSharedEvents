@@ -123,6 +123,7 @@ import {
   type SponsorsEnv,
 } from './handlers/sponsors';
 import { handleAdminBackupEvent, type BigQueryHandlerEnv } from './handlers/bigquery';
+import { fetchStaticMapImage, type MapsEnv } from './lib/maps';
 import { corsOrigin } from './lib/cors';
 import { guardPublicReadOnly } from './lib/public-readonly';
 
@@ -132,6 +133,7 @@ export type RouterEnv = PagesEnv &
   FormPagesEnv &
   SponsorsEnv &
   EventsEnv &
+  MapsEnv &
   BigQueryHandlerEnv & {
     WORKER_ENV?: string;
     WORKER_BUILD_VERSION?: string;
@@ -387,6 +389,15 @@ export async function route(request: Request, env: RouterEnv): Promise<Response>
   const clickMatch = pathname.match(/^\/api\/v2\/events\/([^/]+)\/sponsors\/([^/]+)\/click$/);
   if (clickMatch && method === 'POST') {
     return handleLogClick(request, env, clickMatch[1], clickMatch[2]);
+  }
+
+  // ── Google Maps venue image proxy (OSE-217) ────────────────────────────────
+  // GET /api/v2/maps/venue-image?venue=<encoded>
+  // Proxies Google Static Maps API server-side so the API key never reaches
+  // the browser. Used by SharedReports to render venue map thumbnails.
+  if (pathname === '/api/v2/maps/venue-image' && method === 'GET') {
+    const venueParam = url.searchParams.get('venue') ?? '';
+    return fetchStaticMapImage(env, venueParam);
   }
 
   // ── Public form endpoints (no auth) ────────────────────────────────────────
