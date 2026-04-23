@@ -22,6 +22,71 @@ export interface FormPagesEnv {
   WORKER_ENV?: string;
 }
 
+// ── Security headers (SEC-2) ──────────────────────────────────────────────────
+
+const SECURITY_HEADERS: Record<string, string> = {
+  'Content-Security-Policy':
+    "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; font-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'",
+  'X-Content-Type-Options': 'nosniff',
+  'X-Frame-Options': 'DENY',
+  'Referrer-Policy': 'strict-origin-when-cross-origin',
+  'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
+};
+
+// ── GDPR Art. 13 privacy notice (BE-9 / BE-10) ───────────────────────────────
+
+function privacyNotice(formType: string, legalTier = 1): string {
+  let purpose: string;
+  let legalBasis: string;
+  let retention: string;
+
+  switch (formType) {
+    case 'checkin':
+      purpose = 'We record an <strong>anonymous count only</strong> — no personal data is stored.';
+      legalBasis = 'GDPR Art. 6(1)(f) — legitimate interest in knowing attendance numbers.';
+      retention = 'Anonymous aggregate counts are kept for event reporting only.';
+      break;
+    case 'survey':
+      purpose = 'We collect your ratings and optional comments to improve future events.';
+      legalBasis = 'GDPR Art. 6(1)(a) — your <strong>consent</strong>.';
+      retention =
+        'Comments are scrubbed of personal information within <strong>24</strong> hours. Aggregate ratings are kept indefinitely.';
+      break;
+    case 'email':
+      purpose = 'We collect your email address to notify you about future community events.';
+      legalBasis =
+        'GDPR Art. 6(1)(a) — your <strong>consent</strong>. You can <strong>withdraw consent</strong> at any time.';
+      retention =
+        'Your email is encrypted at rest and automatically deleted after <strong>30</strong> days.';
+      break;
+    default: // register
+      purpose =
+        'We collect your name (required) and email (optional) to register you for this event.';
+      legalBasis =
+        'GDPR Art. 6(1)(a) — your <strong>consent</strong>. Your data is <strong>deleted when the event ends</strong>.';
+      retention = 'Registration data is deleted automatically when the event ends.';
+  }
+
+  let addenda = '';
+  if (legalTier >= 2) {
+    addenda += `<br/><strong>Commerce notice:</strong> Payment data is handled by our PCI DSS-compliant processor and never stored by us. `;
+  }
+  if (legalTier >= 4) {
+    addenda += `<br/><strong>Health notice:</strong> Health data is protected under HIPAA safeguards and a Business Associate Agreement. `;
+  }
+  if (legalTier >= 5) {
+    addenda += `<br/><strong>Children's notice:</strong> For children under 13, a parent or guardian must submit this form (COPPA). `;
+  }
+
+  return `<p class="privacy-notice" data-testid="privacy-notice">
+    ${purpose} Legal basis: ${legalBasis} ${retention}
+    You have the right to access, correct, or erase your data, and to lodge a complaint with your local data protection
+    <strong>supervisory authority</strong>.
+    ${addenda}
+    <a href="/privacy" data-testid="privacy-policy-link">Full privacy policy</a>
+  </p>`;
+}
+
 // ── XSS Prevention ───────────────────────────────────────────────────────────
 
 function escapeHtml(text: string): string {
@@ -100,7 +165,7 @@ const FORM_JS_SUBMIT = `
 
 // ── Registration form ────────────────────────────────────────────────────────
 
-function registrationForm(eventId: string): string {
+function registrationForm(eventId: string, legalTier = 1): string {
   return `
     <div class="form-card" id="form-area" data-testid="form-register">
       <h2>Register for this event</h2>
@@ -111,7 +176,7 @@ function registrationForm(eventId: string): string {
         <label for="email">Email (optional)</label>
         <input type="email" id="email" data-testid="register-email-input" placeholder="jane@example.com" maxlength="320" autocomplete="email" aria-describedby="error-msg" />
         <button type="submit" data-testid="register-submit">Register</button>
-        <p class="privacy-notice" data-testid="privacy-notice">By submitting, you agree to our data collection practices. Your name is stored temporarily and deleted after the event. Email is hashed for deduplication only.</p>
+        ${privacyNotice('register', legalTier)}
       </form>
     </div>
     <script>
@@ -129,13 +194,14 @@ function registrationForm(eventId: string): string {
 
 // ── Check-in form (tap counter) ──────────────────────────────────────────────
 
-function checkinForm(eventId: string): string {
+function checkinForm(eventId: string, legalTier = 1): string {
   return `
     <div class="checkin-tap" id="form-area" data-testid="form-checkin">
       <h2>Check In</h2>
       <p id="error-msg" class="error-msg" data-testid="form-error" role="alert" aria-live="assertive"></p>
       <button type="button" id="checkin-btn" data-testid="checkin-submit" ontouchend="handleCheckin(event)" onclick="handleCheckin(event)">Tap to<br/>Check In</button>
       <div class="count" id="count" data-testid="checkin-count"></div>
+      ${privacyNotice('checkin', legalTier)}
     </div>
     <script>
       ${FORM_JS_SUBMIT}
@@ -162,7 +228,7 @@ function checkinForm(eventId: string): string {
 
 // ── Survey form ──────────────────────────────────────────────────────────────
 
-function surveyForm(eventId: string): string {
+function surveyForm(eventId: string, legalTier = 1): string {
   return `
     <div class="form-card" id="form-area" data-testid="form-survey">
       <h2>How was the event?</h2>
@@ -179,7 +245,7 @@ function surveyForm(eventId: string): string {
         <label for="comments">Comments (optional)</label>
         <textarea id="comments" data-testid="survey-comments-input" placeholder="Tell us what you thought..." maxlength="1000" aria-describedby="error-msg"></textarea>
         <button type="submit" data-testid="survey-submit">Submit Feedback</button>
-        <p class="privacy-notice" data-testid="privacy-notice">By submitting, you agree to our data collection practices. Ratings are kept for analytics. Comments are scrubbed of personal data within 24 hours.</p>
+        ${privacyNotice('survey', legalTier)}
       </form>
     </div>
     <script>
@@ -204,7 +270,7 @@ function surveyForm(eventId: string): string {
 
 // ── Email signup form ────────────────────────────────────────────────────────
 
-function emailSignupForm(eventId: string): string {
+function emailSignupForm(eventId: string, legalTier = 1): string {
   return `
     <div class="form-card" id="form-area" data-testid="form-email">
       <h2>Stay in the loop</h2>
@@ -214,7 +280,7 @@ function emailSignupForm(eventId: string): string {
         <label for="email">Your email</label>
         <input type="email" id="email" data-testid="email-email-input" placeholder="you@example.com" maxlength="320" required autocomplete="email" aria-required="true" aria-describedby="error-msg" />
         <button type="submit" data-testid="email-submit">Sign me up</button>
-        <p class="privacy-notice" data-testid="privacy-notice">By submitting, you agree to our data collection practices. Your email is encrypted and automatically deleted after 30 days.</p>
+        ${privacyNotice('email', legalTier)}
       </form>
     </div>
     <script>
@@ -231,20 +297,20 @@ function emailSignupForm(eventId: string): string {
 
 // ── Page shell ───────────────────────────────────────────────────────────────
 
-function formPage(eventId: string, eventName: string, formType: string): string {
+function formPage(eventId: string, eventName: string, formType: string, legalTier = 1): string {
   let formHtml: string;
   switch (formType) {
     case 'checkin':
-      formHtml = checkinForm(eventId);
+      formHtml = checkinForm(eventId, legalTier);
       break;
     case 'survey':
-      formHtml = surveyForm(eventId);
+      formHtml = surveyForm(eventId, legalTier);
       break;
     case 'email':
-      formHtml = emailSignupForm(eventId);
+      formHtml = emailSignupForm(eventId, legalTier);
       break;
     default:
-      formHtml = registrationForm(eventId);
+      formHtml = registrationForm(eventId, legalTier);
       break;
   }
 
@@ -252,7 +318,7 @@ function formPage(eventId: string, eventName: string, formType: string): string 
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>${eventName} – OurSharedEvents</title>
   <style>${FORM_CSS}</style>
 </head>
@@ -269,15 +335,23 @@ function formPage(eventId: string, eventName: string, formType: string): string 
 
 // ─── Route handler ───────────────────────────────────────────────────────────
 
-export function handleFormPage(request: Request, _env: FormPagesEnv, eventId: string): Response {
+export function handleFormPage(
+  request: Request,
+  _env: FormPagesEnv,
+  eventId: string,
+  legalTier = 1
+): Response {
   const url = new URL(request.url);
   const formType = url.searchParams.get('type') ?? 'register';
   // Escape event name to prevent XSS — this value comes from a URL query param
   const eventName = escapeHtml((url.searchParams.get('event') ?? 'Event').slice(0, 200));
 
-  const html = formPage(eventId, eventName, formType);
+  const html = formPage(eventId, eventName, formType, legalTier);
   return new Response(html, {
     status: 200,
-    headers: { 'Content-Type': 'text/html; charset=utf-8' },
+    headers: {
+      'Content-Type': 'text/html; charset=utf-8',
+      ...SECURITY_HEADERS,
+    },
   });
 }
