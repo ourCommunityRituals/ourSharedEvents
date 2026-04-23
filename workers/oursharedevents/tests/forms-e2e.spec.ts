@@ -633,6 +633,79 @@ describe('Scenario 8b: Enterprise event override — global OFF, event ON', () =
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// SCENARIO 10: Full Organizer Flow — QA-4
+//   admin creates event → configure tier → QR scan → customer submits → admin verifies
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('Scenario 10: Full organizer flow (QA-4 — admin→configure→QR→submit→verify)', () => {
+  test('create event → apply mid tier → QR scan renders form → submit → admin verifies count=1', async () => {
+    // ── Step 1: Admin creates event ──────────────────────────────────────
+    const createRes = await SELF.fetch('https://t.test/api/v2/admin/events', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${MOCK_ADMIN_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ title: 'QA Flow Event', status: 'active' }),
+    });
+    expect(createRes.status).toBe(201);
+    const createBody = await json(createRes);
+    expect(createBody.ok).toBe(true);
+    const eventId = createBody.id as string;
+    expect(eventId).toMatch(/^evt_/);
+
+    // ── Step 2: Admin configures — apply mid tier ──────────────────────
+    // Mid tier enables: forms.register, forms.survey, forms.email-signup
+    const configRes = await SELF.fetch('https://t.test/api/v2/admin/flags/apply-tier', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${MOCK_ADMIN_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ tier: 'mid' }),
+    });
+    expect(configRes.status).toBe(200);
+    const configBody = await json(configRes);
+    expect(configBody.tier).toBe('mid');
+    expect(configBody.ok).toBe(true);
+
+    // ── Step 3: QR scan — attendee scans code, form page loads ────────
+    const formRes = await SELF.fetch(
+      `https://t.test/forms/${eventId}?type=register&event=QA+Flow+Event`
+    );
+    expect(formRes.status).toBe(200);
+    expect(formRes.headers.get('Content-Type')).toContain('text/html');
+    const formHtml = await formRes.text();
+    expect(formHtml).toContain('data-testid="form-register"');
+    expect(formHtml).toContain('QA Flow Event');
+
+    // ── Step 4: Customer submits registration ──────────────────────────
+    const submitRes = await SELF.fetch(`https://t.test/api/v2/events/${eventId}/forms/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'Flow Test Attendee', email: 'flow@test.com' }),
+    });
+    expect(submitRes.status).toBe(200);
+    const submitBody = await json(submitRes);
+    expect(submitBody.ok).toBe(true);
+    expect(submitBody.id).toBeDefined();
+
+    // ── Step 5: Admin verifies count = 1 ─────────────────────────────
+    const adminRes = await SELF.fetch(
+      `https://t.test/api/v2/admin/events/${eventId}/forms/registrations`,
+      { headers: { Authorization: `Bearer ${MOCK_ADMIN_KEY}` } }
+    );
+    expect(adminRes.status).toBe(200);
+    const adminBody = await json(adminRes);
+    expect(adminBody.count).toBe(1);
+    const items = adminBody.items as Record<string, unknown>[];
+    expect(items[0].attendee_name).toBe('Flow Test Attendee');
+    // Raw email must not be stored (hashed only)
+    expect(JSON.stringify(items[0])).not.toContain('flow@test.com');
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // SCENARIO 9: Existing Routes (via SELF.fetch)
 // ═══════════════════════════════════════════════════════════════════════════════
 
