@@ -1465,7 +1465,11 @@ const POSTER_HTML = `<!DOCTYPE html>
     .meta-text { font-size: 1rem; color: #334155; }
     .qr-section { display: flex; justify-content: center; gap: 2rem; flex-wrap: wrap; padding: 1.5rem 0; border-top: 1px solid #e2e8f0; border-bottom: 1px solid #e2e8f0; margin-bottom: 1.5rem; }
     .qr-item { text-align: center; }
-    .qr-placeholder { width: 120px; height: 120px; background: #f1f5f9; border: 2px dashed #cbd5e1; border-radius: 8px; display: flex; align-items: center; justify-content: center; margin: 0 auto .5rem; font-size: .7rem; color: #64748b; text-align: center; padding: .5rem; }
+    .qr-loading { width: 120px; height: 120px; background: #f1f5f9; border: 2px dashed #cbd5e1; border-radius: 8px; display: flex; align-items: center; justify-content: center; margin: 0 auto .5rem; font-size: 1.25rem; color: #64748b; }
+    .qr-img { width: 120px; height: 120px; display: block; margin: 0 auto .5rem; image-rendering: pixelated; }
+    .qr-link { display: block; color: inherit; text-decoration: none; }
+    .qr-link:hover .qr-img { opacity: .85; }
+    .qr-link-url { display: block; font-size: .6rem; color: #64748b; word-break: break-all; margin-top: .25rem; max-width: 120px; text-align: center; }
     .qr-label { font-size: .75rem; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: .05em; }
     .poster-footer { text-align: center; padding: 1rem; background: #f8fafc; font-size: .8rem; color: #64748b; }
     .loading { text-align: center; padding: 4rem; color: #64748b; }
@@ -1498,6 +1502,8 @@ const POSTER_HTML = `<!DOCTYPE html>
       .poster-sponsors { page-break-inside: avoid; border-top: 1px solid #ccc; padding: .75rem 1rem; }
       .poster-sponsor img { filter: grayscale(1); max-height: 20px; }
       .poster-sponsor-name, .poster-sponsor-label { color: #000; }
+      .qr-loading { display: none !important; }
+      .qr-link-url { display: none !important; }
     }
   </style>
 </head>
@@ -1537,8 +1543,10 @@ const POSTER_HTML = `<!DOCTYPE html>
           (venue ? '<div class="meta-row" data-testid="poster-meta-venue"><div class="meta-icon" aria-hidden="true">&#x1F4CD;</div><div class="meta-text">' + esc(venue) + (address ? '<br><small>' + esc(address) + '</small>' : '') + '</div></div>' : '') +
           '</div>' +
           '<div class="qr-section" data-testid="poster-qr-section">' +
-            '<div class="qr-item" data-testid="poster-qr-event"><div class="qr-placeholder" data-testid="poster-qr-event-placeholder">QR codes available after event setup</div><div class="qr-label" data-testid="poster-qr-event-label">Event Page</div></div>' +
-            '<div class="qr-item" data-testid="poster-qr-register"><div class="qr-placeholder" data-testid="poster-qr-register-placeholder">QR codes available after event setup</div><div class="qr-label" data-testid="poster-qr-register-label">Registration</div></div>' +
+            '<div class="qr-item" data-testid="poster-qr-register"><div id="qr-img-register" class="qr-loading" aria-busy="true">&#x23F3;</div><div class="qr-label" data-testid="poster-qr-register-label">Registration</div></div>' +
+            '<div class="qr-item" data-testid="poster-qr-checkin"><div id="qr-img-checkin" class="qr-loading" aria-busy="true">&#x23F3;</div><div class="qr-label" data-testid="poster-qr-checkin-label">Check-in</div></div>' +
+            '<div class="qr-item" data-testid="poster-qr-survey"><div id="qr-img-survey" class="qr-loading" aria-busy="true">&#x23F3;</div><div class="qr-label" data-testid="poster-qr-survey-label">Survey</div></div>' +
+            '<div class="qr-item" data-testid="poster-qr-email-signup"><div id="qr-img-email-signup" class="qr-loading" aria-busy="true">&#x23F3;</div><div class="qr-label" data-testid="poster-qr-email-signup-label">Email Signup</div></div>' +
           '</div>' +
         '</div>' +
         '<div id="poster-sponsor-strip" class="poster-sponsors" data-testid="poster-sponsor-strip" role="list" aria-label="Event sponsors"></div>' +
@@ -1563,11 +1571,13 @@ const POSTER_HTML = `<!DOCTYPE html>
         ).join('');
         area.innerHTML = renderPoster(items[0]);
         loadPosterSponsors(items[0].id);
+        loadPosterQR(items[0].id);
         picker.addEventListener('change', () => {
           const idx = parseInt(picker.value, 10);
           if (!isNaN(idx) && items[idx]) {
             area.innerHTML = renderPoster(items[idx]);
             loadPosterSponsors(items[idx].id);
+            loadPosterQR(items[idx].id);
           }
         });
       } catch {
@@ -1592,6 +1602,32 @@ const POSTER_HTML = `<!DOCTYPE html>
             return '<div class="poster-sponsor" data-testid="poster-sponsor-item" role="listitem" aria-label="' + esc(s.name) + '">' + logo + '<span class="poster-sponsor-name" data-testid="poster-sponsor-name">' + esc(s.name) + '</span></div>';
           }).join('');
       } catch { strip.setAttribute('aria-busy', 'false'); strip.innerHTML = ''; }
+    }
+    async function loadPosterQR(eventId) {
+      if (!eventId) return;
+      const types = [
+        { type: 'register', id: 'qr-img-register' },
+        { type: 'checkin', id: 'qr-img-checkin' },
+        { type: 'survey', id: 'qr-img-survey' },
+        { type: 'email-signup', id: 'qr-img-email-signup' },
+      ];
+      try {
+        const res = await fetch('/api/v2/events/' + encodeURIComponent(eventId) + '/poster-bundle');
+        const data = await res.json();
+        if (!data.ok) return;
+        for (const { type, id } of types) {
+          const el = document.getElementById(id);
+          if (!el) continue;
+          const src = data.qr && data.qr[type];
+          const href = data.links && data.links[type];
+          const label = (data.labels && data.labels[type]) || type;
+          if (!src) continue;
+          el.outerHTML = '<a class="qr-link" href="' + esc(href || '#') + '" target="_blank" rel="noopener noreferrer" aria-label="' + esc(label) + ' QR code \u2014 tap to open" data-testid="qr-link-' + type + '">' +
+            '<img src="' + esc(src) + '" alt="' + esc(label) + ' QR code" class="qr-img" data-testid="qr-img-' + type + '" width="120" height="120" />' +
+            '<span class="qr-link-url" data-testid="qr-link-url-' + type + '">' + esc(href || '') + '</span>' +
+            '</a>';
+        }
+      } catch { /* QR loading is non-critical */ }
     }
     init();
   </script>
