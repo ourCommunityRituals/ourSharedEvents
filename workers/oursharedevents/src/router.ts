@@ -67,6 +67,9 @@
  *   POST /api/v2/admin/events/:id/uploads → handleAdminUploadFile (auth required)
  *   GET  /api/v2/uploads/*key             → handleGetUploadedFile (public)
  *
+ *   Data Subject Rights (OSE-203 / GDPR Art. 17 / CCPA §1798.105):
+ *   POST /api/v2/admin/data-subject/erase → handleDataSubjectErase (auth required)
+ *
  *   GET /.well-known/openid-configuration  → OIDC discovery (WIF)
  *   GET /.well-known/jwks.json             → WIF public key
  *
@@ -150,6 +153,7 @@ import { guardPublicReadOnly } from './lib/public-readonly';
 import { assertRenderable, parseEventState } from './domain/event-state';
 import { isRateLimited, clientIp, rateLimitResponse } from './lib/rate-limit';
 import { handleAdminUploadFile, handleGetUploadedFile, type UploadEnv } from './handlers/upload';
+import { handleDataSubjectErase, type DataSubjectEnv } from './handlers/data-subject';
 
 export type RouterEnv = PagesEnv &
   AdminEnv &
@@ -163,7 +167,8 @@ export type RouterEnv = PagesEnv &
   MapsEnv &
   BigQueryHandlerEnv &
   PosterBundleEnv &
-  UploadEnv & {
+  UploadEnv &
+  DataSubjectEnv & {
     WORKER_ENV?: string;
     WORKER_BUILD_VERSION?: string;
   };
@@ -542,6 +547,24 @@ export async function route(
     }
     const response = await handleApplyTier(request, env);
     _audit(reqId, 'APPLY_TIER', 'success', 'flag');
+    return response;
+  }
+
+  // POST /api/v2/admin/data-subject/erase — GDPR Art. 17 / CCPA erasure (OSE-203)
+  if (pathname === '/api/v2/admin/data-subject/erase' && method === 'POST') {
+    const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
+    const deny = requireAdmin(request, env, reqId);
+    if (deny) {
+      _audit(reqId, 'DATA_SUBJECT_ERASE', 'denied', 'data-subject');
+      return deny;
+    }
+    const response = await handleDataSubjectErase(request, env);
+    _audit(
+      reqId,
+      'DATA_SUBJECT_ERASE',
+      response.status < 400 ? 'success' : 'denied',
+      'data-subject'
+    );
     return response;
   }
 

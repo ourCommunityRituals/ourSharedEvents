@@ -48,10 +48,10 @@ const EXPECTED_INDEXES = [
 ] as const;
 
 const EXPECTED_COLUMN_COUNTS: Record<string, number> = {
-  form_registrations: 11,
+  form_registrations: 12, // +consent_type (migration 0012)
   checkin_counts: 5,
-  form_surveys: 8,
-  email_signups: 9,
+  form_surveys: 9, // +consent_type (migration 0012)
+  email_signups: 10, // +consent_type (migration 0012)
 };
 
 // Tables that must NEVER exist in FORMS_DB (they belong in main DB)
