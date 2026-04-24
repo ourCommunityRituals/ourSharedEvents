@@ -46,6 +46,13 @@
  *   Admin Audit Log (auth required — OSE-212):
  *   GET    /api/v2/admin/audit-log          → paginated audit entries
  *
+ *   Admin Audit Log (auth required — OSE-212):
+ *   GET    /api/v2/admin/audit-log          → paginated audit entries
+ *
+ *   QR Verify/Unverify (auth required — OSE-213):
+ *   POST   /api/v2/admin/events/:id/verify-qr    → handleV2AdminVerifyQr (READY→ACTIVE)
+ *   POST   /api/v2/admin/events/:id/unverify-qr  → handleV2AdminUnverifyQr (ACTIVE→READY)
+ *
  *   Feature Flag Admin (auth required):
  *   GET    /api/v2/admin/flags              → list all flags
  *   GET    /api/v2/admin/flags/tiers        → list tier presets
@@ -87,6 +94,11 @@ import { handleBriefingPage } from './handlers/briefing';
 import { requireAdmin, extractAdminActor, type AdminEnv } from './auth/admin';
 import { logAdminAction, type AuditLogEnv } from './lib/audit-log';
 import { handleListAuditLog, type AuditHandlerEnv } from './handlers/audit';
+import {
+  handleV2AdminVerifyQr,
+  handleV2AdminUnverifyQr,
+  type QrVerifyEnv,
+} from './handlers/qr-verify';
 import {
   handleFormRegistration,
   handleFormCheckin,
@@ -142,6 +154,7 @@ export type RouterEnv = PagesEnv &
   EventsEnv &
   AuditLogEnv &
   AuditHandlerEnv &
+  QrVerifyEnv &
   MapsEnv &
   BigQueryHandlerEnv &
   PosterBundleEnv & {
@@ -267,6 +280,46 @@ export async function route(
     const response = await handleUpdateEvent(request, env, adminEventMatch[1]);
     _audit(reqId, 'UPDATE_EVENT', 'success', 'event', adminEventMatch[1]);
     return response;
+  }
+
+  // ── QR verify/unverify (OSE-213) ────────────────────────────────────────────────
+
+  // POST /api/v2/admin/events/:id/verify-qr
+  if (method === 'POST' && /^\/api\/v2\/admin\/events\/([^/]+)\/verify-qr$/.test(pathname)) {
+    const eventId = pathname.split('/')[5];
+    const authRes = requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
+    if (authRes) {
+      _audit(crypto.randomUUID(), 'VERIFY_QR', 'denied', 'event', eventId);
+      return authRes;
+    }
+    const res = await handleV2AdminVerifyQr(request, env, eventId);
+    _audit(
+      crypto.randomUUID(),
+      'VERIFY_QR',
+      res.status < 400 ? 'success' : 'denied',
+      'event',
+      eventId
+    );
+    return res;
+  }
+
+  // POST /api/v2/admin/events/:id/unverify-qr
+  if (method === 'POST' && /^\/api\/v2\/admin\/events\/([^/]+)\/unverify-qr$/.test(pathname)) {
+    const eventId = pathname.split('/')[5];
+    const authRes = requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
+    if (authRes) {
+      _audit(crypto.randomUUID(), 'UNVERIFY_QR', 'denied', 'event', eventId);
+      return authRes;
+    }
+    const res = await handleV2AdminUnverifyQr(request, env, eventId);
+    _audit(
+      crypto.randomUUID(),
+      'UNVERIFY_QR',
+      res.status < 400 ? 'success' : 'denied',
+      'event',
+      eventId
+    );
+    return res;
   }
 
   // POST /api/v2/admin/events/:id/backup — BigQuery event backup (OSE-215)
