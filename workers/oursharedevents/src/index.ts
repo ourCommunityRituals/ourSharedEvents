@@ -12,9 +12,9 @@ import { runBigQueryBackup } from './handlers/bigquery';
 export type { RouterEnv as Env };
 
 export default {
-  async fetch(request: Request, env: RouterEnv, _ctx: ExecutionContext): Promise<Response> {
+  async fetch(request: Request, env: RouterEnv, ctx: ExecutionContext): Promise<Response> {
     try {
-      return await route(request, env);
+      return await route(request, env, ctx);
     } catch (err) {
       console.error(
         JSON.stringify({
