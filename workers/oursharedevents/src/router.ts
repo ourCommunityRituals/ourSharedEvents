@@ -146,6 +146,7 @@ import { handleGetPosterBundle, type PosterBundleEnv } from './handlers/poster-b
 import { corsOrigin } from './lib/cors';
 import { guardPublicReadOnly } from './lib/public-readonly';
 import { assertRenderable, parseEventState } from './domain/event-state';
+import { isRateLimited, clientIp, rateLimitResponse } from './lib/rate-limit';
 
 export type RouterEnv = PagesEnv &
   AdminEnv &
@@ -599,6 +600,11 @@ export async function route(
   );
   if (publicFormsMatch && method === 'POST') {
     const [, eventId, formType] = publicFormsMatch;
+
+    // Rate limit: 60 req/min per IP, best-effort (resets on cold start).
+    if (isRateLimited(clientIp(request))) {
+      return rateLimitResponse();
+    }
 
     // Event lifecycle guard: reject submissions for non-active events.
     // Only blocks if the event row explicitly exists with a non-active status;
