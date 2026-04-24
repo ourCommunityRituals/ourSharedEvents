@@ -96,8 +96,8 @@ describe('Authentication Methods (Story 3.1)', () => {
       expect(adminAuthSource).toContain("'Cf-Access-Jwt-Assertion'");
     });
 
-    it('should decode JWT with decodeCfAccessJwt', () => {
-      expect(adminAuthSource).toContain('decodeCfAccessJwt');
+    it('should decode JWT with extractCfAccessPayload', () => {
+      expect(adminAuthSource).toContain('extractCfAccessPayload');
     });
 
     it('should validate 3-part JWT structure', () => {
@@ -117,7 +117,7 @@ describe('Authentication Methods (Story 3.1)', () => {
     });
 
     it('should return null (allow) on valid JWT', () => {
-      expect(adminAuthSource).toContain('if (cfJwt && decodeCfAccessJwt(cfJwt)) return null');
+      expect(adminAuthSource).toContain('const { valid, email } = extractCfAccessPayload(cfJwt)');
     });
   });
 
