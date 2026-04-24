@@ -39,6 +39,12 @@ database_name = "ocr-forms-db-local"
 database_id = "local-forms"
 migrations_dir = "migrations-forms"
 
+# ── R2 Uploads Bucket (local dev) ────────────────────────────────────────────
+# Create once: wrangler r2 bucket create ose-uploads-dev
+[[r2_buckets]]
+binding = "UPLOADS_BUCKET"
+bucket_name = "ose-uploads-dev"
+
 # ── Observability: structured logs and traces ────────────────────
 # Enables Workers Logs in CF Dashboard (real-time + historical)
 # See: https://developers.cloudflare.com/workers/observability/
@@ -90,6 +96,12 @@ binding = "FORMS_DB"
 database_name = "ocr-forms-db-staging"
 database_id = "ff1cb46d-cb3b-463d-9aad-713de4d272b5"
 migrations_dir = "migrations-forms"
+
+# ── R2 Uploads Bucket (staging) ──────────────────────────────────────────────
+# Create once: wrangler r2 bucket create ose-uploads-staging
+[[env.staging.r2_buckets]]
+binding = "UPLOADS_BUCKET"
+bucket_name = "ose-uploads-staging"
 
 [env.staging.vars]
 WORKER_ENV = "staging"
@@ -146,6 +158,12 @@ binding = "FORMS_DB"
 database_name = "ocr-forms-db-production"
 database_id = "<production-forms-db-id>"
 migrations_dir = "migrations-forms"
+
+# ── R2 Uploads Bucket (production) ───────────────────────────────────────────
+# Create once: wrangler r2 bucket create ose-uploads-production
+[[env.production.r2_buckets]]
+binding = "UPLOADS_BUCKET"
+bucket_name = "ose-uploads-production"
 
 [env.production.vars]
 WORKER_ENV = "production"

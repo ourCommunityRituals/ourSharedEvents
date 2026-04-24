@@ -63,7 +63,9 @@
  *   PUT    /api/v2/admin/events/:id/flags/:key    → set event override
  *   DELETE /api/v2/admin/events/:id/flags/:key    → remove event override
  *
- *   POST /api/v2/admin/events/:id/backup → handleAdminBackupEvent (auth required)
+ *   POST /api/v2/admin/events/:id/backup   → handleAdminBackupEvent (auth required)
+ *   POST /api/v2/admin/events/:id/uploads → handleAdminUploadFile (auth required)
+ *   GET  /api/v2/uploads/*key             → handleGetUploadedFile (public)
  *
  *   GET /.well-known/openid-configuration  → OIDC discovery (WIF)
  *   GET /.well-known/jwks.json             → WIF public key
@@ -147,6 +149,7 @@ import { corsOrigin } from './lib/cors';
 import { guardPublicReadOnly } from './lib/public-readonly';
 import { assertRenderable, parseEventState } from './domain/event-state';
 import { isRateLimited, clientIp, rateLimitResponse } from './lib/rate-limit';
+import { handleAdminUploadFile, handleGetUploadedFile, type UploadEnv } from './handlers/upload';
 
 export type RouterEnv = PagesEnv &
   AdminEnv &
@@ -159,7 +162,8 @@ export type RouterEnv = PagesEnv &
   QrVerifyEnv &
   MapsEnv &
   BigQueryHandlerEnv &
-  PosterBundleEnv & {
+  PosterBundleEnv &
+  UploadEnv & {
     WORKER_ENV?: string;
     WORKER_BUILD_VERSION?: string;
   };
@@ -330,6 +334,14 @@ export async function route(
     const authRes = requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
     if (authRes) return authRes;
     return handleAdminBackupEvent(request, env, eventId);
+  }
+
+  // POST /api/v2/admin/events/:id/uploads — R2 file upload (OSE-200)
+  if (method === 'POST' && /^\/api\/v2\/admin\/events\/([^/]+)\/uploads$/.test(pathname)) {
+    const eventId = pathname.split('/')[5];
+    const authRes = requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
+    if (authRes) return authRes;
+    return handleAdminUploadFile(request, env, eventId);
   }
 
   // ── Admin sponsor routes (auth-gated) ──────────────────────────────────────
@@ -586,6 +598,12 @@ export async function route(
   }
 
   // ── Google Maps venue image proxy (OSE-217) ────────────────────────────────
+  // GET /api/v2/uploads/*key — serve R2 file (OSE-200)
+  const uploadServeMatch = pathname.match(/^\/api\/v2\/uploads\/(.+)$/);
+  if (uploadServeMatch && method === 'GET') {
+    return handleGetUploadedFile(request, env, uploadServeMatch[1]);
+  }
+
   // GET /api/v2/maps/venue-image?venue=<encoded>
   // Proxies Google Static Maps API server-side so the API key never reaches
   // the browser. Used by SharedReports to render venue map thumbnails.
