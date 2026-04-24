@@ -7,6 +7,7 @@
  */
 
 import { route, type RouterEnv } from './router';
+import { runBigQueryBackup } from './handlers/bigquery';
 
 export type { RouterEnv as Env };
 
@@ -32,7 +33,10 @@ export default {
   },
 
   async scheduled(_event: ScheduledEvent, env: RouterEnv, ctx: ExecutionContext): Promise<void> {
-    ctx.waitUntil(runFormDataLifecycle(env));
+    // runFormDataLifecycle is FORMS_DB-only (PII scrub + retention).
+    // runBigQueryBackup reads from the main DB and is kept separate for
+    // isolation: lifecycle job must never touch the events DB (forms-security gate).
+    ctx.waitUntil(Promise.all([runFormDataLifecycle(env), runBigQueryBackup(env)]));
   },
 };
 
@@ -193,3 +197,11 @@ async function runFormDataLifecycle(env: RouterEnv): Promise<void> {
 
   console.log(JSON.stringify({ type: 'LIFECYCLE_COMPLETE', ...results }));
 }
+
+/**
+ * BigQuery event backup — runs daily alongside the lifecycle job.
+ *
+ * Kept separate from runFormDataLifecycle so that function remains
+ * FORMS_DB-only (required by the forms-security isolation gate).
+ * This function reads from the main DB (events table) and writes to BigQuery.
+ */

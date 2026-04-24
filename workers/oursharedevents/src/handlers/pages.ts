@@ -8,9 +8,12 @@
  *   Replace the embedded strings with a fetch() call to Firebase Hosting URL.
  */
 
+import { isGoogleMapsConfigured } from '../lib/maps';
+
 export interface PagesEnv {
   WORKER_ENV?: string;
   DB?: D1Database;
+  GOOGLE_MAPS_API_KEY?: string;
 }
 
 // ─── Public page ────────────────────────────────────────────────────────────────
@@ -1465,7 +1468,11 @@ const POSTER_HTML = `<!DOCTYPE html>
     .meta-text { font-size: 1rem; color: #334155; }
     .qr-section { display: flex; justify-content: center; gap: 2rem; flex-wrap: wrap; padding: 1.5rem 0; border-top: 1px solid #e2e8f0; border-bottom: 1px solid #e2e8f0; margin-bottom: 1.5rem; }
     .qr-item { text-align: center; }
-    .qr-placeholder { width: 120px; height: 120px; background: #f1f5f9; border: 2px dashed #cbd5e1; border-radius: 8px; display: flex; align-items: center; justify-content: center; margin: 0 auto .5rem; font-size: .7rem; color: #64748b; text-align: center; padding: .5rem; }
+    .qr-loading { width: 120px; height: 120px; background: #f1f5f9; border: 2px dashed #cbd5e1; border-radius: 8px; display: flex; align-items: center; justify-content: center; margin: 0 auto .5rem; font-size: 1.25rem; color: #64748b; }
+    .qr-img { width: 120px; height: 120px; display: block; margin: 0 auto .5rem; image-rendering: pixelated; }
+    .qr-link { display: block; color: inherit; text-decoration: none; }
+    .qr-link:hover .qr-img { opacity: .85; }
+    .qr-link-url { display: block; font-size: .6rem; color: #64748b; word-break: break-all; margin-top: .25rem; max-width: 120px; text-align: center; }
     .qr-label { font-size: .75rem; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: .05em; }
     .poster-footer { text-align: center; padding: 1rem; background: #f8fafc; font-size: .8rem; color: #64748b; }
     .loading { text-align: center; padding: 4rem; color: #64748b; }
@@ -1498,6 +1505,8 @@ const POSTER_HTML = `<!DOCTYPE html>
       .poster-sponsors { page-break-inside: avoid; border-top: 1px solid #ccc; padding: .75rem 1rem; }
       .poster-sponsor img { filter: grayscale(1); max-height: 20px; }
       .poster-sponsor-name, .poster-sponsor-label { color: #000; }
+      .qr-loading { display: none !important; }
+      .qr-link-url { display: none !important; }
     }
   </style>
 </head>
@@ -1537,8 +1546,10 @@ const POSTER_HTML = `<!DOCTYPE html>
           (venue ? '<div class="meta-row" data-testid="poster-meta-venue"><div class="meta-icon" aria-hidden="true">&#x1F4CD;</div><div class="meta-text">' + esc(venue) + (address ? '<br><small>' + esc(address) + '</small>' : '') + '</div></div>' : '') +
           '</div>' +
           '<div class="qr-section" data-testid="poster-qr-section">' +
-            '<div class="qr-item" data-testid="poster-qr-event"><div class="qr-placeholder" data-testid="poster-qr-event-placeholder">QR codes available after event setup</div><div class="qr-label" data-testid="poster-qr-event-label">Event Page</div></div>' +
-            '<div class="qr-item" data-testid="poster-qr-register"><div class="qr-placeholder" data-testid="poster-qr-register-placeholder">QR codes available after event setup</div><div class="qr-label" data-testid="poster-qr-register-label">Registration</div></div>' +
+            '<div class="qr-item" data-testid="poster-qr-register"><div id="qr-img-register" class="qr-loading" aria-busy="true">&#x23F3;</div><div class="qr-label" data-testid="poster-qr-register-label">Registration</div></div>' +
+            '<div class="qr-item" data-testid="poster-qr-checkin"><div id="qr-img-checkin" class="qr-loading" aria-busy="true">&#x23F3;</div><div class="qr-label" data-testid="poster-qr-checkin-label">Check-in</div></div>' +
+            '<div class="qr-item" data-testid="poster-qr-survey"><div id="qr-img-survey" class="qr-loading" aria-busy="true">&#x23F3;</div><div class="qr-label" data-testid="poster-qr-survey-label">Survey</div></div>' +
+            '<div class="qr-item" data-testid="poster-qr-email-signup"><div id="qr-img-email-signup" class="qr-loading" aria-busy="true">&#x23F3;</div><div class="qr-label" data-testid="poster-qr-email-signup-label">Email Signup</div></div>' +
           '</div>' +
         '</div>' +
         '<div id="poster-sponsor-strip" class="poster-sponsors" data-testid="poster-sponsor-strip" role="list" aria-label="Event sponsors"></div>' +
@@ -1563,11 +1574,13 @@ const POSTER_HTML = `<!DOCTYPE html>
         ).join('');
         area.innerHTML = renderPoster(items[0]);
         loadPosterSponsors(items[0].id);
+        loadPosterQR(items[0].id);
         picker.addEventListener('change', () => {
           const idx = parseInt(picker.value, 10);
           if (!isNaN(idx) && items[idx]) {
             area.innerHTML = renderPoster(items[idx]);
             loadPosterSponsors(items[idx].id);
+            loadPosterQR(items[idx].id);
           }
         });
       } catch {
@@ -1592,6 +1605,32 @@ const POSTER_HTML = `<!DOCTYPE html>
             return '<div class="poster-sponsor" data-testid="poster-sponsor-item" role="listitem" aria-label="' + esc(s.name) + '">' + logo + '<span class="poster-sponsor-name" data-testid="poster-sponsor-name">' + esc(s.name) + '</span></div>';
           }).join('');
       } catch { strip.setAttribute('aria-busy', 'false'); strip.innerHTML = ''; }
+    }
+    async function loadPosterQR(eventId) {
+      if (!eventId) return;
+      const types = [
+        { type: 'register', id: 'qr-img-register' },
+        { type: 'checkin', id: 'qr-img-checkin' },
+        { type: 'survey', id: 'qr-img-survey' },
+        { type: 'email-signup', id: 'qr-img-email-signup' },
+      ];
+      try {
+        const res = await fetch('/api/v2/events/' + encodeURIComponent(eventId) + '/poster-bundle');
+        const data = await res.json();
+        if (!data.ok) return;
+        for (const { type, id } of types) {
+          const el = document.getElementById(id);
+          if (!el) continue;
+          const src = data.qr && data.qr[type];
+          const href = data.links && data.links[type];
+          const label = (data.labels && data.labels[type]) || type;
+          if (!src) continue;
+          el.outerHTML = '<a class="qr-link" href="' + esc(href || '#') + '" target="_blank" rel="noopener noreferrer" aria-label="' + esc(label) + ' QR code \u2014 tap to open" data-testid="qr-link-' + type + '">' +
+            '<img src="' + esc(src) + '" alt="' + esc(label) + ' QR code" class="qr-img" data-testid="qr-img-' + type + '" width="120" height="120" />' +
+            '<span class="qr-link-url" data-testid="qr-link-url-' + type + '">' + esc(href || '') + '</span>' +
+            '</a>';
+        }
+      } catch { /* QR loading is non-critical */ }
     }
     init();
   </script>
@@ -1667,12 +1706,18 @@ const SHARED_REPORT_HTML = `<!DOCTYPE html>
     .upgrade-prompt p { font-size: .85rem; color: #6c757d; margin: 0; }
     .skip-link { position: absolute; left: -9999px; top: auto; width: 1px; height: 1px; overflow: hidden; }
     .skip-link:focus { position: fixed; top: 0; left: 0; width: auto; height: auto; padding: .5rem 1rem; background: #1a1a2e; color: #fff; font-size: 1rem; z-index: 9999; text-decoration: none; border-bottom: 2px solid #4361ee; }
+    .venue-cell { display: flex; flex-direction: column; gap: .3rem; align-items: flex-start; min-width: 140px; }
+    .venue-map { border-radius: 4px; display: block; object-fit: cover; max-width: 200px; height: 80px; width: 100%; }
+    .venue-text { font-size: .75rem; color: #495057; max-width: 200px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .venue-plain { font-size: .85rem; color: #495057; }
+    .no-venue { color: #adb5bd; }
     @media print {
       .skip-link, .action-bar { display: none !important; }
       header { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
       .stat-card, .events-list, .sponsor-metric-card, .funnel-card { box-shadow: none; border: 1px solid #e9ecef; }
       body { background: #fff; }
       #advanced-metrics-section { display: block !important; }
+      .venue-map { display: none !important; }
     }
   </style>
 </head>
@@ -1733,18 +1778,32 @@ const SHARED_REPORT_HTML = `<!DOCTYPE html>
           listEl.innerHTML = '<p class="empty">No events to report.</p>';
           return;
         }
+        const mapsOn = document.body.dataset.mapsConfigured === '1';
         listEl.innerHTML = '<table class="report-table" data-testid="events-table"><caption class="sr-only">Events list</caption>' +
           '<thead><tr>' +
           '<th scope="col">Name</th>' +
           '<th scope="col">Date</th>' +
+          '<th scope="col">Venue</th>' +
           '<th scope="col">Status</th>' +
           '</tr></thead>' +
           '<tbody>' +
-          items.map(e => '<tr data-testid="report-event-row">' +
-            '<td data-testid="report-event-name">' + esc(e.name || 'Untitled') + '</td>' +
-            '<td data-testid="report-event-date">' + esc(fmt(e.startDateISO)) + '</td>' +
-            '<td><span class="badge ' + esc(e.status || '') + '" data-testid="report-event-status">' + esc(e.status || '') + '</span></td>' +
-            '</tr>').join('') +
+          items.map(e => {
+            const venue = e.location || '';
+            const venueInner = (venue && mapsOn)
+              ? '<div class="venue-cell">' +
+                  '<img src="/api/v2/maps/venue-image?venue=' + encodeURIComponent(venue) + '" alt="Map: ' + esc(venue) + '" class="venue-map" width="200" height="80" loading="lazy" />' +
+                  '<span class="venue-text" title="' + esc(venue) + '">' + esc(venue) + '</span>' +
+                '</div>'
+              : venue
+                ? '<span class="venue-plain">' + esc(venue) + '</span>'
+                : '<span class="no-venue">&mdash;</span>';
+            return '<tr data-testid="report-event-row">' +
+              '<td data-testid="report-event-name">' + esc(e.title || e.name || 'Untitled') + '</td>' +
+              '<td data-testid="report-event-date">' + esc(fmt(e.start_date || e.startDateISO)) + '</td>' +
+              '<td data-testid="report-event-venue">' + venueInner + '</td>' +
+              '<td><span class="badge ' + esc(e.status || '') + '" data-testid="report-event-status">' + esc(e.status || '') + '</span></td>' +
+              '</tr>';
+          }).join('') +
           '</tbody></table>';
         document.getElementById('export-json-btn').disabled = false;
       } catch {
@@ -1876,6 +1935,10 @@ export function handlePosterPage(_env: PagesEnv): Response {
   return html(POSTER_HTML);
 }
 
-export function handleSharedReportPage(_env: PagesEnv): Response {
-  return html(SHARED_REPORT_HTML);
+export function handleSharedReportPage(env: PagesEnv): Response {
+  // Inject data-maps-configured so client-side JS knows whether to render
+  // map thumbnails via the /api/v2/maps/venue-image proxy endpoint.
+  const mapsAttr = isGoogleMapsConfigured(env) ? ' data-maps-configured="1"' : '';
+  const content = SHARED_REPORT_HTML.replace('<body>', `<body${mapsAttr}>`);
+  return html(content);
 }

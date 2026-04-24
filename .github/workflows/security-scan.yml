@@ -33,22 +33,10 @@ name: CodeQL Security Analysis
 
 on:
   push:
-    # Trigger on ALL branches - any code touching the repo gets scanned
+    # Trigger on ALL branches, every push — no paths filter per security-unconditional rule.
+    # (S0 Security must run unconditionally; paths filters only on Gate/Deploy/Smoke.)
     branches:
       - '**'
-    paths:
-      - '**.js'
-      - '**.ts'
-      - '**.jsx'
-      - '**.tsx'
-      - '**.json'
-      - '**.html'
-      - '**.gs'
-      - '**.mjs'
-      - '**.cjs'
-      - '**.sh'
-      - '**.env*'
-      - 'workers/**'
   pull_request:
     # Scan all PRs regardless of target branch
     branches:
@@ -260,7 +248,9 @@ jobs:
       run: |
         HASH="$(node --version)-$(git hash-object package-lock.json)"
         STAMP=node_modules/.install-stamp
-        if [ '${{ inputs.skip_cache }}' != 'true' ] && [ -f "$STAMP" ] && [ "$(cat $STAMP)" = "$HASH" ] && [ -f "node_modules/.package-lock.json" ]; then
+        # inputs.skip_cache is only populated on workflow_dispatch; default to 'false' for push/PR.
+        SKIP_CACHE="${{ inputs.skip_cache || 'false' }}"
+        if [ "$SKIP_CACHE" != 'true' ] && [ -f "$STAMP" ] && [ "$(cat $STAMP)" = "$HASH" ] && [ -f "node_modules/.package-lock.json" ]; then
           echo "node_modules up-to-date, skipping npm ci"
         else
           npm ci --prefer-offline || npm ci

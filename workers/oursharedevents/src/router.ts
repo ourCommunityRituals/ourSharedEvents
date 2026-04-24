@@ -41,6 +41,10 @@
  *   GET    /api/v2/events/:id/sponsor-bundle   → sponsor bundle (surface filtering)
  *   POST   /api/v2/events/:id/sponsors/:sid/impression → log impression
  *   POST   /api/v2/events/:id/sponsors/:sid/click      → log click
+ *   GET    /api/v2/events/:id/poster-bundle    → poster bundle (QR data URIs + form links)
+ *
+ *   Admin Audit Log (auth required — OSE-212):
+ *   GET    /api/v2/admin/audit-log          → paginated audit entries
  *
  *   Admin Audit Log (auth required — OSE-212):
  *   GET    /api/v2/admin/audit-log          → paginated audit entries
@@ -58,6 +62,11 @@
  *   POST   /api/v2/admin/flags/apply-tier   → apply tier preset
  *   PUT    /api/v2/admin/events/:id/flags/:key    → set event override
  *   DELETE /api/v2/admin/events/:id/flags/:key    → remove event override
+ *
+ *   POST /api/v2/admin/events/:id/backup → handleAdminBackupEvent (auth required)
+ *
+ *   GET /.well-known/openid-configuration  → OIDC discovery (WIF)
+ *   GET /.well-known/jwks.json             → WIF public key
  *
  *   *                            → 404
  */
@@ -131,6 +140,9 @@ import {
   handleLogClick,
   type SponsorsEnv,
 } from './handlers/sponsors';
+import { handleAdminBackupEvent, type BigQueryHandlerEnv } from './handlers/bigquery';
+import { fetchStaticMapImage, type MapsEnv } from './lib/maps';
+import { handleGetPosterBundle, type PosterBundleEnv } from './handlers/poster-bundle';
 import { corsOrigin } from './lib/cors';
 import { guardPublicReadOnly } from './lib/public-readonly';
 
@@ -142,7 +154,10 @@ export type RouterEnv = PagesEnv &
   EventsEnv &
   AuditLogEnv &
   AuditHandlerEnv &
-  QrVerifyEnv & {
+  QrVerifyEnv &
+  MapsEnv &
+  BigQueryHandlerEnv &
+  PosterBundleEnv & {
     WORKER_ENV?: string;
     WORKER_BUILD_VERSION?: string;
   };
@@ -182,6 +197,26 @@ export async function route(
   if (url.protocol === 'http:') {
     url.protocol = 'https:';
     return Response.redirect(url.toString(), 301);
+  }
+
+  // ── OIDC well-known endpoints (for GCP Workload Identity Federation) ──────────
+  if (method === 'GET' && pathname === '/.well-known/openid-configuration') {
+    const issuer =
+      (env as { WIF_ISSUER?: string }).WIF_ISSUER?.trim() ?? 'https://oursharedevents.workers.dev';
+    return Response.json({
+      issuer,
+      jwks_uri: `${issuer}/.well-known/jwks.json`,
+      response_types_supported: ['id_token'],
+      subject_types_supported: ['public'],
+      id_token_signing_alg_values_supported: ['RS256'],
+    });
+  }
+
+  if (method === 'GET' && pathname === '/.well-known/jwks.json') {
+    const jwks = (env as { WIF_PUBLIC_JWKS?: string }).WIF_PUBLIC_JWKS ?? '{"keys":[]}';
+    return new Response(jwks, {
+      headers: { 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=3600' },
+    });
   }
 
   // ── Public read-only guard (OSE-214) ─────────────────────────────────────
@@ -285,6 +320,14 @@ export async function route(
       eventId
     );
     return res;
+  }
+
+  // POST /api/v2/admin/events/:id/backup — BigQuery event backup (OSE-215)
+  if (method === 'POST' && /^\/api\/v2\/admin\/events\/([^/]+)\/backup$/.test(pathname)) {
+    const eventId = pathname.split('/')[5];
+    const authRes = requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
+    if (authRes) return authRes;
+    return handleAdminBackupEvent(request, env, eventId);
   }
 
   // ── Admin sponsor routes (auth-gated) ──────────────────────────────────────
@@ -520,6 +563,12 @@ export async function route(
     return handleGetSponsorBundle(request, env, sponsorBundleMatch[1]);
   }
 
+  // GET /api/v2/events/:id/poster-bundle
+  const posterBundleMatch = pathname.match(/^\/api\/v2\/events\/([^/]+)\/poster-bundle$/);
+  if (posterBundleMatch && method === 'GET') {
+    return handleGetPosterBundle(request, env, posterBundleMatch[1]);
+  }
+
   // POST /api/v2/events/:id/sponsors/:sid/impression
   const impressionMatch = pathname.match(
     /^\/api\/v2\/events\/([^/]+)\/sponsors\/([^/]+)\/impression$/
@@ -532,6 +581,15 @@ export async function route(
   const clickMatch = pathname.match(/^\/api\/v2\/events\/([^/]+)\/sponsors\/([^/]+)\/click$/);
   if (clickMatch && method === 'POST') {
     return handleLogClick(request, env, clickMatch[1], clickMatch[2]);
+  }
+
+  // ── Google Maps venue image proxy (OSE-217) ────────────────────────────────
+  // GET /api/v2/maps/venue-image?venue=<encoded>
+  // Proxies Google Static Maps API server-side so the API key never reaches
+  // the browser. Used by SharedReports to render venue map thumbnails.
+  if (pathname === '/api/v2/maps/venue-image' && method === 'GET') {
+    const venueParam = url.searchParams.get('venue') ?? '';
+    return fetchStaticMapImage(env, venueParam);
   }
 
   // ── Public form endpoints (no auth) ────────────────────────────────────────
