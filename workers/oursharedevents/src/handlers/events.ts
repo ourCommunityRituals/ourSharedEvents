@@ -11,6 +11,7 @@
  */
 
 import { corsHeaders } from '../lib/cors';
+import { assertRenderable, VALID_EVENT_STATES, parseEventState } from '../domain/event-state';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -118,6 +119,17 @@ export async function handleGetEvent(
 
     if (!row) {
       return errorResponse('NOT_FOUND', `Event not found: ${id}`, 404, rid);
+    }
+
+    const { allowed, reason } = assertRenderable(
+      parseEventState((row as Record<string, unknown>).status),
+      'public'
+    );
+    if (!allowed) {
+      return Response.json(
+        { ok: false, status: 403, code: 'NOT_RENDERABLE', error: reason },
+        { status: 403, headers: { ...corsHeaders(request), 'X-Request-Id': rid } }
+      );
     }
 
     return Response.json(
@@ -270,7 +282,8 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
   const id = `evt_${crypto.randomUUID ? crypto.randomUUID() : Date.now()}`;
   const slug = typeof body.slug === 'string' ? body.slug.slice(0, 100) : slugify(title);
   const status =
-    typeof body.status === 'string' && ['active', 'draft', 'archived'].includes(body.status)
+    typeof body.status === 'string' &&
+    (VALID_EVENT_STATES as readonly string[]).includes(body.status)
       ? body.status
       : 'draft';
   const description = typeof body.description === 'string' ? body.description.slice(0, 2000) : null;
@@ -364,6 +377,19 @@ export async function handleUpdateEvent(
     body = JSON.parse(text) as Record<string, unknown>;
   } catch {
     return errorResponse('INVALID_BODY', 'Request body must be valid JSON', 400, rid);
+  }
+
+  // Status validation (if provided)
+  if ('status' in body && body.status !== null) {
+    const s = typeof body.status === 'string' ? body.status : '';
+    if (!(VALID_EVENT_STATES as readonly string[]).includes(s)) {
+      return errorResponse(
+        'INVALID_STATUS',
+        `status must be one of: ${VALID_EVENT_STATES.join(', ')}`,
+        400,
+        rid
+      );
+    }
   }
 
   // Date validation (if provided)

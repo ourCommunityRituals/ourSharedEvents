@@ -145,6 +145,7 @@ import { fetchStaticMapImage, type MapsEnv } from './lib/maps';
 import { handleGetPosterBundle, type PosterBundleEnv } from './handlers/poster-bundle';
 import { corsOrigin } from './lib/cors';
 import { guardPublicReadOnly } from './lib/public-readonly';
+import { assertRenderable, parseEventState } from './domain/event-state';
 
 export type RouterEnv = PagesEnv &
   AdminEnv &
@@ -606,16 +607,19 @@ export async function route(
       const eventRow = await env.DB.prepare('SELECT status FROM events WHERE id = ?')
         .bind(eventId)
         .first<{ status: string }>();
-      if (eventRow && eventRow.status !== 'active') {
-        return Response.json(
-          {
-            ok: false,
-            status: 410,
-            code: 'EVENT_ARCHIVED',
-            error: 'This event is no longer accepting submissions',
-          },
-          { status: 410 }
-        );
+      if (eventRow) {
+        const { allowed, reason } = assertRenderable(parseEventState(eventRow.status), 'public');
+        if (!allowed) {
+          return Response.json(
+            {
+              ok: false,
+              status: 410,
+              code: 'EVENT_NOT_ACTIVE',
+              error: reason ?? 'This event is not accepting submissions',
+            },
+            { status: 410 }
+          );
+        }
       }
     }
 
