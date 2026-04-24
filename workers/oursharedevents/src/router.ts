@@ -41,6 +41,7 @@
  *   GET    /api/v2/events/:id/sponsor-bundle   → sponsor bundle (surface filtering)
  *   POST   /api/v2/events/:id/sponsors/:sid/impression → log impression
  *   POST   /api/v2/events/:id/sponsors/:sid/click      → log click
+ *   GET    /api/v2/events/:id/poster-bundle    → poster bundle (QR data URIs + form links)
  *
  *   Feature Flag Admin (auth required):
  *   GET    /api/v2/admin/flags              → list all flags
@@ -124,6 +125,7 @@ import {
 } from './handlers/sponsors';
 import { handleAdminBackupEvent, type BigQueryHandlerEnv } from './handlers/bigquery';
 import { fetchStaticMapImage, type MapsEnv } from './lib/maps';
+import { handleGetPosterBundle, type PosterBundleEnv } from './handlers/poster-bundle';
 import { corsOrigin } from './lib/cors';
 import { guardPublicReadOnly } from './lib/public-readonly';
 
@@ -134,7 +136,8 @@ export type RouterEnv = PagesEnv &
   SponsorsEnv &
   EventsEnv &
   MapsEnv &
-  BigQueryHandlerEnv & {
+  BigQueryHandlerEnv &
+  PosterBundleEnv & {
     WORKER_ENV?: string;
     WORKER_BUILD_VERSION?: string;
   };
@@ -375,6 +378,12 @@ export async function route(request: Request, env: RouterEnv): Promise<Response>
   const sponsorBundleMatch = pathname.match(/^\/api\/v2\/events\/([^/]+)\/sponsor-bundle$/);
   if (sponsorBundleMatch && method === 'GET') {
     return handleGetSponsorBundle(request, env, sponsorBundleMatch[1]);
+  }
+
+  // GET /api/v2/events/:id/poster-bundle
+  const posterBundleMatch = pathname.match(/^\/api\/v2\/events\/([^/]+)\/poster-bundle$/);
+  if (posterBundleMatch && method === 'GET') {
+    return handleGetPosterBundle(request, env, posterBundleMatch[1]);
   }
 
   // POST /api/v2/events/:id/sponsors/:sid/impression
