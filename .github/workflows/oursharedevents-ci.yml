@@ -207,8 +207,10 @@ jobs:
 
       - name: detect-secrets baseline scan
         run: |
-          pip install detect-secrets --quiet
-          detect-secrets scan \
+          python -m pip install detect-secrets --quiet
+          SCRIPTS_DIR=$(python -c "import sysconfig; print(sysconfig.get_path('scripts'))")
+          chmod +x "$SCRIPTS_DIR/detect-secrets" 2>/dev/null || true
+          "$SCRIPTS_DIR/detect-secrets" scan \
             --exclude-files 'package-lock\.json' \
             --exclude-files '\.gitleaks\.toml' \
             --exclude-files '.*\.spec\.ts' \
