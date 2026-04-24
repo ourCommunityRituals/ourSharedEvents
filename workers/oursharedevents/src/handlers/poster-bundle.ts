@@ -19,6 +19,7 @@
  */
 
 import { generateQrCode } from '../lib/qr';
+import { assertRenderable, parseEventState } from '../domain/event-state';
 
 export interface PosterBundleEnv {
   DB: D1Database;
@@ -49,6 +50,14 @@ export async function handleGetPosterBundle(
 
   if (!row) {
     return Response.json({ ok: false, status: 404, error: 'Event not found' }, { status: 404 });
+  }
+
+  const { allowed, reason } = assertRenderable(parseEventState(row.status), 'poster');
+  if (!allowed) {
+    return Response.json(
+      { ok: false, status: 403, code: 'NOT_RENDERABLE', error: reason },
+      { status: 403 }
+    );
   }
 
   const origin = new URL(request.url).origin;

@@ -174,11 +174,11 @@ describe('QA-1 Edge-2: Email-signup — server-side dedup by email hash', () => 
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// EDGE-3: Archived / draft event lifecycle guard → 410 EVENT_ARCHIVED
+// EDGE-3: Non-active event lifecycle guard → 410 EVENT_NOT_ACTIVE
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('QA-1 Edge-3: Event lifecycle guard — non-active events reject submissions', () => {
-  test('archived event returns 410 EVENT_ARCHIVED for register', async () => {
+  test('archived event returns 410 EVENT_NOT_ACTIVE for register', async () => {
     const EVENT = 'qa1-archived-evt';
     await mainDb()
       .prepare(
@@ -190,11 +190,11 @@ describe('QA-1 Edge-3: Event lifecycle guard — non-active events reject submis
     const res = await postJson(`/api/v2/events/${EVENT}/forms/register`, { name: 'Bob' });
     expect(res.status).toBe(410);
     const body = await j(res);
-    expect(body.code).toBe('EVENT_ARCHIVED');
+    expect(body.code).toBe('EVENT_NOT_ACTIVE');
     expect(body.ok).toBe(false);
   });
 
-  test('draft event returns 410 EVENT_ARCHIVED for checkin', async () => {
+  test('draft event returns 410 EVENT_NOT_ACTIVE for checkin', async () => {
     const EVENT = 'qa1-draft-evt';
     await mainDb()
       .prepare(
@@ -205,10 +205,10 @@ describe('QA-1 Edge-3: Event lifecycle guard — non-active events reject submis
 
     const res = await postJson(`/api/v2/events/${EVENT}/forms/checkin`, {});
     expect(res.status).toBe(410);
-    expect((await j(res)).code).toBe('EVENT_ARCHIVED');
+    expect((await j(res)).code).toBe('EVENT_NOT_ACTIVE');
   });
 
-  test('archived event returns 410 EVENT_ARCHIVED for survey', async () => {
+  test('archived event returns 410 EVENT_NOT_ACTIVE for survey', async () => {
     // OSE-199: state machine trigger (migration 0025) only permits draft|ready|active|archived.
     // 'cancelled' was removed as a valid status; 'archived' is the terminal state.
     const EVENT = 'qa1-cancelled-evt';
@@ -226,7 +226,7 @@ describe('QA-1 Edge-3: Event lifecycle guard — non-active events reject submis
       responses: { rating: 4 },
     });
     expect(res.status).toBe(410);
-    expect((await j(res)).code).toBe('EVENT_ARCHIVED');
+    expect((await j(res)).code).toBe('EVENT_NOT_ACTIVE');
 
     await applyTier('free');
   });
