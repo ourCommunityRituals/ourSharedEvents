@@ -110,9 +110,9 @@ WORKER_BUILD_VERSION = "stg-2026.03.22"
 ALLOW_ADMIN_KEY_FALLBACK = "true"
 # Allow X-OCR-Internal header for CI/CD automation
 ALLOW_OCR_INTERNAL = "true"
-# Admin email allowlist (must be explicit per env — not inherited from [vars])
-ALLOWED_ADMIN_EMAILS = ""
-ALLOWED_ADMIN_DOMAINS = ""
+# Admin email allowlist — plaintext vars take priority over secrets; set actual values here
+ALLOWED_ADMIN_EMAILS = "mzdano@gmail.com"
+ALLOWED_ADMIN_DOMAINS = "oursharedevents.com"
 # Google Cloud — non-sensitive WIF config
 GCP_PROJECT_ID     = "project-7cc9adcd-ed55-47aa-958"
 GCP_PROJECT_NUMBER = "295230478705"
