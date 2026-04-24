@@ -187,8 +187,8 @@ jobs:
 
       - name: Semgrep SAST
         run: |
-          pip install semgrep --quiet
-          semgrep scan \
+          python -m pip install semgrep --quiet
+          python -m semgrep scan \
             --config=p/nodejs \
             --config=p/owasp-top-ten \
             --config=p/r2c-security-audit \
