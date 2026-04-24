@@ -29,6 +29,7 @@ import {
   hashEmail,
   bucketTimestamp,
   encryptEmail,
+  decryptEmail,
   generateId,
 } from '../lib/forms-db';
 import { corsHeaders } from '../lib/cors';
@@ -487,7 +488,7 @@ export async function handleAdminExport(
       break;
     case 'email-signups':
       query =
-        'SELECT id, event_id, signup_bucket, created_at FROM email_signups WHERE event_id = ? ORDER BY created_at DESC';
+        'SELECT id, event_id, email_encrypted, signup_bucket, consent_given_at, created_at FROM email_signups WHERE event_id = ? ORDER BY created_at DESC';
       break;
     default:
       return errorResponse('INVALID_TYPE', `Unknown export type: ${dataType}`, 400, request);
@@ -495,7 +496,25 @@ export async function handleAdminExport(
 
   try {
     const result = await env.FORMS_DB.prepare(query).bind(eventId).all();
-    const rows = (result.results ?? []) as Record<string, unknown>[];
+    let rows = (result.results ?? []) as Record<string, unknown>[];
+
+    // Decrypt email addresses for admin export — never expose raw ciphertext
+    if (dataType === 'email-signups' && env.FORMS_ENCRYPTION_KEY) {
+      const key = env.FORMS_ENCRYPTION_KEY;
+      rows = await Promise.all(
+        rows.map(async (row) => {
+          const { email_encrypted, ...rest } = row;
+          if (typeof email_encrypted === 'string') {
+            try {
+              return { ...rest, email: await decryptEmail(email_encrypted, key) };
+            } catch {
+              return { ...rest, email: null };
+            }
+          }
+          return rest;
+        })
+      );
+    }
 
     logFormEvent(dataType as FormType, eventId, 'admin_read', { count: rows.length, format });
 
