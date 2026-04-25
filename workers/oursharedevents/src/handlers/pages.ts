@@ -1488,11 +1488,16 @@ const POSTER_HTML = `<!DOCTYPE html>
     .poster-sponsor-label { font-size: .65rem; text-transform: uppercase; letter-spacing: .06em; color: #64748b; text-align: center; margin-bottom: .35rem; }
     .poster-sponsor-tier-row { display: flex; align-items: center; justify-content: center; gap: 1rem; flex-wrap: wrap; padding: .2rem 0; }
     .poster-sponsor-tier-label { font-size: .6rem; text-transform: uppercase; letter-spacing: .06em; color: #64748b; text-align: center; width: 100%; margin-bottom: .15rem; }
-    .poster-sponsor--premium img { height: 36px; }
-    .poster-sponsor--premium .poster-sponsor-name { font-size: .8rem; font-weight: 600; color: #1e293b; }
-    .poster-sponsor--mid img { height: 26px; }
-    .poster-sponsor--local img { height: 20px; }
-    .poster-sponsor--local .poster-sponsor-name { font-size: .65rem; color: #64748b; }
+    .poster-sponsor--title img,
+    .poster-sponsor--platinum img { height: 40px; }
+    .poster-sponsor--title .poster-sponsor-name,
+    .poster-sponsor--platinum .poster-sponsor-name { font-size: .85rem; font-weight: 700; color: #1e293b; }
+    .poster-sponsor--gold img { height: 34px; }
+    .poster-sponsor--gold .poster-sponsor-name { font-size: .8rem; font-weight: 600; color: #1e293b; }
+    .poster-sponsor--silver img,
+    .poster-sponsor--bronze img { height: 28px; }
+    .poster-sponsor--primary img { height: 22px; }
+    .poster-sponsor--primary .poster-sponsor-name { font-size: .65rem; color: #6c757d; }
     .page-header a:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
     .event-select select:focus { border-color: #4361ee; outline: none; box-shadow: 0 0 0 3px rgba(67,97,238,.15); }
     .skip-link { position: absolute; left: -9999px; top: auto; width: 1px; height: 1px; overflow: hidden; }
@@ -1602,7 +1607,9 @@ const POSTER_HTML = `<!DOCTYPE html>
         strip.innerHTML = '<div class="poster-sponsor-label" data-testid="poster-sponsor-label">Sponsored By</div>' +
           sponsors.map(function(s) {
             const logo = s.logo_url ? '<img src="' + esc(s.logo_url) + '" alt="' + esc(s.name) + ' logo" data-testid="poster-sponsor-logo">' : '';
-            return '<div class="poster-sponsor" data-testid="poster-sponsor-item" role="listitem" aria-label="' + esc(s.name) + '">' + logo + '<span class="poster-sponsor-name" data-testid="poster-sponsor-name">' + esc(s.name) + '</span></div>';
+            const validTiers = ['title','platinum','gold','silver','bronze','primary'];
+            const tier = validTiers.indexOf(String(s.tier || '')) >= 0 ? s.tier : 'primary';
+            return '<div class="poster-sponsor poster-sponsor--' + esc(tier) + '" data-tier="' + esc(tier) + '" data-testid="poster-sponsor-item" role="listitem" aria-label="' + esc(s.name) + '">' + logo + '<span class="poster-sponsor-name" data-testid="poster-sponsor-name">' + esc(s.name) + '</span></div>';
           }).join('');
       } catch { strip.setAttribute('aria-busy', 'false'); strip.innerHTML = ''; }
     }
