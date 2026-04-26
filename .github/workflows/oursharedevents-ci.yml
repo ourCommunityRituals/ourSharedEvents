@@ -178,6 +178,26 @@ jobs:
         uses: github/codeql-action/analyze@v4
         with:
           category: '/language:javascript-typescript'
+          # Private repo on free tier: GitHub Code Scanning upload requires
+          # GitHub Advanced Security (GHAS), which is paid for private repos.
+          # Per `feedback_private_until_launch.md`, OSE stays private until
+          # launch — so until GHAS is provisioned (or the repo goes public),
+          # we run CodeQL analysis but skip the Security-tab upload. The
+          # SARIF is published as a workflow artifact instead (next step) so
+          # findings remain reviewable without losing the analysis depth.
+          # When OSE goes public OR GHAS is enabled, remove `upload: 'never'`
+          # and the upload-artifact step below.
+          upload: 'never'
+          output: '${{ runner.temp }}/codeql-sarif'
+
+      - name: Upload CodeQL SARIF as workflow artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: codeql-sarif-${{ github.sha }}
+          path: '${{ runner.temp }}/codeql-sarif/'
+          retention-days: 30
+          if-no-files-found: warn
 
       # ── Semgrep + detect-secrets (Python-based) ──────────────────────────
       - name: Set up Python for Semgrep + detect-secrets
@@ -271,7 +291,7 @@ jobs:
           npx @cyclonedx/cyclonedx-npm --omit dev --output-file sbom.json --output-format JSON --spec-version 1.5
           COMPONENT_COUNT=$(jq '.components | length' sbom.json 2>/dev/null || echo "unknown")
           echo "## S0 Security" >> $GITHUB_STEP_SUMMARY
-          echo "- **CodeQL:** passed" >> $GITHUB_STEP_SUMMARY
+          echo "- **CodeQL:** analyzed (SARIF artifact: codeql-sarif-${{ github.sha }})" >> $GITHUB_STEP_SUMMARY
           echo "- **npm audit:** passed" >> $GITHUB_STEP_SUMMARY
           echo "- **SBOM:** $COMPONENT_COUNT components (CycloneDX 1.5)" >> $GITHUB_STEP_SUMMARY
 
