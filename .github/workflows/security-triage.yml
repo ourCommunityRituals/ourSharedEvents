@@ -80,6 +80,24 @@ jobs:
 
           echo "count=$EXISTING" >> $GITHUB_OUTPUT
 
+      - name: Ensure auto-triage labels exist
+        # `gh issue create --label X` errors when label X is missing. Create
+        # the three labels we attach below idempotently so the issue creation
+        # step never fails on a label-not-found error.
+        if: steps.existing.outputs.count == '0'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          for spec in "security:#d73a4a:Security finding" "priority:high:#b60205:High priority" "auto-triage:#0e8a16:Created by security-triage workflow"; do
+            name="${spec%%:*}"
+            rest="${spec#*:}"
+            color="${rest%%:*}"
+            desc="${rest#*:}"
+            if ! gh label list --search "$name" --json name --jq '.[].name' | grep -Fxq "$name"; then
+              gh label create "$name" --color "${color#'#'}" --description "$desc" || true
+            fi
+          done
+
       - name: Create security issue
         if: steps.existing.outputs.count == '0'
         env:
@@ -148,11 +166,15 @@ jobs:
             -e "s|SLA_DEADLINE_PLACEHOLDER|${SLA_DEADLINE}|g" \
             "$BODY_FILE"
 
+          # `--assignee oursharedevents` was failing because the org name is
+          # not a valid issue-assignee on this repo. Drop it; the labels +
+          # title prefix surface the issue clearly enough for triage. If a
+          # human assignee is desired later, set repo var SECURITY_ASSIGNEE
+          # to a username and re-add `--assignee "${SECURITY_ASSIGNEE}"`.
           gh issue create \
             --title "[SECURITY] ${WORKFLOW} failure on ${BRANCH} (${SHORT_SHA})" \
             --body-file "$BODY_FILE" \
-            --label "security,${SEVERITY_LABEL},auto-triage" \
-            --assignee "oursharedevents"
+            --label "security,${SEVERITY_LABEL},auto-triage"
 
           rm -f "$BODY_FILE"
 

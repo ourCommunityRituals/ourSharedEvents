@@ -93,19 +93,26 @@ jobs:
         echo "Commit: ${{ github.sha }}"
         echo ""
 
-        # Determine target URL
+        # Determine target URL.
+        # Pre-launch (OSE-15 not yet shipped): production URL is not live, so
+        # main-push and nightly-schedule both target staging. Once OSE-15 ships
+        # and the production URL responds, set the repo variable
+        # `PRODUCTION_LIVE=true` (Settings → Variables → Actions) to flip
+        # main-push and nightly back to PRODUCTION_URL.
+        PRODUCTION_LIVE="${{ vars.PRODUCTION_LIVE || 'false' }}"
+
         if [ "${{ github.event_name }}" == "workflow_dispatch" ] && [ -n "${{ inputs.target_url }}" ]; then
           TARGET_URL="${{ inputs.target_url }}"
           echo "Target: $TARGET_URL (manual override)"
-        elif [ "${{ github.event_name }}" == "schedule" ]; then
+        elif [ "${{ github.event_name }}" == "schedule" ] && [ "$PRODUCTION_LIVE" == "true" ]; then
           TARGET_URL="${{ env.PRODUCTION_URL }}"
           echo "Target: $TARGET_URL (nightly production check)"
-        elif [ "${{ github.ref_name }}" == "main" ] && [ "${{ github.event_name }}" == "push" ]; then
+        elif [ "${{ github.ref_name }}" == "main" ] && [ "${{ github.event_name }}" == "push" ] && [ "$PRODUCTION_LIVE" == "true" ]; then
           TARGET_URL="${{ env.PRODUCTION_URL }}"
           echo "Target: $TARGET_URL (main branch - production)"
         else
           TARGET_URL="${{ env.STAGING_URL }}"
-          echo "Target: $TARGET_URL (staging)"
+          echo "Target: $TARGET_URL (staging — PRODUCTION_LIVE=$PRODUCTION_LIVE)"
         fi
 
         echo ""

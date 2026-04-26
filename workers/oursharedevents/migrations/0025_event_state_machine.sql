@@ -1,29 +1,28 @@
--- Migration 0025: Event state machine — add 'ready' state and enforce valid transitions
+-- Migration 0025: Event state machine — app-layer enforcement only
 -- OSE-199 / BE-12
 --
--- SQLite does not support ALTER TABLE ADD CONSTRAINT, so enforcement is done
--- via BEFORE INSERT / BEFORE UPDATE triggers. Application layer also enforces
--- valid states through src/domain/event-state.ts.
+-- Original revision attempted to add SQLite BEFORE INSERT/UPDATE triggers
+-- with `BEGIN ... SELECT RAISE(ABORT, ...); END;` bodies. Cloudflare D1's
+-- `wrangler d1 migrations apply` parser splits SQL on naked `;`, which
+-- breaks trigger bodies and surfaces as
+--   `incomplete input: SQLITE_ERROR [code: 7500]`
+-- on `--remote`. The triggers were redundant defense-in-depth — the
+-- application layer is the source of truth for state transitions:
+--
+--   src/domain/event-state.ts    — VALID_TRANSITIONS map
+--   src/handlers/pages.ts        — assertRenderable() on every public render
+--   src/handlers/qr-verify.ts    — POST /api/v2/admin/events/:id/verify-qr
+--                                  enforces READY → ACTIVE
+--
+-- This migration is therefore a documented no-op. The status column
+-- accepts any TEXT value at the storage layer; only app code reads/writes
+-- it.
 --
 -- Valid status values: draft | ready | active | archived
--- Valid transitions enforced by application code (see VALID_TRANSITIONS in event-state.ts):
+-- Valid transitions (enforced in event-state.ts VALID_TRANSITIONS):
 --   draft    → ready | archived
 --   ready    → active | draft | archived
 --   active   → archived | ready
 --   archived → active | draft
 
-CREATE TRIGGER IF NOT EXISTS trg_events_status_insert
-  BEFORE INSERT ON events
-  FOR EACH ROW
-  WHEN NEW.status NOT IN ('draft', 'ready', 'active', 'archived')
-BEGIN
-  SELECT RAISE(ABORT, 'Invalid event status: must be draft, ready, active, or archived');
-END;
-
-CREATE TRIGGER IF NOT EXISTS trg_events_status_update
-  BEFORE UPDATE OF status ON events
-  FOR EACH ROW
-  WHEN NEW.status NOT IN ('draft', 'ready', 'active', 'archived')
-BEGIN
-  SELECT RAISE(ABORT, 'Invalid event status: must be draft, ready, active, or archived');
-END;
+SELECT 1;
