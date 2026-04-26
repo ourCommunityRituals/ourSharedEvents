@@ -12,6 +12,28 @@
 
 import { corsHeaders } from '../lib/cors';
 import { assertRenderable, VALID_EVENT_STATES, parseEventState } from '../domain/event-state';
+import { computeEventPhase, type EventPhase } from '../domain/event-phase';
+
+// ─── Phase enrichment ──────────────────────────────────────────────────────────
+//
+// Per OSE-242 (rescoped 2026-04-26 to canonical matrix-wide resolver), every
+// event API response carries `phase` so that all 5 surfaces (Sponsor, Poster,
+// Display, Public, SharedReport, Admin event-list) consume the same canonical
+// phase computation. Wiring here = single point of injection; surfaces don't
+// re-derive phase locally. Brain contract:
+//   OCR-docs/ocr-docs-brain/event-phase-contract.yaml
+function enrichWithPhase(
+  row: Record<string, unknown>
+): Record<string, unknown> & { phase: EventPhase } {
+  return {
+    ...row,
+    phase: computeEventPhase({
+      status: typeof row.status === 'string' ? row.status : '',
+      start_date: typeof row.start_date === 'string' ? row.start_date : null,
+      end_date: typeof row.end_date === 'string' ? row.end_date : null,
+    }),
+  };
+}
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -68,8 +90,9 @@ export async function handleListEvents(request: Request, env: EventsEnv): Promis
       .bind(brand)
       .all();
 
+    const items = (result.results ?? []).map(enrichWithPhase);
     return Response.json(
-      { ok: true, status: 200, items: result.results ?? [] },
+      { ok: true, status: 200, items },
       {
         headers: {
           ...corsHeaders(request),
@@ -133,7 +156,7 @@ export async function handleGetEvent(
     }
 
     return Response.json(
-      { ok: true, status: 200, item: row },
+      { ok: true, status: 200, item: enrichWithPhase(row as Record<string, unknown>) },
       {
         headers: {
           ...corsHeaders(request),
@@ -178,8 +201,9 @@ export async function handleAdminListEvents(request: Request, env: EventsEnv): P
        ORDER BY updated_at DESC`
     ).all();
 
+    const items = (result.results ?? []).map(enrichWithPhase);
     return Response.json(
-      { ok: true, status: 200, items: result.results ?? [] },
+      { ok: true, status: 200, items },
       {
         headers: {
           ...corsHeaders(request),
