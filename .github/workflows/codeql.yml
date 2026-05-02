@@ -69,6 +69,11 @@ jobs:
         with:
           languages: ${{ matrix.language }}
           build-mode: ${{ matrix.build-mode }}
+          # Cap heap + parallelism — prevents OS commit-limit exhaustion under
+          # concurrent runs on Bloodraven. See oursharedevents-ci.yml S0 for
+          # full rationale (auto-calc was claiming ~30 GB heap + 32 threads).
+          ram: 8192
+          threads: 8
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v4

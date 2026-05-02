@@ -173,6 +173,15 @@ jobs:
         with:
           languages: javascript-typescript
           build-mode: none
+          # Cap heap + parallelism. Without this, codeql-action auto-calculates
+          # ram=(total-2048) and threads=cpu-count, which on Bloodraven (32 GB,
+          # 32 threads) means CodeQL claims ~30 GB heap and 32 threads. When a
+          # second workflow runs concurrently OR the JVM later commits native
+          # memory on top, the OS commit budget exhausts even with a 48 GB
+          # auto-managed pagefile (DOS error 1455). 8 GB / 8 threads leaves
+          # plenty of headroom for the worker + concurrent jobs + JVM native.
+          ram: 8192
+          threads: 8
 
       - name: CodeQL Analysis
         uses: github/codeql-action/analyze@v4
