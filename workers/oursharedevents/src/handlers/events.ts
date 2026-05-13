@@ -82,7 +82,8 @@ export async function handleListEvents(request: Request, env: EventsEnv): Promis
   try {
     const result = await env.DB.prepare(
       `SELECT id, brand_id, title, slug, status, description, location,
-              start_date, end_date, timezone, cover_image_url, created_at, updated_at
+              start_date, end_date, timezone, cover_image_url, created_at, updated_at,
+              legal_clearance_tier
        FROM events
        WHERE brand_id = ? AND status = 'active'
        ORDER BY start_date ASC`
@@ -133,7 +134,8 @@ export async function handleGetEvent(
   try {
     const row = await env.DB.prepare(
       `SELECT id, brand_id, title, slug, status, description, location,
-              start_date, end_date, timezone, cover_image_url, created_at, updated_at
+              start_date, end_date, timezone, cover_image_url, created_at, updated_at,
+              legal_clearance_tier
        FROM events
        WHERE id = ?`
     )
@@ -196,7 +198,8 @@ export async function handleAdminListEvents(request: Request, env: EventsEnv): P
   try {
     const result = await env.DB.prepare(
       `SELECT id, brand_id, title, slug, status, description, location,
-              start_date, end_date, timezone, cover_image_url, created_at, updated_at
+              start_date, end_date, timezone, cover_image_url, created_at, updated_at,
+              legal_clearance_tier
        FROM events
        ORDER BY updated_at DESC`
     ).all();
