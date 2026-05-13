@@ -461,6 +461,11 @@ describe('ADMIN-2: Phase badge JS wiring in loadForms', () => {
     expect(html).toContain('Number(legalPhase) || 1');
   });
 
+  test('loadForms p clamped to 1-5 range (prevents phase-badge class overflow)', async () => {
+    const html = await fetchAdminHtml();
+    expect(html).toContain('Math.max(1, Math.min(5, Number(legalPhase) || 1))');
+  });
+
   test('loadForms updates phase badge textContent to "Phase " + p', async () => {
     const html = await fetchAdminHtml();
     expect(html).toContain("pb.textContent = 'Phase ' + p");
@@ -488,6 +493,11 @@ describe('ADMIN-2: Events table phase column', () => {
   test('safePhase coerces legal_clearance_tier with numeric fallback to 1', async () => {
     const html = await fetchAdminHtml();
     expect(html).toContain('Number(e.legal_clearance_tier) || 1');
+  });
+
+  test('safePhase clamped to 1-5 range (Math.max/Math.min prevents out-of-range CSS classes)', async () => {
+    const html = await fetchAdminHtml();
+    expect(html).toContain('Math.max(1, Math.min(5, Number(e.legal_clearance_tier) || 1))');
   });
 
   test('event row passes safePhase to loadForms as third argument', async () => {
@@ -519,7 +529,7 @@ describe('ADMIN-2: Events table phase column', () => {
 describe('ADMIN-2: Two-axis tier × phase gate in loadForms', () => {
   test('loadForms derives eventPhase from legalPhase with safe coercion', async () => {
     const html = await fetchAdminHtml();
-    expect(html).toContain('const eventPhase = Number(legalPhase) || 1');
+    expect(html).toContain('const eventPhase = Math.max(1, Math.min(5, Number(legalPhase) || 1))');
   });
 
   test('phaseEnabled computed from eventPhase against upgradePhase threshold', async () => {
@@ -549,6 +559,13 @@ describe('ADMIN-2: Two-axis tier × phase gate in loadForms', () => {
     // // upgradeTier: payment tier required. upgradePhase: regulatory clearance tier required.
     expect(html).toContain('upgradeTier');
     expect(html).toContain('upgradePhase');
+  });
+
+  test('survey and email form types define upgradePhase: 2 (Phase 2 required for data-collection forms)', async () => {
+    const html = await fetchAdminHtml();
+    // Two occurrences of `upgradePhase: 2` — one each for survey and email types
+    const hits = (html.match(/upgradePhase: 2/g) ?? []).length;
+    expect(hits).toBe(2);
   });
 
   test('payment tier lock is distinct from phase lock ("Upgrade to" vs "Requires Phase")', async () => {
@@ -608,6 +625,15 @@ describe('ADMIN-2 Backend: legal_clearance_tier field in admin events API', () =
       )
       .bind('evt_lct_default', BRAND, 'LCT Default Event', 'lct-default', 'active', now, now)
       .run();
+
+    // Out-of-range: LCT=6 (above max CSS class phase-5 — clamping is UI-layer)
+    await db
+      .prepare(
+        `INSERT INTO events (id, brand_id, title, slug, status, legal_clearance_tier, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+      )
+      .bind('evt_lct_oor', BRAND, 'LCT Out-of-Range Event', 'lct-oor', 'active', 6, now, now)
+      .run();
   });
 
   test('GET /api/v2/admin/events includes legal_clearance_tier on every item', async () => {
@@ -643,5 +669,16 @@ describe('ADMIN-2 Backend: legal_clearance_tier field in admin events API', () =
     const item = body.items.find((e) => e.id === 'evt_lct_default');
     expect(item).toBeDefined();
     expect(item!.legal_clearance_tier).toBe(1);
+  });
+
+  test('L5 boundary: LCT=6 passes through API as raw value (clamping is UI-layer only)', async () => {
+    const res = await SELF.fetch('https://t.test/api/v2/admin/events', {
+      headers: adminHeaders(),
+    });
+    const body = (await res.json()) as { ok: boolean; items: Record<string, unknown>[] };
+    const item = body.items.find((e) => e.id === 'evt_lct_oor');
+    expect(item).toBeDefined();
+    // API returns the raw DB value — the UI template clamps it to 1-5
+    expect(item!.legal_clearance_tier).toBe(6);
   });
 });
