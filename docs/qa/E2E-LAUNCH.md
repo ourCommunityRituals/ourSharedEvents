@@ -3,9 +3,20 @@
 Everything needed to go from zero to a fully working live site at `oursharedevents.com`.
 Work through each Part in order — each one unlocks the next.
 
-> **SUPERSEDED (2026-04-09):** Parts 1-2 (Google Cloud + Sheets) are obsolete — Phase 2 replaced Sheets with D1.
-> Use **`docs/deployment/INFRA-CHECKLIST.md`** for the corrected, D1-native infrastructure steps.
-> Parts 3-9 (Cloudflare zone, secrets, deploy, sign-off) remain valid but INFRA-CHECKLIST.md consolidates them.
+> **SUPERSEDED (2026-05-09):** This document is archived. The architecture has changed significantly.
+>
+> **Use these docs instead:**
+>
+> - **`docs/deployment/INFRA-CHECKLIST.md`** — D1-native setup, current secrets, 27 migrations, CF Access, WIF/BigQuery
+> - **`docs/qa/STAGING-SMOKE.md`** — full surface-by-surface staging sign-off checklist
+>
+> **What's dead in this doc:**
+>
+> - Parts 1–2 (Google Cloud + Sheets) — D1 is the data layer, no Sheets dependency
+> - Part 5 secrets (`GOOGLE_SA_*`, `SHEETS_SPREADSHEET_ID`) — replaced by WIF + `FORMS_ENCRYPTION_KEY` + `ALLOWED_ADMIN_EMAILS`
+> - Part 7 sign-off — only 7 checks, missing privacy route, state machine, rate limiter, audit log, feature flags
+>
+> Parts 3–4, 6, 8–9 (Cloudflare zone, GitHub secrets, first deploy, repo migration, production launch) remain structurally accurate but INFRA-CHECKLIST.md consolidates them with current values.
 
 **Estimated time (first time through):** 2–3 hours
 **Recurring deploys after setup:** ~2 minutes (CI/CD handles it automatically)
