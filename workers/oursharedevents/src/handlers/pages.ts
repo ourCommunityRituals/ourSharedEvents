@@ -149,6 +149,12 @@ const ADMIN_HTML = `<!DOCTYPE html>
     .tier-badge.free       { background: #d3f9d8; color: #155724; }
     .tier-badge.mid        { background: #d0ebff; color: #1971c2; }
     .tier-badge.enterprise { background: #e8deee; color: #7c3aed; }
+    .phase-badge { display: inline-block; padding: .2rem .6rem; border-radius: 12px; font-size: .7rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; margin-left: .5rem; }
+    .phase-badge.phase-1 { background: #f1f3f5; color: #495057; }
+    .phase-badge.phase-2 { background: #d0ebff; color: #1864ab; }
+    .phase-badge.phase-3 { background: #fff3cd; color: #856404; }
+    .phase-badge.phase-4 { background: #ffe8cc; color: #7d4600; }
+    .phase-badge.phase-5 { background: #ffe0e0; color: #c92a2a; }
     .feature-locked { position: relative; opacity: .5; }
     .feature-locked::after { content: '🔒'; position: absolute; top: .5rem; right: .5rem; font-size: 1rem; }
     .feature-locked .form-link { pointer-events: none; }
@@ -277,7 +283,7 @@ const ADMIN_HTML = `<!DOCTYPE html>
 <body>
   <a href="#main-content" class="skip-link">Skip to content</a>
   <header data-testid="admin-header" aria-label="OurSharedEvents Admin">
-    <h1>OurSharedEvents<span class="tier-badge" id="tierBadge" data-testid="tier-badge"></span></h1>
+    <h1>OurSharedEvents<span class="tier-badge" id="tierBadge" data-testid="tier-badge"></span><span class="phase-badge phase-1" id="phaseBadge" data-testid="phase-badge">Phase 1</span></h1>
     <span>Admin</span>
   </header>
   <main id="main-content" data-testid="admin-main" aria-label="Admin dashboard">
@@ -324,18 +330,20 @@ const ADMIN_HTML = `<!DOCTYPE html>
         const rows = data.items.map(e => {
           const safeName = esc(e.name || 'Untitled');
           const safeId = esc(String(e.id));
+          const safePhase = Number(e.legal_clearance_tier) || 1;
           return \`
-          <tr onclick="window.loadForms('\${safeId}', '\${safeName.replace(/'/g, "\\\\'")}'); document.querySelectorAll('tr.selected').forEach(r=>r.classList.remove('selected')); this.classList.add('selected');" onkeydown="if(event.key==='Enter'||event.key===' '){this.click();event.preventDefault();}" class="clickable-row" tabindex="0" data-testid="event-row-\${safeId}">
+          <tr onclick="window.loadForms('\${safeId}', '\${safeName.replace(/'/g, "\\\\'")}', \${safePhase}); document.querySelectorAll('tr.selected').forEach(r=>r.classList.remove('selected')); this.classList.add('selected');" onkeydown="if(event.key==='Enter'||event.key===' '){this.click();event.preventDefault();}" class="clickable-row" tabindex="0" data-testid="event-row-\${safeId}" data-phase="\${safePhase}">
             <td data-testid="event-id">\${safeId}</td>
             <td data-testid="event-name">\${safeName}</td>
             <td data-testid="event-date">\${e.startDateISO ? esc(new Date(e.startDateISO).toLocaleDateString()) : '—'}</td>
             <td data-testid="event-venue">\${esc(e.venue || '—')}</td>
             <td><span class="badge \${esc(e.status)}" data-testid="event-status">\${esc(e.status)}</span></td>
+            <td><span class="phase-badge phase-\${safePhase}" data-testid="event-phase">Phase \${safePhase}</span></td>
           </tr>
         \`}).join('');
         container.innerHTML = \`
           <table data-testid="events-table">
-            <thead><tr><th>ID</th><th>Name</th><th>Date</th><th>Venue</th><th>Status</th></tr></thead>
+            <thead><tr><th>ID</th><th>Name</th><th>Date</th><th>Venue</th><th>Status</th><th>Phase</th></tr></thead>
             <tbody data-testid="events-tbody">\${rows}</tbody>
           </table>
         \`;
@@ -400,10 +408,19 @@ const ADMIN_HTML = `<!DOCTYPE html>
   </div>
   <script>
     // Forms card — load counts and generate QR links for selected event
-    window.loadForms = async function(eventId, eventName) {
+    window.loadForms = async function(eventId, eventName, legalPhase) {
+      // Update phase badge to reflect selected event's regulatory clearance tier
+      const pb = document.getElementById('phaseBadge');
+      if (pb) {
+        const p = Number(legalPhase) || 1;
+        pb.textContent = 'Phase ' + p;
+        pb.className = 'phase-badge phase-' + p;
+        pb.dataset.testid = 'phase-badge';
+      }
       const panel = document.getElementById('forms-panel');
       panel.innerHTML = '<div class="skeleton-table" data-testid="skeleton-forms"><div class="skeleton skeleton-row"></div><div class="skeleton skeleton-row"></div><div class="skeleton skeleton-row"></div></div>';
       try {
+      // upgradeTier: payment tier required. upgradePhase: regulatory clearance tier required.
       const types = [
         { key: 'register', flagKey: 'forms.register', label: 'Registration', desc: 'Pre-event sign-up' },
         { key: 'checkin', flagKey: 'forms.checkin', label: 'Check-in', desc: 'Walk-in door tally' },
@@ -423,11 +440,16 @@ const ADMIN_HTML = `<!DOCTYPE html>
       ));
       const countLabels = ['Registrations', 'Check-ins', 'Surveys', 'Emails'];
 
-      // Form links — locked if flag is off
+      // Form links — locked if flag is off (payment tier) or regulatory phase insufficient
+      const eventPhase = Number(legalPhase) || 1;
       const linksHtml = types.map(t => {
-        const enabled = flags[t.flagKey] !== false;
+        const tierEnabled = flags[t.flagKey] !== false;
+        const phaseEnabled = eventPhase >= (t.upgradePhase || 1);
+        const enabled = tierEnabled && phaseEnabled;
         const lockedClass = enabled ? '' : ' feature-locked';
-        const lockMsg = enabled ? '' : '<div class="lock-overlay">Upgrade to ' + (t.upgradeTier || 'mid') + ' to unlock</div>';
+        const lockMsg = enabled ? '' : !tierEnabled
+          ? '<div class="lock-overlay">Upgrade to ' + (t.upgradeTier || 'mid') + ' to unlock</div>'
+          : '<div class="lock-overlay">Requires Phase ' + (t.upgradePhase || 2) + ' regulatory clearance</div>';
         return '<div class="' + lockedClass + '" data-testid="form-gate-' + t.key + '">' +
           '<a class="form-link" href="/forms/' + eventId + '?type=' + t.key + '&event=' + encodedName + '" target="_blank" data-testid="form-link-' + t.key + '">' +
             '<div class="form-type">' + t.label + '</div>' +
