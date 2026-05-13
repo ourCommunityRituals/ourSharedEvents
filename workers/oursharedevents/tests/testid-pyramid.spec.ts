@@ -1,14 +1,42 @@
 /**
  * Data-TestID Automation Pyramid
  *
- * Full SDET testing pyramid for the data-testid system across all surfaces.
- * Validates from static lint through contract, integration, and E2E.
+ * Full SDET testing pyramid for OSE. Validates from security through academic.
  *
- * Pyramid layers:
- *   L1 — Lint:        Static analysis of source files (naming, uniqueness, coverage)
- *   L2 — Contract:    API response schemas match what the UI consumes
- *   L3 — Integration: DB → Handler → Router → HTML pipeline validation
- *   L4 — E2E:         Full admin flow: load → select event → forms → flags → surfaces
+ * ── Canonical OCR 10-Level Pyramid (execution order) ──────────────────────────
+ *
+ *   L0  Security    — auth guards, response hygiene, no-leak assertions
+ *   L1  Lint        — static source analysis (naming, projections, clamp patterns)
+ *   L2  Schema      — DB column types, defaults, migration-applied shape
+ *   L3  Unit        — pure decision logic, decision tables, happy + sad paths
+ *   L4  Regression  — field defaults on create; fields survive unrelated mutations
+ *   L5  Boundary    — clamp/out-of-range/null edges → see admin-ui.spec.ts
+ *   L6  Integration — DB → Handler → Router → API pipeline (flywheel loop)
+ *   L7  Contract    — API response schema: field names, types, presence guarantees
+ *   L8  Pact        — consumer-driven contract (N/A — no external consumers yet)
+ *   L9  Academic    — invariant proofs, model checks (N/A — future)
+ *
+ * ── How existing describe blocks map to canonical levels ──────────────────────
+ *
+ *   "L1 Lint …"          → canonical L1
+ *   "L2 Contract …"      → canonical L7  (named for local clarity; schema = L2 below)
+ *   "L3 Integration …"   → canonical L6
+ *   "L4 E2E …"           → canonical L4 + L6 combined
+ *
+ * ── Pattern for every new regulatory field (TEMPLATE) ────────────────────────
+ *
+ *   When shipping a net-new regulatory/typed field, add one describe block per
+ *   missing canonical level in the "REGULATORY FIELD PYRAMID" section below.
+ *   Minimum required: L0–L7. L5 goes in admin-ui.spec.ts (surface assertions).
+ *
+ *   L0  → PUT/POST write requires auth (401); gate 403 body has no internal fields
+ *   L1  → source file scan: column in SELECT projection + clamp/sanitise present
+ *   L2  → PRAGMA table_info: column exists, correct type, correct DEFAULT
+ *   L3  → decision table: all form types × field values → expected gate outcome
+ *   L4  → create (no field) → DB shows DEFAULT; update other field → field unchanged
+ *   L5  → min/max clamp, null fallback, out-of-range coercion (admin-ui.spec.ts)
+ *   L6  → flywheel: admin sets field in DB → public API enforces it end-to-end
+ *   L7  → field present in API response as correct JS type
  */
 
 import { env, SELF } from 'cloudflare:test';
