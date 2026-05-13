@@ -10,8 +10,8 @@
  * the Playwright suite in tests/e2e/.
  */
 
-import { SELF } from 'cloudflare:test';
-import { describe, test, expect } from 'vitest';
+import { SELF, env } from 'cloudflare:test';
+import { describe, test, expect, beforeAll } from 'vitest';
 
 const ADMIN_KEY = 'test-admin-key-e2e-2026';
 
@@ -412,5 +412,236 @@ describe('Admin auth gate', () => {
       headers: adminHeaders(),
     });
     expect(res.status).toBe(200);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ADMIN-2: Phase badge (regulatory clearance tier) — OSE-73 / PR #146
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('ADMIN-2: Phase badge element and initial state', () => {
+  test('phase badge has id, data-testid, and default class phase-1', async () => {
+    const html = await fetchAdminHtml();
+    expect(html).toContain('id="phaseBadge"');
+    expect(html).toContain('data-testid="phase-badge"');
+    expect(html).toContain('class="phase-badge phase-1"');
+  });
+
+  test('phase badge initial text content is "Phase 1"', async () => {
+    const html = await fetchAdminHtml();
+    // Static default rendered in the header <h1>
+    expect(html).toContain('>Phase 1<');
+  });
+
+  test('phase badge base CSS class defined', async () => {
+    const html = await fetchAdminHtml();
+    expect(html).toContain('.phase-badge {');
+  });
+
+  test('phase badge CSS defined for all 5 regulatory phases', async () => {
+    const html = await fetchAdminHtml();
+    expect(html).toContain('.phase-badge.phase-1');
+    expect(html).toContain('.phase-badge.phase-2');
+    expect(html).toContain('.phase-badge.phase-3');
+    expect(html).toContain('.phase-badge.phase-4');
+    expect(html).toContain('.phase-badge.phase-5');
+  });
+});
+
+// ── Phase badge JS wiring ─────────────────────────────────────────────────────
+
+describe('ADMIN-2: Phase badge JS wiring in loadForms', () => {
+  test('loadForms signature accepts legalPhase as third parameter', async () => {
+    const html = await fetchAdminHtml();
+    expect(html).toContain('window.loadForms = async function(eventId, eventName, legalPhase)');
+  });
+
+  test('loadForms coerces legalPhase safely via Number() with fallback 1', async () => {
+    const html = await fetchAdminHtml();
+    expect(html).toContain('Number(legalPhase) || 1');
+  });
+
+  test('loadForms updates phase badge textContent to "Phase " + p', async () => {
+    const html = await fetchAdminHtml();
+    expect(html).toContain("pb.textContent = 'Phase ' + p");
+  });
+
+  test('loadForms updates phase badge CSS class to "phase-badge phase-N"', async () => {
+    const html = await fetchAdminHtml();
+    expect(html).toContain("pb.className = 'phase-badge phase-' + p");
+  });
+
+  test('loadForms preserves data-testid on the phase badge after dynamic update', async () => {
+    const html = await fetchAdminHtml();
+    expect(html).toContain("pb.dataset.testid = 'phase-badge'");
+  });
+});
+
+// ── Events table phase column ─────────────────────────────────────────────────
+
+describe('ADMIN-2: Events table phase column', () => {
+  test('events JS reads legal_clearance_tier from each event row', async () => {
+    const html = await fetchAdminHtml();
+    expect(html).toContain('e.legal_clearance_tier');
+  });
+
+  test('safePhase coerces legal_clearance_tier with numeric fallback to 1', async () => {
+    const html = await fetchAdminHtml();
+    expect(html).toContain('Number(e.legal_clearance_tier) || 1');
+  });
+
+  test('event row passes safePhase to loadForms as third argument', async () => {
+    const html = await fetchAdminHtml();
+    // JS builds: loadForms('${safeId}', '${safeName...}', ${safePhase})
+    expect(html).toContain("loadForms('${safeId}',");
+    expect(html).toContain(', ${safePhase});');
+  });
+
+  test('event row carries data-phase attribute populated from safePhase', async () => {
+    const html = await fetchAdminHtml();
+    expect(html).toContain('data-phase="${safePhase}"');
+  });
+
+  test('events table header includes Phase column', async () => {
+    const html = await fetchAdminHtml();
+    expect(html).toContain('<th>Phase</th>');
+  });
+
+  test('phase cell has event-phase data-testid and phase-badge class template', async () => {
+    const html = await fetchAdminHtml();
+    expect(html).toContain('data-testid="event-phase"');
+    expect(html).toContain('class="phase-badge phase-${safePhase}"');
+  });
+});
+
+// ── Two-axis tier × phase gate ────────────────────────────────────────────────
+
+describe('ADMIN-2: Two-axis tier × phase gate in loadForms', () => {
+  test('loadForms derives eventPhase from legalPhase with safe coercion', async () => {
+    const html = await fetchAdminHtml();
+    expect(html).toContain('const eventPhase = Number(legalPhase) || 1');
+  });
+
+  test('phaseEnabled computed from eventPhase against upgradePhase threshold', async () => {
+    const html = await fetchAdminHtml();
+    expect(html).toContain('phaseEnabled');
+    expect(html).toContain('t.upgradePhase || 1');
+  });
+
+  test('gate requires BOTH tier AND phase conditions (two-axis AND)', async () => {
+    const html = await fetchAdminHtml();
+    expect(html).toContain('tierEnabled && phaseEnabled');
+  });
+
+  test('regulatory lock message contains "Requires Phase" text', async () => {
+    const html = await fetchAdminHtml();
+    expect(html).toContain('Requires Phase');
+  });
+
+  test('form gate elements are keyed by form type via t.key', async () => {
+    const html = await fetchAdminHtml();
+    // JS builds: data-testid="form-gate-' + t.key + '"
+    expect(html).toContain("form-gate-' + t.key");
+  });
+
+  test('form types comment documents both axes (upgradeTier and upgradePhase)', async () => {
+    const html = await fetchAdminHtml();
+    // // upgradeTier: payment tier required. upgradePhase: regulatory clearance tier required.
+    expect(html).toContain('upgradeTier');
+    expect(html).toContain('upgradePhase');
+  });
+
+  test('payment tier lock is distinct from phase lock ("Upgrade to" vs "Requires Phase")', async () => {
+    const html = await fetchAdminHtml();
+    // Both lock messages must be present — they cover different axes
+    expect(html).toContain('Upgrade to');
+    expect(html).toContain('Requires Phase');
+  });
+});
+
+// ─── Backend: legal_clearance_tier in admin events API response ────────────────
+//
+// Verifies that the SELECT query in handleAdminListEvents projects
+// legal_clearance_tier onto each row, and that non-default values round-trip
+// through the API without coercion. Seeded via D1 directly to avoid
+// depending on the create-event UI flow.
+
+interface Admin2TestEnv {
+  DB: D1Database;
+  TEST_MIGRATION_STATEMENTS: string;
+}
+
+describe('ADMIN-2 Backend: legal_clearance_tier field in admin events API', () => {
+  const BRAND = 'admin2-lct-backend';
+
+  beforeAll(async () => {
+    const tenv = env as unknown as Admin2TestEnv;
+    const db = tenv.DB;
+    const stmts: string[] = JSON.parse(tenv.TEST_MIGRATION_STATEMENTS);
+    for (const stmt of stmts) {
+      try {
+        await db.prepare(stmt).run();
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : String(e);
+        if (msg.includes('duplicate column name')) continue;
+        throw e;
+      }
+    }
+    // Clean slate for this brand
+    await db.prepare('DELETE FROM events WHERE brand_id = ?').bind(BRAND).run();
+
+    const now = new Date().toISOString();
+    // Event with explicit non-default legal_clearance_tier = 3
+    await db
+      .prepare(
+        `INSERT INTO events (id, brand_id, title, slug, status, legal_clearance_tier, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+      )
+      .bind('evt_lct_phase3', BRAND, 'LCT Phase 3 Event', 'lct-phase3', 'active', 3, now, now)
+      .run();
+
+    // Event relying on column DEFAULT (expects 1)
+    await db
+      .prepare(
+        `INSERT INTO events (id, brand_id, title, slug, status, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`
+      )
+      .bind('evt_lct_default', BRAND, 'LCT Default Event', 'lct-default', 'active', now, now)
+      .run();
+  });
+
+  test('GET /api/v2/admin/events includes legal_clearance_tier on every item', async () => {
+    const res = await SELF.fetch('https://t.test/api/v2/admin/events', {
+      headers: adminHeaders(),
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { ok: boolean; items: Record<string, unknown>[] };
+    expect(body.ok).toBe(true);
+    // Every item must carry the field (not undefined / missing from SELECT)
+    for (const item of body.items) {
+      expect(item, `Event ${String(item.id)} is missing legal_clearance_tier`).toHaveProperty(
+        'legal_clearance_tier'
+      );
+    }
+  });
+
+  test('seeded event with legal_clearance_tier=3 round-trips correctly', async () => {
+    const res = await SELF.fetch('https://t.test/api/v2/admin/events', {
+      headers: adminHeaders(),
+    });
+    const body = (await res.json()) as { ok: boolean; items: Record<string, unknown>[] };
+    const item = body.items.find((e) => e.id === 'evt_lct_phase3');
+    expect(item).toBeDefined();
+    expect(item!.legal_clearance_tier).toBe(3);
+  });
+
+  test('event without explicit tier returns default value of 1', async () => {
+    const res = await SELF.fetch('https://t.test/api/v2/admin/events', {
+      headers: adminHeaders(),
+    });
+    const body = (await res.json()) as { ok: boolean; items: Record<string, unknown>[] };
+    const item = body.items.find((e) => e.id === 'evt_lct_default');
+    expect(item).toBeDefined();
+    expect(item!.legal_clearance_tier).toBe(1);
   });
 });
