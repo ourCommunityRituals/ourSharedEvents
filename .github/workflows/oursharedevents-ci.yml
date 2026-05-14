@@ -465,7 +465,7 @@ jobs:
         run: |
           set -euo pipefail
           # Keep in sync with tests/migration-smoke.spec.ts DB_TABLES.
-          EXPECTED_DB="admin_audit_log corridor_regulatory_status corridors event_templates event_type_registry events node_hierarchy poster_deployments scan_aggregates scans sponsor_areas sponsor_event_types sponsor_impressions sponsors subscribers"
+          EXPECTED_DB="admin_audit_log corridor_regulatory_status corridors event_templates event_type_registry events node_hierarchy poster_deployments scan_aggregates scans shortlinks sponsor_areas sponsor_event_types sponsor_impressions sponsors subscribers"
           # Keep in sync with tests/migration-smoke.spec.ts FORMS_DB_TABLES.
           EXPECTED_FORMS="checkin_counts email_signups feature_flags form_registrations form_surveys pii_audit_log"
 
@@ -889,7 +889,7 @@ jobs:
         working-directory: ${{ env.WORKER_DIR }}
         run: |
           set -euo pipefail
-          EXPECTED_DB="admin_audit_log corridor_regulatory_status corridors event_templates event_type_registry events node_hierarchy poster_deployments scan_aggregates scans sponsor_areas sponsor_event_types sponsor_impressions sponsors subscribers"
+          EXPECTED_DB="admin_audit_log corridor_regulatory_status corridors event_templates event_type_registry events node_hierarchy poster_deployments scan_aggregates scans shortlinks sponsor_areas sponsor_event_types sponsor_impressions sponsors subscribers"
           EXPECTED_FORMS="checkin_counts email_signups feature_flags form_registrations form_surveys pii_audit_log"
 
           fetch_names() {

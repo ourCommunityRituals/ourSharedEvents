@@ -37,6 +37,7 @@ const EXPECTED_TABLES = [
   'poster_deployments',
   'scan_aggregates',
   'scans',
+  'shortlinks', // OSE-240 (migration 0030)
   'sponsor_areas',
   'sponsor_event_types',
   'sponsor_impressions',
@@ -89,6 +90,9 @@ const EXPECTED_INDEXES = [
   'idx_admin_audit_log_created_at',
   'idx_admin_audit_log_actor',
   'idx_admin_audit_log_resource',
+  // OSE-240 (migration 0030)
+  'idx_shortlinks_event_id',
+  'idx_shortlinks_created_at',
 ] as const;
 
 const EXPECTED_COLUMN_COUNTS: Record<string, number> = {
@@ -110,6 +114,9 @@ const EXPECTED_COLUMN_COUNTS: Record<string, number> = {
   sponsor_impressions: 7,
   event_type_registry: 10,
   corridor_regulatory_status: 5,
+  // OSE-240 (migration 0030): code TEXT PK, event_id TEXT FK, created_at TEXT,
+  // clicks INTEGER, last_clicked_at TEXT. 5 columns.
+  shortlinks: 5,
 };
 
 // ── Apply migrations before tests ────────────────────────────────────────────
@@ -137,7 +144,7 @@ beforeAll(async () => {
 // ── Gate 1: Table existence ──────────────────────────────────────────────────
 
 describe('Gate 1: Table existence', () => {
-  test('all 14 tables exist post-migration', async () => {
+  test('all 15 tables exist post-migration', async () => {
     const tables = await env.DB.prepare(
       "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' ORDER BY name"
     ).all();
@@ -216,13 +223,13 @@ describe('Gate 4: scan_aggregates write protection', () => {
 // ── Gate 5: Index verification ───────────────────────────────────────────────
 
 describe('Gate 5: Index verification', () => {
-  test('all 33 custom indexes exist', async () => {
+  test('all 35 custom indexes exist', async () => {
     const indexes = await env.DB.prepare(
       "SELECT name FROM sqlite_master WHERE type='index' AND name LIKE 'idx_%' ORDER BY name"
     ).all();
 
     const names = indexes.results.map((r: Record<string, unknown>) => r.name);
-    expect(names.length).toBe(33);
+    expect(names.length).toBe(35);
     EXPECTED_INDEXES.forEach((idx) => expect(names).toContain(idx));
   });
 });
