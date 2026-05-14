@@ -13,6 +13,7 @@
 import { corsHeaders } from '../lib/cors';
 import { assertRenderable, VALID_EVENT_STATES, parseEventState } from '../domain/event-state';
 import { computeEventPhase, type EventPhase } from '../domain/event-phase';
+import { createShortlink } from '../lib/shortlinks';
 
 // ─── Phase enrichment ──────────────────────────────────────────────────────────
 //
@@ -447,8 +448,30 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
     return errorResponse('DB_ERROR', 'Failed to create event', 503, rid);
   }
 
+  // OSE-240: generate a shortlink for every newly-created event. The
+  // shortlinks table FK is TEXT REFERENCES events(id), matching the
+  // events.id we just inserted. If shortlink creation fails (D1 down,
+  // migration not applied), we surface the event_id + slug but no
+  // shortcode — the event itself still exists. Future POST retries
+  // with the same id would conflict on UNIQUE constraint, which is
+  // the right behavior (don't double-create).
+  let shortcode: string | null = null;
+  try {
+    const sl = await createShortlink(env, id);
+    shortcode = sl.code;
+  } catch (err) {
+    console.warn(
+      JSON.stringify({
+        type: 'SHORTLINK_CREATE_FAILED',
+        eventId: id,
+        error: err instanceof Error ? err.message : String(err),
+        timestamp: new Date().toISOString(),
+      })
+    );
+  }
+
   return Response.json(
-    { ok: true, status: 201, id, slug },
+    { ok: true, status: 201, id, slug, shortcode },
     {
       status: 201,
       headers: { ...corsHeaders(request), 'X-Request-Id': rid },

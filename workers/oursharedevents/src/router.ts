@@ -101,6 +101,7 @@ import { logAdminAction, type AuditLogEnv } from './lib/audit-log';
 import { handleListAuditLog, type AuditHandlerEnv } from './handlers/audit';
 import { handleListSubscribers, type SubscribersAdminEnv } from './handlers/subscribers';
 import { handleAdminGeocode, type GeocodeAdminEnv } from './handlers/geocode';
+import { handleShortlinkResolve, type ShortlinkResolveEnv } from './handlers/shortlink-resolve';
 import {
   handleV2AdminVerifyQr,
   handleV2AdminUnverifyQr,
@@ -170,7 +171,8 @@ export type RouterEnv = PagesEnv &
   BigQueryHandlerEnv &
   PosterBundleEnv &
   UploadEnv &
-  DataSubjectEnv & {
+  DataSubjectEnv &
+  ShortlinkResolveEnv & {
     WORKER_ENV?: string;
     WORKER_BUILD_VERSION?: string;
   };
@@ -252,6 +254,15 @@ export async function route(
   }
 
   // ── Health ─────────────────────────────────────────────────────────────────
+  // ── Shortlink resolver (OSE-240) — `/s/<code>` ────────────────────────────
+  // PUBLIC route. NO auth. Anonymity-principle compliant: counter +
+  // last_clicked_at increments only; no IP, no anon_id, no session.
+  // Matched FIRST so /s/ never collides with longer prefixes downstream.
+  if (pathname.startsWith('/s/') && method === 'GET') {
+    const code = pathname.slice('/s/'.length);
+    return handleShortlinkResolve(request, env, code);
+  }
+
   if (pathname === '/health' || pathname === '/api/status') {
     return handleHealth(env);
   }

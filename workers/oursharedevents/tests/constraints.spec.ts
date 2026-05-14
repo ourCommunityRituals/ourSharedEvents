@@ -57,9 +57,10 @@ describe('QA-1: Migration idempotency', () => {
     // Run migrations a second time — CREATE IF NOT EXISTS / DROP IF EXISTS should be safe
     await expect(applyMigrations()).resolves.not.toThrow();
 
-    // 15 tables: admin_audit_log (OSE-212), corridors, event_template_*, events,
-    // node_hierarchy, poster_deployments, scan_aggregates, scans, sponsors,
-    // sponsor_areas, sponsor_event_types, sponsor_impressions, subscribers,
+    // 16 tables: admin_audit_log (OSE-212), corridors, event_template_*,
+    // events, node_hierarchy, poster_deployments, scan_aggregates, scans,
+    // shortlinks (OSE-240, migration 0030), sponsors, sponsor_areas,
+    // sponsor_event_types, sponsor_impressions, subscribers,
     // event_type_registry, corridor_regulatory_status
     // (checkins/registrations dropped by migration 0009, moved to FORMS_DB)
     const tables = await env.DB.prepare(
@@ -67,14 +68,15 @@ describe('QA-1: Migration idempotency', () => {
     ).all();
 
     const names = tables.results.map((r: Record<string, unknown>) => r.name);
-    expect(names).toHaveLength(15);
+    expect(names).toHaveLength(16);
   });
 
-  test('indexes remain at exactly 33 after idempotent re-run', async () => {
+  test('indexes remain at exactly 35 after idempotent re-run', async () => {
+    // 33 (pre-OSE-240) + 2 (idx_shortlinks_event_id, idx_shortlinks_created_at) = 35.
     const indexes = await env.DB.prepare(
       "SELECT name FROM sqlite_master WHERE type='index' AND name LIKE 'idx_%'"
     ).all();
-    expect(indexes.results).toHaveLength(33);
+    expect(indexes.results).toHaveLength(35);
   });
 });
 

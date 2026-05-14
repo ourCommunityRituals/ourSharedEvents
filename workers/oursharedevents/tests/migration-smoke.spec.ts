@@ -50,6 +50,7 @@ const DB_TABLES = [
   'poster_deployments', // 0003
   'scan_aggregates', // 0006
   'scans', // 0004
+  'shortlinks', // 0030 (OSE-240)
   'sponsor_areas', // 0020
   'sponsor_event_types', // 0019
   'sponsor_impressions', // 0022
