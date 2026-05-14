@@ -128,47 +128,99 @@ Win32_Process which doesn't need admin.
 
 ## Make it self-running — `install-janitor-tasks.ps1`
 
-Instead of remembering to invoke the janitor, install the two scheduled
-tasks that wire it into Windows Task Scheduler:
+The runner pool's one job is to be **ready for the next run, every time**.
+A janitor that runs once an hour can leave you with 60 minutes of lost
+throughput per stuck Listener. Sweep 7 collapsed the earlier "hourly
+prune + 6h recovery" pair into a single **1-minute readiness probe**
+that catches "not-ready" _before_ a job arrives waiting.
 
 ```powershell
-# Install — registers both tasks under the current user (no admin needed)
+# Install — registers the readiness probe (no UAC needed)
 pwsh -File tools\runner\install-janitor-tasks.ps1
 
 # Preview without changes
 pwsh -File tools\runner\install-janitor-tasks.ps1 -WhatIf
 
-# Remove the tasks (leaves janitor script + log in place)
+# Remove the task (leaves janitor script + log in place)
 pwsh -File tools\runner\install-janitor-tasks.ps1 -Uninstall
 ```
 
 What gets installed:
 
-| Task                                         | Cadence  | Action                                               | Why this cadence                                                                                                                                        |
-| -------------------------------------------- | -------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Runner Janitor - Hourly Prune`              | every 1h | `janitor.ps1 -PruneOrphans`                          | Cheap, safe. Pruning orphans never disturbs healthy jobs, so do it often.                                                                               |
-| `Runner Janitor - Stuck Recovery (Every 6h)` | every 6h | `janitor.ps1 -BounceStuck -StuckThresholdMinutes 60` | More conservative — bounce only Listeners stuck > 60 min, every 6 hours. Avoids thrash if a deeper problem (machine down, network) is the actual cause. |
+| Task                             | Cadence     | Action                     | Why this cadence                                                                                                 |
+| -------------------------------- | ----------- | -------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `Runner Readiness Probe (1-min)` | every 1 min | `janitor.ps1 -EnsureReady` | The pool's mandate is "be ready for the next job." Anything slower than a minute leaves throughput on the table. |
 
-Both run as the current user with `LogonType Interactive` (no UAC, no
-stored password), tolerate battery, and self-skip if a prior instance
-is still running (`MultipleInstances IgnoreNew`).
+The installer also **removes the legacy hourly/6h tasks** if present —
+Sweep 5/6 → Sweep 7 migration runs automatically. Re-running the
+installer after upgrading the janitor will cleanly transition.
 
-Output appends to `actions-runner\_janitor.log`. Tail with:
+### Four signals the probe acts on (every 60 seconds)
+
+1. **Orphan job children** — processes whose CommandLine references a
+   runner `_work` path but whose parent chain doesn't reach a live
+   Worker. Killed every cycle. Parent-chain filter (not process-name
+   match) so it never touches Firebase MCP / Cursor / Doppler / other
+   unrelated `node.exe`.
+2. **Worker dwell time** — `Runner.Worker` processes alive longer than
+   `WorkerDwellMaxMinutes` (default 15 min) are stuck _inside a job_,
+   blocking the parent Listener from picking up the next job. Killed
+   immediately; the Listener spawns a fresh Worker within seconds.
+3. **Listener stuck on broker errors** — `SocketException (995)` /
+   `TaskAgentJobNotFoundException` / `BrokerServer ERR` in the diag
+   log within `RecentStuckMinutes` (default 3) AND no successful
+   `Running job:` line in the same window. Listener gets bounced.
+4. **GitHub queue depth vs local idle** — single `gh api` call per
+   cycle. If GitHub has queued workflow runs but the pool reports zero
+   `Runner.Worker` processes, a broker is silently broken even when
+   the log hasn't caught up. The affected Listener gets bounced.
+
+### Safety: circuit breaker
+
+If the same runner gets bounced 3+ times in 60 minutes, the probe
+**stops bouncing it** and emits a `RUNNER_POOL_DEGRADED` line for
+human review. Slapping a broken machine never fixes it — and rapid
+re-bouncing can mask the underlying problem (dead network, GitHub-side
+deregistration, disk full). State persists in
+`actions-runner\_janitor-state.json` (a small JSON file of recent
+bounce timestamps per runner name).
+
+The task itself: current user, `LogonType Interactive` (no UAC, no
+stored password), `MultipleInstances IgnoreNew` (a slow cycle won't
+pile up), 2-min `ExecutionTimeLimit` (safety guardrail), tolerates
+battery.
+
+Output appends to `actions-runner\_janitor.log`. Three structured
+signal types to grep for:
+
+| Signal                  | What it means                       | When to act                                                      |
+| ----------------------- | ----------------------------------- | ---------------------------------------------------------------- |
+| `RUNNER_JANITOR`        | Per-runner per-cycle status         | Diagnostic; one per runner per minute                            |
+| `RUNNER_POOL_READINESS` | Pool summary per cycle              | Diagnostic; one per minute                                       |
+| `RUNNER_POOL_DEGRADED`  | Circuit breaker tripped on a runner | **Investigate** — runner won't be bounced again until <1h passes |
 
 ```powershell
+# Tail in real time
 Get-Content 'C:\Users\mzdan\dev\ourCommunityRituals\actions-runner\_janitor.log' -Tail 20 -Wait
+
+# Find every circuit-breaker trip in the last day
+Get-Content 'C:\Users\mzdan\dev\ourCommunityRituals\actions-runner\_janitor.log' |
+  Select-String 'RUNNER_POOL_DEGRADED'
 ```
 
-Verify both tasks are registered:
+Verify the task is registered and look at its trigger:
 
 ```powershell
-Get-ScheduledTask -TaskName 'Runner Janitor*' | Select-Object TaskName, State
+Get-ScheduledTask -TaskName 'Runner Readiness Probe (1-min)' |
+  Select-Object TaskName, State
+(Get-ScheduledTask -TaskName 'Runner Readiness Probe (1-min)').Triggers |
+  Select-Object StartBoundary, @{n='Interval';e={$_.Repetition.Interval}}
 ```
 
-Trigger one immediately (rather than waiting for the next firing):
+Trigger an immediate readiness check (otherwise next firing is within 60s):
 
 ```powershell
-Start-ScheduledTask -TaskName 'Runner Janitor - Hourly Prune'
+Start-ScheduledTask -TaskName 'Runner Readiness Probe (1-min)'
 ```
 
 ### What this doesn't cover
