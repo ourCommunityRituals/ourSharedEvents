@@ -24,23 +24,83 @@ The buyer is the venue owner / general manager. The sponsor _is_ the buyer (the 
 
 5. **Defensible against group-chat default.** Bar owners do _not_ have a customer WhatsApp group for Thursday trivia regulars — they have an Instagram post that gets buried in four hours. OSE replaces the _gap_, not the _group chat_. The "OSE is a layer, not a replacement" claim (OSE-265) becomes literally true for this ICP.
 
-## What gets sold
+## The product, in one sentence
 
-The bar buys a **recurring events stack with anonymous attendance signal + a corridor-anchored sponsor surface**. Specifically:
+**OSE is a sponsor-grade corridor-density analytics product, delivered through an events platform.**
 
-- A public event surface (`/events/:id`) the bar can share via QR codes, Instagram bio, printed coasters, or chalkboard signs — designed for the phone the attendee is already holding when they walk in.
-- An admin surface where the bar's manager creates the recurring trivia / league series in under five minutes.
-- A `/poster` surface that prints a QR code carrier for bathroom walls and coaster racks.
-- A `/display` surface for the TV behind the bar showing the night's leaderboard, sponsor rotation, or "next league night" countdown.
-- A monthly `/sharedReport` showing: unique gatherings, return rate, corridor density vs. neighborhood baseline, headcount trend, sponsor-rotation impressions.
+The events generate the data; the **SharedReport** delivers it. Every event closes with a data artifact the sponsor can hold in their hand — and every event makes the next one's report richer. This is the SKU. The events platform is the data-collection mechanism that makes the SKU possible.
 
-What the bar **does not** get, by architectural design:
+## The product flow — pre-event, event, post-event
 
-- Attendee names, emails, phone numbers, IP addresses, or device IDs.
-- A roster they can export.
-- A way to remarket to attendees outside of "show up at the same bar next Thursday."
+OSE runs as a **continuous three-phase arc** across every event, with the SharedReport as the closing artifact that lands the sponsor relationship.
 
-The "you cannot accidentally collect attendee identity because the platform cannot accidentally show it to you" line is the architectural moat translated to bar-owner English.
+### Pre-event
+
+- Public event surface (`/events/:id`) — mobile-first, anonymity affordance visible, share/save flows, sponsor matching. The bar shares this via QR codes, Instagram bio, printed coasters, chalkboard signs. (Shipped — OSE-243a.)
+- Admin surface where the bar's manager creates the recurring trivia / league series in under five minutes.
+- `/poster` surface prints a QR-code carrier for bathroom walls and coaster racks — every scan is a corridor-density signal contribution.
+
+### Event (live)
+
+- Public event surface flips to live-phase rendering with a LIVE NOW indicator, check-in CTA, and "navigate now" wayfinding. (Shipped — OSE-244a, deployed to staging 2026-05-14.)
+- `/display` surface drives the TV behind the bar — sponsor rotation, the night's leaderboard, "next league night" countdown.
+- Check-in scans contribute to the anonymized event-night density signal.
+
+### Post-event
+
+- **`/sharedReport` — the product deliverable.** Every event closes with a sponsor-grade data artifact:
+  - Unique gatherings (anonymized count of distinct anon-IDs in the event window)
+  - Return rate (% of anon-IDs seen at prior events at this venue or corridor)
+  - Corridor density vs. neighborhood baseline (how busy was this venue compared to the surrounding 2-mile corridor)
+  - Sponsor-rotation impressions on the `/display` surface
+  - Poster-scan attribution (which venue / placement / time-of-day drove scans)
+  - Headcount trend over recurring instances of the same series
+  - Sample size and confidence-band callouts so the bar / sponsor can read the numbers honestly
+- The SharedReport ships as both a sponsor-facing PDF / web page and a structured BigQuery-backed artifact that compounds across phases and years.
+
+### Why the three-phase arc matters
+
+The three rendered surfaces are not three independent features — they are the **product itself running as a continuous data-collection-and-delivery loop**. Each event:
+
+1. Generates pre-event share signal (QR scans, poster scans, save-event clicks).
+2. Generates live-event attendance signal (check-ins, time-on-page, sponsor-rotation impressions).
+3. Closes with a SharedReport that compounds with every prior event in the same venue / corridor / sponsor account.
+
+The flywheel is concrete: **every event creates data → SharedReport delivers data to sponsor → SharedReport is the proof point for the next sponsor conversation → next event creates more data**. Per the flywheel doctrine, this is not a feature roadmap; it is a single loop running at every fractal scale (event-level, sponsor-account-level, corridor-level, phase-level).
+
+## What the architecture lets us _legally_ deliver
+
+The SharedReport contains:
+
+- Gathering density signal (count of distinct anonymous IDs in time/place buckets)
+- Return rate signal (anonymous ID seen at multiple events, no identity ever resolved)
+- Corridor density (geographic aggregation across the 2-mile bucket)
+- Sponsor-rotation reach (impressions on `/display` surface, aggregate)
+- Poster-scan attribution (which scan source, no individual identity)
+- Time-of-day / day-of-week density patterns
+- Phase-spanning cross-tier corridor data (once Phases 1-5 are in production, with regulatory-tier-safe aggregation guaranteed by the multi-D1 architecture)
+
+The SharedReport explicitly **does not** contain:
+
+- Attendee names, emails, phone numbers, IP addresses, or device IDs
+- A roster of who attended
+- Any per-attendee identity linkage across events
+- Any pre-aggregation raw signal that could re-identify an attendee
+
+The architectural moat translates directly into a sales line: **"You cannot accidentally collect attendee identity, because the platform cannot accidentally show it to you — but you do get a sponsor-grade analytics report at every event close, and the data compounds over time as your venue's corridor signal grows."**
+
+## Why this product framing is structurally stronger than the competition
+
+| Competitor pattern              | Their framing                                  | Why OSE's framing wins                                                                                           |
+| ------------------------------- | ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| Eventbrite                      | Ticket processing; data is a side-pocket asset | OSE's data IS the asset; the events make the data                                                                |
+| Partiful                        | Friend-group RSVP; monetization unclear        | OSE has a tangible sponsor-paid deliverable per event                                                            |
+| Luma                            | Event UX; analytics are an add-on subscription | OSE's analytics are the product; the events are the input                                                        |
+| Meta Events                     | Identity-graph ad targeting                    | OSE delivers corridor density without identity capture — a categorically different SKU                           |
+| Posh                            | Influencer attendance graphs                   | OSE delivers venue-level density; no influencer mediation, no identity layer                                     |
+| Group chats (WhatsApp / Signal) | Free, friction-free, no data layer             | Group chats can't generate SharedReports; OSE doesn't replace the chat — it replaces the missing analytics layer |
+
+The competitive matrix collapses to one observation: every other platform either (a) treats data as a byproduct of identity-aware events, or (b) doesn't generate data at all. OSE is the only platform shipping a data product _because of_ anonymity, not in spite of it.
 
 ## Phase sequencing — the five-phase model
 
@@ -56,7 +116,7 @@ OSE ships in **five phases**. The first three share the existing data architectu
 
 Each phase reuses the **architectural pattern** (anonymous ID, 15-min time bucket, static invariant gate per database, regulatory pool router) but the _concrete database count_ grows from 2 → 2 → 2 → 3 → 4 across the five phases. By Phase 5, the platform runs **four physically separate D1 databases**, each bound to a disjoint handler class, with no cross-references except the anonymous ID + corridor signal — and BigQuery mirrors that segregation at the export layer.
 
-**Critical discipline:** Phases 4 and 5 are _roadmap_, not _current defensibility_. Marketing language must distinguish them clearly. See OSE-264. The architectural readiness exists today (`src/lib/pool-contract.ts` REGULATORY_POOLS contract); the _operational_ readiness (separate D1 instances + BAA + attestation) lands with Phases 4 and 5.
+**Critical discipline:** Phases 4 and 5 are _roadmap_, not _current defensibility_. Marketing language must distinguish them clearly. See OSE-264. The architectural readiness exists today (`src/lib/pool-contract.ts` REGULATORY*POOLS contract); the \_operational* readiness (separate D1 instances + BAA + attestation) lands with Phases 4 and 5.
 
 ## Infrastructure stack — designed for this flow
 
