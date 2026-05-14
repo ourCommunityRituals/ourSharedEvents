@@ -1446,6 +1446,143 @@ function renderPreEventHtml(row: PublicEventRow, shareUrl: string): string {
 </html>`;
 }
 
+/**
+ * Renders the event-live phase (OSE-244a). Same 5W content surface as
+ * pre-event, but the hero shows a "LIVE NOW" indicator and the primary
+ * CTA flips from RSVP to Check-in (wired to the existing scan/checkin
+ * form route).
+ *
+ * What's NOT in this render (scoped to follow-on stories):
+ *   - Sponsor rotation (OSE-244b) — uses the existing EPIC-02 rotation lib
+ *   - Live scan counter + auto-refresh (OSE-244c) — polls the form
+ *     checkin-count endpoint; degrades gracefully when no QR deployment
+ *
+ * The "share still available" requirement from the AC is satisfied
+ * implicitly: the page URL is the share artifact. Anyone hitting
+ * /events/:id during live phase gets this render and can forward the
+ * link.
+ */
+function renderEventLiveHtml(row: PublicEventRow, shareUrl: string): string {
+  const title = esc(row.title);
+  const whatShort = esc(row.what_short);
+  const whoHost = esc(row.who_host);
+  const whyPurpose = esc(row.why_purpose);
+  const howDetails = esc(row.how_details);
+  const whereAddress = esc(row.where_address) || esc(row.location);
+  const venueDisplay = esc(row.location);
+  const venueParam = encodeURIComponent(row.location || row.where_address || '');
+  const mapImg = venueParam
+    ? `<img src="/api/v2/maps/venue-image?venue=${venueParam}" alt="Map of ${esc(row.location || row.where_address)}" class="ose-venue-map" loading="lazy" width="600" height="240" data-testid="venue-map-live" />`
+    : '';
+  const gmapsLink = venueParam
+    ? `<a class="ose-gmaps-link" data-testid="gmaps-link-live" href="https://www.google.com/maps/dir/?api=1&destination=${venueParam}" target="_blank" rel="noopener noreferrer">Navigate now</a>`
+    : '';
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>${title}</title>
+  <meta property="og:title" content="${title}" />
+  <meta property="og:description" content="${whatShort}" />
+  <meta property="og:url" content="${esc(shareUrl)}" />
+  <meta property="og:type" content="event" />
+  <style>
+    :root { --ose-bg: #faf7f2; --ose-text: #2a2a2a; --ose-muted: #5a5a5a; --ose-accent: #4361ee; --ose-card: #fff; --ose-live: #d63b3b; }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; background: var(--ose-bg); color: var(--ose-text); font-family: system-ui, -apple-system, "Segoe UI", sans-serif; line-height: 1.5; }
+    body { max-width: 720px; margin: 0 auto; padding: 1.5rem 1.25rem 3rem; }
+    .ose-skip { position: absolute; left: -9999px; }
+    .ose-skip:focus { left: 1rem; top: 1rem; background: var(--ose-accent); color: #fff; padding: 0.5rem 1rem; border-radius: 4px; }
+    .ose-live-badge { display: inline-flex; align-items: center; gap: 0.4rem; background: var(--ose-live); color: #fff; padding: 0.25rem 0.75rem; border-radius: 999px; font-size: 0.8rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.75rem; }
+    .ose-live-dot { width: 0.6rem; height: 0.6rem; background: #fff; border-radius: 50%; animation: ose-pulse 1.5s ease-in-out infinite; }
+    @keyframes ose-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+    h1 { font-size: 1.875rem; margin: 0 0 0.5rem; line-height: 1.2; }
+    h2 { font-size: 1.125rem; margin: 1.5rem 0 0.5rem; color: var(--ose-text); }
+    .ose-card { background: var(--ose-card); border-radius: 8px; padding: 1.25rem; margin-bottom: 1rem; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+    .ose-venue-map { width: 100%; height: auto; border-radius: 6px; display: block; margin-bottom: 0.75rem; }
+    .ose-gmaps-link { color: var(--ose-accent); text-decoration: none; font-weight: 500; }
+    .ose-gmaps-link:hover { text-decoration: underline; }
+    .ose-checkin-btn { display: inline-block; background: var(--ose-accent); color: #fff; padding: 0.875rem 1.75rem; border-radius: 6px; text-decoration: none; font-weight: 700; margin: 1.25rem 0; font-size: 1.05rem; }
+    .ose-checkin-btn:focus { outline: 3px solid #ffb800; outline-offset: 2px; }
+    .ose-anonymity { margin-top: 2rem; padding: 1rem 1.25rem; background: rgba(67, 97, 238, 0.06); border-left: 3px solid var(--ose-accent); border-radius: 4px; font-size: 0.9rem; color: var(--ose-muted); }
+    .ose-anonymity h2 { margin-top: 0; font-size: 1rem; color: var(--ose-text); }
+    .ose-anonymity p { margin: 0; }
+    .ose-section p { margin: 0; }
+  </style>
+</head>
+<body>
+  <a href="#main" class="ose-skip">Skip to event content</a>
+  <main id="main" role="main" aria-labelledby="event-title" data-testid="event-main-live">
+    <header data-testid="event-header-live">
+      <span class="ose-live-badge" data-testid="event-live-badge" aria-label="Event is live now">
+        <span class="ose-live-dot" aria-hidden="true"></span>Live now
+      </span>
+      <h1 id="event-title" data-testid="event-title-live">${title}</h1>
+    </header>
+
+    <a class="ose-checkin-btn" data-testid="event-checkin" href="/forms/${esc(row.id)}?type=checkin">Check in at this event</a>
+
+    ${
+      whatShort
+        ? `<section class="ose-card ose-section" data-testid="event-what-live" aria-labelledby="what-heading-live">
+           <h2 id="what-heading-live">What</h2>
+           <p>${whatShort}</p>
+         </section>`
+        : ''
+    }
+
+    ${
+      venueDisplay || whereAddress
+        ? `<section class="ose-card ose-section" data-testid="event-where-live" aria-labelledby="where-heading-live">
+           <h2 id="where-heading-live">Where</h2>
+           ${mapImg}
+           ${venueDisplay ? `<p><strong>${venueDisplay}</strong></p>` : ''}
+           ${whereAddress && whereAddress !== venueDisplay ? `<p>${whereAddress}</p>` : ''}
+           ${gmapsLink}
+         </section>`
+        : ''
+    }
+
+    ${
+      whoHost
+        ? `<section class="ose-card ose-section" data-testid="event-who-live" aria-labelledby="who-heading-live">
+           <h2 id="who-heading-live">Who</h2>
+           <p>${whoHost}</p>
+         </section>`
+        : ''
+    }
+
+    ${
+      whyPurpose
+        ? `<section class="ose-card ose-section" data-testid="event-why-live" aria-labelledby="why-heading-live">
+           <h2 id="why-heading-live">Why</h2>
+           <p>${whyPurpose}</p>
+         </section>`
+        : ''
+    }
+
+    ${
+      howDetails
+        ? `<section class="ose-card ose-section" data-testid="event-how-live" aria-labelledby="how-heading-live">
+           <h2 id="how-heading-live">How</h2>
+           <p>${howDetails}</p>
+         </section>`
+        : ''
+    }
+
+    ${ANONYMITY_AFFORDANCE}
+  </main>
+</body>
+</html>`;
+}
+
+/**
+ * Minimal phase stub. After OSE-244a (event-live got full rendering), this
+ * function is only called for `post_event`. OSE-245 will replace this with
+ * a full post-event recap render.
+ */
 function renderMinimalPhaseHtml(row: PublicEventRow, phase: 'event' | 'post_event'): string {
   const title = esc(row.title);
   const message = phase === 'event' ? 'This event is happening now.' : 'This event has ended.';
@@ -1562,6 +1699,8 @@ export async function handlePublicEventPage(
   let body: string;
   if (phase === 'pre_event') {
     body = renderPreEventHtml(row, shareUrl);
+  } else if (phase === 'event') {
+    body = renderEventLiveHtml(row, shareUrl);
   } else {
     body = renderMinimalPhaseHtml(row, phase);
   }
