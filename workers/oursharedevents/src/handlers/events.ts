@@ -182,31 +182,79 @@ export async function handleGetEvent(
 
 /**
  * GET /api/v2/admin/events
+ *   ?limit=<1-100, default 50>
+ *   ?cursor=<ISO timestamp - page backward past this created_at>
  *
- * Returns all events (including archived) for admin dashboard.
+ * Returns events (including archived) for the admin dashboard in the
+ * canonical cursor-paginated shape:
+ *
+ *   { ok: true, items: Event[], pagination: { limit, hasMore, nextCursor } }
+ *
+ * Cursor key is `created_at DESC` to match the reference implementations
+ * in `audit.ts` (OSE-212) and `subscribers.ts` (OSE-207). The pagination
+ * shape is statically enforced by
+ * `tests/pagination-shape-invariant.spec.ts` (PR #155).
+ *
+ * Note: this is a behavioral change from the prior unbounded
+ * `ORDER BY updated_at DESC` no-pagination response. FE consumers in
+ * pages.ts read `data.items` directly and remain compatible (the
+ * envelope is additive). If/when the admin UI grows past 50 events,
+ * file a follow-on story to teach the dashboard to iterate via
+ * `nextCursor` - same playbook the audit-log and subscribers admin
+ * views will eventually need.
  */
 export async function handleAdminListEvents(request: Request, env: EventsEnv): Promise<Response> {
   const rid = requestId();
+  const url = new URL(request.url);
+
+  // Match audit.ts / subscribers.ts parsing exactly.
+  const rawLimit = parseInt(url.searchParams.get('limit') ?? '50', 10);
+  const limit = Math.min(Math.max(isNaN(rawLimit) ? 50 : rawLimit, 1), 100);
+  const cursor = url.searchParams.get('cursor') ?? null;
 
   if (!env.DB) {
     return Response.json(
-      { ok: true, status: 200, items: [] },
+      {
+        ok: true,
+        items: [],
+        pagination: { limit, hasMore: false, nextCursor: null },
+      },
       { headers: { ...corsHeaders(request), 'Cache-Control': 'no-store', 'X-Request-Id': rid } }
     );
   }
 
   try {
+    const where = cursor ? 'WHERE created_at < ?' : '';
+    const bindings: (string | number)[] = cursor ? [cursor, limit + 1] : [limit + 1];
+
     const result = await env.DB.prepare(
       `SELECT id, brand_id, title, slug, status, description, location,
               start_date, end_date, timezone, cover_image_url, created_at, updated_at,
               legal_clearance_tier
-       FROM events
-       ORDER BY updated_at DESC`
-    ).all();
+       FROM   events
+       ${where}
+       ORDER  BY created_at DESC
+       LIMIT  ?`
+    )
+      .bind(...bindings)
+      .all();
 
-    const items = (result.results ?? []).map(enrichWithPhase);
+    const rows = result.results ?? [];
+    const hasMore = rows.length > limit;
+    const page = hasMore ? rows.slice(0, limit) : rows;
+    const items = page.map(enrichWithPhase);
+    // Cursor key MUST come from the source row, not the enriched value -
+    // enrichWithPhase copies created_at through unchanged, but explicit
+    // is safer and matches audit.ts pattern.
+    const nextCursor =
+      hasMore && page.length > 0 ? ((page[page.length - 1].created_at as string) ?? null) : null;
+
     return Response.json(
-      { ok: true, status: 200, items },
+      {
+        ok: true,
+        items,
+        pagination: { limit, hasMore, nextCursor },
+      },
       {
         headers: {
           ...corsHeaders(request),
