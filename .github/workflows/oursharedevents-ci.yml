@@ -307,11 +307,32 @@ jobs:
 
   # ============================================================================
   # TIER 0: GATE — Every push, every PR
+  #
+  # Sweep 9 (2026-05-14): sharded into 4 parallel matrix children so the
+  # 3-runner Bloodraven pool can execute lint / typecheck / tests / a11y in
+  # parallel rather than serial. Baseline: PR #160 measured 6.4 min for the
+  # monolithic single job. Expected wall-clock after shard: ~3 min, driven
+  # by the gate-tests shard (the long pole due to ~1064 vitest cases).
+  #
+  # Downstream jobs (`deploy-staging`, `summary`) reference `needs: [gate]`
+  # which GitHub Actions resolves to "all matrix children succeeded" — no
+  # change required there.
+  #
+  # Each shard runs identical setup (checkout, setup-node, stage @ocr/flags,
+  # install root deps). The per-runner stamp cache (node_modules/.install-stamp)
+  # makes the install a near no-op on warm runners, so the duplicated setup
+  # cost is bounded to ~30-45s per shard. Worker deps are skipped on the
+  # lint shard since eslint only touches root files — absorbs the original
+  # Sweep 9 #3 (combine npm ci) win directly into the matrix design.
   # ============================================================================
   gate:
-    name: 'T0 Gate'
+    name: 'T0 Gate (${{ matrix.shard }})'
     needs: [security]
     runs-on: self-hosted
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [lint, typecheck, tests, a11y]
     steps:
       - uses: actions/checkout@v6
         with:
@@ -335,16 +356,11 @@ jobs:
             echo "$HASH" > "$STAMP"
           fi
 
-      - name: 'Security: Banned origins'
-        run: npm run check:banned-origins
-
-      - name: 'Security: Unit tests'
-        run: npx vitest run tests/unit/worker/sec-iac-03-adminOAuth.test.js tests/unit/worker/sec-iac-04-public-read-only.test.js tests/unit/worker/sec-iac-05-signed-mutations.test.js tests/unit/worker/sec-iac-07-iac-smoke.test.js
-
-      - name: 'Quality: Lint'
-        run: npx eslint config/ scripts/ tests/unit/ tests/contract/ --cache --cache-location node_modules/.eslintcache
-
+      # Worker deps not needed for the lint shard (eslint targets root paths).
+      # All other shards exercise the worker test suite or worker tsc, so they
+      # need workers/oursharedevents/node_modules populated.
       - name: Install worker dependencies
+        if: matrix.shard != 'lint'
         run: |
           HASH="$(node --version)-$(git hash-object package-lock.json)"
           STAMP=node_modules/.install-stamp
@@ -356,18 +372,46 @@ jobs:
           fi
         working-directory: ${{ env.WORKER_DIR }}
 
+      # ── Shard: lint ────────────────────────────────────────────────────────
+      # Banned origins + eslint. Smallest shard, ~30-60s. Root deps only.
+      - name: 'Security: Banned origins'
+        if: matrix.shard == 'lint'
+        run: npm run check:banned-origins
+
+      - name: 'Quality: Lint'
+        if: matrix.shard == 'lint'
+        run: npx eslint config/ scripts/ tests/unit/ tests/contract/ --cache --cache-location node_modules/.eslintcache
+
+      # ── Shard: typecheck ───────────────────────────────────────────────────
+      # tsc --noEmit on the worker. Standalone shard so a type regression
+      # surfaces as a single named check, not buried inside a multi-step job.
       - name: 'Quality: TypeScript'
+        if: matrix.shard == 'typecheck'
         run: npx tsc --noEmit
         working-directory: ${{ env.WORKER_DIR }}
 
+      # ── Shard: tests ───────────────────────────────────────────────────────
+      # Security-IAC unit tests + root npm test + worker D1 schema (vitest
+      # against the 1064-case suite). This is the long pole and the primary
+      # justification for sharding — letting it own a dedicated runner instead
+      # of blocking lint/typecheck/a11y behind it.
+      - name: 'Security: Unit tests'
+        if: matrix.shard == 'tests'
+        run: npx vitest run tests/unit/worker/sec-iac-03-adminOAuth.test.js tests/unit/worker/sec-iac-04-public-read-only.test.js tests/unit/worker/sec-iac-05-signed-mutations.test.js tests/unit/worker/sec-iac-07-iac-smoke.test.js
+
       - name: 'Quality: Unit + Contract + Guards'
+        if: matrix.shard == 'tests'
         run: npm test
 
       - name: 'Quality: Worker D1 schema'
+        if: matrix.shard == 'tests'
         run: npm test
         working-directory: ${{ env.WORKER_DIR }}
 
+      # ── Shard: a11y ────────────────────────────────────────────────────────
+      # axe-core WCAG 2.0 AA scan via the worker test runner.
       - name: 'Quality: A11Y axe-core WCAG 2.0 AA scan'
+        if: matrix.shard == 'a11y'
         run: npm run test:a11y
         working-directory: ${{ env.WORKER_DIR }}
 
