@@ -8,6 +8,7 @@ Positioning artifacts are **descriptive, not aspirational**. They capture how OS
 
 | Document                                                           | Audience                                                 | Date       | Status  |
 | ------------------------------------------------------------------ | -------------------------------------------------------- | ---------- | ------- |
+| [BEACHHEAD-ICP-2026-05-14.md](BEACHHEAD-ICP-2026-05-14.md)         | Internal — strategic spine for GTM + eng prioritization  | 2026-05-14 | Current |
 | [COMPETITIVE-BRIEF-2026-05-14.md](COMPETITIVE-BRIEF-2026-05-14.md) | Internal — sales, organizer conversations, sponsor pitch | 2026-05-14 | Current |
 
 ## Relationship to other artifacts
