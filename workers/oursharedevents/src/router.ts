@@ -87,6 +87,7 @@ import {
 } from './handlers/events';
 import {
   handlePublicPage,
+  handlePublicEventPage,
   handleAdminPage,
   handleLandingPage,
   handleSubscribe,
@@ -785,6 +786,20 @@ export async function route(
     pathname === '/info'
   ) {
     return handleLandingPage(env);
+  }
+
+  // ── Public event landing page (OSE-243a) ──────────────────────────────────
+  // /events/:id renders the 5W content + venue map + anonymity affordance.
+  // Recipients land here from /s/:code shortlinks (OSE-240). Phase-aware
+  // dispatch: pre_event = full render, event/post_event = minimal stub.
+  // MUST appear before the generic /events match below or the more-specific
+  // path is shadowed.
+  if (pathname.startsWith('/events/') && method === 'GET') {
+    const eventId = pathname.slice('/events/'.length);
+    // Reject sub-paths like /events/:id/whatever — those don't exist yet.
+    if (eventId && !eventId.includes('/')) {
+      return handlePublicEventPage(request, env, eventId);
+    }
   }
 
   // ── Public pages ───────────────────────────────────────────────────────────
