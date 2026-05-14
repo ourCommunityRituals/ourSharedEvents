@@ -259,6 +259,63 @@ describe('ADMIN-14 CSS: Surface card styles', () => {
   });
 });
 
+// OSE-262: warnings banner rendering for create-event response
+// Surfaces non-fatal partial-success conditions (e.g., SHORTLINK_CREATE_FAILED)
+// in the admin create-event form. The API contract (handleCreateEvent in
+// events.ts, PR #170) returns `warnings: []` alongside `ok: true` on
+// partial success; this UI is where those warnings become visible.
+describe('OSE-262: create-event warnings banner', () => {
+  test('admin HTML contains create-warnings container with proper data-testid + ARIA', async () => {
+    const html = await fetchAdminHtml();
+    expect(html).toContain('id="create-warnings"');
+    expect(html).toContain('data-testid="create-warnings"');
+    expect(html).toContain('role="alert"');
+    expect(html).toContain('aria-live="assertive"');
+    // Container starts hidden until populated by the submit handler
+    expect(html).toMatch(/id="create-warnings"[^>]*hidden/);
+  });
+
+  test('warning banner CSS classes defined', async () => {
+    const html = await fetchAdminHtml();
+    expect(html).toContain('.create-warnings');
+    expect(html).toContain('.warning-banner');
+    expect(html).toContain('.warning-dismiss-btn');
+    // Banner uses a distinct color from success (green) / error (red) — yellow/amber palette
+    expect(html).toMatch(/\.warning-banner\s*\{[^}]*background:\s*#fef3c7/);
+    expect(html).toMatch(/\.warning-banner\s*\{[^}]*border-left:[^}]*#d97706/);
+  });
+
+  test('submit handler reads data.warnings and renders per-code testids', async () => {
+    const html = await fetchAdminHtml();
+    // JS references the API contract field
+    expect(html).toContain('data.warnings');
+    // Renders banner with data-testid prefix scoped by warning code
+    expect(html).toContain("'create-warning-' + (w.code || 'UNKNOWN')");
+    // Provides a dismiss button that reloads the events table
+    expect(html).toContain("'create-warning-dismiss'");
+    expect(html).toContain('warning-dismiss-btn');
+    // Auto-reload is suppressed when warnings present — only the dismiss
+    // button click triggers reload. The branching logic must be in the JS.
+    expect(html).toMatch(/Array\.isArray\(data\.warnings\)/);
+  });
+
+  test('warnings UI is independent of error UI (success + warnings is a real state)', async () => {
+    const html = await fetchAdminHtml();
+    // The submit handler must enter the success branch FIRST (res.ok && data.ok),
+    // then check warnings inside it. A response with warnings is still a success.
+    expect(html).toMatch(/if\s*\(\s*res\.ok\s*&&\s*data\.ok\s*\)/);
+    // The error branch sets create-msg error and DOES NOT touch warnings;
+    // warnings live entirely in the success path.
+    expect(html).toContain("'create-msg error'");
+    // Sanity: warnings reference + dismiss handler appear after the success
+    // branch keyword in the JS handler (script execution order is left-to-right
+    // in this single-file dump).
+    expect(html.indexOf('warningsContainer.hidden = false')).toBeGreaterThan(
+      html.indexOf('if (res.ok && data.ok)')
+    );
+  });
+});
+
 // ── Layer 3: Integration — linked surfaces respond with 200 HTML ────────────
 
 describe('ADMIN-14 Integration: Surface routes serve content', () => {
