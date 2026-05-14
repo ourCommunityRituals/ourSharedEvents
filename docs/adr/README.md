@@ -9,10 +9,10 @@ ADRs are **descriptive, not prescriptive**. They record decisions that have alre
 | #                                                     | Title                                                      | Status   | Date       |
 | ----------------------------------------------------- | ---------------------------------------------------------- | -------- | ---------- |
 | [ADR-001](ADR-001-anonymous-identity-architecture.md) | Anonymous-identity architecture (DB ↔ FORMS_DB separation) | Accepted | 2026-05-14 |
+| [ADR-002](ADR-002-static-invariant-gates.md)          | Static-invariant gates as the load-bearing CI pattern      | Accepted | 2026-05-14 |
 
 ADR series in progress (planned, in numerical order — none of these block any current work):
 
-- ADR-002 — Static invariant gates as architectural floor (the pattern that makes `pagination-shape`, `pii`, `fk-type`, `architecture`, `form-validation` gates work together)
 - ADR-003 — Cursor pagination over offset (locked by PR #155 invariant gate)
 - ADR-004 — Self-hosted runner pool readiness probe + watchdog architecture (Brain invariant 12)
 - ADR-005 — Co-Architect decomposition pattern: Option-C deferral and the halt-criterion discipline
