@@ -227,12 +227,27 @@ describe('L1 Lint: data-testid naming conventions', () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('L2 Contract: Admin events API schema', () => {
-  test('GET /api/v2/admin/events returns { ok, status, items[] }', async () => {
+  test('GET /api/v2/admin/events returns canonical cursor envelope { ok, items[], pagination }', async () => {
+    // OSE-206: the admin events list adopted the canonical cursor shape
+    // shipped by OSE-207 (subscribers) and OSE-212 (audit log). The legacy
+    // `body.status` field is NOT part of the canonical contract; HTTP-level
+    // status is already checked at the response layer, and the canonical
+    // pagination shape is statically enforced by
+    // `tests/pagination-shape-invariant.spec.ts` (PR #155).
     const body = await fetchJson('/api/v2/admin/events');
     expect(body).toHaveProperty('ok', true);
-    expect(body).toHaveProperty('status', 200);
     expect(body).toHaveProperty('items');
     expect(Array.isArray(body.items)).toBe(true);
+    expect(body).toHaveProperty('pagination');
+    const pagination = body.pagination as Record<string, unknown>;
+    expect(pagination).toHaveProperty('limit');
+    expect(pagination).toHaveProperty('hasMore');
+    expect(pagination).toHaveProperty('nextCursor');
+    // Forbidden offset-shape keys MUST NOT leak through.
+    expect(body).not.toHaveProperty('total');
+    expect(body).not.toHaveProperty('offset');
+    expect(pagination).not.toHaveProperty('total');
+    expect(pagination).not.toHaveProperty('offset');
   });
 
   test('POST /api/v2/admin/events returns { ok, status, id, slug }', async () => {
