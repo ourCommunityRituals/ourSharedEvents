@@ -650,10 +650,14 @@ export async function route(
     // Event lifecycle guard: reject submissions for non-active events.
     // Only blocks if the event row explicitly exists with a non-active status;
     // unknown event IDs pass through for backward compat with un-seeded test fixtures.
+    // Hoisted to outer scope so phase gate below can access legal_clearance_tier.
+    let eventRow: { status: string; legal_clearance_tier: number | null } | null = null;
     if (env.DB) {
-      const eventRow = await env.DB.prepare('SELECT status FROM events WHERE id = ?')
+      eventRow = await env.DB.prepare(
+        'SELECT status, legal_clearance_tier FROM events WHERE id = ?'
+      )
         .bind(eventId)
-        .first<{ status: string }>();
+        .first<{ status: string; legal_clearance_tier: number | null }>();
       if (eventRow) {
         const { allowed, reason } = assertRenderable(parseEventState(eventRow.status), 'public');
         if (!allowed) {
@@ -683,6 +687,30 @@ export async function route(
         },
         { status: 403 }
       );
+    }
+
+    // Regulatory phase gate (OSE-73 / ADMIN-2):
+    // Only fires when the event row exists in DB — unknown event IDs pass through
+    // for backward compat with un-seeded test fixtures.
+    // survey + email-signup require Phase 2 (personal data collection).
+    const FORM_PHASE_REQUIREMENTS: Partial<Record<string, number>> = {
+      survey: 2,
+      'email-signup': 2,
+    };
+    const requiredPhase = FORM_PHASE_REQUIREMENTS[formType];
+    if (requiredPhase && eventRow) {
+      const actualPhase = eventRow.legal_clearance_tier ?? 1;
+      if (actualPhase < requiredPhase) {
+        return Response.json(
+          {
+            ok: false,
+            status: 403,
+            code: 'PHASE_REQUIRED',
+            error: `This form requires regulatory clearance Phase ${requiredPhase}`,
+          },
+          { status: 403 }
+        );
+      }
     }
 
     switch (formType) {

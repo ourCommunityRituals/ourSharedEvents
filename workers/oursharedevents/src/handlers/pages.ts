@@ -330,7 +330,7 @@ const ADMIN_HTML = `<!DOCTYPE html>
         const rows = data.items.map(e => {
           const safeName = esc(e.name || 'Untitled');
           const safeId = esc(String(e.id));
-          const safePhase = Number(e.legal_clearance_tier) || 1;
+          const safePhase = Math.max(1, Math.min(5, Number(e.legal_clearance_tier) || 1));
           return \`
           <tr onclick="window.loadForms('\${safeId}', '\${safeName.replace(/'/g, "\\\\'")}', \${safePhase}); document.querySelectorAll('tr.selected').forEach(r=>r.classList.remove('selected')); this.classList.add('selected');" onkeydown="if(event.key==='Enter'||event.key===' '){this.click();event.preventDefault();}" class="clickable-row" tabindex="0" data-testid="event-row-\${safeId}" data-phase="\${safePhase}">
             <td data-testid="event-id">\${safeId}</td>
@@ -412,7 +412,7 @@ const ADMIN_HTML = `<!DOCTYPE html>
       // Update phase badge to reflect selected event's regulatory clearance tier
       const pb = document.getElementById('phaseBadge');
       if (pb) {
-        const p = Number(legalPhase) || 1;
+        const p = Math.max(1, Math.min(5, Number(legalPhase) || 1));
         pb.textContent = 'Phase ' + p;
         pb.className = 'phase-badge phase-' + p;
         pb.dataset.testid = 'phase-badge';
@@ -424,8 +424,8 @@ const ADMIN_HTML = `<!DOCTYPE html>
       const types = [
         { key: 'register', flagKey: 'forms.register', label: 'Registration', desc: 'Pre-event sign-up' },
         { key: 'checkin', flagKey: 'forms.checkin', label: 'Check-in', desc: 'Walk-in door tally' },
-        { key: 'survey', flagKey: 'forms.survey', label: 'Survey', desc: 'Post-event feedback', upgradeTier: 'mid' },
-        { key: 'email', flagKey: 'forms.email-signup', label: 'Email List', desc: 'Voluntary opt-in', upgradeTier: 'mid' },
+        { key: 'survey', flagKey: 'forms.survey', label: 'Survey', desc: 'Post-event feedback', upgradeTier: 'mid', upgradePhase: 2 },
+        { key: 'email', flagKey: 'forms.email-signup', label: 'Email List', desc: 'Voluntary opt-in', upgradeTier: 'mid', upgradePhase: 2 },
       ];
       const encodedName = encodeURIComponent(eventName);
 
@@ -441,7 +441,7 @@ const ADMIN_HTML = `<!DOCTYPE html>
       const countLabels = ['Registrations', 'Check-ins', 'Surveys', 'Emails'];
 
       // Form links — locked if flag is off (payment tier) or regulatory phase insufficient
-      const eventPhase = Number(legalPhase) || 1;
+      const eventPhase = Math.max(1, Math.min(5, Number(legalPhase) || 1));
       const linksHtml = types.map(t => {
         const tierEnabled = flags[t.flagKey] !== false;
         const phaseEnabled = eventPhase >= (t.upgradePhase || 1);

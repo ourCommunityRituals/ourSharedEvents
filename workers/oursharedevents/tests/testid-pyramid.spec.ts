@@ -1,14 +1,42 @@
 /**
  * Data-TestID Automation Pyramid
  *
- * Full SDET testing pyramid for the data-testid system across all surfaces.
- * Validates from static lint through contract, integration, and E2E.
+ * Full SDET testing pyramid for OSE. Validates from security through academic.
  *
- * Pyramid layers:
- *   L1 — Lint:        Static analysis of source files (naming, uniqueness, coverage)
- *   L2 — Contract:    API response schemas match what the UI consumes
- *   L3 — Integration: DB → Handler → Router → HTML pipeline validation
- *   L4 — E2E:         Full admin flow: load → select event → forms → flags → surfaces
+ * ── Canonical OCR 10-Level Pyramid (execution order) ──────────────────────────
+ *
+ *   L0  Security    — auth guards, response hygiene, no-leak assertions
+ *   L1  Lint        — static source analysis (naming, projections, clamp patterns)
+ *   L2  Schema      — DB column types, defaults, migration-applied shape
+ *   L3  Unit        — pure decision logic, decision tables, happy + sad paths
+ *   L4  Regression  — field defaults on create; fields survive unrelated mutations
+ *   L5  Boundary    — clamp/out-of-range/null edges → see admin-ui.spec.ts
+ *   L6  Integration — DB → Handler → Router → API pipeline (flywheel loop)
+ *   L7  Contract    — API response schema: field names, types, presence guarantees
+ *   L8  Pact        — consumer-driven contract (N/A — no external consumers yet)
+ *   L9  Academic    — invariant proofs, model checks (N/A — future)
+ *
+ * ── How existing describe blocks map to canonical levels ──────────────────────
+ *
+ *   "L1 Lint …"          → canonical L1
+ *   "L2 Contract …"      → canonical L7  (named for local clarity; schema = L2 below)
+ *   "L3 Integration …"   → canonical L6
+ *   "L4 E2E …"           → canonical L4 + L6 combined
+ *
+ * ── Pattern for every new regulatory field (TEMPLATE) ────────────────────────
+ *
+ *   When shipping a net-new regulatory/typed field, add one describe block per
+ *   missing canonical level in the "REGULATORY FIELD PYRAMID" section below.
+ *   Minimum required: L0–L7. L5 goes in admin-ui.spec.ts (surface assertions).
+ *
+ *   L0  → PUT/POST write requires auth (401); gate 403 body has no internal fields
+ *   L1  → source file scan: column in SELECT projection + clamp/sanitise present
+ *   L2  → PRAGMA table_info: column exists, correct type, correct DEFAULT
+ *   L3  → decision table: all form types × field values → expected gate outcome
+ *   L4  → create (no field) → DB shows DEFAULT; update other field → field unchanged
+ *   L5  → min/max clamp, null fallback, out-of-range coercion (admin-ui.spec.ts)
+ *   L6  → flywheel: admin sets field in DB → public API enforces it end-to-end
+ *   L7  → field present in API response as correct JS type
  */
 
 import { env, SELF } from 'cloudflare:test';
@@ -219,6 +247,25 @@ describe('L2 Contract: Admin events API schema', () => {
     expect(body).toHaveProperty('slug');
     expect(typeof body.id).toBe('string');
     expect((body.id as string).startsWith('evt_')).toBe(true);
+  });
+
+  // L7 contract: legal_clearance_tier must be a typed field on every item
+  test('GET /api/v2/admin/events items include legal_clearance_tier as a number', async () => {
+    // Create a known event so items[] is guaranteed non-empty for this assertion
+    const created = await fetchJson('/api/v2/admin/events', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: 'LCT Contract Schema Test' }),
+    });
+    const eventId = created.id as string;
+
+    const body = await fetchJson('/api/v2/admin/events');
+    const items = body.items as Record<string, unknown>[];
+    const item = items.find((e) => e.id === eventId);
+    expect(item).toBeDefined();
+    expect(item).toHaveProperty('legal_clearance_tier');
+    // Must be a number, not null or undefined — SELECT projection is wired
+    expect(typeof item!.legal_clearance_tier).toBe('number');
   });
 });
 
@@ -574,6 +621,103 @@ describe('L4 E2E: Admin create → update → forms → export → flags → sur
     const reportRes = await SELF.fetch('https://t.test/sharedReport');
     // Free tier: analytics.shared-report is OFF → 403
     expect(reportRes.status).toBe(403);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// L3 (flywheel) — Admin phase → forms API phase gate (ADMIN-2 / OSE-73)
+//
+// This is the L6 integration test that closes the ADMIN-2 flywheel:
+//   Admin sets legal_clearance_tier on event (in events DB)
+//   → Router's phase gate enforces it server-side on public form endpoints
+//   → survey/email-signup return 403 PHASE_REQUIRED for phase-1 events
+//   → survey/email-signup return 200 for phase-2 events (with flag enabled)
+//
+// Gate rule: only fires when the event row EXISTS in the events DB.
+// Unknown event IDs pass through (backward compat with un-seeded test fixtures).
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('L3 Integration: Admin phase → forms API phase gate', () => {
+  const LCT1_ID = 'evt-phase-gate-lct1';
+  const LCT2_ID = 'evt-phase-gate-lct2';
+
+  beforeAll(async () => {
+    const tenv = env as unknown as TestEnv;
+    const db = tenv.DB;
+    const now = new Date().toISOString();
+
+    // Seed two events: one at phase 1 (blocked for survey), one at phase 2 (allowed)
+    await db.prepare('DELETE FROM events WHERE id IN (?, ?)').bind(LCT1_ID, LCT2_ID).run();
+    await db
+      .prepare(
+        `INSERT INTO events (id, brand_id, title, slug, status, legal_clearance_tier, created_at, updated_at)
+         VALUES (?, 'root', 'Phase Gate P1', 'phase-gate-p1', 'active', 1, ?, ?)`
+      )
+      .bind(LCT1_ID, now, now)
+      .run();
+    await db
+      .prepare(
+        `INSERT INTO events (id, brand_id, title, slug, status, legal_clearance_tier, created_at, updated_at)
+         VALUES (?, 'root', 'Phase Gate P2', 'phase-gate-p2', 'active', 2, ?, ?)`
+      )
+      .bind(LCT2_ID, now, now)
+      .run();
+
+    // Enable survey flag at event level for both events so the flag gate passes
+    // and the phase gate is the only variable under test
+    for (const id of [LCT1_ID, LCT2_ID]) {
+      await fetchJson(`/api/v2/admin/events/${id}/flags/forms.survey`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled: true }),
+      });
+    }
+  });
+
+  test('survey blocked (403 PHASE_REQUIRED) for event with LCT=1 even when flag is enabled', async () => {
+    const res = await SELF.fetch(`https://t.test/api/v2/events/${LCT1_ID}/forms/survey`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ responses: { rating: 5 } }),
+    });
+    expect(res.status).toBe(403);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body.code).toBe('PHASE_REQUIRED');
+    expect(body.error as string).toContain('Phase 2');
+  });
+
+  test('survey allowed (200) for event with LCT=2 when flag is enabled', async () => {
+    const res = await SELF.fetch(`https://t.test/api/v2/events/${LCT2_ID}/forms/survey`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ responses: { rating: 5 } }),
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body.ok).toBe(true);
+  });
+
+  test('register has no phase requirement — allowed at LCT=1', async () => {
+    // register/checkin are not in FORM_PHASE_REQUIREMENTS → no phase gate
+    const res = await SELF.fetch(`https://t.test/api/v2/events/${LCT1_ID}/forms/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'Phase Test User' }),
+    });
+    expect(res.status).toBe(200);
+  });
+
+  test('events without DB rows bypass the phase gate (backward compat)', async () => {
+    // 'evt-unseeded' has no row in events DB — phase gate is skipped
+    // survey still returns 403 FORM_DISABLED (flag is off for free tier globally)
+    // but NOT 403 PHASE_REQUIRED
+    const res = await SELF.fetch('https://t.test/api/v2/events/evt-unseeded-no-row/forms/survey', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ responses: { q: 'test' } }),
+    });
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body.code).not.toBe('PHASE_REQUIRED');
   });
 });
 
