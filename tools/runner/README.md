@@ -175,10 +175,18 @@ installer after upgrading the janitor will cleanly transition.
    `TaskAgentJobNotFoundException` / `BrokerServer ERR` in the diag
    log within `RecentStuckMinutes` (default 3) AND no successful
    `Running job:` line in the same window. Listener gets bounced.
-4. **GitHub queue depth vs local idle** — single `gh api` call per
-   cycle. If GitHub has queued workflow runs but the pool reports zero
-   `Runner.Worker` processes, a broker is silently broken even when
-   the log hasn't caught up. The affected Listener gets bounced.
+4. **GitHub queue depth vs local idle — corroboration-gated** (Sweep 8 G).
+   Single `gh api` call per cycle. The `queue_idle_signal` HINT fires
+   when GitHub has queued workflow runs but the pool reports zero
+   `Runner.Worker` processes. **Critically: this is only a HINT, not a
+   bounce trigger.** A bounce requires corroborating evidence — a recent
+   broker error in _this_ Listener's diag log within the last 10 min.
+   Without that corroboration, "queue at GitHub + nothing local running"
+   is just a quiet pool waiting for work to assign (CodeQL on
+   `ubuntu-latest`, environment-approval blocks, workflow_run waiters
+   all queue without ever touching Bloodraven). **The original
+   unilateral version of this signal falsely bounced all 3 healthy idle
+   Listeners during PR #159 — fixed by `Test-QueueIdleCorroborated`.**
 5. **Pool-wide outage detection** (Sweep 8) — if every runner shows the
    _same_ broker-error signature within the last 5 minutes, the failure
    is GitHub-side, not local. The probe **suppresses all per-runner

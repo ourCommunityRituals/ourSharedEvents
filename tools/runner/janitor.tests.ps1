@@ -116,7 +116,8 @@ $fns = Extract-PowerShellFunctions $janitorSource
 # that we don't need for the unit-style tests we're running below.
 foreach ($name in 'ConvertTo-UtcDateTimeSafe', 'Get-TaskNameForRunner', 'typeAffinity', 'Test-CircuitOpen',
                   'Add-BounceToCircuitBreaker', 'Get-WorkerDwellCapMinutes',
-                  'Read-CircuitBreakerState', 'Test-ListenerStuck') {
+                  'Read-CircuitBreakerState', 'Test-ListenerStuck',
+                  'Test-QueueIdleCorroborated') {
     if ($fns.ContainsKey($name)) {
         Invoke-Expression $fns[$name]
     }
@@ -264,6 +265,35 @@ try {
 finally {
     Remove-Item -Path $tempRoot -Recurse -Force -ErrorAction SilentlyContinue
 }
+
+# --- Test-QueueIdleCorroborated (Sweep 8 G regression coverage) ---------
+
+Write-Host ''
+Write-Host '=== Test-QueueIdleCorroborated ==='
+
+# This is the regression test for the PR #159 false-positive. Without
+# corroboration, ANY upstream queued workflow (CodeQL on ubuntu-latest,
+# environment-approval blocks, workflow_run waiters) would bounce healthy
+# idle Listeners. Each of the 3 cases below MUST hold or that bug returns.
+
+# Case 1: no broker error at all -> not corroborated -> do not bounce.
+$corroborated = Test-QueueIdleCorroborated -LastBrokerError $null -CorroborationWindowMinutes 10
+Assert-False 'no broker error -> queue-idle is NOT corroborated (the PR #159 bug case)' $corroborated
+
+# Case 2: fresh broker error -> corroborated -> safe to bounce.
+$freshErr = (Get-Date).ToUniversalTime().AddMinutes(-2)
+$corroborated = Test-QueueIdleCorroborated -LastBrokerError $freshErr -CorroborationWindowMinutes 10
+Assert-True 'broker error 2 min ago -> queue-idle IS corroborated (real stuck case)' $corroborated
+
+# Case 3: stale broker error -> not corroborated -> do not bounce.
+$staleErr = (Get-Date).ToUniversalTime().AddMinutes(-30)
+$corroborated = Test-QueueIdleCorroborated -LastBrokerError $staleErr -CorroborationWindowMinutes 10
+Assert-False 'broker error 30 min ago -> NOT corroborated (broker recovered, idle pool is fine)' $corroborated
+
+# Case 4: future-stamped (clock skew) -> not corroborated -> safe default.
+$futureErr = (Get-Date).ToUniversalTime().AddMinutes(5)
+$corroborated = Test-QueueIdleCorroborated -LastBrokerError $futureErr -CorroborationWindowMinutes 10
+Assert-False 'future-stamped error (clock skew) -> NOT corroborated (safe default)' $corroborated
 
 # --- Summary -------------------------------------------------------------
 

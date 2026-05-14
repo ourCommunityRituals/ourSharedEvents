@@ -294,6 +294,45 @@ function Test-ListenerStuck([string]$RunnerDir, [int]$ThresholdMinutes) {
 }
 
 # -----------------------------------------------------------------------------
+# Sweep 8 G: corroboration gate for the queue-while-idle signal.
+#
+# Pre-G: the inline check at the per-runner loop treated ANY queued workflow
+# at GitHub + zero local Workers as "broker silently broken" and bounced.
+# This falsely fired in production PR #159: CodeQL on ubuntu-latest queues
+# don't belong to Bloodraven, and bouncing 3 healthy idle Listeners
+# tripped the circuit breaker in ~15 min for a problem that didn't exist.
+#
+# Post-G: queue-while-idle is a HINT, not a trigger. We only escalate to
+# Stuck=true when this Listener's diag log ALSO shows a recent broker
+# error - meaning the bounce has actual local evidence to act on.
+#
+# Returns $true ONLY when there is a corroborating broker error within
+# the window; $false otherwise (the safe default - leave it alone).
+# -----------------------------------------------------------------------------
+
+function Test-QueueIdleCorroborated {
+    [CmdletBinding()]
+    param(
+        # Last broker-error timestamp from Test-ListenerStuck (UTC), or $null.
+        [Parameter(Mandatory = $false)][AllowNull()]$LastBrokerError,
+        [int]$CorroborationWindowMinutes = 10
+    )
+    if ($null -eq $LastBrokerError) { return $false }
+    # Cast for type-safety: callers may pass a DateTime, string, or pscustomobject field.
+    try {
+        $errStamp = [DateTime]$LastBrokerError
+    } catch {
+        return $false
+    }
+    # Both sides MUST be UTC to make this comparison meaningful.
+    if ($errStamp.Kind -ne [DateTimeKind]::Utc) {
+        $errStamp = $errStamp.ToUniversalTime()
+    }
+    $ageMinutes = ((Get-Date).ToUniversalTime() - $errStamp).TotalMinutes
+    return ($ageMinutes -le $CorroborationWindowMinutes -and $ageMinutes -ge 0)
+}
+
+# -----------------------------------------------------------------------------
 # Sweep 7: Worker-dwell check.
 #
 # A Runner.Worker process represents an in-flight job. Typical OSE jobs
@@ -703,25 +742,31 @@ foreach ($dir in $runnerDirs) {
     $health = Test-ListenerStuck -RunnerDir $dir.FullName -ThresholdMinutes $StuckThresholdMinutes
     $orphans = Find-OrphanJobChildren -RunnerDir $dir.FullName
 
-    # Sweep 7: queue-while-idle signal. If GitHub has queued runs AND this
-    # runner instance reports no Worker child AND no recent broker error AND
-    # task is Running, that's a precise "broker silently broken" indicator
-    # that the log-based detection would miss for ~30s.
+    # Sweep 7 + Sweep 8 G: queue-while-idle CORROBORATING signal.
+    # See Test-QueueIdleCorroborated docstring above for the full rationale.
+    # Short version: a queued workflow upstream is NOT proof our broker is
+    # broken. We MUST corroborate with a recent broker error in this
+    # Listener's diag log. Otherwise it's just a quiet pool, leave it alone.
     $queueIdle = $false
     if ($EnsureReady -and $queuedCount -gt 0 -and -not $health.Stuck -and $taskState -eq 'Running') {
-        # If any Workers are running locally somewhere we can't yet say this
-        # specific Listener is idle (PID -> folder attribution requires admin).
-        # Be conservative: only flag if there are ZERO Workers at all yet a
-        # queue exists.
         $anyWorker = @(Get-Process Runner.Worker -ErrorAction SilentlyContinue)
         if ($anyWorker.Count -eq 0) {
+            # Diagnostic hint fires regardless - tells you why this cycle even looked.
             $queueIdle = $true
-            $health = [pscustomobject]@{
-                Stuck = $true
-                Reason = "GitHub queue depth $queuedCount but pool reports zero Workers"
-                LastDispatch = $health.LastDispatch
-                LastBrokerError = $health.LastBrokerError
+
+            $corroborated = Test-QueueIdleCorroborated `
+                -LastBrokerError $health.LastBrokerError `
+                -CorroborationWindowMinutes 10
+
+            if ($corroborated) {
+                $health = [pscustomobject]@{
+                    Stuck = $true
+                    Reason = "GitHub queue depth $queuedCount, zero Workers, AND broker error in diag log within last 10 min"
+                    LastDispatch = $health.LastDispatch
+                    LastBrokerError = $health.LastBrokerError
+                }
             }
+            # else: $health.Stuck stays $false. Pool is just quiet.
         }
     }
 
