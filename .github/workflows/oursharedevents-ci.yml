@@ -165,42 +165,15 @@ jobs:
             echo "$HASH" > "$STAMP"
           fi
 
-      - name: Shield CodeQL parser from workspace ESM scope
-        run: |
-          if [ -n "$RUNNER_TOOL_CACHE" ] && [ -d "$RUNNER_TOOL_CACHE" ]; then
-            printf '{"type":"commonjs"}\n' > "$RUNNER_TOOL_CACHE/package.json"
-          fi
-
-      - name: Initialize CodeQL
-        uses: github/codeql-action/init@v4
-        with:
-          languages: javascript-typescript
-          build-mode: none
-
-      - name: CodeQL Analysis
-        uses: github/codeql-action/analyze@v4
-        with:
-          category: '/language:javascript-typescript'
-          # Private repo on free tier: GitHub Code Scanning upload requires
-          # GitHub Advanced Security (GHAS), which is paid for private repos.
-          # Per `feedback_private_until_launch.md`, OSE stays private until
-          # launch — so until GHAS is provisioned (or the repo goes public),
-          # we run CodeQL analysis but skip the Security-tab upload. The
-          # SARIF is published as a workflow artifact instead (next step) so
-          # findings remain reviewable without losing the analysis depth.
-          # When OSE goes public OR GHAS is enabled, remove `upload: 'never'`
-          # and the upload-artifact step below.
-          upload: 'never'
-          output: '${{ runner.temp }}/codeql-sarif'
-
-      - name: Upload CodeQL SARIF as workflow artifact
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: codeql-sarif-${{ github.sha }}
-          path: '${{ runner.temp }}/codeql-sarif/'
-          retention-days: 30
-          if-no-files-found: warn
+      # ── CodeQL moved out (Sweep 9 #2, 2026-05-14) ───────────────────────
+      # CodeQL javascript-typescript analysis lived here AND in codeql.yml
+      # — same trigger set, same analysis target, ~2.4 min each on
+      # Bloodraven (measured on PR #160). The duplicate burned a runner
+      # slot for no signal gain. codeql.yml is now the canonical entry
+      # point: it owns the pull_request + push + scheduled + dispatch
+      # triggers and emits the SARIF artifact. Keep S0 Security focused on
+      # the non-CodeQL scanners (Semgrep, detect-secrets, gitleaks, npm
+      # audit, SBOM) where the duplication didn't exist.
 
       # ── Semgrep + detect-secrets (Python-based) ──────────────────────────
       - name: Set up Python for Semgrep + detect-secrets
@@ -294,7 +267,7 @@ jobs:
           npx @cyclonedx/cyclonedx-npm --omit dev --output-file sbom.json --output-format JSON --spec-version 1.5
           COMPONENT_COUNT=$(jq '.components | length' sbom.json 2>/dev/null || echo "unknown")
           echo "## S0 Security" >> $GITHUB_STEP_SUMMARY
-          echo "- **CodeQL:** analyzed (SARIF artifact: codeql-sarif-${{ github.sha }})" >> $GITHUB_STEP_SUMMARY
+          echo "- **CodeQL:** see separate \`CodeQL\` workflow (canonical entry, Sweep 9)" >> $GITHUB_STEP_SUMMARY
           echo "- **npm audit:** passed" >> $GITHUB_STEP_SUMMARY
           echo "- **SBOM:** $COMPONENT_COUNT components (CycloneDX 1.5)" >> $GITHUB_STEP_SUMMARY
 
@@ -307,11 +280,32 @@ jobs:
 
   # ============================================================================
   # TIER 0: GATE — Every push, every PR
+  #
+  # Sweep 9 (2026-05-14): sharded into 4 parallel matrix children so the
+  # 3-runner Bloodraven pool can execute lint / typecheck / tests / a11y in
+  # parallel rather than serial. Baseline: PR #160 measured 6.4 min for the
+  # monolithic single job. Expected wall-clock after shard: ~3 min, driven
+  # by the gate-tests shard (the long pole due to ~1064 vitest cases).
+  #
+  # Downstream jobs (`deploy-staging`, `summary`) reference `needs: [gate]`
+  # which GitHub Actions resolves to "all matrix children succeeded" — no
+  # change required there.
+  #
+  # Each shard runs identical setup (checkout, setup-node, stage @ocr/flags,
+  # install root deps). The per-runner stamp cache (node_modules/.install-stamp)
+  # makes the install a near no-op on warm runners, so the duplicated setup
+  # cost is bounded to ~30-45s per shard. Worker deps are skipped on the
+  # lint shard since eslint only touches root files — absorbs the original
+  # Sweep 9 #3 (combine npm ci) win directly into the matrix design.
   # ============================================================================
   gate:
-    name: 'T0 Gate'
+    name: 'T0 Gate (${{ matrix.shard }})'
     needs: [security]
     runs-on: self-hosted
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [lint, typecheck, tests, a11y]
     steps:
       - uses: actions/checkout@v6
         with:
@@ -335,16 +329,11 @@ jobs:
             echo "$HASH" > "$STAMP"
           fi
 
-      - name: 'Security: Banned origins'
-        run: npm run check:banned-origins
-
-      - name: 'Security: Unit tests'
-        run: npx vitest run tests/unit/worker/sec-iac-03-adminOAuth.test.js tests/unit/worker/sec-iac-04-public-read-only.test.js tests/unit/worker/sec-iac-05-signed-mutations.test.js tests/unit/worker/sec-iac-07-iac-smoke.test.js
-
-      - name: 'Quality: Lint'
-        run: npx eslint config/ scripts/ tests/unit/ tests/contract/ --cache --cache-location node_modules/.eslintcache
-
+      # Worker deps not needed for the lint shard (eslint targets root paths).
+      # All other shards exercise the worker test suite or worker tsc, so they
+      # need workers/oursharedevents/node_modules populated.
       - name: Install worker dependencies
+        if: matrix.shard != 'lint'
         run: |
           HASH="$(node --version)-$(git hash-object package-lock.json)"
           STAMP=node_modules/.install-stamp
@@ -356,18 +345,46 @@ jobs:
           fi
         working-directory: ${{ env.WORKER_DIR }}
 
+      # ── Shard: lint ────────────────────────────────────────────────────────
+      # Banned origins + eslint. Smallest shard, ~30-60s. Root deps only.
+      - name: 'Security: Banned origins'
+        if: matrix.shard == 'lint'
+        run: npm run check:banned-origins
+
+      - name: 'Quality: Lint'
+        if: matrix.shard == 'lint'
+        run: npx eslint config/ scripts/ tests/unit/ tests/contract/ --cache --cache-location node_modules/.eslintcache
+
+      # ── Shard: typecheck ───────────────────────────────────────────────────
+      # tsc --noEmit on the worker. Standalone shard so a type regression
+      # surfaces as a single named check, not buried inside a multi-step job.
       - name: 'Quality: TypeScript'
+        if: matrix.shard == 'typecheck'
         run: npx tsc --noEmit
         working-directory: ${{ env.WORKER_DIR }}
 
+      # ── Shard: tests ───────────────────────────────────────────────────────
+      # Security-IAC unit tests + root npm test + worker D1 schema (vitest
+      # against the 1064-case suite). This is the long pole and the primary
+      # justification for sharding — letting it own a dedicated runner instead
+      # of blocking lint/typecheck/a11y behind it.
+      - name: 'Security: Unit tests'
+        if: matrix.shard == 'tests'
+        run: npx vitest run tests/unit/worker/sec-iac-03-adminOAuth.test.js tests/unit/worker/sec-iac-04-public-read-only.test.js tests/unit/worker/sec-iac-05-signed-mutations.test.js tests/unit/worker/sec-iac-07-iac-smoke.test.js
+
       - name: 'Quality: Unit + Contract + Guards'
+        if: matrix.shard == 'tests'
         run: npm test
 
       - name: 'Quality: Worker D1 schema'
+        if: matrix.shard == 'tests'
         run: npm test
         working-directory: ${{ env.WORKER_DIR }}
 
+      # ── Shard: a11y ────────────────────────────────────────────────────────
+      # axe-core WCAG 2.0 AA scan via the worker test runner.
       - name: 'Quality: A11Y axe-core WCAG 2.0 AA scan'
+        if: matrix.shard == 'a11y'
         run: npm run test:a11y
         working-directory: ${{ env.WORKER_DIR }}
 

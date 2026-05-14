@@ -17,6 +17,19 @@ on:
     - cron: '0 2 * * 0'  # Sundays 02:00 UTC
   workflow_dispatch:
 
+# Sweep 9 #4 (2026-05-14): cancel superseded runs.
+# Without this block, pushing 3 commits in 60s would queue 3 independent
+# CodeQL runs on the 3-runner Bloodraven pool (each ~2.4 min, single
+# self-hosted runner per axis). cancel-in-progress: true keeps only the
+# latest commit's analysis alive, freeing runner slots immediately.
+#
+# Group key uses PR number when on PR (so commits to the same PR cancel
+# prior runs) or full ref otherwise (so main pushes don't accidentally
+# cancel each other's analyses).
+concurrency:
+  group: codeql-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 defaults:
   run:
     shell: bash

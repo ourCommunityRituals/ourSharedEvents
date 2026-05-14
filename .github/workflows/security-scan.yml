@@ -53,6 +53,16 @@ on:
         default: 'false'
         type: boolean
 
+# Sweep 9 #4 (2026-05-14): cancel superseded runs.
+# This workflow triggers on EVERY branch + EVERY PR with no paths filter
+# (per security-unconditional doctrine). Without concurrency cancel, a
+# rapid push storm to a single branch would queue N analyses on the
+# 3-runner pool. Group by PR number when available, else by ref, so
+# distinct branches don't interfere with each other.
+concurrency:
+  group: security-scan-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 # Environment configuration
 env:
   # Security scan policy - CRITICAL and HIGH findings block merges

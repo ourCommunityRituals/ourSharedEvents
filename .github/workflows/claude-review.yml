@@ -51,10 +51,12 @@ jobs:
             echo "skip=false" >> $GITHUB_OUTPUT
           fi
 
+      # Sweep 9 #6 (2026-05-14): dropped `fetch-depth: 0`. The Claude review
+      # action only needs the PR diff (head..base), not the entire repo
+      # history. Default shallow checkout is faster on Bloodraven where
+      # the OSE repo has ~3 years of commits.
       - uses: actions/checkout@v6
         if: steps.check-key.outputs.skip != 'true'
-        with:
-          fetch-depth: 0
 
       - uses: anthropics/claude-code-action@v1
         if: steps.check-key.outputs.skip != 'true'
