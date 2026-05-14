@@ -100,6 +100,7 @@ import { requireAdmin, extractAdminActor, type AdminEnv } from './auth/admin';
 import { logAdminAction, type AuditLogEnv } from './lib/audit-log';
 import { handleListAuditLog, type AuditHandlerEnv } from './handlers/audit';
 import { handleListSubscribers, type SubscribersAdminEnv } from './handlers/subscribers';
+import { handleAdminGeocode, type GeocodeAdminEnv } from './handlers/geocode';
 import {
   handleV2AdminVerifyQr,
   handleV2AdminUnverifyQr,
@@ -585,6 +586,17 @@ export async function route(
     const deny = requireAdmin(request, env, reqId);
     if (deny) return deny;
     return handleListSubscribers(request, env, ctx, reqId);
+  }
+
+  // ── Admin geocoding (OSE-238) ───────────────────────────────────────────────
+  // Translates a human-readable address into { lat, lng, formatted_address }
+  // via Google Geocoding API. corridor_id resolution is currently a stub
+  // returning null (Option C); BE-24b will fill it in once the corridor
+  // geometry source-of-truth lands.
+  if (pathname === '/api/v2/admin/geocode' && method === 'POST') {
+    const deny = requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
+    if (deny) return deny;
+    return handleAdminGeocode(request, env);
   }
 
   // ── Public API ─────────────────────────────────────────────────────────────
