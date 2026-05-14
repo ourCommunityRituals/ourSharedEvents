@@ -132,5 +132,13 @@ export default defineConfig({
     include: ['tests/**/*.spec.ts'],
     exclude: ['tests/a11y-axe.spec.ts'],
     pool: cloudflarePool(),
+    // 30s — miniflare worker bootstrap + per-spec D1 migration apply (~80 stmts)
+    // can exceed vitest's 10s default `hookTimeout` when the self-hosted
+    // Bloodraven runners are processing parallel workflow jobs and CPU/IO
+    // contention slows the SQLite migration loop. 30s is comfortable headroom
+    // for the slowest beforeAll observed (~6s) while still failing fast on
+    // genuine hangs. Without this, T0 Gate flakes whenever 2+ PRs run their
+    // test pyramids concurrently.
+    hookTimeout: 30000,
   },
 });
