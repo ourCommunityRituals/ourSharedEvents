@@ -188,8 +188,8 @@ describe('OSE-243a: pre-event rendering (full 5W page)', () => {
 });
 
 describe('OSE-243a: phase dispatch', () => {
-  test('active event in [start_date, end_date] → minimal "Live now" stub', async () => {
-    const eventId = 'evt_ose243a_live';
+  test('active event in [start_date, end_date] → full event-live render (OSE-244a)', async () => {
+    const eventId = 'evt_ose244a_live';
     // start_date 1 hour ago, end_date 1 hour from now → phase = event
     await seedEvent({
       id: eventId,
@@ -201,9 +201,28 @@ describe('OSE-243a: phase dispatch', () => {
     const res = await SELF.fetch(`https://t.test/events/${eventId}`);
     expect(res.status).toBe(200);
     const html = await res.text();
-    expect(html).toContain('data-testid="event-phase-msg"');
-    expect(html).toContain('This event is happening now');
+    // Full event-live render distinguishing markers
+    expect(html).toContain('data-testid="event-main-live"');
+    expect(html).toContain('data-testid="event-header-live"');
+    expect(html).toContain('data-testid="event-title-live"');
+    expect(html).toContain('data-testid="event-live-badge"');
+    expect(html).toContain('Live now');
+    // Check-in CTA points at forms surface with type=checkin
+    expect(html).toContain('data-testid="event-checkin"');
+    expect(html).toContain(`href="/forms/${eventId}?type=checkin"`);
+    // 5W sections rendered with -live suffixed testids (distinct from pre_event)
+    expect(html).toContain('data-testid="event-what-live"');
+    expect(html).toContain('data-testid="event-where-live"');
+    expect(html).toContain('data-testid="event-who-live"');
+    expect(html).toContain('data-testid="event-why-live"');
+    expect(html).toContain('data-testid="event-how-live"');
+    // Wayfinding CTA distinct from pre_event (Navigate, not See on)
+    expect(html).toContain('Navigate now');
+    // Anonymity affordance must persist across all rendered phases
     expect(html).toContain('data-testid="anonymity-affordance"');
+    // MUST NOT fall through to the minimal stub
+    expect(html).not.toContain('data-testid="event-phase-msg"');
+    expect(html).not.toContain('This event is happening now.');
   });
 
   test('active event past end_date → minimal "ended" stub', async () => {
