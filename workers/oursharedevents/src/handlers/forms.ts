@@ -3,10 +3,11 @@
  *
  * All form data lives in FORMS_DB — NEVER linked to the anonymous scan system (DB).
  *
- * Container pattern: All 4 form types share validateFormRequest() for input
- * validation, logFormEvent() for observability, handleDbError() for D1 fault
- * tolerance, and jsonResponse/errorResponse for consistent error handling.
- * Each type implements its own success response shape.
+ * Container pattern (OSE-204): All 4 public form handlers share the
+ * `validateFormRequest()` / `handleDbError()` / `trimStr()` container from
+ * `src/lib/form-validation.ts`. The L1 static invariant gate
+ * (`tests/form-validation-invariant.spec.ts`) asserts every public form
+ * handler imports + uses this container — any drift fails CI.
  *
  * Feature flags: Callers can pass ?disabled=register,survey to disable specific
  * form types per event. The router reads event config and passes enabled types.
@@ -34,6 +35,14 @@ import {
 } from '../lib/forms-db';
 import { corsHeaders } from '../lib/cors';
 import { getOrCreateAnonId, setAnonCookie } from '../lib/anonymous-id';
+import {
+  validateFormRequest,
+  handleDbError,
+  errorResponse,
+  jsonResponse,
+  trimStr,
+  type FormType,
+} from '../lib/form-validation';
 
 export interface FormsEnv extends FormsDbEnv {
   FORMS_ENCRYPTION_KEY?: string;
@@ -41,58 +50,13 @@ export interface FormsEnv extends FormsDbEnv {
 
 // ─── Constants ──────────────────────────────────────────────────────────────────
 
-const MAX_BODY_BYTES = 16 * 1024;
 const REGISTRATION_TTL_MS = 90 * 24 * 60 * 60 * 1000;
 const EMAIL_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 
-// ─── Container Pattern: Shared Infrastructure ───────────────────────────────────
-
-type FormType = 'register' | 'checkin' | 'survey' | 'email-signup';
-
-function requestId(): string {
-  return crypto.randomUUID ? crypto.randomUUID() : `req-${Date.now()}`;
-}
-
-// EFF-3: Use corsHeaders() from lib/cors.ts so form responses respect the same
-// origin allowlist as the router's OPTIONS preflight — never * bypass.
-function jsonResponse(body: Record<string, unknown>, request: Request, status = 200): Response {
-  return Response.json(body, {
-    status,
-    headers: {
-      'X-Request-Id': requestId(),
-      ...corsHeaders(request),
-      'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-    },
-  });
-}
-
-function errorResponse(code: string, message: string, status: number, request: Request): Response {
-  return jsonResponse(
-    { ok: false, status, code, error: message, timestamp: new Date().toISOString() },
-    request,
-    status
-  );
-}
-
-function isValidEventId(id: string): boolean {
-  return id.length > 0 && id.length <= 128 && /^[a-zA-Z0-9_\-]+$/.test(id);
-}
+// ─── Helpers ────────────────────────────────────────────────────────────────────
 
 function isValidEmail(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) && email.length <= 320;
-}
-
-async function parseJsonBody(request: Request): Promise<Record<string, unknown> | null> {
-  const contentLength = request.headers.get('Content-Length');
-  if (contentLength && parseInt(contentLength, 10) > MAX_BODY_BYTES) return null;
-  try {
-    const text = await request.text();
-    if (text.length > MAX_BODY_BYTES) return null;
-    return JSON.parse(text) as Record<string, unknown>;
-  } catch {
-    return null;
-  }
 }
 
 /** SDET: Structured observability log for every form event */
@@ -114,46 +78,6 @@ function logFormEvent(
   );
 }
 
-/** BE: Consistent D1 error handling — logs and returns 503 */
-function handleDbError(
-  formType: FormType,
-  eventId: string,
-  err: unknown,
-  request: Request
-): Response {
-  const message = err instanceof Error ? err.message : String(err);
-  logFormEvent(formType, eventId, 'error', { error: message });
-  return errorResponse('DB_ERROR', 'Service temporarily unavailable', 503, request);
-}
-
-/** Container: shared pre-processing for all public form submissions. */
-async function validateFormRequest(
-  request: Request,
-  eventId: string,
-  requireBody: boolean
-): Promise<{ body: Record<string, unknown> | null; error: Response | null }> {
-  if (!isValidEventId(eventId)) {
-    return {
-      body: null,
-      error: errorResponse('INVALID_EVENT_ID', 'Invalid event ID format', 400, request),
-    };
-  }
-  if (!requireBody) return { body: null, error: null };
-  const body = await parseJsonBody(request);
-  if (!body) {
-    return {
-      body: null,
-      error: errorResponse(
-        'INVALID_BODY',
-        'Request body must be valid JSON under 16KB',
-        400,
-        request
-      ),
-    };
-  }
-  return { body, error: null };
-}
-
 // ─── Public: Registration ───────────────────────────────────────────────────────
 
 export async function handleFormRegistration(
@@ -166,12 +90,14 @@ export async function handleFormRegistration(
   if (error) return error;
 
   const { anonId, isNew } = getOrCreateAnonId(request);
-  const name = typeof body!.name === 'string' ? body!.name.trim().slice(0, 200) : undefined;
-  const rawEmail = typeof body!.email === 'string' ? body!.email.trim().slice(0, 320) : undefined;
+  const name = trimStr(body!.name, 200);
+  const rawEmail = trimStr(body!.email, 320);
   if (rawEmail && !isValidEmail(rawEmail)) {
     return errorResponse('INVALID_EMAIL', 'Invalid email format', 400, request);
   }
   const email = rawEmail;
+  // sourcePlacementId is not trimmed for whitespace — IDs MAY contain
+  // significant leading/trailing chars. Just bound the length.
   const sourcePlacementId =
     typeof body!.sourcePlacementId === 'string' ? body!.sourcePlacementId.slice(0, 128) : undefined;
 
@@ -297,7 +223,7 @@ export async function handleFormEmailSignup(
   if (error) return error;
 
   const { anonId, isNew } = getOrCreateAnonId(request);
-  const email = typeof body!.email === 'string' ? body!.email.trim().slice(0, 320) : '';
+  const email = trimStr(body!.email, 320) ?? '';
   if (!email) return errorResponse('MISSING_FIELD', 'Missing required field: email', 400, request);
   if (!isValidEmail(email))
     return errorResponse('INVALID_EMAIL', 'Invalid email format', 400, request);
