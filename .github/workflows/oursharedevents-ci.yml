@@ -26,7 +26,10 @@
 #
 #   T1: Deploy — Migrations, deploy, health check
 #       - D1 migrations (main + forms) → wrangler d1 migrations apply {DB,FORMS_DB} --remote
-#       - Table count verification     → SELECT COUNT(*) (6 main, 5 forms)
+#       - Canonical-shape verification → assert 15 DB tables + 6 FORMS_DB tables
+#                                        + 0 triggers, BY NAME, against the
+#                                        canonical set in
+#                                        tests/migration-smoke.spec.ts (OSE-209)
 #       - Deploy                       → wrangler deploy
 #       - Health check                 → curl /health (HTTP 200)
 #
