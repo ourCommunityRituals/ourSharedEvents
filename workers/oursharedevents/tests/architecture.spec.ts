@@ -1,0 +1,215 @@
+/**
+ * Architecture Isolation Gate — OSE-205 / QA-8
+ *
+ * Asserts the two-database isolation contract that the OSE worker relies on:
+ *
+ *   DB        → anonymous public surface (events, sponsors, scans, poster
+ *               deployments, regulatory schema, admin audit log)
+ *   FORMS_DB  → identified-user surface (form registrations, check-in counts,
+ *               surveys, email signups, feature flags, PII audit log)
+ *
+ * If a handler ever reaches across this line — e.g. forms.ts touching env.DB,
+ * or sponsors.ts touching env.FORMS_DB — the PII / anon-surface guarantees
+ * documented in `OCR-docs/ocr-docs-brain/architectural-invariants.yaml`
+ * collapse. This file is the architectural gate that fails CI when that
+ * happens.
+ *
+ * Coverage map vs. existing `forms-security.spec.ts`:
+ *   - forms-security.spec.ts already covers a superset of behavioural PII
+ *     concerns (encryption roundtrip, lifecycle, scrub) and overlaps on L1
+ *     for forms.ts / events.ts / health.ts / pages.ts / feature-flags handler+lib.
+ *   - This file adds the missing L1 sponsors.ts static gate, the missing
+ *     forward L2 PRAGMA (`FORMS_DB` has none of [events, sponsors, scans,
+ *     sponsor_impressions]), the missing DB.feature_flags PRAGMA, and a
+ *     structured `console.log` summary of pass count for CI observability.
+ *
+ * All L1 gates are pure string checks (<1s). The L2 gates run after the
+ * miniflare migrations apply (~ms).
+ */
+
+import { env } from 'cloudflare:test';
+import { afterAll, beforeAll, describe, expect, test } from 'vitest';
+
+interface TestEnv {
+  DB: D1Database;
+  FORMS_DB: D1Database;
+  TEST_SOURCE_FILES_JSON: string;
+  TEST_FORMS_MIGRATION_STATEMENTS: string;
+  TEST_MIGRATION_STATEMENTS: string;
+}
+
+const tenv = () => env as unknown as TestEnv;
+
+/** Normalise Windows backslashes so `endsWith('handlers/forms.ts')` works on Bloodraven (Windows self-hosted runner). */
+const norm = (p: string) => p.replace(/\\/g, '/');
+
+/** Find one source file by suffix; assert its presence so a typo'd path never makes a gate vacuously pass. */
+function getSource(suffix: string): string {
+  const sources: Record<string, string> = JSON.parse(tenv().TEST_SOURCE_FILES_JSON);
+  for (const [path, content] of Object.entries(sources)) {
+    if (norm(path).endsWith(suffix)) return content;
+  }
+  throw new Error(
+    `[OSE-205] expected source file ending in ${suffix} not found in TEST_SOURCE_FILES_JSON`
+  );
+}
+
+// ── Pass-count tracking for structured CI log ────────────────────────────────
+let gatesPassed = 0;
+let gatesFailed = 0;
+
+function expectPass(label: string, fn: () => void): void {
+  try {
+    fn();
+    gatesPassed++;
+  } catch (err) {
+    gatesFailed++;
+    // Re-throw so vitest still reports the failure.
+    throw new Error(`[${label}] ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Migrate both DBs once so L2 PRAGMA assertions have schemas to query.
+// ─────────────────────────────────────────────────────────────────────────────
+beforeAll(async () => {
+  const mainStmts: string[] = JSON.parse(tenv().TEST_MIGRATION_STATEMENTS);
+  for (const stmt of mainStmts) {
+    try {
+      await tenv().DB.prepare(stmt).run();
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (msg.includes('duplicate column name')) continue;
+      throw e;
+    }
+  }
+  const formsStmts: string[] = JSON.parse(tenv().TEST_FORMS_MIGRATION_STATEMENTS);
+  for (const stmt of formsStmts) {
+    try {
+      await tenv().FORMS_DB.prepare(stmt).run();
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (msg.includes('duplicate column name')) continue;
+      throw e;
+    }
+  }
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// L1 — STATIC ANALYSIS GATES (pure string checks, <1s combined)
+// ═════════════════════════════════════════════════════════════════════════════
+
+describe('L1: handlers/forms.ts never references env.DB', () => {
+  test('no env.DB or .DB.prepare in forms.ts', () => {
+    expectPass('L1.forms', () => {
+      const content = getSource('src/handlers/forms.ts');
+      expect(content).not.toMatch(/env\.DB\b/);
+      expect(content).not.toMatch(/\.DB\.prepare/);
+    });
+  });
+});
+
+describe('L1: handlers/events.ts never references FORMS_DB', () => {
+  test('no FORMS_DB / forms-db / form_registrations / email_signups in events.ts', () => {
+    expectPass('L1.events', () => {
+      const content = getSource('src/handlers/events.ts');
+      expect(content).not.toMatch(/FORMS_DB/);
+      expect(content).not.toMatch(/forms-db/);
+      expect(content).not.toMatch(/form_registrations/);
+      expect(content).not.toMatch(/email_signups/);
+    });
+  });
+});
+
+describe('L1: handlers/sponsors.ts never references FORMS_DB', () => {
+  // This is the gap forms-security.spec.ts S2 did not cover — events/health/pages
+  // are gated there but sponsors is not. Anonymous-surface sponsor data must
+  // never leak into the identified-user database.
+  test('no FORMS_DB / forms-db / form_* / email_signups in sponsors.ts', () => {
+    expectPass('L1.sponsors', () => {
+      const content = getSource('src/handlers/sponsors.ts');
+      expect(content).not.toMatch(/FORMS_DB/);
+      expect(content).not.toMatch(/forms-db/);
+      expect(content).not.toMatch(/form_registrations/);
+      expect(content).not.toMatch(/form_surveys/);
+      expect(content).not.toMatch(/email_signups/);
+      expect(content).not.toMatch(/checkin_counts/);
+    });
+  });
+});
+
+describe('L1: handlers/feature-flags.ts never references env.DB', () => {
+  test('no env.DB or .DB.prepare in feature-flags handler', () => {
+    expectPass('L1.feature-flags-handler', () => {
+      const content = getSource('src/handlers/feature-flags.ts');
+      expect(content).not.toMatch(/env\.DB\b/);
+      expect(content).not.toMatch(/\.DB\.prepare/);
+    });
+  });
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// L2 — PRAGMA ASSERTIONS (forward and reverse table-isolation guarantees)
+// ═════════════════════════════════════════════════════════════════════════════
+
+async function tableNames(db: D1Database): Promise<string[]> {
+  const result = await db
+    .prepare(
+      "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' AND name NOT LIKE 'd1_%'"
+    )
+    .all();
+  return (result.results ?? []).map((r) => (r as { name: string }).name);
+}
+
+describe('L2: FORMS_DB does not contain anonymous-surface tables', () => {
+  // This is the forward direction that forms-security.spec.ts S14 did not
+  // assert — S14 covers DB-has-no-forms-tables, this asserts the symmetric
+  // FORMS_DB-has-no-anon-tables guarantee.
+  test('events / sponsors / scans / sponsor_impressions not in FORMS_DB', async () => {
+    const names = await tableNames(tenv().FORMS_DB);
+    expectPass('L2.forms-db-no-anon-tables', () => {
+      expect(names).not.toContain('events');
+      expect(names).not.toContain('sponsors');
+      expect(names).not.toContain('scans');
+      expect(names).not.toContain('sponsor_impressions');
+      // Defensive extras documented by the brain invariants:
+      expect(names).not.toContain('poster_deployments');
+      expect(names).not.toContain('sponsor_event_types');
+      expect(names).not.toContain('sponsor_areas');
+      expect(names).not.toContain('corridors');
+    });
+  });
+});
+
+describe('L2: DB does not contain identified-user-surface tables', () => {
+  test('form_registrations / email_signups / feature_flags not in DB', async () => {
+    const names = await tableNames(tenv().DB);
+    expectPass('L2.db-no-forms-tables', () => {
+      expect(names).not.toContain('form_registrations');
+      expect(names).not.toContain('email_signups');
+      expect(names).not.toContain('feature_flags');
+      // Defensive extras:
+      expect(names).not.toContain('form_surveys');
+      expect(names).not.toContain('checkin_counts');
+      expect(names).not.toContain('form_config');
+      expect(names).not.toContain('pii_audit_log');
+    });
+  });
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// STRUCTURED CI LOG — emits a single JSON line summarising gate outcomes
+// ═════════════════════════════════════════════════════════════════════════════
+
+afterAll(() => {
+  // eslint-disable-next-line no-console
+  console.log(
+    JSON.stringify({
+      type: 'OSE_205_ARCHITECTURE_GATE_SUMMARY',
+      passed: gatesPassed,
+      failed: gatesFailed,
+      total: gatesPassed + gatesFailed,
+      timestamp: new Date().toISOString(),
+    })
+  );
+});
