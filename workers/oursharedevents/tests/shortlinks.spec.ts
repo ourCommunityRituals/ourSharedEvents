@@ -194,7 +194,7 @@ describe('OSE-240: POST /api/v2/admin/events returns shortcode', () => {
 });
 
 describe('OSE-240: GET /s/:code redirect + click counter', () => {
-  test('valid code -> 302 redirect to /api/v2/events/:id', async () => {
+  test('valid code -> 302 redirect to /events/:id (public HTML page)', async () => {
     // Create an event so we have a code to resolve.
     const create = await SELF.fetch('https://t.test/api/v2/admin/events', {
       method: 'POST',
@@ -209,7 +209,11 @@ describe('OSE-240: GET /s/:code redirect + click counter', () => {
     });
     expect(res.status).toBe(302);
     const location = res.headers.get('Location');
-    expect(location).toContain(`/api/v2/events/${created.id}`);
+    // OSE-243a moved the redirect target from the JSON endpoint
+    // (/api/v2/events/:id) to the HTML public page (/events/:id). The
+    // recipient's browser now lands on a rendered event page, not raw JSON.
+    expect(location).toContain(`/events/${created.id}`);
+    expect(location).not.toContain('/api/v2/events/');
     // Cache-Control: no-store prevents intermediaries from masking click signals.
     expect(res.headers.get('Cache-Control')).toBe('no-store');
   });

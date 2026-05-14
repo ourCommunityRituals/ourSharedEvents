@@ -68,12 +68,14 @@ export async function handleShortlinkResolve(
   // structured log; we still don't await the result before redirecting.)
   await incrementClick(env, code);
 
-  // 302 to the canonical event endpoint. The Worker handles the HTML
-  // route at /events/:id (or /api/v2/events/:id JSON depending on the
-  // caller's Accept header — for ose.link/abc123 in a browser, the
-  // browser follows the redirect and gets the lifecycle page).
+  // 302 to the public event HTML page. OSE-243a wired /events/:id to
+  // handlePublicEventPage which renders the 5W content + venue map +
+  // anonymity affordance (pre_event) or a minimal phase stub (event /
+  // post_event). The pre-OSE-243a target was /api/v2/events/:id which
+  // returned JSON — sending a recipient's browser to that was the gap
+  // that this two-PR sequence closed.
   const url = new URL(request.url);
-  const target = `${url.origin}/api/v2/events/${encodeURIComponent(row.event_id)}`;
+  const target = `${url.origin}/events/${encodeURIComponent(row.event_id)}`;
 
   return new Response(null, {
     status: 302,

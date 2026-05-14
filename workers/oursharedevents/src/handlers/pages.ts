@@ -9,6 +9,7 @@
  */
 
 import { isGoogleMapsConfigured } from '../lib/maps';
+import { computeEventPhase } from '../domain/event-phase';
 
 export interface PagesEnv {
   WORKER_ENV?: string;
@@ -1223,6 +1224,339 @@ function html(content: string, status = 200): Response {
 
 export function handlePublicPage(_env: PagesEnv): Response {
   return html(PUBLIC_HTML);
+}
+
+// ─── Public event page — OSE-243a / BE-27 ─────────────────────────────────────
+//
+// Renders /events/:id as a phase-aware HTML page. Recipients land here from
+// `/s/:code` shortlinks (OSE-240) — they should see event content, not JSON.
+//
+// Phase dispatch:
+//   pre_event  → full 5W content + venue map + anonymity affordance + RSVP CTA
+//   event      → minimal "Live now" stub (full design in OSE-244)
+//   post_event → minimal "This event has ended" stub (full design in OSE-245)
+//
+// State gating:
+//   - draft/ready events return 404 (not renderable to public per OSE-199 state machine)
+//   - archived events return 200 with a minimal "ended" message
+//
+// Anonymity affordance (user-reinforced 2026-05-14):
+//   The page MUST surface, in plain language, the user-facing privacy story.
+//   Every recipient sees this BEFORE deciding to RSVP / share email / check in.
+//   Architectural truth (DB↔FORMS_DB split, anon_id, 15-min tranches) becomes
+//   user-readable here; the rest of the platform's protections are what make
+//   the claim true.
+//
+// CSP: the page has zero inline scripts; only an `<img>` to the venue map
+// proxy + simple anchors. The `html()` helper still attaches the nonce
+// header for defense-in-depth.
+
+interface PublicEventEnv extends PagesEnv {
+  DB?: D1Database;
+}
+
+interface PublicEventRow {
+  id: string;
+  brand_id: string;
+  title: string;
+  slug: string;
+  status: string;
+  description: string | null;
+  location: string | null;
+  start_date: string | null;
+  end_date: string | null;
+  timezone: string | null;
+  what_short: string | null;
+  who_host: string | null;
+  why_purpose: string | null;
+  how_details: string | null;
+  where_address: string | null;
+  lat: number | null;
+  lon: number | null;
+}
+
+function esc(s: string | null | undefined): string {
+  if (s == null) return '';
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function formatHumanDate(iso: string | null): string {
+  if (!iso) return '';
+  try {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return iso;
+    return d.toLocaleDateString('en-US', {
+      weekday: 'long',
+      month: 'long',
+      day: 'numeric',
+      year: 'numeric',
+    });
+  } catch {
+    return iso;
+  }
+}
+
+/**
+ * Anonymity affordance — the user-facing version of the architectural
+ * separation principle. The platform's DB↔FORMS_DB split + anon_id + 15-min
+ * tranches make this claim physically true; this paragraph makes it
+ * user-readable. Lives at the bottom of every public event page so recipients
+ * read it before any sign-up action they might take.
+ */
+const ANONYMITY_AFFORDANCE = `
+  <section class="ose-anonymity" data-testid="anonymity-affordance" aria-labelledby="anon-heading">
+    <h2 id="anon-heading">How this works</h2>
+    <p>
+      You're part of the group, anonymously. OurSharedEvents tracks when
+      groups gather &mdash; never who you are. Event hosts and sponsors see
+      corridors and venues, not people. The link you followed counted as a
+      single click; nothing about your device, location, or identity was
+      collected to display this page.
+    </p>
+  </section>
+`;
+
+function renderPreEventHtml(row: PublicEventRow, shareUrl: string, nonce: string): string {
+  const title = esc(row.title);
+  const whatShort = esc(row.what_short);
+  const whoHost = esc(row.who_host);
+  const whyPurpose = esc(row.why_purpose);
+  const howDetails = esc(row.how_details);
+  const whereAddress = esc(row.where_address) || esc(row.location);
+  const venueDisplay = esc(row.location);
+  const startHuman = formatHumanDate(row.start_date);
+  const venueParam = encodeURIComponent(row.location || row.where_address || '');
+  const mapImg = venueParam
+    ? `<img src="/api/v2/maps/venue-image?venue=${venueParam}" alt="Map of ${esc(row.location || row.where_address)}" class="ose-venue-map" loading="lazy" width="600" height="240" data-testid="venue-map" />`
+    : '';
+  const gmapsLink = venueParam
+    ? `<a class="ose-gmaps-link" data-testid="gmaps-link" href="https://www.google.com/maps/search/?api=1&query=${venueParam}" target="_blank" rel="noopener noreferrer">See on Google Maps</a>`
+    : '';
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>${title}</title>
+  <meta property="og:title" content="${title}" />
+  <meta property="og:description" content="${whatShort}" />
+  <meta property="og:url" content="${esc(shareUrl)}" />
+  <meta property="og:type" content="event" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <style nonce="${nonce}">
+    :root { --ose-bg: #faf7f2; --ose-text: #2a2a2a; --ose-muted: #5a5a5a; --ose-accent: #4361ee; --ose-card: #fff; }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; background: var(--ose-bg); color: var(--ose-text); font-family: system-ui, -apple-system, "Segoe UI", sans-serif; line-height: 1.5; }
+    body { max-width: 720px; margin: 0 auto; padding: 1.5rem 1.25rem 3rem; }
+    .ose-skip { position: absolute; left: -9999px; }
+    .ose-skip:focus { left: 1rem; top: 1rem; background: var(--ose-accent); color: #fff; padding: 0.5rem 1rem; border-radius: 4px; }
+    h1 { font-size: 1.875rem; margin: 0 0 0.5rem; line-height: 1.2; }
+    h2 { font-size: 1.125rem; margin: 1.5rem 0 0.5rem; color: var(--ose-text); }
+    .ose-meta { color: var(--ose-muted); font-size: 0.95rem; margin-bottom: 1.5rem; }
+    .ose-card { background: var(--ose-card); border-radius: 8px; padding: 1.25rem; margin-bottom: 1rem; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+    .ose-venue-map { width: 100%; height: auto; border-radius: 6px; display: block; margin-bottom: 0.75rem; }
+    .ose-gmaps-link { color: var(--ose-accent); text-decoration: none; font-weight: 500; }
+    .ose-gmaps-link:hover { text-decoration: underline; }
+    .ose-rsvp-btn { display: inline-block; background: var(--ose-accent); color: #fff; padding: 0.75rem 1.5rem; border-radius: 6px; text-decoration: none; font-weight: 600; margin: 1.25rem 0; }
+    .ose-rsvp-btn:focus { outline: 3px solid #ffb800; outline-offset: 2px; }
+    .ose-anonymity { margin-top: 2rem; padding: 1rem 1.25rem; background: rgba(67, 97, 238, 0.06); border-left: 3px solid var(--ose-accent); border-radius: 4px; font-size: 0.9rem; color: var(--ose-muted); }
+    .ose-anonymity h2 { margin-top: 0; font-size: 1rem; color: var(--ose-text); }
+    .ose-anonymity p { margin: 0; }
+    .ose-section p { margin: 0; }
+  </style>
+</head>
+<body>
+  <a href="#main" class="ose-skip">Skip to event content</a>
+  <main id="main" role="main" aria-labelledby="event-title" data-testid="event-main">
+    <header data-testid="event-header">
+      <h1 id="event-title" data-testid="event-title">${title}</h1>
+      ${startHuman ? `<p class="ose-meta" data-testid="event-when">${esc(startHuman)}${row.timezone ? ` &middot; ${esc(row.timezone)}` : ''}</p>` : ''}
+    </header>
+
+    ${
+      whatShort
+        ? `<section class="ose-card ose-section" data-testid="event-what" aria-labelledby="what-heading">
+           <h2 id="what-heading">What</h2>
+           <p>${whatShort}</p>
+         </section>`
+        : ''
+    }
+
+    ${
+      venueDisplay || whereAddress
+        ? `<section class="ose-card ose-section" data-testid="event-where" aria-labelledby="where-heading">
+           <h2 id="where-heading">Where</h2>
+           ${mapImg}
+           ${venueDisplay ? `<p><strong>${venueDisplay}</strong></p>` : ''}
+           ${whereAddress && whereAddress !== venueDisplay ? `<p>${whereAddress}</p>` : ''}
+           ${gmapsLink}
+         </section>`
+        : ''
+    }
+
+    ${
+      whoHost
+        ? `<section class="ose-card ose-section" data-testid="event-who" aria-labelledby="who-heading">
+           <h2 id="who-heading">Who</h2>
+           <p>${whoHost}</p>
+         </section>`
+        : ''
+    }
+
+    ${
+      whyPurpose
+        ? `<section class="ose-card ose-section" data-testid="event-why" aria-labelledby="why-heading">
+           <h2 id="why-heading">Why</h2>
+           <p>${whyPurpose}</p>
+         </section>`
+        : ''
+    }
+
+    ${
+      howDetails
+        ? `<section class="ose-card ose-section" data-testid="event-how" aria-labelledby="how-heading">
+           <h2 id="how-heading">How</h2>
+           <p>${howDetails}</p>
+         </section>`
+        : ''
+    }
+
+    <a class="ose-rsvp-btn" data-testid="event-rsvp" href="/forms/${esc(row.id)}?type=register">RSVP for this event</a>
+
+    ${ANONYMITY_AFFORDANCE}
+  </main>
+</body>
+</html>`;
+}
+
+function renderMinimalPhaseHtml(
+  row: PublicEventRow,
+  phase: 'event' | 'post_event',
+  nonce: string
+): string {
+  const title = esc(row.title);
+  const message = phase === 'event' ? 'This event is happening now.' : 'This event has ended.';
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>${title}</title>
+  <style nonce="${nonce}">
+    body { font-family: system-ui, -apple-system, sans-serif; max-width: 600px; margin: 3rem auto; padding: 1rem; line-height: 1.5; color: #2a2a2a; background: #faf7f2; }
+    h1 { font-size: 1.5rem; margin: 0 0 0.5rem; }
+    .msg { color: #5a5a5a; font-size: 1.05rem; margin: 0.5rem 0 1.5rem; }
+    .ose-anonymity { margin-top: 2rem; padding: 1rem 1.25rem; background: rgba(67, 97, 238, 0.06); border-left: 3px solid #4361ee; border-radius: 4px; font-size: 0.9rem; color: #5a5a5a; }
+    .ose-anonymity h2 { margin-top: 0; font-size: 1rem; color: #2a2a2a; }
+    .ose-anonymity p { margin: 0; }
+  </style>
+</head>
+<body>
+  <main role="main" aria-labelledby="event-title-minimal" data-testid="event-main-minimal">
+    <h1 id="event-title-minimal" data-testid="event-title-minimal">${title}</h1>
+    <p class="msg" data-testid="event-phase-msg">${message}</p>
+    ${ANONYMITY_AFFORDANCE}
+  </main>
+</body>
+</html>`;
+}
+
+/**
+ * GET /events/:id — public event landing page. Phase-aware.
+ *
+ * Recipients land here from `/s/:code` shortlinks. The page renders the
+ * event's 5W content + venue map when in pre_event phase, or a minimal
+ * phase-appropriate stub otherwise.
+ *
+ * Anonymity: NO IP / Cookie / anon_id reads in this handler. The only
+ * inputs are the eventId from the URL and the event row from D1. The
+ * anonymity affordance section explains this to the recipient in plain
+ * language.
+ */
+export async function handlePublicEventPage(
+  request: Request,
+  env: PublicEventEnv,
+  eventId: string
+): Promise<Response> {
+  if (!env.DB) {
+    return html(
+      '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Service unavailable</title></head><body><h1>Service unavailable</h1></body></html>',
+      503
+    );
+  }
+
+  // Cheap input validation. Event IDs are URL-safe alnum/_-, max 128 chars
+  // (same shape as the form-validation lib enforces).
+  if (!eventId || eventId.length > 128 || !/^[a-zA-Z0-9_\-]+$/.test(eventId)) {
+    return html(
+      '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Not found</title></head><body><h1>Event not found</h1></body></html>',
+      404
+    );
+  }
+
+  let row: PublicEventRow | null;
+  try {
+    row = await env.DB.prepare(
+      `SELECT id, brand_id, title, slug, status, description, location,
+              start_date, end_date, timezone,
+              what_short, who_host, why_purpose, how_details, where_address,
+              lat, lon
+       FROM events WHERE id = ?`
+    )
+      .bind(eventId)
+      .first<PublicEventRow>();
+  } catch {
+    return html(
+      '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Service unavailable</title></head><body><h1>Service unavailable</h1></body></html>',
+      503
+    );
+  }
+
+  if (!row) {
+    return html(
+      '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Not found</title></head><body><h1>Event not found</h1></body></html>',
+      404
+    );
+  }
+
+  // State-machine gate: draft/ready events are NOT renderable to public.
+  // 404 (not 403) so an attacker can't probe to discover unpublished events.
+  const status = (row.status || '').toLowerCase();
+  if (status === 'draft' || status === 'ready') {
+    return html(
+      '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Not found</title></head><body><h1>Event not found</h1></body></html>',
+      404
+    );
+  }
+
+  // Phase-aware dispatch via the OSE-242 canonical resolver.
+  const phase = computeEventPhase({
+    status: row.status,
+    start_date: row.start_date,
+    end_date: row.end_date,
+  });
+
+  const nonce = generateNonce();
+  const url = new URL(request.url);
+  const shareUrl = `${url.origin}/events/${row.id}`;
+
+  let body: string;
+  if (phase === 'pre_event') {
+    body = renderPreEventHtml(row, shareUrl, nonce);
+  } else {
+    body = renderMinimalPhaseHtml(row, phase, nonce);
+  }
+
+  return new Response(body, {
+    status: 200,
+    headers: securityHeaders(nonce),
+  });
 }
 
 export function handleAdminPage(_env: PagesEnv): Response {
