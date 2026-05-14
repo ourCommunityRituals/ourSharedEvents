@@ -14,6 +14,39 @@ export interface PagesEnv {
   WORKER_ENV?: string;
   DB?: D1Database;
   GOOGLE_MAPS_API_KEY?: string;
+  /**
+   * OSE-207 — per-environment pepper for peppered SHA-256 IP hashing in
+   * handleSubscribe. Set via `wrangler secret put IP_HASH_PEPPER --env <env>`.
+   * Rotate to invalidate all historical reverse-lookup utility.
+   *
+   * If unset, handleSubscribe falls back to storing NULL ip_hash and logs a
+   * structured warning. Subscribe still succeeds; the abuse signal is just
+   * disabled. This is fail-safe — never store a raw IP as a fallback.
+   */
+  IP_HASH_PEPPER?: string;
+}
+
+/**
+ * OSE-207 — peppered SHA-256 hash of a client IP, truncated to 32 hex chars.
+ *
+ * Returns null if no pepper is configured. Callers MUST treat null as
+ * "no abuse signal available" and store NULL — never the raw IP.
+ *
+ * Truncation: 32 hex chars = 128 bits of collision resistance, ample for
+ * "did this same IP submit twice" abuse detection without any reversibility
+ * benefit from a longer hash.
+ */
+export async function hashIpForSubscribe(
+  ip: string,
+  pepper: string | undefined
+): Promise<string | null> {
+  if (!pepper) return null;
+  const buf = new TextEncoder().encode(`${ip}|${pepper}`);
+  const digest = await crypto.subtle.digest('SHA-256', buf);
+  return Array.from(new Uint8Array(digest))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('')
+    .slice(0, 32);
 }
 
 // ─── Public page ────────────────────────────────────────────────────────────────
@@ -1238,14 +1271,28 @@ export async function handleSubscribe(request: Request, env: PagesEnv): Promise<
       );
     }
 
-    // Persist to D1 if available (graceful fallback if DB not provisioned)
+    // Persist to D1 if available (graceful fallback if DB not provisioned).
+    // OSE-207: ip_hash replaces the raw ip_address column (migration 0028).
+    //   - hashIpForSubscribe returns null if env.IP_HASH_PEPPER is unset;
+    //     null is stored as NULL — never the raw IP.
+    //   - A structured warning is emitted when the pepper is missing so
+    //     ops can detect the misconfiguration.
     let persisted = false;
     if (env.DB) {
       try {
+        const ipHash = await hashIpForSubscribe(clientIp, env.IP_HASH_PEPPER);
+        if (!env.IP_HASH_PEPPER) {
+          console.warn(
+            JSON.stringify({
+              type: 'SUBSCRIBE_IP_HASH_PEPPER_MISSING',
+              note: 'IP abuse signal disabled. Set wrangler secret IP_HASH_PEPPER.',
+            })
+          );
+        }
         await env.DB.prepare(
-          'INSERT INTO subscribers (email, ip_address, source) VALUES (?, ?, ?) ON CONFLICT (email) DO NOTHING'
+          'INSERT INTO subscribers (email, ip_hash, source) VALUES (?, ?, ?) ON CONFLICT (email) DO NOTHING'
         )
-          .bind(email, clientIp, 'landing')
+          .bind(email, ipHash, 'landing')
           .run();
         persisted = true;
       } catch (dbErr) {

@@ -124,6 +124,8 @@ export default defineConfig({
           // OSE-216: Vertex AI chatbot (BE-20)
           VERTEX_AI_MODEL_ID: 'gemini-2.0-flash',
           GCP_REGION: 'us-central1',
+          // OSE-207: per-env pepper for handleSubscribe ip_hash (BE-17)
+          IP_HASH_PEPPER: 'test-ip-hash-pepper-32char-secret',
         },
       },
     }),

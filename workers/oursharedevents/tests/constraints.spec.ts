@@ -36,6 +36,10 @@ async function applyMigrations(): Promise<void> {
       // ALTER TABLE ADD COLUMN is not idempotent in SQLite —
       // "duplicate column" on re-run means the column already exists, which is fine.
       if (msg.includes('duplicate column name')) continue;
+      // OSE-207 / migration 0028: ALTER TABLE DROP COLUMN is the symmetric case.
+      // "no such column" on re-run means the column has already been dropped.
+      // SQLite < 3.44 lacks DROP COLUMN IF EXISTS, so we treat it the same way.
+      if (msg.includes('no such column')) continue;
       throw e;
     }
   }
