@@ -26,7 +26,10 @@
 #
 #   T1: Deploy — Migrations, deploy, health check
 #       - D1 migrations (main + forms) → wrangler d1 migrations apply {DB,FORMS_DB} --remote
-#       - Table count verification     → SELECT COUNT(*) (6 main, 5 forms)
+#       - Canonical-shape verification → assert 15 DB tables + 6 FORMS_DB tables
+#                                        + 0 triggers, BY NAME, against the
+#                                        canonical set in
+#                                        tests/migration-smoke.spec.ts (OSE-209)
 #       - Deploy                       → wrangler deploy
 #       - Health check                 → curl /health (HTTP 200)
 #
@@ -420,29 +423,79 @@ jobs:
         working-directory: ${{ env.WORKER_DIR }}
         run: npx wrangler d1 migrations apply FORMS_DB --env staging --remote
 
-      - name: Verify D1 tables (main DB — 6 tables)
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        working-directory: ${{ env.WORKER_DIR }}
-        run: |
-          RESULT=$(npx wrangler d1 execute ocr-db-staging --env staging --remote \
-            --command "SELECT COUNT(*) as cnt FROM sqlite_master WHERE type='table' AND name IN ('events','sponsors','poster_deployments','scans','scan_aggregates','subscribers')")
-          echo "$RESULT"
-          if ! echo "$RESULT" | grep -q "6"; then echo "::error::Expected 6 tables"; exit 1; fi
-          echo "✓ 6 tables verified"
+      # ────────────────────────────────────────────────────────────────────
+      # Post-migration canonical-shape verification (OSE-209 hardening).
+      #
+      # Asserts the staging D1 schema, AFTER wrangler applies migrations,
+      # matches the canonical set defined in
+      #   workers/oursharedevents/tests/migration-smoke.spec.ts
+      # (DB_TABLES, FORMS_DB_TABLES, EXPECTED_TRIGGER_COUNT_*).
+      #
+      # The earlier version of these steps asserted COUNT(*) against a
+      # hardcoded 6-table list (DB) / 5-table list (FORMS_DB) and never
+      # got updated as new migrations landed (0010, 0014, 0019-0023, 0026,
+      # 0009-FORMS, etc.). That drift silently masked real-D1 regressions
+      # — the same regressions the PR-time miniflare smoke test (OSE-209)
+      # already catches in vitest. Now both layers reference the same
+      # canonical set, name-based, with a trigger=0 invariant on top.
+      # ────────────────────────────────────────────────────────────────────
 
-      - name: Verify D1 tables (forms DB — 5 tables)
+      - name: 'Verify staging D1 (canonical shape: 15 DB tables, 6 FORMS_DB tables, 0 triggers)'
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         working-directory: ${{ env.WORKER_DIR }}
         run: |
-          RESULT=$(npx wrangler d1 execute ocr-forms-db-staging --env staging --remote \
-            --command "SELECT COUNT(*) as cnt FROM sqlite_master WHERE type='table' AND name IN ('form_registrations','checkin_counts','form_surveys','email_signups','feature_flags')")
-          echo "$RESULT"
-          if ! echo "$RESULT" | grep -q "5"; then echo "::error::Expected 5 tables"; exit 1; fi
-          echo "✓ 5 tables verified"
+          set -euo pipefail
+          # Keep in sync with tests/migration-smoke.spec.ts DB_TABLES.
+          EXPECTED_DB="admin_audit_log corridor_regulatory_status corridors event_templates event_type_registry events node_hierarchy poster_deployments scan_aggregates scans sponsor_areas sponsor_event_types sponsor_impressions sponsors subscribers"
+          # Keep in sync with tests/migration-smoke.spec.ts FORMS_DB_TABLES.
+          EXPECTED_FORMS="checkin_counts email_signups feature_flags form_registrations form_surveys pii_audit_log"
+
+          fetch_names() {
+            local DB=$1; local OBJ=$2
+            npx wrangler d1 execute "$DB" --env staging --remote --json \
+              --command "SELECT name FROM sqlite_master WHERE type='$OBJ' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' AND name NOT LIKE 'd1_%' ORDER BY name" \
+              | jq -r '.[0].results[].name' | tr '\n' ' ' | sed 's/[[:space:]]*$//'
+          }
+
+          ACTUAL_DB=$(fetch_names ocr-db-staging table)
+          if [ "$ACTUAL_DB" != "$EXPECTED_DB" ]; then
+            echo "::error::DB table-set drift on staging."
+            echo "  Expected: [$EXPECTED_DB]"
+            echo "  Got:      [$ACTUAL_DB]"
+            echo "  Update tests/migration-smoke.spec.ts DB_TABLES *and* the EXPECTED_DB list above together."
+            exit 1
+          fi
+          echo "✓ DB: 15 canonical tables verified by name"
+
+          ACTUAL_FORMS=$(fetch_names ocr-forms-db-staging table)
+          if [ "$ACTUAL_FORMS" != "$EXPECTED_FORMS" ]; then
+            echo "::error::FORMS_DB table-set drift on staging."
+            echo "  Expected: [$EXPECTED_FORMS]"
+            echo "  Got:      [$ACTUAL_FORMS]"
+            echo "  Update tests/migration-smoke.spec.ts FORMS_DB_TABLES *and* the EXPECTED_FORMS list above together."
+            exit 1
+          fi
+          echo "✓ FORMS_DB: 6 canonical tables verified by name"
+
+          # Triggers: must be zero on both DBs (migration 0025 documented
+          # that triggers were removed; D1 parser breaks on ; in trigger
+          # bodies, so state-machine enforcement lives in app code).
+          DB_TRIGGERS=$(fetch_names ocr-db-staging trigger)
+          if [ -n "$DB_TRIGGERS" ]; then
+            echo "::error::Unexpected triggers in staging DB: [$DB_TRIGGERS]"
+            echo "  Migration 0025 documents triggers were removed; any new trigger must justify reintroducing the wrangler-parser fragility."
+            exit 1
+          fi
+          FORMS_TRIGGERS=$(fetch_names ocr-forms-db-staging trigger)
+          if [ -n "$FORMS_TRIGGERS" ]; then
+            echo "::error::Unexpected triggers in staging FORMS_DB: [$FORMS_TRIGGERS]"
+            exit 1
+          fi
+          echo "✓ Triggers: 0 on both DBs (matches canonical)"
+
+          echo '{"type":"OSE_209_POST_WRANGLER_SMOKE_STAGING","tables_db":15,"tables_forms":6,"triggers_db":0,"triggers_forms":0}'
 
       - name: Stamp build version
         working-directory: ${{ env.WORKER_DIR }}
@@ -809,21 +862,57 @@ jobs:
         working-directory: ${{ env.WORKER_DIR }}
         run: npx wrangler d1 migrations apply FORMS_DB --env production --remote
 
-      - name: Verify D1 tables (main — 6, forms — 5)
+      # Canonical-shape verification on production. Mirror of the staging
+      # step in T1 Deploy → Staging; keep both in sync. Source of truth:
+      # workers/oursharedevents/tests/migration-smoke.spec.ts.
+      - name: 'Verify production D1 (canonical shape: 15 DB tables, 6 FORMS_DB tables, 0 triggers)'
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         working-directory: ${{ env.WORKER_DIR }}
         run: |
-          R1=$(npx wrangler d1 execute ocr-db-production --env production --remote \
-            --command "SELECT COUNT(*) as cnt FROM sqlite_master WHERE type='table' AND name IN ('events','sponsors','poster_deployments','scans','scan_aggregates','subscribers')")
-          echo "$R1"
-          if ! echo "$R1" | grep -q "6"; then echo "::error::Expected 6 main tables"; exit 1; fi
-          R2=$(npx wrangler d1 execute ocr-forms-db-production --env production --remote \
-            --command "SELECT COUNT(*) as cnt FROM sqlite_master WHERE type='table' AND name IN ('form_registrations','checkin_counts','form_surveys','email_signups','feature_flags')")
-          echo "$R2"
-          if ! echo "$R2" | grep -q "5"; then echo "::error::Expected 5 forms tables"; exit 1; fi
-          echo "✓ All tables verified"
+          set -euo pipefail
+          EXPECTED_DB="admin_audit_log corridor_regulatory_status corridors event_templates event_type_registry events node_hierarchy poster_deployments scan_aggregates scans sponsor_areas sponsor_event_types sponsor_impressions sponsors subscribers"
+          EXPECTED_FORMS="checkin_counts email_signups feature_flags form_registrations form_surveys pii_audit_log"
+
+          fetch_names() {
+            local DB=$1; local OBJ=$2
+            npx wrangler d1 execute "$DB" --env production --remote --json \
+              --command "SELECT name FROM sqlite_master WHERE type='$OBJ' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' AND name NOT LIKE 'd1_%' ORDER BY name" \
+              | jq -r '.[0].results[].name' | tr '\n' ' ' | sed 's/[[:space:]]*$//'
+          }
+
+          ACTUAL_DB=$(fetch_names ocr-db-production table)
+          if [ "$ACTUAL_DB" != "$EXPECTED_DB" ]; then
+            echo "::error::DB table-set drift on production."
+            echo "  Expected: [$EXPECTED_DB]"
+            echo "  Got:      [$ACTUAL_DB]"
+            exit 1
+          fi
+          echo "✓ Production DB: 15 canonical tables verified by name"
+
+          ACTUAL_FORMS=$(fetch_names ocr-forms-db-production table)
+          if [ "$ACTUAL_FORMS" != "$EXPECTED_FORMS" ]; then
+            echo "::error::FORMS_DB table-set drift on production."
+            echo "  Expected: [$EXPECTED_FORMS]"
+            echo "  Got:      [$ACTUAL_FORMS]"
+            exit 1
+          fi
+          echo "✓ Production FORMS_DB: 6 canonical tables verified by name"
+
+          DB_TRIGGERS=$(fetch_names ocr-db-production trigger)
+          if [ -n "$DB_TRIGGERS" ]; then
+            echo "::error::Unexpected triggers in production DB: [$DB_TRIGGERS]"
+            exit 1
+          fi
+          FORMS_TRIGGERS=$(fetch_names ocr-forms-db-production trigger)
+          if [ -n "$FORMS_TRIGGERS" ]; then
+            echo "::error::Unexpected triggers in production FORMS_DB: [$FORMS_TRIGGERS]"
+            exit 1
+          fi
+          echo "✓ Production triggers: 0 on both DBs"
+
+          echo '{"type":"OSE_209_POST_WRANGLER_SMOKE_PRODUCTION","tables_db":15,"tables_forms":6,"triggers_db":0,"triggers_forms":0}'
 
       - name: Stamp build version
         working-directory: ${{ env.WORKER_DIR }}

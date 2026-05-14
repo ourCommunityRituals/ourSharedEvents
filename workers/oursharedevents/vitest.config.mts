@@ -146,5 +146,13 @@ export default defineConfig({
     // genuine hangs. Without this, T0 Gate flakes whenever 2+ PRs run their
     // test pyramids concurrently.
     hookTimeout: 30000,
+    // Same reasoning for testTimeout. QA-1 migration idempotency
+    // (constraints.spec.ts) re-runs the entire 28-migration loop inside the
+    // test body (not just beforeAll), which puts the work under the
+    // testTimeout budget rather than hookTimeout. Default 5s timed out on
+    // PR #156 CI under runner contention (observed 12.8s wall-clock).
+    // Aligning testTimeout with hookTimeout keeps both budgets symmetric
+    // and removes a second class of parallel-runner flake.
+    testTimeout: 30000,
   },
 });

@@ -362,7 +362,8 @@ When you add migration `NNNN_*.sql` to either `migrations/` or `migrations-forms
 
 1. The migration SQL itself must be idempotent (`IF NOT EXISTS` / `IF EXISTS` clauses).
 2. Update `tests/migration-smoke.spec.ts` `DB_TABLES` or `FORMS_DB_TABLES` constants if a new table is added.
-3. Update `tests/constraints.spec.ts` table/index counts if those change.
-4. Add a "## NNNN" entry to the relevant section (B.1 or B.2) of this file with the reverse SQL.
-5. Run `npx vitest run tests/migration-smoke.spec.ts tests/constraints.spec.ts` locally — both must pass.
-6. Document data-loss implications in the PR description if the migration drops a column or table.
+3. Update `.github/workflows/oursharedevents-ci.yml` `EXPECTED_DB` / `EXPECTED_FORMS` shell variables — in **both** the T1 Deploy → Staging and T1 Deploy → Production blocks. These run against the live D1 post-`wrangler d1 migrations apply` and must agree with the miniflare-based smoke test (#2).
+4. Update `tests/constraints.spec.ts` table/index counts if those change.
+5. Add a "## NNNN" entry to the relevant section (B.1 or B.2) of this file with the reverse SQL.
+6. Run `npx vitest run tests/migration-smoke.spec.ts tests/constraints.spec.ts` locally — both must pass.
+7. Document data-loss implications in the PR description if the migration drops a column or table.
