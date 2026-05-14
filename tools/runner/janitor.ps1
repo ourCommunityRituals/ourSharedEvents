@@ -108,7 +108,17 @@ param(
     [int]$WorkerDwellMaxMinutes = 15,
     [int]$RecentStuckMinutes = 3,
     [int]$CircuitBreakerMaxBouncesPerHour = 3,
-    [string]$Repo = 'ourCommunityRituals/ourSharedEvents'
+    [string]$Repo = 'ourCommunityRituals/ourSharedEvents',
+
+    # Sweep 8: configurable workspace root. Default keeps single-dev
+    # convenience; CI / different developers / future ops automation can
+    # override. All hardcoded paths in this file now derive from this root.
+    [string]$WorkspaceRoot = 'C:\Users\mzdan\dev\ourCommunityRituals',
+
+    # Sweep 8: log rotation. When the janitor log exceeds this size, the
+    # current file is renamed to _janitor.log.1 (replacing any prior
+    # rotation) and a fresh file starts. Single-generation, simple.
+    [int]$LogMaxMB = 5
 )
 
 $ErrorActionPreference = 'Stop'
@@ -128,14 +138,86 @@ if ($EnsureReady) {
 # Any actions-runner-* folder next to actions-runner is a sibling runner.
 # -----------------------------------------------------------------------------
 
-$workspaceRoot = 'C:\Users\mzdan\dev\ourCommunityRituals'
-$runnerDirs = @(Get-ChildItem -Path $workspaceRoot -Directory -Filter 'actions-runner*' -ErrorAction SilentlyContinue |
+$runnerDirs = @(Get-ChildItem -Path $WorkspaceRoot -Directory -Filter 'actions-runner*' -ErrorAction SilentlyContinue |
     Where-Object { Test-Path (Join-Path $_.FullName 'run.cmd') } |
     Sort-Object Name)
 
 if ($runnerDirs.Count -eq 0) {
-    Write-Error "No runner folders found under $workspaceRoot (expected actions-runner, actions-runner-2, ...)"
+    Write-Error "No runner folders found under $WorkspaceRoot (expected actions-runner, actions-runner-2, ...)"
     exit 2
+}
+
+# Sweep 8: heartbeat + log paths derive from $WorkspaceRoot
+$heartbeatPath = Join-Path $WorkspaceRoot 'actions-runner\_probe-heartbeat.txt'
+$logPath       = Join-Path $WorkspaceRoot 'actions-runner\_janitor.log'
+
+# -----------------------------------------------------------------------------
+# Sweep 8: per-workflow Worker dwell caps.
+#
+# A blanket 15-min cap was the obvious naive choice but kills legitimate
+# long-running jobs. Different workflow jobs have different ceilings:
+#
+#   - T0 Gate                 (~2-5 min unit/contract pyramid)
+#   - S0 Security             (~3-5 min Semgrep/CodeQL + npm audit)
+#   - T2 Smoke -> Staging     (5-15 min Playwright)
+#   - T4 Functional -> Staging (15-45 min full functional matrix)
+#
+# The Worker job name appears in the diag log as "Running job: <name>".
+# We look up the active job name per Worker (via diag-log scan of the
+# corresponding runner folder) and pick the dwell cap from this table.
+# Falls back to WorkerDwellMaxMinutes if no match.
+#
+# Update this table when adding workflows that legitimately run long.
+# -----------------------------------------------------------------------------
+
+$WorkflowDwellCapsMinutes = @{
+    'T0 Gate'                        = 10
+    'S0 Security'                    = 15
+    'T2 Smoke -> Staging'            = 30
+    'T2 Smoke -> Production'         = 30
+    'T3 Contract -> Staging'         = 20
+    'T4 Functional -> Staging'       = 60
+    'OurSharedEvents CI/CD'          = 60  # umbrella; conservative
+    'Brain contract check'           = 10
+    'Validate against OCR-docs brain' = 10
+    'Validate self-hosted runner env' = 5
+    'Runner Env Validation'          = 5
+    'Security Regression Gate'       = 10
+    'Security Human Gate'            = 5
+    'QR-0 Contract Verification'     = 10
+    'Dependency Review'              = 5
+    'Markdown lint + DAC compliance' = 5
+    'Claude PR Review'               = 10
+    'Claude Code Review'             = 10
+    'Analyze (javascript-typescript)' = 15
+    'Analyze (python)'                = 10
+}
+
+# Given a runner's most recent diag log line "Running job: <name>", return
+# the dwell cap for that job. Returns $null if no job is currently mapped.
+function Get-CurrentJobName([string]$RunnerDir) {
+    $diagDir = Join-Path $RunnerDir '_diag'
+    if (-not (Test-Path $diagDir)) { return $null }
+    $log = Get-ChildItem -Path $diagDir -Filter 'Runner_*.log' -ErrorAction SilentlyContinue |
+        Sort-Object LastWriteTime -Descending | Select-Object -First 1
+    if (-not $log) { return $null }
+    # Search backwards from the tail for the most recent "Running job:" line.
+    $tail = Get-Content -Path $log.FullName -Tail 500 -ErrorAction SilentlyContinue
+    if (-not $tail) { return $null }
+    foreach ($line in ($tail | Sort-Object -Descending)) {
+        if ($line -match 'Running job:\s*(.+?)(?:\s*$|\s*\[)') {
+            return $Matches[1].Trim()
+        }
+    }
+    return $null
+}
+
+function Get-WorkerDwellCapMinutes([string]$JobName, [int]$Default) {
+    if (-not $JobName) { return $Default }
+    if ($WorkflowDwellCapsMinutes.ContainsKey($JobName)) {
+        return $WorkflowDwellCapsMinutes[$JobName]
+    }
+    return $Default
 }
 
 # Map runner folder -> scheduled task name. The original Bloodraven uses
@@ -212,6 +294,45 @@ function Test-ListenerStuck([string]$RunnerDir, [int]$ThresholdMinutes) {
 }
 
 # -----------------------------------------------------------------------------
+# Sweep 8 G: corroboration gate for the queue-while-idle signal.
+#
+# Pre-G: the inline check at the per-runner loop treated ANY queued workflow
+# at GitHub + zero local Workers as "broker silently broken" and bounced.
+# This falsely fired in production PR #159: CodeQL on ubuntu-latest queues
+# don't belong to Bloodraven, and bouncing 3 healthy idle Listeners
+# tripped the circuit breaker in ~15 min for a problem that didn't exist.
+#
+# Post-G: queue-while-idle is a HINT, not a trigger. We only escalate to
+# Stuck=true when this Listener's diag log ALSO shows a recent broker
+# error - meaning the bounce has actual local evidence to act on.
+#
+# Returns $true ONLY when there is a corroborating broker error within
+# the window; $false otherwise (the safe default - leave it alone).
+# -----------------------------------------------------------------------------
+
+function Test-QueueIdleCorroborated {
+    [CmdletBinding()]
+    param(
+        # Last broker-error timestamp from Test-ListenerStuck (UTC), or $null.
+        [Parameter(Mandatory = $false)][AllowNull()]$LastBrokerError,
+        [int]$CorroborationWindowMinutes = 10
+    )
+    if ($null -eq $LastBrokerError) { return $false }
+    # Cast for type-safety: callers may pass a DateTime, string, or pscustomobject field.
+    try {
+        $errStamp = [DateTime]$LastBrokerError
+    } catch {
+        return $false
+    }
+    # Both sides MUST be UTC to make this comparison meaningful.
+    if ($errStamp.Kind -ne [DateTimeKind]::Utc) {
+        $errStamp = $errStamp.ToUniversalTime()
+    }
+    $ageMinutes = ((Get-Date).ToUniversalTime() - $errStamp).TotalMinutes
+    return ($ageMinutes -le $CorroborationWindowMinutes -and $ageMinutes -ge 0)
+}
+
+# -----------------------------------------------------------------------------
 # Sweep 7: Worker-dwell check.
 #
 # A Runner.Worker process represents an in-flight job. Typical OSE jobs
@@ -226,9 +347,47 @@ function Test-ListenerStuck([string]$RunnerDir, [int]$ThresholdMinutes) {
 # -----------------------------------------------------------------------------
 
 function Find-StuckWorkers([int]$DwellMaxMinutes) {
-    $deadline = (Get-Date).AddMinutes(-$DwellMaxMinutes)
-    @(Get-Process Runner.Worker -ErrorAction SilentlyContinue |
-        Where-Object { $_.StartTime -and $_.StartTime -lt $deadline })
+    # Sweep 8: per-Worker cap. Without admin we can't attribute each Worker
+    # PID to a specific runner folder via process metadata. But we can
+    # cross-reference each runner's diag log to find the most recent "Running
+    # job: <name>" line, and apply that job's specific dwell cap to each
+    # Worker. If a Worker dwells longer than its workflow's cap, kill it.
+    #
+    # When a Worker is older than even the LONGEST per-workflow cap, we kill
+    # it regardless of which runner owns it. This handles the legitimately
+    # bad case (worker stuck somewhere unexpected) AND the common case
+    # (T0 Gate running 30+ min is stuck).
+    $workers = @(Get-Process Runner.Worker -ErrorAction SilentlyContinue |
+        Where-Object { $_.StartTime })
+    if ($workers.Count -eq 0) { return @() }
+
+    # Build a per-runner cap map keyed off each runner's current job (if any).
+    $perRunnerCap = @{}
+    foreach ($rdir in $runnerDirs) {
+        $job = Get-CurrentJobName -RunnerDir $rdir.FullName
+        $cap = Get-WorkerDwellCapMinutes -JobName $job -Default $DwellMaxMinutes
+        $perRunnerCap[$rdir.Name] = @{ Job = $job; Cap = $cap }
+    }
+    # The strictest single cap among all runners (a Worker older than this
+    # is stuck no matter who owns it).
+    $minCap = ($perRunnerCap.Values | ForEach-Object { $_.Cap } | Measure-Object -Minimum).Minimum
+    if (-not $minCap) { $minCap = $DwellMaxMinutes }
+
+    $stuck = @()
+    foreach ($w in $workers) {
+        $ageMin = ((Get-Date) - $w.StartTime).TotalMinutes
+        if ($ageMin -gt $minCap) {
+            # Pick the cap that's actually being enforced (max across runners
+            # so we don't kill a legit T4 Functional Worker just because some
+            # other runner is on T0 Gate).
+            $effectiveCap = ($perRunnerCap.Values | ForEach-Object { $_.Cap } | Measure-Object -Maximum).Maximum
+            if (-not $effectiveCap) { $effectiveCap = $DwellMaxMinutes }
+            if ($ageMin -gt $effectiveCap) {
+                $stuck += $w
+            }
+        }
+    }
+    return $stuck
 }
 
 # -----------------------------------------------------------------------------
@@ -268,7 +427,7 @@ function Get-QueuedRunCount([string]$Repo) {
 # -----------------------------------------------------------------------------
 
 function Get-CircuitBreakerStatePath() {
-    return Join-Path 'C:\Users\mzdan\dev\ourCommunityRituals\actions-runner' '_janitor-state.json'
+    return Join-Path $WorkspaceRoot 'actions-runner\_janitor-state.json'
 }
 
 function Read-CircuitBreakerState() {
@@ -295,23 +454,49 @@ function Write-CircuitBreakerState([hashtable]$State) {
     $obj | ConvertTo-Json -Depth 5 | Set-Content -Path $path -Encoding UTF8
 }
 
+function ConvertTo-UtcDateTimeSafe([string]$IsoString) {
+    # PS 5.1's [DateTime] cast may strip the Z and return Kind=Local, which
+    # then makes .ToUniversalTime() drift the value by the local UTC offset.
+    # DateTime.Parse with AssumeUniversal + AdjustToUniversal is the
+    # reliable way to round-trip an ISO-8601 'o' string back to UTC.
+    return [DateTime]::Parse(
+        $IsoString,
+        [System.Globalization.CultureInfo]::InvariantCulture,
+        [System.Globalization.DateTimeStyles]::AssumeUniversal -bor
+        [System.Globalization.DateTimeStyles]::AdjustToUniversal
+    )
+}
+
 function Test-CircuitOpen([hashtable]$State, [string]$RunnerName, [int]$MaxPerHour) {
     if (-not $State.ContainsKey($RunnerName)) { return $false }
     $cutoff = (Get-Date).ToUniversalTime().AddHours(-1)
-    $recent = @($State[$RunnerName] | Where-Object {
-        try { ([DateTime]$_).ToUniversalTime() -gt $cutoff } catch { $false }
-    })
-    return $recent.Count -ge $MaxPerHour
+    $recentCount = 0
+    foreach ($entry in $State[$RunnerName]) {
+        try {
+            if ((ConvertTo-UtcDateTimeSafe $entry) -gt $cutoff) { $recentCount++ }
+        } catch {
+            # unparseable entries are silently ignored — they can't have
+            # come from us so we don't count them either way.
+        }
+    }
+    return $recentCount -ge $MaxPerHour
 }
 
 function Add-BounceToCircuitBreaker([hashtable]$State, [string]$RunnerName) {
     $now = (Get-Date).ToUniversalTime().ToString('o')
     $cutoff = (Get-Date).ToUniversalTime().AddHours(-1)
-    $existing = if ($State.ContainsKey($RunnerName)) {
-        @($State[$RunnerName] | Where-Object {
-            try { ([DateTime]$_).ToUniversalTime() -gt $cutoff } catch { $false }
-        })
-    } else { @() }
+    $existing = @()
+    if ($State.ContainsKey($RunnerName)) {
+        foreach ($entry in $State[$RunnerName]) {
+            try {
+                if ((ConvertTo-UtcDateTimeSafe $entry) -gt $cutoff) {
+                    $existing += $entry
+                }
+            } catch {
+                # ignore unparseable entries
+            }
+        }
+    }
     $State[$RunnerName] = $existing + $now
     return $State
 }
@@ -369,17 +554,149 @@ function Find-OrphanJobChildren([string]$RunnerDir) {
 }
 
 # -----------------------------------------------------------------------------
+# Sweep 8: Pool-wide outage detection.
+#
+# If ALL runners report the same broker error pattern within the last few
+# minutes, that's a GitHub-side outage (broker endpoint down, regional
+# Azure issue, etc.). Bouncing won't help and burns the circuit-breaker
+# budget. Detection: count distinct error patterns across runners; if all
+# share one, classify as pool-wide and emit GITHUB_SIDE_OUTAGE.
+# -----------------------------------------------------------------------------
+
+function Get-RecentBrokerErrorSignature([string]$RunnerDir, [int]$WindowMinutes) {
+    $diagDir = Join-Path $RunnerDir '_diag'
+    if (-not (Test-Path $diagDir)) { return $null }
+    $log = Get-ChildItem -Path $diagDir -Filter 'Runner_*.log' -ErrorAction SilentlyContinue |
+        Sort-Object LastWriteTime -Descending | Select-Object -First 1
+    if (-not $log) { return $null }
+
+    $tail = Get-Content -Path $log.FullName -Tail 200 -ErrorAction SilentlyContinue
+    if (-not $tail) { return $null }
+
+    $cutoff = (Get-Date).AddMinutes(-$WindowMinutes).ToUniversalTime()
+    # Find the most recent broker-error line within the window and return its
+    # 'normalized' signature (first matched pattern only, no timestamps).
+    foreach ($line in ($tail | Sort-Object -Descending)) {
+        if ($line -match '\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})Z' -and
+            $line -match '(SocketException \(\d+\)|TaskAgentJobNotFoundException|BrokerServer.*ERR.*\b\w+Exception\b)') {
+            try {
+                $ts = [DateTime]::ParseExact($Matches[1], 'yyyy-MM-dd HH:mm:ss', $null,
+                    [System.Globalization.DateTimeStyles]::AssumeUniversal -bor
+                    [System.Globalization.DateTimeStyles]::AdjustToUniversal)
+                if ($ts -gt $cutoff) {
+                    # Re-extract the error signature only (no PID-like noise).
+                    if ($line -match '(SocketException \(\d+\)|TaskAgentJobNotFoundException|\b\w+Exception\b)') {
+                        return $Matches[1]
+                    }
+                }
+            } catch { continue }
+        }
+    }
+    return $null
+}
+
+function Test-PoolWideOutage([array]$RunnerDirs, [int]$WindowMinutes = 5) {
+    $sigs = @()
+    foreach ($rdir in $RunnerDirs) {
+        $s = Get-RecentBrokerErrorSignature -RunnerDir $rdir.FullName -WindowMinutes $WindowMinutes
+        if ($s) { $sigs += $s }
+    }
+    # All runners must show a recent error AND share the same pattern.
+    if ($sigs.Count -eq $RunnerDirs.Count -and $sigs.Count -ge 2) {
+        $distinct = $sigs | Select-Object -Unique
+        if ($distinct.Count -eq 1) {
+            return [pscustomobject]@{ IsOutage = $true; Pattern = $distinct[0]; RunnerCount = $sigs.Count }
+        }
+    }
+    return [pscustomobject]@{ IsOutage = $false; Pattern = $null; RunnerCount = $sigs.Count }
+}
+
+# -----------------------------------------------------------------------------
+# Sweep 8: Log rotation.
+#
+# When the janitor log exceeds $LogMaxMB, rename it to _janitor.log.1
+# (replacing any prior rotation) and let the next write start a fresh file.
+# Single-generation; PowerShell *>> redirect creates the file as needed.
+# -----------------------------------------------------------------------------
+
+function Invoke-LogRotation([string]$LogPath, [int]$MaxMB) {
+    if (-not (Test-Path $LogPath)) { return }
+    $info = Get-Item $LogPath -ErrorAction SilentlyContinue
+    if (-not $info) { return }
+    if (($info.Length / 1MB) -lt $MaxMB) { return }
+    $rotated = "$LogPath.1"
+    try {
+        if (Test-Path $rotated) { Remove-Item $rotated -Force }
+        Rename-Item -Path $LogPath -NewName "$([System.IO.Path]::GetFileName($LogPath)).1"
+    } catch {
+        # rotation failure must not kill the probe
+    }
+}
+
+# -----------------------------------------------------------------------------
+# Sweep 8: Watchdog heartbeat.
+#
+# Every cycle, write the current ISO timestamp to a known file. A separate
+# verifier (tools/runner/verify-probe-alive.ps1) reads it and fails loud
+# if the file is stale (no probe run within the freshness window). This
+# is the only way to detect "the probe itself died silently."
+# -----------------------------------------------------------------------------
+
+function Write-ProbeHeartbeat([string]$Path) {
+    try {
+        $stamp = (Get-Date).ToUniversalTime().ToString('o')
+        Set-Content -Path $Path -Value $stamp -Encoding ASCII -NoNewline
+    } catch {
+        # Heartbeat failure must not kill the probe — but emit a warning so
+        # the issue is visible in stdout (and thus the rotated log).
+        Write-Host "[WARN] Failed to write probe heartbeat to $Path : $($_.Exception.Message)"
+    }
+}
+
+# -----------------------------------------------------------------------------
 # Main loop
 # -----------------------------------------------------------------------------
+
+# Sweep 8: log rotation is the first thing this run does — must happen
+# before we write the heartbeat or anything else (so the rotation point
+# is deterministic).
+if ($EnsureReady -and -not $WhatIf) {
+    Invoke-LogRotation -LogPath $logPath -MaxMB $LogMaxMB
+}
+
+# Sweep 8: heartbeat is the second thing. Even if every subsequent step
+# fails, this proves the probe ran.
+if ($EnsureReady -and -not $WhatIf) {
+    Write-ProbeHeartbeat -Path $heartbeatPath
+}
 
 # Sweep 7: pre-loop pool-level signals (cheap, single API call).
 $queuedCount = -1
 if ($EnsureReady) {
     $queuedCount = Get-QueuedRunCount -Repo $Repo
     if ($queuedCount -lt 0) {
-        Write-Host "[INFO] GitHub queue depth unavailable (gh auth / network) — degrading to local signals only"
+        Write-Host "[INFO] GitHub queue depth unavailable (gh auth / network) - degrading to local signals only"
     } else {
         Write-Host ("[INFO] GitHub queued workflow runs: {0}" -f $queuedCount)
+    }
+}
+
+# Sweep 8: pool-wide outage detection. Run BEFORE any bounce action so
+# we can suppress per-runner bounces when the failure is GitHub-side.
+$poolOutage = $null
+if ($EnsureReady) {
+    $poolOutage = Test-PoolWideOutage -RunnerDirs $runnerDirs -WindowMinutes 5
+    if ($poolOutage.IsOutage) {
+        Write-Host ("[WARN] Pool-wide outage detected: $($poolOutage.RunnerCount) runners sharing pattern '$($poolOutage.Pattern)' within 5 min")
+        Write-Host '[WARN] Suppressing per-runner bounces this cycle (bouncing all 3 would burn the circuit breaker without fixing a GitHub-side problem).'
+        $outageLine = @{
+            type        = 'GITHUB_SIDE_OUTAGE'
+            runners     = $poolOutage.RunnerCount
+            pattern     = $poolOutage.Pattern
+            window_min  = 5
+            timestamp   = (Get-Date).ToUniversalTime().ToString('o')
+        } | ConvertTo-Json -Compress
+        Write-Host $outageLine
     }
 }
 
@@ -425,25 +742,31 @@ foreach ($dir in $runnerDirs) {
     $health = Test-ListenerStuck -RunnerDir $dir.FullName -ThresholdMinutes $StuckThresholdMinutes
     $orphans = Find-OrphanJobChildren -RunnerDir $dir.FullName
 
-    # Sweep 7: queue-while-idle signal. If GitHub has queued runs AND this
-    # runner instance reports no Worker child AND no recent broker error AND
-    # task is Running, that's a precise "broker silently broken" indicator
-    # that the log-based detection would miss for ~30s.
+    # Sweep 7 + Sweep 8 G: queue-while-idle CORROBORATING signal.
+    # See Test-QueueIdleCorroborated docstring above for the full rationale.
+    # Short version: a queued workflow upstream is NOT proof our broker is
+    # broken. We MUST corroborate with a recent broker error in this
+    # Listener's diag log. Otherwise it's just a quiet pool, leave it alone.
     $queueIdle = $false
     if ($EnsureReady -and $queuedCount -gt 0 -and -not $health.Stuck -and $taskState -eq 'Running') {
-        # If any Workers are running locally somewhere we can't yet say this
-        # specific Listener is idle (PID -> folder attribution requires admin).
-        # Be conservative: only flag if there are ZERO Workers at all yet a
-        # queue exists.
         $anyWorker = @(Get-Process Runner.Worker -ErrorAction SilentlyContinue)
         if ($anyWorker.Count -eq 0) {
+            # Diagnostic hint fires regardless - tells you why this cycle even looked.
             $queueIdle = $true
-            $health = [pscustomobject]@{
-                Stuck = $true
-                Reason = "GitHub queue depth $queuedCount but pool reports zero Workers"
-                LastDispatch = $health.LastDispatch
-                LastBrokerError = $health.LastBrokerError
+
+            $corroborated = Test-QueueIdleCorroborated `
+                -LastBrokerError $health.LastBrokerError `
+                -CorroborationWindowMinutes 10
+
+            if ($corroborated) {
+                $health = [pscustomobject]@{
+                    Stuck = $true
+                    Reason = "GitHub queue depth $queuedCount, zero Workers, AND broker error in diag log within last 10 min"
+                    LastDispatch = $health.LastDispatch
+                    LastBrokerError = $health.LastBrokerError
+                }
             }
+            # else: $health.Stuck stays $false. Pool is just quiet.
         }
     }
 
@@ -482,9 +805,16 @@ foreach ($dir in $runnerDirs) {
     # --- Bounce stuck Listener ---------------------------------------------
     $bounced = $false
     $circuitOpen = $false
+    $bounceSuppressed = $false
     if ($health.Stuck) {
+        # Sweep 8: pool-wide outage suppresses per-runner bounces. Emit the
+        # individual line for transparency but skip the action.
+        if ($EnsureReady -and $poolOutage -and $poolOutage.IsOutage) {
+            $bounceSuppressed = $true
+            Write-Host "  [POOL-OUTAGE] would bounce $taskName but suppressed (pool-wide GITHUB_SIDE_OUTAGE)"
+        }
         # Sweep 7: circuit breaker — refuse to bounce the same runner repeatedly.
-        if ($EnsureReady -and (Test-CircuitOpen -State $cbState -RunnerName $runnerName -MaxPerHour $CircuitBreakerMaxBouncesPerHour)) {
+        elseif ($EnsureReady -and (Test-CircuitOpen -State $cbState -RunnerName $runnerName -MaxPerHour $CircuitBreakerMaxBouncesPerHour)) {
             $circuitOpen = $true
             $cbHistory = @($cbState[$runnerName])
             Write-Host "  [CIRCUIT OPEN] $runnerName bounced $($cbHistory.Count)+ times in last hour - SKIPPING. Human review required."
@@ -541,9 +871,11 @@ foreach ($dir in $runnerDirs) {
         orphans_found         = $orphans.Count
         orphans_pruned        = $orphansPruned
         bounced               = $bounced
+        bounce_suppressed_outage = $bounceSuppressed
         circuit_open          = $circuitOpen
         queued_count          = $queuedCount
         queue_idle_signal     = $queueIdle
+        pool_outage           = if ($poolOutage) { [bool]$poolOutage.IsOutage } else { $false }
         whatif                = [bool]$WhatIf
         timestamp             = (Get-Date).ToUniversalTime().ToString('o')
     } | ConvertTo-Json -Compress
@@ -576,6 +908,9 @@ if ($EnsureReady) {
         workers_killed    = $stuckWorkersPruned
         runners_bounced   = @($summary | ForEach-Object { ($_ | ConvertFrom-Json).bounced } | Where-Object { $_ }).Count
         circuits_open     = @($summary | ForEach-Object { ($_ | ConvertFrom-Json).circuit_open } | Where-Object { $_ }).Count
+        pool_outage       = if ($poolOutage) { [bool]$poolOutage.IsOutage } else { $false }
+        outage_pattern    = if ($poolOutage -and $poolOutage.IsOutage) { $poolOutage.Pattern } else { $null }
+        heartbeat_written = (Test-Path $heartbeatPath)
         whatif            = [bool]$WhatIf
         timestamp         = (Get-Date).ToUniversalTime().ToString('o')
     } | ConvertTo-Json -Compress
