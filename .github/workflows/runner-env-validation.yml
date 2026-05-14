@@ -1,0 +1,68 @@
+# Runner Environment Validation
+#
+# Fast pre-flight that runs FIRST on every PR/push to self-hosted runners.
+# Catches the WSL-bash-vs-Git-Bash trap before any downstream workflow trips
+# on it with a confusing "No such file or directory" error.
+#
+# Why this matters:
+#   On Windows there are two bash.exe binaries: WSL bash (via the
+#   Microsoft Store WindowsApps shim) and Git Bash (with Git for Windows).
+#   When a workflow says `shell: bash`, GitHub Actions does a PATH lookup.
+#   WSL bash treats `\` as an escape character, so script-file paths the
+#   runner generates (full of Windows backslashes) get corrupted, and the
+#   step fails 4 seconds in with a path that looks like
+#   "C:UsersmzdandevourCommunityRitualsactions-runner-2_work_temp...sh".
+#
+# Brain reference:
+#   OCR-docs/ocr-docs-brain/architectural-invariants.yaml
+#   invariant id 11 — self_hosted_runner_bash_resolution
+#
+# Provisioning: tools/runner/provision-runner.ps1 + tools/runner/README.md.
+
+name: Runner Env Validation
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: runner-env-${{ github.event.pull_request.head.sha || github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate self-hosted runner env
+    runs-on: self-hosted
+    timeout-minutes: 2
+    steps:
+      - name: Checkout (for local verifier script)
+        uses: actions/checkout@v4
+
+      - name: Verify bash resolves to Git Bash
+        # Uses Windows PowerShell 5.1 (the `powershell` shell), NOT pwsh.
+        # Bloodraven self-hosted runners are baseline Windows installs with
+        # only PowerShell 5.1 available — `shell: pwsh` requires PowerShell 7+
+        # which isn't installed. The verifier script is 5.1-compatible.
+        shell: powershell
+        run: .\tools\runner\verify-runner-env.ps1
+
+      - name: Smoke-test Windows path handling in bash
+        # Reaching this step is itself the proof: if WSL bash were resolving
+        # first, the previous step would have failed AND/OR this step's
+        # script-file path would corrupt and we'd see "No such file or
+        # directory". A clean run of this step is the green flag.
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "BASH_VERSION:  $BASH_VERSION"
+          echo "RUNNER_TEMP:   $RUNNER_TEMP"
+          echo "RUNNER_OS:     $RUNNER_OS"
+          probe="$RUNNER_TEMP/runner-env-probe-$RANDOM.txt"
+          echo "ok" > "$probe"
+          test -f "$probe"
+          rm "$probe"
+          echo "[OK] bash handles Windows paths correctly."
