@@ -1,0 +1,35 @@
+-- Migration 0028: Replace raw subscribers.ip_address with peppered SHA-256 ip_hash
+--
+-- OSE-207 / BE-17.
+--
+-- Rationale
+--   Migration 0008 added subscribers.ip_address as a raw IPv4/IPv6 literal.
+--   That violates the post-OSE-202 / OSE-203 contract that net-new PII
+--   columns must hash by default (or register with the PII lifecycle).
+--   The raw column never should have shipped.
+--
+-- What this migration does
+--   1. Drops subscribers.ip_address (raw network identifier).
+--   2. Adds subscribers.ip_hash TEXT — populated by handleSubscribe as
+--      SHA-256(client_ip + env.IP_HASH_PEPPER), truncated to 32 hex chars.
+--
+-- Why a hash and not encryption
+--   The only use case is the abuse signal "did this IP submit twice?".
+--   That requires deterministic lookup, which a peppered SHA-256 provides
+--   without ever retaining a reversible identifier.
+--
+-- Compensating control
+--   Stored ip_hash values cannot be linked back to a person without the
+--   per-environment pepper. Rotate the pepper to invalidate the entire
+--   historical dataset's reverse-lookup utility.
+--
+-- Data loss
+--   Existing rows lose their ip_address value. This is the intended
+--   outcome — the raw column was not supposed to exist.
+--
+-- D1 / SQLite compatibility
+--   ALTER TABLE ... DROP COLUMN requires SQLite 3.35+. D1 ships 3.40+, so
+--   this runs on staging and production D1 directly.
+
+ALTER TABLE subscribers DROP COLUMN ip_address;
+ALTER TABLE subscribers ADD COLUMN ip_hash TEXT;

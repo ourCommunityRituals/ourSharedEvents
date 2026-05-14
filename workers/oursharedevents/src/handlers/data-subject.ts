@@ -12,7 +12,20 @@
 
 import { type FormsDbEnv, hashEmail } from '../lib/forms-db';
 
-export type DataSubjectEnv = FormsDbEnv;
+/**
+ * OSE-207 — subscribers table erase support.
+ *
+ * subscribers.email is plaintext (the UNIQUE constraint requires a
+ * deterministic identity for idempotent dedup; encrypting per OSE-202
+ * would break that). Erase deletes by raw email — the raw value is used
+ * only as a parameterised bind for the DELETE; it is never logged or
+ * returned. The response continues to expose only the emailHash, per
+ * the "raw email never written to any log or response" contract.
+ */
+export type DataSubjectEnv = FormsDbEnv & {
+  /** Main DB binding — host of `subscribers` (OSE-207). */
+  DB: D1Database;
+};
 
 export async function handleDataSubjectErase(
   request: Request,
@@ -40,7 +53,14 @@ export async function handleDataSubjectErase(
   const now = new Date().toISOString();
   let signupsDeleted = 0;
   let registrationsDeleted = 0;
+  let subscribersDeleted = 0;
   let errors = 0;
+
+  // Normalise the raw email for the subscribers DELETE: subscribers.email is
+  // plaintext, but hashEmail's normalisation is trim+lowercase. Apply the
+  // same normalisation so a user who subscribed as "ME@X.com" can erase as
+  // "me@x.com" and vice versa.
+  const normalisedEmail = rawEmail.trim().toLowerCase();
 
   // Phase A: delete email signups by hash (independent — failure does not abort B)
   try {
@@ -64,6 +84,18 @@ export async function handleDataSubjectErase(
     errors++;
   }
 
+  // Phase C (OSE-207): delete subscribers by plaintext email.
+  // Lives in the main DB, not FORMS_DB. Raw email is used only as a bound
+  // parameter and never logged.
+  try {
+    const res = await env.DB.prepare('DELETE FROM subscribers WHERE email = ?')
+      .bind(normalisedEmail)
+      .run();
+    subscribersDeleted = res.meta?.changes ?? 0;
+  } catch {
+    errors++;
+  }
+
   // Audit — write failure is non-fatal and must never abort the erasure response
   try {
     const auditId = crypto.randomUUID ? crypto.randomUUID() : `audit-${Date.now()}`;
@@ -75,9 +107,9 @@ export async function handleDataSubjectErase(
         auditId,
         'data_subject_erase',
         'admin_api',
-        signupsDeleted + registrationsDeleted,
+        signupsDeleted + registrationsDeleted + subscribersDeleted,
         errors,
-        JSON.stringify({ emailHash, signupsDeleted, registrationsDeleted })
+        JSON.stringify({ emailHash, signupsDeleted, registrationsDeleted, subscribersDeleted })
       )
       .run();
   } catch {
@@ -90,6 +122,7 @@ export async function handleDataSubjectErase(
       emailHash,
       signupsDeleted,
       registrationsDeleted,
+      subscribersDeleted,
       errors,
       timestamp: now,
     })
@@ -100,6 +133,7 @@ export async function handleDataSubjectErase(
     emailHash,
     signupsDeleted,
     registrationsDeleted,
+    subscribersDeleted,
     erasedAt: now,
   });
 }

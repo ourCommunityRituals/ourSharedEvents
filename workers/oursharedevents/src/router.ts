@@ -99,6 +99,7 @@ import { handleBriefingPage } from './handlers/briefing';
 import { requireAdmin, extractAdminActor, type AdminEnv } from './auth/admin';
 import { logAdminAction, type AuditLogEnv } from './lib/audit-log';
 import { handleListAuditLog, type AuditHandlerEnv } from './handlers/audit';
+import { handleListSubscribers, type SubscribersAdminEnv } from './handlers/subscribers';
 import {
   handleV2AdminVerifyQr,
   handleV2AdminUnverifyQr,
@@ -573,6 +574,17 @@ export async function route(
     const deny = requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
     if (deny) return deny;
     return handleListAuditLog(request, env);
+  }
+
+  // ── Admin subscribers list (OSE-207) ──────────────────────────────────────
+  // PII surface: emails are returned to admins. Each access is audited via
+  // logAdminAction so reads of subscriber PII are traceable. Pagination
+  // mirrors the audit-log endpoint (created_at-descending cursor).
+  if (pathname === '/api/v2/admin/subscribers' && method === 'GET') {
+    const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
+    const deny = requireAdmin(request, env, reqId);
+    if (deny) return deny;
+    return handleListSubscribers(request, env, ctx, reqId);
   }
 
   // ── Public API ─────────────────────────────────────────────────────────────
