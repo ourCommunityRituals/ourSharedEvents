@@ -452,26 +452,40 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
   // shortlinks table FK is TEXT REFERENCES events(id), matching the
   // events.id we just inserted. If shortlink creation fails (D1 down,
   // migration not applied), we surface the event_id + slug but no
-  // shortcode — the event itself still exists. Future POST retries
-  // with the same id would conflict on UNIQUE constraint, which is
-  // the right behavior (don't double-create).
+  // shortcode — the event itself still exists.
+  //
+  // OSE-243a code review follow-up (2026-05-14): a NULL shortcode means
+  // a critical Pulse 1 affordance failed (the whole point of OSE-240
+  // is the shareable link). Returning silent null leaves the admin to
+  // share an event with no working /s/:code. We add a `warnings` array
+  // so the API contract is honest — the admin UI / Postman caller can
+  // detect SHORTLINK_CREATE_FAILED and surface a retry banner. Warnings
+  // are always present (empty array on success) so consumers can iterate
+  // without null checks.
   let shortcode: string | null = null;
+  const warnings: Array<{ code: string; message: string }> = [];
   try {
     const sl = await createShortlink(env, id);
     shortcode = sl.code;
   } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
     console.warn(
       JSON.stringify({
         type: 'SHORTLINK_CREATE_FAILED',
         eventId: id,
-        error: err instanceof Error ? err.message : String(err),
+        error: message,
         timestamp: new Date().toISOString(),
       })
     );
+    warnings.push({
+      code: 'SHORTLINK_CREATE_FAILED',
+      message:
+        'Shortlink generation failed; the event was created but no shareable code was assigned. Retry the create or generate a shortlink manually.',
+    });
   }
 
   return Response.json(
-    { ok: true, status: 201, id, slug, shortcode },
+    { ok: true, status: 201, id, slug, shortcode, warnings },
     {
       status: 201,
       headers: { ...corsHeaders(request), 'X-Request-Id': rid },

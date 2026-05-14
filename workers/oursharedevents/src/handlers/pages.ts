@@ -1321,7 +1321,18 @@ const ANONYMITY_AFFORDANCE = `
   </section>
 `;
 
-function renderPreEventHtml(row: PublicEventRow, shareUrl: string, nonce: string): string {
+// NOTE on CSP + the nonce parameter (added 2026-05-14 after code review):
+// The current CSP policy (see `securityHeaders` below) allows
+// `style-src 'self' 'unsafe-inline'`. With `'unsafe-inline'` present,
+// every browser IGNORES nonces on <style> tags — putting `nonce="..."`
+// on the <style> tag was decoration, not defense. The honest fix is
+// to NOT pretend to nonce the style. A follow-on story (CSP tightening
+// across ALL pages.ts handlers — every existing handler ships inline
+// <style>) needs to happen before <style nonce> means anything. Until
+// then the nonce parameter remains on the function signature because
+// it IS real for inline <script> (which this page does not have, but
+// might later).
+function renderPreEventHtml(row: PublicEventRow, shareUrl: string): string {
   const title = esc(row.title);
   const whatShort = esc(row.what_short);
   const whoHost = esc(row.who_host);
@@ -1349,7 +1360,7 @@ function renderPreEventHtml(row: PublicEventRow, shareUrl: string, nonce: string
   <meta property="og:url" content="${esc(shareUrl)}" />
   <meta property="og:type" content="event" />
   <meta name="twitter:card" content="summary_large_image" />
-  <style nonce="${nonce}">
+  <style>
     :root { --ose-bg: #faf7f2; --ose-text: #2a2a2a; --ose-muted: #5a5a5a; --ose-accent: #4361ee; --ose-card: #fff; }
     * { box-sizing: border-box; }
     html, body { margin: 0; padding: 0; background: var(--ose-bg); color: var(--ose-text); font-family: system-ui, -apple-system, "Segoe UI", sans-serif; line-height: 1.5; }
@@ -1435,11 +1446,7 @@ function renderPreEventHtml(row: PublicEventRow, shareUrl: string, nonce: string
 </html>`;
 }
 
-function renderMinimalPhaseHtml(
-  row: PublicEventRow,
-  phase: 'event' | 'post_event',
-  nonce: string
-): string {
+function renderMinimalPhaseHtml(row: PublicEventRow, phase: 'event' | 'post_event'): string {
   const title = esc(row.title);
   const message = phase === 'event' ? 'This event is happening now.' : 'This event has ended.';
   return `<!DOCTYPE html>
@@ -1448,7 +1455,7 @@ function renderMinimalPhaseHtml(
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>${title}</title>
-  <style nonce="${nonce}">
+  <style>
     body { font-family: system-ui, -apple-system, sans-serif; max-width: 600px; margin: 3rem auto; padding: 1rem; line-height: 1.5; color: #2a2a2a; background: #faf7f2; }
     h1 { font-size: 1.5rem; margin: 0 0 0.5rem; }
     .msg { color: #5a5a5a; font-size: 1.05rem; margin: 0.5rem 0 1.5rem; }
@@ -1542,15 +1549,21 @@ export async function handlePublicEventPage(
     end_date: row.end_date,
   });
 
+  // CSP nonce — generated for the response headers regardless of whether
+  // the body uses it. `securityHeaders(nonce)` writes the nonce into the
+  // CSP header so any future inline <script> on this page is enforceable
+  // immediately. The render functions don't take the nonce because the
+  // current CSP allows `style-src 'unsafe-inline'` (see CSP-tightening
+  // follow-on story) — nonce on <style> would be theater today.
   const nonce = generateNonce();
   const url = new URL(request.url);
   const shareUrl = `${url.origin}/events/${row.id}`;
 
   let body: string;
   if (phase === 'pre_event') {
-    body = renderPreEventHtml(row, shareUrl, nonce);
+    body = renderPreEventHtml(row, shareUrl);
   } else {
-    body = renderMinimalPhaseHtml(row, phase, nonce);
+    body = renderMinimalPhaseHtml(row, phase);
   }
 
   return new Response(body, {
