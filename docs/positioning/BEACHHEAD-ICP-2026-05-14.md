@@ -6,6 +6,36 @@
 **Supersedes:** the implicit multi-vertical ICP framing in `COMPETITIVE-BRIEF-2026-05-14.md`
 **Closes:** OSE-266
 
+## Why this matters — the civic-visibility thesis
+
+There is an entire economy of recurring community events — bocce nights, trivia leagues, recreational kickball, taproom darts, neighborhood-bar trivia, rec-center pickleball, library book clubs, parks-dept rec leagues — that happens every week in every neighborhood, and that has been **invisible to measurement, invisible to local sponsors, and economically illegible**.
+
+These events have been compounding _socially_ (the same regulars Thursday after Thursday, the same league season after season) without compounding _economically_ or _informationally_. The bar that's hosted trivia for eight years has eight years of attendance memory in the bartender's head and zero years of measurable data. The insurance broker, credit union, or urgent-care clinic that would happily sponsor that trivia night has no way to find it, no way to measure it, and no way to justify a budget against it.
+
+**OSE gives those events three things they have never had:**
+
+1. **A voice.** Every event closes with a SharedReport. The trivia night that used to disappear from the calendar at 11 pm now leaves a measurable trace. Multiplied across a corridor and across years, the trace becomes a _story about a place_ that did not exist before.
+
+2. **Local sponsor power.** The corner insurance broker, the regional credit union, the neighborhood urgent-care clinic — these are buyers Eventbrite is too expensive for and Meta is too imprecise for. OSE turns "the Beverly trivia corridor on Thursdays" into a $149/mo SKU with a measurable monthly report. Local sponsor budgets that currently leak into low-ROI digital ad spend now have a high-signal home.
+
+3. **Compounding data, compounding voice.** Every event adds to the corridor's signal. A bar with 47 trivia nights of SharedReport data isn't just a busy bar; it's a documented community fixture whose value to local sponsors grows with every Thursday. The data compounding _is_ the voice compounding.
+
+This is the line: **"OSE gives a voice to the events that happen in quiet, and gives local sponsors a way to support them — without surveilling a single person who shows up."**
+
+### Every layer wins, simultaneously
+
+| Layer                               | Before OSE                                                                 | With OSE                                                                                                                                              |
+| ----------------------------------- | -------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **The event** (Thursday trivia)     | Happens, dies at 11pm, lives only in bartender memory                      | Generates a SharedReport, compounds with prior nights, becomes a documented fixture                                                                   |
+| **The venue** (the bar)             | Pays its bills from drink revenue alone                                    | Adds a second revenue surface: a measurable sponsor pitch backed by months of corridor data                                                           |
+| **The local sponsor**               | Spends on Meta / Google with poor signal, or doesn't spend locally at all  | Buys corridor presence as a SKU with monthly attribution — ROI legible for the first time                                                             |
+| **The attendee**                    | Anonymous in the bartender's eye, but tracked across the rest of the web   | Anonymous in the bartender's eye AND in the platform AND in the sponsor relationship — only their presence-density contributes to the corridor signal |
+| **The neighborhood** (the corridor) | A collection of disconnected venues with no measurable civic-vitality data | A corridor-density profile across years, available to researchers, planners, civic leaders                                                            |
+
+Every layer wins — and the architecture is what makes every win simultaneous. Meta makes sponsors win at attendees' expense. Eventbrite makes ticketing companies win at organizers' expense. **OSE is the only platform where all five layers compound together because the architecture refuses to extract value from any one of them at the expense of the others.**
+
+This is the thesis that makes the rest of this document — beachhead ICP, product narrative, phase sequencing, infrastructure stack — coherent. Without it, OSE is good engineering. With it, OSE is the platform that makes a category of overlooked community economic activity visible for the first time.
+
 ## The beachhead, in one sentence
 
 **OSE is for medium-and-smaller adult venues — bars, taprooms, neighborhood pubs — running recurring sports leagues and trivia nights, in the United States.**
