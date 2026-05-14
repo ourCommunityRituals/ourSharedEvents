@@ -289,26 +289,23 @@ describe('OSE-243a: state gate + 404 semantics', () => {
   });
 });
 
-describe('OSE-243a: anonymity-principle source gate (L1 static)', () => {
-  test('handlePublicEventPage source has zero per-attendee identity reads', () => {
-    // Static-source check: the handler MUST NOT read IP / Cookie / anon_id /
-    // Referer / User-Agent. If a future refactor adds any of those, this
-    // gate fails before the change can land.
-    const sources: Record<string, string> = JSON.parse(
-      (env as unknown as TestEnv).TEST_SOURCE_FILES_JSON
-    );
-    const entry = Object.entries(sources).find(([p]) =>
-      p.replace(/\\/g, '/').endsWith('src/handlers/pages.ts')
-    );
-    expect(entry, 'pages.ts source not in TEST_SOURCE_FILES_JSON').toBeDefined();
-    const src = entry![1];
-
-    // Extract just the handlePublicEventPage function body.
-    const start = src.indexOf('export async function handlePublicEventPage');
-    expect(start, 'handlePublicEventPage not found in pages.ts').toBeGreaterThan(-1);
-    // Walk braces to find end of function
+describe('OSE-243a + OSE-263: anonymity-principle source gate (L1 static)', () => {
+  // Helper — extracts the body of a named exported function (sync or async)
+  // from a source blob via brace-walking. Returns null if not found.
+  function extractFunctionBody(src: string, exportName: string): string | null {
+    const patterns = [`export async function ${exportName}`, `export function ${exportName}`];
+    let start = -1;
+    for (const p of patterns) {
+      const idx = src.indexOf(p);
+      if (idx > -1) {
+        start = idx;
+        break;
+      }
+    }
+    if (start < 0) return null;
     let depth = 0;
     let i = src.indexOf('{', start);
+    if (i < 0) return null;
     const bodyStart = i;
     for (; i < src.length; i++) {
       if (src[i] === '{') depth++;
@@ -317,25 +314,129 @@ describe('OSE-243a: anonymity-principle source gate (L1 static)', () => {
         if (depth === 0) break;
       }
     }
-    const body = src.slice(bodyStart, i + 1);
+    return src.slice(bodyStart, i + 1);
+  }
 
-    const forbiddenReads = [
-      /\bCf-Connecting-Ip\b/i,
-      /\bX-Forwarded-For\b/i,
-      /\brequest\.headers\.get\(['"]?[Cc]ookie['"]?\)/,
-      /\bgetOrCreateAnonId\b/,
-      /\bsetAnonCookie\b/,
-      /\brequest\.headers\.get\(['"]?[Rr]eferer['"]?\)/,
-      /\brequest\.headers\.get\(['"]?[Uu]ser-[Aa]gent['"]?\)/,
-    ];
+  // Forbidden per-attendee identity reads. These MUST NOT appear in any
+  // public-render handler in pages.ts. If a future refactor adds any of
+  // these to a rendering handler, this gate fails the PR before it lands.
+  //
+  // Why these specific patterns:
+  //   - CF-Connecting-IP / X-Forwarded-For: the network identifier
+  //   - Cookie / anon_id: per-attendee session identifier
+  //   - Referer: the previous URL (can re-identify attendee browsing pattern)
+  //   - User-Agent: device fingerprinting input
+  //
+  // Exemptions explicitly OUT of this gate's scope (with rationale):
+  //   - handleAdminPage: admin surface, CF Access JWT auth is legitimate
+  //   - handleSubscribe: explicit email opt-in + peppered IP hash for rate
+  //     limiting (OSE-207 / migration 0028); never stores raw IP
+  //   - Any non-render utility (rate limiter, geocoder, etc.): out of scope
+  const FORBIDDEN_READS: RegExp[] = [
+    /\bCf-Connecting-Ip\b/i,
+    /\bX-Forwarded-For\b/i,
+    /\brequest\.headers\.get\(['"]?[Cc]ookie['"]?\)/,
+    /\bgetOrCreateAnonId\b/,
+    /\bsetAnonCookie\b/,
+    /\brequest\.headers\.get\(['"]?[Rr]eferer['"]?\)/,
+    /\brequest\.headers\.get\(['"]?[Uu]ser-[Aa]gent['"]?\)/,
+  ];
+
+  // The set of public-render handlers in pages.ts that MUST be anonymity-safe.
+  // This is the OSE-263 widening of the original OSE-243a gate, which only
+  // covered handlePublicEventPage. Adding a new public-render handler? It MUST
+  // go in this list.
+  const PUBLIC_RENDER_HANDLERS = [
+    'handlePublicPage',
+    'handlePublicEventPage',
+    'handleLandingPage',
+    'handleDisplayPage',
+    'handlePosterPage',
+    'handleSharedReportPage',
+  ];
+
+  function loadPagesSource(): string {
+    const sources: Record<string, string> = JSON.parse(
+      (env as unknown as TestEnv).TEST_SOURCE_FILES_JSON
+    );
+    const entry = Object.entries(sources).find(([p]) =>
+      p.replace(/\\/g, '/').endsWith('src/handlers/pages.ts')
+    );
+    expect(entry, 'pages.ts source not in TEST_SOURCE_FILES_JSON').toBeDefined();
+    return entry![1];
+  }
+
+  // OSE-243a — preserved as the named anchor on handlePublicEventPage
+  test('handlePublicEventPage source has zero per-attendee identity reads', () => {
+    const body = extractFunctionBody(loadPagesSource(), 'handlePublicEventPage');
+    expect(body, 'handlePublicEventPage not found in pages.ts').not.toBeNull();
     const violations: string[] = [];
-    for (const pattern of forbiddenReads) {
-      if (pattern.test(body)) violations.push(pattern.source);
+    for (const pattern of FORBIDDEN_READS) {
+      if (pattern.test(body!)) violations.push(pattern.source);
     }
     expect(
       violations,
       `handlePublicEventPage reads per-attendee identity (violates OSE anonymity principle): ${violations.join(', ')}`
     ).toEqual([]);
+  });
+
+  // OSE-263 — widens the gate to every public-render handler in pages.ts.
+  // The set is the union of handlers that produce HTML responses for public
+  // (non-admin, non-subscribe) consumption. handleAdminPage is exempt (admin
+  // auth is legitimate). handleSubscribe is exempt (explicit email opt-in +
+  // peppered IP hash for rate limit; OSE-207 compliance).
+  test('all public-render handlers in pages.ts have zero per-attendee identity reads (OSE-263)', () => {
+    const src = loadPagesSource();
+    const perHandlerViolations: Record<string, string[]> = {};
+
+    for (const fnName of PUBLIC_RENDER_HANDLERS) {
+      const body = extractFunctionBody(src, fnName);
+      expect(
+        body,
+        `${fnName} not found in pages.ts — gate must be updated when handlers are renamed or removed`
+      ).not.toBeNull();
+      const violations: string[] = [];
+      for (const pattern of FORBIDDEN_READS) {
+        if (pattern.test(body!)) violations.push(pattern.source);
+      }
+      if (violations.length > 0) {
+        perHandlerViolations[fnName] = violations;
+      }
+    }
+
+    expect(
+      perHandlerViolations,
+      `Public-render handlers reading per-attendee identity (violates OSE anonymity principle, ADR-001): ${JSON.stringify(perHandlerViolations, null, 2)}`
+    ).toEqual({});
+  });
+
+  // OSE-263 — guard against silent regression: if a new public-render handler
+  // is added to pages.ts and isn't in PUBLIC_RENDER_HANDLERS, the gate would
+  // miss it. This test enumerates `export async function handle*Page` /
+  // `export function handle*Page` in the source and asserts the gate covers
+  // every one (minus the documented exemptions).
+  test('PUBLIC_RENDER_HANDLERS list covers every public-render handler in pages.ts (no silent gaps)', () => {
+    const src = loadPagesSource();
+    // Match handler exports — both sync and async — with names matching
+    // handle*Page. Excludes handleSubscribe (which doesn't end in Page) and
+    // any helpers.
+    const handlerRegex = /export (?:async )?function (handle\w*Page)\b/g;
+    const found = new Set<string>();
+    let m: RegExpExecArray | null;
+    while ((m = handlerRegex.exec(src)) !== null) {
+      found.add(m[1]);
+    }
+
+    // Exemptions: documented, must stay short and audited.
+    const EXEMPT: Set<string> = new Set(['handleAdminPage']);
+
+    const expectedInGate = [...found].filter((name) => !EXEMPT.has(name)).sort();
+    const gateNames = [...PUBLIC_RENDER_HANDLERS].sort();
+
+    expect(
+      gateNames,
+      `OSE-263 gate drift: PUBLIC_RENDER_HANDLERS does not match the handle*Page exports in pages.ts.\n  In source (non-exempt): ${expectedInGate.join(', ')}\n  In gate: ${gateNames.join(', ')}\n  → Add the missing handler to PUBLIC_RENDER_HANDLERS OR add a documented exemption (with rationale) above the EXEMPT set.`
+    ).toEqual(expectedInGate);
   });
 
   test('shortlink → event page chain has zero per-attendee identity reads end-to-end', async () => {
