@@ -350,6 +350,31 @@ const ADMIN_HTML = `<!DOCTYPE html>
             <label for="create-venue">Venue</label>
             <input type="text" id="create-venue" name="location" data-testid="create-venue" placeholder="Evergreen Park" maxlength="500" />
           </div>
+
+          <!-- OSE-239a: 5W content fields. WHAT/WHO/WHY/HOW/WHERE feed the
+               lifecycle public page (OSE-243) + OG preview (OSE-247).
+               All optional; an event with only a title still saves. -->
+          <div class="full-width">
+            <label for="create-what-short">What (short share description)</label>
+            <input type="text" id="create-what-short" name="what_short" data-testid="create-what-short" placeholder="1-2 sentences — what makes this event a thing" maxlength="300" />
+          </div>
+          <div>
+            <label for="create-who-host">Who (host / organizer)</label>
+            <input type="text" id="create-who-host" name="who_host" data-testid="create-who-host" placeholder="Beverly Hills Bocce League" maxlength="200" />
+          </div>
+          <div class="full-width">
+            <label for="create-where-address">Where (full address)</label>
+            <input type="text" id="create-where-address" name="where_address" data-testid="create-where-address" placeholder="12345 South Western Ave, Blue Island IL 60406" maxlength="500" />
+          </div>
+          <div class="full-width">
+            <label for="create-why-purpose">Why (purpose)</label>
+            <textarea id="create-why-purpose" name="why_purpose" data-testid="create-why-purpose" placeholder="Why is this happening? Why now?" maxlength="2000" rows="3"></textarea>
+          </div>
+          <div class="full-width">
+            <label for="create-how-details">How (price, what to bring, what to expect)</label>
+            <textarea id="create-how-details" name="how_details" data-testid="create-how-details" placeholder="$10 at door, BYOB, food trucks on site" maxlength="2000" rows="3"></textarea>
+          </div>
+
           <div class="full-width form-actions">
             <button type="submit" id="create-submit-btn" class="create-btn" data-testid="create-submit">Create Event</button>
             <div id="create-msg" class="create-msg" data-testid="create-msg" role="status" aria-live="polite"></div>
@@ -417,6 +442,22 @@ const ADMIN_HTML = `<!DOCTYPE html>
         const venueVal = document.getElementById('create-venue').value.trim();
         if (venueVal) body.location = venueVal;
 
+        // OSE-239a: collect 5W content fields. Each is optional; only
+        // populate the request body when the user actually typed something
+        // so the handler's null-on-empty semantics work.
+        const fivew = [
+          ['create-what-short', 'what_short'],
+          ['create-who-host', 'who_host'],
+          ['create-why-purpose', 'why_purpose'],
+          ['create-how-details', 'how_details'],
+          ['create-where-address', 'where_address'],
+        ];
+        for (const [domId, apiField] of fivew) {
+          const el = document.getElementById(domId);
+          const val = el && el.value ? el.value.trim() : '';
+          if (val) body[apiField] = val;
+        }
+
         const res = await fetch('/api/v2/admin/events', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -430,6 +471,10 @@ const ADMIN_HTML = `<!DOCTYPE html>
           document.getElementById('create-title').value = '';
           document.getElementById('create-date').value = '';
           document.getElementById('create-venue').value = '';
+          for (const [domId] of fivew) {
+            const el = document.getElementById(domId);
+            if (el) el.value = '';
+          }
           // Reload events table to show the new event
           location.reload();
         } else {

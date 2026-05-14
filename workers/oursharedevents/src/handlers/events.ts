@@ -80,10 +80,17 @@ export async function handleListEvents(request: Request, env: EventsEnv): Promis
   }
 
   try {
+    // Public list: project the same column set as admin so public surfaces
+    // (lifecycle page, OG preview, SharedReport) can render 5W content and
+    // venue geo without a second roundtrip. Anonymity is preserved by the
+    // status='active' filter + brand scope — the 5W payload is event-level
+    // metadata, never per-attendee data.
     const result = await env.DB.prepare(
       `SELECT id, brand_id, title, slug, status, description, location,
               start_date, end_date, timezone, cover_image_url, created_at, updated_at,
-              legal_clearance_tier
+              legal_clearance_tier,
+              what_short, who_host, why_purpose, how_details, where_address,
+              lat, lon, corridor_id
        FROM events
        WHERE brand_id = ? AND status = 'active'
        ORDER BY start_date ASC`
@@ -135,7 +142,9 @@ export async function handleGetEvent(
     const row = await env.DB.prepare(
       `SELECT id, brand_id, title, slug, status, description, location,
               start_date, end_date, timezone, cover_image_url, created_at, updated_at,
-              legal_clearance_tier
+              legal_clearance_tier,
+              what_short, who_host, why_purpose, how_details, where_address,
+              lat, lon, corridor_id
        FROM events
        WHERE id = ?`
     )
@@ -230,7 +239,9 @@ export async function handleAdminListEvents(request: Request, env: EventsEnv): P
     const result = await env.DB.prepare(
       `SELECT id, brand_id, title, slug, status, description, location,
               start_date, end_date, timezone, cover_image_url, created_at, updated_at,
-              legal_clearance_tier
+              legal_clearance_tier,
+              what_short, who_host, why_purpose, how_details, where_address,
+              lat, lon, corridor_id
        FROM   events
        ${where}
        ORDER  BY created_at DESC
@@ -364,6 +375,22 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
   const description = typeof body.description === 'string' ? body.description.slice(0, 2000) : null;
   const location = typeof body.location === 'string' ? body.location.slice(0, 500) : null;
 
+  // OSE-239a: 5W content fields (added by OSE-236 schema migration 0029).
+  // All optional; bounded by reasonable max lengths. trimStr() inline-equivalent
+  // here so an empty string after trim persists as null rather than ''. This
+  // matters because L2 tests / FE consumers MUST be able to distinguish
+  // "field intentionally blank" from "field never populated".
+  const trimOrNull = (v: unknown, max: number): string | null => {
+    if (typeof v !== 'string') return null;
+    const trimmed = v.trim().slice(0, max);
+    return trimmed.length > 0 ? trimmed : null;
+  };
+  const whatShort = trimOrNull(body.what_short, 300);
+  const whoHost = trimOrNull(body.who_host, 200);
+  const whyPurpose = trimOrNull(body.why_purpose, 2000);
+  const howDetails = trimOrNull(body.how_details, 2000);
+  const whereAddress = trimOrNull(body.where_address, 500);
+
   // Date validation
   const startDate = typeof body.start_date === 'string' ? body.start_date.slice(0, 30) : null;
   if (startDate !== null && !isValidIsoDate(startDate)) {
@@ -382,8 +409,10 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
 
   try {
     await env.DB.prepare(
-      `INSERT INTO events (id, brand_id, title, slug, status, description, location, start_date, end_date, timezone, cover_image_url, template_id, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO events (id, brand_id, title, slug, status, description, location, start_date, end_date, timezone, cover_image_url, template_id,
+                           what_short, who_host, why_purpose, how_details, where_address,
+                           created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
       .bind(
         id,
@@ -398,6 +427,11 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
         timezone,
         coverImageUrl,
         templateId,
+        whatShort,
+        whoHost,
+        whyPurpose,
+        howDetails,
+        whereAddress,
         now,
         now
       )
@@ -491,6 +525,13 @@ export async function handleUpdateEvent(
     cover_image_url: { max: 500 },
     status: { max: 20 },
     template_id: { max: 64 },
+    // OSE-239a: 5W content fields (added by OSE-236 migration 0029). All
+    // nullable; max-length-bounded to match handleCreateEvent semantics.
+    what_short: { max: 300 },
+    who_host: { max: 200 },
+    why_purpose: { max: 2000 },
+    how_details: { max: 2000 },
+    where_address: { max: 500 },
   };
 
   const sets: string[] = [];
