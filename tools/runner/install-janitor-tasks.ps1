@@ -80,12 +80,17 @@ param(
 $ErrorActionPreference = 'Stop'
 
 $janitorPath = Join-Path $WorkspaceRoot 'ourSharedEvents\tools\runner\janitor.ps1'
-$logPath = Join-Path $WorkspaceRoot 'actions-runner\_janitor.log'
+$verifyPath  = Join-Path $WorkspaceRoot 'ourSharedEvents\tools\runner\verify-probe-alive.ps1'
+$logPath     = Join-Path $WorkspaceRoot 'actions-runner\_janitor.log'
 
 # --- Pre-flight ---------------------------------------------------------------
 
 if (-not (Test-Path $janitorPath)) {
     Write-Error "Janitor script not found at: $janitorPath"
+    exit 2
+}
+if (-not (Test-Path $verifyPath)) {
+    Write-Error "Verify-probe-alive script not found at: $verifyPath"
     exit 2
 }
 
@@ -120,6 +125,20 @@ $readinessTask = @{
     IntervalDisplay = '1m'
 }
 
+# Sweep 8: watchdog. The readiness probe is itself a single point of
+# failure. This second task runs every 5 minutes and verifies the probe
+# wrote its heartbeat recently. If the heartbeat is stale (5+ min old)
+# the probe is dead and verify-probe-alive.ps1 emits RUNNER_PROBE_DEAD
+# + exits non-zero. Output redirected to the same log so all probe
+# state lives in one grep-friendly place.
+$watchdogTask = @{
+    Name        = 'Runner Probe Watchdog (5-min)'
+    Description = "Runs tools/runner/verify-probe-alive.ps1 every 5 minutes. Reads the heartbeat file the readiness probe writes each cycle. Fails loud (RUNNER_PROBE_DEAD JSON line + non-zero exit) when the probe stops running. The watchman watching the watchman."
+    Command     = "& '$verifyPath' *>> '$logPath'"
+    Interval    = (New-TimeSpan -Minutes 5)
+    IntervalDisplay = '5m'
+}
+
 # Names of legacy tasks to remove on install/uninstall (Sweep 5+6 → Sweep 7
 # migration). Leaving them registered alongside the new probe would create
 # overlapping bounce attempts and inflate the circuit breaker.
@@ -128,7 +147,7 @@ $legacyTaskNames = @(
     'Runner Janitor - Stuck Recovery (Every 6h)'
 )
 
-$tasks = @($readinessTask)
+$tasks = @($readinessTask, $watchdogTask)
 
 # --- Uninstall path -----------------------------------------------------------
 
