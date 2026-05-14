@@ -126,11 +126,64 @@ Runs without elevation — uses Stop/Start-ScheduledTask which work for
 the current user's own tasks, and parent-chain orphan detection via
 Win32_Process which doesn't need admin.
 
-Consider running it via a scheduled task hourly with `-PruneOrphans`
-to keep `_work\_temp` clean automatically. `-BounceStuck` is more
-invasive; run it manually after `-WhatIf` confirms a stuck runner
-or wire it into a separate weekly task with a higher
-`StuckThresholdMinutes` value if you want fully unattended recovery.
+## Make it self-running — `install-janitor-tasks.ps1`
+
+Instead of remembering to invoke the janitor, install the two scheduled
+tasks that wire it into Windows Task Scheduler:
+
+```powershell
+# Install — registers both tasks under the current user (no admin needed)
+pwsh -File tools\runner\install-janitor-tasks.ps1
+
+# Preview without changes
+pwsh -File tools\runner\install-janitor-tasks.ps1 -WhatIf
+
+# Remove the tasks (leaves janitor script + log in place)
+pwsh -File tools\runner\install-janitor-tasks.ps1 -Uninstall
+```
+
+What gets installed:
+
+| Task                                         | Cadence  | Action                                               | Why this cadence                                                                                                                                        |
+| -------------------------------------------- | -------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Runner Janitor - Hourly Prune`              | every 1h | `janitor.ps1 -PruneOrphans`                          | Cheap, safe. Pruning orphans never disturbs healthy jobs, so do it often.                                                                               |
+| `Runner Janitor - Stuck Recovery (Every 6h)` | every 6h | `janitor.ps1 -BounceStuck -StuckThresholdMinutes 60` | More conservative — bounce only Listeners stuck > 60 min, every 6 hours. Avoids thrash if a deeper problem (machine down, network) is the actual cause. |
+
+Both run as the current user with `LogonType Interactive` (no UAC, no
+stored password), tolerate battery, and self-skip if a prior instance
+is still running (`MultipleInstances IgnoreNew`).
+
+Output appends to `actions-runner\_janitor.log`. Tail with:
+
+```powershell
+Get-Content 'C:\Users\mzdan\dev\ourCommunityRituals\actions-runner\_janitor.log' -Tail 20 -Wait
+```
+
+Verify both tasks are registered:
+
+```powershell
+Get-ScheduledTask -TaskName 'Runner Janitor*' | Select-Object TaskName, State
+```
+
+Trigger one immediately (rather than waiting for the next firing):
+
+```powershell
+Start-ScheduledTask -TaskName 'Runner Janitor - Hourly Prune'
+```
+
+### What this doesn't cover
+
+- **Re-registering a runner that GitHub deregistered server-side.** Still
+  manual — re-run `config.cmd --token <new>` per the "How to add a new
+  runner" procedure above.
+- **Alerting.** The janitor emits structured `RUNNER_JANITOR` JSON lines
+  to the log file. For a single-dev infra that's enough; for a team you'd
+  pipe these to Slack/email via a separate watcher.
+- **Circuit breaker.** If a Listener keeps getting bounced every recovery
+  cycle, that's a deeper problem (bad machine, bad network) that no
+  janitor will fix on its own. Today: nothing detects this pattern. Watch
+  the log for repeated bounces of the same `runner` name as a manual
+  proxy.
 
 ## Re-provisioning an existing runner
 
