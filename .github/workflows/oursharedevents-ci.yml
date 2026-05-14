@@ -165,42 +165,15 @@ jobs:
             echo "$HASH" > "$STAMP"
           fi
 
-      - name: Shield CodeQL parser from workspace ESM scope
-        run: |
-          if [ -n "$RUNNER_TOOL_CACHE" ] && [ -d "$RUNNER_TOOL_CACHE" ]; then
-            printf '{"type":"commonjs"}\n' > "$RUNNER_TOOL_CACHE/package.json"
-          fi
-
-      - name: Initialize CodeQL
-        uses: github/codeql-action/init@v4
-        with:
-          languages: javascript-typescript
-          build-mode: none
-
-      - name: CodeQL Analysis
-        uses: github/codeql-action/analyze@v4
-        with:
-          category: '/language:javascript-typescript'
-          # Private repo on free tier: GitHub Code Scanning upload requires
-          # GitHub Advanced Security (GHAS), which is paid for private repos.
-          # Per `feedback_private_until_launch.md`, OSE stays private until
-          # launch — so until GHAS is provisioned (or the repo goes public),
-          # we run CodeQL analysis but skip the Security-tab upload. The
-          # SARIF is published as a workflow artifact instead (next step) so
-          # findings remain reviewable without losing the analysis depth.
-          # When OSE goes public OR GHAS is enabled, remove `upload: 'never'`
-          # and the upload-artifact step below.
-          upload: 'never'
-          output: '${{ runner.temp }}/codeql-sarif'
-
-      - name: Upload CodeQL SARIF as workflow artifact
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: codeql-sarif-${{ github.sha }}
-          path: '${{ runner.temp }}/codeql-sarif/'
-          retention-days: 30
-          if-no-files-found: warn
+      # ── CodeQL moved out (Sweep 9 #2, 2026-05-14) ───────────────────────
+      # CodeQL javascript-typescript analysis lived here AND in codeql.yml
+      # — same trigger set, same analysis target, ~2.4 min each on
+      # Bloodraven (measured on PR #160). The duplicate burned a runner
+      # slot for no signal gain. codeql.yml is now the canonical entry
+      # point: it owns the pull_request + push + scheduled + dispatch
+      # triggers and emits the SARIF artifact. Keep S0 Security focused on
+      # the non-CodeQL scanners (Semgrep, detect-secrets, gitleaks, npm
+      # audit, SBOM) where the duplication didn't exist.
 
       # ── Semgrep + detect-secrets (Python-based) ──────────────────────────
       - name: Set up Python for Semgrep + detect-secrets
@@ -294,7 +267,7 @@ jobs:
           npx @cyclonedx/cyclonedx-npm --omit dev --output-file sbom.json --output-format JSON --spec-version 1.5
           COMPONENT_COUNT=$(jq '.components | length' sbom.json 2>/dev/null || echo "unknown")
           echo "## S0 Security" >> $GITHUB_STEP_SUMMARY
-          echo "- **CodeQL:** analyzed (SARIF artifact: codeql-sarif-${{ github.sha }})" >> $GITHUB_STEP_SUMMARY
+          echo "- **CodeQL:** see separate \`CodeQL\` workflow (canonical entry, Sweep 9)" >> $GITHUB_STEP_SUMMARY
           echo "- **npm audit:** passed" >> $GITHUB_STEP_SUMMARY
           echo "- **SBOM:** $COMPONENT_COUNT components (CycloneDX 1.5)" >> $GITHUB_STEP_SUMMARY
 
