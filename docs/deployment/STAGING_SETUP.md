@@ -1,5 +1,17 @@
 # Staging Environment Setup Guide
 
+> **ARCHIVED (2026-05-09):** This document is fully outdated. It references the old GAS/Google Sheets architecture and `eventangle.com` domain — none of which apply.
+>
+> **Use instead:**
+>
+> - **`docs/deployment/INFRA-CHECKLIST.md`** — current staging setup (D1, WIF, CF Access, AES-GCM PII)
+> - **`docs/qa/STAGING-SMOKE.md`** — staging sign-off checklist
+>
+> The staging URL is `stg.oursharedevents.com` (not `stg.eventangle.com`).
+> Secrets are `ADMIN_TOKEN`, `FORMS_ENCRYPTION_KEY`, `X_OCR_INTERNAL`, `ALLOWED_ADMIN_EMAILS` — not GAS credentials.
+
+---
+
 This guide explains how to set up and configure the staging environment for the MVP Event Toolkit.
 
 ## Quick Start
