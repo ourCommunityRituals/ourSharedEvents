@@ -287,6 +287,18 @@ const ADMIN_HTML = `<!DOCTYPE html>
     .create-msg { font-size: .85rem; margin-top: .5rem; min-height: 1.25rem; }
     .create-msg.success { color: #16a34a; }
     .create-msg.error { color: #dc2626; }
+    /* OSE-262: warnings banner for create-event response.
+       Surfaces non-fatal partial-success conditions (e.g.,
+       SHORTLINK_CREATE_FAILED) so the admin sees what landed and
+       what didn't, instead of a silent "Event created" while the
+       shareable link is broken. */
+    .create-warnings { display: block; margin-top: 0.75rem; }
+    .create-warnings[hidden] { display: none; }
+    .warning-banner { background: #fef3c7; border-left: 3px solid #d97706; padding: 0.75rem 1rem; border-radius: 4px; margin-bottom: 0.5rem; font-size: 0.9rem; color: #78350f; }
+    .warning-banner strong { display: block; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.2rem; color: #92400e; }
+    .warning-dismiss-btn { display: inline-block; margin-top: 0.5rem; padding: 0.5rem 1rem; background: #d97706; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-weight: 500; font-size: 0.85rem; }
+    .warning-dismiss-btn:hover { background: #b45309; }
+    .warning-dismiss-btn:focus { outline: 3px solid #ffb800; outline-offset: 2px; }
     .skip-link { position: absolute; left: -9999px; top: auto; width: 1px; height: 1px; overflow: hidden; }
     .skip-link:focus { position: fixed; top: 0; left: 0; width: auto; height: auto; padding: .5rem 1rem; background: #1a1a2e; color: #fff; font-size: 1rem; z-index: 9999; text-decoration: none; border-bottom: 2px solid #4361ee; }
     button:focus-visible { outline: 2px solid #4361ee; outline-offset: 2px; }
@@ -379,6 +391,11 @@ const ADMIN_HTML = `<!DOCTYPE html>
           <div class="full-width form-actions">
             <button type="submit" id="create-submit-btn" class="create-btn" data-testid="create-submit">Create Event</button>
             <div id="create-msg" class="create-msg" data-testid="create-msg" role="status" aria-live="polite"></div>
+            <!-- OSE-262: warnings container — populated from data.warnings
+                 (non-fatal partial-success conditions like SHORTLINK_CREATE_FAILED).
+                 Initially hidden; the submit handler unhides + populates when
+                 the API response carries a non-empty warnings[] array. -->
+            <div id="create-warnings" class="create-warnings" data-testid="create-warnings" role="alert" aria-live="assertive" hidden></div>
           </div>
         </div>
       </form>
@@ -476,8 +493,43 @@ const ADMIN_HTML = `<!DOCTYPE html>
             const el = document.getElementById(domId);
             if (el) el.value = '';
           }
-          // Reload events table to show the new event
-          location.reload();
+
+          // OSE-262: surface non-fatal warnings (e.g., SHORTLINK_CREATE_FAILED)
+          // so the admin sees what landed and what didn't. When warnings are
+          // present we DO NOT auto-reload — the admin needs to read the warning
+          // before the page refreshes. The "Got it" button performs the reload.
+          const warningsContainer = document.getElementById('create-warnings');
+          if (Array.isArray(data.warnings) && data.warnings.length > 0) {
+            // Clear any previous warnings first
+            while (warningsContainer.firstChild) {
+              warningsContainer.removeChild(warningsContainer.firstChild);
+            }
+            for (const w of data.warnings) {
+              const banner = document.createElement('div');
+              banner.className = 'warning-banner';
+              banner.setAttribute('data-testid', 'create-warning-' + (w.code || 'UNKNOWN'));
+              const code = document.createElement('strong');
+              code.textContent = w.code || 'WARNING';
+              const text = document.createElement('span');
+              text.textContent = w.message || '';
+              banner.appendChild(code);
+              banner.appendChild(text);
+              warningsContainer.appendChild(banner);
+            }
+            // Dismiss button — reloads the events table once the admin has
+            // read the warnings.
+            const dismiss = document.createElement('button');
+            dismiss.type = 'button';
+            dismiss.className = 'warning-dismiss-btn';
+            dismiss.setAttribute('data-testid', 'create-warning-dismiss');
+            dismiss.textContent = 'Got it \\u2014 refresh events';
+            dismiss.addEventListener('click', () => location.reload());
+            warningsContainer.appendChild(dismiss);
+            warningsContainer.hidden = false;
+          } else {
+            // No warnings — auto-reload as before to surface the new event in the table.
+            location.reload();
+          }
         } else {
           msg.textContent = data.error || 'Failed to create event.';
           msg.className = 'create-msg error';
