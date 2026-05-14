@@ -22,6 +22,16 @@
 # @see PROMPTSPEC-SEC-10.1
 name: Security Regression Gate
 
+# Sweep 9 #4 (2026-05-14): cancel superseded runs.
+# Security Regression Gate runs on every PR + push to main + nightly,
+# and takes ~2.6 min (PR #160 baseline). Without concurrency cancel,
+# a rapid commit stream to a single PR would queue N regression runs
+# on the 3-runner pool. Group by PR number on PR events, else by full
+# ref so main pushes and claude/** pushes don't cancel each other.
+concurrency:
+  group: security-regression-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 on:
   push:
     branches:
