@@ -92,7 +92,12 @@ const EXPECTED_INDEXES = [
 ] as const;
 
 const EXPECTED_COLUMN_COUNTS: Record<string, number> = {
-  events: 23,
+  // events: 23 (pre-OSE-236) + 6 (migration 0029: what_short, who_host,
+  // why_purpose, how_details, where_address, corridor_id) = 29.
+  // This count is the canonical floor — any future column add/drop on
+  // events MUST bump this number in the same PR, surfacing the change
+  // in code review.
+  events: 29,
   sponsors: 12,
   poster_deployments: 10,
   scans: 10,
