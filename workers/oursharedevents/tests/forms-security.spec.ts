@@ -121,19 +121,29 @@ describe('S3: forms-db.ts utility has ZERO main DB references', () => {
 });
 
 describe('S4: Lifecycle job isolation', () => {
-  test('index.ts lifecycle only writes to FORMS_DB, never to DB', () => {
+  // Precise function-body scoping (OSE-207 hardening). Earlier revision
+  // sliced `content.indexOf('runFormDataLifecycle')` through end-of-file,
+  // which scanned every later helper in index.ts and would have flagged
+  // any future DB-touching lifecycle stage (e.g. subscribers retention).
+  // S4's actual contract is: the FORMS_DB lifecycle FUNCTION must not
+  // touch env.DB — not "everything below this point in the file."
+  test('runFormDataLifecycle function body only writes to FORMS_DB, never to DB', () => {
     const sources: Record<string, string> = JSON.parse(tenv().TEST_SOURCE_FILES_JSON);
     for (const [path, content] of Object.entries(sources)) {
-      if (path.includes('index.ts')) {
-        // The lifecycle function should only reference FORMS_DB for data operations
-        // It must NOT INSERT/UPDATE/DELETE from env.DB
-        const lifecycleSection = content.slice(content.indexOf('runFormDataLifecycle'));
-        if (lifecycleSection) {
-          expect(lifecycleSection).not.toMatch(/env\.DB\.prepare/);
-          expect(lifecycleSection).not.toMatch(/INSERT\s+INTO\s+(?!form_|checkin_|email_|pii_)/i);
-          expect(lifecycleSection).not.toMatch(/UPDATE\s+(?!form_)/i);
-          expect(lifecycleSection).not.toMatch(/DELETE\s+FROM\s+(?!form_|email_)/i);
-        }
+      if (path.endsWith('index.ts')) {
+        const start = content.indexOf('async function runFormDataLifecycle');
+        expect(start, 'runFormDataLifecycle function not found in index.ts').toBeGreaterThan(-1);
+
+        // Bound the body: from the function declaration to the next top-level
+        // declaration (async function / function / export at column 0).
+        const afterStart = content.slice(start);
+        const endMatch = /\n(async function|function|export)\s/.exec(afterStart.slice(1));
+        const body = endMatch ? afterStart.slice(0, endMatch.index + 1) : afterStart;
+
+        expect(body).not.toMatch(/env\.DB\.prepare/);
+        expect(body).not.toMatch(/INSERT\s+INTO\s+(?!form_|checkin_|email_|pii_)/i);
+        expect(body).not.toMatch(/UPDATE\s+(?!form_)/i);
+        expect(body).not.toMatch(/DELETE\s+FROM\s+(?!form_|email_)/i);
       }
     }
   });

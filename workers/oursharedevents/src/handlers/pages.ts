@@ -24,6 +24,18 @@ export interface PagesEnv {
    * disabled. This is fail-safe — never store a raw IP as a fallback.
    */
   IP_HASH_PEPPER?: string;
+  /**
+   * OSE-207 — subscribers TTL retention window in days. Optional.
+   *
+   * Read by the scheduled `runSubscribersRetentionLifecycle` job in
+   * `src/index.ts`. When set to a positive integer N, the daily cron
+   * deletes subscribers whose created_at is older than N days. When
+   * unset, retention is uncapped (the cron logs a no-op).
+   *
+   * Independent of the data-subject right-to-erase Phase C handler in
+   * `src/handlers/data-subject.ts`, which deletes by email on demand.
+   */
+  SUBSCRIBERS_RETENTION_DAYS?: string;
 }
 
 /**

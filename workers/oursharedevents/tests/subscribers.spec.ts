@@ -210,6 +210,79 @@ describe('L2 behavioral: admin enumerate writes audit log entry', () => {
 // L2 BEHAVIORAL — Data-subject erase covers subscribers (Phase C)
 // ═════════════════════════════════════════════════════════════════════════════
 
+// ═════════════════════════════════════════════════════════════════════════════
+// L2 BEHAVIORAL — Subscribers retention lifecycle (OSE-207 follow-up)
+// ═════════════════════════════════════════════════════════════════════════════
+
+describe('L2 behavioral: subscribers retention SQL pattern matches the cron', () => {
+  // The scheduled() handler isn't directly invokable from cloudflare:test
+  // SELF.fetch (it's only fired by Cloudflare's cron in real deploys), so
+  // this test asserts that the DELETE pattern used by
+  // runSubscribersRetentionLifecycle in src/index.ts performs the
+  // expected retention semantics when executed directly against DB.
+
+  test('DELETE WHERE created_at < datetime("now", "-N days") removes old rows only', async () => {
+    // Seed two rows: one 400 days old, one 10 days old
+    const oldEmail = `retention-old-${Date.now()}@example.com`;
+    const recentEmail = `retention-recent-${Date.now()}@example.com`;
+    const oldDate = new Date(Date.now() - 400 * 24 * 3600 * 1000).toISOString();
+    const recentDate = new Date(Date.now() - 10 * 24 * 3600 * 1000).toISOString();
+
+    await tenv()
+      .DB.prepare(
+        'INSERT OR IGNORE INTO subscribers (email, ip_hash, source, created_at) VALUES (?, ?, ?, ?)'
+      )
+      .bind(oldEmail, 'a'.repeat(32), 'landing', oldDate)
+      .run();
+    await tenv()
+      .DB.prepare(
+        'INSERT OR IGNORE INTO subscribers (email, ip_hash, source, created_at) VALUES (?, ?, ?, ?)'
+      )
+      .bind(recentEmail, 'b'.repeat(32), 'landing', recentDate)
+      .run();
+
+    // Apply the same SQL the cron uses, with a 365-day window.
+    const res = await tenv()
+      .DB.prepare("DELETE FROM subscribers WHERE created_at < datetime('now', ?)")
+      .bind('-365 days')
+      .run();
+    expect((res.meta?.changes ?? 0) >= 1).toBe(true);
+
+    const oldStill = await tenv()
+      .DB.prepare('SELECT 1 AS x FROM subscribers WHERE email = ?')
+      .bind(oldEmail)
+      .first();
+    expect(oldStill).toBeNull();
+
+    const recentStill = await tenv()
+      .DB.prepare('SELECT 1 AS x FROM subscribers WHERE email = ?')
+      .bind(recentEmail)
+      .first();
+    expect(recentStill).not.toBeNull();
+  });
+
+  test('source code: runSubscribersRetentionLifecycle is a no-op when env knob unset', () => {
+    // Locked into the file's behaviour via static check — if someone changes
+    // the function to default-to-deleting (e.g. hardcoded 365 days), this
+    // catches it.
+    const sources: Record<string, string> = JSON.parse(
+      (env as unknown as { TEST_SOURCE_FILES_JSON: string }).TEST_SOURCE_FILES_JSON
+    );
+    const indexFile = Object.entries(sources).find(([p]) =>
+      p.replace(/\\/g, '/').endsWith('src/index.ts')
+    );
+    expect(indexFile, 'src/index.ts not found in TEST_SOURCE_FILES_JSON').toBeDefined();
+    const content = indexFile![1];
+
+    // The function must read SUBSCRIBERS_RETENTION_DAYS, must early-return
+    // a noop log when not finite/positive, and must NOT contain a hardcoded
+    // `'-NNN days'` fallback that bypasses the env knob.
+    expect(content).toMatch(/SUBSCRIBERS_RETENTION_DAYS/);
+    expect(content).toMatch(/SUBSCRIBERS_RETENTION_NOOP/);
+    expect(content).not.toMatch(/-\s*\d{2,}\s*days/);
+  });
+});
+
 describe('L2 behavioral: data-subject erase removes subscribers row', () => {
   test('POST /api/v2/admin/data-subject/erase deletes from subscribers', async () => {
     const email = `erase-me-${Date.now()}@example.com`;
