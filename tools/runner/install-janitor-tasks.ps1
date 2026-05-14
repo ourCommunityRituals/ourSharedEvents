@@ -98,23 +98,37 @@ if (-not (Test-Path $logDir)) {
 
 # --- Task specs ---------------------------------------------------------------
 
-$hourlyTask = @{
-    Name        = 'Runner Janitor - Hourly Prune'
-    Description = "Runs tools/runner/janitor.ps1 -PruneOrphans every 60 min. Kills orphan job children (processes referencing runner _work whose parent chain doesn't reach a live Worker). Safe routine maintenance; never disturbs healthy jobs."
-    Command     = "& '$janitorPath' -PruneOrphans *>> '$logPath'"
-    Interval    = (New-TimeSpan -Hours 1)
-    IntervalDisplay = '1h'
+# Sweep 7: collapsed from two slow tasks (hourly prune + 6h stuck recovery)
+# to a single 1-minute readiness probe.
+#
+# The earlier design had the right machinery but the wrong mandate. The
+# runner pool's one job is to be ready for the NEXT run — not to be
+# tidied up an hour from now. A 1-min probe in -EnsureReady mode:
+#   - prunes orphans every cycle (was hourly)
+#   - tightens the stuck-threshold from 30 to 3 minutes
+#   - adds Worker-dwell kills (Workers > 15 min mid-job = stuck inside job)
+#   - adds GitHub queue-depth correlation (queued runs while local idle)
+#   - adds a circuit breaker (3+ bounces in 1h = STOP, emit RUNNER_POOL_DEGRADED)
+#
+# Net effect: most "lost throughput" failure modes self-heal within 60-90s
+# instead of 60+ min.
+$readinessTask = @{
+    Name        = 'Runner Readiness Probe (1-min)'
+    Description = "Runs tools/runner/janitor.ps1 -EnsureReady every 1 minute. Single-pass readiness probe: prunes orphans, kills Workers stuck >15 min, bounces Listeners stuck >3 min, checks GitHub queue-depth vs local idle, circuit-breaker after 3+ bounces/hr. Replaces the prior hourly/6h pair (Sweep 7)."
+    Command     = "& '$janitorPath' -EnsureReady *>> '$logPath'"
+    Interval    = (New-TimeSpan -Minutes 1)
+    IntervalDisplay = '1m'
 }
 
-$stuckRecoveryTask = @{
-    Name        = 'Runner Janitor - Stuck Recovery (Every 6h)'
-    Description = "Runs tools/runner/janitor.ps1 -BounceStuck -StuckThresholdMinutes 60 every 6 hours. Bounces ONLY Listeners with broker errors for 60+ min and no recent dispatch. Healthy Listeners untouched."
-    Command     = "& '$janitorPath' -BounceStuck -StuckThresholdMinutes 60 *>> '$logPath'"
-    Interval    = (New-TimeSpan -Hours 6)
-    IntervalDisplay = '6h'
-}
+# Names of legacy tasks to remove on install/uninstall (Sweep 5+6 → Sweep 7
+# migration). Leaving them registered alongside the new probe would create
+# overlapping bounce attempts and inflate the circuit breaker.
+$legacyTaskNames = @(
+    'Runner Janitor - Hourly Prune'
+    'Runner Janitor - Stuck Recovery (Every 6h)'
+)
 
-$tasks = @($hourlyTask, $stuckRecoveryTask)
+$tasks = @($readinessTask)
 
 # --- Uninstall path -----------------------------------------------------------
 
@@ -132,9 +146,34 @@ if ($Uninstall) {
             Write-Host "Not present (skipping): $($t.Name)"
         }
     }
+    # Sweep 7: also remove legacy hourly/6h tasks if present
+    foreach ($name in $legacyTaskNames) {
+        $existing = Get-ScheduledTask -TaskName $name -ErrorAction SilentlyContinue
+        if ($existing) {
+            if ($WhatIf) {
+                Write-Host "[WhatIf] would unregister legacy: $name"
+            } else {
+                Unregister-ScheduledTask -TaskName $name -Confirm:$false
+                Write-Host "Unregistered (legacy): $name"
+            }
+        }
+    }
     Write-Host ""
     Write-Host "Note: log file ($logPath) and janitor script left in place."
     return
+}
+
+# Sweep 7: install path — also remove legacy tasks so we don't double-fire.
+foreach ($name in $legacyTaskNames) {
+    $existing = Get-ScheduledTask -TaskName $name -ErrorAction SilentlyContinue
+    if ($existing) {
+        if ($WhatIf) {
+            Write-Host "[WhatIf] would remove legacy task: $name"
+        } else {
+            Unregister-ScheduledTask -TaskName $name -Confirm:$false
+            Write-Host "Removed legacy task: $name"
+        }
+    }
 }
 
 # --- Install path -------------------------------------------------------------
@@ -172,10 +211,13 @@ foreach ($t in $tasks) {
         -LogonType Interactive `
         -RunLevel Limited
 
+    # Sweep 7: a 1-minute probe must NOT pile up. If a single run takes
+    # longer than 60s (rare but possible during a bounce), the next firing
+    # should skip rather than queue. ExecutionTimeLimit is the safety net.
     $settings = New-ScheduledTaskSettingsSet `
         -DontStopIfGoingOnBatteries `
         -AllowStartIfOnBatteries `
-        -ExecutionTimeLimit (New-TimeSpan -Minutes 5) `
+        -ExecutionTimeLimit (New-TimeSpan -Minutes 2) `
         -MultipleInstances IgnoreNew `
         -StartWhenAvailable
 
@@ -201,12 +243,16 @@ Write-Host ""
 Write-Host "=== INSTALL COMPLETE ==="
 Write-Host "Log file: $logPath"
 Write-Host ""
-Write-Host "Verify with:"
-Write-Host "  Get-ScheduledTask -TaskName 'Runner Janitor*' | Select-Object TaskName, State"
+Write-Host "Verify task is registered:"
+Write-Host "  Get-ScheduledTask -TaskName 'Runner Readiness Probe (1-min)' | Format-List TaskName, State"
 Write-Host ""
-Write-Host "To see what each task is about to do without waiting:"
-Write-Host "  Start-ScheduledTask -TaskName 'Runner Janitor - Hourly Prune'"
-Write-Host "  Start-ScheduledTask -TaskName 'Runner Janitor - Stuck Recovery (Every 6h)'"
+Write-Host "Trigger an immediate readiness check (next firing is within 60s otherwise):"
+Write-Host "  Start-ScheduledTask -TaskName 'Runner Readiness Probe (1-min)'"
 Write-Host ""
-Write-Host "Tail the log:"
+Write-Host "Tail the log in real time:"
 Write-Host "  Get-Content '$logPath' -Tail 20 -Wait"
+Write-Host ""
+Write-Host "Look for these structured signals:"
+Write-Host "  RUNNER_JANITOR        - per-runner per-cycle status"
+Write-Host "  RUNNER_POOL_READINESS - pool summary per cycle"
+Write-Host "  RUNNER_POOL_DEGRADED  - circuit breaker tripped on a runner (human review)"

@@ -87,10 +87,41 @@ param(
     [switch]$WhatIf,
     [switch]$PruneOrphans,
     [switch]$BounceStuck,
-    [int]$StuckThresholdMinutes = 30
+    [int]$StuckThresholdMinutes = 30,
+
+    # -----------------------------------------------------------------------
+    # Sweep 7: -EnsureReady mode — the runner pool's one job is to be
+    # available for the next run. This mode adds tighter signals that
+    # catch "not-ready" *before* a job arrives and waits, not after.
+    #
+    # Enable with -EnsureReady. Implies -PruneOrphans + -BounceStuck with
+    # tighter thresholds and adds:
+    #   * Worker-dwell check (kill Workers stuck > WorkerDwellMaxMinutes)
+    #   * Queue-depth signal (GitHub-side queued runs while local idle)
+    #   * Circuit breaker (don't bounce the same Listener N+ times in 1h)
+    #
+    # Runs every 1 minute via the scheduled task installed by
+    # install-janitor-tasks.ps1. Intended cadence is "before the next
+    # job," not "every hour."
+    # -----------------------------------------------------------------------
+    [switch]$EnsureReady,
+    [int]$WorkerDwellMaxMinutes = 15,
+    [int]$RecentStuckMinutes = 3,
+    [int]$CircuitBreakerMaxBouncesPerHour = 3,
+    [string]$Repo = 'ourCommunityRituals/ourSharedEvents'
 )
 
 $ErrorActionPreference = 'Stop'
+
+# In -EnsureReady mode, imply prune+bounce with the tighter threshold so
+# the readiness probe is a single self-contained pass.
+if ($EnsureReady) {
+    $PruneOrphans = $true
+    $BounceStuck  = $true
+    if (-not $PSBoundParameters.ContainsKey('StuckThresholdMinutes')) {
+        $StuckThresholdMinutes = $RecentStuckMinutes
+    }
+}
 
 # -----------------------------------------------------------------------------
 # Runner inventory - discover by directory pattern, not by hardcoded list.
@@ -181,6 +212,111 @@ function Test-ListenerStuck([string]$RunnerDir, [int]$ThresholdMinutes) {
 }
 
 # -----------------------------------------------------------------------------
+# Sweep 7: Worker-dwell check.
+#
+# A Runner.Worker process represents an in-flight job. Typical OSE jobs
+# finish in 2-10 min; nightly heavy jobs cap out around 12-15 min. A Worker
+# alive longer than that is stuck inside the job (vitest hang, network call
+# timeout, miniflare not exiting), blocking its parent Listener from picking
+# up the *next* job. Killing the Worker frees the Listener; the next job
+# starts seconds later.
+#
+# We can't read Worker.exe's CommandLine without admin (elevated process),
+# but Process.Id and StartTime ARE visible. That's enough.
+# -----------------------------------------------------------------------------
+
+function Find-StuckWorkers([int]$DwellMaxMinutes) {
+    $deadline = (Get-Date).AddMinutes(-$DwellMaxMinutes)
+    @(Get-Process Runner.Worker -ErrorAction SilentlyContinue |
+        Where-Object { $_.StartTime -and $_.StartTime -lt $deadline })
+}
+
+# -----------------------------------------------------------------------------
+# Sweep 7: GitHub-side queue-depth signal.
+#
+# If GitHub has queued workflow runs but our local Listeners report idle
+# (no Worker children), the broker connection is broken in a way the diag
+# log might not have caught up to yet — a leading indicator of "stuck"
+# that the readiness probe acts on immediately.
+#
+# Uses `gh api` (already authenticated for mzdan) at repo scope, which
+# doesn't require admin:org. Returns -1 on auth/network failure so the
+# caller can degrade gracefully instead of false-alarming.
+# -----------------------------------------------------------------------------
+
+function Get-QueuedRunCount([string]$Repo) {
+    try {
+        $json = & gh api "repos/$Repo/actions/runs?status=queued&per_page=1" 2>$null
+        if ($LASTEXITCODE -ne 0 -or -not $json) { return -1 }
+        $obj = $json | ConvertFrom-Json
+        return [int]$obj.total_count
+    } catch {
+        return -1
+    }
+}
+
+# -----------------------------------------------------------------------------
+# Sweep 7: Circuit breaker — refuse to bounce the same runner repeatedly.
+#
+# Persistent state in actions-runner/_janitor-state.json:
+#   { "actions-runner-2": [ "2026-05-14T14:23:11Z", "2026-05-14T14:38:02Z" ] }
+#
+# If a runner has been bounced N+ times in the last hour, treat it as
+# fundamentally broken (machine, network, GitHub-side dereg) — emit
+# RUNNER_POOL_DEGRADED for that runner and SKIP the bounce. Healthy
+# siblings can absorb the load while a human looks at it.
+# -----------------------------------------------------------------------------
+
+function Get-CircuitBreakerStatePath() {
+    return Join-Path 'C:\Users\mzdan\dev\ourCommunityRituals\actions-runner' '_janitor-state.json'
+}
+
+function Read-CircuitBreakerState() {
+    $path = Get-CircuitBreakerStatePath
+    if (-not (Test-Path $path)) { return @{} }
+    try {
+        $raw = Get-Content -Path $path -Raw -ErrorAction Stop
+        $obj = $raw | ConvertFrom-Json -ErrorAction Stop
+        $h = @{}
+        # ConvertFrom-Json returns a PSCustomObject; convert to hashtable
+        foreach ($prop in $obj.PSObject.Properties) {
+            $h[$prop.Name] = @($prop.Value)
+        }
+        return $h
+    } catch {
+        return @{}
+    }
+}
+
+function Write-CircuitBreakerState([hashtable]$State) {
+    $path = Get-CircuitBreakerStatePath
+    $obj = [pscustomobject]@{}
+    foreach ($k in $State.Keys) { $obj | Add-Member -NotePropertyName $k -NotePropertyValue @($State[$k]) }
+    $obj | ConvertTo-Json -Depth 5 | Set-Content -Path $path -Encoding UTF8
+}
+
+function Test-CircuitOpen([hashtable]$State, [string]$RunnerName, [int]$MaxPerHour) {
+    if (-not $State.ContainsKey($RunnerName)) { return $false }
+    $cutoff = (Get-Date).ToUniversalTime().AddHours(-1)
+    $recent = @($State[$RunnerName] | Where-Object {
+        try { ([DateTime]$_).ToUniversalTime() -gt $cutoff } catch { $false }
+    })
+    return $recent.Count -ge $MaxPerHour
+}
+
+function Add-BounceToCircuitBreaker([hashtable]$State, [string]$RunnerName) {
+    $now = (Get-Date).ToUniversalTime().ToString('o')
+    $cutoff = (Get-Date).ToUniversalTime().AddHours(-1)
+    $existing = if ($State.ContainsKey($RunnerName)) {
+        @($State[$RunnerName] | Where-Object {
+            try { ([DateTime]$_).ToUniversalTime() -gt $cutoff } catch { $false }
+        })
+    } else { @() }
+    $State[$RunnerName] = $existing + $now
+    return $State
+}
+
+# -----------------------------------------------------------------------------
 # Orphan detection: processes spawned under a runner's _work that no
 # longer have a live Runner.Worker ancestor.
 # -----------------------------------------------------------------------------
@@ -236,6 +372,43 @@ function Find-OrphanJobChildren([string]$RunnerDir) {
 # Main loop
 # -----------------------------------------------------------------------------
 
+# Sweep 7: pre-loop pool-level signals (cheap, single API call).
+$queuedCount = -1
+if ($EnsureReady) {
+    $queuedCount = Get-QueuedRunCount -Repo $Repo
+    if ($queuedCount -lt 0) {
+        Write-Host "[INFO] GitHub queue depth unavailable (gh auth / network) — degrading to local signals only"
+    } else {
+        Write-Host ("[INFO] GitHub queued workflow runs: {0}" -f $queuedCount)
+    }
+}
+
+# Sweep 7: load circuit-breaker state once per run.
+$cbState = if ($EnsureReady) { Read-CircuitBreakerState } else { @{} }
+
+# Sweep 7: cross-pool worker dwell scan (one snapshot, used per-runner below
+# for the JSON output but the kills happen here so we don't double-process).
+$stuckWorkers = if ($EnsureReady) { Find-StuckWorkers -DwellMaxMinutes $WorkerDwellMaxMinutes } else { @() }
+$stuckWorkersPruned = 0
+if ($EnsureReady -and $stuckWorkers.Count -gt 0) {
+    if ($WhatIf) {
+        Write-Host "[WhatIf] would kill $($stuckWorkers.Count) stuck Worker(s) (alive > ${WorkerDwellMaxMinutes}m):"
+        foreach ($w in $stuckWorkers) {
+            Write-Host ("  - PID {0} started {1} (alive {2:N1} min)" -f $w.Id, $w.StartTime, ((Get-Date) - $w.StartTime).TotalMinutes)
+        }
+    } else {
+        foreach ($w in $stuckWorkers) {
+            try {
+                Stop-Process -Id $w.Id -Force -ErrorAction Stop
+                $stuckWorkersPruned++
+                Write-Host ("[OK] killed stuck Worker PID $($w.Id) (alive $([math]::Round(((Get-Date) - $w.StartTime).TotalMinutes,1)) min)")
+            } catch {
+                Write-Host "[WARN] failed to kill Worker PID $($w.Id): $($_.Exception.Message)"
+            }
+        }
+    }
+}
+
 $summary = @()
 foreach ($dir in $runnerDirs) {
     $runnerName = $dir.Name
@@ -251,6 +424,28 @@ foreach ($dir in $runnerDirs) {
     }
     $health = Test-ListenerStuck -RunnerDir $dir.FullName -ThresholdMinutes $StuckThresholdMinutes
     $orphans = Find-OrphanJobChildren -RunnerDir $dir.FullName
+
+    # Sweep 7: queue-while-idle signal. If GitHub has queued runs AND this
+    # runner instance reports no Worker child AND no recent broker error AND
+    # task is Running, that's a precise "broker silently broken" indicator
+    # that the log-based detection would miss for ~30s.
+    $queueIdle = $false
+    if ($EnsureReady -and $queuedCount -gt 0 -and -not $health.Stuck -and $taskState -eq 'Running') {
+        # If any Workers are running locally somewhere we can't yet say this
+        # specific Listener is idle (PID -> folder attribution requires admin).
+        # Be conservative: only flag if there are ZERO Workers at all yet a
+        # queue exists.
+        $anyWorker = @(Get-Process Runner.Worker -ErrorAction SilentlyContinue)
+        if ($anyWorker.Count -eq 0) {
+            $queueIdle = $true
+            $health = [pscustomobject]@{
+                Stuck = $true
+                Reason = "GitHub queue depth $queuedCount but pool reports zero Workers"
+                LastDispatch = $health.LastDispatch
+                LastBrokerError = $health.LastBrokerError
+            }
+        }
+    }
 
     Write-Host ""
     Write-Host "=== $runnerName ==="
@@ -286,8 +481,24 @@ foreach ($dir in $runnerDirs) {
 
     # --- Bounce stuck Listener ---------------------------------------------
     $bounced = $false
+    $circuitOpen = $false
     if ($health.Stuck) {
-        if ($WhatIf) {
+        # Sweep 7: circuit breaker — refuse to bounce the same runner repeatedly.
+        if ($EnsureReady -and (Test-CircuitOpen -State $cbState -RunnerName $runnerName -MaxPerHour $CircuitBreakerMaxBouncesPerHour)) {
+            $circuitOpen = $true
+            $cbHistory = @($cbState[$runnerName])
+            Write-Host "  [CIRCUIT OPEN] $runnerName bounced $($cbHistory.Count)+ times in last hour - SKIPPING. Human review required."
+            # Emit the dedicated degraded signal so a watcher / scheduled task can alert.
+            $degradedLine = @{
+                type      = 'RUNNER_POOL_DEGRADED'
+                runner    = $runnerName
+                task      = $taskName
+                bounces_last_hour = $cbHistory.Count
+                last_bounce = $cbHistory[-1]
+                timestamp = (Get-Date).ToUniversalTime().ToString('o')
+            } | ConvertTo-Json -Compress
+            Write-Host "  $degradedLine"
+        } elseif ($WhatIf) {
             Write-Host "  [WhatIf] would bounce $taskName"
         } elseif ($BounceStuck -and $taskName) {
             try {
@@ -305,6 +516,10 @@ foreach ($dir in $runnerDirs) {
                 } while ($dropped.Count -eq 0 -and (Get-Date) -lt $deadline)
                 Start-ScheduledTask -TaskName $taskName
                 $bounced = $true
+                # Sweep 7: record the bounce in the circuit-breaker state.
+                if ($EnsureReady) {
+                    $cbState = Add-BounceToCircuitBreaker -State $cbState -RunnerName $runnerName
+                }
                 Write-Host "  Bounced $taskName"
             } catch {
                 Write-Host "  ! bounce failed: $($_.Exception.Message)"
@@ -316,17 +531,21 @@ foreach ($dir in $runnerDirs) {
 
     # --- Structured log line for ops grepping ------------------------------
     $jsonLine = @{
-        type           = 'RUNNER_JANITOR'
-        runner         = $runnerName
-        task           = $taskName
-        task_state     = $taskState
-        stuck          = [bool]$health.Stuck
-        reason         = $health.Reason
-        orphans_found  = $orphans.Count
-        orphans_pruned = $orphansPruned
-        bounced        = $bounced
-        whatif         = [bool]$WhatIf
-        timestamp      = (Get-Date).ToUniversalTime().ToString('o')
+        type                  = 'RUNNER_JANITOR'
+        mode                  = if ($EnsureReady) { 'ensure-ready' } else { 'manual' }
+        runner                = $runnerName
+        task                  = $taskName
+        task_state            = $taskState
+        stuck                 = [bool]$health.Stuck
+        reason                = $health.Reason
+        orphans_found         = $orphans.Count
+        orphans_pruned        = $orphansPruned
+        bounced               = $bounced
+        circuit_open          = $circuitOpen
+        queued_count          = $queuedCount
+        queue_idle_signal     = $queueIdle
+        whatif                = [bool]$WhatIf
+        timestamp             = (Get-Date).ToUniversalTime().ToString('o')
     } | ConvertTo-Json -Compress
     Write-Host "  $jsonLine"
     $summary += $jsonLine
@@ -335,3 +554,32 @@ foreach ($dir in $runnerDirs) {
 Write-Host ""
 Write-Host "=== JANITOR SUMMARY ==="
 $summary | ForEach-Object { Write-Host $_ }
+
+# Sweep 7: persist circuit-breaker state for next run
+if ($EnsureReady -and -not $WhatIf) {
+    try {
+        Write-CircuitBreakerState -State $cbState
+    } catch {
+        Write-Host "[WARN] failed to persist circuit-breaker state: $($_.Exception.Message)"
+    }
+}
+
+# Sweep 7: pool-level summary line. Single grep-friendly emission of the
+# probe's overall verdict — useful for log alerting at the pool level
+# rather than per-runner.
+if ($EnsureReady) {
+    $poolJson = @{
+        type              = 'RUNNER_POOL_READINESS'
+        runners           = $runnerDirs.Count
+        queued_count      = $queuedCount
+        stuck_workers     = $stuckWorkers.Count
+        workers_killed    = $stuckWorkersPruned
+        runners_bounced   = @($summary | ForEach-Object { ($_ | ConvertFrom-Json).bounced } | Where-Object { $_ }).Count
+        circuits_open     = @($summary | ForEach-Object { ($_ | ConvertFrom-Json).circuit_open } | Where-Object { $_ }).Count
+        whatif            = [bool]$WhatIf
+        timestamp         = (Get-Date).ToUniversalTime().ToString('o')
+    } | ConvertTo-Json -Compress
+    Write-Host ""
+    Write-Host "=== POOL READINESS ==="
+    Write-Host $poolJson
+}
