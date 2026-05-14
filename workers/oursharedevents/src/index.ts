@@ -33,10 +33,18 @@ export default {
   },
 
   async scheduled(_event: ScheduledEvent, env: RouterEnv, ctx: ExecutionContext): Promise<void> {
-    // runFormDataLifecycle is FORMS_DB-only (PII scrub + retention).
-    // runBigQueryBackup reads from the main DB and is kept separate for
-    // isolation: lifecycle job must never touch the events DB (forms-security gate).
-    ctx.waitUntil(Promise.all([runFormDataLifecycle(env), runBigQueryBackup(env)]));
+    // runFormDataLifecycle is FORMS_DB-only (PII scrub + retention) — see forms-security S4.
+    // runBigQueryBackup reads from the main DB and is kept separate for isolation.
+    // runSubscribersRetentionLifecycle (OSE-207) touches DB.subscribers ONLY;
+    //   off by default (env.SUBSCRIBERS_RETENTION_DAYS unset → no-op). When set,
+    //   deletes subscribers older than the window. Audits to DB.admin_audit_log.
+    ctx.waitUntil(
+      Promise.all([
+        runFormDataLifecycle(env),
+        runBigQueryBackup(env),
+        runSubscribersRetentionLifecycle(env),
+      ])
+    );
   },
 };
 
@@ -205,3 +213,112 @@ async function runFormDataLifecycle(env: RouterEnv): Promise<void> {
  * FORMS_DB-only (required by the forms-security isolation gate).
  * This function reads from the main DB (events table) and writes to BigQuery.
  */
+
+/**
+ * Subscribers retention lifecycle — OSE-207 / BE-17.
+ *
+ * Touches DB.subscribers ONLY. Lives outside runFormDataLifecycle so the
+ * forms-security S4 isolation gate stays intact (that gate is now precisely
+ * scoped to runFormDataLifecycle's function body, not the whole file).
+ *
+ * Off-by-default by design:
+ *   - subscribers is a marketing list; silent automatic deletion would break
+ *     product expectations.
+ *   - env.SUBSCRIBERS_RETENTION_DAYS is the documented knob. Unset → no-op
+ *     with a structured log line (so ops sees the retention is uncapped).
+ *   - When set to a positive integer N, deletes rows whose created_at is
+ *     older than N days from now. Bounded retention is the GDPR-aligned
+ *     posture once you set the knob; the data-subject erase Phase C
+ *     handler covers ad-hoc right-to-be-forgotten requests independently.
+ *
+ * Every run writes an admin_audit_log row (action=SUBSCRIBERS_RETENTION,
+ * actor=system:lifecycle) so ops can audit retention activity over time.
+ */
+async function runSubscribersRetentionLifecycle(env: RouterEnv): Promise<void> {
+  const now = new Date().toISOString();
+  const raw = env.SUBSCRIBERS_RETENTION_DAYS;
+  const days = raw != null ? parseInt(String(raw), 10) : NaN;
+
+  if (!Number.isFinite(days) || days <= 0) {
+    console.log(
+      JSON.stringify({
+        type: 'SUBSCRIBERS_RETENTION_NOOP',
+        reason: 'SUBSCRIBERS_RETENTION_DAYS unset or non-positive; retention is uncapped',
+        timestamp: now,
+      })
+    );
+    await logSubscribersRetentionAudit(env, 'noop', 0, 0, { reason: 'unset' });
+    return;
+  }
+
+  let deleted = 0;
+  let errors = 0;
+  try {
+    const res = await env.DB.prepare(
+      "DELETE FROM subscribers WHERE created_at < datetime('now', ?)"
+    )
+      .bind(`-${days} days`)
+      .run();
+    deleted = res.meta?.changes ?? 0;
+  } catch (err) {
+    errors = 1;
+    console.error(
+      JSON.stringify({
+        type: 'SUBSCRIBERS_RETENTION_ERROR',
+        error: err instanceof Error ? err.message : String(err),
+        days,
+        timestamp: now,
+      })
+    );
+  }
+
+  console.log(
+    JSON.stringify({
+      type: 'SUBSCRIBERS_RETENTION_COMPLETE',
+      days,
+      deleted,
+      errors,
+      timestamp: now,
+    })
+  );
+  await logSubscribersRetentionAudit(env, 'success', deleted, errors, { days });
+}
+
+/**
+ * Write the retention run to admin_audit_log so retention activity has a
+ * durable trail alongside admin reads (OSE-212 audit log pattern).
+ */
+async function logSubscribersRetentionAudit(
+  env: RouterEnv,
+  outcomeRaw: 'success' | 'noop',
+  deleted: number,
+  errors: number,
+  details: Record<string, unknown>
+): Promise<void> {
+  const id = crypto.randomUUID ? crypto.randomUUID() : `audit-${Date.now()}`;
+  // Map our two non-failure outcomes to OSE-212's audit-outcome column:
+  // 'success' for an executed run (including 0-deleted), 'success' for noop
+  // (informational — not a failure). 'denied' is reserved for real failures.
+  const outcome = errors > 0 ? 'denied' : 'success';
+  try {
+    await env.DB.prepare(
+      `INSERT INTO admin_audit_log
+         (id, action, actor, resource_type, resource_id, request_id, outcome, ip, details)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    )
+      .bind(
+        id,
+        'SUBSCRIBERS_RETENTION',
+        'system:lifecycle',
+        'subscribers',
+        null,
+        id, // request_id = audit row id for scheduled jobs (no inbound request)
+        outcome,
+        null,
+        JSON.stringify({ ...details, deleted, errors, outcomeRaw })
+      )
+      .run();
+  } catch {
+    // Audit failures must never break the lifecycle job.
+  }
+}

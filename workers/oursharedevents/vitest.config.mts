@@ -126,6 +126,10 @@ export default defineConfig({
           GCP_REGION: 'us-central1',
           // OSE-207: per-env pepper for handleSubscribe ip_hash (BE-17)
           IP_HASH_PEPPER: 'test-ip-hash-pepper-32char-secret',
+          // OSE-207 follow-up: subscribers retention knob. Unset by default
+          // (cron logs no-op). Specific specs that exercise the retention
+          // path mutate env per-test via the cloudflare:test helpers.
+          // SUBSCRIBERS_RETENTION_DAYS intentionally NOT set here.
         },
       },
     }),

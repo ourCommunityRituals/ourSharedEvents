@@ -273,6 +273,41 @@ DROP TABLE IF EXISTS form_registrations;
 
 ---
 
+---
+
+## Retention policies per table (PII lifecycle)
+
+The scheduled lifecycle job runs daily. Two functions live in `src/index.ts`:
+
+| Function                           | Touches             | What it does                                                                                                                                                                                                                                                                                                                                                                                         |
+| ---------------------------------- | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `runFormDataLifecycle`             | FORMS_DB only       | Deletes expired `form_registrations`, scrubs `form_surveys` PII via the whitelist, deletes `email_signups` past `retention_expires_at`. Audits to `pii_audit_log`. Bounded by the `forms-security` S4 isolation gate.                                                                                                                                                                                |
+| `runSubscribersRetentionLifecycle` | DB.subscribers only | OSE-207. **Off by default.** If `env.SUBSCRIBERS_RETENTION_DAYS` is set to a positive integer N, deletes subscribers whose `created_at` is older than N days. When unset, logs `SUBSCRIBERS_RETENTION_NOOP` — retention is uncapped and right-to-erase (Phase C in `data-subject.ts`) covers ad-hoc removal. Audits to `admin_audit_log` (action=`SUBSCRIBERS_RETENTION`, actor=`system:lifecycle`). |
+
+### Operator knobs
+
+| Env var                                | Default | Effect                                                                                                                |
+| -------------------------------------- | ------- | --------------------------------------------------------------------------------------------------------------------- |
+| `SUBSCRIBERS_RETENTION_DAYS`           | unset   | Cron is a no-op (with structured log line); subscribers are never auto-deleted. Right-to-erase still works on demand. |
+| `SUBSCRIBERS_RETENTION_DAYS=N` (N > 0) | —       | Cron deletes rows where `created_at < datetime('now', '-N days')`. Audits each run.                                   |
+
+Set via `wrangler secret put` or `[vars]` in `wrangler.toml` per env:
+
+```bash
+wrangler secret put SUBSCRIBERS_RETENTION_DAYS --env staging   # interactive value entry
+```
+
+### Cross-DB no-raw-IP invariant
+
+`tests/pii-invariant.spec.ts` asserts on every PR that no table in either
+binding carries a column whose name is a raw network identifier (`ip_address`,
+`client_ip`, `remote_addr`, `x_forwarded_for`, `cf_connecting_ip`, etc.).
+The hashed escape hatch (`*_hash`) is allowed. Adding any forbidden column
+name fails CI; the right fix is to use a peppered hash like
+`hashIpForSubscribe` from OSE-207, not to weaken the gate.
+
+---
+
 ## Post-migration smoke test
 
 The authoritative gate is `tests/migration-smoke.spec.ts`, run on every PR
