@@ -147,25 +147,30 @@ pwsh -File tools\runner\install-janitor-tasks.ps1 -Uninstall
 
 What gets installed:
 
-| Task                             | Cadence     | Action                     | Why this cadence                                                                                                 |
-| -------------------------------- | ----------- | -------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `Runner Readiness Probe (1-min)` | every 1 min | `janitor.ps1 -EnsureReady` | The pool's mandate is "be ready for the next job." Anything slower than a minute leaves throughput on the table. |
+| Task                             | Cadence     | Action                     | Why this cadence                                                                                                                                                        |
+| -------------------------------- | ----------- | -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Runner Readiness Probe (1-min)` | every 1 min | `janitor.ps1 -EnsureReady` | The pool's mandate is "be ready for the next job." Anything slower than a minute leaves throughput on the table.                                                        |
+| `Runner Probe Watchdog (5-min)`  | every 5 min | `verify-probe-alive.ps1`   | The probe itself is a single point of failure. Watchdog reads the heartbeat file the probe writes every cycle and emits `RUNNER_PROBE_DEAD` if it goes stale (Sweep 8). |
 
 The installer also **removes the legacy hourly/6h tasks** if present —
 Sweep 5/6 → Sweep 7 migration runs automatically. Re-running the
 installer after upgrading the janitor will cleanly transition.
 
-### Four signals the probe acts on (every 60 seconds)
+### Six signals the probe acts on (every 60 seconds)
 
 1. **Orphan job children** — processes whose CommandLine references a
    runner `_work` path but whose parent chain doesn't reach a live
    Worker. Killed every cycle. Parent-chain filter (not process-name
    match) so it never touches Firebase MCP / Cursor / Doppler / other
    unrelated `node.exe`.
-2. **Worker dwell time** — `Runner.Worker` processes alive longer than
-   `WorkerDwellMaxMinutes` (default 15 min) are stuck _inside a job_,
-   blocking the parent Listener from picking up the next job. Killed
-   immediately; the Listener spawns a fresh Worker within seconds.
+2. **Worker dwell time (per-workflow caps)** — `Runner.Worker` processes
+   alive longer than the cap for the currently-running workflow are
+   stuck _inside a job_, blocking the parent Listener from picking up
+   the next job. Killed immediately; the Listener spawns a fresh Worker
+   within seconds. Caps are tuned per workflow (e.g. `T0 Gate` = 10 min,
+   `T4 Functional → Staging` = 60 min) so a legitimately-long workflow
+   isn't mistaken for stuck. Falls back to `WorkerDwellMaxMinutes`
+   (default 15 min) when the workflow name can't be read.
 3. **Listener stuck on broker errors** — `SocketException (995)` /
    `TaskAgentJobNotFoundException` / `BrokerServer ERR` in the diag
    log within `RecentStuckMinutes` (default 3) AND no successful
@@ -174,6 +179,18 @@ installer after upgrading the janitor will cleanly transition.
    cycle. If GitHub has queued workflow runs but the pool reports zero
    `Runner.Worker` processes, a broker is silently broken even when
    the log hasn't caught up. The affected Listener gets bounced.
+5. **Pool-wide outage detection** (Sweep 8) — if every runner shows the
+   _same_ broker-error signature within the last 5 minutes, the failure
+   is GitHub-side, not local. The probe **suppresses all per-runner
+   bounces** for the cycle and emits `GITHUB_SIDE_OUTAGE`. Bouncing all
+   3 runners against a dead broker endpoint would burn the circuit
+   breaker budget without fixing anything.
+6. **Self-heartbeat** (Sweep 8) — the probe writes the current UTC ISO
+   timestamp to `actions-runner\_probe-heartbeat.txt` every cycle.
+   The watchdog task reads this file every 5 minutes and emits
+   `RUNNER_PROBE_DEAD` if the timestamp goes stale — covering the case
+   where the probe task itself gets disabled, PowerShell breaks, the
+   disk fills, etc.
 
 ### Safety: circuit breaker
 
@@ -190,14 +207,20 @@ stored password), `MultipleInstances IgnoreNew` (a slow cycle won't
 pile up), 2-min `ExecutionTimeLimit` (safety guardrail), tolerates
 battery.
 
-Output appends to `actions-runner\_janitor.log`. Three structured
-signal types to grep for:
+Output appends to `actions-runner\_janitor.log`. The log is auto-rotated
+once it crosses `LogMaxMB` (default 5 MB) — old content is moved to
+`_janitor.log.1` so grep stays fast and the file never grows unbounded.
 
-| Signal                  | What it means                       | When to act                                                      |
-| ----------------------- | ----------------------------------- | ---------------------------------------------------------------- |
-| `RUNNER_JANITOR`        | Per-runner per-cycle status         | Diagnostic; one per runner per minute                            |
-| `RUNNER_POOL_READINESS` | Pool summary per cycle              | Diagnostic; one per minute                                       |
-| `RUNNER_POOL_DEGRADED`  | Circuit breaker tripped on a runner | **Investigate** — runner won't be bounced again until <1h passes |
+Six structured signal types to grep for:
+
+| Signal                  | Source                | What it means                                                                              | When to act                                                                                     |
+| ----------------------- | --------------------- | ------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------- |
+| `RUNNER_JANITOR`        | probe (per cycle)     | Per-runner per-cycle status                                                                | Diagnostic; one per runner per minute                                                           |
+| `RUNNER_POOL_READINESS` | probe (per cycle)     | Pool summary per cycle                                                                     | Diagnostic; one per minute                                                                      |
+| `RUNNER_POOL_DEGRADED`  | probe (circuit break) | Circuit breaker tripped on a runner (3+ bounces in 1h)                                     | **Investigate** — runner won't be bounced again until <1h passes                                |
+| `GITHUB_SIDE_OUTAGE`    | probe (Sweep 8)       | All runners share the same broker error in the last 5 min — failure is upstream, not local | **Investigate upstream** (broker, network, GitHub status) — local bounces suppressed this cycle |
+| `RUNNER_PROBE_ALIVE`    | watchdog (5-min)      | Heartbeat file fresh — probe is running on schedule                                        | Diagnostic; one per 5 minutes                                                                   |
+| `RUNNER_PROBE_DEAD`     | watchdog (5-min)      | Heartbeat file missing or stale — probe task stopped, PowerShell broke, disk full, etc.    | **Investigate immediately** — the pool has no self-healing while the probe is down              |
 
 ```powershell
 # Tail in real time
@@ -228,14 +251,16 @@ Start-ScheduledTask -TaskName 'Runner Readiness Probe (1-min)'
 - **Re-registering a runner that GitHub deregistered server-side.** Still
   manual — re-run `config.cmd --token <new>` per the "How to add a new
   runner" procedure above.
-- **Alerting.** The janitor emits structured `RUNNER_JANITOR` JSON lines
-  to the log file. For a single-dev infra that's enough; for a team you'd
-  pipe these to Slack/email via a separate watcher.
-- **Circuit breaker.** If a Listener keeps getting bounced every recovery
-  cycle, that's a deeper problem (bad machine, bad network) that no
-  janitor will fix on its own. Today: nothing detects this pattern. Watch
-  the log for repeated bounces of the same `runner` name as a manual
-  proxy.
+- **Alerting.** The janitor + watchdog emit structured JSON lines to the
+  log file (`RUNNER_POOL_DEGRADED`, `GITHUB_SIDE_OUTAGE`, `RUNNER_PROBE_DEAD`).
+  For a single-dev infra that's enough; for a team you'd pipe these to
+  Slack/email via a separate watcher (e.g. tail the log, regex on the
+  three "human-investigate" signals, post to a webhook).
+- **Self-tests.** `tools/runner/janitor.tests.ps1` covers the pure-logic
+  pieces (circuit-breaker state machine, per-workflow dwell lookups,
+  broker-error parsing, runner→task-name mapping). Run locally with
+  `pwsh -File tools\runner\janitor.tests.ps1` — exits non-zero on any
+  failed assertion. Re-run after editing the janitor.
 
 ## Re-provisioning an existing runner
 
