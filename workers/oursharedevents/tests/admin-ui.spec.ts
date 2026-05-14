@@ -245,6 +245,18 @@ describe('ADMIN-14 CSS: Surface card styles', () => {
     const html = await fetchAdminHtml();
     expect(html).toContain('.qr-hint');
   });
+
+  // OSE-221: Display surface card MUST use the platform-standard accent
+  // (#4361ee, indigo) — not the Tailwind blue (#2563eb) that drifted in
+  // earlier. The 7-surface color tokens need to stay consistent across
+  // admin surfaces. If a future contributor reverts this to Tailwind blue,
+  // this test fails the PR.
+  test('OSE-221: surface-card.display uses platform-standard #4361ee accent (no Tailwind drift)', async () => {
+    const html = await fetchAdminHtml();
+    expect(html).toMatch(/\.surface-card\.display\s*\{[^}]*border-left-color:\s*#4361ee\b/);
+    // Negative: the Tailwind drift value MUST NOT appear in the display rule
+    expect(html).not.toMatch(/\.surface-card\.display\s*\{[^}]*border-left-color:\s*#2563eb\b/);
+  });
 });
 
 // ── Layer 3: Integration — linked surfaces respond with 200 HTML ────────────

@@ -250,7 +250,7 @@ const ADMIN_HTML = `<!DOCTYPE html>
     .surface-card a { font-size: .8rem; color: #4361ee; text-decoration: none; font-weight: 500; }
     .surface-card a:hover { text-decoration: underline; }
     .surface-card.poster  { border-left-color: #d97706; }
-    .surface-card.display { border-left-color: #2563eb; }
+    .surface-card.display { border-left-color: #4361ee; } /* OSE-221: platform-standard accent (was Tailwind blue #2563eb) */
     .surface-card.public  { border-left-color: #16a34a; }
     .surface-card.report  { border-left-color: #7c3aed; }
     .qr-hint { font-size: .7rem; color: #64748b; margin-top: .25rem; }
