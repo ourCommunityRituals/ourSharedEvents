@@ -82,6 +82,17 @@ jobs:
         with:
           languages: ${{ matrix.language }}
           build-mode: ${{ matrix.build-mode }}
+          # Cap heap + parallelism to prevent OS commit-limit exhaustion on
+          # Bloodraven (32 GB / 32 threads). Without these, codeql-action
+          # auto-calculates ram=(total-2048) and threads=cpu-count, claiming
+          # ~30 GB heap + 32 threads. When a second workflow runs concurrently
+          # OR the JVM later commits native memory on top, the OS commit
+          # budget exhausts even with a 48 GB auto-managed pagefile (DOS
+          # error 1455). 8 GB / 8 threads leaves headroom for the worker +
+          # concurrent jobs + JVM native commits. Original rationale +
+          # incident: closed PR #145.
+          ram: 8192
+          threads: 8
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v4
