@@ -473,7 +473,7 @@ jobs:
             local DB=$1; local OBJ=$2
             npx wrangler d1 execute "$DB" --env staging --remote --json \
               --command "SELECT name FROM sqlite_master WHERE type='$OBJ' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' AND name NOT LIKE 'd1_%' ORDER BY name" \
-              | jq -r '.[0].results[].name' | tr '\n' ' ' | sed 's/[[:space:]]*$//'
+              | jq -r '.[0].results[].name' | tr -d '\r' | tr '\n' ' ' | sed 's/[[:space:]]*$//'
           }
 
           ACTUAL_DB=$(fetch_names ocr-db-staging table)
@@ -896,7 +896,7 @@ jobs:
             local DB=$1; local OBJ=$2
             npx wrangler d1 execute "$DB" --env production --remote --json \
               --command "SELECT name FROM sqlite_master WHERE type='$OBJ' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' AND name NOT LIKE 'd1_%' ORDER BY name" \
-              | jq -r '.[0].results[].name' | tr '\n' ' ' | sed 's/[[:space:]]*$//'
+              | jq -r '.[0].results[].name' | tr -d '\r' | tr '\n' ' ' | sed 's/[[:space:]]*$//'
           }
 
           ACTUAL_DB=$(fetch_names ocr-db-production table)
