@@ -703,12 +703,15 @@
                 "exec": [
                   "const ct = (pm.response.headers.get('Content-Type') || ''); if (!ct.includes('application/json')) { pm.test('CF Access blocked — admin route protected', function() { pm.expect([200, 302, 403]).to.include(pm.response.code); }); return; } const json = pm.response.json();",
                   "",
-                  "pm.test('Returns 400', function() {",
-                  "    pm.response.to.have.status(400);",
+                  "// OSE-204 (2026-05-14): oversized payloads return 413 PAYLOAD_TOO_LARGE,",
+                  "// not 400 INVALID_BODY. The form-validation container distinguishes the",
+                  "// two so clients can give users the right error class.",
+                  "pm.test('Returns 413 (PAYLOAD_TOO_LARGE)', function() {",
+                  "    pm.response.to.have.status(413);",
                   "});",
                   "",
-                  "pm.test('INVALID_BODY code', function() {",
-                  "    pm.expect(json.code).to.eql('INVALID_BODY');",
+                  "pm.test('PAYLOAD_TOO_LARGE code', function() {",
+                  "    pm.expect(json.code).to.eql('PAYLOAD_TOO_LARGE');",
                   "});"
                 ]
               }
