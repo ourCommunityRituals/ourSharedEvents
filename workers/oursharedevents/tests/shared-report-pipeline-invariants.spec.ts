@@ -41,9 +41,14 @@ const PIPELINE_MIGRATIONS = [
   '0034_events_add_series_id.sql',
 ];
 
-// The set of pipeline-related lib files Gate 1 inspects (Session 2 has
-// only the hash lib; Session 3 will add the materialize handler).
-const PIPELINE_LIB_FILES = ['src/lib/anon-id-hash.ts'];
+// The set of pipeline-related lib + handler files Gate 1 inspects.
+// Session 2: anon-id-hash.ts. Session 3: shared-report.ts + the
+// scheduled-only handler shared-report-materialize.ts.
+const PIPELINE_LIB_FILES = [
+  'src/lib/anon-id-hash.ts',
+  'src/lib/shared-report.ts',
+  'src/handlers/shared-report-materialize.ts',
+];
 
 function loadSource(relPath: string): string | null {
   const sources: Record<string, string> = JSON.parse(tenv().TEST_SOURCE_FILES_JSON);
@@ -65,20 +70,72 @@ function loadMigrationByName(name: string): string | null {
 // ─── Gate 1 — no FORMS_DB reads in SharedReport pipeline source files ───────
 
 describe('OSE-272 Gate 1: no FORMS_DB reads in pipeline source files', () => {
-  test('src/lib/anon-id-hash.ts does not reference env.FORMS_DB', () => {
-    const src = loadSource('src/lib/anon-id-hash.ts');
-    expect(src, 'anon-id-hash.ts not in TEST_SOURCE_FILES_JSON').not.toBeNull();
+  test.each(PIPELINE_LIB_FILES)('%s does not reference env.FORMS_DB', (rel) => {
+    const src = loadSource(rel);
+    expect(src, `${rel} not in TEST_SOURCE_FILES_JSON`).not.toBeNull();
     expect(src!).not.toMatch(/env\.FORMS_DB/);
     expect(src!).not.toMatch(/FORMS_DB\b/);
   });
 
-  // Drift-guard — when Sessions 3-5 add materialize handler, BigQuery
-  // exporter, and read API, register them here so this gate covers them.
+  // Drift-guard — when Sessions 4-5 add BigQuery exporter and read API,
+  // register them in PIPELINE_LIB_FILES so this gate covers them.
   test('PIPELINE_LIB_FILES list is honest about what exists in src/', () => {
     for (const f of PIPELINE_LIB_FILES) {
       const src = loadSource(f);
       expect(src, `${f} expected to exist`).not.toBeNull();
     }
+  });
+});
+
+// ─── Gate 4 — materialization handler is cron-only, never user-facing ───────
+
+describe('OSE-272 Gate 4: SharedReport materialization is cron-only', () => {
+  // The materialization entry point (runSharedReportMaterialization) MUST
+  // NOT appear in any user-facing handler or in the router. The ONLY caller
+  // permitted is the scheduled() handler in src/index.ts (which dispatches
+  // it via the daily cron trigger configured in wrangler.toml).
+  //
+  // If a future PR exposes the materialization as a route (e.g., for a
+  // "manually trigger backfill" admin endpoint), this gate fails. Manual
+  // backfill should be its own admin handler with its own audit + auth
+  // path, NOT a direct call to the cron-only function.
+
+  test('runSharedReportMaterialization is NOT referenced from src/router.ts', () => {
+    const src = loadSource('src/router.ts');
+    expect(src, 'router.ts not in TEST_SOURCE_FILES_JSON').not.toBeNull();
+    expect(src!).not.toMatch(/runSharedReportMaterialization/);
+  });
+
+  test('runSharedReportMaterialization IS referenced from src/index.ts (scheduled handler)', () => {
+    const src = loadSource('src/index.ts');
+    expect(src, 'index.ts not in TEST_SOURCE_FILES_JSON').not.toBeNull();
+    expect(src!).toMatch(/runSharedReportMaterialization/);
+    // Bonus: must appear inside the scheduled() block, not the fetch() block.
+    // Cheap proxy: scheduled() appears in source BEFORE the call site.
+    const scheduledIdx = src!.indexOf('async scheduled(');
+    const callIdx = src!.indexOf('runSharedReportMaterialization(env)');
+    expect(scheduledIdx).toBeGreaterThan(-1);
+    expect(callIdx).toBeGreaterThan(scheduledIdx);
+  });
+
+  test('materialize handler does not export a route handler shape', () => {
+    // Sanity: the handler file should not export anything that looks like
+    // a Request -> Response handler (which would be a sign someone is
+    // trying to expose it via the router).
+    const src = loadSource('src/handlers/shared-report-materialize.ts');
+    expect(src, 'shared-report-materialize.ts not in TEST_SOURCE_FILES_JSON').not.toBeNull();
+    expect(src!).not.toMatch(
+      /export\s+(?:async\s+)?function\s+handle\w+\s*\([^)]*request\s*:\s*Request/i
+    );
+  });
+
+  test('pipeline lib does not import from router', () => {
+    // shared-report.ts is the pure aggregation lib; it must not pull in
+    // routing primitives (which would imply user-facing wiring).
+    const src = loadSource('src/lib/shared-report.ts');
+    expect(src, 'shared-report.ts not in TEST_SOURCE_FILES_JSON').not.toBeNull();
+    expect(src!).not.toMatch(/from\s+['"]\.\.\/router['"]/);
+    expect(src!).not.toMatch(/import.*\broute\b.*from/);
   });
 });
 

@@ -8,6 +8,7 @@
 
 import { route, type RouterEnv } from './router';
 import { runBigQueryBackup } from './handlers/bigquery';
+import { runSharedReportMaterialization } from './handlers/shared-report-materialize';
 
 export type { RouterEnv as Env };
 
@@ -38,11 +39,16 @@ export default {
     // runSubscribersRetentionLifecycle (OSE-207) touches DB.subscribers ONLY;
     //   off by default (env.SUBSCRIBERS_RETENTION_DAYS unset → no-op). When set,
     //   deletes subscribers older than the window. Audits to DB.admin_audit_log.
+    // runSharedReportMaterialization (OSE-272 Session 3) reads DB only;
+    //   off by default (env.ANON_ID_HASH_PEPPER unset → Phase 1 no-ops with
+    //   structured warning). Phases 2 + 3 (corridor baseline + event-series
+    //   detector) run regardless — they don't need the pepper.
     ctx.waitUntil(
       Promise.all([
         runFormDataLifecycle(env),
         runBigQueryBackup(env),
         runSubscribersRetentionLifecycle(env),
+        runSharedReportMaterialization(env),
       ])
     );
   },

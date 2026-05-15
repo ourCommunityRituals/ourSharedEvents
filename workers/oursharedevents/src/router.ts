@@ -176,6 +176,11 @@ export type RouterEnv = PagesEnv &
   ShortlinkResolveEnv & {
     WORKER_ENV?: string;
     WORKER_BUILD_VERSION?: string;
+    // OSE-272: peppered SHA-256 input for SharedReport return-rate hashing.
+    // Distinct secret from IP_HASH_PEPPER per Q1 ratified (separate peppers,
+    // separate rotation cadences for independent blast radii). Read only by
+    // src/lib/shared-report.ts (cron-only — Gate 4).
+    ANON_ID_HASH_PEPPER?: string;
   };
 
 export async function route(
