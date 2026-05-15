@@ -91,6 +91,7 @@ import {
   handlePublicPage,
   handlePublicEventPage,
   handleAdminPage,
+  handleAdminSignInPage,
   handleLandingPage,
   handleSubscribe,
   handleDisplayPage,
@@ -289,9 +290,26 @@ export async function route(
   }
 
   // ── Admin routes (auth-gated) ──────────────────────────────────────────────
-  if (pathname === '/admin') {
+  //
+  // R-001 fix (2026-05-15) — HTML GET /admin must return an HTML sign-in
+  // page when unauthenticated, not the JSON 401 from requireAdmin. The
+  // JSON dump was the literal first-touch experience for any prospect
+  // clicking "Admin" from the landing nav.
+  //
+  // Logic: if the client accepts text/html (browsers do; API clients
+  // rarely send Accept:text/html for JSON endpoints), render the HTML
+  // sign-in page on auth fail. Otherwise fall through to the JSON 401
+  // so machine consumers (curl, scripts, CI) still get a structured
+  // response.
+  if (pathname === '/admin' && method === 'GET') {
     const deny = requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
-    if (deny) return deny;
+    if (deny) {
+      const accept = request.headers.get('Accept') ?? '';
+      if (accept.includes('text/html')) {
+        return handleAdminSignInPage(env);
+      }
+      return deny;
+    }
     return handleAdminPage(env);
   }
 
@@ -851,9 +869,16 @@ export async function route(
   }
 
   // ── Admin aliases ─────────────────────────────────────────────────────────
+  // Same R-001 HTML-vs-JSON-aware auth pattern as /admin proper.
   if (pathname === '/manage' || pathname === '/dashboard' || pathname === '/create') {
     const deny = requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
-    if (deny) return deny;
+    if (deny) {
+      const accept = request.headers.get('Accept') ?? '';
+      if (method === 'GET' && accept.includes('text/html')) {
+        return handleAdminSignInPage(env);
+      }
+      return deny;
+    }
     return handleAdminPage(env);
   }
 
