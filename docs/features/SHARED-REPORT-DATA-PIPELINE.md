@@ -1,7 +1,7 @@
 # SharedReport Data Pipeline — Design
 
-**Status:** Design draft (Session 1 of OSE-272)
-**Date:** 2026-05-14
+**Status:** **Design ratified** (Session 1 of OSE-272 complete; Session 2 unblocked)
+**Date:** 2026-05-14 (drafted), **2026-05-15 (ratified)**
 **Authors:** mzdan + Co-Architect
 **Closes design phase of:** OSE-272 (data pipeline)
 **Unblocks:** OSE-245 (post-event rendering), OSE-178 (SPON-5 sponsor analytics pane), OSE-246 (sponsor impression logging extension)
@@ -341,17 +341,95 @@ After this chain lands, **OSE-245 (post-event rendering) can ship a real SharedR
 
 ---
 
-## Open questions for review
+## Ratified decisions (2026-05-15)
 
-1. **Pepper rotation cadence.** OSE-207 set up `IP_HASH_PEPPER`. Do we want `ANON_ID_HASH_PEPPER` rotated on the same cadence, or different? Same cadence simplifies ops; different cadence reduces blast radius if one is compromised.
+The 5 open questions surfaced in the initial design draft have been answered. Session 2 (migrations) ships against these decisions.
 
-2. **Event-series creation flow.** Admin UI vs. automatic detection (cluster events by venue + day-of-week + hour-of-day)? Manual is safer for v1; auto-detect can come later.
+### Q1 — Pepper rotation cadence → **Separate peppers, separate cadence**
 
-3. **Return-rate window.** Should "return rate" mean "anon_id seen at any prior event at venue" (lifetime) or "anon_id seen at prior event in last N days/months"? BEACHHEAD-ICP says "% of anon-IDs seen at prior events at this venue or corridor" — implies lifetime. Confirm.
+`ANON_ID_HASH_PEPPER` is its own Wrangler secret, rotated independently of `IP_HASH_PEPPER`. Rationale: the two peppers protect different anonymity scopes (per-attendee event correlation vs. rate-limit/subscriber identity) and should have independent compromise blast radii. Ops overhead is one extra Wrangler secret + one extra entry in the rotation runbook.
 
-4. **Corridor baseline minimum sample size.** Below what density count should the baseline be treated as "insufficient signal"? E.g., a corridor with only 3 events in 30 days probably shouldn't be a baseline.
+**Implementation:**
 
-5. **Tier gating at read time vs. materialization time.** Should all events get their SharedReport materialized regardless of event tier, or only tier-eligible events? Cheaper to materialize selectively; simpler to materialize everything and gate at read.
+- New secret: `ANON_ID_HASH_PEPPER` (Doppler-managed per `reference_doppler.md` memory)
+- Distinct from existing `IP_HASH_PEPPER`
+- Rotation runbook (separate story) documents both peppers + their independent schedules
+
+### Q2 — Event-series creation flow → **Hybrid (auto-suggest + admin confirms)**
+
+The platform auto-detects candidate series by clustering events on `venue + day_of_week + hour_of_day`, surfaces them to the admin UI as suggestions, and the admin clicks accept/reject. Confirmed series participate in `headcount_trend`; rejected suggestions are remembered so the platform doesn't re-suggest them.
+
+**Implementation note (this is the deviation from the original draft):**
+
+The schema needs to support the three-state lifecycle (`pending` candidate → `confirmed` series → optionally `rejected`):
+
+```sql
+CREATE TABLE event_series (
+  id              TEXT PRIMARY KEY,
+  venue_id        TEXT NOT NULL,
+  series_name     TEXT NOT NULL,
+  cadence         TEXT,
+  day_of_week     INTEGER,
+  hour_of_day     INTEGER,
+  active_from     TEXT,
+  active_until    TEXT,
+  state           TEXT NOT NULL DEFAULT 'pending'  -- 'pending' | 'confirmed' | 'rejected'
+    CHECK (state IN ('pending', 'confirmed', 'rejected')),
+  detected_at     TEXT,                            -- when auto-detector first proposed
+  confirmed_at    TEXT,                            -- when admin accepted
+  rejected_reason TEXT,                            -- optional admin note on rejection
+  created_at      TEXT NOT NULL,
+  updated_at      TEXT NOT NULL,
+  FOREIGN KEY (venue_id) REFERENCES events(id)
+);
+
+CREATE INDEX idx_event_series_venue_state ON event_series(venue_id, state);
+```
+
+Auto-detector runs nightly. It looks at the last 8 weeks of events per venue, clusters by `(venue, dow, hour_of_day)` with a tolerance window (±1 hour), and emits a `pending` row for any cluster with ≥ 3 events not already covered by a `confirmed` or `rejected` series.
+
+Admin UI presents pending suggestions with `accept` / `reject` / `edit name` actions. Auto-detector skips clusters that already match a `rejected` row to avoid re-prompting.
+
+Only `confirmed` series are joined to `events.series_id` for SharedReport `headcount_trend`. `pending` and `rejected` rows are detection-loop bookkeeping.
+
+**Scope impact on Session 2:** the migration is slightly more complex (lifecycle column + check constraint + index), and Session 3 gets a new sub-deliverable: the auto-detector cron worker. Net: ~1-2 additional hours of work across Sessions 2-3.
+
+### Q3 — Return-rate window → **Lifetime (bounded by 1-year cookie TTL)**
+
+`anon_id_returns` accumulates over the cookie's natural 1-year lifespan. The 1-year TTL bounds memory implicitly — no additional windowing needed. BEACHHEAD-ICP's "% of anon-IDs seen at prior events" is the source of truth; the cookie TTL is the upper bound.
+
+### Q4 — Corridor baseline minimum sample size → **10 events / 30 days at (corridor × dow × hour) granularity**
+
+Below 10 events in the rolling 30-day window for a given (corridor, day-of-week, hour-of-day) cell, `corridor_density_ratio` returns `NULL`. The SharedReport renderer surfaces: _"insufficient corridor signal — this 2-mile radius needs more events to compute density against."_ Honest about uncertainty.
+
+This is a parameter, not architecture — easy to retune later. Initial: **10**.
+
+### Q5 — Tier gating: materialize vs. read → **Materialize all events; gate at read time**
+
+Cron computes SharedReport aggregates for every event regardless of tier. Tier-gating lives in the _read API response shape_: free tier gets a teaser, paid tiers get the full 6 fields. Rationale: a bar upgrading from free to House at $49/mo sees historical SharedReports immediately, not a "give us 24 hours to backfill" message. Cron cost on D1 aggregation is negligible at our scale.
+
+**Implementation:**
+
+- `materializeSharedReport(eventId)` runs unconditionally on every post-event cron tick
+- `GET /api/v2/events/:id/shared-report` reads the materialized data, applies tier-gating at response-shape time
+- Free tier response: `{ ok: true, tier: 'free', unique_gatherings: <int>, full_data_locked: true, upgrade_hint: { ... } }`
+- Paid tier response: full 6-field payload
+
+---
+
+## Implementation deltas from the original design draft
+
+For session-2 planning, the ratified decisions change a few things from the initial draft:
+
+| Original draft                             | Ratified                                                | Impact                                                       |
+| ------------------------------------------ | ------------------------------------------------------- | ------------------------------------------------------------ |
+| `event_series` table (no lifecycle column) | `event_series` table + `state` lifecycle column + index | +1 migration column, +1 index, ~30 min more work             |
+| Manual-only series creation                | Hybrid auto-suggest + admin confirm                     | New cron sub-worker for auto-detection (~2hr Session 3 work) |
+| Single pepper system extended              | Net-new `ANON_ID_HASH_PEPPER` secret                    | One secret to register + document                            |
+| Corridor baseline min sample TBD           | 10 events / 30d at (corridor × dow × hour)              | Parameter in materialization code                            |
+| Tier gating TBD                            | Materialize all, gate at read                           | Cron is unconditional; tier logic lives in read API          |
+
+Total additional Session 2-3 work: **~3 hours** beyond the original estimate. Still single-PR per session.
 
 ---
 
@@ -374,6 +452,13 @@ After this chain lands, **OSE-245 (post-event rendering) can ship a real SharedR
 
 ## Sign-off
 
-When this design doc is reviewed and ratified, Session 2 (migration) becomes the next concrete deliverable. Until then, the doc itself is the deliverable.
+**Design ratified 2026-05-15.** Session 2 (migrations) is unblocked. The next concrete deliverable is the migration PR with:
 
-**Status: awaiting review.**
+- Migration 0031: `anon_id_returns` table
+- Migration 0032: `corridor_density_baseline` table
+- Migration 0033: `event_series` table with lifecycle `state` column + index
+- Migration 0034: `events.series_id` column (FK to `event_series.id`, optional)
+- New Wrangler secret: `ANON_ID_HASH_PEPPER` (Doppler-managed)
+- Static gates 1 + 2 from the gates section above
+
+Open ratified design at any time during Session 2+ to amend with implementation feedback — the doc remains the source of truth for the pipeline's contract.
