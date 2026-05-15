@@ -496,10 +496,14 @@ describe('ADMIN-2: Phase badge element and initial state', () => {
     expect(html).toContain('class="phase-badge phase-1"');
   });
 
-  test('phase badge initial text content is "Phase 1"', async () => {
+  test('phase badge initial text content is the Phase 1 friendly label', async () => {
     const html = await fetchAdminHtml();
-    // Static default rendered in the header <h1>
-    expect(html).toContain('>Phase 1<');
+    // OSE-R-005 (2026-05-15): the raw "Phase 1" jargon string used to render
+    // in the header. The audit replaced it with PHASE_LABELS[1] = "Community
+    // events". The raw phase number is still available via title + data-phase
+    // for admins/support who need it.
+    expect(html).toContain('>Community events<');
+    expect(html).toContain('data-phase="1"');
   });
 
   test('phase badge base CSS class defined', async () => {
@@ -535,9 +539,12 @@ describe('ADMIN-2: Phase badge JS wiring in loadForms', () => {
     expect(html).toContain('Math.max(1, Math.min(5, Number(legalPhase) || 1))');
   });
 
-  test('loadForms updates phase badge textContent to "Phase " + p', async () => {
+  test('loadForms updates phase badge textContent to the friendly phase label', async () => {
     const html = await fetchAdminHtml();
-    expect(html).toContain("pb.textContent = 'Phase ' + p");
+    // OSE-R-005: friendly label visible; raw phase number lives in title +
+    // data-phase. window.friendlyPhase(p) maps 1..5 to PHASE_LABELS.
+    expect(html).toContain('pb.textContent = window.friendlyPhase(p)');
+    expect(html).toContain("pb.title = 'Internal phase ' + p");
   });
 
   test('loadForms updates phase badge CSS class to "phase-badge phase-N"', async () => {
@@ -581,9 +588,12 @@ describe('ADMIN-2: Events table phase column', () => {
     expect(html).toContain('data-phase="${safePhase}"');
   });
 
-  test('events table header includes Phase column', async () => {
+  test('events table header includes the friendly event-type column', async () => {
     const html = await fetchAdminHtml();
-    expect(html).toContain('<th>Phase</th>');
+    // OSE-R-005: the "Phase" column header used to leak the internal phase
+    // terminology to bar owners. Replaced with "Event type" which matches
+    // the friendly cell values rendered via friendlyPhase().
+    expect(html).toContain('<th>Event type</th>');
   });
 
   test('phase cell has event-phase data-testid and phase-badge class template', async () => {
@@ -612,9 +622,13 @@ describe('ADMIN-2: Two-axis tier × phase gate in loadForms', () => {
     expect(html).toContain('tierEnabled && phaseEnabled');
   });
 
-  test('regulatory lock message contains "Requires Phase" text', async () => {
+  test('regulatory lock message uses the friendly "Available for <event type>" copy', async () => {
     const html = await fetchAdminHtml();
-    expect(html).toContain('Requires Phase');
+    // OSE-R-005: the lock overlay used to say "Requires Phase 2 regulatory
+    // clearance" — internal compliance jargon. Replaced with the friendly
+    // "Available for Commerce events" pattern keyed by PHASE_LABELS.
+    expect(html).toContain('Available for ');
+    expect(html).toContain('upgradePhaseLabel');
   });
 
   test('form gate elements are keyed by form type via t.key', async () => {
@@ -637,11 +651,14 @@ describe('ADMIN-2: Two-axis tier × phase gate in loadForms', () => {
     expect(hits).toBe(2);
   });
 
-  test('payment tier lock is distinct from phase lock ("Upgrade to" vs "Requires Phase")', async () => {
+  test('payment tier lock is distinct from phase lock ("Upgrade to <plan>" vs "Available for <event type>")', async () => {
     const html = await fetchAdminHtml();
-    // Both lock messages must be present — they cover different axes
+    // OSE-R-005: both lock messages still present, both still distinct —
+    // but rephrased to plain English. The tier axis says "Upgrade to <plan>"
+    // (was "Upgrade to mid"), the phase axis says "Available for <event type>"
+    // (was "Requires Phase N regulatory clearance").
     expect(html).toContain('Upgrade to');
-    expect(html).toContain('Requires Phase');
+    expect(html).toContain('Available for ');
   });
 });
 

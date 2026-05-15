@@ -201,6 +201,12 @@ const ADMIN_HTML = `<!DOCTYPE html>
     .phase-badge.phase-3 { background: #fff3cd; color: #856404; }
     .phase-badge.phase-4 { background: #ffe8cc; color: #7d4600; }
     .phase-badge.phase-5 { background: #ffe0e0; color: #c92a2a; }
+    /* OSE-R-005: ID column is hidden by default. Toggle via the
+       "Show internal IDs" checkbox above the events table. */
+    .events-toolbar { display: flex; align-items: center; gap: .5rem; margin: .5rem 0 .75rem; font-size: .85rem; color: #6c757d; }
+    .events-toolbar input[type=checkbox] { margin: 0; }
+    table.events-table .col-internal-id { display: none; }
+    table.events-table.show-internal-ids .col-internal-id { display: table-cell; }
     .feature-locked { position: relative; opacity: .5; }
     .feature-locked::after { content: '🔒'; position: absolute; top: .5rem; right: .5rem; font-size: 1rem; }
     .feature-locked .form-link { pointer-events: none; }
@@ -341,7 +347,7 @@ const ADMIN_HTML = `<!DOCTYPE html>
 <body>
   <a href="#main-content" class="skip-link">Skip to content</a>
   <header data-testid="admin-header" aria-label="OurSharedEvents Admin">
-    <h1>OurSharedEvents<span class="tier-badge" id="tierBadge" data-testid="tier-badge"></span><span class="phase-badge phase-1" id="phaseBadge" data-testid="phase-badge">Phase 1</span></h1>
+    <h1>OurSharedEvents<span class="tier-badge" id="tierBadge" data-testid="tier-badge"></span><span class="phase-badge phase-1" id="phaseBadge" data-testid="phase-badge" title="Internal phase 1" data-phase="1">Community events</span></h1>
     <span>Admin</span>
   </header>
   <main id="main-content" data-testid="admin-main" aria-label="Admin dashboard">
@@ -405,6 +411,33 @@ const ADMIN_HTML = `<!DOCTYPE html>
     <div id="events" data-testid="events-container"><div class="skeleton-table" data-testid="skeleton-events"><div class="skeleton skeleton-row"></div><div class="skeleton skeleton-row"></div><div class="skeleton skeleton-row"></div><div class="skeleton skeleton-row"></div></div></div>
   </main>
   <script>
+    // ─── OSE-R-005 label maps ─────────────────────────────────────────────
+    // The admin UI used to leak raw tier slugs (free/mid/enterprise) and
+    // "Phase N" strings to bar owners. These maps + helpers replace those
+    // with plain-English copy. Source of truth: briefing.ts uses Pro (not
+    // Mid) for the middle tier — admin UI must match or customers see
+    // contradictory naming across surfaces.
+    window.TIER_LABELS = {
+      free: 'Free plan',
+      mid: 'Pro plan',
+      enterprise: 'Enterprise plan'
+    };
+    window.PHASE_LABELS = {
+      1: 'Community events',
+      2: 'Commerce events',
+      3: 'Licensed activities',
+      4: 'Health events',
+      5: 'Youth events'
+    };
+    window.friendlyTier = function(slug) {
+      return (slug && window.TIER_LABELS[slug]) || 'Free plan';
+    };
+    window.friendlyPhase = function(p) {
+      var n = Math.max(1, Math.min(5, Number(p) || 1));
+      return window.PHASE_LABELS[n] || 'Community events';
+    };
+  </script>
+  <script>
     (async () => {
       const esc = s => { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; };
       const container = document.getElementById('events');
@@ -419,22 +452,37 @@ const ADMIN_HTML = `<!DOCTYPE html>
           const safeName = esc(e.name || 'Untitled');
           const safeId = esc(String(e.id));
           const safePhase = Math.max(1, Math.min(5, Number(e.legal_clearance_tier) || 1));
+          const phaseLabel = esc(window.friendlyPhase(safePhase));
           return \`
           <tr onclick="window.loadForms('\${safeId}', '\${safeName.replace(/'/g, "\\\\'")}', \${safePhase}); document.querySelectorAll('tr.selected').forEach(r=>r.classList.remove('selected')); this.classList.add('selected');" onkeydown="if(event.key==='Enter'||event.key===' '){this.click();event.preventDefault();}" class="clickable-row" tabindex="0" data-testid="event-row-\${safeId}" data-phase="\${safePhase}">
-            <td data-testid="event-id">\${safeId}</td>
+            <td class="col-internal-id" data-testid="event-id">\${safeId}</td>
             <td data-testid="event-name">\${safeName}</td>
             <td data-testid="event-date">\${e.startDateISO ? esc(new Date(e.startDateISO).toLocaleDateString()) : '—'}</td>
             <td data-testid="event-venue">\${esc(e.venue || '—')}</td>
             <td><span class="badge \${esc(e.status)}" data-testid="event-status">\${esc(e.status)}</span></td>
-            <td><span class="phase-badge phase-\${safePhase}" data-testid="event-phase">Phase \${safePhase}</span></td>
+            <td><span class="phase-badge phase-\${safePhase}" data-testid="event-phase" title="Internal phase \${safePhase}">\${phaseLabel}</span></td>
           </tr>
         \`}).join('');
         container.innerHTML = \`
-          <table data-testid="events-table">
-            <thead><tr><th>ID</th><th>Name</th><th>Date</th><th>Venue</th><th>Status</th><th>Phase</th></tr></thead>
+          <div class="events-toolbar">
+            <label><input type="checkbox" id="show-internal-ids" data-testid="show-internal-ids-toggle" /> Show internal IDs</label>
+          </div>
+          <table class="events-table" data-testid="events-table">
+            <thead><tr><th class="col-internal-id">ID</th><th>Name</th><th>Date</th><th>Venue</th><th>Status</th><th>Event type</th></tr></thead>
             <tbody data-testid="events-tbody">\${rows}</tbody>
           </table>
         \`;
+        const toggle = document.getElementById('show-internal-ids');
+        const tbl = container.querySelector('table.events-table');
+        if (toggle && tbl) {
+          toggle.addEventListener('change', () => {
+            if (toggle.checked) {
+              tbl.classList.add('show-internal-ids');
+            } else {
+              tbl.classList.remove('show-internal-ids');
+            }
+          });
+        }
       } catch (err) {
         container.innerHTML = '<div class="card-error" data-testid="events-error"><div class="error-icon">&#9888;</div><div class="error-msg">Could not load events.</div><button class="retry-btn" data-testid="events-retry" onclick="location.reload()">Retry</button></div>';
       }
@@ -484,7 +532,11 @@ const ADMIN_HTML = `<!DOCTYPE html>
         const data = await res.json();
 
         if (res.ok && data.ok) {
-          msg.textContent = 'Event created \\u2014 ' + data.id;
+          // OSE-R-005: bar owners don't need to see (or copy) internal event
+          // IDs. Stash the id in a dataset attribute for support/test access
+          // while the visible toast stays in plain English.
+          msg.textContent = 'Event created.';
+          if (data.id) msg.dataset.eventId = String(data.id);
           msg.className = 'create-msg success';
           document.getElementById('create-title').value = '';
           document.getElementById('create-date').value = '';
@@ -556,7 +608,11 @@ const ADMIN_HTML = `<!DOCTYPE html>
       const pb = document.getElementById('phaseBadge');
       if (pb) {
         const p = Math.max(1, Math.min(5, Number(legalPhase) || 1));
-        pb.textContent = 'Phase ' + p;
+        // OSE-R-005: friendly label visible; raw phase number stays in a
+        // tooltip + data attribute for admins who actually need it.
+        pb.textContent = window.friendlyPhase(p);
+        pb.title = 'Internal phase ' + p;
+        pb.setAttribute('data-phase', String(p));
         pb.className = 'phase-badge phase-' + p;
         pb.dataset.testid = 'phase-badge';
       }
@@ -590,9 +646,12 @@ const ADMIN_HTML = `<!DOCTYPE html>
         const phaseEnabled = eventPhase >= (t.upgradePhase || 1);
         const enabled = tierEnabled && phaseEnabled;
         const lockedClass = enabled ? '' : ' feature-locked';
+        // OSE-R-005: friendly plan + event-type names in the lock overlay.
+        const upgradeTierLabel = window.friendlyTier(t.upgradeTier || 'mid');
+        const upgradePhaseLabel = window.friendlyPhase(t.upgradePhase || 2);
         const lockMsg = enabled ? '' : !tierEnabled
-          ? '<div class="lock-overlay">Upgrade to ' + (t.upgradeTier || 'mid') + ' to unlock</div>'
-          : '<div class="lock-overlay">Requires Phase ' + (t.upgradePhase || 2) + ' regulatory clearance</div>';
+          ? '<div class="lock-overlay">Upgrade to ' + upgradeTierLabel + ' to unlock</div>'
+          : '<div class="lock-overlay">Available for ' + upgradePhaseLabel + '</div>';
         return '<div class="' + lockedClass + '" data-testid="form-gate-' + t.key + '">' +
           '<a class="form-link" href="/forms/' + eventId + '?type=' + t.key + '&event=' + encodedName + '" target="_blank" data-testid="form-link-' + t.key + '">' +
             '<div class="form-type">' + t.label + '</div>' +
@@ -1022,10 +1081,13 @@ const ADMIN_HTML = `<!DOCTYPE html>
         fetch('/api/v2/admin/flags/resolve').then(r => r.json()).catch(() => null),
       ]);
 
-      // Render tier badge
+      // Render tier badge — OSE-R-005: friendly label visible; raw slug
+      // preserved in data-tier for tests / support tooling.
       const badge = document.getElementById('tierBadge');
       const tier = (tierRes && tierRes.ok) ? tierRes.tier : 'free';
-      badge.textContent = tier;
+      badge.textContent = window.friendlyTier(tier);
+      badge.setAttribute('data-tier', tier);
+      badge.title = 'Internal tier slug: ' + tier;
       badge.className = 'tier-badge ' + tier;
 
       // Store resolved flags globally for form gating

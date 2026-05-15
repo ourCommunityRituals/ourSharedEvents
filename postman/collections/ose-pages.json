@@ -10,7 +10,9 @@
       "listen": "prerequest",
       "script": {
         "type": "text/javascript",
-        "exec": ["pm.variables.set('requestStartTime', Date.now());"]
+        "exec": [
+          "pm.variables.set('requestStartTime', Date.now());"
+        ]
       }
     },
     {
@@ -63,8 +65,12 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/",
-              "host": ["{{baseUrl}}"],
-              "path": [""]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                ""
+              ]
             }
           }
         },
@@ -91,8 +97,12 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/home",
-              "host": ["{{baseUrl}}"],
-              "path": ["home"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "home"
+              ]
             }
           }
         },
@@ -115,8 +125,12 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/welcome",
-              "host": ["{{baseUrl}}"],
-              "path": ["welcome"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "welcome"
+              ]
             }
           }
         },
@@ -139,8 +153,12 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/landing",
-              "host": ["{{baseUrl}}"],
-              "path": ["landing"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "landing"
+              ]
             }
           }
         },
@@ -163,8 +181,12 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/events",
-              "host": ["{{baseUrl}}"],
-              "path": ["events"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "events"
+              ]
             }
           }
         },
@@ -187,8 +209,12 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/public",
-              "host": ["{{baseUrl}}"],
-              "path": ["public"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "public"
+              ]
             }
           }
         },
@@ -211,8 +237,12 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/schedule",
-              "host": ["{{baseUrl}}"],
-              "path": ["schedule"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "schedule"
+              ]
             }
           }
         },
@@ -235,8 +265,12 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/calendar",
-              "host": ["{{baseUrl}}"],
-              "path": ["calendar"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "calendar"
+              ]
             }
           }
         }
@@ -247,7 +281,13 @@
       "description": "Admin dashboard (auth required). Uses Bearer token from env.",
       "auth": {
         "type": "bearer",
-        "bearer": [{ "key": "token", "value": "{{adminKey}}", "type": "string" }]
+        "bearer": [
+          {
+            "key": "token",
+            "value": "{{adminKey}}",
+            "type": "string"
+          }
+        ]
       },
       "item": [
         {
@@ -280,8 +320,12 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/admin",
-              "host": ["{{baseUrl}}"],
-              "path": ["admin"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin"
+              ]
             }
           }
         },
@@ -308,8 +352,12 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/manage",
-              "host": ["{{baseUrl}}"],
-              "path": ["manage"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "manage"
+              ]
             }
           }
         },
@@ -331,8 +379,12 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/dashboard",
-              "host": ["{{baseUrl}}"],
-              "path": ["dashboard"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "dashboard"
+              ]
             }
           }
         },
@@ -354,13 +406,17 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/create",
-              "host": ["{{baseUrl}}"],
-              "path": ["create"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "create"
+              ]
             }
           }
         },
         {
-          "name": "GET /admin (no auth — blocked by CF Access)",
+          "name": "GET /admin (no auth â€” blocked by CF Access)",
           "event": [
             {
               "listen": "test",
@@ -385,13 +441,19 @@
             }
           ],
           "request": {
-            "auth": { "type": "noauth" },
+            "auth": {
+              "type": "noauth"
+            },
             "method": "GET",
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/admin",
-              "host": ["{{baseUrl}}"],
-              "path": ["admin"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin"
+              ]
             }
           }
         },
@@ -439,7 +501,9 @@
             }
           ],
           "request": {
-            "auth": { "type": "noauth" },
+            "auth": {
+              "type": "noauth"
+            },
             "method": "GET",
             "header": [
               {
@@ -449,8 +513,12 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/admin",
-              "host": ["{{baseUrl}}"],
-              "path": ["admin"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin"
+              ]
             }
           }
         },
@@ -486,13 +554,24 @@
             }
           ],
           "request": {
-            "auth": { "type": "noauth" },
+            "auth": {
+              "type": "noauth"
+            },
             "method": "GET",
-            "header": [{ "key": "Accept", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/admin",
-              "host": ["{{baseUrl}}"],
-              "path": ["admin"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin"
+              ]
             }
           }
         },
@@ -512,13 +591,24 @@
             }
           ],
           "request": {
-            "auth": { "type": "noauth" },
+            "auth": {
+              "type": "noauth"
+            },
             "method": "GET",
-            "header": [{ "key": "Accept", "value": "text/html" }],
+            "header": [
+              {
+                "key": "Accept",
+                "value": "text/html"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/manage",
-              "host": ["{{baseUrl}}"],
-              "path": ["manage"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "manage"
+              ]
             }
           }
         },
@@ -542,17 +632,35 @@
             }
           ],
           "request": {
-            "auth": { "type": "noauth" },
+            "auth": {
+              "type": "noauth"
+            },
             "method": "POST",
             "header": [
-              { "key": "Accept", "value": "text/html" },
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Accept",
+                "value": "text/html"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
-            "body": { "mode": "raw", "raw": "{}" },
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
             "url": {
               "raw": "{{baseUrl}}/api/v2/admin/events",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v2", "admin", "events"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v2",
+                "admin",
+                "events"
+              ]
             }
           }
         }
@@ -560,7 +668,7 @@
     },
     {
       "name": "3. MVP Surfaces",
-      "description": "Display (TV/kiosk), Poster, SharedReport — public, no auth.",
+      "description": "Display (TV/kiosk), Poster, SharedReport â€” public, no auth.",
       "item": [
         {
           "name": "GET /display",
@@ -582,8 +690,12 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/display",
-              "host": ["{{baseUrl}}"],
-              "path": ["display"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "display"
+              ]
             }
           }
         },
@@ -606,8 +718,12 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/tv",
-              "host": ["{{baseUrl}}"],
-              "path": ["tv"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "tv"
+              ]
             }
           }
         },
@@ -630,8 +746,12 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/kiosk",
-              "host": ["{{baseUrl}}"],
-              "path": ["kiosk"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "kiosk"
+              ]
             }
           }
         },
@@ -654,8 +774,12 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/screen",
-              "host": ["{{baseUrl}}"],
-              "path": ["screen"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "screen"
+              ]
             }
           }
         },
@@ -679,8 +803,12 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/poster",
-              "host": ["{{baseUrl}}"],
-              "path": ["poster"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "poster"
+              ]
             }
           }
         },
@@ -703,8 +831,12 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/posters",
-              "host": ["{{baseUrl}}"],
-              "path": ["posters"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "posters"
+              ]
             }
           }
         },
@@ -727,8 +859,12 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/flyers",
-              "host": ["{{baseUrl}}"],
-              "path": ["flyers"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "flyers"
+              ]
             }
           }
         },
@@ -768,8 +904,12 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/sharedReport",
-              "host": ["{{baseUrl}}"],
-              "path": ["sharedReport"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "sharedReport"
+              ]
             }
           }
         },
@@ -792,8 +932,12 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/report",
-              "host": ["{{baseUrl}}"],
-              "path": ["report"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "report"
+              ]
             }
           }
         },
@@ -816,8 +960,12 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/analytics",
-              "host": ["{{baseUrl}}"],
-              "path": ["analytics"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "analytics"
+              ]
             }
           }
         },
@@ -840,8 +988,12 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/reports",
-              "host": ["{{baseUrl}}"],
-              "path": ["reports"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reports"
+              ]
             }
           }
         },
@@ -864,8 +1016,12 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/insights",
-              "host": ["{{baseUrl}}"],
-              "path": ["insights"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "insights"
+              ]
             }
           }
         }
@@ -896,8 +1052,13 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/forms/{{testEventId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["forms", "{{testEventId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "forms",
+                "{{testEventId}}"
+              ]
             }
           }
         },
@@ -921,9 +1082,19 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/forms/{{testEventId}}?type=register",
-              "host": ["{{baseUrl}}"],
-              "path": ["forms", "{{testEventId}}"],
-              "query": [{ "key": "type", "value": "register" }]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "forms",
+                "{{testEventId}}"
+              ],
+              "query": [
+                {
+                  "key": "type",
+                  "value": "register"
+                }
+              ]
             }
           }
         },
@@ -947,9 +1118,19 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/forms/{{testEventId}}?type=checkin",
-              "host": ["{{baseUrl}}"],
-              "path": ["forms", "{{testEventId}}"],
-              "query": [{ "key": "type", "value": "checkin" }]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "forms",
+                "{{testEventId}}"
+              ],
+              "query": [
+                {
+                  "key": "type",
+                  "value": "checkin"
+                }
+              ]
             }
           }
         },
@@ -973,9 +1154,19 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/forms/{{testEventId}}?type=survey",
-              "host": ["{{baseUrl}}"],
-              "path": ["forms", "{{testEventId}}"],
-              "query": [{ "key": "type", "value": "survey" }]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "forms",
+                "{{testEventId}}"
+              ],
+              "query": [
+                {
+                  "key": "type",
+                  "value": "survey"
+                }
+              ]
             }
           }
         },
@@ -999,9 +1190,19 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/forms/{{testEventId}}?type=email",
-              "host": ["{{baseUrl}}"],
-              "path": ["forms", "{{testEventId}}"],
-              "query": [{ "key": "type", "value": "email" }]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "forms",
+                "{{testEventId}}"
+              ],
+              "query": [
+                {
+                  "key": "type",
+                  "value": "email"
+                }
+              ]
             }
           }
         }
@@ -1030,8 +1231,12 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/briefing",
-              "host": ["{{baseUrl}}"],
-              "path": ["briefing"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "briefing"
+              ]
             }
           }
         }
@@ -1039,7 +1244,7 @@
     },
     {
       "name": "OSE-R-004 branded public-event error pages (audit 2026-05-15)",
-      "description": "Locks the contract that public-event 404 / 503 HTML responses render the branded shell with OurSharedEvents header, friendly copy, and a CTA back to /events. Pre-fix, these returned bare 1996-style HTML — see REFINEMENT-BACKLOG-2026-05-15.md OSE-R-004 + OSE-R-022.\n\nMatching vitest API spec: workers/oursharedevents/tests/public-event-error-pages.spec.ts. Matching Playwright FE spec: tests/playwright/public-event-error-pages.spec.ts.",
+      "description": "Locks the contract that public-event 404 / 503 HTML responses render the branded shell with OurSharedEvents header, friendly copy, and a CTA back to /events. Pre-fix, these returned bare 1996-style HTML â€” see REFINEMENT-BACKLOG-2026-05-15.md OSE-R-004 + OSE-R-022.\n\nMatching vitest API spec: workers/oursharedevents/tests/public-event-error-pages.spec.ts. Matching Playwright FE spec: tests/playwright/public-event-error-pages.spec.ts.",
       "item": [
         {
           "name": "OSE-R-004 | API | GET /events/:id (well-formed id, no row) | 404 with branded HTML body",
@@ -1078,11 +1283,21 @@
           ],
           "request": {
             "method": "GET",
-            "header": [{ "key": "Accept", "value": "text/html" }],
+            "header": [
+              {
+                "key": "Accept",
+                "value": "text/html"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/events/evt_does_not_exist_r004",
-              "host": ["{{baseUrl}}"],
-              "path": ["events", "evt_does_not_exist_r004"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "events",
+                "evt_does_not_exist_r004"
+              ]
             }
           }
         },
@@ -1109,11 +1324,21 @@
           ],
           "request": {
             "method": "GET",
-            "header": [{ "key": "Accept", "value": "text/html" }],
+            "header": [
+              {
+                "key": "Accept",
+                "value": "text/html"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/events/not%20a%20valid%20id!!",
-              "host": ["{{baseUrl}}"],
-              "path": ["events", "not%20a%20valid%20id!!"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "events",
+                "not%20a%20valid%20id!!"
+              ]
             }
           }
         },
@@ -1125,7 +1350,7 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "// OSE-R-004: defensive — error pages must not leak D1 errors, stack",
+                  "// OSE-R-004: defensive â€” error pages must not leak D1 errors, stack",
                   "// traces, or 'undefined' to customers.",
                   "pm.test('Returns 404', function() { pm.response.to.have.status(404); });",
                   "const body = pm.response.text();",
@@ -1140,11 +1365,175 @@
           ],
           "request": {
             "method": "GET",
-            "header": [{ "key": "Accept", "value": "text/html" }],
+            "header": [
+              {
+                "key": "Accept",
+                "value": "text/html"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/events/evt_does_not_exist_r004",
-              "host": ["{{baseUrl}}"],
-              "path": ["events", "evt_does_not_exist_r004"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "events",
+                "evt_does_not_exist_r004"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "OSE-R-005 friendly admin labels (audit 2026-05-15)",
+      "description": "Locks the contract that the rendered admin dashboard surfaces friendly tier + phase labels (not raw slugs or 'Phase N' strings), hides internal IDs behind a toggle, and keeps the create-event toast jargon-free. Matching specs:\n  - workers/oursharedevents/tests/admin-friendly-labels.spec.ts (vitest API)\n  - tests/playwright/admin-friendly-labels.spec.ts (Playwright FE)",
+      "item": [
+        {
+          "name": "OSE-R-005 | API | GET /admin (authed) | rendered HTML embeds TIER_LABELS + PHASE_LABELS maps",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Returns 200', function() { pm.response.to.have.status(200); });",
+                  "const body = pm.response.text();",
+                  "pm.test('TIER_LABELS map embedded with Free / Pro / Enterprise plan strings', function() {",
+                  "    pm.expect(body).to.match(/TIER_LABELS\\s*=\\s*\\{/);",
+                  "    pm.expect(body).to.match(/free\\s*:\\s*['\\\"]Free plan['\\\"]/);",
+                  "    pm.expect(body).to.match(/mid\\s*:\\s*['\\\"]Pro plan['\\\"]/);",
+                  "    pm.expect(body).to.match(/enterprise\\s*:\\s*['\\\"]Enterprise plan['\\\"]/);",
+                  "});",
+                  "pm.test('PHASE_LABELS map embedded for all 5 phases', function() {",
+                  "    pm.expect(body).to.match(/PHASE_LABELS\\s*=\\s*\\{/);",
+                  "    pm.expect(body).to.include('Community events');",
+                  "    pm.expect(body).to.include('Commerce events');",
+                  "    pm.expect(body).to.include('Licensed activities');",
+                  "    pm.expect(body).to.include('Health events');",
+                  "    pm.expect(body).to.include('Youth events');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "text/html"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminBearer}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin"
+              ]
+            }
+          }
+        },
+        {
+          "name": "OSE-R-005 | API | GET /admin (authed) | events table ID column is .col-internal-id (hidden by default) and toggle is rendered",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Returns 200', function() { pm.response.to.have.status(200); });",
+                  "const body = pm.response.text();",
+                  "pm.test('ID column header carries .col-internal-id class', function() {",
+                  "    pm.expect(body).to.include('<th class=\\\"col-internal-id\\\">ID</th>');",
+                  "});",
+                  "pm.test('ID cell template carries .col-internal-id class', function() {",
+                  "    pm.expect(body).to.include('<td class=\\\"col-internal-id\\\" data-testid=\\\"event-id\\\">');",
+                  "});",
+                  "pm.test('Show internal IDs toggle is rendered', function() {",
+                  "    pm.expect(body).to.include('data-testid=\\\"show-internal-ids-toggle\\\"');",
+                  "});",
+                  "pm.test('CSS hides .col-internal-id by default', function() {",
+                  "    pm.expect(body).to.include('table.events-table .col-internal-id { display: none; }');",
+                  "});",
+                  "pm.test('Events table header column reads \\\"Event type\\\" not \\\"Phase\\\"', function() {",
+                  "    pm.expect(body).to.include('<th>Event type</th>');",
+                  "    pm.expect(body).to.not.include('<th>Phase</th>');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "text/html"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminBearer}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin"
+              ]
+            }
+          }
+        },
+        {
+          "name": "OSE-R-005 | API | GET /admin (authed) | create-event toast uses friendly copy (no internal id leak)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Returns 200', function() { pm.response.to.have.status(200); });",
+                  "const body = pm.response.text();",
+                  "pm.test('Friendly toast wired', function() {",
+                  "    pm.expect(body).to.include(\"msg.textContent = 'Event created.'\");",
+                  "    pm.expect(body).to.include('msg.dataset.eventId = String(data.id)');",
+                  "});",
+                  "pm.test('Pre-fix toast pattern absent', function() {",
+                  "    pm.expect(body).to.not.match(/msg\\.textContent\\s*=\\s*['\\\"]Event created\\s*\\\\u2014/);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "text/html"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminBearer}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin"
+              ]
             }
           }
         }
