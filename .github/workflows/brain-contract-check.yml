@@ -39,14 +39,6 @@ jobs:
           ref: main
           token: ${{ secrets.OCR_PROPAGATE_TOKEN }}
 
-      - name: Checkout OCR workspace root (centralized CI scripts)
-        uses: actions/checkout@v4
-        with:
-          repository: ourCommunityRituals/ourCommunityRituals
-          path: ocr-workspace
-          ref: main
-          token: ${{ secrets.OCR_PROPAGATE_TOKEN }}
-
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
@@ -65,7 +57,7 @@ jobs:
         working-directory: ${{ github.workspace }}
         shell: bash
         run: |
-          python3 ocr-workspace/packages/ocr-ci-scripts/check_brain_contract.py \
+          python3 ocr-docs/ocr-docs-brain/scripts/check_brain_contract.py \
             --brain ocr-docs/ocr-docs-brain \
             --repo ose \
             --product-id ose \
@@ -90,7 +82,7 @@ jobs:
           COMMIT_SHA: ${{ github.event.pull_request.head.sha }}
           REPO_NAME: ${{ github.repository }}
         run: |
-          python3 ocr-workspace/packages/ocr-ci-scripts/open_drift_ticket.py \
+          python3 ocr-docs/ocr-docs-brain/scripts/open_drift_ticket.py \
             --report conformance-report.json \
             --repo "$REPO_NAME" \
             --pr-number "$PR_NUMBER" \
