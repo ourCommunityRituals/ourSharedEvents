@@ -93,6 +93,79 @@ export async function bigQueryInsertRows(
 }
 
 /**
+ * Stream rows into a BigQuery table in a SPECIFIC dataset, with an
+ * optional caller-supplied insertId function for idempotency.
+ *
+ * Used by the SharedReport BigQuery export (OSE-272 Session 4) where
+ * different rows must route to different datasets per regulatory pool,
+ * and where retries must be safe (BQ deduplicates on insertId).
+ *
+ * - Same 500-row batch limit as bigQueryInsertRows.
+ * - insertIdFn defaults to ${tableId}-${Date.now()}-${i} (non-idempotent,
+ *   matches legacy bigQueryInsertRows behavior). Pass an explicit function
+ *   to compute insertIds from row content for crash-safe retries.
+ */
+export async function bigQueryInsertRowsToDataset(
+  env: BigQueryEnv,
+  datasetId: string,
+  tableId: string,
+  rows: Record<string, unknown>[],
+  insertIdFn?: (row: Record<string, unknown>, i: number) => string
+): Promise<{ rowCount: number }> {
+  if (!isBigQueryConfigured(env)) {
+    throw new BigQueryError(
+      'NOT_CONFIGURED',
+      'BigQuery is not configured — set GCP_PROJECT_ID and Google SA credentials'
+    );
+  }
+  if (rows.length > MAX_ROWS_PER_BATCH) {
+    throw new BigQueryError(
+      'TOO_MANY_ROWS',
+      `Batch size ${rows.length} exceeds max ${MAX_ROWS_PER_BATCH}`
+    );
+  }
+  if (rows.length === 0) return { rowCount: 0 };
+
+  const { token } = await getGoogleAccessToken(env);
+  const projectId = getProjectId(env);
+  const url = GCP_API_URLS.bigqueryInsert(projectId, datasetId, tableId);
+
+  const makeInsertId =
+    insertIdFn ?? ((_row: Record<string, unknown>, i: number) => `${tableId}-${Date.now()}-${i}`);
+  const body = {
+    rows: rows.map((row, i) => ({ insertId: makeInsertId(row, i), json: row })),
+  };
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      throw new BigQueryError(
+        'INSERT_FAILED',
+        `BQ insertAll failed (dataset=${datasetId} table=${tableId}): ${res.status} ${text}`
+      );
+    }
+    return { rowCount: rows.length };
+  } catch (err) {
+    if (err instanceof BigQueryError) throw err;
+    throw new BigQueryError(
+      'INSERT_FAILED',
+      `BQ insert request failed (dataset=${datasetId} table=${tableId})`,
+      err
+    );
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+/**
  * Run a synchronous BigQuery query. Returns up to 1000 rows.
  */
 export async function bigQueryRunQuery(

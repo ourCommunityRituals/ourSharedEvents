@@ -69,8 +69,9 @@ describe('QA-1: Migration idempotency', () => {
 
     const names = tables.results.map((r: Record<string, unknown>) => r.name);
     // 16 (pre-OSE-272) + 3 (anon_id_returns, corridor_density_baseline,
-    // event_series — OSE-272 Session 2) = 19.
-    expect(names).toHaveLength(19);
+    // event_series — OSE-272 Session 2) + 1 (bigquery_export_state —
+    // OSE-272 Session 4) = 20.
+    expect(names).toHaveLength(20);
   });
 
   test('indexes remain at exactly 39 after idempotent re-run', async () => {

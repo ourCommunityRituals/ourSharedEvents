@@ -78,6 +78,29 @@ export type RequiredTag = (typeof REQUIRED_TAGS)[number];
 export type RequiredTagMap = Record<RequiredTag, string>;
 
 /**
+ * Map an event's `legal_clearance_tier` (Phase 1-5 per migration 0023) to
+ * the regulatory pool it belongs to. Codifies the routing rule that until
+ * Session 4 (OSE-272) lived only in migration comments:
+ *
+ *   Phase 1-3 → 'general' (community/recreational, commerce, licensed)
+ *   Phase 4   → 'hipaa'   (health events, institutional)
+ *   Phase 5   → 'coppa'   (youth events, school functions)
+ *
+ * Defensive against NaN/undefined: any non-finite or invalid phase falls
+ * back to 'general' (the least-restrictive pool). This is the safe default
+ * — a misconfigured event still gets exported but lands in the lowest-
+ * sensitivity dataset where general analytics applies.
+ *
+ * Brain conformance verifies the mapping appears in repo code.
+ */
+export function phaseToPool(phase: number | null | undefined): RegulatoryPool {
+  if (typeof phase !== 'number' || !Number.isFinite(phase)) return 'general';
+  if (phase >= 5) return 'coppa';
+  if (phase >= 4) return 'hipaa';
+  return 'general';
+}
+
+/**
  * Resolve the target BigQuery dataset for a given regulatory pool.
  * Throws if the pool is not in this product's allowed set — callers are
  * expected to have already validated the pool belongs to the product.
