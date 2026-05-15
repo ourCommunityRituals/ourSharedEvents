@@ -1767,6 +1767,97 @@ export function handleAdminPage(_env: PagesEnv): Response {
   return html(ADMIN_HTML);
 }
 
+/**
+ * R-001 fix — HTML sign-in landing for unauthenticated GET /admin.
+ *
+ * Before this handler existed, hitting GET /admin without credentials
+ * fell through to `requireAdmin`, which returned a raw JSON 401 dump
+ * (`{"ok":false,"code":"UNAUTH",...}`). For an HTML GET that's the
+ * literal first-touch experience: a JSON error rendered as page text.
+ *
+ * This page replaces the JSON for HTML GETs only. The JSON 401 still
+ * returns for API calls (POST /api/v2/admin/* etc.) — those are
+ * machine consumers that expect a structured response.
+ *
+ * Auth model (per src/auth/admin.ts):
+ *   - Production: Cloudflare Access JWT (preferred). Sign-in flow is
+ *     handled by CF Access itself; this page tells the user what to
+ *     expect and provides the entry-point link.
+ *   - Staging/CI: X-OCR-Internal header or Bearer ADMIN_KEY. Not a
+ *     human-facing path; we don't surface either on this page.
+ *
+ * No JS, no external dependencies. Renders fully under strict CSP.
+ */
+const ADMIN_SIGNIN_HTML = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sign in &middot; OurSharedEvents Admin</title>
+  <meta name="robots" content="noindex" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f8fafc; color: #1e293b; line-height: 1.6; min-height: 100vh; display: flex; flex-direction: column; }
+    header { background: #1a1a2e; color: #fff; padding: 1rem 2rem; display: flex; align-items: center; justify-content: space-between; }
+    .logo { font-size: 1.1rem; font-weight: 700; letter-spacing: -0.01em; text-decoration: none; color: #fff; }
+    nav { display: flex; gap: 1.5rem; }
+    nav a { color: rgba(255,255,255,.8); text-decoration: none; font-size: .875rem; font-weight: 500; }
+    nav a:hover, nav a:focus-visible { color: #fff; }
+    nav a:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+    main { flex: 1; display: flex; align-items: center; justify-content: center; padding: 3rem 1.5rem; }
+    .signin-card { background: #fff; max-width: 460px; width: 100%; border-radius: 12px; padding: 2.5rem 2rem; box-shadow: 0 4px 12px rgba(0,0,0,.06); border: 1px solid #e2e8f0; }
+    .signin-card h1 { font-size: 1.5rem; font-weight: 700; color: #0f172a; margin-bottom: .5rem; }
+    .signin-card .lede { color: #475569; font-size: .95rem; margin-bottom: 1.75rem; }
+    .signin-card .cta { display: inline-block; background: #2563eb; color: #fff; padding: .75rem 1.5rem; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 1rem; transition: background 0.2s; margin-bottom: 1.5rem; }
+    .signin-card .cta:hover { background: #1d4ed8; }
+    .signin-card .cta:focus-visible { outline: 2px solid #1d4ed8; outline-offset: 3px; }
+    .signin-card .helper { font-size: .85rem; color: #64748b; padding-top: 1rem; border-top: 1px solid #e2e8f0; margin-top: .5rem; }
+    .signin-card .helper a { color: #2563eb; text-decoration: none; font-weight: 500; }
+    .signin-card .helper a:hover { text-decoration: underline; }
+    footer { background: #1a1a2e; color: rgba(255,255,255,.6); text-align: center; padding: 1.5rem; font-size: .8rem; }
+    footer a { color: rgba(255,255,255,.8); text-decoration: none; }
+    footer a:hover { color: #fff; }
+    .skip-link { position: absolute; left: -9999px; }
+    .skip-link:focus { position: fixed; top: 0; left: 0; padding: .5rem 1rem; background: #1a1a2e; color: #fff; font-size: 1rem; z-index: 9999; text-decoration: none; border-bottom: 2px solid #4361ee; }
+    @media (max-width: 480px) { header { padding: .75rem 1rem; } nav { gap: 1rem; } .signin-card { padding: 2rem 1.5rem; } }
+  </style>
+</head>
+<body>
+  <a href="#main-content" class="skip-link">Skip to content</a>
+  <header data-testid="signin-header">
+    <a href="/" class="logo" data-testid="signin-logo">OurSharedEvents</a>
+    <nav data-testid="signin-nav">
+      <a href="/events" data-testid="nav-events">Events</a>
+    </nav>
+  </header>
+  <main id="main-content" data-testid="signin-main">
+    <section class="signin-card" data-testid="signin-card">
+      <h1 data-testid="signin-heading">Admin sign-in required</h1>
+      <p class="lede" data-testid="signin-lede">This page is for event organizers. Sign in with your authorized work email to manage your events and access reports.</p>
+      <a href="/admin" class="cta" data-testid="signin-cta" rel="noopener">Sign in to admin</a>
+      <p class="helper" data-testid="signin-helper">
+        New to OurSharedEvents? <a href="/" data-testid="signin-request-access">Request access from the home page</a> &mdash; subscribe and we&#x2019;ll be in touch.
+      </p>
+    </section>
+  </main>
+  <footer data-testid="signin-footer">
+    <p>&#xA9; 2026 OurSharedEvents &#xB7; <a href="/events">Browse Events</a> &#xB7; <a href="/privacy">Privacy</a></p>
+  </footer>
+</body>
+</html>`;
+
+/**
+ * Render the admin sign-in page (HTML 401). Used by the router when an
+ * HTML GET to /admin fails authentication — returns a styled page
+ * instead of the JSON 401 from requireAdmin.
+ *
+ * Status code is 401 so monitoring + bots see the correct semantics,
+ * but the body is a real page a human can read.
+ */
+export function handleAdminSignInPage(_env: PagesEnv): Response {
+  return html(ADMIN_SIGNIN_HTML, 401);
+}
+
 // ─── Rate limiter (per-isolate, in-memory sliding window) ────────────────────
 // Cloudflare Workers share isolates across requests. This provides basic burst
 // protection within a single isolate. For cross-isolate enforcement, upgrade

@@ -353,6 +353,9 @@ describe('OSE-243a + OSE-263: anonymity-principle source gate (L1 static)', () =
     'handleDisplayPage',
     'handlePosterPage',
     'handleSharedReportPage',
+    // R-001 (2026-05-15) — HTML sign-in page for unauth GET /admin. Public-
+    // render because it's served to anonymous prospects; must be anonymity-safe.
+    'handleAdminSignInPage',
   ];
 
   function loadPagesSource(): string {
