@@ -132,6 +132,26 @@ const FORM_CSS = `
   .checkin-tap { text-align: center; padding: 3rem 1rem; }
   .checkin-tap button { font-size: 1.5rem; padding: 1.5rem; border-radius: 50%; width: 180px; height: 180px; margin: 1rem auto; display: block; -webkit-tap-highlight-color: transparent; touch-action: manipulation; transition: transform 0.1s, opacity 0.1s; user-select: none; }
   .checkin-tap .count { font-size: 2rem; font-weight: 700; color: #1a1a2e; margin-top: 1rem; }
+  /* OSE-222: sponsor logo strip in form header. Renders hidden by
+     default; gets .has-sponsors class via JS only if sponsor-bundle
+     for this event returns mobileBanner sponsors. Non-critical
+     load — silently no-ops on fetch failure. */
+  .form-sponsor-strip { display: none; padding: 0.5rem 1rem; background: #fff; border-bottom: 1px solid #e9ecef; }
+  .form-sponsor-strip.has-sponsors { display: flex; align-items: center; justify-content: center; gap: 0.75rem; flex-wrap: wrap; }
+  .form-sponsor-strip .strip-label { font-size: 0.7rem; color: #6c757d; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 500; }
+  .form-sponsor-strip .sponsor-item { display: inline-flex; align-items: center; gap: 0.35rem; }
+  .form-sponsor-strip img { height: 24px; width: auto; max-width: 80px; object-fit: contain; }
+  .form-sponsor-strip .sponsor-name { font-size: 0.8rem; color: #495057; }
+  /* OSE-223: sponsor acknowledgment on form success state. Renders
+     inside .success block below the "you can close this page" line.
+     Uses the same fetched sponsor bundle (cached on page load by
+     the strip loader) — no second fetch. */
+  .form-sponsor-thanks { margin-top: 1.25rem; padding: 1rem; background: #f8f9fa; border-radius: 8px; text-align: center; }
+  .form-sponsor-thanks .thanks-label { display: block; font-size: 0.7rem; color: #6c757d; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 500; margin-bottom: 0.5rem; }
+  .form-sponsor-thanks .sponsor-row { display: inline-flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; justify-content: center; }
+  .form-sponsor-thanks .sponsor-item { display: inline-flex; align-items: center; gap: 0.4rem; }
+  .form-sponsor-thanks img { height: 32px; width: auto; max-width: 120px; object-fit: contain; }
+  .form-sponsor-thanks .sponsor-name { font-size: 0.85rem; color: #495057; font-weight: 500; }
 `;
 
 // ── Form JS: shared submit logic ─────────────────────────────────────────────
@@ -158,9 +178,63 @@ const FORM_JS_SUBMIT = `
     }
   }
   function showSuccess(msg) {
+    // OSE-223: append sponsor-thanks block if sponsors were loaded for
+    // this event. window.__formSponsorCache is populated by the
+    // sponsor-strip loader on page init (see FORM_JS_SPONSOR). If the
+    // cache is empty (no sponsors / fetch failed / suppressed), the
+    // thanks block silently no-ops.
+    var thanks = '';
+    var cache = window.__formSponsorCache;
+    if (cache && cache.length) {
+      var items = cache.slice(0, 3).map(function(s) {
+        var name = String(s.name || '').replace(/[<>&"']/g, function(c) {
+          return { '<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;' }[c];
+        });
+        var logo = s.logo_url ? '<img src="' + s.logo_url + '" alt="' + name + '" loading="lazy" />' : '';
+        return '<span class="sponsor-item">' + logo + '<span class="sponsor-name">' + name + '</span></span>';
+      }).join('');
+      thanks = '<div class="form-sponsor-thanks" data-testid="form-sponsor-thanks"><span class="thanks-label">Event supported by</span><div class="sponsor-row">' + items + '</div></div>';
+    }
     document.getElementById('form-area').innerHTML =
-      '<div class="success" data-testid="form-success"><div class="icon">&#10003;</div><h2>' + msg + '</h2><p>You can close this page.</p></div>';
+      '<div class="success" data-testid="form-success"><div class="icon">&#10003;</div><h2>' + msg + '</h2><p>You can close this page.</p>' + thanks + '</div>';
   }
+`;
+
+// ── Sponsor strip + cache loader (OSE-222 + OSE-223) ─────────────────────────
+//
+// Single fetch per form-page page load. Caches the mobileBanner sponsor
+// list on window.__formSponsorCache for showSuccess() to read on form
+// submit. If sponsor-bundle is empty or the fetch fails, the strip stays
+// hidden and the success-state thanks block silently no-ops.
+//
+// Why a separate const: keeps FORM_JS_SUBMIT focused on the submit
+// contract; this is a non-critical brand-presence overlay that any
+// individual form can include or skip without coupling.
+
+const FORM_JS_SPONSOR = `
+  (function loadFormSponsors(eventId) {
+    window.__formSponsorCache = null;
+    fetch('/api/v2/events/' + eventId + '/sponsor-bundle?surface=public')
+      .then(function(r) { return r.ok ? r.json() : null; })
+      .then(function(data) {
+        if (!data || !data.ok || !data.bundle || !data.bundle.surface_sponsors) return;
+        var banner = data.bundle.surface_sponsors.mobileBanner;
+        if (!banner || !banner.length) return;
+        window.__formSponsorCache = banner;
+        var strip = document.getElementById('form-sponsor-strip');
+        if (!strip) return;
+        var items = banner.slice(0, 3).map(function(s) {
+          var name = String(s.name || '').replace(/[<>&"']/g, function(c) {
+            return { '<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;' }[c];
+          });
+          var logo = s.logo_url ? '<img src="' + s.logo_url + '" alt="' + name + '" loading="lazy" />' : '';
+          return '<span class="sponsor-item">' + logo + '<span class="sponsor-name">' + name + '</span></span>';
+        }).join('');
+        strip.innerHTML = '<span class="strip-label">Supported by</span>' + items;
+        strip.classList.add('has-sponsors');
+      })
+      .catch(function() { /* silently no-op — sponsor strip is non-critical */ });
+  })(EVENT_ID_PLACEHOLDER);
 `;
 
 // ── Registration form ────────────────────────────────────────────────────────
@@ -328,7 +402,13 @@ function formPage(eventId: string, eventName: string, formType: string, legalTie
     <h1>OurSharedEvents</h1>
     <div class="event-name" data-testid="form-event-name">${eventName}</div>
   </header>
+  <!-- OSE-222: sponsor logo strip — hidden by default. Populated on
+       page load by FORM_JS_SPONSOR using the surface=public bundle.
+       Renders as a thin row under the dark header. Non-critical;
+       silently absent if no sponsors are configured for this event. -->
+  <div class="form-sponsor-strip" id="form-sponsor-strip" data-testid="form-sponsor-strip" role="complementary" aria-label="Event sponsors"></div>
   <main id="main-content" data-testid="form-main">${formHtml}</main>
+  <script>${FORM_JS_SPONSOR.replace('EVENT_ID_PLACEHOLDER', JSON.stringify(eventId))}</script>
 </body>
 </html>`;
 }
