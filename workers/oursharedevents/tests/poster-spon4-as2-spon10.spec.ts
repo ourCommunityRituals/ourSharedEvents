@@ -173,8 +173,18 @@ describe('SPON-10: Sponsor print stylesheet (OSE-183)', () => {
     expect(await posterHtml()).toContain('page-break-inside: avoid');
   });
 
-  test('print styles apply grayscale filter to sponsor logos', async () => {
-    expect(await posterHtml()).toContain('grayscale(1)');
+  test('print styles do NOT grayscale sponsor logos (OSE-R-006)', async () => {
+    // OSE-R-006 (2026-05-15): sponsors paid for full-color logo placement on
+    // printed posters. The pre-fix `filter: grayscale(1)` rule broke that
+    // value promise; the audit removed it. This test inverts the original
+    // SPON-10 assertion to lock the new contract. Full coverage of the
+    // surrounding print-color-adjust + page-break rules lives in
+    // tests/poster-print-colors.spec.ts.
+    const body = await posterHtml();
+    const printMatch = body.match(/@media\s+print\s*\{([\s\S]*?)\}\s*<\/style>/);
+    expect(printMatch, 'poster HTML must contain an @media print block').toBeTruthy();
+    const printBlock = printMatch![1];
+    expect(printBlock).not.toMatch(/filter:\s*grayscale/);
   });
 
   test('print styles enforce black text for sponsor names', async () => {

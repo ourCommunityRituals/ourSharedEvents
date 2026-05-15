@@ -2350,11 +2350,31 @@ const POSTER_HTML = `<!DOCTYPE html>
     .skip-link:focus { position: fixed; top: 0; left: 0; width: auto; height: auto; padding: .5rem 1rem; background: #1a1a2e; color: #fff; font-size: 1rem; z-index: 9999; text-decoration: none; border-bottom: 2px solid #4361ee; }
     @media print {
       .page-header, .event-select, .no-print { display: none !important; }
+      /* OSE-R-006 (audit 2026-05-15): force-print backgrounds + sponsor
+         colors. Sponsors paid for full-color logo placement; pre-fix the
+         print rule grayscaled them and the dark-navy poster header dropped
+         to white-on-white. Both broke the printed-poster value promise. */
+      body,
+      .poster,
+      .poster-header,
+      .poster-sponsors,
+      .poster-sponsor,
+      .poster-sponsor img {
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+        color-adjust: exact;
+      }
       body { background: #fff; }
       .container { margin: 0; max-width: 100%; }
-      .poster { box-shadow: none; border: none; }
+      /* Keep the whole poster on one page when it fits; otherwise allow
+         orderly breaks at the major section boundaries. */
+      .poster { box-shadow: none; border: none; page-break-inside: avoid; }
+      .qr-section { page-break-inside: avoid; }
       .poster-sponsors { page-break-inside: avoid; border-top: 1px solid #ccc; padding: .75rem 1rem; }
-      .poster-sponsor img { filter: grayscale(1); max-height: 20px; }
+      /* OSE-R-006: NO grayscale on sponsor logos in print. Keep the
+         max-height clamp so logos still fit a printed A4 page — that part
+         was a layout decision, separate from the color issue. */
+      .poster-sponsor img { max-height: 20px; }
       .poster-sponsor-name, .poster-sponsor-label { color: #000; }
       .qr-loading { display: none !important; }
       .qr-link-url { display: none !important; }

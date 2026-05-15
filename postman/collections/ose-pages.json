@@ -1149,6 +1149,150 @@
           }
         }
       ]
+    },
+    {
+      "name": "OSE-R-006 poster print colors (audit 2026-05-15)",
+      "description": "Locks the contract that the rendered /poster page's @media print block preserves sponsor color, applies print-color-adjust: exact to brand surfaces, and enforces page-break-inside: avoid on the poster shell and QR section. Sponsors pay for full-color logo placement; pre-fix the print rule grayscaled them and the dark-navy header dropped to white-on-white when a bar owner hit Cmd+P.\n\nMatching vitest API spec: workers/oursharedevents/tests/poster-print-colors.spec.ts. Matching Playwright FE spec: tests/playwright/poster-print-colors.spec.ts.",
+      "item": [
+        {
+          "name": "OSE-R-006 | API | GET /poster (any visitor) | @media print block exists in rendered HTML",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Returns 200', function() { pm.response.to.have.status(200); });",
+                  "const body = pm.response.text();",
+                  "pm.test('Body has @media print block', function() {",
+                  "    pm.expect(body).to.match(/@media\\s+print\\s*\\{/);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "text/html" }],
+            "url": {
+              "raw": "{{baseUrl}}/poster",
+              "host": ["{{baseUrl}}"],
+              "path": ["poster"]
+            }
+          }
+        },
+        {
+          "name": "OSE-R-006 | API | GET /poster (any visitor) | sponsor logos are NOT grayscaled in print rule",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// OSE-R-006 (2026-05-15): pre-fix the print block applied",
+                  "// filter: grayscale(1) to .poster-sponsor img. Sponsors paid for",
+                  "// full color; this lock holds the contract.",
+                  "pm.test('Returns 200', function() { pm.response.to.have.status(200); });",
+                  "const body = pm.response.text();",
+                  "const match = body.match(/@media\\s+print\\s*\\{([\\s\\S]*?)\\}\\s*<\\/style>/);",
+                  "pm.test('Print block extractable', function() { pm.expect(match).to.not.be.null; });",
+                  "const printBlock = match[1];",
+                  "pm.test('No filter: grayscale on sponsor img inside print block', function() {",
+                  "    pm.expect(printBlock).to.not.match(/\\.poster-sponsor\\s+img\\s*\\{[^}]*filter:\\s*grayscale/);",
+                  "});",
+                  "pm.test('No bare grayscale filter anywhere in print block', function() {",
+                  "    pm.expect(printBlock).to.not.match(/filter:\\s*grayscale/);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "text/html" }],
+            "url": {
+              "raw": "{{baseUrl}}/poster",
+              "host": ["{{baseUrl}}"],
+              "path": ["poster"]
+            }
+          }
+        },
+        {
+          "name": "OSE-R-006 | API | GET /poster (any visitor) | print-color-adjust: exact applied to brand header and sponsor surfaces",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Returns 200', function() { pm.response.to.have.status(200); });",
+                  "const body = pm.response.text();",
+                  "const match = body.match(/@media\\s+print\\s*\\{([\\s\\S]*?)\\}\\s*<\\/style>/);",
+                  "pm.test('Print block extractable', function() { pm.expect(match).to.not.be.null; });",
+                  "const printBlock = match[1];",
+                  "pm.test('print-color-adjust: exact present', function() {",
+                  "    pm.expect(printBlock).to.match(/print-color-adjust:\\s*exact/);",
+                  "});",
+                  "pm.test('-webkit-print-color-adjust: exact present', function() {",
+                  "    pm.expect(printBlock).to.match(/-webkit-print-color-adjust:\\s*exact/);",
+                  "});",
+                  "pm.test('.poster-header is in the color-adjust rule set', function() {",
+                  "    pm.expect(printBlock).to.match(/\\.poster-header[\\s\\S]*print-color-adjust:\\s*exact/);",
+                  "});",
+                  "pm.test('.poster-sponsor is in the color-adjust rule set', function() {",
+                  "    pm.expect(printBlock).to.match(/\\.poster-sponsor[\\s\\S]*print-color-adjust:\\s*exact/);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "text/html" }],
+            "url": {
+              "raw": "{{baseUrl}}/poster",
+              "host": ["{{baseUrl}}"],
+              "path": ["poster"]
+            }
+          }
+        },
+        {
+          "name": "OSE-R-006 | API | GET /poster (any visitor) | page-break-inside: avoid on .poster shell AND .qr-section",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Returns 200', function() { pm.response.to.have.status(200); });",
+                  "const body = pm.response.text();",
+                  "const match = body.match(/@media\\s+print\\s*\\{([\\s\\S]*?)\\}\\s*<\\/style>/);",
+                  "pm.test('Print block extractable', function() { pm.expect(match).to.not.be.null; });",
+                  "const printBlock = match[1];",
+                  "pm.test('.poster shell has page-break-inside: avoid', function() {",
+                  "    pm.expect(printBlock).to.match(/\\.poster\\s*\\{[^}]*page-break-inside:\\s*avoid/);",
+                  "});",
+                  "pm.test('.qr-section has page-break-inside: avoid', function() {",
+                  "    pm.expect(printBlock).to.match(/\\.qr-section\\s*\\{[^}]*page-break-inside:\\s*avoid/);",
+                  "});",
+                  "pm.test('.poster-sponsors retains page-break-inside: avoid', function() {",
+                  "    pm.expect(printBlock).to.match(/\\.poster-sponsors\\s*\\{[^}]*page-break-inside:\\s*avoid/);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "text/html" }],
+            "url": {
+              "raw": "{{baseUrl}}/poster",
+              "host": ["{{baseUrl}}"],
+              "path": ["poster"]
+            }
+          }
+        }
+      ]
     }
   ]
 }
