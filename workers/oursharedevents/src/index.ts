@@ -9,6 +9,7 @@
 import { route, type RouterEnv } from './router';
 import { runBigQueryBackup } from './handlers/bigquery';
 import { runSharedReportMaterialization } from './handlers/shared-report-materialize';
+import { runSharedReportBigQueryExport } from './handlers/shared-report-export';
 
 export type { RouterEnv as Env };
 
@@ -43,12 +44,17 @@ export default {
     //   off by default (env.ANON_ID_HASH_PEPPER unset → Phase 1 no-ops with
     //   structured warning). Phases 2 + 3 (corridor baseline + event-series
     //   detector) run regardless — they don't need the pepper.
+    // runSharedReportBigQueryExport (OSE-272 Session 4) reads main DB only
+    //   AND streams to BigQuery; off by default (BQ config unset → no-op).
+    //   Same cron tick as materialization (S4-Q1 ratified). Per-phase
+    //   failure-isolated (S4-Q4); materialization never blocks on export.
     ctx.waitUntil(
       Promise.all([
         runFormDataLifecycle(env),
         runBigQueryBackup(env),
         runSubscribersRetentionLifecycle(env),
         runSharedReportMaterialization(env),
+        runSharedReportBigQueryExport(env),
       ])
     );
   },
