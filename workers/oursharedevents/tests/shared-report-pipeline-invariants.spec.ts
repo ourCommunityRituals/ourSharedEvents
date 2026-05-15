@@ -39,19 +39,23 @@ const PIPELINE_MIGRATIONS = [
   '0032_create_corridor_density_baseline.sql',
   '0033_create_event_series.sql',
   '0034_events_add_series_id.sql',
+  '0035_create_bigquery_export_state.sql',
 ];
 
 // The set of pipeline-related lib + handler files Gate 1 inspects.
 // Session 2: anon-id-hash.ts. Session 3: shared-report.ts + the
-// scheduled-only handler shared-report-materialize.ts. Session 5: the
-// read-API stack (auth, builder, handler). Session 4's exporter files
-// land via its own PR and add themselves to this list at that point.
+// scheduled-only handler shared-report-materialize.ts. Session 4:
+// shared-report-export.ts (lib + handler). Session 5: the read-API
+// stack (shared-report-auth.ts, shared-report-builder.ts, and the
+// shared-report-read.ts handler).
 const PIPELINE_LIB_FILES = [
   'src/lib/anon-id-hash.ts',
   'src/lib/shared-report.ts',
   'src/lib/shared-report-auth.ts',
   'src/lib/shared-report-builder.ts',
+  'src/lib/shared-report-export.ts',
   'src/handlers/shared-report-materialize.ts',
+  'src/handlers/shared-report-export.ts',
   'src/handlers/shared-report-read.ts',
 ];
 
@@ -141,6 +145,57 @@ describe('OSE-272 Gate 4: SharedReport materialization is cron-only', () => {
     expect(src, 'shared-report.ts not in TEST_SOURCE_FILES_JSON').not.toBeNull();
     expect(src!).not.toMatch(/from\s+['"]\.\.\/router['"]/);
     expect(src!).not.toMatch(/import.*\broute\b.*from/);
+  });
+});
+
+// ─── Gate 5 — BigQuery export handler is cron-only, never user-facing ───────
+
+describe('OSE-272 Gate 5: SharedReport BigQuery export is cron-only', () => {
+  // Mirror of Gate 4 for the Session 4 export. The export streams aggregate
+  // rows to BigQuery — it must NEVER be invoked from a request handler.
+  // Cron-only by static-source contract.
+
+  test('runSharedReportBigQueryExport is NOT referenced from src/router.ts', () => {
+    const src = loadSource('src/router.ts');
+    expect(src, 'router.ts not in TEST_SOURCE_FILES_JSON').not.toBeNull();
+    expect(src!).not.toMatch(/runSharedReportBigQueryExport/);
+  });
+
+  test('runSharedReportBigQueryExport IS referenced from src/index.ts (scheduled handler)', () => {
+    const src = loadSource('src/index.ts');
+    expect(src, 'index.ts not in TEST_SOURCE_FILES_JSON').not.toBeNull();
+    expect(src!).toMatch(/runSharedReportBigQueryExport/);
+    const scheduledIdx = src!.indexOf('async scheduled(');
+    const callIdx = src!.indexOf('runSharedReportBigQueryExport(env)');
+    expect(scheduledIdx).toBeGreaterThan(-1);
+    expect(callIdx).toBeGreaterThan(scheduledIdx);
+  });
+
+  test('export handler does not export a route handler shape', () => {
+    const src = loadSource('src/handlers/shared-report-export.ts');
+    expect(src, 'shared-report-export.ts not in TEST_SOURCE_FILES_JSON').not.toBeNull();
+    expect(src!).not.toMatch(
+      /export\s+(?:async\s+)?function\s+handle\w+\s*\([^)]*request\s*:\s*Request/i
+    );
+  });
+
+  test('export lib does not import from router', () => {
+    const src = loadSource('src/lib/shared-report-export.ts');
+    expect(src, 'shared-report-export.ts not in TEST_SOURCE_FILES_JSON').not.toBeNull();
+    expect(src!).not.toMatch(/from\s+['"]\.\.\/router['"]/);
+    expect(src!).not.toMatch(/import.*\broute\b.*from/);
+  });
+
+  test('export pipeline writes only aggregate tables, never raw scans/forms', () => {
+    // The exporter joins to events for routing tags but only writes to
+    // BigQuery — never INSERTs into scans, registrations, surveys, etc.
+    // This is a paranoia gate: catches a future PR that accidentally
+    // "enriches" the export with forms data.
+    const src = loadSource('src/lib/shared-report-export.ts');
+    expect(src, 'shared-report-export.ts not in TEST_SOURCE_FILES_JSON').not.toBeNull();
+    expect(src!).not.toMatch(/INSERT\s+INTO\s+scans/i);
+    expect(src!).not.toMatch(/INSERT\s+INTO\s+form_/i);
+    expect(src!).not.toMatch(/INSERT\s+INTO\s+email_signups/i);
   });
 });
 

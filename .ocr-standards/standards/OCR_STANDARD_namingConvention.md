@@ -10,13 +10,13 @@
 {Product}_{Type}_{What}_{How}_{Why}
 ```
 
-| Segment | Answers | Required |
-|---------|---------|----------|
-| **Product** | Which repo/product owns this | Always |
-| **Type** | What category of artifact this is | Always |
-| **What** | What this file does or defines | Always |
-| **How** | How it accomplishes it, or what mechanism it uses | When the mechanism matters |
-| **Why** | Why this file exists — the trigger, the story, the constraint | When intent matters |
+| Segment     | Answers                                                       | Required                   |
+| ----------- | ------------------------------------------------------------- | -------------------------- |
+| **Product** | Which repo/product owns this                                  | Always                     |
+| **Type**    | What category of artifact this is                             | Always                     |
+| **What**    | What this file does or defines                                | Always                     |
+| **How**     | How it accomplishes it, or what mechanism it uses             | When the mechanism matters |
+| **Why**     | Why this file exists — the trigger, the story, the constraint | When intent matters        |
 
 Not every file needs all five segments. A migration needs Product, Type, What, and Why. A simple config might only need Product and Type. The rule: **use as many segments as it takes for the name to tell the story without opening the file.**
 
@@ -24,17 +24,17 @@ Not every file needs all five segments. A migration needs Product, Type, What, a
 
 ## Product codes
 
-| Code | Product |
-|------|---------|
+| Code  | Product                         |
+| ----- | ------------------------------- |
 | `OCR` | OurCommunityRituals (org-level) |
-| `OSE` | OurSharedEvents |
-| `OW` | OurWKRP |
-| `OSG` | OurSharedGames |
-| `OSR` | OurSharedRecords |
-| `OSP` | OurSharedPulse |
-| `OSM` | OurSharedMagnets |
-| `OER` | OurEventRings |
-| `OWL` | OurWhiteList |
+| `OSE` | OurSharedEvents                 |
+| `OW`  | OurWKRP                         |
+| `OSG` | OurSharedGames                  |
+| `OSR` | OurSharedRecords                |
+| `OSP` | OurSharedPulse                  |
+| `OSM` | OurSharedMagnets                |
+| `OER` | OurEventRings                   |
+| `OWL` | OurWhiteList                    |
 
 ---
 
@@ -79,7 +79,7 @@ The sequence number stays first for ordering. Product and type follow the spine.
 {Product}_{DocType}_{what}_{why}.md
 ```
 
-Doc types: `STANDARD`, `DECISION`, `ADR`, `GATE`, `CHECKLIST`, `VISION`, `DEPENDENCY`, `PROMPT`
+Doc types: `STANDARD`, `DECISION`, `GATE`, `CHECKLIST`, `VISION`, `DEPENDENCY`, `PROMPT`
 
 ```
 OCR_STANDARD_d1Migration.md
@@ -87,11 +87,21 @@ OCR_STANDARD_testNaming.md
 OCR_STANDARD_namingConvention.md
 OCR_DECISION_mockDataProvider.md
 OW_GATE_OW30_boundaryReview.md
-OCR_ADR_001_repoScaffold.md
 OCR_CHECKLIST_beverlyActivation.md
 OCR_DEPENDENCY_crossRepo.md
 OSE_GATE_OSE12_acAudit.md
 ```
+
+#### ADRs — exception (MADR format)
+
+Architecture Decision Records are an **exception** to the `{Product}_{DocType}_{what}_{why}.md` rule. As of 2026-05-15 (routing-matrix adoption — see `OCR-docs/OPERATING_SYSTEM.md §3`), ADRs use the MADR convention `ADR-NNN-kebab-case-title.md` and live in `docs/adr/` (per-repo) or `OCR-docs/docs/adr/` (fleet-wide).
+
+```
+ourSharedEvents/docs/adr/ADR-001-anonymous-identity-architecture.md   # per-repo
+OCR-docs/docs/adr/ADR-001-docs-as-code-scaffold.md                    # fleet-wide
+```
+
+The previous file `OCR_ADR_001_repoScaffold.md` has been migrated to `OCR-docs/docs/adr/ADR-001-docs-as-code-scaffold.md` as part of `CURRENT_STATE_INVENTORY.md` gap G9 closure.
 
 ### Skills
 
@@ -190,13 +200,13 @@ ow-production-secrets.example.env
 
 ## Casing rules
 
-| Context | Casing | Example |
-|---------|--------|---------|
-| Product code | UPPERCASE | `OSE`, `OW`, `OCR` |
-| Type | UPPERCASE | `UNIT`, `MIGRATION`, `STANDARD` |
-| What/How/Why segments | camelCase | `sponsorTierNormalization`, `mockCoercion` |
-| Workflow files | lowercase-hyphenated | `ose-ci-deploy-staging.yml` |
-| Migration files | snake_case after sequence | `0018_OSE_MIGRATION_fixSponsorTierDefault_OSE168.sql` |
+| Context               | Casing                    | Example                                               |
+| --------------------- | ------------------------- | ----------------------------------------------------- |
+| Product code          | UPPERCASE                 | `OSE`, `OW`, `OCR`                                    |
+| Type                  | UPPERCASE                 | `UNIT`, `MIGRATION`, `STANDARD`                       |
+| What/How/Why segments | camelCase                 | `sponsorTierNormalization`, `mockCoercion`            |
+| Workflow files        | lowercase-hyphenated      | `ose-ci-deploy-staging.yml`                           |
+| Migration files       | snake_case after sequence | `0018_OSE_MIGRATION_fixSponsorTierDefault_OSE168.sql` |
 
 ---
 
@@ -274,6 +284,6 @@ A future CI check (planned) will validate file naming against this standard. Unt
 
 ---
 
-*Last updated: April 9 2026*
-*Owner: Matt*
-*Status: ACTIVE*
+_Last updated: April 9 2026_
+_Owner: Matt_
+_Status: ACTIVE_
