@@ -396,14 +396,14 @@
           }
         },
         {
-          "name": "R-001 | GET /admin | unauthenticated browser → 401 HTML sign-in page",
+          "name": "OSE-R-001 | GET /admin (unauthenticated) | 401 HTML sign-in page",
           "event": [
             {
               "listen": "test",
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "// R-001 (audit ship-stopper #1, 2026-05-15): pre-fix, this returned a raw JSON 401",
+                  "// OSE-R-001 (audit ship-stopper #1, 2026-05-15): pre-fix, this returned a raw JSON 401",
                   "// dump rendered as page text in the browser. After fix: browsers get HTML sign-in.",
                   "pm.test('Returns 401 (auth required)', function() {",
                   "    pm.response.to.have.status(401);",
@@ -455,14 +455,14 @@
           }
         },
         {
-          "name": "R-001 | GET /admin | unauthenticated API client → 401 JSON error",
+          "name": "OSE-R-001 | GET /admin (Accept: application/json) | 401 JSON error",
           "event": [
             {
               "listen": "test",
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "// R-001 contract: API consumers (curl, scripts, CI) still get structured JSON 401.",
+                  "// OSE-R-001 contract: API consumers (curl, scripts, CI) still get structured JSON 401.",
                   "// Only browsers (Accept: text/html) get the HTML sign-in page.",
                   "pm.test('Returns 401 (auth required)', function() {",
                   "    pm.response.to.have.status(401);",
@@ -497,7 +497,7 @@
           }
         },
         {
-          "name": "R-001 | GET /manage | unauthenticated browser → 401 HTML sign-in page (alias)",
+          "name": "OSE-R-001 | GET /manage (unauthenticated) | 401 HTML sign-in page (alias)",
           "event": [
             {
               "listen": "test",
@@ -523,7 +523,7 @@
           }
         },
         {
-          "name": "R-001 | POST /api/v2/admin/events | unauthenticated browser → 401 JSON (no HTML leak)",
+          "name": "OSE-R-001 | POST /api/v2/admin/events (unauthenticated) | 401 JSON (no HTML leak)",
           "event": [
             {
               "listen": "test",
