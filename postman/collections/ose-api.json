@@ -732,6 +732,109 @@
           }
         },
         {
+          "name": "OSE-R-002 | API | POST /api/v2/events/:id/forms/register (invalid JSON body) | 400 with body.code=INVALID_BODY",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// OSE-R-002 (2026-05-15): the client-side friendly-copy map in form-pages.ts",
+                  "// keys off body.code. This locks the server contract: invalid JSON returns 400",
+                  "// with code=INVALID_BODY. If this contract breaks, the friendly-copy map cannot",
+                  "// translate the error and bar attendees see raw dev strings.",
+                  "pm.test('Returns 400', function() { pm.response.to.have.status(400); });",
+                  "const json = pm.response.json();",
+                  "pm.test('body.ok is false', function() { pm.expect(json.ok).to.equal(false); });",
+                  "pm.test('body.code is INVALID_BODY (client-mappable)', function() {",
+                  "    pm.expect(json.code).to.equal('INVALID_BODY');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "not-valid-json" },
+            "url": {
+              "raw": "{{baseUrl}}/api/v2/events/{{testEventId}}/forms/register",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v2", "events", "{{testEventId}}", "forms", "register"]
+            }
+          }
+        },
+        {
+          "name": "OSE-R-002 | API | POST /api/v2/events/:id/forms/register (malformed email) | 400 with body.code=INVALID_EMAIL",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// OSE-R-002: locks INVALID_EMAIL as a client-mappable code. The friendly-copy",
+                  "// map renders: 'That email doesn't look right. Please check and try again.'",
+                  "pm.test('Returns 400', function() { pm.response.to.have.status(400); });",
+                  "const json = pm.response.json();",
+                  "pm.test('body.code is INVALID_EMAIL (client-mappable)', function() {",
+                  "    pm.expect(json.code).to.equal('INVALID_EMAIL');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"email\":\"not-an-email\"}" },
+            "url": {
+              "raw": "{{baseUrl}}/api/v2/events/{{testEventId}}/forms/register",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v2", "events", "{{testEventId}}", "forms", "register"]
+            }
+          }
+        },
+        {
+          "name": "OSE-R-002 | API | POST /api/v2/events/:id/forms/register (oversized body 17KB) | 413 with body.code=PAYLOAD_TOO_LARGE",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const big = 'x'.repeat(17000);",
+                  "pm.environment.set('oseR002OversizedBody', JSON.stringify({ name: big }));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// OSE-R-002: locks PAYLOAD_TOO_LARGE as client-mappable. Friendly-copy:",
+                  "// 'Your message is too long. Please shorten it and try again.'",
+                  "pm.test('Returns 413', function() { pm.response.to.have.status(413); });",
+                  "const json = pm.response.json();",
+                  "pm.test('body.code is PAYLOAD_TOO_LARGE (client-mappable)', function() {",
+                  "    pm.expect(json.code).to.equal('PAYLOAD_TOO_LARGE');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{{oseR002OversizedBody}}" },
+            "url": {
+              "raw": "{{baseUrl}}/api/v2/events/{{testEventId}}/forms/register",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v2", "events", "{{testEventId}}", "forms", "register"]
+            }
+          }
+        },
+        {
           "name": "POST Survey — missing responses field",
           "event": [
             {
