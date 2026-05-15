@@ -31,9 +31,9 @@
 import { describe, test, expect } from 'vitest';
 import { handleFormPage } from '../src/handlers/form-pages';
 
-function html(eventId = 'evt-test', formType = 'register'): Promise<string> {
+async function html(eventId = 'evt-test', formType = 'register'): Promise<string> {
   const req = new Request(`https://t.test/forms/${eventId}?type=${formType}&event=Test`);
-  return handleFormPage(req, {}, eventId).text();
+  return (await handleFormPage(req, {}, eventId)).text();
 }
 
 // ─── OSE-222 — sponsor logo strip in header ─────────────────────────────────

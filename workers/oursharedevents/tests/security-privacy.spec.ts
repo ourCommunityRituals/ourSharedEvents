@@ -27,11 +27,11 @@ function formReq(type: string): Request {
 }
 
 async function formHtml(type: string, legalTier?: number): Promise<string> {
-  const res = handleFormPage(formReq(type), {}, 'evt1', legalTier);
+  const res = await handleFormPage(formReq(type), {}, 'evt1', legalTier);
   return res.text();
 }
 
-function formRes(type: string, legalTier?: number): Response {
+async function formRes(type: string, legalTier?: number): Promise<Response> {
   return handleFormPage(formReq(type), {}, 'evt1', legalTier);
 }
 
@@ -41,8 +41,10 @@ function formRes(type: string, legalTier?: number): Response {
 
 describe('SEC-2 L2: CSP headers present on all form page responses', () => {
   for (const type of FORM_TYPES) {
-    test(`${type} form has Content-Security-Policy header`, () => {
-      const res = formRes(type);
+    // OSE-R-007 (2026-05-15): formRes is now async because handleFormPage
+    // does a D1 lookup for the canonical event title. Tests await.
+    test(`${type} form has Content-Security-Policy header`, async () => {
+      const res = await formRes(type);
       const csp = res.headers.get('Content-Security-Policy');
       expect(csp).toBeTruthy();
       expect(csp).toContain("default-src 'self'");
@@ -51,16 +53,18 @@ describe('SEC-2 L2: CSP headers present on all form page responses', () => {
       expect(csp).toContain("base-uri 'self'");
     });
 
-    test(`${type} form has X-Content-Type-Options: nosniff`, () => {
-      expect(formRes(type).headers.get('X-Content-Type-Options')).toBe('nosniff');
+    test(`${type} form has X-Content-Type-Options: nosniff`, async () => {
+      expect((await formRes(type)).headers.get('X-Content-Type-Options')).toBe('nosniff');
     });
 
-    test(`${type} form has X-Frame-Options: DENY`, () => {
-      expect(formRes(type).headers.get('X-Frame-Options')).toBe('DENY');
+    test(`${type} form has X-Frame-Options: DENY`, async () => {
+      expect((await formRes(type)).headers.get('X-Frame-Options')).toBe('DENY');
     });
 
-    test(`${type} form has Referrer-Policy: strict-origin-when-cross-origin`, () => {
-      expect(formRes(type).headers.get('Referrer-Policy')).toBe('strict-origin-when-cross-origin');
+    test(`${type} form has Referrer-Policy: strict-origin-when-cross-origin`, async () => {
+      expect((await formRes(type)).headers.get('Referrer-Policy')).toBe(
+        'strict-origin-when-cross-origin'
+      );
     });
   }
 });

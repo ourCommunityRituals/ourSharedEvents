@@ -16,9 +16,9 @@ import { handleFormPage } from '../src/handlers/form-pages';
 function reportHtml(): Promise<string> {
   return handleSharedReportPage({} as never).text();
 }
-function formHtml(type: string): Promise<string> {
+async function formHtml(type: string): Promise<string> {
   const req = new Request(`https://t.test/forms/evt1?type=${type}&event=Test`);
-  return handleFormPage(req, {} as never, 'evt1').text();
+  return (await handleFormPage(req, {} as never, 'evt1')).text();
 }
 
 // ─── aria-describedby — inputs linked to error container ─────────────────────

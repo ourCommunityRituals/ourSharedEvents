@@ -16,14 +16,14 @@ function adminHtml(): Promise<string> {
 function displayHtml(): Promise<string> {
   return handleDisplayPage({} as never).text();
 }
-function publicHtml(): Promise<string> {
+async function publicHtml(): Promise<string> {
   const req = new Request('https://t.test/');
-  return handleFormPage(req, {}, '')
-    .text()
-    .catch(() =>
-      // PUBLIC_HTML is served by the main router; derive from pages export
-      Promise.resolve('')
-    );
+  try {
+    return await (await handleFormPage(req, {}, '')).text();
+  } catch {
+    // PUBLIC_HTML is served by the main router; derive from pages export
+    return '';
+  }
 }
 
 // Use the pages module directly for PUBLIC_HTML

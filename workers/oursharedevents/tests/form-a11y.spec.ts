@@ -17,20 +17,21 @@ describe('A11Y-2 L1 Static: error-msg has role=alert + aria-live=assertive', () 
   const types = ['register', 'checkin', 'survey', 'email'] as const;
 
   for (const type of types) {
-    test(`${type} form error-msg has role="alert"`, () => {
+    test(`${type} form error-msg has role="alert"`, async () => {
+      // OSE-R-007 (2026-05-15): handleFormPage is now async because it
+      // does a D1 lookup for the canonical event title. Await its
+      // Response before reading headers/body.
       const req = new Request(`https://t.test/forms/evt1?type=${type}&event=Test`);
-      const res = handleFormPage(req, {}, 'evt1');
+      const res = await handleFormPage(req, {}, 'evt1');
       expect(res.headers.get('Content-Type')).toContain('text/html');
-      // We can't call .text() synchronously here — check via regex on the sync HTML path
-      // handleFormPage returns sync Response; read body via clone trick is async — use integration layer
     });
   }
 });
 
 describe('A11Y-2 L1 Static: registration form autocomplete + aria-required', () => {
-  function html(): Promise<string> {
+  async function html(): Promise<string> {
     const req = new Request('https://t.test/forms/evt1?type=register&event=Test');
-    return handleFormPage(req, {}, 'evt1').text();
+    return (await handleFormPage(req, {}, 'evt1')).text();
   }
 
   test('name input has autocomplete="name"', async () => {
@@ -57,7 +58,7 @@ describe('A11Y-2 L1 Static: registration form autocomplete + aria-required', () 
 describe('A11Y-2 L1 Static: survey form rating group', () => {
   async function html(): Promise<string> {
     const req = new Request('https://t.test/forms/evt1?type=survey&event=Test');
-    return handleFormPage(req, {}, 'evt1').text();
+    return (await handleFormPage(req, {}, 'evt1')).text();
   }
 
   test('rating div has role="group"', async () => {
@@ -76,7 +77,7 @@ describe('A11Y-2 L1 Static: survey form rating group', () => {
 describe('A11Y-2 L1 Static: email signup form', () => {
   async function html(): Promise<string> {
     const req = new Request('https://t.test/forms/evt1?type=email&event=Test');
-    return handleFormPage(req, {}, 'evt1').text();
+    return (await handleFormPage(req, {}, 'evt1')).text();
   }
 
   test('email input has autocomplete="email"', async () => {

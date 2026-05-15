@@ -1149,6 +1149,120 @@
           }
         }
       ]
+    },
+    {
+      "name": "OSE-R-007 form-page canonical title (audit 2026-05-15)",
+      "description": "Locks the contract that the /forms/:id renderer uses the canonical event title from D1, never the ?event=... URL query parameter. Pre-fix, the renderer trusted the query param and let an attacker craft /forms/evt_X?event=Cheap%20Rolex%20Deals! to present a phishing-ready page that looked official.\n\nMatching vitest API spec: workers/oursharedevents/tests/form-page-canonical-title.spec.ts. Matching Playwright FE spec: tests/playwright/form-page-canonical-title.spec.ts.",
+      "item": [
+        {
+          "name": "OSE-R-007 | API | GET /forms/:id (known event, attacker query) | query param ignored in HTML body",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Returns 200', function() { pm.response.to.have.status(200); });",
+                  "const body = pm.response.text();",
+                  "pm.test('Phishing payload absent from rendered HTML', function() {",
+                  "    pm.expect(body).to.not.include('Cheap Rolex Deals');",
+                  "    pm.expect(body).to.not.include('Cheap%20Rolex');",
+                  "});",
+                  "pm.test('Document title does NOT contain the phishing payload', function() {",
+                  "    const m = body.match(/<title>([^<]*)<\\/title>/);",
+                  "    pm.expect(m).to.not.be.null;",
+                  "    pm.expect(m[1]).to.not.match(/Cheap Rolex|PWNED/i);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "text/html" }],
+            "url": {
+              "raw": "{{baseUrl}}/forms/{{testEventId}}?event=Cheap%20Rolex%20Deals%21&type=register",
+              "host": ["{{baseUrl}}"],
+              "path": ["forms", "{{testEventId}}"],
+              "query": [
+                { "key": "event", "value": "Cheap%20Rolex%20Deals%21" },
+                { "key": "type", "value": "register" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "OSE-R-007 | API | GET /forms/:id (unknown event, attacker query) | generic Event fallback rendered",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Returns 200 (backward compat for un-seeded events)', function() { pm.response.to.have.status(200); });",
+                  "const body = pm.response.text();",
+                  "pm.test('event-name testid renders Event fallback, not phishing payload', function() {",
+                  "    const m = body.match(/data-testid=\\\"form-event-name\\\"[^>]*>([^<]*)</);",
+                  "    pm.expect(m).to.not.be.null;",
+                  "    pm.expect(m[1].trim()).to.equal('Event');",
+                  "});",
+                  "pm.test('Phishing payload absent everywhere in body', function() {",
+                  "    pm.expect(body).to.not.include('Account suspended');",
+                  "    pm.expect(body).to.not.include('URGENT');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "text/html" }],
+            "url": {
+              "raw": "{{baseUrl}}/forms/evt_does_not_exist_r007?event=URGENT%3A%20Account%20suspended&type=register",
+              "host": ["{{baseUrl}}"],
+              "path": ["forms", "evt_does_not_exist_r007"],
+              "query": [
+                { "key": "event", "value": "URGENT%3A%20Account%20suspended" },
+                { "key": "type", "value": "register" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "OSE-R-007 | API | GET /forms/:id (script-tag XSS in query) | payload escaped or stripped",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Returns 200', function() { pm.response.to.have.status(200); });",
+                  "const body = pm.response.text();",
+                  "pm.test('Raw <script> tag from query string NOT present', function() {",
+                  "    pm.expect(body).to.not.include('<script>alert(1)</script>');",
+                  "});",
+                  "pm.test('alert(1) literal NOT present', function() {",
+                  "    pm.expect(body).to.not.include('alert(1)');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "text/html" }],
+            "url": {
+              "raw": "{{baseUrl}}/forms/evt_does_not_exist_r007?event=%3Cscript%3Ealert%281%29%3C%2Fscript%3E&type=register",
+              "host": ["{{baseUrl}}"],
+              "path": ["forms", "evt_does_not_exist_r007"],
+              "query": [
+                { "key": "event", "value": "%3Cscript%3Ealert%281%29%3C%2Fscript%3E" },
+                { "key": "type", "value": "register" }
+              ]
+            }
+          }
+        }
+      ]
     }
   ]
 }
