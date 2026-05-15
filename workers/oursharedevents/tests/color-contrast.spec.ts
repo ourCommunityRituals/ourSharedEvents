@@ -26,9 +26,9 @@ function reportHtml(): Promise<string> {
 function posterHtml(): Promise<string> {
   return handlePosterPage({} as never).text();
 }
-function formHtml(type: string): Promise<string> {
+async function formHtml(type: string): Promise<string> {
   const req = new Request(`https://t.test/forms/evt1?type=${type}&event=Test`);
-  return handleFormPage(req, {}, 'evt1').text();
+  return (await handleFormPage(req, {}, 'evt1')).text();
 }
 
 // ─── No failing colors ───────────────────────────────────────────────────────

@@ -64,28 +64,28 @@ describe('A11Y-7: axe-core WCAG 2.0 AA — zero critical/serious violations', ()
   test('register form', async () => {
     await scanPage(
       'Register form',
-      await handleFormPage(formReq('register'), {} as never, 'evt1').text()
+      await (await handleFormPage(formReq('register'), {} as never, 'evt1')).text()
     );
   });
 
   test('checkin form', async () => {
     await scanPage(
       'Checkin form',
-      await handleFormPage(formReq('checkin'), {} as never, 'evt1').text()
+      await (await handleFormPage(formReq('checkin'), {} as never, 'evt1')).text()
     );
   });
 
   test('survey form', async () => {
     await scanPage(
       'Survey form',
-      await handleFormPage(formReq('survey'), {} as never, 'evt1').text()
+      await (await handleFormPage(formReq('survey'), {} as never, 'evt1')).text()
     );
   });
 
   test('email signup form', async () => {
     await scanPage(
       'Email form',
-      await handleFormPage(formReq('email'), {} as never, 'evt1').text()
+      await (await handleFormPage(formReq('email'), {} as never, 'evt1')).text()
     );
   });
 });

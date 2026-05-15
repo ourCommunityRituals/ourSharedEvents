@@ -19,6 +19,10 @@
  */
 
 export interface FormPagesEnv {
+  // OSE-R-007 (2026-05-15): event title must come from the canonical
+  // event row in D1, not from the URL query param. Optional so the
+  // handler stays compatible with test environments that don't bind DB.
+  DB?: D1Database;
   WORKER_ENV?: string;
 }
 
@@ -484,16 +488,46 @@ function formPage(eventId: string, eventName: string, formType: string, legalTie
 
 // ─── Route handler ───────────────────────────────────────────────────────────
 
-export function handleFormPage(
+export async function handleFormPage(
   request: Request,
-  _env: FormPagesEnv,
+  env: FormPagesEnv,
   eventId: string,
   legalTier = 1
-): Response {
+): Promise<Response> {
   const url = new URL(request.url);
   const formType = url.searchParams.get('type') ?? 'register';
-  // Escape event name to prevent XSS — this value comes from a URL query param
-  const eventName = escapeHtml((url.searchParams.get('event') ?? 'Event').slice(0, 200));
+
+  // OSE-R-007 (2026-05-15): event title MUST come from the canonical
+  // event row in D1, never from the URL query param. Pre-fix the page
+  // trusted `?event=...` and rendered it as the official event name,
+  // letting an attacker craft `/forms/evt_X?event=Cheap%20Rolex%20Deals!`
+  // and present a phishing-ready form page. The query param is now
+  // ignored entirely for display content; the canonical title is fetched
+  // by eventId.
+  //
+  // Backward compat: unknown event IDs (including ones the form-submission
+  // endpoints still accept "for un-seeded test fixtures") fall back to the
+  // generic "Event" label rather than 404ing. The customer who scanned a
+  // QR for an event we can't resolve still sees a renderable form; the
+  // attacker-controlled string never reaches the DOM.
+  let canonicalTitle: string | null = null;
+  if (env.DB) {
+    try {
+      const row = await env.DB.prepare('SELECT title FROM events WHERE id = ?')
+        .bind(eventId)
+        .first<{ title: string | null }>();
+      if (row && typeof row.title === 'string' && row.title.length > 0) {
+        canonicalTitle = row.title;
+      }
+    } catch {
+      // DB throw → keep the safe fallback. The form should still render so
+      // a customer who scanned a QR isn't stuck on a 503 mid-conversion.
+      canonicalTitle = null;
+    }
+  }
+  // Defense in depth: even though the DB column is admin-controlled and
+  // shouldn't contain HTML, escape the value and cap length before render.
+  const eventName = escapeHtml((canonicalTitle ?? 'Event').slice(0, 200));
 
   const html = formPage(eventId, eventName, formType, legalTier);
   return new Response(html, {
