@@ -155,24 +155,93 @@ const FORM_CSS = `
 `;
 
 // ── Form JS: shared submit logic ─────────────────────────────────────────────
+//
+// OSE-R-002 (2026-05-15) — error rendering must show friendly user copy, never
+// raw server codes. Before the fix, `errEl.textContent = err.message` piped
+// strings like "INVALID_BODY", "Request body must be valid JSON under 16KB",
+// or "FORMS_ENCRYPTION_KEY not configured" directly to bar customers in
+// noisy venues. The audit (REFINEMENT-BACKLOG-2026-05-15.md R-002) flagged
+// this as a ship-stopper.
+//
+// Contract:
+//   • Map known server `code` values to bar-customer-friendly copy.
+//   • Unknown codes → generic fallback. Never expose raw server strings.
+//   • Preserve the raw code in a `data-error-code` attribute so QA / support
+//     can still see what actually happened via DevTools.
+//   • Status-code fallback (429 rate limit, 4xx, 5xx) for codes that aren't
+//     mapped.
 
 const FORM_JS_SUBMIT = `
+  // OSE-R-002: code → friendly copy. Update both this map AND the standard
+  // doc tests when a new server code is added.
+  var FORM_ERROR_FRIENDLY_COPY = {
+    INVALID_EVENT_ID: "This event link doesn't look right. Try the original link or contact the host.",
+    INVALID_BODY: "We couldn't read your response. Please refresh the page and try again.",
+    PAYLOAD_TOO_LARGE: "Your message is too long. Please shorten it and try again.",
+    MISSING_FIELD: "Please fill out all required fields and try again.",
+    INVALID_EMAIL: "That email doesn't look right. Please check and try again.",
+    CONFIG_ERROR: "Something's not set up on our side. Please try again in a few minutes.",
+    DB_ERROR: "We're having trouble right now. Please try again in a moment.",
+    METHOD_NOT_ALLOWED: "This action isn't available right now."
+  };
+
+  function friendlyFormError(code, status) {
+    if (code && FORM_ERROR_FRIENDLY_COPY[code]) return FORM_ERROR_FRIENDLY_COPY[code];
+    if (status === 429) return "Too many tries. Please wait a moment and try again.";
+    if (status === 503) return "We're having trouble right now. Please try again in a moment.";
+    if (status >= 500) return "Sorry, something went wrong on our end. Please try again.";
+    if (status >= 400) return "Sorry, something went wrong. Please try again.";
+    return "Sorry, something went wrong. Please try again.";
+  }
+
   async function submitForm(eventId, formType, data) {
-    const errEl = document.getElementById('error-msg');
-    const btn = document.querySelector('[data-testid$="-submit"]');
-    if (errEl) errEl.style.display = 'none';
+    var errEl = document.getElementById('error-msg');
+    var btn = document.querySelector('[data-testid$="-submit"]');
+    if (errEl) {
+      errEl.style.display = 'none';
+      errEl.removeAttribute('data-error-code');
+    }
     if (btn) btn.disabled = true;
     try {
-      const res = await fetch('/api/v2/events/' + eventId + '/forms/' + formType, {
+      var res = await fetch('/api/v2/events/' + eventId + '/forms/' + formType, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
       });
-      const body = await res.json();
-      if (!body.ok) throw new Error(body.error || 'Submission failed');
+      var body;
+      try {
+        body = await res.json();
+      } catch (parseErr) {
+        // Non-JSON response — surface a generic friendly error, preserve
+        // status for triage via data attribute.
+        if (errEl) {
+          errEl.textContent = friendlyFormError(null, res.status);
+          errEl.setAttribute('data-error-code', 'NON_JSON_RESPONSE');
+          errEl.style.display = 'block';
+        }
+        if (btn) btn.disabled = false;
+        throw new Error('NON_JSON_RESPONSE');
+      }
+      if (!body.ok) {
+        // Friendly UI, raw code preserved for support
+        if (errEl) {
+          errEl.textContent = friendlyFormError(body.code, res.status);
+          errEl.setAttribute('data-error-code', body.code || 'UNKNOWN');
+          errEl.style.display = 'block';
+        }
+        if (btn) btn.disabled = false;
+        throw new Error(body.code || 'UNKNOWN');
+      }
       return body;
     } catch (err) {
-      if (errEl) { errEl.textContent = err.message; errEl.style.display = 'block'; }
+      // Network failure or thrown above. err.message holds the code OR a
+      // network-level error. Render generic friendly copy if errEl wasn't
+      // already populated by the parse/!body.ok branches.
+      if (errEl && !errEl.textContent) {
+        errEl.textContent = friendlyFormError(null, 0);
+        errEl.setAttribute('data-error-code', 'NETWORK_ERROR');
+        errEl.style.display = 'block';
+      }
       if (btn) btn.disabled = false;
       throw err;
     }
