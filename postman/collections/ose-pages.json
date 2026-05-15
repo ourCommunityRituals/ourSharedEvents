@@ -396,7 +396,7 @@
           }
         },
         {
-          "name": "R-001 | GET /admin (no auth, Accept:text/html) returns HTML sign-in page",
+          "name": "R-001 | GET /admin | unauthenticated browser → 401 HTML sign-in page",
           "event": [
             {
               "listen": "test",
@@ -455,7 +455,7 @@
           }
         },
         {
-          "name": "R-001 | GET /admin (no auth, Accept:application/json) returns JSON 401 (API contract preserved)",
+          "name": "R-001 | GET /admin | unauthenticated API client → 401 JSON error",
           "event": [
             {
               "listen": "test",
@@ -497,7 +497,7 @@
           }
         },
         {
-          "name": "R-001 | GET /manage alias (no auth, Accept:text/html) also returns HTML sign-in",
+          "name": "R-001 | GET /manage | unauthenticated browser → 401 HTML sign-in page (alias)",
           "event": [
             {
               "listen": "test",
@@ -523,7 +523,7 @@
           }
         },
         {
-          "name": "R-001 | POST /api/v2/admin/events (no auth, browser Accept) still returns JSON 401 (no HTML leak to APIs)",
+          "name": "R-001 | POST /api/v2/admin/events | unauthenticated browser → 401 JSON (no HTML leak)",
           "event": [
             {
               "listen": "test",

@@ -33,7 +33,7 @@ async function gotoAdminUnauth(page: Page, path: string = '/admin') {
 // ═════════════════════════════════════════════════════════════════════════════
 
 test.describe('R-001 — admin sign-in front door', () => {
-  test('R-001-PW-01 | GET /admin (unauth) returns 401 + HTML page (not JSON)', async ({ page }) => {
+  test('R-001 | GET /admin | unauthenticated browser → 401 HTML sign-in page', async ({ page }) => {
     const res = await gotoAdminUnauth(page);
     expect(res, 'navigation response should exist').not.toBeNull();
     expect(res!.status()).toBe(401);
@@ -48,7 +48,9 @@ test.describe('R-001 — admin sign-in front door', () => {
     expect(body).not.toMatch(/"code":\s*"UNAUTH"/);
   });
 
-  test('R-001-PW-02 | Sign-in page has the expected heading + lede + CTAs', async ({ page }) => {
+  test('R-001 | GET /admin | unauthenticated browser → heading + lede + CTAs render', async ({
+    page,
+  }) => {
     await gotoAdminUnauth(page);
 
     // Heading is found by data-testid (locked into the markup)
@@ -70,7 +72,7 @@ test.describe('R-001 — admin sign-in front door', () => {
     await expect(requestAccess).toHaveAttribute('href', '/');
   });
 
-  test('R-001-PW-03 | Brand is consistent — same nav as landing, logo links to /', async ({
+  test('R-001 | GET /admin | unauthenticated browser → brand matches landing (logo + nav)', async ({
     page,
   }) => {
     await gotoAdminUnauth(page);
@@ -84,7 +86,7 @@ test.describe('R-001 — admin sign-in front door', () => {
     await expect(page.locator('[data-testid="nav-events"]')).toHaveAttribute('href', '/events');
   });
 
-  test('R-001-PW-04 | Accessibility — skip-link, semantic main, focus-visible', async ({
+  test('R-001 | GET /admin | unauthenticated browser → a11y skip-link + semantic main + focus', async ({
     page,
   }) => {
     await gotoAdminUnauth(page);
@@ -103,26 +105,39 @@ test.describe('R-001 — admin sign-in front door', () => {
     expect(isFocused).toBe(true);
   });
 
-  test('R-001-PW-05 | Robots noindex meta tag present (not for crawlers)', async ({ page }) => {
+  test('R-001 | GET /admin | unauthenticated browser → robots noindex meta present', async ({
+    page,
+  }) => {
     await gotoAdminUnauth(page);
     const robots = page.locator('meta[name="robots"]');
     await expect(robots).toHaveAttribute('content', 'noindex');
   });
 
-  test('R-001-PW-06 | Aliases /manage, /dashboard, /create also return the sign-in page', async ({
+  test('R-001 | GET /manage | unauthenticated browser → 401 HTML sign-in page (alias)', async ({
     page,
   }) => {
-    for (const path of ['/manage', '/dashboard', '/create']) {
-      const res = await gotoAdminUnauth(page, path);
-      expect(res!.status(), `${path} should 401`).toBe(401);
-      await expect(
-        page.locator('[data-testid="signin-heading"]'),
-        `${path} should render sign-in heading`
-      ).toBeVisible();
-    }
+    const res = await gotoAdminUnauth(page, '/manage');
+    expect(res!.status()).toBe(401);
+    await expect(page.locator('[data-testid="signin-heading"]')).toBeVisible();
   });
 
-  test('R-001-PW-07 | CTA click attempts to re-authenticate (links to /admin)', async ({
+  test('R-001 | GET /dashboard | unauthenticated browser → 401 HTML sign-in page (alias)', async ({
+    page,
+  }) => {
+    const res = await gotoAdminUnauth(page, '/dashboard');
+    expect(res!.status()).toBe(401);
+    await expect(page.locator('[data-testid="signin-heading"]')).toBeVisible();
+  });
+
+  test('R-001 | GET /create | unauthenticated browser → 401 HTML sign-in page (alias)', async ({
+    page,
+  }) => {
+    const res = await gotoAdminUnauth(page, '/create');
+    expect(res!.status()).toBe(401);
+    await expect(page.locator('[data-testid="signin-heading"]')).toBeVisible();
+  });
+
+  test('R-001 | GET /admin | unauthenticated browser → sign-in CTA href is /admin', async ({
     page,
   }) => {
     await gotoAdminUnauth(page);
@@ -133,7 +148,9 @@ test.describe('R-001 — admin sign-in front door', () => {
     expect(href).toBe('/admin');
   });
 
-  test('R-001-PW-08 | Mobile viewport renders sign-in card without overflow', async ({ page }) => {
+  test('R-001 | GET /admin | mobile 375px viewport → card fits within viewport width', async ({
+    page,
+  }) => {
     await page.setViewportSize({ width: 375, height: 667 }); // iPhone SE
     await gotoAdminUnauth(page);
 
@@ -145,7 +162,9 @@ test.describe('R-001 — admin sign-in front door', () => {
     expect(cardBox!.width).toBeLessThanOrEqual(375);
   });
 
-  test('R-001-PW-09 | Page body does NOT leak admin dashboard content', async ({ page }) => {
+  test('R-001 | GET /admin | unauthenticated browser → no admin dashboard content leaked', async ({
+    page,
+  }) => {
     await gotoAdminUnauth(page);
     const body = await page.content();
     // Defense-in-depth: even though we expect 401, confirm no admin internals
