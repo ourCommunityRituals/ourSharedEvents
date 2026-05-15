@@ -9,6 +9,8 @@
  *   GET /api/status              → alias for /health
  *   GET /api/v2/events           → list active events
  *   GET /api/v2/events/:id       → single event
+ *   GET /api/v2/events/:id/shared-report     → SharedReport (signed-link auth, OSE-272 S5)
+ *   POST /api/v2/events/shared-reports/batch → SharedReport batch (WKRP service token, OSE-272 S5)
  *   GET /api/v2/admin/events     → admin event list (auth required)
  *
  *   POST /api/v2/events/:id/forms/register      → submit registration (public)
@@ -158,6 +160,11 @@ import { assertRenderable, parseEventState } from './domain/event-state';
 import { isRateLimited, clientIp, rateLimitResponse } from './lib/rate-limit';
 import { handleAdminUploadFile, handleGetUploadedFile, type UploadEnv } from './handlers/upload';
 import { handleDataSubjectErase, type DataSubjectEnv } from './handlers/data-subject';
+import {
+  handleGetSharedReport,
+  handleBatchSharedReports,
+  type SharedReportReadEnv,
+} from './handlers/shared-report-read';
 
 export type RouterEnv = PagesEnv &
   AdminEnv &
@@ -173,6 +180,7 @@ export type RouterEnv = PagesEnv &
   PosterBundleEnv &
   UploadEnv &
   DataSubjectEnv &
+  SharedReportReadEnv &
   ShortlinkResolveEnv & {
     WORKER_ENV?: string;
     WORKER_BUILD_VERSION?: string;
@@ -181,6 +189,13 @@ export type RouterEnv = PagesEnv &
     // separate rotation cadences for independent blast radii). Read only by
     // src/lib/shared-report.ts (cron-only — Gate 4).
     ANON_ID_HASH_PEPPER?: string;
+    // OSE-272 Session 5: HMAC-SHA256 signing secret for signed-link tokens
+    // (bar/sponsor SharedReport read auth). Unset → all signed-link reads
+    // are rejected (fail-safe).
+    SHARED_REPORT_SIGNING_SECRET?: string;
+    // OSE-272 Session 5: WKRP service-account bearer token for the batch
+    // SharedReport endpoint. Unset → batch endpoint rejects all callers.
+    WKRP_SERVICE_TOKEN?: string;
   };
 
 export async function route(
@@ -619,6 +634,22 @@ export async function route(
   // ── Public API ─────────────────────────────────────────────────────────────
   if (pathname === '/api/v2/events') {
     return handleListEvents(request, env);
+  }
+
+  // ── OSE-272 Session 5: SharedReport read API ──────────────────────────────
+  // POST /api/v2/events/shared-reports/batch
+  // Service-token-authenticated batch endpoint. Placed BEFORE the
+  // single-event matcher to avoid `shared-reports` being interpreted as
+  // an event id.
+  if (pathname === '/api/v2/events/shared-reports/batch' && method === 'POST') {
+    return handleBatchSharedReports(request, env);
+  }
+
+  // GET /api/v2/events/:id/shared-report
+  // Signed-link-authenticated single-event SharedReport read.
+  const sharedReportMatch = pathname.match(/^\/api\/v2\/events\/([^/]+)\/shared-report$/);
+  if (sharedReportMatch && method === 'GET') {
+    return handleGetSharedReport(request, env, sharedReportMatch[1]);
   }
 
   // /api/v2/events/:id

@@ -43,11 +43,16 @@ const PIPELINE_MIGRATIONS = [
 
 // The set of pipeline-related lib + handler files Gate 1 inspects.
 // Session 2: anon-id-hash.ts. Session 3: shared-report.ts + the
-// scheduled-only handler shared-report-materialize.ts.
+// scheduled-only handler shared-report-materialize.ts. Session 5: the
+// read-API stack (auth, builder, handler). Session 4's exporter files
+// land via its own PR and add themselves to this list at that point.
 const PIPELINE_LIB_FILES = [
   'src/lib/anon-id-hash.ts',
   'src/lib/shared-report.ts',
+  'src/lib/shared-report-auth.ts',
+  'src/lib/shared-report-builder.ts',
   'src/handlers/shared-report-materialize.ts',
+  'src/handlers/shared-report-read.ts',
 ];
 
 function loadSource(relPath: string): string | null {
@@ -136,6 +141,69 @@ describe('OSE-272 Gate 4: SharedReport materialization is cron-only', () => {
     expect(src, 'shared-report.ts not in TEST_SOURCE_FILES_JSON').not.toBeNull();
     expect(src!).not.toMatch(/from\s+['"]\.\.\/router['"]/);
     expect(src!).not.toMatch(/import.*\broute\b.*from/);
+  });
+});
+
+// ─── Gate 6 — SharedReport read API is read-only (no writes to pipeline) ────
+
+describe('OSE-272 Gate 6: SharedReport read API is read-only', () => {
+  // The read API surfaces aggregate data to bars, sponsors, and (in-fleet)
+  // WKRP. It MUST NEVER write to anon_id_returns, corridor_density_baseline,
+  // or event_series — those are written exclusively by the cron (Session 3
+  // materialization). A handler that writes back through the read path
+  // would break the cron-only invariant AND defeat the read/write
+  // separation that anchors the Session-3 / Session-5 boundary.
+
+  test('shared-report-builder.ts contains no INSERT/UPDATE/DELETE statements', () => {
+    const src = loadSource('src/lib/shared-report-builder.ts');
+    expect(src, 'shared-report-builder.ts not in TEST_SOURCE_FILES_JSON').not.toBeNull();
+    // SELECT is fine (read). Any write statement is a contract violation.
+    expect(src!).not.toMatch(/\bINSERT\s+INTO\b/i);
+    expect(src!).not.toMatch(/\bUPDATE\s+\w+\s+SET\b/i);
+    expect(src!).not.toMatch(/\bDELETE\s+FROM\b/i);
+  });
+
+  test('shared-report-read.ts (handler) contains no INSERT/UPDATE/DELETE statements', () => {
+    const src = loadSource('src/handlers/shared-report-read.ts');
+    expect(src, 'shared-report-read.ts not in TEST_SOURCE_FILES_JSON').not.toBeNull();
+    expect(src!).not.toMatch(/\bINSERT\s+INTO\b/i);
+    expect(src!).not.toMatch(/\bUPDATE\s+\w+\s+SET\b/i);
+    expect(src!).not.toMatch(/\bDELETE\s+FROM\b/i);
+  });
+
+  test('shared-report-builder.ts does not query forms tables', () => {
+    // Read-side echo of Gate 1: no FORMS_DB access from the read path.
+    // The builder must not enrich SharedReport with per-attendee form data.
+    const src = loadSource('src/lib/shared-report-builder.ts');
+    expect(src, 'shared-report-builder.ts not in TEST_SOURCE_FILES_JSON').not.toBeNull();
+    expect(src!).not.toMatch(/\bform_registrations\b/i);
+    expect(src!).not.toMatch(/\bform_surveys\b/i);
+    expect(src!).not.toMatch(/\bemail_signups\b/i);
+    expect(src!).not.toMatch(/env\.FORMS_DB/);
+  });
+
+  test('shared-report-read.ts response shape never includes anon_id_hash', () => {
+    // The builder reads anon_id_hash internally for COUNT(*) operations
+    // but never returns it. This gate is a paranoia check: the read
+    // handler's response surface must not include the hash field.
+    const src = loadSource('src/handlers/shared-report-read.ts');
+    expect(src, 'shared-report-read.ts not in TEST_SOURCE_FILES_JSON').not.toBeNull();
+    // The handler delegates to the builder; the builder's SharedReport
+    // interface in shared-report-builder.ts must also not expose anon_id_hash.
+    const builderSrc = loadSource('src/lib/shared-report-builder.ts');
+    expect(builderSrc).not.toBeNull();
+    // Allow it to APPEAR in WHERE/SELECT clauses (internal aggregation)
+    // but NOT in any exported interface field.
+    expect(builderSrc!).not.toMatch(/anon_id_hash\s*:/);
+  });
+
+  test('shared-report-auth.ts does not query the database', () => {
+    // Auth verification must be pure crypto — never D1 lookups.
+    const src = loadSource('src/lib/shared-report-auth.ts');
+    expect(src, 'shared-report-auth.ts not in TEST_SOURCE_FILES_JSON').not.toBeNull();
+    expect(src!).not.toMatch(/env\.DB/);
+    expect(src!).not.toMatch(/env\.FORMS_DB/);
+    expect(src!).not.toMatch(/\.prepare\(/);
   });
 });
 

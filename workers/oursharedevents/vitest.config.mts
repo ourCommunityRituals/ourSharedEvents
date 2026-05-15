@@ -154,6 +154,9 @@ export default defineConfig({
           // (cron logs no-op). Specific specs that exercise the retention
           // path mutate env per-test via the cloudflare:test helpers.
           // SUBSCRIBERS_RETENTION_DAYS intentionally NOT set here.
+          // OSE-272 Session 5: SharedReport read API auth.
+          SHARED_REPORT_SIGNING_SECRET: 'test-shared-report-signing-secret-do-not-use',
+          WKRP_SERVICE_TOKEN: 'test-wkrp-service-token-do-not-use',
         },
       },
     }),

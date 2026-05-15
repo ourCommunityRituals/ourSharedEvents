@@ -36,6 +36,11 @@ const POST_ONLY_EXEMPTIONS: readonly RegExp[] = [
   /^\/subscribe$/,
   /^\/signup$/,
   /^\/newsletter$/,
+  // OSE-272 Session 5: SharedReport batch read endpoint. Logically a read,
+  // but uses POST because it carries a JSON `{ ids: [...] }` body that
+  // GET can't transport. Service-token auth still enforced inside the
+  // handler; this exemption only bypasses the read-only method guard.
+  /^\/api\/v2\/events\/shared-reports\/batch$/,
 ];
 
 // ── Internal ──────────────────────────────────────────────────────────────────
