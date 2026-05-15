@@ -79,7 +79,7 @@ The sequence number stays first for ordering. Product and type follow the spine.
 {Product}_{DocType}_{what}_{why}.md
 ```
 
-Doc types: `STANDARD`, `DECISION`, `ADR`, `GATE`, `CHECKLIST`, `VISION`, `DEPENDENCY`, `PROMPT`
+Doc types: `STANDARD`, `DECISION`, `GATE`, `CHECKLIST`, `VISION`, `DEPENDENCY`, `PROMPT`
 
 ```
 OCR_STANDARD_d1Migration.md
@@ -87,11 +87,21 @@ OCR_STANDARD_testNaming.md
 OCR_STANDARD_namingConvention.md
 OCR_DECISION_mockDataProvider.md
 OW_GATE_OW30_boundaryReview.md
-OCR_ADR_001_repoScaffold.md
 OCR_CHECKLIST_beverlyActivation.md
 OCR_DEPENDENCY_crossRepo.md
 OSE_GATE_OSE12_acAudit.md
 ```
+
+#### ADRs — exception (MADR format)
+
+Architecture Decision Records are an **exception** to the `{Product}_{DocType}_{what}_{why}.md` rule. As of 2026-05-15 (routing-matrix adoption — see `OCR-docs/OPERATING_SYSTEM.md §3`), ADRs use the MADR convention `ADR-NNN-kebab-case-title.md` and live in `docs/adr/` (per-repo) or `OCR-docs/docs/adr/` (fleet-wide).
+
+```
+ourSharedEvents/docs/adr/ADR-001-anonymous-identity-architecture.md   # per-repo
+OCR-docs/docs/adr/ADR-001-docs-as-code-scaffold.md                    # fleet-wide
+```
+
+The previous file `OCR_ADR_001_repoScaffold.md` has been migrated to `OCR-docs/docs/adr/ADR-001-docs-as-code-scaffold.md` as part of `CURRENT_STATE_INVENTORY.md` gap G9 closure.
 
 ### Skills
 
