@@ -258,7 +258,12 @@ describe('OSE-243a: state gate + 404 semantics', () => {
     const res = await SELF.fetch(`https://t.test/events/${eventId}`);
     expect(res.status).toBe(404);
     const html = await res.text();
-    expect(html).toContain('Event not found');
+    // OSE-R-004 (2026-05-15): the bare "<h1>Event not found</h1>" 1996-style
+    // body was replaced by the branded renderErrorPage shell. The contract
+    // tests for THIS shell live in tests/public-event-error-pages.spec.ts.
+    // Here we only re-assert the security-critical invariants: 404 status
+    // (above) + no event title / content leak (below).
+    expect(html).toMatch(/data-testid="error-title"/);
     // MUST NOT leak the event title or content
     expect(html).not.toContain('OSE-243a Smoke Event');
   });
