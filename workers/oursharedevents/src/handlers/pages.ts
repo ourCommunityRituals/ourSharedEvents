@@ -2490,7 +2490,14 @@ const SHARED_REPORT_HTML = `<!DOCTYPE html>
     <span>Shared Report</span>
   </header>
   <main id="main-content" data-testid="report-main">
-    <div class="action-bar" data-testid="report-action-bar">
+    <aside id="signed-link-error" role="alert" data-testid="signed-link-error" data-error-code="" hidden></aside>
+    <section id="signed-link-section" data-testid="signed-link-section" hidden aria-labelledby="signed-link-heading">
+      <h2 id="signed-link-heading" class="section-title">Event Report</h2>
+      <div id="signed-link-content" data-testid="signed-link-content">
+        <p class="loading" role="status" aria-live="polite">Loading your event report&hellip;</p>
+      </div>
+    </section>
+    <div class="action-bar" data-testid="report-action-bar" id="admin-action-bar">
       <button class="btn btn-outline" data-testid="export-json-btn" id="export-json-btn" disabled>
         &#8595; Export JSON
       </button>
@@ -2498,14 +2505,14 @@ const SHARED_REPORT_HTML = `<!DOCTYPE html>
         &#128438; Export PDF
       </button>
     </div>
-    <section aria-labelledby="section-stats">
+    <section aria-labelledby="section-stats" id="admin-section-stats"
       <h2 class="section-title" id="section-stats">Events Overview</h2>
       <div class="stats-row" id="stats-row" data-testid="report-stats">
         <div class="stat-card" data-testid="stat-total"><dl class="stat-dl"><dt>Total Events</dt><dd id="stat-total">&mdash;</dd></dl></div>
         <div class="stat-card" data-testid="stat-active"><dl class="stat-dl"><dt>Active</dt><dd id="stat-active">&mdash;</dd></dl></div>
       </div>
     </section>
-    <section aria-labelledby="section-events">
+    <section aria-labelledby="section-events" id="admin-section-events">
       <h2 class="section-title" id="section-events">Events</h2>
       <div class="events-list" id="events-list" data-testid="report-events-list"><p class="loading">Loading&hellip;</p></div>
     </section>
@@ -2522,9 +2529,228 @@ const SHARED_REPORT_HTML = `<!DOCTYPE html>
   </main>
   <script>
     window.__reportBundle = { events: [], sponsors: [], generatedAt: null };
+    window.__signedLinkMode = false;
+  </script>
+  <script>
+    // \u2500\u2500\u2500 OSE-R-003 signed-link mode \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+    // When the page is opened with ?eventId=<id>&token=<sig> (the shape of a
+    // signed-link share URL emailed to bar owners), switch out of the admin
+    // multi-event dashboard and into single-event SharedReport rendering
+    // backed by GET /api/v2/events/:id/shared-report (OSE-272 Session 5).
+    //
+    // The admin scripts further down early-exit when __signedLinkMode is true
+    // so the page renders exactly one report \u2014 the customer's \u2014 and never
+    // calls admin-only endpoints from a signed-link visit.
+    //
+    // Friendly copy: SHARED_REPORT_ERROR_COPY maps server code (and HTTP
+    // status fallback) to user-facing strings. The raw code is preserved on
+    // #signed-link-error[data-error-code] for support visibility (NOT shown
+    // to the user). Same contract as OSE-R-002 form errors.
+    window.SHARED_REPORT_ERROR_COPY = {
+      UNAUTHORIZED: 'This share link has expired or isn\u2019t valid. Ask the sender for a fresh link.',
+      FORBIDDEN: 'This share link is for a different event.',
+      NOT_FOUND: 'We couldn\u2019t find that event report.',
+      MATERIALIZATION_PENDING: 'Your event report is almost ready \u2014 usually takes a few minutes. Refresh in a moment.',
+      NON_JSON_RESPONSE: 'We\u2019re having trouble reaching the report service. Try again in a moment.',
+      NETWORK_ERROR: 'Couldn\u2019t reach the report service. Check your connection and try again.',
+      DEFAULT: 'Something went wrong loading your event report. Try again in a moment.'
+    };
+    window.SHARED_REPORT_STATUS_FALLBACK = {
+      401: 'UNAUTHORIZED',
+      403: 'FORBIDDEN',
+      404: 'NOT_FOUND',
+      409: 'MATERIALIZATION_PENDING'
+    };
+    window.friendlySharedReportError = function(code, status) {
+      const map = window.SHARED_REPORT_ERROR_COPY;
+      if (code && map[code]) return map[code];
+      const fallbackCode = window.SHARED_REPORT_STATUS_FALLBACK[status];
+      if (fallbackCode && map[fallbackCode]) return map[fallbackCode];
+      return map.DEFAULT;
+    };
+
+    (async () => {
+      const esc = s => { const d = document.createElement('div'); d.textContent = String(s == null ? '' : s); return d.innerHTML; };
+      const fmtDate = iso => iso ? new Date(iso).toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' }) : '\u2014';
+      const fmtPct = n => (n == null) ? '\u2014' : (Math.round(n * 10) / 10).toFixed(1) + '%';
+      const fmtInt = n => (n == null) ? '\u2014' : Number(n).toLocaleString();
+
+      const params = new URLSearchParams(location.search);
+      // Support both ?eventId=... and the legacy ?id=... shape so older
+      // links keep working. Path form /sharedReport/:eventId is also honored
+      // when the worker proxies it through (router treats the suffix as part
+      // of the pathname; we read it defensively here).
+      let eventId = params.get('eventId') || params.get('id') || '';
+      if (!eventId) {
+        const pathMatch = location.pathname.match(/^\\/sharedReport\\/([^/?#]+)/);
+        if (pathMatch) eventId = pathMatch[1];
+      }
+      const token = params.get('token') || '';
+      // Only enter signed-link mode when BOTH eventId and token are present.
+      // A user landing on bare /sharedReport (admin dashboard) is unchanged.
+      if (!eventId || !token) return;
+
+      window.__signedLinkMode = true;
+
+      // Hide admin sections \u2014 signed-link mode is single-event, no dashboard.
+      const hideIds = [
+        'admin-action-bar',
+        'admin-section-stats',
+        'admin-section-events',
+        'report-sponsor-section',
+        'advanced-metrics-section'
+      ];
+      for (const id of hideIds) {
+        const el = document.getElementById(id);
+        if (el) el.hidden = true;
+      }
+
+      const section = document.getElementById('signed-link-section');
+      const content = document.getElementById('signed-link-content');
+      const errEl = document.getElementById('signed-link-error');
+      if (section) section.hidden = false;
+
+      const showError = (code, status) => {
+        const msg = window.friendlySharedReportError(code, status);
+        if (errEl) {
+          errEl.hidden = false;
+          errEl.setAttribute('data-error-code', code || ('HTTP_' + (status || 'UNKNOWN')));
+          errEl.textContent = msg;
+        }
+        if (content) {
+          content.innerHTML = '';
+        }
+      };
+
+      let res;
+      try {
+        res = await fetch('/api/v2/events/' + encodeURIComponent(eventId) + '/shared-report', {
+          method: 'GET',
+          headers: {
+            'Accept': 'application/json',
+            'Authorization': 'Bearer ' + token
+          }
+        });
+      } catch (_netErr) {
+        showError('NETWORK_ERROR', 0);
+        return;
+      }
+
+      let body = null;
+      try {
+        body = await res.json();
+      } catch (_parseErr) {
+        showError('NON_JSON_RESPONSE', res.status);
+        return;
+      }
+
+      if (!res.ok || !body || body.ok === false) {
+        const code = body && body.code ? body.code : null;
+        showError(code, res.status);
+        return;
+      }
+
+      const report = body.report || {};
+      window.__reportBundle.signedLinkReport = report;
+
+      // \u2500\u2500 Render the SharedReport object \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+      const suppressionByField = {};
+      const reasons = (report._meta && report._meta.suppression_reasons) || [];
+      for (const r of reasons) {
+        if (r && r.field) suppressionByField[r.field] = r;
+      }
+      const suppressionNote = field => {
+        const r = suppressionByField[field];
+        if (!r) return '';
+        // Single sentence per S5-Q5 ratified UX. No raw reason codes leak.
+        const why = r.reason === 'below_min_sample_size'
+          ? 'Hidden to keep things anonymous \u2014 not enough data yet.'
+          : r.reason === 'no_baseline_yet'
+            ? 'No baseline yet \u2014 this is one of the first events here.'
+            : r.reason === 'no_series'
+              ? 'Not part of a series yet.'
+              : r.reason === 'materialization_pending'
+                ? 'Still being calculated.'
+                : 'Hidden for privacy.';
+        return '<p class="report-note" data-testid="report-suppression-note" data-field="' + esc(field) + '">' + esc(why) + '</p>';
+      };
+
+      const sponsorRows = (report.sponsor_impressions || []).map(s =>
+        '<tr data-testid="signed-link-sponsor-row">' +
+          '<td>' + esc(s.sponsor_name) + '</td>' +
+          '<td>' + esc(s.surface) + '</td>' +
+          '<td>' + fmtInt(s.count) + '</td>' +
+        '</tr>'
+      ).join('');
+      const posterRows = (report.poster_attribution || []).map(p =>
+        '<tr data-testid="signed-link-poster-row">' +
+          '<td>' + esc(p.location) + '</td>' +
+          '<td>' + fmtInt(p.scan_count) + '</td>' +
+          '<td>' + esc(fmtDate(p.first_scan_at)) + '</td>' +
+          '<td>' + esc(fmtDate(p.last_scan_at)) + '</td>' +
+        '</tr>'
+      ).join('');
+      const trendInstances = (report.headcount_trend && report.headcount_trend.instances) || [];
+      const trendRows = trendInstances.map(t =>
+        '<tr data-testid="signed-link-trend-row">' +
+          '<td>' + esc(fmtDate(t.start_date)) + '</td>' +
+          '<td>' + fmtInt(t.unique_gatherings) + '</td>' +
+        '</tr>'
+      ).join('');
+
+      content.innerHTML =
+        '<article class="signed-link-report" data-testid="signed-link-report-article">' +
+          '<header class="signed-link-report-header" data-testid="signed-link-report-header">' +
+            '<h3 data-testid="signed-link-event-title">' + esc(report.event_title || 'Event') + '</h3>' +
+            '<p class="signed-link-event-date" data-testid="signed-link-event-date">' + esc(fmtDate(report.event_start_date)) + '</p>' +
+          '</header>' +
+          '<section class="stats-row" data-testid="signed-link-stats">' +
+            '<div class="stat-card" data-testid="signed-link-unique-gatherings">' +
+              '<dl class="stat-dl"><dt>Unique Gatherings</dt><dd>' + fmtInt(report.unique_gatherings) + '</dd></dl>' +
+              suppressionNote('unique_gatherings') +
+            '</div>' +
+            '<div class="stat-card" data-testid="signed-link-return-rate">' +
+              '<dl class="stat-dl"><dt>Return Rate (venue)</dt><dd>' + fmtPct(report.return_rate && report.return_rate.venue_pct) + '</dd></dl>' +
+              suppressionNote('return_rate') +
+            '</div>' +
+            '<div class="stat-card" data-testid="signed-link-corridor-density">' +
+              '<dl class="stat-dl"><dt>Corridor Density (30d)</dt><dd>' + fmtInt(report.corridor_density && report.corridor_density.this_event_count) + '</dd></dl>' +
+              suppressionNote('corridor_density') +
+            '</div>' +
+          '</section>' +
+          (sponsorRows
+            ? '<section class="funnel-card" data-testid="signed-link-sponsor-section">' +
+                '<h3>Sponsor Impressions</h3>' +
+                '<table class="funnel-table" aria-label="Sponsor impressions">' +
+                  '<thead><tr><th scope="col">Sponsor</th><th scope="col">Surface</th><th scope="col">Impressions</th></tr></thead>' +
+                  '<tbody>' + sponsorRows + '</tbody>' +
+                '</table>' +
+              '</section>'
+            : '') +
+          (posterRows
+            ? '<section class="funnel-card" data-testid="signed-link-poster-section">' +
+                '<h3>Poster Attribution</h3>' +
+                '<table class="funnel-table" aria-label="Poster scans">' +
+                  '<thead><tr><th scope="col">Location</th><th scope="col">Scans</th><th scope="col">First</th><th scope="col">Last</th></tr></thead>' +
+                  '<tbody>' + posterRows + '</tbody>' +
+                '</table>' +
+              '</section>'
+            : '') +
+          (trendRows
+            ? '<section class="funnel-card" data-testid="signed-link-trend-section">' +
+                '<h3>Headcount Trend</h3>' +
+                '<table class="funnel-table" aria-label="Headcount trend across the series">' +
+                  '<thead><tr><th scope="col">Date</th><th scope="col">Unique Gatherings</th></tr></thead>' +
+                  '<tbody>' + trendRows + '</tbody>' +
+                '</table>' +
+              '</section>'
+            : '') +
+        '</article>';
+    })();
   </script>
   <script>
     (async () => {
+      if (window.__signedLinkMode) return;
       const esc = s => { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; };
       const fmt = iso => iso ? new Date(iso).toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' }) : '\u2014';
       const listEl = document.getElementById('events-list');
@@ -2575,6 +2801,7 @@ const SHARED_REPORT_HTML = `<!DOCTYPE html>
   </script>
   <script>
     (async () => {
+      if (window.__signedLinkMode) return;
       const metricsEl = document.getElementById('sponsor-metrics');
       const sectionEl = document.getElementById('report-sponsor-section');
       if (!metricsEl) return;
@@ -2608,6 +2835,7 @@ const SHARED_REPORT_HTML = `<!DOCTYPE html>
   </script>
   <script>
     (async () => {
+      if (window.__signedLinkMode) return;
       const section = document.getElementById('advanced-metrics-section');
       const content = document.getElementById('advanced-metrics-content');
       if (!section || !content) return;
