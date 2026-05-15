@@ -1530,6 +1530,111 @@
           }
         }
       ]
+    },
+    {
+      "name": "OSE-R-003 SharedReport signed-link API (audit 2026-05-15)",
+      "description": "Locks the server contract the OSE-R-003 SharedReport HTML page depends on. The signed-link UI (workers/oursharedevents/src/handlers/pages.ts) keys friendly copy off body.code from these responses. If the contract breaks, bar owners see raw dev strings — the audit catches it here.\n\nThe matching vitest API spec lives at workers/oursharedevents/tests/sharedReport-signed-link-ui.spec.ts; the FE Playwright spec lives at tests/playwright/sharedReport-signed-link-ui.spec.ts.",
+      "item": [
+        {
+          "name": "OSE-R-003 | API | GET /api/v2/events/:id/shared-report (no Authorization header) | 401 with body.code=UNAUTHORIZED",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// OSE-R-003 (2026-05-15): the /sharedReport page's signed-link mode reads",
+                  "// body.code to choose friendly copy. This locks the wire contract for the",
+                  "// no-auth path: 401 + code=UNAUTHORIZED. If the server stops emitting `code`",
+                  "// the UI falls through to the HTTP-status map — degraded but not broken —",
+                  "// and this test flags the regression.",
+                  "pm.test('Returns 401', function() { pm.response.to.have.status(401); });",
+                  "const json = pm.response.json();",
+                  "pm.test('body.ok is false', function() { pm.expect(json.ok).to.equal(false); });",
+                  "pm.test('body.code is UNAUTHORIZED (client-mappable)', function() {",
+                  "    pm.expect(json.code).to.equal('UNAUTHORIZED');",
+                  "});",
+                  "pm.test('WWW-Authenticate header advertises bearer realm', function() {",
+                  "    pm.expect(pm.response.headers.get('WWW-Authenticate') || '').to.include('Bearer');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/v2/events/{{testEventId}}/shared-report",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v2", "events", "{{testEventId}}", "shared-report"]
+            }
+          }
+        },
+        {
+          "name": "OSE-R-003 | API | GET /api/v2/events/:id/shared-report (malformed bearer token) | 401 with body.code=UNAUTHORIZED",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// OSE-R-003: invalid-token path. Same friendly copy bucket as the no-auth",
+                  "// case ('This share link has expired or isn’t valid. Ask the sender for a",
+                  "// fresh link.'). Server contract: 401 + code=UNAUTHORIZED, not 400 or 403.",
+                  "pm.test('Returns 401', function() { pm.response.to.have.status(401); });",
+                  "const json = pm.response.json();",
+                  "pm.test('body.code is UNAUTHORIZED', function() {",
+                  "    pm.expect(json.code).to.equal('UNAUTHORIZED');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer not-a-real-signed-link-token" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v2/events/{{testEventId}}/shared-report",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v2", "events", "{{testEventId}}", "shared-report"]
+            }
+          }
+        },
+        {
+          "name": "OSE-R-003 | API | GET /api/v2/events/:id/shared-report (no Authorization header) | response is application/json (not HTML)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// OSE-R-003: the signed-link UI parses the response with .json(). If the API",
+                  "// ever returns HTML on this code path (proxy 502 unwrap, gateway page, etc.)",
+                  "// the UI shows the NON_JSON_RESPONSE friendly copy. The contract under test",
+                  "// here is that the server itself never serves HTML for this endpoint.",
+                  "pm.test('Returns 401', function() { pm.response.to.have.status(401); });",
+                  "pm.test('Content-Type is JSON', function() {",
+                  "    pm.expect(pm.response.headers.get('Content-Type') || '').to.include('application/json');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/v2/events/{{testEventId}}/shared-report",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v2", "events", "{{testEventId}}", "shared-report"]
+            }
+          }
+        }
+      ]
     }
   ]
 }
