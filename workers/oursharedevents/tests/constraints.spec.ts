@@ -68,15 +68,19 @@ describe('QA-1: Migration idempotency', () => {
     ).all();
 
     const names = tables.results.map((r: Record<string, unknown>) => r.name);
-    expect(names).toHaveLength(16);
+    // 16 (pre-OSE-272) + 3 (anon_id_returns, corridor_density_baseline,
+    // event_series — OSE-272 Session 2) = 19.
+    expect(names).toHaveLength(19);
   });
 
-  test('indexes remain at exactly 35 after idempotent re-run', async () => {
-    // 33 (pre-OSE-240) + 2 (idx_shortlinks_event_id, idx_shortlinks_created_at) = 35.
+  test('indexes remain at exactly 39 after idempotent re-run', async () => {
+    // 33 (pre-OSE-240) + 2 (idx_shortlinks_*, OSE-240) + 4 (OSE-272 Session 2:
+    // idx_anon_id_returns_venue_visit, idx_event_series_venue_state,
+    // idx_event_series_venue_dow_hour, idx_events_series_start) = 39.
     const indexes = await env.DB.prepare(
       "SELECT name FROM sqlite_master WHERE type='index' AND name LIKE 'idx_%'"
     ).all();
-    expect(indexes.results).toHaveLength(35);
+    expect(indexes.results).toHaveLength(39);
   });
 });
 
