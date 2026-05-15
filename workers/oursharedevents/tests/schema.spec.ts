@@ -97,11 +97,12 @@ const EXPECTED_INDEXES = [
 
 const EXPECTED_COLUMN_COUNTS: Record<string, number> = {
   // events: 23 (pre-OSE-236) + 6 (migration 0029: what_short, who_host,
-  // why_purpose, how_details, where_address, corridor_id) = 29.
+  // why_purpose, how_details, where_address, corridor_id) + 1 (migration
+  // 0034: series_id, OSE-272 Session 2) = 30.
   // This count is the canonical floor — any future column add/drop on
   // events MUST bump this number in the same PR, surfacing the change
   // in code review.
-  events: 29,
+  events: 30,
   sponsors: 12,
   poster_deployments: 10,
   scans: 10,
@@ -223,13 +224,16 @@ describe('Gate 4: scan_aggregates write protection', () => {
 // ── Gate 5: Index verification ───────────────────────────────────────────────
 
 describe('Gate 5: Index verification', () => {
-  test('all 35 custom indexes exist', async () => {
+  test('all 39 custom indexes exist', async () => {
+    // 35 (pre-OSE-272) + 4 (OSE-272 Session 2: idx_anon_id_returns_venue_visit,
+    // idx_event_series_venue_state, idx_event_series_venue_dow_hour,
+    // idx_events_series_start) = 39.
     const indexes = await env.DB.prepare(
       "SELECT name FROM sqlite_master WHERE type='index' AND name LIKE 'idx_%' ORDER BY name"
     ).all();
 
     const names = indexes.results.map((r: Record<string, unknown>) => r.name);
-    expect(names.length).toBe(35);
+    expect(names.length).toBe(39);
     EXPECTED_INDEXES.forEach((idx) => expect(names).toContain(idx));
   });
 });

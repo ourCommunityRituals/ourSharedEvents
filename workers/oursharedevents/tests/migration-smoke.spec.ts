@@ -41,11 +41,14 @@ const tenv = () => env as unknown as TestEnv;
 
 const DB_TABLES = [
   'admin_audit_log', // 0026
+  'anon_id_returns', // 0031 (OSE-272 SharedReport pipeline)
+  'corridor_density_baseline', // 0032 (OSE-272 SharedReport pipeline)
   'corridor_regulatory_status', // 0023
   'corridors', // 0010
+  'event_series', // 0033 (OSE-272 SharedReport pipeline)
   'event_templates', // 0014
   'event_type_registry', // 0023
-  'events', // 0001
+  'events', // 0001 + 0034 series_id column
   'node_hierarchy', // 0010
   'poster_deployments', // 0003
   'scan_aggregates', // 0006
