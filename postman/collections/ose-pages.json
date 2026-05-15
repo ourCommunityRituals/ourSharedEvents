@@ -396,7 +396,7 @@
           }
         },
         {
-          "name": "OSE-R-001 | GET /admin (unauthenticated) | 401 HTML sign-in page",
+          "name": "OSE-R-001 | API | GET /admin (unauthenticated) | 401 HTML sign-in page",
           "event": [
             {
               "listen": "test",
@@ -455,7 +455,7 @@
           }
         },
         {
-          "name": "OSE-R-001 | GET /admin (Accept: application/json) | 401 JSON error",
+          "name": "OSE-R-001 | API | GET /admin (Accept: application/json) | 401 JSON error",
           "event": [
             {
               "listen": "test",
@@ -497,7 +497,7 @@
           }
         },
         {
-          "name": "OSE-R-001 | GET /manage (unauthenticated) | 401 HTML sign-in page (alias)",
+          "name": "OSE-R-001 | API | GET /manage (unauthenticated) | 401 HTML sign-in page (alias)",
           "event": [
             {
               "listen": "test",
@@ -523,7 +523,7 @@
           }
         },
         {
-          "name": "OSE-R-001 | POST /api/v2/admin/events (unauthenticated) | 401 JSON (no HTML leak)",
+          "name": "OSE-R-001 | API | POST /api/v2/admin/events (unauthenticated) | 401 JSON (no HTML leak)",
           "event": [
             {
               "listen": "test",

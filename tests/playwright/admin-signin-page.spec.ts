@@ -33,7 +33,9 @@ async function gotoAdminUnauth(page: Page, path: string = '/admin') {
 // ═════════════════════════════════════════════════════════════════════════════
 
 test.describe('OSE-R-001 — admin sign-in front door', () => {
-  test('OSE-R-001 | GET /admin (unauthenticated) | 401 HTML sign-in page', async ({ page }) => {
+  test('OSE-R-001 | FE | GET /admin (unauthenticated) | 401 HTML sign-in page', async ({
+    page,
+  }) => {
     const res = await gotoAdminUnauth(page);
     expect(res, 'navigation response should exist').not.toBeNull();
     expect(res!.status()).toBe(401);
@@ -48,7 +50,7 @@ test.describe('OSE-R-001 — admin sign-in front door', () => {
     expect(body).not.toMatch(/"code":\s*"UNAUTH"/);
   });
 
-  test('OSE-R-001 | GET /admin (unauthenticated) | heading + lede + CTAs render', async ({
+  test('OSE-R-001 | FE | GET /admin (unauthenticated) | heading + lede + CTAs render', async ({
     page,
   }) => {
     await gotoAdminUnauth(page);
@@ -72,7 +74,7 @@ test.describe('OSE-R-001 — admin sign-in front door', () => {
     await expect(requestAccess).toHaveAttribute('href', '/');
   });
 
-  test('OSE-R-001 | GET /admin (unauthenticated) | brand matches landing (logo + nav)', async ({
+  test('OSE-R-001 | FE | GET /admin (unauthenticated) | brand matches landing (logo + nav)', async ({
     page,
   }) => {
     await gotoAdminUnauth(page);
@@ -86,7 +88,7 @@ test.describe('OSE-R-001 — admin sign-in front door', () => {
     await expect(page.locator('[data-testid="nav-events"]')).toHaveAttribute('href', '/events');
   });
 
-  test('OSE-R-001 | GET /admin (unauthenticated) | a11y skip-link + semantic main + focus', async ({
+  test('OSE-R-001 | FE | GET /admin (unauthenticated) | a11y skip-link + semantic main + focus', async ({
     page,
   }) => {
     await gotoAdminUnauth(page);
@@ -105,7 +107,7 @@ test.describe('OSE-R-001 — admin sign-in front door', () => {
     expect(isFocused).toBe(true);
   });
 
-  test('OSE-R-001 | GET /admin (unauthenticated) | robots noindex meta present', async ({
+  test('OSE-R-001 | FE | GET /admin (unauthenticated) | robots noindex meta present', async ({
     page,
   }) => {
     await gotoAdminUnauth(page);
@@ -113,7 +115,7 @@ test.describe('OSE-R-001 — admin sign-in front door', () => {
     await expect(robots).toHaveAttribute('content', 'noindex');
   });
 
-  test('OSE-R-001 | GET /manage (unauthenticated) | 401 HTML sign-in page (alias)', async ({
+  test('OSE-R-001 | FE | GET /manage (unauthenticated) | 401 HTML sign-in page (alias)', async ({
     page,
   }) => {
     const res = await gotoAdminUnauth(page, '/manage');
@@ -121,7 +123,7 @@ test.describe('OSE-R-001 — admin sign-in front door', () => {
     await expect(page.locator('[data-testid="signin-heading"]')).toBeVisible();
   });
 
-  test('OSE-R-001 | GET /dashboard (unauthenticated) | 401 HTML sign-in page (alias)', async ({
+  test('OSE-R-001 | FE | GET /dashboard (unauthenticated) | 401 HTML sign-in page (alias)', async ({
     page,
   }) => {
     const res = await gotoAdminUnauth(page, '/dashboard');
@@ -129,7 +131,7 @@ test.describe('OSE-R-001 — admin sign-in front door', () => {
     await expect(page.locator('[data-testid="signin-heading"]')).toBeVisible();
   });
 
-  test('OSE-R-001 | GET /create (unauthenticated) | 401 HTML sign-in page (alias)', async ({
+  test('OSE-R-001 | FE | GET /create (unauthenticated) | 401 HTML sign-in page (alias)', async ({
     page,
   }) => {
     const res = await gotoAdminUnauth(page, '/create');
@@ -137,7 +139,7 @@ test.describe('OSE-R-001 — admin sign-in front door', () => {
     await expect(page.locator('[data-testid="signin-heading"]')).toBeVisible();
   });
 
-  test('OSE-R-001 | GET /admin (unauthenticated) | sign-in CTA href is /admin', async ({
+  test('OSE-R-001 | FE | GET /admin (unauthenticated) | sign-in CTA href is /admin', async ({
     page,
   }) => {
     await gotoAdminUnauth(page);
@@ -148,7 +150,7 @@ test.describe('OSE-R-001 — admin sign-in front door', () => {
     expect(href).toBe('/admin');
   });
 
-  test('OSE-R-001 | GET /admin (mobile 375px viewport) | card fits within viewport width', async ({
+  test('OSE-R-001 | FE | GET /admin (mobile 375px viewport) | card fits within viewport width', async ({
     page,
   }) => {
     await page.setViewportSize({ width: 375, height: 667 }); // iPhone SE
@@ -162,7 +164,7 @@ test.describe('OSE-R-001 — admin sign-in front door', () => {
     expect(cardBox!.width).toBeLessThanOrEqual(375);
   });
 
-  test('OSE-R-001 | GET /admin (unauthenticated) | no admin dashboard content leaked', async ({
+  test('OSE-R-001 | FE | GET /admin (unauthenticated) | no admin dashboard content leaked', async ({
     page,
   }) => {
     await gotoAdminUnauth(page);

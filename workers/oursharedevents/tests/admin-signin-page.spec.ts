@@ -18,7 +18,7 @@ import { describe, test, expect } from 'vitest';
 import { SELF } from 'cloudflare:test';
 
 describe('OSE-R-001 admin front-door', () => {
-  test('OSE-R-001 | GET /admin (unauthenticated) | 401 HTML sign-in page', async () => {
+  test('OSE-R-001 | API | GET /admin (unauthenticated) | 401 HTML sign-in page', async () => {
     const res = await SELF.fetch('https://test.local/admin', {
       headers: { Accept: 'text/html' },
     });
@@ -34,7 +34,7 @@ describe('OSE-R-001 admin front-door', () => {
     expect(body).not.toMatch(/"code":\s*"UNAUTH"/);
   });
 
-  test('OSE-R-001 | GET /admin (unauthenticated) | sign-in CTA + request-access path present', async () => {
+  test('OSE-R-001 | API | GET /admin (unauthenticated) | sign-in CTA + request-access path present', async () => {
     const res = await SELF.fetch('https://test.local/admin', {
       headers: { Accept: 'text/html' },
     });
@@ -46,7 +46,7 @@ describe('OSE-R-001 admin front-door', () => {
     expect(body).not.toMatch(/\bUNAUTH\b/);
   });
 
-  test('OSE-R-001 | GET /manage (unauthenticated) | 401 HTML sign-in page (alias)', async () => {
+  test('OSE-R-001 | API | GET /manage (unauthenticated) | 401 HTML sign-in page (alias)', async () => {
     const res = await SELF.fetch('https://test.local/manage', {
       headers: { Accept: 'text/html' },
     });
@@ -55,7 +55,7 @@ describe('OSE-R-001 admin front-door', () => {
     expect(body).toMatch(/Admin sign-in required/);
   });
 
-  test('OSE-R-001 | GET /admin (Accept: application/json) | 401 JSON error', async () => {
+  test('OSE-R-001 | API | GET /admin (Accept: application/json) | 401 JSON error', async () => {
     const res = await SELF.fetch('https://test.local/admin', {
       headers: { Accept: 'application/json' },
     });
@@ -67,7 +67,7 @@ describe('OSE-R-001 admin front-door', () => {
     expect(body.code).toBe('UNAUTH');
   });
 
-  test('OSE-R-001 | GET /api/v2/admin/events (unauthenticated) | 401 JSON (no HTML leak)', async () => {
+  test('OSE-R-001 | API | GET /api/v2/admin/events (unauthenticated) | 401 JSON (no HTML leak)', async () => {
     const res = await SELF.fetch('https://test.local/api/v2/admin/events', {
       headers: { Accept: 'text/html' }, // even browser-style Accept must NOT get HTML on API
     });
@@ -77,7 +77,7 @@ describe('OSE-R-001 admin front-door', () => {
     expect(body).toMatch(/"ok":\s*false/);
   });
 
-  test('OSE-R-001 | GET /admin (unauthenticated) | Content-Security-Policy header set', async () => {
+  test('OSE-R-001 | API | GET /admin (unauthenticated) | Content-Security-Policy header set', async () => {
     const res = await SELF.fetch('https://test.local/admin', {
       headers: { Accept: 'text/html' },
     });
@@ -86,7 +86,7 @@ describe('OSE-R-001 admin front-door', () => {
     expect(csp!).toMatch(/default-src 'self'/);
   });
 
-  test('OSE-R-001 | GET /admin (unauthenticated) | robots noindex meta present', async () => {
+  test('OSE-R-001 | API | GET /admin (unauthenticated) | robots noindex meta present', async () => {
     const res = await SELF.fetch('https://test.local/admin', {
       headers: { Accept: 'text/html' },
     });
