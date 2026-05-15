@@ -1274,6 +1274,80 @@ function html(content: string, status = 200): Response {
   });
 }
 
+/**
+ * OSE-R-004 — branded 4xx/5xx HTML helper.
+ *
+ * Before this helper landed, the public-event handler emitted bare 1996-style
+ * HTML for 404 and 503 responses (audit REFINEMENT-BACKLOG-2026-05-15.md
+ * OSE-R-004 + OSE-R-022). A bar customer following a shared event link that
+ * was archived or hit during an outage saw an unstyled "Event not found" h1
+ * with no brand, no nav, no CTA, no wayfinding.
+ *
+ * Every 4xx/5xx HTML path in pages.ts now routes through this helper so the
+ * brand header, friendly copy, and CTA back to /events ship consistently.
+ *
+ * Inputs are validated and rendered safely:
+ *   - status: number (used in title + h1)
+ *   - title:  short heading (5–7 words max). User-visible.
+ *   - body:   single sentence of friendly copy. User-visible.
+ *   - ctaHref / ctaLabel: optional CTA. Default targets /events.
+ *
+ * Outputs the standard branded shell with CSP-friendly inline styles.
+ * data-testids drive the OSE-R-004 test pyramid.
+ */
+function renderErrorPage(
+  status: number,
+  title: string,
+  body: string,
+  ctaHref: string = '/events',
+  ctaLabel: string = 'Browse upcoming events'
+): Response {
+  const esc = (s: string) =>
+    s
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  const safeTitle = esc(title);
+  const safeBody = esc(body);
+  const safeCtaHref = esc(ctaHref);
+  const safeCtaLabel = esc(ctaLabel);
+  const content = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>${safeTitle} – OurSharedEvents</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, -apple-system, sans-serif; background: #f8f9fa; color: #212529; min-height: 100vh; display: flex; flex-direction: column; }
+    header { background: #1a1a2e; color: #fff; padding: 1.25rem 2rem; }
+    header a { color: #fff; text-decoration: none; font-size: 1.1rem; font-weight: 600; }
+    main { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 3rem 1.5rem; text-align: center; }
+    .error-status { font-size: .8rem; color: #6c757d; text-transform: uppercase; letter-spacing: .12em; margin-bottom: .75rem; }
+    .error-title { font-size: 1.75rem; font-weight: 700; color: #1a1a2e; margin-bottom: 1rem; max-width: 520px; }
+    .error-body { font-size: 1rem; color: #495057; max-width: 520px; line-height: 1.5; margin-bottom: 1.75rem; }
+    .error-cta { display: inline-block; padding: .65rem 1.25rem; background: #1a1a2e; color: #fff; text-decoration: none; border-radius: 6px; font-weight: 600; font-size: .95rem; }
+    .error-cta:hover { background: #0f0f1a; }
+    .error-cta:focus-visible { outline: 2px solid #4361ee; outline-offset: 2px; }
+    footer { padding: 1rem 2rem; text-align: center; font-size: .8rem; color: #6c757d; }
+  </style>
+</head>
+<body>
+  <header data-testid="error-header"><a href="/" data-testid="error-brand">OurSharedEvents</a></header>
+  <main data-testid="error-main">
+    <p class="error-status" data-testid="error-status">Error ${status}</p>
+    <h1 class="error-title" data-testid="error-title">${safeTitle}</h1>
+    <p class="error-body" data-testid="error-body">${safeBody}</p>
+    <a class="error-cta" data-testid="error-cta" href="${safeCtaHref}">${safeCtaLabel}</a>
+  </main>
+  <footer data-testid="error-footer">OurSharedEvents — community gatherings</footer>
+</body>
+</html>`;
+  return html(content, status);
+}
+
 export function handlePublicPage(_env: PagesEnv): Response {
   return html(PUBLIC_HTML);
 }
@@ -1681,18 +1755,24 @@ export async function handlePublicEventPage(
   eventId: string
 ): Promise<Response> {
   if (!env.DB) {
-    return html(
-      '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Service unavailable</title></head><body><h1>Service unavailable</h1></body></html>',
-      503
+    return renderErrorPage(
+      503,
+      "We're having trouble loading this event",
+      'Our event service is briefly unavailable. Try again in a minute, or browse what else is coming up.',
+      '/events',
+      'Browse upcoming events'
     );
   }
 
   // Cheap input validation. Event IDs are URL-safe alnum/_-, max 128 chars
   // (same shape as the form-validation lib enforces).
   if (!eventId || eventId.length > 128 || !/^[a-zA-Z0-9_\-]+$/.test(eventId)) {
-    return html(
-      '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Not found</title></head><body><h1>Event not found</h1></body></html>',
-      404
+    return renderErrorPage(
+      404,
+      "We couldn't find that event",
+      "This event link doesn't work anymore — it may have been archived. See what's coming up next.",
+      '/events',
+      'Browse upcoming events'
     );
   }
 
@@ -1708,26 +1788,37 @@ export async function handlePublicEventPage(
       .bind(eventId)
       .first<PublicEventRow>();
   } catch {
-    return html(
-      '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Service unavailable</title></head><body><h1>Service unavailable</h1></body></html>',
-      503
+    return renderErrorPage(
+      503,
+      "We're having trouble loading this event",
+      'Our event service is briefly unavailable. Try again in a minute, or browse what else is coming up.',
+      '/events',
+      'Browse upcoming events'
     );
   }
 
   if (!row) {
-    return html(
-      '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Not found</title></head><body><h1>Event not found</h1></body></html>',
-      404
+    return renderErrorPage(
+      404,
+      "We couldn't find that event",
+      "This event link doesn't work anymore — it may have been archived. See what's coming up next.",
+      '/events',
+      'Browse upcoming events'
     );
   }
 
   // State-machine gate: draft/ready events are NOT renderable to public.
   // 404 (not 403) so an attacker can't probe to discover unpublished events.
+  // The friendly copy MUST be byte-identical to the not-found case above so
+  // a probe attacker can't differentiate a missing row from a draft row.
   const status = (row.status || '').toLowerCase();
   if (status === 'draft' || status === 'ready') {
-    return html(
-      '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Not found</title></head><body><h1>Event not found</h1></body></html>',
-      404
+    return renderErrorPage(
+      404,
+      "We couldn't find that event",
+      "This event link doesn't work anymore — it may have been archived. See what's coming up next.",
+      '/events',
+      'Browse upcoming events'
     );
   }
 
