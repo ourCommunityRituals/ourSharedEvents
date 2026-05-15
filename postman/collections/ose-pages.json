@@ -394,6 +394,167 @@
               "path": ["admin"]
             }
           }
+        },
+        {
+          "name": "R-001 | GET /admin (no auth, Accept:text/html) returns HTML sign-in page",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// R-001 (audit ship-stopper #1, 2026-05-15): pre-fix, this returned a raw JSON 401",
+                  "// dump rendered as page text in the browser. After fix: browsers get HTML sign-in.",
+                  "pm.test('Returns 401 (auth required)', function() {",
+                  "    pm.response.to.have.status(401);",
+                  "});",
+                  "",
+                  "pm.test('Content-Type is text/html (not JSON)', function() {",
+                  "    pm.expect(pm.response.headers.get('Content-Type')).to.include('text/html');",
+                  "});",
+                  "",
+                  "const body = pm.response.text();",
+                  "",
+                  "pm.test('Renders the styled sign-in page', function() {",
+                  "    pm.expect(body).to.include('<!DOCTYPE html>');",
+                  "    pm.expect(body).to.include('Admin sign-in required');",
+                  "    pm.expect(body).to.include('data-testid=\"signin-cta\"');",
+                  "    pm.expect(body).to.include('data-testid=\"signin-request-access\"');",
+                  "});",
+                  "",
+                  "pm.test('Body does NOT contain the raw JSON error dump', function() {",
+                  "    pm.expect(body).to.not.match(/\"ok\":\\s*false/);",
+                  "    pm.expect(body).to.not.match(/\"code\":\\s*\"UNAUTH\"/);",
+                  "});",
+                  "",
+                  "pm.test('CSP header set (defense in depth)', function() {",
+                  "    pm.expect(pm.response.headers.get('Content-Security-Policy')).to.not.be.null;",
+                  "});",
+                  "",
+                  "pm.test('Robots noindex meta present (not crawler-facing)', function() {",
+                  "    pm.expect(body).to.match(/<meta name=\"robots\" content=\"noindex\"/);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin"]
+            }
+          }
+        },
+        {
+          "name": "R-001 | GET /admin (no auth, Accept:application/json) returns JSON 401 (API contract preserved)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// R-001 contract: API consumers (curl, scripts, CI) still get structured JSON 401.",
+                  "// Only browsers (Accept: text/html) get the HTML sign-in page.",
+                  "pm.test('Returns 401 (auth required)', function() {",
+                  "    pm.response.to.have.status(401);",
+                  "});",
+                  "",
+                  "pm.test('Content-Type is application/json (NOT HTML)', function() {",
+                  "    pm.expect(pm.response.headers.get('Content-Type')).to.include('application/json');",
+                  "});",
+                  "",
+                  "pm.test('Body is the JSON error shape', function() {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.ok).to.equal(false);",
+                  "    pm.expect(json.code).to.equal('UNAUTH');",
+                  "});",
+                  "",
+                  "pm.test('WWW-Authenticate Bearer challenge present', function() {",
+                  "    pm.expect(pm.response.headers.get('WWW-Authenticate')).to.match(/Bearer/i);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": {
+              "raw": "{{baseUrl}}/admin",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin"]
+            }
+          }
+        },
+        {
+          "name": "R-001 | GET /manage alias (no auth, Accept:text/html) also returns HTML sign-in",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Returns 401', function() { pm.response.to.have.status(401); });",
+                  "pm.test('HTML response', function() { pm.expect(pm.response.headers.get('Content-Type')).to.include('text/html'); });",
+                  "pm.test('Sign-in page rendered', function() { pm.expect(pm.response.text()).to.include('Admin sign-in required'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "text/html" }],
+            "url": {
+              "raw": "{{baseUrl}}/manage",
+              "host": ["{{baseUrl}}"],
+              "path": ["manage"]
+            }
+          }
+        },
+        {
+          "name": "R-001 | POST /api/v2/admin/events (no auth, browser Accept) still returns JSON 401 (no HTML leak to APIs)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Even with browser-style Accept header, API endpoints must NEVER return HTML auth-fail.",
+                  "// The HTML branch is for HTML *page* routes only.",
+                  "pm.test('Returns 401', function() { pm.response.to.have.status(401); });",
+                  "pm.test('Response is JSON, not HTML', function() {",
+                  "    pm.expect(pm.response.headers.get('Content-Type')).to.include('application/json');",
+                  "    pm.expect(pm.response.text()).to.not.include('<!DOCTYPE html>');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [
+              { "key": "Accept", "value": "text/html" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{}" },
+            "url": {
+              "raw": "{{baseUrl}}/api/v2/admin/events",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v2", "admin", "events"]
+            }
+          }
         }
       ]
     },

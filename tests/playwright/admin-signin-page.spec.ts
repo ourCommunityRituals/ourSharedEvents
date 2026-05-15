@@ -1,0 +1,157 @@
+/**
+ * R-001 — Playwright E2E for the admin sign-in front door.
+ *
+ * Companion to:
+ *   - tests/admin-signin-page.spec.ts (vitest — Worker-internal)
+ *   - postman/collections/ose-pages.json (Newman — API contract)
+ *
+ * Layer:
+ *   • Vitest: unit + Worker-binding tests (fast, runs in CI)
+ *   • Postman: response shape + headers (runs in Newman against staging)
+ *   • Playwright (this file): real browser, DOM, accessibility, navigation
+ *
+ * Story: R-001 in REFINEMENT-BACKLOG-2026-05-15.md
+ * Pre-fix defect: unauth GET /admin returned JSON 401 rendered as text
+ * Post-fix contract: HTML 401 sign-in page with brand + sign-in CTA
+ */
+
+import { test, expect, type Page } from '@playwright/test';
+
+const BASE_URL = process.env.STAGING_URL || 'https://stg.oursharedevents.com';
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+async function gotoAdminUnauth(page: Page, path: string = '/admin') {
+  // Use a fresh context with no auth headers — Playwright contexts default
+  // to no shared state, so this is incognito-equivalent.
+  const res = await page.goto(`${BASE_URL}${path}`, { waitUntil: 'domcontentloaded' });
+  return res;
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// SUITE: R-001 ADMIN SIGN-IN PAGE
+// ═════════════════════════════════════════════════════════════════════════════
+
+test.describe('R-001 — admin sign-in front door', () => {
+  test('R-001-PW-01 | GET /admin (unauth) returns 401 + HTML page (not JSON)', async ({ page }) => {
+    const res = await gotoAdminUnauth(page);
+    expect(res, 'navigation response should exist').not.toBeNull();
+    expect(res!.status()).toBe(401);
+
+    const contentType = res!.headers()['content-type'] ?? '';
+    expect(contentType).toMatch(/text\/html/);
+
+    // The body is a real HTML page, not the pre-R-001 JSON dump
+    const body = await page.content();
+    expect(body).toMatch(/<!DOCTYPE html>/i);
+    expect(body).not.toMatch(/"ok":\s*false/);
+    expect(body).not.toMatch(/"code":\s*"UNAUTH"/);
+  });
+
+  test('R-001-PW-02 | Sign-in page has the expected heading + lede + CTAs', async ({ page }) => {
+    await gotoAdminUnauth(page);
+
+    // Heading is found by data-testid (locked into the markup)
+    await expect(page.locator('[data-testid="signin-heading"]')).toHaveText(
+      'Admin sign-in required'
+    );
+
+    // Lede explains who this is for
+    await expect(page.locator('[data-testid="signin-lede"]')).toContainText(/event organizers/i);
+
+    // Primary CTA exists and points to /admin (retry → CF Access in prod)
+    const cta = page.locator('[data-testid="signin-cta"]');
+    await expect(cta).toBeVisible();
+    await expect(cta).toHaveAttribute('href', '/admin');
+
+    // Request-access path for prospects exists and points home
+    const requestAccess = page.locator('[data-testid="signin-request-access"]');
+    await expect(requestAccess).toBeVisible();
+    await expect(requestAccess).toHaveAttribute('href', '/');
+  });
+
+  test('R-001-PW-03 | Brand is consistent — same nav as landing, logo links to /', async ({
+    page,
+  }) => {
+    await gotoAdminUnauth(page);
+
+    const logo = page.locator('[data-testid="signin-logo"]');
+    await expect(logo).toBeVisible();
+    await expect(logo).toHaveText('OurSharedEvents');
+    await expect(logo).toHaveAttribute('href', '/');
+
+    // Events link in nav (matches landing nav)
+    await expect(page.locator('[data-testid="nav-events"]')).toHaveAttribute('href', '/events');
+  });
+
+  test('R-001-PW-04 | Accessibility — skip-link, semantic main, focus-visible', async ({
+    page,
+  }) => {
+    await gotoAdminUnauth(page);
+
+    // Skip-link exists and is visually hidden until focused
+    const skipLink = page.locator('a.skip-link');
+    await expect(skipLink).toHaveAttribute('href', '#main-content');
+
+    // Semantic main landmark
+    await expect(page.locator('main#main-content')).toBeVisible();
+
+    // Sign-in CTA is keyboard-focusable
+    const cta = page.locator('[data-testid="signin-cta"]');
+    await cta.focus();
+    const isFocused = await cta.evaluate((el) => el === document.activeElement);
+    expect(isFocused).toBe(true);
+  });
+
+  test('R-001-PW-05 | Robots noindex meta tag present (not for crawlers)', async ({ page }) => {
+    await gotoAdminUnauth(page);
+    const robots = page.locator('meta[name="robots"]');
+    await expect(robots).toHaveAttribute('content', 'noindex');
+  });
+
+  test('R-001-PW-06 | Aliases /manage, /dashboard, /create also return the sign-in page', async ({
+    page,
+  }) => {
+    for (const path of ['/manage', '/dashboard', '/create']) {
+      const res = await gotoAdminUnauth(page, path);
+      expect(res!.status(), `${path} should 401`).toBe(401);
+      await expect(
+        page.locator('[data-testid="signin-heading"]'),
+        `${path} should render sign-in heading`
+      ).toBeVisible();
+    }
+  });
+
+  test('R-001-PW-07 | CTA click attempts to re-authenticate (links to /admin)', async ({
+    page,
+  }) => {
+    await gotoAdminUnauth(page);
+    const cta = page.locator('[data-testid="signin-cta"]');
+    // We don't follow the click into CF Access (that's an external dependency
+    // tested elsewhere). We only verify the link target is correct.
+    const href = await cta.getAttribute('href');
+    expect(href).toBe('/admin');
+  });
+
+  test('R-001-PW-08 | Mobile viewport renders sign-in card without overflow', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 667 }); // iPhone SE
+    await gotoAdminUnauth(page);
+
+    // Card is visible and within viewport
+    const card = page.locator('[data-testid="signin-card"]');
+    await expect(card).toBeVisible();
+    const cardBox = await card.boundingBox();
+    expect(cardBox).not.toBeNull();
+    expect(cardBox!.width).toBeLessThanOrEqual(375);
+  });
+
+  test('R-001-PW-09 | Page body does NOT leak admin dashboard content', async ({ page }) => {
+    await gotoAdminUnauth(page);
+    const body = await page.content();
+    // Defense-in-depth: even though we expect 401, confirm no admin internals
+    // accidentally render (e.g., the JSON branch returning HTML by mistake).
+    expect(body).not.toMatch(/data-testid="admin-header"/);
+    expect(body).not.toMatch(/data-testid="admin-main"/);
+    expect(body).not.toMatch(/Event Templates/i); // an admin-specific label
+  });
+});
