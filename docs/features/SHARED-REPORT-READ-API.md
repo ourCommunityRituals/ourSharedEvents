@@ -5,7 +5,7 @@
 **Authors:** mzdan + Co-Architect
 **Closes design phase of:** OSE-272 Session 5 (read API)
 **Unblocks:** OSE-15 production launch readiness; future WKRP performer-attribution consumer
-**Routing:** per `OPERATING_SYSTEM.md §3` — per-repo feature design → `<repo>/docs/features/`
+**Routing:** per `OCR-docs/OPERATING_SYSTEM.md §3` — per-repo feature design → `<repo>/docs/features/`
 
 ---
 
