@@ -117,7 +117,9 @@ const FORM_CSS = `
   input, textarea, select { width: 100%; padding: .65rem .75rem; border: 1.5px solid #dee2e6; border-radius: 8px; font-size: 1rem; margin-bottom: .75rem; font-family: inherit; }
   input:focus, textarea:focus { outline: none; border-color: #4361ee; box-shadow: 0 0 0 3px rgba(67,97,238,.15); }
   textarea { resize: vertical; min-height: 80px; }
-  button { width: 100%; padding: .75rem; background: #4361ee; color: #fff; border: none; border-radius: 8px; font-size: 1rem; font-weight: 600; cursor: pointer; margin-top: .5rem; }
+  /* OSE-292 (2026-05-16): min-height 44px on every button to meet
+     WCAG 2.5.5 + Apple HIG touch-target floor. */
+  button { width: 100%; padding: .75rem; min-height: 44px; background: #4361ee; color: #fff; border: none; border-radius: 8px; font-size: 1rem; font-weight: 600; cursor: pointer; margin-top: .5rem; }
   button:active { background: #3451d1; }
   button:disabled { background: #adb5bd; cursor: not-allowed; }
   .success { text-align: center; padding: 2rem 1rem; }
@@ -126,12 +128,16 @@ const FORM_CSS = `
   .success p { color: #6c757d; font-size: .9rem; margin-top: .5rem; }
   .error-msg { color: #e03131; font-size: .85rem; margin-bottom: .5rem; display: none; }
   .privacy-notice { font-size: .75rem; color: #6c757d; margin-top: .75rem; line-height: 1.4; }
-  .privacy-notice a { color: #4361ee; }
+  /* OSE-292: privacy-policy link must be a real tap target on phones —
+     inline-block + padding gives a 44px+ touch area without breaking
+     the inline text flow visually. */
+  .privacy-notice a { color: #4361ee; display: inline-block; min-height: 44px; padding: .5rem .25rem; line-height: 1.4; }
   .skip-link { position: absolute; left: -9999px; top: auto; width: 1px; height: 1px; overflow: hidden; }
   .skip-link:focus { position: fixed; top: 0; left: 0; width: auto; height: auto; padding: .5rem 1rem; background: #1a1a2e; color: #fff; font-size: 1rem; z-index: 9999; text-decoration: none; border-bottom: 2px solid #4361ee; }
   button:focus-visible { outline: 2px solid #4361ee; outline-offset: 2px; }
   .rating-row { display: flex; gap: .5rem; margin-bottom: .75rem; }
-  .rating-row button { width: auto; flex: 1; padding: .5rem; font-size: 1.1rem; background: #f1f3f5; color: #495057; border: 2px solid transparent; }
+  /* OSE-292: 44px floor for survey rating tap targets. */
+  .rating-row button { width: auto; flex: 1; padding: .5rem; min-height: 44px; font-size: 1.1rem; background: #f1f3f5; color: #495057; border: 2px solid transparent; }
   .rating-row button.selected { background: #4361ee; color: #fff; border-color: #3451d1; }
   .checkin-tap { text-align: center; padding: 3rem 1rem; }
   .checkin-tap button { font-size: 1.5rem; padding: 1.5rem; border-radius: 50%; width: 180px; height: 180px; margin: 1rem auto; display: block; -webkit-tap-highlight-color: transparent; touch-action: manipulation; transition: transform 0.1s, opacity 0.1s; user-select: none; }
