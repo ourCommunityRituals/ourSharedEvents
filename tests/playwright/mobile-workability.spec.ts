@@ -29,6 +29,20 @@ import { test, expect, type Page, type Locator } from '@playwright/test';
 const BASE_URL = process.env.STAGING_URL || 'https://stg.oursharedevents.com';
 const ADMIN_BEARER = process.env.OSE_ADMIN_BEARER || 'test-admin-key-e2e-2026';
 
+// OSE-305 / OSE-302 / ADR-006: when OSE_ADMIN_BEARER is unset OR equals the
+// test default, the audit's authenticated request to /admin fails →
+// Cloudflare Bot Management intercepts with a 403 challenge → the audit's
+// Playwright runner measures the Cloudflare challenge page's UI, not OSE's
+// admin dashboard. The /admin contracts then "fail" for reasons that have
+// nothing to do with OSE's admin code. Mark the surface as skipped in
+// that case so the audit pipeline reports the real signal: non-/admin
+// surfaces' compliance against the refined OCR-42 standard.
+const ADMIN_BEARER_IS_DEFAULT =
+  !process.env.OSE_ADMIN_BEARER || process.env.OSE_ADMIN_BEARER === 'test-admin-key-e2e-2026';
+const ADMIN_SKIP_REASON = ADMIN_BEARER_IS_DEFAULT
+  ? "OSE-302 / ADR-006: requires OSE_ADMIN_BEARER repo secret to be set with a valid staging admin bearer. Until set, the /admin audit measures the Cloudflare bot challenge page, not OSE's admin dashboard. Founder action: `gh secret set OSE_ADMIN_BEARER --repo OurCommunityRituals/ourSharedEvents`"
+  : undefined;
+
 // Mobile floor: iPhone 13 Mini / iPhone X. Smallest modern phone in
 // significant active use. Designing to this floor passes for every
 // wider modern phone (iPhone 12/13/14, Pro Max, modern Android).
@@ -108,6 +122,7 @@ const SURFACES: Surface[] = [
     name: 'admin dashboard',
     authHeader: { Authorization: `Bearer ${ADMIN_BEARER}` },
     primaryCtaSelector: '[data-testid="create-submit"], #admin-action-bar button, main button',
+    skipReason: ADMIN_SKIP_REASON,
   },
   {
     path: '/sharedReport',
