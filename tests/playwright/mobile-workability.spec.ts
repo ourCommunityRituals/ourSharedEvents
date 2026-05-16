@@ -144,15 +144,29 @@ async function getInteractiveLocators(page: Page): Promise<Locator[]> {
     '[role="link"]:not([hidden])',
   ].join(', ');
   const all = await page.locator(selector).all();
-  // Filter to visible elements only (touch-target rules don't apply to
-  // hidden affordances). Use `isVisible()` per element.
-  const visible: Locator[] = [];
+  // Filter to "real" touch targets. Playwright's isVisible() returns true
+  // for elements positioned off-screen (e.g. `.skip-link` at left:-9999px
+  // is "visible" by CSS rules even though no user will ever tap it), which
+  // produces noisy 1×1 touch-target violations. Filter additionally on:
+  //   - bounding box exists
+  //   - box is inside the viewport (x >= 0 catches offscreen-left skip
+  //     links; x < viewport.width catches offscreen-right elements)
+  //   - width AND height >= 4 px (anything smaller is decorative or
+  //     screen-reader-only and not a real tap target)
+  // The 4 px floor is generous; legitimate small targets like badges
+  // and icons are typically 16+ px wide.
+  const viewport = page.viewportSize();
+  const viewportW = viewport?.width ?? 375;
+  const real: Locator[] = [];
   for (const loc of all) {
-    if (await loc.isVisible().catch(() => false)) {
-      visible.push(loc);
-    }
+    if (!(await loc.isVisible().catch(() => false))) continue;
+    const box = await loc.boundingBox().catch(() => null);
+    if (!box) continue;
+    if (box.width < 4 || box.height < 4) continue; // decorative / a11y-only
+    if (box.x < 0 || box.x >= viewportW) continue; // offscreen
+    real.push(loc);
   }
-  return visible;
+  return real;
 }
 
 async function getInputLocators(page: Page): Promise<Locator[]> {
