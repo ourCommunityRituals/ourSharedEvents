@@ -86,7 +86,8 @@ const PUBLIC_HTML = `<!DOCTYPE html>
     .event-card .event-info { flex: 1; min-width: 0; }
     .event-card h3 { font-size: 1rem; font-weight: 600; margin-bottom: .35rem; }
     .event-card .meta { font-size: .85rem; color: #6c757d; }
-    .event-card .cta { display: inline-block; padding: .5rem 1.25rem; background: #4361ee; color: #fff; border-radius: 6px; font-size: .85rem; font-weight: 600; text-decoration: none; white-space: nowrap; transition: background .2s; flex-shrink: 0; }
+    /* OSE-292: 44px touch-target floor on event-card register CTA. */
+    .event-card .cta { display: inline-flex; align-items: center; padding: .5rem 1.25rem; min-height: 44px; background: #4361ee; color: #fff; border-radius: 6px; font-size: .85rem; font-weight: 600; text-decoration: none; white-space: nowrap; transition: background .2s; flex-shrink: 0; }
     .event-card .cta:hover { background: #3451d1; }
     .event-card .cta:focus-visible { outline: 2px solid #4361ee; outline-offset: 2px; }
     .loading { text-align: center; padding: 3rem; color: #6c757d; font-size: .95rem; }
@@ -1115,7 +1116,8 @@ const LANDING_HTML = `<!DOCTYPE html>
     header { background: #1a1a2e; color: #fff; padding: 1rem 2rem; display: flex; align-items: center; justify-content: space-between; }
     .logo { font-size: 1.25rem; font-weight: 700; letter-spacing: -0.01em; text-decoration: none; color: #fff; }
     nav { display: flex; gap: 1.5rem; }
-    nav a { color: rgba(255,255,255,.8); text-decoration: none; font-size: .875rem; font-weight: 500; transition: color 0.2s; }
+    /* OSE-292 (2026-05-16): landing nav links must be 44x44 tap targets. */
+    nav a { color: rgba(255,255,255,.8); text-decoration: none; font-size: .875rem; font-weight: 500; transition: color 0.2s; display: inline-flex; align-items: center; min-height: 44px; padding: 0 .5rem; }
     nav a:hover { color: #fff; }
     nav a:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
     .logo:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
@@ -1125,7 +1127,8 @@ const LANDING_HTML = `<!DOCTYPE html>
     .subscribe-form { display: flex; gap: .5rem; max-width: 440px; margin: 0 auto; flex-wrap: wrap; justify-content: center; }
     .subscribe-form input[type="email"] { flex: 1 1 240px; padding: .75rem 1rem; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 1rem; outline: none; transition: border-color 0.2s; background: #fff; color: #1e293b; }
     .subscribe-form input[type="email"]:focus { border-color: #2563eb; }
-    .subscribe-form button[type="submit"] { padding: .75rem 1.5rem; background: #2563eb; color: #fff; border: none; border-radius: 8px; font-size: 1rem; font-weight: 600; cursor: pointer; transition: background 0.2s; white-space: nowrap; }
+    /* OSE-292: subscribe button must clear 44px touch-target floor. */
+    .subscribe-form button[type="submit"] { padding: .75rem 1.5rem; min-height: 44px; background: #2563eb; color: #fff; border: none; border-radius: 8px; font-size: 1rem; font-weight: 600; cursor: pointer; transition: background 0.2s; white-space: nowrap; }
     .subscribe-form button[type="submit"]:hover { background: #1d4ed8; }
     .subscribe-form button[type="submit"]:focus-visible { outline: 2px solid #1d4ed8; outline-offset: 2px; }
     .subscribe-form button[type="submit"]:disabled { background: #64748b; cursor: not-allowed; }
@@ -1957,7 +1960,8 @@ const ADMIN_SIGNIN_HTML = `<!DOCTYPE html>
     header { background: #1a1a2e; color: #fff; padding: 1rem 2rem; display: flex; align-items: center; justify-content: space-between; }
     .logo { font-size: 1.1rem; font-weight: 700; letter-spacing: -0.01em; text-decoration: none; color: #fff; }
     nav { display: flex; gap: 1.5rem; }
-    nav a { color: rgba(255,255,255,.8); text-decoration: none; font-size: .875rem; font-weight: 500; }
+    /* OSE-292: signin/public secondary nav links also need 44px floor. */
+    nav a { color: rgba(255,255,255,.8); text-decoration: none; font-size: .875rem; font-weight: 500; display: inline-flex; align-items: center; min-height: 44px; padding: 0 .5rem; }
     nav a:hover, nav a:focus-visible { color: #fff; }
     nav a:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
     main { flex: 1; display: flex; align-items: center; justify-content: center; padding: 3rem 1.5rem; }
