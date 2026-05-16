@@ -10,6 +10,7 @@ ADRs are **descriptive, not prescriptive**. They record decisions that have alre
 | ---------------------------------------------------------- | ---------------------------------------------------------- | -------- | ---------- |
 | [ADR-001](ADR-001-anonymous-identity-architecture.md)      | Anonymous-identity architecture (DB ↔ FORMS_DB separation) | Accepted | 2026-05-14 |
 | [ADR-002](ADR-002-static-invariant-gates.md)               | Static-invariant gates as the load-bearing CI pattern      | Accepted | 2026-05-14 |
+| [ADR-006](ADR-006-audit-access-bearer-pattern.md)          | Audit access architecture — dedicated bearer pattern       | Accepted | 2026-05-16 |
 | [ADR-009](ADR-009-ncr-v2-geographic-hierarchy.md)          | NCR v2 geographic hierarchy                                | Accepted | 2026-04    |
 | [ADR-010](ADR-010-templates-breadth-tiers-depth.md)        | Templates breadth × tiers depth                            | Accepted | 2026-04    |
 | [ADR-011](ADR-011-shared-report-wkrp-consumer-boundary.md) | SharedReport read API as the WKRP consumer boundary        | Accepted | 2026-05-15 |
