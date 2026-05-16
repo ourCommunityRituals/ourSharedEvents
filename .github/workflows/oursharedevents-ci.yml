@@ -26,7 +26,7 @@
 #
 #   T1: Deploy — Migrations, deploy, health check
 #       - D1 migrations (main + forms) → wrangler d1 migrations apply {DB,FORMS_DB} --remote
-#       - Canonical-shape verification → assert 15 DB tables + 6 FORMS_DB tables
+#       - Canonical-shape verification → assert 20 DB tables + 6 FORMS_DB tables
 #                                        + 0 triggers, BY NAME, against the
 #                                        canonical set in
 #                                        tests/migration-smoke.spec.ts (OSE-209)
@@ -457,7 +457,7 @@ jobs:
       # canonical set, name-based, with a trigger=0 invariant on top.
       # ────────────────────────────────────────────────────────────────────
 
-      - name: 'Verify staging D1 (canonical shape: 15 DB tables, 6 FORMS_DB tables, 0 triggers)'
+      - name: 'Verify staging D1 (canonical shape: 20 DB tables, 6 FORMS_DB tables, 0 triggers)'
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -465,7 +465,7 @@ jobs:
         run: |
           set -euo pipefail
           # Keep in sync with tests/migration-smoke.spec.ts DB_TABLES.
-          EXPECTED_DB="admin_audit_log corridor_regulatory_status corridors event_templates event_type_registry events node_hierarchy poster_deployments scan_aggregates scans shortlinks sponsor_areas sponsor_event_types sponsor_impressions sponsors subscribers"
+          EXPECTED_DB="admin_audit_log anon_id_returns bigquery_export_state corridor_density_baseline corridor_regulatory_status corridors event_series event_templates event_type_registry events node_hierarchy poster_deployments scan_aggregates scans shortlinks sponsor_areas sponsor_event_types sponsor_impressions sponsors subscribers"
           # Keep in sync with tests/migration-smoke.spec.ts FORMS_DB_TABLES.
           EXPECTED_FORMS="checkin_counts email_signups feature_flags form_registrations form_surveys pii_audit_log"
 
@@ -882,14 +882,14 @@ jobs:
       # Canonical-shape verification on production. Mirror of the staging
       # step in T1 Deploy → Staging; keep both in sync. Source of truth:
       # workers/oursharedevents/tests/migration-smoke.spec.ts.
-      - name: 'Verify production D1 (canonical shape: 15 DB tables, 6 FORMS_DB tables, 0 triggers)'
+      - name: 'Verify production D1 (canonical shape: 20 DB tables, 6 FORMS_DB tables, 0 triggers)'
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         working-directory: ${{ env.WORKER_DIR }}
         run: |
           set -euo pipefail
-          EXPECTED_DB="admin_audit_log corridor_regulatory_status corridors event_templates event_type_registry events node_hierarchy poster_deployments scan_aggregates scans shortlinks sponsor_areas sponsor_event_types sponsor_impressions sponsors subscribers"
+          EXPECTED_DB="admin_audit_log anon_id_returns bigquery_export_state corridor_density_baseline corridor_regulatory_status corridors event_series event_templates event_type_registry events node_hierarchy poster_deployments scan_aggregates scans shortlinks sponsor_areas sponsor_event_types sponsor_impressions sponsors subscribers"
           EXPECTED_FORMS="checkin_counts email_signups feature_flags form_registrations form_surveys pii_audit_log"
 
           fetch_names() {
