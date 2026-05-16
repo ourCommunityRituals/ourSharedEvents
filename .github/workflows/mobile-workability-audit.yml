@@ -68,26 +68,32 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: '20'
-          cache: 'pnpm'
 
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 9
+      - name: Stage adjacent @ocr/flags package
+        shell: bash
+        run: bash scripts/ci-stage-ocr-workspace.sh
 
-      - name: Install deps (workspace)
-        run: pnpm install --frozen-lockfile
+      - name: Install root dependencies
+        run: |
+          HASH="$(node --version)-$(git hash-object package-lock.json)"
+          STAMP=node_modules/.install-stamp
+          if [ -f "$STAMP" ] && [ "$(cat $STAMP)" = "$HASH" ] && [ -f "node_modules/.package-lock.json" ]; then
+            echo "node_modules up-to-date, skipping npm ci"
+          else
+            npm ci --prefer-offline || npm ci
+            echo "$HASH" > "$STAMP"
+          fi
 
-      - name: Install Playwright browsers
-        run: pnpm exec playwright install --with-deps chromium
+      - name: Install Playwright Chromium
+        run: npx playwright install chromium
 
       - name: Run mobile workability audit
         id: audit
         continue-on-error: ${{ github.event_name == 'pull_request' }}
-        run: pnpm exec playwright test tests/playwright/mobile-workability.spec.ts --reporter=html,list
+        run: npx playwright test tests/playwright/mobile-workability.spec.ts --reporter=html,list
 
       - name: Upload Playwright report
         if: always()
