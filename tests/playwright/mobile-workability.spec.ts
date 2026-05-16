@@ -125,11 +125,19 @@ const SURFACES: Surface[] = [
     skipReason: ADMIN_SKIP_REASON,
   },
   {
+    // OSE-309: /sharedReport returns 403 (Content-Type: application/json)
+    // when the audit bearer is unset OR the analytics.shared-report
+    // feature flag is off on staging. The audit then has no DOM to
+    // measure against. Same skipReason logic as /admin — when
+    // OSE_ADMIN_BEARER is missing/default, skip with the documented
+    // founder action. Both /admin AND /sharedReport unblock together
+    // when OSE-302's `gh secret set` lands.
     path: '/sharedReport',
     name: 'shared report (admin mode)',
     authHeader: { Authorization: `Bearer ${ADMIN_BEARER}` },
     primaryCtaSelector:
       '[data-testid="export-json-btn"], [data-testid="export-pdf-btn"], main button, main a',
+    skipReason: ADMIN_SKIP_REASON,
   },
   {
     path: '/poster',

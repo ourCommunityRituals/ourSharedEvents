@@ -68,6 +68,19 @@ describe('OSE-305 post-OCR-42 refinement regression guard — audit spec precond
     expect(audit).toMatch(/path:\s*['"]\/admin['"][\s\S]{0,400}?skipReason:\s*ADMIN_SKIP_REASON/);
   });
 
+  test('/sharedReport surface has skipReason referencing ADMIN_SKIP_REASON (OSE-309)', () => {
+    // Same root cause as /admin: /sharedReport returns 403 JSON when
+    // the audit bearer is unset/the feature flag is off. The audit's
+    // Playwright runner has no DOM to measure CTAs against — better
+    // to skip with the documented founder action than silently report
+    // false-positive violations. Both /admin AND /sharedReport
+    // unblock together when OSE-302's secret-set lands.
+    const audit = readAuditSpec();
+    expect(audit).toMatch(
+      /path:\s*['"]\/sharedReport['"][\s\S]{0,500}?skipReason:\s*ADMIN_SKIP_REASON/
+    );
+  });
+
   test('/events/:id primaryCtaSelector includes "error-cta" (OCR-42 error-page sub-contract)', () => {
     // The OCR-42 error-page sub-contract says: when the audit's test
     // fixture (evt_test_2026) doesn't exist on staging, the rendered
