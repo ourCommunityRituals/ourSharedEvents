@@ -908,7 +908,9 @@ export async function route(
     pathname === '/tent' ||
     pathname === '/signage'
   ) {
-    return handlePosterPage(env);
+    // OSE-310: handler reads `request` to look up the format via
+    // posterProductForPath() and attach data-poster-format to body.
+    return handlePosterPage(env, request);
   }
 
   if (
