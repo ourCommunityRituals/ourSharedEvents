@@ -2754,6 +2754,39 @@ const SHARED_REPORT_HTML = `<!DOCTYPE html>
     .venue-text { font-size: .75rem; color: #495057; max-width: 200px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .venue-plain { font-size: .85rem; color: #495057; }
     .no-venue { color: #adb5bd; }
+    /* OSE-295 DRAIN 2/7: mobile workability for /sharedReport.
+       Mirrors the admin pattern (OSE-294): tables collapse to a card
+       layout below 768px so the 4-col events list and 5-col funnel
+       table stay legible at 375px. Each <td> declares a data-label
+       attribute that drives the ::before pseudo-element. */
+    @media (max-width: 768px) {
+      header { padding: 1rem; flex-direction: column; align-items: flex-start; gap: .25rem; }
+      header h1 { font-size: 1.15rem; }
+      main { padding: 0 .75rem; margin: 1rem auto; gap: 1rem; }
+      .action-bar { justify-content: stretch; flex-wrap: wrap; }
+      .action-bar .btn { flex: 1 1 auto; justify-content: center; min-height: 44px; }
+      .event-row { flex-wrap: wrap; gap: .35rem; padding: .75rem 1rem; }
+      .event-row .date { font-size: .75rem; }
+      .funnel-card { padding: 1rem; }
+      .report-table { display: block; }
+      .report-table thead { display: none; }
+      .report-table tr { display: block; padding: .75rem 1rem; border-bottom: 1px solid #f1f3f5; }
+      .report-table tr:last-child { border-bottom: none; }
+      .report-table td { display: block; padding: .35rem 0; border: none; text-align: left; word-break: break-word; font-size: .9rem; }
+      .report-table td::before { content: attr(data-label) ': '; font-weight: 600; color: #495057; margin-right: .5rem; }
+      .funnel-table { display: block; }
+      .funnel-table thead { display: none; }
+      .funnel-table tr { display: block; padding: .65rem .75rem; border: 1px solid #e9ecef; border-radius: 6px; margin-bottom: .5rem; }
+      .funnel-table tr:last-child { margin-bottom: 0; }
+      .funnel-table td { display: block; padding: .25rem 0; border: none; text-align: left; }
+      .funnel-table td::before { content: attr(data-label) ': '; font-weight: 600; color: #495057; margin-right: .5rem; }
+      .funnel-table td.bar-cell { width: 100%; padding: .35rem 0; }
+      .funnel-table td.bar-cell::before { content: ''; margin: 0; }
+      .funnel-table td.rate-val { text-align: left; min-width: 0; }
+      .venue-cell { min-width: 0; max-width: 100%; }
+      .venue-map { max-width: 100%; }
+      .venue-text { max-width: 100%; white-space: normal; overflow: visible; text-overflow: clip; }
+    }
     @media print {
       .skip-link, .action-bar { display: none !important; }
       header { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
@@ -2958,24 +2991,24 @@ const SHARED_REPORT_HTML = `<!DOCTYPE html>
 
       const sponsorRows = (report.sponsor_impressions || []).map(s =>
         '<tr data-testid="signed-link-sponsor-row">' +
-          '<td>' + esc(s.sponsor_name) + '</td>' +
-          '<td>' + esc(s.surface) + '</td>' +
-          '<td>' + fmtInt(s.count) + '</td>' +
+          '<td data-label="Sponsor">' + esc(s.sponsor_name) + '</td>' +
+          '<td data-label="Surface">' + esc(s.surface) + '</td>' +
+          '<td data-label="Impressions">' + fmtInt(s.count) + '</td>' +
         '</tr>'
       ).join('');
       const posterRows = (report.poster_attribution || []).map(p =>
         '<tr data-testid="signed-link-poster-row">' +
-          '<td>' + esc(p.location) + '</td>' +
-          '<td>' + fmtInt(p.scan_count) + '</td>' +
-          '<td>' + esc(fmtDate(p.first_scan_at)) + '</td>' +
-          '<td>' + esc(fmtDate(p.last_scan_at)) + '</td>' +
+          '<td data-label="Location">' + esc(p.location) + '</td>' +
+          '<td data-label="Scans">' + fmtInt(p.scan_count) + '</td>' +
+          '<td data-label="First">' + esc(fmtDate(p.first_scan_at)) + '</td>' +
+          '<td data-label="Last">' + esc(fmtDate(p.last_scan_at)) + '</td>' +
         '</tr>'
       ).join('');
       const trendInstances = (report.headcount_trend && report.headcount_trend.instances) || [];
       const trendRows = trendInstances.map(t =>
         '<tr data-testid="signed-link-trend-row">' +
-          '<td>' + esc(fmtDate(t.start_date)) + '</td>' +
-          '<td>' + fmtInt(t.unique_gatherings) + '</td>' +
+          '<td data-label="Date">' + esc(fmtDate(t.start_date)) + '</td>' +
+          '<td data-label="Unique gatherings">' + fmtInt(t.unique_gatherings) + '</td>' +
         '</tr>'
       ).join('');
 
@@ -3067,10 +3100,10 @@ const SHARED_REPORT_HTML = `<!DOCTYPE html>
                 ? '<span class="venue-plain">' + esc(venue) + '</span>'
                 : '<span class="no-venue">&mdash;</span>';
             return '<tr data-testid="report-event-row">' +
-              '<td data-testid="report-event-name">' + esc(e.title || e.name || 'Untitled') + '</td>' +
-              '<td data-testid="report-event-date">' + esc(fmt(e.start_date || e.startDateISO)) + '</td>' +
-              '<td data-testid="report-event-venue">' + venueInner + '</td>' +
-              '<td><span class="badge ' + esc(e.status || '') + '" data-testid="report-event-status">' + esc(e.status || '') + '</span></td>' +
+              '<td data-label="Name" data-testid="report-event-name">' + esc(e.title || e.name || 'Untitled') + '</td>' +
+              '<td data-label="Date" data-testid="report-event-date">' + esc(fmt(e.start_date || e.startDateISO)) + '</td>' +
+              '<td data-label="Venue" data-testid="report-event-venue">' + venueInner + '</td>' +
+              '<td data-label="Status"><span class="badge ' + esc(e.status || '') + '" data-testid="report-event-status">' + esc(e.status || '') + '</span></td>' +
               '</tr>';
           }).join('') +
           '</tbody></table>';
@@ -3167,11 +3200,11 @@ const SHARED_REPORT_HTML = `<!DOCTYPE html>
           const pct = r.reg > 0 ? Math.round((r.checkin / r.reg) * 100) : 0;
           const barW = Math.round((r.reg / maxReg) * 100);
           return '<tr data-testid="funnel-row">' +
-            '<td data-testid="funnel-event-name">' + esc(r.name) + '</td>' +
-            '<td data-testid="funnel-reg-count">' + r.reg + '</td>' +
+            '<td data-label="Event" data-testid="funnel-event-name">' + esc(r.name) + '</td>' +
+            '<td data-label="Registrations" data-testid="funnel-reg-count">' + r.reg + '</td>' +
             '<td class="bar-cell"><div class="bar-track"><div class="bar-fill" style="width:' + barW + '%" aria-hidden="true"></div></div></td>' +
-            '<td data-testid="funnel-checkin-count">' + r.checkin + '</td>' +
-            '<td class="rate-val" data-testid="funnel-rate">' + pct + '%</td>' +
+            '<td data-label="Check-ins" data-testid="funnel-checkin-count">' + r.checkin + '</td>' +
+            '<td data-label="Attendance" class="rate-val" data-testid="funnel-rate">' + pct + '%</td>' +
             '</tr>';
         }).join('') +
         '</tbody></table>';
