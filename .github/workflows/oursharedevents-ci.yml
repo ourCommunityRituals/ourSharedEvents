@@ -26,7 +26,10 @@
 #
 #   T1: Deploy — Migrations, deploy, health check
 #       - D1 migrations (main + forms) → wrangler d1 migrations apply {DB,FORMS_DB} --remote
-#       - Canonical-shape verification → assert 20 DB tables + 6 FORMS_DB tables
+#       - Canonical-shape verification → assert tables-by-name match the spec at
+#                                        workers/oursharedevents/tests/migration-smoke.spec.ts
+#                                        (extracted at workflow runtime per OSE-303 —
+#                                        no hard-coded copy in this workflow)
 #                                        + 0 triggers, BY NAME, against the
 #                                        canonical set in
 #                                        tests/migration-smoke.spec.ts (OSE-209)
@@ -457,17 +460,35 @@ jobs:
       # canonical set, name-based, with a trigger=0 invariant on top.
       # ────────────────────────────────────────────────────────────────────
 
-      - name: 'Verify staging D1 (canonical shape: 20 DB tables, 6 FORMS_DB tables, 0 triggers)'
+      - name: 'Verify staging D1 (canonical shape from migration-smoke.spec.ts, 0 triggers)'
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         working-directory: ${{ env.WORKER_DIR }}
         run: |
           set -euo pipefail
-          # Keep in sync with tests/migration-smoke.spec.ts DB_TABLES.
-          EXPECTED_DB="admin_audit_log anon_id_returns bigquery_export_state corridor_density_baseline corridor_regulatory_status corridors event_series event_templates event_type_registry events node_hierarchy poster_deployments scan_aggregates scans shortlinks sponsor_areas sponsor_event_types sponsor_impressions sponsors subscribers"
-          # Keep in sync with tests/migration-smoke.spec.ts FORMS_DB_TABLES.
-          EXPECTED_FORMS="checkin_counts email_signups feature_flags form_registrations form_surveys pii_audit_log"
+          # OSE-303: extract canonical lists from migration-smoke.spec.ts
+          # at runtime instead of copying them here. The spec is the
+          # SINGLE source of truth — workflow MUST NOT carry a duplicate.
+          # Previous drift (PR #213) silently broke deploys for ~2 weeks
+          # because the spec was updated and the workflow's copy wasn't.
+          # See OSE-303 for the discipline rationale.
+          EXPECTED_DB=$(node -e "
+          const m = require('fs').readFileSync('tests/migration-smoke.spec.ts', 'utf8').match(/const DB_TABLES = \[([\\s\\S]*?)\] as const;/);
+          if (!m) { console.error('::error::OSE-303: could not extract DB_TABLES from spec (regex likely broken; check tests/migration-smoke.spec.ts'); process.exit(1); }
+          const n = (m[1].match(/'([^']+)'/g) || []).map(s => s.slice(1, -1)).sort();
+          if (n.length < 10) { console.error('::error::OSE-303: extracted ' + n.length + ' DB_TABLES; expected >= 10 (regex likely broken)'); process.exit(1); }
+          console.log(n.join(' '));
+          ")
+          EXPECTED_FORMS=$(node -e "
+          const m = require('fs').readFileSync('tests/migration-smoke.spec.ts', 'utf8').match(/const FORMS_DB_TABLES = \[([\\s\\S]*?)\] as const;/);
+          if (!m) { console.error('::error::OSE-303: could not extract FORMS_DB_TABLES from spec'); process.exit(1); }
+          const n = (m[1].match(/'([^']+)'/g) || []).map(s => s.slice(1, -1)).sort();
+          if (n.length < 3) { console.error('::error::OSE-303: extracted ' + n.length + ' FORMS_DB_TABLES; expected >= 3'); process.exit(1); }
+          console.log(n.join(' '));
+          ")
+          DB_COUNT=$(echo "$EXPECTED_DB" | wc -w | tr -d ' ')
+          FORMS_COUNT=$(echo "$EXPECTED_FORMS" | wc -w | tr -d ' ')
 
           fetch_names() {
             local DB=$1; local OBJ=$2
@@ -481,20 +502,20 @@ jobs:
             echo "::error::DB table-set drift on staging."
             echo "  Expected: [$EXPECTED_DB]"
             echo "  Got:      [$ACTUAL_DB]"
-            echo "  Update tests/migration-smoke.spec.ts DB_TABLES *and* the EXPECTED_DB list above together."
+            echo "  Update tests/migration-smoke.spec.ts DB_TABLES — workflow extracts from the spec automatically (OSE-303), so updating the spec is sufficient."
             exit 1
           fi
-          echo "✓ DB: 15 canonical tables verified by name"
+          echo "✓ DB: $DB_COUNT canonical tables verified by name (extracted from spec)"
 
           ACTUAL_FORMS=$(fetch_names ocr-forms-db-staging table)
           if [ "$ACTUAL_FORMS" != "$EXPECTED_FORMS" ]; then
             echo "::error::FORMS_DB table-set drift on staging."
             echo "  Expected: [$EXPECTED_FORMS]"
             echo "  Got:      [$ACTUAL_FORMS]"
-            echo "  Update tests/migration-smoke.spec.ts FORMS_DB_TABLES *and* the EXPECTED_FORMS list above together."
+            echo "  Update tests/migration-smoke.spec.ts FORMS_DB_TABLES — workflow extracts from the spec automatically (OSE-303)."
             exit 1
           fi
-          echo "✓ FORMS_DB: 6 canonical tables verified by name"
+          echo "✓ FORMS_DB: $FORMS_COUNT canonical tables verified by name (extracted from spec)"
 
           # Triggers: must be zero on both DBs (migration 0025 documented
           # that triggers were removed; D1 parser breaks on ; in trigger
@@ -512,7 +533,7 @@ jobs:
           fi
           echo "✓ Triggers: 0 on both DBs (matches canonical)"
 
-          echo '{"type":"OSE_209_POST_WRANGLER_SMOKE_STAGING","tables_db":15,"tables_forms":6,"triggers_db":0,"triggers_forms":0}'
+          echo "{\"type\":\"OSE_209_POST_WRANGLER_SMOKE_STAGING\",\"tables_db\":$DB_COUNT,\"tables_forms\":$FORMS_COUNT,\"triggers_db\":0,\"triggers_forms\":0}"
 
       - name: Stamp build version
         working-directory: ${{ env.WORKER_DIR }}
@@ -882,15 +903,34 @@ jobs:
       # Canonical-shape verification on production. Mirror of the staging
       # step in T1 Deploy → Staging; keep both in sync. Source of truth:
       # workers/oursharedevents/tests/migration-smoke.spec.ts.
-      - name: 'Verify production D1 (canonical shape: 20 DB tables, 6 FORMS_DB tables, 0 triggers)'
+      - name: 'Verify production D1 (canonical shape from migration-smoke.spec.ts, 0 triggers)'
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         working-directory: ${{ env.WORKER_DIR }}
         run: |
           set -euo pipefail
-          EXPECTED_DB="admin_audit_log anon_id_returns bigquery_export_state corridor_density_baseline corridor_regulatory_status corridors event_series event_templates event_type_registry events node_hierarchy poster_deployments scan_aggregates scans shortlinks sponsor_areas sponsor_event_types sponsor_impressions sponsors subscribers"
-          EXPECTED_FORMS="checkin_counts email_signups feature_flags form_registrations form_surveys pii_audit_log"
+          # OSE-303: same spec-as-source-of-truth extraction as the
+          # staging step above. Mirror by intent — both production and
+          # staging consume the SAME canonical tables list because
+          # migrations apply identically. Drift between prod and staging
+          # would itself be a separate alarm (migrations out of sync).
+          EXPECTED_DB=$(node -e "
+          const m = require('fs').readFileSync('tests/migration-smoke.spec.ts', 'utf8').match(/const DB_TABLES = \[([\\s\\S]*?)\] as const;/);
+          if (!m) { console.error('::error::OSE-303: could not extract DB_TABLES from spec'); process.exit(1); }
+          const n = (m[1].match(/'([^']+)'/g) || []).map(s => s.slice(1, -1)).sort();
+          if (n.length < 10) { console.error('::error::OSE-303: extracted ' + n.length + ' DB_TABLES; expected >= 10'); process.exit(1); }
+          console.log(n.join(' '));
+          ")
+          EXPECTED_FORMS=$(node -e "
+          const m = require('fs').readFileSync('tests/migration-smoke.spec.ts', 'utf8').match(/const FORMS_DB_TABLES = \[([\\s\\S]*?)\] as const;/);
+          if (!m) { console.error('::error::OSE-303: could not extract FORMS_DB_TABLES from spec'); process.exit(1); }
+          const n = (m[1].match(/'([^']+)'/g) || []).map(s => s.slice(1, -1)).sort();
+          if (n.length < 3) { console.error('::error::OSE-303: extracted ' + n.length + ' FORMS_DB_TABLES; expected >= 3'); process.exit(1); }
+          console.log(n.join(' '));
+          ")
+          DB_COUNT=$(echo "$EXPECTED_DB" | wc -w | tr -d ' ')
+          FORMS_COUNT=$(echo "$EXPECTED_FORMS" | wc -w | tr -d ' ')
 
           fetch_names() {
             local DB=$1; local OBJ=$2
@@ -906,7 +946,7 @@ jobs:
             echo "  Got:      [$ACTUAL_DB]"
             exit 1
           fi
-          echo "✓ Production DB: 15 canonical tables verified by name"
+          echo "✓ Production DB: $DB_COUNT canonical tables verified by name (extracted from spec)"
 
           ACTUAL_FORMS=$(fetch_names ocr-forms-db-production table)
           if [ "$ACTUAL_FORMS" != "$EXPECTED_FORMS" ]; then
@@ -915,7 +955,7 @@ jobs:
             echo "  Got:      [$ACTUAL_FORMS]"
             exit 1
           fi
-          echo "✓ Production FORMS_DB: 6 canonical tables verified by name"
+          echo "✓ Production FORMS_DB: $FORMS_COUNT canonical tables verified by name (extracted from spec)"
 
           DB_TRIGGERS=$(fetch_names ocr-db-production trigger)
           if [ -n "$DB_TRIGGERS" ]; then
@@ -929,7 +969,7 @@ jobs:
           fi
           echo "✓ Production triggers: 0 on both DBs"
 
-          echo '{"type":"OSE_209_POST_WRANGLER_SMOKE_PRODUCTION","tables_db":15,"tables_forms":6,"triggers_db":0,"triggers_forms":0}'
+          echo "{\"type\":\"OSE_209_POST_WRANGLER_SMOKE_PRODUCTION\",\"tables_db\":$DB_COUNT,\"tables_forms\":$FORMS_COUNT,\"triggers_db\":0,\"triggers_forms\":0}"
 
       - name: Stamp build version
         working-directory: ${{ env.WORKER_DIR }}
