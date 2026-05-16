@@ -259,11 +259,20 @@ const FORM_JS_SUBMIT = `
     var thanks = '';
     var cache = window.__formSponsorCache;
     if (cache && cache.length) {
-      var items = cache.slice(0, 3).map(function(s) {
-        var name = String(s.name || '').replace(/[<>&"']/g, function(c) {
+      // OSE-R-015 (2026-05-15): escape every attribute value, set
+      // referrerpolicy="no-referrer" so the sponsor host cannot fingerprint
+      // the attendee, and add onerror to gracefully hide broken images.
+      var escAttr = function(v) {
+        return String(v || '').replace(/[<>&"']/g, function(c) {
           return { '<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;' }[c];
         });
-        var logo = s.logo_url ? '<img src="' + s.logo_url + '" alt="' + name + '" loading="lazy" />' : '';
+      };
+      var items = cache.slice(0, 3).map(function(s) {
+        var name = escAttr(s.name);
+        var logoUrl = escAttr(s.logo_url);
+        var logo = s.logo_url
+          ? '<img src="' + logoUrl + '" alt="' + name + '" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display=\'none\'" />'
+          : '';
         return '<span class="sponsor-item">' + logo + '<span class="sponsor-name">' + name + '</span></span>';
       }).join('');
       thanks = '<div class="form-sponsor-thanks" data-testid="form-sponsor-thanks"><span class="thanks-label">Event supported by</span><div class="sponsor-row">' + items + '</div></div>';
@@ -296,11 +305,19 @@ const FORM_JS_SPONSOR = `
         window.__formSponsorCache = banner;
         var strip = document.getElementById('form-sponsor-strip');
         if (!strip) return;
-        var items = banner.slice(0, 3).map(function(s) {
-          var name = String(s.name || '').replace(/[<>&"']/g, function(c) {
+        // OSE-R-015 (2026-05-15): see FORM_JS_SUBMIT counterpart above for
+        // the same escape + referrerpolicy + onerror contract.
+        var escAttr = function(v) {
+          return String(v || '').replace(/[<>&"']/g, function(c) {
             return { '<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;' }[c];
           });
-          var logo = s.logo_url ? '<img src="' + s.logo_url + '" alt="' + name + '" loading="lazy" />' : '';
+        };
+        var items = banner.slice(0, 3).map(function(s) {
+          var name = escAttr(s.name);
+          var logoUrl = escAttr(s.logo_url);
+          var logo = s.logo_url
+            ? '<img src="' + logoUrl + '" alt="' + name + '" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display=\'none\'" />'
+            : '';
           return '<span class="sponsor-item">' + logo + '<span class="sponsor-name">' + name + '</span></span>';
         }).join('');
         strip.innerHTML = '<span class="strip-label">Supported by</span>' + items;

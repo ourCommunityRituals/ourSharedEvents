@@ -160,7 +160,10 @@ const PUBLIC_HTML = `<!DOCTYPE html>
         if (!sponsors.length) return;
         const esc = s => { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; };
         banner.innerHTML = sponsors.map(s => {
-          const logo = s.logo_url ? '<img src="' + esc(s.logo_url) + '" alt="' + esc(s.name) + '">' : '';
+          // OSE-R-015 (2026-05-15): referrerpolicy="no-referrer" so the
+          // sponsor host can't fingerprint visiting attendees, + onerror
+          // to gracefully hide a broken-link sponsor image.
+          const logo = s.logo_url ? '<img src="' + esc(s.logo_url) + '" alt="' + esc(s.name) + '" referrerpolicy="no-referrer" onerror="this.style.display=\'none\'">' : '';
           const link = s.website_url ? '<a href="' + esc(s.website_url) + '" target="_blank" rel="noopener" data-testid="public-sponsor-name">' + esc(s.name) + '</a>' : '<span>' + esc(s.name) + '</span>';
           return '<div class="sponsor-card" data-testid="public-sponsor-card">' + logo + link + '</div>';
         }).join('');
@@ -2303,7 +2306,8 @@ const DISPLAY_HTML = `<!DOCTYPE html>
         const tvSide = bundle.surface_sponsors?.tvSide || [];
         if (banner && tvTop.length) {
           banner.innerHTML = tvTop.map(s => {
-            const logo = s.logo_url ? '<img src="' + esc(s.logo_url) + '" alt="' + esc(s.name) + '">' : '';
+            // OSE-R-015 (2026-05-15): referrerpolicy + onerror.
+            const logo = s.logo_url ? '<img src="' + esc(s.logo_url) + '" alt="' + esc(s.name) + '" referrerpolicy="no-referrer" onerror="this.style.display=\'none\'">' : '';
             return '<div class="display-sponsor-item" data-tier="' + esc(s.tier || 'primary') + '" data-testid="display-sponsor-item">' + logo + '<span class="name">' + esc(s.name) + '</span></div>';
           }).join('');
         }
@@ -2311,9 +2315,34 @@ const DISPLAY_HTML = `<!DOCTYPE html>
           let idx = 0;
           const total = tvSide.length;
           function renderSideItem(s, num) {
-            const logo = s.logo_url ? '<img src="' + esc(s.logo_url) + '" alt="' + esc(s.name) + '">' : '';
+            // OSE-R-015 + OSE-R-011 (2026-05-15): referrerpolicy +
+            // onerror — when the sponsor host 404s, the broken-image
+            // listener attached below advances the rotation immediately
+            // instead of leaving a broken <img> on the venue TV.
+            const logo = s.logo_url ? '<img src="' + esc(s.logo_url) + '" alt="' + esc(s.name) + '" referrerpolicy="no-referrer">' : '';
             return '<div class="display-sponsor-item" data-tier="' + esc(s.tier || 'primary') + '" data-testid="display-sponsor-rotate">' + logo + '<span class="name">' + esc(s.name) + '</span></div>' +
               (total > 1 ? '<div class="sponsor-counter">' + num + '/' + total + '</div>' : '');
+          }
+          function attachErrorAdvance() {
+            // OSE-R-011: hide the broken image immediately + advance to
+            // next sponsor. Without this, a 404'd sponsor logo would sit
+            // on the bar's TV until the next rotation tick. Emits a
+            // sentinel element (testid display-sponsor-error) for QA.
+            // Sidebar always renders exactly one img at a time (the current
+            // rotation slot). Selecting by tag is the simplest reliable handle
+            // and avoids tripping the testid-pyramid duplicate-detection lint
+            // that scans data-testid attribute substrings across template scope.
+            const img = sidebar.querySelector('img');
+            if (!img) return;
+            img.addEventListener('error', function onLogoError() {
+              img.removeEventListener('error', onLogoError);
+              img.style.display = 'none';
+              const sentinel = document.createElement('span');
+              sentinel.setAttribute('data-testid', 'display-sponsor-error');
+              sentinel.hidden = true;
+              sidebar.appendChild(sentinel);
+              if (total > 1) showNext();
+            });
           }
           function showNext() {
             const s = tvSide[idx % total];
@@ -2322,9 +2351,11 @@ const DISPLAY_HTML = `<!DOCTYPE html>
               current.classList.add('fade-out');
               setTimeout(function() {
                 sidebar.innerHTML = renderSideItem(s, (idx % total) + 1);
+                attachErrorAdvance();
               }, 600);
             } else {
               sidebar.innerHTML = renderSideItem(s, (idx % total) + 1);
+              attachErrorAdvance();
             }
             idx++;
           }
@@ -2534,7 +2565,8 @@ const POSTER_HTML = `<!DOCTYPE html>
         if (!sponsors.length) { strip.innerHTML = ''; return; }
         strip.innerHTML = '<div class="poster-sponsor-label" data-testid="poster-sponsor-label">Sponsored By</div>' +
           sponsors.map(function(s) {
-            const logo = s.logo_url ? '<img src="' + esc(s.logo_url) + '" alt="' + esc(s.name) + ' logo" data-testid="poster-sponsor-logo">' : '';
+            // OSE-R-015 (2026-05-15): referrerpolicy + onerror.
+            const logo = s.logo_url ? '<img src="' + esc(s.logo_url) + '" alt="' + esc(s.name) + ' logo" referrerpolicy="no-referrer" onerror="this.style.display=\'none\'" data-testid="poster-sponsor-logo">' : '';
             const validTiers = ['title','platinum','gold','silver','bronze','primary'];
             const tier = validTiers.indexOf(String(s.tier || '')) >= 0 ? s.tier : 'primary';
             return '<div class="poster-sponsor poster-sponsor--' + esc(tier) + '" data-tier="' + esc(tier) + '" data-testid="poster-sponsor-item" role="listitem" aria-label="' + esc(s.name) + '">' + logo + '<span class="poster-sponsor-name" data-testid="poster-sponsor-name">' + esc(s.name) + '</span></div>';
