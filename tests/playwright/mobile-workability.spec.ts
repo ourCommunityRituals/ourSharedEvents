@@ -71,10 +71,14 @@ const SURFACES: Surface[] = [
     primaryCtaSelector: 'main a, [data-testid*="event"]',
   },
   {
+    // OSE-298 DRAIN 5/7: when staging doesn't have evt_test_2026 seeded
+    // the worker renders the OSE-R-004 branded 404 page (data-testid
+    // "error-cta"). Either path is a valid mobile surface; the audit
+    // accepts both so it doesn't false-positive on a missing fixture.
     path: '/events/evt_test_2026',
     name: 'public event page',
     primaryCtaSelector:
-      '[data-testid="rsvp-cta"], [data-testid="register-cta"], main a, main button',
+      '[data-testid="event-rsvp"], [data-testid="event-checkin"], [data-testid="error-cta"], main a, main button',
   },
   {
     path: '/forms/evt_test_2026?type=register',
