@@ -1,6 +1,6 @@
 # OurSharedEvents Brand Voice Guidelines
 
-**Status:** v1.2 (2026-05-16 — Info button system elevated to load-bearing UX pattern in technical surfaces) · **Source:** `.claude/brand-voice-audit-context.md` + `docs/brand-voice-audit-2026-05-16.md` + founder confirmation threads · **Owner:** mzdan (founder) + Co-Architect · **Effective:** 2026-05-16
+**Status:** v1.3 (2026-05-16 — Q3 resolved: check-in earns a celebratory `You're checked in!` to match the other 3 success states; all 6 Open Questions now CONFIRMED) · **Source:** `.claude/brand-voice-audit-context.md` + `docs/brand-voice-audit-2026-05-16.md` + founder confirmation threads · **Owner:** mzdan (founder) + Co-Architect · **Effective:** 2026-05-16
 
 This document is the canonical brand-voice reference for OurSharedEvents (OSE). The `/brand-voice:enforce-voice` skill reads this file to validate copy across the 13 customer-visible surfaces. Update this file as decisions evolve — its diff history IS the voice's evolution log.
 
@@ -168,17 +168,17 @@ Models:
 
 ### 4.4 The success-message pattern
 
-Confidence: HIGH (3 of 4 customer flows celebrate; checkin is silent — see Open Questions).
+Confidence: HIGH (founder-confirmed Q3 2026-05-16 — all 4 customer flows now celebrate; check-in earns `You're checked in!`).
 
-Earned exclamation. Contraction. Customer-state, not system-state.
+Earned exclamation. Contraction. Customer-state, not system-state. **Every direct customer action gets a success confirmation** — the user needs to know their tap / submit / sign-up worked.
 
-| Flow               | Success copy                                                    |
-| ------------------ | --------------------------------------------------------------- |
-| Register           | `You're registered!`                                            |
-| Email signup (new) | `You're on the list!`                                           |
-| Email signup (dup) | `You're already signed up!`                                     |
-| Survey             | `Thanks for your feedback!`                                     |
-| Checkin            | (currently silent — only count increment) — **Open Question 3** |
+| Flow               | Success copy                |
+| ------------------ | --------------------------- |
+| Register           | `You're registered!`        |
+| Email signup (new) | `You're on the list!`       |
+| Email signup (dup) | `You're already signed up!` |
+| Survey             | `Thanks for your feedback!` |
+| Checkin            | `You're checked in!`        |
 
 **Pattern rules:**
 
@@ -186,6 +186,9 @@ Earned exclamation. Contraction. Customer-state, not system-state.
 - `Thanks for your <thing>!` when the user gave us something (feedback, time)
 - Exclamation is mandatory on direct success — earned, not gratuitous
 - NEVER use `Submission received.` `Transaction complete.` `Operation successful.` — these are system-state, not customer-state
+- **Silent success is a bug, not a feature.** Even when the system has a secondary signal (count incrementing, list visibly changing), the customer's relationship to the action requires explicit confirmation — they did the thing, the thing worked, here's the proof. Founder rationale (2026-05-16): "User needs some confirmation that their action worked."
+
+**Re-tap edge case (check-in):** if a customer taps Check In twice from the same anonymous-id within the same event window, the second tap returns the same `You're checked in!` message rather than incrementing the count again. Idempotent confirmation — no scolding, no error, no silent no-op.
 
 ### 4.5 The empty-state pattern (invite-next-step, NOT report-absence)
 
@@ -492,7 +495,7 @@ This document is the GUIDELINE. Migrating existing surfaces to fully comply is a
 | MEDIUM   | public listing empty state        | `No events scheduled.` → `Nothing scheduled right now. Sign up to hear when the next one drops.`                 | invite-next-step pattern                                                      |
 | MEDIUM   | admin events empty state          | `No events found.` → `No events yet. Create your first one above.`                                               | invite-next-step pattern                                                      |
 | MEDIUM   | display primary empty state       | `No upcoming events scheduled.` → `Nothing on the calendar this minute. New events posted as they're confirmed.` | invite-next-step pattern                                                      |
-| LOW      | checkin success state             | (currently silent) → see Open Question 3                                                                         | UX completeness                                                               |
+| HIGH     | checkin success state             | (currently silent) → `You're checked in!` (Q3 confirmed 2026-05-16)                                              | matches the other 3 success states; user needs confirmation tap worked        |
 | HIGH     | **Info button system (NEW arc)**  | Per §4.7 + §7.4 — Info popovers ubiquitous in technical surfaces (admin, sharedReport, advanced metrics, etc.)   | founder direction 2026-05-16 — separate OSE-313 sub-arc; see story when filed |
 | HIGH     | Landing flywheel rewrite          | `Six Southside communities. One connected flywheel.` → use `event triangle` / `event cycle` framing (Q2)         | replaces internal-only `flywheel` per Q2 confirmation                         |
 
@@ -512,7 +515,7 @@ Each phase is its own PR with §4.7-template content written for each placement.
 
 ## 9. Open questions (founder review)
 
-5 of 6 confirmed 2026-05-16. Q3 re-posed below with clearer framing.
+All 6 confirmed 2026-05-16. Q3 resolved via founder pick (a) — Bug, add `You're checked in!` (see below).
 
 ### Open Question 1 — Does the brand voice generalize beyond Chicago's Southside? ✅ CONFIRMED 2026-05-16
 
@@ -537,25 +540,17 @@ Each phase is its own PR with §4.7-template content written for each placement.
 
 See §6 glossary for full set of triangle-phase term mappings.
 
-### Open Question 3 — Should the check-in success message celebrate or stay silent? 🔄 RE-POSED 2026-05-16
+### Open Question 3 — Should the check-in success message celebrate or stay silent? ✅ CONFIRMED 2026-05-16
 
-(The previous framing referenced "Apple-style" / "Mailchimp-style" which apparently didn't land. Re-asking with concrete code examples.)
+**Decision (a) — Bug. Add `You're checked in!` to match the other 3.** Founder rationale: "User needs some confirmation that their action worked."
 
-**The situation:** 4 customer success states currently behave like this:
+**Why this is the right call:** the count incrementing on the page is system-state feedback (the room got bigger by one), not customer-state feedback (you, specifically, are checked in). The customer is reading the count for OTHERS; they need explicit confirmation for THEMSELVES. The Voice Constant says "celebratory on success" — silent success contradicts the brand promise.
 
-1. Register form submit → page shows `You're registered!` (celebratory)
-2. Survey form submit → page shows `Thanks for your feedback!` (celebratory)
-3. Email-signup form submit → page shows `You're on the list!` (celebratory)
-4. Check-in form tap → page shows NO message; the visible count just goes from "12 checked in" to "13 checked in"
+**Edge case handled:** re-taps from the same anonymous-id return the same `You're checked in!` confirmation idempotently — no count double-increment, no error, no scolding. The customer's mental model stays clean ("I tapped, it worked"); the platform's data stays clean (one check-in per anon-id per event window).
 
-**The question — is #4 (check-in) a bug or a feature?**
+**Migration:** filed as a §8 backlog item (HIGH priority) — surgical PR that adds the success copy to the check-in form completion handler. See §4.4 success-message pattern (now updated with all 4 flows).
 
-- **(a) Bug — add a celebratory message.** Customers tap "Check In" and expect feedback like the other 3. Add something like `You're checked in!` so it matches.
-- **(b) Feature — check-in stays quiet on purpose.** A customer at an event might tap the button multiple times (e.g., re-tap to verify it counted) OR multiple attendees might tap from the same phone. A loud `You're checked in!` popping up every tap would be obnoxious. The count incrementing IS the feedback.
-
-**Co-Architect recommendation: (b) — feature, keep silent.** Documenting this as an intentional pattern: _one-time identity moments earn celebration; repeatable transactional moments stay silent_.
-
-If you agree with (b), I lock it as a pattern. If you pick (a), I file the check-in copy addition as a migration item.
+**Pattern locked:** _every direct customer action gets explicit success confirmation_. Silent success is a bug, not a feature. The earlier Co-Architect recommendation (b — feature, keep silent) was wrong on the brand-voice principle; the founder's instinct on customer reassurance is correct and is now the durable rule.
 
 ### Open Question 4 — GDPR legal blocks — voice or compliance layer? ✅ CONFIRMED 2026-05-16
 
@@ -602,7 +597,7 @@ The `/brand-voice:enforce-voice` skill uses these to weigh strict-vs-flexible en
 | Anonymity-affordance pattern (§4.1)       | HIGH                                                                                                | In production, multi-surface, founder authored                                                                         |
 | Friendly-error pattern (§4.2)             | HIGH                                                                                                | In production across form-pages + sharedReport + error page; explicit pattern                                          |
 | Action-verb CTA pattern (§4.3)            | HIGH                                                                                                | Zero counter-examples in 13-surface audit                                                                              |
-| Success-message pattern (§4.4)            | HIGH                                                                                                | 3 of 4 flows; check-in deliberately silent per Open Question 3                                                         |
+| Success-message pattern (§4.4)            | HIGH (founder-confirmed Q3 2026-05-16)                                                              | All 4 flows now celebrate; check-in gets `You're checked in!` with idempotent re-tap behavior                          |
 | Empty-state pattern (§4.5)                | MEDIUM                                                                                              | Display's `Also Coming Up` is the only existing example of the proposed pattern; migration of 3 other surfaces follows |
 | 5W placeholder pattern (§4.6)             | HIGH                                                                                                | In production; bar owner feedback positive                                                                             |
 | Info popover voice pattern (§4.7)         | HIGH (founder-directed 2026-05-16 — elevation pass)                                                 | Info icons become ubiquitous in technical surfaces; 3-part content template + accessibility rules                      |
@@ -617,7 +612,7 @@ The `/brand-voice:enforce-voice` skill uses these to weigh strict-vs-flexible en
 | Icon-only buttons (§7.4)                  | HIGH (founder-confirmed Q5 2026-05-16)                                                              | Two sanctioned: `🖨 Print` + `ℹ Info`; mobile space pressure may drive future additions                                |
 | Neighborhood-rooted ubiquity (§1)         | HIGH (founder-confirmed Q1 2026-05-16)                                                              | Geography is a content variable, not a brand variable                                                                  |
 | Migration backlog (§8)                    | (deferred work — not a confidence claim)                                                            | —                                                                                                                      |
-| Open questions (§9)                       | 5 of 6 CONFIRMED 2026-05-16; Q3 RE-POSED with clearer framing                                       | Q3 awaits founder pick                                                                                                 |
+| Open questions (§9)                       | 6 of 6 CONFIRMED 2026-05-16                                                                         | Q3 resolved via founder pick (a) — Bug: add `You're checked in!`                                                       |
 
 ---
 
@@ -642,6 +637,13 @@ For the human founder:
 ---
 
 ## 12. Changelog
+
+- **2026-05-16 — v1.3 Q3 resolved (check-in earns celebration).** Founder pick: (a) Bug — add `You're checked in!` to match the other 3 success states. Rationale: "User needs some confirmation that their action worked." Updates:
+  - §4.4 success-message pattern: check-in row updated from "(currently silent)" to `You're checked in!`; new pattern rule explicitly states "silent success is a bug, not a feature"; re-tap edge case documented as idempotent confirmation
+  - §8 migration backlog: check-in success state priority upgraded LOW → HIGH with the confirmed copy
+  - §9 Open Question 3 marked CONFIRMED with founder text + Co-Architect self-correction noted (the v1.1 recommendation for option (b) was wrong on brand-voice principle; founder's customer-reassurance instinct is the durable rule)
+  - §10 confidence: §4.4 row updated to reflect Q3 confirmation; Open questions row now "6 of 6 CONFIRMED"
+  - All 6 Open Questions now resolved — brand-voice guidelines reach steady state
 
 - **2026-05-16 — v1.2 Info button system elevated.** Founder direction: "providing i buttons throughout the UI will guide users with the flow in the more technical areas." Updates:
   - §4.7 NEW: Info popover voice pattern — 3-part content template (~3 sentences, ~60 words), where Info popovers belong (admin tier/phase badges, 5W fields, sponsor tiers, SharedReport metrics, poster format selector), where they DON'T (customer-facing minimal flows, error messages, empty states), accessibility rules (§4.7.2), and the principle that Info popovers are the brand's chance to teach (§4.7.3)
