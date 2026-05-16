@@ -10,9 +10,7 @@
       "listen": "prerequest",
       "script": {
         "type": "text/javascript",
-        "exec": [
-          "pm.variables.set('requestStartTime', Date.now());"
-        ]
+        "exec": ["pm.variables.set('requestStartTime', Date.now());"]
       }
     },
     {
@@ -65,12 +63,8 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                ""
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": [""]
             }
           }
         },
@@ -97,12 +91,8 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/home",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "home"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["home"]
             }
           }
         },
@@ -125,12 +115,8 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/welcome",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "welcome"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["welcome"]
             }
           }
         },
@@ -153,12 +139,8 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/landing",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "landing"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["landing"]
             }
           }
         },
@@ -181,12 +163,8 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/events",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "events"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["events"]
             }
           }
         },
@@ -209,12 +187,8 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/public",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "public"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["public"]
             }
           }
         },
@@ -237,12 +211,8 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/schedule",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "schedule"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["schedule"]
             }
           }
         },
@@ -265,12 +235,8 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/calendar",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "calendar"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["calendar"]
             }
           }
         }
@@ -320,12 +286,8 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/admin",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "admin"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["admin"]
             }
           }
         },
@@ -352,12 +314,8 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/manage",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "manage"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["manage"]
             }
           }
         },
@@ -379,12 +337,8 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/dashboard",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "dashboard"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["dashboard"]
             }
           }
         },
@@ -406,12 +360,8 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/create",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "create"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["create"]
             }
           }
         },
@@ -448,12 +398,8 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/admin",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "admin"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["admin"]
             }
           }
         },
@@ -513,12 +459,8 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/admin",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "admin"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["admin"]
             }
           }
         },
@@ -566,12 +508,8 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/admin",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "admin"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["admin"]
             }
           }
         },
@@ -603,12 +541,8 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/manage",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "manage"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["manage"]
             }
           }
         },
@@ -652,15 +586,8 @@
             },
             "url": {
               "raw": "{{baseUrl}}/api/v2/admin/events",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "v2",
-                "admin",
-                "events"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v2", "admin", "events"]
             }
           }
         }
@@ -690,12 +617,8 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/display",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "display"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["display"]
             }
           }
         },
@@ -718,12 +641,8 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/tv",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "tv"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["tv"]
             }
           }
         },
@@ -746,12 +665,8 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/kiosk",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "kiosk"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["kiosk"]
             }
           }
         },
@@ -774,12 +689,8 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/screen",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "screen"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["screen"]
             }
           }
         },
@@ -803,12 +714,8 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/poster",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "poster"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["poster"]
             }
           }
         },
@@ -831,12 +738,8 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/posters",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "posters"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["posters"]
             }
           }
         },
@@ -859,12 +762,8 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/flyers",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "flyers"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["flyers"]
             }
           }
         },
@@ -904,12 +803,8 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/sharedReport",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "sharedReport"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["sharedReport"]
             }
           }
         },
@@ -932,12 +827,8 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/report",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "report"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["report"]
             }
           }
         },
@@ -960,12 +851,8 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/analytics",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "analytics"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["analytics"]
             }
           }
         },
@@ -988,12 +875,8 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/reports",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "reports"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["reports"]
             }
           }
         },
@@ -1016,12 +899,8 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/insights",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "insights"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["insights"]
             }
           }
         }
@@ -1052,13 +931,8 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/forms/{{testEventId}}",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "forms",
-                "{{testEventId}}"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["forms", "{{testEventId}}"]
             }
           }
         },
@@ -1082,13 +956,8 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/forms/{{testEventId}}?type=register",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "forms",
-                "{{testEventId}}"
-              ],
+              "host": ["{{baseUrl}}"],
+              "path": ["forms", "{{testEventId}}"],
               "query": [
                 {
                   "key": "type",
@@ -1118,13 +987,8 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/forms/{{testEventId}}?type=checkin",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "forms",
-                "{{testEventId}}"
-              ],
+              "host": ["{{baseUrl}}"],
+              "path": ["forms", "{{testEventId}}"],
               "query": [
                 {
                   "key": "type",
@@ -1154,13 +1018,8 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/forms/{{testEventId}}?type=survey",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "forms",
-                "{{testEventId}}"
-              ],
+              "host": ["{{baseUrl}}"],
+              "path": ["forms", "{{testEventId}}"],
               "query": [
                 {
                   "key": "type",
@@ -1190,13 +1049,8 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/forms/{{testEventId}}?type=email",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "forms",
-                "{{testEventId}}"
-              ],
+              "host": ["{{baseUrl}}"],
+              "path": ["forms", "{{testEventId}}"],
               "query": [
                 {
                   "key": "type",
@@ -1231,12 +1085,8 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/briefing",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "briefing"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["briefing"]
             }
           }
         }
@@ -1291,13 +1141,8 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/events/evt_does_not_exist_r004",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "events",
-                "evt_does_not_exist_r004"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["events", "evt_does_not_exist_r004"]
             }
           }
         },
@@ -1332,13 +1177,8 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/events/not%20a%20valid%20id!!",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "events",
-                "not%20a%20valid%20id!!"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["events", "not%20a%20valid%20id!!"]
             }
           }
         },
@@ -1373,13 +1213,8 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/events/evt_does_not_exist_r004",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "events",
-                "evt_does_not_exist_r004"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["events", "evt_does_not_exist_r004"]
             }
           }
         }
@@ -1431,12 +1266,8 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/admin",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "admin"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["admin"]
             }
           }
         },
@@ -1484,12 +1315,8 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/admin",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "admin"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["admin"]
             }
           }
         },
@@ -1528,12 +1355,8 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/admin",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "admin"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["admin"]
             }
           }
         }
@@ -1562,7 +1385,12 @@
           ],
           "request": {
             "method": "GET",
-            "header": [{ "key": "Accept", "value": "text/html" }],
+            "header": [
+              {
+                "key": "Accept",
+                "value": "text/html"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/poster",
               "host": ["{{baseUrl}}"],
@@ -1598,7 +1426,12 @@
           ],
           "request": {
             "method": "GET",
-            "header": [{ "key": "Accept", "value": "text/html" }],
+            "header": [
+              {
+                "key": "Accept",
+                "value": "text/html"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/poster",
               "host": ["{{baseUrl}}"],
@@ -1637,7 +1470,12 @@
           ],
           "request": {
             "method": "GET",
-            "header": [{ "key": "Accept", "value": "text/html" }],
+            "header": [
+              {
+                "key": "Accept",
+                "value": "text/html"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/poster",
               "host": ["{{baseUrl}}"],
@@ -1673,7 +1511,12 @@
           ],
           "request": {
             "method": "GET",
-            "header": [{ "key": "Accept", "value": "text/html" }],
+            "header": [
+              {
+                "key": "Accept",
+                "value": "text/html"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/poster",
               "host": ["{{baseUrl}}"],
@@ -1712,14 +1555,25 @@
           ],
           "request": {
             "method": "GET",
-            "header": [{ "key": "Accept", "value": "text/html" }],
+            "header": [
+              {
+                "key": "Accept",
+                "value": "text/html"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/forms/{{testEventId}}?event=Cheap%20Rolex%20Deals%21&type=register",
               "host": ["{{baseUrl}}"],
               "path": ["forms", "{{testEventId}}"],
               "query": [
-                { "key": "event", "value": "Cheap%20Rolex%20Deals%21" },
-                { "key": "type", "value": "register" }
+                {
+                  "key": "event",
+                  "value": "Cheap%20Rolex%20Deals%21"
+                },
+                {
+                  "key": "type",
+                  "value": "register"
+                }
               ]
             }
           }
@@ -1749,14 +1603,25 @@
           ],
           "request": {
             "method": "GET",
-            "header": [{ "key": "Accept", "value": "text/html" }],
+            "header": [
+              {
+                "key": "Accept",
+                "value": "text/html"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/forms/evt_does_not_exist_r007?event=URGENT%3A%20Account%20suspended&type=register",
               "host": ["{{baseUrl}}"],
               "path": ["forms", "evt_does_not_exist_r007"],
               "query": [
-                { "key": "event", "value": "URGENT%3A%20Account%20suspended" },
-                { "key": "type", "value": "register" }
+                {
+                  "key": "event",
+                  "value": "URGENT%3A%20Account%20suspended"
+                },
+                {
+                  "key": "type",
+                  "value": "register"
+                }
               ]
             }
           }
@@ -1783,15 +1648,172 @@
           ],
           "request": {
             "method": "GET",
-            "header": [{ "key": "Accept", "value": "text/html" }],
+            "header": [
+              {
+                "key": "Accept",
+                "value": "text/html"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/forms/evt_does_not_exist_r007?event=%3Cscript%3Ealert%281%29%3C%2Fscript%3E&type=register",
               "host": ["{{baseUrl}}"],
               "path": ["forms", "evt_does_not_exist_r007"],
               "query": [
-                { "key": "event", "value": "%3Cscript%3Ealert%281%29%3C%2Fscript%3E" },
-                { "key": "type", "value": "register" }
+                {
+                  "key": "event",
+                  "value": "%3Cscript%3Ealert%281%29%3C%2Fscript%3E"
+                },
+                {
+                  "key": "type",
+                  "value": "register"
+                }
               ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "OSE-R-011 + OSE-R-015 sponsor render hardening (audit 2026-05-15)",
+      "description": "Locks the contract that every sponsor <img> tag across 6 render sites (public listing, register form, display TV banner, display TV rotation, poster sponsor band, form-pages mobile banner) carries referrerpolicy=\"no-referrer\" and an onerror handler. Form-pages additionally escape s.logo_url to prevent attribute-breakout XSS. Display TV rotation has a specific advance-on-error handler so a 404 sponsor logo does not freeze the bar TV. Matching specs: workers/oursharedevents/tests/sponsor-render-hardening.spec.ts (vitest API), tests/playwright/sponsor-render-hardening.spec.ts (Playwright FE).",
+      "item": [
+        {
+          "name": "OSE-R-015 | API | GET /events (public listing) | sponsor img tags carry referrerpolicy=no-referrer",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Returns 200', function() { pm.response.to.have.status(200); });",
+                  "const body = pm.response.text();",
+                  "pm.test('public listing HTML includes referrerpolicy=no-referrer', function() {",
+                  "    pm.expect(body).to.match(/referrerpolicy=[\"']no-referrer[\"']/);",
+                  "});",
+                  "pm.test('public listing HTML includes onerror handler', function() {",
+                  "    pm.expect(body).to.match(/onerror=[\"']this\\.style\\.display=/);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "text/html"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/events",
+              "host": ["{{baseUrl}}"],
+              "path": ["events"]
+            }
+          }
+        },
+        {
+          "name": "OSE-R-015 | API | GET /forms/evt_test_2026 (register form) | sponsor img tags carry referrerpolicy=no-referrer",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Returns 200', function() { pm.response.to.have.status(200); });",
+                  "const body = pm.response.text();",
+                  "pm.test('register form HTML includes referrerpolicy=no-referrer', function() {",
+                  "    pm.expect(body).to.match(/referrerpolicy=[\"']no-referrer[\"']/);",
+                  "});",
+                  "pm.test('register form HTML includes onerror handler', function() {",
+                  "    pm.expect(body).to.match(/onerror=[\"']this\\.style\\.display=/);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "text/html"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/forms/evt_test_2026?type=register",
+              "host": ["{{baseUrl}}"],
+              "path": ["forms", "evt_test_2026"]
+            }
+          }
+        },
+        {
+          "name": "OSE-R-015 | API | GET /display (display TV) | sponsor img tags carry referrerpolicy=no-referrer",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Returns 200', function() { pm.response.to.have.status(200); });",
+                  "const body = pm.response.text();",
+                  "pm.test('display TV HTML includes referrerpolicy=no-referrer', function() {",
+                  "    pm.expect(body).to.match(/referrerpolicy=[\"']no-referrer[\"']/);",
+                  "});",
+                  "pm.test('display TV HTML includes onerror handler', function() {",
+                  "    pm.expect(body).to.match(/onerror=[\"']this\\.style\\.display=/);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "text/html"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/display",
+              "host": ["{{baseUrl}}"],
+              "path": ["display"]
+            }
+          }
+        },
+        {
+          "name": "OSE-R-015 | API | GET /poster (poster) | sponsor img tags carry referrerpolicy=no-referrer",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Returns 200', function() { pm.response.to.have.status(200); });",
+                  "const body = pm.response.text();",
+                  "pm.test('poster HTML includes referrerpolicy=no-referrer', function() {",
+                  "    pm.expect(body).to.match(/referrerpolicy=[\"']no-referrer[\"']/);",
+                  "});",
+                  "pm.test('poster HTML includes onerror handler', function() {",
+                  "    pm.expect(body).to.match(/onerror=[\"']this\\.style\\.display=/);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "text/html"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/poster",
+              "host": ["{{baseUrl}}"],
+              "path": ["poster"]
             }
           }
         }
