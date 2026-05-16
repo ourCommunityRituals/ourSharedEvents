@@ -10,6 +10,7 @@
 
 import { isGoogleMapsConfigured } from '../lib/maps';
 import { computeEventPhase } from '../domain/event-phase';
+import { DEFAULT_POSTER_CODE, posterProductForPath } from '../lib/poster-products';
 
 export interface PagesEnv {
   WORKER_ENV?: string;
@@ -3276,8 +3277,24 @@ export function handleDisplayPage(_env: PagesEnv): Response {
   return html(DISPLAY_HTML);
 }
 
-export function handlePosterPage(_env: PagesEnv): Response {
-  return html(POSTER_HTML);
+export function handlePosterPage(_env: PagesEnv, request?: Request): Response {
+  // OSE-310 Phase 1: format-aware rendering for the Poster Family.
+  // Look up the format from the request pathname (path-aliased
+  // registry) and attach data-poster-format to the body so future
+  // format-specific CSS can target via [data-poster-format=...].
+  // Backwards-compatible: /poster + /posters render the letter
+  // format with no visible change vs the pre-OSE-310 output.
+  let posterCode = DEFAULT_POSTER_CODE;
+  if (request) {
+    try {
+      const { pathname } = new URL(request.url);
+      posterCode = posterProductForPath(pathname).code;
+    } catch {
+      // Malformed URL — fall through to default letter.
+    }
+  }
+  const content = POSTER_HTML.replace('<body>', `<body data-poster-format="${posterCode}">`);
+  return html(content);
 }
 
 export function handleSharedReportPage(env: PagesEnv): Response {

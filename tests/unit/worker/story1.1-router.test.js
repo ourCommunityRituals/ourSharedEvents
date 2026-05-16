@@ -272,7 +272,10 @@ describe('Route Coverage (Story 1.1)', () => {
 
     it('should route /poster to handlePosterPage', () => {
       expect(routerSource).toContain("pathname === '/poster'");
-      expect(routerSource).toContain('handlePosterPage(env)');
+      // OSE-310: handler now also takes the request so it can look
+      // up the format from the path. Match the function-call prefix
+      // so future signature additions don't re-break this assertion.
+      expect(routerSource).toMatch(/handlePosterPage\(env\b/);
     });
 
     it('should route /sharedReport to handleSharedReportPage', () => {
