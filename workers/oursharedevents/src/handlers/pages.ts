@@ -315,6 +315,78 @@ const ADMIN_HTML = `<!DOCTYPE html>
     .form-link:focus-visible { outline: 2px solid #4361ee; outline-offset: 2px; }
     .clickable-row:focus-visible { outline: 2px solid #4361ee; outline-offset: -2px; background: #eef2ff; }
     @media (max-width: 600px) { .create-form { grid-template-columns: 1fr; } }
+    /* OSE-292 / DRAIN 1 (2026-05-16): admin mobile workability.
+       Stack header badges, collapse 6-col tables to card layout, tighten
+       padding so the dashboard is usable on a 375px phone. Closes
+       OSE-R-027 (admin desktop-only). */
+    @media (max-width: 768px) {
+      main { padding: 0 .75rem; }
+      header { padding: .9rem 1rem; }
+      header h1 {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: .4rem;
+        font-size: 1.1rem;
+      }
+      header h1 .tier-badge, header h1 .phase-badge { margin-left: 0; }
+      /* Events table → card layout. Each <tr> becomes a vertical card;
+         each <td> shows its label via the data-label attribute the
+         renderer now writes. Hide the <thead> entirely. */
+      table.events-table { display: block; box-shadow: none; }
+      table.events-table thead { display: none; }
+      table.events-table tbody { display: block; }
+      table.events-table tr {
+        display: block;
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        padding: .75rem 1rem;
+        margin-bottom: .75rem;
+        background: #fff;
+      }
+      table.events-table td {
+        display: block;
+        padding: .35rem 0;
+        border: none;
+        text-align: left;
+        word-break: break-word;
+      }
+      table.events-table td::before {
+        content: attr(data-label) ': ';
+        font-weight: 600;
+        color: #495057;
+        margin-right: .5rem;
+      }
+      table.events-table td.col-internal-id { display: none; }
+      table.events-table.show-internal-ids td.col-internal-id { display: block; }
+      /* Sponsors table — same treatment. */
+      #sponsors-list table { display: block; box-shadow: none; }
+      #sponsors-list table thead { display: none; }
+      #sponsors-list table tbody { display: block; }
+      #sponsors-list table tr {
+        display: block;
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        padding: .75rem 1rem;
+        margin-bottom: .75rem;
+        background: #fff;
+      }
+      #sponsors-list table td {
+        display: block;
+        padding: .35rem 0;
+        border: none;
+        text-align: left;
+      }
+      #sponsors-list table td::before {
+        content: attr(data-label) ': ';
+        font-weight: 600;
+        color: #495057;
+        margin-right: .5rem;
+      }
+      /* Action cell shouldn't get the label prefix — it contains buttons. */
+      #sponsors-list table td[data-label="Actions"]::before { content: ''; }
+      #sponsors-list table td[data-label="Actions"] { padding-top: .75rem; }
+    }
     .sponsors-card { background: #fff; border-radius: 8px; padding: 1.25rem 1.5rem; box-shadow: 0 1px 3px rgba(0,0,0,.08); margin-top: 2rem; }
     .sponsors-card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; }
     .sponsors-card-header h2 { margin-bottom: 0; }
@@ -459,12 +531,12 @@ const ADMIN_HTML = `<!DOCTYPE html>
           const phaseLabel = esc(window.friendlyPhase(safePhase));
           return \`
           <tr onclick="window.loadForms('\${safeId}', '\${safeName.replace(/'/g, "\\\\'")}', \${safePhase}); document.querySelectorAll('tr.selected').forEach(r=>r.classList.remove('selected')); this.classList.add('selected');" onkeydown="if(event.key==='Enter'||event.key===' '){this.click();event.preventDefault();}" class="clickable-row" tabindex="0" data-testid="event-row-\${safeId}" data-phase="\${safePhase}">
-            <td class="col-internal-id" data-testid="event-id">\${safeId}</td>
-            <td data-testid="event-name">\${safeName}</td>
-            <td data-testid="event-date">\${e.startDateISO ? esc(new Date(e.startDateISO).toLocaleDateString()) : '—'}</td>
-            <td data-testid="event-venue">\${esc(e.venue || '—')}</td>
-            <td><span class="badge \${esc(e.status)}" data-testid="event-status">\${esc(e.status)}</span></td>
-            <td><span class="phase-badge phase-\${safePhase}" data-testid="event-phase" title="Internal phase \${safePhase}">\${phaseLabel}</span></td>
+            <td class="col-internal-id" data-label="ID" data-testid="event-id">\${safeId}</td>
+            <td data-label="Name" data-testid="event-name">\${safeName}</td>
+            <td data-label="Date" data-testid="event-date">\${e.startDateISO ? esc(new Date(e.startDateISO).toLocaleDateString()) : '—'}</td>
+            <td data-label="Venue" data-testid="event-venue">\${esc(e.venue || '—')}</td>
+            <td data-label="Status"><span class="badge \${esc(e.status)}" data-testid="event-status">\${esc(e.status)}</span></td>
+            <td data-label="Event type"><span class="phase-badge phase-\${safePhase}" data-testid="event-phase" title="Internal phase \${safePhase}">\${phaseLabel}</span></td>
           </tr>
         \`}).join('');
         container.innerHTML = \`
@@ -842,12 +914,12 @@ const ADMIN_HTML = `<!DOCTYPE html>
                 '<button class="spon-action-btn deactivate" data-testid="deactivate-' + esc(s.id) + '" onclick="window._deactivateSponsor(\'' + esc(s.id) + '\')">Deactivate</button>'
               : '<span class="muted-sm">Deactivated</span>';
             return '<tr data-testid="sponsor-row-' + esc(s.id) + '"' + dimStyle + '>' +
-              '<td data-testid="spon-name-' + esc(s.id) + '">' + esc(s.name) + '</td>' +
-              '<td><span class="spon-tier-pill ' + esc(s.tier) + '" data-testid="spon-tier-' + esc(s.id) + '">' + esc(s.tier) + '</span></td>' +
-              '<td class="muted-sm" data-testid="spon-event-' + esc(s.id) + '">' + esc(s.event_id) + '</td>' +
-              '<td data-testid="spon-placements-' + esc(s.id) + '">' + pipHtml(s.placement_formats) + '</td>' +
-              '<td>' + statusBadge + '</td>' +
-              '<td class="flex-row">' + actions + '</td>' +
+              '<td data-label="Name" data-testid="spon-name-' + esc(s.id) + '">' + esc(s.name) + '</td>' +
+              '<td data-label="Tier"><span class="spon-tier-pill ' + esc(s.tier) + '" data-testid="spon-tier-' + esc(s.id) + '">' + esc(s.tier) + '</span></td>' +
+              '<td data-label="Event" class="muted-sm" data-testid="spon-event-' + esc(s.id) + '">' + esc(s.event_id) + '</td>' +
+              '<td data-label="Placements" data-testid="spon-placements-' + esc(s.id) + '">' + pipHtml(s.placement_formats) + '</td>' +
+              '<td data-label="Status">' + statusBadge + '</td>' +
+              '<td data-label="Actions" class="flex-row">' + actions + '</td>' +
             '</tr>';
           }).join('');
           wrap.innerHTML = '<table data-testid="sponsors-table">' +
