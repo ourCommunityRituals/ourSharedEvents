@@ -1,6 +1,6 @@
 # OurSharedEvents Brand Voice Guidelines
 
-**Status:** v1.1 (founder-confirmed 5 of 6 Open Questions 2026-05-16) · **Source:** `.claude/brand-voice-audit-context.md` + `docs/brand-voice-audit-2026-05-16.md` + founder confirmation thread · **Owner:** mzdan (founder) + Co-Architect · **Effective:** 2026-05-16
+**Status:** v1.2 (2026-05-16 — Info button system elevated to load-bearing UX pattern in technical surfaces) · **Source:** `.claude/brand-voice-audit-context.md` + `docs/brand-voice-audit-2026-05-16.md` + founder confirmation threads · **Owner:** mzdan (founder) + Co-Architect · **Effective:** 2026-05-16
 
 This document is the canonical brand-voice reference for OurSharedEvents (OSE). The `/brand-voice:enforce-voice` skill reads this file to validate copy across the 13 customer-visible surfaces. Update this file as decisions evolve — its diff history IS the voice's evolution log.
 
@@ -227,6 +227,103 @@ Placeholders teach by example. Use real-shaped content, not abstractions.
 - Show texture: "$10 at door, BYOB" is more useful than "Free!" because it teaches FORMAT
 - Why-field is the exception that proves the rule — that question wants a prompt, not an example
 
+### 4.7 The Info popover pattern — guide flow in technical surfaces
+
+Confidence: HIGH (founder-directed 2026-05-16 — elevation pass).
+
+**Principle:** Technical surfaces (admin, sharedReport, advanced metrics, sponsor configuration, anything where unfamiliar terms / concepts / tier-gating appears) carry inline `ℹ` Info buttons next to the technical element. Tapping the icon reveals a short popover that explains the term in OSE's voice and tells the user what to do next.
+
+**Why this is load-bearing:** the Voice Constant says "plain-language technical" — Info popovers are WHERE that promise lives. The technical surface itself can stay dense + scannable (numbers, tables, controls); the popover carries the longer-form voice the customer needs to make sense of it.
+
+**Where Info popovers belong:**
+
+| Surface           | Element                                                               | Info popover content                                                                                                                     |
+| ----------------- | --------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| Admin dashboard   | Tier badge (Free / Pro / Enterprise plan)                             | What's included in this tier vs. the next one; explicit upgrade path                                                                     |
+| Admin dashboard   | Phase badge (Community / Commerce / Licensed / Health / Youth events) | What this phase means; what's allowed / required at this phase                                                                           |
+| Admin dashboard   | 5W form fields                                                        | Per-field guidance — `Why` field: "Why is this event happening, in your own words?"; `How` field: "Price, what to bring, what to expect" |
+| Admin dashboard   | Sponsor tier (title / platinum / gold / silver / bronze / primary)    | Visual placement + what sponsor sees + price point per tier                                                                              |
+| Admin dashboard   | "Show internal IDs" toggle                                            | What internal IDs are; when support might ask for them                                                                                   |
+| SharedReport      | "Conversion funnel" header                                            | How the funnel is calculated; what each step means                                                                                       |
+| SharedReport      | "Sponsor impressions" header                                          | What counts as an impression; what doesn't                                                                                               |
+| SharedReport      | "Headcount trend" header                                              | How attendance is measured anonymously                                                                                                   |
+| SharedReport      | "Corridor density" header                                             | What a corridor is; how density compounds across events                                                                                  |
+| SharedReport      | "Return rate" header                                                  | Return rate of WHAT — venue, host, sponsor; what the number means                                                                        |
+| SharedReport      | Tier-gating badges (Pro / Enterprise)                                 | What unlocks this metric; how to upgrade                                                                                                 |
+| Poster preview    | 4-QR-code section                                                     | What each of the 4 form types does; which one to print where                                                                             |
+| Poster preview    | Format selector (letter / tent4x6 / flyer / signage per OSE-310)      | When each physical format works best; print specs                                                                                        |
+| Public event page | Tier-specific UX (when applicable)                                    | What this event tier means for the attendee                                                                                              |
+| Display TV        | Sponsor rotation rules                                                | How sponsors qualify; how rotation is fair                                                                                               |
+
+**Where Info popovers do NOT belong:**
+
+- Customer-facing flows that are intentionally minimal (landing, /events listing, checkin tap button) — adding ℹ would clutter and undermine the action-verb-led principle
+- Error messages — the error copy itself IS the explanation (see §4.2 friendly-error pattern)
+- Empty states — the invite-next-step copy IS the guidance (see §4.5)
+
+### 4.7.1 The Info popover content template
+
+Three-part structure. Each part is one short sentence. Total: ~3 sentences, max ~60 words.
+
+```
+[What it is.] [Why it matters / what it does.] [What you can do about it.]
+```
+
+**Examples (model these):**
+
+For an admin's "Pro plan" tier badge:
+
+```
+You're on the Pro plan — unlocks PDF exports, advanced metrics, and
+sponsor-impression detail. The data you collected on Free is yours;
+upgrading is additive. Want a feature you're not seeing? Open the
+"Plan options" link below.
+```
+
+For a SharedReport "Corridor density" metric:
+
+```
+Corridors are how events compound — a corridor is a stretch of
+neighborhoods where multiple events have happened. Higher density
+means more groups have gathered nearby in the last 30 days. Use it
+to spot which corridors are warming up before booking your next
+event.
+```
+
+For a Poster preview "Tabletop tent card (4×6)" format:
+
+```
+Tent cards sit on tables at the event — guests scan during dinner
+or between sets. Smaller than the letter poster, so the QR is the
+focus. Pick this format when the poster's job is to capture
+in-the-moment scans rather than draw foot traffic from across the
+room.
+```
+
+**Pattern rules:**
+
+- Lead with the WHAT, not the abstract noun ("Corridors are how events compound" beats "Corridor density is a metric that…")
+- Use the Voice Constant — first-person inclusive, plain technical, action-verb closer ("Use it to…", "Pick this format when…")
+- ALWAYS end with a next action the user can take (even if the action is "Learn more in the playbook")
+- Never longer than ~3 sentences — if it needs more, link to a longer doc
+- Never empty — if there's an ℹ button, it MUST resolve to actionable content
+
+### 4.7.2 Info popover accessibility
+
+The `ℹ` icon button must carry an `aria-label` that names the popover's subject:
+
+```html
+<button data-testid="info-tier" aria-label="What is the Pro plan?">ℹ</button>
+```
+
+The popover content itself must be reachable via keyboard (Enter / Space to open; Escape to close; trap focus inside while open).
+
+### 4.7.3 Info popover voice = the brand's chance to teach
+
+Info popovers are the ONE place in the UI where the voice gets to be longer than a button label or an error message. Treat them like brand training opportunities — every popover is a chance to use the platform's specific vocabulary in plain language so the user adopts the terminology naturally.
+
+Example: every Info popover that mentions a metric should reinforce the platform's anonymity stance when relevant ("Corridor density is calculated anonymously — we count groups gathered, never who attended"). Don't lecture; reinforce.
+
 ---
 
 ## 5. Terminology decisions (drift class resolutions)
@@ -357,24 +454,26 @@ Admin placeholders teach by example (see 4.6). Public-facing form placeholders a
 
 **Rule:** placeholder-as-example is reserved for admin authoring surfaces. Customer-facing forms use minimal placeholders.
 
-### 7.4 Icon-only buttons (founder-confirmed 2026-05-16 — Q5)
+### 7.4 Icon-only buttons (founder-elevated 2026-05-16)
 
-Two icon-only buttons are sanctioned. Both are universally-recognized affordances where the icon adds visual scan-anchor without losing meaning:
+Two icon-only buttons sanctioned. `🖨 Print` is the lone-exception pattern (one specific affordance, one specific surface). `ℹ Info` is the **load-bearing UX pattern for technical surfaces** (see §4.7 for full voice template). They're different beasts — both sanctioned, but for opposite reasons.
 
-| Icon             | Use                                                        | Surface                                                                  |
-| ---------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------ |
-| `🖨` (printer)   | Print action — universally recognized                      | Admin /poster preview header                                             |
-| `ℹ` (i for info) | Info / help / explanation popover — universally recognized | TBD — will be introduced as mobile space pressure makes text-CTAs costly |
+| Icon             | Use                                                                | Surface scope                                                                                                                       |
+| ---------------- | ------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `🖨` (printer)   | Print action — universally recognized                              | Admin /poster preview header (single placement; don't proliferate)                                                                  |
+| `ℹ` (i for info) | Inline explainer popover — guides users through technical concepts | UBIQUITOUS in technical surfaces — admin, sharedReport, advanced metrics, sponsor configuration, poster format selection. See §4.7. |
 
-**Rule:** these two icons may stand alone as button content. Any third icon-only CTA requires a guidelines update — the principle is "universally-recognized affordance + space-constrained context," not "icons are cool."
+**Rule for `🖨 Print`:** lone exception. Don't add it to other surfaces. If a future surface needs print, evaluate per-case.
 
-**Forward-looking note:** as mobile UI density increases (small phones, more controls per surface), additional icon-only patterns may become necessary. Each new pattern requires:
+**Rule for `ℹ Info`:** first-class pattern in technical surfaces. Wherever an unfamiliar term, concept, tier-gate, or metric appears in admin/sharedReport/advanced UX, attach an `ℹ` button next to it carrying a §4.7-template popover. The point is to make technical surfaces self-teaching so the customer never has to leave the screen to understand what they're looking at.
 
-- Documented user-research evidence that the icon is recognized without label
+**Forward-looking note:** as mobile UI density increases AND the Info pattern propagates throughout technical surfaces, additional icon-only patterns may become necessary. Each new pattern requires:
+
+- Documented evidence the icon is recognized without label
 - An entry in this section
-- Accessibility plan: `aria-label` carries the full text equivalent so screen readers don't lose meaning
+- Accessibility plan: `aria-label` carries the subject text so screen readers don't lose meaning (per §4.7.2)
 
-**Forbidden:** `❌` `✓` `▶` `⬇` `📊` AS button content (the existing `⬇ Export JSON` / `📊 Export PDF` on shared report are icon-PREFIX buttons, not icon-only — text follows the icon). Don't strip the text.
+**Forbidden as icon-only button content:** `❌` `✓` `▶` `⬇` `📊` (the existing `⬇ Export JSON` / `📊 Export PDF` on shared report are icon-PREFIX buttons, not icon-only — text follows the icon). Don't strip the text.
 
 ---
 
@@ -382,20 +481,32 @@ Two icon-only buttons are sanctioned. Both are universally-recognized affordance
 
 This document is the GUIDELINE. Migrating existing surfaces to fully comply is a separate, multi-PR workstream. The following items would be filed as follow-on stories under an OSE-313 (Brand Voice Migration) parent:
 
-| Priority | Surface                           | Change                                                                                                           | Rationale                                |
-| -------- | --------------------------------- | ---------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
-| HIGH     | admin form label                  | `Who (host / organizer)` → `Who (host)`                                                                          | resolves drift class #1                  |
-| HIGH     | admin signin lede                 | `event organizers` → `event hosts`                                                                               | resolves drift class #1                  |
-| HIGH     | shared report PDF tooltip         | `Mid+ plan required` → `Pro plan required`                                                                       | resolves drift class #3                  |
-| HIGH     | shared report advanced badge      | `Mid+` → `Pro`                                                                                                   | resolves drift class #3                  |
-| HIGH     | error page CTA                    | `Browse upcoming events` → `Browse Upcoming Events`                                                              | resolves drift class #2                  |
-| HIGH     | per-event email-signup form title | `Stay in the loop` → `Stay in the Loop`                                                                          | matches landing button intentional flair |
-| MEDIUM   | public listing empty state        | `No events scheduled.` → `Nothing scheduled right now. Sign up to hear when the next one drops.`                 | invite-next-step pattern                 |
-| MEDIUM   | admin events empty state          | `No events found.` → `No events yet. Create your first one above.`                                               | invite-next-step pattern                 |
-| MEDIUM   | display primary empty state       | `No upcoming events scheduled.` → `Nothing on the calendar this minute. New events posted as they're confirmed.` | invite-next-step pattern                 |
-| LOW      | checkin success state             | (currently silent) → see Open Question 3                                                                         | UX completeness                          |
+| Priority | Surface                           | Change                                                                                                           | Rationale                                                                     |
+| -------- | --------------------------------- | ---------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| HIGH     | admin form label                  | `Who (host / organizer)` → `Who (host)`                                                                          | resolves drift class #1                                                       |
+| HIGH     | admin signin lede                 | `event organizers` → `event hosts`                                                                               | resolves drift class #1                                                       |
+| HIGH     | shared report PDF tooltip         | `Mid+ plan required` → `Pro plan required`                                                                       | resolves drift class #3                                                       |
+| HIGH     | shared report advanced badge      | `Mid+` → `Pro`                                                                                                   | resolves drift class #3                                                       |
+| HIGH     | error page CTA                    | `Browse upcoming events` → `Browse Upcoming Events`                                                              | resolves drift class #2                                                       |
+| HIGH     | per-event email-signup form title | `Stay in the loop` → `Stay in the Loop`                                                                          | matches landing button intentional flair                                      |
+| MEDIUM   | public listing empty state        | `No events scheduled.` → `Nothing scheduled right now. Sign up to hear when the next one drops.`                 | invite-next-step pattern                                                      |
+| MEDIUM   | admin events empty state          | `No events found.` → `No events yet. Create your first one above.`                                               | invite-next-step pattern                                                      |
+| MEDIUM   | display primary empty state       | `No upcoming events scheduled.` → `Nothing on the calendar this minute. New events posted as they're confirmed.` | invite-next-step pattern                                                      |
+| LOW      | checkin success state             | (currently silent) → see Open Question 3                                                                         | UX completeness                                                               |
+| HIGH     | **Info button system (NEW arc)**  | Per §4.7 + §7.4 — Info popovers ubiquitous in technical surfaces (admin, sharedReport, advanced metrics, etc.)   | founder direction 2026-05-16 — separate OSE-313 sub-arc; see story when filed |
+| HIGH     | Landing flywheel rewrite          | `Six Southside communities. One connected flywheel.` → use `event triangle` / `event cycle` framing (Q2)         | replaces internal-only `flywheel` per Q2 confirmation                         |
 
 Each migration is a small surgical PR with a regression-guard vitest test asserting the new copy.
+
+**Info button system sub-arc (NEW):** the Info popover work is multi-phase per the §4.7 mapping table:
+
+- **Phase 1 — component:** build the reusable `<button data-testid="info-*" aria-label="...">ℹ</button>` + popover component with the §4.7.2 accessibility rules baked in. Establishes the foundation.
+- **Phase 2 — admin dashboard:** add Info popovers to tier badge, phase badge, 5W form fields, sponsor tier, show-internal-ids toggle (~6 placements)
+- **Phase 3 — sharedReport:** add Info popovers to funnel header, sponsor impressions, headcount trend, corridor density, return rate, tier-gating badges (~6 placements)
+- **Phase 4 — poster preview:** Info popovers on the 4-QR section + format selector (~2 placements)
+- **Phase 5 — other surfaces as needed**
+
+Each phase is its own PR with §4.7-template content written for each placement.
 
 ---
 
@@ -494,6 +605,7 @@ The `/brand-voice:enforce-voice` skill uses these to weigh strict-vs-flexible en
 | Success-message pattern (§4.4)            | HIGH                                                                                                | 3 of 4 flows; check-in deliberately silent per Open Question 3                                                         |
 | Empty-state pattern (§4.5)                | MEDIUM                                                                                              | Display's `Also Coming Up` is the only existing example of the proposed pattern; migration of 3 other surfaces follows |
 | 5W placeholder pattern (§4.6)             | HIGH                                                                                                | In production; bar owner feedback positive                                                                             |
+| Info popover voice pattern (§4.7)         | HIGH (founder-directed 2026-05-16 — elevation pass)                                                 | Info icons become ubiquitous in technical surfaces; 3-part content template + accessibility rules                      |
 | Host terminology (§5.1)                   | HIGH (founder-confirmed Q6 2026-05-16)                                                              | Super admin / Host admin tiering added                                                                                 |
 | Button capitalization (§5.2)              | HIGH                                                                                                | Co-Architect recommendation active; founder did not push back; migration scope greenlit via §8                         |
 | Tier naming (§5.3)                        | HIGH                                                                                                | briefing.ts already uses `Pro`; consistent with founder Q answers                                                      |
@@ -530,6 +642,12 @@ For the human founder:
 ---
 
 ## 12. Changelog
+
+- **2026-05-16 — v1.2 Info button system elevated.** Founder direction: "providing i buttons throughout the UI will guide users with the flow in the more technical areas." Updates:
+  - §4.7 NEW: Info popover voice pattern — 3-part content template (~3 sentences, ~60 words), where Info popovers belong (admin tier/phase badges, 5W fields, sponsor tiers, SharedReport metrics, poster format selector), where they DON'T (customer-facing minimal flows, error messages, empty states), accessibility rules (§4.7.2), and the principle that Info popovers are the brand's chance to teach (§4.7.3)
+  - §7.4 reframed: `🖨 Print` stays a lone exception; `ℹ Info` elevated to load-bearing UX pattern for technical surfaces (different rules for each)
+  - §8 backlog: added OSE-313 sub-arc for Info button system (component + content per surface)
+  - §10 confidence: §4.7 + §7.4 marked HIGH (founder-directed)
 
 - **2026-05-16 — v1.1 founder-confirmation pass.** 5 of 6 Open Questions resolved by founder. Q3 re-posed with clearer framing (the previous Apple/Mailchimp analogy apparently didn't land). Updates:
   - §1.1 NEW: customer-facing mental model is **Event Triangle** (Pre / Event / Post). `flywheel` reserved internal-only (Q2)
