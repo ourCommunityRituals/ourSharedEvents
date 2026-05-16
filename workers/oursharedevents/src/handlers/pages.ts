@@ -1463,12 +1463,17 @@ function renderErrorPage(
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: system-ui, -apple-system, sans-serif; background: #f8f9fa; color: #212529; min-height: 100vh; display: flex; flex-direction: column; }
     header { background: #1a1a2e; color: #fff; padding: 1.25rem 2rem; }
-    header a { color: #fff; text-decoration: none; font-size: 1.1rem; font-weight: 600; }
+    /* OSE-308: both anchors are primary action targets on the
+       error-page recovery flow. Per WCAG 2.5.5 Level AAA + invariant 14
+       refined contract, they must meet the 44x44 floor. Using
+       inline-flex + align-items: center vertically centers the text
+       inside the 44px box without misaligning the visual baseline. */
+    header a { color: #fff; text-decoration: none; font-size: 1.1rem; font-weight: 600; display: inline-flex; align-items: center; min-height: 44px; padding: 0 .5rem; }
     main { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 3rem 1.5rem; text-align: center; }
     .error-status { font-size: .8rem; color: #6c757d; text-transform: uppercase; letter-spacing: .12em; margin-bottom: .75rem; }
     .error-title { font-size: 1.75rem; font-weight: 700; color: #1a1a2e; margin-bottom: 1rem; max-width: 520px; }
     .error-body { font-size: 1rem; color: #495057; max-width: 520px; line-height: 1.5; margin-bottom: 1.75rem; }
-    .error-cta { display: inline-block; padding: .65rem 1.25rem; background: #1a1a2e; color: #fff; text-decoration: none; border-radius: 6px; font-weight: 600; font-size: .95rem; }
+    .error-cta { display: inline-flex; align-items: center; min-height: 44px; line-height: 1.5; padding: .65rem 1.25rem; background: #1a1a2e; color: #fff; text-decoration: none; border-radius: 6px; font-weight: 600; font-size: .95rem; }
     .error-cta:hover { background: #0f0f1a; }
     .error-cta:focus-visible { outline: 2px solid #4361ee; outline-offset: 2px; }
     footer { padding: 1rem 2rem; text-align: center; font-size: .8rem; color: #6c757d; }
