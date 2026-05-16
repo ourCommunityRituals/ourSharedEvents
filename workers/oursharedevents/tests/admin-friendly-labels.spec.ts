@@ -102,7 +102,11 @@ describe('OSE-R-005 admin friendly labels — API layer', () => {
     // CSS default-hide kicks in. data-testid="event-id" stays on the cell
     // so support tooling can still read the value via a query.
     expect(html).toContain('<th class="col-internal-id">ID</th>');
-    expect(html).toContain('<td class="col-internal-id" data-testid="event-id">');
+    // Note: attribute order between class / data-label / data-testid is
+    // template-author choice; OSE-294 added data-label="ID" for mobile
+    // card-layout. Assert presence of all 3 attributes within one td tag
+    // rather than a specific substring order.
+    expect(html).toMatch(/<td[^>]*class="col-internal-id"[^>]*data-testid="event-id"[^>]*>/);
   });
 
   test('OSE-R-005 | API | GET /admin (any visitor) | "Show internal IDs" toggle is rendered and OFF by default', async () => {
