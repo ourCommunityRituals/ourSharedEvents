@@ -85,7 +85,12 @@ describe('OSE-307 e2e flow test infrastructure — regression guard', () => {
     expect(src).toMatch(/Math\.round\(box\.height\)/);
   });
 
-  test('at least one flow spec exists and imports the shared helper', () => {
+  test('at least one flow spec exists and imports the shared helper (OR carries @contract-flow-no-ui exemption)', () => {
+    // OSE-312: contract-only flow specs (e.g., the shortlink resolver
+    // which is a 302 redirector + JSON 404 — no DOM to measure) carry
+    // an explicit `@contract-flow-no-ui` JSDoc marker indicating the
+    // OSE-307 helper isn't applicable. The regression guard honors
+    // this exemption rather than forcing a vestigial import.
     const flowSpecs = listFlowSpecs();
     expect(
       flowSpecs.length,
@@ -93,9 +98,19 @@ describe('OSE-307 e2e flow test infrastructure — regression guard', () => {
     ).toBeGreaterThan(0);
     for (const specPath of flowSpecs) {
       const src = readFileSync(specPath, 'utf8');
+      if (src.includes('@contract-flow-no-ui')) {
+        // Exempt: the spec explicitly declares it has no UI to measure.
+        // Sanity-check it doesn't ALSO import the helper (that'd be
+        // contradictory + dead-import noise).
+        expect(
+          src,
+          `${specPath}: marked @contract-flow-no-ui but ALSO imports the helper — pick one`
+        ).not.toMatch(/from\s+['"]\.\/_helpers\/mobile-workability-assertions['"]/);
+        continue;
+      }
       expect(
         src,
-        `${specPath}: does not import from _helpers/mobile-workability-assertions`
+        `${specPath}: does not import from _helpers/mobile-workability-assertions (add the import OR mark the file @contract-flow-no-ui)`
       ).toMatch(/from\s+['"]\.\/_helpers\/mobile-workability-assertions['"]/);
     }
   });
