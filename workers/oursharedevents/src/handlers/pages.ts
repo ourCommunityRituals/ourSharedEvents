@@ -1630,17 +1630,24 @@ function renderPreEventHtml(row: PublicEventRow, shareUrl: string): string {
     :root { --ose-bg: #faf7f2; --ose-text: #2a2a2a; --ose-muted: #5a5a5a; --ose-accent: #4361ee; --ose-card: #fff; }
     * { box-sizing: border-box; }
     html, body { margin: 0; padding: 0; background: var(--ose-bg); color: var(--ose-text); font-family: system-ui, -apple-system, "Segoe UI", sans-serif; line-height: 1.5; }
-    body { max-width: 720px; margin: 0 auto; padding: 1.5rem 1.25rem 3rem; }
+    /* OSE-298 DRAIN 5/7: defensive horizontal-scroll guard for the
+       public event page. overflow-x:hidden prevents any descendant
+       (long URLs in the 5W fields, sponsor links, future embeds)
+       from pushing the body wide at 375px. overflow-wrap:anywhere
+       breaks long unbreakable strings so they wrap inside the
+       max-width:720px column instead of forcing a scrollbar. */
+    html, body { overflow-x: hidden; }
+    body { max-width: 720px; margin: 0 auto; padding: 1.5rem 1.25rem 3rem; overflow-wrap: anywhere; word-break: break-word; }
     .ose-skip { position: absolute; left: -9999px; }
     .ose-skip:focus { left: 1rem; top: 1rem; background: var(--ose-accent); color: #fff; padding: 0.5rem 1rem; border-radius: 4px; }
     h1 { font-size: 1.875rem; margin: 0 0 0.5rem; line-height: 1.2; }
     h2 { font-size: 1.125rem; margin: 1.5rem 0 0.5rem; color: var(--ose-text); }
     .ose-meta { color: var(--ose-muted); font-size: 0.95rem; margin-bottom: 1.5rem; }
     .ose-card { background: var(--ose-card); border-radius: 8px; padding: 1.25rem; margin-bottom: 1rem; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
-    .ose-venue-map { width: 100%; height: auto; border-radius: 6px; display: block; margin-bottom: 0.75rem; }
+    .ose-venue-map { width: 100%; max-width: 100%; height: auto; border-radius: 6px; display: block; margin-bottom: 0.75rem; }
     .ose-gmaps-link { color: var(--ose-accent); text-decoration: none; font-weight: 500; }
     .ose-gmaps-link:hover { text-decoration: underline; }
-    .ose-rsvp-btn { display: inline-block; background: var(--ose-accent); color: #fff; padding: 0.75rem 1.5rem; border-radius: 6px; text-decoration: none; font-weight: 600; margin: 1.25rem 0; }
+    .ose-rsvp-btn { display: inline-block; background: var(--ose-accent); color: #fff; padding: 0.75rem 1.5rem; border-radius: 6px; text-decoration: none; font-weight: 600; margin: 1.25rem 0; min-height: 44px; line-height: 1.5; }
     .ose-rsvp-btn:focus { outline: 3px solid #ffb800; outline-offset: 2px; }
     .ose-anonymity { margin-top: 2rem; padding: 1rem 1.25rem; background: rgba(67, 97, 238, 0.06); border-left: 3px solid var(--ose-accent); border-radius: 4px; font-size: 0.9rem; color: var(--ose-muted); }
     .ose-anonymity h2 { margin-top: 0; font-size: 1rem; color: var(--ose-text); }
@@ -1758,7 +1765,10 @@ function renderEventLiveHtml(row: PublicEventRow, shareUrl: string): string {
     :root { --ose-bg: #faf7f2; --ose-text: #2a2a2a; --ose-muted: #5a5a5a; --ose-accent: #4361ee; --ose-card: #fff; --ose-live: #d63b3b; }
     * { box-sizing: border-box; }
     html, body { margin: 0; padding: 0; background: var(--ose-bg); color: var(--ose-text); font-family: system-ui, -apple-system, "Segoe UI", sans-serif; line-height: 1.5; }
-    body { max-width: 720px; margin: 0 auto; padding: 1.5rem 1.25rem 3rem; }
+    /* OSE-298 DRAIN 5/7: defensive horizontal-scroll guard for the
+       public event page (live phase mirror of renderPreEventHtml). */
+    html, body { overflow-x: hidden; }
+    body { max-width: 720px; margin: 0 auto; padding: 1.5rem 1.25rem 3rem; overflow-wrap: anywhere; word-break: break-word; }
     .ose-skip { position: absolute; left: -9999px; }
     .ose-skip:focus { left: 1rem; top: 1rem; background: var(--ose-accent); color: #fff; padding: 0.5rem 1rem; border-radius: 4px; }
     .ose-live-badge { display: inline-flex; align-items: center; gap: 0.4rem; background: var(--ose-live); color: #fff; padding: 0.25rem 0.75rem; border-radius: 999px; font-size: 0.8rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.75rem; }
@@ -1767,10 +1777,10 @@ function renderEventLiveHtml(row: PublicEventRow, shareUrl: string): string {
     h1 { font-size: 1.875rem; margin: 0 0 0.5rem; line-height: 1.2; }
     h2 { font-size: 1.125rem; margin: 1.5rem 0 0.5rem; color: var(--ose-text); }
     .ose-card { background: var(--ose-card); border-radius: 8px; padding: 1.25rem; margin-bottom: 1rem; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
-    .ose-venue-map { width: 100%; height: auto; border-radius: 6px; display: block; margin-bottom: 0.75rem; }
+    .ose-venue-map { width: 100%; max-width: 100%; height: auto; border-radius: 6px; display: block; margin-bottom: 0.75rem; }
     .ose-gmaps-link { color: var(--ose-accent); text-decoration: none; font-weight: 500; }
     .ose-gmaps-link:hover { text-decoration: underline; }
-    .ose-checkin-btn { display: inline-block; background: var(--ose-accent); color: #fff; padding: 0.875rem 1.75rem; border-radius: 6px; text-decoration: none; font-weight: 700; margin: 1.25rem 0; font-size: 1.05rem; }
+    .ose-checkin-btn { display: inline-block; background: var(--ose-accent); color: #fff; padding: 0.875rem 1.75rem; border-radius: 6px; text-decoration: none; font-weight: 700; margin: 1.25rem 0; font-size: 1.05rem; min-height: 44px; line-height: 1.5; }
     .ose-checkin-btn:focus { outline: 3px solid #ffb800; outline-offset: 2px; }
     .ose-anonymity { margin-top: 2rem; padding: 1rem 1.25rem; background: rgba(67, 97, 238, 0.06); border-left: 3px solid var(--ose-accent); border-radius: 4px; font-size: 0.9rem; color: var(--ose-muted); }
     .ose-anonymity h2 { margin-top: 0; font-size: 1rem; color: var(--ose-text); }
