@@ -1,0 +1,131 @@
+# mobile-workability-audit.yml — enforce invariant 14.
+#
+# Loads each customer-facing OSE surface at 375×812 (iPhone 13 Mini /
+# iPhone X) and asserts the five concrete mobile-workability contracts
+# from OCR_STANDARD_mobileWorkability.md:
+#
+#   1. No horizontal scroll
+#   2. Touch targets ≥ 44×44 px
+#   3. Input font-size ≥ 16 px
+#   4. Primary CTA above the fold
+#   5. No pinch-zoom blocked or required
+#
+# Triggers:
+#   - schedule: nightly at 09:30 UTC (30 min offset from brain-location-audit)
+#   - pull_request: when the audit spec OR the standard doc changes
+#   - workflow_dispatch: manual investigator runs
+#
+# UX pattern (mirrors brain-location-audit per OCR-docs #46):
+#   - On `pull_request` triggers, the audit step is non-blocking
+#     (`continue-on-error: true`). PR check stays green; violations
+#     surface via test report artifact only. Reasoning: this audit
+#     ran on its own introducing PR + every drain story's PR will
+#     fail until that surface is fixed — informational reporting
+#     stops false-positive red CI on unrelated PRs.
+#   - On `schedule` + `workflow_dispatch`, the audit step blocks
+#     normally. Investigator manually triggering wants the failure
+#     signal.
+
+name: Mobile workability audit
+
+on:
+  schedule:
+    - cron: '30 9 * * *'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'tests/playwright/mobile-workability.spec.ts'
+      - '.github/workflows/mobile-workability-audit.yml'
+      - 'workers/oursharedevents/src/handlers/pages.ts'
+      - 'workers/oursharedevents/src/handlers/form-pages.ts'
+  workflow_dispatch:
+
+concurrency:
+  group: mobile-workability-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  audit:
+    name: Mobile workability audit (375×812)
+    runs-on: self-hosted
+    timeout-minutes: 15
+
+    env:
+      STAGING_URL: ${{ vars.STAGING_URL || 'https://stg.oursharedevents.com' }}
+      OSE_ADMIN_BEARER: ${{ secrets.OSE_ADMIN_BEARER }}
+
+    steps:
+      - name: Checkout OSE
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Install deps (workspace)
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browsers
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Run mobile workability audit
+        id: audit
+        continue-on-error: ${{ github.event_name == 'pull_request' }}
+        run: pnpm exec playwright test tests/playwright/mobile-workability.spec.ts --reporter=html,list
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mobile-workability-report
+          path: playwright-report/
+          retention-days: 30
+
+      - name: Comment on PR with violation summary
+        if: steps.audit.outcome == 'failure' && github.event_name == 'pull_request'
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const body = [
+              '### Mobile workability audit failed (informational)',
+              '',
+              'Invariant 14 (`OCR_STANDARD_mobileWorkability.md`) requires every customer-facing surface',
+              'to be fully usable on a 375×812 viewport. The audit Playwright suite detected at least one',
+              'violation on this PR.',
+              '',
+              'See the `mobile-workability-report` artifact attached to this run for the per-surface,',
+              'per-contract violation list.',
+              '',
+              '**This PR is NOT blocked** — PR-event audits are informational. The drain stories',
+              '(OSE-294 through OSE-300) will close the existing violations over time. New regressions',
+              'introduced by this PR should still be addressed before merge.',
+            ].join('\n');
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body,
+            });
+
+      - name: Fail workflow on scheduled-run violation
+        if: steps.audit.outcome == 'failure' && github.event_name != 'pull_request'
+        run: |
+          echo "::error::Mobile workability audit detected violations on a non-PR run."
+          echo "::error::See the mobile-workability-report artifact for details."
+          exit 1
