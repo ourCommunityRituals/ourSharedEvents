@@ -2527,6 +2527,32 @@ const POSTER_HTML = `<!DOCTYPE html>
     .event-select select:focus { border-color: #4361ee; outline: none; box-shadow: 0 0 0 3px rgba(67,97,238,.15); }
     .skip-link { position: absolute; left: -9999px; top: auto; width: 1px; height: 1px; overflow: hidden; }
     .skip-link:focus { position: fixed; top: 0; left: 0; width: auto; height: auto; padding: .5rem 1rem; background: #1a1a2e; color: #fff; font-size: 1rem; z-index: 9999; text-decoration: none; border-bottom: 2px solid #4361ee; }
+    /* OSE-300 DRAIN 7/7: mobile workability for /poster preview.
+       At 375px the default 4-up QR row at 120px each plus 2rem gaps
+       overflows; the .page-header Print anchor is below the 44px
+       touch-target floor; the .event-select picker renders below
+       16px font-size so iOS auto-zooms on tap. This block:
+         - tightens .page-header / .container / .poster-body padding
+         - bumps the Print anchor to 44px min-height
+         - raises the event-picker to 16px / 44px so it meets both
+           the iOS auto-zoom guard and the touch-target floor
+         - shrinks .qr-img / .qr-loading to 100px and looses the
+           gap so two QR codes fit per row with breathing room
+         - releases .qr-link-url word-break so the long URL wraps
+           inside the QR column */
+    @media (max-width: 768px) {
+      .page-header { padding: .75rem 1rem; }
+      .page-header h1 { font-size: 1.05rem; }
+      .page-header a { display: inline-flex; align-items: center; min-height: 44px; padding: 0 .5rem; }
+      .container { padding: 0 .75rem; margin: 1rem auto; }
+      .poster-header { padding: 1.75rem 1.25rem 1.5rem; }
+      .poster-body { padding: 1.25rem 1rem; }
+      .event-select select { font-size: 16px; min-height: 44px; padding: .65rem .75rem; }
+      .qr-section { gap: 1rem; padding: 1.25rem 0; }
+      .qr-img, .qr-loading { width: 100px; height: 100px; }
+      .qr-link-url { max-width: 100px; word-break: break-all; }
+      .poster-sponsors { padding: 1rem; gap: 1rem; }
+    }
     @media print {
       .page-header, .event-select, .no-print { display: none !important; }
       /* OSE-R-006 (audit 2026-05-15): force-print backgrounds + sponsor
