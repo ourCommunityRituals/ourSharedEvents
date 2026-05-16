@@ -1,6 +1,6 @@
 # OurSharedEvents Brand Voice Guidelines
 
-**Status:** v1 (initial generation 2026-05-16) · **Source:** `.claude/brand-voice-audit-context.md` + `docs/brand-voice-audit-2026-05-16.md` · **Owner:** mzdan (founder) + Co-Architect · **Effective:** 2026-05-16 once founder confirms drift-class resolutions in the Open Questions section
+**Status:** v1.1 (founder-confirmed 5 of 6 Open Questions 2026-05-16) · **Source:** `.claude/brand-voice-audit-context.md` + `docs/brand-voice-audit-2026-05-16.md` + founder confirmation thread · **Owner:** mzdan (founder) + Co-Architect · **Effective:** 2026-05-16
 
 This document is the canonical brand-voice reference for OurSharedEvents (OSE). The `/brand-voice:enforce-voice` skill reads this file to validate copy across the 13 customer-visible surfaces. Update this file as decisions evolve — its diff history IS the voice's evolution log.
 
@@ -10,7 +10,7 @@ This document is the canonical brand-voice reference for OurSharedEvents (OSE). 
 
 OurSharedEvents is **the platform that makes communities visible to themselves.**
 
-Bar owners run events. Attendees show up. OSE is the layer that tracks "groups gathered, here, when" without ever tracking "who you are." The product makes anonymous community signal real and durable so neighborhoods can SEE themselves coalescing through the events they hold together.
+Hosts run events. Attendees show up. OSE is the layer that tracks "groups gathered, here, when" without ever tracking "who you are." The product makes anonymous community signal real and durable so neighborhoods can SEE themselves coalescing through the events they hold together.
 
 **One-line positioning:** Community events that bring people together — tracked anonymously so the patterns stay honest.
 
@@ -20,24 +20,38 @@ Bar owners run events. Attendees show up. OSE is the layer that tracks "groups g
 
 This sentence is load-bearing. Every surface inherits its tone.
 
+### 1.1 The customer-facing mental model — Event Triangle (Pre / Event / Post)
+
+Customers should picture three phases for every event. This is the canonical customer-facing model — what they see, hear, and remember:
+
+- **Pre-event** — sharing that the event is coming. Hosts post; attendees see; word travels. The flyer goes up, the QR code spreads, the calendar fills.
+- **Event** — the gathering itself. Attendees enjoy. QR codes connect them to sponsors. Real-time check-ins prove "groups gathered, here, when."
+- **Post-event** — additional ops. Recap data flows to hosts. Sponsor funneling continues. The event's signal compounds into the next one.
+
+**Use these phrases in customer copy:** `event flow`, `event cycle`, `event triangle`. The three phases. The customer's mental model.
+
+**Do NOT use customer-facing:** `flywheel`. That's behind-the-scenes platform terminology (briefing deck, internal docs, founder talks). It's our mechanism, not their mental model.
+
+**Why this distinction matters:** "flywheel" is a B2B-mechanic metaphor — useful when explaining HOW the platform compounds value. "Event triangle" is the customer experience — useful when explaining WHAT they'll do this Saturday. Pick the right one for the audience.
+
 ---
 
 ## 2. Voice Constant — the "We Are / We Are Not" table
 
 The Voice Constant is what stays the same across every surface. Tone (formality, energy, technical depth) flexes per surface; voice does not.
 
-| We Are                                                                                                       | We Are Not                                                               |
-| ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------ |
-| **Warm but precise** — neighborhood language that names specifics ("$10 at door, BYOB, food trucks on site") | Generic, corporate, safe ("Great events for everyone")                   |
-| **Neighborhood-rooted** — the brand belongs to a place, named or implied                                     | Geography-agnostic SaaS-shaped ("Bring your community together!")        |
-| **Privacy-forward by design** — make specific anti-promises, not legal disclaimers                           | Privacy-policy-PDF-link defensive ("By using this site you consent to…") |
-| **Action-verb led** — every button is a verb the customer is choosing to do                                  | Generic-button passive (`Click here`, `Submit`, `OK`, `Continue`)        |
-| **Plain-language technical** — say "corridors and venues, not people"; "a single click"                      | Engineer-jargon ("anon_id", "phase 1", "tier mid", "tranche")            |
-| **First-person inclusive** — "you're part of the group", "we'll be in touch"                                 | Third-person institutional ("Users may", "the system tracks")            |
-| **Specific and concrete** — placeholder examples are real things real bar owners would type                  | Vague and abstract ("amazing community", "next-level events")            |
-| **Apologetic-helpful on errors** — name what went wrong, suggest a next action                               | Terse-blame (`Error 500`, `Invalid input`, "Failed to process")          |
-| **Celebratory on success** — earned exclamations on customer wins                                            | Receipt-style ("Submission received", "Transaction complete")            |
-| **Confident without overclaim** — "Built for the Southside, by the Southside"                                | Marketing puffery ("The #1 platform for…", "Best-in-class")              |
+| We Are                                                                                                                                                          | We Are Not                                                               |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| **Warm but precise** — neighborhood language that names specifics ("$10 at door, BYOB, food trucks on site")                                                    | Generic, corporate, safe ("Great events for everyone")                   |
+| **Neighborhood-rooted** — the brand belongs to a place, named or implied                                                                                        | Geography-agnostic SaaS-shaped ("Bring your community together!")        |
+| **Privacy-forward by design** — make specific anti-promises, not legal disclaimers; the brand intends to be the privacy standard for community-events platforms | Privacy-policy-PDF-link defensive ("By using this site you consent to…") |
+| **Action-verb led** — every button is a verb the customer is choosing to do                                                                                     | Generic-button passive (`Click here`, `Submit`, `OK`, `Continue`)        |
+| **Plain-language technical** — say "corridors and venues, not people"; "a single click"                                                                         | Engineer-jargon ("anon_id", "phase 1", "tier mid", "tranche")            |
+| **First-person inclusive** — "you're part of the group", "we'll be in touch"                                                                                    | Third-person institutional ("Users may", "the system tracks")            |
+| **Specific and concrete** — placeholder examples are real things real bar owners would type                                                                     | Vague and abstract ("amazing community", "next-level events")            |
+| **Apologetic-helpful on errors** — name what went wrong, suggest a next action                                                                                  | Terse-blame (`Error 500`, `Invalid input`, "Failed to process")          |
+| **Celebratory on success** — earned exclamations on customer wins                                                                                               | Receipt-style ("Submission received", "Transaction complete")            |
+| **Confident without overclaim** — "Built for the Southside, by the Southside"                                                                                   | Marketing puffery ("The #1 platform for…", "Best-in-class")              |
 
 **Voice constant in one sentence:** _Warm, specific, first-person, action-verb language that names the neighborhood, makes anti-promises about privacy, and treats customers like neighbors instead of users._
 
@@ -221,17 +235,19 @@ The audit surfaced 4 drift classes. Co-Architect recommendations resolved here. 
 
 ### 5.1 Host vs. organizer vs. event manager
 
-**Decision:** `host` is the canonical customer-facing term.
+**Decision (founder-confirmed 2026-05-16 — Q6):** `host` is the canonical customer-facing term. Internal admin-rights model uses tiered roles: **Super admin** (platform-side) and **Host admin** (the customer logged into /admin to run their own events). See §6 glossary.
 
 | Context                                                         | Use                                                            | Don't use                                 |
 | --------------------------------------------------------------- | -------------------------------------------------------------- | ----------------------------------------- |
 | Public-facing copy (error messages, anonymity copy, event page) | `host`                                                         | `organizer`, `event manager`, `bar owner` |
-| Admin form labels                                               | `host` (sole word — remove the `/ organizer` slash)            | `host / organizer`                        |
+| Admin form labels (Host admin UX)                               | `host` (sole word — remove the `/ organizer` slash)            | `host / organizer`                        |
 | Admin signin lede                                               | `event hosts` (instead of current `event organizers`)          | `event organizers`                        |
 | Internal docs / Linear / commit messages                        | `host` OR `bar owner` (both ok internally)                     | mix in same paragraph                     |
 | Formal legal / GDPR copy (the existing notice blocks)           | `organizer` is acceptable here only — legal copy can be formal | drift back into customer surfaces         |
+| Platform-side admin UX (Super admin, when built)                | `Super admin`                                                  | `super user`, `root admin`, `staff`       |
+| Customer-side admin UX (Host admin = today's /admin)            | `Host admin` (when role-distinguishing); `host` in copy        | `bar owner` (customer-facing)             |
 
-**Rationale:** `host` is warmer, shorter, and matches how the customer actually thinks ("I'm hosting an event"). `organizer` is formal-coded and reads as "professional event planner," which mis-anchors what most OSE customers are.
+**Rationale:** `host` is warmer, shorter, and matches how the customer actually thinks ("I'm hosting an event"). `organizer` is formal-coded and reads as "professional event planner," which mis-anchors what most OSE customers are. The Super admin / Host admin tiering captures the future product role distinction without leaking "bar owner" into customer copy.
 
 **Migrations required (file follow-on stories):**
 
@@ -279,27 +295,35 @@ See **4.5 The empty-state pattern** for the proposed copy.
 
 ## 6. Terminology glossary (preferred / acceptable / forbidden)
 
-| Concept                       | Preferred                                                              | Acceptable                         | Forbidden                                                                    |
-| ----------------------------- | ---------------------------------------------------------------------- | ---------------------------------- | ---------------------------------------------------------------------------- |
-| Person who creates an event   | `host`                                                                 | `organizer` (formal contexts only) | `event manager`, `user`, `admin user`, `bar owner` (in customer-facing copy) |
-| Person who attends            | `attendee` (in admin), `you` (in customer copy)                        | `participant`                      | `user`, `guest` (unless event is private)                                    |
-| Customer creating event       | `you` (admin copy)                                                     | —                                  | `the admin`, `the user`, `the system administrator`                          |
-| Place an event happens        | `venue` (the name) + `address` (the location string)                   | `location` (generic)               | mix in same surface                                                          |
-| Event in past tense           | `ended`                                                                | `past`, `archived`                 | `dead`, `expired`, `closed`                                                  |
-| Event in future tense         | `upcoming`                                                             | `scheduled`, `coming up`           | `pending`, `queued`, `planned`                                               |
-| Event happening now           | `live`                                                                 | `live now`, `happening now`        | `active`, `current`, `in progress`                                           |
-| The platform itself           | `OurSharedEvents` (always full name, no abbreviation in customer copy) | OSE (internal / API contexts only) | `the platform`, `the site`, `the service`                                    |
-| The product family            | `OurCommunityRituals` (when referenced; rarely customer-facing)        | OCR (internal only)                | "Our system"                                                                 |
-| Anonymous tracking            | `anonymously` (the brand promise word)                                 | `private`, `not identified`        | `untracked` (false), `confidential` (different meaning)                      |
-| Sponsor's role                | `local sponsor`, `neighborhood sponsor`, `supporting [event]`          | `partner`                          | `advertiser`, `customer`                                                     |
-| Tier "Free"                   | `Free plan`                                                            | `Free`                             | `basic`, `starter`, `free tier` (the word "tier" is jargon)                  |
-| Tier "mid" / "Pro"            | `Pro plan`                                                             | `Pro`                              | `Mid`, `Mid+`, `paid plan`                                                   |
-| Tier "Enterprise"             | `Enterprise plan`                                                      | `Enterprise`                       | `business tier`, `corporate plan`                                            |
-| Server failure                | `having trouble`                                                       | `briefly unavailable`              | `error`, `failure`, `down`                                                   |
-| Bad user input                | `doesn't look right`                                                   | `isn't valid` (sparing)            | `invalid`, `incorrect`, `wrong`                                              |
-| Success                       | `You're [state]!` shape                                                | `Thanks for [thing]!`              | `successful`, `complete`, `received`                                         |
-| The 5-minute-tracker concept  | `tracks when groups gather`                                            | `anonymous community signal`       | `collects user data`, `monitors attendance`                                  |
-| The neighborhood-ring concept | `Neighborhood Ring`, `connected flywheel` (brand-flair)                | `community`                        | `community ecosystem`, `our network`                                         |
+| Concept                                                      | Preferred                                                                                                   | Acceptable                                                | Forbidden                                                                      |
+| ------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| Person who creates an event                                  | `host`                                                                                                      | `organizer` (formal contexts only)                        | `event manager`, `user`, `admin user`, `bar owner` (in customer-facing copy)   |
+| Person who attends                                           | `attendee` (in admin), `you` (in customer copy)                                                             | `participant`                                             | `user`, `guest` (unless event is private)                                      |
+| Customer creating event                                      | `you` (admin copy)                                                                                          | —                                                         | `the admin`, `the user`, `the system administrator`                            |
+| Place an event happens                                       | `venue` (the name) + `address` (the location string)                                                        | `location` (generic)                                      | mix in same surface                                                            |
+| Event in past tense                                          | `ended`                                                                                                     | `past`, `archived`                                        | `dead`, `expired`, `closed`                                                    |
+| Event in future tense                                        | `upcoming`                                                                                                  | `scheduled`, `coming up`                                  | `pending`, `queued`, `planned`                                                 |
+| Event happening now                                          | `live`                                                                                                      | `live now`, `happening now`                               | `active`, `current`, `in progress`                                             |
+| The platform itself                                          | `OurSharedEvents` (always full name, no abbreviation in customer copy)                                      | OSE (internal / API contexts only)                        | `the platform`, `the site`, `the service`                                      |
+| The product family                                           | `OurCommunityRituals` (when referenced; rarely customer-facing)                                             | OCR (internal only)                                       | "Our system"                                                                   |
+| Anonymous tracking                                           | `anonymously` (the brand promise word)                                                                      | `private`, `not identified`                               | `untracked` (false), `confidential` (different meaning)                        |
+| Sponsor's role                                               | `local sponsor`, `neighborhood sponsor`, `supporting [event]`                                               | `partner`                                                 | `advertiser`, `customer`                                                       |
+| Tier "Free"                                                  | `Free plan`                                                                                                 | `Free`                                                    | `basic`, `starter`, `free tier` (the word "tier" is jargon)                    |
+| Tier "mid" / "Pro"                                           | `Pro plan`                                                                                                  | `Pro`                                                     | `Mid`, `Mid+`, `paid plan`                                                     |
+| Tier "Enterprise"                                            | `Enterprise plan`                                                                                           | `Enterprise`                                              | `business tier`, `corporate plan`                                              |
+| Server failure                                               | `having trouble`                                                                                            | `briefly unavailable`                                     | `error`, `failure`, `down`                                                     |
+| Bad user input                                               | `doesn't look right`                                                                                        | `isn't valid` (sparing)                                   | `invalid`, `incorrect`, `wrong`                                                |
+| Success                                                      | `You're [state]!` shape                                                                                     | `Thanks for [thing]!`                                     | `successful`, `complete`, `received`                                           |
+| The 5-minute-tracker concept                                 | `tracks when groups gather`                                                                                 | `anonymous community signal`                              | `collects user data`, `monitors attendance`                                    |
+| The neighborhood-ring concept                                | `Neighborhood Ring`                                                                                         | `community`                                               | `community ecosystem`, `our network`                                           |
+| Customer mental model for an event (Q2 confirmed 2026-05-16) | `event triangle` (the 3 phases), `event flow`, `event cycle`                                                | —                                                         | `flywheel` in customer copy (the platform mechanic word is internal-only)      |
+| Pre-event phase (customer-facing)                            | `pre-event`                                                                                                 | `before the event`, `sharing the event is coming`         | `T-minus`, `staging`, `prep`                                                   |
+| Event phase (customer-facing)                                | `event`, `live`                                                                                             | `the gathering`, `during the event`                       | `runtime`, `live ops`                                                          |
+| Post-event phase (customer-facing)                           | `post-event`                                                                                                | `after the event`, `event recap`                          | `wrap-up`, `teardown`, `post-mortem`                                           |
+| Internal compounding mechanism                               | `flywheel` (briefing deck + internal docs only)                                                             | `mechanism`, `compounding signal`                         | use in customer copy                                                           |
+| Platform-side admin (Q6 confirmed 2026-05-16)                | `Super admin`                                                                                               | `platform admin`, `OCR staff` (in legal contexts)         | `super user`, `root admin`, `god mode`                                         |
+| Customer-side admin (today's /admin)                         | `Host admin` (role-distinguishing); `host` in customer copy                                                 | `event creator`, `event organizer` (formal contexts only) | `bar owner` (customer-facing), `merchant`, `vendor`                            |
+| Privacy-as-positioning (Q4 confirmed 2026-05-16)             | `the privacy standard for community events`, `built privacy-first`, `you're part of the group, anonymously` | `privacy by design`                                       | `GDPR-compliant` (true but defensive — say what we DO not what we comply with) |
 
 ---
 
@@ -315,9 +339,11 @@ The privacy notices on `/forms` pages cite GDPR articles explicitly:
 GDPR Art. 6(1)(a) — your consent. Your data is deleted when the event ends.
 ```
 
-This is intentionally MORE formal than the Voice Constant. Justification: legal precision in customer-facing copy is itself a trust signal in EU markets. The legal precision is contained to the privacy-notice block — it should NOT bleed into form labels, button text, or success messages.
+This is intentionally MORE formal than the Voice Constant. Justification (founder-confirmed 2026-05-16 — Q4): GDPR legal precision is a **compliance layer** that lives in dedicated visual blocks. It is NOT brand voice. The brand-voice angle on privacy is separate AND positions OSE to lead the privacy standard for community-events platforms as the regulatory landscape tightens.
 
-**Rule:** GDPR / legal citation lives in dedicated visual blocks (the privacy-notice card). Adjacent copy stays Voice Constant.
+**Rule:** GDPR / legal citation lives in dedicated visual blocks (the privacy-notice card). Adjacent copy stays Voice Constant. The voice statement on privacy is the anonymity affordance ("you're part of the group, anonymously…"); the legal statement is the GDPR notice. Both serve different jobs; they don't blend.
+
+**Strategic positioning note (Q4):** the founder intends for OSE to be at the forefront of privacy standards for community-events platforms. The Voice Constant attribute "Privacy-forward by design" is therefore not aspirational — it's competitive positioning. Copy across surfaces should reinforce "this is what we do" (the active stance) rather than "this is what we comply with" (the passive stance).
 
 ### 7.2 Display `/display` ticker
 
@@ -330,6 +356,25 @@ The TV ticker (`OurSharedEvents — Community events on Chicago's Southside`) is
 Admin placeholders teach by example (see 4.6). Public-facing form placeholders are conversational + minimal (`Jane Smith`, `you@example.com`, `Tell us what you thought...`). This disparity is INTENTIONAL — the admin user wants concrete examples to scaffold their data entry; the public user wants a clean field they can fill quickly.
 
 **Rule:** placeholder-as-example is reserved for admin authoring surfaces. Customer-facing forms use minimal placeholders.
+
+### 7.4 Icon-only buttons (founder-confirmed 2026-05-16 — Q5)
+
+Two icon-only buttons are sanctioned. Both are universally-recognized affordances where the icon adds visual scan-anchor without losing meaning:
+
+| Icon             | Use                                                        | Surface                                                                  |
+| ---------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------ |
+| `🖨` (printer)   | Print action — universally recognized                      | Admin /poster preview header                                             |
+| `ℹ` (i for info) | Info / help / explanation popover — universally recognized | TBD — will be introduced as mobile space pressure makes text-CTAs costly |
+
+**Rule:** these two icons may stand alone as button content. Any third icon-only CTA requires a guidelines update — the principle is "universally-recognized affordance + space-constrained context," not "icons are cool."
+
+**Forward-looking note:** as mobile UI density increases (small phones, more controls per surface), additional icon-only patterns may become necessary. Each new pattern requires:
+
+- Documented user-research evidence that the icon is recognized without label
+- An entry in this section
+- Accessibility plan: `aria-label` carries the full text equivalent so screen readers don't lose meaning
+
+**Forbidden:** `❌` `✓` `▶` `⬇` `📊` AS button content (the existing `⬇ Export JSON` / `📊 Export PDF` on shared report are icon-PREFIX buttons, not icon-only — text follows the icon). Don't strip the text.
 
 ---
 
@@ -356,65 +401,81 @@ Each migration is a small surgical PR with a regression-guard vitest test assert
 
 ## 9. Open questions (founder review)
 
-These were surfaced in the audit context file and remain unresolved. Co-Architect recommendations included where applicable. Founder direction needed for v1.1 of this document.
+5 of 6 confirmed 2026-05-16. Q3 re-posed below with clearer framing.
 
-### Open Question 1 — Does the brand voice generalize beyond Chicago's Southside?
+### Open Question 1 — Does the brand voice generalize beyond Chicago's Southside? ✅ CONFIRMED 2026-05-16
 
-Today's landing copy is geographically specific (`Gather with your neighborhood on Chicago's Southside`). Should the voice principle be:
+**Decision:** Neighborhood-rooted is ubiquitous. The pattern is "rooted somewhere specific" — every deployment names its own neighborhood. Chicago Southside is today's neighborhood; the brand voice extends to wherever the platform deploys next.
 
-- **(a) Neighborhood-rooted with deployment-specific geography** — every deployment names its own neighborhood; the pattern is "rooted somewhere specific" rather than "rooted in Chicago"
-- **(b) Chicago-Southside-specific** — the geography IS part of the brand; expansion happens via partnerships, not white-label
+**In practice:** when authoring copy for a non-Chicago deployment, replace "Chicago's Southside" with the local neighborhood name; the surrounding voice stays. Treat geography as a CONTENT variable, not a brand variable.
 
-**Co-Architect recommendation:** (a). The brand essence (`makes communities visible to themselves`) is geography-agnostic; the geographic specificity is the BRAND'S COMMITMENT to specifics, not a commitment to Chicago. Future deployments substitute their neighborhood; the pattern stays.
+### Open Question 2 — Is "flywheel" customer-facing brand language? ✅ CONFIRMED 2026-05-16
 
-### Open Question 2 — Is "flywheel" customer-facing brand language?
+**Decision:** No. `flywheel` is behind-the-scenes / internal terminology only (briefing deck, founder talks, internal docs). Customer-facing language uses **`event triangle`** / **`event flow`** / **`event cycle`**.
 
-Currently appears in landing subhead (`Six Southside communities. One connected flywheel.`). It's strong, specific, slightly insider.
+**The customer mental model (Pre / Event / Post):**
 
-- **(a) Keep as customer-facing** — the metaphor IS the brand's central thesis; using it on the landing teaches the customer to think in those terms
-- **(b) Soften** — `Six Southside communities. One connected network.`
-- **(c) Replace** — find a more accessible metaphor (ripple, current, signal)
+- **Pre-event** — the customer pictures sharing the event is coming with others
+- **Event** — the customer pictures enjoying it + sharing QR codes with sponsors
+- **Post-event** — the customer pictures additional ops, sponsor funneling
 
-**Co-Architect recommendation:** (a). "Flywheel" is the kind of specific-noun choice the rest of the voice celebrates. If we use plain language for privacy mechanics (`a single click`), we can use a specific-but-slightly-insider noun for the brand's mechanic.
+**In practice:**
 
-### Open Question 3 — Should success states earn exclamations?
+- Landing subhead `Six Southside communities. One connected flywheel.` → migrate to use `event triangle` / `event cycle` framing. Suggested rewrite: `Six Southside communities. One event cycle that compounds with every gathering.` OR `Six Southside communities. Pre, Event, Post — the cycle that makes neighborhoods visible to themselves.`
+- Internal copy (briefing.ts deck) keeps `flywheel` — that's the mechanic-explainer for B2B / investor / partner audiences.
 
-Three of four customer flows use `!`. Checkin is silent.
+See §6 glossary for full set of triangle-phase term mappings.
 
-- **(a) Silent-success Apple-style** — quiet "did it" state (e.g., the count just increments)
-- **(b) Celebratory-success Mailchimp-style** — exclamation across the board
-- **(c) Mixed (current state)** — checkin is silent because it's repeatable in seconds; first-time interactions get celebration
+### Open Question 3 — Should the check-in success message celebrate or stay silent? 🔄 RE-POSED 2026-05-16
 
-**Co-Architect recommendation:** (c). Current behavior is correct: register/survey/signup are one-time identity-affirming moments → celebrate; checkin is mundane-repeat → silent. Document this as an intentional pattern: `One-time identity moments earn exclamation. Repeatable transactional moments stay silent.`
+(The previous framing referenced "Apple-style" / "Mailchimp-style" which apparently didn't land. Re-asking with concrete code examples.)
 
-### Open Question 4 — GDPR legal blocks — voice or compliance layer?
+**The situation:** 4 customer success states currently behave like this:
 
-`form-pages.ts` privacy notices contain GDPR Art. references. Compliance precision sits inside otherwise-conversational copy.
+1. Register form submit → page shows `You're registered!` (celebratory)
+2. Survey form submit → page shows `Thanks for your feedback!` (celebratory)
+3. Email-signup form submit → page shows `You're on the list!` (celebratory)
+4. Check-in form tap → page shows NO message; the visible count just goes from "12 checked in" to "13 checked in"
 
-- **(a) Voice** — the legal precision IS the brand voice in EU contexts (trust signal)
-- **(b) Compliance layer** — visually distinct block, voice-neutral
+**The question — is #4 (check-in) a bug or a feature?**
 
-**Co-Architect recommendation:** (b) with documentation. The notices STAY where they are (already in a `.privacy-notice` visual block per `form-pages.ts` CSS), but documented as exception 7.1 above. The Voice Constant doesn't apply inside the notice block — it applies to the labels + buttons + microcopy AROUND it.
+- **(a) Bug — add a celebratory message.** Customers tap "Check In" and expect feedback like the other 3. Add something like `You're checked in!` so it matches.
+- **(b) Feature — check-in stays quiet on purpose.** A customer at an event might tap the button multiple times (e.g., re-tap to verify it counted) OR multiple attendees might tap from the same phone. A loud `You're checked in!` popping up every tap would be obnoxious. The count incrementing IS the feedback.
 
-### Open Question 5 — Emoji-only buttons?
+**Co-Architect recommendation: (b) — feature, keep silent.** Documenting this as an intentional pattern: _one-time identity moments earn celebration; repeatable transactional moments stay silent_.
 
-Only one exists: `🖨 Print` on the poster preview. Other action buttons use text.
+If you agree with (b), I lock it as a pattern. If you pick (a), I file the check-in copy addition as a migration item.
 
-- **(a) Keep as the lone exception** — print is the universal symbol; text adds nothing
-- **(b) Formalize as a pattern** — emoji + verb for canonical actions
-- **(c) Unify with text-only** — `Print` becomes just the word
+### Open Question 4 — GDPR legal blocks — voice or compliance layer? ✅ CONFIRMED 2026-05-16
 
-**Co-Architect recommendation:** (a). Print on the admin /poster preview is a documented exception. Don't proliferate emoji-only CTAs to other surfaces; don't strip this one because it works in context (high-affordance, low-density admin surface where the emoji adds visual scan-anchor for the bar owner).
+**Decision:** Compliance layer. GDPR is a standard; the visual block treatment stays as-is.
 
-### Open Question 6 — Is "bar owner" customer-facing?
+**Strategic positioning:** the founder intends OSE to be at the forefront of being the privacy standard for community-events platforms. The brand voice's "Privacy-forward by design" attribute is therefore not aspirational — it's competitive positioning. Privacy compliance will become more prevalent in the regulatory landscape; OSE leads rather than complies-defensively.
 
-The audit notes this question separately. Internal docs use "bar owner" everywhere; customer-visible copy uses "host" / "organizer."
+**In practice:** the GDPR notice block stays as the compliance layer (legal precision, contained visually). The brand-voice statement about privacy is separate and active ("you're part of the group, anonymously…") — that's the LEAD voice on privacy. Copy across surfaces should reinforce active stance ("this is what we do") not passive compliance ("this is what we comply with"). See §7.1.
 
-- **(a) Internal only** — keep "bar owner" out of customer copy entirely
-- **(b) Onboarding only** — admin signin / onboarding email may say "bar owners", everything else uses "host"
-- **(c) Customer-facing** — promote "bar owner" to a customer-visible term
+### Open Question 5 — Emoji-only buttons? ✅ CONFIRMED 2026-05-16
 
-**Co-Architect recommendation:** (a). The customer creating events at OSE may not BE a bar owner specifically (could be church organizer, league coordinator, neighborhood association lead). "Bar owner" is the dominant SEGMENT internally but isn't an accurate self-description for all customers. Stay with "host" externally; "bar owner" remains internal shorthand.
+**Decision:** Two icon-only buttons sanctioned: `🖨 Print` (existing) and `ℹ Info` (forthcoming). Both are universally-recognized affordances where the icon adds scan-anchor without losing meaning.
+
+Forward-looking: as mobile UI density increases (small phones, more controls per surface), additional icon-only patterns may become necessary. Each requires user-research evidence the icon is recognized, plus an `aria-label` for accessibility. See §7.4 for full rule.
+
+### Open Question 6 — Is "bar owner" customer-facing? ✅ CONFIRMED 2026-05-16
+
+**Decision:** `bar owner` stays internal. Customer-facing uses `host`. The admin-rights model introduces a tiered role distinction:
+
+- **Super admin** — the platform-side admin (mzdan / OCR staff). Builds the platform, manages tenants, sees cross-event data.
+- **Host admin** — the customer logged into /admin to run their own events. This is today's /admin user; the role exists today but the term `Host admin` formalizes it.
+
+**In practice:**
+
+- Today's /admin = Host admin's surface. Copy stays customer-friendly (`host`, `your events`, `you've created`).
+- Future Super admin UX (when built) = a distinct surface with platform-side controls. Copy can be more technical / direct since the audience is OSE platform staff.
+- Customer-facing copy never uses "Super admin" or "Host admin" as terms — those are role distinctions in internal docs + admin UX role-distinguishing labels. The customer is just "the host" externally.
+
+See §5.1 + §6 glossary.
+
+**Follow-on product question (not a brand-voice question, captured here for traceability):** the Super admin / Host admin distinction implies a tiered-rights model in the app. Building that is a separate product workstream — file as its own story when prioritized. The brand-voice guidelines work doesn't block on it; the terms are now reserved in the glossary regardless of when the implementation lands.
 
 ---
 
@@ -422,25 +483,29 @@ The audit notes this question separately. Internal docs use "bar owner" everywhe
 
 The `/brand-voice:enforce-voice` skill uses these to weigh strict-vs-flexible enforcement.
 
-| Section                             | Confidence                                                                              | Source                                                                                                                 |
-| ----------------------------------- | --------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| Brand essence (§1)                  | HIGH                                                                                    | Co-Architect synthesis from anonymity affordance + landing hero + briefing.ts                                          |
-| Voice Constant / We Are-Not (§2)    | HIGH                                                                                    | Founder-validated audit + grounded in 13-surface in-production samples                                                 |
-| Tone-by-context matrix (§3)         | HIGH                                                                                    | Direct mapping from existing surface tone observed in audit                                                            |
-| Anonymity-affordance pattern (§4.1) | HIGH                                                                                    | In production, multi-surface, founder authored                                                                         |
-| Friendly-error pattern (§4.2)       | HIGH                                                                                    | In production across form-pages + sharedReport + error page; explicit pattern                                          |
-| Action-verb CTA pattern (§4.3)      | HIGH                                                                                    | Zero counter-examples in 13-surface audit                                                                              |
-| Success-message pattern (§4.4)      | HIGH                                                                                    | 3 of 4 flows; check-in deliberately silent per Open Question 3                                                         |
-| Empty-state pattern (§4.5)          | MEDIUM                                                                                  | Display's `Also Coming Up` is the only existing example of the proposed pattern; migration of 3 other surfaces follows |
-| 5W placeholder pattern (§4.6)       | HIGH                                                                                    | In production; bar owner feedback positive                                                                             |
-| Host terminology (§5.1)             | HIGH (Co-Architect recommendation) → PENDING (founder confirmation)                     | Resolved tentatively; Open Question 6 dependency                                                                       |
-| Button capitalization (§5.2)        | HIGH → PENDING                                                                          | Resolved tentatively; founder confirms migration scope                                                                 |
-| Tier naming (§5.3)                  | HIGH → PENDING                                                                          | Resolved tentatively; cross-checks briefing.ts already uses `Pro`                                                      |
-| Empty-state migrations (§5.4)       | MEDIUM                                                                                  | Proposed copy is new; needs founder review before migration PRs land                                                   |
-| Terminology glossary (§6)           | HIGH for in-production terms; MEDIUM for forbidden-list items not currently in codebase | Composite                                                                                                              |
-| Surface exceptions (§7)             | HIGH                                                                                    | All documented exceptions observed in current production                                                               |
-| Migration backlog (§8)              | (deferred work — not a confidence claim)                                                | —                                                                                                                      |
-| Open questions (§9)                 | (unresolved — confidence is FOUNDER PENDING)                                            | —                                                                                                                      |
+| Section                                   | Confidence                                                                                          | Source                                                                                                                 |
+| ----------------------------------------- | --------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| Brand essence (§1)                        | HIGH                                                                                                | Co-Architect synthesis from anonymity affordance + landing hero + briefing.ts                                          |
+| Voice Constant / We Are-Not (§2)          | HIGH                                                                                                | Founder-validated audit + grounded in 13-surface in-production samples                                                 |
+| Tone-by-context matrix (§3)               | HIGH                                                                                                | Direct mapping from existing surface tone observed in audit                                                            |
+| Anonymity-affordance pattern (§4.1)       | HIGH                                                                                                | In production, multi-surface, founder authored                                                                         |
+| Friendly-error pattern (§4.2)             | HIGH                                                                                                | In production across form-pages + sharedReport + error page; explicit pattern                                          |
+| Action-verb CTA pattern (§4.3)            | HIGH                                                                                                | Zero counter-examples in 13-surface audit                                                                              |
+| Success-message pattern (§4.4)            | HIGH                                                                                                | 3 of 4 flows; check-in deliberately silent per Open Question 3                                                         |
+| Empty-state pattern (§4.5)                | MEDIUM                                                                                              | Display's `Also Coming Up` is the only existing example of the proposed pattern; migration of 3 other surfaces follows |
+| 5W placeholder pattern (§4.6)             | HIGH                                                                                                | In production; bar owner feedback positive                                                                             |
+| Host terminology (§5.1)                   | HIGH (founder-confirmed Q6 2026-05-16)                                                              | Super admin / Host admin tiering added                                                                                 |
+| Button capitalization (§5.2)              | HIGH                                                                                                | Co-Architect recommendation active; founder did not push back; migration scope greenlit via §8                         |
+| Tier naming (§5.3)                        | HIGH                                                                                                | briefing.ts already uses `Pro`; consistent with founder Q answers                                                      |
+| Empty-state migrations (§5.4)             | MEDIUM                                                                                              | Proposed copy is new; needs founder review before migration PRs land                                                   |
+| Terminology glossary (§6)                 | HIGH for in-production terms; MEDIUM for forbidden-list items not currently in codebase             | Composite — updated with event triangle phase terms + Super admin / Host admin tiering 2026-05-16                      |
+| Surface exceptions (§7)                   | HIGH (now 4 exceptions: §7.1 GDPR / §7.2 ticker / §7.3 admin placeholders / §7.4 icon-only buttons) | §7.4 added 2026-05-16 per Q5 confirmation                                                                              |
+| Event triangle mental model (§1.1)        | HIGH (founder-confirmed Q2 2026-05-16)                                                              | Replaces "flywheel" as the customer-facing mental model; `flywheel` reserved for behind-the-scenes / internal use only |
+| Privacy positioning (§7.1 strategic note) | HIGH (founder-confirmed Q4 2026-05-16)                                                              | OSE intends to lead privacy standard for community-events platforms — active stance, not compliance posture            |
+| Icon-only buttons (§7.4)                  | HIGH (founder-confirmed Q5 2026-05-16)                                                              | Two sanctioned: `🖨 Print` + `ℹ Info`; mobile space pressure may drive future additions                                |
+| Neighborhood-rooted ubiquity (§1)         | HIGH (founder-confirmed Q1 2026-05-16)                                                              | Geography is a content variable, not a brand variable                                                                  |
+| Migration backlog (§8)                    | (deferred work — not a confidence claim)                                                            | —                                                                                                                      |
+| Open questions (§9)                       | 5 of 6 CONFIRMED 2026-05-16; Q3 RE-POSED with clearer framing                                       | Q3 awaits founder pick                                                                                                 |
 
 ---
 
@@ -466,4 +531,13 @@ For the human founder:
 
 ## 12. Changelog
 
-- **2026-05-16 — v1 initial generation** (this file). Co-Architect synthesis from `.claude/brand-voice-audit-context.md`. Confidence HIGH on existing-pattern sections; PENDING on drift-class resolutions until founder confirms.
+- **2026-05-16 — v1.1 founder-confirmation pass.** 5 of 6 Open Questions resolved by founder. Q3 re-posed with clearer framing (the previous Apple/Mailchimp analogy apparently didn't land). Updates:
+  - §1.1 NEW: customer-facing mental model is **Event Triangle** (Pre / Event / Post). `flywheel` reserved internal-only (Q2)
+  - §2: Voice Constant "Privacy-forward" attribute strengthened — OSE intends to lead the privacy standard for community-events platforms (Q4)
+  - §5.1: host terminology decision now also captures Super admin / Host admin role distinction (Q6)
+  - §6 glossary: added event triangle phase terms + Super admin/Host admin entries + privacy-positioning entry; removed `connected flywheel` from preferred neighborhood-ring entry (Q2)
+  - §7.1: GDPR notice block strategic-positioning note added (Q4)
+  - §7.4 NEW: icon-only buttons formalized — `🖨 Print` + `ℹ Info` sanctioned (Q5)
+  - §9: 5 questions marked CONFIRMED with founder text; Q3 re-posed
+  - §10: confidence scores updated to reflect founder-confirmation status
+- **2026-05-16 — v1 initial generation.** Co-Architect synthesis from `.claude/brand-voice-audit-context.md`. Confidence HIGH on existing-pattern sections; PENDING on drift-class resolutions until founder confirms.
