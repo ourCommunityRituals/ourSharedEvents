@@ -1779,11 +1779,11 @@
       ]
     },
     {
-      "name": "10. UEC QR Generation",
-      "description": "OSE-320 — UEC-aware QR generation endpoint. Reads canonical codes from the brain artifact and emits QR data URIs with canonical metadata. Stateless, no auth, edge-cacheable.",
+      "name": "10. UEC Resolve",
+      "description": "OSE-320 — UEC resolve endpoint. Resolves canonical UEC code identifiers to full metadata + a rendered QR data URI. UEC is the semantic-category contract for any URL the platform emits (QR, shortlinks, deep links); this endpoint serves the QR-render case first. Stateless, no auth, edge-cacheable.",
       "item": [
         {
-          "name": "OSE-320 | API | GET /api/v2/qr/generate?code=green (canonical label) | 200 with code metadata + QR",
+          "name": "OSE-320 | API | GET /api/v2/uec/resolve?code=green (canonical label) | 200 with code metadata + QR",
           "event": [
             {
               "listen": "test",
@@ -1812,9 +1812,9 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/api/v2/qr/generate?code=green",
+              "raw": "{{baseUrl}}/api/v2/uec/resolve?code=green",
               "host": ["{{baseUrl}}"],
-              "path": ["api", "v2", "qr", "generate"],
+              "path": ["api", "v2", "uec", "resolve"],
               "query": [
                 {
                   "key": "code",
@@ -1825,7 +1825,7 @@
           }
         },
         {
-          "name": "OSE-320 | API | GET /api/v2/qr/generate?code=SPONSOR (canonical id) | 200 with blue hex",
+          "name": "OSE-320 | API | GET /api/v2/uec/resolve?code=SPONSOR (canonical id) | 200 with blue hex",
           "event": [
             {
               "listen": "test",
@@ -1846,9 +1846,9 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/api/v2/qr/generate?code=SPONSOR",
+              "raw": "{{baseUrl}}/api/v2/uec/resolve?code=SPONSOR",
               "host": ["{{baseUrl}}"],
-              "path": ["api", "v2", "qr", "generate"],
+              "path": ["api", "v2", "uec", "resolve"],
               "query": [
                 {
                   "key": "code",
@@ -1859,7 +1859,7 @@
           }
         },
         {
-          "name": "OSE-320 | API | GET /api/v2/qr/generate?code=%20GREEN%20 (whitespace + uppercase) | 200 still resolves ENTER",
+          "name": "OSE-320 | API | GET /api/v2/uec/resolve?code=%20GREEN%20 (whitespace + uppercase) | 200 still resolves ENTER",
           "event": [
             {
               "listen": "test",
@@ -1877,9 +1877,9 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/api/v2/qr/generate?code=%20GREEN%20",
+              "raw": "{{baseUrl}}/api/v2/uec/resolve?code=%20GREEN%20",
               "host": ["{{baseUrl}}"],
-              "path": ["api", "v2", "qr", "generate"],
+              "path": ["api", "v2", "uec", "resolve"],
               "query": [
                 {
                   "key": "code",
@@ -1890,7 +1890,7 @@
           }
         },
         {
-          "name": "OSE-320 | API | GET /api/v2/qr/generate (no code param) | 400 MISSING_CODE with valid_codes list",
+          "name": "OSE-320 | API | GET /api/v2/uec/resolve (no code param) | 400 MISSING_CODE with valid_codes list",
           "event": [
             {
               "listen": "test",
@@ -1921,14 +1921,14 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/api/v2/qr/generate",
+              "raw": "{{baseUrl}}/api/v2/uec/resolve",
               "host": ["{{baseUrl}}"],
-              "path": ["api", "v2", "qr", "generate"]
+              "path": ["api", "v2", "uec", "resolve"]
             }
           }
         },
         {
-          "name": "OSE-320 | API | GET /api/v2/qr/generate?code=xyz (non-canonical) | 400 INVALID_CODE",
+          "name": "OSE-320 | API | GET /api/v2/uec/resolve?code=xyz (non-canonical) | 400 INVALID_CODE",
           "event": [
             {
               "listen": "test",
@@ -1953,9 +1953,9 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/api/v2/qr/generate?code=xyz",
+              "raw": "{{baseUrl}}/api/v2/uec/resolve?code=xyz",
               "host": ["{{baseUrl}}"],
-              "path": ["api", "v2", "qr", "generate"],
+              "path": ["api", "v2", "uec", "resolve"],
               "query": [
                 {
                   "key": "code",

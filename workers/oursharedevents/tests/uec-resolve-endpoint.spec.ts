@@ -1,7 +1,14 @@
 /**
- * OSE-320 — `GET /api/v2/qr/generate` endpoint API tests
+ * OSE-320 — `GET /api/v2/uec/resolve` endpoint API tests
  *
- * Exercises the HTTP contract of the new UEC-aware QR generation endpoint.
+ * Exercises the HTTP contract of the new UEC resolve endpoint. The
+ * endpoint resolves a canonical UEC code identifier to its full metadata
+ * + a rendered QR data URI. UEC is the semantic-category contract for
+ * any URL the platform emits (QR, shortlinks, deep links) — not a
+ * QR-specific concept. This endpoint serves the QR-render case first;
+ * future /api/v2/uec/* endpoints will serve shortlink creation and other
+ * surfaces.
+ *
  * Per OCR_STANDARD_perStoryTestPyramid these tests carry the API qualifier
  * (they call SELF.fetch — same contract as Postman/Newman would).
  *
@@ -61,7 +68,7 @@ interface ErrorResponse {
   uec_version: string;
 }
 
-describe('OSE-320 GET /api/v2/qr/generate — canonical happy path (by id)', () => {
+describe('OSE-320 GET /api/v2/uec/resolve — canonical happy path (by id)', () => {
   const canonicalCodes = [
     'ENTER',
     'LIVE',
@@ -77,8 +84,8 @@ describe('OSE-320 GET /api/v2/qr/generate — canonical happy path (by id)', () 
   ];
 
   for (const codeId of canonicalCodes) {
-    test(`OSE-320 | API | GET /api/v2/qr/generate?code=${codeId} (canonical id) | 200 with code metadata + QR`, async () => {
-      const res = await SELF.fetch(`${BASE}/api/v2/qr/generate?code=${encodeURIComponent(codeId)}`);
+    test(`OSE-320 | API | GET /api/v2/uec/resolve?code=${codeId} (canonical id) | 200 with code metadata + QR`, async () => {
+      const res = await SELF.fetch(`${BASE}/api/v2/uec/resolve?code=${encodeURIComponent(codeId)}`);
       expect(res.status).toBe(200);
       expect(res.headers.get('Content-Type')).toContain('application/json');
       const body = (await res.json()) as SuccessResponse;
@@ -94,7 +101,7 @@ describe('OSE-320 GET /api/v2/qr/generate — canonical happy path (by id)', () 
   }
 });
 
-describe('OSE-320 GET /api/v2/qr/generate — canonical happy path (by label)', () => {
+describe('OSE-320 GET /api/v2/uec/resolve — canonical happy path (by label)', () => {
   // AC example: ?code=green should resolve. Spot-check several labels.
   const labelTests: Array<[string, string]> = [
     ['green', 'ENTER'],
@@ -104,8 +111,8 @@ describe('OSE-320 GET /api/v2/qr/generate — canonical happy path (by label)', 
     ['Dark Teal', 'SHOP'],
   ];
   for (const [label, expectedId] of labelTests) {
-    test(`OSE-320 | API | GET /api/v2/qr/generate?code=${label} (label) | resolves to ${expectedId}`, async () => {
-      const res = await SELF.fetch(`${BASE}/api/v2/qr/generate?code=${encodeURIComponent(label)}`);
+    test(`OSE-320 | API | GET /api/v2/uec/resolve?code=${label} (label) | resolves to ${expectedId}`, async () => {
+      const res = await SELF.fetch(`${BASE}/api/v2/uec/resolve?code=${encodeURIComponent(label)}`);
       expect(res.status).toBe(200);
       const body = (await res.json()) as SuccessResponse;
       expect(body.code.id).toBe(expectedId);
@@ -113,7 +120,7 @@ describe('OSE-320 GET /api/v2/qr/generate — canonical happy path (by label)', 
   }
 });
 
-describe('OSE-320 GET /api/v2/qr/generate — case insensitivity', () => {
+describe('OSE-320 GET /api/v2/uec/resolve — case insensitivity', () => {
   const variants: Array<[string, string]> = [
     ['enter', 'ENTER'],
     ['Enter', 'ENTER'],
@@ -123,8 +130,8 @@ describe('OSE-320 GET /api/v2/qr/generate — case insensitivity', () => {
     ['gReEn', 'ENTER'],
   ];
   for (const [input, expectedId] of variants) {
-    test(`OSE-320 | API | GET /api/v2/qr/generate?code=${input} (case variant) | resolves to ${expectedId}`, async () => {
-      const res = await SELF.fetch(`${BASE}/api/v2/qr/generate?code=${encodeURIComponent(input)}`);
+    test(`OSE-320 | API | GET /api/v2/uec/resolve?code=${input} (case variant) | resolves to ${expectedId}`, async () => {
+      const res = await SELF.fetch(`${BASE}/api/v2/uec/resolve?code=${encodeURIComponent(input)}`);
       expect(res.status).toBe(200);
       const body = (await res.json()) as SuccessResponse;
       expect(body.code.id).toBe(expectedId);
@@ -132,19 +139,19 @@ describe('OSE-320 GET /api/v2/qr/generate — case insensitivity', () => {
   }
 });
 
-describe('OSE-320 GET /api/v2/qr/generate — whitespace tolerance', () => {
-  test('OSE-320 | API | GET /api/v2/qr/generate?code=%20green%20 (padded space) | trims and resolves', async () => {
+describe('OSE-320 GET /api/v2/uec/resolve — whitespace tolerance', () => {
+  test('OSE-320 | API | GET /api/v2/uec/resolve?code=%20green%20 (padded space) | trims and resolves', async () => {
     const res = await SELF.fetch(
-      `${BASE}/api/v2/qr/generate?code=${encodeURIComponent(' green ')}`
+      `${BASE}/api/v2/uec/resolve?code=${encodeURIComponent(' green ')}`
     );
     expect(res.status).toBe(200);
     const body = (await res.json()) as SuccessResponse;
     expect(body.code.id).toBe('ENTER');
   });
 
-  test('OSE-320 | API | GET /api/v2/qr/generate?code=%20%20SPONSOR%20%20 (double-padded) | trims and resolves', async () => {
+  test('OSE-320 | API | GET /api/v2/uec/resolve?code=%20%20SPONSOR%20%20 (double-padded) | trims and resolves', async () => {
     const res = await SELF.fetch(
-      `${BASE}/api/v2/qr/generate?code=${encodeURIComponent('  SPONSOR  ')}`
+      `${BASE}/api/v2/uec/resolve?code=${encodeURIComponent('  SPONSOR  ')}`
     );
     expect(res.status).toBe(200);
     const body = (await res.json()) as SuccessResponse;
@@ -152,24 +159,24 @@ describe('OSE-320 GET /api/v2/qr/generate — whitespace tolerance', () => {
   });
 });
 
-describe('OSE-320 GET /api/v2/qr/generate — encoded_url uses request origin', () => {
-  test('OSE-320 | API | GET /api/v2/qr/generate?code=green (test.local origin) | encoded_url = test.local/enter', async () => {
-    const res = await SELF.fetch(`${BASE}/api/v2/qr/generate?code=green`);
+describe('OSE-320 GET /api/v2/uec/resolve — encoded_url uses request origin', () => {
+  test('OSE-320 | API | GET /api/v2/uec/resolve?code=green (test.local origin) | encoded_url = test.local/enter', async () => {
+    const res = await SELF.fetch(`${BASE}/api/v2/uec/resolve?code=green`);
     const body = (await res.json()) as SuccessResponse;
     expect(body.qr.encoded_url).toBe('https://test.local/enter');
   });
 
-  test('OSE-320 | API | GET /api/v2/qr/generate?code=sponsor (custom origin) | encoded_url uses request origin', async () => {
+  test('OSE-320 | API | GET /api/v2/uec/resolve?code=sponsor (custom origin) | encoded_url uses request origin', async () => {
     const customOrigin = 'https://stg.oursharedevents.com';
-    const res = await SELF.fetch(`${customOrigin}/api/v2/qr/generate?code=sponsor`);
+    const res = await SELF.fetch(`${customOrigin}/api/v2/uec/resolve?code=sponsor`);
     const body = (await res.json()) as SuccessResponse;
     expect(body.qr.encoded_url).toBe(`${customOrigin}/sponsor`);
   });
 });
 
-describe('OSE-320 GET /api/v2/qr/generate — refusal paths (HTTP 400)', () => {
-  test('OSE-320 | API | GET /api/v2/qr/generate (no code param) | 400 MISSING_CODE', async () => {
-    const res = await SELF.fetch(`${BASE}/api/v2/qr/generate`);
+describe('OSE-320 GET /api/v2/uec/resolve — refusal paths (HTTP 400)', () => {
+  test('OSE-320 | API | GET /api/v2/uec/resolve (no code param) | 400 MISSING_CODE', async () => {
+    const res = await SELF.fetch(`${BASE}/api/v2/uec/resolve`);
     expect(res.status).toBe(400);
     const body = (await res.json()) as ErrorResponse;
     expect(body.ok).toBe(false);
@@ -178,22 +185,22 @@ describe('OSE-320 GET /api/v2/qr/generate — refusal paths (HTTP 400)', () => {
     expect(body.valid_codes.labels).toContain('Green');
   });
 
-  test('OSE-320 | API | GET /api/v2/qr/generate?code= (empty value) | 400 MISSING_CODE', async () => {
-    const res = await SELF.fetch(`${BASE}/api/v2/qr/generate?code=`);
+  test('OSE-320 | API | GET /api/v2/uec/resolve?code= (empty value) | 400 MISSING_CODE', async () => {
+    const res = await SELF.fetch(`${BASE}/api/v2/uec/resolve?code=`);
     expect(res.status).toBe(400);
     const body = (await res.json()) as ErrorResponse;
     expect(body.error).toBe('MISSING_CODE');
   });
 
-  test('OSE-320 | API | GET /api/v2/qr/generate?code=%20%20 (whitespace-only) | 400 MISSING_CODE', async () => {
-    const res = await SELF.fetch(`${BASE}/api/v2/qr/generate?code=${encodeURIComponent('   ')}`);
+  test('OSE-320 | API | GET /api/v2/uec/resolve?code=%20%20 (whitespace-only) | 400 MISSING_CODE', async () => {
+    const res = await SELF.fetch(`${BASE}/api/v2/uec/resolve?code=${encodeURIComponent('   ')}`);
     expect(res.status).toBe(400);
     const body = (await res.json()) as ErrorResponse;
     expect(body.error).toBe('MISSING_CODE');
   });
 
-  test('OSE-320 | API | GET /api/v2/qr/generate?code=xyz (non-canonical) | 400 INVALID_CODE with valid_codes list', async () => {
-    const res = await SELF.fetch(`${BASE}/api/v2/qr/generate?code=xyz`);
+  test('OSE-320 | API | GET /api/v2/uec/resolve?code=xyz (non-canonical) | 400 INVALID_CODE with valid_codes list', async () => {
+    const res = await SELF.fetch(`${BASE}/api/v2/uec/resolve?code=xyz`);
     expect(res.status).toBe(400);
     const body = (await res.json()) as ErrorResponse;
     expect(body.ok).toBe(false);
@@ -217,15 +224,15 @@ describe('OSE-320 GET /api/v2/qr/generate — refusal paths (HTTP 400)', () => {
     ]);
   });
 
-  test('OSE-320 | API | GET /api/v2/qr/generate?code=VIOLET (valid-shape but unknown color) | 400 INVALID_CODE', async () => {
-    const res = await SELF.fetch(`${BASE}/api/v2/qr/generate?code=VIOLET`);
+  test('OSE-320 | API | GET /api/v2/uec/resolve?code=VIOLET (valid-shape but unknown color) | 400 INVALID_CODE', async () => {
+    const res = await SELF.fetch(`${BASE}/api/v2/uec/resolve?code=VIOLET`);
     expect(res.status).toBe(400);
     const body = (await res.json()) as ErrorResponse;
     expect(body.error).toBe('INVALID_CODE');
   });
 
-  test('OSE-320 | API | GET /api/v2/qr/generate?code=xyz | error body uses friendly voice (per brand-voice §4.2)', async () => {
-    const res = await SELF.fetch(`${BASE}/api/v2/qr/generate?code=xyz`);
+  test('OSE-320 | API | GET /api/v2/uec/resolve?code=xyz | error body uses friendly voice (per brand-voice §4.2)', async () => {
+    const res = await SELF.fetch(`${BASE}/api/v2/uec/resolve?code=xyz`);
     const body = (await res.json()) as ErrorResponse;
     // No raw stack traces, no internal jargon leaking
     expect(body.message).not.toMatch(/at .* \(.+\.ts:\d+/);
@@ -235,17 +242,17 @@ describe('OSE-320 GET /api/v2/qr/generate — refusal paths (HTTP 400)', () => {
   });
 });
 
-describe('OSE-320 GET /api/v2/qr/generate — caching + headers', () => {
-  test('OSE-320 | API | GET /api/v2/qr/generate?code=green | Cache-Control set (edge-cacheable)', async () => {
-    const res = await SELF.fetch(`${BASE}/api/v2/qr/generate?code=green`);
+describe('OSE-320 GET /api/v2/uec/resolve — caching + headers', () => {
+  test('OSE-320 | API | GET /api/v2/uec/resolve?code=green | Cache-Control set (edge-cacheable)', async () => {
+    const res = await SELF.fetch(`${BASE}/api/v2/uec/resolve?code=green`);
     expect(res.status).toBe(200);
     const cc = res.headers.get('Cache-Control');
     expect(cc).toBeTruthy();
     expect(cc).toMatch(/max-age=\d+/);
   });
 
-  test("OSE-320 | API | GET /api/v2/qr/generate?code=xyz | 400 does NOT carry long Cache-Control (don't cache errors)", async () => {
-    const res = await SELF.fetch(`${BASE}/api/v2/qr/generate?code=xyz`);
+  test("OSE-320 | API | GET /api/v2/uec/resolve?code=xyz | 400 does NOT carry long Cache-Control (don't cache errors)", async () => {
+    const res = await SELF.fetch(`${BASE}/api/v2/uec/resolve?code=xyz`);
     expect(res.status).toBe(400);
     const cc = res.headers.get('Cache-Control');
     // Error responses should NOT carry the aggressive 1-hour cache

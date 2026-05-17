@@ -1,17 +1,31 @@
 /**
- * OSE-320 — UEC-aware QR generation endpoint.
+ * OSE-320 — UEC resolve endpoint.
  *
- *   GET /api/v2/qr/generate?code=<identifier>
+ *   GET /api/v2/uec/resolve?code=<identifier>
  *
- * Returns the canonical UEC code metadata + a QR data URI for the code's
- * URL path. The endpoint is the customer-facing surface that reads UEC
- * from the brain artifact (consumed copy at `src/lib/uec/uec-codes.ts`)
- * and emits canonical hex / label / semantics — never inline constants.
+ * Resolves a canonical UEC code identifier to its full metadata + a
+ * rendered QR data URI for the code's URL path. The endpoint is the
+ * primary customer-facing surface for UEC consumption — any caller that
+ * needs to know "what's the canonical state of this code" comes here.
  *
- * Scope: this story (OSE-320) adds the NEW endpoint and utility module.
- * It does NOT refactor existing QR call sites (that's OSE-321 scope).
- * Existing handlers continue to call `generateQrCode()` directly with
- * their own URLs and inherit the greyscale default.
+ * UEC is NOT a QR concept. It's a semantic-category contract for any
+ * URL the platform emits: QR codes, shortlinks, email deep links,
+ * poster links, sponsor placements. This endpoint serves the QR-render
+ * case first (the most common today) but the response shape is
+ * deliberately QR-agnostic at the `code` level — callers needing just
+ * metadata can ignore the `qr` block. Future stories may add an
+ * opt-out (`?no_qr=true`) if QR generation cost becomes a concern.
+ *
+ * Endpoint naming history: shipped initially as `/api/v2/qr/generate`
+ * during the same PR but renamed pre-merge to `/api/v2/uec/resolve`
+ * after the founder named the broader UEC principle (the endpoint
+ * had been narrowly scoped to the QR use case in error). The handler
+ * file was renamed in tandem (qr-generate.ts → uec-resolve.ts).
+ *
+ * Scope: this story (OSE-320) adds the NEW endpoint + utility module.
+ * It does NOT refactor existing QR call sites (that's OSE-321 scope)
+ * and does NOT add UEC awareness to shortlinks (that's a separate
+ * follow-on story — same principles apply, real schema migration).
  *
  * Per OSE-320 AC:
  *   - `?code=` may be either the canonical id ("ENTER") or the label ("Green")
@@ -20,14 +34,15 @@
  *   - Returns scan_hex + display_hex + label + semantics + url_path
  *
  * Per OCR_STANDARD_perStoryTestPyramid.md: customer-facing HTTP endpoint
- * → all 3 layers required. See tests/qr-generate-endpoint.spec.ts (vitest),
- * postman/collections/ose-api.json (Postman), tests/playwright/qr-generate.spec.ts.
+ * → all 3 layers required. See tests/uec-resolve-endpoint.spec.ts
+ * (vitest), postman/collections/ose-api.json group "10. UEC Resolve"
+ * (Postman), tests/playwright/uec-resolve-endpoint.spec.ts.
  */
 
 import { generateQrCode } from '../lib/qr';
 import { getCode, allCodeIds, allCodeLabels, VERSION } from '../lib/uec';
 
-export async function handleQrGenerate(request: Request): Promise<Response> {
+export async function handleUecResolve(request: Request): Promise<Response> {
   const url = new URL(request.url);
   const codeParam = url.searchParams.get('code');
 

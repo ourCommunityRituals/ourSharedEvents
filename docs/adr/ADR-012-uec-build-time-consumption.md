@@ -61,9 +61,21 @@ for UEC colors must not appear anywhere else in `src/` (enforced by
 OSE-322 static gate when it lands).
 
 The first concrete consumer of the new surface is the new
-`GET /api/v2/qr/generate` endpoint shipped in OSE-320 — a public,
+`GET /api/v2/uec/resolve` endpoint shipped in OSE-320 — a public,
 no-auth utility that emits canonical UEC metadata + a QR data URI for
 the requested code's `url_path`.
+
+**Endpoint naming note (2026-05-17, pre-merge):** the endpoint shipped
+initially as `/api/v2/qr/generate` and was renamed pre-merge to
+`/api/v2/uec/resolve` after the founder named the broader UEC
+principle — UEC is not a QR-specific concept; it's the semantic-
+category contract for any URL the platform emits (QR codes,
+shortlinks, deep links, sponsor placements). The endpoint shape stays
+the same (resolve a code identifier → return metadata + rendered QR);
+the namespace change positions the `/api/v2/uec/*` family to host
+future endpoints like shortlink creation under the same governance.
+Handler file renamed in tandem (`qr-generate.ts` → `uec-resolve.ts`)
+so the file name tracks the responsibility.
 
 ## Alternatives Considered
 
@@ -184,15 +196,15 @@ type safety and zero parsing.
   2026-05-17)
 - **OSE consumed copy:** `workers/oursharedevents/src/lib/uec/uec-codes.ts`
 - **OSE lookup surface:** `workers/oursharedevents/src/lib/uec/index.ts`
-- **OSE endpoint:** `workers/oursharedevents/src/handlers/qr-generate.ts`
-  routed at `GET /api/v2/qr/generate` in
+- **OSE endpoint:** `workers/oursharedevents/src/handlers/uec-resolve.ts`
+  routed at `GET /api/v2/uec/resolve` in
   `workers/oursharedevents/src/router.ts`
 - **Tests:**
   - Unit: `workers/oursharedevents/tests/uec-module.spec.ts`
-  - API contract (vitest): `workers/oursharedevents/tests/qr-generate-endpoint.spec.ts`
+  - API contract (vitest): `workers/oursharedevents/tests/uec-resolve-endpoint.spec.ts`
   - API contract (Postman): `postman/collections/ose-api.json` group
-    "10. UEC QR Generation"
-  - FE: `tests/playwright/qr-generate-endpoint.spec.ts`
+    "10. UEC Resolve"
+  - FE: `tests/playwright/uec-resolve-endpoint.spec.ts`
 - **Linear:** OSE-320 (this story); blocks OSE-321 (refactor existing
   call sites), OSE-323 (drift check), OSE-326 (contract test suite)
 

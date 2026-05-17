@@ -1,5 +1,9 @@
 /**
- * OSE-320 — `GET /api/v2/qr/generate` Playwright contract spec.
+ * OSE-320 — `GET /api/v2/uec/resolve` Playwright contract spec.
+ *
+ * Resolves a canonical UEC code identifier to its full metadata + QR.
+ * UEC is the semantic-category contract for any URL the platform emits
+ * (QR, shortlinks, deep links) — not QR-specific.
  *
  * This is the FE-layer test for the per-story 3-layer pyramid. The
  * endpoint returns JSON (not HTML), so Playwright exercises it via
@@ -12,7 +16,7 @@
  *   - CORS / CDN / origin-rewriting issues that only surface in deploy
  *
  * Per OCR_STANDARD_perStoryTestPyramid: names follow
- *   `OSE-320 | FE | GET /api/v2/qr/generate (<condition>) | <assertion>`
+ *   `OSE-320 | FE | GET /api/v2/uec/resolve (<condition>) | <assertion>`
  *
  * Note on the FE qualifier: the standard's "FE" qualifier names the
  * RUNNER's perspective — Playwright observes from outside the worker.
@@ -53,11 +57,11 @@ interface QrGenerateError {
   };
 }
 
-test.describe('OSE-320 /api/v2/qr/generate — contract via real network', () => {
-  test('OSE-320 | FE | GET /api/v2/qr/generate?code=green (canonical label) | 200 with code metadata + QR data URI', async ({
+test.describe('OSE-320 /api/v2/uec/resolve — contract via real network', () => {
+  test('OSE-320 | FE | GET /api/v2/uec/resolve?code=green (canonical label) | 200 with code metadata + QR data URI', async ({
     request,
   }) => {
-    const res = await request.get(`${BASE_URL}/api/v2/qr/generate?code=green`);
+    const res = await request.get(`${BASE_URL}/api/v2/uec/resolve?code=green`);
     expect(res.status()).toBe(200);
     expect(res.headers()['content-type']).toContain('application/json');
     const body = (await res.json()) as QrGenerateSuccess;
@@ -73,10 +77,10 @@ test.describe('OSE-320 /api/v2/qr/generate — contract via real network', () =>
     expect(body.uec_version).toBe('1.1');
   });
 
-  test('OSE-320 | FE | GET /api/v2/qr/generate?code=SPONSOR (canonical id) | 200 with blue scan_hex', async ({
+  test('OSE-320 | FE | GET /api/v2/uec/resolve?code=SPONSOR (canonical id) | 200 with blue scan_hex', async ({
     request,
   }) => {
-    const res = await request.get(`${BASE_URL}/api/v2/qr/generate?code=SPONSOR`);
+    const res = await request.get(`${BASE_URL}/api/v2/uec/resolve?code=SPONSOR`);
     expect(res.status()).toBe(200);
     const body = (await res.json()) as QrGenerateSuccess;
     expect(body.code.id).toBe('SPONSOR');
@@ -84,21 +88,21 @@ test.describe('OSE-320 /api/v2/qr/generate — contract via real network', () =>
     expect(body.qr.encoded_url).toBe(`${BASE_URL}/sponsor`);
   });
 
-  test('OSE-320 | FE | GET /api/v2/qr/generate?code=%20GREEN%20 (whitespace + case) | 200 resolves cleanly', async ({
+  test('OSE-320 | FE | GET /api/v2/uec/resolve?code=%20GREEN%20 (whitespace + case) | 200 resolves cleanly', async ({
     request,
   }) => {
     const res = await request.get(
-      `${BASE_URL}/api/v2/qr/generate?code=${encodeURIComponent(' GREEN ')}`
+      `${BASE_URL}/api/v2/uec/resolve?code=${encodeURIComponent(' GREEN ')}`
     );
     expect(res.status()).toBe(200);
     const body = (await res.json()) as QrGenerateSuccess;
     expect(body.code.id).toBe('ENTER');
   });
 
-  test('OSE-320 | FE | GET /api/v2/qr/generate (no code param) | 400 MISSING_CODE with valid_codes', async ({
+  test('OSE-320 | FE | GET /api/v2/uec/resolve (no code param) | 400 MISSING_CODE with valid_codes', async ({
     request,
   }) => {
-    const res = await request.get(`${BASE_URL}/api/v2/qr/generate`);
+    const res = await request.get(`${BASE_URL}/api/v2/uec/resolve`);
     expect(res.status()).toBe(400);
     const body = (await res.json()) as QrGenerateError;
     expect(body.ok).toBe(false);
@@ -107,10 +111,10 @@ test.describe('OSE-320 /api/v2/qr/generate — contract via real network', () =>
     expect(body.valid_codes.labels).toContain('Green');
   });
 
-  test('OSE-320 | FE | GET /api/v2/qr/generate?code=xyz (non-canonical) | 400 INVALID_CODE with full valid_codes list', async ({
+  test('OSE-320 | FE | GET /api/v2/uec/resolve?code=xyz (non-canonical) | 400 INVALID_CODE with full valid_codes list', async ({
     request,
   }) => {
-    const res = await request.get(`${BASE_URL}/api/v2/qr/generate?code=xyz`);
+    const res = await request.get(`${BASE_URL}/api/v2/uec/resolve?code=xyz`);
     expect(res.status()).toBe(400);
     const body = (await res.json()) as QrGenerateError;
     expect(body.error).toBe('INVALID_CODE');
@@ -120,17 +124,17 @@ test.describe('OSE-320 /api/v2/qr/generate — contract via real network', () =>
     expect(body.message).not.toMatch(/TypeError|undefined|at .+\.ts:\d+/);
   });
 
-  test('OSE-320 | FE | GET /api/v2/qr/generate?code=green (canonical) | Cache-Control header present', async ({
+  test('OSE-320 | FE | GET /api/v2/uec/resolve?code=green (canonical) | Cache-Control header present', async ({
     request,
   }) => {
-    const res = await request.get(`${BASE_URL}/api/v2/qr/generate?code=green`);
+    const res = await request.get(`${BASE_URL}/api/v2/uec/resolve?code=green`);
     expect(res.status()).toBe(200);
     const cc = res.headers()['cache-control'];
     expect(cc).toBeTruthy();
     expect(cc).toMatch(/max-age=\d+/);
   });
 
-  test('OSE-320 | FE | GET /api/v2/qr/generate?code=green | rendered QR image loads in browser', async ({
+  test('OSE-320 | FE | GET /api/v2/uec/resolve?code=green | rendered QR image loads in browser', async ({
     page,
     request,
   }) => {
@@ -138,7 +142,7 @@ test.describe('OSE-320 /api/v2/qr/generate — contract via real network', () =>
     // the JSON, then load the data URI into an <img>, then verify the image
     // dimensions match a reasonable QR size. This catches base64 corruption
     // and PNG header issues that pure-JSON validation can miss.
-    const res = await request.get(`${BASE_URL}/api/v2/qr/generate?code=green`);
+    const res = await request.get(`${BASE_URL}/api/v2/uec/resolve?code=green`);
     const body = (await res.json()) as QrGenerateSuccess;
     await page.setContent(
       `<!doctype html><html><body><img id="qr" src="${body.qr.data_uri}"></body></html>`

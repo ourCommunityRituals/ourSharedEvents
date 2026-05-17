@@ -1,21 +1,27 @@
 #!/usr/bin/env node
 /**
- * One-shot helper for OSE-320: appends the "10. UEC QR Generation" item
+ * One-shot helper for OSE-320: appends the "10. UEC Resolve" item
  * group to postman/collections/ose-api.json. Re-runnable (idempotent —
- * detects existing group by name and replaces). Delete after merge.
+ * detects existing group by name, including the pre-rename "10. UEC QR
+ * Generation" name, and replaces). Re-usable for future UEC endpoint
+ * additions in the same group.
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 
 const COLLECTION_PATH = 'postman/collections/ose-api.json';
-const NEW_GROUP_NAME = '10. UEC QR Generation';
+const NEW_GROUP_NAME = '10. UEC Resolve';
+// Pre-rename name kept so re-running this script after the in-PR rename
+// from "/api/v2/qr/generate" → "/api/v2/uec/resolve" replaces cleanly
+// instead of leaving a stale group around.
+const OLD_GROUP_NAME = '10. UEC QR Generation';
 
 const uecGroup = {
   name: NEW_GROUP_NAME,
   description:
-    'OSE-320 — UEC-aware QR generation endpoint. Reads canonical codes from the brain artifact and emits QR data URIs with canonical metadata. Stateless, no auth, edge-cacheable.',
+    'OSE-320 — UEC resolve endpoint. Resolves canonical UEC code identifiers to full metadata + a rendered QR data URI. UEC is the semantic-category contract for any URL the platform emits (QR, shortlinks, deep links); this endpoint serves the QR-render case first. Stateless, no auth, edge-cacheable.',
   item: [
     {
-      name: 'OSE-320 | API | GET /api/v2/qr/generate?code=green (canonical label) | 200 with code metadata + QR',
+      name: 'OSE-320 | API | GET /api/v2/uec/resolve?code=green (canonical label) | 200 with code metadata + QR',
       event: [
         {
           listen: 'test',
@@ -44,15 +50,15 @@ const uecGroup = {
         method: 'GET',
         header: [],
         url: {
-          raw: '{{baseUrl}}/api/v2/qr/generate?code=green',
+          raw: '{{baseUrl}}/api/v2/uec/resolve?code=green',
           host: ['{{baseUrl}}'],
-          path: ['api', 'v2', 'qr', 'generate'],
+          path: ['api', 'v2', 'uec', 'resolve'],
           query: [{ key: 'code', value: 'green' }],
         },
       },
     },
     {
-      name: 'OSE-320 | API | GET /api/v2/qr/generate?code=SPONSOR (canonical id) | 200 with blue hex',
+      name: 'OSE-320 | API | GET /api/v2/uec/resolve?code=SPONSOR (canonical id) | 200 with blue hex',
       event: [
         {
           listen: 'test',
@@ -73,15 +79,15 @@ const uecGroup = {
         method: 'GET',
         header: [],
         url: {
-          raw: '{{baseUrl}}/api/v2/qr/generate?code=SPONSOR',
+          raw: '{{baseUrl}}/api/v2/uec/resolve?code=SPONSOR',
           host: ['{{baseUrl}}'],
-          path: ['api', 'v2', 'qr', 'generate'],
+          path: ['api', 'v2', 'uec', 'resolve'],
           query: [{ key: 'code', value: 'SPONSOR' }],
         },
       },
     },
     {
-      name: 'OSE-320 | API | GET /api/v2/qr/generate?code=%20GREEN%20 (whitespace + uppercase) | 200 still resolves ENTER',
+      name: 'OSE-320 | API | GET /api/v2/uec/resolve?code=%20GREEN%20 (whitespace + uppercase) | 200 still resolves ENTER',
       event: [
         {
           listen: 'test',
@@ -99,15 +105,15 @@ const uecGroup = {
         method: 'GET',
         header: [],
         url: {
-          raw: '{{baseUrl}}/api/v2/qr/generate?code=%20GREEN%20',
+          raw: '{{baseUrl}}/api/v2/uec/resolve?code=%20GREEN%20',
           host: ['{{baseUrl}}'],
-          path: ['api', 'v2', 'qr', 'generate'],
+          path: ['api', 'v2', 'uec', 'resolve'],
           query: [{ key: 'code', value: '%20GREEN%20' }],
         },
       },
     },
     {
-      name: 'OSE-320 | API | GET /api/v2/qr/generate (no code param) | 400 MISSING_CODE with valid_codes list',
+      name: 'OSE-320 | API | GET /api/v2/uec/resolve (no code param) | 400 MISSING_CODE with valid_codes list',
       event: [
         {
           listen: 'test',
@@ -138,14 +144,14 @@ const uecGroup = {
         method: 'GET',
         header: [],
         url: {
-          raw: '{{baseUrl}}/api/v2/qr/generate',
+          raw: '{{baseUrl}}/api/v2/uec/resolve',
           host: ['{{baseUrl}}'],
-          path: ['api', 'v2', 'qr', 'generate'],
+          path: ['api', 'v2', 'uec', 'resolve'],
         },
       },
     },
     {
-      name: 'OSE-320 | API | GET /api/v2/qr/generate?code=xyz (non-canonical) | 400 INVALID_CODE',
+      name: 'OSE-320 | API | GET /api/v2/uec/resolve?code=xyz (non-canonical) | 400 INVALID_CODE',
       event: [
         {
           listen: 'test',
@@ -170,9 +176,9 @@ const uecGroup = {
         method: 'GET',
         header: [],
         url: {
-          raw: '{{baseUrl}}/api/v2/qr/generate?code=xyz',
+          raw: '{{baseUrl}}/api/v2/uec/resolve?code=xyz',
           host: ['{{baseUrl}}'],
-          path: ['api', 'v2', 'qr', 'generate'],
+          path: ['api', 'v2', 'uec', 'resolve'],
           query: [{ key: 'code', value: 'xyz' }],
         },
       },
@@ -183,11 +189,17 @@ const uecGroup = {
 const raw = readFileSync(COLLECTION_PATH, 'utf8');
 const collection = JSON.parse(raw);
 
-// Idempotent: replace existing group if it exists, else append
-const existingIdx = collection.item.findIndex((g) => g.name === NEW_GROUP_NAME);
+// Idempotent: replace existing group if it exists (either current or
+// pre-rename name), else append. The OR-match makes this script safe to
+// re-run on a collection that still has the pre-rename "UEC QR Generation"
+// group from the earlier OSE-320 commit.
+const existingIdx = collection.item.findIndex(
+  (g) => g.name === NEW_GROUP_NAME || g.name === OLD_GROUP_NAME
+);
 if (existingIdx >= 0) {
+  const oldName = collection.item[existingIdx].name;
   collection.item[existingIdx] = uecGroup;
-  console.log(`Replaced existing "${NEW_GROUP_NAME}" group (idx ${existingIdx})`);
+  console.log(`Replaced "${oldName}" group with "${NEW_GROUP_NAME}" (idx ${existingIdx})`);
 } else {
   collection.item.push(uecGroup);
   console.log(`Appended new "${NEW_GROUP_NAME}" group (now ${collection.item.length} top-level groups)`);
