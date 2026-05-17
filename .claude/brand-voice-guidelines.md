@@ -1,6 +1,6 @@
 # OurSharedEvents Brand Voice Guidelines
 
-**Status:** v1.3 (2026-05-16 — Q3 resolved: check-in earns a celebratory `You're checked in!` to match the other 3 success states; all 6 Open Questions now CONFIRMED) · **Source:** `.claude/brand-voice-audit-context.md` + `docs/brand-voice-audit-2026-05-16.md` + founder confirmation threads · **Owner:** mzdan (founder) + Co-Architect · **Effective:** 2026-05-16
+**Status:** v1.4 (2026-05-17 — §4.8 URL voice pattern added; URLs are user-facing copy; codifies the action-first natural-flow URL design for OSE-331 + all future URL surfaces) · **Source:** `.claude/brand-voice-audit-context.md` + `docs/brand-voice-audit-2026-05-16.md` + founder confirmation threads · **Owner:** mzdan (founder) + Co-Architect · **Effective:** 2026-05-16
 
 This document is the canonical brand-voice reference for OurSharedEvents (OSE). The `/brand-voice:enforce-voice` skill reads this file to validate copy across the 13 customer-visible surfaces. Update this file as decisions evolve — its diff history IS the voice's evolution log.
 
@@ -327,6 +327,99 @@ Info popovers are the ONE place in the UI where the voice gets to be longer than
 
 Example: every Info popover that mentions a metric should reinforce the platform's anonymity stance when relevant ("Corridor density is calculated anonymously — we count groups gathered, never who attended"). Don't lecture; reinforce.
 
+### 4.8 The URL voice pattern — URLs are user-facing copy
+
+Confidence: HIGH (founder-directed 2026-05-17).
+
+**Principle:** URLs are user-facing copy. The Voice Constant §2 applies to URLs the same way it applies to button labels, error messages, and headlines. Every URL the platform emits — shortlinks, canonical destination pages, email links, poster URLs, anywhere a string starting with `oursharedevents.com/` appears in the wild — should be readable AND understandable by **anyone**, in **any channel**, without explanation.
+
+**The test:** read the URL aloud. If it sounds like a phrase, it passes. If it sounds like developer crud, it fails.
+
+| URL                                                   | Read aloud                            | Verdict                 |
+| ----------------------------------------------------- | ------------------------------------- | ----------------------- |
+| `oursharedevents.com/s/k7Hd2x`                        | "slash S slash K-7-H-D-2-X"           | gibberish — fails       |
+| `oursharedevents.com/sponsor/bocce-finals-2026`       | "sponsor for bocce finals 2026"       | natural phrase — passes |
+| `oursharedevents.com/live/spring-festival`            | "live for spring festival"            | natural phrase — passes |
+| `oursharedevents.com/feedback/winter-fundraiser-2028` | "feedback for winter fundraiser 2028" | natural phrase — passes |
+
+**The action-first formula:** `oursharedevents.com/<action>/<context>`
+
+For UEC-coded URLs (the primary case): `oursharedevents.com/<uec_id>/<event-slug>`
+
+Action leads; context qualifies. Mirrors how humans introduce things in speech: "the sponsor for X," "feedback for Y," "live for Z." Same shape, same flow.
+
+**Where the URL voice pattern applies:**
+
+| Surface                                       | Example URL                                  | Notes                                                    |
+| --------------------------------------------- | -------------------------------------------- | -------------------------------------------------------- |
+| Shortlinks (the primary case — OSE-331)       | `/sponsor/bocce-finals-2026`                 | Canonical destination — no `/s/` prefix, no random codes |
+| Generic UEC landings (OSE-318, in production) | `/sponsor`, `/live`, `/enter`                | Per `ocr-docs-brain/uec-codes.yaml` `url_path`           |
+| Public event page                             | `/events/<event-slug>`                       | Already production; reads naturally                      |
+| Forms                                         | `/forms/<event-slug>?type=register`          | Existing; readable                                       |
+| Poster preview                                | `/poster/<event-slug>`                       | OSE-310 path-aliased; reads naturally                    |
+| Admin URLs                                    | `/admin`, `/admin/events`, `/admin/sponsors` | Action-first; honors pattern                             |
+
+**Where the URL voice pattern does NOT apply:**
+
+- **API endpoints** (e.g., `/api/v2/uec/resolve`) — developer-facing, follow REST conventions
+- **Internal routing helpers / signed-link tokens / auth params** — opaque by necessity for security
+- **Legacy URLs** (`/s/<random>`) — kept resolvable forever for backward compat, but new URLs use the natural-flow form
+
+**Pattern rules:**
+
+- **Action-first** — the first path segment after the domain is the action verb (UEC code id for UEC-coded URLs; canonical verb for other URLs)
+- **Lowercase + hyphens** — `bocce-finals-2026` not `BocceFinals2026` or `bocce_finals_2026` or `BocceFinals_2026`
+- **Words humans say** — `feedback` not `survey` (matches §6 glossary); `live` not `active`; `enter` not `entry`
+- **No developer prefixes** in customer-facing URLs — no `/s/`, no `/v2/`, no `/r/`
+- **Reads aloud as a phrase** — the read-aloud test is the canonical check
+- **Slug stability** — once a URL is in the wild (printed on a poster, sent in an email, saved to a contact card), the slug becomes IMMUTABLE. Renaming an event creates a NEW slug; old slug stays canonical for old URLs forever
+- **Reserved-word denylist** — event slugs cannot collide with any UEC id (`sponsor`, `live`, `enter`, etc.) or top-level path (`api`, `admin`, `events`, `forms`, `display`, `poster`, `sharedReport`, `s`, `health`); collision-creation appends `-event` suffix (e.g., a literal event named "Sponsor" becomes slug `sponsor-event`)
+
+**Why this is load-bearing:**
+
+URLs travel further than any other brand artifact. A poster URL stays on a wall for a season. A shortlink stays in a text-message history for years. An email link gets forwarded across orgs. A URL that fails the brand-voice test fails it for every person who sees it, in every channel, for the lifetime of the URL.
+
+The Voice Constant says **warm but precise · first-person inclusive · action-verb-led · plain-language technical · specific and concrete**. The URL `/sponsor/bocce-finals-2026` honors every one. The URL `/s/k7Hd2x` violates every one.
+
+**Connection to §4.3 (action-verb CTAs):**
+
+The URL voice pattern is §4.3 applied to URLs. The CTA button says `Sponsor this event`; the URL the button leads to is `/sponsor/bocce-finals-2026`. Same verb, same lead, same brand promise. The URL IS the next step the verb commits to.
+
+**The 3-year maintainability test:**
+
+Year-3 admin (or future contributor) opens the platform's URL inventory:
+
+```
+oursharedevents.com/sponsor/bocce-finals-2026
+oursharedevents.com/sponsor/spring-festival-2026
+oursharedevents.com/sponsor/winter-fundraiser-2028
+oursharedevents.com/live/bocce-finals-2026
+oursharedevents.com/feedback/spring-festival-2026
+oursharedevents.com/feedback/winter-fundraiser-2028
+```
+
+Reads as a filesystem. `grep "/sponsor"` shows every sponsor link ever. `grep "2026"` shows everything from 2026. The URL structure IS the inventory. No admin UI cleverness required.
+
+**The "everyone reads, everyone understands" test:**
+
+The URL must work for:
+
+- **Attendee** glancing at the URL in a text message before tapping ("oh, that's the sponsor sign-up for the bocce thing")
+- **Sponsor** receiving a shortlink in an email from a venue ("they want me to sponsor bocce finals 2026")
+- **Admin / space owner** managing their own URL inventory 3 years from now ("show me every feedback link from 2026")
+- **Future contributor** reading the codebase fresh ("the route is `/uec_id/event-slug` — that's the URL voice pattern from §4.8")
+- **Founder** explaining the platform to a partner over the phone ("the URL is `oursharedevents-dot-com-slash-sponsor-slash-bocce-finals-2026`")
+- **Voice-readable contexts** — phone calls, screen readers, voice assistants
+
+A URL that fails any of those readers fails the pattern.
+
+**Brand-voice enforcement for URLs:**
+
+- `/brand-voice:enforce-voice` skill reads §4.8 when validating URL-producing code paths
+- OSE-322 (substrate static gate, future) checks that customer-facing URL emission paths use natural-flow forms
+- OSE-331 (this principle's first implementation) replaces `/s/<random>` shortlinks with the canonical `/<uec_id>/<event-slug>` form
+- Future surfaces (email-template URLs, in-app deep links, sponsor placement URLs) inherit the rule
+
 ---
 
 ## 5. Terminology decisions (drift class resolutions)
@@ -601,6 +694,7 @@ The `/brand-voice:enforce-voice` skill uses these to weigh strict-vs-flexible en
 | Empty-state pattern (§4.5)                | MEDIUM                                                                                              | Display's `Also Coming Up` is the only existing example of the proposed pattern; migration of 3 other surfaces follows |
 | 5W placeholder pattern (§4.6)             | HIGH                                                                                                | In production; bar owner feedback positive                                                                             |
 | Info popover voice pattern (§4.7)         | HIGH (founder-directed 2026-05-16 — elevation pass)                                                 | Info icons become ubiquitous in technical surfaces; 3-part content template + accessibility rules                      |
+| URL voice pattern (§4.8)                  | HIGH (founder-directed 2026-05-17)                                                                  | URLs are user-facing copy; action-first natural-flow form; OSE-331 first implementation; future surfaces inherit       |
 | Host terminology (§5.1)                   | HIGH (founder-confirmed Q6 2026-05-16)                                                              | Super admin / Host admin tiering added                                                                                 |
 | Button capitalization (§5.2)              | HIGH                                                                                                | Co-Architect recommendation active; founder did not push back; migration scope greenlit via §8                         |
 | Tier naming (§5.3)                        | HIGH                                                                                                | briefing.ts already uses `Pro`; consistent with founder Q answers                                                      |
@@ -637,6 +731,12 @@ For the human founder:
 ---
 
 ## 12. Changelog
+
+- **2026-05-17 — v1.4 URL voice pattern added.** Founder direction: "every[one] should be able to read it and understand. It should read in the natural flow." Codifies the principle that URLs are user-facing copy and the Voice Constant §2 applies to them. Updates:
+  - §4.8 NEW: URL voice pattern — action-first formula (`/<uec_id>/<event-slug>`), read-aloud test as canonical check, pattern rules (lowercase + hyphens, words humans say, no developer prefixes, slug stability, reserved-word denylist), where it applies + where it doesn't, connection to §4.3 action-verb CTAs, the 3-year maintainability test, the "everyone reads, everyone understands" test
+  - §10 confidence: §4.8 row added at HIGH (founder-directed); slots between §4.7 Info popover and §5.1 Host terminology
+  - First implementation: OSE-331 (shortlinks adopt natural-flow URL design — replaces `/s/<random>` with `/<uec_id>/<event-slug>`); future surfaces (email-template URLs, in-app deep links, sponsor placement URLs) inherit
+  - Co-Architect meta-lesson banked (no doc change): foundational consumer-side patterns deserve the same "what's the general shape?" audit pass as foundational brain-side ones. URL design surfaced this iteration's gap — same reflex needs to fire on every surface where a brand principle has multiple consumers (QR → also shortlinks; shortlinks → also URL voice pattern as a brand-level rule)
 
 - **2026-05-16 — v1.3 Q3 resolved (check-in earns celebration).** Founder pick: (a) Bug — add `You're checked in!` to match the other 3 success states. Rationale: "User needs some confirmation that their action worked." Updates:
   - §4.4 success-message pattern: check-in row updated from "(currently silent)" to `You're checked in!`; new pattern rule explicitly states "silent success is a bug, not a feature"; re-tap edge case documented as idempotent confirmation
