@@ -228,7 +228,12 @@
               "raw": "{{baseUrl}}/api/v2/events?brand={{brandId}}",
               "host": ["{{baseUrl}}"],
               "path": ["api", "v2", "events"],
-              "query": [{ "key": "brand", "value": "{{brandId}}" }]
+              "query": [
+                {
+                  "key": "brand",
+                  "value": "{{brandId}}"
+                }
+              ]
             }
           }
         },
@@ -360,7 +365,13 @@
       "description": "Admin-gated event endpoints. Requires Bearer token in adminKey env variable.\nStaging has ALLOW_ADMIN_KEY_FALLBACK=true so Bearer auth works.",
       "auth": {
         "type": "bearer",
-        "bearer": [{ "key": "token", "value": "{{adminKey}}", "type": "string" }]
+        "bearer": [
+          {
+            "key": "token",
+            "value": "{{adminKey}}",
+            "type": "string"
+          }
+        ]
       },
       "item": [
         {
@@ -449,7 +460,9 @@
             }
           ],
           "request": {
-            "auth": { "type": "noauth" },
+            "auth": {
+              "type": "noauth"
+            },
             "method": "GET",
             "header": [],
             "url": {
@@ -505,7 +518,12 @@
           ],
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"name\": \"Postman Test User\",\n  \"email\": \"postman-test@example.com\",\n  \"sourcePlacementId\": \"qr-poster-001\"\n}"
@@ -547,7 +565,12 @@
           ],
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{}"
@@ -590,7 +613,12 @@
           ],
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"responses\": {\n    \"overall_rating\": 5,\n    \"venue_score\": 4,\n    \"speaker_quality\": \"excellent\",\n    \"feedback\": \"Great event, well organized!\",\n    \"would_recommend\": true\n  }\n}"
@@ -635,7 +663,12 @@
           ],
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"email\": \"postman-signup@example.com\"\n}"
@@ -670,7 +703,12 @@
           ],
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"name\": \"Bad ID Test\"\n}"
@@ -719,7 +757,12 @@
           ],
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{{oversizedBody}}"
@@ -755,8 +798,16 @@
           ],
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "not-valid-json" },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "not-valid-json"
+            },
             "url": {
               "raw": "{{baseUrl}}/api/v2/events/{{testEventId}}/forms/register",
               "host": ["{{baseUrl}}"],
@@ -785,8 +836,16 @@
           ],
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\"email\":\"not-an-email\"}" },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"email\":\"not-an-email\"}"
+            },
             "url": {
               "raw": "{{baseUrl}}/api/v2/events/{{testEventId}}/forms/register",
               "host": ["{{baseUrl}}"],
@@ -825,8 +884,16 @@
           ],
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{{oseR002OversizedBody}}" },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{{oseR002OversizedBody}}"
+            },
             "url": {
               "raw": "{{baseUrl}}/api/v2/events/{{testEventId}}/forms/register",
               "host": ["{{baseUrl}}"],
@@ -859,7 +926,12 @@
           ],
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"not_responses\": \"missing the required field\"\n}"
@@ -896,7 +968,12 @@
           ],
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"not_email\": \"oops\"\n}"
@@ -915,7 +992,13 @@
       "description": "Admin-gated form read endpoints. Bearer auth required.\nThese read back what was submitted in section 4.",
       "auth": {
         "type": "bearer",
-        "bearer": [{ "key": "token", "value": "{{adminKey}}", "type": "string" }]
+        "bearer": [
+          {
+            "key": "token",
+            "value": "{{adminKey}}",
+            "type": "string"
+          }
+        ]
       },
       "item": [
         {
@@ -1063,7 +1146,13 @@
       "description": "Feature flag management (8 endpoints). All admin-gated.\n3-tier model: free/mid/enterprise. Global flags + event-level overrides.",
       "auth": {
         "type": "bearer",
-        "bearer": [{ "key": "token", "value": "{{adminKey}}", "type": "string" }]
+        "bearer": [
+          {
+            "key": "token",
+            "value": "{{adminKey}}",
+            "type": "string"
+          }
+        ]
       },
       "item": [
         {
@@ -1197,7 +1286,12 @@
               "raw": "{{baseUrl}}/api/v2/admin/flags/resolve?eventId={{testEventId}}",
               "host": ["{{baseUrl}}"],
               "path": ["api", "v2", "admin", "flags", "resolve"],
-              "query": [{ "key": "eventId", "value": "{{testEventId}}" }]
+              "query": [
+                {
+                  "key": "eventId",
+                  "value": "{{testEventId}}"
+                }
+              ]
             }
           }
         },
@@ -1222,7 +1316,12 @@
           ],
           "request": {
             "method": "PUT",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"enabled\": true\n}"
@@ -1255,7 +1354,12 @@
           ],
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"tier\": \"free\"\n}"
@@ -1288,7 +1392,12 @@
           ],
           "request": {
             "method": "PUT",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"enabled\": true\n}"
@@ -1385,8 +1494,14 @@
           "request": {
             "method": "OPTIONS",
             "header": [
-              { "key": "Origin", "value": "https://stg.oursharedevents.com" },
-              { "key": "Access-Control-Request-Method", "value": "GET" }
+              {
+                "key": "Origin",
+                "value": "https://stg.oursharedevents.com"
+              },
+              {
+                "key": "Access-Control-Request-Method",
+                "value": "GET"
+              }
             ],
             "url": {
               "raw": "{{baseUrl}}/api/v2/events",
@@ -1418,8 +1533,14 @@
           "request": {
             "method": "OPTIONS",
             "header": [
-              { "key": "Origin", "value": "https://evil.com" },
-              { "key": "Access-Control-Request-Method", "value": "GET" }
+              {
+                "key": "Origin",
+                "value": "https://evil.com"
+              },
+              {
+                "key": "Access-Control-Request-Method",
+                "value": "GET"
+              }
             ],
             "url": {
               "raw": "{{baseUrl}}/api/v2/events",
@@ -1488,7 +1609,12 @@
           ],
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"email\": \"postman-subscribe@example.com\"\n}"
@@ -1563,7 +1689,12 @@
           ],
           "request": {
             "method": "GET",
-            "header": [{ "key": "Accept", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/api/v2/events/{{testEventId}}/shared-report",
               "host": ["{{baseUrl}}"],
@@ -1594,8 +1725,14 @@
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Accept", "value": "application/json" },
-              { "key": "Authorization", "value": "Bearer not-a-real-signed-link-token" }
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer not-a-real-signed-link-token"
+              }
             ],
             "url": {
               "raw": "{{baseUrl}}/api/v2/events/{{testEventId}}/shared-report",
@@ -1626,11 +1763,205 @@
           ],
           "request": {
             "method": "GET",
-            "header": [{ "key": "Accept", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/api/v2/events/{{testEventId}}/shared-report",
               "host": ["{{baseUrl}}"],
               "path": ["api", "v2", "events", "{{testEventId}}", "shared-report"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "10. UEC QR Generation",
+      "description": "OSE-320 — UEC-aware QR generation endpoint. Reads canonical codes from the brain artifact and emits QR data URIs with canonical metadata. Stateless, no auth, edge-cacheable.",
+      "item": [
+        {
+          "name": "OSE-320 | API | GET /api/v2/qr/generate?code=green (canonical label) | 200 with code metadata + QR",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('ok is true', () => pm.expect(json.ok).to.be.true);",
+                  "pm.test('code.id is ENTER (matched by green label)', () => pm.expect(json.code.id).to.eql('ENTER'));",
+                  "pm.test('code.scan_hex is canonical', () => pm.expect(json.code.scan_hex).to.eql('#1A6B2F'));",
+                  "pm.test('code.display_hex is canonical', () => pm.expect(json.code.display_hex).to.eql('#2D6A4F'));",
+                  "pm.test('code.wcag_grade is AAA', () => pm.expect(json.code.wcag_grade).to.eql('AAA'));",
+                  "pm.test('qr.data_uri is PNG data URI', () => pm.expect(json.qr.data_uri).to.match(/^data:image\\/png;base64,/));",
+                  "pm.test('qr.encoded_url uses request origin', () => pm.expect(json.qr.encoded_url).to.match(/\\/enter$/));",
+                  "pm.test('uec_version is 1.1', () => pm.expect(json.uec_version).to.eql('1.1'));",
+                  "pm.test('Cache-Control header set (edge-cacheable)', () => {",
+                  "    const cc = pm.response.headers.get('Cache-Control');",
+                  "    pm.expect(cc).to.match(/max-age=\\d+/);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v2/qr/generate?code=green",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v2", "qr", "generate"],
+              "query": [
+                {
+                  "key": "code",
+                  "value": "green"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "OSE-320 | API | GET /api/v2/qr/generate?code=SPONSOR (canonical id) | 200 with blue hex",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('code.id is SPONSOR', () => pm.expect(json.code.id).to.eql('SPONSOR'));",
+                  "pm.test('code.label is Blue', () => pm.expect(json.code.label).to.eql('Blue'));",
+                  "pm.test('code.scan_hex is canonical sponsor blue', () => pm.expect(json.code.scan_hex).to.eql('#1A3A8A'));",
+                  "pm.test('code.url_path is /sponsor', () => pm.expect(json.code.url_path).to.eql('/sponsor'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v2/qr/generate?code=SPONSOR",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v2", "qr", "generate"],
+              "query": [
+                {
+                  "key": "code",
+                  "value": "SPONSOR"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "OSE-320 | API | GET /api/v2/qr/generate?code=%20GREEN%20 (whitespace + uppercase) | 200 still resolves ENTER",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('code.id is ENTER (whitespace + case tolerated)', () => pm.expect(json.code.id).to.eql('ENTER'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v2/qr/generate?code=%20GREEN%20",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v2", "qr", "generate"],
+              "query": [
+                {
+                  "key": "code",
+                  "value": "%20GREEN%20"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "OSE-320 | API | GET /api/v2/qr/generate (no code param) | 400 MISSING_CODE with valid_codes list",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));",
+                  "pm.test('ok is false', () => pm.expect(json.ok).to.be.false);",
+                  "pm.test('error is MISSING_CODE', () => pm.expect(json.error).to.eql('MISSING_CODE'));",
+                  "pm.test('valid_codes.ids includes all 11 canonical', () => {",
+                  "    pm.expect(json.valid_codes.ids).to.have.lengthOf(11);",
+                  "    pm.expect(json.valid_codes.ids).to.include('ENTER');",
+                  "    pm.expect(json.valid_codes.ids).to.include('SHOP');",
+                  "});",
+                  "pm.test('valid_codes.labels includes all 11', () => {",
+                  "    pm.expect(json.valid_codes.labels).to.have.lengthOf(11);",
+                  "});",
+                  "pm.test('message uses friendly voice (no raw stack trace)', () => {",
+                  "    pm.expect(json.message).to.not.match(/TypeError|undefined|at .*\\.ts:/);",
+                  "    pm.expect(json.message.toLowerCase()).to.match(/required|canonical|provide/);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v2/qr/generate",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v2", "qr", "generate"]
+            }
+          }
+        },
+        {
+          "name": "OSE-320 | API | GET /api/v2/qr/generate?code=xyz (non-canonical) | 400 INVALID_CODE",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));",
+                  "pm.test('error is INVALID_CODE', () => pm.expect(json.error).to.eql('INVALID_CODE'));",
+                  "pm.test('invalid_code echoed back', () => pm.expect(json.invalid_code).to.eql('xyz'));",
+                  "pm.test('valid_codes.ids present and complete', () => {",
+                  "    pm.expect(json.valid_codes.ids).to.eql(['ENTER','LIVE','SPONSOR','ARCHIVE','HELP','FEEDBACK','UTILITY','ALERT','STAFF','CHECK-IN','SHOP']);",
+                  "});",
+                  "pm.test('message uses friendly voice', () => {",
+                  "    pm.expect(json.message).to.match(/canonical/i);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v2/qr/generate?code=xyz",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v2", "qr", "generate"],
+              "query": [
+                {
+                  "key": "code",
+                  "value": "xyz"
+                }
+              ]
             }
           }
         }
