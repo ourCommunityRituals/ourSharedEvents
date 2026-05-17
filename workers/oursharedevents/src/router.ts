@@ -26,6 +26,10 @@
  *   GET /display                  → TV/kiosk live event display
  *   GET /poster                   → printable poster with QR codes
  *   GET /sharedReport             → shareable analytics dashboard
+ *   GET /api/v2/uec/resolve?code=<id|label>  → UEC code resolution (OSE-320)
+ *                                            — returns canonical metadata + QR data URI.
+ *                                            UEC is a semantic-category contract
+ *                                            for any URL: QR, shortlink, deep link.
  *
  *   Sponsor Admin (auth required):
  *   GET    /api/v2/admin/sponsors              → list all sponsors
@@ -106,6 +110,7 @@ import { handleListAuditLog, type AuditHandlerEnv } from './handlers/audit';
 import { handleListSubscribers, type SubscribersAdminEnv } from './handlers/subscribers';
 import { handleAdminGeocode, type GeocodeAdminEnv } from './handlers/geocode';
 import { handleShortlinkResolve, type ShortlinkResolveEnv } from './handlers/shortlink-resolve';
+import { handleUecResolve } from './handlers/uec-resolve';
 import {
   handleV2AdminVerifyQr,
   handleV2AdminUnverifyQr,
@@ -287,6 +292,20 @@ export async function route(
 
   if (pathname === '/health' || pathname === '/api/status') {
     return handleHealth(env);
+  }
+
+  // ── UEC code resolution (OSE-320) — public, no auth ─────────────────────
+  // GET /api/v2/uec/resolve?code=<id|label> — returns canonical UEC metadata
+  // + a QR data URI for the code's url_path. Reads from the OSE-consumed
+  // copy of the brain UEC artifact (src/lib/uec/). Anonymity-principle
+  // compliant: stateless, no tracking, deterministic.
+  //
+  // UEC is the semantic-category contract for ANY URL the platform emits
+  // — QR codes, shortlinks, deep links, sponsor placements. This endpoint
+  // resolves the code → metadata + renderable QR; future endpoints in the
+  // /api/v2/uec/* family will serve shortlink-creation and other surfaces.
+  if (pathname === '/api/v2/uec/resolve' && method === 'GET') {
+    return handleUecResolve(request);
   }
 
   // ── Admin routes (auth-gated) ──────────────────────────────────────────────

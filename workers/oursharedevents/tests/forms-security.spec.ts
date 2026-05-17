@@ -128,24 +128,37 @@ describe('S4: Lifecycle job isolation', () => {
   // S4's actual contract is: the FORMS_DB lifecycle FUNCTION must not
   // touch env.DB — not "everything below this point in the file."
   test('runFormDataLifecycle function body only writes to FORMS_DB, never to DB', () => {
+    // Scan every source file for the function; validate body in whichever
+    // file(s) contain it. Earlier revision iterated `if (path.endsWith
+    // ('index.ts'))` which silently matched any future sub-module barrel
+    // file (e.g., src/lib/uec/index.ts added by OSE-320) and failed the
+    // existence check because that file legitimately doesn't define
+    // runFormDataLifecycle. The contract is "the function (wherever it
+    // lives) must not touch env.DB" — not "every index.ts must contain
+    // it." Existence is guarded by the foundCount assertion at the end.
     const sources: Record<string, string> = JSON.parse(tenv().TEST_SOURCE_FILES_JSON);
-    for (const [path, content] of Object.entries(sources)) {
-      if (path.endsWith('index.ts')) {
-        const start = content.indexOf('async function runFormDataLifecycle');
-        expect(start, 'runFormDataLifecycle function not found in index.ts').toBeGreaterThan(-1);
+    let foundCount = 0;
+    for (const [, content] of Object.entries(sources)) {
+      const start = content.indexOf('async function runFormDataLifecycle');
+      if (start === -1) continue;
+      foundCount++;
 
-        // Bound the body: from the function declaration to the next top-level
-        // declaration (async function / function / export at column 0).
-        const afterStart = content.slice(start);
-        const endMatch = /\n(async function|function|export)\s/.exec(afterStart.slice(1));
-        const body = endMatch ? afterStart.slice(0, endMatch.index + 1) : afterStart;
+      // Bound the body: from the function declaration to the next top-level
+      // declaration (async function / function / export at column 0).
+      const afterStart = content.slice(start);
+      const endMatch = /\n(async function|function|export)\s/.exec(afterStart.slice(1));
+      const body = endMatch ? afterStart.slice(0, endMatch.index + 1) : afterStart;
 
-        expect(body).not.toMatch(/env\.DB\.prepare/);
-        expect(body).not.toMatch(/INSERT\s+INTO\s+(?!form_|checkin_|email_|pii_)/i);
-        expect(body).not.toMatch(/UPDATE\s+(?!form_)/i);
-        expect(body).not.toMatch(/DELETE\s+FROM\s+(?!form_|email_)/i);
-      }
+      expect(body).not.toMatch(/env\.DB\.prepare/);
+      expect(body).not.toMatch(/INSERT\s+INTO\s+(?!form_|checkin_|email_|pii_)/i);
+      expect(body).not.toMatch(/UPDATE\s+(?!form_)/i);
+      expect(body).not.toMatch(/DELETE\s+FROM\s+(?!form_|email_)/i);
     }
+    // Existence guarantee — at least one source file must define the function.
+    expect(
+      foundCount,
+      'runFormDataLifecycle function not found in any source file'
+    ).toBeGreaterThan(0);
   });
 });
 

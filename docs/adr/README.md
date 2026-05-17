@@ -14,6 +14,7 @@ ADRs are **descriptive, not prescriptive**. They record decisions that have alre
 | [ADR-009](ADR-009-ncr-v2-geographic-hierarchy.md)          | NCR v2 geographic hierarchy                                | Accepted | 2026-04    |
 | [ADR-010](ADR-010-templates-breadth-tiers-depth.md)        | Templates breadth × tiers depth                            | Accepted | 2026-04    |
 | [ADR-011](ADR-011-shared-report-wkrp-consumer-boundary.md) | SharedReport read API as the WKRP consumer boundary        | Accepted | 2026-05-15 |
+| [ADR-012](ADR-012-uec-build-time-consumption.md)           | UEC build-time consumption via manually-synced TS module   | Accepted | 2026-05-17 |
 
 ADR series in progress (planned, in numerical order — none of these block any current work):
 
