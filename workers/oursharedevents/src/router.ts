@@ -320,6 +320,18 @@ export async function route(
   // sign-in page on auth fail. Otherwise fall through to the JSON 401
   // so machine consumers (curl, scripts, CI) still get a structured
   // response.
+  //
+  // EDGE-LAYER NOTE (2026-05-18, OSE-338) — On staging (and prod),
+  // Cloudflare Access fronts /admin, /manage, /dashboard, /create, and
+  // /api/v2/admin/* at the network edge. Unauthenticated requests are
+  // redirected (302 → CF Access login at mzdano.cloudflareaccess.com)
+  // BEFORE reaching the worker, so this `handleAdminSignInPage`
+  // 401 path is effectively shadowed on those environments. The worker
+  // remains the contract owner for local dev + any environment without
+  // CF Access in front. Postman ose-pages.json OSE-R-001 tests assert
+  // the unified contract — "unauthenticated request is blocked,
+  // dashboard HTML is never served" — and accept either CF Access
+  // 302/200 OR worker 401 as satisfying that contract.
   if (pathname === '/admin' && method === 'GET') {
     const deny = requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
     if (deny) {
