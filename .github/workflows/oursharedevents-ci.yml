@@ -349,10 +349,34 @@ jobs:
         working-directory: ${{ env.WORKER_DIR }}
 
       # ── Shard: lint ────────────────────────────────────────────────────────
-      # Banned origins + eslint. Smallest shard, ~30-60s. Root deps only.
+      # Banned origins + eslint + deprecation-lock guard. Smallest shard,
+      # ~30-60s. Root deps only.
       - name: 'Security: Banned origins'
         if: matrix.shard == 'lint'
         run: npm run check:banned-origins
+
+      # Brain Invariant #10 (deprecation_lock): the canonical instance of
+      # the deprecation-lock pattern. OSE migrated off Google Apps Script
+      # to Cloudflare Workers + D1; this guard scans the repo for any
+      # reintroduced GAS pattern and fails non-zero on hit. A guard that
+      # exists in scripts/ but is never invoked by CI is cosmetic — the
+      # 0-architecture invariant test
+      # tests/e2e/0-architecture/deprecation-lock.invariant.spec.ts
+      # asserts this step exists in the workflow.
+      #
+      # Self-tests run BEFORE the guard itself. The Windows-path
+      # regression that hid behind the un-wired self-tests (allowlist
+      # silently inert when paths used backslashes; 91 entries loaded,
+      # 0 matched) is exactly what an un-tested guard ships. Running the
+      # self-tests in CI guarantees the next regression of the same class
+      # surfaces in seconds, not months.
+      - name: 'Security: Deprecation lock — self-tests'
+        if: matrix.shard == 'lint'
+        run: npm run test:guard-no-gas
+
+      - name: 'Security: Deprecation lock (no-GAS guard)'
+        if: matrix.shard == 'lint'
+        run: npm run guard:no-gas
 
       - name: 'Quality: Lint'
         if: matrix.shard == 'lint'
