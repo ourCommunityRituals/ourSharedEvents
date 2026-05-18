@@ -5,7 +5,7 @@
  * First line of defence against form-submission spam. For hard enforcement,
  * configure Cloudflare Rate Limiting Rules at the edge.
  *
- * Ported from Codex worker/src/handlers/sharedReport.ts.
+ * Ported from prior worker implementation.
  * Ref: https://developers.cloudflare.com/workers/runtime-apis/request/#incomingrequestcfproperties
  */
 

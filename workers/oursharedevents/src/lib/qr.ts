@@ -4,8 +4,9 @@
  * Generates QR codes as PNG data URIs with zero external dependencies.
  * Full Reed-Solomon error correction + minimal PNG encoder (DEFLATE uncompressed).
  *
- * Ported from the Codex/cloudflare-proxy implementation (nayuki/QR-Code-generator,
- * public domain). Supports byte mode, versions 1-5, EC levels L/M/Q/H.
+ * Ported from a prior cloudflare-proxy implementation (built atop
+ * nayuki/QR-Code-generator, public domain). Supports byte mode, versions 1-5,
+ * EC levels L/M/Q/H.
  *
  * Max URL capacity at version 5 / EC level M: 122 bytes — enough for all OSE
  * form URLs (origin + /forms/ + evt_ ID + ?type=email-signup ≈ 92 chars).

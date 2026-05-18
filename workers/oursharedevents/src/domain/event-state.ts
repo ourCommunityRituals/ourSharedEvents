@@ -18,7 +18,7 @@
  *
  * OSE convention: lowercase state values match the D1 status column.
  *
- * Ported from Codex worker/src/domain/assetState.ts (zero external imports).
+ * Ported from prior worker implementation (zero external imports).
  */
 
 // ── Types ─────────────────────────────────────────────────────────────────────

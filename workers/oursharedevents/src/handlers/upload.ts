@@ -16,7 +16,7 @@
  * Key schema: events/{eventId}/{timestamp}-{sanitisedName}[.ext]
  * GET URL:    /api/v2/uploads/events/{eventId}/{filename}
  *
- * Ported from Codex worker/src/handlers/v2AdminUploadFile.ts.
+ * Ported from prior worker implementation.
  */
 
 // ── Constants ─────────────────────────────────────────────────────────────────
