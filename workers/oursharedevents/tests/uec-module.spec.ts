@@ -236,6 +236,44 @@ describe('OSE-320 UEC module — canonical hex values match brain artifact', () 
     'CHECK-IN': { scan: '#006B6B', display: '#006B6B' },
     SHOP: { scan: '#1A4A48', display: '#1A4A48' },
   };
+  // Per-code wcag_grade regression block (added 2026-05-18 / OSE-332 sync
+  // of OSE-324 brain corrections). Locks in the post-correction declared
+  // grades — any future hex tweak that would drop the grade gets caught
+  // here AND at the brain-side WCAG CI gate (OSE-324, level3_unit.py).
+  const expectedGrades: Record<string, 'AA' | 'AAA'> = {
+    ENTER: 'AA', // Corrected from AAA → AA per OSE-324 (computed 6.59:1, below AAA 7:1)
+    LIVE: 'AA',
+    SPONSOR: 'AAA',
+    ARCHIVE: 'AA',
+    HELP: 'AA',
+    FEEDBACK: 'AA',
+    UTILITY: 'AAA',
+    ALERT: 'AA', // Carve-out via requires_alt_print=true — yellow fails WCAG on white
+    STAFF: 'AAA',
+    'CHECK-IN': 'AA', // Corrected from AAA → AA per OSE-324 (computed 6.33:1, below AAA 7:1)
+    SHOP: 'AAA',
+  };
+  for (const [id, expected] of Object.entries(expectedGrades)) {
+    test(`OSE-332 | UEC ${id} | wcag_grade matches brain canonical ${expected} (post-OSE-324 corrections)`, () => {
+      expect(getCode(id)?.wcag_grade).toBe(expected);
+    });
+  }
+
+  // Alt-print carve-out regression guard — ALERT must carry requires_alt_print
+  // since the brain documents the yellow-on-white contrast failure as a
+  // designed-substrate carve-out. If this flag ever drops off ALERT, the
+  // brand promise ("the color IS the instruction") silently weakens.
+  test('OSE-332 | UEC ALERT | requires_alt_print=true regression guard', () => {
+    expect(getCode('ALERT')?.requires_alt_print).toBe(true);
+  });
+
+  // Only ALERT should carry requires_alt_print — every other code must NOT
+  // have the flag, so an over-broad addition of the carve-out gets caught.
+  test('OSE-332 | UEC | only ALERT carries requires_alt_print=true', () => {
+    const flagged = CODES.filter((c) => c.requires_alt_print === true).map((c) => c.id);
+    expect(flagged).toEqual(['ALERT']);
+  });
+
   for (const [id, expected] of Object.entries(expectedHexes)) {
     test(`OSE-320 | UEC ${id} | scan_hex matches brain canonical ${expected.scan}`, () => {
       expect(getCode(id)?.scan_hex).toBe(expected.scan);
