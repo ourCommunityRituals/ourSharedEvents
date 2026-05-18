@@ -40,6 +40,13 @@ const PIPELINE_MIGRATIONS = [
   '0033_create_event_series.sql',
   '0034_events_add_series_id.sql',
   '0035_create_bigquery_export_state.sql',
+  // OSE-330 Phase 2 — Local Sponsor Covenant. Adds is_local to the
+  // existing sponsors table. NOT a pipeline-shape migration (sponsors is
+  // metadata, not per-attendee), but registering here satisfies the
+  // drift-guard at line ~320 which requires every 003x_*.sql to be listed.
+  // The per-migration Gate 2 check below treats this migration as a
+  // sponsors-metadata change (no per-attendee columns expected).
+  '0036_add_is_local_to_sponsors.sql',
 ];
 
 // The set of pipeline-related lib + handler files Gate 1 inspects.
@@ -315,6 +322,24 @@ describe('OSE-272 Gate 2: no raw anon_id columns in pipeline migrations', () => 
     // Sanity: doesn't sneak in any attendee-identity columns
     expect(src!).not.toMatch(COL_ANON_ID);
     expect(src!).not.toMatch(COL_IP_HASH);
+  });
+
+  test('migration 0036 (sponsors.is_local) only adds the locality classification axis', () => {
+    // OSE-330 Phase 2 — Local Sponsor Covenant. Adds is_local INTEGER to
+    // sponsors (metadata table). Not a pipeline-shape migration but
+    // registered in PIPELINE_MIGRATIONS so the drift-guard above stays
+    // satisfied; the equivalent of Gate 2 for this migration is:
+    //   (a) it ONLY adds is_local (not a per-attendee PII column)
+    //   (b) DEFAULT 0 for backward compatibility
+    //   (c) NOT NULL for schema-level guard (see tier-equity-sort.spec.ts
+    //       schema-rejects-NULL test for the matching assertion)
+    const src = loadMigrationByName('0036_add_is_local_to_sponsors.sql');
+    expect(src, '0036 not found in TEST_SOURCE_FILES_JSON').not.toBeNull();
+    expect(src!).toMatch(/ALTER TABLE sponsors ADD COLUMN is_local INTEGER NOT NULL DEFAULT 0/i);
+    // Sanity: doesn't sneak in any attendee-identity columns
+    expect(src!).not.toMatch(COL_ANON_ID);
+    expect(src!).not.toMatch(COL_IP_HASH);
+    expect(src!).not.toMatch(COL_EMAIL);
   });
 
   test('drift-guard: PIPELINE_MIGRATIONS list covers every 003x_*.sql in migrations/', () => {
