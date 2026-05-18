@@ -37,24 +37,24 @@ const IGNORED_DIRS = new Set([
   'playwright-report-smoke',
   'playwright-report-pages',
   'playwright-report-flows',
-  'archive',                  // Historical/archived code - not active
-  'workflow-archive',         // Archived workflows
-  '.security-reports',        // Historical security reports
-  'postman',                  // Postman collections with test data
-  'schemas',                  // JSON schemas with example data
-  'tests',                    // Test files with test patterns
+  'archive', // Historical/archived code - not active
+  'workflow-archive', // Archived workflows
+  '.security-reports', // Historical security reports
+  'postman', // Postman collections with test data
+  'schemas', // JSON schemas with example data
+  'tests', // Test files with test patterns
 ]);
 
 // Files/patterns to skip (documentation files are excluded by default)
 // These are legitimate documentation that may reference GAS for historical context
 const SKIP_PATTERNS = [
-  /\.md$/i,                   // Markdown files are documentation
-  /^\.clasp.*\.json$/,        // Clasp config files (GAS tooling - covered by allowlist)
-  /\.gs$/,                    // GAS source files (legitimately contain GAS code)
-  /\.test\.js$/,              // Test files (may contain test patterns)
-  /\.test\.ts$/,              // TypeScript test files
-  /\.spec\.js$/,              // Spec files (may contain test patterns)
-  /\.spec\.ts$/,              // TypeScript spec files
+  /\.md$/i, // Markdown files are documentation
+  /^\.clasp.*\.json$/, // Clasp config files (GAS tooling - covered by allowlist)
+  /\.gs$/, // GAS source files (legitimately contain GAS code)
+  /\.test\.js$/, // Test files (may contain test patterns)
+  /\.test\.ts$/, // TypeScript test files
+  /\.spec\.js$/, // Spec files (may contain test patterns)
+  /\.spec\.ts$/, // TypeScript spec files
 ];
 
 // File extensions to scan (note: .md is excluded via SKIP_PATTERNS as documentation)
@@ -74,7 +74,8 @@ const SCANNABLE_EXTENSIONS = new Set([
 const SCAN_ENV_FILES = true;
 
 // Allowlist file path
-const ALLOWLIST_PATH = process.env.GUARD_NO_GAS_ALLOWLIST ||
+const ALLOWLIST_PATH =
+  process.env.GUARD_NO_GAS_ALLOWLIST ||
   path.join(ROOT_DIR, 'scripts', 'guard-no-gas.allowlist.json');
 
 // ============================================================================
@@ -200,8 +201,13 @@ function loadAllowlist() {
  * Check if a finding is allowlisted.
  */
 function isAllowlisted(allowlist, filePath, token) {
-  // Normalize path to be relative to ROOT_DIR
-  const relativePath = path.relative(ROOT_DIR, filePath);
+  // Normalize path to be relative to ROOT_DIR AND use forward slashes so the
+  // lookup matches the allowlist JSON (which always uses forward slashes for
+  // cross-platform stability). Without the `.replace(/\\/g, '/')`, the entire
+  // allowlist was silently inert on Windows runners — every path with a
+  // backslash separator missed every entry — producing 137 false-positive
+  // findings against a fully-allowlisted codebase.
+  const relativePath = path.relative(ROOT_DIR, filePath).replace(/\\/g, '/');
 
   const allowedTokens = allowlist[relativePath];
   if (!allowedTokens) {
@@ -334,7 +340,11 @@ function scanFile(filePath, allowlist) {
         const snippet = line.trim().slice(0, 80);
 
         findings.push({
-          file: path.relative(ROOT_DIR, filePath),
+          // Same forward-slash normalization as isAllowlisted() — keeps
+          // findings output stable across Windows + POSIX so allowlist
+          // matching, log scraping, and test assertions all read the same
+          // path shape regardless of host OS.
+          file: path.relative(ROOT_DIR, filePath).replace(/\\/g, '/'),
           line: lineNum + 1,
           column: match.index + 1,
           token,
