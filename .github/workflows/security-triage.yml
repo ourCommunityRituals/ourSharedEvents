@@ -84,17 +84,34 @@ jobs:
         # `gh issue create --label X` errors when label X is missing. Create
         # the three labels we attach below idempotently so the issue creation
         # step never fails on a label-not-found error.
+        #
+        # OSE-340 fix (2026-05-18): pipe `|` is the spec separator, NOT colon.
+        # The label name `priority:high` contains a colon, so a colon-separated
+        # spec string (the prior implementation) made bash's `${spec%%:*}` strip
+        # at the first colon, parsing `priority:high:#b60205:High priority` as
+        # name=`priority`, color=`high` (invalid hex), desc=`#b60205:High priority`.
+        # `gh label create priority --color high` then failed; `|| true` swallowed
+        # the error; the real label `priority:high` was never created; the
+        # downstream `gh issue create --label "priority:high"` failed with
+        # `could not add label: 'priority:high' not found` (run 26051710958).
         if: steps.existing.outputs.count == '0'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          for spec in "security:#d73a4a:Security finding" "priority:high:#b60205:High priority" "auto-triage:#0e8a16:Created by security-triage workflow"; do
-            name="${spec%%:*}"
-            rest="${spec#*:}"
-            color="${rest%%:*}"
-            desc="${rest#*:}"
+          for spec in "security|#d73a4a|Security finding" "priority:high|#b60205|High priority" "auto-triage|#0e8a16|Created by security-triage workflow"; do
+            name="${spec%%|*}"
+            rest="${spec#*|}"
+            color="${rest%%|*}"
+            desc="${rest#*|}"
             if ! gh label list --search "$name" --json name --jq '.[].name' | grep -Fxq "$name"; then
-              gh label create "$name" --color "${color#'#'}" --description "$desc" || true
+              echo "[label-bootstrap] creating label: '$name' (color=$color, desc=$desc)"
+              if ! gh label create "$name" --color "${color#'#'}" --description "$desc"; then
+                # Don't swallow the error silently like the pre-OSE-340 code did
+                # — log it so a future debug pass sees what actually happened.
+                echo "[label-bootstrap] WARN: gh label create failed for '$name'; downstream issue create may fail"
+              fi
+            else
+              echo "[label-bootstrap] label '$name' already exists; skipping create"
             fi
           done
 
