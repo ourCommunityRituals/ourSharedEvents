@@ -379,10 +379,31 @@ jobs:
         if: matrix.shard == 'tests'
         run: npm test
 
+      # ── OCR-docs brain checkout (for OSE-323 UEC drift check) ──────────────
+      # The drift check in workers/oursharedevents/tests/uec-drift-check.spec.ts
+      # (vitest) compares the OSE consumed UEC copy against the brain canonical.
+      # vitest.config.mts reads the brain artifact at config time and injects
+      # TEST_BRAIN_UEC_JSON. When BRAIN_DIR is absent, the drift gate SKIPS
+      # locally; this step ensures it FIRES in CI by checking out OCR-docs
+      # and pointing BRAIN_DIR at it.
+      - name: 'Checkout OCR-docs brain (for OSE-323 drift check)'
+        if: matrix.shard == 'tests'
+        uses: actions/checkout@v4
+        with:
+          repository: ourCommunityRituals/OCR-docs
+          ref: main
+          path: ocr-docs-brain-checkout
+          # OCR-docs is private; needs the cross-repo read token (same one
+          # brain-contract-check.yml uses). Default GITHUB_TOKEN can't read
+          # across private repos.
+          token: ${{ secrets.OCR_PROPAGATE_TOKEN }}
+
       - name: 'Quality: Worker D1 schema'
         if: matrix.shard == 'tests'
         run: npm test
         working-directory: ${{ env.WORKER_DIR }}
+        env:
+          BRAIN_DIR: ${{ github.workspace }}/ocr-docs-brain-checkout/ocr-docs-brain
 
       # ── Shard: a11y ────────────────────────────────────────────────────────
       # axe-core WCAG 2.0 AA scan via the worker test runner.
