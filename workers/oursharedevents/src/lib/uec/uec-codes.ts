@@ -61,6 +61,17 @@ export interface UECCode {
   wcag_grade: WcagGrade;
   /** Extension codes only. Undefined for core (01-07). */
   extension_priority?: ExtensionPriority;
+  /**
+   * Optional carve-out marker (added 2026-05-18 / OSE-332 sync of OSE-324
+   * brain corrections). When `true`, this code's `scan_hex` is documented
+   * as fundamentally unable to pass WCAG contrast on white background
+   * (e.g., ALERT yellow). Standard contrast assumption does NOT apply;
+   * code MUST be printed on alternative substrate (e.g., yellow background
+   * with dark modules). Brain-side WCAG CI gate skips codes with this flag.
+   * Caller contract: must justify the carve-out in rationale.verdict on
+   * the brain side. Presence is the signal; only `true` is meaningful.
+   */
+  requires_alt_print?: true;
 }
 
 export const VERSION = '1.1' as const;
@@ -94,7 +105,10 @@ export const CODES: ReadonlyArray<UECCode> = [
     phase: 'Arrival',
     verticals: ALL_VERTICALS,
     status: 'CHANGE',
-    wcag_grade: 'AAA',
+    // Corrected 2026-05-18 (OSE-332 sync of OSE-324 brain corrections):
+    // computed 6.59:1 on white, below AAA threshold (7:1). Still passes
+    // AA (>=4.5:1) comfortably. No scan_hex change.
+    wcag_grade: 'AA',
   },
   {
     id: 'LIVE',
@@ -198,8 +212,14 @@ export const CODES: ReadonlyArray<UECCode> = [
     phase: 'Anytime',
     verticals: ALL_VERTICALS,
     status: 'ADD',
+    // Yellow #B8960A computes 2.84:1 on white — fundamentally below WCAG AA
+    // (4.5:1). Per OSE-324 / OSE-332 (2026-05-18): requires_alt_print=true is
+    // the designed carve-out — ALERT codes MUST be printed on yellow background
+    // with dark modules (the inverse of standard print pattern). The brain
+    // WCAG CI gate skips codes with this flag set.
     wcag_grade: 'AA',
     extension_priority: 'HIGH',
+    requires_alt_print: true,
   },
   {
     id: 'STAFF',
@@ -230,7 +250,10 @@ export const CODES: ReadonlyArray<UECCode> = [
     phase: 'Arrival',
     verticals: ['Sports', 'School', 'Church', 'Museum', 'Rec Center', 'Civic'],
     status: 'KEEP',
-    wcag_grade: 'AAA',
+    // Corrected 2026-05-18 (OSE-332 sync of OSE-324 brain corrections):
+    // teal #006B6B computed 6.33:1 on white, below AAA threshold (7:1).
+    // Still passes AA (>=4.5:1) comfortably. No scan_hex change.
+    wcag_grade: 'AA',
     extension_priority: 'MEDIUM',
   },
   {
