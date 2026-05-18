@@ -111,6 +111,33 @@ try {
   );
 }
 
+// ── OSE-336: Load brain sponsor-allocation artifact for drift check ─────────
+// Mirrors the UEC drift pattern (OSE-323) but for the Local Sponsor Covenant
+// canonical at OCR-docs/ocr-docs-brain/sponsor-allocation.yaml. The drift check
+// (tests/sponsor-allocation-drift-check.spec.ts) compares this artifact against
+// the OSE consumed copy at src/lib/sponsor-allocation.ts (SPONSOR_ALLOCATION
+// const). Same skip-on-missing behavior as UEC: local dev without OCR-docs
+// checked out is not blocked; CI always populates this via the workflow
+// checkout step that already sets BRAIN_DIR.
+const brainSponsorAllocPath = join(brainDir, 'sponsor-allocation.yaml');
+let brainSponsorAllocJson = '';
+try {
+  if (existsSync(brainSponsorAllocPath)) {
+    brainSponsorAllocJson = JSON.stringify(yaml.load(readFileSync(brainSponsorAllocPath, 'utf8')));
+  } else {
+    // eslint-disable-next-line no-console
+    console.warn(
+      `[vitest config] brain sponsor-allocation artifact not found at ${brainSponsorAllocPath} — drift check will skip. ` +
+        `Set BRAIN_DIR env var or clone OCR-docs as sibling to enable drift detection locally.`
+    );
+  }
+} catch (e) {
+  // eslint-disable-next-line no-console
+  console.warn(
+    `[vitest config] failed to load brain sponsor-allocation artifact at ${brainSponsorAllocPath}: ${e instanceof Error ? e.message : String(e)}`
+  );
+}
+
 /**
  * Split migration SQL into individual statements, correctly handling
  * SQLite trigger bodies that contain nested BEGIN...END blocks.
@@ -169,6 +196,10 @@ export default defineConfig({
           // at config time. Empty string when brain not available (local dev
           // without OCR-docs checked out); CI always populates this.
           TEST_BRAIN_UEC_JSON: brainUecJson,
+          // OSE-336 drift check input — brain canonical sponsor-allocation
+          // artifact (the Local Sponsor Covenant scaffolding from OSE-330
+          // Phase 1). Same skip-on-empty behavior as TEST_BRAIN_UEC_JSON.
+          TEST_BRAIN_SPONSOR_ALLOCATION_JSON: brainSponsorAllocJson,
           ADMIN_KEY: 'test-admin-key-e2e-2026',
           ALLOW_ADMIN_KEY_FALLBACK: 'true',
           X_OCR_INTERNAL: 'test-ocr-internal-secret-2026',
