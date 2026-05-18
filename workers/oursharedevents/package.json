@@ -16,6 +16,9 @@
     "test:all": "vitest run",
     "test:a11y": "vitest run --config vitest.config.a11y.mts"
   },
+  "dependencies": {
+    "@ocr/flags": "file:../../../packages/flags"
+  },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.14.2",
     "@cloudflare/workers-types": "^4.0.0",
