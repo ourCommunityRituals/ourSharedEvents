@@ -107,6 +107,14 @@ export async function handleUecResolve(request: Request): Promise<Response> {
         url_path: code.url_path,
         phase: code.phase,
         wcag_grade: code.wcag_grade,
+        // Surface the alt-print carve-out (OSE-324 / OSE-332 — added to brain
+        // for codes whose scan_hex fundamentally fails WCAG on white, e.g.
+        // ALERT yellow). Conditional include — only emit when true so the
+        // response shape stays clean for codes without the flag.
+        // CCR-4 audit gap #2 (2026-05-18): close consumer-side surface so
+        // downstream UI can render alt-print guidance (yellow background +
+        // dark modules) when this flag is set.
+        ...(code.requires_alt_print ? { requires_alt_print: true } : {}),
       },
       qr: {
         data_uri: qrDataUri,
