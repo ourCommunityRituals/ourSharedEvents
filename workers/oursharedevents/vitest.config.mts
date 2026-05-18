@@ -3,6 +3,7 @@ import { join, resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { defineConfig } from 'vitest/config';
 import { cloudflarePool, cloudflareTest } from '@cloudflare/vitest-pool-workers';
+import * as yaml from 'js-yaml';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const rootDir = resolve(__dirname);
@@ -76,6 +77,40 @@ const sourceFiles = {
 };
 const wranglerToml = readFileSync(join(rootDir, 'wrangler.toml'), 'utf8');
 
+// ── Load brain UEC artifact for OSE-323 drift check ─────────────────────────
+// The drift check (tests/uec-drift-check.spec.ts) compares this artifact
+// against the OSE consumed copy at src/lib/uec/uec-codes.ts. Brain is
+// always canonical; drift always resolves toward brain (never the reverse).
+//
+// Path resolution:
+//   1. BRAIN_DIR env var (CI sets this — points at the checked-out OCR-docs)
+//   2. Default: ../../../OCR-docs/ocr-docs-brain (local dev sibling layout)
+//
+// If neither path exists, TEST_BRAIN_UEC_JSON is injected as '' and the
+// drift check SKIPS with a clear message — local devs without OCR-docs
+// checked out aren't blocked; CI always has it via the workflow checkout step.
+const brainDir = process.env.BRAIN_DIR
+  ? resolve(process.env.BRAIN_DIR)
+  : resolve(rootDir, '..', '..', '..', 'OCR-docs', 'ocr-docs-brain');
+const brainUecPath = join(brainDir, 'uec-codes.yaml');
+let brainUecJson = '';
+try {
+  if (existsSync(brainUecPath)) {
+    brainUecJson = JSON.stringify(yaml.load(readFileSync(brainUecPath, 'utf8')));
+  } else {
+    // eslint-disable-next-line no-console
+    console.warn(
+      `[vitest config] brain UEC artifact not found at ${brainUecPath} — drift check will skip. ` +
+        `Set BRAIN_DIR env var or clone OCR-docs as sibling to enable drift detection locally.`
+    );
+  }
+} catch (e) {
+  // eslint-disable-next-line no-console
+  console.warn(
+    `[vitest config] failed to load brain UEC artifact at ${brainUecPath}: ${e instanceof Error ? e.message : String(e)}`
+  );
+}
+
 /**
  * Split migration SQL into individual statements, correctly handling
  * SQLite trigger bodies that contain nested BEGIN...END blocks.
@@ -130,6 +165,10 @@ export default defineConfig({
           TEST_FORMS_MIGRATION_STATEMENTS: JSON.stringify(formsMigrationStatements),
           TEST_SOURCE_FILES_JSON: JSON.stringify(sourceFiles),
           TEST_WRANGLER_TOML: wranglerToml,
+          // OSE-323 drift check input — brain canonical UEC artifact loaded
+          // at config time. Empty string when brain not available (local dev
+          // without OCR-docs checked out); CI always populates this.
+          TEST_BRAIN_UEC_JSON: brainUecJson,
           ADMIN_KEY: 'test-admin-key-e2e-2026',
           ALLOW_ADMIN_KEY_FALLBACK: 'true',
           X_OCR_INTERNAL: 'test-ocr-internal-secret-2026',
