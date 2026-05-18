@@ -73,27 +73,32 @@ export const SPONSOR_ALLOCATION: SponsorAllocationCanonical = {
   slot_floor: {
     status: 'scaffolded',
     surfaces: {
+      // Rationale strings INTENTIONALLY include trailing `\n` to match brain
+      // canonical's YAML folded-scalar (`>` style) output byte-for-byte. The
+      // OSE-336 drift check (tests/sponsor-allocation-drift-check.spec.ts)
+      // enforces this byte-equivalence. If you edit a rationale here, also
+      // edit the matching brain canonical and re-run the drift check.
       posterTop: {
         cap: null,
         local_floor: 1,
         rationale:
-          'Poster is the highest-visibility physical surface. Local sponsors guaranteed at least 1 of the cap slots when cap > 0.',
+          'Poster is the highest-visibility physical surface. Local sponsors guaranteed at least 1 of the cap slots when cap > 0.\n',
       },
       tvTop: {
         cap: null,
         local_floor: 1,
-        rationale: 'TV top banner. Same local-first guarantee as poster.',
+        rationale: 'TV top banner. Same local-first guarantee as poster.\n',
       },
       tvSide: {
         cap: null,
         local_floor: 2,
-        rationale: 'TV sidebar has more slots historically; double the local floor.',
+        rationale: 'TV sidebar has more slots historically; double the local floor.\n',
       },
       mobileBanner: {
         cap: null,
         local_floor: 0,
         rationale:
-          'Mobile banner is a single-impression surface; tier sort already delivers locals-first via display_priority. No additional floor needed when cap is set.',
+          'Mobile banner is a single-impression surface; tier sort already delivers locals-first via display_priority above. No additional floor needed when cap is set.\n',
       },
     },
   },
