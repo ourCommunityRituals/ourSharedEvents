@@ -47,6 +47,9 @@ interface SuccessResponse {
     url_path: string;
     phase: string;
     wcag_grade: string;
+    // Surfaced 2026-05-18 (CCR-4 audit gap closure) — present + true only
+    // when the code's scan_hex fails WCAG on white (ALERT yellow).
+    requires_alt_print?: true;
   };
   qr: {
     data_uri: string;
@@ -239,6 +242,33 @@ describe('OSE-320 GET /api/v2/uec/resolve — refusal paths (HTTP 400)', () => {
     expect(body.message).not.toMatch(/undefined|null|TypeError|SyntaxError/);
     // Must mention what to use instead
     expect(body.message).toMatch(/canonical|valid|use one of/i);
+  });
+});
+
+describe('OSE-320 GET /api/v2/uec/resolve — requires_alt_print surface (CCR-4 gap closure 2026-05-18)', () => {
+  test('OSE-320 | API | GET /api/v2/uec/resolve?code=ALERT | response.code.requires_alt_print === true', async () => {
+    // ALERT yellow (#B8960A) computes 2.84:1 on white — fundamentally below
+    // WCAG AA. The brain documents this carve-out via requires_alt_print=true
+    // (OSE-324). This test confirms the flag flows through the OSE-side
+    // consumed copy AND the endpoint response shape so downstream UI can
+    // render alt-print guidance (yellow background + dark modules) without
+    // having to introspect the typed module separately.
+    const res = await SELF.fetch(`${BASE}/api/v2/uec/resolve?code=ALERT`);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as SuccessResponse;
+    expect(body.code.id).toBe('ALERT');
+    expect(body.code.requires_alt_print).toBe(true);
+  });
+
+  test('OSE-320 | API | GET /api/v2/uec/resolve?code=ENTER | response.code OMITS requires_alt_print (only ALERT has it)', async () => {
+    // Negative guard — for every code that does NOT carry the carve-out
+    // flag, the response must NOT include the field (clean shape, no
+    // false-positive consumer confusion).
+    const res = await SELF.fetch(`${BASE}/api/v2/uec/resolve?code=ENTER`);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as SuccessResponse;
+    expect(body.code.id).toBe('ENTER');
+    expect(body.code.requires_alt_print).toBeUndefined();
   });
 });
 

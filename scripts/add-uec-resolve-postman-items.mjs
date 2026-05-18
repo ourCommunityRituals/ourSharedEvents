@@ -34,7 +34,13 @@ const uecGroup = {
               "pm.test('code.id is ENTER (matched by green label)', () => pm.expect(json.code.id).to.eql('ENTER'));",
               "pm.test('code.scan_hex is canonical', () => pm.expect(json.code.scan_hex).to.eql('#1A6B2F'));",
               "pm.test('code.display_hex is canonical', () => pm.expect(json.code.display_hex).to.eql('#2D6A4F'));",
-              "pm.test('code.wcag_grade is AAA', () => pm.expect(json.code.wcag_grade).to.eql('AAA'));",
+              // TODO (OSE-3xx): refactor this script to derive canonical hex/grade
+              // values from src/lib/uec/uec-codes.ts at script run-time instead of
+              // hardcoding them here. Hardcoded values drift when brain corrects
+              // canonical state (see OSE-324 + OSE-332). Until that refactor lands,
+              // any wcag_grade / hex change requires a manual update + re-run here.
+              // Current state below was corrected 2026-05-18 post-OSE-332 deploy.
+              "pm.test('code.wcag_grade is AA', () => pm.expect(json.code.wcag_grade).to.eql('AA'));",
               "pm.test('qr.data_uri is PNG data URI', () => pm.expect(json.qr.data_uri).to.match(/^data:image\\/png;base64,/));",
               "pm.test('qr.encoded_url uses request origin', () => pm.expect(json.qr.encoded_url).to.match(/\\/enter$/));",
               "pm.test('uec_version is 1.1', () => pm.expect(json.uec_version).to.eql('1.1'));",
