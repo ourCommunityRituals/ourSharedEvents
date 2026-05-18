@@ -74,14 +74,16 @@ describe('QA-1: Migration idempotency', () => {
     expect(names).toHaveLength(20);
   });
 
-  test('indexes remain at exactly 39 after idempotent re-run', async () => {
+  test('indexes remain at exactly 40 after idempotent re-run', async () => {
     // 33 (pre-OSE-240) + 2 (idx_shortlinks_*, OSE-240) + 4 (OSE-272 Session 2:
     // idx_anon_id_returns_venue_visit, idx_event_series_venue_state,
-    // idx_event_series_venue_dow_hour, idx_events_series_start) = 39.
+    // idx_event_series_venue_dow_hour, idx_events_series_start) + 1
+    // (idx_sponsors_is_local, OSE-330 Phase 2 — Local Sponsor Covenant
+    // enforcement, migration 0036) = 40.
     const indexes = await env.DB.prepare(
       "SELECT name FROM sqlite_master WHERE type='index' AND name LIKE 'idx_%'"
     ).all();
-    expect(indexes.results).toHaveLength(39);
+    expect(indexes.results).toHaveLength(40);
   });
 });
 

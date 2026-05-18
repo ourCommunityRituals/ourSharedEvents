@@ -8,8 +8,18 @@
  * Surface filtering determines which placements each sponsor qualifies for.
  * All qualifying sponsors accumulate (rotation, never replacement).
  *
- * Tier priority (display order only): title(1) > platinum(2) > gold(3) >
- * silver(4) > bronze(5) > primary(6). Tier does NOT affect UX access.
+ * ─── Display priority (OSE-330 — Local Sponsor Covenant) ───────────────────
+ * Two-level sort, locals-first:
+ *   1. is_local=true sponsors (sorted by tier priority within the group)
+ *   2. is_local=false sponsors (sorted by tier priority within the group)
+ * No interleaving. A primary-tier local appears BEFORE a platinum-tier
+ * non-local. This is the LITERAL mechanical implementation of the
+ * Local Sponsor Covenant — see brain Invariant #5 + ADR-013 +
+ * ocr-docs-brain/sponsor-allocation.yaml.
+ *
+ * Tier priority within each group: title(1) > platinum(2) > gold(3) >
+ * silver(4) > bronze(5) > primary(6). Tier does NOT affect UX access OR
+ * cross the local/non-local boundary.
  */
 
 // ─── Types ──────────────────────────────────────────────────────────────────────
@@ -25,6 +35,14 @@ export interface SponsorRow {
   click_token: string | null;
   impression_token: string | null;
   is_active: number;
+  /**
+   * Local-business classification (OSE-330 Phase 2). D1 returns SQLite
+   * BOOLEAN as 0/1 integer. is_local=1 means the sponsor is a local
+   * business and gets top-of-display position via the Local Sponsor
+   * Covenant — see tierSort() below. Defaults to 0 for existing sponsors
+   * (backward-compatible per migration 0036).
+   */
+  is_local: number;
   created_at: string;
   updated_at: string;
 }
@@ -63,7 +81,32 @@ const TIER_PRIORITY: Record<string, number> = {
   primary: 6,
 };
 
+/**
+ * Two-level sort implementing the Local Sponsor Covenant (OSE-330 / brain
+ * Invariant #5). Locals first (regardless of tier); then non-locals
+ * (regardless of tier). Tier breaks ties WITHIN each group. No
+ * interleaving across the local/non-local boundary.
+ *
+ * Invariant: for any (a, b) where a.is_local === 1 and b.is_local === 0,
+ * tierSort(a, b) MUST be negative (a sorts before b) regardless of tier
+ * values. Tested in tests/e2e/0-architecture/tier-equity.invariant.spec.ts.
+ *
+ * Brand promise (per brain canonical sponsor-allocation.yaml + ADR-013):
+ * "A sponsor matching platform that pushes the highest bidder to the top
+ * is a standard ad network. OSE's covenant — that the local stays in — is
+ * the differentiating brand promise that creates the local-economy
+ * flywheel."
+ */
 function tierSort(a: SponsorRow, b: SponsorRow): number {
+  // Level 1: locals before non-locals (the covenant).
+  // Coerce to boolean to handle null/undefined defensively (existing rows
+  // pre-migration 0036 might lack is_local — treat them as non-local).
+  const aLocal = a.is_local === 1;
+  const bLocal = b.is_local === 1;
+  if (aLocal !== bLocal) {
+    return aLocal ? -1 : 1;
+  }
+  // Level 2: within the same locality group, tier priority breaks ties.
   return (TIER_PRIORITY[a.tier] ?? 99) - (TIER_PRIORITY[b.tier] ?? 99);
 }
 
