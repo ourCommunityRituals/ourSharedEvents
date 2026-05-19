@@ -253,6 +253,21 @@ jobs:
       # file:-linked @ocr/flags exposes its devDependencies to npm ls --all,
       # causing CycloneDX to fail. Strip them from the installed copy so SBOM
       # only inventories production dependencies.
+      #
+      # IMPORTANT — this step destructively mutates node_modules. The Install
+      # Dependencies step earlier uses an install-stamp keyed on
+      # `package-lock.json` hash to skip `npm ci` on subsequent runs when the
+      # lock hasn't changed. Self-hosted runners persist disk between runs, so
+      # without invalidating the stamp here, the NEXT run inherits the
+      # mutated `@ocr/flags/package.json` (devDependencies stripped). The
+      # subsequent `npm audit` then submits a package tree that doesn't match
+      # `package-lock.json` to the npm registry's audit endpoint, which
+      # rejects it with `400 Bad Request — Invalid package tree, run
+      # npm install to rebuild your package-lock.json`. Diagnosed via
+      # workflow_dispatch with force_clean=true (run 26111985672 = success
+      # vs run 26110784159 on same SHA = failure). The fix: invalidate the
+      # install stamp at the end of this step so the next run does a
+      # fresh `npm ci` against the canonical lockfile-derived tree.
       - name: Fix @ocr/flags for SBOM resolution
         run: |
           FLAGS_PKG="node_modules/@ocr/flags/package.json"
@@ -264,6 +279,10 @@ jobs:
               fs.writeFileSync('$FLAGS_PKG', JSON.stringify(pkg, null, 2));
             "
           fi
+          # Invalidate install stamp — node_modules is no longer pristine
+          # after the @ocr/flags mutation above. Next run must do `npm ci`
+          # to restore lockfile-canonical state for `npm audit`.
+          rm -f node_modules/.install-stamp
 
       - name: Generate SBOM
         run: |
