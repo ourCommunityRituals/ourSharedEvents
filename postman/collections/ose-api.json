@@ -2036,7 +2036,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "const ct = pm.response.headers.get('Content-Type') || '';",
-                  "if (!ct.includes('application/json')) { pm.test('CF Access blocked seed POST', function() { pm.expect.fail('admin path edge-shadowed'); }); return; }",
+                  "if (!ct.includes('application/json')) { pm.test(`CF Access shadow on seed POST (HTTP ${pm.response.code}, Content-Type=${ct}) — see OSE-349`, function() { pm.expect.fail('admin path edge-shadowed; likely STALE service token rather than missing wiring'); }); return; }",
                   "pm.test('Seed POST status is 200 or 201', function() { pm.expect([200, 201]).to.include(pm.response.code); });",
                   "const sponsor = (pm.response.json().item || pm.response.json().sponsor || pm.response.json());",
                   "pm.test('Seeded local-platinum sponsor', function() { pm.expect(sponsor.id).to.eql('covenant-fixture-local-platinum'); pm.expect(sponsor.is_local).to.eql(1); pm.expect(sponsor.tier).to.eql('platinum'); });"
@@ -2071,7 +2071,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "const ct = pm.response.headers.get('Content-Type') || '';",
-                  "if (!ct.includes('application/json')) { pm.test('CF Access blocked seed POST', function() { pm.expect.fail('admin path edge-shadowed'); }); return; }",
+                  "if (!ct.includes('application/json')) { pm.test(`CF Access shadow on seed POST (HTTP ${pm.response.code}, Content-Type=${ct}) — see OSE-349`, function() { pm.expect.fail('admin path edge-shadowed; likely STALE service token rather than missing wiring'); }); return; }",
                   "pm.test('Seed POST status is 200 or 201', function() { pm.expect([200, 201]).to.include(pm.response.code); });",
                   "const sponsor = (pm.response.json().item || pm.response.json().sponsor || pm.response.json());",
                   "pm.test('Seeded nonlocal-bronze sponsor', function() { pm.expect(sponsor.id).to.eql('covenant-fixture-nonlocal-bronze'); pm.expect(sponsor.is_local).to.eql(0); });"
@@ -2106,7 +2106,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "const ct = pm.response.headers.get('Content-Type') || '';",
-                  "if (!ct.includes('application/json')) { pm.test('CF Access blocked seed POST', function() { pm.expect.fail('admin path edge-shadowed'); }); return; }",
+                  "if (!ct.includes('application/json')) { pm.test(`CF Access shadow on seed POST (HTTP ${pm.response.code}, Content-Type=${ct}) — see OSE-349`, function() { pm.expect.fail('admin path edge-shadowed; likely STALE service token rather than missing wiring'); }); return; }",
                   "pm.test('Seed POST status is 200 or 201', function() { pm.expect([200, 201]).to.include(pm.response.code); });",
                   "const sponsor = (pm.response.json().item || pm.response.json().sponsor || pm.response.json());",
                   "pm.test('Seeded nonlocal-title sponsor (highest tier non-local)', function() { pm.expect(sponsor.id).to.eql('covenant-fixture-nonlocal-title'); pm.expect(sponsor.is_local).to.eql(0); pm.expect(sponsor.tier).to.eql('title'); });"
