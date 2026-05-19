@@ -733,11 +733,22 @@ jobs:
         env:
           ADMIN_KEY: ${{ secrets.ADMIN_KEY }}
           X_OCR_INTERNAL: ${{ secrets.X_OCR_INTERNAL }}
+          # CF Access service token — required for section 11 (Sponsor Covenant)
+          # which seeds + cleans up admin sponsors. The seed/cleanup POSTs hit
+          # /api/v2/admin/* which CF Access shadows at the edge with a 302/HTML
+          # redirect before the request reaches the worker. Forwarding the
+          # service token bypasses CF Access at the edge while preserving the
+          # worker-side Bearer auth check. Without these secrets the covenant
+          # test fails loudly (not silently) — see section 11 seed tests.
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
         run: |
           npx newman run postman/collections/ose-api.json \
             -e postman/environments/ose-staging.json \
             --env-var "adminKey=$ADMIN_KEY" \
             --env-var "ocrInternalSecret=$X_OCR_INTERNAL" \
+            --env-var "cfAccessClientId=$CF_ACCESS_CLIENT_ID" \
+            --env-var "cfAccessClientSecret=$CF_ACCESS_CLIENT_SECRET" \
             --bail \
             --reporters cli,junit \
             --reporter-junit-export .test-results/newman-api-junit.xml

@@ -1966,6 +1966,350 @@
           }
         }
       ]
+    },
+    {
+      "name": "11. Sponsor Covenant (Brain Invariant #5 — Local Sponsor Covenant)",
+      "description": "T3 (Newman against staging) coverage of Brain Invariant #5: the Local Sponsor Covenant. On any event with mixed-locality sponsors, local sponsors MUST appear in the resolved sponsor list BEFORE non-local sponsors regardless of pricing tier; within each group, tier breaks ties.\n\nTest pyramid context — this section is the network-staging layer. Companions:\n  • L0 structural: tests/e2e/0-architecture/tier-equity.invariant.spec.ts (code shape)\n  • L0 schema:     workers/oursharedevents/tests/schema.spec.ts + constraints.spec.ts + shared-report-pipeline-invariants.spec.ts\n  • L0 drift:      workers/oursharedevents/tests/sponsor-allocation-drift-check.spec.ts (brain↔OSE)\n  • L1 in-process: workers/oursharedevents/tests/tier-equity-sort.spec.ts (7 cases via SELF.fetch in miniflare)\n  • L3 (this):     covenant assertion against deployed worker on stg.oursharedevents.com\n\nFlow per run:\n  1. seed 4 sponsors on test-event-001 with mixed (is_local × tier) — stable IDs prefixed `covenant-fixture-` so re-runs upsert rather than duplicate\n  2. assert GET /api/v2/events/test-event-001/sponsors returns them in covenant order:\n     locals first (platinum-local, bronze-local), then non-locals by tier (title-nonlocal, bronze-nonlocal)\n  3. cleanup — DELETE the 4 fixture sponsors\n\nRequires CF Access service token in env (cfAccessClientId + cfAccessClientSecret) — seed/cleanup POST/DELETE hit /api/v2/admin/* which CF Access shadows at edge. Without the service token the seed step's CF-Access-Blocked branch fails the test with an actionable message (the covenant cannot be proven if seeding cannot succeed).",
+      "auth": {
+        "type": "bearer",
+        "bearer": [{ "key": "token", "value": "{{adminKey}}", "type": "string" }]
+      },
+      "item": [
+        {
+          "name": "OSE-INV5 | T3 | seed | local-bronze sponsor",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Covenant cannot be proven if seed cannot land — fail loud, not silent.",
+                  "const ct = pm.response.headers.get('Content-Type') || '';",
+                  "if (!ct.includes('application/json')) {",
+                  "    pm.test('COVENANT TEST BLOCKED: seed POST shadowed by CF Access (set CF_ACCESS_CLIENT_ID + CF_ACCESS_CLIENT_SECRET secrets in CI; the Newman invocation forwards them as cfAccessClientId/Secret env vars which become CF-Access-Client-* headers)', function() {",
+                  "        pm.expect.fail(`Seed POST returned ${pm.response.code} with Content-Type=${ct} — admin path is edge-shadowed`);",
+                  "    });",
+                  "    return;",
+                  "}",
+                  "pm.test('Seed POST status is 200 or 201', function() { pm.expect([200, 201]).to.include(pm.response.code); });",
+                  "const json = pm.response.json();",
+                  "const sponsor = json.item || json.sponsor || json;",
+                  "pm.test('Seeded sponsor id is covenant-fixture-local-bronze', function() { pm.expect(sponsor.id).to.eql('covenant-fixture-local-bronze'); });",
+                  "pm.test('Seeded sponsor is_local is 1', function() { pm.expect(sponsor.is_local).to.eql(1); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "CF-Access-Client-Id", "value": "{{cfAccessClientId}}" },
+              { "key": "CF-Access-Client-Secret", "value": "{{cfAccessClientSecret}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"id\":\"covenant-fixture-local-bronze\",\"event_id\":\"test-event-001\",\"name\":\"Covenant Local Bronze\",\"tier\":\"bronze\",\"is_local\":1,\"placement_formats\":{\"posterTop\":true,\"tvTop\":true,\"tvSide\":true,\"mobileBanner\":true}}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v2/admin/sponsors",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v2", "admin", "sponsors"]
+            }
+          }
+        },
+        {
+          "name": "OSE-INV5 | T3 | seed | local-platinum sponsor",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const ct = pm.response.headers.get('Content-Type') || '';",
+                  "if (!ct.includes('application/json')) { pm.test('CF Access blocked seed POST', function() { pm.expect.fail('admin path edge-shadowed'); }); return; }",
+                  "pm.test('Seed POST status is 200 or 201', function() { pm.expect([200, 201]).to.include(pm.response.code); });",
+                  "const sponsor = (pm.response.json().item || pm.response.json().sponsor || pm.response.json());",
+                  "pm.test('Seeded local-platinum sponsor', function() { pm.expect(sponsor.id).to.eql('covenant-fixture-local-platinum'); pm.expect(sponsor.is_local).to.eql(1); pm.expect(sponsor.tier).to.eql('platinum'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "CF-Access-Client-Id", "value": "{{cfAccessClientId}}" },
+              { "key": "CF-Access-Client-Secret", "value": "{{cfAccessClientSecret}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"id\":\"covenant-fixture-local-platinum\",\"event_id\":\"test-event-001\",\"name\":\"Covenant Local Platinum\",\"tier\":\"platinum\",\"is_local\":1,\"placement_formats\":{\"posterTop\":true,\"tvTop\":true,\"tvSide\":true,\"mobileBanner\":true}}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v2/admin/sponsors",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v2", "admin", "sponsors"]
+            }
+          }
+        },
+        {
+          "name": "OSE-INV5 | T3 | seed | nonlocal-bronze sponsor",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const ct = pm.response.headers.get('Content-Type') || '';",
+                  "if (!ct.includes('application/json')) { pm.test('CF Access blocked seed POST', function() { pm.expect.fail('admin path edge-shadowed'); }); return; }",
+                  "pm.test('Seed POST status is 200 or 201', function() { pm.expect([200, 201]).to.include(pm.response.code); });",
+                  "const sponsor = (pm.response.json().item || pm.response.json().sponsor || pm.response.json());",
+                  "pm.test('Seeded nonlocal-bronze sponsor', function() { pm.expect(sponsor.id).to.eql('covenant-fixture-nonlocal-bronze'); pm.expect(sponsor.is_local).to.eql(0); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "CF-Access-Client-Id", "value": "{{cfAccessClientId}}" },
+              { "key": "CF-Access-Client-Secret", "value": "{{cfAccessClientSecret}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"id\":\"covenant-fixture-nonlocal-bronze\",\"event_id\":\"test-event-001\",\"name\":\"Covenant NonLocal Bronze\",\"tier\":\"bronze\",\"is_local\":0,\"placement_formats\":{\"posterTop\":true,\"tvTop\":true,\"tvSide\":true,\"mobileBanner\":true}}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v2/admin/sponsors",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v2", "admin", "sponsors"]
+            }
+          }
+        },
+        {
+          "name": "OSE-INV5 | T3 | seed | nonlocal-title sponsor (highest non-local tier — adversarial seed)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const ct = pm.response.headers.get('Content-Type') || '';",
+                  "if (!ct.includes('application/json')) { pm.test('CF Access blocked seed POST', function() { pm.expect.fail('admin path edge-shadowed'); }); return; }",
+                  "pm.test('Seed POST status is 200 or 201', function() { pm.expect([200, 201]).to.include(pm.response.code); });",
+                  "const sponsor = (pm.response.json().item || pm.response.json().sponsor || pm.response.json());",
+                  "pm.test('Seeded nonlocal-title sponsor (highest tier non-local)', function() { pm.expect(sponsor.id).to.eql('covenant-fixture-nonlocal-title'); pm.expect(sponsor.is_local).to.eql(0); pm.expect(sponsor.tier).to.eql('title'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "CF-Access-Client-Id", "value": "{{cfAccessClientId}}" },
+              { "key": "CF-Access-Client-Secret", "value": "{{cfAccessClientSecret}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"id\":\"covenant-fixture-nonlocal-title\",\"event_id\":\"test-event-001\",\"name\":\"Covenant NonLocal Title\",\"tier\":\"title\",\"is_local\":0,\"placement_formats\":{\"posterTop\":true,\"tvTop\":true,\"tvSide\":true,\"mobileBanner\":true}}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v2/admin/sponsors",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v2", "admin", "sponsors"]
+            }
+          }
+        },
+        {
+          "name": "OSE-INV5 | T3 | assert | GET /api/v2/events/test-event-001/sponsors returns covenant-correct order",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// This is the assertion that proves the Local Sponsor Covenant on the deployed worker.",
+                  "// Public endpoint — no admin auth required, not edge-shadowed.",
+                  "pm.test('Response is 200 JSON', function() {",
+                  "    pm.expect(pm.response.code).to.eql(200);",
+                  "    pm.expect(pm.response.headers.get('Content-Type')).to.include('application/json');",
+                  "});",
+                  "const json = pm.response.json();",
+                  "pm.test('Response has items array', function() { pm.expect(json.items).to.be.an('array'); });",
+                  "",
+                  "// Locate our 4 fixture sponsors by their stable IDs.",
+                  "const ids = json.items.map(s => s.id);",
+                  "const idxLocalBronze   = ids.indexOf('covenant-fixture-local-bronze');",
+                  "const idxLocalPlatinum = ids.indexOf('covenant-fixture-local-platinum');",
+                  "const idxNonlocBronze  = ids.indexOf('covenant-fixture-nonlocal-bronze');",
+                  "const idxNonlocTitle   = ids.indexOf('covenant-fixture-nonlocal-title');",
+                  "",
+                  "pm.test('All 4 covenant fixture sponsors are present in the public response', function() {",
+                  "    pm.expect(idxLocalBronze,   'covenant-fixture-local-bronze').to.be.above(-1);",
+                  "    pm.expect(idxLocalPlatinum, 'covenant-fixture-local-platinum').to.be.above(-1);",
+                  "    pm.expect(idxNonlocBronze,  'covenant-fixture-nonlocal-bronze').to.be.above(-1);",
+                  "    pm.expect(idxNonlocTitle,   'covenant-fixture-nonlocal-title').to.be.above(-1);",
+                  "});",
+                  "",
+                  "// THE COVENANT — the load-bearing assertion of Brain Invariant #5.",
+                  "// Local sponsors MUST appear before non-locals regardless of tier.",
+                  "// The adversarial case is local-bronze vs nonlocal-title: lowest local tier vs highest non-local tier.",
+                  "pm.test('COVENANT: local-bronze appears BEFORE nonlocal-title (lowest local tier beats highest non-local tier)', function() {",
+                  "    pm.expect(idxLocalBronze, `bronze-local at index ${idxLocalBronze} must come before title-nonlocal at ${idxNonlocTitle}`).to.be.below(idxNonlocTitle);",
+                  "});",
+                  "pm.test('COVENANT: local-platinum appears BEFORE nonlocal-title', function() {",
+                  "    pm.expect(idxLocalPlatinum).to.be.below(idxNonlocTitle);",
+                  "});",
+                  "pm.test('COVENANT: local-bronze appears BEFORE nonlocal-bronze', function() {",
+                  "    pm.expect(idxLocalBronze).to.be.below(idxNonlocBronze);",
+                  "});",
+                  "",
+                  "// Within-group tier ordering — secondary covenant claim.",
+                  "pm.test('Within local group: platinum tier beats bronze tier', function() {",
+                  "    pm.expect(idxLocalPlatinum, `local-platinum at ${idxLocalPlatinum} must beat local-bronze at ${idxLocalBronze}`).to.be.below(idxLocalBronze);",
+                  "});",
+                  "pm.test('Within non-local group: title tier beats bronze tier', function() {",
+                  "    pm.expect(idxNonlocTitle).to.be.below(idxNonlocBronze);",
+                  "});",
+                  "",
+                  "// Full expected order: local-platinum, local-bronze, nonlocal-title, nonlocal-bronze.",
+                  "// Both groups respect tier internally; locals come first as a group.",
+                  "pm.test('Full covenant order: local-platinum < local-bronze < nonlocal-title < nonlocal-bronze', function() {",
+                  "    pm.expect(idxLocalPlatinum).to.be.below(idxLocalBronze);",
+                  "    pm.expect(idxLocalBronze).to.be.below(idxNonlocTitle);",
+                  "    pm.expect(idxNonlocTitle).to.be.below(idxNonlocBronze);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v2/events/test-event-001/sponsors",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v2", "events", "test-event-001", "sponsors"]
+            }
+          }
+        },
+        {
+          "name": "OSE-INV5 | T3 | cleanup | DELETE covenant-fixture-local-bronze",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Cleanup is best-effort — staging soft-deletes (is_active=0) so re-runs upsert cleanly.",
+                  "const ct = pm.response.headers.get('Content-Type') || '';",
+                  "if (!ct.includes('application/json')) { console.warn('cleanup DELETE blocked by CF Access — sponsor row remains on staging until next manual cleanup'); return; }",
+                  "pm.test('Cleanup DELETE returned 200, 204, or 404 (already gone)', function() { pm.expect([200, 204, 404]).to.include(pm.response.code); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "CF-Access-Client-Id", "value": "{{cfAccessClientId}}" },
+              { "key": "CF-Access-Client-Secret", "value": "{{cfAccessClientSecret}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v2/admin/sponsors/covenant-fixture-local-bronze",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v2", "admin", "sponsors", "covenant-fixture-local-bronze"]
+            }
+          }
+        },
+        {
+          "name": "OSE-INV5 | T3 | cleanup | DELETE covenant-fixture-local-platinum",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const ct = pm.response.headers.get('Content-Type') || '';",
+                  "if (!ct.includes('application/json')) { return; }",
+                  "pm.test('Cleanup DELETE returned 200/204/404', function() { pm.expect([200, 204, 404]).to.include(pm.response.code); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "CF-Access-Client-Id", "value": "{{cfAccessClientId}}" },
+              { "key": "CF-Access-Client-Secret", "value": "{{cfAccessClientSecret}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v2/admin/sponsors/covenant-fixture-local-platinum",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v2", "admin", "sponsors", "covenant-fixture-local-platinum"]
+            }
+          }
+        },
+        {
+          "name": "OSE-INV5 | T3 | cleanup | DELETE covenant-fixture-nonlocal-bronze",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const ct = pm.response.headers.get('Content-Type') || '';",
+                  "if (!ct.includes('application/json')) { return; }",
+                  "pm.test('Cleanup DELETE returned 200/204/404', function() { pm.expect([200, 204, 404]).to.include(pm.response.code); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "CF-Access-Client-Id", "value": "{{cfAccessClientId}}" },
+              { "key": "CF-Access-Client-Secret", "value": "{{cfAccessClientSecret}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v2/admin/sponsors/covenant-fixture-nonlocal-bronze",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v2", "admin", "sponsors", "covenant-fixture-nonlocal-bronze"]
+            }
+          }
+        },
+        {
+          "name": "OSE-INV5 | T3 | cleanup | DELETE covenant-fixture-nonlocal-title",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const ct = pm.response.headers.get('Content-Type') || '';",
+                  "if (!ct.includes('application/json')) { return; }",
+                  "pm.test('Cleanup DELETE returned 200/204/404', function() { pm.expect([200, 204, 404]).to.include(pm.response.code); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "CF-Access-Client-Id", "value": "{{cfAccessClientId}}" },
+              { "key": "CF-Access-Client-Secret", "value": "{{cfAccessClientSecret}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v2/admin/sponsors/covenant-fixture-nonlocal-title",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v2", "admin", "sponsors", "covenant-fixture-nonlocal-title"]
+            }
+          }
+        }
+      ]
     }
   ]
 }
