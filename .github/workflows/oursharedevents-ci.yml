@@ -346,7 +346,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [lint, typecheck, tests, a11y]
+        # `invariants` shard (OSE-350) runs the structural 0-architecture
+        # invariant tests on EVERY PR + push — see the "Architecture:
+        # structural invariants" step below. Before this, the 0-architecture
+        # suite ran only in dispatch-only T4 Functional, so the brain's
+        # architectural contracts were not gated on normal development.
+        shard: [lint, typecheck, tests, a11y, invariants]
     steps:
       - uses: actions/checkout@v6
         with:
@@ -370,11 +375,13 @@ jobs:
             echo "$HASH" > "$STAMP"
           fi
 
-      # Worker deps not needed for the lint shard (eslint targets root paths).
-      # All other shards exercise the worker test suite or worker tsc, so they
-      # need workers/oursharedevents/node_modules populated.
+      # Worker deps not needed for the lint shard (eslint targets root paths)
+      # nor the invariants shard (structural specs read source via node:fs —
+      # they never import worker runtime code). All other shards exercise the
+      # worker test suite or worker tsc, so they need
+      # workers/oursharedevents/node_modules populated.
       - name: Install worker dependencies
-        if: matrix.shard != 'lint'
+        if: matrix.shard != 'lint' && matrix.shard != 'invariants'
         run: |
           HASH="$(node --version)-$(git hash-object package-lock.json)"
           STAMP=node_modules/.install-stamp
@@ -473,6 +480,38 @@ jobs:
         if: matrix.shard == 'a11y'
         run: npm run test:a11y
         working-directory: ${{ env.WORKER_DIR }}
+
+      # ── Shard: invariants (OSE-350) ────────────────────────────────────────
+      # The STRUCTURAL subset of the 0-architecture invariant suite — the
+      # code-shape locks that read source files via node:fs and assert the
+      # brain's architectural contracts hold. These need no deployed worker,
+      # so they gate EVERY PR + push here in T0 Gate.
+      #
+      # Why this exists: before OSE-350 the entire 0-architecture suite ran
+      # only in T4 Functional, which is dispatch-only. That meant the brain's
+      # "CI-enforced contracts" were NOT enforced on normal development — a PR
+      # could break an invariant's code shape and nothing caught it unless
+      # someone manually dispatched T4. This shard closes that
+      # enforcement-continuity gap: invariants are carried from 0 through the
+      # whole flow.
+      #
+      # ONLY the structural subset runs here. Runtime invariant specs
+      # (anonymous-id, geo-resolution, ncr-accumulation, uec-codes) need a
+      # deployed worker and stay in T4 / post-deploy tiers. The file list
+      # below is locked by the placement guard in
+      # tests/integration/infra-consistency.test.js — a new structural
+      # invariant spec that is not listed here fails that guard, so the
+      # continuity cannot silently regress.
+      - name: 'Architecture: structural invariants'
+        if: matrix.shard == 'invariants'
+        run: |
+          npx playwright install chromium
+          npx playwright test --config=playwright.e2e-smoke.config.ts \
+            tests/e2e/0-architecture/deprecation-lock.invariant.spec.ts \
+            tests/e2e/0-architecture/pii-retention.invariant.spec.ts \
+            tests/e2e/0-architecture/runner-environment.invariant.spec.ts \
+            tests/e2e/0-architecture/runner-pool-readiness.invariant.spec.ts \
+            tests/e2e/0-architecture/tier-equity.invariant.spec.ts
 
   # ============================================================================
   # TIER 1: DEPLOY — Push to main or dispatch
