@@ -178,3 +178,62 @@ describe('D1 staging database health', () => {
     expect(rows[0].count).toBeGreaterThan(0);
   });
 });
+
+// ─── npm audit resilience — @ocr/flags SBOM mutation guards (PR #254) ──────────
+//
+// The S0 Security job's "Fix @ocr/flags for SBOM resolution" step strips
+// devDependencies from node_modules/@ocr/flags/package.json IN PLACE so
+// CycloneDX SBOM only inventories prod deps. Self-hosted runners persist
+// node_modules between runs. Without guards, a subsequent run honors the
+// install-stamp (keyed only on package-lock.json hash, unchanged), skips
+// `npm ci`, and `npm audit` submits the mutated tree to the npm registry —
+// which rejects it with `400 — Invalid package tree`.
+//
+// Two guards prevent this. These tests lock both so a future workflow edit
+// can't silently remove them (the failure mode is sporadic — only when a
+// runner happens to carry mutated state — so it would not be caught
+// deterministically by CI execution alone).
+describe('npm audit resilience — @ocr/flags SBOM mutation guards', () => {
+  const yaml = require('js-yaml');
+  const wf = yaml.load(readFile('.github/workflows/oursharedevents-ci.yml'));
+  const s0Steps = (wf.jobs && wf.jobs.security && wf.jobs.security.steps) || [];
+  const installStep = s0Steps.find((s) => s && s.name === 'Install dependencies');
+  const sbomFixStep = s0Steps.find((s) => s && s.name === 'Fix @ocr/flags for SBOM resolution');
+
+  test('S0 Security job has the "Install dependencies" step', () => {
+    expect(installStep, 'security job must have an "Install dependencies" step').toBeDefined();
+  });
+
+  test('S0 Security job has the "Fix @ocr/flags for SBOM resolution" step', () => {
+    expect(
+      sbomFixStep,
+      'security job must have the "Fix @ocr/flags for SBOM resolution" step'
+    ).toBeDefined();
+  });
+
+  test('GUARD 1 (self-healing): Install step detects a mutated @ocr/flags and forces fresh npm ci', () => {
+    const run = (installStep && installStep.run) || '';
+    // The detection must compute a flags_mutated signal...
+    expect(run, 'install step must compute a flags_mutated signal').toMatch(/flags_mutated/);
+    // ...by inspecting @ocr/flags devDependencies...
+    expect(
+      run,
+      'install step must inspect @ocr/flags devDependencies to detect the SBOM mutation'
+    ).toMatch(/devDependencies/);
+    // ...AND the skip-npm-ci condition MUST actually consult flags_mutated.
+    // If the detection is computed but the skip condition ignores it, the
+    // guard is dead code and npm audit will still hit the mutated tree.
+    expect(
+      run,
+      'the skip-npm-ci condition MUST gate on flags_mutated=false — otherwise the detection is computed but never used'
+    ).toMatch(/flags_mutated"?\s*=\s*'false'/);
+  });
+
+  test('GUARD 2 (belt-and-suspenders): SBOM fix step invalidates the install stamp', () => {
+    const run = (sbomFixStep && sbomFixStep.run) || '';
+    expect(
+      run,
+      'the SBOM @ocr/flags fix step must `rm -f node_modules/.install-stamp` so the next run reinstalls against the canonical lockfile-derived tree'
+    ).toMatch(/rm\s+-f\s+node_modules\/\.install-stamp/);
+  });
+});

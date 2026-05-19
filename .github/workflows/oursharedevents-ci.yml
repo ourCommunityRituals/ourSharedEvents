@@ -161,9 +161,32 @@ jobs:
         run: |
           HASH="$(node --version)-$(git hash-object package-lock.json)"
           STAMP=node_modules/.install-stamp
-          if [ '${{ inputs.force_clean }}' != 'true' ] && [ -f "$STAMP" ] && [ "$(cat $STAMP)" = "$HASH" ] && [ -f "node_modules/.package-lock.json" ]; then
+          FLAGS_NM=node_modules/@ocr/flags/package.json
+          # The install-stamp lets us skip `npm ci` when package-lock.json is
+          # unchanged. But the "Fix @ocr/flags for SBOM resolution" step later
+          # in THIS job destructively strips devDependencies from @ocr/flags
+          # IN PLACE, and self-hosted runners persist node_modules between
+          # runs. The lockfile hash doesn't change when only @ocr/flags is
+          # mutated, so a naive stamp-skip would let `npm audit` run against
+          # the mutated tree — the npm registry then rejects the submitted
+          # tree with `400 Bad Request — Invalid package tree`.
+          #
+          # SELF-HEALING GUARD: the stamp is only trustworthy if @ocr/flags
+          # in node_modules still carries its devDependencies. If they're gone
+          # (SBOM step already ran on this runner) or the file is unparseable,
+          # node_modules is mutated → force a fresh `npm ci`. This recovers on
+          # the very next run with no force_clean dispatch needed, and catches
+          # corruption from ANY source, not just the known SBOM step.
+          flags_mutated=false
+          if [ -f "$FLAGS_NM" ]; then
+            node -e "const p=JSON.parse(require('fs').readFileSync('$FLAGS_NM','utf8'));process.exit(p.devDependencies?0:1)" 2>/dev/null || flags_mutated=true
+          fi
+          if [ '${{ inputs.force_clean }}' != 'true' ] && [ "$flags_mutated" = 'false' ] && [ -f "$STAMP" ] && [ "$(cat $STAMP)" = "$HASH" ] && [ -f "node_modules/.package-lock.json" ]; then
             echo "node_modules up-to-date, skipping npm ci"
           else
+            if [ "$flags_mutated" = 'true' ]; then
+              echo "node_modules/@ocr/flags is mutated (devDependencies stripped by a prior SBOM run) — forcing fresh npm ci"
+            fi
             npm ci --prefer-offline || npm ci
             echo "$HASH" > "$STAMP"
           fi
@@ -254,20 +277,17 @@ jobs:
       # causing CycloneDX to fail. Strip them from the installed copy so SBOM
       # only inventories production dependencies.
       #
-      # IMPORTANT — this step destructively mutates node_modules. The Install
-      # Dependencies step earlier uses an install-stamp keyed on
-      # `package-lock.json` hash to skip `npm ci` on subsequent runs when the
-      # lock hasn't changed. Self-hosted runners persist disk between runs, so
-      # without invalidating the stamp here, the NEXT run inherits the
-      # mutated `@ocr/flags/package.json` (devDependencies stripped). The
-      # subsequent `npm audit` then submits a package tree that doesn't match
-      # `package-lock.json` to the npm registry's audit endpoint, which
-      # rejects it with `400 Bad Request — Invalid package tree, run
-      # npm install to rebuild your package-lock.json`. Diagnosed via
-      # workflow_dispatch with force_clean=true (run 26111985672 = success
-      # vs run 26110784159 on same SHA = failure). The fix: invalidate the
-      # install stamp at the end of this step so the next run does a
-      # fresh `npm ci` against the canonical lockfile-derived tree.
+      # IMPORTANT — this step destructively mutates node_modules. Two guards
+      # keep `npm audit` from later submitting the mutated tree to the npm
+      # registry (which rejects it with `400 — Invalid package tree`):
+      #   1. PRIMARY (self-healing): the Install Dependencies step above
+      #      detects a stripped @ocr/flags and forces a fresh `npm ci`
+      #      regardless of the install-stamp. See its comment block.
+      #   2. BELT-AND-SUSPENDERS (this step): invalidate the install-stamp
+      #      here so the stamp-hash path ALSO reinstalls next run, even if
+      #      the primary detection is ever broken.
+      # Diagnosed via workflow_dispatch force_clean=true (run 26111985672 =
+      # success vs run 26110784159 same SHA = failure).
       - name: Fix @ocr/flags for SBOM resolution
         run: |
           FLAGS_PKG="node_modules/@ocr/flags/package.json"
@@ -279,9 +299,8 @@ jobs:
               fs.writeFileSync('$FLAGS_PKG', JSON.stringify(pkg, null, 2));
             "
           fi
-          # Invalidate install stamp — node_modules is no longer pristine
-          # after the @ocr/flags mutation above. Next run must do `npm ci`
-          # to restore lockfile-canonical state for `npm audit`.
+          # Belt-and-suspenders — invalidate install stamp; node_modules is no
+          # longer pristine after the @ocr/flags mutation above.
           rm -f node_modules/.install-stamp
 
       - name: Generate SBOM
