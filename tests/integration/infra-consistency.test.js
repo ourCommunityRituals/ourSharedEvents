@@ -178,3 +178,154 @@ describe('D1 staging database health', () => {
     expect(rows[0].count).toBeGreaterThan(0);
   });
 });
+
+// ─── npm audit resilience — @ocr/flags SBOM mutation guards (PR #254) ──────────
+//
+// The S0 Security job's "Fix @ocr/flags for SBOM resolution" step strips
+// devDependencies from node_modules/@ocr/flags/package.json IN PLACE so
+// CycloneDX SBOM only inventories prod deps. Self-hosted runners persist
+// node_modules between runs. Without guards, a subsequent run honors the
+// install-stamp (keyed only on package-lock.json hash, unchanged), skips
+// `npm ci`, and `npm audit` submits the mutated tree to the npm registry —
+// which rejects it with `400 — Invalid package tree`.
+//
+// Two guards prevent this. These tests lock both so a future workflow edit
+// can't silently remove them (the failure mode is sporadic — only when a
+// runner happens to carry mutated state — so it would not be caught
+// deterministically by CI execution alone).
+describe('npm audit resilience — @ocr/flags SBOM mutation guards', () => {
+  const yaml = require('js-yaml');
+  const wf = yaml.load(readFile('.github/workflows/oursharedevents-ci.yml'));
+  const s0Steps = (wf.jobs && wf.jobs.security && wf.jobs.security.steps) || [];
+  const installStep = s0Steps.find((s) => s && s.name === 'Install dependencies');
+  const sbomFixStep = s0Steps.find((s) => s && s.name === 'Fix @ocr/flags for SBOM resolution');
+
+  test('S0 Security job has the "Install dependencies" step', () => {
+    expect(installStep, 'security job must have an "Install dependencies" step').toBeDefined();
+  });
+
+  test('S0 Security job has the "Fix @ocr/flags for SBOM resolution" step', () => {
+    expect(
+      sbomFixStep,
+      'security job must have the "Fix @ocr/flags for SBOM resolution" step'
+    ).toBeDefined();
+  });
+
+  test('GUARD 1 (self-healing): Install step detects a mutated @ocr/flags and forces fresh npm ci', () => {
+    const run = (installStep && installStep.run) || '';
+    // The detection must compute a flags_mutated signal...
+    expect(run, 'install step must compute a flags_mutated signal').toMatch(/flags_mutated/);
+    // ...by inspecting @ocr/flags devDependencies...
+    expect(
+      run,
+      'install step must inspect @ocr/flags devDependencies to detect the SBOM mutation'
+    ).toMatch(/devDependencies/);
+    // ...AND the skip-npm-ci condition MUST actually consult flags_mutated.
+    // If the detection is computed but the skip condition ignores it, the
+    // guard is dead code and npm audit will still hit the mutated tree.
+    expect(
+      run,
+      'the skip-npm-ci condition MUST gate on flags_mutated=false — otherwise the detection is computed but never used'
+    ).toMatch(/flags_mutated"?\s*=\s*'false'/);
+  });
+
+  test('GUARD 2 (belt-and-suspenders): SBOM fix step invalidates the install stamp', () => {
+    const run = (sbomFixStep && sbomFixStep.run) || '';
+    expect(
+      run,
+      'the SBOM @ocr/flags fix step must `rm -f node_modules/.install-stamp` so the next run reinstalls against the canonical lockfile-derived tree'
+    ).toMatch(/rm\s+-f\s+node_modules\/\.install-stamp/);
+  });
+});
+
+// ─── Invariant enforcement continuity — structural specs gate T0 (OSE-350) ────
+//
+// The 0-architecture invariant suite is the brain's "CI-enforced architectural
+// contracts" layer. Before OSE-350 the WHOLE suite ran only in dispatch-only
+// T4 Functional — so a PR could break an invariant's code shape and nothing
+// caught it on the normal PR/push path. OSE-350 added a T0 Gate `invariants`
+// shard that runs the STRUCTURAL subset (specs that read source via node:fs,
+// no deployed worker needed) on every PR + push.
+//
+// This placement guard locks the continuity. It classifies every spec in
+// tests/e2e/0-architecture/ as structural or runtime by inspecting content,
+// then asserts every structural spec is wired into the T0 step. A new
+// structural invariant spec that is NOT listed in the workflow fails here —
+// so the enforcement continuity cannot silently regress (the exact failure
+// mode PR #59's defects pointed at).
+describe('invariant enforcement continuity — structural specs gate T0 (OSE-350)', () => {
+  const yaml = require('js-yaml');
+  const { readdirSync } = require('fs');
+
+  const ARCH_REL = 'tests/e2e/0-architecture';
+  const specs = readdirSync(join(ROOT, ARCH_REL)).filter((f) => f.endsWith('.invariant.spec.ts'));
+
+  // Classify each spec by content. Runtime = needs a deployed worker
+  // (page fixture / request fixture / baseURL). Structural = reads source
+  // files via node:fs and asserts code shape, no worker needed.
+  const classified = specs.map((spec) => {
+    const content = readFile(`${ARCH_REL}/${spec}`);
+    const isRuntime =
+      /page\.goto|\{\s*page\s*\}|\{\s*request\s*\}|\brequest\.(get|post|fetch)\b|baseURL/.test(
+        content
+      );
+    const isStructural = /readFileSync|existsSync/.test(content) && !isRuntime;
+    return { spec, isRuntime, isStructural };
+  });
+  const structural = classified.filter((c) => c.isStructural).map((c) => c.spec);
+  const runtime = classified.filter((c) => c.isRuntime).map((c) => c.spec);
+
+  // The T0 Gate "Architecture: structural invariants" step.
+  const wf = yaml.load(readFile('.github/workflows/oursharedevents-ci.yml'));
+  const gateSteps = (wf.jobs && wf.jobs.gate && wf.jobs.gate.steps) || [];
+  const invStep = gateSteps.find((s) => s && s.name === 'Architecture: structural invariants');
+  const invRun = (invStep && invStep.run) || '';
+  const matrixShards =
+    (wf.jobs &&
+      wf.jobs.gate &&
+      wf.jobs.gate.strategy &&
+      wf.jobs.gate.strategy.matrix &&
+      wf.jobs.gate.strategy.matrix.shard) ||
+    [];
+
+  test('T0 Gate matrix includes the invariants shard', () => {
+    expect(
+      matrixShards,
+      'gate job matrix must include an "invariants" shard so structural invariants run on every PR/push'
+    ).toContain('invariants');
+  });
+
+  test('T0 Gate has the "Architecture: structural invariants" step', () => {
+    expect(
+      invStep,
+      'gate job must have the "Architecture: structural invariants" step'
+    ).toBeDefined();
+  });
+
+  test('every 0-architecture spec classifies as structural OR runtime (no unknowns)', () => {
+    const unknown = classified.filter((c) => !c.isStructural && !c.isRuntime).map((c) => c.spec);
+    expect(
+      unknown,
+      `specs that classify as neither structural nor runtime — the classifier or the spec needs attention: ${unknown.join(', ')}`
+    ).toEqual([]);
+  });
+
+  test('EVERY structural invariant spec is wired into the T0 gating path', () => {
+    expect(structural.length, 'expected ≥1 structural invariant spec').toBeGreaterThan(0);
+    for (const spec of structural) {
+      expect(
+        invRun.includes(spec),
+        `structural invariant ${spec} is NOT in the T0 "Architecture: structural invariants" step — it would run only in dispatch-only T4, breaking enforcement continuity. Add it to that step's file list in oursharedevents-ci.yml.`
+      ).toBe(true);
+    }
+  });
+
+  test('NO runtime invariant spec is in the T0 structural step', () => {
+    for (const spec of runtime) {
+      expect(
+        invRun.includes(spec),
+        `runtime invariant ${spec} is listed in the T0 structural step but needs a deployed worker — T0 runs pre-deploy, so it would fail there. Runtime invariants belong in T4/post-deploy tiers.`
+      ).toBe(false);
+    }
+  });
+});
