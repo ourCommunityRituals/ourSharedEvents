@@ -1,0 +1,1896 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Admin – OurSharedEvents</title>
+    <style>
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      body {
+        font-family:
+          system-ui,
+          -apple-system,
+          sans-serif;
+        background: #f8f9fa;
+        color: #212529;
+      }
+      header {
+        background: #1a1a2e;
+        color: #fff;
+        padding: 1.25rem 2rem;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+      header h1 {
+        font-size: 1.4rem;
+        font-weight: 600;
+      }
+      header span {
+        font-size: 0.8rem;
+        opacity: 0.6;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+      .tier-badge {
+        display: inline-block;
+        padding: 0.2rem 0.6rem;
+        border-radius: 12px;
+        font-size: 0.7rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        margin-left: 0.75rem;
+      }
+      .tier-badge.free {
+        background: #d3f9d8;
+        color: #155724;
+      }
+      .tier-badge.mid {
+        background: #d0ebff;
+        color: #1971c2;
+      }
+      .tier-badge.enterprise {
+        background: #e8deee;
+        color: #7c3aed;
+      }
+      .phase-badge {
+        display: inline-block;
+        padding: 0.2rem 0.6rem;
+        border-radius: 12px;
+        font-size: 0.7rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        margin-left: 0.5rem;
+      }
+      .phase-badge.phase-1 {
+        background: #f1f3f5;
+        color: #495057;
+      }
+      .phase-badge.phase-2 {
+        background: #d0ebff;
+        color: #1864ab;
+      }
+      .phase-badge.phase-3 {
+        background: #fff3cd;
+        color: #856404;
+      }
+      .phase-badge.phase-4 {
+        background: #ffe8cc;
+        color: #7d4600;
+      }
+      .phase-badge.phase-5 {
+        background: #ffe0e0;
+        color: #c92a2a;
+      }
+      /* OSE-R-005: ID column is hidden by default. Toggle via the
+       "Show internal IDs" checkbox above the events table. */
+      .events-toolbar {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        margin: 0.5rem 0 0.75rem;
+        font-size: 0.85rem;
+        color: #6c757d;
+      }
+      .events-toolbar input[type='checkbox'] {
+        margin: 0;
+      }
+      table.events-table .col-internal-id {
+        display: none;
+      }
+      table.events-table.show-internal-ids .col-internal-id {
+        display: table-cell;
+      }
+      .feature-locked {
+        position: relative;
+        opacity: 0.5;
+      }
+      .feature-locked::after {
+        content: '🔒';
+        position: absolute;
+        top: 0.5rem;
+        right: 0.5rem;
+        font-size: 1rem;
+      }
+      .feature-locked .form-link {
+        pointer-events: none;
+      }
+      .lock-overlay {
+        display: none;
+        padding: 0.5rem 0.75rem;
+        background: #fff3bf;
+        border-radius: 6px;
+        font-size: 0.8rem;
+        color: #664d03;
+        margin-top: 0.5rem;
+      }
+      .feature-locked .lock-overlay {
+        display: block;
+      }
+      .form-config {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0.5rem 0;
+        border-bottom: 1px solid #f1f3f5;
+      }
+      .form-config:last-child {
+        border-bottom: none;
+      }
+      .form-config-label {
+        font-size: 0.9rem;
+        font-weight: 500;
+      }
+      .form-config-desc {
+        font-size: 0.75rem;
+        color: #6c757d;
+      }
+      .toggle {
+        position: relative;
+        width: 40px;
+        height: 22px;
+        flex-shrink: 0;
+      }
+      .toggle input {
+        opacity: 0;
+        width: 0;
+        height: 0;
+      }
+      .toggle .slider {
+        position: absolute;
+        inset: 0;
+        background: #dee2e6;
+        border-radius: 22px;
+        cursor: pointer;
+        transition: background 0.2s;
+      }
+      .toggle .slider::before {
+        content: '';
+        position: absolute;
+        left: 2px;
+        top: 2px;
+        width: 18px;
+        height: 18px;
+        background: #fff;
+        border-radius: 50%;
+        transition: transform 0.2s;
+      }
+      .toggle input:checked + .slider {
+        background: #4361ee;
+      }
+      .toggle input:checked + .slider::before {
+        transform: translateX(18px);
+      }
+      .toggle input:disabled + .slider {
+        opacity: 0.4;
+        cursor: not-allowed;
+      }
+      .config-section {
+        margin-top: 1rem;
+        padding-top: 1rem;
+        border-top: 1px solid #e9ecef;
+      }
+      .config-section h3 {
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: #495057;
+        margin-bottom: 0.5rem;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+      main {
+        max-width: 1000px;
+        margin: 2rem auto;
+        padding: 0 1rem;
+      }
+      h2 {
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: #495057;
+        margin-bottom: 1rem;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        background: #fff;
+        border-radius: 8px;
+        overflow: hidden;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+      }
+      th {
+        background: #1a1a2e;
+        color: #fff;
+        padding: 0.75rem 1rem;
+        text-align: left;
+        font-size: 0.8rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+      td {
+        padding: 0.75rem 1rem;
+        border-bottom: 1px solid #f1f3f5;
+        font-size: 0.9rem;
+      }
+      tr:last-child td {
+        border-bottom: none;
+      }
+      tbody tr:hover {
+        background: #f1f3f5;
+      }
+      tbody tr.selected {
+        background: #dbe4ff;
+      }
+      .badge {
+        display: inline-block;
+        padding: 0.15rem 0.5rem;
+        border-radius: 4px;
+        font-size: 0.75rem;
+        font-weight: 600;
+      }
+      .badge.active {
+        background: #d3f9d8;
+        color: #155724;
+      }
+      .badge.archived {
+        background: #f1f3f5;
+        color: #495057;
+      }
+      .loading {
+        text-align: center;
+        padding: 3rem;
+        color: #6c757d;
+      }
+      .error {
+        text-align: center;
+        padding: 2rem;
+        color: #e03131;
+      }
+      .forms-card {
+        background: #fff;
+        border-radius: 8px;
+        padding: 1.25rem 1.5rem;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+        margin-top: 2rem;
+      }
+      .forms-card h2 {
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: #495057;
+        margin-bottom: 0.75rem;
+      }
+      .forms-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 0.75rem;
+      }
+      .form-link {
+        display: block;
+        padding: 0.75rem 1rem;
+        background: #f8f9fa;
+        border-radius: 6px;
+        text-decoration: none;
+        color: #212529;
+        border-left: 3px solid #4361ee;
+      }
+      .form-link:hover {
+        background: #e9ecef;
+      }
+      .form-link .form-type {
+        font-weight: 600;
+        font-size: 0.9rem;
+      }
+      .form-link .form-desc {
+        font-size: 0.8rem;
+        color: #6c757d;
+        margin-top: 0.15rem;
+      }
+      .form-counts {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 0.5rem;
+        margin-top: 1rem;
+      }
+      .form-counts .count-box {
+        text-align: center;
+        padding: 0.5rem;
+        background: #f8f9fa;
+        border-radius: 6px;
+      }
+      .form-counts .count-num {
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: #1a1a2e;
+      }
+      .form-counts .count-label {
+        font-size: 0.7rem;
+        color: #6c757d;
+        text-transform: uppercase;
+      }
+      .surface-cards {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1rem;
+        margin-top: 2rem;
+      }
+      .surface-card {
+        background: #fff;
+        border-radius: 8px;
+        padding: 1rem 1.25rem;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+        border-left: 3px solid #6c757d;
+      }
+      .surface-card h3 {
+        font-size: 0.9rem;
+        font-weight: 600;
+        margin-bottom: 0.35rem;
+      }
+      .surface-card p {
+        font-size: 0.8rem;
+        color: #6c757d;
+        margin-bottom: 0.5rem;
+      }
+      .surface-card a {
+        font-size: 0.8rem;
+        color: #4361ee;
+        text-decoration: none;
+        font-weight: 500;
+      }
+      .surface-card a:hover {
+        text-decoration: underline;
+      }
+      .surface-card.poster {
+        border-left-color: #d97706;
+      }
+      .surface-card.display {
+        border-left-color: #4361ee;
+      } /* OSE-221: platform-standard accent (was Tailwind blue #2563eb) */
+      .surface-card.public {
+        border-left-color: #16a34a;
+      }
+      .surface-card.report {
+        border-left-color: #7c3aed;
+      }
+      .qr-hint {
+        font-size: 0.7rem;
+        color: #64748b;
+        margin-top: 0.25rem;
+      }
+      .copy-btn {
+        display: inline-block;
+        padding: 0.2rem 0.5rem;
+        background: #f1f3f5;
+        border: 1px solid #dee2e6;
+        border-radius: 4px;
+        font-size: 0.75rem;
+        cursor: pointer;
+        color: #495057;
+        margin-left: 0.5rem;
+        transition:
+          background 0.2s,
+          color 0.2s;
+      }
+      .copy-btn:hover {
+        background: #e9ecef;
+      }
+      .copy-btn.copied {
+        background: #d3f9d8;
+        color: #155724;
+        border-color: #b2f2bb;
+      }
+      .clickable-row {
+        cursor: pointer;
+      }
+      .muted-sm {
+        color: #6c757d;
+        font-size: 0.8rem;
+      }
+      .sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+      }
+      .flex-row {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+      }
+      .form-actions {
+        display: flex;
+        align-items: end;
+        gap: 0.75rem;
+      }
+      .required-star {
+        color: #dc2626;
+      }
+      @keyframes shimmer {
+        0% {
+          background-position: -200px 0;
+        }
+        100% {
+          background-position: 200px 0;
+        }
+      }
+      .skeleton {
+        background: linear-gradient(90deg, #f1f3f5 25%, #e9ecef 50%, #f1f3f5 75%);
+        background-size: 400px 100%;
+        animation: shimmer 1.5s ease-in-out infinite;
+        border-radius: 4px;
+      }
+      .skeleton-row {
+        height: 1rem;
+        margin-bottom: 0.5rem;
+      }
+      .skeleton-table {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+        padding: 1.5rem;
+        background: #fff;
+        border-radius: 8px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+      }
+      .skeleton-table .skeleton-row {
+        height: 2.5rem;
+        border-radius: 6px;
+      }
+      .skeleton-table .skeleton-row:first-child {
+        height: 2rem;
+        width: 60%;
+      }
+      .card-error {
+        text-align: center;
+        padding: 1.5rem;
+        background: #fff5f5;
+        border: 1px solid #ffc9c9;
+        border-radius: 8px;
+        color: #c92a2a;
+      }
+      .card-error .error-icon {
+        font-size: 1.5rem;
+        margin-bottom: 0.5rem;
+      }
+      .card-error .error-msg {
+        font-size: 0.85rem;
+      }
+      .card-error .retry-btn {
+        display: inline-block;
+        margin-top: 0.75rem;
+        padding: 0.4rem 1rem;
+        background: #fff;
+        border: 1px solid #dee2e6;
+        border-radius: 6px;
+        font-size: 0.8rem;
+        cursor: pointer;
+        color: #495057;
+      }
+      .card-error .retry-btn:hover {
+        background: #f8f9fa;
+      }
+      .create-card {
+        background: #fff;
+        border-radius: 8px;
+        padding: 1.25rem 1.5rem;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+        margin-bottom: 2rem;
+        border-left: 3px solid #16a34a;
+      }
+      .create-card h2 {
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: #495057;
+        margin-bottom: 1rem;
+      }
+      .create-form {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0.75rem;
+      }
+      .create-form .full-width {
+        grid-column: 1 / -1;
+      }
+      .create-form label {
+        display: block;
+        font-size: 0.8rem;
+        font-weight: 600;
+        color: #495057;
+        margin-bottom: 0.25rem;
+      }
+      .create-form input,
+      .create-form select {
+        width: 100%;
+        padding: 0.5rem 0.75rem;
+        border: 1px solid #dee2e6;
+        border-radius: 6px;
+        font-size: 0.9rem;
+        background: #fff;
+        color: #1e293b;
+      }
+      .create-form input:focus,
+      .create-form select:focus {
+        border-color: #4361ee;
+        outline: none;
+        box-shadow: 0 0 0 3px rgba(67, 97, 238, 0.12);
+      }
+      .create-btn {
+        padding: 0.6rem 1.5rem;
+        background: #16a34a;
+        color: #fff;
+        border: none;
+        border-radius: 6px;
+        font-size: 0.9rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background 0.2s;
+      }
+      .create-btn:hover {
+        background: #15803d;
+      }
+      .create-btn:disabled {
+        background: #64748b;
+        cursor: not-allowed;
+      }
+      .create-msg {
+        font-size: 0.85rem;
+        margin-top: 0.5rem;
+        min-height: 1.25rem;
+      }
+      .create-msg.success {
+        color: #16a34a;
+      }
+      .create-msg.error {
+        color: #dc2626;
+      }
+      /* OSE-262: warnings banner for create-event response.
+       Surfaces non-fatal partial-success conditions (e.g.,
+       SHORTLINK_CREATE_FAILED) so the admin sees what landed and
+       what didn't, instead of a silent "Event created" while the
+       shareable link is broken. */
+      .create-warnings {
+        display: block;
+        margin-top: 0.75rem;
+      }
+      .create-warnings[hidden] {
+        display: none;
+      }
+      .warning-banner {
+        background: #fef3c7;
+        border-left: 3px solid #d97706;
+        padding: 0.75rem 1rem;
+        border-radius: 4px;
+        margin-bottom: 0.5rem;
+        font-size: 0.9rem;
+        color: #78350f;
+      }
+      .warning-banner strong {
+        display: block;
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 0.2rem;
+        color: #92400e;
+      }
+      .warning-dismiss-btn {
+        display: inline-block;
+        margin-top: 0.5rem;
+        padding: 0.5rem 1rem;
+        background: #d97706;
+        color: #fff;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-weight: 500;
+        font-size: 0.85rem;
+      }
+      .warning-dismiss-btn:hover {
+        background: #b45309;
+      }
+      .warning-dismiss-btn:focus {
+        outline: 3px solid #ffb800;
+        outline-offset: 2px;
+      }
+      .skip-link {
+        position: absolute;
+        left: -9999px;
+        top: auto;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+      }
+      .skip-link:focus {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: auto;
+        height: auto;
+        padding: 0.5rem 1rem;
+        background: #1a1a2e;
+        color: #fff;
+        font-size: 1rem;
+        z-index: 9999;
+        text-decoration: none;
+        border-bottom: 2px solid #4361ee;
+      }
+      button:focus-visible {
+        outline: 2px solid #4361ee;
+        outline-offset: 2px;
+      }
+      .form-link:focus-visible {
+        outline: 2px solid #4361ee;
+        outline-offset: 2px;
+      }
+      .clickable-row:focus-visible {
+        outline: 2px solid #4361ee;
+        outline-offset: -2px;
+        background: #eef2ff;
+      }
+      @media (max-width: 600px) {
+        .create-form {
+          grid-template-columns: 1fr;
+        }
+      }
+      /* OSE-292 / DRAIN 1 (2026-05-16): admin mobile workability.
+       Stack header badges, collapse 6-col tables to card layout, tighten
+       padding so the dashboard is usable on a 375px phone. Closes
+       OSE-R-027 (admin desktop-only). */
+      @media (max-width: 768px) {
+        main {
+          padding: 0 0.75rem;
+        }
+        header {
+          padding: 0.9rem 1rem;
+        }
+        header h1 {
+          display: flex;
+          flex-direction: column;
+          align-items: flex-start;
+          gap: 0.4rem;
+          font-size: 1.1rem;
+        }
+        header h1 .tier-badge,
+        header h1 .phase-badge {
+          margin-left: 0;
+        }
+        /* Events table → card layout. Each <tr> becomes a vertical card;
+         each <td> shows its label via the data-label attribute the
+         renderer now writes. Hide the <thead> entirely. */
+        table.events-table {
+          display: block;
+          box-shadow: none;
+        }
+        table.events-table thead {
+          display: none;
+        }
+        table.events-table tbody {
+          display: block;
+        }
+        table.events-table tr {
+          display: block;
+          border: 1px solid #dee2e6;
+          border-radius: 8px;
+          padding: 0.75rem 1rem;
+          margin-bottom: 0.75rem;
+          background: #fff;
+        }
+        table.events-table td {
+          display: block;
+          padding: 0.35rem 0;
+          border: none;
+          text-align: left;
+          word-break: break-word;
+        }
+        table.events-table td::before {
+          content: attr(data-label) ': ';
+          font-weight: 600;
+          color: #495057;
+          margin-right: 0.5rem;
+        }
+        table.events-table td.col-internal-id {
+          display: none;
+        }
+        table.events-table.show-internal-ids td.col-internal-id {
+          display: block;
+        }
+        /* Sponsors table — same treatment. */
+        #sponsors-list table {
+          display: block;
+          box-shadow: none;
+        }
+        #sponsors-list table thead {
+          display: none;
+        }
+        #sponsors-list table tbody {
+          display: block;
+        }
+        #sponsors-list table tr {
+          display: block;
+          border: 1px solid #dee2e6;
+          border-radius: 8px;
+          padding: 0.75rem 1rem;
+          margin-bottom: 0.75rem;
+          background: #fff;
+        }
+        #sponsors-list table td {
+          display: block;
+          padding: 0.35rem 0;
+          border: none;
+          text-align: left;
+        }
+        #sponsors-list table td::before {
+          content: attr(data-label) ': ';
+          font-weight: 600;
+          color: #495057;
+          margin-right: 0.5rem;
+        }
+        /* Action cell shouldn't get the label prefix — it contains buttons. */
+        #sponsors-list table td[data-label='Actions']::before {
+          content: '';
+        }
+        #sponsors-list table td[data-label='Actions'] {
+          padding-top: 0.75rem;
+        }
+      }
+      .sponsors-card {
+        background: #fff;
+        border-radius: 8px;
+        padding: 1.25rem 1.5rem;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+        margin-top: 2rem;
+      }
+      .sponsors-card-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 1rem;
+      }
+      .sponsors-card-header h2 {
+        margin-bottom: 0;
+      }
+      .add-spon-btn {
+        padding: 0.4rem 1rem;
+        background: #4361ee;
+        color: #fff;
+        border: none;
+        border-radius: 6px;
+        font-size: 0.85rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background 0.2s;
+      }
+      .add-spon-btn:hover {
+        background: #3a56d4;
+      }
+      .add-spon-btn:focus-visible {
+        outline: 2px solid #4361ee;
+        outline-offset: 2px;
+      }
+      .cancel-btn {
+        padding: 0.6rem 1rem;
+        background: #fff;
+        color: #495057;
+        border: 1px solid #dee2e6;
+        border-radius: 6px;
+        font-size: 0.9rem;
+        cursor: pointer;
+      }
+      .cancel-btn:hover {
+        background: #f8f9fa;
+      }
+      .spon-form-wrap {
+        background: #f8f9fa;
+        border-radius: 6px;
+        padding: 1rem;
+        margin-bottom: 1rem;
+        border-left: 3px solid #4361ee;
+      }
+      .spon-tier-pill {
+        display: inline-block;
+        padding: 0.15rem 0.5rem;
+        border-radius: 4px;
+        font-size: 0.7rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+      .spon-tier-pill.title {
+        background: #fff9db;
+        color: #7d5a00;
+      }
+      .spon-tier-pill.platinum {
+        background: #e8deee;
+        color: #7c3aed;
+      }
+      .spon-tier-pill.gold {
+        background: #fff3cd;
+        color: #856404;
+      }
+      .spon-tier-pill.silver {
+        background: #e9ecef;
+        color: #495057;
+      }
+      .spon-tier-pill.bronze {
+        background: #fde8d8;
+        color: #9c4221;
+      }
+      .spon-tier-pill.primary {
+        background: #d0ebff;
+        color: #1971c2;
+      }
+      .placement-pips {
+        display: flex;
+        gap: 0.25rem;
+        flex-wrap: wrap;
+      }
+      .pip {
+        display: inline-block;
+        padding: 0.1rem 0.35rem;
+        border-radius: 3px;
+        font-size: 0.65rem;
+        font-weight: 700;
+        background: #e9ecef;
+        color: #adb5bd;
+      }
+      .pip.active {
+        background: #4361ee;
+        color: #fff;
+      }
+      .spon-action-btn {
+        padding: 0.25rem 0.6rem;
+        border: 1px solid #dee2e6;
+        border-radius: 4px;
+        font-size: 0.75rem;
+        cursor: pointer;
+        background: #fff;
+        color: #495057;
+        transition: all 0.15s;
+      }
+      .spon-action-btn:hover {
+        background: #f8f9fa;
+      }
+      .spon-action-btn:focus-visible {
+        outline: 2px solid #4361ee;
+        outline-offset: 2px;
+      }
+      .spon-action-btn.deactivate {
+        border-color: #ffc9c9;
+        color: #c92a2a;
+      }
+      .spon-action-btn.deactivate:hover {
+        background: #fff5f5;
+      }
+      .placements-group {
+        display: flex;
+        gap: 1.25rem;
+        flex-wrap: wrap;
+        margin-top: 0.25rem;
+      }
+      .placement-check {
+        display: flex;
+        align-items: center;
+        gap: 0.35rem;
+        font-size: 0.85rem;
+        cursor: pointer;
+        font-weight: normal;
+        color: #212529;
+      }
+      .placement-check input {
+        cursor: pointer;
+        width: auto;
+      }
+      .spon-edit-ctx {
+        padding: 0.4rem 0.75rem;
+        background: #e8f4fd;
+        border-radius: 4px;
+        font-size: 0.85rem;
+        color: #1971c2;
+        margin-bottom: 0.75rem;
+        font-weight: 500;
+      }
+      .spon-row-inactive {
+        opacity: 0.55;
+      }
+      .spon-ml {
+        margin-left: 0.25rem;
+      }
+      .deact-confirm-lbl {
+        font-size: 0.8rem;
+      }
+    </style>
+  </head>
+  <body>
+    <a href="#main-content" class="skip-link">Skip to content</a>
+    <header data-testid="admin-header" aria-label="OurSharedEvents Admin">
+      <h1>
+        OurSharedEvents<span class="tier-badge" id="tierBadge" data-testid="tier-badge"></span
+        ><span
+          class="phase-badge phase-1"
+          id="phaseBadge"
+          data-testid="phase-badge"
+          title="Internal phase 1"
+          data-phase="1"
+          >Community events</span
+        >
+      </h1>
+      <span>Admin</span>
+    </header>
+    <main id="main-content" data-testid="admin-main" aria-label="Admin dashboard">
+      <!-- Create Event Card -->
+      <div class="create-card" data-testid="create-event-card">
+        <h2>Create Event</h2>
+        <form
+          id="create-event-form"
+          data-testid="create-event-form"
+          novalidate
+          aria-label="Create new event"
+        >
+          <div class="create-form">
+            <div class="full-width">
+              <label for="create-title">Event Name <span class="required-star">*</span></label>
+              <input
+                type="text"
+                id="create-title"
+                name="title"
+                data-testid="create-title"
+                placeholder="Summer Block Party"
+                maxlength="200"
+                required
+                aria-required="true"
+              />
+            </div>
+            <div>
+              <label for="create-date">Start Date</label>
+              <input type="date" id="create-date" name="start_date" data-testid="create-date" />
+            </div>
+            <div>
+              <label for="create-venue">Venue</label>
+              <input
+                type="text"
+                id="create-venue"
+                name="location"
+                data-testid="create-venue"
+                placeholder="Evergreen Park"
+                maxlength="500"
+              />
+            </div>
+
+            <!-- OSE-239a: 5W content fields. WHAT/WHO/WHY/HOW/WHERE feed the
+               lifecycle public page (OSE-243) + OG preview (OSE-247).
+               All optional; an event with only a title still saves. -->
+            <div class="full-width">
+              <label for="create-what-short">What (short share description)</label>
+              <input
+                type="text"
+                id="create-what-short"
+                name="what_short"
+                data-testid="create-what-short"
+                placeholder="1-2 sentences — what makes this event a thing"
+                maxlength="300"
+              />
+            </div>
+            <div>
+              <label for="create-who-host">Who (host / organizer)</label>
+              <input
+                type="text"
+                id="create-who-host"
+                name="who_host"
+                data-testid="create-who-host"
+                placeholder="Beverly Hills Bocce League"
+                maxlength="200"
+              />
+            </div>
+            <div class="full-width">
+              <label for="create-where-address">Where (full address)</label>
+              <input
+                type="text"
+                id="create-where-address"
+                name="where_address"
+                data-testid="create-where-address"
+                placeholder="12345 South Western Ave, Blue Island IL 60406"
+                maxlength="500"
+              />
+            </div>
+            <div class="full-width">
+              <label for="create-why-purpose">Why (purpose)</label>
+              <textarea
+                id="create-why-purpose"
+                name="why_purpose"
+                data-testid="create-why-purpose"
+                placeholder="Why is this happening? Why now?"
+                maxlength="2000"
+                rows="3"
+              ></textarea>
+            </div>
+            <div class="full-width">
+              <label for="create-how-details">How (price, what to bring, what to expect)</label>
+              <textarea
+                id="create-how-details"
+                name="how_details"
+                data-testid="create-how-details"
+                placeholder="$10 at door, BYOB, food trucks on site"
+                maxlength="2000"
+                rows="3"
+              ></textarea>
+            </div>
+
+            <div class="full-width form-actions">
+              <button
+                type="submit"
+                id="create-submit-btn"
+                class="create-btn"
+                data-testid="create-submit"
+              >
+                Create Event
+              </button>
+              <div
+                id="create-msg"
+                class="create-msg"
+                data-testid="create-msg"
+                role="status"
+                aria-live="polite"
+              ></div>
+              <!-- OSE-262: warnings container — populated from data.warnings
+                 (non-fatal partial-success conditions like SHORTLINK_CREATE_FAILED).
+                 Initially hidden; the submit handler unhides + populates when
+                 the API response carries a non-empty warnings[] array. -->
+              <div
+                id="create-warnings"
+                class="create-warnings"
+                data-testid="create-warnings"
+                role="alert"
+                aria-live="assertive"
+                hidden
+              ></div>
+            </div>
+          </div>
+        </form>
+      </div>
+
+      <h2>All Events</h2>
+      <div id="events" data-testid="events-container">
+        <div class="skeleton-table" data-testid="skeleton-events">
+          <div class="skeleton skeleton-row"></div>
+          <div class="skeleton skeleton-row"></div>
+          <div class="skeleton skeleton-row"></div>
+          <div class="skeleton skeleton-row"></div>
+        </div>
+      </div>
+    </main>
+    <script>
+      // ─── OSE-R-005 label maps ─────────────────────────────────────────────
+      // The admin UI used to leak raw tier slugs (free/mid/enterprise) and
+      // "Phase N" strings to bar owners. These maps + helpers replace those
+      // with plain-English copy. Source of truth: briefing.ts uses Pro (not
+      // Mid) for the middle tier — admin UI must match or customers see
+      // contradictory naming across surfaces.
+      window.TIER_LABELS = {
+        free: 'Free plan',
+        mid: 'Pro plan',
+        enterprise: 'Enterprise plan',
+      };
+      window.PHASE_LABELS = {
+        1: 'Community events',
+        2: 'Commerce events',
+        3: 'Licensed activities',
+        4: 'Health events',
+        5: 'Youth events',
+      };
+      window.friendlyTier = function (slug) {
+        return (slug && window.TIER_LABELS[slug]) || 'Free plan';
+      };
+      window.friendlyPhase = function (p) {
+        var n = Math.max(1, Math.min(5, Number(p) || 1));
+        return window.PHASE_LABELS[n] || 'Community events';
+      };
+    </script>
+    <script>
+      (async () => {
+        const esc = (s) => {
+          const d = document.createElement('div');
+          d.textContent = s;
+          return d.innerHTML;
+        };
+        const container = document.getElementById('events');
+        try {
+          const res = await fetch('/api/v2/admin/events');
+          const data = await res.json();
+          if (!data.ok || !data.items.length) {
+            container.innerHTML = '<p class="loading">No events found.</p>';
+            return;
+          }
+          const rows = data.items
+            .map((e) => {
+              const safeName = esc(e.name || 'Untitled');
+              const safeId = esc(String(e.id));
+              const safePhase = Math.max(1, Math.min(5, Number(e.legal_clearance_tier) || 1));
+              const phaseLabel = esc(window.friendlyPhase(safePhase));
+              return `
+          <tr onclick="window.loadForms('${safeId}', '${safeName.replace(/'/g, "\\'")}', ${safePhase}); document.querySelectorAll('tr.selected').forEach(r=>r.classList.remove('selected')); this.classList.add('selected');" onkeydown="if(event.key==='Enter'||event.key===' '){this.click();event.preventDefault();}" class="clickable-row" tabindex="0" data-testid="event-row-${safeId}" data-phase="${safePhase}">
+            <td class="col-internal-id" data-label="ID" data-testid="event-id">${safeId}</td>
+            <td data-label="Name" data-testid="event-name">${safeName}</td>
+            <td data-label="Date" data-testid="event-date">${e.startDateISO ? esc(new Date(e.startDateISO).toLocaleDateString()) : '—'}</td>
+            <td data-label="Venue" data-testid="event-venue">${esc(e.venue || '—')}</td>
+            <td data-label="Status"><span class="badge ${esc(e.status)}" data-testid="event-status">${esc(e.status)}</span></td>
+            <td data-label="Event type"><span class="phase-badge phase-${safePhase}" data-testid="event-phase" title="Internal phase ${safePhase}">${phaseLabel}</span></td>
+          </tr>
+        `;
+            })
+            .join('');
+          container.innerHTML = `
+          <div class="events-toolbar">
+            <label><input type="checkbox" id="show-internal-ids" data-testid="show-internal-ids-toggle" /> Show internal IDs</label>
+          </div>
+          <table class="events-table" data-testid="events-table">
+            <thead><tr><th class="col-internal-id">ID</th><th>Name</th><th>Date</th><th>Venue</th><th>Status</th><th>Event type</th></tr></thead>
+            <tbody data-testid="events-tbody">${rows}</tbody>
+          </table>
+        `;
+          const toggle = document.getElementById('show-internal-ids');
+          const tbl = container.querySelector('table.events-table');
+          if (toggle && tbl) {
+            toggle.addEventListener('change', () => {
+              if (toggle.checked) {
+                tbl.classList.add('show-internal-ids');
+              } else {
+                tbl.classList.remove('show-internal-ids');
+              }
+            });
+          }
+        } catch (err) {
+          container.innerHTML =
+            '<div class="card-error" data-testid="events-error"><div class="error-icon">&#9888;</div><div class="error-msg">Could not load events.</div><button class="retry-btn" data-testid="events-retry" onclick="location.reload()">Retry</button></div>';
+        }
+      })();
+
+      // ── Create Event form handler ──
+      document.getElementById('create-event-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const btn = document.getElementById('create-submit-btn');
+        const msg = document.getElementById('create-msg');
+        const title = document.getElementById('create-title').value.trim();
+        if (!title) {
+          msg.textContent = 'Event name is required.';
+          msg.className = 'create-msg error';
+          return;
+        }
+
+        btn.disabled = true;
+        btn.textContent = 'Creating\u2026';
+        msg.textContent = '';
+        msg.className = 'create-msg';
+
+        try {
+          const body = { title };
+          const dateVal = document.getElementById('create-date').value;
+          if (dateVal) body.start_date = dateVal;
+          const venueVal = document.getElementById('create-venue').value.trim();
+          if (venueVal) body.location = venueVal;
+
+          // OSE-239a: collect 5W content fields. Each is optional; only
+          // populate the request body when the user actually typed something
+          // so the handler's null-on-empty semantics work.
+          const fivew = [
+            ['create-what-short', 'what_short'],
+            ['create-who-host', 'who_host'],
+            ['create-why-purpose', 'why_purpose'],
+            ['create-how-details', 'how_details'],
+            ['create-where-address', 'where_address'],
+          ];
+          for (const [domId, apiField] of fivew) {
+            const el = document.getElementById(domId);
+            const val = el && el.value ? el.value.trim() : '';
+            if (val) body[apiField] = val;
+          }
+
+          const res = await fetch('/api/v2/admin/events', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+          });
+          const data = await res.json();
+
+          if (res.ok && data.ok) {
+            // OSE-R-005: bar owners don't need to see (or copy) internal event
+            // IDs. Stash the id in a dataset attribute for support/test access
+            // while the visible toast stays in plain English.
+            msg.textContent = 'Event created.';
+            if (data.id) msg.dataset.eventId = String(data.id);
+            msg.className = 'create-msg success';
+            document.getElementById('create-title').value = '';
+            document.getElementById('create-date').value = '';
+            document.getElementById('create-venue').value = '';
+            for (const [domId] of fivew) {
+              const el = document.getElementById(domId);
+              if (el) el.value = '';
+            }
+
+            // OSE-262: surface non-fatal warnings (e.g., SHORTLINK_CREATE_FAILED)
+            // so the admin sees what landed and what didn't. When warnings are
+            // present we DO NOT auto-reload — the admin needs to read the warning
+            // before the page refreshes. The "Got it" button performs the reload.
+            const warningsContainer = document.getElementById('create-warnings');
+            if (Array.isArray(data.warnings) && data.warnings.length > 0) {
+              // Clear any previous warnings first
+              while (warningsContainer.firstChild) {
+                warningsContainer.removeChild(warningsContainer.firstChild);
+              }
+              for (const w of data.warnings) {
+                const banner = document.createElement('div');
+                banner.className = 'warning-banner';
+                banner.setAttribute('data-testid', 'create-warning-' + (w.code || 'UNKNOWN'));
+                const code = document.createElement('strong');
+                code.textContent = w.code || 'WARNING';
+                const text = document.createElement('span');
+                text.textContent = w.message || '';
+                banner.appendChild(code);
+                banner.appendChild(text);
+                warningsContainer.appendChild(banner);
+              }
+              // Dismiss button — reloads the events table once the admin has
+              // read the warnings.
+              const dismiss = document.createElement('button');
+              dismiss.type = 'button';
+              dismiss.className = 'warning-dismiss-btn';
+              dismiss.setAttribute('data-testid', 'create-warning-dismiss');
+              dismiss.textContent = 'Got it \u2014 refresh events';
+              dismiss.addEventListener('click', () => location.reload());
+              warningsContainer.appendChild(dismiss);
+              warningsContainer.hidden = false;
+            } else {
+              // No warnings — auto-reload as before to surface the new event in the table.
+              location.reload();
+            }
+          } else {
+            msg.textContent = data.error || 'Failed to create event.';
+            msg.className = 'create-msg error';
+          }
+        } catch (err) {
+          msg.textContent = 'Network error. Please try again.';
+          msg.className = 'create-msg error';
+        } finally {
+          btn.disabled = false;
+          btn.textContent = 'Create Event';
+        }
+      });
+    </script>
+
+    <!-- Card 2: Forms Management -->
+    <div class="forms-card" data-testid="forms-card">
+      <h2>Forms (Card 2)</h2>
+      <div id="forms-panel" data-testid="forms-panel">
+        <p class="loading">Select an event to manage forms&hellip;</p>
+      </div>
+    </div>
+    <script>
+      // Forms card — load counts and generate QR links for selected event
+      window.loadForms = async function(eventId, eventName, legalPhase) {
+        // Update phase badge to reflect selected event's regulatory clearance tier
+        const pb = document.getElementById('phaseBadge');
+        if (pb) {
+          const p = Math.max(1, Math.min(5, Number(legalPhase) || 1));
+          // OSE-R-005: friendly label visible; raw phase number stays in a
+          // tooltip + data attribute for admins who actually need it.
+          pb.textContent = window.friendlyPhase(p);
+          pb.title = 'Internal phase ' + p;
+          pb.setAttribute('data-phase', String(p));
+          pb.className = 'phase-badge phase-' + p;
+          pb.dataset.testid = 'phase-badge';
+        }
+        const panel = document.getElementById('forms-panel');
+        panel.innerHTML = '<div class="skeleton-table" data-testid="skeleton-forms"><div class="skeleton skeleton-row"></div><div class="skeleton skeleton-row"></div><div class="skeleton skeleton-row"></div></div>';
+        try {
+        // upgradeTier: payment tier required. upgradePhase: regulatory clearance tier required.
+        const types = [
+          { key: 'register', flagKey: 'forms.register', label: 'Registration', desc: 'Pre-event sign-up' },
+          { key: 'checkin', flagKey: 'forms.checkin', label: 'Check-in', desc: 'Walk-in door tally' },
+          { key: 'survey', flagKey: 'forms.survey', label: 'Survey', desc: 'Post-event feedback', upgradeTier: 'mid', upgradePhase: 2 },
+          { key: 'email', flagKey: 'forms.email-signup', label: 'Email List', desc: 'Voluntary opt-in', upgradeTier: 'mid', upgradePhase: 2 },
+        ];
+        const encodedName = encodeURIComponent(eventName);
+
+        // Resolve flags for this specific event
+        const eventFlagsRes = await fetch('/api/v2/admin/flags/resolve?eventId=' + eventId).then(r => r.json()).catch(() => null);
+        const flags = (eventFlagsRes && eventFlagsRes.ok) ? eventFlagsRes.flags : (window._resolvedFlags || {});
+
+        // Fetch counts in parallel
+        const adminPaths = ['registrations', 'checkin-count', 'surveys', 'email-signups'];
+        const counts = await Promise.all(adminPaths.map(p =>
+          fetch('/api/v2/admin/events/' + eventId + '/forms/' + p).then(r => r.json()).then(d => d.count || 0).catch(() => 0)
+        ));
+        const countLabels = ['Registrations', 'Check-ins', 'Surveys', 'Emails'];
+
+        // Form links — locked if flag is off (payment tier) or regulatory phase insufficient
+        const eventPhase = Math.max(1, Math.min(5, Number(legalPhase) || 1));
+        const linksHtml = types.map(t => {
+          const tierEnabled = flags[t.flagKey] !== false;
+          const phaseEnabled = eventPhase >= (t.upgradePhase || 1);
+          const enabled = tierEnabled && phaseEnabled;
+          const lockedClass = enabled ? '' : ' feature-locked';
+          // OSE-R-005: friendly plan + event-type names in the lock overlay.
+          const upgradeTierLabel = window.friendlyTier(t.upgradeTier || 'mid');
+          const upgradePhaseLabel = window.friendlyPhase(t.upgradePhase || 2);
+          const lockMsg = enabled ? '' : !tierEnabled
+            ? '<div class="lock-overlay">Upgrade to ' + upgradeTierLabel + ' to unlock</div>'
+            : '<div class="lock-overlay">Available for ' + upgradePhaseLabel + '</div>';
+          return '<div class="' + lockedClass + '" data-testid="form-gate-' + t.key + '">' +
+            '<a class="form-link" href="/forms/' + eventId + '?type=' + t.key + '&event=' + encodedName + '" target="_blank" data-testid="form-link-' + t.key + '">' +
+              '<div class="form-type">' + t.label + '</div>' +
+              '<div class="form-desc">' + t.desc + '</div>' +
+            '</a>' + lockMsg + '</div>';
+        }).join('');
+
+        // Inline form config toggles
+        const configHtml = types.map((t, i) => {
+          const globalEnabled = (window._resolvedFlags || {})[t.flagKey] !== false;
+          const eventEnabled = flags[t.flagKey] !== false;
+          const tierLocked = !globalEnabled && !t.upgradeTier; // truly unavailable
+          const disabled = !globalEnabled ? ' disabled' : '';
+          const checked = eventEnabled ? ' checked' : '';
+          return '<div class="form-config" data-testid="form-config-' + t.key + '">' +
+            '<div>' +
+              '<div class="form-config-label">' + t.label + ' <span class="muted-sm">(' + counts[i] + ')</span></div>' +
+              '<div class="form-config-desc">' + t.desc + (disabled ? ' — requires ' + (t.upgradeTier || 'upgrade') : '') + '</div>' +
+            '</div>' +
+            '<label class="toggle">' +
+              '<input type="checkbox" data-testid="form-toggle-' + t.key + '" data-flag="' + t.flagKey + '" data-event="' + eventId + '"' + checked + disabled +
+              ' onchange="toggleFormFlag(this)" />' +
+              '<span class="slider"></span>' +
+            '</label>' +
+          '</div>';
+        }).join('');
+
+        panel.innerHTML =
+          '<div class="forms-grid" data-testid="forms-grid">' + linksHtml + '</div>' +
+          '<div class="form-counts" data-testid="form-counts">' +
+            counts.map((c, i) =>
+              '<div class="count-box" data-testid="count-' + countLabels[i].toLowerCase().replace(/s+/g, '-') + '"><div class="count-num" data-testid="count-num">' + c + '</div><div class="count-label">' + countLabels[i] + '</div></div>'
+            ).join('') +
+          '</div>' +
+          '<div class="config-section" data-testid="config-section">' +
+            '<h3>Form Config</h3>' +
+            configHtml +
+          '</div>';
+        } catch (err) {
+          panel.innerHTML = '<div class="card-error" data-testid="forms-error"><div class="error-icon">&#9888;</div><div class="error-msg">Could not load forms.</div><button class="retry-btn" data-testid="forms-retry" onclick="window.loadForms('' + eventId + '','' + eventName.replace(/'/g, "\\'") + '')">Retry</button></div>';
+        }
+      };
+
+      // Toggle a form flag for the selected event
+      window.toggleFormFlag = async function(el) {
+        const flagKey = el.dataset.flag;
+        const eventId = el.dataset.event;
+        const enabled = el.checked;
+        try {
+          const res = await fetch('/api/v2/admin/events/' + eventId + '/flags/' + flagKey, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ enabled }),
+          });
+          const data = await res.json();
+          if (!data.ok) throw new Error(data.error || 'Failed');
+        } catch (err) {
+          el.checked = !enabled; // revert on failure
+          console.error('Flag toggle failed:', err);
+        }
+      };
+    </script>
+
+    <!-- Card 3: Sponsor Management (SPON-6) -->
+    <div class="sponsors-card" data-testid="sponsors-card">
+      <div class="sponsors-card-header">
+        <h2>Sponsors</h2>
+        <button
+          class="add-spon-btn"
+          id="add-spon-toggle"
+          data-testid="add-sponsor-toggle"
+          aria-expanded="false"
+          aria-controls="spon-form-wrap"
+        >
+          + Add Sponsor
+        </button>
+      </div>
+
+      <div id="spon-form-wrap" class="spon-form-wrap" hidden data-testid="sponsor-form-wrap">
+        <form id="spon-create-form" data-testid="sponsor-create-form" novalidate>
+          <input type="hidden" id="spon-edit-id" value="" />
+          <div id="spon-edit-ctx" class="spon-edit-ctx" hidden data-testid="sponsor-edit-ctx"></div>
+          <div class="create-form">
+            <div>
+              <label for="spon-name"
+                >Name <span class="required-star" aria-hidden="true">*</span></label
+              >
+              <input
+                type="text"
+                id="spon-name"
+                name="name"
+                data-testid="spon-name"
+                placeholder="ACME Corp"
+                maxlength="200"
+                required
+                autocomplete="organization"
+                aria-required="true"
+              />
+            </div>
+            <div>
+              <label for="spon-event"
+                >Event <span class="required-star" aria-hidden="true">*</span></label
+              >
+              <select
+                id="spon-event"
+                name="event_id"
+                data-testid="spon-event"
+                required
+                aria-required="true"
+              ></select>
+            </div>
+            <div>
+              <label for="spon-tier">Tier</label>
+              <select id="spon-tier" name="tier" data-testid="spon-tier">
+                <option value="primary">Primary</option>
+                <option value="bronze">Bronze</option>
+                <option value="silver">Silver</option>
+                <option value="gold">Gold</option>
+                <option value="platinum">Platinum</option>
+                <option value="title">Title</option>
+              </select>
+            </div>
+            <div>
+              <label for="spon-logo">Logo URL</label>
+              <input
+                type="text"
+                id="spon-logo"
+                name="logo_url"
+                data-testid="spon-logo"
+                placeholder="https://acme.com/logo.png"
+                maxlength="500"
+              />
+            </div>
+            <div class="full-width">
+              <label for="spon-website">Website URL</label>
+              <input
+                type="text"
+                id="spon-website"
+                name="website_url"
+                data-testid="spon-website"
+                placeholder="https://acme.com"
+                maxlength="500"
+              />
+            </div>
+            <div class="full-width">
+              <label>Placements</label>
+              <div
+                class="placements-group"
+                role="group"
+                aria-label="Placement surfaces"
+                data-testid="placements-group"
+              >
+                <label class="placement-check"
+                  ><input
+                    type="checkbox"
+                    id="spon-placement-poster"
+                    data-testid="placement-poster-top"
+                  />
+                  Poster Top</label
+                >
+                <label class="placement-check"
+                  ><input
+                    type="checkbox"
+                    id="spon-placement-tvtop"
+                    data-testid="placement-tv-top"
+                  />
+                  TV Top</label
+                >
+                <label class="placement-check"
+                  ><input
+                    type="checkbox"
+                    id="spon-placement-tvside"
+                    data-testid="placement-tv-side"
+                  />
+                  TV Side</label
+                >
+                <label class="placement-check"
+                  ><input
+                    type="checkbox"
+                    id="spon-placement-mobile"
+                    data-testid="placement-mobile-banner"
+                  />
+                  Mobile Banner</label
+                >
+              </div>
+            </div>
+            <div class="full-width form-actions">
+              <button
+                type="submit"
+                id="spon-submit-btn"
+                class="create-btn"
+                data-testid="sponsor-submit"
+              >
+                Save Sponsor
+              </button>
+              <button
+                type="button"
+                class="cancel-btn"
+                id="spon-cancel-btn"
+                data-testid="sponsor-cancel"
+              >
+                Cancel
+              </button>
+              <div
+                id="spon-form-msg"
+                class="create-msg"
+                role="status"
+                aria-live="polite"
+                data-testid="sponsor-form-msg"
+              ></div>
+            </div>
+          </div>
+        </form>
+      </div>
+
+      <div id="sponsors-list" data-testid="sponsors-list">
+        <div class="skeleton-table" data-testid="skeleton-sponsors">
+          <div class="skeleton skeleton-row"></div>
+          <div class="skeleton skeleton-row"></div>
+          <div class="skeleton skeleton-row"></div>
+        </div>
+      </div>
+    </div>
+    <script>
+      (function() {
+        const esc = s => { const d = document.createElement('div'); d.textContent = String(s); return d.innerHTML; };
+
+        function parsePlc(raw) {
+          try { const p = JSON.parse(raw || '{}'); return (p && typeof p === 'object') ? p : {}; } catch (e) { return {}; }
+        }
+
+        function pipHtml(raw) {
+          const p = parsePlc(raw);
+          const defs = [['posterTop','P'],['tvTop','TV'],['tvSide','S'],['mobileBanner','M']];
+          return '<span class="placement-pips">' + defs.map(function(d) {
+            return '<span class="pip' + (p[d[0]] ? ' active' : '') + '" title="' + d[0] + '">' + d[1] + '</span>';
+          }).join('') + '</span>';
+        }
+
+        async function loadEventOptions(selectedId) {
+          const sel = document.getElementById('spon-event');
+          sel.innerHTML = '<option value="" disabled selected>Loading events…</option>';
+          try {
+            const data = await fetch('/api/v2/admin/events').then(function(r) { return r.json(); });
+            const items = (data.ok && data.items) ? data.items : [];
+            sel.innerHTML = items.length
+              ? items.map(function(e) {
+                  return '<option value="' + esc(e.id) + '"' + (e.id === selectedId ? ' selected' : '') + '>' + esc(e.name || e.id) + '</option>';
+                }).join('')
+              : '<option value="" disabled>No events found — create an event first</option>';
+          } catch (e) {
+            sel.innerHTML = '<option value="" disabled>Could not load events</option>';
+          }
+        }
+
+        async function loadSponsors() {
+          const wrap = document.getElementById('sponsors-list');
+          wrap.innerHTML = '<div class="skeleton-table"><div class="skeleton skeleton-row"></div><div class="skeleton skeleton-row"></div><div class="skeleton skeleton-row"></div></div>';
+          try {
+            const data = await fetch('/api/v2/admin/sponsors').then(function(r) { return r.json(); });
+            if (!data.ok) throw new Error(data.error || 'Load failed');
+            const items = data.items || [];
+            if (!items.length) {
+              wrap.innerHTML = '<p class="loading" data-testid="sponsors-empty">No sponsors yet. Click &ldquo;+ Add Sponsor&rdquo; to add the first one.</p>';
+              return;
+            }
+            const rows = items.map(function(s) {
+              const dimStyle = s.is_active ? '' : ' class="spon-row-inactive"';
+              const statusBadge = s.is_active
+                ? '<span class="badge active" data-testid="spon-status-' + esc(s.id) + '">Active</span>'
+                : '<span class="badge archived" data-testid="spon-status-' + esc(s.id) + '">Inactive</span>';
+              const actions = s.is_active
+                ? '<button class="spon-action-btn" data-testid="edit-' + esc(s.id) + '" onclick="window._editSponsor('' + esc(s.id) + '')">Edit</button> ' +
+                  '<button class="spon-action-btn deactivate" data-testid="deactivate-' + esc(s.id) + '" onclick="window._deactivateSponsor('' + esc(s.id) + '')">Deactivate</button>'
+                : '<span class="muted-sm">Deactivated</span>';
+              return '<tr data-testid="sponsor-row-' + esc(s.id) + '"' + dimStyle + '>' +
+                '<td data-label="Name" data-testid="spon-name-' + esc(s.id) + '">' + esc(s.name) + '</td>' +
+                '<td data-label="Tier"><span class="spon-tier-pill ' + esc(s.tier) + '" data-testid="spon-tier-' + esc(s.id) + '">' + esc(s.tier) + '</span></td>' +
+                '<td data-label="Event" class="muted-sm" data-testid="spon-event-' + esc(s.id) + '">' + esc(s.event_id) + '</td>' +
+                '<td data-label="Placements" data-testid="spon-placements-' + esc(s.id) + '">' + pipHtml(s.placement_formats) + '</td>' +
+                '<td data-label="Status">' + statusBadge + '</td>' +
+                '<td data-label="Actions" class="flex-row">' + actions + '</td>' +
+              '</tr>';
+            }).join('');
+            wrap.innerHTML = '<table data-testid="sponsors-table">' +
+              '<thead><tr><th scope="col">Name</th><th scope="col">Tier</th><th scope="col">Event</th><th scope="col">Placements</th><th scope="col">Status</th><th scope="col">Actions</th></tr></thead>' +
+              '<tbody data-testid="sponsors-tbody">' + rows + '</tbody></table>';
+          } catch (err) {
+            wrap.innerHTML = '<div class="card-error" data-testid="sponsors-error"><div class="error-icon">&#9888;</div><div class="error-msg">Could not load sponsors.</div><button class="retry-btn" data-testid="sponsors-retry" onclick="window._loadSponsors()">Retry</button></div>';
+          }
+        }
+        window._loadSponsors = loadSponsors;
+
+        function openForm() {
+          const wrap = document.getElementById('spon-form-wrap');
+          const btn = document.getElementById('add-spon-toggle');
+          wrap.removeAttribute('hidden');
+          btn.setAttribute('aria-expanded', 'true');
+          btn.textContent = '✕ Cancel';
+          document.getElementById('spon-name').focus();
+        }
+
+        function doCloseForm() {
+          document.getElementById('spon-form-wrap').setAttribute('hidden', '');
+          document.getElementById('add-spon-toggle').setAttribute('aria-expanded', 'false');
+          document.getElementById('add-spon-toggle').textContent = '+ Add Sponsor';
+          document.getElementById('spon-edit-id').value = '';
+          document.getElementById('spon-create-form').reset();
+          const msg = document.getElementById('spon-form-msg');
+          msg.textContent = '';
+          msg.className = 'create-msg';
+          document.getElementById('spon-submit-btn').textContent = 'Save Sponsor';
+          const ctx = document.getElementById('spon-edit-ctx');
+          ctx.hidden = true;
+          ctx.textContent = '';
+          document.getElementById('add-spon-toggle').focus();
+        }
+        window._doCloseForm = doCloseForm;
+
+        function formHasData() {
+          return !!(document.getElementById('spon-name').value.trim() ||
+                    document.getElementById('spon-edit-id').value.trim());
+        }
+
+        window._keepEditing = function() {
+          document.getElementById('spon-form-msg').textContent = '';
+          document.getElementById('spon-form-msg').className = 'create-msg';
+          document.getElementById('spon-name').focus();
+        };
+
+        function closeForm() {
+          if (formHasData()) {
+            const msg = document.getElementById('spon-form-msg');
+            msg.className = 'create-msg error';
+            msg.innerHTML = 'Discard unsaved changes? ' +
+              '<button class="spon-action-btn spon-ml" onclick="window._doCloseForm()" data-testid="confirm-discard" aria-label="Yes, discard changes">Yes, discard</button>' +
+              ' <button class="spon-action-btn" onclick="window._keepEditing()" data-testid="keep-editing" aria-label="Keep editing">Keep editing</button>';
+            const yesBtn = msg.querySelector("[data-testid='confirm-discard']");
+            if (yesBtn) yesBtn.focus();
+            return;
+          }
+          doCloseForm();
+        }
+
+        document.getElementById('add-spon-toggle').addEventListener('click', function() {
+          const hidden = document.getElementById('spon-form-wrap').hasAttribute('hidden');
+          if (hidden) { openForm(); loadEventOptions(null); } else { closeForm(); }
+        });
+        document.getElementById('spon-cancel-btn').addEventListener('click', closeForm);
+
+        document.addEventListener('keydown', function(e) {
+          if (e.key === 'Escape' && !document.getElementById('spon-form-wrap').hasAttribute('hidden')) {
+            closeForm();
+          }
+        });
+
+        window._editSponsor = async function(id) {
+          openForm();
+          const msg = document.getElementById('spon-form-msg');
+          msg.textContent = '';
+          msg.className = 'create-msg';
+          try {
+            const data = await fetch('/api/v2/admin/sponsors/' + id).then(function(r) { return r.json(); });
+            if (!data.ok || !data.item) throw new Error('Not found');
+            const s = data.item;
+            await loadEventOptions(s.event_id);
+            document.getElementById('spon-edit-id').value = s.id;
+            document.getElementById('spon-name').value = s.name || '';
+            document.getElementById('spon-event').value = s.event_id || '';
+            document.getElementById('spon-tier').value = s.tier || 'primary';
+            document.getElementById('spon-logo').value = s.logo_url || '';
+            document.getElementById('spon-website').value = s.website_url || '';
+            const p = parsePlc(s.placement_formats);
+            document.getElementById('spon-placement-poster').checked = !!p.posterTop;
+            document.getElementById('spon-placement-tvtop').checked = !!p.tvTop;
+            document.getElementById('spon-placement-tvside').checked = !!p.tvSide;
+            document.getElementById('spon-placement-mobile').checked = !!p.mobileBanner;
+            document.getElementById('spon-submit-btn').textContent = 'Update Sponsor';
+            const ctx = document.getElementById('spon-edit-ctx');
+            ctx.textContent = 'Editing: ' + (s.name || s.id);
+            ctx.hidden = false;
+            document.getElementById('spon-form-wrap').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            document.getElementById('spon-name').focus();
+          } catch (e) {
+            msg.textContent = 'Could not load sponsor data.';
+            msg.className = 'create-msg error';
+          }
+        };
+
+        window._deactivateSponsor = function(id) {
+          const btn = document.querySelector('[data-testid="deactivate-' + id + '"]');
+          if (!btn) return;
+          const cell = btn.parentElement;
+          cell.innerHTML =
+            '<span class="muted-sm deact-confirm-lbl">Deactivate?</span> ' +
+            '<button class="spon-action-btn deactivate" data-testid="confirm-deactivate-' + esc(id) + '" onclick="window._confirmDeactivate('' + esc(id) + '')" aria-label="Confirm deactivate sponsor">Yes</button>' +
+            ' <button class="spon-action-btn" data-testid="cancel-deactivate-' + esc(id) + '" onclick="window._loadSponsors()" aria-label="Cancel deactivate">No</button>';
+          const yesBtn = cell.querySelector("[data-testid='confirm-deactivate-" + esc(id) + "']");
+          if (yesBtn) yesBtn.focus();
+        };
+
+        window._confirmDeactivate = async function(id) {
+          try {
+            const res = await fetch('/api/v2/admin/sponsors/' + id, { method: 'DELETE' });
+            const data = await res.json();
+            if (!res.ok || !data.ok) throw new Error(data.error || 'Failed');
+            loadSponsors();
+          } catch (err) {
+            alert('Could not deactivate: ' + (err.message || 'Unknown error'));
+            loadSponsors();
+          }
+        };
+
+        document.getElementById('spon-create-form').addEventListener('submit', async function(e) {
+          e.preventDefault();
+          const btn = document.getElementById('spon-submit-btn');
+          const msg = document.getElementById('spon-form-msg');
+          const editId = document.getElementById('spon-edit-id').value.trim();
+          const name = document.getElementById('spon-name').value.trim();
+          const event_id = document.getElementById('spon-event').value.trim();
+
+          if (!name) { msg.textContent = 'Name is required.'; msg.className = 'create-msg error'; return; }
+          if (!event_id) { msg.textContent = 'Event is required.'; msg.className = 'create-msg error'; return; }
+
+          const placements = JSON.stringify({
+            posterTop: document.getElementById('spon-placement-poster').checked,
+            tvTop: document.getElementById('spon-placement-tvtop').checked,
+            tvSide: document.getElementById('spon-placement-tvside').checked,
+            mobileBanner: document.getElementById('spon-placement-mobile').checked,
+          });
+          const body = { name: name, event_id: event_id, tier: document.getElementById('spon-tier').value, placement_formats: placements };
+          const logoVal = document.getElementById('spon-logo').value.trim();
+          if (logoVal) body.logo_url = logoVal;
+          const siteVal = document.getElementById('spon-website').value.trim();
+          if (siteVal) body.website_url = siteVal;
+
+          btn.disabled = true;
+          btn.textContent = editId ? 'Updating…' : 'Saving…';
+          msg.textContent = '';
+          msg.className = 'create-msg';
+
+          try {
+            const url = editId ? '/api/v2/admin/sponsors/' + editId : '/api/v2/admin/sponsors';
+            const res = await fetch(url, { method: editId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+            const data = await res.json();
+            if (!res.ok || !data.ok) throw new Error(data.error || 'Save failed');
+            msg.className = 'create-msg success';
+            msg.innerHTML = (editId ? 'Sponsor updated.' : 'Sponsor created — ' + esc(data.id)) +
+              ' <button class="spon-action-btn spon-ml" onclick="window._doCloseForm()" data-testid="close-after-save">Close</button>';
+            loadSponsors();
+          } catch (err) {
+            msg.textContent = err.message || 'Could not save sponsor.';
+            msg.className = 'create-msg error';
+          } finally {
+            btn.disabled = false;
+            btn.textContent = editId ? 'Update Sponsor' : 'Save Sponsor';
+          }
+        });
+
+        loadSponsors();
+      })();
+    </script>
+
+    <!-- Cards 4-7: Surface Links -->
+    <div class="surface-cards" data-testid="surface-cards">
+      <div class="surface-card poster" data-testid="card-poster">
+        <h3>Poster Page</h3>
+        <p>Print-ready event poster with QR codes</p>
+        <a href="/poster" target="_blank" data-testid="link-poster">Open Poster</a>
+        <button class="copy-btn" data-testid="copy-poster" onclick="copyUrl('/poster', this)">
+          Copy URL
+        </button>
+        <div class="qr-hint">QR-ready: /poster</div>
+      </div>
+      <div class="surface-card display" data-testid="card-display">
+        <h3>TV Display</h3>
+        <p>Bar TV / kiosk live event display</p>
+        <a href="/display" target="_blank" data-testid="link-display">Open Display</a>
+        <button class="copy-btn" data-testid="copy-display" onclick="copyUrl('/display', this)">
+          Copy URL
+        </button>
+        <div class="qr-hint">QR-ready: /display</div>
+      </div>
+      <div class="surface-card public" data-testid="card-public">
+        <h3>Public Page</h3>
+        <p>Customer-facing events listing</p>
+        <a href="/" target="_blank" data-testid="link-public">Open Public Page</a>
+        <button class="copy-btn" data-testid="copy-public" onclick="copyUrl('/', this)">
+          Copy URL
+        </button>
+        <div class="qr-hint">QR-ready: /</div>
+      </div>
+      <div class="surface-card report" data-testid="card-report">
+        <h3>Shared Report</h3>
+        <p>Post-event analytics dashboard</p>
+        <a href="/sharedReport" target="_blank" data-testid="link-report">Open Report</a>
+        <button class="copy-btn" data-testid="copy-report" onclick="copyUrl('/sharedReport', this)">
+          Copy URL
+        </button>
+        <div class="qr-hint">QR-ready: /sharedReport</div>
+      </div>
+    </div>
+
+    <!-- Copy URL helper -->
+    <script>
+      function copyUrl(path, btn) {
+        const url = location.origin + path;
+        navigator.clipboard
+          .writeText(url)
+          .then(() => {
+            btn.textContent = 'Copied!';
+            btn.classList.add('copied');
+            setTimeout(() => {
+              btn.textContent = 'Copy URL';
+              btn.classList.remove('copied');
+            }, 2000);
+          })
+          .catch(() => {
+            btn.textContent = 'Failed';
+            setTimeout(() => {
+              btn.textContent = 'Copy URL';
+            }, 2000);
+          });
+      }
+    </script>
+
+    <!-- Tier badge + feature gating -->
+    <script>
+      (async () => {
+        // Fetch current tier and resolved flags in parallel
+        const [tierRes, flagsRes] = await Promise.all([
+          fetch('/api/v2/admin/flags/current-tier')
+            .then((r) => r.json())
+            .catch(() => null),
+          fetch('/api/v2/admin/flags/resolve')
+            .then((r) => r.json())
+            .catch(() => null),
+        ]);
+
+        // Render tier badge — OSE-R-005: friendly label visible; raw slug
+        // preserved in data-tier for tests / support tooling.
+        const badge = document.getElementById('tierBadge');
+        const tier = tierRes && tierRes.ok ? tierRes.tier : 'free';
+        badge.textContent = window.friendlyTier(tier);
+        badge.setAttribute('data-tier', tier);
+        badge.title = 'Internal tier slug: ' + tier;
+        badge.className = 'tier-badge ' + tier;
+
+        // Store resolved flags globally for form gating
+        window._resolvedFlags = flagsRes && flagsRes.ok ? flagsRes.flags : {};
+      })();
+    </script>
+  </body>
+</html>
