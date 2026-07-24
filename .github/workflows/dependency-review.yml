@@ -51,7 +51,7 @@ jobs:
           echo "  Settings > Security > Code security and analysis > Dependency graph"
           echo "=============================================="
 
-      - uses: actions/dependency-review-action@v4
+      - uses: actions/dependency-review-action@v5
         # Graceful degradation: if Dependency Graph is not enabled, this errors
         # but should not block PRs. Stage-1 npm audit provides the backstop.
         # Once Dependency Graph is enabled, remove continue-on-error to make this a hard gate.
