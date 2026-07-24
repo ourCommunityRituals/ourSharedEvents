@@ -146,7 +146,7 @@ jobs:
       contents: read
       actions: read
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           clean: false
       - uses: actions/setup-node@v7
@@ -353,7 +353,7 @@ jobs:
         # architectural contracts were not gated on normal development.
         shard: [lint, typecheck, tests, a11y, invariants]
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           clean: false
       - uses: actions/setup-node@v7
@@ -457,7 +457,7 @@ jobs:
       # and pointing BRAIN_DIR at it.
       - name: 'Checkout OCR-docs brain (for OSE-323 drift check)'
         if: matrix.shard == 'tests'
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: ourCommunityRituals/OCR-docs
           ref: main
@@ -528,7 +528,7 @@ jobs:
       url: ${{ env.STG_BASE_URL }}
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           clean: false
       - uses: actions/setup-node@v7
@@ -697,7 +697,7 @@ jobs:
       needs.gate.result == 'success' &&
       (needs.deploy-staging.result == 'success' || github.event_name == 'schedule')
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           clean: false
       - uses: actions/setup-node@v7
@@ -783,7 +783,7 @@ jobs:
       needs.gate.result == 'success' &&
       (needs.deploy-staging.result == 'success' || github.event_name == 'schedule')
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           clean: false
       - uses: actions/setup-node@v7
@@ -953,7 +953,7 @@ jobs:
       checks: write
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           clean: false
       - uses: actions/setup-node@v7
@@ -1072,7 +1072,7 @@ jobs:
       url: ${{ env.PROD_BASE_URL }}
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
           node-version: '20'
@@ -1238,7 +1238,7 @@ jobs:
     runs-on: self-hosted
     needs: [security, gate, deploy-production]
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           clean: false
       - uses: actions/setup-node@v7

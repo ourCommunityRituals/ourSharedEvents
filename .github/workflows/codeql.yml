@@ -58,7 +58,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Shield CodeQL parser from workspace ESM scope
         # CodeQL's typescript-parser-wrapper/main.js is a CommonJS module.

@@ -65,7 +65,7 @@ jobs:
 
     steps:
       - name: Checkout OSE
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Node
         uses: actions/setup-node@v7
