@@ -27,12 +27,12 @@ jobs:
 
     steps:
       - name: Checkout OSE
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           path: ose
 
       - name: Checkout OCR-docs brain (read-only)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: ourCommunityRituals/OCR-docs
           path: ocr-docs

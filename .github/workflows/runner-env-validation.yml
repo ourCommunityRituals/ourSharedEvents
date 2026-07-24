@@ -40,7 +40,7 @@ jobs:
     timeout-minutes: 2
     steps:
       - name: Checkout (for local verifier script)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Verify bash resolves to Git Bash
         # Uses Windows PowerShell 5.1 (the `powershell` shell), NOT pwsh.

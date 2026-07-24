@@ -55,7 +55,7 @@ jobs:
       # action only needs the PR diff (head..base), not the entire repo
       # history. Default shallow checkout is faster on Bloodraven where
       # the OSE repo has ~3 years of commits.
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         if: steps.check-key.outputs.skip != 'true'
 
       - uses: anthropics/claude-code-action@v1
