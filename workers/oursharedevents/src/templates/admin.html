@@ -925,6 +925,127 @@
         font-size: 0.8rem;
       }
     </style>
+    <link rel="stylesheet" href="/ui.css" />
+    <style>
+      body {
+        background: var(--bg);
+        color: var(--text);
+      }
+      header {
+        background: var(--surface);
+        border-bottom: 1px solid var(--border);
+        color: var(--text);
+      }
+      header h1 {
+        color: var(--text);
+      }
+      header span {
+        color: var(--text-muted);
+      }
+      main,
+      .main-content,
+      .admin-main {
+        background: var(--bg);
+      }
+      /* cards & panels */
+      .card,
+      .admin-card,
+      .panel,
+      .modal-content,
+      .events-section,
+      .event-detail,
+      .sponsor-panel,
+      .flags-panel,
+      .flag-card {
+        background: var(--surface);
+        border-color: var(--border);
+        box-shadow: none;
+      }
+      /* tables */
+      table th {
+        color: var(--text-muted);
+        border-color: var(--border);
+        background: var(--surface);
+      }
+      table td {
+        border-color: var(--border);
+        color: var(--text);
+      }
+      table tr:hover td {
+        background: var(--surface-hover);
+      }
+      /* form inputs */
+      input,
+      select,
+      textarea {
+        background: var(--surface);
+        border-color: var(--border);
+        color: var(--text);
+      }
+      input:focus,
+      select:focus,
+      textarea:focus {
+        border-color: var(--accent);
+      }
+      /* buttons */
+      .btn-primary,
+      button.primary {
+        background: var(--accent);
+        color: #000;
+        border-color: var(--accent);
+      }
+      .btn-primary:hover,
+      button.primary:hover {
+        background: var(--accent-hover);
+      }
+      .btn-secondary,
+      button.secondary,
+      .btn-outline {
+        background: var(--surface);
+        color: var(--text);
+        border-color: var(--border);
+      }
+      .btn:focus-visible,
+      button:focus-visible {
+        outline-color: var(--accent);
+      }
+      /* tier/phase badges — keep their color families but darken bg */
+      .tier-badge.free {
+        background: rgba(22, 163, 74, 0.15);
+        color: #4ade80;
+      }
+      .tier-badge.mid {
+        background: rgba(59, 130, 246, 0.15);
+        color: #60a5fa;
+      }
+      .tier-badge.enterprise {
+        background: rgba(124, 58, 237, 0.15);
+        color: #c084fc;
+      }
+      /* muted text */
+      .section-title,
+      .label,
+      .events-toolbar,
+      .col-id,
+      .events-toolbar label {
+        color: var(--text-muted);
+      }
+      /* skip link */
+      .skip-link:focus {
+        background: var(--surface);
+        color: var(--text);
+        border-bottom-color: var(--accent);
+      }
+      /* info banner on admin */
+      .spon-row-info {
+        background: rgba(59, 130, 246, 0.1);
+        color: #60a5fa;
+      }
+      /* modal overlay */
+      .modal-overlay {
+        background: rgba(0, 0, 0, 0.7);
+      }
+    </style>
   </head>
   <body>
     <a href="#main-content" class="skip-link">Skip to content</a>

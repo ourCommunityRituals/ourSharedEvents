@@ -364,6 +364,14 @@
         .no-print {
           display: none !important;
         }
+        /* restore white background for print even in dark mode */
+        body {
+          background: #fff !important;
+          color: #1e293b !important;
+        }
+        .poster {
+          background: #fff !important;
+        }
         /* OSE-R-006 (audit 2026-05-15): force-print backgrounds + sponsor
          colors. Sponsors paid for full-color logo placement; pre-fix the
          print rule grayscaled them and the dark-navy poster header dropped
@@ -416,6 +424,81 @@
         .qr-link-url {
           display: none !important;
         }
+      }
+    </style>
+    <link rel="stylesheet" href="/ui.css" />
+    <style>
+      body {
+        background: var(--bg);
+        color: var(--text);
+      }
+      .page-header {
+        background: var(--surface);
+        border-bottom: 1px solid var(--border);
+        color: var(--text);
+      }
+      .page-header a {
+        color: var(--text-muted);
+      }
+      .page-header a:hover {
+        color: var(--text);
+      }
+      .poster {
+        background: var(--surface);
+        border-color: var(--border);
+        box-shadow: none;
+      }
+      .poster-header {
+        background: var(--surface);
+        border-bottom: 1px solid var(--border);
+      }
+      .meta-text {
+        color: var(--text-muted);
+      }
+      .qr-section {
+        border-color: var(--border);
+      }
+      .qr-loading {
+        background: var(--surface-hover);
+        border-color: var(--border);
+        color: var(--text-muted);
+      }
+      .qr-label {
+        color: var(--text-muted);
+      }
+      .qr-link-url {
+        color: var(--text-muted);
+      }
+      .poster-footer {
+        background: var(--surface-hover);
+        color: var(--text-muted);
+      }
+      .event-select label {
+        color: var(--text-muted);
+      }
+      .event-select select {
+        background: var(--surface);
+        border-color: var(--border);
+        color: var(--text);
+      }
+      .event-select select:focus {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px rgba(212, 149, 75, 0.15);
+      }
+      .poster-sponsor-name,
+      .poster-sponsor-label,
+      .poster-sponsor-tier-label {
+        color: var(--text-muted);
+      }
+      .poster-sponsor--title .poster-sponsor-name,
+      .poster-sponsor--platinum .poster-sponsor-name,
+      .poster-sponsor--gold .poster-sponsor-name {
+        color: var(--text);
+      }
+      .skip-link:focus {
+        background: var(--surface);
+        color: var(--text);
+        border-bottom-color: var(--accent);
       }
     </style>
   </head>

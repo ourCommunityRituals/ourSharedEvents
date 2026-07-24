@@ -293,6 +293,61 @@
         border-bottom: 2px solid #4361ee;
       }
     </style>
+    <link rel="stylesheet" href="/ui.css" />
+    <style>
+      body {
+        background: var(--bg);
+        color: var(--text);
+      }
+      header {
+        background: var(--surface);
+        border-bottom: 1px solid var(--border);
+      }
+      .event-card {
+        background: var(--surface-hover);
+        border-color: var(--border);
+      }
+      .next-card {
+        background: var(--surface);
+        border-color: var(--border);
+      }
+      .event-card .label,
+      .next-card .date,
+      .clock,
+      .empty {
+        color: var(--text-muted);
+      }
+      .event-card .meta {
+        color: var(--text-muted);
+      }
+      .event-card h2 {
+        color: var(--text);
+      }
+      .next-events h3 {
+        color: var(--text-muted);
+      }
+      .ticker {
+        background: var(--surface);
+        color: var(--accent);
+        border-top-color: var(--border);
+      }
+      .display-sponsor-item {
+        background: var(--surface);
+        border-color: var(--border);
+      }
+      .display-sponsor-item .name {
+        color: var(--text-muted);
+      }
+      .display-sponsor-banner {
+        background: var(--surface);
+        border-color: var(--border);
+      }
+      .skip-link:focus {
+        background: var(--surface);
+        color: var(--text);
+        border-bottom-color: var(--accent);
+      }
+    </style>
   </head>
   <body>
     <a href="#main-content" class="skip-link">Skip to content</a>

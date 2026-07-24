@@ -5,6 +5,7 @@
  *
  *   GET /                        → landing page
  *   GET /admin                   → admin dashboard (auth required)
+ *   GET /ui.css                  → shared OCR stylesheet (@ocr/ui)
  *   GET /health                  → health check
  *   GET /api/status              → alias for /health
  *   GET /api/v2/events           → list active events
@@ -82,6 +83,7 @@
  *   *                            → 404
  */
 
+import { serveCss } from '@ocr/ui';
 import { handleHealth } from './handlers/health';
 import {
   handleListEvents,
@@ -288,6 +290,10 @@ export async function route(
   if (pathname.startsWith('/s/') && method === 'GET') {
     const code = pathname.slice('/s/'.length);
     return handleShortlinkResolve(request, env, code);
+  }
+
+  if (pathname === '/ui.css') {
+    return serveCss();
   }
 
   if (pathname === '/health' || pathname === '/api/status') {

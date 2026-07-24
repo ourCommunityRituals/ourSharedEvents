@@ -528,7 +528,8 @@
           border: 1px solid #e9ecef;
         }
         body {
-          background: #fff;
+          background: #fff !important;
+          color: #212529 !important;
         }
         #advanced-metrics-section {
           display: block !important;
@@ -536,6 +537,111 @@
         .venue-map {
           display: none !important;
         }
+      }
+    </style>
+    <link rel="stylesheet" href="/ui.css" />
+    <style>
+      body {
+        background: var(--bg);
+        color: var(--text);
+      }
+      header {
+        background: var(--surface);
+        border-bottom: 1px solid var(--border);
+      }
+      .stat-card,
+      .events-list,
+      .sponsor-metric-card,
+      .funnel-card {
+        background: var(--surface);
+        border-color: var(--border);
+        box-shadow: none;
+      }
+      .stat-card .num,
+      .stat-dl dd {
+        color: var(--text);
+      }
+      .stat-card .label,
+      .section-title,
+      .event-row .date,
+      .no-venue {
+        color: var(--text-muted);
+      }
+      .sponsor-metric-card .metric-row {
+        color: var(--text-muted);
+      }
+      .sponsor-metric-card .metric-val {
+        color: var(--text);
+      }
+      .event-row {
+        border-bottom-color: var(--border);
+      }
+      .report-table th[scope] {
+        color: var(--text-muted);
+        border-bottom-color: var(--border);
+      }
+      .report-table td {
+        border-bottom-color: var(--border);
+      }
+      .report-table td::before {
+        color: var(--text-muted);
+      }
+      .funnel-card h3 {
+        color: var(--text-muted);
+      }
+      .funnel-table th {
+        color: var(--text-muted);
+        border-bottom-color: var(--border);
+      }
+      .funnel-table td {
+        border-bottom-color: var(--border);
+      }
+      .funnel-table tr {
+        border-color: var(--border);
+      }
+      .funnel-table td::before {
+        color: var(--text-muted);
+      }
+      .bar-track {
+        background: var(--surface-hover);
+      }
+      .bar-fill {
+        background: var(--accent);
+      }
+      .btn-outline {
+        background: var(--surface);
+        color: var(--text);
+        border-color: var(--border);
+      }
+      .btn:focus-visible {
+        outline-color: var(--accent);
+      }
+      .upgrade-prompt {
+        background: var(--surface-hover);
+        border-color: var(--border);
+      }
+      .upgrade-prompt strong {
+        color: var(--text);
+      }
+      .upgrade-prompt p {
+        color: var(--text-muted);
+      }
+      .venue-text,
+      .venue-plain {
+        color: var(--text-muted);
+      }
+      .badge.active {
+        background: rgba(22, 163, 74, 0.15);
+        color: #4ade80;
+      }
+      .badge.archived {
+        background: var(--surface-hover);
+        color: var(--text-muted);
+      }
+      .skip-link:focus {
+        background: var(--surface);
+        color: var(--text);
+        border-bottom-color: var(--accent);
       }
     </style>
   </head>
