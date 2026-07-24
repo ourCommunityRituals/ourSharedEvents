@@ -1,4 +1,4 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
@@ -103,12 +103,8 @@
       .events-toolbar input[type='checkbox'] {
         margin: 0;
       }
-      table.events-table .col-internal-id {
-        display: none;
-      }
-      table.events-table.show-internal-ids .col-internal-id {
-        display: table-cell;
-      }
+      table.events-table .col-internal-id { display: none; }
+      table.events-table.show-internal-ids .col-internal-id { display: table-cell; }
       .feature-locked {
         position: relative;
         opacity: 0.5;
@@ -664,7 +660,7 @@
        OSE-R-027 (admin desktop-only). */
       @media (max-width: 768px) {
         main {
-          padding: 0 0.75rem;
+          padding: 0 .75rem;
         }
         header {
           padding: 0.9rem 1rem;
@@ -752,10 +748,10 @@
           margin-right: 0.5rem;
         }
         /* Action cell shouldn't get the label prefix — it contains buttons. */
-        #sponsors-list table td[data-label='Actions']::before {
+        #sponsors-list table td[data-label="Actions"]::before {
           content: '';
         }
-        #sponsors-list table td[data-label='Actions'] {
+        #sponsors-list table td[data-label="Actions"] {
           padding-top: 0.75rem;
         }
       }
@@ -1847,8 +1843,7 @@
     <script>
       function copyUrl(path, btn) {
         const url = location.origin + path;
-        navigator.clipboard
-          .writeText(url)
+        navigator.clipboard.writeText(url)
           .then(() => {
             btn.textContent = 'Copied!';
             btn.classList.add('copied');

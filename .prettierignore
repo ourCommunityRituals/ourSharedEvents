@@ -1,0 +1,3 @@
+# Worker HTML templates — tests pin specific CSS formatting (whitespace, quote style,
+# shorthand values). Prettier reformats these and breaks the assertions.
+workers/oursharedevents/src/templates/

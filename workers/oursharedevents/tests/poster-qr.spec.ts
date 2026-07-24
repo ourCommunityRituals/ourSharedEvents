@@ -98,13 +98,13 @@ describe('DESIGN-9 L1: static source file checks', () => {
   });
 
   test('poster page has loadPosterQR function calling poster-bundle endpoint', () => {
-    const pages = sourceFile('handlers/pages.ts');
+    const pages = sourceFile('templates/poster.html');
     expect(pages).toContain('loadPosterQR');
     expect(pages).toContain('poster-bundle');
   });
 
   test('poster page renderPoster() has all 4 QR loading item IDs', () => {
-    const pages = sourceFile('handlers/pages.ts');
+    const pages = sourceFile('templates/poster.html');
     expect(pages).toContain('qr-img-register');
     expect(pages).toContain('qr-img-checkin');
     expect(pages).toContain('qr-img-survey');
@@ -112,7 +112,7 @@ describe('DESIGN-9 L1: static source file checks', () => {
   });
 
   test('poster page calls loadPosterQR in both init() and picker change handler', () => {
-    const pages = sourceFile('handlers/pages.ts');
+    const pages = sourceFile('templates/poster.html');
     // Count occurrences — must appear at least twice (init + picker listener)
     const count = (pages.match(/loadPosterQR/g) ?? []).length;
     expect(
