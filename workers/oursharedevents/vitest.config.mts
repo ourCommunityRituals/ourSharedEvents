@@ -50,6 +50,23 @@ function collectTsFiles(dir: string): Record<string, string> {
   return result;
 }
 
+function collectHtmlFiles(dir: string): Record<string, string> {
+  const result: Record<string, string> = {};
+  try {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const full = join(dir, entry.name);
+      if (entry.isDirectory()) {
+        Object.assign(result, collectHtmlFiles(full));
+      } else if (entry.name.endsWith('.html')) {
+        result[full] = readFileSync(full, 'utf8');
+      }
+    }
+  } catch {
+    // dir may not exist
+  }
+  return result;
+}
+
 // OSE-272: Static-invariant gates for the SharedReport data pipeline need to
 // inspect migration .sql files (e.g., to assert no `anon_id TEXT` column
 // exists in any pipeline migration). Read them into the same source map
@@ -73,6 +90,7 @@ function collectSqlFiles(dir: string): Record<string, string> {
 
 const sourceFiles = {
   ...collectTsFiles(srcDir),
+  ...collectHtmlFiles(join(srcDir, 'templates')),
   ...collectSqlFiles(join(rootDir, 'migrations')),
 };
 const wranglerToml = readFileSync(join(rootDir, 'wrangler.toml'), 'utf8');

@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Event Poster – OurSharedEvents</title>
+    <style>
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      body {
+        font-family:
+          system-ui,
+          -apple-system,
+          sans-serif;
+        background: #f8f9fa;
+        color: #1e293b;
+      }
+      .page-header {
+        background: #1a1a2e;
+        color: #fff;
+        padding: 1rem 2rem;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+      .page-header h1 {
+        font-size: 1.2rem;
+        font-weight: 700;
+      }
+      .page-header a {
+        color: rgba(255, 255, 255, 0.7);
+        font-size: 0.85rem;
+        text-decoration: none;
+      }
+      .page-header a:hover {
+        color: #fff;
+      }
+      .container {
+        max-width: 680px;
+        margin: 2rem auto;
+        padding: 0 1rem;
+      }
+      .poster {
+        background: #fff;
+        border-radius: 12px;
+        overflow: hidden;
+        box-shadow: 0 4px 24px rgba(0, 0, 0, 0.12);
+        border: 1px solid #e2e8f0;
+      }
+      .poster-header {
+        background: #1a1a2e;
+        color: #fff;
+        padding: 2.5rem 2rem 2rem;
+        text-align: center;
+      }
+      .poster-header .org {
+        font-size: 0.8rem;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        opacity: 0.6;
+        margin-bottom: 0.75rem;
+      }
+      .poster-header h2 {
+        font-size: clamp(1.5rem, 5vw, 2.25rem);
+        font-weight: 800;
+        line-height: 1.2;
+      }
+      .poster-body {
+        padding: 2rem;
+      }
+      .poster-meta {
+        display: grid;
+        gap: 0.75rem;
+        margin-bottom: 2rem;
+      }
+      .meta-row {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.75rem;
+      }
+      .meta-icon {
+        width: 24px;
+        flex-shrink: 0;
+        text-align: center;
+        font-size: 1rem;
+        padding-top: 0.1rem;
+      }
+      .meta-text {
+        font-size: 1rem;
+        color: #334155;
+      }
+      .qr-section {
+        display: flex;
+        justify-content: center;
+        gap: 2rem;
+        flex-wrap: wrap;
+        padding: 1.5rem 0;
+        border-top: 1px solid #e2e8f0;
+        border-bottom: 1px solid #e2e8f0;
+        margin-bottom: 1.5rem;
+      }
+      .qr-item {
+        text-align: center;
+      }
+      .qr-loading {
+        width: 120px;
+        height: 120px;
+        background: #f1f5f9;
+        border: 2px dashed #cbd5e1;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 0.5rem;
+        font-size: 1.25rem;
+        color: #64748b;
+      }
+      .qr-img {
+        width: 120px;
+        height: 120px;
+        display: block;
+        margin: 0 auto 0.5rem;
+        image-rendering: pixelated;
+      }
+      .qr-link {
+        display: block;
+        color: inherit;
+        text-decoration: none;
+      }
+      .qr-link:hover .qr-img {
+        opacity: 0.85;
+      }
+      .qr-link-url {
+        display: block;
+        font-size: 0.6rem;
+        color: #64748b;
+        word-break: break-all;
+        margin-top: 0.25rem;
+        max-width: 120px;
+        text-align: center;
+      }
+      .qr-label {
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: #64748b;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+      .poster-footer {
+        text-align: center;
+        padding: 1rem;
+        background: #f8fafc;
+        font-size: 0.8rem;
+        color: #64748b;
+      }
+      .loading {
+        text-align: center;
+        padding: 4rem;
+        color: #64748b;
+      }
+      .error {
+        text-align: center;
+        padding: 3rem;
+        color: #dc2626;
+      }
+      .event-select {
+        margin-bottom: 1.5rem;
+      }
+      .event-select label {
+        display: block;
+        font-size: 0.875rem;
+        font-weight: 600;
+        color: #374151;
+        margin-bottom: 0.375rem;
+      }
+      .event-select select {
+        width: 100%;
+        padding: 0.5rem 0.75rem;
+        border: 1px solid #d1d5db;
+        border-radius: 6px;
+        font-size: 0.95rem;
+        background: #fff;
+        color: #1e293b;
+      }
+      .poster-sponsors {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 1.5rem;
+        padding: 1rem 2rem;
+        flex-wrap: wrap;
+      }
+      .poster-sponsors:empty {
+        display: none;
+      }
+      .poster-sponsor {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+      }
+      .poster-sponsor img {
+        height: 28px;
+        width: auto;
+        max-width: 80px;
+        object-fit: contain;
+      }
+      .poster-sponsor-name {
+        font-size: 0.75rem;
+        color: #64748b;
+        font-weight: 500;
+      }
+      .poster-sponsor-label {
+        font-size: 0.65rem;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: #64748b;
+        text-align: center;
+        margin-bottom: 0.35rem;
+      }
+      .poster-sponsor-tier-row {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 1rem;
+        flex-wrap: wrap;
+        padding: 0.2rem 0;
+      }
+      .poster-sponsor-tier-label {
+        font-size: 0.6rem;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: #64748b;
+        text-align: center;
+        width: 100%;
+        margin-bottom: 0.15rem;
+      }
+      .poster-sponsor--title img,
+      .poster-sponsor--platinum img {
+        height: 40px;
+      }
+      .poster-sponsor--title .poster-sponsor-name,
+      .poster-sponsor--platinum .poster-sponsor-name {
+        font-size: 0.85rem;
+        font-weight: 700;
+        color: #1e293b;
+      }
+      .poster-sponsor--gold img {
+        height: 34px;
+      }
+      .poster-sponsor--gold .poster-sponsor-name {
+        font-size: 0.8rem;
+        font-weight: 600;
+        color: #1e293b;
+      }
+      .poster-sponsor--silver img,
+      .poster-sponsor--bronze img {
+        height: 28px;
+      }
+      .poster-sponsor--primary img {
+        height: 22px;
+      }
+      .poster-sponsor--primary .poster-sponsor-name {
+        font-size: 0.65rem;
+        color: #6c757d;
+      }
+      .page-header a:focus-visible {
+        outline: 2px solid #fff;
+        outline-offset: 2px;
+      }
+      .event-select select:focus {
+        border-color: #4361ee;
+        outline: none;
+        box-shadow: 0 0 0 3px rgba(67, 97, 238, 0.15);
+      }
+      .skip-link {
+        position: absolute;
+        left: -9999px;
+        top: auto;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+      }
+      .skip-link:focus {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: auto;
+        height: auto;
+        padding: 0.5rem 1rem;
+        background: #1a1a2e;
+        color: #fff;
+        font-size: 1rem;
+        z-index: 9999;
+        text-decoration: none;
+        border-bottom: 2px solid #4361ee;
+      }
+      /* OSE-300 DRAIN 7/7: mobile workability for /poster preview.
+       At 375px the default 4-up QR row at 120px each plus 2rem gaps
+       overflows; the .page-header Print anchor is below the 44px
+       touch-target floor; the .event-select picker renders below
+       16px font-size so iOS auto-zooms on tap. This block:
+         - tightens .page-header / .container / .poster-body padding
+         - bumps the Print anchor to 44px min-height
+         - raises the event-picker to 16px / 44px so it meets both
+           the iOS auto-zoom guard and the touch-target floor
+         - shrinks .qr-img / .qr-loading to 100px and looses the
+           gap so two QR codes fit per row with breathing room
+         - releases .qr-link-url word-break so the long URL wraps
+           inside the QR column */
+      @media (max-width: 768px) {
+        .page-header {
+          padding: 0.75rem 1rem;
+        }
+        .page-header h1 {
+          font-size: 1.05rem;
+        }
+        .page-header a {
+          display: inline-flex;
+          align-items: center;
+          min-height: 44px;
+          padding: 0 0.5rem;
+        }
+        .container {
+          padding: 0 .75rem;
+          margin: 1rem auto;
+        }
+        .poster-header {
+          padding: 1.75rem 1.25rem 1.5rem;
+        }
+        .poster-body {
+          padding: 1.25rem 1rem;
+        }
+        .event-select select {
+          font-size: 16px;
+          min-height: 44px;
+          padding: 0.65rem 0.75rem;
+        }
+        .qr-section {
+          gap: 1rem;
+          padding: 1.25rem 0;
+        }
+        .qr-img,
+        .qr-loading {
+          width: 100px;
+          height: 100px;
+        }
+        .qr-link-url {
+          max-width: 100px;
+          word-break: break-all;
+        }
+        .poster-sponsors {
+          padding: 1rem;
+          gap: 1rem;
+        }
+      }
+      @media print {
+        .page-header,
+        .event-select,
+        .no-print {
+          display: none !important;
+        }
+        /* OSE-R-006 (audit 2026-05-15): force-print backgrounds + sponsor
+         colors. Sponsors paid for full-color logo placement; pre-fix the
+         print rule grayscaled them and the dark-navy poster header dropped
+         to white-on-white. Both broke the printed-poster value promise. */
+        body,
+        .poster,
+        .poster-header,
+        .poster-sponsors,
+        .poster-sponsor,
+        .poster-sponsor img {
+          -webkit-print-color-adjust: exact;
+          print-color-adjust: exact;
+          color-adjust: exact;
+        }
+        body {
+          background: #fff;
+        }
+        .container {
+          margin: 0;
+          max-width: 100%;
+        }
+        /* Keep the whole poster on one page when it fits; otherwise allow
+         orderly breaks at the major section boundaries. */
+        .poster {
+          box-shadow: none;
+          border: none;
+          page-break-inside: avoid;
+        }
+        .qr-section {
+          page-break-inside: avoid;
+        }
+        .poster-sponsors {
+          page-break-inside: avoid;
+          border-top: 1px solid #ccc;
+          padding: 0.75rem 1rem;
+        }
+        /* OSE-R-006: NO grayscale on sponsor logos in print. Keep the
+         max-height clamp so logos still fit a printed A4 page — that part
+         was a layout decision, separate from the color issue. */
+        .poster-sponsor img {
+          max-height: 20px;
+        }
+        .poster-sponsor-name,
+        .poster-sponsor-label {
+          color: #000;
+        }
+        .qr-loading {
+          display: none !important;
+        }
+        .qr-link-url {
+          display: none !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <a href="#main-content" class="skip-link">Skip to content</a>
+    <div class="page-header no-print" data-testid="poster-header">
+      <h1>OurSharedEvents — Poster</h1>
+      <a href="javascript:window.print()" data-testid="poster-print">&#x1F5A8; Print</a>
+    </div>
+    <div id="main-content" class="container" data-testid="poster-container">
+      <div class="event-select no-print" data-testid="poster-event-select">
+        <label for="event-picker">Select Event</label>
+        <select id="event-picker" data-testid="poster-event-picker">
+          <option value="">Loading events&hellip;</option>
+        </select>
+      </div>
+      <div id="poster-area" data-testid="poster-area">
+        <p class="loading" data-testid="poster-loading" role="status">Loading&hellip;</p>
+      </div>
+    </div>
+    <script>
+      const esc = s => { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; };
+      const fmt = iso => iso ? new Date(iso).toLocaleDateString('en-US', { weekday:'long', year:'numeric', month:'long', day:'numeric' }) : '';
+      const fmtTime = iso => iso ? new Date(iso).toLocaleTimeString('en-US', { hour:'numeric', minute:'2-digit' }) : '';
+
+      function renderPoster(event) {
+        const data = event.data || {};
+        const venue = data.venue || event.venue || '';
+        const address = data.address || '';
+        const startISO = data.startDateISO || event.startDateISO || '';
+        const name = data.name || event.name || 'Event';
+
+        return '<div class="poster" data-testid="poster-card" role="article" aria-label="' + esc(name) + ' event poster">' +
+          '<div class="poster-header" data-testid="poster-card-header">' +
+            '<div class="org" data-testid="poster-org">OurSharedEvents</div>' +
+            '<h2 data-testid="poster-title">' + esc(name) + '</h2>' +
+          '</div>' +
+          '<div class="poster-body" data-testid="poster-body">' +
+            '<div class="poster-meta" data-testid="poster-meta">' +
+            (startISO ? '<div class="meta-row" data-testid="poster-meta-date"><div class="meta-icon" aria-hidden="true">&#x1F4C5;</div><div class="meta-text">' + esc(fmt(startISO)) + (startISO ? ' &mdash; ' + esc(fmtTime(startISO)) : '') + '</div></div>' : '') +
+            (venue ? '<div class="meta-row" data-testid="poster-meta-venue"><div class="meta-icon" aria-hidden="true">&#x1F4CD;</div><div class="meta-text">' + esc(venue) + (address ? '<br><small>' + esc(address) + '</small>' : '') + '</div></div>' : '') +
+            '</div>' +
+            '<div class="qr-section" data-testid="poster-qr-section">' +
+              '<div class="qr-item" data-testid="poster-qr-register"><div id="qr-img-register" class="qr-loading" aria-busy="true">&#x23F3;</div><div class="qr-label" data-testid="poster-qr-register-label">Registration</div></div>' +
+              '<div class="qr-item" data-testid="poster-qr-checkin"><div id="qr-img-checkin" class="qr-loading" aria-busy="true">&#x23F3;</div><div class="qr-label" data-testid="poster-qr-checkin-label">Check-in</div></div>' +
+              '<div class="qr-item" data-testid="poster-qr-survey"><div id="qr-img-survey" class="qr-loading" aria-busy="true">&#x23F3;</div><div class="qr-label" data-testid="poster-qr-survey-label">Survey</div></div>' +
+              '<div class="qr-item" data-testid="poster-qr-email-signup"><div id="qr-img-email-signup" class="qr-loading" aria-busy="true">&#x23F3;</div><div class="qr-label" data-testid="poster-qr-email-signup-label">Email Signup</div></div>' +
+            '</div>' +
+          '</div>' +
+          '<div id="poster-sponsor-strip" class="poster-sponsors" data-testid="poster-sponsor-strip" role="list" aria-label="Event sponsors"></div>' +
+          '<div class="poster-footer" data-testid="poster-footer">oursharedevents.com</div>' +
+        '</div>';
+      }
+
+      async function init() {
+        const picker = document.getElementById('event-picker');
+        const area = document.getElementById('poster-area');
+        try {
+          const res = await fetch('/api/v2/events');
+          const data = await res.json();
+          const items = (data.ok && data.items) ? data.items : [];
+          if (!items.length) {
+            picker.innerHTML = '<option>No events available</option>';
+            area.innerHTML = '<p class="loading" data-testid="poster-empty" role="status">No events scheduled.</p>';
+            return;
+          }
+          picker.innerHTML = items.map((e, i) =>
+            '<option value="' + i + '">' + esc(e.name || 'Untitled Event') + '</option>'
+          ).join('');
+          area.innerHTML = renderPoster(items[0]);
+          loadPosterSponsors(items[0].id);
+          loadPosterQR(items[0].id);
+          picker.addEventListener('change', () => {
+            const idx = parseInt(picker.value, 10);
+            if (!isNaN(idx) && items[idx]) {
+              area.innerHTML = renderPoster(items[idx]);
+              loadPosterSponsors(items[idx].id);
+              loadPosterQR(items[idx].id);
+            }
+          });
+        } catch {
+          area.innerHTML = '<p class="error" data-testid="poster-error" role="alert">Could not load events.</p>';
+        }
+      }
+      async function loadPosterSponsors(eventId) {
+        const strip = document.getElementById('poster-sponsor-strip');
+        if (!strip || !eventId) return;
+        strip.setAttribute('aria-busy', 'true');
+        strip.innerHTML = '<span class="sr-only" data-testid="poster-sponsors-loading">Loading sponsors…</span>';
+        try {
+          const res = await fetch('/api/v2/events/' + encodeURIComponent(eventId) + '/sponsor-bundle?surface=poster');
+          const data = await res.json();
+          strip.setAttribute('aria-busy', 'false');
+          if (!data.ok) { strip.innerHTML = ''; return; }
+          const sponsors = data.bundle?.surface_sponsors?.posterTop || [];
+          if (!sponsors.length) { strip.innerHTML = ''; return; }
+          strip.innerHTML = '<div class="poster-sponsor-label" data-testid="poster-sponsor-label">Sponsored By</div>' +
+            sponsors.map(function(s) {
+              // OSE-R-015 (2026-05-15): referrerpolicy + onerror.
+              const logo = s.logo_url ? '<img src="' + esc(s.logo_url) + '" alt="' + esc(s.name) + ' logo" referrerpolicy="no-referrer" onerror="this.style.display='none'" data-testid="poster-sponsor-logo">' : '';
+              const validTiers = ['title','platinum','gold','silver','bronze','primary'];
+              const tier = validTiers.indexOf(String(s.tier || '')) >= 0 ? s.tier : 'primary';
+              return '<div class="poster-sponsor poster-sponsor--' + esc(tier) + '" data-tier="' + esc(tier) + '" data-testid="poster-sponsor-item" role="listitem" aria-label="' + esc(s.name) + '">' + logo + '<span class="poster-sponsor-name" data-testid="poster-sponsor-name">' + esc(s.name) + '</span></div>';
+            }).join('');
+        } catch { strip.setAttribute('aria-busy', 'false'); strip.innerHTML = ''; }
+      }
+      async function loadPosterQR(eventId) {
+        if (!eventId) return;
+        const types = [
+          { type: 'register', id: 'qr-img-register' },
+          { type: 'checkin', id: 'qr-img-checkin' },
+          { type: 'survey', id: 'qr-img-survey' },
+          { type: 'email-signup', id: 'qr-img-email-signup' },
+        ];
+        try {
+          const res = await fetch('/api/v2/events/' + encodeURIComponent(eventId) + '/poster-bundle');
+          const data = await res.json();
+          if (!data.ok) return;
+          for (const { type, id } of types) {
+            const el = document.getElementById(id);
+            if (!el) continue;
+            const src = data.qr && data.qr[type];
+            const href = data.links && data.links[type];
+            const label = (data.labels && data.labels[type]) || type;
+            if (!src) continue;
+            el.outerHTML = '<a class="qr-link" href="' + esc(href || '#') + '" target="_blank" rel="noopener noreferrer" aria-label="' + esc(label) + ' QR code — tap to open" data-testid="qr-link-' + type + '">' +
+              '<img src="' + esc(src) + '" alt="' + esc(label) + ' QR code" class="qr-img" data-testid="qr-img-' + type + '" width="120" height="120" />' +
+              '<span class="qr-link-url" data-testid="qr-link-url-' + type + '">' + esc(href || '') + '</span>' +
+              '</a>';
+          }
+        } catch { /* QR loading is non-critical */ }
+      }
+      init();
+    </script>
+  </body>
+</html>

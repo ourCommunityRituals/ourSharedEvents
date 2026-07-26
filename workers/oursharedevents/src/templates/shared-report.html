@@ -1,0 +1,1193 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Shared Report – OurSharedEvents</title>
+    <style>
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      body {
+        font-family:
+          system-ui,
+          -apple-system,
+          sans-serif;
+        background: #f8f9fa;
+        color: #212529;
+      }
+      header {
+        background: #1a1a2e;
+        color: #fff;
+        padding: 1.25rem 2rem;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+      header h1 {
+        font-size: 1.4rem;
+        font-weight: 600;
+      }
+      header span {
+        font-size: 0.8rem;
+        opacity: 0.6;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+      main {
+        max-width: 960px;
+        margin: 2rem auto;
+        padding: 0 1rem;
+        display: grid;
+        gap: 1.5rem;
+      }
+      .section-title {
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: #6c757d;
+        margin-bottom: 0.75rem;
+        font-weight: 600;
+      }
+      .stats-row {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+        gap: 1rem;
+      }
+      .stat-card {
+        background: #fff;
+        border-radius: 8px;
+        padding: 1.25rem 1.5rem;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+      }
+      .stat-card .num {
+        font-size: 2rem;
+        font-weight: 800;
+        color: #1a1a2e;
+        line-height: 1;
+        margin-bottom: 0.25rem;
+      }
+      .stat-card .label {
+        font-size: 0.8rem;
+        color: #6c757d;
+      }
+      .events-list {
+        background: #fff;
+        border-radius: 8px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+        overflow: hidden;
+      }
+      .event-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0.875rem 1.25rem;
+        border-bottom: 1px solid #f1f3f5;
+        gap: 1rem;
+      }
+      .event-row:last-child {
+        border-bottom: none;
+      }
+      .event-row .name {
+        font-weight: 600;
+        font-size: 0.95rem;
+      }
+      .event-row .date {
+        font-size: 0.8rem;
+        color: #6c757d;
+        white-space: nowrap;
+      }
+      .badge {
+        display: inline-block;
+        padding: 0.15rem 0.5rem;
+        border-radius: 4px;
+        font-size: 0.72rem;
+        font-weight: 600;
+      }
+      .badge.active {
+        background: #d3f9d8;
+        color: #155724;
+      }
+      .badge.archived {
+        background: #f1f3f5;
+        color: #495057;
+      }
+      .loading {
+        text-align: center;
+        padding: 3rem;
+        color: #6c757d;
+      }
+      .empty {
+        text-align: center;
+        padding: 2rem;
+        color: #6c757d;
+        font-size: 0.95rem;
+      }
+      .sponsor-metrics {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1rem;
+      }
+      .sponsor-metrics:empty {
+        display: none;
+      }
+      .sponsor-metric-card {
+        background: #fff;
+        border-radius: 8px;
+        padding: 1rem 1.25rem;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+      }
+      .sponsor-metric-card .sponsor-name {
+        font-weight: 600;
+        font-size: 0.9rem;
+        margin-bottom: 0.5rem;
+      }
+      .sponsor-metric-card .metric-row {
+        display: flex;
+        justify-content: space-between;
+        font-size: 0.8rem;
+        color: #6c757d;
+        padding: 0.15rem 0;
+      }
+      .sponsor-metric-card .metric-val {
+        font-weight: 600;
+        color: #212529;
+      }
+      .action-bar {
+        display: flex;
+        gap: 0.75rem;
+        justify-content: flex-end;
+      }
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        padding: 0.5rem 1rem;
+        border-radius: 6px;
+        border: none;
+        font-size: 0.85rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: opacity 0.15s;
+      }
+      .btn:hover:not(:disabled) {
+        opacity: 0.85;
+      }
+      .btn:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+      }
+      .btn-outline {
+        background: #fff;
+        color: #1a1a2e;
+        border: 1.5px solid #dee2e6;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+      }
+      .sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border-width: 0;
+      }
+      .report-table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      .report-table th[scope] {
+        text-align: left;
+        padding: 0.625rem 1.25rem;
+        font-size: 0.8rem;
+        color: #6c757d;
+        font-weight: 600;
+        border-bottom: 2px solid #f1f3f5;
+      }
+      .report-table td {
+        padding: 0.875rem 1.25rem;
+        border-bottom: 1px solid #f1f3f5;
+        font-size: 0.9rem;
+      }
+      .report-table tr:last-child td {
+        border-bottom: none;
+      }
+      .stat-dl {
+        display: flex;
+        flex-direction: column;
+      }
+      .stat-dl dt {
+        font-size: 0.8rem;
+        color: #6c757d;
+        order: 2;
+        margin-top: 0.25rem;
+      }
+      .stat-dl dd {
+        font-size: 2rem;
+        font-weight: 800;
+        color: #1a1a2e;
+        line-height: 1;
+        order: 1;
+        margin: 0;
+      }
+      .btn:focus-visible {
+        outline: 2px solid #4361ee;
+        outline-offset: 2px;
+      }
+      .tier-badge {
+        display: inline-block;
+        padding: 0.15rem 0.45rem;
+        border-radius: 10px;
+        font-size: 0.65rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        vertical-align: middle;
+        margin-left: 0.35rem;
+      }
+      .tier-badge.mid {
+        background: #d0ebff;
+        color: #1971c2;
+      }
+      .tier-badge.enterprise {
+        background: #e8deee;
+        color: #7c3aed;
+      }
+      .funnel-card {
+        background: #fff;
+        border-radius: 8px;
+        padding: 1.25rem 1.5rem;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+      }
+      .funnel-card h3 {
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: #495057;
+        margin-bottom: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+      .funnel-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.85rem;
+      }
+      .funnel-table th {
+        text-align: left;
+        padding: 0.35rem 0.5rem;
+        font-size: 0.75rem;
+        color: #6c757d;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        font-weight: 600;
+        border-bottom: 1px solid #e9ecef;
+      }
+      .funnel-table td {
+        padding: 0.45rem 0.5rem;
+        border-bottom: 1px solid #f1f3f5;
+        vertical-align: middle;
+      }
+      .funnel-table tr:last-child td {
+        border-bottom: none;
+      }
+      .bar-cell {
+        width: 80px;
+      }
+      .bar-track {
+        height: 6px;
+        background: #f1f3f5;
+        border-radius: 3px;
+        overflow: hidden;
+      }
+      .bar-fill {
+        height: 100%;
+        border-radius: 3px;
+        background: #4361ee;
+      }
+      .bar-fill.checkin {
+        background: #16a34a;
+      }
+      .rate-val {
+        font-size: 0.75rem;
+        color: #6c757d;
+        text-align: right;
+        min-width: 36px;
+      }
+      .upgrade-prompt {
+        text-align: center;
+        padding: 2rem 1.5rem;
+        background: #f8f9fa;
+        border-radius: 8px;
+        border: 2px dashed #dee2e6;
+      }
+      .upgrade-prompt strong {
+        color: #1a1a2e;
+        display: block;
+        font-size: 0.95rem;
+        margin-bottom: 0.5rem;
+      }
+      .upgrade-prompt p {
+        font-size: 0.85rem;
+        color: #6c757d;
+        margin: 0;
+      }
+      .skip-link {
+        position: absolute;
+        left: -9999px;
+        top: auto;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+      }
+      .skip-link:focus {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: auto;
+        height: auto;
+        padding: 0.5rem 1rem;
+        background: #1a1a2e;
+        color: #fff;
+        font-size: 1rem;
+        z-index: 9999;
+        text-decoration: none;
+        border-bottom: 2px solid #4361ee;
+      }
+      .venue-cell {
+        display: flex;
+        flex-direction: column;
+        gap: 0.3rem;
+        align-items: flex-start;
+        min-width: 140px;
+      }
+      .venue-map {
+        border-radius: 4px;
+        display: block;
+        object-fit: cover;
+        max-width: 200px;
+        height: 80px;
+        width: 100%;
+      }
+      .venue-text {
+        font-size: 0.75rem;
+        color: #495057;
+        max-width: 200px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .venue-plain {
+        font-size: 0.85rem;
+        color: #495057;
+      }
+      .no-venue {
+        color: #adb5bd;
+      }
+      /* OSE-295 DRAIN 2/7: mobile workability for /sharedReport.
+       Mirrors the admin pattern (OSE-294): tables collapse to a card
+       layout below 768px so the 4-col events list and 5-col funnel
+       table stay legible at 375px. Each <td> declares a data-label
+       attribute that drives the ::before pseudo-element. */
+      @media (max-width: 768px) {
+        header {
+          padding: 1rem;
+          flex-direction: column;
+          align-items: flex-start;
+          gap: 0.25rem;
+        }
+        header h1 {
+          font-size: 1.15rem;
+        }
+        main {
+          padding: 0 .75rem;
+          margin: 1rem auto;
+          gap: 1rem;
+        }
+        .action-bar {
+          justify-content: stretch;
+          flex-wrap: wrap;
+        }
+        .action-bar .btn {
+          flex: 1 1 auto;
+          justify-content: center;
+          min-height: 44px;
+        }
+        .event-row {
+          flex-wrap: wrap;
+          gap: 0.35rem;
+          padding: 0.75rem 1rem;
+        }
+        .event-row .date {
+          font-size: 0.75rem;
+        }
+        .funnel-card {
+          padding: 1rem;
+        }
+        .report-table {
+          display: block;
+        }
+        .report-table thead {
+          display: none;
+        }
+        .report-table tr {
+          display: block;
+          padding: 0.75rem 1rem;
+          border-bottom: 1px solid #f1f3f5;
+        }
+        .report-table tr:last-child {
+          border-bottom: none;
+        }
+        .report-table td {
+          display: block;
+          padding: 0.35rem 0;
+          border: none;
+          text-align: left;
+          word-break: break-word;
+          font-size: 0.9rem;
+        }
+        .report-table td::before {
+          content: attr(data-label) ': ';
+          font-weight: 600;
+          color: #495057;
+          margin-right: 0.5rem;
+        }
+        .funnel-table {
+          display: block;
+        }
+        .funnel-table thead {
+          display: none;
+        }
+        .funnel-table tr {
+          display: block;
+          padding: 0.65rem 0.75rem;
+          border: 1px solid #e9ecef;
+          border-radius: 6px;
+          margin-bottom: 0.5rem;
+        }
+        .funnel-table tr:last-child {
+          margin-bottom: 0;
+        }
+        .funnel-table td {
+          display: block;
+          padding: 0.25rem 0;
+          border: none;
+          text-align: left;
+        }
+        .funnel-table td::before {
+          content: attr(data-label) ': ';
+          font-weight: 600;
+          color: #495057;
+          margin-right: 0.5rem;
+        }
+        .funnel-table td.bar-cell {
+          width: 100%;
+          padding: 0.35rem 0;
+        }
+        .funnel-table td.bar-cell::before {
+          content: '';
+          margin: 0;
+        }
+        .funnel-table td.rate-val {
+          text-align: left;
+          min-width: 0;
+        }
+        .venue-cell {
+          min-width: 0;
+          max-width: 100%;
+        }
+        .venue-map {
+          max-width: 100%;
+        }
+        .venue-text {
+          max-width: 100%;
+          white-space: normal;
+          overflow: visible;
+          text-overflow: clip;
+        }
+      }
+      @media print {
+        .skip-link,
+        .action-bar {
+          display: none !important;
+        }
+        header {
+          -webkit-print-color-adjust: exact;
+          print-color-adjust: exact;
+        }
+        .stat-card,
+        .events-list,
+        .sponsor-metric-card,
+        .funnel-card {
+          box-shadow: none;
+          border: 1px solid #e9ecef;
+        }
+        body {
+          background: #fff;
+        }
+        #advanced-metrics-section {
+          display: block !important;
+        }
+        .venue-map {
+          display: none !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <a href="#main-content" class="skip-link">Skip to content</a>
+    <header data-testid="report-header">
+      <h1>OurSharedEvents</h1>
+      <span>Shared Report</span>
+    </header>
+    <main id="main-content" data-testid="report-main">
+      <aside
+        id="signed-link-error"
+        role="alert"
+        data-testid="signed-link-error"
+        data-error-code=""
+        hidden
+      ></aside>
+      <section
+        id="signed-link-section"
+        data-testid="signed-link-section"
+        hidden
+        aria-labelledby="signed-link-heading"
+      >
+        <h2 id="signed-link-heading" class="section-title">Event Report</h2>
+        <div id="signed-link-content" data-testid="signed-link-content">
+          <p class="loading" role="status" aria-live="polite">Loading your event report&hellip;</p>
+        </div>
+      </section>
+      <div class="action-bar" data-testid="report-action-bar" id="admin-action-bar">
+        <button class="btn btn-outline" data-testid="export-json-btn" id="export-json-btn" disabled>
+          &#8595; Export JSON
+        </button>
+        <button
+          class="btn btn-outline"
+          data-testid="export-pdf-btn"
+          id="export-pdf-btn"
+          disabled
+          title="Mid+ plan required"
+        >
+          &#128438; Export PDF
+        </button>
+      </div>
+      <section aria-labelledby="section-stats" id="admin-section-stats">
+        <h2 class="section-title" id="section-stats">Events Overview</h2>
+        <div class="stats-row" id="stats-row" data-testid="report-stats">
+          <div class="stat-card" data-testid="stat-total">
+            <dl class="stat-dl">
+              <dt>Total Events</dt>
+              <dd id="stat-total">&mdash;</dd>
+            </dl>
+          </div>
+          <div class="stat-card" data-testid="stat-active">
+            <dl class="stat-dl">
+              <dt>Active</dt>
+              <dd id="stat-active">&mdash;</dd>
+            </dl>
+          </div>
+        </div>
+      </section>
+      <section aria-labelledby="section-events" id="admin-section-events">
+        <h2 class="section-title" id="section-events">Events</h2>
+        <div class="events-list" id="events-list" data-testid="report-events-list">
+          <p class="loading">Loading&hellip;</p>
+        </div>
+      </section>
+      <section
+        id="report-sponsor-section"
+        aria-labelledby="section-sponsors"
+        data-testid="report-sponsor-section"
+      >
+        <h2 class="section-title" id="section-sponsors">Sponsor Overview</h2>
+        <div
+          id="sponsor-metrics"
+          class="sponsor-metrics"
+          data-testid="report-sponsor-metrics"
+        ></div>
+      </section>
+      <section
+        id="advanced-metrics-section"
+        data-testid="advanced-metrics-section"
+        style="display:none"
+        aria-labelledby="section-advanced-metrics"
+      >
+        <h2 class="section-title" id="section-advanced-metrics">
+          Advanced Metrics
+          <span class="tier-badge mid" data-testid="advanced-metrics-tier-badge">Mid+</span>
+        </h2>
+        <div
+          id="advanced-metrics-content"
+          data-testid="advanced-metrics-content"
+          class="funnel-card"
+        >
+          <p class="loading" role="status" aria-live="polite">Loading&hellip;</p>
+        </div>
+      </section>
+    </main>
+    <script>
+      window.__reportBundle = { events: [], sponsors: [], generatedAt: null };
+      window.__signedLinkMode = false;
+    </script>
+    <script>
+      // ─── OSE-R-003 signed-link mode ─────────────────────────────────────────
+      // When the page is opened with ?eventId=<id>&token=<sig> (the shape of a
+      // signed-link share URL emailed to bar owners), switch out of the admin
+      // multi-event dashboard and into single-event SharedReport rendering
+      // backed by GET /api/v2/events/:id/shared-report (OSE-272 Session 5).
+      //
+      // The admin scripts further down early-exit when __signedLinkMode is true
+      // so the page renders exactly one report — the customer's — and never
+      // calls admin-only endpoints from a signed-link visit.
+      //
+      // Friendly copy: SHARED_REPORT_ERROR_COPY maps server code (and HTTP
+      // status fallback) to user-facing strings. The raw code is preserved on
+      // #signed-link-error[data-error-code] for support visibility (NOT shown
+      // to the user). Same contract as OSE-R-002 form errors.
+      window.SHARED_REPORT_ERROR_COPY = {
+        UNAUTHORIZED:
+          'This share link has expired or isn’t valid. Ask the sender for a fresh link.',
+        FORBIDDEN: 'This share link is for a different event.',
+        NOT_FOUND: 'We couldn’t find that event report.',
+        MATERIALIZATION_PENDING:
+          'Your event report is almost ready — usually takes a few minutes. Refresh in a moment.',
+        NON_JSON_RESPONSE:
+          'We’re having trouble reaching the report service. Try again in a moment.',
+        NETWORK_ERROR: 'Couldn’t reach the report service. Check your connection and try again.',
+        DEFAULT: 'Something went wrong loading your event report. Try again in a moment.',
+      };
+      window.SHARED_REPORT_STATUS_FALLBACK = {
+        401: 'UNAUTHORIZED',
+        403: 'FORBIDDEN',
+        404: 'NOT_FOUND',
+        409: 'MATERIALIZATION_PENDING',
+      };
+      window.friendlySharedReportError = function (code, status) {
+        const map = window.SHARED_REPORT_ERROR_COPY;
+        if (code && map[code]) return map[code];
+        const fallbackCode = window.SHARED_REPORT_STATUS_FALLBACK[status];
+        if (fallbackCode && map[fallbackCode]) return map[fallbackCode];
+        return map.DEFAULT;
+      };
+
+      (async () => {
+        const esc = (s) => {
+          const d = document.createElement('div');
+          d.textContent = String(s == null ? '' : s);
+          return d.innerHTML;
+        };
+        const fmtDate = (iso) =>
+          iso
+            ? new Date(iso).toLocaleDateString('en-US', {
+                month: 'short',
+                day: 'numeric',
+                year: 'numeric',
+              })
+            : '—';
+        const fmtPct = (n) => (n == null ? '—' : (Math.round(n * 10) / 10).toFixed(1) + '%');
+        const fmtInt = (n) => (n == null ? '—' : Number(n).toLocaleString());
+
+        const params = new URLSearchParams(location.search);
+        // Support both ?eventId=... and the legacy ?id=... shape so older
+        // links keep working. Path form /sharedReport/:eventId is also honored
+        // when the worker proxies it through (router treats the suffix as part
+        // of the pathname; we read it defensively here).
+        let eventId = params.get('eventId') || params.get('id') || '';
+        if (!eventId) {
+          const pathMatch = location.pathname.match(/^\/sharedReport\/([^/?#]+)/);
+          if (pathMatch) eventId = pathMatch[1];
+        }
+        const token = params.get('token') || '';
+        // Only enter signed-link mode when BOTH eventId and token are present.
+        // A user landing on bare /sharedReport (admin dashboard) is unchanged.
+        if (!eventId || !token) return;
+
+        window.__signedLinkMode = true;
+
+        // Hide admin sections — signed-link mode is single-event, no dashboard.
+        const hideIds = [
+          'admin-action-bar',
+          'admin-section-stats',
+          'admin-section-events',
+          'report-sponsor-section',
+          'advanced-metrics-section',
+        ];
+        for (const id of hideIds) {
+          const el = document.getElementById(id);
+          if (el) el.hidden = true;
+        }
+
+        const section = document.getElementById('signed-link-section');
+        const content = document.getElementById('signed-link-content');
+        const errEl = document.getElementById('signed-link-error');
+        if (section) section.hidden = false;
+
+        const showError = (code, status) => {
+          const msg = window.friendlySharedReportError(code, status);
+          if (errEl) {
+            errEl.hidden = false;
+            errEl.setAttribute('data-error-code', code || 'HTTP_' + (status || 'UNKNOWN'));
+            errEl.textContent = msg;
+          }
+          if (content) {
+            content.innerHTML = '';
+          }
+        };
+
+        let res;
+        try {
+          res = await fetch('/api/v2/events/' + encodeURIComponent(eventId) + '/shared-report', {
+            method: 'GET',
+            headers: {
+              Accept: 'application/json',
+              'Authorization': 'Bearer ' + token,
+            },
+          });
+        } catch (_netErr) {
+          showError('NETWORK_ERROR', 0);
+          return;
+        }
+
+        let body = null;
+        try {
+          body = await res.json();
+        } catch (_parseErr) {
+          showError('NON_JSON_RESPONSE', res.status);
+          return;
+        }
+
+        if (!res.ok || !body || body.ok === false) {
+          const code = body && body.code ? body.code : null;
+          showError(code, res.status);
+          return;
+        }
+
+        const report = body.report || {};
+        window.__reportBundle.signedLinkReport = report;
+
+        // ── Render the SharedReport object ──────────────────────────────────
+        const suppressionByField = {};
+        const reasons = (report._meta && report._meta.suppression_reasons) || [];
+        for (const r of reasons) {
+          if (r && r.field) suppressionByField[r.field] = r;
+        }
+        const suppressionNote = (field) => {
+          const r = suppressionByField[field];
+          if (!r) return '';
+          // Single sentence per S5-Q5 ratified UX. No raw reason codes leak.
+          const why =
+            r.reason === 'below_min_sample_size'
+              ? 'Hidden to keep things anonymous — not enough data yet.'
+              : r.reason === 'no_baseline_yet'
+                ? 'No baseline yet — this is one of the first events here.'
+                : r.reason === 'no_series'
+                  ? 'Not part of a series yet.'
+                  : r.reason === 'materialization_pending'
+                    ? 'Still being calculated.'
+                    : 'Hidden for privacy.';
+          return (
+            '<p class="report-note" data-testid="report-suppression-note" data-field="' +
+            esc(field) +
+            '">' +
+            esc(why) +
+            '</p>'
+          );
+        };
+
+        const sponsorRows = (report.sponsor_impressions || [])
+          .map(
+            (s) =>
+              '<tr data-testid="signed-link-sponsor-row">' +
+              '<td data-label="Sponsor">' +
+              esc(s.sponsor_name) +
+              '</td>' +
+              '<td data-label="Surface">' +
+              esc(s.surface) +
+              '</td>' +
+              '<td data-label="Impressions">' +
+              fmtInt(s.count) +
+              '</td>' +
+              '</tr>'
+          )
+          .join('');
+        const posterRows = (report.poster_attribution || [])
+          .map(
+            (p) =>
+              '<tr data-testid="signed-link-poster-row">' +
+              '<td data-label="Location">' +
+              esc(p.location) +
+              '</td>' +
+              '<td data-label="Scans">' +
+              fmtInt(p.scan_count) +
+              '</td>' +
+              '<td data-label="First">' +
+              esc(fmtDate(p.first_scan_at)) +
+              '</td>' +
+              '<td data-label="Last">' +
+              esc(fmtDate(p.last_scan_at)) +
+              '</td>' +
+              '</tr>'
+          )
+          .join('');
+        const trendInstances = (report.headcount_trend && report.headcount_trend.instances) || [];
+        const trendRows = trendInstances
+          .map(
+            (t) =>
+              '<tr data-testid="signed-link-trend-row">' +
+              '<td data-label="Date">' +
+              esc(fmtDate(t.start_date)) +
+              '</td>' +
+              '<td data-label="Unique gatherings">' +
+              fmtInt(t.unique_gatherings) +
+              '</td>' +
+              '</tr>'
+          )
+          .join('');
+
+        content.innerHTML =
+          '<article class="signed-link-report" data-testid="signed-link-report-article">' +
+          '<header class="signed-link-report-header" data-testid="signed-link-report-header">' +
+          '<h3 data-testid="signed-link-event-title">' +
+          esc(report.event_title || 'Event') +
+          '</h3>' +
+          '<p class="signed-link-event-date" data-testid="signed-link-event-date">' +
+          esc(fmtDate(report.event_start_date)) +
+          '</p>' +
+          '</header>' +
+          '<section class="stats-row" data-testid="signed-link-stats">' +
+          '<div class="stat-card" data-testid="signed-link-unique-gatherings">' +
+          '<dl class="stat-dl"><dt>Unique Gatherings</dt><dd>' +
+          fmtInt(report.unique_gatherings) +
+          '</dd></dl>' +
+          suppressionNote('unique_gatherings') +
+          '</div>' +
+          '<div class="stat-card" data-testid="signed-link-return-rate">' +
+          '<dl class="stat-dl"><dt>Return Rate (venue)</dt><dd>' +
+          fmtPct(report.return_rate && report.return_rate.venue_pct) +
+          '</dd></dl>' +
+          suppressionNote('return_rate') +
+          '</div>' +
+          '<div class="stat-card" data-testid="signed-link-corridor-density">' +
+          '<dl class="stat-dl"><dt>Corridor Density (30d)</dt><dd>' +
+          fmtInt(report.corridor_density && report.corridor_density.this_event_count) +
+          '</dd></dl>' +
+          suppressionNote('corridor_density') +
+          '</div>' +
+          '</section>' +
+          (sponsorRows
+            ? '<section class="funnel-card" data-testid="signed-link-sponsor-section">' +
+              '<h3>Sponsor Impressions</h3>' +
+              '<table class="funnel-table" aria-label="Sponsor impressions">' +
+              '<thead><tr><th scope="col">Sponsor</th><th scope="col">Surface</th><th scope="col">Impressions</th></tr></thead>' +
+              '<tbody>' +
+              sponsorRows +
+              '</tbody>' +
+              '</table>' +
+              '</section>'
+            : '') +
+          (posterRows
+            ? '<section class="funnel-card" data-testid="signed-link-poster-section">' +
+              '<h3>Poster Attribution</h3>' +
+              '<table class="funnel-table" aria-label="Poster scans">' +
+              '<thead><tr><th scope="col">Location</th><th scope="col">Scans</th><th scope="col">First</th><th scope="col">Last</th></tr></thead>' +
+              '<tbody>' +
+              posterRows +
+              '</tbody>' +
+              '</table>' +
+              '</section>'
+            : '') +
+          (trendRows
+            ? '<section class="funnel-card" data-testid="signed-link-trend-section">' +
+              '<h3>Headcount Trend</h3>' +
+              '<table class="funnel-table" aria-label="Headcount trend across the series">' +
+              '<thead><tr><th scope="col">Date</th><th scope="col">Unique Gatherings</th></tr></thead>' +
+              '<tbody>' +
+              trendRows +
+              '</tbody>' +
+              '</table>' +
+              '</section>'
+            : '') +
+          '</article>';
+      })();
+    </script>
+    <script>
+      (async () => {
+        if (window.__signedLinkMode) return;
+        const esc = (s) => {
+          const d = document.createElement('div');
+          d.textContent = s;
+          return d.innerHTML;
+        };
+        const fmt = (iso) =>
+          iso
+            ? new Date(iso).toLocaleDateString('en-US', {
+                month: 'short',
+                day: 'numeric',
+                year: 'numeric',
+              })
+            : '—';
+        const listEl = document.getElementById('events-list');
+        try {
+          const res = await fetch('/api/v2/events');
+          const data = await res.json();
+          const items = data.ok && data.items ? data.items : [];
+          window.__reportBundle.events = items;
+          window.__reportBundle.generatedAt = new Date().toISOString();
+          document.getElementById('stat-total').textContent = items.length;
+          document.getElementById('stat-active').textContent = items.filter(
+            (e) => e.status === 'active'
+          ).length;
+          if (!items.length) {
+            listEl.innerHTML = '<p class="empty">No events to report.</p>';
+            return;
+          }
+          const mapsOn = document.body.dataset.mapsConfigured === '1';
+          listEl.innerHTML =
+            '<table class="report-table" data-testid="events-table"><caption class="sr-only">Events list</caption>' +
+            '<thead><tr>' +
+            '<th scope="col">Name</th>' +
+            '<th scope="col">Date</th>' +
+            '<th scope="col">Venue</th>' +
+            '<th scope="col">Status</th>' +
+            '</tr></thead>' +
+            '<tbody>' +
+            items
+              .map((e) => {
+                const venue = e.location || '';
+                const venueInner =
+                  venue && mapsOn
+                    ? '<div class="venue-cell">' +
+                      '<img src="/api/v2/maps/venue-image?venue=' +
+                      encodeURIComponent(venue) +
+                      '" alt="Map: ' +
+                      esc(venue) +
+                      '" class="venue-map" width="200" height="80" loading="lazy" />' +
+                      '<span class="venue-text" title="' +
+                      esc(venue) +
+                      '">' +
+                      esc(venue) +
+                      '</span>' +
+                      '</div>'
+                    : venue
+                      ? '<span class="venue-plain">' + esc(venue) + '</span>'
+                      : '<span class="no-venue">&mdash;</span>';
+                return (
+                  '<tr data-testid="report-event-row">' +
+                  '<td data-label="Name" data-testid="report-event-name">' +
+                  esc(e.title || e.name || 'Untitled') +
+                  '</td>' +
+                  '<td data-label="Date" data-testid="report-event-date">' +
+                  esc(fmt(e.start_date || e.startDateISO)) +
+                  '</td>' +
+                  '<td data-label="Venue" data-testid="report-event-venue">' +
+                  venueInner +
+                  '</td>' +
+                  '<td data-label="Status"><span class="badge ' +
+                  esc(e.status || '') +
+                  '" data-testid="report-event-status">' +
+                  esc(e.status || '') +
+                  '</span></td>' +
+                  '</tr>'
+                );
+              })
+              .join('') +
+            '</tbody></table>';
+          document.getElementById('export-json-btn').disabled = false;
+        } catch {
+          listEl.innerHTML = '<p class="empty">Could not load data.</p>';
+        }
+      })();
+    </script>
+    <script>
+      (async () => {
+        if (window.__signedLinkMode) return;
+        const metricsEl = document.getElementById('sponsor-metrics');
+        const sectionEl = document.getElementById('report-sponsor-section');
+        if (!metricsEl) return;
+        try {
+          const evRes = await fetch('/api/v2/events');
+          const evData = await evRes.json();
+          const items = evData.ok && evData.items ? evData.items : [];
+          if (!items.length) {
+            sectionEl.style.display = 'none';
+            return;
+          }
+          const esc = (s) => {
+            const d = document.createElement('div');
+            d.textContent = s;
+            return d.innerHTML;
+          };
+          const allSponsors = [];
+          for (const ev of items.slice(0, 10)) {
+            try {
+              const res = await fetch('/api/v2/events/' + encodeURIComponent(ev.id) + '/sponsors');
+              const data = await res.json();
+              if (data.ok && data.items) {
+                data.items.forEach((s) => {
+                  if (!allSponsors.find((x) => x.id === s.id)) allSponsors.push(s);
+                });
+              }
+            } catch {
+              /* skip */
+            }
+          }
+          window.__reportBundle.sponsors = allSponsors;
+          if (!allSponsors.length) {
+            sectionEl.style.display = 'none';
+            return;
+          }
+          metricsEl.innerHTML = allSponsors
+            .map(
+              (s) =>
+                '<div class="sponsor-metric-card" data-testid="report-sponsor-card">' +
+                '<div class="sponsor-name">' +
+                esc(s.name) +
+                '</div>' +
+                '<div class="metric-row"><span>Tier</span><span class="metric-val">' +
+                esc(s.tier) +
+                '</span></div>' +
+                '<div class="metric-row"><span>Status</span><span class="metric-val">' +
+                (s.is_active ? 'Active' : 'Inactive') +
+                '</span></div>' +
+                '</div>'
+            )
+            .join('');
+        } catch {
+          if (sectionEl) sectionEl.style.display = 'none';
+        }
+      })();
+    </script>
+    <script>
+      (async () => {
+        if (window.__signedLinkMode) return;
+        const section = document.getElementById('advanced-metrics-section');
+        const content = document.getElementById('advanced-metrics-content');
+        if (!section || !content) return;
+        let tier = 'free';
+        try {
+          const tr = await fetch('/api/v2/admin/flags/current-tier')
+            .then((r) => r.json())
+            .catch(() => null);
+          if (tr && tr.ok && tr.tier) tier = tr.tier;
+        } catch {
+          /* stay free */
+        }
+        section.style.display = '';
+        const pdfBtn = document.getElementById('export-pdf-btn');
+        if (pdfBtn && tier !== 'free') {
+          pdfBtn.disabled = false;
+          pdfBtn.title = '';
+        }
+        if (tier === 'free') {
+          content.innerHTML =
+            '<div class="upgrade-prompt" data-testid="advanced-metrics-upgrade"><strong>Upgrade to Mid+ for Advanced Metrics</strong><p>Conversion funnels and per-event trends are available on the Mid+ plan.</p></div>';
+          return;
+        }
+        let events = [];
+        try {
+          const res = await fetch('/api/v2/events');
+          const data = await res.json();
+          events = data.ok && data.items ? data.items : [];
+        } catch {
+          /* empty */
+        }
+        if (!events.length) {
+          content.innerHTML = '<p class="empty">No event data to analyze.</p>';
+          return;
+        }
+        const esc = (s) => {
+          const d = document.createElement('div');
+          d.textContent = s;
+          return d.innerHTML;
+        };
+        const rows = await Promise.all(
+          events.slice(0, 10).map(async (ev) => {
+            let reg = 0,
+              checkin = 0;
+            try {
+              const [rRes, cRes] = await Promise.all([
+                fetch('/api/v2/admin/events/' + encodeURIComponent(ev.id) + '/forms/registrations')
+                  .then((r) => r.json())
+                  .catch(() => null),
+                fetch('/api/v2/admin/events/' + encodeURIComponent(ev.id) + '/forms/checkin-count')
+                  .then((r) => r.json())
+                  .catch(() => null),
+              ]);
+              reg = rRes && rRes.ok ? Number(rRes.count) || 0 : 0;
+              checkin = cRes && cRes.ok ? Number(cRes.count) || 0 : 0;
+            } catch {
+              /* zero */
+            }
+            return { name: ev.name || 'Untitled', reg, checkin };
+          })
+        );
+        const maxReg = Math.max(...rows.map((r) => r.reg), 1);
+        content.innerHTML =
+          '<h3>Registration → Check-in Funnel</h3>' +
+          '<table class="funnel-table" data-testid="funnel-table" aria-label="Conversion funnel per event">' +
+          '<thead><tr>' +
+          '<th scope="col">Event</th>' +
+          '<th scope="col">Registrations</th>' +
+          '<th scope="col" class="bar-cell"></th>' +
+          '<th scope="col">Check-ins</th>' +
+          '<th scope="col">Attendance</th>' +
+          '</tr></thead><tbody>' +
+          rows
+            .map((r) => {
+              const pct = r.reg > 0 ? Math.round((r.checkin / r.reg) * 100) : 0;
+              const barW = Math.round((r.reg / maxReg) * 100);
+              return (
+                '<tr data-testid="funnel-row">' +
+                '<td data-label="Event" data-testid="funnel-event-name">' +
+                esc(r.name) +
+                '</td>' +
+                '<td data-label="Registrations" data-testid="funnel-reg-count">' +
+                r.reg +
+                '</td>' +
+                '<td class="bar-cell"><div class="bar-track"><div class="bar-fill" style="width:' +
+                barW +
+                '%" aria-hidden="true"></div></div></td>' +
+                '<td data-label="Check-ins" data-testid="funnel-checkin-count">' +
+                r.checkin +
+                '</td>' +
+                '<td data-label="Attendance" class="rate-val" data-testid="funnel-rate">' +
+                pct +
+                '%</td>' +
+                '</tr>'
+              );
+            })
+            .join('') +
+          '</tbody></table>';
+      })();
+      document.getElementById('export-pdf-btn').addEventListener('click', function () {
+        window.print();
+      });
+      document.getElementById('export-json-btn').addEventListener('click', function () {
+        const bundle = window.__reportBundle || {};
+        const params = new URLSearchParams(location.search);
+        const eventId = params.get('id') || 'all';
+        const payload = JSON.stringify(
+          {
+            generatedAt: bundle.generatedAt || new Date().toISOString(),
+            events: bundle.events || [],
+            sponsors: bundle.sponsors || [],
+          },
+          null,
+          2
+        );
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(new Blob([payload], { type: 'application/json' }));
+        a.download = 'report-' + eventId + '.json';
+        a.click();
+        URL.revokeObjectURL(a.href);
+      });
+    </script>
+  </body>
+</html>

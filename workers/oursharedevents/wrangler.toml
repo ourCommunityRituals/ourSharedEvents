@@ -23,6 +23,11 @@ main = "src/index.ts"
 compatibility_date = "2024-01-01"
 account_id = "c4dee735e39737db94d7befeecf96e82"
 
+# ── HTML templates (S-1.2.1: extracted from pages.ts) ───────────
+[[rules]]
+type = "Text"
+globs = ["**/*.html"]
+
 # ── D1 Database (local dev) ──────────────────────────────────────
 # Migrations applied via: wrangler d1 migrations apply ocr-db-local --local
 [[d1_databases]]

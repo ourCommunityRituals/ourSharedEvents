@@ -36,6 +36,9 @@
   "_section_security_reports": "Security audit reports (historical)",
   ".security-reports/AUDIT_REPORT_2025-12-10.md": ["*"],
 
+  "_section_brain_checkout": "OCR-docs brain checkout (CI-only, read-only reference) — architectural-invariants.yaml documents banned patterns",
+  "ocr-docs-brain-checkout/ocr-docs-brain/architectural-invariants.yaml": ["*"],
+
   "_section_worker_infrastructure": "Cloudflare Worker infrastructure - JSDoc examples and NO-GAS comments",
   "cloudflare-proxy/worker.js": ["*"],
   "cloudflare-proxy/wrangler.toml": ["*"],

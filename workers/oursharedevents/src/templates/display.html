@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Display – OurSharedEvents</title>
+    <style>
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      html,
+      body {
+        height: 100%;
+      }
+      body {
+        font-family:
+          system-ui,
+          -apple-system,
+          sans-serif;
+        background: #0f172a;
+        color: #f8fafc;
+        display: flex;
+        flex-direction: column;
+      }
+      header {
+        background: #1a1a2e;
+        padding: 1rem 2rem;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      }
+      header h1 {
+        font-size: 1.4rem;
+        font-weight: 700;
+        letter-spacing: -0.01em;
+      }
+      .clock {
+        font-size: 1rem;
+        opacity: 0.6;
+        font-variant-numeric: tabular-nums;
+      }
+      main {
+        flex: 1;
+        max-width: 1200px;
+        width: 100%;
+        margin: 0 auto;
+        padding: 2rem 1.5rem;
+        display: flex;
+        flex-direction: column;
+        gap: 1.5rem;
+      }
+      .event-card {
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 12px;
+        padding: 2rem 2.5rem;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+      }
+      .event-card .label {
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: #64748b;
+        margin-bottom: 0.5rem;
+      }
+      .event-card h2 {
+        font-size: clamp(1.5rem, 4vw, 2.5rem);
+        font-weight: 800;
+        line-height: 1.15;
+        color: #f8fafc;
+        margin-bottom: 0.75rem;
+      }
+      .event-card .meta {
+        font-size: 1.1rem;
+        color: #64748b;
+        display: flex;
+        gap: 1.5rem;
+        flex-wrap: wrap;
+      }
+      .event-card .meta span::before {
+        content: '';
+      }
+      .next-events {
+        display: grid;
+        gap: 1rem;
+      }
+      .next-events h3 {
+        font-size: 0.8rem;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: #64748b;
+        margin-bottom: 0.25rem;
+      }
+      .next-card {
+        background: rgba(255, 255, 255, 0.03);
+        border-radius: 8px;
+        padding: 1rem 1.25rem;
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .next-card .name {
+        font-weight: 600;
+        font-size: 1rem;
+      }
+      .next-card .date {
+        font-size: 0.85rem;
+        color: #64748b;
+      }
+      .empty {
+        text-align: center;
+        padding: 4rem;
+        color: #475569;
+        font-size: 1.1rem;
+      }
+      .ticker {
+        background: #1e3a5f;
+        padding: 0.6rem 2rem;
+        font-size: 0.85rem;
+        color: #93c5fd;
+        border-top: 1px solid rgba(255, 255, 255, 0.06);
+        overflow: hidden;
+        white-space: nowrap;
+      }
+      .ticker-inner {
+        display: inline-block;
+        animation: scroll 30s linear infinite;
+      }
+      @keyframes scroll {
+        from {
+          transform: translateX(100vw);
+        }
+        to {
+          transform: translateX(-100%);
+        }
+      }
+      .display-sponsor-banner {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 2rem;
+        padding: 0.75rem 1.5rem;
+        background: rgba(255, 255, 255, 0.03);
+        border-radius: 8px;
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        min-height: 48px;
+      }
+      .display-sponsor-banner:empty {
+        display: none;
+      }
+      .display-sponsor-sidebar {
+        position: fixed;
+        right: 0;
+        top: 60px;
+        width: 200px;
+        padding: 1rem;
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+        z-index: 10;
+      }
+      .display-sponsor-sidebar:empty {
+        display: none;
+      }
+      .display-sponsor-item {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.5rem;
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 6px;
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        transition: opacity 0.6s ease-in-out;
+      }
+      .display-sponsor-item.fade-out {
+        opacity: 0;
+      }
+      .display-sponsor-item img {
+        height: 36px;
+        width: auto;
+        max-width: 80px;
+        object-fit: contain;
+        filter: brightness(1.1);
+      }
+      .display-sponsor-item .name {
+        font-size: 0.8rem;
+        color: #64748b;
+      }
+      .display-sponsor-item[data-tier='title'],
+      .display-sponsor-item[data-tier='platinum'] {
+        border-color: rgba(234, 179, 8, 0.4);
+        background: rgba(234, 179, 8, 0.08);
+        padding: 0.625rem 0.75rem;
+      }
+      .display-sponsor-item[data-tier='title'] img,
+      .display-sponsor-item[data-tier='platinum'] img {
+        height: 48px;
+        max-width: 120px;
+      }
+      .display-sponsor-item[data-tier='title'] .name,
+      .display-sponsor-item[data-tier='platinum'] .name {
+        font-size: 0.9rem;
+        color: #e2e8f0;
+        font-weight: 600;
+      }
+      .display-sponsor-item[data-tier='gold'] {
+        border-color: rgba(234, 179, 8, 0.2);
+      }
+      .display-sponsor-item[data-tier='gold'] img {
+        height: 42px;
+        max-width: 100px;
+      }
+      .sponsor-counter {
+        font-size: 0.65rem;
+        color: #64748b;
+        text-align: center;
+        margin-top: 0.25rem;
+        font-variant-numeric: tabular-nums;
+      }
+      @media (min-width: 1920px) {
+        header h1 {
+          font-size: 2rem;
+        }
+        .clock {
+          font-size: 1.4rem;
+        }
+        main {
+          max-width: 1600px;
+          padding: 3rem 2.5rem;
+          gap: 2rem;
+        }
+        .event-card {
+          padding: 3rem 3.5rem;
+        }
+        .event-card h2 {
+          font-size: 3rem;
+        }
+        .event-card .meta {
+          font-size: 1.4rem;
+        }
+        .display-sponsor-sidebar {
+          width: 280px;
+          padding: 1.5rem;
+          top: 80px;
+        }
+        .display-sponsor-item img {
+          height: 48px;
+          max-width: 120px;
+        }
+        .display-sponsor-item[data-tier='title'] img,
+        .display-sponsor-item[data-tier='platinum'] img {
+          height: 64px;
+          max-width: 160px;
+        }
+        .display-sponsor-item .name {
+          font-size: 1rem;
+        }
+        .display-sponsor-banner {
+          padding: 1rem 2rem;
+          gap: 3rem;
+          min-height: 64px;
+        }
+        .ticker {
+          font-size: 1.1rem;
+          padding: 0.8rem 2rem;
+        }
+      }
+      .skip-link {
+        position: absolute;
+        left: -9999px;
+        top: auto;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+      }
+      .skip-link:focus {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: auto;
+        height: auto;
+        padding: 0.5rem 1rem;
+        background: #1a1a2e;
+        color: #fff;
+        font-size: 1rem;
+        z-index: 9999;
+        text-decoration: none;
+        border-bottom: 2px solid #4361ee;
+      }
+    </style>
+  </head>
+  <body>
+    <a href="#main-content" class="skip-link">Skip to content</a>
+    <header data-testid="display-header" aria-label="OurSharedEvents live display">
+      <h1>OurSharedEvents</h1>
+      <div class="clock" id="clock" aria-live="off" data-testid="display-clock"></div>
+    </header>
+    <aside
+      id="display-sponsor-sidebar"
+      class="display-sponsor-sidebar"
+      data-testid="display-sponsor-sidebar"
+      aria-label="Side sponsors"
+    ></aside>
+    <main id="main-content" data-testid="display-main" aria-live="polite" aria-atomic="false">
+      <p class="empty" data-testid="display-loading">Loading&hellip;</p>
+    </main>
+    <div
+      id="display-sponsor-banner"
+      class="display-sponsor-banner"
+      data-testid="display-sponsor-banner"
+    ></div>
+    <div class="ticker" aria-hidden="true" data-testid="display-ticker">
+      <span class="ticker-inner" id="ticker"
+        >OurSharedEvents &mdash; Community events on Chicago&rsquo;s Southside</span
+      >
+    </div>
+    <script>
+      // Clock
+      function updateClock() {
+        const el = document.getElementById('clock');
+        if (el) el.textContent = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+      }
+      updateClock();
+      setInterval(updateClock, 30_000);
+
+      // Events
+      async function loadEvents() {
+        const main = document.getElementById('main-content');
+        try {
+          const res = await fetch('/api/v2/events');
+          const data = await res.json();
+          const items = (data.ok && data.items) ? data.items : [];
+          if (!items.length) {
+            main.innerHTML = '<p class="empty">No upcoming events scheduled.</p>';
+            return;
+          }
+          const esc = s => { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; };
+          const fmt = iso => iso ? new Date(iso).toLocaleDateString('en-US', { weekday:'long', month:'long', day:'numeric' }) : '';
+          const [featured, ...rest] = items;
+          let html = '<div class="event-card" data-testid="display-featured-card">' +
+            '<div class="label">Upcoming Event</div>' +
+            '<h2 data-testid="display-featured-title">' + esc(featured.name || 'Untitled Event') + '</h2>' +
+            '<div class="meta" data-testid="display-featured-meta">' +
+            (featured.startDateISO ? '<span>' + esc(fmt(featured.startDateISO)) + '</span>' : '') +
+            (featured.venue ? '<span>' + esc(featured.venue) + '</span>' : '') +
+            '</div></div>';
+          if (rest.length) {
+            html += '<div class="next-events" data-testid="display-upcoming"><h3>Also Coming Up</h3>' +
+              rest.slice(0, 4).map(e => '<div class="next-card" data-testid="display-upcoming-card"><div class="name">' + esc(e.name || 'Untitled') + '</div>' +
+                '<div class="date">' + esc(fmt(e.startDateISO)) + '</div></div>').join('') +
+              '</div>';
+          }
+          main.innerHTML = html;
+          // Update ticker
+          const ticker = document.getElementById('ticker');
+          if (ticker) ticker.textContent = items.map(e => e.name).filter(Boolean).join(' • ');
+        } catch {
+          main.innerHTML = '<p class="empty" data-testid="display-empty">Could not load events.</p>';
+        }
+      }
+      loadEvents();
+      // Auto-refresh every 5 minutes
+      setInterval(loadEvents, 5 * 60 * 1000);
+
+      // ── Display sponsor loading + rotation ──
+      async function loadDisplaySponsors() {
+        const sidebar = document.getElementById('display-sponsor-sidebar');
+        const banner = document.getElementById('display-sponsor-banner');
+        try {
+          const evRes = await fetch('/api/v2/events');
+          const evData = await evRes.json();
+          const items = (evData.ok && evData.items) ? evData.items : [];
+          if (!items.length || !items[0].id) return;
+          const eventId = items[0].id;
+          const res = await fetch('/api/v2/events/' + encodeURIComponent(eventId) + '/sponsor-bundle?surface=display');
+          const data = await res.json();
+          if (!data.ok) return;
+          const bundle = data.bundle || {};
+          const esc = s => { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; };
+          const tvTop = bundle.surface_sponsors?.tvTop || [];
+          const tvSide = bundle.surface_sponsors?.tvSide || [];
+          if (banner && tvTop.length) {
+            banner.innerHTML = tvTop.map(s => {
+              // OSE-R-015 (2026-05-15): referrerpolicy + onerror.
+              const logo = s.logo_url ? '<img src="' + esc(s.logo_url) + '" alt="' + esc(s.name) + '" referrerpolicy="no-referrer" onerror="this.style.display='none'">' : '';
+              return '<div class="display-sponsor-item" data-tier="' + esc(s.tier || 'primary') + '" data-testid="display-sponsor-item">' + logo + '<span class="name">' + esc(s.name) + '</span></div>';
+            }).join('');
+          }
+          if (sidebar && tvSide.length) {
+            let idx = 0;
+            const total = tvSide.length;
+            function renderSideItem(s, num) {
+              // OSE-R-015 + OSE-R-011 (2026-05-15): referrerpolicy +
+              // onerror — when the sponsor host 404s, the broken-image
+              // listener attached below advances the rotation immediately
+              // instead of leaving a broken <img> on the venue TV.
+              const logo = s.logo_url ? '<img src="' + esc(s.logo_url) + '" alt="' + esc(s.name) + '" referrerpolicy="no-referrer">' : '';
+              return '<div class="display-sponsor-item" data-tier="' + esc(s.tier || 'primary') + '" data-testid="display-sponsor-rotate">' + logo + '<span class="name">' + esc(s.name) + '</span></div>' +
+                (total > 1 ? '<div class="sponsor-counter">' + num + '/' + total + '</div>' : '');
+            }
+            function attachErrorAdvance() {
+              // OSE-R-011: hide the broken image immediately + advance to
+              // next sponsor. Without this, a 404'd sponsor logo would sit
+              // on the bar's TV until the next rotation tick. Emits a
+              // sentinel element (testid display-sponsor-error) for QA.
+              // Sidebar always renders exactly one img at a time (the current
+              // rotation slot). Selecting by tag is the simplest reliable handle
+              // and avoids tripping the testid-pyramid duplicate-detection lint
+              // that scans data-testid attribute substrings across template scope.
+              const img = sidebar.querySelector('img');
+              if (!img) return;
+              img.addEventListener('error', function onLogoError() {
+                img.removeEventListener('error', onLogoError);
+                img.style.display = 'none';
+                const sentinel = document.createElement('span');
+                sentinel.setAttribute('data-testid', 'display-sponsor-error');
+                sentinel.hidden = true;
+                sidebar.appendChild(sentinel);
+                if (total > 1) showNext();
+              });
+            }
+            function showNext() {
+              const s = tvSide[idx % total];
+              const current = sidebar.querySelector('.display-sponsor-item');
+              if (current && total > 1) {
+                current.classList.add('fade-out');
+                setTimeout(function() {
+                  sidebar.innerHTML = renderSideItem(s, (idx % total) + 1);
+                  attachErrorAdvance();
+                }, 600);
+              } else {
+                sidebar.innerHTML = renderSideItem(s, (idx % total) + 1);
+                attachErrorAdvance();
+              }
+              idx++;
+            }
+            showNext();
+            const ms = bundle.rotation_config?.rotationMs || 5000;
+            setInterval(showNext, ms);
+          }
+          // Log impressions
+          [...tvTop, ...tvSide].forEach(s => {
+            fetch('/api/v2/events/' + encodeURIComponent(eventId) + '/sponsors/' + encodeURIComponent(s.id) + '/impression', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ surface: 'display', placement: s.tvTop ? 'tvTop' : 'tvSide' })
+            }).catch(() => {});
+          });
+        } catch { /* sponsor loading is non-critical */ }
+      }
+      loadDisplaySponsors();
+    </script>
+  </body>
+</html>
