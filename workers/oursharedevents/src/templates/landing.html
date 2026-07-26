@@ -421,6 +421,112 @@
         }
       }
     </style>
+    <link rel="stylesheet" href="/ui.css" />
+    <style>
+      body {
+        background: var(--bg);
+        color: var(--text);
+      }
+      header {
+        background: var(--surface);
+        border-bottom: 1px solid var(--border);
+      }
+      footer {
+        background: var(--surface);
+        border-top: 1px solid var(--border);
+        color: var(--text-muted);
+      }
+      nav a {
+        color: var(--text-muted);
+      }
+      nav a:hover,
+      nav a:focus-visible {
+        color: var(--text);
+      }
+      .logo {
+        color: var(--text);
+      }
+      .logo:focus-visible,
+      nav a:focus-visible {
+        outline-color: var(--accent);
+      }
+      .hero h1 {
+        color: var(--text);
+      }
+      .hero p {
+        color: var(--text-muted);
+      }
+      .subscribe-form input[type='email'] {
+        background: var(--surface);
+        border-color: var(--border);
+        color: var(--text);
+      }
+      .subscribe-form input[type='email']:focus {
+        border-color: var(--accent);
+      }
+      .subscribe-form button[type='submit'] {
+        background: var(--accent);
+        color: #000;
+      }
+      .subscribe-form button[type='submit']:hover {
+        background: var(--accent-hover);
+      }
+      .subscribe-form button[type='submit']:focus-visible {
+        outline-color: var(--accent);
+      }
+      .subscribe-form button[type='submit']:disabled {
+        background: var(--text-muted);
+      }
+      .form-message.success {
+        color: #4ade80;
+      }
+      .form-message.error {
+        color: var(--danger);
+      }
+      .ring-path {
+        border-color: var(--border);
+      }
+      .ring-section h2 {
+        color: var(--text);
+      }
+      .ring-section p.ring-subtitle {
+        color: var(--text-muted);
+      }
+      .feature-card {
+        background: var(--surface);
+        border-color: var(--border);
+        box-shadow: none;
+      }
+      .feature-card h3 {
+        color: var(--text);
+      }
+      .feature-card p {
+        color: var(--text-muted);
+      }
+      .feature-icon.events {
+        background: rgba(212, 149, 75, 0.15);
+        color: var(--accent);
+      }
+      .feature-icon.sponsors {
+        background: rgba(212, 149, 75, 0.1);
+        color: var(--accent-hover);
+      }
+      .feature-icon.community {
+        background: rgba(22, 163, 74, 0.15);
+        color: #4ade80;
+      }
+      footer a {
+        color: var(--text-muted);
+      }
+      footer a:hover {
+        color: var(--text);
+      }
+      .skip-link:focus {
+        background: var(--surface);
+        color: var(--text);
+        border-bottom-color: var(--accent);
+      }
+    </style>
   </head>
   <body>
     <a href="#main-content" class="skip-link">Skip to content</a>

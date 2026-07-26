@@ -4,25 +4,12 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>OurSharedEvents</title>
+    <link rel="stylesheet" href="/ui.css" />
     <style>
-      *,
-      *::before,
-      *::after {
-        box-sizing: border-box;
-        margin: 0;
-        padding: 0;
-      }
-      body {
-        font-family:
-          system-ui,
-          -apple-system,
-          sans-serif;
-        background: #f8f9fa;
-        color: #212529;
-      }
       header {
-        background: #1a1a2e;
-        color: #fff;
+        background: var(--surface);
+        border-bottom: 1px solid var(--border);
+        color: var(--text);
         padding: 1.25rem 2rem;
         display: flex;
         align-items: center;
@@ -41,7 +28,7 @@
       h2 {
         font-size: 1.1rem;
         font-weight: 600;
-        color: #495057;
+        color: var(--text-muted);
         margin-bottom: 1rem;
       }
       #events {
@@ -49,15 +36,19 @@
         gap: 1rem;
       }
       .event-card {
-        background: #fff;
-        border-radius: 8px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
         padding: 1.25rem 1.5rem;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
-        border-left: 3px solid #4361ee;
+        border-left: 3px solid var(--accent);
         display: flex;
         justify-content: space-between;
         align-items: center;
         gap: 1rem;
+        transition: background 0.15s;
+      }
+      .event-card:hover {
+        background: var(--surface-hover);
       }
       .event-card .event-info {
         flex: 1;
@@ -67,20 +58,20 @@
         font-size: 1rem;
         font-weight: 600;
         margin-bottom: 0.35rem;
+        color: var(--text);
       }
       .event-card .meta {
         font-size: 0.85rem;
-        color: #6c757d;
+        color: var(--text-muted);
       }
-      /* OSE-292: 44px touch-target floor on event-card register CTA. */
       .event-card .cta {
         display: inline-flex;
         align-items: center;
         padding: 0.5rem 1.25rem;
-        min-height: 44px;
-        background: #4361ee;
-        color: #fff;
-        border-radius: 6px;
+        min-height: var(--tap-min);
+        background: var(--accent);
+        color: #000;
+        border-radius: var(--radius-sm);
         font-size: 0.85rem;
         font-weight: 600;
         text-decoration: none;
@@ -89,22 +80,22 @@
         flex-shrink: 0;
       }
       .event-card .cta:hover {
-        background: #3451d1;
+        background: var(--accent-hover);
       }
       .event-card .cta:focus-visible {
-        outline: 2px solid #4361ee;
+        outline: 2px solid var(--accent);
         outline-offset: 2px;
       }
       .loading {
         text-align: center;
         padding: 3rem;
-        color: #6c757d;
+        color: var(--text-muted);
         font-size: 0.95rem;
       }
       .error {
         text-align: center;
         padding: 2rem;
-        color: #e03131;
+        color: var(--danger);
       }
       .sponsor-strip {
         display: flex;
@@ -131,7 +122,7 @@
       }
       .sponsor-card a {
         font-size: 0.8rem;
-        color: #4361ee;
+        color: var(--accent);
         text-decoration: none;
         font-weight: 500;
       }
@@ -139,7 +130,7 @@
         text-decoration: underline;
       }
       .sponsor-card a:focus-visible {
-        outline: 2px solid #4361ee;
+        outline: 2px solid var(--accent);
         outline-offset: 2px;
       }
       .skip-link {
@@ -157,12 +148,12 @@
         width: auto;
         height: auto;
         padding: 0.5rem 1rem;
-        background: #1a1a2e;
-        color: #fff;
+        background: var(--surface);
+        color: var(--text);
         font-size: 1rem;
         z-index: 9999;
         text-decoration: none;
-        border-bottom: 2px solid #4361ee;
+        border-bottom: 2px solid var(--accent);
       }
     </style>
   </head>
@@ -241,28 +232,60 @@
           const params = new URLSearchParams(window.location.search);
           const eventId = params.get('event');
           if (!eventId) return;
-          const res = await fetch('/api/v2/events/' + encodeURIComponent(eventId) + '/sponsor-bundle?surface=public');
+          const res = await fetch(
+            '/api/v2/events/' + encodeURIComponent(eventId) + '/sponsor-bundle?surface=public'
+          );
           const data = await res.json();
           if (!data.ok) return;
           const sponsors = data.bundle?.surface_sponsors?.mobileBanner || [];
           if (!sponsors.length) return;
-          const esc = s => { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; };
-          banner.innerHTML = sponsors.map(s => {
-            // OSE-R-015 (2026-05-15): referrerpolicy="no-referrer" so the
-            // sponsor host can't fingerprint visiting attendees, + onerror
-            // to gracefully hide a broken-link sponsor image.
-            const logo = s.logo_url ? '<img src="' + esc(s.logo_url) + '" alt="' + esc(s.name) + '" referrerpolicy="no-referrer" onerror="this.style.display='none'">' : '';
-            const link = s.website_url ? '<a href="' + esc(s.website_url) + '" target="_blank" rel="noopener" data-testid="public-sponsor-name">' + esc(s.name) + '</a>' : '<span>' + esc(s.name) + '</span>';
-            return '<div class="sponsor-card" data-testid="public-sponsor-card">' + logo + link + '</div>';
-          }).join('');
+          const esc = (s) => {
+            const d = document.createElement('div');
+            d.textContent = s;
+            return d.innerHTML;
+          };
+          banner.innerHTML = sponsors
+            .map((s) => {
+              const logo = s.logo_url
+                ? '<img src="' +
+                  esc(s.logo_url) +
+                  '" alt="' +
+                  esc(s.name) +
+                  '" referrerpolicy="no-referrer" onerror="this.style.display=\'none\'">'
+                : '';
+              const link = s.website_url
+                ? '<a href="' +
+                  esc(s.website_url) +
+                  '" target="_blank" rel="noopener" data-testid="public-sponsor-name">' +
+                  esc(s.name) +
+                  '</a>'
+                : '<span>' + esc(s.name) + '</span>';
+              return (
+                '<div class="sponsor-card" data-testid="public-sponsor-card">' +
+                logo +
+                link +
+                '</div>'
+              );
+            })
+            .join('');
           banner.classList.add('sponsor-strip');
-          sponsors.forEach(s => {
-            fetch('/api/v2/events/' + encodeURIComponent(eventId) + '/sponsors/' + encodeURIComponent(s.id) + '/impression', {
-              method: 'POST', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ surface: 'public', placement: 'mobileBanner' })
-            }).catch(() => {});
+          sponsors.forEach((s) => {
+            fetch(
+              '/api/v2/events/' +
+                encodeURIComponent(eventId) +
+                '/sponsors/' +
+                encodeURIComponent(s.id) +
+                '/impression',
+              {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ surface: 'public', placement: 'mobileBanner' }),
+              }
+            ).catch(() => {});
           });
-        } catch { /* sponsor loading is non-critical */ }
+        } catch {
+          /* sponsor loading is non-critical */
+        }
       })();
     </script>
   </body>
