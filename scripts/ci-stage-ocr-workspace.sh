@@ -85,3 +85,9 @@ mkdir -p "$TARGET_PARENT"
 rm -rf "$TARGET_PARENT/flags"
 cp -r "$WS_CACHE/packages/flags" "$TARGET_PARENT/flags"
 echo "[stage] @ocr/flags available at $TARGET_PARENT/flags"
+
+if [ -d "$WS_CACHE/packages/ui" ]; then
+  rm -rf "$TARGET_PARENT/ui"
+  cp -r "$WS_CACHE/packages/ui" "$TARGET_PARENT/ui"
+  echo "[stage] @ocr/ui available at $TARGET_PARENT/ui"
+fi
