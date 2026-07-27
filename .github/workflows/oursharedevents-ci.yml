@@ -427,6 +427,12 @@ jobs:
         if: matrix.shard == 'lint'
         run: npx eslint config/ scripts/ tests/unit/ tests/contract/ --cache --cache-location node_modules/.eslintcache
 
+      # Tier-1 static preflight: validates manifest anchors exist in templates
+      # without a browser. Catches manifest/template drift in seconds.
+      - name: 'Smoke: manifest preflight (static)'
+        if: matrix.shard == 'lint'
+        run: OSE_TPL=workers/oursharedevents/src/templates npx tsx --test tests/ui/smoke/static-check.test.ts
+
       # ── Shard: typecheck ───────────────────────────────────────────────────
       # tsc --noEmit on the worker. Standalone shard so a type regression
       # surfaces as a single named check, not buried inside a multi-step job.
@@ -1015,13 +1021,14 @@ jobs:
             tests/e2e/4-negative/form-validation.spec.ts
         timeout-minutes: 10
 
-      - name: 'T4d: UI Smoke'
+      - name: 'T4d: UI Smoke — Tier-1 page smoke'
         id: ui-tests
         env:
           BASE_URL: ${{ env.STG_BASE_URL }}
           ADMIN_KEY: ${{ secrets.ADMIN_KEY }}
           X_OCR_INTERNAL: ${{ secrets.X_OCR_INTERNAL }}
-        run: npm run test:ui:smoke
+          SMOKE_ADMIN_READY: '1'
+        run: SMOKE_APP=ose SMOKE_ADMIN_READY=1 npx playwright test tests/ui/smoke/tier1.spec.ts
         timeout-minutes: 10
 
       - name: Upload artifacts
