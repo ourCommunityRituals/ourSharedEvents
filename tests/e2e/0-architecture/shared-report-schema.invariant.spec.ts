@@ -89,6 +89,21 @@ function extractInterfaceBlock(src: string): string {
 }
 
 test.describe('Invariant 21: SharedReport Schema Stability — structural interface lock', () => {
+  let builderSrc: string;
+  let depthSrc: string;
+  let snapshot: {
+    version: string;
+    top_level_fields: string[];
+    sponsor_impressions_fields: string[];
+    campaign_summary_fields: string[];
+  };
+
+  test.beforeAll(() => {
+    builderSrc = readFileSync(BUILDER_PATH, 'utf8');
+    depthSrc = readFileSync(DEPTH_PATH, 'utf8');
+    snapshot = JSON.parse(readFileSync(SNAPSHOT_PATH, 'utf8'));
+  });
+
   test('OSE-INV21 | shared-report | schema | snapshot file exists at canonical path', () => {
     expect(
       existsSync(SNAPSHOT_PATH),
@@ -99,7 +114,6 @@ test.describe('Invariant 21: SharedReport Schema Stability — structural interf
   });
 
   test('OSE-INV21 | shared-report | schema | snapshot has a version field (enables explicit version bumps on breaking changes)', () => {
-    const snapshot = JSON.parse(readFileSync(SNAPSHOT_PATH, 'utf8'));
     expect(
       typeof snapshot.version,
       'snapshot must have a version field — bumping version makes breaking field removals visible in PR diffs'
@@ -109,17 +123,15 @@ test.describe('Invariant 21: SharedReport Schema Stability — structural interf
 
   test('OSE-INV21 | shared-report | interface | every top_level_field in the snapshot appears in SharedReport interface', () => {
     expect(existsSync(BUILDER_PATH), 'shared-report-builder.ts must exist').toBe(true);
-    const src = readFileSync(BUILDER_PATH, 'utf8');
-    const snapshot = JSON.parse(readFileSync(SNAPSHOT_PATH, 'utf8'));
 
-    const interfaceBlock = extractInterfaceBlock(src);
+    const interfaceBlock = extractInterfaceBlock(builderSrc);
     expect(
       interfaceBlock.length,
       'SharedReport interface block must be extractable from shared-report-builder.ts — ' +
         'if this fails, the interface was renamed or removed'
     ).toBeGreaterThan(0);
 
-    for (const field of snapshot.top_level_fields as string[]) {
+    for (const field of snapshot.top_level_fields) {
       expect(
         interfaceBlock,
         `SharedReport interface is missing top-level field '${field}' — ` +
@@ -131,21 +143,18 @@ test.describe('Invariant 21: SharedReport Schema Stability — structural interf
   });
 
   test('OSE-INV21 | shared-report | interface | every sponsor_impressions_field appears in the sponsor_impressions type', () => {
-    const src = readFileSync(BUILDER_PATH, 'utf8');
-    const snapshot = JSON.parse(readFileSync(SNAPSHOT_PATH, 'utf8'));
-
     // Extract the sponsor_impressions array type block — starts after
     // `sponsor_impressions: Array<{` and ends at the matching `}>`
     const marker = 'sponsor_impressions: Array<{';
-    const start = src.indexOf(marker);
+    const start = builderSrc.indexOf(marker);
     expect(
       start,
       'sponsor_impressions: Array<{ must appear in shared-report-builder.ts'
     ).toBeGreaterThan(-1);
 
-    const block = src.slice(start, src.indexOf('}>;', start) + 3);
+    const block = builderSrc.slice(start, builderSrc.indexOf('}>;', start) + 3);
 
-    for (const field of snapshot.sponsor_impressions_fields as string[]) {
+    for (const field of snapshot.sponsor_impressions_fields) {
       expect(
         block,
         `sponsor_impressions type is missing field '${field}' — ` +
@@ -156,19 +165,16 @@ test.describe('Invariant 21: SharedReport Schema Stability — structural interf
   });
 
   test('OSE-INV21 | shared-report | interface | every campaign_summary_field appears in the campaign_summary type', () => {
-    const src = readFileSync(BUILDER_PATH, 'utf8');
-    const snapshot = JSON.parse(readFileSync(SNAPSHOT_PATH, 'utf8'));
-
     const marker = 'campaign_summary: Array<{';
-    const start = src.indexOf(marker);
+    const start = builderSrc.indexOf(marker);
     expect(
       start,
       'campaign_summary: Array<{ must appear in shared-report-builder.ts'
     ).toBeGreaterThan(-1);
 
-    const block = src.slice(start, src.indexOf('}>', start) + 2);
+    const block = builderSrc.slice(start, builderSrc.indexOf('}>', start) + 2);
 
-    for (const field of snapshot.campaign_summary_fields as string[]) {
+    for (const field of snapshot.campaign_summary_fields) {
       expect(
         block,
         `campaign_summary type is missing field '${field}' — ` +
@@ -180,13 +186,12 @@ test.describe('Invariant 21: SharedReport Schema Stability — structural interf
 
   test('OSE-INV21 | shared-report | depth | campaign_summary is present in both mid and premium depth tiers', () => {
     expect(existsSync(DEPTH_PATH), 'report-depth.ts must exist').toBe(true);
-    const src = readFileSync(DEPTH_PATH, 'utf8');
 
     // Extract the mid section of DEPTH_SECTIONS. The mid block starts after
     // `mid: [` and ends at the next `],`. campaign_summary must appear there.
-    const midStart = src.indexOf('mid: [');
+    const midStart = depthSrc.indexOf('mid: [');
     expect(midStart, 'DEPTH_SECTIONS.mid must exist in report-depth.ts').toBeGreaterThan(-1);
-    const midBlock = src.slice(midStart, src.indexOf('],', midStart));
+    const midBlock = depthSrc.slice(midStart, depthSrc.indexOf('],', midStart));
 
     expect(
       midBlock,
@@ -195,11 +200,11 @@ test.describe('Invariant 21: SharedReport Schema Stability — structural interf
         'removing it from mid silently hides the entire campaign surface from mid-tier tokens'
     ).toContain("'campaign_summary'");
 
-    const premiumStart = src.indexOf('premium: [');
+    const premiumStart = depthSrc.indexOf('premium: [');
     expect(premiumStart, 'DEPTH_SECTIONS.premium must exist in report-depth.ts').toBeGreaterThan(
       -1
     );
-    const premiumBlock = src.slice(premiumStart, src.indexOf('],', premiumStart));
+    const premiumBlock = depthSrc.slice(premiumStart, depthSrc.indexOf('],', premiumStart));
 
     expect(
       premiumBlock,

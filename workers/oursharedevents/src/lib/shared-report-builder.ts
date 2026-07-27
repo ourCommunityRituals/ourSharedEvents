@@ -344,7 +344,7 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
       campaign_id: string;
       campaign_title: string;
       total_impressions: number;
-      sponsors: Set<string>;
+      sponsor_count: number;
       impressions_by_surface: Record<string, number>;
     }
   >();
@@ -353,7 +353,7 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
     const existing = campaignMap.get(row.campaign_id);
     if (existing) {
       existing.total_impressions += row.count;
-      existing.sponsors.add(row.sponsor_id);
+      existing.sponsor_count += 1;
       existing.impressions_by_surface[row.surface] =
         (existing.impressions_by_surface[row.surface] ?? 0) + row.count;
     } else {
@@ -361,22 +361,14 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
         campaign_id: row.campaign_id,
         campaign_title: row.campaign_title ?? 'unknown',
         total_impressions: row.count,
-        sponsors: new Set([row.sponsor_id]),
+        sponsor_count: 1,
         impressions_by_surface: { [row.surface]: row.count },
       });
     }
   }
   const campaignSummary =
     campaignMap.size > 0
-      ? [...campaignMap.values()]
-          .map((c) => ({
-            campaign_id: c.campaign_id,
-            campaign_title: c.campaign_title,
-            total_impressions: c.total_impressions,
-            sponsor_count: c.sponsors.size,
-            impressions_by_surface: c.impressions_by_surface,
-          }))
-          .sort((a, b) => b.total_impressions - a.total_impressions)
+      ? [...campaignMap.values()].sort((a, b) => b.total_impressions - a.total_impressions)
       : null;
 
   // 6. poster_attribution — per poster_deployment_id
@@ -418,6 +410,18 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
   //    day one IS the product" (ring gives the saturation promise context).
   let corridorMap: { svg: string; suppressed: string[]; cell_count: number } | null = null;
 
+  function buildCorridorMap(cells: Array<{ cell: string; count: number }>): void {
+    const { svg, suppressed: suppressedCells } = renderCorridorMap(cells);
+    corridorMap = { svg, suppressed: suppressedCells, cell_count: cells.length };
+    for (const cellId of suppressedCells) {
+      suppression.push({
+        field: 'corridor_map',
+        reason: 'below_min_sample_size',
+        detail: `h3 cell ${cellId} suppressed (below privacy floor)`,
+      });
+    }
+  }
+
   const cellRows = await db
     .prepare(
       `SELECT h3_res9 AS cell, SUM(unique_agents) AS count
@@ -431,35 +435,16 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
   const cellData = cellRows.results ?? [];
 
   if (cellData.length > 0) {
-    const { svg, suppressed: suppressedCells } = renderCorridorMap(
-      cellData.map((r) => ({ cell: r.cell, count: r.count }))
-    );
-    corridorMap = { svg, suppressed: suppressedCells, cell_count: cellData.length };
-    for (const cellId of suppressedCells) {
-      suppression.push({
-        field: 'corridor_map',
-        reason: 'below_min_sample_size',
-        detail: `h3 cell ${cellId} suppressed (below privacy floor)`,
-      });
-    }
+    buildCorridorMap(cellData.map((r) => ({ cell: r.cell, count: r.count })));
   } else if (event.h3_res7) {
     // Launch-day fallback: corridor cell with uniqueGatherings count +
     // ring neighbors at count=0 (suppressed by privacy floor — correct).
     const ring = gridRingUnsafe(event.h3_res7, 1);
     const count = uniqueGatherings ?? 0;
-    const cells = [
+    buildCorridorMap([
       { cell: event.h3_res7, count },
       ...ring.map((c: string) => ({ cell: c, count: 0 })),
-    ];
-    const { svg, suppressed: suppressedCells } = renderCorridorMap(cells);
-    corridorMap = { svg, suppressed: suppressedCells, cell_count: cells.length };
-    for (const cellId of suppressedCells) {
-      suppression.push({
-        field: 'corridor_map',
-        reason: 'below_min_sample_size',
-        detail: `h3 cell ${cellId} suppressed (below privacy floor)`,
-      });
-    }
+    ]);
   } else {
     suppression.push({
       field: 'corridor_map',
