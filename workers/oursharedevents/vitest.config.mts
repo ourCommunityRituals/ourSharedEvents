@@ -167,7 +167,19 @@ function splitMigrationSQL(sql: string): string[] {
 
   if (buffer.trim().length > 0) results.push(buffer.trim() + ';');
 
-  return results.filter((s) => s.replace(/;$/, '').trim().length > 0);
+  return results.filter((s) => {
+    const withoutSemi = s.replace(/;$/, '').trim();
+    if (withoutSemi.length === 0) return false;
+    // D1 rejects statements that contain only SQL comments with
+    // "SQL code did not contain a statement". Strip comment lines and
+    // verify actual SQL content remains before including the statement.
+    const nonCommentContent = withoutSemi
+      .split('\n')
+      .filter((line) => !line.trimStart().startsWith('--'))
+      .join('\n')
+      .trim();
+    return nonCommentContent.length > 0;
+  });
 }
 
 const migrationStatements = splitMigrationSQL(migrationSQL);

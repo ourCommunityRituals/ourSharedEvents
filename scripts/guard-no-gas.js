@@ -43,6 +43,8 @@ const IGNORED_DIRS = new Set([
   'postman', // Postman collections with test data
   'schemas', // JSON schemas with example data
   'tests', // Test files with test patterns
+  'ocr-docs', // OCR-docs brain checkout (governance docs — legitimately references deprecated GAS for documentation; not application code)
+  'ose', // Stale self-checkout artifact from runner workspace (clean: false + prior checkout into ose/ subdir); no ose/ dir exists in this repo
 ]);
 
 // Files/patterns to skip (documentation files are excluded by default)
