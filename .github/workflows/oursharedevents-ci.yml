@@ -513,10 +513,18 @@ jobs:
         run: |
           npx playwright install chromium
           npx playwright test --config=playwright.e2e-smoke.config.ts \
+            tests/e2e/0-architecture/aggregate-only.invariant.spec.ts \
+            tests/e2e/0-architecture/api-response-schema.invariant.spec.ts \
+            tests/e2e/0-architecture/cors-allowlist.invariant.spec.ts \
             tests/e2e/0-architecture/deprecation-lock.invariant.spec.ts \
+            tests/e2e/0-architecture/migration-monotonicity.invariant.spec.ts \
+            tests/e2e/0-architecture/monetization-inert.invariant.spec.ts \
+            tests/e2e/0-architecture/oer-emission-boundary.invariant.spec.ts \
             tests/e2e/0-architecture/pii-retention.invariant.spec.ts \
             tests/e2e/0-architecture/runner-environment.invariant.spec.ts \
             tests/e2e/0-architecture/runner-pool-readiness.invariant.spec.ts \
+            tests/e2e/0-architecture/slug-permanence.invariant.spec.ts \
+            tests/e2e/0-architecture/tenant-isolation.invariant.spec.ts \
             tests/e2e/0-architecture/tier-equity.invariant.spec.ts
 
   # ============================================================================
@@ -1001,8 +1009,11 @@ jobs:
           X_OCR_INTERNAL: ${{ secrets.X_OCR_INTERNAL }}
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
-        run: npx playwright test --config=playwright.e2e-smoke.config.ts tests/e2e/3-flows/sponsor-journey.spec.ts
-        timeout-minutes: 5
+        run: |
+          npx playwright test --config=playwright.e2e-smoke.config.ts \
+            tests/e2e/3-flows/sponsor-journey.spec.ts \
+            tests/e2e/3-flows/cross-brand-isolation.spec.ts
+        timeout-minutes: 8
 
       - name: 'T4c: Form E2E (4 types + flows + validation)'
         id: form-e2e-tests

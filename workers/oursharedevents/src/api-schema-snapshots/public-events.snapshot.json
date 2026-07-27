@@ -1,0 +1,64 @@
+{
+  "version": "1.0.0",
+  "description": "Minimum required response columns for the public OSE events API. Removing any field from projected_columns MUST be accompanied by removing it here and bumping the version — that makes the change visible in a diff rather than silent. Adding new fields is always safe (additive). Computed fields are those injected by enrichWithPhase() at the handler layer, not projected from the DB SELECT.",
+  "endpoints": {
+    "GET /api/v2/events": {
+      "handler": "handleListEvents",
+      "envelope_keys": ["ok", "status", "items"],
+      "projected_columns": [
+        "id",
+        "brand_id",
+        "title",
+        "slug",
+        "status",
+        "description",
+        "location",
+        "start_date",
+        "end_date",
+        "timezone",
+        "cover_image_url",
+        "created_at",
+        "updated_at",
+        "legal_clearance_tier",
+        "what_short",
+        "who_host",
+        "why_purpose",
+        "how_details",
+        "where_address",
+        "lat",
+        "lon",
+        "corridor_id"
+      ],
+      "computed_fields": ["phase"]
+    },
+    "GET /api/v2/events/:id": {
+      "handler": "handleGetEvent",
+      "envelope_keys": ["ok", "status", "item"],
+      "projected_columns": [
+        "id",
+        "brand_id",
+        "title",
+        "slug",
+        "status",
+        "description",
+        "location",
+        "start_date",
+        "end_date",
+        "timezone",
+        "cover_image_url",
+        "created_at",
+        "updated_at",
+        "legal_clearance_tier",
+        "what_short",
+        "who_host",
+        "why_purpose",
+        "how_details",
+        "where_address",
+        "lat",
+        "lon",
+        "corridor_id"
+      ],
+      "computed_fields": ["phase"]
+    }
+  }
+}
