@@ -393,23 +393,14 @@ describe('OSE-272 Phase 3: detectEventSeriesClusters', () => {
   });
 
   test('emits pending row when cluster >= 3 events at same (location, dow, hour)', async () => {
-    // 3 events spread weekly, same time + location
+    // 3 events spread weekly, same time + location — relative dates so they stay
+    // within the SERIES_DETECTOR_LOOKBACK_DAYS (56 d) window as time passes.
     for (let i = 1; i <= 3; i++) {
-      await tenv()
-        .DB.prepare(
-          `INSERT INTO events
-             (id, brand_id, title, slug, status, location, start_date, created_at, updated_at)
-           VALUES (?, ?, ?, ?, 'active', ?, ?, datetime('now'), datetime('now'))`
-        )
-        .bind(
-          `test-evt-mat-cluster-${i}`,
-          'test-brand',
-          'Thursday Trivia',
-          `test-evt-mat-cluster-${i}`,
-          'Lincoln Park Tap',
-          `2026-04-${String(2 + 7 * i).padStart(2, '0')}T19:00:00Z`
-        )
-        .run();
+      await seedEvent({
+        id: `test-evt-mat-cluster-${i}`,
+        start_offset_hours: -(7 * i * 24),
+        location: 'Lincoln Park Tap',
+      });
     }
     const r = await detectEventSeriesClusters({ DB: tenv().DB });
     expect(r.errors).toBe(0);
@@ -423,30 +414,19 @@ describe('OSE-272 Phase 3: detectEventSeriesClusters', () => {
   });
 
   test('idempotent — re-running does NOT emit duplicate pending rows', async () => {
+    // Relative dates — same logic as the cluster test above.
     for (let i = 1; i <= 3; i++) {
-      await tenv()
-        .DB.prepare(
-          `INSERT INTO events
-             (id, brand_id, title, slug, status, location, start_date, created_at, updated_at)
-           VALUES (?, ?, ?, ?, 'active', ?, ?, datetime('now'), datetime('now'))`
-        )
-        .bind(
-          `test-evt-mat-idem-${i}`,
-          'test-brand',
-          'Tuesday Bocce',
-          `test-evt-mat-idem-${i}`,
-          'Idempotent Pub',
-          `2026-04-${String(7 + 7 * i).padStart(2, '0')}T20:00:00Z`
-        )
-        .run();
+      await seedEvent({
+        id: `test-evt-mat-idem-${i}`,
+        start_offset_hours: -(7 * i * 24),
+        location: 'Idempotent Pub',
+      });
     }
     await detectEventSeriesClusters({ DB: tenv().DB });
     await detectEventSeriesClusters({ DB: tenv().DB });
     await detectEventSeriesClusters({ DB: tenv().DB });
     const rows = await tenv()
-      .DB.prepare(
-        `SELECT id FROM event_series WHERE series_name LIKE '%(auto-detected)%' AND series_name LIKE 'Tuesday%'`
-      )
+      .DB.prepare(`SELECT id FROM event_series WHERE series_name LIKE '%(auto-detected)%'`)
       .all();
     expect(rows.results).toHaveLength(1);
   });
@@ -458,32 +438,28 @@ describe('OSE-272 Phase 3: detectEventSeriesClusters', () => {
       start_offset_hours: -7 * 24,
       location: 'Rejection Tap',
     });
+    // Derive day_of_week + hour_of_day from the anchor's actual start_date so
+    // the rejected series matches whatever dow/hour the relative seed lands on.
     await tenv()
       .DB.prepare(
         `INSERT INTO event_series
            (id, venue_id, series_name, day_of_week, hour_of_day, state, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, 'rejected', datetime('now'), datetime('now'))`
+         SELECT ?, ?, ?,
+           CAST(strftime('%w', start_date) AS INTEGER),
+           CAST(strftime('%H', start_date) AS INTEGER),
+           'rejected', datetime('now'), datetime('now')
+         FROM events WHERE id = ?`
       )
-      .bind('rejected-srs', 'test-evt-mat-rej-anchor', 'Old Rejected', 4, 19)
+      .bind('rejected-srs', 'test-evt-mat-rej-anchor', 'Old Rejected', 'test-evt-mat-rej-anchor')
       .run();
 
-    // Now seed 3 more events that would otherwise trigger a pending row
+    // Seed 3 more events at the same location — relative dates within the lookback window.
     for (let i = 1; i <= 3; i++) {
-      await tenv()
-        .DB.prepare(
-          `INSERT INTO events
-             (id, brand_id, title, slug, status, location, start_date, created_at, updated_at)
-           VALUES (?, ?, ?, ?, 'active', ?, ?, datetime('now'), datetime('now'))`
-        )
-        .bind(
-          `test-evt-mat-rej-${i}`,
-          'test-brand',
-          'Thursday Trivia',
-          `test-evt-mat-rej-${i}`,
-          'Rejection Tap',
-          `2026-04-${String(2 + 7 * i).padStart(2, '0')}T19:00:00Z`
-        )
-        .run();
+      await seedEvent({
+        id: `test-evt-mat-rej-${i}`,
+        start_offset_hours: -(7 * i * 24),
+        location: 'Rejection Tap',
+      });
     }
 
     const r = await detectEventSeriesClusters({ DB: tenv().DB });
@@ -511,13 +487,14 @@ describe('OSE-272 Session 3: runSharedReportMaterialization (cron orchestrator)'
     await resetForTest();
   });
 
-  test('runs all 3 phases and returns aggregated result shape', async () => {
+  test('runs all 4 phases and returns aggregated result shape', async () => {
     const r = await runSharedReportMaterialization({
       DB: tenv().DB,
       ANON_ID_HASH_PEPPER: TEST_PEPPER,
     });
-    expect(r.phases).toHaveLength(3);
+    expect(r.phases).toHaveLength(4);
     expect(r.phases.map((p) => p.phase)).toEqual([
+      'h3_cell_backfill',
       'anon_id_returns',
       'corridor_density_baseline',
       'event_series_detector',
@@ -534,13 +511,13 @@ describe('OSE-272 Session 3: runSharedReportMaterialization (cron orchestrator)'
     expect(r.totalErrors).toBe(0);
   });
 
-  test('continues running phases even if pepper is missing (Phase 1 silently skips)', async () => {
+  test('continues running phases even if pepper is missing (anon_id_returns silently skips)', async () => {
     await seedEvent({ id: 'test-evt-mat-orch', end_offset_hours: -4 });
     await seedScan('test-evt-mat-orch', 'anon_orch');
     const r = await runSharedReportMaterialization({ DB: tenv().DB });
-    // Phase 1 noops gracefully (pepper missing); Phases 2-3 still run
-    expect(r.phases).toHaveLength(3);
+    // anon_id_returns noops gracefully (pepper missing); all other phases still run
+    expect(r.phases).toHaveLength(4);
     expect(r.totalErrors).toBe(0);
-    expect(r.phases[0].rowsUpserted).toBe(0); // anon_id_returns skipped
+    expect(r.phases[1].rowsUpserted).toBe(0); // anon_id_returns is phases[1]; skipped without pepper
   });
 });
