@@ -75,6 +75,8 @@ test.describe('SharedReport depth gate', () => {
     const report = body.report as Record<string, unknown>;
     expect('event_id' in report).toBe(true);
     expect('unique_gatherings' in report).toBe(true);
+    // corridor_map key must be present at premium depth (value may be null if no h3 data)
+    expect('corridor_map' in report).toBe(true);
     // No upgrade hint at premium
     expect('upgrade' in body).toBe(false);
   });
@@ -126,6 +128,34 @@ test.describe('SharedReport depth gate', () => {
     if (body.upgrade) {
       expect(body.upgrade.next_depth).toBe('premium');
     }
+  });
+
+  test('LOCAL sponsor token → no corridor_map in response (premium-only gate)', async ({
+    request,
+  }) => {
+    test.skip(!POST || !LOCAL_TOKEN, 'fixtures not seeded');
+    const res = await fetchReport(request, POST!, LOCAL_TOKEN!);
+    const body = await res.json();
+    const report = body.report as Record<string, unknown>;
+    // corridor_map is premium-only — must be omitted entirely at local depth
+    expect('corridor_map' in report).toBe(false);
+    // Sanity: no SVG corridor map markup leaking in the JSON text
+    const text = JSON.stringify(report);
+    expect(text).not.toMatch(/corridor-map/);
+    expect(text).not.toMatch(/hex-cell/);
+  });
+
+  test('MID sponsor token → no corridor_map in response (premium-only gate)', async ({
+    request,
+  }) => {
+    test.skip(!POST || !MID_TOKEN, 'fixtures not seeded');
+    const res = await fetchReport(request, POST!, MID_TOKEN!);
+    const body = await res.json();
+    const report = body.report as Record<string, unknown>;
+    expect('corridor_map' in report).toBe(false);
+    const text = JSON.stringify(report);
+    expect(text).not.toMatch(/corridor-map/);
+    expect(text).not.toMatch(/hex-cell/);
   });
 
   test('live equity check: response shape never exposes raw tier vocabulary', async ({

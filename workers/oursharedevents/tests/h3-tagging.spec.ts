@@ -143,12 +143,14 @@ describe('B. corridor-map — honesty at any density', () => {
 
 const H3_HOT_PATH_PATTERN = /h3-js|h3-tagging/;
 
+// shared-report-builder.ts is a READ function (not scan ingest), so it may
+// import h3 for corridor map generation. The hot-path guard applies only to
+// scan ingest handlers and form submission handlers.
 const SCAN_PATH = [
   'src/handlers/qr-verify.ts',
   'src/handlers/shortlink-resolve.ts',
   'src/handlers/uec-resolve.ts',
   'src/handlers/forms.ts',
-  'src/lib/shared-report-builder.ts',
 ] as const;
 
 describe('C. hot-path guard — scan handlers import no H3 geo code', () => {

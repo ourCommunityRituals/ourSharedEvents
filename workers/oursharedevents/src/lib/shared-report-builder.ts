@@ -28,6 +28,8 @@
  */
 
 import { CORRIDOR_BASELINE_MIN_SAMPLE } from './shared-report';
+import { renderCorridorMap } from './corridor-map';
+import { gridRingUnsafe } from 'h3-js';
 
 // Minimum number of distinct anons before return_rate is computed. Below
 // this, the denominator is so small that the percentage is identifying
@@ -94,6 +96,12 @@ export interface SharedReport {
     }>;
   };
 
+  corridor_map: {
+    svg: string;
+    suppressed: string[]; // cell IDs under privacy floor — also in _meta.suppression_reasons
+    cell_count: number;
+  } | null;
+
   _meta: {
     materialized_at: string | null;
     suppression_reasons: SuppressionReason[];
@@ -111,13 +119,15 @@ interface EventRow {
   end_date: string | null;
   corridor_id: string | null;
   series_id: string | null;
+  h3_res9: string | null;
+  h3_res7: string | null;
 }
 
 export async function buildSharedReport(db: D1Database, eventId: string): Promise<BuildResult> {
   // 1. Resolve the event.
   const event = await db
     .prepare(
-      `SELECT id, title, start_date, end_date, corridor_id, series_id
+      `SELECT id, title, start_date, end_date, corridor_id, series_id, h3_res9, h3_res7
        FROM events WHERE id = ?`
     )
     .bind(eventId)
@@ -319,7 +329,64 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
     last_scan_at: r.last_scan_at,
   }));
 
-  // 7. headcount_trend — across confirmed event_series instances
+  // 7. corridor_map — premium hex map of per-cell scan densities (S-6.3.1b).
+  //    Source: scan_aggregates.h3_res9 rows for this event.
+  //    Fallback (launch-day honesty): event's own h3_res7 corridor cell +
+  //    gridRingUnsafe ring neighbors, so "one venue lighting one cell on
+  //    day one IS the product" (ring gives the saturation promise context).
+  let corridorMap: { svg: string; suppressed: string[]; cell_count: number } | null = null;
+
+  const cellRows = await db
+    .prepare(
+      `SELECT h3_res9 AS cell, SUM(unique_agents) AS count
+         FROM scan_aggregates
+         WHERE event_id = ? AND h3_res9 IS NOT NULL
+         GROUP BY h3_res9`
+    )
+    .bind(eventId)
+    .all<{ cell: string; count: number }>();
+
+  const cellData = cellRows.results ?? [];
+
+  if (cellData.length > 0) {
+    const { svg, suppressed: suppressedCells } = renderCorridorMap(
+      cellData.map((r) => ({ cell: r.cell, count: r.count }))
+    );
+    corridorMap = { svg, suppressed: suppressedCells, cell_count: cellData.length };
+    for (const cellId of suppressedCells) {
+      suppression.push({
+        field: 'corridor_map',
+        reason: 'below_min_sample_size',
+        detail: `h3 cell ${cellId} suppressed (below privacy floor)`,
+      });
+    }
+  } else if (event.h3_res7) {
+    // Launch-day fallback: corridor cell with uniqueGatherings count +
+    // ring neighbors at count=0 (suppressed by privacy floor — correct).
+    const ring = gridRingUnsafe(event.h3_res7, 1);
+    const count = uniqueGatherings ?? 0;
+    const cells = [
+      { cell: event.h3_res7, count },
+      ...ring.map((c: string) => ({ cell: c, count: 0 })),
+    ];
+    const { svg, suppressed: suppressedCells } = renderCorridorMap(cells);
+    corridorMap = { svg, suppressed: suppressedCells, cell_count: cells.length };
+    for (const cellId of suppressedCells) {
+      suppression.push({
+        field: 'corridor_map',
+        reason: 'below_min_sample_size',
+        detail: `h3 cell ${cellId} suppressed (below privacy floor)`,
+      });
+    }
+  } else {
+    suppression.push({
+      field: 'corridor_map',
+      reason: 'materialization_pending',
+      detail: 'event has no h3 cells tagged; update event lat/lon to enable corridor map',
+    });
+  }
+
+  // 8. headcount_trend — across confirmed event_series instances
   let trendSeriesId: string | null = null;
   let trendSeriesName: string | null = null;
   const trendInstances: Array<{
@@ -407,6 +474,7 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
         series_name: trendSeriesName,
         instances: trendInstances,
       },
+      corridor_map: corridorMap,
       _meta: {
         materialized_at: materializedAt,
         suppression_reasons: suppression,

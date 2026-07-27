@@ -55,7 +55,7 @@ export const DEPTH_SECTIONS: Record<ReportDepth, readonly string[]> = {
     'corridor_density',
     '_meta',
   ],
-  // Premium buys intelligence: cross-event comparison + corridor truth.
+  // Premium buys intelligence: cross-event comparison + corridor truth + map.
   premium: [
     'event_id',
     'event_title',
@@ -66,6 +66,7 @@ export const DEPTH_SECTIONS: Record<ReportDepth, readonly string[]> = {
     'poster_attribution',
     'return_rate',
     'corridor_density',
+    'corridor_map',
     'headcount_trend',
     '_meta',
   ],

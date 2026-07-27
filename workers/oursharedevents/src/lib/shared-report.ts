@@ -497,3 +497,58 @@ function formatHour(hour: number): string {
   if (hour < 12) return `${hour} AM`;
   return `${hour - 12} PM`;
 }
+
+/**
+ * Phase 0 — backfill h3_res9/h3_res7 from events onto scan_aggregates rows
+ * that are missing them. Runs before all other phases so corridor-map data
+ * becomes available to the read API without a full re-scan.
+ *
+ * Idempotent (WHERE h3_res9 IS NULL), never overwrites existing tags.
+ * Safe: uses a correlated sub-select — no JS-level h3 computation needed.
+ */
+export async function backfillH3Cells(
+  env: SharedReportMaterializeEnv
+): Promise<MaterializationResult> {
+  const start = Date.now();
+  const result: MaterializationResult = {
+    phase: 'h3_cell_backfill',
+    eventsProcessed: 0,
+    rowsUpserted: 0,
+    rowsSkipped: 0,
+    errors: 0,
+    durationMs: 0,
+  };
+
+  if (!env.DB) {
+    result.durationMs = Date.now() - start;
+    return result;
+  }
+
+  try {
+    const upd = await env.DB.prepare(
+      `UPDATE scan_aggregates
+         SET h3_res9 = (SELECT h3_res9 FROM events WHERE id = scan_aggregates.event_id),
+             h3_res7 = (SELECT h3_res7 FROM events WHERE id = scan_aggregates.event_id)
+       WHERE h3_res9 IS NULL
+         AND EXISTS (
+           SELECT 1 FROM events
+           WHERE id = scan_aggregates.event_id
+             AND h3_res9 IS NOT NULL
+         )`
+    ).run();
+    result.rowsUpserted = upd.meta.changes ?? 0;
+    result.eventsProcessed = result.rowsUpserted;
+  } catch (err) {
+    result.errors++;
+    console.error(
+      JSON.stringify({
+        type: 'SHARED_REPORT_MATERIALIZE_ERROR',
+        phase: 'h3_cell_backfill',
+        error: err instanceof Error ? err.message : String(err),
+      })
+    );
+  }
+
+  result.durationMs = Date.now() - start;
+  return result;
+}
