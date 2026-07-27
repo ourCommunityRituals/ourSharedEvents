@@ -485,6 +485,7 @@ describe('L3 Integration: Anonymous ID → DB → Form submissions', () => {
     expect(setCookie).toContain('ose_anon=anon_');
     expect(setCookie).toContain('HttpOnly');
     expect(setCookie).toContain('Secure');
+    expect(setCookie).toContain('SameSite=Lax'); // invariant #1 — cookie contract completeness
 
     // Check DB has anonymous_id
     const tenv = env as unknown as TestEnv;
@@ -533,6 +534,29 @@ describe('L3 Integration: Anonymous ID → DB → Form submissions', () => {
       .bind(eventId)
       .first<{ last_anonymous_id: string }>();
     expect(checkin!.last_anonymous_id).toBe(anonId);
+  });
+});
+
+describe('L3 Integration: Invariant #6 — X-Monetization-Inert header on every response', () => {
+  // Invariant #6 (inert_monetization_hooks): every response must carry
+  // X-Monetization-Inert: true. This verifies the fetch() wrapper in index.ts
+  // actually sets the header on real Worker responses, not just in the source.
+  test('public API response carries X-Monetization-Inert: true', async () => {
+    const res = await SELF.fetch('https://t.test/api/v2/events');
+    expect(res.headers.get('X-Monetization-Inert')).toBe('true'); // invariant #6
+  });
+
+  test('admin API response carries X-Monetization-Inert: true', async () => {
+    const res = await SELF.fetch('https://t.test/api/v2/admin/events', {
+      headers: adminHeaders(),
+    });
+    expect(res.headers.get('X-Monetization-Inert')).toBe('true'); // invariant #6
+  });
+
+  test('404 response carries X-Monetization-Inert: true', async () => {
+    const res = await SELF.fetch('https://t.test/api/v2/nonexistent-route-xyz');
+    expect(res.status).toBe(404);
+    expect(res.headers.get('X-Monetization-Inert')).toBe('true'); // invariant #6 — error responses too
   });
 });
 

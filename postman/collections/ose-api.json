@@ -46,6 +46,16 @@
           "    pm.test('Content-Type is application/json', function() {",
           "        pm.expect(ct).to.include('application/json');",
           "    });",
+          "}",
+          "",
+          "// Invariant #6 — Inert Monetization Hooks: every Worker response must carry",
+          "// X-Monetization-Inert: true. The header is set in index.ts fetch() wrapper,",
+          "// so it appears on every route — success, error, and 404. Skipped only when",
+          "// Cloudflare Access intercepts the request (worker never ran).",
+          "if (!isCorsOptions && !isCfAccessBlocked) {",
+          "    pm.test('Invariant #6: X-Monetization-Inert: true on every Worker response', function() {",
+          "        pm.expect(pm.response.headers.get('X-Monetization-Inert')).to.eql('true');",
+          "    });",
           "}"
         ]
       }

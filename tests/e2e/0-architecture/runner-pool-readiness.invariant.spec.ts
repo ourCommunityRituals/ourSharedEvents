@@ -62,6 +62,7 @@ const RUNNER_TOOLS_DIR = join(REPO_ROOT, 'tools', 'runner');
 const JANITOR_SCRIPT = join(RUNNER_TOOLS_DIR, 'janitor.ps1');
 const JANITOR_TESTS = join(RUNNER_TOOLS_DIR, 'janitor.tests.ps1');
 const INSTALL_TASKS = join(RUNNER_TOOLS_DIR, 'install-janitor-tasks.ps1');
+const SETUP_SCRIPT = join(RUNNER_TOOLS_DIR, 'setup-runner.ps1');
 const VERIFY_PROBE_ALIVE = join(RUNNER_TOOLS_DIR, 'verify-probe-alive.ps1');
 const RUNNER_README = join(RUNNER_TOOLS_DIR, 'README.md');
 
@@ -147,5 +148,22 @@ test.describe('Invariant 12: Runner Pool Readiness — probe + watchdog mechanis
     expect(readme, 'runbook must document RUNNER_POOL_DEGRADED').toMatch(/RUNNER_POOL_DEGRADED/);
     expect(readme, 'runbook must document GITHUB_SIDE_OUTAGE').toMatch(/GITHUB_SIDE_OUTAGE/);
     expect(readme, 'runbook must document RUNNER_PROBE_DEAD').toMatch(/RUNNER_PROBE_DEAD/);
+  });
+
+  test('OSE-INV12 | infra | scripts | setup-runner.ps1 auto-invokes install-janitor-tasks.ps1', () => {
+    // setup-runner.ps1 is the partial→live gate for invariant #12: it chains
+    // install-janitor-tasks.ps1 automatically so the probe + watchdog are always
+    // installed as part of runner registration, not as a separate manual step.
+    expect(
+      existsSync(SETUP_SCRIPT),
+      'tools/runner/setup-runner.ps1 must exist — it is the one-shot script that satisfies ' +
+        'the invariant #12 partial→live criterion (install-janitor-tasks auto-invoked after config.cmd)'
+    ).toBe(true);
+
+    const src = readFileSync(SETUP_SCRIPT, 'utf8');
+    expect(
+      src,
+      'setup-runner.ps1 must invoke install-janitor-tasks.ps1 — the probe is only self-healing if the tasks are installed'
+    ).toMatch(/install-janitor-tasks\.ps1/);
   });
 });

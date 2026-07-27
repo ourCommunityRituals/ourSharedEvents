@@ -15,8 +15,9 @@ export type { RouterEnv as Env };
 
 export default {
   async fetch(request: Request, env: RouterEnv, ctx: ExecutionContext): Promise<Response> {
+    let response: Response;
     try {
-      return await route(request, env, ctx);
+      response = await route(request, env, ctx);
     } catch (err) {
       console.error(
         JSON.stringify({
@@ -26,12 +27,17 @@ export default {
           timestamp: new Date().toISOString(),
         })
       );
-
-      return Response.json(
+      response = Response.json(
         { ok: false, status: 500, error: 'Internal server error' },
         { status: 500 }
       );
     }
+    // Invariant #6 — Inert Monetization Hooks: every HTTP response carries
+    // this header to assert no billing logic executed during the request.
+    // Pre-revenue by contract, not by choice.
+    const patched = new Response(response.body, response);
+    patched.headers.set('X-Monetization-Inert', 'true');
+    return patched;
   },
 
   async scheduled(_event: ScheduledEvent, env: RouterEnv, ctx: ExecutionContext): Promise<void> {
