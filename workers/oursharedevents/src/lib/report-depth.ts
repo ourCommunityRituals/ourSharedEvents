@@ -42,7 +42,7 @@ export const DEPTH_SECTIONS: Record<ReportDepth, readonly string[]> = {
     'sponsor_impressions',
     '_meta',
   ],
-  // Mid buys optimization: placement breakdown, temporal signal.
+  // Mid buys optimization: placement breakdown, temporal signal, campaign comparison.
   mid: [
     'event_id',
     'event_title',
@@ -50,6 +50,7 @@ export const DEPTH_SECTIONS: Record<ReportDepth, readonly string[]> = {
     'event_end_date',
     'unique_gatherings',
     'sponsor_impressions',
+    'campaign_summary',
     'poster_attribution',
     'return_rate',
     'corridor_density',
@@ -63,6 +64,7 @@ export const DEPTH_SECTIONS: Record<ReportDepth, readonly string[]> = {
     'event_end_date',
     'unique_gatherings',
     'sponsor_impressions',
+    'campaign_summary',
     'poster_attribution',
     'return_rate',
     'corridor_density',

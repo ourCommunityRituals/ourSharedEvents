@@ -74,9 +74,29 @@ export interface SharedReport {
   sponsor_impressions: Array<{
     sponsor_id: string;
     sponsor_name: string;
+    campaign_id: string | null;
+    campaign_title: string | null;
+    sponsor_tier: string | null;
+    is_local: boolean;
     surface: string;
     count: number;
   }>;
+
+  /**
+   * Per-campaign aggregate for this event. Null when no sponsors have a
+   * campaign_id. Exposed at mid/premium depth — enterprise comparison surface.
+   * Each row aggregates all sponsor_impressions rows for the campaign so a
+   * brand can compare campaign reach across events via the batch endpoint.
+   * impressions_by_surface lets enterprise see which placement formats drove
+   * reach without additional client-side grouping.
+   */
+  campaign_summary: Array<{
+    campaign_id: string;
+    campaign_title: string;
+    total_impressions: number;
+    sponsor_count: number;
+    impressions_by_surface: Record<string, number>;
+  }> | null;
 
   poster_attribution: Array<{
     poster_deployment_id: string;
@@ -274,28 +294,90 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
     });
   }
 
-  // 5. sponsor_impressions — per sponsor × surface
+  // 5. sponsor_impressions — per sponsor × surface, including campaign linkage,
+  //    sponsor tier, and local-sponsor flag. D1 returns INTEGER booleans (0/1).
   const impressions = await db
     .prepare(
       `SELECT
          si.sponsor_id      AS sponsor_id,
-         s.name              AS sponsor_name,
-         si.surface          AS surface,
-         COUNT(*)            AS count
+         s.name             AS sponsor_name,
+         s.campaign_id      AS campaign_id,
+         c.title            AS campaign_title,
+         s.tier             AS sponsor_tier,
+         s.is_local         AS is_local,
+         si.surface         AS surface,
+         COUNT(*)           AS count
        FROM sponsor_impressions si
        LEFT JOIN sponsors s ON s.id = si.sponsor_id
+       LEFT JOIN campaigns c ON c.id = s.campaign_id
        WHERE si.event_id = ?
-       GROUP BY si.sponsor_id, s.name, si.surface
+       GROUP BY si.sponsor_id, s.name, s.campaign_id, c.title, s.tier, s.is_local, si.surface
        ORDER BY count DESC`
     )
     .bind(eventId)
-    .all<{ sponsor_id: string; sponsor_name: string | null; surface: string; count: number }>();
+    .all<{
+      sponsor_id: string;
+      sponsor_name: string | null;
+      campaign_id: string | null;
+      campaign_title: string | null;
+      sponsor_tier: string | null;
+      is_local: number | null;
+      surface: string;
+      count: number;
+    }>();
   const sponsorImpressions = (impressions.results ?? []).map((r) => ({
     sponsor_id: r.sponsor_id,
     sponsor_name: r.sponsor_name ?? 'unknown',
+    campaign_id: r.campaign_id ?? null,
+    campaign_title: r.campaign_title ?? null,
+    sponsor_tier: r.sponsor_tier ?? null,
+    is_local: r.is_local === 1,
     surface: r.surface,
     count: r.count,
   }));
+
+  // Derive campaign_summary by aggregating sponsorImpressions rows that have
+  // a campaign_id. No extra DB call — the data is already fetched above.
+  const campaignMap = new Map<
+    string,
+    {
+      campaign_id: string;
+      campaign_title: string;
+      total_impressions: number;
+      sponsors: Set<string>;
+      impressions_by_surface: Record<string, number>;
+    }
+  >();
+  for (const row of sponsorImpressions) {
+    if (!row.campaign_id) continue;
+    const existing = campaignMap.get(row.campaign_id);
+    if (existing) {
+      existing.total_impressions += row.count;
+      existing.sponsors.add(row.sponsor_id);
+      existing.impressions_by_surface[row.surface] =
+        (existing.impressions_by_surface[row.surface] ?? 0) + row.count;
+    } else {
+      campaignMap.set(row.campaign_id, {
+        campaign_id: row.campaign_id,
+        campaign_title: row.campaign_title ?? 'unknown',
+        total_impressions: row.count,
+        sponsors: new Set([row.sponsor_id]),
+        impressions_by_surface: { [row.surface]: row.count },
+      });
+    }
+  }
+  const campaignSummary =
+    campaignMap.size > 0
+      ? [...campaignMap.values()]
+          .map((c) => ({
+            campaign_id: c.campaign_id,
+            campaign_title: c.campaign_title,
+            total_impressions: c.total_impressions,
+            sponsor_count: c.sponsors.size,
+            impressions_by_surface: c.impressions_by_surface,
+          }))
+          .sort((a, b) => b.total_impressions - a.total_impressions)
+      : null;
 
   // 6. poster_attribution — per poster_deployment_id
   const posters = await db
@@ -468,6 +550,7 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
         density_ratio_90d: densityRatio90d,
       },
       sponsor_impressions: sponsorImpressions,
+      campaign_summary: campaignSummary,
       poster_attribution: posterAttribution,
       headcount_trend: {
         series_id: trendSeriesId,
