@@ -51,6 +51,9 @@ const PIPELINE_MIGRATIONS = [
   // and scan_aggregates. NOT per-attendee columns; geo enrichment only.
   '0037_add_h3_cells_to_events.sql',
   '0038_scan_aggregates_add_h3_cells.sql',
+  // Invariant #21 — SharedReport campaigns. Creates the campaigns metadata table.
+  // NOT a per-attendee table; brand-level only. Satisfies drift-guard.
+  '0039_create_campaigns.sql',
 ];
 
 // The set of pipeline-related lib + handler files Gate 1 inspects.
@@ -365,6 +368,19 @@ describe('OSE-272 Gate 2: no raw anon_id columns in pipeline migrations', () => 
     expect(src, '0038 not found in TEST_SOURCE_FILES_JSON').not.toBeNull();
     expect(src!).toMatch(/ALTER TABLE scan_aggregates ADD COLUMN h3_res9 TEXT/i);
     expect(src!).toMatch(/ALTER TABLE scan_aggregates ADD COLUMN h3_res7 TEXT/i);
+    expect(src!).not.toMatch(COL_ANON_ID);
+    expect(src!).not.toMatch(COL_IP_HASH);
+    expect(src!).not.toMatch(COL_EMAIL);
+  });
+
+  test('migration 0039 (campaigns) creates a brand-level metadata table — no per-attendee columns', () => {
+    // Invariant #21 — SharedReport campaigns. campaigns is a brand/sponsor
+    // metadata table (id, brand_id, title, description, status, timestamps).
+    // It must never carry per-attendee identity columns.
+    const src = loadMigrationByName('0039_create_campaigns.sql');
+    expect(src, '0039 not found in TEST_SOURCE_FILES_JSON').not.toBeNull();
+    expect(src!).toMatch(/CREATE TABLE IF NOT EXISTS campaigns/i);
+    expect(src!).toMatch(/brand_id TEXT NOT NULL/i);
     expect(src!).not.toMatch(COL_ANON_ID);
     expect(src!).not.toMatch(COL_IP_HASH);
     expect(src!).not.toMatch(COL_EMAIL);
