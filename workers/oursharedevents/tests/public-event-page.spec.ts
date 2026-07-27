@@ -225,7 +225,7 @@ describe('OSE-243a: phase dispatch', () => {
     expect(html).not.toContain('This event is happening now.');
   });
 
-  test('active event past end_date → minimal "ended" stub', async () => {
+  test('active event past end_date → post-event recap render', async () => {
     const eventId = 'evt_ose243a_past';
     await seedEvent({
       id: eventId,
@@ -237,17 +237,22 @@ describe('OSE-243a: phase dispatch', () => {
     const res = await SELF.fetch(`https://t.test/events/${eventId}`);
     expect(res.status).toBe(200);
     const html = await res.text();
-    expect(html).toContain('This event has ended');
+    // OSE-245: post_event now renders a full recap page (renderPostEventHtml),
+    // not the old minimal stub. Check for the canonical post-event markers.
+    expect(html).toContain('data-testid="event-main-post"');
+    expect(html).toContain('data-testid="event-phase-chip"');
     expect(html).toContain('data-testid="anonymity-affordance"');
   });
 
-  test('archived event → 200 minimal "ended" stub (status forces post_event)', async () => {
+  test('archived event → 200 post-event recap (status forces post_event)', async () => {
     const eventId = 'evt_ose243a_archived';
     await seedEvent({ id: eventId, status: 'archived', startOffsetDays: 7, withFiveW: true });
     const res = await SELF.fetch(`https://t.test/events/${eventId}`);
     expect(res.status).toBe(200);
     const html = await res.text();
-    expect(html).toContain('This event has ended');
+    // archived status → post_event phase → renderPostEventHtml
+    expect(html).toContain('data-testid="event-main-post"');
+    expect(html).toContain('data-testid="event-phase-chip"');
   });
 });
 

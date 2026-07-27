@@ -100,15 +100,18 @@ const EXPECTED_INDEXES = [
 const EXPECTED_COLUMN_COUNTS: Record<string, number> = {
   // events: 23 (pre-OSE-236) + 6 (migration 0029: what_short, who_host,
   // why_purpose, how_details, where_address, corridor_id) + 1 (migration
-  // 0034: series_id, OSE-272 Session 2) = 30.
+  // 0034: series_id, OSE-272 Session 2) + 2 (migration 0037: h3_res9,
+  // h3_res7, OSE-450 S-6 H3 NCR tagging) = 32.
   // This count is the canonical floor — any future column add/drop on
   // events MUST bump this number in the same PR, surfacing the change
   // in code review.
-  events: 30,
+  events: 32,
   sponsors: 12,
   poster_deployments: 10,
   scans: 10,
-  scan_aggregates: 9,
+  // scan_aggregates: 9 (pre-OSE-450) + 2 (migration 0038: h3_res9, h3_res7,
+  // OSE-450 S-6.1.2 — denormalized NCR cells for density queries) = 11.
+  scan_aggregates: 11,
   subscribers: 5,
   node_hierarchy: 14,
   corridors: 22,
