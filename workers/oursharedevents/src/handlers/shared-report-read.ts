@@ -26,6 +26,7 @@ import {
   verifySignedLinkToken,
   type SharedReportAuthEnv,
 } from '../lib/shared-report-auth';
+import { resolveDepth, filterReportByDepth } from '../lib/report-depth';
 
 export type SharedReportReadEnv = SharedReportAuthEnv & { DB: D1Database };
 
@@ -97,10 +98,16 @@ export async function handleGetSharedReport(
     );
   }
 
-  return jsonResponse({ ok: true, report: result.report }, 200, {
-    'Cache-Control': 'private, max-age=3600',
-    Vary: 'Authorization',
-  });
+  const resolved = resolveDepth(claim);
+  const { report, upgrade } = filterReportByDepth(
+    result.report as unknown as Record<string, unknown>,
+    resolved
+  );
+  return jsonResponse(
+    { ok: true, depth: resolved.depth, report, ...(upgrade ? { upgrade } : {}) },
+    200,
+    { 'Cache-Control': 'private, max-age=3600', Vary: 'Authorization' }
+  );
 }
 
 // ─── Batch endpoint (WKRP consumer pattern) ────────────────────────────────

@@ -1052,6 +1052,22 @@ jobs:
         run: npx playwright test --config=playwright.e2e-smoke.config.ts tests/ui/smoke/journey-attendee-arc.smoke.spec.ts
         timeout-minutes: 5
 
+      # T4f: SharedReport depth gate — E2E contract tests (S-3.3.2 / Invariant #5).
+      # Tokens must be minted and stored as secrets before seeded run. Tests skip
+      # cleanly when tokens are absent (continue-on-error preserves CI green).
+      - name: 'T4f: SharedReport Depth Gate'
+        id: sharedreport-depth-tests
+        continue-on-error: true
+        env:
+          BASE_URL: ${{ env.STG_BASE_URL }}
+          SMOKE_EVENT_POST: evt_smoke_post
+          SMOKE_RPT_ADMIN_TOKEN: ${{ secrets.SMOKE_RPT_ADMIN_TOKEN }}
+          SMOKE_RPT_LOCAL_TOKEN: ${{ secrets.SMOKE_RPT_LOCAL_TOKEN }}
+          SMOKE_RPT_MID_TOKEN: ${{ secrets.SMOKE_RPT_MID_TOKEN }}
+          SMOKE_RPT_OTHER_EVENT_TOKEN: ${{ secrets.SMOKE_RPT_OTHER_EVENT_TOKEN }}
+        run: npx playwright test --config=playwright.e2e-smoke.config.ts tests/e2e/3-flows/sharedreport-depth.spec.ts
+        timeout-minutes: 5
+
       - name: Upload artifacts
         uses: actions/upload-artifact@v7
         if: always()
@@ -1085,6 +1101,7 @@ jobs:
           echo "| T4c Form E2E (4 types) | \`${{ steps.form-e2e-tests.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| T4d UI Smoke | \`${{ steps.ui-tests.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| T4e Attendee Arc Journey | \`${{ steps.attendee-arc-tests.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| T4f SharedReport Depth Gate | \`${{ steps.sharedreport-depth-tests.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
 
   # ============================================================================
   # TIER 1P: DEPLOY → Production (tag vX.Y.Z only)
