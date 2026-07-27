@@ -1028,8 +1028,29 @@ jobs:
           ADMIN_KEY: ${{ secrets.ADMIN_KEY }}
           X_OCR_INTERNAL: ${{ secrets.X_OCR_INTERNAL }}
           SMOKE_ADMIN_READY: '1'
+          # Fixture IDs seeded via tests/ui/smoke/fixtures/smoke-events.sql (OSE-455).
+          # Routes skip cleanly when absent; set to known IDs when staging has been seeded.
+          SMOKE_EVENT_PRE: evt_smoke_pre
+          SMOKE_EVENT_LIVE: evt_smoke_live
+          SMOKE_EVENT_POST: evt_smoke_post
         run: SMOKE_APP=ose SMOKE_ADMIN_READY=1 npx playwright test tests/ui/smoke/tier1.spec.ts
         timeout-minutes: 10
+
+      # T4e: Attendee arc — poster → pre / event / post phases (OSE-456).
+      # Fixture rows (evt_smoke_{pre,live,post}) must be seeded into staging D1
+      # via tests/ui/smoke/fixtures/smoke-events.sql before this runs.
+      # Tests skip cleanly if fixtures are absent — continue-on-error protects CI
+      # when staging has not been manually seeded for the run.
+      - name: 'T4e: Attendee Arc Journey'
+        id: attendee-arc-tests
+        continue-on-error: true
+        env:
+          BASE_URL: ${{ env.STG_BASE_URL }}
+          SMOKE_EVENT_PRE: evt_smoke_pre
+          SMOKE_EVENT_LIVE: evt_smoke_live
+          SMOKE_EVENT_POST: evt_smoke_post
+        run: npx playwright test --config=playwright.e2e-smoke.config.ts tests/ui/smoke/journey-attendee-arc.smoke.spec.ts
+        timeout-minutes: 5
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v7
@@ -1063,6 +1084,7 @@ jobs:
           echo "| T4b Core Journeys | \`${{ steps.journey-tests.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| T4c Form E2E (4 types) | \`${{ steps.form-e2e-tests.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| T4d UI Smoke | \`${{ steps.ui-tests.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| T4e Attendee Arc Journey | \`${{ steps.attendee-arc-tests.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
 
   # ============================================================================
   # TIER 1P: DEPLOY → Production (tag vX.Y.Z only)

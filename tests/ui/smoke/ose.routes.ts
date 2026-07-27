@@ -9,6 +9,10 @@ import type { AppManifest } from './types';
  * anchors use data-testids present in the extracted templates.
  * sharedSheet stays false until OSE adopts /ui.css (extraction shipped the
  * pages byte-identical, CSS untouched).
+ *
+ * Three phase routes replace the single /events/{id} route (ose-client-ready
+ * package, OSE-454): pre / live / post each have seeded fixture IDs so Tier-1
+ * can assert the post-event recap render, not just status=200.
  */
 export const oseManifest: AppManifest = {
   app: 'ose',
@@ -18,9 +22,21 @@ export const oseManifest: AppManifest = {
     { path: '/public', name: 'public listing', anchor: '[data-testid="public-header"]' },
     {
       path: '/events/{id}',
-      name: 'public event page (phase-driven)',
+      name: 'event page — pre',
       anchor: 'main',
-      fixtureEnv: 'SMOKE_EVENT_ID',
+      fixtureEnv: 'SMOKE_EVENT_PRE',
+    },
+    {
+      path: '/events/{id}',
+      name: 'event page — live',
+      anchor: 'main',
+      fixtureEnv: 'SMOKE_EVENT_LIVE',
+    },
+    {
+      path: '/events/{id}',
+      name: 'event page — post',
+      anchor: '[data-testid="event-main-post"]',
+      fixtureEnv: 'SMOKE_EVENT_POST',
     },
     {
       path: '/admin',
@@ -39,7 +55,10 @@ export const oseManifest: AppManifest = {
       gate: true,
       status: 401,
     },
-    { path: '/display', name: 'display board', anchor: 'body' },
+    // Invariant #14 exemption: display board is a venue TV, not a mobile surface.
+    // allowHScroll because the board may render a horizontal ticker; minTap: 0
+    // because there are no tappable elements on the kiosk view.
+    { path: '/display', name: 'display board', anchor: 'body', allowHScroll: true, minTap: 0 },
     { path: '/poster', name: 'poster', anchor: 'body', allowHScroll: true },
     { path: '/sharedReport', name: 'shared report shell', anchor: 'body' },
     { path: '/health', name: 'health', anchor: 'body' }, // JSON; status-only value
