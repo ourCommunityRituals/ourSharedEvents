@@ -22,9 +22,11 @@
 import { buildSharedReport, type SharedReport } from '../lib/shared-report-builder';
 import {
   extractBearerToken,
+  mintSignedLinkToken,
   verifyServiceToken,
   verifySignedLinkToken,
   type SharedReportAuthEnv,
+  type SignedLinkRole,
 } from '../lib/shared-report-auth';
 import { resolveDepth, filterReportByDepth } from '../lib/report-depth';
 
@@ -183,6 +185,102 @@ export async function handleBatchSharedReports(
   }
 
   return jsonResponse({ ok: true, reports, errors }, 200, {
+    'Cache-Control': 'no-store',
+  });
+}
+
+// ─── Admin mint endpoint (S-3.5.1) ────────────────────────────────────────────
+
+const VALID_MINT_ROLES: readonly SignedLinkRole[] = ['bar_owner', 'sponsor', 'admin'];
+
+/**
+ * POST /api/v2/admin/events/:id/shared-report/mint-link
+ * Admin-auth-gated. Mints a signed-link token for any event × role × depth.
+ *
+ * Depth options: 'local' | 'premium'. 'mid' is dormant — rejected with 400.
+ * Bar owner and admin tokens always get premium depth (per resolveDepth); the
+ * depth field is only meaningful on sponsor tokens and is optional for them.
+ */
+export async function handleAdminMintSharedReportLink(
+  request: Request,
+  env: SharedReportReadEnv,
+  eventId: string
+): Promise<Response> {
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return jsonResponse({ ok: false, code: 'BAD_REQUEST', error: 'invalid JSON body' }, 400);
+  }
+  if (!body || typeof body !== 'object') {
+    return jsonResponse({ ok: false, code: 'BAD_REQUEST', error: 'body must be an object' }, 400);
+  }
+  const b = body as Record<string, unknown>;
+
+  // Validate role
+  const role = b.role;
+  if (!VALID_MINT_ROLES.includes(role as SignedLinkRole)) {
+    return jsonResponse(
+      { ok: false, code: 'BAD_REQUEST', error: 'role must be bar_owner, sponsor, or admin' },
+      400
+    );
+  }
+
+  // Validate depth — local and premium only; mid is dormant
+  const depth = b.depth;
+  if (depth !== undefined && depth !== 'local' && depth !== 'premium') {
+    return jsonResponse(
+      {
+        ok: false,
+        code: 'BAD_REQUEST',
+        error: 'depth must be "local" or "premium" (mid is dormant)',
+      },
+      400
+    );
+  }
+
+  // Validate sponsor_id when present
+  const sponsorId = b.sponsor_id;
+  if (sponsorId !== undefined && (typeof sponsorId !== 'string' || sponsorId.length === 0)) {
+    return jsonResponse(
+      { ok: false, code: 'BAD_REQUEST', error: 'sponsor_id must be a non-empty string' },
+      400
+    );
+  }
+
+  // Validate TTL (1–365 days, default 7)
+  const ttlDays = b.ttl_days === undefined ? 7 : b.ttl_days;
+  if (!Number.isInteger(ttlDays) || (ttlDays as number) < 1 || (ttlDays as number) > 365) {
+    return jsonResponse(
+      { ok: false, code: 'BAD_REQUEST', error: 'ttl_days must be an integer between 1 and 365' },
+      400
+    );
+  }
+
+  const token = await mintSignedLinkToken(
+    env,
+    eventId,
+    role as SignedLinkRole,
+    (ttlDays as number) * 24 * 60 * 60,
+    {
+      ...(depth !== undefined ? { depth: depth as string } : {}),
+      ...(typeof sponsorId === 'string' ? { sponsor_id: sponsorId } : {}),
+    }
+  );
+
+  if (!token) {
+    return jsonResponse(
+      {
+        ok: false,
+        code: 'CONFIGURATION_ERROR',
+        error: 'SHARED_REPORT_SIGNING_SECRET is not configured',
+      },
+      503
+    );
+  }
+
+  const expiresAt = new Date(Date.now() + (ttlDays as number) * 24 * 60 * 60 * 1000).toISOString();
+  return jsonResponse({ ok: true, token, expires_at: expiresAt }, 200, {
     'Cache-Control': 'no-store',
   });
 }

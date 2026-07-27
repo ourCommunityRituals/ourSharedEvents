@@ -12,6 +12,7 @@
  *   GET /api/v2/events/:id       → single event
  *   GET /api/v2/events/:id/shared-report     → SharedReport (signed-link auth, OSE-272 S5)
  *   POST /api/v2/events/shared-reports/batch → SharedReport batch (WKRP service token, OSE-272 S5)
+ *   POST /api/v2/admin/events/:id/shared-report/mint-link → mint signed token (admin, S-3.5.1)
  *   GET /api/v2/admin/events     → admin event list (auth required)
  *
  *   POST /api/v2/events/:id/forms/register      → submit registration (public)
@@ -169,6 +170,7 @@ import { isRateLimited, clientIp, rateLimitResponse } from './lib/rate-limit';
 import { handleAdminUploadFile, handleGetUploadedFile, type UploadEnv } from './handlers/upload';
 import { handleDataSubjectErase, type DataSubjectEnv } from './handlers/data-subject';
 import {
+  handleAdminMintSharedReportLink,
   handleGetSharedReport,
   handleBatchSharedReports,
   type SharedReportReadEnv,
@@ -689,6 +691,18 @@ export async function route(
   // ── Public API ─────────────────────────────────────────────────────────────
   if (pathname === '/api/v2/events') {
     return handleListEvents(request, env);
+  }
+
+  // ── S-3.5.1: Admin mint endpoint ───────────────────────────────────────────
+  // POST /api/v2/admin/events/:id/shared-report/mint-link
+  // Admin-auth-gated. Generates a signed bearer token for a given role+depth.
+  const mintLinkMatch = pathname.match(
+    /^\/api\/v2\/admin\/events\/([^/]+)\/shared-report\/mint-link$/
+  );
+  if (mintLinkMatch && method === 'POST') {
+    const authRes = requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
+    if (authRes) return authRes;
+    return handleAdminMintSharedReportLink(request, env, mintLinkMatch[1]);
   }
 
   // ── OSE-272 Session 5: SharedReport read API ──────────────────────────────
