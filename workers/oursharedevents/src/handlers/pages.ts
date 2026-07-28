@@ -1053,3 +1053,199 @@ export function handleSharedReportPage(env: PagesEnv): Response {
   const content = SHARED_REPORT_HTML.replace('<body>', `<body${mapsAttr}>`);
   return html(content);
 }
+
+// ─── /ui-preview — component showcase for Claude Design ───────────────────────
+
+import { styleTag } from '@ocr/ui';
+
+/**
+ * Self-contained component showcase. Renders every @ocr/ui class in both
+ * light and dark themes with explicit [data-theme] selectors, so Claude Design
+ * can inspect actual rendering, token application, and interactive states.
+ *
+ * No auth required — design tokens are not sensitive. No D1 queries.
+ */
+export function handleUiPreview(): Response {
+  const css = styleTag();
+  const content = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>@ocr/ui — Component Preview</title>
+  ${css}
+  <style>
+    .preview-root { max-width: 960px; margin: 0 auto; padding: 2rem 1rem 6rem; }
+    .preview-section { margin-bottom: 3rem; }
+    .preview-section h2 { font-size: .7rem; text-transform: uppercase; letter-spacing: .12em; color: var(--text-muted); margin-bottom: 1rem; padding-bottom: .5rem; border-bottom: 1px solid var(--border); }
+    .preview-row { display: flex; flex-wrap: wrap; gap: .75rem; align-items: flex-start; margin-bottom: .75rem; }
+    .preview-label { font-size: .65rem; color: var(--text-muted); margin-bottom: .25rem; }
+    .theme-bar { position: sticky; top: 0; z-index: 100; background: var(--surface); border-bottom: 1px solid var(--border); padding: .75rem 1rem; display: flex; gap: .5rem; align-items: center; }
+    .theme-bar span { font-size: .75rem; color: var(--text-muted); margin-right: .5rem; }
+    .token-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: .5rem; }
+    .token-swatch { border-radius: var(--radius-sm); overflow: hidden; border: 1px solid var(--border); }
+    .token-color { height: 40px; }
+    .token-name { font-size: .6rem; padding: .25rem .5rem; color: var(--text-muted); font-family: monospace; background: var(--surface); }
+  </style>
+</head>
+<body>
+  <div class="theme-bar">
+    <span>Theme:</span>
+    <button class="btn btn-secondary" onclick="document.documentElement.removeAttribute('data-theme')" data-testid="theme-auto">Auto</button>
+    <button class="btn btn-secondary" onclick="document.documentElement.setAttribute('data-theme','light')" data-testid="theme-light">Light</button>
+    <button class="btn btn-secondary" onclick="document.documentElement.setAttribute('data-theme','dark')" data-testid="theme-dark">Dark</button>
+  </div>
+  <div class="preview-root">
+    <h1 style="margin-bottom:2rem">@ocr/ui Component Preview</h1>
+
+    <div class="preview-section">
+      <h2>Buttons</h2>
+      <div class="preview-row">
+        <div><div class="preview-label">.btn-primary</div><button class="btn btn-primary">Save</button></div>
+        <div><div class="preview-label">.btn-secondary</div><button class="btn btn-secondary">Cancel</button></div>
+        <div><div class="preview-label">.btn-danger</div><button class="btn btn-danger">Delete</button></div>
+        <div><div class="preview-label">.btn-link</div><button class="btn btn-link">More info</button></div>
+        <div><div class="preview-label">.attr-btn</div><button class="attr-btn">Attribution</button></div>
+        <div><div class="preview-label">disabled</div><button class="btn btn-primary" disabled>Disabled</button></div>
+      </div>
+      <div class="preview-row">
+        <div style="width:100%"><div class="preview-label">.btn-block</div><button class="btn btn-primary btn-block">Full width</button></div>
+      </div>
+    </div>
+
+    <div class="preview-section">
+      <h2>Cards</h2>
+      <div class="preview-row">
+        <div style="width:220px"><div class="preview-label">.card</div>
+          <div class="card"><div class="item-name">Eagles Hall</div><div class="item-sub">Chicago, IL</div></div>
+        </div>
+        <div><div class="preview-label">.stat-card</div>
+          <div class="stat-card"><div class="stat-value">142</div><div class="stat-label">Attendees</div></div>
+        </div>
+        <div style="width:220px"><div class="preview-label">.track-card</div>
+          <div class="track-card">
+            <div class="track-art" style="width:48px;height:48px;background:var(--accent);border-radius:var(--radius-sm);flex-shrink:0"></div>
+            <div class="item-info"><div class="item-name">Song Title</div><div class="item-sub">Artist Name</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="preview-section">
+      <h2>Inputs</h2>
+      <div class="preview-row">
+        <div style="width:240px"><div class="preview-label">.input</div><input class="input" placeholder="Enter value…" /></div>
+        <div style="width:240px"><div class="preview-label">.search-bar</div><input class="search-bar" placeholder="Search…" /></div>
+        <div style="width:200px"><div class="preview-label">.sort-select</div>
+          <select class="sort-select"><option>Most recent</option><option>Oldest first</option></select>
+        </div>
+      </div>
+    </div>
+
+    <div class="preview-section">
+      <h2>Navigation</h2>
+      <div class="preview-label">.bottom-nav (simulated — fixed in real use)</div>
+      <nav style="position:relative;border-radius:var(--radius)">
+        <div style="display:flex;gap:0;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden">
+          <a class="nav-item active" href="#" style="position:relative;flex:1" onclick="return false">🏠<span>Home</span></a>
+          <a class="nav-item" href="#" style="flex:1" onclick="return false">📊<span>Stats</span></a>
+          <a class="nav-item" href="#" style="flex:1" onclick="return false">🎵<span>Music</span></a>
+          <a class="nav-item" href="#" style="flex:1" onclick="return false">👤<span>Profile</span></a>
+        </div>
+      </nav>
+    </div>
+
+    <div class="preview-section">
+      <h2>Status / Feedback</h2>
+      <div class="preview-row">
+        <div><div class="preview-label">.live-indicator.on</div><span class="live-indicator on">Live</span></div>
+        <div><div class="preview-label">.live-indicator.off</div><span class="live-indicator off">Offline</span></div>
+        <div><div class="preview-label">.live-badge</div><span class="live-badge">● LIVE</span></div>
+        <div><div class="preview-label">.spinner</div><div class="spinner"></div></div>
+        <div><div class="preview-label">.error-banner.visible</div><div class="error-banner visible">Something went wrong. Please try again.</div></div>
+      </div>
+    </div>
+
+    <div class="preview-section">
+      <h2>Lists</h2>
+      <div style="max-width:360px">
+        <div class="preview-label">.list-item</div>
+        <div class="list-item"><div class="list-name">Eagles Hall Opener</div><div class="list-sub">Chicago · Fri 7pm</div><div class="list-count">142</div></div>
+        <div class="list-item"><div class="list-name">Sunday Session</div><div class="list-sub">Detroit · Sun 4pm</div><div class="list-count">87</div></div>
+      </div>
+    </div>
+
+    <div class="preview-section">
+      <h2>Chips / Tags</h2>
+      <div class="preview-row">
+        <div><div class="preview-label">.filter-chip</div><button class="filter-chip">All</button></div>
+        <div><div class="preview-label">.filter-chip.active</div><button class="filter-chip active">Jazz</button></div>
+        <div><div class="preview-label">.genre-tag</div><span class="genre-tag">House</span></div>
+        <div><div class="preview-label">.meta-badge</div><span class="meta-badge">New</span></div>
+        <div><div class="preview-label">.meta-badge.high</div><span class="meta-badge high">Featured</span></div>
+        <div><div class="preview-label">.user-badge</div><span class="user-badge">DJ Kai</span></div>
+        <div><div class="preview-label">.source-badge</div><span class="source-badge">Spotify</span></div>
+      </div>
+    </div>
+
+    <div class="preview-section">
+      <h2>Empty State</h2>
+      <div class="empty-state">
+        <div class="es-icon">📭</div>
+        <h3>No events yet</h3>
+        <p>Events you create will appear here.</p>
+        <a class="btn btn-primary" href="#" onclick="return false">Create event</a>
+      </div>
+    </div>
+
+    <div class="preview-section">
+      <h2>Forms (advanced)</h2>
+      <div class="preview-row" style="align-items:center">
+        <div><div class="preview-label">.toggle-row</div>
+          <div class="toggle-row">
+            <span>Enable feature</span>
+            <label class="toggle"><input type="checkbox" checked /><span class="toggle-track"></span></label>
+          </div>
+        </div>
+        <div style="width:240px"><div class="preview-label">.progress-bar</div>
+          <div class="progress-bar" style="--pct:65%"><div class="bar-fill" style="width:65%"></div></div>
+        </div>
+      </div>
+      <div class="preview-row">
+        <div style="width:300px"><div class="preview-label">.result-success</div>
+          <div class="result-success">Registration confirmed! See you there.</div>
+        </div>
+        <div style="width:300px"><div class="preview-label">.result-error</div>
+          <div class="result-error">That email is already registered.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="preview-section">
+      <h2>Design tokens — Tier 2 semantic</h2>
+      <div class="token-grid">
+        ${[
+          ['--bg', 'var(--bg)'],
+          ['--surface', 'var(--surface)'],
+          ['--border', 'var(--border)'],
+          ['--text', 'var(--text)'],
+          ['--text-muted', 'var(--text-muted)'],
+          ['--accent', 'var(--accent)'],
+          ['--accent-hover', 'var(--accent-hover)'],
+          ['--live', 'var(--live)'],
+          ['--danger', 'var(--danger)'],
+          ['--error', 'var(--error)'],
+          ['--surface-hover', 'var(--surface-hover)'],
+        ]
+          .map(
+            ([name, color]) =>
+              `<div class="token-swatch"><div class="token-color" style="background:${color}"></div><div class="token-name">${name}</div></div>`
+          )
+          .join('\n        ')}
+      </div>
+    </div>
+  </div>
+</body>
+</html>`;
+  return html(content);
+}
