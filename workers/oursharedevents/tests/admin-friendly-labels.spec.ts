@@ -101,7 +101,7 @@ describe('OSE-R-005 admin friendly labels — API layer', () => {
     // The ID column header AND cells must carry the toggle class so the
     // CSS default-hide kicks in. data-testid="event-id" stays on the cell
     // so support tooling can still read the value via a query.
-    expect(html).toContain('<th class="col-internal-id">ID</th>');
+    expect(html).toMatch(/<th class="col-internal-id"[^>]*>ID<\/th>/);
     // Note: attribute order between class / data-label / data-testid is
     // template-author choice; OSE-294 added data-label="ID" for mobile
     // card-layout. Assert presence of all 3 attributes within one td tag
@@ -135,7 +135,7 @@ describe('OSE-R-005 admin friendly labels — API layer', () => {
 
   test('OSE-R-005 | API | GET /admin (any visitor) | events table header uses "Event type" not "Phase"', async () => {
     const html = await fetchAdminHtml();
-    expect(html).toContain('<th>Event type</th>');
+    expect(html).toMatch(/<th[^>]*>Event type<\/th>/);
     expect(html).not.toContain('<th>Phase</th>');
   });
 
