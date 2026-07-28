@@ -463,6 +463,7 @@ jobs:
       # and pointing BRAIN_DIR at it.
       - name: 'Checkout OCR-docs brain (for OSE-323 drift check)'
         if: matrix.shard == 'tests'
+        continue-on-error: true
         uses: actions/checkout@v4
         with:
           repository: ourCommunityRituals/OCR-docs
@@ -470,7 +471,8 @@ jobs:
           path: ocr-docs-brain-checkout
           # OCR-docs is private; needs the cross-repo read token (same one
           # brain-contract-check.yml uses). Default GITHUB_TOKEN can't read
-          # across private repos.
+          # across private repos. Token absent (Dependabot / pre-PAT) → step
+          # skips gracefully; drift check runs in skip mode (BRAIN_DIR unset).
           token: ${{ secrets.OCR_PROPAGATE_TOKEN }}
 
       - name: 'Quality: Worker D1 schema'
