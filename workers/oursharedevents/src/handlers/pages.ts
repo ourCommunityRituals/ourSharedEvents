@@ -1056,7 +1056,7 @@ export function handleSharedReportPage(env: PagesEnv): Response {
 
 // ─── /ui-preview — component showcase for Claude Design ───────────────────────
 
-import { styleTag } from '@ocr/ui';
+import { styleTag, formInput, textarea, formSelect, checkbox, radioGroup } from '@ocr/ui';
 
 /**
  * Self-contained component showcase. Renders every @ocr/ui class in both
@@ -1086,6 +1086,45 @@ const TOKEN_SWATCHES = [
 
 export function handleUiPreview(): Response {
   const css = styleTag();
+
+  const FORM_PARTIALS_HTML = [
+    formInput({ id: 'pv-name', label: 'Full name', placeholder: 'Jane Smith', required: true }),
+    formInput({
+      id: 'pv-email',
+      label: 'Email',
+      type: 'email',
+      hint: 'We will never share your email.',
+    }),
+    formInput({
+      id: 'pv-err',
+      label: 'Email (error state)',
+      type: 'email',
+      value: 'bad@@email',
+      error: 'Enter a valid email address.',
+    }),
+    textarea({ id: 'pv-bio', label: 'Bio', placeholder: 'Tell us about yourself…', rows: 3 }),
+    formSelect({
+      id: 'pv-tier',
+      label: 'Tier',
+      options: [
+        { value: '', label: 'Select a tier' },
+        { value: 'free', label: 'Free' },
+        { value: 'pro', label: 'Pro', selected: true },
+        { value: 'enterprise', label: 'Enterprise' },
+      ],
+    }),
+    checkbox({ id: 'pv-agree', label: 'I agree to the terms and conditions' }),
+    radioGroup({
+      name: 'pv-size',
+      legend: 'Event size',
+      options: [
+        { value: 'small', label: 'Under 50 attendees' },
+        { value: 'medium', label: '50 – 200 attendees', checked: true },
+        { value: 'large', label: 'Over 200 attendees' },
+      ],
+    }),
+  ].join('\n');
+
   const content = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1108,7 +1147,7 @@ export function handleUiPreview(): Response {
   </style>
 </head>
 <body>
-  <div class="theme-bar">
+  <div class="theme-bar" data-testid="theme-bar">
     <span>Theme:</span>
     <button class="btn btn-secondary" onclick="document.documentElement.removeAttribute('data-theme')" data-testid="theme-auto">Auto</button>
     <button class="btn btn-secondary" onclick="document.documentElement.setAttribute('data-theme','light')" data-testid="theme-light">Light</button>
@@ -1117,32 +1156,32 @@ export function handleUiPreview(): Response {
   <div class="preview-root">
     <h1 style="margin-bottom:2rem">@ocr/ui Component Preview</h1>
 
-    <div class="preview-section">
+    <div class="preview-section" data-testid="preview-section-buttons">
       <h2>Buttons</h2>
       <div class="preview-row">
-        <div><div class="preview-label">.btn-primary</div><button class="btn btn-primary">Save</button></div>
-        <div><div class="preview-label">.btn-secondary</div><button class="btn btn-secondary">Cancel</button></div>
-        <div><div class="preview-label">.btn-danger</div><button class="btn btn-danger">Delete</button></div>
-        <div><div class="preview-label">.btn-link</div><button class="btn btn-link">More info</button></div>
-        <div><div class="preview-label">.attr-btn</div><button class="attr-btn">Attribution</button></div>
-        <div><div class="preview-label">disabled</div><button class="btn btn-primary" disabled>Disabled</button></div>
+        <div><div class="preview-label">.btn-primary</div><button class="btn btn-primary" data-testid="btn-primary-demo">Save</button></div>
+        <div><div class="preview-label">.btn-secondary</div><button class="btn btn-secondary" data-testid="btn-secondary-demo">Cancel</button></div>
+        <div><div class="preview-label">.btn-danger</div><button class="btn btn-danger" data-testid="btn-danger-demo">Delete</button></div>
+        <div><div class="preview-label">.btn-link</div><button class="btn btn-link" data-testid="btn-link-demo">More info</button></div>
+        <div><div class="preview-label">.attr-btn</div><button class="attr-btn" data-testid="attr-btn-demo">Attribution</button></div>
+        <div><div class="preview-label">disabled</div><button class="btn btn-primary" disabled data-testid="btn-disabled-demo">Disabled</button></div>
       </div>
       <div class="preview-row">
-        <div style="width:100%"><div class="preview-label">.btn-block</div><button class="btn btn-primary btn-block">Full width</button></div>
+        <div style="width:100%"><div class="preview-label">.btn-block</div><button class="btn btn-primary btn-block" data-testid="btn-block-demo">Full width</button></div>
       </div>
     </div>
 
-    <div class="preview-section">
+    <div class="preview-section" data-testid="preview-section-cards">
       <h2>Cards</h2>
       <div class="preview-row">
         <div style="width:220px"><div class="preview-label">.card</div>
-          <div class="card"><div class="item-name">Eagles Hall</div><div class="item-sub">Chicago, IL</div></div>
+          <div class="card" data-testid="card-demo"><div class="item-name">Eagles Hall</div><div class="item-sub">Chicago, IL</div></div>
         </div>
         <div><div class="preview-label">.stat-card</div>
-          <div class="stat-card"><div class="stat-value">142</div><div class="stat-label">Attendees</div></div>
+          <div class="stat-card" data-testid="stat-card-demo"><div class="stat-value">142</div><div class="stat-label">Attendees</div></div>
         </div>
         <div style="width:220px"><div class="preview-label">.track-card</div>
-          <div class="track-card">
+          <div class="track-card" data-testid="track-card-demo">
             <div class="track-art" style="width:48px;height:48px;background:var(--accent);border-radius:var(--radius-sm);flex-shrink:0"></div>
             <div class="item-info"><div class="item-name">Song Title</div><div class="item-sub">Artist Name</div></div>
           </div>
@@ -1150,21 +1189,21 @@ export function handleUiPreview(): Response {
       </div>
     </div>
 
-    <div class="preview-section">
+    <div class="preview-section" data-testid="preview-section-inputs">
       <h2>Inputs</h2>
       <div class="preview-row">
-        <div style="width:240px"><div class="preview-label">.input</div><input class="input" placeholder="Enter value…" /></div>
-        <div style="width:240px"><div class="preview-label">.search-bar</div><input class="search-bar" placeholder="Search…" /></div>
+        <div style="width:240px"><div class="preview-label">.input</div><input class="input" placeholder="Enter value…" data-testid="input-demo" /></div>
+        <div style="width:240px"><div class="preview-label">.search-bar</div><input class="search-bar" placeholder="Search…" data-testid="search-bar-demo" /></div>
         <div style="width:200px"><div class="preview-label">.sort-select</div>
-          <select class="sort-select"><option>Most recent</option><option>Oldest first</option></select>
+          <select class="sort-select" data-testid="sort-select-demo"><option>Most recent</option><option>Oldest first</option></select>
         </div>
       </div>
     </div>
 
-    <div class="preview-section">
+    <div class="preview-section" data-testid="preview-section-navigation">
       <h2>Navigation</h2>
       <div class="preview-label">.bottom-nav (simulated — fixed in real use)</div>
-      <nav style="position:relative;border-radius:var(--radius)">
+      <nav style="position:relative;border-radius:var(--radius)" data-testid="nav-demo">
         <div style="display:flex;gap:0;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden">
           <a class="nav-item active" href="#" style="position:relative;flex:1" onclick="return false">🏠<span>Home</span></a>
           <a class="nav-item" href="#" style="flex:1" onclick="return false">📊<span>Stats</span></a>
@@ -1174,42 +1213,42 @@ export function handleUiPreview(): Response {
       </nav>
     </div>
 
-    <div class="preview-section">
+    <div class="preview-section" data-testid="preview-section-feedback">
       <h2>Status / Feedback</h2>
       <div class="preview-row">
-        <div><div class="preview-label">.live-indicator.on</div><span class="live-indicator on">Live</span></div>
-        <div><div class="preview-label">.live-indicator.off</div><span class="live-indicator off">Offline</span></div>
-        <div><div class="preview-label">.live-badge</div><span class="live-badge">● LIVE</span></div>
-        <div><div class="preview-label">.spinner</div><div class="spinner"></div></div>
-        <div><div class="preview-label">.error-banner.visible</div><div class="error-banner visible">Something went wrong. Please try again.</div></div>
+        <div><div class="preview-label">.live-indicator.on</div><span class="live-indicator on" data-testid="live-indicator-on">Live</span></div>
+        <div><div class="preview-label">.live-indicator.off</div><span class="live-indicator off" data-testid="live-indicator-off">Offline</span></div>
+        <div><div class="preview-label">.live-badge</div><span class="live-badge" data-testid="live-badge-demo">● LIVE</span></div>
+        <div><div class="preview-label">.spinner</div><div class="spinner" data-testid="spinner-demo"></div></div>
+        <div><div class="preview-label">.error-banner.visible</div><div class="error-banner visible" data-testid="error-banner-demo">Something went wrong. Please try again.</div></div>
       </div>
     </div>
 
-    <div class="preview-section">
+    <div class="preview-section" data-testid="preview-section-lists">
       <h2>Lists</h2>
-      <div style="max-width:360px">
+      <div style="max-width:360px" data-testid="list-demo">
         <div class="preview-label">.list-item</div>
         <div class="list-item"><div class="list-name">Eagles Hall Opener</div><div class="list-sub">Chicago · Fri 7pm</div><div class="list-count">142</div></div>
         <div class="list-item"><div class="list-name">Sunday Session</div><div class="list-sub">Detroit · Sun 4pm</div><div class="list-count">87</div></div>
       </div>
     </div>
 
-    <div class="preview-section">
+    <div class="preview-section" data-testid="preview-section-chips">
       <h2>Chips / Tags</h2>
       <div class="preview-row">
-        <div><div class="preview-label">.filter-chip</div><button class="filter-chip">All</button></div>
-        <div><div class="preview-label">.filter-chip.active</div><button class="filter-chip active">Jazz</button></div>
-        <div><div class="preview-label">.genre-tag</div><span class="genre-tag">House</span></div>
-        <div><div class="preview-label">.meta-badge</div><span class="meta-badge">New</span></div>
-        <div><div class="preview-label">.meta-badge.high</div><span class="meta-badge high">Featured</span></div>
-        <div><div class="preview-label">.user-badge</div><span class="user-badge">DJ Kai</span></div>
-        <div><div class="preview-label">.source-badge</div><span class="source-badge">Spotify</span></div>
+        <div><div class="preview-label">.filter-chip</div><button class="filter-chip" data-testid="filter-chip-demo">All</button></div>
+        <div><div class="preview-label">.filter-chip.active</div><button class="filter-chip active" data-testid="filter-chip-active-demo">Jazz</button></div>
+        <div><div class="preview-label">.genre-tag</div><span class="genre-tag" data-testid="genre-tag-demo">House</span></div>
+        <div><div class="preview-label">.meta-badge</div><span class="meta-badge" data-testid="meta-badge-demo">New</span></div>
+        <div><div class="preview-label">.meta-badge.high</div><span class="meta-badge high" data-testid="meta-badge-high-demo">Featured</span></div>
+        <div><div class="preview-label">.user-badge</div><span class="user-badge" data-testid="user-badge-demo">DJ Kai</span></div>
+        <div><div class="preview-label">.source-badge</div><span class="source-badge" data-testid="source-badge-demo">Spotify</span></div>
       </div>
     </div>
 
-    <div class="preview-section">
+    <div class="preview-section" data-testid="preview-section-empty-state">
       <h2>Empty State</h2>
-      <div class="empty-state">
+      <div class="empty-state" data-testid="empty-state-demo">
         <div class="es-icon">📭</div>
         <h3>No events yet</h3>
         <p>Events you create will appear here.</p>
@@ -1217,30 +1256,37 @@ export function handleUiPreview(): Response {
       </div>
     </div>
 
-    <div class="preview-section">
-      <h2>Forms (advanced)</h2>
+    <div class="preview-section" data-testid="preview-section-form-controls">
+      <h2>Form controls</h2>
       <div class="preview-row" style="align-items:center">
         <div><div class="preview-label">.toggle-row</div>
-          <div class="toggle-row">
+          <div class="toggle-row" data-testid="toggle-row-demo">
             <span>Enable feature</span>
             <label class="toggle"><input type="checkbox" checked /><span class="toggle-track"></span></label>
           </div>
         </div>
         <div style="width:240px"><div class="preview-label">.progress-bar</div>
-          <div class="progress-bar" style="--pct:65%"><div class="bar-fill" style="width:65%"></div></div>
+          <div class="progress-bar" style="--pct:65%" data-testid="progress-bar-demo"><div class="bar-fill" style="width:65%"></div></div>
         </div>
       </div>
       <div class="preview-row">
         <div style="width:300px"><div class="preview-label">.result-success</div>
-          <div class="result-success">Registration confirmed! See you there.</div>
+          <div class="result-success" data-testid="result-success-demo">Registration confirmed! See you there.</div>
         </div>
         <div style="width:300px"><div class="preview-label">.result-error</div>
-          <div class="result-error">That email is already registered.</div>
+          <div class="result-error" data-testid="result-error-demo">That email is already registered.</div>
         </div>
       </div>
     </div>
 
-    <div class="preview-section">
+    <div class="preview-section" data-testid="preview-section-form-partials">
+      <h2>Form partials — @ocr/ui</h2>
+      <div style="max-width:480px">
+        ${FORM_PARTIALS_HTML}
+      </div>
+    </div>
+
+    <div class="preview-section" data-testid="preview-section-tokens">
       <h2>Design tokens — Tier 2 semantic</h2>
       <div class="token-grid">
         ${TOKEN_SWATCHES}
