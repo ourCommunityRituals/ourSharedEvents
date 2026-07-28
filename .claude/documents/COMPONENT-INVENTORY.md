@@ -86,19 +86,50 @@ Used only in public event page renders (`renderPreEventHtml`, `renderLiveEventHt
 ### Generating CSS
 
 ```typescript
-import { rootBlock, lightModeBlock } from '@ocr/ui';
+import { rootBlock, lightModeBlock, forceDarkBlock } from '@ocr/ui';
 
 // Full :root + semantic dark defaults
 const css = rootBlock();
 
 // Light mode override (media query or selector)
-const lightCss = lightModeBlock(); // prefers-color-scheme
-const forcedLight = lightModeBlock('[data-theme="light"]'); // explicit attribute
+const lightCss = lightModeBlock(); // prefers-color-scheme: light
+const forcedLight = lightModeBlock('[data-theme="light"]'); // explicit attribute — Claude Design preview
+
+// Dark mode forced override (explicit attribute)
+const forcedDark = forceDarkBlock(); // [data-theme="dark"] — locks dark regardless of OS
+const customDark = forceDarkBlock('[data-brand="x"]'); // custom selector
 
 // Serve from worker route
 import { ocrStylesheet } from '@ocr/ui';
-// ocrStylesheet() = rootBlock() + componentStyles + lightModeBlock()
+// ocrStylesheet = rootBlock()
+//               + lightModeBlock()                    (@media prefers-color-scheme: light)
+//               + lightModeBlock('[data-theme="light"]')  (explicit forced light)
+//               + forceDarkBlock()                    ([data-theme="dark"])
+//               + componentStyles                     (includes :focus-visible + prefers-reduced-motion)
 ```
+
+### Theme switching (Claude Design)
+
+Set `data-theme` on `<html>` to override the OS preference:
+
+```html
+<html data-theme="light">
+  <!-- force light, ignore OS -->
+  <html data-theme="dark">
+    <!-- force dark, ignore OS -->
+  </html>
+</html>
+```
+
+Claude Design uses explicit `[data-theme]` selectors for component preview — the stylesheet includes both directions. Without `data-theme`, the theme follows `prefers-color-scheme` automatically.
+
+### Accessibility — `:focus-visible` (WCAG 2.4.11)
+
+All interactive component classes have explicit `outline: 2px solid var(--accent)` on `:focus-visible`. Covered classes: `.btn`, `.attr-btn`, `.filter-chip`, `.genre-filter-btn`, `.view-btn`, `.btn-link`, `.nav-item`, `.card`, `.track-card`, `.genre-link`, `.list-item`, `.grid-card`, `.input`, `.search-bar`, `.sort-select`, `.toggle input + .toggle-track`.
+
+### Accessibility — `prefers-reduced-motion` (WCAG 2.3.3)
+
+A `@media (prefers-reduced-motion: reduce)` block in `componentStyles` disables all animations and transitions for users who opt out. Covered: `.live-indicator.on`, `.live-badge`, `.spinner`, `.search-bar.loading`, `.btn`, `.card`, `.track-card`, `.filter-chip`, `.grid-card`, `.genre-popup`, `.genre-link`, `.list-item`, `.nav-item`, `.bar-fill`, `.progress-bar`, `.toggle-track`.
 
 ### Brand overrides (Tier 3)
 
@@ -414,20 +445,22 @@ import { contrastRatio } from '@ocr/ui';
 contrastRatio('#1785FB', '#0F1824'); // → 5.1 (AA for large text)
 ```
 
-### `ocrStylesheet()` / `serveCss(req)` / `styleTag()`
+### `ocrStylesheet` / `serveCss()` / `styleTag()`
 
 ```typescript
 import { ocrStylesheet, serveCss, styleTag } from '@ocr/ui';
 
 // Serve from a worker route:
-router.get('/ui.css', (req) => serveCss(req)); // sets Content-Type, ETag
+router.get('/ui.css', () => serveCss()); // sets Content-Type, cache-control
 
 // Inline in a <style> block:
 const css = styleTag(); // → <style>...</style>
 
-// Raw string:
-const raw = ocrStylesheet(); // rootBlock() + componentStyles + lightModeBlock()
+// Raw string (includes all 4 blocks + components + a11y):
+const raw = ocrStylesheet;
 ```
+
+`ocrStylesheet` is a pre-built string (not a function call) containing: primitives `:root`, dark semantic `:root`, `@media prefers-color-scheme: light`, `[data-theme="light"]`, `[data-theme="dark"]`, component vocabulary, `:focus-visible` rules, and `prefers-reduced-motion` block.
 
 ### `checkTemplate(html)` / `checkAll(htmlMap)`
 
@@ -456,6 +489,9 @@ When Claude Design generates a new surface or component, validate it meets:
 - [ ] User input passed through `esc()` before embedding in HTML strings
 - [ ] `data-testid` on every interactive element and every data region
 - [ ] Light mode tested via `[data-theme="light"]` attribute on `<html>`
+- [ ] Dark mode tested via `[data-theme="dark"]` attribute on `<html>`
+- [ ] Keyboard focus rings visible — `:focus-visible` inherits from component classes (no extra work needed)
+- [ ] Reduced-motion tested — `prefers-reduced-motion: reduce` disables all animations (covered globally)
 - [ ] Brand override tested via `[data-brand="X"]` attribute on `<html>`
 - [ ] New component classes reference only Tier 2 tokens (no `--ocr-*` primitives)
 - [ ] Run `checkTemplate()` in tests to catch drift before merge
