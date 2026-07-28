@@ -163,9 +163,10 @@ function renderErrorPage(
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>${safeTitle} – OurSharedEvents</title>
   <style>
+    :root { --err-bg: #f8f9fa; --err-text: #212529; --err-surface: #1a1a2e; --err-muted: #6c757d; --err-body: #495057; --err-surface-hover: #0f0f1a; --err-focus: #4361ee; }
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: system-ui, -apple-system, sans-serif; background: #f8f9fa; color: #212529; min-height: 100vh; display: flex; flex-direction: column; }
-    header { background: #1a1a2e; color: #fff; padding: 1.25rem 2rem; }
+    body { font-family: system-ui, -apple-system, sans-serif; background: var(--err-bg); color: var(--err-text); min-height: 100vh; display: flex; flex-direction: column; }
+    header { background: var(--err-surface); color: #fff; padding: 1.25rem 2rem; }
     /* OSE-308: both anchors are primary action targets on the
        error-page recovery flow. Per WCAG 2.5.5 Level AAA + invariant 14
        refined contract, they must meet the 44x44 floor. Using
@@ -173,13 +174,13 @@ function renderErrorPage(
        inside the 44px box without misaligning the visual baseline. */
     header a { color: #fff; text-decoration: none; font-size: 1.1rem; font-weight: 600; display: inline-flex; align-items: center; min-height: 44px; padding: 0 .5rem; }
     main { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 3rem 1.5rem; text-align: center; }
-    .error-status { font-size: .8rem; color: #6c757d; text-transform: uppercase; letter-spacing: .12em; margin-bottom: .75rem; }
-    .error-title { font-size: 1.75rem; font-weight: 700; color: #1a1a2e; margin-bottom: 1rem; max-width: 520px; }
-    .error-body { font-size: 1rem; color: #495057; max-width: 520px; line-height: 1.5; margin-bottom: 1.75rem; }
-    .error-cta { display: inline-flex; align-items: center; min-height: 44px; line-height: 1.5; padding: .65rem 1.25rem; background: #1a1a2e; color: #fff; text-decoration: none; border-radius: 6px; font-weight: 600; font-size: .95rem; }
-    .error-cta:hover { background: #0f0f1a; }
-    .error-cta:focus-visible { outline: 2px solid #4361ee; outline-offset: 2px; }
-    footer { padding: 1rem 2rem; text-align: center; font-size: .8rem; color: #6c757d; }
+    .error-status { font-size: .8rem; color: var(--err-muted); text-transform: uppercase; letter-spacing: .12em; margin-bottom: .75rem; }
+    .error-title { font-size: 1.75rem; font-weight: 700; color: var(--err-surface); margin-bottom: 1rem; max-width: 520px; }
+    .error-body { font-size: 1rem; color: var(--err-body); max-width: 520px; line-height: 1.5; margin-bottom: 1.75rem; }
+    .error-cta { display: inline-flex; align-items: center; min-height: 44px; line-height: 1.5; padding: .65rem 1.25rem; background: var(--err-surface); color: #fff; text-decoration: none; border-radius: 6px; font-weight: 600; font-size: .95rem; }
+    .error-cta:hover { background: var(--err-surface-hover); }
+    .error-cta:focus-visible { outline: 2px solid var(--err-focus); outline-offset: 2px; }
+    footer { padding: 1rem 2rem; text-align: center; font-size: .8rem; color: var(--err-muted); }
   </style>
 </head>
 <body>
@@ -335,7 +336,7 @@ function renderPreEventHtml(row: PublicEventRow, shareUrl: string): string {
   <meta property="og:type" content="event" />
   <meta name="twitter:card" content="summary_large_image" />
   <style>
-    :root { --ose-bg: #faf7f2; --ose-text: #2a2a2a; --ose-muted: #5a5a5a; --ose-accent: #4361ee; --ose-card: #fff; }
+    :root { --ose-bg: #faf7f2; --ose-text: #2a2a2a; --ose-muted: #5a5a5a; --ose-accent: #4361ee; --ose-card: #fff; --ose-focus: #ffb800; --ose-accent-tint: rgba(67, 97, 238, 0.06); }
     * { box-sizing: border-box; }
     html, body { margin: 0; padding: 0; background: var(--ose-bg); color: var(--ose-text); font-family: system-ui, -apple-system, "Segoe UI", sans-serif; line-height: 1.5; }
     /* OSE-298 DRAIN 5/7: defensive horizontal-scroll guard for the
@@ -356,8 +357,8 @@ function renderPreEventHtml(row: PublicEventRow, shareUrl: string): string {
     .ose-gmaps-link { color: var(--ose-accent); text-decoration: none; font-weight: 500; }
     .ose-gmaps-link:hover { text-decoration: underline; }
     .ose-rsvp-btn { display: inline-block; background: var(--ose-accent); color: #fff; padding: 0.75rem 1.5rem; border-radius: 6px; text-decoration: none; font-weight: 600; margin: 1.25rem 0; min-height: 44px; line-height: 1.5; }
-    .ose-rsvp-btn:focus { outline: 3px solid #ffb800; outline-offset: 2px; }
-    .ose-anonymity { margin-top: 2rem; padding: 1rem 1.25rem; background: rgba(67, 97, 238, 0.06); border-left: 3px solid var(--ose-accent); border-radius: 4px; font-size: 0.9rem; color: var(--ose-muted); }
+    .ose-rsvp-btn:focus { outline: 3px solid var(--ose-focus); outline-offset: 2px; }
+    .ose-anonymity { margin-top: 2rem; padding: 1rem 1.25rem; background: var(--ose-accent-tint); border-left: 3px solid var(--ose-accent); border-radius: 4px; font-size: 0.9rem; color: var(--ose-muted); }
     .ose-anonymity h2 { margin-top: 0; font-size: 1rem; color: var(--ose-text); }
     .ose-anonymity p { margin: 0; }
     .ose-section p { margin: 0; }
@@ -470,7 +471,7 @@ function renderEventLiveHtml(row: PublicEventRow, shareUrl: string): string {
   <meta property="og:url" content="${esc(shareUrl)}" />
   <meta property="og:type" content="event" />
   <style>
-    :root { --ose-bg: #faf7f2; --ose-text: #2a2a2a; --ose-muted: #5a5a5a; --ose-accent: #4361ee; --ose-card: #fff; --ose-live: #d63b3b; }
+    :root { --ose-bg: #faf7f2; --ose-text: #2a2a2a; --ose-muted: #5a5a5a; --ose-accent: #4361ee; --ose-card: #fff; --ose-live: #d63b3b; --ose-focus: #ffb800; --ose-accent-tint: rgba(67, 97, 238, 0.06); }
     * { box-sizing: border-box; }
     html, body { margin: 0; padding: 0; background: var(--ose-bg); color: var(--ose-text); font-family: system-ui, -apple-system, "Segoe UI", sans-serif; line-height: 1.5; }
     /* OSE-298 DRAIN 5/7: defensive horizontal-scroll guard for the
@@ -489,8 +490,8 @@ function renderEventLiveHtml(row: PublicEventRow, shareUrl: string): string {
     .ose-gmaps-link { color: var(--ose-accent); text-decoration: none; font-weight: 500; }
     .ose-gmaps-link:hover { text-decoration: underline; }
     .ose-checkin-btn { display: inline-block; background: var(--ose-accent); color: #fff; padding: 0.875rem 1.75rem; border-radius: 6px; text-decoration: none; font-weight: 700; margin: 1.25rem 0; font-size: 1.05rem; min-height: 44px; line-height: 1.5; }
-    .ose-checkin-btn:focus { outline: 3px solid #ffb800; outline-offset: 2px; }
-    .ose-anonymity { margin-top: 2rem; padding: 1rem 1.25rem; background: rgba(67, 97, 238, 0.06); border-left: 3px solid var(--ose-accent); border-radius: 4px; font-size: 0.9rem; color: var(--ose-muted); }
+    .ose-checkin-btn:focus { outline: 3px solid var(--ose-focus); outline-offset: 2px; }
+    .ose-anonymity { margin-top: 2rem; padding: 1rem 1.25rem; background: var(--ose-accent-tint); border-left: 3px solid var(--ose-accent); border-radius: 4px; font-size: 0.9rem; color: var(--ose-muted); }
     .ose-anonymity h2 { margin-top: 0; font-size: 1rem; color: var(--ose-text); }
     .ose-anonymity p { margin: 0; }
     .ose-section p { margin: 0; }
@@ -577,11 +578,12 @@ function renderMinimalPhaseHtml(row: PublicEventRow, phase: 'event' | 'post_even
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>${title}</title>
   <style>
-    body { font-family: system-ui, -apple-system, sans-serif; max-width: 600px; margin: 3rem auto; padding: 1rem; line-height: 1.5; color: #2a2a2a; background: #faf7f2; }
+    :root { --ose-bg: #faf7f2; --ose-text: #2a2a2a; --ose-muted: #5a5a5a; --ose-accent: #4361ee; --ose-accent-tint: rgba(67, 97, 238, 0.06); }
+    body { font-family: system-ui, -apple-system, sans-serif; max-width: 600px; margin: 3rem auto; padding: 1rem; line-height: 1.5; color: var(--ose-text); background: var(--ose-bg); }
     h1 { font-size: 1.5rem; margin: 0 0 0.5rem; }
-    .msg { color: #5a5a5a; font-size: 1.05rem; margin: 0.5rem 0 1.5rem; }
-    .ose-anonymity { margin-top: 2rem; padding: 1rem 1.25rem; background: rgba(67, 97, 238, 0.06); border-left: 3px solid #4361ee; border-radius: 4px; font-size: 0.9rem; color: #5a5a5a; }
-    .ose-anonymity h2 { margin-top: 0; font-size: 1rem; color: #2a2a2a; }
+    .msg { color: var(--ose-muted); font-size: 1.05rem; margin: 0.5rem 0 1.5rem; }
+    .ose-anonymity { margin-top: 2rem; padding: 1rem 1.25rem; background: var(--ose-accent-tint); border-left: 3px solid var(--ose-accent); border-radius: 4px; font-size: 0.9rem; color: var(--ose-muted); }
+    .ose-anonymity h2 { margin-top: 0; font-size: 1rem; color: var(--ose-text); }
     .ose-anonymity p { margin: 0; }
   </style>
 </head>
@@ -651,7 +653,7 @@ function renderPostEventHtml(
   <meta property="og:type" content="event" />
   <meta name="twitter:card" content="summary" />
   <style>
-    :root { --ose-bg: #faf7f2; --ose-text: #2a2a2a; --ose-muted: #5a5a5a; --ose-accent: #4361ee; --ose-card: #fff; }
+    :root { --ose-bg: #faf7f2; --ose-text: #2a2a2a; --ose-muted: #5a5a5a; --ose-accent: #4361ee; --ose-card: #fff; --ose-focus: #ffb800; --ose-accent-tint: rgba(67, 97, 238, 0.06); }
     * { box-sizing: border-box; }
     html, body { margin: 0; padding: 0; background: var(--ose-bg); color: var(--ose-text); font-family: system-ui, -apple-system, "Segoe UI", sans-serif; line-height: 1.5; }
     main { max-width: 640px; margin: 0 auto; padding: 1.25rem 1rem 3rem; }
@@ -665,7 +667,7 @@ function renderPostEventHtml(
     .ose-recap-label { display: block; font-size: 0.72rem; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--ose-muted); }
     .ose-cta { display: inline-block; min-height: 44px; line-height: 44px; padding: 0 20px; background: var(--ose-accent); color: #fff; border-radius: 6px; text-decoration: none; font-weight: 600; }
     .ose-cta.ose-cta-secondary { background: transparent; color: var(--ose-accent); border: 1px solid var(--ose-accent); }
-    .ose-anonymity { margin-top: 2rem; padding: 1rem 1.25rem; background: rgba(67, 97, 238, 0.06); border-left: 3px solid var(--ose-accent); border-radius: 4px; font-size: 0.9rem; color: var(--ose-muted); }
+    .ose-anonymity { margin-top: 2rem; padding: 1rem 1.25rem; background: var(--ose-accent-tint); border-left: 3px solid var(--ose-accent); border-radius: 4px; font-size: 0.9rem; color: var(--ose-muted); }
     .ose-anonymity h2 { margin-top: 0; font-size: 1rem; color: var(--ose-text); }
     .ose-anonymity p { margin: 0; }
   </style>
