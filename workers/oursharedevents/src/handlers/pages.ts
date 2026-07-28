@@ -1065,6 +1065,25 @@ import { styleTag } from '@ocr/ui';
  *
  * No auth required — design tokens are not sensitive. No D1 queries.
  */
+const TOKEN_SWATCHES = [
+  ['--bg', 'var(--bg)'],
+  ['--surface', 'var(--surface)'],
+  ['--border', 'var(--border)'],
+  ['--text', 'var(--text)'],
+  ['--text-muted', 'var(--text-muted)'],
+  ['--accent', 'var(--accent)'],
+  ['--accent-hover', 'var(--accent-hover)'],
+  ['--live', 'var(--live)'],
+  ['--danger', 'var(--danger)'],
+  ['--error', 'var(--error)'],
+  ['--surface-hover', 'var(--surface-hover)'],
+]
+  .map(
+    ([name, color]) =>
+      `<div class="token-swatch"><div class="token-color" style="background:${color}"></div><div class="token-name">${name}</div></div>`
+  )
+  .join('\n        ');
+
 export function handleUiPreview(): Response {
   const css = styleTag();
   const content = `<!DOCTYPE html>
@@ -1224,24 +1243,7 @@ export function handleUiPreview(): Response {
     <div class="preview-section">
       <h2>Design tokens — Tier 2 semantic</h2>
       <div class="token-grid">
-        ${[
-          ['--bg', 'var(--bg)'],
-          ['--surface', 'var(--surface)'],
-          ['--border', 'var(--border)'],
-          ['--text', 'var(--text)'],
-          ['--text-muted', 'var(--text-muted)'],
-          ['--accent', 'var(--accent)'],
-          ['--accent-hover', 'var(--accent-hover)'],
-          ['--live', 'var(--live)'],
-          ['--danger', 'var(--danger)'],
-          ['--error', 'var(--error)'],
-          ['--surface-hover', 'var(--surface-hover)'],
-        ]
-          .map(
-            ([name, color]) =>
-              `<div class="token-swatch"><div class="token-color" style="background:${color}"></div><div class="token-name">${name}</div></div>`
-          )
-          .join('\n        ')}
+        ${TOKEN_SWATCHES}
       </div>
     </div>
   </div>
