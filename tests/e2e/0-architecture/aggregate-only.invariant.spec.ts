@@ -1,0 +1,268 @@
+/**
+ * INVARIANT 7: Aggregate-Only Reporting
+ *
+ * SharedReport endpoints must return aggregates only — never individual
+ * attendee records or raw anonymous identifiers. This closes the privacy
+ * story on the output side: Invariant #1 (Anonymous ID) guards the data
+ * at rest and in transit; this invariant guards what the reports actually
+ * surface.
+ *
+ * Brain Invariant #7 (aggregate_only_reporting):
+ *   - status: partial (gate in 0-architecture suite — promotes to live
+ *     once this file ships green)
+ *   - brain canonical: OCR-docs/ocr-docs-brain/architectural-invariants.yaml
+ *   - companion tests:
+ *     workers/oursharedevents/tests/shared-report-pipeline-invariants.spec.ts
+ *     (Gate 1: no FORMS_DB; Gate 4: cron-only materialization)
+ *     workers/oursharedevents/tests/shared-report-read.spec.ts
+ *     (behavioural integration — read API auth + response shape)
+ *
+ * Pyramid coverage for this invariant:
+ *   L0 STATIC (this file)     — code shape: anon_id_hash never projected;
+ *                               SharedReport interface has no raw identity
+ *                               fields; min-sample suppression guard exists;
+ *                               corridor map suppression exists
+ *   L1 IN-PROCESS             — shared-report-pipeline-invariants.spec.ts
+ *                               (no FORMS_DB reads, cron-only write path)
+ *                               shared-report-read.spec.ts (response shape)
+ *   T4 DEPLOYED (planned)     — aggregate-only.invariant.spec.ts expansion
+ *                               once staging is live (verify no anon_id_hash
+ *                               surfaces in a real HTTP response)
+ *
+ * What this invariant catches:
+ *   - A future refactor adds `SELECT anon_id_hash, ...` to a builder query
+ *     → CI fails (anon_id_hash projection regex matches) → raw identity leak
+ *     prevented before PR merges
+ *   - Someone removes RETURN_RATE_MIN_SAMPLE or sets it to 0 or 1
+ *     → CI fails (constant check fails) → de-anonymization via small-sample
+ *     percentages would slip through (e.g., return_rate=50% with 2 attendees
+ *     narrows a returner to one of two specific people)
+ *   - A new field is added to SharedReport that includes raw identity data
+ *     (e.g., an email, a raw hash) → the interface scan catches it
+ *   - The corridor map suppression below-minimum-privacy-floor is removed
+ *     → CI fails (suppression regex misses)
+ *
+ * Pattern reference: pii-retention.invariant.spec.ts (same readFileSync
+ * L0 structural approach using Playwright with Node fs access).
+ */
+
+import { test, expect } from '@playwright/test';
+import { readFileSync, existsSync } from 'node:fs';
+import { join } from 'node:path';
+
+const REPO_ROOT = join(__dirname, '..', '..', '..');
+const BUILDER_PATH = join(
+  REPO_ROOT,
+  'workers',
+  'oursharedevents',
+  'src',
+  'lib',
+  'shared-report-builder.ts'
+);
+const REPORT_DEPTH_PATH = join(
+  REPO_ROOT,
+  'workers',
+  'oursharedevents',
+  'src',
+  'lib',
+  'report-depth.ts'
+);
+
+test.describe('Invariant 7: Aggregate-Only Reporting — structural code-shape lock', () => {
+  test('OSE-INV7 | privacy | existence | shared-report-builder.ts exists', () => {
+    expect(
+      existsSync(BUILDER_PATH),
+      'workers/oursharedevents/src/lib/shared-report-builder.ts must exist — ' +
+        'deleting it removes the aggregate-only enforcement layer'
+    ).toBe(true);
+  });
+
+  test('OSE-INV7 | privacy | anon_id | anon_id_hash is never a SELECT projection in the builder', () => {
+    const src = readFileSync(BUILDER_PATH, 'utf8');
+
+    // Any pattern that looks like: SELECT [anything,] anon_id_hash [anything]
+    // would project the raw hash into query results and violate the invariant.
+    // Legitimate uses: COUNT(DISTINCT anon_id_hash), WHERE anon_id_hash IN (...),
+    // AND a.anon_id_hash IN (...) — these do NOT project the value.
+    //
+    // The regex matches: SELECT<anything>anon_id_hash that is NOT inside COUNT(...)
+    // We do this by checking for the pattern outside a COUNT context.
+    // Conservative assertion: anon_id_hash must NEVER appear after SELECT as
+    // a bare column reference (without being wrapped in COUNT or IN).
+    const lines = src.split('\n');
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      // Skip lines that are comments
+      if (line.trimStart().startsWith('//') || line.trimStart().startsWith('*')) continue;
+      // Flag any SELECT line that mentions anon_id_hash as a projection.
+      // Allowed: COUNT(DISTINCT anon_id_hash), IN (...anon_id_hash...), WHERE anon_id_hash
+      // Disallowed: SELECT anon_id_hash ..., , anon_id_hash, ...
+      if (/\bSELECT\b[^;]*\banon_id_hash\b/i.test(line)) {
+        // It's OK if it's inside COUNT(DISTINCT ...) — that's an aggregate.
+        // Handle table-aliased forms like COUNT(DISTINCT a.anon_id_hash).
+        const countPattern = /COUNT\s*\(\s*DISTINCT\s+(?:\w+\.)?anon_id_hash\s*\)/i;
+        const inSubqueryPattern = /IN\s*\(\s*SELECT\s+(?:\w+\.)?anon_id_hash\s+FROM/i;
+        if (countPattern.test(line) || inSubqueryPattern.test(line)) continue;
+        // Also OK if anon_id_hash appears only in a subquery SELECT within a WHERE clause
+        // (the outer SELECT does not project it — the subquery returns it for IN matching)
+        // Check if the whole query context is a subquery for IN
+        // We look a few lines ahead/behind for context
+        const context = lines.slice(Math.max(0, i - 3), i + 4).join('\n');
+        if (/\bIN\s*\(\s*SELECT\s+anon_id_hash/i.test(context)) continue;
+        expect
+          .soft(
+            false,
+            `Line ${i + 1}: anon_id_hash appears as a SELECT projection — ` +
+              `this would expose a raw anon identifier in the report output:\n  ${line.trim()}\n` +
+              `Invariant #7 requires aggregate-only output. Use COUNT(DISTINCT anon_id_hash) instead.`
+          )
+          .toBe(true);
+      }
+    }
+  });
+
+  test('OSE-INV7 | privacy | interface | SharedReport TypeScript interface has no raw identity fields', () => {
+    const src = readFileSync(BUILDER_PATH, 'utf8');
+    // The exported SharedReport interface must not include fields that could
+    // carry raw identity data. If anyone adds `anon_id_hash: string` or
+    // `email: string` to the interface, this gate fails.
+    const interfaceMatch = src.match(/export\s+interface\s+SharedReport\s*\{([\s\S]*?)\n\}/);
+    expect(
+      interfaceMatch,
+      'SharedReport interface must be defined and exported from shared-report-builder.ts'
+    ).not.toBeNull();
+
+    const interfaceBody = interfaceMatch![1];
+    expect(
+      interfaceBody,
+      'SharedReport interface must not contain anon_id_hash field — ' +
+        'raw identifier would bypass the aggregate-only guarantee'
+    ).not.toMatch(/\banon_id_hash\b/);
+    expect(
+      interfaceBody,
+      'SharedReport interface must not contain email field — ' +
+        'PII must not surface in aggregate reports'
+    ).not.toMatch(/\bemail\b/);
+    expect(
+      interfaceBody,
+      'SharedReport interface must not contain anon_id field — ' + 'raw identifier field variant'
+    ).not.toMatch(/\banon_id\b(?!_hash)/);
+  });
+
+  test('OSE-INV7 | privacy | suppression | RETURN_RATE_MIN_SAMPLE >= 3 (de-anonymization prevention)', () => {
+    const src = readFileSync(BUILDER_PATH, 'utf8');
+    // A return_rate percentage is only safe to publish when the sample size
+    // is large enough that the percentage cannot narrow down a single
+    // individual. With 2 attendees, return_rate=50% means one specific
+    // person is a returner — effectively de-anonymizing them.
+    // The minimum must be >= 3.
+    const minSampleMatch = src.match(/RETURN_RATE_MIN_SAMPLE\s*=\s*(\d+)/);
+    expect(
+      minSampleMatch,
+      'RETURN_RATE_MIN_SAMPLE constant must be defined in shared-report-builder.ts — ' +
+        'removing it disables de-anonymization protection on return_rate'
+    ).not.toBeNull();
+
+    const minSampleValue = parseInt(minSampleMatch![1], 10);
+    expect(
+      minSampleValue,
+      `RETURN_RATE_MIN_SAMPLE is ${minSampleValue} — must be >= 3 to prevent de-anonymization ` +
+        '(return_rate=50% with 2 attendees narrows a returner to one specific person)'
+    ).toBeGreaterThanOrEqual(3);
+  });
+
+  test('OSE-INV7 | privacy | suppression | return_rate is suppressed (nulled) when below min sample', () => {
+    const src = readFileSync(BUILDER_PATH, 'utf8');
+    // The guard must actually USE RETURN_RATE_MIN_SAMPLE as a threshold.
+    // If someone removes the `if (distinctAnonsHere >= RETURN_RATE_MIN_SAMPLE)` guard,
+    // small-sample percentages flow through to the response unchecked.
+    expect(
+      src,
+      'builder must gate return_rate computation on RETURN_RATE_MIN_SAMPLE — ' +
+        'missing guard means small-sample percentages expose de-anonymizing data'
+    ).toMatch(/RETURN_RATE_MIN_SAMPLE/);
+
+    // The guard must result in suppression being recorded (push to suppression array)
+    expect(
+      src,
+      'builder must push a suppression reason when distinctAnonsHere < RETURN_RATE_MIN_SAMPLE'
+    ).toMatch(/below_min_sample_size/);
+  });
+
+  test('OSE-INV7 | privacy | suppression | corridor_map applies privacy floor (cell suppression)', () => {
+    const src = readFileSync(BUILDER_PATH, 'utf8');
+    // The corridor map renders H3 cells with scan densities. A cell with
+    // very few scans could expose that a single person was at a specific
+    // location. The renderCorridorMap() function takes a suppressed[] array
+    // and the builder records suppressed cells in _meta.suppression_reasons.
+    // If this suppression is removed, low-density cells expose location data.
+    expect(
+      src,
+      'builder must record suppressed corridor map cells in suppression reasons — ' +
+        'missing suppression means low-density cells expose attendee location data'
+    ).toMatch(/suppressedCells/);
+
+    expect(
+      src,
+      'suppressed corridor map cells must be pushed to the suppression array — ' +
+        'consumers must be informed which cells were withheld'
+    ).toMatch(/suppression\.push\s*\(\s*\{[\s\S]*?corridor_map/);
+  });
+
+  test('OSE-INV7 | privacy | interface | report-depth.ts exists (tier-gated access control)', () => {
+    // filterReportByDepth() gates which report sections are surfaced based
+    // on the token's depth claim. This is a product-tier gate, not a privacy
+    // gate, but its presence confirms that premium-only sections (corridor_map)
+    // are not accidentally exposed to local-tier consumers.
+    expect(
+      existsSync(REPORT_DEPTH_PATH),
+      'workers/oursharedevents/src/lib/report-depth.ts must exist — ' +
+        'deleting it removes the premium-tier depth filter on SharedReport access'
+    ).toBe(true);
+
+    const src = readFileSync(REPORT_DEPTH_PATH, 'utf8');
+    expect(
+      src,
+      'filterReportByDepth must be exported from report-depth.ts — ' +
+        'this function gates corridor_map to premium consumers only'
+    ).toMatch(/export\s+(function|const)\s+filterReportByDepth/);
+  });
+
+  test('OSE-INV7 | privacy | queries | all anon_id_hash SQL usages are aggregate or WHERE-only', () => {
+    const src = readFileSync(BUILDER_PATH, 'utf8');
+    // Enumerate all SQL template literals in the builder and check that
+    // anon_id_hash only appears in:
+    //   - COUNT(DISTINCT anon_id_hash)   — aggregate
+    //   - WHERE anon_id_hash IN (...)    — filter predicate
+    //   - AND a.anon_id_hash IN (...)    — join predicate
+    // These are the only sanctioned uses. A SELECT anon_id_hash projection
+    // or a GROUP BY anon_id_hash (which would enumerate identities) fails.
+    const templateLiterals = src.match(/`[^`]+`/g) ?? [];
+    for (const literal of templateLiterals) {
+      if (!literal.includes('anon_id_hash')) continue;
+      // Check for forbidden patterns: anon_id_hash as a SELECT column alias
+      // e.g. "SELECT anon_id_hash," or "SELECT ..., anon_id_hash FROM"
+      const selectProjection =
+        /SELECT\s+(?:(?!COUNT\s*\().)*\banon_id_hash\b(?!\s*\))/i.test(literal) &&
+        !/COUNT\s*\(\s*DISTINCT\s+anon_id_hash\s*\)/i.test(literal) &&
+        !/IN\s*\(\s*SELECT\s+anon_id_hash\s+FROM/i.test(literal);
+
+      expect
+        .soft(
+          selectProjection,
+          'SQL template literal projects anon_id_hash as a column — violates aggregate-only ' +
+            `invariant:\n  ${literal.slice(0, 200)}...`
+        )
+        .toBe(false);
+
+      // GROUP BY anon_id_hash would enumerate unique identities — forbidden
+      expect
+        .soft(
+          literal,
+          'SQL template literal uses GROUP BY anon_id_hash — this enumerates individual ' +
+            'identities and violates aggregate-only invariant'
+        )
+        .not.toMatch(/GROUP\s+BY\s+[^;]*\banon_id_hash\b/i);
+    }
+  });
+});

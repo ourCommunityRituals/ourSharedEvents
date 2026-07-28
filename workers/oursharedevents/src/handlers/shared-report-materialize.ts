@@ -22,6 +22,7 @@
  */
 
 import {
+  backfillH3Cells,
   materializeAnonIdReturns,
   refreshCorridorBaselines,
   detectEventSeriesClusters,
@@ -42,6 +43,16 @@ export async function runSharedReportMaterialization(
   const start = Date.now();
   const phases: MaterializationResult[] = [];
   let totalErrors = 0;
+
+  // Phase 0 — H3 cell backfill (must run before read-side corridor-map queries)
+  try {
+    const r = await backfillH3Cells(env);
+    phases.push(r);
+    totalErrors += r.errors;
+  } catch (err) {
+    totalErrors++;
+    phases.push(makeErrorResult('h3_cell_backfill', err));
+  }
 
   // Phase 1 — per-event return-rate materialization
   try {

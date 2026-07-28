@@ -48,6 +48,7 @@ const REPO_ROOT = join(__dirname, '..', '..', '..');
 const RUNNER_TOOLS_DIR = join(REPO_ROOT, 'tools', 'runner');
 const PROVISION_SCRIPT = join(RUNNER_TOOLS_DIR, 'provision-runner.ps1');
 const VERIFY_SCRIPT = join(RUNNER_TOOLS_DIR, 'verify-runner-env.ps1');
+const SETUP_SCRIPT = join(RUNNER_TOOLS_DIR, 'setup-runner.ps1');
 const RUNNER_README = join(RUNNER_TOOLS_DIR, 'README.md');
 const VALIDATION_WORKFLOW = join(REPO_ROOT, '.github', 'workflows', 'runner-env-validation.yml');
 
@@ -138,5 +139,23 @@ test.describe('Invariant 11: Self-Hosted Runner Bash Resolution — env contract
       wf,
       'validation workflow must include the deliberate shell: bash smoke step (RUNNER_TEMP probe)'
     ).toMatch(/shell:\s*bash[\s\S]*RUNNER_TEMP/);
+  });
+
+  test('OSE-INV11 | infra | scripts | setup-runner.ps1 exists — one-shot post-config.cmd provisioning', () => {
+    // setup-runner.ps1 is the partial→live gate for invariant #11: it chains
+    // provision-runner.ps1 + install-janitor-tasks.ps1 + verify-runner-env.ps1
+    // so all three steps run automatically after config.cmd registration.
+    // Without this script, an operator must remember to run provision-runner.ps1
+    // manually — the gap that kept #11 partial.
+    expect(
+      existsSync(SETUP_SCRIPT),
+      'tools/runner/setup-runner.ps1 must exist — it is the one-shot script that satisfies ' +
+        'the invariant #11 partial→live criterion (provisioner auto-invoked after config.cmd)'
+    ).toBe(true);
+
+    const src = readFileSync(SETUP_SCRIPT, 'utf8');
+    expect(src, 'setup-runner.ps1 must invoke provision-runner.ps1').toMatch(
+      /provision-runner\.ps1/
+    );
   });
 });

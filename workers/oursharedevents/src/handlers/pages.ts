@@ -595,6 +595,108 @@ function renderMinimalPhaseHtml(row: PublicEventRow, phase: 'event' | 'post_even
 </html>`;
 }
 
+/** Minimal shape for the "next at this venue" card. */
+interface NextEventRow {
+  id: string;
+  title: string;
+  start_date: string | null;
+  location: string | null;
+}
+
+/**
+ * Post-event recap render (OSE-245 / ose-client-ready package).
+ *
+ * Replaces the "This event has ended." stub with a real recap + return loop.
+ * Design intent: closes the ritual loop at exactly the moment it matters.
+ *   • Recap frame: same 5W surface, shifted to past tense.
+ *   • Return loop: next upcoming event at the same venue, else public listing.
+ *   • Opt-in email CTA: routes to existing /forms/:id?type=email (FORMS_DB).
+ *   • Anonymity affordance retained (Invariant #1 surface language).
+ *   • No sponsor logos v1 — display priority is tier-governed (Invariant #5).
+ */
+function renderPostEventHtml(
+  row: PublicEventRow,
+  shareUrl: string,
+  nextEvent: NextEventRow | null
+): string {
+  const title = esc(row.title);
+  const whatShort = esc(row.what_short);
+  const whoHost = esc(row.who_host);
+  const whyPurpose = esc(row.why_purpose);
+  const venueDisplay = esc(row.location) || esc(row.where_address);
+  const whenHuman = formatHumanDate(row.start_date);
+
+  const nextCard = nextEvent
+    ? `<section class="ose-card ose-next" data-testid="next-event-card" aria-labelledby="next-heading">
+        <h2 id="next-heading">Next at ${venueDisplay || 'this venue'}</h2>
+        <p class="ose-next-title" data-testid="next-event-title">${esc(nextEvent.title)}</p>
+        <p class="ose-next-when" data-testid="next-event-when">${formatHumanDate(nextEvent.start_date)}</p>
+        <a class="ose-cta" data-testid="next-event-link" href="/events/${esc(nextEvent.id)}">See details</a>
+      </section>`
+    : `<section class="ose-card ose-next" data-testid="next-event-fallback" aria-labelledby="next-heading">
+        <h2 id="next-heading">The corridor keeps going</h2>
+        <p>More gatherings are always coming together nearby.</p>
+        <a class="ose-cta" data-testid="browse-events-link" href="/public">See what's coming up</a>
+      </section>`;
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>${title} — recap</title>
+  <meta property="og:title" content="${title}" />
+  <meta property="og:description" content="${whatShort}" />
+  <meta property="og:url" content="${esc(shareUrl)}" />
+  <meta property="og:type" content="event" />
+  <meta name="twitter:card" content="summary" />
+  <style>
+    :root { --ose-bg: #faf7f2; --ose-text: #2a2a2a; --ose-muted: #5a5a5a; --ose-accent: #4361ee; --ose-card: #fff; }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; background: var(--ose-bg); color: var(--ose-text); font-family: system-ui, -apple-system, "Segoe UI", sans-serif; line-height: 1.5; }
+    main { max-width: 640px; margin: 0 auto; padding: 1.25rem 1rem 3rem; }
+    .ose-phase-chip { display: inline-block; font-size: 0.75rem; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ose-muted); background: rgba(42,42,42,0.06); border-radius: 999px; padding: 4px 12px; margin-bottom: 0.75rem; }
+    h1 { font-size: 1.6rem; margin: 0 0 0.25rem; }
+    .ose-when { color: var(--ose-muted); margin: 0 0 1.25rem; }
+    .ose-card { background: var(--ose-card); border: 1px solid rgba(42,42,42,0.08); border-radius: 8px; padding: 1rem 1.25rem; margin: 0 0 1rem; }
+    .ose-card h2 { font-size: 1rem; margin: 0 0 0.5rem; }
+    .ose-card p { margin: 0 0 0.5rem; }
+    .ose-recap-row { margin: 0 0 0.6rem; }
+    .ose-recap-label { display: block; font-size: 0.72rem; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--ose-muted); }
+    .ose-cta { display: inline-block; min-height: 44px; line-height: 44px; padding: 0 20px; background: var(--ose-accent); color: #fff; border-radius: 6px; text-decoration: none; font-weight: 600; }
+    .ose-cta.ose-cta-secondary { background: transparent; color: var(--ose-accent); border: 1px solid var(--ose-accent); }
+    .ose-anonymity { margin-top: 2rem; padding: 1rem 1.25rem; background: rgba(67, 97, 238, 0.06); border-left: 3px solid var(--ose-accent); border-radius: 4px; font-size: 0.9rem; color: var(--ose-muted); }
+    .ose-anonymity h2 { margin-top: 0; font-size: 1rem; color: var(--ose-text); }
+    .ose-anonymity p { margin: 0; }
+  </style>
+</head>
+<body>
+  <main role="main" aria-labelledby="event-title-post" data-testid="event-main-post">
+    <span class="ose-phase-chip" data-testid="event-phase-chip">This one's a wrap</span>
+    <h1 id="event-title-post" data-testid="event-title-post">${title}</h1>
+    <p class="ose-when" data-testid="event-when-post">${whenHuman ? `Happened ${whenHuman}` : 'This event has ended.'}${venueDisplay ? ` &middot; ${venueDisplay}` : ''}</p>
+
+    <section class="ose-card" data-testid="event-recap-card" aria-labelledby="recap-heading">
+      <h2 id="recap-heading">What this was</h2>
+      ${whatShort ? `<p class="ose-recap-row" data-testid="recap-what">${whatShort}</p>` : ''}
+      ${whoHost ? `<p class="ose-recap-row" data-testid="recap-who"><span class="ose-recap-label">Hosted by</span>${whoHost}</p>` : ''}
+      ${whyPurpose ? `<p class="ose-recap-row" data-testid="recap-why"><span class="ose-recap-label">Why it exists</span>${whyPurpose}</p>` : ''}
+    </section>
+
+    ${nextCard}
+
+    <section class="ose-card" data-testid="stay-connected-card" aria-labelledby="connect-heading">
+      <h2 id="connect-heading">Hear about the next one</h2>
+      <p>One email when something's coming up. Nothing else.</p>
+      <a class="ose-cta ose-cta-secondary" data-testid="email-signup-link" href="/forms/${esc(row.id)}?type=email">Keep me posted</a>
+    </section>
+
+    ${ANONYMITY_AFFORDANCE}
+  </main>
+</body>
+</html>`;
+}
+
 /**
  * GET /events/:id — public event landing page. Phase-aware.
  *
@@ -703,7 +805,25 @@ export async function handlePublicEventPage(
   } else if (phase === 'event') {
     body = renderEventLiveHtml(row, shareUrl);
   } else {
-    body = renderMinimalPhaseHtml(row, phase);
+    // post_event: real recap + return loop (OSE-245 ose-client-ready package).
+    // renderMinimalPhaseHtml is kept as the defensive fallback for phase==='event'
+    // only — do NOT delete (Invariant #10 deprecation_lock).
+    let nextEvent: NextEventRow | null = null;
+    try {
+      if (row.location) {
+        nextEvent = await env.DB.prepare(
+          `SELECT id, title, start_date, location FROM events
+           WHERE status = 'active' AND location = ?1 AND id != ?2
+             AND start_date IS NOT NULL AND datetime(start_date) > datetime('now')
+           ORDER BY datetime(start_date) ASC LIMIT 1`
+        )
+          .bind(row.location, row.id)
+          .first<NextEventRow>();
+      }
+    } catch {
+      nextEvent = null; // recap must render even if the lookup fails
+    }
+    body = renderPostEventHtml(row, shareUrl, nextEvent ?? null);
   }
 
   return new Response(body, {

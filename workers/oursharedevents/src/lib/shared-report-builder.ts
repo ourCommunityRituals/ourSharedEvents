@@ -28,6 +28,8 @@
  */
 
 import { CORRIDOR_BASELINE_MIN_SAMPLE } from './shared-report';
+import { renderCorridorMap } from './corridor-map';
+import { gridRingUnsafe } from 'h3-js';
 
 // Minimum number of distinct anons before return_rate is computed. Below
 // this, the denominator is so small that the percentage is identifying
@@ -72,9 +74,29 @@ export interface SharedReport {
   sponsor_impressions: Array<{
     sponsor_id: string;
     sponsor_name: string;
+    campaign_id: string | null;
+    campaign_title: string | null;
+    sponsor_tier: string | null;
+    is_local: boolean;
     surface: string;
     count: number;
   }>;
+
+  /**
+   * Per-campaign aggregate for this event. Null when no sponsors have a
+   * campaign_id. Exposed at mid/premium depth — enterprise comparison surface.
+   * Each row aggregates all sponsor_impressions rows for the campaign so a
+   * brand can compare campaign reach across events via the batch endpoint.
+   * impressions_by_surface lets enterprise see which placement formats drove
+   * reach without additional client-side grouping.
+   */
+  campaign_summary: Array<{
+    campaign_id: string;
+    campaign_title: string;
+    total_impressions: number;
+    sponsor_count: number;
+    impressions_by_surface: Record<string, number>;
+  }> | null;
 
   poster_attribution: Array<{
     poster_deployment_id: string;
@@ -94,6 +116,12 @@ export interface SharedReport {
     }>;
   };
 
+  corridor_map: {
+    svg: string;
+    suppressed: string[]; // cell IDs under privacy floor — also in _meta.suppression_reasons
+    cell_count: number;
+  } | null;
+
   _meta: {
     materialized_at: string | null;
     suppression_reasons: SuppressionReason[];
@@ -111,13 +139,15 @@ interface EventRow {
   end_date: string | null;
   corridor_id: string | null;
   series_id: string | null;
+  h3_res9: string | null;
+  h3_res7: string | null;
 }
 
 export async function buildSharedReport(db: D1Database, eventId: string): Promise<BuildResult> {
   // 1. Resolve the event.
   const event = await db
     .prepare(
-      `SELECT id, title, start_date, end_date, corridor_id, series_id
+      `SELECT id, title, start_date, end_date, corridor_id, series_id, h3_res9, h3_res7
        FROM events WHERE id = ?`
     )
     .bind(eventId)
@@ -264,28 +294,82 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
     });
   }
 
-  // 5. sponsor_impressions — per sponsor × surface
+  // 5. sponsor_impressions — per sponsor × surface, including campaign linkage,
+  //    sponsor tier, and local-sponsor flag. D1 returns INTEGER booleans (0/1).
   const impressions = await db
     .prepare(
       `SELECT
          si.sponsor_id      AS sponsor_id,
-         s.name              AS sponsor_name,
-         si.surface          AS surface,
-         COUNT(*)            AS count
+         s.name             AS sponsor_name,
+         s.campaign_id      AS campaign_id,
+         c.title            AS campaign_title,
+         s.tier             AS sponsor_tier,
+         s.is_local         AS is_local,
+         si.surface         AS surface,
+         COUNT(*)           AS count
        FROM sponsor_impressions si
        LEFT JOIN sponsors s ON s.id = si.sponsor_id
+       LEFT JOIN campaigns c ON c.id = s.campaign_id
        WHERE si.event_id = ?
-       GROUP BY si.sponsor_id, s.name, si.surface
+       GROUP BY si.sponsor_id, s.name, s.campaign_id, c.title, s.tier, s.is_local, si.surface
        ORDER BY count DESC`
     )
     .bind(eventId)
-    .all<{ sponsor_id: string; sponsor_name: string | null; surface: string; count: number }>();
+    .all<{
+      sponsor_id: string;
+      sponsor_name: string | null;
+      campaign_id: string | null;
+      campaign_title: string | null;
+      sponsor_tier: string | null;
+      is_local: number | null;
+      surface: string;
+      count: number;
+    }>();
   const sponsorImpressions = (impressions.results ?? []).map((r) => ({
     sponsor_id: r.sponsor_id,
     sponsor_name: r.sponsor_name ?? 'unknown',
+    campaign_id: r.campaign_id ?? null,
+    campaign_title: r.campaign_title ?? null,
+    sponsor_tier: r.sponsor_tier ?? null,
+    is_local: r.is_local === 1,
     surface: r.surface,
     count: r.count,
   }));
+
+  // Derive campaign_summary by aggregating sponsorImpressions rows that have
+  // a campaign_id. No extra DB call — the data is already fetched above.
+  const campaignMap = new Map<
+    string,
+    {
+      campaign_id: string;
+      campaign_title: string;
+      total_impressions: number;
+      sponsor_count: number;
+      impressions_by_surface: Record<string, number>;
+    }
+  >();
+  for (const row of sponsorImpressions) {
+    if (!row.campaign_id) continue;
+    const existing = campaignMap.get(row.campaign_id);
+    if (existing) {
+      existing.total_impressions += row.count;
+      existing.sponsor_count += 1;
+      existing.impressions_by_surface[row.surface] =
+        (existing.impressions_by_surface[row.surface] ?? 0) + row.count;
+    } else {
+      campaignMap.set(row.campaign_id, {
+        campaign_id: row.campaign_id,
+        campaign_title: row.campaign_title ?? 'unknown',
+        total_impressions: row.count,
+        sponsor_count: 1,
+        impressions_by_surface: { [row.surface]: row.count },
+      });
+    }
+  }
+  const campaignSummary =
+    campaignMap.size > 0
+      ? [...campaignMap.values()].sort((a, b) => b.total_impressions - a.total_impressions)
+      : null;
 
   // 6. poster_attribution — per poster_deployment_id
   const posters = await db
@@ -319,7 +403,57 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
     last_scan_at: r.last_scan_at,
   }));
 
-  // 7. headcount_trend — across confirmed event_series instances
+  // 7. corridor_map — premium hex map of per-cell scan densities (S-6.3.1b).
+  //    Source: scan_aggregates.h3_res9 rows for this event.
+  //    Fallback (launch-day honesty): event's own h3_res7 corridor cell +
+  //    gridRingUnsafe ring neighbors, so "one venue lighting one cell on
+  //    day one IS the product" (ring gives the saturation promise context).
+  let corridorMap: { svg: string; suppressed: string[]; cell_count: number } | null = null;
+
+  function buildCorridorMap(cells: Array<{ cell: string; count: number }>): void {
+    const { svg, suppressed: suppressedCells } = renderCorridorMap(cells);
+    corridorMap = { svg, suppressed: suppressedCells, cell_count: cells.length };
+    for (const cellId of suppressedCells) {
+      suppression.push({
+        field: 'corridor_map',
+        reason: 'below_min_sample_size',
+        detail: `h3 cell ${cellId} suppressed (below privacy floor)`,
+      });
+    }
+  }
+
+  const cellRows = await db
+    .prepare(
+      `SELECT h3_res9 AS cell, SUM(unique_agents) AS count
+         FROM scan_aggregates
+         WHERE event_id = ? AND h3_res9 IS NOT NULL
+         GROUP BY h3_res9`
+    )
+    .bind(eventId)
+    .all<{ cell: string; count: number }>();
+
+  const cellData = cellRows.results ?? [];
+
+  if (cellData.length > 0) {
+    buildCorridorMap(cellData.map((r) => ({ cell: r.cell, count: r.count })));
+  } else if (event.h3_res7) {
+    // Launch-day fallback: corridor cell with uniqueGatherings count +
+    // ring neighbors at count=0 (suppressed by privacy floor — correct).
+    const ring = gridRingUnsafe(event.h3_res7, 1);
+    const count = uniqueGatherings ?? 0;
+    buildCorridorMap([
+      { cell: event.h3_res7, count },
+      ...ring.map((c: string) => ({ cell: c, count: 0 })),
+    ]);
+  } else {
+    suppression.push({
+      field: 'corridor_map',
+      reason: 'materialization_pending',
+      detail: 'event has no h3 cells tagged; update event lat/lon to enable corridor map',
+    });
+  }
+
+  // 8. headcount_trend — across confirmed event_series instances
   let trendSeriesId: string | null = null;
   let trendSeriesName: string | null = null;
   const trendInstances: Array<{
@@ -401,12 +535,14 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
         density_ratio_90d: densityRatio90d,
       },
       sponsor_impressions: sponsorImpressions,
+      campaign_summary: campaignSummary,
       poster_attribution: posterAttribution,
       headcount_trend: {
         series_id: trendSeriesId,
         series_name: trendSeriesName,
         instances: trendInstances,
       },
+      corridor_map: corridorMap,
       _meta: {
         materialized_at: materializedAt,
         suppression_reasons: suppression,

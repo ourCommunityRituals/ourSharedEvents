@@ -148,6 +148,70 @@ describe('L1: handlers/feature-flags.ts never references env.DB', () => {
   });
 });
 
+describe('L1: handlers/data-subject.ts — cross-binding scope guard (invariant #1)', () => {
+  // data-subject.ts is the ONLY authorised handler that touches BOTH databases:
+  //   FORMS_DB — DELETE from email_signups, form_registrations; INSERT into pii_audit_log
+  //   DB       — DELETE from subscribers only (plaintext email; GDPR Art.17 / OSE-207)
+  // This guard locks the scope to those operations. Any SELECT, JOIN, or new
+  // table reference across the DB boundary would be an unreviewable cross-link.
+  test('DB usage in data-subject.ts is DELETE-only on subscribers table', () => {
+    expectPass('L1.data-subject-db-scope', () => {
+      const content = getSource('src/handlers/data-subject.ts');
+      expect(content).toMatch(/env\.DB\.prepare\('DELETE FROM subscribers/);
+      expect(content).not.toMatch(/env\.DB\.prepare\('SELECT/i);
+      expect(content).not.toMatch(/env\.DB\.prepare\("SELECT/i);
+      expect(content).not.toMatch(/env\.DB\.prepare\(`SELECT/i);
+      expect(content).not.toMatch(/env\.DB\.prepare\('UPDATE/i);
+      expect(content).not.toMatch(/env\.DB\.prepare\("UPDATE/i);
+    });
+  });
+  test('FORMS_DB usage in data-subject.ts does not reference anon-surface tables', () => {
+    expectPass('L1.data-subject-formsdb-scope', () => {
+      const content = getSource('src/handlers/data-subject.ts');
+      const anonTables = [
+        'events',
+        'sponsors',
+        'scans',
+        'sponsor_impressions',
+        'poster_deployments',
+      ];
+      for (const table of anonTables) {
+        expect(content).not.toMatch(new RegExp(`FORMS_DB\\.prepare\\(['"]\\.* FROM ${table}`, 'i'));
+      }
+    });
+  });
+});
+
+describe('L1: broad reverse gate — no ungated handler touches FORMS_DB (invariant #1)', () => {
+  // Authorised FORMS_DB handlers: forms.ts, feature-flags.ts, data-subject.ts.
+  // All other src/handlers/ files must never reference env.FORMS_DB.
+  // This gate closes the gap where 9+ handler files were ungated.
+  test('non-authorised handlers contain no FORMS_DB reference', () => {
+    const AUTHORISED_SUFFIXES = [
+      'src/handlers/forms.ts',
+      'src/handlers/feature-flags.ts',
+      'src/handlers/data-subject.ts',
+    ];
+    const sources: Record<string, string> = JSON.parse(tenv().TEST_SOURCE_FILES_JSON);
+    let checked = 0;
+    for (const [rawPath, content] of Object.entries(sources)) {
+      const p = norm(rawPath);
+      if (!p.includes('src/handlers/')) continue;
+      if (AUTHORISED_SUFFIXES.some((a) => p.endsWith(a))) continue;
+      expectPass(`L1.reverse-gate:${p.split('src/handlers/').pop() ?? p}`, () => {
+        expect(content).not.toMatch(/env\.FORMS_DB\b/);
+        expect(content).not.toMatch(/\.FORMS_DB\.prepare/);
+      });
+      checked++;
+    }
+    // Fail loud if no handler files were found (would make gate vacuously pass)
+    expect(
+      checked,
+      'no handler source files loaded — TEST_SOURCE_FILES_JSON misconfigured'
+    ).toBeGreaterThan(0);
+  });
+});
+
 // ═════════════════════════════════════════════════════════════════════════════
 // L2 — PRAGMA ASSERTIONS (forward and reverse table-isolation guarantees)
 // ═════════════════════════════════════════════════════════════════════════════

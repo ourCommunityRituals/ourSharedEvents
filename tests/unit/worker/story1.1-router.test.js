@@ -403,7 +403,7 @@ describe('Index Entry Point (Story 1.1)', () => {
   });
 
   it('should call route() in fetch handler', () => {
-    expect(indexSource).toContain('return await route(request, env, ctx)');
+    expect(indexSource).toContain('await route(request, env, ctx)');
   });
 
   it('should catch unhandled errors', () => {

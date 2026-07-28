@@ -67,25 +67,27 @@ and exports it to every job process.
      --unattended --replace
    ```
 
-5. **Provision the env** — this is the step every runner needs:
+5. **Provision + install probe** — run the one-shot setup script (invariants #11 + #12):
 
    ```powershell
-   pwsh -File C:\Users\mzdan\dev\ourCommunityRituals\ourSharedEvents\tools\runner\provision-runner.ps1 `
+   pwsh -File C:\Users\mzdan\dev\ourCommunityRituals\ourSharedEvents\tools\runner\setup-runner.ps1 `
      -RunnerPath C:\Users\mzdan\dev\ourCommunityRituals\actions-runner-N
    ```
+
+   This runs three steps automatically:
+   - `provision-runner.ps1` — writes Git-Bash-first PATH into the runner's `.env` (invariant #11)
+   - `install-janitor-tasks.ps1` — registers the 1-min readiness probe + 5-min watchdog (invariant #12)
+   - `verify-runner-env.ps1` — pre-flight confirms Git Bash resolved correctly
+
+   Use `-WhatIf` to preview without making changes.
 
 6. **Register a scheduled task** that starts the runner on user login,
    with no battery guard and 3× restart-on-failure. See
    `_install-task.ps1` in any of the actions-runner-\* folders as a
    template.
 
-7. **Verify** before opening for traffic:
-   ```powershell
-   pwsh -File C:\Users\mzdan\dev\ourCommunityRituals\ourSharedEvents\tools\runner\verify-runner-env.ps1 `
-     -RunnerPath C:\Users\mzdan\dev\ourCommunityRituals\actions-runner-N
-   ```
-   Exit code 0 = OK. The next PR that runs against the new runner will
-   also trigger the CI-side check in `.github/workflows/runner-env-validation.yml`.
+7. **Open for traffic** — the next PR that targets this runner will trigger
+   `.github/workflows/runner-env-validation.yml` as the CI-side confirmation.
 
 ---
 

@@ -1484,6 +1484,8 @@
           '</div>';
         }).join('');
 
+        window._mintEventId = eventId;
+
         panel.innerHTML =
           '<div class="forms-grid" data-testid="forms-grid">' + linksHtml + '</div>' +
           '<div class="form-counts" data-testid="form-counts">' +
@@ -1494,9 +1496,101 @@
           '<div class="config-section" data-testid="config-section">' +
             '<h3>Form Config</h3>' +
             configHtml +
+          '</div>' +
+          '<div class="report-links-section" data-testid="report-links-section">' +
+            '<h3>Shared Report Links</h3>' +
+            '<p style="margin:0 0 12px;font-size:13px;color:#5a5a5a">Mint a signed bearer token scoped to this event. Share the token with bar owners or sponsors — they present it as <code>Authorization: Bearer &lt;token&gt;</code>.</p>' +
+            '<div class="mint-form-grid" data-testid="mint-form-grid">' +
+              '<div class="mint-field">' +
+                '<label for="mint-role">Role</label>' +
+                '<select id="mint-role" data-testid="mint-role" onchange="window._onMintRoleChange()">' +
+                  '<option value="bar_owner">Bar Owner</option>' +
+                  '<option value="sponsor">Sponsor</option>' +
+                  '<option value="admin">Admin</option>' +
+                '</select>' +
+              '</div>' +
+              '<div class="mint-field" id="mint-depth-row" style="display:none">' +
+                '<label for="mint-depth">Depth</label>' +
+                '<select id="mint-depth" data-testid="mint-depth">' +
+                  '<option value="local">Local — proof of presence</option>' +
+                  '<option value="premium">Premium — full intelligence</option>' +
+                '</select>' +
+              '</div>' +
+              '<div class="mint-field" id="mint-sponsor-id-row" style="display:none">' +
+                '<label for="mint-sponsor-id">Sponsor ID</label>' +
+                '<input type="text" id="mint-sponsor-id" data-testid="mint-sponsor-id" placeholder="sp_…" style="width:100%;box-sizing:border-box" />' +
+              '</div>' +
+              '<div class="mint-field">' +
+                '<label for="mint-ttl">Expires in</label>' +
+                '<select id="mint-ttl" data-testid="mint-ttl">' +
+                  '<option value="7">7 days</option>' +
+                  '<option value="30">30 days</option>' +
+                  '<option value="90">90 days</option>' +
+                '</select>' +
+              '</div>' +
+            '</div>' +
+            '<button class="copy-btn" data-testid="mint-link-btn" style="margin-top:8px" onclick="window.mintReportLink(window._mintEventId, this)">Generate Link</button>' +
+            '<div id="mint-result" class="mint-result" data-testid="mint-result" style="margin-top:10px"></div>' +
           '</div>';
         } catch (err) {
           panel.innerHTML = '<div class="card-error" data-testid="forms-error"><div class="error-icon">&#9888;</div><div class="error-msg">Could not load forms.</div><button class="retry-btn" data-testid="forms-retry" onclick="window.loadForms('' + eventId + '','' + eventName.replace(/'/g, "\\'") + '')">Retry</button></div>';
+        }
+      };
+
+      // S-3.5.1 — mint-link depth/sponsor-id visibility toggle
+      window._onMintRoleChange = function() {
+        const role = document.getElementById('mint-role').value;
+        const isSponsor = role === 'sponsor';
+        document.getElementById('mint-depth-row').style.display = isSponsor ? '' : 'none';
+        document.getElementById('mint-sponsor-id-row').style.display = isSponsor ? '' : 'none';
+      };
+
+      // S-3.5.1 — generate a signed link token via the admin mint endpoint
+      window.mintReportLink = async function(eventId, btn) {
+        if (!eventId) { alert('Select an event first.'); return; }
+        const role = document.getElementById('mint-role').value;
+        const isSponsor = role === 'sponsor';
+        const depthEl = document.getElementById('mint-depth');
+        const depth = isSponsor && depthEl ? depthEl.value : undefined;
+        const sponsorIdEl = document.getElementById('mint-sponsor-id');
+        const sponsorId = isSponsor && sponsorIdEl ? sponsorIdEl.value.trim() : undefined;
+        const ttlDays = parseInt(document.getElementById('mint-ttl').value, 10);
+        const result = document.getElementById('mint-result');
+
+        btn.disabled = true;
+        btn.textContent = 'Generating…';
+        result.textContent = '';
+        result.removeAttribute('class');
+
+        try {
+          const reqBody = { role, ttl_days: ttlDays };
+          if (depth !== undefined) reqBody.depth = depth;
+          if (sponsorId) reqBody.sponsor_id = sponsorId;
+
+          const res = await fetch('/api/v2/admin/events/' + eventId + '/shared-report/mint-link', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(reqBody),
+          });
+          const data = await res.json();
+          if (!res.ok || !data.ok) throw new Error(data.error || 'Mint failed');
+
+          const expires = new Date(data.expires_at).toLocaleDateString();
+          const tokenSafe = data.token.replace(/'/g, "\\'");
+          result.innerHTML =
+            '<div style="font-size:12px;color:#5a5a5a;margin-bottom:4px">Bearer token · expires ' + expires + '</div>' +
+            '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">' +
+              '<code data-testid="mint-token" style="font-size:11px;word-break:break-all;flex:1;background:#f5f5f5;padding:4px 6px;border-radius:4px">' + esc(data.token) + '</code>' +
+              '<button class="copy-btn" data-testid="mint-copy-btn" style="flex-shrink:0" onclick="navigator.clipboard.writeText(\'' + tokenSafe + '\').then(()=>{ this.textContent=\'Copied!\'; setTimeout(()=>this.textContent=\'Copy\',2000); }).catch(()=>this.textContent=\'Failed\')">Copy</button>' +
+            '</div>' +
+            '<div style="font-size:11px;color:#5a5a5a;margin-top:4px">Endpoint: GET /api/v2/events/' + esc(eventId) + '/shared-report</div>';
+          result.style.cssText = 'margin-top:10px;padding:8px;background:#f0faf0;border:1px solid #b6e2b6;border-radius:6px';
+        } catch (err) {
+          result.textContent = err.message || 'Failed to generate link.';
+          result.style.cssText = 'margin-top:10px;padding:8px;background:#fff0f0;border:1px solid #e2b6b6;border-radius:6px;color:#c0392b';
+        } finally {
+          btn.disabled = false;
+          btn.textContent = 'Generate Link';
         }
       };
 

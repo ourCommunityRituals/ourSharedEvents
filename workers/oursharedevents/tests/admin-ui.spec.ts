@@ -122,10 +122,13 @@ describe('ADMIN-5: Form config toggles', () => {
 describe('ADMIN-12: No inline styles in admin HTML', () => {
   test('admin page contains zero style= attributes', async () => {
     const html = await fetchAdminHtml();
-    // Extract just the body (exclude <style> block which contains CSS)
+    // Extract body, then strip <script> blocks — JS template strings may contain
+    // style= as part of dynamically injected HTML snippets; those are not real
+    // HTML attributes and should not trigger this guard.
     const bodyStart = html.indexOf('<body>');
     const bodyHtml = html.slice(bodyStart);
-    expect(bodyHtml).not.toMatch(/style="/);
+    const bodyNoScripts = bodyHtml.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '');
+    expect(bodyNoScripts).not.toMatch(/style="/);
   });
 
   test('utility CSS classes exist', async () => {
@@ -388,7 +391,11 @@ describe('ADMIN-15 Structure: Copy buttons', () => {
 
   test('copy buttons render as <button> elements (not links)', async () => {
     const html = await fetchAdminHtml();
-    const copyBtns = html.match(/<button[^>]*class="copy-btn"[^>]*>/g) ?? [];
+    // Strip <script> blocks before counting — JS template strings may contain
+    // <button class="copy-btn"> snippets for dynamically injected content
+    // (e.g. mint-link-btn, mint-copy-btn); only surface-card static buttons count.
+    const htmlNoScripts = html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '');
+    const copyBtns = htmlNoScripts.match(/<button[^>]*class="copy-btn"[^>]*>/g) ?? [];
     expect(copyBtns.length).toBe(4);
   });
 });

@@ -45,6 +45,17 @@ export interface SignedLinkClaim {
   role: SignedLinkRole;
   /** Expiry — epoch seconds. */
   exp: number;
+  /**
+   * Report depth claim — optional, backward compatible.
+   * Absent on legacy tokens; resolveDepth() handles missing gracefully.
+   */
+  depth?: string;
+  /**
+   * Sponsor ID scope claim — optional, backward compatible.
+   * When present on a sponsor token, filterReportByDepth() restricts
+   * sponsor_impressions to this sponsor only (cross-contamination guard).
+   */
+  sponsor_id?: string;
 }
 
 const TOKEN_PARTS_DELIMITER = '.';
@@ -108,13 +119,17 @@ function isValidRole(s: unknown): s is SignedLinkRole {
  * Output shape: `<base64url(payload)>.<hex(sig)>` — single string,
  * Authorization-header friendly.
  *
+ * `depth` and `sponsor_id` are optional extensions (flywheel S-3.1.1).
+ * Absent fields → legacy behavior: admin/bar_owner → premium, sponsor → local.
+ *
  * Returns null if the signing secret is unset. Callers must handle that.
  */
 export async function mintSignedLinkToken(
   env: SharedReportAuthEnv,
   eventId: string,
   role: SignedLinkRole,
-  ttlSeconds = DEFAULT_TTL_SECONDS
+  ttlSeconds = DEFAULT_TTL_SECONDS,
+  opts: { depth?: string; sponsor_id?: string } = {}
 ): Promise<string | null> {
   const secret = env.SHARED_REPORT_SIGNING_SECRET?.trim();
   if (!secret) return null;
@@ -122,6 +137,8 @@ export async function mintSignedLinkToken(
     eventId,
     role,
     exp: Math.floor(Date.now() / 1000) + ttlSeconds,
+    ...(opts.depth !== undefined ? { depth: opts.depth } : {}),
+    ...(opts.sponsor_id !== undefined ? { sponsor_id: opts.sponsor_id } : {}),
   };
   const payloadStr = JSON.stringify(payload);
   const payloadB64 = base64UrlEncode(new TextEncoder().encode(payloadStr));
@@ -164,7 +181,13 @@ export async function verifySignedLinkToken(
   if (typeof claim.exp !== 'number' || !Number.isFinite(claim.exp)) return null;
   if (claim.exp <= Math.floor(Date.now() / 1000)) return null;
 
-  return { eventId: claim.eventId, role: claim.role, exp: claim.exp };
+  return {
+    eventId: claim.eventId,
+    role: claim.role,
+    exp: claim.exp,
+    ...(typeof claim.depth === 'string' ? { depth: claim.depth } : {}),
+    ...(typeof claim.sponsor_id === 'string' ? { sponsor_id: claim.sponsor_id } : {}),
+  };
 }
 
 // ─── Service-token primitive (WKRP batch endpoint) ─────────────────────────

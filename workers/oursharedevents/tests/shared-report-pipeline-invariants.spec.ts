@@ -47,6 +47,13 @@ const PIPELINE_MIGRATIONS = [
   // The per-migration Gate 2 check below treats this migration as a
   // sponsors-metadata change (no per-attendee columns expected).
   '0036_add_is_local_to_sponsors.sql',
+  // OSE-450 S-6 — H3 NCR tagging. Adds h3_res9/h3_res7 TEXT columns to events
+  // and scan_aggregates. NOT per-attendee columns; geo enrichment only.
+  '0037_add_h3_cells_to_events.sql',
+  '0038_scan_aggregates_add_h3_cells.sql',
+  // Invariant #21 — SharedReport campaigns. Creates the campaigns metadata table.
+  // NOT a per-attendee table; brand-level only. Satisfies drift-guard.
+  '0039_create_campaigns.sql',
 ];
 
 // The set of pipeline-related lib + handler files Gate 1 inspects.
@@ -337,6 +344,43 @@ describe('OSE-272 Gate 2: no raw anon_id columns in pipeline migrations', () => 
     expect(src, '0036 not found in TEST_SOURCE_FILES_JSON').not.toBeNull();
     expect(src!).toMatch(/ALTER TABLE sponsors ADD COLUMN is_local INTEGER NOT NULL DEFAULT 0/i);
     // Sanity: doesn't sneak in any attendee-identity columns
+    expect(src!).not.toMatch(COL_ANON_ID);
+    expect(src!).not.toMatch(COL_IP_HASH);
+    expect(src!).not.toMatch(COL_EMAIL);
+  });
+
+  test('migration 0037 (h3_res9/h3_res7 on events) only adds geo-enrichment columns', () => {
+    // OSE-450 S-6.1.1 — NCR tagging at capture time. Adds h3_res9 and h3_res7
+    // TEXT columns to events (nullable, venue-level geo only, never per-attendee).
+    const src = loadMigrationByName('0037_add_h3_cells_to_events.sql');
+    expect(src, '0037 not found in TEST_SOURCE_FILES_JSON').not.toBeNull();
+    expect(src!).toMatch(/ALTER TABLE events ADD COLUMN h3_res9 TEXT/i);
+    expect(src!).toMatch(/ALTER TABLE events ADD COLUMN h3_res7 TEXT/i);
+    expect(src!).not.toMatch(COL_ANON_ID);
+    expect(src!).not.toMatch(COL_IP_HASH);
+    expect(src!).not.toMatch(COL_EMAIL);
+  });
+
+  test('migration 0038 (h3_res9/h3_res7 on scan_aggregates) only adds geo-enrichment columns', () => {
+    // OSE-450 S-6.1.2 — Denormalizes NCR cells onto scan aggregates. Adds
+    // h3_res9 and h3_res7 TEXT columns to scan_aggregates (nullable, geo-only).
+    const src = loadMigrationByName('0038_scan_aggregates_add_h3_cells.sql');
+    expect(src, '0038 not found in TEST_SOURCE_FILES_JSON').not.toBeNull();
+    expect(src!).toMatch(/ALTER TABLE scan_aggregates ADD COLUMN h3_res9 TEXT/i);
+    expect(src!).toMatch(/ALTER TABLE scan_aggregates ADD COLUMN h3_res7 TEXT/i);
+    expect(src!).not.toMatch(COL_ANON_ID);
+    expect(src!).not.toMatch(COL_IP_HASH);
+    expect(src!).not.toMatch(COL_EMAIL);
+  });
+
+  test('migration 0039 (campaigns) creates a brand-level metadata table — no per-attendee columns', () => {
+    // Invariant #21 — SharedReport campaigns. campaigns is a brand/sponsor
+    // metadata table (id, brand_id, title, description, status, timestamps).
+    // It must never carry per-attendee identity columns.
+    const src = loadMigrationByName('0039_create_campaigns.sql');
+    expect(src, '0039 not found in TEST_SOURCE_FILES_JSON').not.toBeNull();
+    expect(src!).toMatch(/CREATE TABLE IF NOT EXISTS campaigns/i);
+    expect(src!).toMatch(/brand_id\s+TEXT NOT NULL/i);
     expect(src!).not.toMatch(COL_ANON_ID);
     expect(src!).not.toMatch(COL_IP_HASH);
     expect(src!).not.toMatch(COL_EMAIL);

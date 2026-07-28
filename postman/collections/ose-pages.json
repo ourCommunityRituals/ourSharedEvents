@@ -21,7 +21,16 @@
           "const elapsed = Date.now() - pm.variables.get('requestStartTime');",
           "pm.test(`Response time < 3000ms (actual: ${elapsed}ms)`, function() {",
           "    pm.expect(elapsed).to.be.below(3000);",
-          "});"
+          "});",
+          "",
+          "// Invariant #6 — Inert Monetization Hooks: every Worker response (including HTML",
+          "// pages) must carry X-Monetization-Inert: true. Skip CF Access redirects (302)",
+          "// where the worker never ran.",
+          "if (pm.response.code !== 302) {",
+          "    pm.test('Invariant #6: X-Monetization-Inert: true on every Worker response', function() {",
+          "        pm.expect(pm.response.headers.get('X-Monetization-Inert')).to.eql('true');",
+          "    });",
+          "}"
         ]
       }
     }

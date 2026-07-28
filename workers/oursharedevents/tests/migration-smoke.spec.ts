@@ -43,6 +43,7 @@ const DB_TABLES = [
   'admin_audit_log', // 0026
   'anon_id_returns', // 0031 (OSE-272 SharedReport pipeline)
   'bigquery_export_state', // 0035 (OSE-272 Session 4 BigQuery export watermark)
+  'campaigns', // 0039 (campaigns metadata table — enterprise sponsor comparison)
   'corridor_density_baseline', // 0032 (OSE-272 SharedReport pipeline)
   'corridor_regulatory_status', // 0023
   'corridors', // 0010

@@ -427,6 +427,12 @@ jobs:
         if: matrix.shard == 'lint'
         run: npx eslint config/ scripts/ tests/unit/ tests/contract/ --cache --cache-location node_modules/.eslintcache
 
+      # Tier-1 static preflight: validates manifest anchors exist in templates
+      # without a browser. Catches manifest/template drift in seconds.
+      - name: 'Smoke: manifest preflight (static)'
+        if: matrix.shard == 'lint'
+        run: OSE_TPL=workers/oursharedevents/src/templates npx tsx --test tests/ui/smoke/static-check.test.ts
+
       # ── Shard: typecheck ───────────────────────────────────────────────────
       # tsc --noEmit on the worker. Standalone shard so a type regression
       # surfaces as a single named check, not buried inside a multi-step job.
@@ -507,10 +513,19 @@ jobs:
         run: |
           npx playwright install chromium
           npx playwright test --config=playwright.e2e-smoke.config.ts \
+            tests/e2e/0-architecture/aggregate-only.invariant.spec.ts \
+            tests/e2e/0-architecture/api-response-schema.invariant.spec.ts \
+            tests/e2e/0-architecture/cors-allowlist.invariant.spec.ts \
             tests/e2e/0-architecture/deprecation-lock.invariant.spec.ts \
+            tests/e2e/0-architecture/migration-monotonicity.invariant.spec.ts \
+            tests/e2e/0-architecture/monetization-inert.invariant.spec.ts \
+            tests/e2e/0-architecture/oer-emission-boundary.invariant.spec.ts \
             tests/e2e/0-architecture/pii-retention.invariant.spec.ts \
             tests/e2e/0-architecture/runner-environment.invariant.spec.ts \
             tests/e2e/0-architecture/runner-pool-readiness.invariant.spec.ts \
+            tests/e2e/0-architecture/slug-permanence.invariant.spec.ts \
+            tests/e2e/0-architecture/shared-report-schema.invariant.spec.ts \
+            tests/e2e/0-architecture/tenant-isolation.invariant.spec.ts \
             tests/e2e/0-architecture/tier-equity.invariant.spec.ts
 
   # ============================================================================
@@ -995,8 +1010,11 @@ jobs:
           X_OCR_INTERNAL: ${{ secrets.X_OCR_INTERNAL }}
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
-        run: npx playwright test --config=playwright.e2e-smoke.config.ts tests/e2e/3-flows/sponsor-journey.spec.ts
-        timeout-minutes: 5
+        run: |
+          npx playwright test --config=playwright.e2e-smoke.config.ts \
+            tests/e2e/3-flows/sponsor-journey.spec.ts \
+            tests/e2e/3-flows/cross-brand-isolation.spec.ts
+        timeout-minutes: 8
 
       - name: 'T4c: Form E2E (4 types + flows + validation)'
         id: form-e2e-tests
@@ -1015,14 +1033,52 @@ jobs:
             tests/e2e/4-negative/form-validation.spec.ts
         timeout-minutes: 10
 
-      - name: 'T4d: UI Smoke'
+      - name: 'T4d: UI Smoke — Tier-1 page smoke'
         id: ui-tests
         env:
           BASE_URL: ${{ env.STG_BASE_URL }}
           ADMIN_KEY: ${{ secrets.ADMIN_KEY }}
           X_OCR_INTERNAL: ${{ secrets.X_OCR_INTERNAL }}
-        run: npm run test:ui:smoke
+          SMOKE_ADMIN_READY: '1'
+          # Fixture IDs seeded via tests/ui/smoke/fixtures/smoke-events.sql (OSE-455).
+          # Routes skip cleanly when absent; set to known IDs when staging has been seeded.
+          SMOKE_EVENT_PRE: evt_smoke_pre
+          SMOKE_EVENT_LIVE: evt_smoke_live
+          SMOKE_EVENT_POST: evt_smoke_post
+        run: SMOKE_APP=ose SMOKE_ADMIN_READY=1 npx playwright test tests/ui/smoke/tier1.spec.ts
         timeout-minutes: 10
+
+      # T4e: Attendee arc — poster → pre / event / post phases (OSE-456).
+      # Fixture rows (evt_smoke_{pre,live,post}) must be seeded into staging D1
+      # via tests/ui/smoke/fixtures/smoke-events.sql before this runs.
+      # Tests skip cleanly if fixtures are absent — continue-on-error protects CI
+      # when staging has not been manually seeded for the run.
+      - name: 'T4e: Attendee Arc Journey'
+        id: attendee-arc-tests
+        continue-on-error: true
+        env:
+          BASE_URL: ${{ env.STG_BASE_URL }}
+          SMOKE_EVENT_PRE: evt_smoke_pre
+          SMOKE_EVENT_LIVE: evt_smoke_live
+          SMOKE_EVENT_POST: evt_smoke_post
+        run: npx playwright test --config=playwright.e2e-smoke.config.ts tests/ui/smoke/journey-attendee-arc.smoke.spec.ts
+        timeout-minutes: 5
+
+      # T4f: SharedReport depth gate — E2E contract tests (S-3.3.2 / Invariant #5).
+      # Tokens must be minted and stored as secrets before seeded run. Tests skip
+      # cleanly when tokens are absent (continue-on-error preserves CI green).
+      - name: 'T4f: SharedReport Depth Gate'
+        id: sharedreport-depth-tests
+        continue-on-error: true
+        env:
+          BASE_URL: ${{ env.STG_BASE_URL }}
+          SMOKE_EVENT_POST: evt_smoke_post
+          SMOKE_RPT_ADMIN_TOKEN: ${{ secrets.SMOKE_RPT_ADMIN_TOKEN }}
+          SMOKE_RPT_LOCAL_TOKEN: ${{ secrets.SMOKE_RPT_LOCAL_TOKEN }}
+          SMOKE_RPT_MID_TOKEN: ${{ secrets.SMOKE_RPT_MID_TOKEN }}
+          SMOKE_RPT_OTHER_EVENT_TOKEN: ${{ secrets.SMOKE_RPT_OTHER_EVENT_TOKEN }}
+        run: npx playwright test --config=playwright.e2e-smoke.config.ts tests/e2e/3-flows/sharedreport-depth.spec.ts
+        timeout-minutes: 5
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v7
@@ -1056,6 +1112,8 @@ jobs:
           echo "| T4b Core Journeys | \`${{ steps.journey-tests.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| T4c Form E2E (4 types) | \`${{ steps.form-e2e-tests.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| T4d UI Smoke | \`${{ steps.ui-tests.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| T4e Attendee Arc Journey | \`${{ steps.attendee-arc-tests.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| T4f SharedReport Depth Gate | \`${{ steps.sharedreport-depth-tests.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
 
   # ============================================================================
   # TIER 1P: DEPLOY → Production (tag vX.Y.Z only)
