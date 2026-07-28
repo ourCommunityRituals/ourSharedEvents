@@ -9,134 +9,123 @@
  * Test naming follows OCR_STANDARD_perStoryTestPyramid:
  *   `OSE-286 | <role> | GET /ui-preview (<condition>) | <assertion>`
  *
- * POM: UiPreviewPage (_helpers/ui-preview.page.ts) owns all selectors.
+ * POM: UiPreviewPage fixture via _helpers/fixtures.ts (test.extend pattern).
  * Mobile WCAG contracts: assertMobileWorkable from mobile-workability-assertions.ts.
  */
 
-import { test, expect } from '@playwright/test';
-import { UiPreviewPage } from './_helpers/ui-preview.page';
+import { test, expect } from './_helpers/fixtures';
 import { loadAndSettle, assertMobileWorkable } from './_helpers/mobile-workability-assertions';
 
 const BASE_URL = process.env.STAGING_URL || 'https://stg.oursharedevents.com';
 
 test.describe('GET /ui-preview', () => {
   test('OSE-286 | FE | GET /ui-preview (cold load) | page renders with correct title', async ({
+    uiPreview,
     page,
   }) => {
-    const ui = new UiPreviewPage(page);
-    await ui.goto(BASE_URL);
+    await uiPreview.goto(BASE_URL);
     await expect(page).toHaveTitle(/@ocr\/ui/);
   });
 
   test('OSE-286 | FE | GET /ui-preview (cold load) | all 11 component sections are present', async ({
-    page,
+    uiPreview,
   }) => {
-    const ui = new UiPreviewPage(page);
-    await ui.goto(BASE_URL);
-    for (const section of ui.allSections) {
+    await uiPreview.goto(BASE_URL);
+    for (const section of uiPreview.allSections) {
       await expect(section).toBeVisible();
     }
   });
 
   test('OSE-286 | FE | GET /ui-preview (cold load) | theme bar is sticky and all three toggles render', async ({
-    page,
+    uiPreview,
   }) => {
-    const ui = new UiPreviewPage(page);
-    await ui.goto(BASE_URL);
-    await expect(ui.themeBar).toBeVisible();
-    await expect(ui.themeAutoBtn).toBeVisible();
-    await expect(ui.themeLightBtn).toBeVisible();
-    await expect(ui.themeDarkBtn).toBeVisible();
+    await uiPreview.goto(BASE_URL);
+    await expect(uiPreview.themeBar).toBeVisible();
+    await expect(uiPreview.themeAutoBtn).toBeVisible();
+    await expect(uiPreview.themeLightBtn).toBeVisible();
+    await expect(uiPreview.themeDarkBtn).toBeVisible();
   });
 
   test('OSE-286 | FE | GET /ui-preview (theme=light) | clicking Light sets data-theme="light" on <html>', async ({
-    page,
+    uiPreview,
   }) => {
-    const ui = new UiPreviewPage(page);
-    await ui.goto(BASE_URL);
-    await ui.setThemeLight();
-    expect(await ui.currentTheme()).toBe('light');
+    await uiPreview.goto(BASE_URL);
+    await uiPreview.setThemeLight();
+    expect(await uiPreview.currentTheme()).toBe('light');
   });
 
   test('OSE-286 | FE | GET /ui-preview (theme=dark) | clicking Dark sets data-theme="dark" on <html>', async ({
-    page,
+    uiPreview,
   }) => {
-    const ui = new UiPreviewPage(page);
-    await ui.goto(BASE_URL);
-    await ui.setThemeDark();
-    expect(await ui.currentTheme()).toBe('dark');
+    await uiPreview.goto(BASE_URL);
+    await uiPreview.setThemeDark();
+    expect(await uiPreview.currentTheme()).toBe('dark');
   });
 
   test('OSE-286 | FE | GET /ui-preview (theme=auto) | clicking Auto removes data-theme from <html>', async ({
-    page,
+    uiPreview,
   }) => {
-    const ui = new UiPreviewPage(page);
-    await ui.goto(BASE_URL);
-    await ui.setThemeDark();
-    await ui.setThemeAuto();
-    expect(await ui.currentTheme()).toBeNull();
+    await uiPreview.goto(BASE_URL);
+    await uiPreview.setThemeDark();
+    await uiPreview.setThemeAuto();
+    expect(await uiPreview.currentTheme()).toBeNull();
   });
 
   test('OSE-286 | FE | GET /ui-preview (buttons section) | primary, secondary, danger, and disabled variants render', async ({
+    uiPreview,
     page,
   }) => {
-    const ui = new UiPreviewPage(page);
-    await ui.goto(BASE_URL);
-    await expect(ui.btnPrimary).toBeVisible();
+    await uiPreview.goto(BASE_URL);
+    await expect(uiPreview.btnPrimary).toBeVisible();
     await expect(page.getByTestId('btn-secondary-demo')).toBeVisible();
     await expect(page.getByTestId('btn-danger-demo')).toBeVisible();
-    const disabled = ui.btnDisabled;
-    await expect(disabled).toBeDisabled();
+    await expect(uiPreview.btnDisabled).toBeDisabled();
   });
 
   test('OSE-286 | FE | GET /ui-preview (form partials section) | formInput, textarea, select, checkbox, and radioGroup render', async ({
-    page,
+    uiPreview,
   }) => {
-    const ui = new UiPreviewPage(page);
-    await ui.goto(BASE_URL);
-    await expect(ui.sectionFormPartials).toBeVisible();
-    await expect(ui.formInputName).toBeVisible();
-    await expect(ui.formInputEmail).toBeVisible();
-    await expect(ui.formTextarea).toBeVisible();
-    await expect(ui.formSelect).toBeVisible();
-    await expect(ui.formCheckbox).toBeVisible();
+    await uiPreview.goto(BASE_URL);
+    await expect(uiPreview.sectionFormPartials).toBeVisible();
+    await expect(uiPreview.formInputName).toBeVisible();
+    await expect(uiPreview.formInputEmail).toBeVisible();
+    await expect(uiPreview.formTextarea).toBeVisible();
+    await expect(uiPreview.formSelect).toBeVisible();
+    await expect(uiPreview.formCheckbox).toBeVisible();
   });
 
   test('OSE-286 | A11Y | GET /ui-preview (form partials — error state) | aria-invalid and role=alert are present on error input', async ({
+    uiPreview,
     page,
   }) => {
-    const ui = new UiPreviewPage(page);
-    await ui.goto(BASE_URL);
-    await expect(ui.formInputError).toHaveAttribute('aria-invalid', 'true');
-    // error message container carries role=alert for assistive tech
+    await uiPreview.goto(BASE_URL);
+    await expect(uiPreview.formInputError).toHaveAttribute('aria-invalid', 'true');
     await expect(page.locator('#pv-err-error[role="alert"]')).toBeVisible();
   });
 
   test('OSE-286 | A11Y | GET /ui-preview (form partials — required field) | required mark and attribute present on name input', async ({
-    page,
+    uiPreview,
   }) => {
-    const ui = new UiPreviewPage(page);
-    await ui.goto(BASE_URL);
-    await expect(ui.formInputName).toHaveAttribute('required', '');
-    await expect(ui.sectionFormPartials.locator('.required-mark').first()).toBeVisible();
+    await uiPreview.goto(BASE_URL);
+    await expect(uiPreview.formInputName).toHaveAttribute('required', '');
+    await expect(uiPreview.sectionFormPartials.locator('.required-mark').first()).toBeVisible();
   });
 
   test('OSE-286 | A11Y | GET /ui-preview (form partials — hint) | aria-describedby wired to hint on email input', async ({
+    uiPreview,
     page,
   }) => {
-    const ui = new UiPreviewPage(page);
-    await ui.goto(BASE_URL);
-    const describedBy = await ui.formInputEmail.getAttribute('aria-describedby');
+    await uiPreview.goto(BASE_URL);
+    const describedBy = await uiPreview.formInputEmail.getAttribute('aria-describedby');
     expect(describedBy).toBe('pv-email-hint');
     await expect(page.locator('#pv-email-hint')).toBeVisible();
   });
 
   test('OSE-286 | FE | GET /ui-preview (design tokens section) | token swatch grid renders at least 10 swatches', async ({
-    page,
+    uiPreview,
   }) => {
-    const ui = new UiPreviewPage(page);
-    await ui.goto(BASE_URL);
-    const swatches = ui.sectionTokens.locator('.token-swatch');
+    await uiPreview.goto(BASE_URL);
+    const swatches = uiPreview.sectionTokens.locator('.token-swatch');
     expect(await swatches.count()).toBeGreaterThanOrEqual(10);
   });
 

@@ -454,6 +454,15 @@ jobs:
         if: matrix.shard == 'tests'
         run: npm test
 
+      # ── OSE-286: @ocr/ui adoption drift check ──────────────────────────────
+      # Gates on critical violations (local-root-tokens, missing-shared-
+      # stylesheet). Large inline CSS is reported as a migration progress
+      # metric but never blocks — templates are partially migrated.
+      # script mirrors packages/ui/src/contract.ts logic with no build dep.
+      - name: 'Quality: @ocr/ui adoption drift'
+        if: matrix.shard == 'tests'
+        run: node scripts/check-ui-drift.mjs
+
       # ── OCR-docs brain checkout (for OSE-323 UEC drift check) ──────────────
       # The drift check in workers/oursharedevents/tests/uec-drift-check.spec.ts
       # (vitest) compares the OSE consumed UEC copy against the brain canonical.
