@@ -92,6 +92,7 @@ import {
   handleAdminListEvents,
   handleCreateEvent,
   handleUpdateEvent,
+  handleBackfillH3Cells,
   type EventsEnv,
 } from './handlers/events';
 import {
@@ -368,6 +369,13 @@ export async function route(
     const response = await handleCreateEvent(request, env);
     _audit(reqId, 'CREATE_EVENT', 'success', 'event');
     return response;
+  }
+
+  // POST /api/v2/admin/events/backfill-h3-cells — OSE-489 one-shot H3 backfill
+  if (pathname === '/api/v2/admin/events/backfill-h3-cells' && method === 'POST') {
+    const deny = requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
+    if (deny) return deny;
+    return handleBackfillH3Cells(request, env);
   }
 
   // PUT /api/v2/admin/events/:id — update event
