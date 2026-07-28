@@ -37,13 +37,14 @@ export const MIN_INPUT_FONT_SIZE_PX = 16;
 const STEADY_STATE_TIMEOUT_MS = 3000;
 
 /**
- * Navigate to a URL, set the mobile viewport, and wait for steady state
- * before any assertion. The steady-state wait is the OCR-42 contract (4)
- * refinement — surfaces with async data loading need to settle before we
- * measure CTA visibility.
+ * Navigate to a URL and wait for steady state before any assertion.
+ * Viewport is the project's responsibility — set via playwright.config.ts
+ * projects so every spec runs at the correct device dimensions automatically.
+ * Callers that need a specific viewport (e.g. mobile-workability.spec.ts,
+ * which always audits at 375×812 regardless of project) call
+ * page.setViewportSize() themselves before calling this helper.
  */
 export async function loadAndSettle(page: Page, url: string): Promise<void> {
-  await page.setViewportSize(MOBILE_VIEWPORT);
   await page.goto(url, { waitUntil: 'domcontentloaded' });
   await Promise.race([
     page
@@ -61,9 +62,8 @@ export async function loadAndSettle(page: Page, url: string): Promise<void> {
 }
 
 /**
- * Same steady-state wait as `loadAndSettle`, but for the case where the
- * page navigates internally (e.g., after tapping a CTA) and the spec
- * already has the new URL loaded. Use after `page.click()` + `waitForURL`.
+ * Steady-state wait after an in-page navigation (e.g., after page.click()
+ * + waitForURL). Does not touch viewport — project controls that.
  */
 export async function settle(page: Page): Promise<void> {
   await Promise.race([

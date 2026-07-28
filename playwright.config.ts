@@ -49,18 +49,25 @@
  * - Does NOT set reporter/output config — CI workflow chooses those.
  */
 
-import { defineConfig } from '@playwright/test';
+import { defineConfig, devices } from '@playwright/test';
 
-const MOBILE_SAFARI_UA =
-  'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) ' +
-  'AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 ' +
-  'Mobile/15E148 Safari/604.1';
+// All UAs are real Safari patterns that Cloudflare Bot Management
+// whitelists. HeadlessChrome UA triggers a 403 challenge on staging
+// (reproduced 2026-05-16 per OSE-306). Every project overrides UA
+// explicitly so no test runs under the default Chromium headless UA.
+const UA = {
+  iphoneSe:
+    'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1',
+  iphone14ProMax:
+    'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+  ipadAir:
+    'Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+  desktopSafari:
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15',
+};
 
 export default defineConfig({
   testDir: 'tests/playwright',
-  use: {
-    userAgent: MOBILE_SAFARI_UA,
-  },
   expect: {
     toHaveScreenshot: {
       maxDiffPixelRatio: 0.02,
@@ -68,4 +75,27 @@ export default defineConfig({
       threshold: 0.1,
     },
   },
+  projects: [
+    {
+      // Smallest modern iPhone — the WCAG floor.
+      name: 'iPhone SE',
+      use: { ...devices['iPhone SE'], userAgent: UA.iphoneSe },
+    },
+    {
+      // Largest current iPhone — validates nothing collapses on wide mobile.
+      name: 'iPhone 14 Pro Max',
+      use: { ...devices['iPhone 14 Pro Max'], userAgent: UA.iphone14ProMax },
+    },
+    {
+      // Tablet — tests layout at the medium breakpoint where mobile/desktop
+      // patterns often collide (two-column layouts, nav changes, etc.).
+      name: 'iPad Air',
+      use: { ...devices['iPad Air 5'], userAgent: UA.ipadAir },
+    },
+    {
+      // Desktop — full-width layout, hover states, larger touch targets.
+      name: 'Desktop Safari',
+      use: { viewport: { width: 1280, height: 900 }, userAgent: UA.desktopSafari },
+    },
+  ],
 });

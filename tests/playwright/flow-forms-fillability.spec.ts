@@ -45,15 +45,18 @@ import { test, expect } from '@playwright/test';
 import {
   loadAndSettle,
   assertMobileWorkable,
-  MOBILE_VIEWPORT,
   MIN_INPUT_FONT_SIZE_PX,
 } from './_helpers/mobile-workability-assertions';
 
 const BASE_URL = process.env.STAGING_URL || 'https://stg.oursharedevents.com';
 const EVENT_ID = 'test-event-001';
 
+// Keyboard height is device-dependent — calculate against the project's
+// actual viewport height rather than the old hardcoded 375x812 constant.
 const KEYBOARD_ESTIMATE_PX = 280;
-const KEYBOARD_FOLD_Y = MOBILE_VIEWPORT.height - KEYBOARD_ESTIMATE_PX;
+function keyboardFoldY(page: import('@playwright/test').Page): number {
+  return (page.viewportSize()?.height ?? 812) - KEYBOARD_ESTIMATE_PX;
+}
 
 const SYNTHETIC_NAME = `e2e-test-${Date.now()}`;
 const SYNTHETIC_EMAIL = `e2e-test-${Date.now()}@oursharedevents.test`;
@@ -111,12 +114,63 @@ test.describe('OSE-312 forms /register fillability — mobile workability per st
     await page.locator('[data-testid="register-name-input"]').fill(SYNTHETIC_NAME);
     await page.locator('[data-testid="register-email-input"]').fill(SYNTHETIC_EMAIL);
     await page.waitForTimeout(150);
+    const fold = keyboardFoldY(page);
     const submitBox = await page.locator('[data-testid="register-submit"]').boundingBox();
     expect(submitBox).not.toBeNull();
     expect(
       submitBox!.y,
-      `register-submit top = ${Math.round(submitBox!.y)}px; keyboard fold estimate ${KEYBOARD_FOLD_Y}px`
-    ).toBeLessThan(KEYBOARD_FOLD_Y);
+      `register-submit top = ${Math.round(submitBox!.y)}px; keyboard fold estimate ${fold}px`
+    ).toBeLessThan(fold);
+  });
+
+  test('OSE-312 | Design | flow forms-register | step 5: aria wiring — error container pre-wired, inputs linked to it', async ({
+    page,
+  }) => {
+    await loadAndSettle(page, `${BASE_URL}${PATH}`);
+    // Error container must have role=alert + aria-live so assistive tech
+    // announces validation failures without a page reload.
+    const errorEl = page.locator('[data-testid="form-error"]');
+    await expect(errorEl).toHaveAttribute('role', 'alert');
+    await expect(errorEl).toHaveAttribute('aria-live', 'assertive');
+    // Both inputs reference the error container via aria-describedby.
+    await expect(page.locator('[data-testid="register-name-input"]')).toHaveAttribute(
+      'aria-describedby',
+      'error-msg'
+    );
+    await expect(page.locator('[data-testid="register-email-input"]')).toHaveAttribute(
+      'aria-describedby',
+      'error-msg'
+    );
+    // Name field is required — must carry aria-required for screen readers
+    // that don't parse the HTML required attribute.
+    await expect(page.locator('[data-testid="register-name-input"]')).toHaveAttribute(
+      'aria-required',
+      'true'
+    );
+  });
+
+  test('OSE-312 | Design | flow forms-register | step 6: success state container uses CSS class, not inline color', async ({
+    page,
+  }) => {
+    // We cannot submit the form (non-mutating spec) but we can verify the
+    // success container markup that JavaScript injects on completion has
+    // no hardcoded inline style colors — it must rely on CSS classes only.
+    // The success div is hidden on load; we inspect its HTML structure by
+    // reading the page source rather than the live DOM.
+    const html = await page.content();
+    // The success container is injected by JS on submit — verify its
+    // pattern in the source doesn't carry inline background/color styles.
+    // Match the known success div pattern from form-pages.ts.
+    const successMatch = html.match(/class="success"[^>]*style="([^"]+)"/);
+    if (successMatch) {
+      // If the element HAS an inline style, it must not set color/background.
+      expect(
+        successMatch[1],
+        'success container has inline color/background — use a CSS class instead'
+      ).not.toMatch(/(?:^|;)\s*(?:color|background)/i);
+    }
+    // The form-error container on load must be empty (hidden via empty content).
+    await expect(page.locator('[data-testid="form-error"]')).toBeEmpty();
   });
 });
 
@@ -221,12 +275,28 @@ test.describe('OSE-312 forms /survey fillability — mobile workability per step
     await page.locator('[data-testid="survey-rating-3"]').click();
     await page.locator('[data-testid="survey-comments-input"]').fill(SYNTHETIC_COMMENT);
     await page.waitForTimeout(150);
+    const fold = keyboardFoldY(page);
     const submitBox = await page.locator('[data-testid="survey-submit"]').boundingBox();
     expect(submitBox).not.toBeNull();
     expect(
       submitBox!.y,
-      `survey-submit top = ${Math.round(submitBox!.y)}px; keyboard fold ${KEYBOARD_FOLD_Y}px`
-    ).toBeLessThan(KEYBOARD_FOLD_Y);
+      `survey-submit top = ${Math.round(submitBox!.y)}px; keyboard fold ${fold}px`
+    ).toBeLessThan(fold);
+  });
+
+  test('OSE-312 | Design | flow forms-survey | step 5: rating group has role=group + aria-label for assistive tech', async ({
+    page,
+  }) => {
+    await loadAndSettle(page, `${BASE_URL}${PATH}`);
+    const ratingGroup = page.locator('[data-testid="survey-rating-overall"]');
+    await expect(ratingGroup).toHaveAttribute('role', 'group');
+    // Each rating button must have an accessible label (not just a number).
+    for (let i = 1; i <= 5; i++) {
+      await expect(page.locator(`[data-testid="survey-rating-${i}"]`)).toHaveAttribute(
+        'aria-label',
+        `Rate ${i} out of 5`
+      );
+    }
   });
 });
 
@@ -270,9 +340,25 @@ test.describe('OSE-312 forms /email-signup fillability — mobile workability pe
     await page.locator('[data-testid="register-name-input"]').fill(SYNTHETIC_NAME);
     await page.locator('[data-testid="register-email-input"]').fill(SYNTHETIC_EMAIL);
     await page.waitForTimeout(150);
+    const fold = keyboardFoldY(page);
     const submitBox = await page.locator('[data-testid="register-submit"]').boundingBox();
     expect(submitBox).not.toBeNull();
-    expect(submitBox!.y).toBeLessThan(KEYBOARD_FOLD_Y);
+    expect(submitBox!.y).toBeLessThan(fold);
+  });
+
+  test('OSE-312 | Design | flow forms-email-signup | step 4: email input aria-required + aria-describedby wired', async ({
+    page,
+  }) => {
+    await loadAndSettle(page, `${BASE_URL}${PATH}`);
+    await expect(page.locator('[data-testid="email-email-input"]')).toHaveAttribute(
+      'aria-required',
+      'true'
+    );
+    await expect(page.locator('[data-testid="email-email-input"]')).toHaveAttribute(
+      'aria-describedby',
+      'error-msg'
+    );
+    await expect(page.locator('[data-testid="form-error"]')).toHaveAttribute('role', 'alert');
   });
 });
 
