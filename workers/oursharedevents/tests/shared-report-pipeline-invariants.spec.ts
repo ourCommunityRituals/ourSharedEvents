@@ -380,7 +380,7 @@ describe('OSE-272 Gate 2: no raw anon_id columns in pipeline migrations', () => 
     const src = loadMigrationByName('0039_create_campaigns.sql');
     expect(src, '0039 not found in TEST_SOURCE_FILES_JSON').not.toBeNull();
     expect(src!).toMatch(/CREATE TABLE IF NOT EXISTS campaigns/i);
-    expect(src!).toMatch(/brand_id TEXT NOT NULL/i);
+    expect(src!).toMatch(/brand_id\s+TEXT NOT NULL/i);
     expect(src!).not.toMatch(COL_ANON_ID);
     expect(src!).not.toMatch(COL_IP_HASH);
     expect(src!).not.toMatch(COL_EMAIL);

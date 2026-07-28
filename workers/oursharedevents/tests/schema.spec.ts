@@ -95,6 +95,9 @@ const EXPECTED_INDEXES = [
   'idx_shortlinks_created_at',
   // OSE-330 Phase 2 (migration 0036) — Local Sponsor Covenant enforcement
   'idx_sponsors_is_local',
+  // Campaigns (migrations 0039/0040)
+  'idx_campaigns_brand_id',
+  'idx_sponsors_campaign_id',
 ] as const;
 
 const EXPECTED_COLUMN_COUNTS: Record<string, number> = {
@@ -125,8 +128,9 @@ const EXPECTED_COLUMN_COUNTS: Record<string, number> = {
   shortlinks: 5,
 };
 // sponsors: 12 (pre-OSE-330) + 1 (is_local INTEGER NOT NULL DEFAULT 0,
-// migration 0036 — Local Sponsor Covenant enforcement axis) = 13.
-EXPECTED_COLUMN_COUNTS.sponsors = 13;
+// migration 0036 — Local Sponsor Covenant enforcement axis) + 1
+// (campaign_id TEXT, migration 0040 — enterprise campaign linking) = 14.
+EXPECTED_COLUMN_COUNTS.sponsors = 14;
 
 // ── Apply migrations before tests ────────────────────────────────────────────
 
@@ -232,17 +236,18 @@ describe('Gate 4: scan_aggregates write protection', () => {
 // ── Gate 5: Index verification ───────────────────────────────────────────────
 
 describe('Gate 5: Index verification', () => {
-  test('all 40 custom indexes exist', async () => {
+  test('all 42 custom indexes exist', async () => {
     // 35 (pre-OSE-272) + 4 (OSE-272 Session 2: idx_anon_id_returns_venue_visit,
     // idx_event_series_venue_state, idx_event_series_venue_dow_hour,
     // idx_events_series_start) + 1 (idx_sponsors_is_local, OSE-330 Phase 2
-    // — Local Sponsor Covenant enforcement, migration 0036) = 40.
+    // — Local Sponsor Covenant enforcement, migration 0036) + 2
+    // (idx_campaigns_brand_id, idx_sponsors_campaign_id — migrations 0039/0040) = 42.
     const indexes = await env.DB.prepare(
       "SELECT name FROM sqlite_master WHERE type='index' AND name LIKE 'idx_%' ORDER BY name"
     ).all();
 
     const names = indexes.results.map((r: Record<string, unknown>) => r.name);
-    expect(names.length).toBe(40);
+    expect(names.length).toBe(42);
     EXPECTED_INDEXES.forEach((idx) => expect(names).toContain(idx));
   });
 });
