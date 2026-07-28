@@ -152,7 +152,7 @@ export async function assertDesignTokensResolve(page: Page, surfaceName: string)
   // didn't load or the property name is wrong.
   const unresolved = await page.evaluate(() => {
     const style = getComputedStyle(document.documentElement);
-    const tokens = ['--color-bg', '--color-text', '--radius-md'];
+    const tokens = ['--bg', '--text', '--radius-sm'];
     return tokens.filter((t) => style.getPropertyValue(t).trim() === '');
   });
   expect(

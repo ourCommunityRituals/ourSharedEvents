@@ -608,7 +608,7 @@ test.describe('OSE-286 | Design | flow design-system — step 10: ui-preview (/u
     expect(afterDark, 'data-theme did not update after dark toggle').toBe('dark');
   });
 
-  test('OSE-286 | Design | flow design-system | step 10: ui-preview — dark theme changes --color-bg token', async ({
+  test('OSE-286 | Design | flow design-system | step 10: ui-preview — dark theme changes --bg token', async ({
     page,
   }) => {
     // Token values must actually change between themes — if they don't,
@@ -620,16 +620,16 @@ test.describe('OSE-286 | Design | flow design-system — step 10: ui-preview (/u
     await lightBtn.click();
     await page.waitForTimeout(100);
     const lightBg = await page.evaluate(() =>
-      getComputedStyle(document.documentElement).getPropertyValue('--color-bg').trim()
+      getComputedStyle(document.documentElement).getPropertyValue('--bg').trim()
     );
     await darkBtn.click();
     await page.waitForTimeout(100);
     const darkBg = await page.evaluate(() =>
-      getComputedStyle(document.documentElement).getPropertyValue('--color-bg').trim()
+      getComputedStyle(document.documentElement).getPropertyValue('--bg').trim()
     );
     expect(
       lightBg === darkBg,
-      `--color-bg unchanged between light "${lightBg}" and dark "${darkBg}" — theme cascade is broken`
+      `--bg unchanged between light "${lightBg}" and dark "${darkBg}" — theme cascade is broken`
     ).toBe(false);
   });
 
@@ -707,7 +707,7 @@ test.describe('OSE-286 | Design | flow design-system — step 11: cross-surface 
       await page.goto(`${BASE_URL}${path}`, { waitUntil: 'domcontentloaded' });
       const unresolved = await page.evaluate(() => {
         const style = getComputedStyle(document.documentElement);
-        return ['--color-bg', '--color-text', '--radius-md'].filter(
+        return ['--bg', '--text', '--radius-sm'].filter(
           (t) => style.getPropertyValue(t).trim() === ''
         );
       });
