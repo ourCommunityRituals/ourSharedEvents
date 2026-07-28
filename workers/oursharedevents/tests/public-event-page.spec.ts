@@ -254,6 +254,66 @@ describe('OSE-243a: phase dispatch', () => {
     expect(html).toContain('data-testid="event-main-post"');
     expect(html).toContain('data-testid="event-phase-chip"');
   });
+
+  test('post-event: email CTA present — stay-connected card routes to /forms/:id?type=email', async () => {
+    // OSE-454: email CTA harness test. The stay-connected card must always
+    // appear in the post-event render with the correct forms route.
+    const eventId = 'evt_ose454_email_cta';
+    await seedEvent({
+      id: eventId,
+      status: 'active',
+      startOffsetDays: -3,
+      endOffsetDays: -2,
+      withFiveW: true,
+    });
+    const res = await SELF.fetch(`https://t.test/events/${eventId}`);
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).toContain('data-testid="stay-connected-card"');
+    expect(html).toContain('data-testid="email-signup-link"');
+    expect(html).toContain(`href="/forms/${eventId}?type=email"`);
+  });
+
+  test('post-event: return loop — next-event-card appears when future event at same location', async () => {
+    // OSE-454: return loop harness test. When a future active event exists at
+    // the same location, the post-event page renders next-event-card with a
+    // link to that event — closing the ritual loop.
+    // Uses a unique location ('OSE454 Harness Venue') so no other seeded
+    // events in this spec interfere with the next-event query.
+    const tenv = env as unknown as TestEnv;
+    const db = tenv.DB;
+    const pastId = 'evt_ose454_past_iso';
+    const nextId = 'evt_ose454_next_iso';
+    const venue = 'OSE454 Harness Venue';
+    const now = new Date();
+    const past = new Date(now.getTime() - 7 * 86400000).toISOString();
+    const pastEnd = new Date(now.getTime() - 6 * 86400000).toISOString();
+    const future = new Date(now.getTime() + 14 * 86400000).toISOString();
+    const futureEnd = new Date(now.getTime() + 15 * 86400000).toISOString();
+    await db.prepare('DELETE FROM events WHERE id IN (?, ?)').bind(pastId, nextId).run();
+    await db
+      .prepare(
+        `INSERT INTO events (id, brand_id, title, slug, status, location, start_date, end_date, created_at, updated_at)
+         VALUES (?, ?, ?, ?, 'active', ?, ?, ?, datetime('now'), datetime('now'))`
+      )
+      .bind(pastId, BRAND, 'OSE-454 Past Event', pastId, venue, past, pastEnd)
+      .run();
+    await db
+      .prepare(
+        `INSERT INTO events (id, brand_id, title, slug, status, location, start_date, end_date, created_at, updated_at)
+         VALUES (?, ?, ?, ?, 'active', ?, ?, ?, datetime('now'), datetime('now'))`
+      )
+      .bind(nextId, BRAND, 'OSE-454 Next Event', nextId, venue, future, futureEnd)
+      .run();
+
+    const res = await SELF.fetch(`https://t.test/events/${pastId}`);
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).toContain('data-testid="next-event-card"');
+    expect(html).toContain('data-testid="next-event-link"');
+    expect(html).toContain(`href="/events/${nextId}"`);
+    expect(html).not.toContain('data-testid="next-event-fallback"');
+  });
 });
 
 describe('OSE-243a: state gate + 404 semantics', () => {
