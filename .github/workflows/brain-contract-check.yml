@@ -24,6 +24,7 @@ jobs:
     name: Validate against OCR-docs brain
     runs-on: self-hosted
     timeout-minutes: 5
+    if: github.actor != 'dependabot[bot]'
 
     steps:
       - name: Checkout OSE
