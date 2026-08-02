@@ -6,6 +6,7 @@
  *   GET /                        → landing page
  *   GET /admin                   → admin dashboard (auth required)
  *   GET /ui.css                  → shared OCR stylesheet (@ocr/ui)
+ *   GET /ui-preview              → component showcase for Claude Design (no auth)
  *   GET /health                  → health check
  *   GET /api/status              → alias for /health
  *   GET /api/v2/events           → list active events
@@ -105,6 +106,7 @@ import {
   handleDisplayPage,
   handlePosterPage,
   handleSharedReportPage,
+  handleUiPreview,
   type PagesEnv,
 } from './handlers/pages';
 import { handleBriefingPage } from './handlers/briefing';
@@ -297,6 +299,10 @@ export async function route(
 
   if (pathname === '/ui.css') {
     return serveCss();
+  }
+
+  if (pathname === '/ui-preview') {
+    return handleUiPreview();
   }
 
   if (pathname === '/health' || pathname === '/api/status') {

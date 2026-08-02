@@ -1266,7 +1266,7 @@
             <label><input type="checkbox" id="show-internal-ids" data-testid="show-internal-ids-toggle" /> Show internal IDs</label>
           </div>
           <table class="events-table" data-testid="events-table">
-            <thead><tr><th class="col-internal-id">ID</th><th>Name</th><th>Date</th><th>Venue</th><th>Status</th><th>Event type</th></tr></thead>
+            <thead><tr><th class="col-internal-id" data-testid="events-col-id">ID</th><th data-testid="events-col-name">Name</th><th data-testid="events-col-date">Date</th><th data-testid="events-col-venue">Venue</th><th data-testid="events-col-status">Status</th><th data-testid="events-col-type">Event type</th></tr></thead>
             <tbody data-testid="events-tbody">${rows}</tbody>
           </table>
         `;
@@ -1403,7 +1403,7 @@
     <div class="forms-card" data-testid="forms-card">
       <h2>Forms (Card 2)</h2>
       <div id="forms-panel" data-testid="forms-panel">
-        <p class="loading">Select an event to manage forms&hellip;</p>
+        <p class="loading" data-testid="forms-loading-initial">Select an event to manage forms&hellip;</p>
       </div>
     </div>
     <script>
@@ -1460,7 +1460,7 @@
           return '<div class="' + lockedClass + '" data-testid="form-gate-' + t.key + '">' +
             '<a class="form-link" href="/forms/' + eventId + '?type=' + t.key + '&event=' + encodedName + '" target="_blank" data-testid="form-link-' + t.key + '">' +
               '<div class="form-type">' + t.label + '</div>' +
-              '<div class="form-desc">' + t.desc + '</div>' +
+              '<div class="form-desc" data-testid="form-desc-' + t.key + '">' + t.desc + '</div>' +
             '</a>' + lockMsg + '</div>';
         }).join('');
 
@@ -1490,7 +1490,7 @@
           '<div class="forms-grid" data-testid="forms-grid">' + linksHtml + '</div>' +
           '<div class="form-counts" data-testid="form-counts">' +
             counts.map((c, i) =>
-              '<div class="count-box" data-testid="count-' + countLabels[i].toLowerCase().replace(/s+/g, '-') + '"><div class="count-num" data-testid="count-num">' + c + '</div><div class="count-label">' + countLabels[i] + '</div></div>'
+              '<div class="count-box" data-testid="count-' + countLabels[i].toLowerCase().replace(/s+/g, '-') + '"><div class="count-num" data-testid="count-num">' + c + '</div><div class="count-label" data-testid="count-label-' + countLabels[i].toLowerCase().replace(/\s+/g, '-') + '">' + countLabels[i] + '</div></div>'
             ).join('') +
           '</div>' +
           '<div class="config-section" data-testid="config-section">' +
@@ -1836,7 +1836,7 @@
               '</tr>';
             }).join('');
             wrap.innerHTML = '<table data-testid="sponsors-table">' +
-              '<thead><tr><th scope="col">Name</th><th scope="col">Tier</th><th scope="col">Event</th><th scope="col">Placements</th><th scope="col">Status</th><th scope="col">Actions</th></tr></thead>' +
+              '<thead><tr><th scope="col" data-testid="sponsors-col-name">Name</th><th scope="col" data-testid="sponsors-col-tier">Tier</th><th scope="col" data-testid="sponsors-col-event">Event</th><th scope="col" data-testid="sponsors-col-placements">Placements</th><th scope="col" data-testid="sponsors-col-status">Status</th><th scope="col" data-testid="sponsors-col-actions">Actions</th></tr></thead>' +
               '<tbody data-testid="sponsors-tbody">' + rows + '</tbody></table>';
           } catch (err) {
             wrap.innerHTML = '<div class="card-error" data-testid="sponsors-error"><div class="error-icon">&#9888;</div><div class="error-msg">Could not load sponsors.</div><button class="retry-btn" data-testid="sponsors-retry" onclick="window._loadSponsors()">Retry</button></div>';
@@ -2023,7 +2023,7 @@
         <button class="copy-btn" data-testid="copy-poster" onclick="copyUrl('/poster', this)">
           Copy URL
         </button>
-        <div class="qr-hint">QR-ready: /poster</div>
+        <div class="qr-hint" data-testid="qr-hint-poster">QR-ready: /poster</div>
       </div>
       <div class="surface-card display" data-testid="card-display">
         <h3>TV Display</h3>
@@ -2032,7 +2032,7 @@
         <button class="copy-btn" data-testid="copy-display" onclick="copyUrl('/display', this)">
           Copy URL
         </button>
-        <div class="qr-hint">QR-ready: /display</div>
+        <div class="qr-hint" data-testid="qr-hint-display">QR-ready: /display</div>
       </div>
       <div class="surface-card public" data-testid="card-public">
         <h3>Public Page</h3>
@@ -2041,7 +2041,7 @@
         <button class="copy-btn" data-testid="copy-public" onclick="copyUrl('/', this)">
           Copy URL
         </button>
-        <div class="qr-hint">QR-ready: /</div>
+        <div class="qr-hint" data-testid="qr-hint-public">QR-ready: /</div>
       </div>
       <div class="surface-card report" data-testid="card-report">
         <h3>Shared Report</h3>
@@ -2050,7 +2050,7 @@
         <button class="copy-btn" data-testid="copy-report" onclick="copyUrl('/sharedReport', this)">
           Copy URL
         </button>
-        <div class="qr-hint">QR-ready: /sharedReport</div>
+        <div class="qr-hint" data-testid="qr-hint-report">QR-ready: /sharedReport</div>
       </div>
     </div>
 

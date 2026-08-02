@@ -144,6 +144,14 @@ const SURFACES: Surface[] = [
     name: 'poster preview UI',
     primaryCtaSelector: '[data-testid="poster-print"], #admin-action-bar button',
   },
+  {
+    // OSE-286: /ui-preview is the @ocr/ui component showcase used by Claude Design.
+    // Audited here so the design system surface itself demonstrates the same
+    // mobile contracts it's meant to enforce for all other surfaces.
+    path: '/ui-preview',
+    name: 'ui component preview',
+    primaryCtaSelector: '[data-testid="btn-primary-demo"]',
+  },
 ];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────

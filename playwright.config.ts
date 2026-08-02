@@ -1,67 +1,101 @@
 /**
  * OSE-306 — Playwright global config.
  *
- * Sole purpose today: override the default Chromium UA so it doesn't
- * read as `HeadlessChrome/...`, which Cloudflare's Bot Management
- * intercepts with a challenge page on every staging request from our
- * self-hosted BLOODRAVEN runners.
+ * ## UA override (OSE-306)
  *
- * ## Why
+ * Override the default Chromium UA so it doesn't read as
+ * `HeadlessChrome/...`, which Cloudflare's Bot Management intercepts
+ * with a challenge page on every staging request from our self-hosted
+ * BLOODRAVEN runners.
  *
  * Reproduction (2026-05-16):
- *   curl -A "Mozilla/5.0 ... Chrome/120 ..."       → 200, OSE page (correct)
+ *   curl -A "Mozilla/5.0 ... Chrome/120 ..."       → 200, OSE page
  *   curl -A "Mozilla/5.0 ... HeadlessChrome/123 ..." → 403, Cf-Mitigated:challenge
  *
- * Without this override, the mobile-workability audit measures the CF
- * challenge page instead of OSE — producing 5 false-positive
- * violations across /events/:id and /sharedReport (per audit run
- * 25952807821). The challenge page has its own anchors (54×18, 37×18)
- * and a wider layout (scrollWidth=470 > clientWidth=375) that look
- * like OSE bugs but aren't.
+ * Mobile Safari UA matching iPhone 13 Mini / iPhone X (canonical
+ * mobile-workability viewport). Cloudflare whitelists this UA shape
+ * as a real-customer pattern. Kept inline so measurement is
+ * deterministic — no environment drift.
  *
- * ## Why Mobile Safari UA specifically
+ * ## Visual regression screenshot defaults (OSE-286)
  *
- * The mobile-workability audit runs at 375×812 (iPhone 13 Mini /
- * iPhone X viewport). Real customers hitting that viewport are on
- * Mobile Safari. Using the same UA makes the audit measure what a
- * real iPhone customer would actually see — including any
- * CDN/Cloudflare/server response paths that branch on UA. This is
- * more representative than a generic desktop Chrome UA would be.
+ * `expect.toHaveScreenshot` controls the pixel-diff gate for all
+ * calls to `expect(page|locator).toHaveScreenshot()` across the fleet:
  *
- * Other Playwright suites in tests/playwright/* (admin-friendly-labels,
- * landing-page, etc.) inherit this UA. Confirmed safe via:
- *   grep -r "setUserAgent\|userAgent" tests/playwright/
- *   (returns nothing — no existing UA dependencies)
+ * - maxDiffPixelRatio 0.02: tolerates up to 2% pixel difference —
+ *   absorbs sub-pixel anti-aliasing variance between Chromium versions
+ *   and OS renderers while still catching real layout regressions.
+ * - animations 'disabled': tells Playwright's screenshot engine to
+ *   freeze CSS animations/transitions at their initial keyframe before
+ *   capturing, so spinners and transition states don't make diffs
+ *   non-deterministic. Works alongside the `freeze-animations` style
+ *   injected in visual specs for belt-and-suspenders determinism.
+ * - threshold 0.1: per-pixel color tolerance (0–1 scale). 0.1 is
+ *   tighter than Playwright's default 0.2 — appropriate for a design
+ *   system where exact color is meaningful, not just structure.
+ *
+ * Snapshots live next to their spec files in
+ * `{spec-name}.spec.ts-snapshots/`, committed to the repo. The first
+ * run of `ui-preview.visual.spec.ts` creates the baselines. Subsequent
+ * runs compare against them. To update baselines after an intentional
+ * design change: `npx playwright test --update-snapshots ui-preview.visual`
+ * then commit the new PNG files.
  *
  * ## What this config does NOT do
  *
- * - Does NOT set a viewport (each test sets its own per design — e.g.
- *   mobile-workability uses 375×812, other suites use whatever they
- *   need). Viewport is a per-test concern, UA is a per-environment
- *   concern.
+ * - Does NOT set a viewport (per-test concern — mobile-workability uses
+ *   375×812, visual spec uses 1280×900 desktop + 375×812 mobile).
  * - Does NOT set baseURL — env vars (STAGING_URL etc.) drive that.
  * - Does NOT set reporter/output config — CI workflow chooses those.
- *
- * Per ADR convention: this is a small focused config that does one
- * load-bearing thing. If more global Playwright config is needed
- * later, it gets added here with its own commented rationale.
  */
 
-import { defineConfig } from '@playwright/test';
+import { defineConfig, devices } from '@playwright/test';
 
-// Mobile Safari UA matching iPhone 13 Mini / iPhone X (the canonical
-// mobile-workability viewport). Cloudflare's Bot Management whitelists
-// this UA shape as a real-customer pattern. Kept inline (not behind
-// an env var) so the audit's measurement is deterministic across CI
-// runs and local dev — no environment drift.
-const MOBILE_SAFARI_UA =
-  'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) ' +
-  'AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 ' +
-  'Mobile/15E148 Safari/604.1';
+// All UAs are real Safari patterns that Cloudflare Bot Management
+// whitelists. HeadlessChrome UA triggers a 403 challenge on staging
+// (reproduced 2026-05-16 per OSE-306). Every project overrides UA
+// explicitly so no test runs under the default Chromium headless UA.
+const UA = {
+  iphoneSe:
+    'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1',
+  iphone14ProMax:
+    'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+  ipadAir:
+    'Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+  desktopSafari:
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15',
+};
 
 export default defineConfig({
   testDir: 'tests/playwright',
-  use: {
-    userAgent: MOBILE_SAFARI_UA,
+  expect: {
+    toHaveScreenshot: {
+      maxDiffPixelRatio: 0.02,
+      animations: 'disabled',
+      threshold: 0.1,
+    },
   },
+  projects: [
+    {
+      // Smallest modern iPhone — the WCAG floor.
+      name: 'iPhone SE',
+      use: { ...devices['iPhone SE'], userAgent: UA.iphoneSe },
+    },
+    {
+      // Largest current iPhone — validates nothing collapses on wide mobile.
+      name: 'iPhone 14 Pro Max',
+      use: { ...devices['iPhone 14 Pro Max'], userAgent: UA.iphone14ProMax },
+    },
+    {
+      // Tablet — tests layout at the medium breakpoint where mobile/desktop
+      // patterns often collide (two-column layouts, nav changes, etc.).
+      name: 'iPad Air',
+      use: { ...devices['iPad Air 5'], userAgent: UA.ipadAir },
+    },
+    {
+      // Desktop — full-width layout, hover states, larger touch targets.
+      name: 'Desktop Safari',
+      use: { viewport: { width: 1280, height: 900 }, userAgent: UA.desktopSafari },
+    },
+  ],
 });

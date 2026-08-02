@@ -600,7 +600,7 @@ describe('ADMIN-2: Events table phase column', () => {
     // OSE-R-005: the "Phase" column header used to leak the internal phase
     // terminology to bar owners. Replaced with "Event type" which matches
     // the friendly cell values rendered via friendlyPhase().
-    expect(html).toContain('<th>Event type</th>');
+    expect(html).toMatch(/<th[^>]*>Event type<\/th>/);
   });
 
   test('phase cell has event-phase data-testid and phase-badge class template', async () => {
