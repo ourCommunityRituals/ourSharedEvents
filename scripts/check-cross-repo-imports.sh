@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # check-cross-repo-imports.sh
 #
-# Enforces Invariant #9 (Tenant Isolation): no module-level imports may cross
-# the OSE / WKRP / OAW repo boundary. The ONLY permitted cross-repo coupling
-# is the HTTP API seam at GET /api/events/:id/music (WKRP → OSE integration).
+# Enforces Invariant #22 (Cross-Repo Import Isolation — security_isolation
+# group, order 6): no module-level imports may cross the OSE / WKRP / OAW
+# repo boundary. The ONLY permitted cross-repo coupling is the OER aggregation
+# boundary HTTP API seam at GET /api/events/:id/music (WKRP → OSE).
 #
 # Called from brain-contract-check.yml. Exits 1 on any violation.
 #
@@ -24,7 +25,7 @@ REPO_ROOT="${1:-$(git rev-parse --show-toplevel)}"
 SRC_DIR="$REPO_ROOT/workers"
 VIOLATIONS=0
 
-echo "=== Invariant #9 Cross-Repo Isolation Gate ==="
+echo "=== Invariant #22 Cross-Repo Import Isolation Gate ==="
 echo "Scanning: $SRC_DIR"
 echo ""
 
@@ -88,7 +89,7 @@ if [ "$VIOLATIONS" -gt 0 ]; then
   echo "OSE, WKRP, and OAW. The only permitted cross-repo coupling is the HTTP"
   echo "API seam at GET /api/events/:id/music (covered by Pact in OSE-423)."
   echo ""
-  echo "See docs/security/INVARIANT_9_CROSS_REPO_ISOLATION.md for full spec."
+  echo "See docs/security/INVARIANT_22_CROSS_REPO_IMPORT_ISOLATION.md for full spec."
   exit 1
 else
   echo "PASS — no cross-repo isolation violations found."
