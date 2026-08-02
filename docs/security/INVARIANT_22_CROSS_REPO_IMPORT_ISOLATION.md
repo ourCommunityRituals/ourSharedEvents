@@ -56,7 +56,7 @@ The following references were audited and confirmed **not violations**:
 
 ## What is prohibited
 
-Any of the following patterns in OSE, WKRP, or OAW source code constitutes a violation of Invariant #9:
+Any of the following patterns in OSE, WKRP, or OAW source code constitutes a violation of Invariant #22:
 
 ```
 import ... from '@ourwkrp/...'
