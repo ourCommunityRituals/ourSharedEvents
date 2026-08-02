@@ -13,6 +13,8 @@
  *   - Sponsor count is configurable 1–15 via getSponsorFixtures(count)
  */
 
+import { allCodes } from './uec/index.js';
+
 // ── Shared types (mirrors DB columns) ─────────────────────────────────────────
 
 export type EventState = 'draft' | 'ready' | 'active' | 'archived';
@@ -396,7 +398,7 @@ export function getPosterDeployments(): MockPosterDeployment[] {
 
 // ── 4. Scan records (150, deterministic hourly buckets) ───────────────────────
 
-const UEC_CODES = ['#1A3A8A', '#E85D04', '#2D9B4E', '#9B2D8E', '#C8A415', '#4A90D9', '#8B3A3A'];
+const UEC_CODES = allCodes().map((c) => c.scan_hex);
 const SCAN_HOURS = [
   '2026-08-02T10:00:00Z',
   '2026-08-02T11:00:00Z',
