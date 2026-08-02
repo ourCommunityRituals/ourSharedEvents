@@ -552,3 +552,78 @@ describe('OSE-272 hashAnonIdForReturns — anonymity-preserving hash function', 
     expect(hash!.toLowerCase()).not.toContain('someuniqueidentifier');
   });
 });
+
+// ─── Gate 7 — H3 denormalization is cron-only; ingest path is tier-blind ─────
+
+describe('OSE-490 Gate 7: H3 denormalization is cron-only; scan path is tier-blind', () => {
+  // Invariant #5 (tier-blind ingest): The scan ingest path (qr-verify,
+  // shortlink-resolve, uec-resolve, forms) must never compute H3 cells or
+  // write them to scan_aggregates. H3 computation is capture-time only
+  // (events.ts at venue create/update — OSE-489).
+  //
+  // scan_aggregates.h3_res9/h3_res7 are populated exclusively by the nightly
+  // cron via backfillH3Cells (Phase 0 of runSharedReportMaterialization). The
+  // backfill copies pre-computed values from the events table via a correlated
+  // subselect — no h3-js or h3-tagging import in the pipeline lib.
+
+  test('shared-report.ts exports backfillH3Cells and writes to scan_aggregates', () => {
+    const src = loadSource('src/lib/shared-report.ts');
+    expect(src, 'shared-report.ts not in TEST_SOURCE_FILES_JSON').not.toBeNull();
+    expect(
+      src!,
+      'backfillH3Cells must be exported from shared-report.ts — Phase 0 of the nightly cron calls it'
+    ).toMatch(/export.*backfillH3Cells/);
+    expect(
+      src!,
+      'backfillH3Cells must UPDATE scan_aggregates — it denormalizes event H3 cells into the aggregate table'
+    ).toMatch(/UPDATE scan_aggregates/i);
+  });
+
+  test('shared-report.ts backfill copies H3 from events via JOIN, never imports h3-js', () => {
+    const src = loadSource('src/lib/shared-report.ts');
+    expect(src, 'shared-report.ts not in TEST_SOURCE_FILES_JSON').not.toBeNull();
+    // The correlated subselect is the only permitted source of H3 values — no
+    // runtime H3 computation in the pipeline lib (that is events.ts territory).
+    expect(
+      src!,
+      'backfillH3Cells must read h3_res9 from the events table — correlated subselect required'
+    ).toMatch(/FROM events\s+WHERE id = scan_aggregates\.event_id/i);
+    expect(
+      src!,
+      'shared-report.ts must not import h3-js — H3 computation is capture-time-only (events.ts)'
+    ).not.toMatch(/from\s+['"]h3-js['"]/);
+    expect(
+      src!,
+      'shared-report.ts must not import h3-tagging — pipeline lib never computes H3 inline'
+    ).not.toMatch(/from\s+['"].*h3-tagging['"]/);
+  });
+
+  const INGEST_HANDLERS = [
+    'src/handlers/qr-verify.ts',
+    'src/handlers/shortlink-resolve.ts',
+    'src/handlers/uec-resolve.ts',
+    'src/handlers/forms.ts',
+  ];
+
+  test.each(INGEST_HANDLERS)(
+    '%s does not reference h3_res9/h3_res7 or import h3-tagging (Invariant #5 — tier-blind ingest)',
+    (rel) => {
+      const src = loadSource(rel);
+      expect(src, `${rel} not in TEST_SOURCE_FILES_JSON`).not.toBeNull();
+      // Ingest handlers must never name the H3 columns — the nightly cron fills them.
+      expect(src!, `${rel} must not reference h3_res9 — ingest is H3-blind`).not.toMatch(
+        /\bh3_res9\b/
+      );
+      expect(src!, `${rel} must not reference h3_res7 — ingest is H3-blind`).not.toMatch(
+        /\bh3_res7\b/
+      );
+      expect(
+        src!,
+        `${rel} must not import h3-tagging — H3 computation is capture-time-only`
+      ).not.toMatch(/from\s+['"].*h3-tagging['"]/);
+      expect(src!, `${rel} must not import h3-js — ingest path must stay tier-blind`).not.toMatch(
+        /from\s+['"]h3-js['"]/
+      );
+    }
+  );
+});
