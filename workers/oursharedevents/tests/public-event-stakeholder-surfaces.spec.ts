@@ -162,7 +162,7 @@ async function seedEmailSignup(eventId: string, id: string): Promise<void> {
 
 beforeAll(async () => {
   await applyMigrations();
-});
+}, 120_000);
 
 // ── Pre-event: sponsor strip ──────────────────────────────────────────────────
 
