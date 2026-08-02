@@ -458,7 +458,7 @@ jobs:
       # locally; this step ensures it FIRES in CI by checking out OCR-docs
       # and pointing BRAIN_DIR at it.
       - name: 'Checkout OCR-docs brain (for OSE-323 drift check)'
-        if: matrix.shard == 'tests'
+        if: matrix.shard == 'tests' && github.actor != 'dependabot[bot]'
         uses: actions/checkout@v7
         with:
           repository: ourCommunityRituals/OCR-docs
