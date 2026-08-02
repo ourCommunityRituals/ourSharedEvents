@@ -138,7 +138,7 @@ function html(content: string, status = 200): Response {
  * Outputs the standard branded shell with CSP-friendly inline styles.
  * data-testids drive the OSE-R-004 test pyramid.
  */
-function renderErrorPage(
+export function renderErrorPage(
   status: number,
   title: string,
   body: string,
@@ -157,13 +157,13 @@ function renderErrorPage(
   const safeCtaHref = esc(ctaHref);
   const safeCtaLabel = esc(ctaLabel);
   const content = `<!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-surface="ose-error">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>${safeTitle} – OurSharedEvents</title>
   <style>
-    :root { --err-bg: #f8f9fa; --err-text: #212529; --err-surface: #1a1a2e; --err-muted: #6c757d; --err-body: #495057; --err-surface-hover: #0f0f1a; --err-focus: #4361ee; }
+    [data-surface="ose-error"] { --err-bg: #f8f9fa; --err-text: #212529; --err-surface: #1a1a2e; --err-muted: #6c757d; --err-body: #495057; --err-surface-hover: #0f0f1a; --err-focus: #4361ee; }
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: system-ui, -apple-system, sans-serif; background: var(--err-bg); color: var(--err-text); min-height: 100vh; display: flex; flex-direction: column; }
     header { background: var(--err-surface); color: #fff; padding: 1.25rem 2rem; }
@@ -230,7 +230,7 @@ interface PublicEventEnv extends PagesEnv {
   DB?: D1Database;
 }
 
-interface PublicEventRow {
+export interface PublicEventRow {
   id: string;
   brand_id: string;
   title: string;
@@ -307,7 +307,7 @@ const ANONYMITY_AFFORDANCE = `
 // then the nonce parameter remains on the function signature because
 // it IS real for inline <script> (which this page does not have, but
 // might later).
-function renderPreEventHtml(row: PublicEventRow, shareUrl: string): string {
+export function renderPreEventHtml(row: PublicEventRow, shareUrl: string): string {
   const title = esc(row.title);
   const whatShort = esc(row.what_short);
   const whoHost = esc(row.who_host);
@@ -325,7 +325,7 @@ function renderPreEventHtml(row: PublicEventRow, shareUrl: string): string {
     : '';
 
   return `<!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-surface="ose-public">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -336,7 +336,7 @@ function renderPreEventHtml(row: PublicEventRow, shareUrl: string): string {
   <meta property="og:type" content="event" />
   <meta name="twitter:card" content="summary_large_image" />
   <style>
-    :root { --ose-bg: #faf7f2; --ose-text: #2a2a2a; --ose-muted: #5a5a5a; --ose-accent: #4361ee; --ose-card: #fff; --ose-focus: #ffb800; --ose-accent-tint: rgba(67, 97, 238, 0.06); }
+    [data-surface="ose-public"] { --ose-bg: #faf7f2; --ose-text: #2a2a2a; --ose-muted: #5a5a5a; --ose-accent: #4361ee; --ose-card: #fff; --ose-focus: #ffb800; --ose-accent-tint: rgba(67, 97, 238, 0.06); }
     * { box-sizing: border-box; }
     html, body { margin: 0; padding: 0; background: var(--ose-bg); color: var(--ose-text); font-family: system-ui, -apple-system, "Segoe UI", sans-serif; line-height: 1.5; }
     /* OSE-298 DRAIN 5/7: defensive horizontal-scroll guard for the
@@ -444,7 +444,7 @@ function renderPreEventHtml(row: PublicEventRow, shareUrl: string): string {
  * /events/:id during live phase gets this render and can forward the
  * link.
  */
-function renderEventLiveHtml(row: PublicEventRow, shareUrl: string): string {
+export function renderEventLiveHtml(row: PublicEventRow, shareUrl: string): string {
   const title = esc(row.title);
   const whatShort = esc(row.what_short);
   const whoHost = esc(row.who_host);
@@ -461,7 +461,7 @@ function renderEventLiveHtml(row: PublicEventRow, shareUrl: string): string {
     : '';
 
   return `<!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-surface="ose-public">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -471,7 +471,7 @@ function renderEventLiveHtml(row: PublicEventRow, shareUrl: string): string {
   <meta property="og:url" content="${esc(shareUrl)}" />
   <meta property="og:type" content="event" />
   <style>
-    :root { --ose-bg: #faf7f2; --ose-text: #2a2a2a; --ose-muted: #5a5a5a; --ose-accent: #4361ee; --ose-card: #fff; --ose-live: #d63b3b; --ose-focus: #ffb800; --ose-accent-tint: rgba(67, 97, 238, 0.06); }
+    [data-surface="ose-public"] { --ose-bg: #faf7f2; --ose-text: #2a2a2a; --ose-muted: #5a5a5a; --ose-accent: #4361ee; --ose-card: #fff; --ose-live: #d63b3b; --ose-focus: #ffb800; --ose-accent-tint: rgba(67, 97, 238, 0.06); }
     * { box-sizing: border-box; }
     html, body { margin: 0; padding: 0; background: var(--ose-bg); color: var(--ose-text); font-family: system-ui, -apple-system, "Segoe UI", sans-serif; line-height: 1.5; }
     /* OSE-298 DRAIN 5/7: defensive horizontal-scroll guard for the
@@ -572,13 +572,13 @@ function renderMinimalPhaseHtml(row: PublicEventRow, phase: 'event' | 'post_even
   const title = esc(row.title);
   const message = phase === 'event' ? 'This event is happening now.' : 'This event has ended.';
   return `<!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-surface="ose-public">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>${title}</title>
   <style>
-    :root { --ose-bg: #faf7f2; --ose-text: #2a2a2a; --ose-muted: #5a5a5a; --ose-accent: #4361ee; --ose-accent-tint: rgba(67, 97, 238, 0.06); }
+    [data-surface="ose-public"] { --ose-bg: #faf7f2; --ose-text: #2a2a2a; --ose-muted: #5a5a5a; --ose-accent: #4361ee; --ose-accent-tint: rgba(67, 97, 238, 0.06); }
     body { font-family: system-ui, -apple-system, sans-serif; max-width: 600px; margin: 3rem auto; padding: 1rem; line-height: 1.5; color: var(--ose-text); background: var(--ose-bg); }
     h1 { font-size: 1.5rem; margin: 0 0 0.5rem; }
     .msg { color: var(--ose-muted); font-size: 1.05rem; margin: 0.5rem 0 1.5rem; }
@@ -642,7 +642,7 @@ function renderPostEventHtml(
       </section>`;
 
   return `<!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-surface="ose-public">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -653,7 +653,7 @@ function renderPostEventHtml(
   <meta property="og:type" content="event" />
   <meta name="twitter:card" content="summary" />
   <style>
-    :root { --ose-bg: #faf7f2; --ose-text: #2a2a2a; --ose-muted: #5a5a5a; --ose-accent: #4361ee; --ose-card: #fff; --ose-focus: #ffb800; --ose-accent-tint: rgba(67, 97, 238, 0.06); }
+    [data-surface="ose-public"] { --ose-bg: #faf7f2; --ose-text: #2a2a2a; --ose-muted: #5a5a5a; --ose-accent: #4361ee; --ose-card: #fff; --ose-focus: #ffb800; --ose-accent-tint: rgba(67, 97, 238, 0.06); }
     * { box-sizing: border-box; }
     html, body { margin: 0; padding: 0; background: var(--ose-bg); color: var(--ose-text); font-family: system-ui, -apple-system, "Segoe UI", sans-serif; line-height: 1.5; }
     main { max-width: 640px; margin: 0 auto; padding: 1.25rem 1rem 3rem; }
