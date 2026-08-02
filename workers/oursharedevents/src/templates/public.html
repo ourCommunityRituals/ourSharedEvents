@@ -155,25 +155,58 @@
         text-decoration: none;
         border-bottom: 2px solid var(--accent);
       }
+      .sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+      }
+      footer {
+        text-align: center;
+        padding: 1.5rem;
+        font-size: 0.8rem;
+        color: var(--text-muted);
+        border-top: 1px solid var(--border);
+      }
+      footer a {
+        color: var(--accent);
+        text-decoration: none;
+      }
+      footer a:hover {
+        text-decoration: underline;
+      }
     </style>
   </head>
   <body>
-    <a href="#main-content" class="skip-link">Skip to content</a>
+    <a href="#main-content" class="skip-link" data-testid="public-skip-link">Skip to content</a>
     <header data-testid="public-header" role="banner" aria-label="OurSharedEvents">
-      <h1>OurSharedEvents</h1>
+      <h1 data-testid="public-title">OurSharedEvents</h1>
     </header>
     <main id="main-content" data-testid="public-main" aria-label="Upcoming community events">
-      <div
-        id="sponsor-banner"
-        data-testid="public-sponsor-banner"
-        role="region"
-        aria-label="Event sponsors"
-      ></div>
-      <h2 data-testid="public-events-heading" tabindex="-1">Upcoming Events</h2>
-      <div id="events" data-testid="public-events" aria-live="polite" aria-atomic="false">
-        <p class="loading" data-testid="public-loading" role="status">Loading events&hellip;</p>
-      </div>
+      <section data-testid="public-sponsor-section" aria-label="Event sponsors">
+        <div
+          id="sponsor-banner"
+          data-testid="public-sponsor-banner"
+          role="region"
+          aria-label="Sponsors"
+        ></div>
+      </section>
+      <section data-testid="public-events-section" aria-labelledby="events-heading">
+        <p id="events-count" class="sr-only" data-testid="public-events-count" role="status" aria-live="polite"></p>
+        <h2 id="events-heading" data-testid="public-events-heading" tabindex="-1">Upcoming Events</h2>
+        <div id="events" data-testid="public-events" aria-live="polite" aria-atomic="false">
+          <p class="loading" data-testid="public-loading" role="status">Loading events&hellip;</p>
+        </div>
+      </section>
     </main>
+    <footer data-testid="public-footer">
+      <p data-testid="public-footer-copyright">&copy; 2026 OurSharedEvents &middot; <a href="/events" data-testid="public-footer-browse">Browse Events</a></p>
+    </footer>
     <script>
       (async () => {
         const esc = (s) => {
@@ -190,6 +223,8 @@
               '<p class="loading" data-testid="public-events-empty" role="status">No events scheduled.</p>';
             return;
           }
+          const countEl = document.getElementById('events-count');
+          if (countEl) countEl.textContent = data.items.length + ' upcoming event' + (data.items.length === 1 ? '' : 's');
           container.innerHTML = data.items
             .map((e) => {
               const safeId = esc(String(e.id || ''));
@@ -207,12 +242,14 @@
                     )
                   : '';
               const venueStr =
-                e.venue || e.location ? ' &middot; ' + esc(e.venue || e.location) : '';
+                e.venue || e.location ? esc(e.venue || e.location) : '';
+              const datePart = dateStr ? '<span data-testid="public-event-date">' + dateStr + '</span>' : '';
+              const venuePart = venueStr ? ' &middot; <span data-testid="public-event-venue">' + venueStr + '</span>' : '';
               return `
           <div class="event-card" data-testid="public-event-card" data-event-id="${safeId}">
             <div class="event-info" data-testid="public-event-info">
               <h3 data-testid="public-event-name">${safeName}</h3>
-              <p class="meta" data-testid="public-event-meta">${dateStr}${venueStr}</p>
+              <p class="meta" data-testid="public-event-meta">${datePart}${venuePart}</p>
             </div>
             <a class="cta" href="/forms/${safeId}?type=register&event=${encodedName}" data-testid="public-event-cta" aria-label="Register for ${safeName}">Register</a>
           </div>`;
@@ -238,7 +275,10 @@
           const data = await res.json();
           if (!data.ok) return;
           const sponsors = data.bundle?.surface_sponsors?.mobileBanner || [];
-          if (!sponsors.length) return;
+          if (!sponsors.length) {
+            banner.innerHTML = '<span hidden data-testid="public-sponsor-empty"></span>';
+            return;
+          }
           const esc = (s) => {
             const d = document.createElement('div');
             d.textContent = s;
@@ -247,25 +287,12 @@
           banner.innerHTML = sponsors
             .map((s) => {
               const logo = s.logo_url
-                ? '<img src="' +
-                  esc(s.logo_url) +
-                  '" alt="' +
-                  esc(s.name) +
-                  '" referrerpolicy="no-referrer" onerror="this.style.display=\'none\'">'
+                ? '<img src="' + esc(s.logo_url) + '" alt="' + esc(s.name) + '" referrerpolicy="no-referrer" onerror="this.style.display=\'none\'" data-testid="public-sponsor-logo">'
                 : '';
               const link = s.website_url
-                ? '<a href="' +
-                  esc(s.website_url) +
-                  '" target="_blank" rel="noopener" data-testid="public-sponsor-name">' +
-                  esc(s.name) +
-                  '</a>'
-                : '<span>' + esc(s.name) + '</span>';
-              return (
-                '<div class="sponsor-card" data-testid="public-sponsor-card">' +
-                logo +
-                link +
-                '</div>'
-              );
+                ? '<a href="' + esc(s.website_url) + '" target="_blank" rel="noopener" data-testid="public-sponsor-link"><span data-testid="public-sponsor-name">' + esc(s.name) + '</span></a>'
+                : '<span data-testid="public-sponsor-fallback">' + esc(s.name) + '</span>';
+              return '<div class="sponsor-card" data-testid="public-sponsor-card">' + logo + link + '</div>';
             })
             .join('');
           banner.classList.add('sponsor-strip');
@@ -284,7 +311,7 @@
             ).catch(() => {});
           });
         } catch {
-          /* sponsor loading is non-critical */
+          if (banner) banner.innerHTML = '<span hidden data-testid="public-sponsor-error"></span>';
         }
       })();
     </script>

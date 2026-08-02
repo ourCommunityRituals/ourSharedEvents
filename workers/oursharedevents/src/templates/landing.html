@@ -529,7 +529,7 @@
     </style>
   </head>
   <body>
-    <a href="#main-content" class="skip-link">Skip to content</a>
+    <a href="#main-content" class="skip-link" data-testid="landing-skip-link">Skip to content</a>
     <header data-testid="landing-header">
       <span class="logo" data-testid="landing-logo">OurSharedEvents</span>
       <nav data-testid="landing-nav">
@@ -539,8 +539,8 @@
     </header>
     <main id="main-content" data-testid="landing-main">
       <section class="hero" data-testid="hero-section">
-        <h1>Gather with your neighborhood on Chicago&#x2019;s Southside</h1>
-        <p>
+        <h1 data-testid="hero-headline">Gather with your neighborhood on Chicago&#x2019;s Southside</h1>
+        <p data-testid="hero-description">
           Community events that bring people together. Stay in the loop and be the first to know
           when something&#x2019;s happening near you.
         </p>
@@ -556,14 +556,14 @@
             required
           />
           <button type="submit" data-testid="subscribe-submit">Stay in the Loop</button>
-          <div class="form-message" id="form-message" role="status" aria-live="polite"></div>
+          <div class="form-message" id="form-message" role="status" aria-live="polite" data-testid="subscribe-message"></div>
         </form>
       </section>
       <section class="ring-section" aria-label="Focus neighborhoods" data-testid="ring-section">
-        <h2>Our Neighborhood Ring</h2>
+        <h2 data-testid="ring-title">Our Neighborhood Ring</h2>
         <p class="ring-subtitle">Six Southside communities. One connected flywheel.</p>
         <div class="ring-container" data-testid="ring-layout">
-          <div class="ring-path" aria-hidden="true"></div>
+          <div class="ring-path" aria-hidden="true" data-testid="ring-path"></div>
           <div
             class="ring-node n-ep"
             data-testid="ring-node-ep"
@@ -599,23 +599,23 @@
       <section class="features" data-testid="features-section">
         <div class="feature-card" data-testid="feature-events">
           <div class="feature-icon events" role="img" aria-hidden="true">&#x1F4C5;</div>
-          <h3>Shared Events</h3>
-          <p>
+          <h3 data-testid="feature-events-title">Shared Events</h3>
+          <p data-testid="feature-events-desc">
             Browse upcoming gatherings, leagues, and community nights happening across the
             neighborhood.
           </p>
         </div>
         <div class="feature-card" data-testid="feature-sponsors">
           <div class="feature-icon sponsors" role="img" aria-hidden="true">&#x1F91D;</div>
-          <h3>Local Sponsors</h3>
-          <p>
+          <h3 data-testid="feature-sponsors-title">Local Sponsors</h3>
+          <p data-testid="feature-sponsors-desc">
             Neighborhood businesses supporting the events you love. Real partnerships, real impact.
           </p>
         </div>
         <div class="feature-card" data-testid="feature-community">
           <div class="feature-icon community" role="img" aria-hidden="true">&#x1F3D8;</div>
-          <h3>Community First</h3>
-          <p>
+          <h3 data-testid="feature-community-title">Community First</h3>
+          <p data-testid="feature-community-desc">
             Built for the Southside, by the Southside. Every event strengthens the bonds that
             matter.
           </p>
@@ -623,7 +623,7 @@
       </section>
     </main>
     <footer data-testid="landing-footer">
-      <p>&#xA9; 2026 OurSharedEvents &#xB7; <a href="/events">Browse Events</a></p>
+      <p data-testid="landing-footer-copyright">&#xA9; 2026 OurSharedEvents &#xB7; <a href="/events" data-testid="landing-footer-browse">Browse Events</a></p>
     </footer>
     <script type="module">
       const form = document.getElementById('subscribe-form');

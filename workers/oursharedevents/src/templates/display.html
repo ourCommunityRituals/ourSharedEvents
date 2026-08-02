@@ -350,9 +350,9 @@
     </style>
   </head>
   <body>
-    <a href="#main-content" class="skip-link">Skip to content</a>
+    <a href="#main-content" class="skip-link" data-testid="display-skip-link">Skip to content</a>
     <header data-testid="display-header" aria-label="OurSharedEvents live display">
-      <h1>OurSharedEvents</h1>
+      <h1 data-testid="display-title">OurSharedEvents</h1>
       <div class="clock" id="clock" aria-live="off" data-testid="display-clock"></div>
     </header>
     <aside
@@ -370,7 +370,7 @@
       data-testid="display-sponsor-banner"
     ></div>
     <div class="ticker" aria-hidden="true" data-testid="display-ticker">
-      <span class="ticker-inner" id="ticker"
+      <span class="ticker-inner" id="ticker" data-testid="display-ticker-text"
         >OurSharedEvents &mdash; Community events on Chicago&rsquo;s Southside</span
       >
     </div>
@@ -398,16 +398,16 @@
           const fmt = iso => iso ? new Date(iso).toLocaleDateString('en-US', { weekday:'long', month:'long', day:'numeric' }) : '';
           const [featured, ...rest] = items;
           let html = '<div class="event-card" data-testid="display-featured-card">' +
-            '<div class="label">Upcoming Event</div>' +
+            '<div class="label" data-testid="display-featured-label">Upcoming Event</div>' +
             '<h2 data-testid="display-featured-title">' + esc(featured.name || 'Untitled Event') + '</h2>' +
             '<div class="meta" data-testid="display-featured-meta">' +
-            (featured.startDateISO ? '<span>' + esc(fmt(featured.startDateISO)) + '</span>' : '') +
-            (featured.venue ? '<span>' + esc(featured.venue) + '</span>' : '') +
+            (featured.startDateISO ? '<span data-testid="display-featured-date">' + esc(fmt(featured.startDateISO)) + '</span>' : '') +
+            (featured.venue ? '<span data-testid="display-featured-venue">' + esc(featured.venue) + '</span>' : '') +
             '</div></div>';
           if (rest.length) {
-            html += '<div class="next-events" data-testid="display-upcoming"><h3>Also Coming Up</h3>' +
-              rest.slice(0, 4).map(e => '<div class="next-card" data-testid="display-upcoming-card"><div class="name">' + esc(e.name || 'Untitled') + '</div>' +
-                '<div class="date">' + esc(fmt(e.startDateISO)) + '</div></div>').join('') +
+            html += '<div class="next-events" data-testid="display-upcoming"><h3 data-testid="display-upcoming-heading">Also Coming Up</h3>' +
+              rest.slice(0, 4).map(e => '<div class="next-card" data-testid="display-upcoming-card"><div class="name" data-testid="display-upcoming-name">' + esc(e.name || 'Untitled') + '</div>' +
+                '<div class="date" data-testid="display-upcoming-date">' + esc(fmt(e.startDateISO)) + '</div></div>').join('') +
               '</div>';
           }
           main.innerHTML = html;
@@ -442,8 +442,8 @@
           if (banner && tvTop.length) {
             banner.innerHTML = tvTop.map(s => {
               // OSE-R-015 (2026-05-15): referrerpolicy + onerror.
-              const logo = s.logo_url ? '<img src="' + esc(s.logo_url) + '" alt="' + esc(s.name) + '" referrerpolicy="no-referrer" onerror="this.style.display='none'">' : '';
-              return '<div class="display-sponsor-item" data-tier="' + esc(s.tier || 'primary') + '" data-testid="display-sponsor-item">' + logo + '<span class="name">' + esc(s.name) + '</span></div>';
+              const logo = s.logo_url ? '<img src="' + esc(s.logo_url) + '" alt="' + esc(s.name) + '" referrerpolicy="no-referrer" onerror="this.style.display=\'none\'" data-testid="display-sponsor-logo">' : '';
+              return '<div class="display-sponsor-item" data-tier="' + esc(s.tier || 'primary') + '" data-testid="display-sponsor-item">' + logo + '<span class="name" data-testid="display-sponsor-name">' + esc(s.name) + '</span></div>';
             }).join('');
           }
           if (sidebar && tvSide.length) {
@@ -454,9 +454,9 @@
               // onerror — when the sponsor host 404s, the broken-image
               // listener attached below advances the rotation immediately
               // instead of leaving a broken <img> on the venue TV.
-              const logo = s.logo_url ? '<img src="' + esc(s.logo_url) + '" alt="' + esc(s.name) + '" referrerpolicy="no-referrer">' : '';
-              return '<div class="display-sponsor-item" data-tier="' + esc(s.tier || 'primary') + '" data-testid="display-sponsor-rotate">' + logo + '<span class="name">' + esc(s.name) + '</span></div>' +
-                (total > 1 ? '<div class="sponsor-counter">' + num + '/' + total + '</div>' : '');
+              const logo = s.logo_url ? '<img src="' + esc(s.logo_url) + '" alt="' + esc(s.name) + '" referrerpolicy="no-referrer" data-testid="display-sponsor-sidebar-logo">' : '';
+              return '<div class="display-sponsor-item" data-tier="' + esc(s.tier || 'primary') + '" data-testid="display-sponsor-rotate">' + logo + '<span class="name" data-testid="display-sponsor-sidebar-name">' + esc(s.name) + '</span></div>' +
+                (total > 1 ? '<div class="sponsor-counter" data-testid="display-sponsor-counter">' + num + '/' + total + '</div>' : '');
             }
             function attachErrorAdvance() {
               // OSE-R-011: hide the broken image immediately + advance to
