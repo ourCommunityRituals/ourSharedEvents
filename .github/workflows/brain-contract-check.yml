@@ -53,7 +53,7 @@ jobs:
         working-directory: ocr-docs/ocr-docs-brain
         run: python3 tests/run_all.py
 
-      - name: Invariant #9 — cross-repo isolation gate (OCR-ENF-23)
+      - name: Invariant #22 — cross-repo import isolation gate (OCR-ENF-23)
         working-directory: ${{ github.workspace }}/ose
         run: bash scripts/check-cross-repo-imports.sh .
 

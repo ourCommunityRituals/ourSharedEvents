@@ -1,4 +1,4 @@
-# Invariant #9 — Tenant Isolation: Cross-Repo Audit
+# Invariant #22 — Cross-Repo Import Isolation: Audit + Gate
 
 **Date:** 2026-08-02
 **Audit scope:** OSE-388 (OCR-ENF-21) + OSE-389 (OCR-ENF-23)
@@ -9,7 +9,7 @@
 
 ## Invariant definition
 
-**Invariant #9 (Tenant Isolation):** No module-level imports may cross the OSE / WKRP / OAW repo boundary. Each product repo is a separate tenant. Cross-repo coupling must only exist at the OER aggregation boundary — a single, documented HTTP API seam.
+**Invariant #22 (Cross-Repo Import Isolation) — `security_isolation` group, order 6:** No module-level imports may cross the OSE / WKRP / OAW repo boundary. Each product repo is a separate tenant. Cross-repo coupling must only exist at the OER aggregation boundary — a single, documented HTTP API seam.
 
 ---
 
