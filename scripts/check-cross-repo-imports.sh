@@ -85,7 +85,7 @@ echo ""
 if [ "$VIOLATIONS" -gt 0 ]; then
   echo "FAIL — $VIOLATIONS cross-repo isolation violation(s) detected."
   echo ""
-  echo "Invariant #9 (Tenant Isolation) prohibits module-level imports between"
+  echo "Invariant #22 (Cross-Repo Import Isolation) prohibits module-level imports between"
   echo "OSE, WKRP, and OAW. The only permitted cross-repo coupling is the HTTP"
   echo "API seam at GET /api/events/:id/music (covered by Pact in OSE-423)."
   echo ""
@@ -93,6 +93,6 @@ if [ "$VIOLATIONS" -gt 0 ]; then
   exit 1
 else
   echo "PASS — no cross-repo isolation violations found."
-  echo "Invariant #9 (Tenant Isolation) is clean."
+  echo "Invariant #22 (Cross-Repo Import Isolation) is clean."
   exit 0
 fi
