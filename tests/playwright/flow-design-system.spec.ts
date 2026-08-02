@@ -1,5 +1,6 @@
 /**
  * OSE-286 — Design system compliance — full fleet surface coverage.
+ * OSE-307 — e2e flow test infrastructure (provenance trace).
  *
  * Asserts design system invariants across EVERY OSE surface that a customer,
  * operator, or embed partner can reach. Unlike the per-surface
