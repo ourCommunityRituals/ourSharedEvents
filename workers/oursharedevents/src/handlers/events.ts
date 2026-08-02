@@ -14,6 +14,7 @@ import { corsHeaders } from '../lib/cors';
 import { assertRenderable, VALID_EVENT_STATES, parseEventState } from '../domain/event-state';
 import { computeEventPhase, type EventPhase } from '../domain/event-phase';
 import { createShortlink } from '../lib/shortlinks';
+import { maybeTag } from '../lib/h3-tagging';
 
 // ─── Phase enrichment ──────────────────────────────────────────────────────────
 //
@@ -91,7 +92,7 @@ export async function handleListEvents(request: Request, env: EventsEnv): Promis
               start_date, end_date, timezone, cover_image_url, created_at, updated_at,
               legal_clearance_tier,
               what_short, who_host, why_purpose, how_details, where_address,
-              lat, lon, corridor_id
+              lat, lon, corridor_id, h3_res9, h3_res7
        FROM events
        WHERE brand_id = ? AND status = 'active'
        ORDER BY start_date ASC`
@@ -145,7 +146,7 @@ export async function handleGetEvent(
               start_date, end_date, timezone, cover_image_url, created_at, updated_at,
               legal_clearance_tier,
               what_short, who_host, why_purpose, how_details, where_address,
-              lat, lon, corridor_id
+              lat, lon, corridor_id, h3_res9, h3_res7
        FROM events
        WHERE id = ?`
     )
@@ -242,7 +243,7 @@ export async function handleAdminListEvents(request: Request, env: EventsEnv): P
               start_date, end_date, timezone, cover_image_url, created_at, updated_at,
               legal_clearance_tier,
               what_short, who_host, why_purpose, how_details, where_address,
-              lat, lon, corridor_id
+              lat, lon, corridor_id, h3_res9, h3_res7
        FROM   events
        ${where}
        ORDER  BY created_at DESC
@@ -406,14 +407,22 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
   const coverImageUrl =
     typeof body.cover_image_url === 'string' ? body.cover_image_url.slice(0, 500) : null;
   const templateId = typeof body.template_id === 'string' ? body.template_id.slice(0, 64) : null;
+
+  // OSE-489: capture-time H3 tagging — computation happens here (admin create),
+  // never in the scan/read hot path.
+  const lat = typeof body.lat === 'number' && Number.isFinite(body.lat) ? body.lat : null;
+  const lon = typeof body.lon === 'number' && Number.isFinite(body.lon) ? body.lon : null;
+  const h3Tags = maybeTag(lat, lon);
+
   const now = new Date().toISOString();
 
   try {
     await env.DB.prepare(
       `INSERT INTO events (id, brand_id, title, slug, status, description, location, start_date, end_date, timezone, cover_image_url, template_id,
                            what_short, who_host, why_purpose, how_details, where_address,
+                           lat, lon, h3_res9, h3_res7,
                            created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
       .bind(
         id,
@@ -433,6 +442,10 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
         whyPurpose,
         howDetails,
         whereAddress,
+        lat,
+        lon,
+        h3Tags?.h3_res9 ?? null,
+        h3Tags?.h3_res7 ?? null,
         now,
         now
       )
@@ -572,7 +585,7 @@ export async function handleUpdateEvent(
   };
 
   const sets: string[] = [];
-  const values: (string | null)[] = [];
+  const values: (string | number | null)[] = [];
 
   for (const [field, { max }] of Object.entries(allowedFields)) {
     if (field in body) {
@@ -584,6 +597,25 @@ export async function handleUpdateEvent(
         sets.push(`${field} = ?`);
         values.push(val.slice(0, max));
       }
+    }
+  }
+
+  // OSE-489: lat/lon are REAL columns — handle separately from string allowedFields.
+  let geoUpdated = false;
+  if ('lat' in body) {
+    const v = body.lat;
+    if (v === null || (typeof v === 'number' && Number.isFinite(v))) {
+      sets.push('lat = ?');
+      values.push(v === null ? null : (v as number));
+      geoUpdated = true;
+    }
+  }
+  if ('lon' in body) {
+    const v = body.lon;
+    if (v === null || (typeof v === 'number' && Number.isFinite(v))) {
+      sets.push('lon = ?');
+      values.push(v === null ? null : (v as number));
+      geoUpdated = true;
     }
   }
 
@@ -603,6 +635,18 @@ export async function handleUpdateEvent(
     if ((result.meta?.changes ?? 0) === 0) {
       return errorResponse('NOT_FOUND', `Event not found: ${eventId}`, 404, rid);
     }
+
+    // OSE-489: if lat or lon changed, re-fetch merged coords and recompute H3.
+    // Two-step avoids a read-modify-write race on partial coord updates.
+    if (geoUpdated) {
+      const geo = await env.DB.prepare('SELECT lat, lon FROM events WHERE id = ?')
+        .bind(eventId)
+        .first<{ lat: number | null; lon: number | null }>();
+      const tags = maybeTag(geo?.lat ?? null, geo?.lon ?? null);
+      await env.DB.prepare('UPDATE events SET h3_res9 = ?, h3_res7 = ? WHERE id = ?')
+        .bind(tags?.h3_res9 ?? null, tags?.h3_res7 ?? null, eventId)
+        .run();
+    }
   } catch (err) {
     console.error(
       JSON.stringify({
@@ -617,6 +661,47 @@ export async function handleUpdateEvent(
 
   return Response.json(
     { ok: true, status: 200, id: eventId },
+    { headers: { ...corsHeaders(request), 'X-Request-Id': rid } }
+  );
+}
+
+/**
+ * POST /api/v2/admin/events/backfill-h3-cells
+ *
+ * OSE-489 one-shot backfill: computes h3_res9/h3_res7 for existing events
+ * that have lat/lon but no H3 cells. Safe to run multiple times — only
+ * processes rows where h3_res9 IS NULL.
+ */
+export async function handleBackfillH3Cells(request: Request, env: EventsEnv): Promise<Response> {
+  const rid = requestId();
+
+  if (!env.DB) {
+    return errorResponse('DB_NOT_CONFIGURED', 'Database not available', 503, rid);
+  }
+
+  const { results } = await env.DB.prepare(
+    'SELECT id, lat, lon FROM events WHERE lat IS NOT NULL AND lon IS NOT NULL AND h3_res9 IS NULL'
+  ).all<{ id: string; lat: number; lon: number }>();
+
+  let updated = 0;
+  const errors: string[] = [];
+
+  for (const row of results ?? []) {
+    try {
+      const tags = maybeTag(row.lat, row.lon);
+      if (tags) {
+        await env.DB.prepare('UPDATE events SET h3_res9 = ?, h3_res7 = ? WHERE id = ?')
+          .bind(tags.h3_res9, tags.h3_res7, row.id)
+          .run();
+        updated++;
+      }
+    } catch (err) {
+      errors.push(`${row.id}: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
+  return Response.json(
+    { ok: true, status: 200, updated, skipped: errors.length, errors },
     { headers: { ...corsHeaders(request), 'X-Request-Id': rid } }
   );
 }
