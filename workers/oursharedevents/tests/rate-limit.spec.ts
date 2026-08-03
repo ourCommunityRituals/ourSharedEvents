@@ -1,23 +1,23 @@
 /**
- * OSE-201 / BE-11 — In-isolate rate limiter tests
+ * OSE-552 / BE-11 — KV-backed rate limiter tests
  *
  * L1: static shape checks (exports, constants)
- * L2: direct function unit tests for isRateLimited, clientIp, rateLimitResponse
+ * L2: direct function tests for isRateLimited, clientIp, rateLimitResponse
+ *
+ * Each test uses a unique client IP so KV state does not bleed between cases.
+ * No beforeEach flush needed — isolation via unique keys per test.
  */
 
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
+import { env } from 'cloudflare:test';
 import {
   RATE_LIMIT_MAX,
   RATE_LIMIT_WINDOW_MS,
   isRateLimited,
   clientIp,
   rateLimitResponse,
-  _flushRateLimitMap,
+  _deleteRateLimitKey,
 } from '../src/lib/rate-limit';
-
-beforeEach(() => {
-  _flushRateLimitMap();
-});
 
 // ── L1: Static shape ──────────────────────────────────────────────────────────
 
@@ -46,44 +46,43 @@ describe('rate-limit — L1 static', () => {
 // ── L2: isRateLimited ────────────────────────────────────────────────────────
 
 describe('isRateLimited', () => {
-  it('allows the first request for a new IP', () => {
-    expect(isRateLimited('1.2.3.4')).toBe(false);
+  it('allows the first request for a new IP', async () => {
+    expect(await isRateLimited('1.2.3.4', env.RATE_LIMIT_KV)).toBe(false);
   });
 
-  it('allows up to RATE_LIMIT_MAX requests', () => {
+  it('allows up to RATE_LIMIT_MAX requests', async () => {
     const ip = '10.0.0.1';
     for (let i = 0; i < RATE_LIMIT_MAX; i++) {
-      expect(isRateLimited(ip)).toBe(false);
+      expect(await isRateLimited(ip, env.RATE_LIMIT_KV)).toBe(false);
     }
   });
 
-  it('blocks the request after exceeding RATE_LIMIT_MAX', () => {
+  it('blocks the request after exceeding RATE_LIMIT_MAX', async () => {
     const ip = '10.0.0.2';
     for (let i = 0; i < RATE_LIMIT_MAX; i++) {
-      isRateLimited(ip);
+      await isRateLimited(ip, env.RATE_LIMIT_KV);
     }
-    expect(isRateLimited(ip)).toBe(true);
+    expect(await isRateLimited(ip, env.RATE_LIMIT_KV)).toBe(true);
   });
 
-  it('tracks different IPs independently', () => {
+  it('tracks different IPs independently', async () => {
     const ip1 = '192.168.1.1';
     const ip2 = '192.168.1.2';
     for (let i = 0; i < RATE_LIMIT_MAX; i++) {
-      isRateLimited(ip1);
+      await isRateLimited(ip1, env.RATE_LIMIT_KV);
     }
-    // ip1 is now at the limit — ip2 should still be allowed
-    expect(isRateLimited(ip1)).toBe(true);
-    expect(isRateLimited(ip2)).toBe(false);
+    expect(await isRateLimited(ip1, env.RATE_LIMIT_KV)).toBe(true);
+    expect(await isRateLimited(ip2, env.RATE_LIMIT_KV)).toBe(false);
   });
 
-  it('resets the window after flush', () => {
+  it('resets after key deletion (simulates window expiry)', async () => {
     const ip = '10.0.0.3';
     for (let i = 0; i <= RATE_LIMIT_MAX; i++) {
-      isRateLimited(ip);
+      await isRateLimited(ip, env.RATE_LIMIT_KV);
     }
-    expect(isRateLimited(ip)).toBe(true);
-    _flushRateLimitMap();
-    expect(isRateLimited(ip)).toBe(false);
+    expect(await isRateLimited(ip, env.RATE_LIMIT_KV)).toBe(true);
+    await _deleteRateLimitKey(ip, env.RATE_LIMIT_KV);
+    expect(await isRateLimited(ip, env.RATE_LIMIT_KV)).toBe(false);
   });
 });
 

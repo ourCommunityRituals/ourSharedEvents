@@ -50,6 +50,13 @@ migrations_dir = "migrations-forms"
 binding = "UPLOADS_BUCKET"
 bucket_name = "ose-uploads-dev"
 
+# ── Rate Limit KV (local dev) ─────────────────────────────────────────────────
+# Provision once: wrangler kv namespace create rate-limit-dev
+# Then fill id below with the ID from: wrangler kv namespace list
+[[kv_namespaces]]
+binding = "RATE_LIMIT_KV"
+id = "rate-limit-kv-dev-local"
+
 # ── Observability: structured logs and traces ────────────────────
 # Enables Workers Logs in CF Dashboard (real-time + historical)
 # See: https://developers.cloudflare.com/workers/observability/
@@ -107,6 +114,13 @@ migrations_dir = "migrations-forms"
 [[env.staging.r2_buckets]]
 binding = "UPLOADS_BUCKET"
 bucket_name = "ose-uploads-staging"
+
+# ── Rate Limit KV (staging) ───────────────────────────────────────────────────
+# Provision: wrangler kv namespace create rate-limit-staging
+# Then fill id: wrangler kv namespace list | grep rate-limit-staging
+[[env.staging.kv_namespaces]]
+binding = "RATE_LIMIT_KV"
+id = "PROVISION-wrangler-kv-namespace-create-rate-limit-staging"
 
 [env.staging.vars]
 WORKER_ENV = "staging"
@@ -169,6 +183,13 @@ migrations_dir = "migrations-forms"
 [[env.production.r2_buckets]]
 binding = "UPLOADS_BUCKET"
 bucket_name = "ose-uploads-production"
+
+# ── Rate Limit KV (production) ────────────────────────────────────────────────
+# Provision: wrangler kv namespace create rate-limit-production
+# Then fill id: wrangler kv namespace list | grep rate-limit-production
+[[env.production.kv_namespaces]]
+binding = "RATE_LIMIT_KV"
+id = "PROVISION-wrangler-kv-namespace-create-rate-limit-production"
 
 [env.production.vars]
 WORKER_ENV = "production"

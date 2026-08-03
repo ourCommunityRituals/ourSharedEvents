@@ -170,7 +170,7 @@ import { handleGetPosterBundle, type PosterBundleEnv } from './handlers/poster-b
 import { corsOrigin } from './lib/cors';
 import { guardPublicReadOnly } from './lib/public-readonly';
 import { assertRenderable, parseEventState } from './domain/event-state';
-import { isRateLimited, clientIp, rateLimitResponse } from './lib/rate-limit';
+import { isRateLimited, clientIp, rateLimitResponse, type RateLimitEnv } from './lib/rate-limit';
 import { handleAdminUploadFile, handleGetUploadedFile, type UploadEnv } from './handlers/upload';
 import { handleDataSubjectErase, type DataSubjectEnv } from './handlers/data-subject';
 import {
@@ -195,7 +195,8 @@ export type RouterEnv = PagesEnv &
   UploadEnv &
   DataSubjectEnv &
   SharedReportReadEnv &
-  ShortlinkResolveEnv & {
+  ShortlinkResolveEnv &
+  RateLimitEnv & {
     WORKER_ENV?: string;
     WORKER_BUILD_VERSION?: string;
     // OSE-272: peppered SHA-256 input for SharedReport return-rate hashing.
@@ -804,8 +805,8 @@ export async function route(
   if (publicFormsMatch && method === 'POST') {
     const [, eventId, formType] = publicFormsMatch;
 
-    // Rate limit: 60 req/min per IP, best-effort (resets on cold start).
-    if (isRateLimited(clientIp(request))) {
+    // Rate limit: 60 req/min per IP, persistent via CF KV (OSE-552).
+    if (await isRateLimited(clientIp(request), env.RATE_LIMIT_KV)) {
       return rateLimitResponse();
     }
 

@@ -217,6 +217,7 @@ export default defineConfig({
       miniflare: {
         d1Databases: ['DB', 'FORMS_DB'],
         r2Buckets: ['UPLOADS_BUCKET'],
+        kvNamespaces: ['RATE_LIMIT_KV'],
         bindings: {
           TEST_MIGRATION_STATEMENTS: JSON.stringify(migrationStatements),
           TEST_FORMS_MIGRATION_STATEMENTS: JSON.stringify(formsMigrationStatements),
