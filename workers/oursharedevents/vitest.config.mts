@@ -270,23 +270,16 @@ export default defineConfig({
     // independent workerd processes simultaneously, saturating CPU/memory
     // and causing the runner's Azure relay token renewal to fail
     // (VssUnauthorizedException), which cancels the entire job.
-    // 4 is enough to keep all CPU cores busy without overwhelming the runner.
-    maxWorkers: 4,
-    // 30s — miniflare worker bootstrap + per-spec D1 migration apply (~80 stmts)
-    // can exceed vitest's 10s default `hookTimeout` when the self-hosted
-    // Bloodraven runners are processing parallel workflow jobs and CPU/IO
-    // contention slows the SQLite migration loop. 30s is comfortable headroom
-    // for the slowest beforeAll observed (~6s) while still failing fast on
-    // genuine hangs. Without this, T0 Gate flakes whenever 2+ PRs run their
-    // test pyramids concurrently.
-    hookTimeout: 30000,
-    // Same reasoning for testTimeout. QA-1 migration idempotency
-    // (constraints.spec.ts) re-runs the entire 28-migration loop inside the
-    // test body (not just beforeAll), which puts the work under the
-    // testTimeout budget rather than hookTimeout. Default 5s timed out on
-    // PR #156 CI under runner contention (observed 12.8s wall-clock).
-    // Aligning testTimeout with hookTimeout keeps both budgets symmetric
-    // and removes a second class of parallel-runner flake.
-    testTimeout: 30000,
+    // Set to 2 (conservative) while runner pool is at 2 healthy runners and
+    // test suite optimisation is pending (see Linear OSE-TRE epic).
+    // Tune upward after proper benchmarking — see stories for the full plan.
+    maxWorkers: 2,
+    // 60s — D1 migration apply (~80 stmts) under 2-worker concurrency
+    // can still exceed the 30s that was comfortable at lower file counts.
+    // shared-report-read.spec.ts and qa-flag-gating.spec.ts hit hookTimeout
+    // and testTimeout at 30s under 4-worker load (run 30848988594). Doubling
+    // to 60s gives headroom until the TRE epic lands proper parallelism tuning.
+    hookTimeout: 60000,
+    testTimeout: 60000,
   },
 });
