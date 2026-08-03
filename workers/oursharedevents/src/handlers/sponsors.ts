@@ -26,16 +26,17 @@
 
 import { corsHeaders } from '../lib/cors';
 import {
-  resolveSponsorsForEvent,
   filterSponsorsForSurface,
   buildSponsorBundle,
   type Surface,
 } from '../lib/sponsor-resolver';
 import { validateLogoUrl, fetchAndProxyLogo } from '../lib/sponsor-logo';
+import { getDataProvider, type DataProviderEnv } from '../lib/data-provider.js';
+import type { DataProviderCtx } from '@ocr/data-provider';
 
 // ─── Types ──────────────────────────────────────────────────────────────────────
 
-export interface SponsorsEnv {
+export interface SponsorsEnv extends DataProviderEnv {
   WORKER_ENV?: string;
   DB?: D1Database;
 }
@@ -577,29 +578,28 @@ export async function handleGetSponsorAreas(
 
 /**
  * GET /api/v2/events/:id/sponsors
+ *
+ * Uses DataProvider for live → CF cache → mock fallback chain.
  */
 export async function handleGetSponsorsForEvent(
   request: Request,
   env: SponsorsEnv,
-  eventId: string
+  eventId: string,
+  ctx?: DataProviderCtx
 ): Promise<Response> {
   const rid = requestId();
-  if (!env.DB) {
-    return Response.json(
-      { ok: true, status: 200, items: [] },
-      { headers: { ...corsHeaders(request), 'X-Request-Id': rid } }
-    );
-  }
 
   try {
-    const sponsors = await resolveSponsorsForEvent(env.DB, eventId);
+    const dp = getDataProvider(env, ctx);
+    const result = await dp.getSponsors(eventId);
 
     return Response.json(
-      { ok: true, status: 200, items: sponsors },
+      { ok: true, status: 200, items: result.data },
       {
         headers: {
           ...corsHeaders(request),
           'Cache-Control': 'private, max-age=60, stale-while-revalidate=300',
+          'X-Data-Source': result.source,
           'X-Request-Id': rid,
         },
       }
@@ -620,47 +620,38 @@ export async function handleGetSponsorsForEvent(
 
 /**
  * GET /api/v2/events/:id/sponsor-bundle?surface=poster|display|public
+ *
+ * Uses DataProvider for live → CF cache → mock fallback chain.
  */
 export async function handleGetSponsorBundle(
   request: Request,
   env: SponsorsEnv,
-  eventId: string
+  eventId: string,
+  ctx?: DataProviderCtx
 ): Promise<Response> {
   const rid = requestId();
-  if (!env.DB) {
-    return Response.json(
-      {
-        ok: true,
-        status: 200,
-        bundle: {
-          sponsors: [],
-          surface_sponsors: { posterTop: [], tvTop: [], tvSide: [], mobileBanner: [] },
-          rotation_config: { sponsorSlots: 0, rotationMs: 5000 },
-        },
-      },
-      { headers: { ...corsHeaders(request), 'X-Request-Id': rid } }
-    );
-  }
 
   try {
-    const sponsors = await resolveSponsorsForEvent(env.DB, eventId);
+    const dp = getDataProvider(env, ctx);
+    const result = await dp.getSponsors(eventId);
     const url = new URL(request.url);
     const surface = url.searchParams.get('surface') as Surface | null;
 
-    let result;
+    let bundle;
     if (surface && VALID_SURFACES.includes(surface)) {
-      const filtered = filterSponsorsForSurface(sponsors, surface);
-      result = buildSponsorBundle(filtered);
+      const filtered = filterSponsorsForSurface(result.data, surface);
+      bundle = buildSponsorBundle(filtered);
     } else {
-      result = buildSponsorBundle(sponsors);
+      bundle = buildSponsorBundle(result.data);
     }
 
     return Response.json(
-      { ok: true, status: 200, bundle: result },
+      { ok: true, status: 200, bundle },
       {
         headers: {
           ...corsHeaders(request),
           'Cache-Control': 'private, max-age=60, stale-while-revalidate=300',
+          'X-Data-Source': result.source,
           'X-Request-Id': rid,
         },
       }

@@ -58,6 +58,9 @@ export const FLAG_KEYS = {
   BRANDING_WHITE_LABEL: 'branding.white-label',
   BRANDING_CUSTOM_DOMAIN: 'branding.custom-domain',
   BRANDING_COLOR_PALETTE: 'branding.color-palette',
+  // Mock / demo mode
+  CONFIG_MOCK_MODE: 'config.mock-mode',
+  CONFIG_MOCK_SPONSOR_COUNT: 'config.mock-sponsor-count',
 } as const;
 
 export type FlagKey = (typeof FLAG_KEYS)[keyof typeof FLAG_KEYS];
@@ -188,7 +191,7 @@ export async function applyTier(
   tier: Tier
 ): Promise<{ tier: string; applied: number }> {
   const preset: Record<string, boolean> = {};
-  for (const k of ACTIVE_KEYS) preset[k] = TIER_PRESETS[tier].flags[k];
+  for (const k of ACTIVE_KEYS) preset[k] = (TIER_PRESETS[tier].flags as Record<string, boolean>)[k];
   const res = await adapter(db).batchApplyTier(tier, preset);
   return { tier, applied: res.applied };
 }
@@ -215,9 +218,10 @@ export async function resolveFlags(
   eventId?: string
 ): Promise<Record<string, boolean>> {
   try {
-    const all = await resolveFlagsShared(adapter(db), eventId);
+    const all = (await resolveFlagsShared(adapter(db), eventId)) as Record<string, boolean>;
     const out: Record<string, boolean> = {};
-    for (const k of ACTIVE_KEYS) out[k] = all[k];
+    // Keys absent from the shared resolver (OSE-specific extensions) default to false.
+    for (const k of ACTIVE_KEYS) out[k] = all[k] ?? false;
     return out;
   } catch {
     const out: Record<string, boolean> = {};

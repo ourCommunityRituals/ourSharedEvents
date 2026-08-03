@@ -82,11 +82,11 @@ beforeAll(async () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('Scenario 1: Free tier seed migration', () => {
-  test('17 global flags seeded — forms.register + forms.checkin + report.export-json ON, rest OFF', async () => {
+  test('19 global flags seeded — forms.register + forms.checkin + report.export-json ON, rest OFF', async () => {
     const flags = await listFlags(formsDb(), { scope: 'global' });
 
-    // Should have all 17 flag keys
-    expect(flags.length).toBe(17);
+    // 17 business flags from seed migration + 2 operational flags (seeded by OSE-190 migration)
+    expect(flags.length).toBe(19);
 
     const flagMap = Object.fromEntries(flags.map((f) => [f.flag_key, f.enabled]));
 
@@ -131,7 +131,7 @@ describe('Scenario 2: Tier upgrade free → mid → enterprise', () => {
   test('apply mid tier — surveys + email + config ON, assets still OFF', async () => {
     const result = await applyTier(formsDb(), 'mid');
     expect(result.tier).toBe('mid');
-    expect(result.applied).toBe(17);
+    expect(result.applied).toBe(19);
 
     expect(await isFeatureEnabled(formsDb(), 'forms.register')).toBe(true);
     expect(await isFeatureEnabled(formsDb(), 'forms.survey')).toBe(true);
@@ -148,13 +148,22 @@ describe('Scenario 2: Tier upgrade free → mid → enterprise', () => {
     expect(await isFeatureEnabled(formsDb(), 'branding.color-palette')).toBe(false);
   });
 
-  test('apply enterprise tier — everything ON', async () => {
+  test('apply enterprise tier — all 17 business flags ON, operational flags remain OFF', async () => {
     const result = await applyTier(formsDb(), 'enterprise');
     expect(result.tier).toBe('enterprise');
 
-    // All 17 flags ON
+    // Operational flags are explicit-opt-in, not enabled by tier preset
+    const OPERATIONAL_FLAGS = new Set([
+      FLAG_KEYS.CONFIG_MOCK_MODE,
+      FLAG_KEYS.CONFIG_MOCK_SPONSOR_COUNT,
+    ]);
+
     for (const key of Object.values(FLAG_KEYS)) {
-      expect(await isFeatureEnabled(formsDb(), key)).toBe(true);
+      if (OPERATIONAL_FLAGS.has(key)) {
+        expect(await isFeatureEnabled(formsDb(), key)).toBe(false);
+      } else {
+        expect(await isFeatureEnabled(formsDb(), key)).toBe(true);
+      }
     }
   });
 
@@ -275,7 +284,7 @@ describe('Scenario 6: Admin flag CRUD via HTTP', () => {
     const body = await json(res);
     expect(body.ok).toBe(true);
     expect(body.tier).toBe('mid');
-    expect(body.applied).toBe(17);
+    expect(body.applied).toBe(19);
   });
 
   test('GET /api/v2/admin/flags/current-tier → detect applied tier', async () => {
@@ -487,8 +496,16 @@ describe('Scenario 10: Idempotency', () => {
     const r2 = await applyTier(formsDb(), 'enterprise');
     expect(r1.applied).toBe(r2.applied);
 
+    const OPERATIONAL_FLAGS = new Set([
+      FLAG_KEYS.CONFIG_MOCK_MODE,
+      FLAG_KEYS.CONFIG_MOCK_SPONSOR_COUNT,
+    ]);
     for (const key of Object.values(FLAG_KEYS)) {
-      expect(await isFeatureEnabled(formsDb(), key)).toBe(true);
+      if (OPERATIONAL_FLAGS.has(key)) {
+        expect(await isFeatureEnabled(formsDb(), key)).toBe(false);
+      } else {
+        expect(await isFeatureEnabled(formsDb(), key)).toBe(true);
+      }
     }
   });
 

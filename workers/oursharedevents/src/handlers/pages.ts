@@ -228,6 +228,7 @@ export function handlePublicPage(_env: PagesEnv): Response {
 
 interface PublicEventEnv extends PagesEnv {
   DB?: D1Database;
+  FORMS_DB?: D1Database;
 }
 
 export interface PublicEventRow {
@@ -258,6 +259,38 @@ function esc(s: string | null | undefined): string {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
+}
+
+interface SponsorBasicRow {
+  id: string;
+  name: string;
+  website_url: string | null;
+}
+
+interface EventPageSocialData {
+  sponsors: SponsorBasicRow[];
+  regCount: number;
+  checkinCount: number;
+  surveyCount: number;
+  emailCount: number;
+}
+
+function renderSponsorItem(s: SponsorBasicRow): string {
+  const name = esc(s.name);
+  const url = s.website_url ?? '';
+  if (url.startsWith('https://')) {
+    return `<a href="${esc(url)}" class="ose-sponsor-link" rel="noopener noreferrer nofollow">${name}</a>`;
+  }
+  return `<span class="ose-sponsor-name">${name}</span>`;
+}
+
+function renderSponsorStrip(testid: string, sponsors: SponsorBasicRow[], heading: string): string {
+  if (!sponsors.length) return '';
+  const items = sponsors.map(renderSponsorItem).join('');
+  return `<section class="ose-sponsor-strip" data-testid="${testid}" aria-label="Event sponsors">
+    <p class="ose-sponsor-label">${heading}</p>
+    <div class="ose-sponsor-list">${items}</div>
+  </section>`;
 }
 
 function formatHumanDate(iso: string | null): string {
@@ -307,7 +340,11 @@ const ANONYMITY_AFFORDANCE = `
 // then the nonce parameter remains on the function signature because
 // it IS real for inline <script> (which this page does not have, but
 // might later).
-export function renderPreEventHtml(row: PublicEventRow, shareUrl: string): string {
+export function renderPreEventHtml(
+  row: PublicEventRow,
+  shareUrl: string,
+  social?: EventPageSocialData
+): string {
   const title = esc(row.title);
   const whatShort = esc(row.what_short);
   const whoHost = esc(row.who_host);
@@ -420,6 +457,14 @@ export function renderPreEventHtml(row: PublicEventRow, shareUrl: string): strin
         : ''
     }
 
+    ${social ? renderSponsorStrip('pre-sponsor-strip', social.sponsors, 'Supported by') : ''}
+
+    ${
+      social && social.regCount > 0
+        ? `<p class="ose-reg-count" data-testid="registration-count">${social.regCount === 1 ? '1 person has registered' : `${social.regCount} people have registered`}</p>`
+        : ''
+    }
+
     <a class="ose-rsvp-btn" data-testid="event-rsvp" href="/forms/${esc(row.id)}?type=register">RSVP for this event</a>
 
     ${ANONYMITY_AFFORDANCE}
@@ -444,7 +489,11 @@ export function renderPreEventHtml(row: PublicEventRow, shareUrl: string): strin
  * /events/:id during live phase gets this render and can forward the
  * link.
  */
-export function renderEventLiveHtml(row: PublicEventRow, shareUrl: string): string {
+export function renderEventLiveHtml(
+  row: PublicEventRow,
+  shareUrl: string,
+  social?: EventPageSocialData
+): string {
   const title = esc(row.title);
   const whatShort = esc(row.what_short);
   const whoHost = esc(row.who_host);
@@ -508,6 +557,10 @@ export function renderEventLiveHtml(row: PublicEventRow, shareUrl: string): stri
     </header>
 
     <a class="ose-checkin-btn" data-testid="event-checkin" href="/forms/${esc(row.id)}?type=checkin">Check in at this event</a>
+
+    ${social && social.checkinCount > 0 ? `<p class="ose-checkin-count" data-testid="checkin-count">${social.checkinCount} checked in so far</p>` : ''}
+
+    ${social ? renderSponsorStrip('live-sponsor-strip', social.sponsors, 'Supported by') : ''}
 
     ${
       whatShort
@@ -619,7 +672,8 @@ interface NextEventRow {
 function renderPostEventHtml(
   row: PublicEventRow,
   shareUrl: string,
-  nextEvent: NextEventRow | null
+  nextEvent: NextEventRow | null,
+  social?: EventPageSocialData
 ): string {
   const title = esc(row.title);
   const whatShort = esc(row.what_short);
@@ -687,6 +741,29 @@ function renderPostEventHtml(
 
     ${nextCard}
 
+    ${(() => {
+      if (!social) return '';
+      const { checkinCount, regCount, surveyCount, emailCount, sponsors } = social;
+      const hasStats = checkinCount > 0 || regCount > 0 || surveyCount > 0 || emailCount > 0;
+      const statsCard = hasStats
+        ? `<section class="ose-card ose-stats-card" data-testid="event-stats-card" aria-labelledby="stats-heading">
+            <h2 id="stats-heading">By the numbers</h2>
+            ${checkinCount > 0 ? `<p data-testid="stat-checkins"><strong>${checkinCount}</strong> Checked in</p>` : ''}
+            ${regCount > 0 ? `<p data-testid="stat-registrations"><strong>${regCount}</strong> Registered</p>` : ''}
+            ${checkinCount > 0 && regCount > 0 ? `<p data-testid="stat-attendance-rate">${Math.round((checkinCount / regCount) * 100)}% attendance rate</p>` : ''}
+            ${surveyCount > 0 ? `<p data-testid="stat-surveys"><strong>${surveyCount}</strong> Surveys submitted</p>` : ''}
+            ${emailCount > 0 ? `<p data-testid="stat-email-signups"><strong>${emailCount}</strong> Email signups</p>` : ''}
+          </section>`
+        : '';
+      const sponsorThanks = sponsors.length
+        ? `<section class="ose-card ose-sponsor-thanks" data-testid="post-sponsor-thanks" aria-labelledby="thanks-heading">
+            <h2 id="thanks-heading">Thanks to our sponsors</h2>
+            <div class="ose-sponsor-list">${sponsors.map(renderSponsorItem).join('')}</div>
+          </section>`
+        : '';
+      return statsCard + sponsorThanks;
+    })()}
+
     <section class="ose-card" data-testid="stay-connected-card" aria-labelledby="connect-heading">
       <h2 id="connect-heading">Hear about the next one</h2>
       <p>One email when something's coming up. Nothing else.</p>
@@ -697,6 +774,68 @@ function renderPostEventHtml(
   </main>
 </body>
 </html>`;
+}
+
+async function fetchEventPageSocialData(
+  env: PublicEventEnv,
+  eventId: string
+): Promise<EventPageSocialData> {
+  const empty: EventPageSocialData = {
+    sponsors: [],
+    regCount: 0,
+    checkinCount: 0,
+    surveyCount: 0,
+    emailCount: 0,
+  };
+
+  const [sponsorsResult, regResult, checkinResult, surveyResult, emailResult] =
+    await Promise.allSettled([
+      env.DB
+        ? env.DB.prepare(
+            `SELECT id, name, website_url FROM sponsors WHERE event_id = ? AND is_active = 1 ORDER BY id ASC`
+          )
+            .bind(eventId)
+            .all<SponsorBasicRow>()
+        : Promise.resolve({ results: [] as SponsorBasicRow[] }),
+
+      env.FORMS_DB
+        ? env.FORMS_DB.prepare(
+            `SELECT COUNT(*) as cnt FROM form_registrations WHERE event_id = ? AND status = 'confirmed' AND (expires_at IS NULL OR expires_at > datetime('now'))`
+          )
+            .bind(eventId)
+            .first<{ cnt: number }>()
+        : Promise.resolve(null),
+
+      env.FORMS_DB
+        ? env.FORMS_DB.prepare(`SELECT total_count FROM checkin_counts WHERE event_id = ? LIMIT 1`)
+            .bind(eventId)
+            .first<{ total_count: number }>()
+        : Promise.resolve(null),
+
+      env.FORMS_DB
+        ? env.FORMS_DB.prepare(`SELECT COUNT(*) as cnt FROM form_surveys WHERE event_id = ?`)
+            .bind(eventId)
+            .first<{ cnt: number }>()
+        : Promise.resolve(null),
+
+      env.FORMS_DB
+        ? env.FORMS_DB.prepare(`SELECT COUNT(*) as cnt FROM email_signups WHERE event_id = ?`)
+            .bind(eventId)
+            .first<{ cnt: number }>()
+        : Promise.resolve(null),
+    ]);
+
+  return {
+    sponsors:
+      sponsorsResult.status === 'fulfilled'
+        ? (sponsorsResult.value?.results ?? [])
+        : empty.sponsors,
+    regCount: regResult.status === 'fulfilled' ? (regResult.value?.cnt ?? 0) : 0,
+    checkinCount:
+      checkinResult.status === 'fulfilled' ? (checkinResult.value?.total_count ?? 0) : 0,
+    surveyCount: surveyResult.status === 'fulfilled' ? (surveyResult.value?.cnt ?? 0) : 0,
+    emailCount: emailResult.status === 'fulfilled' ? (emailResult.value?.cnt ?? 0) : 0,
+  };
 }
 
 /**
@@ -801,11 +940,14 @@ export async function handlePublicEventPage(
   const url = new URL(request.url);
   const shareUrl = `${url.origin}/events/${row.id}`;
 
+  // Fetch social data (sponsors + counts) in parallel; fail-open on any error.
+  const social = await fetchEventPageSocialData(env, row.id);
+
   let body: string;
   if (phase === 'pre_event') {
-    body = renderPreEventHtml(row, shareUrl);
+    body = renderPreEventHtml(row, shareUrl, social);
   } else if (phase === 'event') {
-    body = renderEventLiveHtml(row, shareUrl);
+    body = renderEventLiveHtml(row, shareUrl, social);
   } else {
     // post_event: real recap + return loop (OSE-245 ose-client-ready package).
     // renderMinimalPhaseHtml is kept as the defensive fallback for phase==='event'
@@ -825,7 +967,7 @@ export async function handlePublicEventPage(
     } catch {
       nextEvent = null; // recap must render even if the lookup fails
     }
-    body = renderPostEventHtml(row, shareUrl, nextEvent ?? null);
+    body = renderPostEventHtml(row, shareUrl, nextEvent ?? null, social);
   }
 
   return new Response(body, {

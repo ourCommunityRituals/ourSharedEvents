@@ -129,8 +129,9 @@ const EXPECTED_COLUMN_COUNTS: Record<string, number> = {
 };
 // sponsors: 12 (pre-OSE-330) + 1 (is_local INTEGER NOT NULL DEFAULT 0,
 // migration 0036 — Local Sponsor Covenant enforcement axis) + 1
-// (campaign_id TEXT, migration 0040 — enterprise campaign linking) = 14.
-EXPECTED_COLUMN_COUNTS.sponsors = 14;
+// (campaign_id TEXT, migration 0040 — enterprise campaign linking) + 2
+// (logo_width/logo_height INTEGER, migration 0041 — logo aspect ratio metadata) = 16.
+EXPECTED_COLUMN_COUNTS.sponsors = 16;
 
 // ── Apply migrations before tests ────────────────────────────────────────────
 
