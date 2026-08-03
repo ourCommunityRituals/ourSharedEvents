@@ -84,7 +84,7 @@ export async function handleListEvents(
   try {
     const dp = getDataProvider(env, ctx);
     const result = await dp.listEvents(brand);
-    const items = result.data.map((e) => enrichWithPhase(e as unknown as Record<string, unknown>));
+    const items = result.data.map((e: unknown) => enrichWithPhase(e as Record<string, unknown>));
     return Response.json(
       { ok: true, status: 200, items },
       {
