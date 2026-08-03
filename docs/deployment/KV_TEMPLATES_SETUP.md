@@ -1,4 +1,4 @@
-# KV Templates Setup Guide
+﻿# KV Templates Setup Guide
 
 **Last Updated:** 2025-12-09
 **Status:** Story 8 - Template serving infrastructure
@@ -143,12 +143,12 @@ wrangler deploy --env production
 
 ```bash
 # Test staging
-curl -I https://stg.eventangle.com/events
+curl -I https://stg.oursharedevents.com/events
 
 # Should return 200 OK, not 503
 
 # Check template debug endpoint (staging only)
-curl https://stg.eventangle.com/__debug/template/public
+curl https://stg.oursharedevents.com/__debug/template/public
 ```
 
 ---
@@ -157,7 +157,7 @@ curl https://stg.eventangle.com/__debug/template/public
 
 ### Error: Template not found (no KV)
 
-**Symptom:** Logs show `[EventAngle] Template not found (no KV): public.html`
+**Symptom:** Logs show `[oursharedevents] Template not found (no KV): public.html`
 
 **Cause:** The `TEMPLATES_KV` binding is not configured in wrangler.toml
 

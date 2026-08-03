@@ -1,4 +1,4 @@
-# Runbook: Investigating a Failing CI Run
+﻿# Runbook: Investigating a Failing CI Run
 
 > **Purpose:** Guide for debugging and investigating failing CI/CD pipelines.
 > **Last Updated:** 2025-12-17 | **Story:** 6 - Document Baseline & Runbooks
@@ -7,13 +7,13 @@
 
 ## Quick Reference
 
-| Task                 | Where to Look                                        |
-| -------------------- | ---------------------------------------------------- |
-| View CI run          | GitHub Actions tab                                   |
-| See test artifacts   | Actions > Run > Artifacts section                    |
-| Find requestId       | Test output or artifact logs                         |
-| Check staging health | `curl https://stg.eventangle.com/api/health/backend` |
-| Reproduce locally    | `npm run ci:local`                                   |
+| Task                 | Where to Look                                             |
+| -------------------- | --------------------------------------------------------- |
+| View CI run          | GitHub Actions tab                                        |
+| See test artifacts   | Actions > Run > Artifacts section                         |
+| Find requestId       | Test output or artifact logs                              |
+| Check staging health | `curl https://stg.oursharedevents.com/api/health/backend` |
+| Reproduce locally    | `npm run ci:local`                                        |
 
 ---
 
@@ -143,7 +143,7 @@ npm run guards        # Guard failure
 
 ```bash
 # First check staging is healthy
-curl -s https://stg.eventangle.com/api/health/backend | jq
+curl -s https://stg.oursharedevents.com/api/health/backend | jq
 
 # Then reproduce tests
 npm run test:api      # API failure
@@ -243,14 +243,14 @@ node scripts/check-schema-fields.js # Schema compliance
 1. **Check environment health:**
 
 ```bash
-curl -s https://stg.eventangle.com/api/health/backend | jq
+curl -s https://stg.oursharedevents.com/api/health/backend | jq
 ```
 
 2. **Check specific failing endpoint:**
 
 ```bash
 # From test output, identify failing URL
-curl -s "https://stg.eventangle.com/api/v2/events" | jq
+curl -s "https://stg.oursharedevents.com/api/v2/events" | jq
 ```
 
 3. **Look for requestId in failure:**
@@ -276,7 +276,7 @@ npx playwright show-trace trace.zip
 3. **Check for GAS HTML leak:**
 
 ```bash
-curl -s https://stg.eventangle.com/events | grep -c "Google Apps Script"
+curl -s https://stg.oursharedevents.com/events | grep -c "Google Apps Script"
 # Should be 0
 ```
 
@@ -342,7 +342,7 @@ Every API response includes a `requestId` for tracing:
 ### Find Request in Cloudflare
 
 1. Go to Cloudflare Dashboard
-2. Navigate to Workers > eventangle-staging
+2. Navigate to Workers > oursharedevents-staging
 3. Go to Logs
 4. Search for requestId
 

@@ -1,7 +1,7 @@
-# Runbook: Collapse to Single Worker Route
+﻿# Runbook: Collapse to Single Worker Route
 
 > **Epic SEC-4 — Route Hygiene (kill the route sprawl)**
-> Story SEC-4.2 — Collapse to Single Worker Route (eventangle.com/\*)
+> Story SEC-4.2 — Collapse to Single Worker Route (oursharedevents.com/\*)
 >
 > Created: 2025-12-21
 > Last Updated: 2025-12-21
@@ -34,12 +34,12 @@ Reduce all Worker routes to **one edge entrypoint** per domain, with the app own
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                              │
 │   Production:                                                                │
-│   └─ eventangle.com/*         (single canonical route)                       │
-│   └─ api.eventangle.com/*     (API subdomain, optional separation)           │
+│   └─ oursharedevents.com/*         (single canonical route)                       │
+│   └─ api.oursharedevents.com/*     (API subdomain, optional separation)           │
 │                                                                              │
 │   Staging:                                                                   │
-│   └─ stg.eventangle.com/*     (single staging route)                         │
-│   └─ api-stg.eventangle.com/* (staging API subdomain)                        │
+│   └─ stg.oursharedevents.com/*     (single staging route)                         │
+│   └─ api-stg.oursharedevents.com/* (staging API subdomain)                        │
 │                                                                              │
 │   TOTAL: 4 routes (2 prod + 2 staging)                                       │
 │                                                                              │
@@ -53,8 +53,8 @@ Worker routes can accumulate over time, creating "route sprawl":
 | Problem                   | Example                           | Impact                              |
 | ------------------------- | --------------------------------- | ----------------------------------- |
 | **Path-specific routes**  | `/admin/*`, `/public/*`, `/api/*` | 60+ fragments instead of 1 wildcard |
-| **Legacy test routes**    | `test.eventangle.com/*`           | Dead routes consuming quota         |
-| **Duplicate www routes**  | `www.eventangle.com/*`            | Redundant after SEC-4.1 redirect    |
+| **Legacy test routes**    | `test.oursharedevents.com/*`      | Dead routes consuming quota         |
+| **Duplicate www routes**  | `www.oursharedevents.com/*`       | Redundant after SEC-4.1 redirect    |
 | **Environment confusion** | Mixed staging/prod patterns       | Deployment errors                   |
 
 ### 1.3 Benefits of Single Route
@@ -77,7 +77,7 @@ Worker routes can accumulate over time, creating "route sprawl":
 │                              ┌─────────────────────────┐                     │
 │                              │     Cloudflare Edge     │                     │
 │                              │  (Single Worker Route)  │                     │
-│                              │   eventangle.com/*      │                     │
+│                              │   oursharedevents.com/*      │                     │
 │                              └───────────┬─────────────┘                     │
 │                                          │                                   │
 │                                          ▼                                   │
@@ -122,14 +122,14 @@ Worker routes can accumulate over time, creating "route sprawl":
 
 ### 2.2 Required Information
 
-| Information       | Value                       | Status |
-| ----------------- | --------------------------- | ------ |
-| Domain            | `eventangle.com`            |        |
-| Zone ID           | (from Cloudflare dashboard) |        |
-| Account ID        | (from Cloudflare dashboard) |        |
-| API Token         | (scoped for Worker Routes)  |        |
-| Production Worker | `eventangle-router-prod`    |        |
-| Staging Worker    | `eventangle-router-staging` |        |
+| Information       | Value                            | Status |
+| ----------------- | -------------------------------- | ------ |
+| Domain            | `oursharedevents.com`            |        |
+| Zone ID           | (from Cloudflare dashboard)      |        |
+| Account ID        | (from Cloudflare dashboard)      |        |
+| API Token         | (scoped for Worker Routes)       |        |
+| Production Worker | `oursharedevents-router-prod`    |        |
+| Staging Worker    | `oursharedevents-router-staging` |        |
 
 ### 2.3 Pre-Flight Checks
 
@@ -229,17 +229,17 @@ wrangler route list --env staging --json > route-backups/stg_routes_$(date +%Y%m
 
 Before cleanup, typical route sprawl might include:
 
-| Pattern                    | Worker                    | Status               |
-| -------------------------- | ------------------------- | -------------------- |
-| `eventangle.com/*`         | eventangle-router-prod    | KEEP                 |
-| `www.eventangle.com/*`     | eventangle-router-prod    | REMOVE (SEC-4.1)     |
-| `eventangle.com/admin/*`   | eventangle-router-prod    | REMOVE (redundant)   |
-| `eventangle.com/public/*`  | eventangle-router-prod    | REMOVE (redundant)   |
-| `eventangle.com/api/*`     | eventangle-router-prod    | REMOVE (redundant)   |
-| `api.eventangle.com/*`     | eventangle-router-prod    | KEEP (API subdomain) |
-| `stg.eventangle.com/*`     | eventangle-router-staging | KEEP                 |
-| `api-stg.eventangle.com/*` | eventangle-router-staging | KEEP                 |
-| `test.eventangle.com/*`    | (various)                 | REMOVE (legacy)      |
+| Pattern                         | Worker                         | Status               |
+| ------------------------------- | ------------------------------ | -------------------- |
+| `oursharedevents.com/*`         | oursharedevents-router-prod    | KEEP                 |
+| `www.oursharedevents.com/*`     | oursharedevents-router-prod    | REMOVE (SEC-4.1)     |
+| `oursharedevents.com/admin/*`   | oursharedevents-router-prod    | REMOVE (redundant)   |
+| `oursharedevents.com/public/*`  | oursharedevents-router-prod    | REMOVE (redundant)   |
+| `oursharedevents.com/api/*`     | oursharedevents-router-prod    | REMOVE (redundant)   |
+| `api.oursharedevents.com/*`     | oursharedevents-router-prod    | KEEP (API subdomain) |
+| `stg.oursharedevents.com/*`     | oursharedevents-router-staging | KEEP                 |
+| `api-stg.oursharedevents.com/*` | oursharedevents-router-staging | KEEP                 |
+| `test.oursharedevents.com/*`    | (various)                      | REMOVE (legacy)      |
 
 ---
 
@@ -252,8 +252,8 @@ After SEC-4.2, production should have exactly:
 ```toml
 # worker/wrangler.toml [env.production]
 routes = [
-  { pattern = "eventangle.com/*", zone_name = "eventangle.com" },
-  { pattern = "api.eventangle.com/*", zone_name = "eventangle.com" }
+  { pattern = "oursharedevents.com/*", zone_name = "oursharedevents.com" },
+  { pattern = "api.oursharedevents.com/*", zone_name = "oursharedevents.com" }
 ]
 ```
 
@@ -262,8 +262,8 @@ routes = [
 ```toml
 # worker/wrangler.toml [env.staging]
 routes = [
-  { pattern = "stg.eventangle.com/*", zone_name = "eventangle.com" },
-  { pattern = "api-stg.eventangle.com/*", zone_name = "eventangle.com" }
+  { pattern = "stg.oursharedevents.com/*", zone_name = "oursharedevents.com" },
+  { pattern = "api-stg.oursharedevents.com/*", zone_name = "oursharedevents.com" }
 ]
 ```
 
@@ -271,17 +271,17 @@ routes = [
 
 Any route matching these patterns should be removed:
 
-| Pattern                          | Reason                        |
-| -------------------------------- | ----------------------------- |
-| `www.eventangle.com/*`           | Redirected at edge (SEC-4.1)  |
-| `eventangle.com/admin/*`         | Covered by `eventangle.com/*` |
-| `eventangle.com/public/*`        | Covered by `eventangle.com/*` |
-| `eventangle.com/api/*`           | Covered by `eventangle.com/*` |
-| `eventangle.com/display/*`       | Covered by `eventangle.com/*` |
-| `eventangle.com/poster/*`        | Covered by `eventangle.com/*` |
-| `eventangle.com/report/*`        | Covered by `eventangle.com/*` |
-| `*.eventangle.com/specific-path` | Any path-specific routes      |
-| `test.*`, `dev.*`, `preview.*`   | Legacy/test subdomains        |
+| Pattern                               | Reason                             |
+| ------------------------------------- | ---------------------------------- |
+| `www.oursharedevents.com/*`           | Redirected at edge (SEC-4.1)       |
+| `oursharedevents.com/admin/*`         | Covered by `oursharedevents.com/*` |
+| `oursharedevents.com/public/*`        | Covered by `oursharedevents.com/*` |
+| `oursharedevents.com/api/*`           | Covered by `oursharedevents.com/*` |
+| `oursharedevents.com/display/*`       | Covered by `oursharedevents.com/*` |
+| `oursharedevents.com/poster/*`        | Covered by `oursharedevents.com/*` |
+| `oursharedevents.com/report/*`        | Covered by `oursharedevents.com/*` |
+| `*.oursharedevents.com/specific-path` | Any path-specific routes           |
+| `test.*`, `dev.*`, `preview.*`        | Legacy/test subdomains             |
 
 ### 4.4 Decision Matrix
 
@@ -316,7 +316,7 @@ Before removing routes, verify the app router handles all paths:
 
 ```bash
 # Test all known routes against the canonical host
-DOMAIN="eventangle.com"
+DOMAIN="oursharedevents.com"
 
 # API routes
 curl -s "https://$DOMAIN/api/status" | jq '.ok'
@@ -346,10 +346,10 @@ CF_API_TOKEN="${CLOUDFLARE_API_TOKEN_OSE}"
 
 # Target routes to KEEP
 KEEP_PATTERNS=(
-    "eventangle.com/*"
-    "api.eventangle.com/*"
-    "stg.eventangle.com/*"
-    "api-stg.eventangle.com/*"
+    "oursharedevents.com/*"
+    "api.oursharedevents.com/*"
+    "stg.oursharedevents.com/*"
+    "api-stg.oursharedevents.com/*"
 )
 
 echo "=== Routes to DELETE ==="
@@ -448,8 +448,8 @@ wrangler deploy --env staging
 
 set -e
 
-DOMAIN="${1:-eventangle.com}"
-STAGING_DOMAIN="stg.eventangle.com"
+DOMAIN="${1:-oursharedevents.com}"
+STAGING_DOMAIN="stg.oursharedevents.com"
 ZONE_ID="${CLOUDFLARE_ZONE_ID:-}"
 CF_API_TOKEN="${CLOUDFLARE_API_TOKEN_OSE:-}"
 
@@ -577,10 +577,10 @@ echo ""
 | Criterion                                             | Verification Method | Status   |
 | ----------------------------------------------------- | ------------------- | -------- |
 | Only 4 Worker routes total                            | API route count ≤4  | [ ] Pass |
-| `eventangle.com/*` works                              | curl returns 200    | [ ] Pass |
-| `api.eventangle.com/*` works                          | curl returns 200    | [ ] Pass |
-| `stg.eventangle.com/*` works                          | curl returns 200    | [ ] Pass |
-| `api-stg.eventangle.com/*` works                      | curl returns 200    | [ ] Pass |
+| `oursharedevents.com/*` works                         | curl returns 200    | [ ] Pass |
+| `api.oursharedevents.com/*` works                     | curl returns 200    | [ ] Pass |
+| `stg.oursharedevents.com/*` works                     | curl returns 200    | [ ] Pass |
+| `api-stg.oursharedevents.com/*` works                 | curl returns 200    | [ ] Pass |
 | All page routes work (`/admin`, `/public`, etc.)      | curl returns 200    | [ ] Pass |
 | All API routes work (`/api/status`, `/api/v2/events`) | curl returns 200    | [ ] Pass |
 | No path-specific routes exist                         | API route list      | [ ] Pass |
@@ -665,14 +665,14 @@ If you need to quickly add back a specific route:
 
 ```bash
 # Add back www route (if SEC-4.1 redirect fails)
-wrangler route create "www.eventangle.com/*" \
-  --zone "eventangle.com" \
-  --script "eventangle-router-prod"
+wrangler route create "www.oursharedevents.com/*" \
+  --zone "oursharedevents.com" \
+  --script "oursharedevents-router-prod"
 
 # Add back path-specific route (emergency)
-wrangler route create "eventangle.com/admin/*" \
-  --zone "eventangle.com" \
-  --script "eventangle-router-prod"
+wrangler route create "oursharedevents.com/admin/*" \
+  --zone "oursharedevents.com" \
+  --script "oursharedevents-router-prod"
 ```
 
 ### 7.3 Rollback Decision Tree
@@ -709,7 +709,7 @@ Is a specific route returning errors?
 
 ```bash
 # Check which worker handles a specific URL
-curl -I https://eventangle.com/admin 2>&1 | grep -i "cf-ray\|server"
+curl -I https://oursharedevents.com/admin 2>&1 | grep -i "cf-ray\|server"
 
 # List all routes via API
 curl -s "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/workers/routes" \
@@ -748,37 +748,37 @@ After SEC-4.2, this is simplified: only wildcards exist, so no precedence confli
 Typical pre-SEC-4 route configuration:
 
 ```
-eventangle.com/*                    (main)
-www.eventangle.com/*                (www variant)
-eventangle.com/admin/*              (admin pages)
-eventangle.com/public/*             (public pages)
-eventangle.com/api/*                (API endpoints)
-eventangle.com/display/*            (display pages)
-api.eventangle.com/*                (API subdomain)
-stg.eventangle.com/*                (staging)
-stg.eventangle.com/admin/*          (staging admin)
-test.eventangle.com/*               (test environment)
+oursharedevents.com/*                    (main)
+www.oursharedevents.com/*                (www variant)
+oursharedevents.com/admin/*              (admin pages)
+oursharedevents.com/public/*             (public pages)
+oursharedevents.com/api/*                (API endpoints)
+oursharedevents.com/display/*            (display pages)
+api.oursharedevents.com/*                (API subdomain)
+stg.oursharedevents.com/*                (staging)
+stg.oursharedevents.com/admin/*          (staging admin)
+test.oursharedevents.com/*               (test environment)
 ... (60+ total routes)
 ```
 
 ### A.2 After SEC-4.1
 
 ```
-eventangle.com/*                    (canonical - KEEP)
-api.eventangle.com/*                (API - KEEP)
-stg.eventangle.com/*                (staging - KEEP)
-api-stg.eventangle.com/*            (staging API - KEEP)
-www.eventangle.com/*                (REMOVED - redirected at edge)
+oursharedevents.com/*                    (canonical - KEEP)
+api.oursharedevents.com/*                (API - KEEP)
+stg.oursharedevents.com/*                (staging - KEEP)
+api-stg.oursharedevents.com/*            (staging API - KEEP)
+www.oursharedevents.com/*                (REMOVED - redirected at edge)
 ... (path-specific routes still exist)
 ```
 
 ### A.3 After SEC-4.2 (Target)
 
 ```
-eventangle.com/*                    (canonical - KEEP)
-api.eventangle.com/*                (API - KEEP)
-stg.eventangle.com/*                (staging - KEEP)
-api-stg.eventangle.com/*            (staging API - KEEP)
+oursharedevents.com/*                    (canonical - KEEP)
+api.oursharedevents.com/*                (API - KEEP)
+stg.oursharedevents.com/*                (staging - KEEP)
+api-stg.oursharedevents.com/*            (staging API - KEEP)
 ```
 
 **Total: 4 routes** (down from 60+)

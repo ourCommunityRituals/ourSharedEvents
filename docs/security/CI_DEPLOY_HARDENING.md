@@ -1,4 +1,4 @@
-# CI_DEPLOY_HARDENING.md — CI Deploy Least Privilege Policy
+﻿# CI_DEPLOY_HARDENING.md — CI Deploy Least Privilege Policy
 
 > **PROMPTSPEC-SEC-7.2** — CI Deploy Hardening (Least Privilege)
 > Role: Director of Security
@@ -49,12 +49,12 @@ Define least-privilege boundaries for CI/CD deployment pipelines, ensuring that 
 
 The CI deploy token (`CF_DEPLOY_TOKEN`) **MAY** perform:
 
-| Capability               | API Permission           | Scope                | Justification             |
-| ------------------------ | ------------------------ | -------------------- | ------------------------- |
-| Deploy Worker code       | Workers Scripts: Edit    | Account              | Core deployment function  |
-| Update Worker routes     | Workers Routes: Edit     | Zone: eventangle.com | Route traffic to Workers  |
-| Read/Write KV namespaces | Workers KV Storage: Edit | Account              | Application data storage  |
-| View account settings    | Account Settings: Read   | Account              | Verify deployment context |
+| Capability               | API Permission           | Scope                     | Justification             |
+| ------------------------ | ------------------------ | ------------------------- | ------------------------- |
+| Deploy Worker code       | Workers Scripts: Edit    | Account                   | Core deployment function  |
+| Update Worker routes     | Workers Routes: Edit     | Zone: oursharedevents.com | Route traffic to Workers  |
+| Read/Write KV namespaces | Workers KV Storage: Edit | Account                   | Application data storage  |
+| View account settings    | Account Settings: Read   | Account                   | Verify deployment context |
 
 ### 3.2 Prohibited Capabilities (Denylist)
 
@@ -80,12 +80,12 @@ TOKEN NAME: CI-Deploy-Workers-Only
 
 PERMISSIONS:
   Account | Workers Scripts        | Edit
-  Zone    | Workers Routes         | Edit     (Zone: eventangle.com)
+  Zone    | Workers Routes         | Edit     (Zone: oursharedevents.com)
   Account | Workers KV Storage     | Edit     (if using KV)
   Account | Account Settings       | Read
 
 ZONE RESOURCES:
-  Include | Specific zone | eventangle.com
+  Include | Specific zone | oursharedevents.com
 
 ACCOUNT RESOURCES:
   Include | [Your Account] | [Account ID]
@@ -322,7 +322,7 @@ CLOUDFLARE_API_TOKEN_OSE="<new-token>" wrangler whoami
 gh workflow run deploy.yml -f environment=staging
 
 # 8. Verify production unchanged (if not compromised)
-curl -sf "https://eventangle.com/?page=status"
+curl -sf "https://oursharedevents.com/?page=status"
 ```
 
 ### 6.3 Incident Notification Matrix

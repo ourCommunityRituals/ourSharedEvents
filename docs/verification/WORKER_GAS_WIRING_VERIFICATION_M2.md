@@ -1,4 +1,4 @@
-# Story M2: Worker → GAS Wiring Verification Results
+﻿# Story M2: Worker → GAS Wiring Verification Results
 
 **Date:** 2025-12-11
 **Status:** PARTIAL PASS - Error Handling Verified, Positive Test Blocked by M1
@@ -51,7 +51,7 @@ WORKER_BUILD_VERSION = "stg-2025.12.09"
 ### Test Command
 
 ```bash
-curl -i -X POST 'https://stg.eventangle.com/api/rpc' \
+curl -i -X POST 'https://stg.oursharedevents.com/api/rpc' \
   -H 'Content-Type: application/json' \
   -d '{"method":"api_list","payload":{"brandId":"root","scope":"events"}}'
 ```
@@ -64,7 +64,7 @@ content-type: application/json
 x-backend-status: 200
 x-backend-duration-ms: 2670
 x-error-corrid: err_20251211201851_48z25e
-x-proxied-by: eventangle-worker
+x-proxied-by: oursharedevents-worker
 x-worker-build-version: stg-2025.12.09
 x-worker-env: staging
 x-worker-version: 2.6.0
@@ -158,16 +158,16 @@ The Worker code in `cloudflare-proxy/worker.js` correctly:
 
 The Worker adds excellent debugging headers:
 
-| Header                   | Value               | Purpose                |
-| ------------------------ | ------------------- | ---------------------- |
-| `x-proxied-by`           | `eventangle-worker` | Identifies proxy       |
-| `x-worker-version`       | `2.6.0`             | Worker code version    |
-| `x-worker-build-version` | `stg-2025.12.09`    | Build timestamp        |
-| `x-worker-env`           | `staging`           | Environment identifier |
-| `x-backend-status`       | `200`               | Original GAS status    |
-| `x-backend-duration-ms`  | `2670`              | Upstream latency       |
-| `x-proxy-duration-ms`    | `2670`              | Total proxy time       |
-| `x-error-corrid`         | `err_...`           | Error correlation ID   |
+| Header                   | Value                    | Purpose                |
+| ------------------------ | ------------------------ | ---------------------- |
+| `x-proxied-by`           | `oursharedevents-worker` | Identifies proxy       |
+| `x-worker-version`       | `2.6.0`                  | Worker code version    |
+| `x-worker-build-version` | `stg-2025.12.09`         | Build timestamp        |
+| `x-worker-env`           | `staging`                | Environment identifier |
+| `x-backend-status`       | `200`                    | Original GAS status    |
+| `x-backend-duration-ms`  | `2670`                   | Upstream latency       |
+| `x-proxy-duration-ms`    | `2670`                   | Total proxy time       |
+| `x-error-corrid`         | `err_...`                | Error correlation ID   |
 
 ---
 
@@ -212,7 +212,7 @@ Story M2 cannot fully pass until Story M1 is completed:
 Re-run this test to verify positive case:
 
 ```bash
-curl -i -X POST 'https://stg.eventangle.com/api/rpc' \
+curl -i -X POST 'https://stg.oursharedevents.com/api/rpc' \
   -H 'Content-Type: application/json' \
   -d '{"method":"api_list","payload":{"brandId":"root","scope":"events"}}'
 ```
@@ -291,5 +291,5 @@ The Worker at `cloudflare-proxy/worker.js` demonstrates robust error handling:
 - Worker Source: `cloudflare-proxy/worker.js`
 - Configuration: `cloudflare-proxy/wrangler.toml`
 - Manifest: `deploy-manifest.json`
-- Staging URL: https://stg.eventangle.com
+- Staging URL: https://stg.oursharedevents.com
 - Direct GAS URL: https://script.google.com/macros/s/AKfycbwFneYCpkio7wCn7y08eDUb2PRCPc2Tdtbv20L4AbEHvuCvoqY9ks7-ONL0pzPPw4Hm/exec

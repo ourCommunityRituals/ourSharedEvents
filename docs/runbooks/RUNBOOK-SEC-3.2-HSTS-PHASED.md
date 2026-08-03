@@ -1,4 +1,4 @@
-# Runbook: HSTS Phased Rollout
+﻿# Runbook: HSTS Phased Rollout
 
 > **Epic SEC-3 — TLS/HTTPS Correctness**
 > Story SEC-3.2 — Enable HSTS (Phased Rollout)
@@ -39,7 +39,7 @@ Enable HTTP Strict Transport Security (HSTS) with a phased rollout approach:
 HSTS instructs browsers to **only** use HTTPS for a domain, even if the user types `http://`:
 
 ```
-Browser Request: http://eventangle.com
+Browser Request: http://oursharedevents.com
                            │
                            ▼
                   Browser checks HSTS cache
@@ -54,7 +54,7 @@ Browser Request: http://eventangle.com
               │                         │
               └──────────┬──────────────┘
                          ▼
-               https://eventangle.com
+               https://oursharedevents.com
                          │
                          ▼
               Response includes HSTS header
@@ -133,12 +133,12 @@ Phase 1          Phase 2         Phase 3          Phase 4         Phase 5
 
 Before enabling `includeSubDomains`, audit ALL subdomains:
 
-| Subdomain                | HTTPS Working | Certificate Valid | Include in HSTS |
-| ------------------------ | ------------- | ----------------- | --------------- |
-| `www.eventangle.com`     | [ ] Yes       | [ ] Valid         | [ ] Yes         |
-| `api.eventangle.com`     | [ ] Yes       | [ ] Valid         | [ ] Yes         |
-| `stg.eventangle.com`     | [ ] Yes       | [ ] Valid         | [ ] Yes         |
-| `api-stg.eventangle.com` | [ ] Yes       | [ ] Valid         | [ ] Yes         |
+| Subdomain                     | HTTPS Working | Certificate Valid | Include in HSTS |
+| ----------------------------- | ------------- | ----------------- | --------------- |
+| `www.oursharedevents.com`     | [ ] Yes       | [ ] Valid         | [ ] Yes         |
+| `api.oursharedevents.com`     | [ ] Yes       | [ ] Valid         | [ ] Yes         |
+| `stg.oursharedevents.com`     | [ ] Yes       | [ ] Valid         | [ ] Yes         |
+| `api-stg.oursharedevents.com` | [ ] Yes       | [ ] Valid         | [ ] Yes         |
 
 **Warning:** If ANY subdomain doesn't support HTTPS, do NOT enable `includeSubDomains`.
 
@@ -166,7 +166,7 @@ Before enabling `includeSubDomains`, audit ALL subdomains:
 ### 3.2 Enable via Cloudflare Dashboard
 
 1. Log in to [Cloudflare Dashboard](https://dash.cloudflare.com)
-2. Select your account and domain (eventangle.com)
+2. Select your account and domain (oursharedevents.com)
 3. Navigate to **SSL/TLS** → **Edge Certificates**
 4. Scroll to **HTTP Strict Transport Security (HSTS)**
 5. Click **Enable HSTS**
@@ -202,13 +202,13 @@ curl -X PATCH "https://api.cloudflare.com/client/v4/zones/{zone_id}/settings/sec
 
 ```bash
 # Verify HSTS header is present
-curl -I https://eventangle.com 2>/dev/null | grep -i strict-transport
+curl -I https://oursharedevents.com 2>/dev/null | grep -i strict-transport
 
 # Expected output:
 # strict-transport-security: max-age=300
 
 # Verify max-age value
-curl -sI https://eventangle.com | grep -i "strict-transport" | grep -oP 'max-age=\K[0-9]+'
+curl -sI https://oursharedevents.com | grep -i "strict-transport" | grep -oP 'max-age=\K[0-9]+'
 # Expected: 300
 ```
 
@@ -288,7 +288,7 @@ curl -X PATCH "https://api.cloudflare.com/client/v4/zones/{zone_id}/settings/sec
 
 ```bash
 # Verify updated max-age
-curl -sI https://eventangle.com | grep -i "strict-transport"
+curl -sI https://oursharedevents.com | grep -i "strict-transport"
 # Expected: strict-transport-security: max-age=604800
 
 # If includeSubDomains enabled:
@@ -348,7 +348,7 @@ curl -X PATCH "https://api.cloudflare.com/client/v4/zones/{zone_id}/settings/sec
 
 ```bash
 # Verify 6-month max-age
-curl -sI https://eventangle.com | grep -i "strict-transport"
+curl -sI https://oursharedevents.com | grep -i "strict-transport"
 # Expected: strict-transport-security: max-age=15768000; includeSubDomains
 ```
 
@@ -397,11 +397,11 @@ curl -X PATCH "https://api.cloudflare.com/client/v4/zones/{zone_id}/settings/sec
 
 ```bash
 # Verify 1-year max-age
-curl -sI https://eventangle.com | grep -i "strict-transport"
+curl -sI https://oursharedevents.com | grep -i "strict-transport"
 # Expected: strict-transport-security: max-age=31536000; includeSubDomains
 
 # Test with SSL Labs
-# Visit: https://www.ssllabs.com/ssltest/analyze.html?d=eventangle.com
+# Visit: https://www.ssllabs.com/ssltest/analyze.html?d=oursharedevents.com
 # HSTS should show as enabled
 ```
 
@@ -450,7 +450,7 @@ Before submitting to preload list:
 
 ```bash
 # Check if domain meets preload requirements
-# Visit: https://hstspreload.org/?domain=eventangle.com
+# Visit: https://hstspreload.org/?domain=oursharedevents.com
 ```
 
 ### 7.4 Enable Preload (ONLY IF CERTAIN)
@@ -478,12 +478,12 @@ curl -X PATCH "https://api.cloudflare.com/client/v4/zones/{zone_id}/settings/sec
 1. Verify header includes preload:
 
    ```bash
-   curl -sI https://eventangle.com | grep -i "strict-transport"
+   curl -sI https://oursharedevents.com | grep -i "strict-transport"
    # Expected: strict-transport-security: max-age=31536000; includeSubDomains; preload
    ```
 
 2. Visit [hstspreload.org](https://hstspreload.org)
-3. Enter domain: `eventangle.com`
+3. Enter domain: `oursharedevents.com`
 4. Verify all requirements met
 5. Submit for inclusion
 6. Wait for browser updates (Chrome, Firefox, Safari, Edge)
@@ -507,7 +507,7 @@ curl -X PATCH "https://api.cloudflare.com/client/v4/zones/{zone_id}/settings/sec
 ```bash
 #!/bin/bash
 # HSTS Verification Script for SEC-3.2
-DOMAIN="eventangle.com"
+DOMAIN="oursharedevents.com"
 
 echo "=== HSTS Verification for $DOMAIN ==="
 echo ""
@@ -677,7 +677,7 @@ For individual users experiencing issues:
 
 1. Navigate to `chrome://net-internals/#hsts`
 2. Under "Delete domain security policies"
-3. Enter: `eventangle.com`
+3. Enter: `oursharedevents.com`
 4. Click **Delete**
 
 **Firefox:**
@@ -736,23 +736,23 @@ For individual users experiencing issues:
 
 ```bash
 # Full HTTPS handshake details
-curl -vI https://eventangle.com 2>&1 | grep -E "(SSL|TLS|strict)"
+curl -vI https://oursharedevents.com 2>&1 | grep -E "(SSL|TLS|strict)"
 
 # Check all security headers
-curl -sI https://eventangle.com | grep -iE "(strict|x-content|x-frame|x-xss)"
+curl -sI https://oursharedevents.com | grep -iE "(strict|x-content|x-frame|x-xss)"
 
 # Test from specific location (via Cloudflare)
-curl -sI https://eventangle.com --resolve eventangle.com:443:$(dig +short eventangle.com | head -1) | grep -i strict
+curl -sI https://oursharedevents.com --resolve oursharedevents.com:443:$(dig +short oursharedevents.com | head -1) | grep -i strict
 
 # Verify Cloudflare is serving the header
-curl -sI https://eventangle.com | grep -i "cf-ray"
+curl -sI https://oursharedevents.com | grep -i "cf-ray"
 ```
 
 ### 10.3 SSL Labs Test
 
 For comprehensive HSTS verification:
 
-1. Visit [SSL Labs](https://www.ssllabs.com/ssltest/analyze.html?d=eventangle.com)
+1. Visit [SSL Labs](https://www.ssllabs.com/ssltest/analyze.html?d=oursharedevents.com)
 2. Check "Strict Transport Security (HSTS)" section
 3. Verify:
    - HSTS: Yes

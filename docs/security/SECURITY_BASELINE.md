@@ -1,4 +1,4 @@
-# SECURITY_BASELINE.md — North Star Security Model
+﻿# SECURITY_BASELINE.md — North Star Security Model
 
 > **PROMPTSPEC-SEC-0.1** — Security Baseline Inventory
 > Role: Director of Security + Lead Networking Consultant
@@ -10,14 +10,14 @@
 
 ## 1. Scope
 
-This document defines the security baseline for **EventAngle**, a multi-brand event management platform.
+This document defines the security baseline for **oursharedevents**, a multi-brand event management platform.
 
 | Attribute             | Value                                                                 |
 | --------------------- | --------------------------------------------------------------------- |
-| **System**            | EventAngle MVP Event Toolkit                                          |
+| **System**            | oursharedevents MVP Event Toolkit                                     |
 | **Version**           | 1.3.0 (Worker-only architecture)                                      |
-| **Production Domain** | `eventangle.com`                                                      |
-| **Staging Domain**    | `stg.eventangle.com`                                                  |
+| **Production Domain** | `oursharedevents.com`                                                 |
+| **Staging Domain**    | `stg.oursharedevents.com`                                             |
 | **Edge Provider**     | Cloudflare (Workers + DNS Proxy)                                      |
 | **Backend**           | Cloudflare D1 (edge SQLite) — previously Google Sheets API in Phase 1 |
 | **Source Repository** | `zeventbooks/MVP-EVENT-TOOLKIT`                                       |
@@ -32,7 +32,7 @@ This document defines the security baseline for **EventAngle**, a multi-brand ev
 
 **Out of Scope:**
 
-- Third-party integrations not controlled by EventAngle
+- Third-party integrations not controlled by oursharedevents
 - End-user device security
 - ~~Google Cloud internal security (assumed secure)~~ — no longer applicable (D1 migration)
 
@@ -66,31 +66,31 @@ These are the non-negotiable security principles. Every change must preserve the
 
 ### 3.1 Hosts
 
-| Host                     | Environment | Purpose            | Cloudflare Status |
-| ------------------------ | ----------- | ------------------ | ----------------- |
-| `eventangle.com`         | Production  | Apex domain        | Proxied           |
-| `www.eventangle.com`     | Production  | **Canonical host** | Proxied           |
-| `api.eventangle.com`     | Production  | API subdomain      | Proxied           |
-| `stg.eventangle.com`     | Staging     | Staging site       | Proxied           |
-| `api-stg.eventangle.com` | Staging     | Staging API        | Proxied           |
+| Host                          | Environment | Purpose            | Cloudflare Status |
+| ----------------------------- | ----------- | ------------------ | ----------------- |
+| `oursharedevents.com`         | Production  | Apex domain        | Proxied           |
+| `www.oursharedevents.com`     | Production  | **Canonical host** | Proxied           |
+| `api.oursharedevents.com`     | Production  | API subdomain      | Proxied           |
+| `stg.oursharedevents.com`     | Staging     | Staging site       | Proxied           |
+| `api-stg.oursharedevents.com` | Staging     | Staging API        | Proxied           |
 
-> **Canonical Host Decision:** `www.eventangle.com` is the canonical host (configured in `deploy-manifest.json`).
-> **Gap:** Apex redirect (`eventangle.com` → `www.eventangle.com`) is **NOT IMPLEMENTED**.
+> **Canonical Host Decision:** `www.oursharedevents.com` is the canonical host (configured in `deploy-manifest.json`).
+> **Gap:** Apex redirect (`oursharedevents.com` → `www.oursharedevents.com`) is **NOT IMPLEMENTED**.
 
 ### 3.2 Worker Routes
 
-| Worker Name          | Environment | Route Patterns                                                     |
-| -------------------- | ----------- | ------------------------------------------------------------------ |
-| `eventangle-prod`    | Production  | `eventangle.com/*`, `www.eventangle.com/*`, `api.eventangle.com/*` |
-| `eventangle-staging` | Staging     | `stg.eventangle.com/*`, `api-stg.eventangle.com/*`                 |
+| Worker Name               | Environment | Route Patterns                                                                    |
+| ------------------------- | ----------- | --------------------------------------------------------------------------------- |
+| `oursharedevents-prod`    | Production  | `oursharedevents.com/*`, `www.oursharedevents.com/*`, `api.oursharedevents.com/*` |
+| `oursharedevents-staging` | Staging     | `stg.oursharedevents.com/*`, `api-stg.oursharedevents.com/*`                      |
 
 ### 3.3 Route Sprawl Assessment
 
-| Concern                  | Status                                         | Notes                                       |
-| ------------------------ | ---------------------------------------------- | ------------------------------------------- |
-| Multiple route wildcards | **3 in production**                            | `apex/*`, `www/*`, `api/*`                  |
-| Route sprawl risk        | **LOW**                                        | All handled by single `router.ts`           |
-| Recommendation           | Consolidate if `api.*` not externally consumed | Consider `www.eventangle.com/api/*` pattern |
+| Concern                  | Status                                         | Notes                                            |
+| ------------------------ | ---------------------------------------------- | ------------------------------------------------ |
+| Multiple route wildcards | **3 in production**                            | `apex/*`, `www/*`, `api/*`                       |
+| Route sprawl risk        | **LOW**                                        | All handled by single `router.ts`                |
+| Recommendation           | Consolidate if `api.*` not externally consumed | Consider `www.oursharedevents.com/api/*` pattern |
 
 ### 3.4 All Endpoints Summary
 
@@ -213,7 +213,7 @@ These are the non-negotiable security principles. Every change must preserve the
 
 | Origin Type            | Endpoint                 | Status                               | Bypass Risk                                    |
 | ---------------------- | ------------------------ | ------------------------------------ | ---------------------------------------------- |
-| **Cloudflare Worker**  | `eventangle-router`      | **ACTIVE** (Primary)                 | **NONE** (no origin IP)                        |
+| **Cloudflare Worker**  | `oursharedevents-router` | **ACTIVE** (Primary)                 | **NONE** (no origin IP)                        |
 | **Cloudflare D1**      | D1 binding (edge SQLite) | **ACTIVE** (Data backend)            | **NONE** (binding-scoped, no external access)  |
 | **Google Sheets API**  | `sheets.googleapis.com`  | **ARCHIVED** (D1 migration, Phase 2) | **N/A** (removed) — previously used in Phase 1 |
 | **Google Apps Script** | `script.google.com`      | **ARCHIVED** (Story 5.2)             | **N/A** (deprecated)                           |
@@ -254,14 +254,14 @@ BACKEND_MODE=worker  # Only supported mode
 
 ## 7. Current Risk Register
 
-| ID        | Risk                                    | Severity   | Likelihood | Impact                   | Status                 | Notes                                                    |
-| --------- | --------------------------------------- | ---------- | ---------- | ------------------------ | ---------------------- | -------------------------------------------------------- |
-| **R-001** | Apex redirect not implemented           | **MEDIUM** | High       | SEO split, phishing risk | **OPEN**               | `eventangle.com` should redirect to `www.eventangle.com` |
-| **R-002** | Multiple route wildcards (NS-4 partial) | **LOW**    | N/A        | Config complexity        | **OPEN**               | 3 wildcards vs 1 ideal                                   |
-| **R-003** | WAF rules not documented                | **MEDIUM** | Medium     | Unknown protection level | **NEEDS VERIFICATION** | Cloudflare WAF state unknown                             |
-| **R-004** | Rate limiting not verified              | **MEDIUM** | Medium     | DoS vulnerability        | **NEEDS VERIFICATION** | Cloudflare rate limits assumed                           |
-| **R-005** | Legacy query param auth                 | **LOW**    | Low        | Credential leak in logs  | **DEPRECATED**         | `?adminKey=` still accepted                              |
-| **R-006** | Debug endpoints in staging              | **LOW**    | Low        | Info disclosure          | **BY DESIGN**          | `ENABLE_DEBUG_ENDPOINTS=true` in staging only            |
+| ID        | Risk                                    | Severity   | Likelihood | Impact                   | Status                 | Notes                                                              |
+| --------- | --------------------------------------- | ---------- | ---------- | ------------------------ | ---------------------- | ------------------------------------------------------------------ |
+| **R-001** | Apex redirect not implemented           | **MEDIUM** | High       | SEO split, phishing risk | **OPEN**               | `oursharedevents.com` should redirect to `www.oursharedevents.com` |
+| **R-002** | Multiple route wildcards (NS-4 partial) | **LOW**    | N/A        | Config complexity        | **OPEN**               | 3 wildcards vs 1 ideal                                             |
+| **R-003** | WAF rules not documented                | **MEDIUM** | Medium     | Unknown protection level | **NEEDS VERIFICATION** | Cloudflare WAF state unknown                                       |
+| **R-004** | Rate limiting not verified              | **MEDIUM** | Medium     | DoS vulnerability        | **NEEDS VERIFICATION** | Cloudflare rate limits assumed                                     |
+| **R-005** | Legacy query param auth                 | **LOW**    | Low        | Credential leak in logs  | **DEPRECATED**         | `?adminKey=` still accepted                                        |
+| **R-006** | Debug endpoints in staging              | **LOW**    | Low        | Info disclosure          | **BY DESIGN**          | `ENABLE_DEBUG_ENDPOINTS=true` in staging only                      |
 
 ### Risk Severity Definitions
 
@@ -280,7 +280,7 @@ BACKEND_MODE=worker  # Only supported mode
 
 ```
                     ┌─────────────────────────────────┐
-                    │      www.eventangle.com         │
+                    │      www.oursharedevents.com         │
                     │      (Single Edge Entrypoint)   │
                     └─────────────────────────────────┘
                                     │
@@ -371,19 +371,19 @@ This baseline links to subsequent PromptSpecs for implementation:
 
 ```bash
 # Verify Worker is responding (NS-1)
-curl -s https://www.eventangle.com/api/status | jq .
+curl -s https://www.oursharedevents.com/api/status | jq .
 
 # Verify backend health
-curl -s https://www.eventangle.com/api/health/backend | jq .
+curl -s https://www.oursharedevents.com/api/health/backend | jq .
 
 # Verify admin requires auth (NS-2) — should return 401/403
-curl -s https://www.eventangle.com/api/v2/admin/events | jq .
+curl -s https://www.oursharedevents.com/api/v2/admin/events | jq .
 
 # Verify origin config
-curl -s https://www.eventangle.com/health/origin | jq .
+curl -s https://www.oursharedevents.com/health/origin | jq .
 
 # Verify staging
-curl -s https://stg.eventangle.com/api/status | jq .
+curl -s https://stg.oursharedevents.com/api/status | jq .
 ```
 
 ### Manual Verification Checklist
@@ -394,7 +394,7 @@ A reviewer can answer these questions in under 2 minutes using this document:
 2. **What's privileged?** → Section 5.2: `/admin/*`, `/api/admin/*`, `/api/v2/admin/*` routes
 3. **What's origin?** → Section 6: Worker-only (no origin IP), Cloudflare D1 as data backend
 4. **What are the invariants?** → Section 2: NS-1 through NS-4 + QR-0
-5. **What's the canonical host?** → Section 3.1: `www.eventangle.com` (apex redirect pending)
+5. **What's the canonical host?** → Section 3.1: `www.oursharedevents.com` (apex redirect pending)
 6. **What are the risks?** → Section 7: Risk register with 6 items, 2 medium severity
 
 ---

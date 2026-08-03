@@ -1,4 +1,4 @@
-# Runbook: Enforce Strict TLS Configuration
+﻿# Runbook: Enforce Strict TLS Configuration
 
 > **Epic SEC-3 — TLS/HTTPS Correctness (no "Flexible", no excuses)**
 > Story SEC-3.1 — Enforce TLS "Full (strict)" + Minimum TLS 1.2+
@@ -211,7 +211,7 @@ If your origin doesn't have a valid certificate, create a free Cloudflare Origin
 1. Go to **SSL/TLS** → **Origin Server**
 2. Click **Create Certificate**
 3. Configure:
-   - Hostnames: `eventangle.com, *.eventangle.com`
+   - Hostnames: `oursharedevents.com, *.oursharedevents.com`
    - Certificate validity: 15 years (recommended)
 4. Click **Create**
 5. Copy the **Origin Certificate** and **Private Key**
@@ -305,13 +305,13 @@ TLS 1.3 provides improved security and performance. To enable:
 **Always Use HTTPS** redirects all HTTP requests to HTTPS:
 
 ```
-HTTP Request:  http://eventangle.com/page
+HTTP Request:  http://oursharedevents.com/page
                            │
                            ▼
                   301 Redirect (Cloudflare)
                            │
                            ▼
-HTTPS Response: https://eventangle.com/page
+HTTPS Response: https://oursharedevents.com/page
 ```
 
 This ensures:
@@ -408,11 +408,11 @@ To have your domain included in browser HSTS preload lists:
 
 ```bash
 # Test HTTP redirect
-curl -I http://eventangle.com 2>/dev/null | head -5
+curl -I http://oursharedevents.com 2>/dev/null | head -5
 
 # Expected output:
 # HTTP/1.1 301 Moved Permanently
-# Location: https://eventangle.com/
+# Location: https://oursharedevents.com/
 ```
 
 **Result:** [ ] Pass (301 redirect) / [ ] Fail (200 OK or other)
@@ -421,7 +421,7 @@ curl -I http://eventangle.com 2>/dev/null | head -5
 
 ```bash
 # Test HTTPS and view certificate
-curl -vI https://eventangle.com 2>&1 | grep -E "(SSL|TLS|subject|issuer|expire)"
+curl -vI https://oursharedevents.com 2>&1 | grep -E "(SSL|TLS|subject|issuer|expire)"
 
 # Expected: Valid certificate, TLS 1.2 or 1.3
 ```
@@ -430,16 +430,16 @@ curl -vI https://eventangle.com 2>&1 | grep -E "(SSL|TLS|subject|issuer|expire)"
 
 ```bash
 # Test that TLS 1.3 works
-curl --tlsv1.3 -I https://eventangle.com 2>/dev/null && echo "TLS 1.3: OK" || echo "TLS 1.3: FAIL"
+curl --tlsv1.3 -I https://oursharedevents.com 2>/dev/null && echo "TLS 1.3: OK" || echo "TLS 1.3: FAIL"
 
 # Test that TLS 1.2 works
-curl --tlsv1.2 -I https://eventangle.com 2>/dev/null && echo "TLS 1.2: OK" || echo "TLS 1.2: FAIL"
+curl --tlsv1.2 -I https://oursharedevents.com 2>/dev/null && echo "TLS 1.2: OK" || echo "TLS 1.2: FAIL"
 
 # Test that TLS 1.1 is rejected (should fail)
-curl --tlsv1.1 --tls-max 1.1 -I https://eventangle.com 2>/dev/null && echo "TLS 1.1: ALLOWED (BAD)" || echo "TLS 1.1: Rejected (GOOD)"
+curl --tlsv1.1 --tls-max 1.1 -I https://oursharedevents.com 2>/dev/null && echo "TLS 1.1: ALLOWED (BAD)" || echo "TLS 1.1: Rejected (GOOD)"
 
 # Test that TLS 1.0 is rejected (should fail)
-curl --tlsv1.0 --tls-max 1.0 -I https://eventangle.com 2>/dev/null && echo "TLS 1.0: ALLOWED (BAD)" || echo "TLS 1.0: Rejected (GOOD)"
+curl --tlsv1.0 --tls-max 1.0 -I https://oursharedevents.com 2>/dev/null && echo "TLS 1.0: ALLOWED (BAD)" || echo "TLS 1.0: Rejected (GOOD)"
 ```
 
 ### 6.3 SSL Labs Test
@@ -447,7 +447,7 @@ curl --tlsv1.0 --tls-max 1.0 -I https://eventangle.com 2>/dev/null && echo "TLS 
 Run a comprehensive SSL/TLS test:
 
 1. Go to [SSL Labs Server Test](https://www.ssllabs.com/ssltest/)
-2. Enter your domain: `eventangle.com`
+2. Enter your domain: `oursharedevents.com`
 3. Wait for analysis (2-3 minutes)
 4. Review results
 
@@ -477,7 +477,7 @@ Mixed content occurs when HTTPS pages load HTTP resources (images, scripts, etc.
 
 ```bash
 # Use curl to check for HTTP resources in page source
-curl -s https://eventangle.com | grep -E "http://" | grep -v "https://" | head -20
+curl -s https://oursharedevents.com | grep -E "http://" | grep -v "https://" | head -20
 ```
 
 If output shows HTTP URLs (not protocol-relative or https), fix the content.
@@ -487,7 +487,7 @@ If output shows HTTP URLs (not protocol-relative or https), fix the content.
 ```bash
 #!/bin/bash
 # TLS Configuration Verification Script
-DOMAIN="eventangle.com"
+DOMAIN="oursharedevents.com"
 
 echo "=== TLS Configuration Verification for $DOMAIN ==="
 echo ""
@@ -626,7 +626,7 @@ Enable **Automatic HTTPS Rewrites** to automatically fix mixed content:
 
 ```bash
 # Check certificate directly on origin (bypassing Cloudflare)
-openssl s_client -connect origin.example.com:443 -servername eventangle.com </dev/null 2>/dev/null | openssl x509 -noout -text | grep -E "(Subject:|Issuer:|Not Before:|Not After:)"
+openssl s_client -connect origin.example.com:443 -servername oursharedevents.com </dev/null 2>/dev/null | openssl x509 -noout -text | grep -E "(Subject:|Issuer:|Not Before:|Not After:)"
 ```
 
 ---

@@ -1,4 +1,4 @@
-# Runbook: Registrar Lock + MFA + Recovery Hygiene
+﻿# Runbook: Registrar Lock + MFA + Recovery Hygiene
 
 > **Epic SEC-2 — Domain Control (DNS/Registrar Takeover Prevention)**
 > Story SEC-2.1 — Registrar Lock + MFA + Recovery Hygiene
@@ -132,7 +132,7 @@ Registrar lock (also called "Domain Lock" or "Transfer Lock") sets the EPP statu
 
 ```bash
 # Check domain status
-whois eventangle.com | grep -i "status"
+whois oursharedevents.com | grep -i "status"
 
 # Expected output for locked domain:
 # Domain Status: clientTransferProhibited
@@ -151,7 +151,7 @@ whois eventangle.com | grep -i "status"
 
 1. Log in to registrar dashboard
 2. Navigate to **Domain Management** or **My Domains**
-3. Select the domain (e.g., `eventangle.com`)
+3. Select the domain (e.g., `oursharedevents.com`)
 4. Find **Domain Lock** or **Transfer Lock** section
 5. Toggle lock to **ON** or **Enabled**
 6. Confirm the change
@@ -185,10 +185,10 @@ whois eventangle.com | grep -i "status"
 
 ### 3.5 Registrar Lock Audit Log
 
-| Domain         | Registrar | Lock Status               | Last Verified | Verified By |
-| -------------- | --------- | ------------------------- | ------------- | ----------- |
-| eventangle.com |           | [ ] Locked / [ ] Unlocked | YYYY-MM-DD    |             |
-|                |           |                           |               |             |
+| Domain              | Registrar | Lock Status               | Last Verified | Verified By |
+| ------------------- | --------- | ------------------------- | ------------- | ----------- |
+| oursharedevents.com |           | [ ] Locked / [ ] Unlocked | YYYY-MM-DD    |             |
+|                     |           |                           |               |             |
 
 ---
 
@@ -391,9 +391,9 @@ Contact your mobile carrier to enable:
 
 ### 6.5 Domain Expiration Audit
 
-| Domain         | Expiration Date | Auto-Renew | Days Until Expiry | Status |
-| -------------- | --------------- | ---------- | ----------------- | ------ |
-| eventangle.com | YYYY-MM-DD      | Yes / No   |                   |        |
+| Domain              | Expiration Date | Auto-Renew | Days Until Expiry | Status |
+| ------------------- | --------------- | ---------- | ----------------- | ------ |
+| oursharedevents.com | YYYY-MM-DD      | Yes / No   |                   |        |
 
 > **Critical:** Enable auto-renewal and ensure payment method is current.
 

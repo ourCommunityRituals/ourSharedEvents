@@ -1,13 +1,13 @@
-# Staging Environment Setup Guide
+﻿# Staging Environment Setup Guide
 
-> **ARCHIVED (2026-05-09):** This document is fully outdated. It references the old GAS/Google Sheets architecture and `eventangle.com` domain — none of which apply.
+> **ARCHIVED (2026-05-09):** This document is fully outdated. It references the old GAS/Google Sheets architecture and `oursharedevents.com` domain — none of which apply.
 >
 > **Use instead:**
 >
 > - **`docs/deployment/INFRA-CHECKLIST.md`** — current staging setup (D1, WIF, CF Access, AES-GCM PII)
 > - **`docs/qa/STAGING-SMOKE.md`** — staging sign-off checklist
 >
-> The staging URL is `stg.oursharedevents.com` (not `stg.eventangle.com`).
+> The staging URL is `stg.oursharedevents.com` (not `stg.oursharedevents.com`).
 > Secrets are `ADMIN_TOKEN`, `FORMS_ENCRYPTION_KEY`, `X_OCR_INTERNAL`, `ALLOWED_ADMIN_EMAILS` — not GAS credentials.
 
 ---
@@ -40,13 +40,13 @@ The staging environment provides a safe sandbox for:
 - Integration testing before production
 - Pre-production validation
 
-| Component      | Staging                          | Production                   |
-| -------------- | -------------------------------- | ---------------------------- |
-| URL            | `https://stg.eventangle.com`     | `https://www.eventangle.com` |
-| API            | `https://api-stg.eventangle.com` | `https://api.eventangle.com` |
-| GAS Project    | Separate Script ID               | Production Script ID         |
-| Spreadsheets   | Staging EVENTS/DIAG              | Production EVENTS/DIAG       |
-| Cloudflare Env | `--env staging`                  | `--env events`               |
+| Component      | Staging                               | Production                        |
+| -------------- | ------------------------------------- | --------------------------------- |
+| URL            | `https://stg.oursharedevents.com`     | `https://www.oursharedevents.com` |
+| API            | `https://api-stg.oursharedevents.com` | `https://api.oursharedevents.com` |
+| GAS Project    | Separate Script ID                    | Production Script ID              |
+| Spreadsheets   | Staging EVENTS/DIAG                   | Production EVENTS/DIAG            |
+| Cloudflare Env | `--env staging`                       | `--env events`                    |
 
 ---
 
@@ -84,7 +84,7 @@ Update the staging project's `Config.gs` to point to staging URLs:
 
 ```javascript
 // In staging GAS project only:
-const FRIENDLY_BASE_URL = 'https://stg.eventangle.com';
+const FRIENDLY_BASE_URL = 'https://stg.oursharedevents.com';
 const BUILD_ID = 'staging-v1';
 ```
 
@@ -120,12 +120,12 @@ DEPLOYMENT_ID = "YOUR_STAGING_DEPLOYMENT_ID_HERE"
 
 ### 2.2 Set Up DNS Records
 
-In Cloudflare DNS for `eventangle.com`, add:
+In Cloudflare DNS for `oursharedevents.com`, add:
 
-| Type  | Name      | Content                  | Proxy   |
-| ----- | --------- | ------------------------ | ------- |
-| CNAME | `stg`     | `eventangle.workers.dev` | Proxied |
-| CNAME | `api-stg` | `eventangle.workers.dev` | Proxied |
+| Type  | Name      | Content                       | Proxy   |
+| ----- | --------- | ----------------------------- | ------- |
+| CNAME | `stg`     | `oursharedevents.workers.dev` | Proxied |
+| CNAME | `api-stg` | `oursharedevents.workers.dev` | Proxied |
 
 ### 2.3 Deploy Staging Worker
 
@@ -156,7 +156,7 @@ For local development, create a `.env.staging` file:
 # .env.staging
 STAGING_SCRIPT_ID=1ABC...xyz
 STAGING_DEPLOYMENT_ID=AKfycbx...
-STAGING_URL=https://stg.eventangle.com
+STAGING_URL=https://stg.oursharedevents.com
 ```
 
 ---
@@ -167,7 +167,7 @@ STAGING_URL=https://stg.eventangle.com
 
 ```bash
 # Health check
-curl https://stg.eventangle.com/status
+curl https://stg.oursharedevents.com/status
 
 # Should return JSON with "ok": true
 ```
@@ -176,7 +176,7 @@ curl https://stg.eventangle.com/status
 
 ```bash
 # All test commands now default to staging
-npm run test:smoke      # Tests stg.eventangle.com
+npm run test:smoke      # Tests stg.oursharedevents.com
 npm run test:api        # API tests against staging
 npm run ci:all          # Full CI gate against staging
 ```
@@ -185,7 +185,7 @@ npm run ci:all          # Full CI gate against staging
 
 ```bash
 # Only when you need to verify production
-npm run test:prod:smoke    # Tests www.eventangle.com
+npm run test:prod:smoke    # Tests www.oursharedevents.com
 npm run test:prod:health   # Production health check
 ```
 
@@ -253,8 +253,8 @@ npm run test:load:stress    # Safe - hits staging
                     ┌─────────────────────────────────────────┐
                     │         Developer Workstation           │
                     │                                         │
-                    │  npm run test:*  ──► stg.eventangle.com │
-                    │  npm run test:prod:* ► www.eventangle.com│
+                    │  npm run test:*  ──► stg.oursharedevents.com │
+                    │  npm run test:prod:* ► www.oursharedevents.com│
                     └─────────────────────────────────────────┘
                                       │
                     ┌─────────────────┴─────────────────┐
@@ -262,7 +262,7 @@ npm run test:load:stress    # Safe - hits staging
         ┌─────────────────────┐           ┌─────────────────────┐
         │   STAGING ENV       │           │   PRODUCTION ENV    │
         │                     │           │                     │
-        │ stg.eventangle.com  │           │ www.eventangle.com  │
+        │ stg.oursharedevents.com  │           │ www.oursharedevents.com  │
         │         │           │           │         │           │
         │         ▼           │           │         ▼           │
         │ Cloudflare Worker   │           │ Cloudflare Worker   │
@@ -295,8 +295,8 @@ Use this checklist when setting up staging:
 - [ ] Configured staging: `npm run staging:configure -- --script-id=... --deployment-id=...`
 - [ ] Deployed to staging GAS: `npm run deploy:staging`
 - [ ] Added DNS records in Cloudflare:
-  - [ ] `stg` CNAME → `eventangle.workers.dev` (Proxied)
-  - [ ] `api-stg` CNAME → `eventangle.workers.dev` (Proxied)
+  - [ ] `stg` CNAME → `oursharedevents.workers.dev` (Proxied)
+  - [ ] `api-stg` CNAME → `oursharedevents.workers.dev` (Proxied)
 - [ ] Deployed staging Worker: `npm run deploy:staging:worker`
 - [ ] Added GitHub secrets for staging (STAGING_SCRIPT_ID, STAGING_DEPLOYMENT_ID)
 - [ ] Verified staging works: `npm run staging:verify`
@@ -325,5 +325,5 @@ npm run test:staging:smoke
 npm run test:staging:api
 
 # Health check
-curl https://stg.eventangle.com/status
+curl https://stg.oursharedevents.com/status
 ```

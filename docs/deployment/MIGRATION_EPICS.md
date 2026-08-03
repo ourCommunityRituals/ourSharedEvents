@@ -1,4 +1,4 @@
-# Migration Plan: GAS → Cloudflare Workers
+﻿# Migration Plan: GAS → Cloudflare Workers
 
 ## Epics & Stories for Backlog
 
@@ -14,11 +14,11 @@ Don't blow up existing QR flows while you cut over from GAS to Workers. This is 
 
 ## Scope
 
-| Component                                  | Status                           |
-| ------------------------------------------ | -------------------------------- |
-| Cloudflare Worker router config            | In scope                         |
-| GAS backend (leave as legacy)              | In scope (read-only, no changes) |
-| DNS / routes `stg.eventangle.com` → Worker | In scope                         |
+| Component                                       | Status                           |
+| ----------------------------------------------- | -------------------------------- |
+| Cloudflare Worker router config                 | In scope                         |
+| GAS backend (leave as legacy)                   | In scope (read-only, no changes) |
+| DNS / routes `stg.oursharedevents.com` → Worker | In scope                         |
 
 ## Epic Definition of Done
 
@@ -187,7 +187,7 @@ And no data loss occurs
 - [ ] Create `wrangler.toml` backup config (GAS-only mode)
 - [ ] Test rollback procedure in staging
 - [ ] Add Slack/PagerDuty alert for v2 API errors > threshold
-- [ ] Document DNS TTL considerations (currently 60s for stg.eventangle.com)
+- [ ] Document DNS TTL considerations (currently 60s for stg.oursharedevents.com)
 
 **Rollback Steps:**
 
@@ -292,7 +292,7 @@ And I see latency percentiles by version (p50, p95, p99)
 ```
                     ┌─────────────────────────────────────────┐
                     │         Cloudflare Worker               │
-                    │    stg.eventangle.com / api-stg.*       │
+                    │    stg.oursharedevents.com / api-stg.*       │
                     └─────────────────┬───────────────────────┘
                                       │
               ┌───────────────────────┼───────────────────────┐
@@ -1244,7 +1244,7 @@ Then GAS proxy can be re-enabled within 5 minutes
 ```
                     ┌─────────────────────────────────────────┐
                     │         Cloudflare Worker               │
-                    │    eventangle.com / api.eventangle.com  │
+                    │    oursharedevents.com / api.oursharedevents.com  │
                     └─────────────────┬───────────────────────┘
                                       │
               ┌───────────────────────┼───────────────────────┐

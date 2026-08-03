@@ -1,8 +1,8 @@
-# Story M3 — /events Rendering Verification Results
+﻿# Story M3 — /events Rendering Verification Results
 
 **Date:** 2025-12-11
 **Verified By:** Claude (automated verification)
-**Environment:** Staging (`stg.eventangle.com`)
+**Environment:** Staging (`stg.oursharedevents.com`)
 
 ---
 
@@ -18,25 +18,25 @@ The `/events` page HTML loads successfully (HTTP 200), but API calls via POST to
 
 ### 1. GET /events → HTML Page Load
 
-| Test                                    | Result        | Details                                                            |
-| --------------------------------------- | ------------- | ------------------------------------------------------------------ |
-| `GET https://stg.eventangle.com/events` | ✅ **200 OK** | Full HTML template loads (5800+ lines)                             |
-| HTML contains error handling            | ✅            | `StateRenderer`, `classifyError()`, `showTemporaryIssue()` present |
-| CSS/JS framework intact                 | ✅            | All styles, SDK code present                                       |
+| Test                                         | Result        | Details                                                            |
+| -------------------------------------------- | ------------- | ------------------------------------------------------------------ |
+| `GET https://stg.oursharedevents.com/events` | ✅ **200 OK** | Full HTML template loads (5800+ lines)                             |
+| HTML contains error handling                 | ✅            | `StateRenderer`, `classifyError()`, `showTemporaryIssue()` present |
+| CSS/JS framework intact                      | ✅            | All styles, SDK code present                                       |
 
 ### 2. GET /ping → Worker Health
 
-| Test                                  | Result        | Details             |
-| ------------------------------------- | ------------- | ------------------- |
-| `GET https://stg.eventangle.com/ping` | ✅ **200 OK** | `{"status":"ok"}`   |
-| Response is JSON                      | ✅            | Proper content-type |
+| Test                                       | Result        | Details             |
+| ------------------------------------------ | ------------- | ------------------- |
+| `GET https://stg.oursharedevents.com/ping` | ✅ **200 OK** | `{"status":"ok"}`   |
+| Response is JSON                           | ✅            | Proper content-type |
 
 ### 3. GET /status → GAS Health
 
-| Test                                    | Result                  | Details                                       |
-| --------------------------------------- | ----------------------- | --------------------------------------------- |
-| `GET https://stg.eventangle.com/status` | ❌ **Permission Error** | GAS returns "You do not have permission" HTML |
-| HTTP Status                             | 200                     | But body is HTML error, not JSON              |
+| Test                                         | Result                  | Details                                       |
+| -------------------------------------------- | ----------------------- | --------------------------------------------- |
+| `GET https://stg.oursharedevents.com/status` | ❌ **Permission Error** | GAS returns "You do not have permission" HTML |
+| HTTP Status                                  | 200                     | But body is HTML error, not JSON              |
 
 ### 4. POST /api/rpc → API Calls
 
@@ -76,19 +76,19 @@ The `/events` page HTML loads successfully (HTTP 200), but API calls via POST to
 
 ```bash
 # 1. Test ping (Worker-level)
-curl -s "https://stg.eventangle.com/ping"
+curl -s "https://stg.oursharedevents.com/ping"
 # Result: {"status":"ok"}
 
 # 2. Test status (GAS-level)
-curl -s "https://stg.eventangle.com/status"
+curl -s "https://stg.oursharedevents.com/status"
 # Result: HTML permission error
 
 # 3. Test events page HTML
-curl -s "https://stg.eventangle.com/events" | head -100
+curl -s "https://stg.oursharedevents.com/events" | head -100
 # Result: Full HTML with template
 
 # 4. Test RPC API
-curl -s -X POST "https://stg.eventangle.com/api/rpc" \
+curl -s -X POST "https://stg.oursharedevents.com/api/rpc" \
   -H "Content-Type: application/json" \
   -d '{"method":"api_list","payload":{"brandId":"root","scope":"events"}}'
 # Result: 502 with structured error

@@ -1,4 +1,4 @@
-# Deployment Guide
+﻿# Deployment Guide
 
 **Last Updated:** 2025-11-22
 **Status:** MVP v1.0 - Focus Group Ready
@@ -83,7 +83,7 @@ Requires `BASE_URL` environment variable pointing to deployed app.
 | ------------------ | ------------------------------------------------------------------------------------------------------------------ |
 | **BUILD_ID**       | Check Admin footer or `?p=status&brand=root`                                                                       |
 | **Deployment URL** | https://script.google.com/macros/s/AKfycbxaTPh3FS4NHJblIcUrz4k01kWAdxsKzLNnYRf0TXe18lBditTm3hqbBoQ4ZxbGhhGuCA/exec |
-| **Custom Domain**  | eventangle.com                                                                                                     |
+| **Custom Domain**  | oursharedevents.com                                                                                                |
 
 To check current version:
 
@@ -171,22 +171,22 @@ npm run deploy  # Create new deployment (dev/stage only)
 
 > **See [ENVIRONMENT_MATRIX.md](../ENVIRONMENT_MATRIX.md) for the authoritative environment reference.**
 
-| Environment    | URL                          | Cloudflare Env     | Purpose                                  |
-| -------------- | ---------------------------- | ------------------ | ---------------------------------------- |
-| **Staging**    | `https://stg.eventangle.com` | `[env.staging]`    | Testing & validation (default for tests) |
-| **Production** | `https://www.eventangle.com` | `[env.production]` | Live application (CI-only deploy)        |
-| **QA**         | `https://zeventbooks.com`    | -                  | Secondary testing                        |
+| Environment    | URL                               | Cloudflare Env     | Purpose                                  |
+| -------------- | --------------------------------- | ------------------ | ---------------------------------------- |
+| **Staging**    | `https://stg.oursharedevents.com` | `[env.staging]`    | Testing & validation (default for tests) |
+| **Production** | `https://www.oursharedevents.com` | `[env.production]` | Live application (CI-only deploy)        |
+| **QA**         | `https://zeventbooks.com`         | -                  | Secondary testing                        |
 
 ### Brand-Specific Access
 
 ```bash
 # Staging environment examples (default)
-https://stg.eventangle.com/events?brand=root
-https://stg.eventangle.com/abc/events
+https://stg.oursharedevents.com/events?brand=root
+https://stg.oursharedevents.com/abc/events
 
 # Production environment examples
-https://www.eventangle.com/events?brand=root
-https://www.eventangle.com/abc/events
+https://www.oursharedevents.com/events?brand=root
+https://www.oursharedevents.com/abc/events
 ```
 
 ---
@@ -234,12 +234,12 @@ Push to main
 
 The Stage-2 workflow runs comprehensive E2E tests after each staging deployment:
 
-| Test Suite                | Description                                 | Environment          |
-| ------------------------- | ------------------------------------------- | -------------------- |
+| Test Suite                | Description                                | Environment          |
+| ------------------------- | ------------------------------------------ | -------------------- |
 | **Environment Alignment** | Verifies Worker ↔ GAS deployment IDs match | Staging + Production |
-| **API Smoke Tests**       | Validates API contracts, status endpoints   | Staging + Production |
-| **UI Smoke Tests**        | All 5 surfaces load correctly               | Staging + Production |
-| **E2E Critical Journeys** | 10 user journeys (creates test data)        | Staging only         |
+| **API Smoke Tests**       | Validates API contracts, status endpoints  | Staging + Production |
+| **UI Smoke Tests**        | All 5 surfaces load correctly              | Staging + Production |
+| **E2E Critical Journeys** | 10 user journeys (creates test data)       | Staging only         |
 
 **Progressive Test Gates:**
 
@@ -439,11 +439,11 @@ npm run test:triangle:parallel
 All E2E and API tests are **BASE_URL-aware** - run the same tests against different environments:
 
 ```bash
-# Run against eventangle.com (default - no BASE_URL needed)
+# Run against oursharedevents.com (default - no BASE_URL needed)
 npm run test:smoke
 
-# Run against production (eventangle.com)
-BASE_URL="https://www.eventangle.com" npm run test:smoke
+# Run against production (oursharedevents.com)
+BASE_URL="https://www.oursharedevents.com" npm run test:smoke
 
 # Run against GAS webapp directly
 BASE_URL="https://script.google.com/macros/s/<DEPLOYMENT_ID>/exec" npm run test:smoke
@@ -454,7 +454,7 @@ BASE_URL="https://staging.zeventbooks.com" npm run test:smoke
 
 **Key Points:**
 
-- Default URL: `https://eventangle.com` (production via Cloudflare Workers)
+- Default URL: `https://oursharedevents.com` (production via Cloudflare Workers)
 - No code changes needed to switch environments
 - Tests auto-detect environment type (GAS vs Cloudflare)
 - Configuration: `tests/config/environments.js`

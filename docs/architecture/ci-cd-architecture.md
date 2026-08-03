@@ -1,4 +1,4 @@
-# CI/CD Architecture & Enforcement Rules
+﻿# CI/CD Architecture & Enforcement Rules
 
 > **Purpose:** Anchor the CI/CD design for future maintainers and prevent architecture drift.
 > **Last Updated:** 2025-12-10
@@ -452,10 +452,10 @@ Production: 1YO4apLOQoAIh208AcAqWO3pWtx_O3yas_QC4z-pkurgMem9UgYOsp86l
 ### URL Selection Hierarchy
 
 ```
-1. USE_PRODUCTION=true     → https://www.eventangle.com (explicit opt-in)
+1. USE_PRODUCTION=true     → https://www.oursharedevents.com (explicit opt-in)
 2. inputs.deployment_url   → Manual override
 3. Stage-1 artifact        → From deployment-url.txt
-4. Default                 → https://stg.eventangle.com (safe sandbox)
+4. Default                 → https://stg.oursharedevents.com (safe sandbox)
 ```
 
 ### Progressive Test Gates
@@ -644,11 +644,11 @@ To enforce security scans as a required check:
 
 ```javascript
 // Production
-PRODUCTION_URL = 'https://www.eventangle.com';
+PRODUCTION_URL = 'https://www.oursharedevents.com';
 GAS_PRODUCTION_URL = 'https://script.google.com/macros/s/{PROD_ID}/exec';
 
 // Staging
-STAGING_URL = 'https://stg.eventangle.com';
+STAGING_URL = 'https://stg.oursharedevents.com';
 GAS_STAGING_URL = 'https://script.google.com/macros/s/{STG_ID}/exec';
 
 // QA
@@ -660,11 +660,11 @@ LOCAL_URL = 'http://localhost:3000';
 
 ### Environment Matrix
 
-| Environment    | URL                  | GAS Project       | Who Can Deploy |
-| -------------- | -------------------- | ----------------- | -------------- |
-| **Production** | `www.eventangle.com` | Production Script | **CI ONLY**    |
-| **Staging**    | `stg.eventangle.com` | Staging Script    | Developers, CI |
-| **Local**      | `localhost:3000`     | N/A               | Developers     |
+| Environment    | URL                       | GAS Project       | Who Can Deploy |
+| -------------- | ------------------------- | ----------------- | -------------- |
+| **Production** | `www.oursharedevents.com` | Production Script | **CI ONLY**    |
+| **Staging**    | `stg.oursharedevents.com` | Staging Script    | Developers, CI |
+| **Local**      | `localhost:3000`          | N/A               | Developers     |
 
 ### Environment Detection
 
@@ -685,10 +685,10 @@ getBrandUrl(brand, page); // brand-specific URLs
 
 ### Route Configuration
 
-| Environment    | Routes                                                             | Worker               |
-| -------------- | ------------------------------------------------------------------ | -------------------- |
-| **Production** | `eventangle.com/*`, `www.eventangle.com/*`, `api.eventangle.com/*` | `eventangle-prod`    |
-| **Staging**    | `stg.eventangle.com/*`, `api-stg.eventangle.com/*`                 | `eventangle-staging` |
+| Environment    | Routes                                                                            | Worker                    |
+| -------------- | --------------------------------------------------------------------------------- | ------------------------- |
+| **Production** | `oursharedevents.com/*`, `www.oursharedevents.com/*`, `api.oursharedevents.com/*` | `oursharedevents-prod`    |
+| **Staging**    | `stg.oursharedevents.com/*`, `api-stg.oursharedevents.com/*`                      | `oursharedevents-staging` |
 
 ### Friendly URL Aliases
 
@@ -989,7 +989,7 @@ When a production Stage-2 validation fails:
 ├─────────────────────────────────────────────────────┤
 │  Failed Test(s): API Smoke Tests                   │
 │  Environment: production                            │
-│  Target URL: https://www.eventangle.com            │
+│  Target URL: https://www.oursharedevents.com            │
 │  Status: PRODUCTION BLOCKED                        │
 │                                                     │
 │  Story 2.5: Progressive test gates - API tests     │

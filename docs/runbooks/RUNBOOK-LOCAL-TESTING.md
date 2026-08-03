@@ -1,4 +1,4 @@
-# Runbook: Running Local Tests
+﻿# Runbook: Running Local Tests
 
 > **Purpose:** Guide for running the local CI pipeline and test suites.
 > **Last Updated:** 2025-12-17 | **Story:** 6 - Document Baseline & Runbooks
@@ -96,7 +96,7 @@ Stage-2 tests require a **live deployment** to test against.
 ### Default: Test Against Staging
 
 ```bash
-# Tests default to staging (https://stg.eventangle.com)
+# Tests default to staging (https://stg.oursharedevents.com)
 npm run ci:local stage2
 ```
 
@@ -104,7 +104,7 @@ npm run ci:local stage2
 
 ```bash
 # Test against production
-BASE_URL="https://www.eventangle.com" npm run ci:local stage2
+BASE_URL="https://www.oursharedevents.com" npm run ci:local stage2
 
 # Test against local development
 BASE_URL="http://localhost:3000" npm run ci:local stage2
@@ -191,11 +191,11 @@ No additional setup needed - tests default to staging.
 npm run test:prod:smoke
 
 # Method 2: Set BASE_URL
-export BASE_URL="https://www.eventangle.com"
+export BASE_URL="https://www.oursharedevents.com"
 npm run test:smoke
 
 # Method 3: Inline
-BASE_URL="https://www.eventangle.com" npm run test:smoke
+BASE_URL="https://www.oursharedevents.com" npm run test:smoke
 ```
 
 ### Testing Local Development
@@ -318,10 +318,10 @@ npm run test -- tests/contract/bundles.contract.test.js
 
 ```bash
 # Check if staging is up
-curl -s https://stg.eventangle.com/ping
+curl -s https://stg.oursharedevents.com/ping
 
 # Check health endpoint
-curl -s https://stg.eventangle.com/api/health/backend | jq
+curl -s https://stg.oursharedevents.com/api/health/backend | jq
 
 # Run API tests with debug
 DEBUG=true npm run test:api

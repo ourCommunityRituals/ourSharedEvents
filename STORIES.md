@@ -17,6 +17,8 @@ Synced with Linear: fill in `Linear #` when issues are created.
 
 Stories are ordered by the sequence you work through them. Each row unlocks the next.
 
+**Last verified: 2026-08-03** — P1-6 infra complete (OSE-544/545/546/547 Done), P1-7 staging deploy in progress (OSE-548 Todo), DAC-1..5 cleared via OSE-553.
+
 | Story ID                                           | Linear # | Status         | Title                                                                 | Prerequisite     |
 | -------------------------------------------------- | -------- | -------------- | --------------------------------------------------------------------- | ---------------- |
 | **Phase 0 — Project Setup**                        |          |                |                                                                       |                  |
@@ -28,7 +30,7 @@ Stories are ordered by the sequence you work through them. Each row unlocks the 
 | P1-4                                               | —        | ✅ DONE        | STORIES.md — project tracking registry                                | P1-3             |
 | P1-5                                               | —        | ✅ DONE        | E2E launch checklist (this doc's guide)                               | P1-4             |
 | **Phase 1 — Operations (go live)**                 |          |                |                                                                       |                  |
-| P1-6                                               | —        | 📋 BACKLOG     | Infra provisioning — Google Cloud + Cloudflare                        | P1-5             |
+| P1-6                                               | —        | ✅ DONE        | Infra provisioning — Google Cloud + Cloudflare                        | P1-5             |
 | P1-7                                               | —        | 🔄 IN PROGRESS | Secrets + first staging deploy                                        | P1-6             |
 | P1-8                                               | —        | 📋 BACKLOG     | Staging sign-off — all checks pass                                    | P1-7             |
 | P1-9                                               | —        | 📋 BACKLOG     | Repo migration → ourCommunityRituals/ourSharedEvents                  | P1-8             |
@@ -80,8 +82,8 @@ Stories are ordered by the sequence you work through them. Each row unlocks the 
 | AS-12                                              | —        | 📋 BACKLOG     | Keyboard nav on Public                                                | —                |
 | AS-13                                              | —        | 📋 BACKLOG     | axe-core CI integration _(xref A11Y-7)_                               | A11Y-7           |
 | **Epic INFRA — Infrastructure Provisioning**       |          |                |                                                                       |                  |
-| INFRA-1                                            | —        | 📋 BACKLOG     | Provision D1 databases (main + forms, staging + prod)                 | —                |
-| INFRA-2                                            | —        | 📋 BACKLOG     | Activate Cloudflare zone + DNS for oursharedevents.com                | —                |
+| INFRA-1                                            | —        | ✅ DONE        | Provision D1 databases (main + forms, staging + prod)                 | —                |
+| INFRA-2                                            | —        | ✅ DONE        | Activate Cloudflare zone + DNS for oursharedevents.com                | —                |
 | INFRA-3                                            | —        | 📋 BACKLOG     | Create Google Cloud service account + set secrets                     | —                |
 | INFRA-4                                            | —        | 📋 BACKLOG     | Document FORMS_ENCRYPTION_KEY generation + rotation                   | —                |
 | **Epic BE — Backend Architecture**                 |          |                |                                                                       |                  |
@@ -152,11 +154,11 @@ Stories are ordered by the sequence you work through them. Each row unlocks the 
 | HK-2                                               | —        | 📋 BACKLOG     | Sync STORIES.md with implemented features                             | —                |
 | HK-3                                               | —        | ✅ DONE        | Update stale docs (DEPLOYMENT, .env.example, RUNBOOK)                 | HK-1             |
 | **Epic DAC — Documentation Domain Reconciliation** |          |                |                                                                       |                  |
-| DAC-1                                              | —        | 📋 BACKLOG     | Batch rename — Security docs (13 files, ~295 refs)                    | P1-8             |
-| DAC-2                                              | —        | 📋 BACKLOG     | Batch rename — Runbooks (12 files, ~386 refs)                         | P1-8             |
-| DAC-3                                              | —        | 📋 BACKLOG     | Batch rename — Architecture docs (9 files, ~126 refs)                 | P1-8             |
-| DAC-4                                              | —        | 📋 BACKLOG     | Batch rename — Deploy + Monitor + QA docs (16 files, ~161 refs)       | P1-8             |
-| DAC-5                                              | —        | 📋 BACKLOG     | Final verification — zero active eventangle references                | DAC-1,2,3,4      |
+| DAC-1                                              | —        | ✅ DONE        | Batch rename — Security docs (13 files, ~295 refs)                    | P1-8             |
+| DAC-2                                              | —        | ✅ DONE        | Batch rename — Runbooks (12 files, ~386 refs)                         | P1-8             |
+| DAC-3                                              | —        | ✅ DONE        | Batch rename — Architecture docs (9 files, ~126 refs)                 | P1-8             |
+| DAC-4                                              | —        | ✅ DONE        | Batch rename — Deploy + Monitor + QA docs (16 files, ~161 refs)       | P1-8             |
+| DAC-5                                              | —        | ✅ DONE        | Final verification — zero active eventangle references                | DAC-1,2,3,4      |
 | **Epic TP — Test Pyramid Enforcement**             |          |                |                                                                       |                  |
 | TP-1                                               | —        | 📋 BACKLOG     | Wire 78 E2E Playwright files into CI pipeline (post-smoke gate)       | P1-8             |
 | TP-2                                               | —        | 📋 BACKLOG     | Cross-surface E2E: poster → pre-event → event → post-event flow       | TP-1             |

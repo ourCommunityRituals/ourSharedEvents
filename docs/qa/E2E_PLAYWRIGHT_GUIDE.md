@@ -1,4 +1,4 @@
-# End-to-End Testing Guide (Playwright)
+﻿# End-to-End Testing Guide (Playwright)
 
 ## Story 3.3: E2E Testing of User Flows
 
@@ -53,7 +53,7 @@ npm run test:smoke
 npm run test:story3.3:prod
 
 # Or explicitly set production URL
-BASE_URL=https://www.eventangle.com npm run test:smoke
+BASE_URL=https://www.oursharedevents.com npm run test:smoke
 ```
 
 ---
@@ -62,23 +62,23 @@ BASE_URL=https://www.eventangle.com npm run test:smoke
 
 ### Environment Variables
 
-| Variable         | Default                      | Description                        |
-| ---------------- | ---------------------------- | ---------------------------------- |
-| `BASE_URL`       | `https://stg.eventangle.com` | Target URL for tests               |
-| `ADMIN_KEY`      | `CHANGE_ME_root`             | Admin key for write operations     |
-| `BRAND_ID`       | `root`                       | Brand to test against              |
-| `USE_PRODUCTION` | `false`                      | Set to `true` to target production |
-| `TEST_ENV`       | (auto-detected)              | Explicit environment name          |
+| Variable         | Default                           | Description                        |
+| ---------------- | --------------------------------- | ---------------------------------- |
+| `BASE_URL`       | `https://stg.oursharedevents.com` | Target URL for tests               |
+| `ADMIN_KEY`      | `CHANGE_ME_root`                  | Admin key for write operations     |
+| `BRAND_ID`       | `root`                            | Brand to test against              |
+| `USE_PRODUCTION` | `false`                           | Set to `true` to target production |
+| `TEST_ENV`       | (auto-detected)                   | Explicit environment name          |
 
 ### Supported Environments
 
-| Environment           | URL                             | Use Case                   |
-| --------------------- | ------------------------------- | -------------------------- |
-| **Staging** (Default) | `https://stg.eventangle.com`    | Safe sandbox for all tests |
-| **Production**        | `https://www.eventangle.com`    | Read-only validation       |
-| **QA**                | `https://zeventbooks.com`       | Secondary testing          |
-| **Local**             | `http://localhost:3000`         | Development                |
-| **GAS Direct**        | `https://script.google.com/...` | Debugging                  |
+| Environment           | URL                               | Use Case                   |
+| --------------------- | --------------------------------- | -------------------------- |
+| **Staging** (Default) | `https://stg.oursharedevents.com` | Safe sandbox for all tests |
+| **Production**        | `https://www.oursharedevents.com` | Read-only validation       |
+| **QA**                | `https://zeventbooks.com`         | Secondary testing          |
+| **Local**             | `http://localhost:3000`           | Development                |
+| **GAS Direct**        | `https://script.google.com/...`   | Debugging                  |
 
 ### Example Commands
 
@@ -229,7 +229,7 @@ jobs:
       - name: Run E2E Tests
         run: npm run test:story3.3
         env:
-          BASE_URL: https://stg.eventangle.com
+          BASE_URL: https://stg.oursharedevents.com
           ADMIN_KEY: ${{ secrets.ADMIN_KEY }}
 
       - name: Upload Test Report

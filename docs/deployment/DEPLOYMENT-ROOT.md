@@ -1,4 +1,4 @@
-# Deployment Runbook
+﻿# Deployment Runbook
 
 A boring, step-by-step checklist for shipping a release.
 
@@ -17,11 +17,11 @@ A boring, step-by-step checklist for shipping a release.
 
 > **Quick reference:** See [ENVIRONMENT_MATRIX.md](./ENVIRONMENT_MATRIX.md) for the authoritative environment table.
 
-| Environment    | URL                          | GAS Project            | Cloudflare Env     | Who Can Deploy |
-| -------------- | ---------------------------- | ---------------------- | ------------------ | -------------- |
-| **Dev**        | `http://localhost:3000`      | Production (read-only) | N/A                | Developers     |
-| **Staging**    | `https://stg.eventangle.com` | Staging Script         | `[env.staging]`    | Developers, CI |
-| **Production** | `https://www.eventangle.com` | Production Script      | `[env.production]` | **CI ONLY**    |
+| Environment    | URL                               | GAS Project            | Cloudflare Env     | Who Can Deploy |
+| -------------- | --------------------------------- | ---------------------- | ------------------ | -------------- |
+| **Dev**        | `http://localhost:3000`           | Production (read-only) | N/A                | Developers     |
+| **Staging**    | `https://stg.oursharedevents.com` | Staging Script         | `[env.staging]`    | Developers, CI |
+| **Production** | `https://www.oursharedevents.com` | Production Script      | `[env.production]` | **CI ONLY**    |
 
 ### Environment Configuration (Single Source of Truth)
 
@@ -34,8 +34,8 @@ tests/config/environments.js    # Re-exports from canonical source
 
 **Key URLs:**
 
-- **Production**: `https://www.eventangle.com`
-- **Staging**: `https://stg.eventangle.com`
+- **Production**: `https://www.oursharedevents.com`
+- **Staging**: `https://stg.oursharedevents.com`
 - **QA**: `https://zeventbooks.com`
 - **Local**: `http://localhost:3000`
 - **GAS Direct**: `https://script.google.com/macros/s/{DEPLOYMENT_ID}/exec`
@@ -73,11 +73,11 @@ The same test suite runs against different environments by changing `BASE_URL`.
 
 ```bash
 # Test against STAGING (default - safe sandbox)
-npm run test:smoke                    # Uses stg.eventangle.com by default
+npm run test:smoke                    # Uses stg.oursharedevents.com by default
 npm run test:staging:smoke            # Explicit staging
 
 # Test against PRODUCTION (explicit only)
-npm run test:prod:smoke               # Uses www.eventangle.com
+npm run test:prod:smoke               # Uses www.oursharedevents.com
 USE_PRODUCTION=true npm run test:smoke
 
 # Test against GAS directly (debugging)
@@ -87,8 +87,8 @@ BASE_URL="https://script.google.com/macros/s/XXX/exec" npm run test:smoke
 ### How It Works
 
 - All API/E2E tests use `process.env.BASE_URL` (or config equivalent)
-- **Default** `BASE_URL` → **Staging** (`stg.eventangle.com`) for safety
-- `USE_PRODUCTION=true` or `test:prod:*` → Production (`www.eventangle.com`)
+- **Default** `BASE_URL` → **Staging** (`stg.oursharedevents.com`) for safety
+- `USE_PRODUCTION=true` or `test:prod:*` → Production (`www.oursharedevents.com`)
 - Tests auto-detect environment type (GAS vs Cloudflare vs Staging)
 - No code changes needed to switch targets
 
@@ -104,10 +104,10 @@ BASE_URL="https://script.google.com/macros/s/XXX/exec" npm run test:smoke
 
 ### Environment-Specific URLs
 
-| Environment | Status Endpoint                     | Manage Endpoint                     |
-| ----------- | ----------------------------------- | ----------------------------------- |
-| Staging     | `https://stg.eventangle.com/status` | `https://stg.eventangle.com/manage` |
-| Production  | `https://www.eventangle.com/status` | `https://www.eventangle.com/manage` |
+| Environment | Status Endpoint                          | Manage Endpoint                          |
+| ----------- | ---------------------------------------- | ---------------------------------------- |
+| Staging     | `https://stg.oursharedevents.com/status` | `https://stg.oursharedevents.com/manage` |
+| Production  | `https://www.oursharedevents.com/status` | `https://www.oursharedevents.com/manage` |
 
 ---
 
@@ -116,7 +116,7 @@ BASE_URL="https://script.google.com/macros/s/XXX/exec" npm run test:smoke
 **Before any deployment, run tests against STAGING:**
 
 ```bash
-npm run ci:all  # Tests against stg.eventangle.com by default
+npm run ci:all  # Tests against stg.oursharedevents.com by default
 ```
 
 **No green on staging, no deploy to prod.**
@@ -135,7 +135,7 @@ If any test fails, the chain stops immediately.
 After CI deploys to production, validate with explicit prod tests:
 
 ```bash
-npm run test:prod:smoke   # Validates www.eventangle.com
+npm run test:prod:smoke   # Validates www.oursharedevents.com
 npm run test:prod:health  # Quick health check
 ```
 
@@ -207,43 +207,43 @@ DEPLOYMENT_ID = "AKfycbx..."
 cd cloudflare-proxy && wrangler deploy --env events
 ```
 
-**Important:** The `--env events` flag deploys to the production EventAngle routes:
+**Important:** The `--env events` flag deploys to the production oursharedevents routes:
 
-- `eventangle.com/events*`
-- `www.eventangle.com/events*`
+- `oursharedevents.com/events*`
+- `www.oursharedevents.com/events*`
 
 All requests are proxied (not redirected), so `script.google.com` is never user-facing.
 
 ---
 
-## 5. Verify eventangle.com
+## 5. Verify oursharedevents.com
 
 Hit these URLs in a browser to confirm the proxy is working:
 
 **Page routes (HTML via proxy):**
 
-- https://www.eventangle.com/events?page=admin - Admin panel
-- https://www.eventangle.com/events?page=public - Public event listing
-- https://www.eventangle.com/events?page=display - TV/kiosk display
-- https://www.eventangle.com/events?page=poster - Printable poster
-- https://www.eventangle.com/events?page=report - Analytics report
-- https://www.eventangle.com/events?page=status&brand=root - Status/health
+- https://www.oursharedevents.com/events?page=admin - Admin panel
+- https://www.oursharedevents.com/events?page=public - Public event listing
+- https://www.oursharedevents.com/events?page=display - TV/kiosk display
+- https://www.oursharedevents.com/events?page=poster - Printable poster
+- https://www.oursharedevents.com/events?page=report - Analytics report
+- https://www.oursharedevents.com/events?page=status&brand=root - Status/health
 
 **Friendly URL routes:**
 
-- https://www.eventangle.com/manage - Admin (via path)
-- https://www.eventangle.com/display - Display (via path)
-- https://www.eventangle.com/abc/events - Brand-specific public page
+- https://www.oursharedevents.com/manage - Admin (via path)
+- https://www.oursharedevents.com/display - Display (via path)
+- https://www.oursharedevents.com/abc/events - Brand-specific public page
 
-**Verify:** The browser address bar should always show `eventangle.com`, never `script.google.com`.
+**Verify:** The browser address bar should always show `oursharedevents.com`, never `script.google.com`.
 
 ---
 
 ## 6. Run Smoke Tests
 
 ```bash
-BASE_URL="https://www.eventangle.com/events" npm run test:health
-BASE_URL="https://www.eventangle.com/events" npm run test:smoke
+BASE_URL="https://www.oursharedevents.com/events" npm run test:health
+BASE_URL="https://www.oursharedevents.com/events" npm run test:smoke
 ```
 
 Both should pass. If they fail, check:

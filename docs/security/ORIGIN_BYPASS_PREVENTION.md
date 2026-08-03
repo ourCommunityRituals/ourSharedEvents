@@ -1,4 +1,4 @@
-# ORIGIN_BYPASS_PREVENTION.md — Origin Bypass Prevention (NS-3)
+﻿# ORIGIN_BYPASS_PREVENTION.md — Origin Bypass Prevention (NS-3)
 
 > **PROMPTSPEC-SEC-8.1** — Origin Bypass Prevention (Non-GAS Origin)
 > Role: Director of Security + Lead Networking Consultant
@@ -11,11 +11,11 @@
 
 Define and enforce controls that ensure **NS-3 compliance**: origin bypass must fail. This document specifies how direct origin access is prevented, what "expected failure" looks like for bypass attempts, and verification procedures for confirming protection.
 
-| Attribute | Value |
-|-----------|-------|
-| **Scope** | Origin access control for all production and staging environments |
-| **Prerequisites** | Security Baseline (SEC-0.1), TLS Strict Baseline (SEC-3.1) |
-| **Constraints** | Worker-only architecture has no traditional origin; document covers defense-in-depth |
+| Attribute         | Value                                                                                |
+| ----------------- | ------------------------------------------------------------------------------------ |
+| **Scope**         | Origin access control for all production and staging environments                    |
+| **Prerequisites** | Security Baseline (SEC-0.1), TLS Strict Baseline (SEC-3.1)                           |
+| **Constraints**   | Worker-only architecture has no traditional origin; document covers defense-in-depth |
 
 ---
 
@@ -25,16 +25,16 @@ Define and enforce controls that ensure **NS-3 compliance**: origin bypass must 
 
 ### 2.1 What NS-3 Means
 
-| Aspect | Requirement |
-|--------|-------------|
-| **Direct IP Access** | Must fail or return meaningless response |
-| **DNS Bypass** | Must not expose origin IP |
-| **Application Logic Bypass** | WAF/Access/Worker guards cannot be skipped |
-| **Data Backend Access** | External APIs (Google Sheets) require Worker authentication |
+| Aspect                       | Requirement                                                 |
+| ---------------------------- | ----------------------------------------------------------- |
+| **Direct IP Access**         | Must fail or return meaningless response                    |
+| **DNS Bypass**               | Must not expose origin IP                                   |
+| **Application Logic Bypass** | WAF/Access/Worker guards cannot be skipped                  |
+| **Data Backend Access**      | External APIs (Google Sheets) require Worker authentication |
 
 ### 2.2 Current Architecture: Worker-Only
 
-EventAngle operates in **Worker-only mode** — there is no traditional origin server.
+oursharedevents operates in **Worker-only mode** — there is no traditional origin server.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -50,12 +50,12 @@ EventAngle operates in **Worker-only mode** — there is no traditional origin s
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-| Characteristic | Value | Bypass Risk |
-|----------------|-------|-------------|
-| Origin Server | **None** | Eliminated |
-| Origin IP | **None** | Eliminated |
-| Application Host | Cloudflare Edge (Worker) | N/A |
-| Data Backend | Google Sheets API | Protected (service account auth) |
+| Characteristic   | Value                    | Bypass Risk                      |
+| ---------------- | ------------------------ | -------------------------------- |
+| Origin Server    | **None**                 | Eliminated                       |
+| Origin IP        | **None**                 | Eliminated                       |
+| Application Host | Cloudflare Edge (Worker) | N/A                              |
+| Data Backend     | Google Sheets API        | Protected (service account auth) |
 
 **NS-3 Status:** **COMPLIANT** — Worker-only architecture eliminates origin bypass by design.
 
@@ -67,31 +67,31 @@ EventAngle operates in **Worker-only mode** — there is no traditional origin s
 
 When an attacker attempts to bypass Cloudflare to reach an origin directly, the attempt must **fail in a predictable, documented way**.
 
-| Bypass Attempt | Expected Failure | Response |
-|----------------|------------------|----------|
-| Direct IP access (if origin existed) | Connection refused or timeout | No HTTP response |
-| DNS lookup for origin IP | Returns Cloudflare IP only | No origin IP exposed |
-| Request without Cloudflare headers | 403 Forbidden or connection reset | No application response |
-| Request without valid origin cert | TLS handshake failure | 525/526 error |
-| Request to Google Sheets API directly | 401/403 Unauthorized | Requires service account |
+| Bypass Attempt                        | Expected Failure                  | Response                 |
+| ------------------------------------- | --------------------------------- | ------------------------ |
+| Direct IP access (if origin existed)  | Connection refused or timeout     | No HTTP response         |
+| DNS lookup for origin IP              | Returns Cloudflare IP only        | No origin IP exposed     |
+| Request without Cloudflare headers    | 403 Forbidden or connection reset | No application response  |
+| Request without valid origin cert     | TLS handshake failure             | 525/526 error            |
+| Request to Google Sheets API directly | 401/403 Unauthorized              | Requires service account |
 
 ### 3.2 Failure Categories
 
-| Category | Definition | Detection Method |
-|----------|------------|------------------|
-| **Connection Failure** | TCP connection cannot be established | `curl` returns connection error |
-| **TLS Failure** | Certificate validation fails | `curl` returns SSL error |
-| **Authentication Failure** | Request rejected for missing/invalid credentials | HTTP 401/403 response |
-| **Authorization Failure** | Request rejected for insufficient permissions | HTTP 403 response |
-| **Empty/Meaningless Response** | Response contains no useful data | Empty body or error page |
+| Category                       | Definition                                       | Detection Method                |
+| ------------------------------ | ------------------------------------------------ | ------------------------------- |
+| **Connection Failure**         | TCP connection cannot be established             | `curl` returns connection error |
+| **TLS Failure**                | Certificate validation fails                     | `curl` returns SSL error        |
+| **Authentication Failure**     | Request rejected for missing/invalid credentials | HTTP 401/403 response           |
+| **Authorization Failure**      | Request rejected for insufficient permissions    | HTTP 403 response               |
+| **Empty/Meaningless Response** | Response contains no useful data                 | Empty body or error page        |
 
 ### 3.3 Why Failure Must Be "Expected"
 
-| Reason | Explanation |
-|--------|-------------|
-| **Predictability** | Security team knows what to expect when testing |
-| **Monitoring** | Alerts can be configured for unexpected success |
-| **Documentation** | Auditors can verify controls are working |
+| Reason                | Explanation                                                 |
+| --------------------- | ----------------------------------------------------------- |
+| **Predictability**    | Security team knows what to expect when testing             |
+| **Monitoring**        | Alerts can be configured for unexpected success             |
+| **Documentation**     | Auditors can verify controls are working                    |
 | **Incident Response** | If bypass succeeds, it's immediately recognized as a breach |
 
 ---
@@ -100,15 +100,15 @@ When an attacker attempts to bypass Cloudflare to reach an origin directly, the 
 
 ### 4.1 Current State (Worker-Only)
 
-Since EventAngle uses Worker-only architecture, traditional origin bypass prevention is **not applicable** but defense-in-depth is maintained:
+Since oursharedevents uses Worker-only architecture, traditional origin bypass prevention is **not applicable** but defense-in-depth is maintained:
 
-| Control | Status | Notes |
-|---------|--------|-------|
-| No origin server | **ACTIVE** | Worker executes at edge |
+| Control                    | Status     | Notes                        |
+| -------------------------- | ---------- | ---------------------------- |
+| No origin server           | **ACTIVE** | Worker executes at edge      |
 | DNS proxied (orange cloud) | **ACTIVE** | No origin IP exposed via DNS |
-| Google Sheets API auth | **ACTIVE** | Service account required |
-| WAF at edge | **ACTIVE** | Blocks attacks before Worker |
-| Rate limiting | **ACTIVE** | Prevents abuse |
+| Google Sheets API auth     | **ACTIVE** | Service account required     |
+| WAF at edge                | **ACTIVE** | Blocks attacks before Worker |
+| Rate limiting              | **ACTIVE** | Prevents abuse               |
 
 ### 4.2 If Origin Server Existed (Reference Architecture)
 
@@ -141,19 +141,19 @@ For architectures with a traditional origin server, these controls would be requ
 
 Authenticated Origin Pulls (AOP) is a Cloudflare feature that uses mutual TLS (mTLS) to verify that requests to the origin come from Cloudflare.
 
-| Aspect | Description |
-|--------|-------------|
-| **Purpose** | Ensure origin only accepts requests from Cloudflare |
-| **Mechanism** | Cloudflare presents a client certificate; origin validates |
-| **Certificate** | Cloudflare-signed or custom CA certificate |
-| **Applicability** | Only for architectures with origin servers |
+| Aspect            | Description                                                |
+| ----------------- | ---------------------------------------------------------- |
+| **Purpose**       | Ensure origin only accepts requests from Cloudflare        |
+| **Mechanism**     | Cloudflare presents a client certificate; origin validates |
+| **Certificate**   | Cloudflare-signed or custom CA certificate                 |
+| **Applicability** | Only for architectures with origin servers                 |
 
 ### 5.2 Current Status
 
-| Setting | Value | Reason |
-|---------|-------|--------|
-| **Authenticated Origin Pulls** | N/A | Worker-only architecture has no origin |
-| **Future Requirement** | Document for reference | If origin added, AOP becomes mandatory |
+| Setting                        | Value                  | Reason                                 |
+| ------------------------------ | ---------------------- | -------------------------------------- |
+| **Authenticated Origin Pulls** | N/A                    | Worker-only architecture has no origin |
+| **Future Requirement**         | Document for reference | If origin added, AOP becomes mandatory |
 
 ### 5.3 Implementation Guide (If Origin Existed)
 
@@ -161,24 +161,25 @@ If an origin server were added to the architecture:
 
 **Step 1: Enable in Cloudflare Dashboard**
 
-| Step | Action | Location |
-|------|--------|----------|
-| 1 | Navigate to SSL/TLS → Origin Server | Cloudflare Dashboard |
-| 2 | Enable "Authenticated Origin Pulls" | Toggle ON |
-| 3 | Download Cloudflare CA certificate | "Download certificate" link |
+| Step | Action                              | Location                    |
+| ---- | ----------------------------------- | --------------------------- |
+| 1    | Navigate to SSL/TLS → Origin Server | Cloudflare Dashboard        |
+| 2    | Enable "Authenticated Origin Pulls" | Toggle ON                   |
+| 3    | Download Cloudflare CA certificate  | "Download certificate" link |
 
 **Step 2: Configure Origin Server**
 
 For nginx:
+
 ```nginx
-# /etc/nginx/sites-available/eventangle
+# /etc/nginx/sites-available/oursharedevents
 server {
     listen 443 ssl;
-    server_name origin.eventangle.com;
+    server_name origin.oursharedevents.com;
 
     # Standard SSL
-    ssl_certificate /etc/ssl/certs/eventangle.crt;
-    ssl_certificate_key /etc/ssl/private/eventangle.key;
+    ssl_certificate /etc/ssl/certs/oursharedevents.crt;
+    ssl_certificate_key /etc/ssl/private/oursharedevents.key;
 
     # Authenticated Origin Pulls
     ssl_client_certificate /etc/ssl/cloudflare-ca.crt;
@@ -196,14 +197,15 @@ server {
 ```
 
 For Apache:
+
 ```apache
 <VirtualHost *:443>
-    ServerName origin.eventangle.com
+    ServerName origin.oursharedevents.com
 
     # Standard SSL
     SSLEngine on
-    SSLCertificateFile /etc/ssl/certs/eventangle.crt
-    SSLCertificateKeyFile /etc/ssl/private/eventangle.key
+    SSLCertificateFile /etc/ssl/certs/oursharedevents.crt
+    SSLCertificateKeyFile /etc/ssl/private/oursharedevents.key
 
     # Authenticated Origin Pulls
     SSLCACertificateFile /etc/ssl/cloudflare-ca.crt
@@ -216,22 +218,22 @@ For Apache:
 
 ```bash
 # Request WITHOUT Cloudflare cert (should FAIL)
-curl -vI https://origin.eventangle.com
+curl -vI https://origin.oursharedevents.com
 # Expected: SSL handshake failure or 403 Forbidden
 
 # Request via Cloudflare (should SUCCEED)
-curl -vI https://www.eventangle.com
+curl -vI https://www.oursharedevents.com
 # Expected: HTTP 200 OK
 ```
 
 ### 5.4 Expected Failure: AOP Bypass Attempt
 
-| Attempt | Expected Result | Verification |
-|---------|-----------------|--------------|
-| Direct HTTPS to origin IP | TLS client cert required error | `curl` returns SSL error |
-| Direct HTTPS with self-signed cert | Certificate rejected | 403 or SSL error |
-| Direct HTTPS without any cert | Connection rejected | 403 or SSL error |
-| Via Cloudflare | Success | HTTP 200 |
+| Attempt                            | Expected Result                | Verification             |
+| ---------------------------------- | ------------------------------ | ------------------------ |
+| Direct HTTPS to origin IP          | TLS client cert required error | `curl` returns SSL error |
+| Direct HTTPS with self-signed cert | Certificate rejected           | 403 or SSL error         |
+| Direct HTTPS without any cert      | Connection rejected            | 403 or SSL error         |
+| Via Cloudflare                     | Success                        | HTTP 200                 |
 
 ---
 
@@ -241,19 +243,19 @@ curl -vI https://www.eventangle.com
 
 Origin firewall rules restrict inbound connections to only Cloudflare IP ranges, blocking all direct access attempts.
 
-| Aspect | Description |
-|--------|-------------|
-| **Purpose** | Block direct IP access to origin |
-| **Mechanism** | Firewall rules allow only Cloudflare IPs on ports 80/443 |
-| **IP List** | https://www.cloudflare.com/ips/ |
-| **Applicability** | Only for architectures with origin servers |
+| Aspect            | Description                                              |
+| ----------------- | -------------------------------------------------------- |
+| **Purpose**       | Block direct IP access to origin                         |
+| **Mechanism**     | Firewall rules allow only Cloudflare IPs on ports 80/443 |
+| **IP List**       | https://www.cloudflare.com/ips/                          |
+| **Applicability** | Only for architectures with origin servers               |
 
 ### 6.2 Current Status
 
-| Setting | Value | Reason |
-|---------|-------|--------|
-| **Origin Firewall** | N/A | Worker-only architecture has no origin |
-| **Google Sheets API** | Google-managed | Not accessible without service account |
+| Setting                | Value                  | Reason                                      |
+| ---------------------- | ---------------------- | ------------------------------------------- |
+| **Origin Firewall**    | N/A                    | Worker-only architecture has no origin      |
+| **Google Sheets API**  | Google-managed         | Not accessible without service account      |
 | **Future Requirement** | Document for reference | If origin added, firewall becomes mandatory |
 
 ### 6.3 Cloudflare IP Ranges
@@ -261,6 +263,7 @@ Origin firewall rules restrict inbound connections to only Cloudflare IP ranges,
 Cloudflare publishes IP ranges that should be allowlisted:
 
 **IPv4 Ranges:**
+
 ```
 173.245.48.0/20
 103.21.244.0/22
@@ -280,6 +283,7 @@ Cloudflare publishes IP ranges that should be allowlisted:
 ```
 
 **IPv6 Ranges:**
+
 ```
 2400:cb00::/32
 2606:4700::/32
@@ -293,6 +297,7 @@ Cloudflare publishes IP ranges that should be allowlisted:
 ### 6.4 Implementation Guide (If Origin Existed)
 
 **Option A: iptables (Linux)**
+
 ```bash
 #!/bin/bash
 # /usr/local/bin/cloudflare-firewall.sh
@@ -317,6 +322,7 @@ iptables -A INPUT -p tcp --dport 443 -j CLOUDFLARE
 ```
 
 **Option B: ufw (Ubuntu)**
+
 ```bash
 # Allow Cloudflare IPs
 for ip in 173.245.48.0/20 103.21.244.0/22 103.22.200.0/22; do
@@ -328,6 +334,7 @@ ufw deny 443
 ```
 
 **Option C: AWS Security Group**
+
 ```json
 {
   "IpPermissions": [
@@ -336,9 +343,9 @@ ufw deny 443
       "ToPort": 443,
       "IpProtocol": "tcp",
       "IpRanges": [
-        {"CidrIp": "173.245.48.0/20", "Description": "Cloudflare"},
-        {"CidrIp": "103.21.244.0/22", "Description": "Cloudflare"},
-        {"CidrIp": "103.22.200.0/22", "Description": "Cloudflare"}
+        { "CidrIp": "173.245.48.0/20", "Description": "Cloudflare" },
+        { "CidrIp": "103.21.244.0/22", "Description": "Cloudflare" },
+        { "CidrIp": "103.22.200.0/22", "Description": "Cloudflare" }
       ]
     }
   ]
@@ -346,6 +353,7 @@ ufw deny 443
 ```
 
 **Option D: GCP Firewall Rule**
+
 ```bash
 gcloud compute firewall-rules create allow-cloudflare \
     --direction=INGRESS \
@@ -358,11 +366,11 @@ gcloud compute firewall-rules create allow-cloudflare \
 
 ### 6.5 Expected Failure: Firewall Bypass Attempt
 
-| Attempt | Expected Result | Verification |
-|---------|-----------------|--------------|
-| Direct IP access from non-CF IP | Connection refused/timeout | `curl` timeout or reset |
-| Direct IP access from CF IP range | Connection allowed | Only CF edge should have these IPs |
-| VPN/proxy to origin | Blocked (not CF IP) | Connection refused |
+| Attempt                           | Expected Result            | Verification                       |
+| --------------------------------- | -------------------------- | ---------------------------------- |
+| Direct IP access from non-CF IP   | Connection refused/timeout | `curl` timeout or reset            |
+| Direct IP access from CF IP range | Connection allowed         | Only CF edge should have these IPs |
+| VPN/proxy to origin               | Blocked (not CF IP)        | Connection refused                 |
 
 ---
 
@@ -377,10 +385,10 @@ Verify that DNS lookups return only Cloudflare IPs, not origin IPs.
 # Test: DNS returns only Cloudflare IPs
 
 echo "=== Test 1: DNS Resolution ==="
-echo "Testing: www.eventangle.com"
+echo "Testing: www.oursharedevents.com"
 
 # Get resolved IPs
-IPS=$(dig +short www.eventangle.com)
+IPS=$(dig +short www.oursharedevents.com)
 
 echo "Resolved IPs:"
 echo "$IPS"
@@ -406,9 +414,10 @@ fi
 ```
 
 **Expected Output:**
+
 ```
 === Test 1: DNS Resolution ===
-Testing: www.eventangle.com
+Testing: www.oursharedevents.com
 Resolved IPs:
 104.21.x.x
 172.67.x.x
@@ -428,7 +437,7 @@ Verify that the Worker is responding (no origin to bypass).
 echo "=== Test 2: Worker-Only Architecture ==="
 
 # Check /api/status endpoint
-STATUS=$(curl -s https://www.eventangle.com/api/status)
+STATUS=$(curl -s https://www.oursharedevents.com/api/status)
 echo "Status endpoint response:"
 echo "$STATUS" | jq .
 
@@ -441,13 +450,14 @@ else
 fi
 
 # Check health endpoint
-HEALTH=$(curl -s https://www.eventangle.com/api/health/backend)
+HEALTH=$(curl -s https://www.oursharedevents.com/api/health/backend)
 echo ""
 echo "Health endpoint response:"
 echo "$HEALTH" | jq .
 ```
 
 **Expected Output:**
+
 ```
 === Test 2: Worker-Only Architecture ===
 Status endpoint response:
@@ -500,9 +510,9 @@ echo "=== Test 4: Edge Request Success ==="
 
 # Test multiple endpoints
 ENDPOINTS=(
-    "https://www.eventangle.com/"
-    "https://www.eventangle.com/api/status"
-    "https://www.eventangle.com/api/events"
+    "https://www.oursharedevents.com/"
+    "https://www.oursharedevents.com/api/status"
+    "https://www.oursharedevents.com/api/events"
 )
 
 ALL_PASS=true
@@ -513,7 +523,7 @@ for endpoint in "${ENDPOINTS[@]}"; do
     else
         echo "WARN: $endpoint → $STATUS_CODE"
         # 404 on /api/events without data is acceptable
-        if [ "$endpoint" != "https://www.eventangle.com/api/events" ]; then
+        if [ "$endpoint" != "https://www.oursharedevents.com/api/events" ]; then
             ALL_PASS=false
         fi
     fi
@@ -528,11 +538,12 @@ fi
 ```
 
 **Expected Output:**
+
 ```
 === Test 4: Edge Request Success ===
-PASS: https://www.eventangle.com/ → 200
-PASS: https://www.eventangle.com/api/status → 200
-PASS: https://www.eventangle.com/api/events → 200
+PASS: https://www.oursharedevents.com/ → 200
+PASS: https://www.oursharedevents.com/api/status → 200
+PASS: https://www.oursharedevents.com/api/events → 200
 
 RESULT: PASS - Edge requests succeed
 ```
@@ -564,6 +575,7 @@ fi
 ```
 
 **Expected Output:**
+
 ```
 === Test 5: Google Sheets Direct Access ===
 Direct Google Sheets API access (no auth):
@@ -580,7 +592,7 @@ Save as `scripts/verify-origin-bypass.sh`:
 # Origin Bypass Prevention Verification Script
 # PROMPTSPEC-SEC-8.1
 
-DOMAIN="${1:-www.eventangle.com}"
+DOMAIN="${1:-www.oursharedevents.com}"
 PASS=0
 FAIL=0
 SKIP=0
@@ -702,7 +714,7 @@ DOMAIN: _______________________  DATE: ___________
 NS-3 COMPLIANCE VERIFICATION (Worker-Only Architecture)
 
 DNS VERIFICATION
-[ ] 1. Run: dig www.eventangle.com
+[ ] 1. Run: dig www.oursharedevents.com
       [ ] Returns Cloudflare IPs (104.x.x.x, 172.67.x.x)
       [ ] NO non-Cloudflare IPs exposed
 [ ] 2. Verify orange cloud in Cloudflare DNS dashboard
@@ -725,7 +737,7 @@ HEADER VERIFICATION
 
 HTTPS VERIFICATION
 [ ] 7. Test HTTP redirect
-      [ ] http://www.eventangle.com redirects to HTTPS
+      [ ] http://www.oursharedevents.com redirects to HTTPS
       [ ] Status code 301/302/307/308
 
 Verified by: _______________  Date: _______________
@@ -768,27 +780,28 @@ Verified by: _______________  Date: _______________
 
 ### 9.1 Scenario Matrix
 
-| Scenario | Attack Method | Expected Outcome | Verification |
-|----------|---------------|------------------|--------------|
-| **S-1** | Attacker discovers origin IP via history/leak | N/A - Worker-only has no origin | Architecture review |
-| **S-2** | Attacker queries DNS for origin | Returns only CF IPs | `dig` test |
-| **S-3** | Attacker guesses origin IP range | Connection fails (no listener) | Port scan returns nothing |
-| **S-4** | Attacker accesses Google Sheets directly | 401/403 Unauthorized | API test |
-| **S-5** | Attacker modifies hosts file | Still hits CF edge (same IP) | Local test |
-| **S-6** | Attacker uses old GAS URL | URL archived/non-functional | GAS deprecated |
+| Scenario | Attack Method                                 | Expected Outcome                | Verification              |
+| -------- | --------------------------------------------- | ------------------------------- | ------------------------- |
+| **S-1**  | Attacker discovers origin IP via history/leak | N/A - Worker-only has no origin | Architecture review       |
+| **S-2**  | Attacker queries DNS for origin               | Returns only CF IPs             | `dig` test                |
+| **S-3**  | Attacker guesses origin IP range              | Connection fails (no listener)  | Port scan returns nothing |
+| **S-4**  | Attacker accesses Google Sheets directly      | 401/403 Unauthorized            | API test                  |
+| **S-5**  | Attacker modifies hosts file                  | Still hits CF edge (same IP)    | Local test                |
+| **S-6**  | Attacker uses old GAS URL                     | URL archived/non-functional     | GAS deprecated            |
 
 ### 9.2 Scenario S-4 Detail: Google Sheets API Bypass
 
 The data backend (Google Sheets) requires service account authentication:
 
-| Protection Layer | Control |
-|------------------|---------|
-| **API Authentication** | Service account JWT required |
-| **Scope Restriction** | Only spreadsheets scope granted |
-| **Sheet Permissions** | Shared only with service account email |
-| **API Quota** | Rate limited by Google |
+| Protection Layer       | Control                                |
+| ---------------------- | -------------------------------------- |
+| **API Authentication** | Service account JWT required           |
+| **Scope Restriction**  | Only spreadsheets scope granted        |
+| **Sheet Permissions**  | Shared only with service account email |
+| **API Quota**          | Rate limited by Google                 |
 
 **Expected Failure:**
+
 ```json
 {
   "error": {
@@ -803,12 +816,12 @@ The data backend (Google Sheets) requires service account authentication:
 
 Legacy Google Apps Script URLs are deprecated and non-functional:
 
-| Status | Details |
-|--------|---------|
-| **GAS URLs** | Archived, no longer deployed |
-| **`script.google.com/macros/*`** | CI gate blocks references |
-| **GAS deployments** | Deleted or access revoked |
-| **Guard** | `npm run guard:no-gas` enforces |
+| Status                           | Details                         |
+| -------------------------------- | ------------------------------- |
+| **GAS URLs**                     | Archived, no longer deployed    |
+| **`script.google.com/macros/*`** | CI gate blocks references       |
+| **GAS deployments**              | Deleted or access revoked       |
+| **Guard**                        | `npm run guard:no-gas` enforces |
 
 ---
 
@@ -816,12 +829,12 @@ Legacy Google Apps Script URLs are deprecated and non-functional:
 
 ### 10.1 Metrics to Monitor
 
-| Metric | Source | Alert Threshold |
-|--------|--------|-----------------|
-| Non-CF requests to origin | Origin logs (if existed) | Any occurrence |
-| DNS query for origin IP | DNS logs | Unusual patterns |
-| Failed Google API auth | Worker logs | Spike in 401s |
-| WAF bypass attempts | Cloudflare Events | Any blocked request |
+| Metric                    | Source                   | Alert Threshold     |
+| ------------------------- | ------------------------ | ------------------- |
+| Non-CF requests to origin | Origin logs (if existed) | Any occurrence      |
+| DNS query for origin IP   | DNS logs                 | Unusual patterns    |
+| Failed Google API auth    | Worker logs              | Spike in 401s       |
+| WAF bypass attempts       | Cloudflare Events        | Any blocked request |
 
 ### 10.2 Cloudflare Dashboard Monitoring
 
@@ -836,11 +849,11 @@ Monitor for:
 
 ### 10.3 Alerting Configuration
 
-| Alert | Condition | Action |
-|-------|-----------|--------|
-| **Origin IP discovered** | Any non-CF IP seen | Investigate leak source |
-| **Direct backend access** | 401/403 spike from sheets | Check for credential compromise |
-| **WAF bypass attempt** | Blocked requests with bypass intent | Review and block source |
+| Alert                     | Condition                           | Action                          |
+| ------------------------- | ----------------------------------- | ------------------------------- |
+| **Origin IP discovered**  | Any non-CF IP seen                  | Investigate leak source         |
+| **Direct backend access** | 401/403 spike from sheets           | Check for credential compromise |
+| **WAF bypass attempt**    | Blocked requests with bypass intent | Review and block source         |
 
 ---
 
@@ -848,81 +861,81 @@ Monitor for:
 
 ### 11.1 Primary Acceptance Criteria
 
-| ID | Criterion | Verification | Status |
-|----|-----------|--------------|--------|
-| **AC-1** | NS-3 compliance documented | This document exists | |
-| **AC-2** | Expected failure defined for all bypass types | Section 3 complete | |
-| **AC-3** | Verification tests documented | Section 7 complete | |
-| **AC-4** | Direct origin request fails (or N/A for Worker-only) | Test 3 passes | |
-| **AC-5** | Edge request succeeds | Test 4 passes | |
+| ID       | Criterion                                            | Verification         | Status |
+| -------- | ---------------------------------------------------- | -------------------- | ------ |
+| **AC-1** | NS-3 compliance documented                           | This document exists |        |
+| **AC-2** | Expected failure defined for all bypass types        | Section 3 complete   |        |
+| **AC-3** | Verification tests documented                        | Section 7 complete   |        |
+| **AC-4** | Direct origin request fails (or N/A for Worker-only) | Test 3 passes        |        |
+| **AC-5** | Edge request succeeds                                | Test 4 passes        |        |
 
 ### 11.2 Defense-in-Depth Criteria
 
-| ID | Criterion | Verification | Status |
-|----|-----------|--------------|--------|
-| **DD-1** | DNS returns only Cloudflare IPs | Test 1 passes | |
-| **DD-2** | Worker responds correctly | Test 2 passes | |
-| **DD-3** | Google Sheets API requires auth | Test 5 passes | |
-| **DD-4** | No origin IP leakage in headers | Test 4 (headers) | |
-| **DD-5** | HTTPS enforced | Test 5 (redirect) | |
+| ID       | Criterion                       | Verification      | Status |
+| -------- | ------------------------------- | ----------------- | ------ |
+| **DD-1** | DNS returns only Cloudflare IPs | Test 1 passes     |        |
+| **DD-2** | Worker responds correctly       | Test 2 passes     |        |
+| **DD-3** | Google Sheets API requires auth | Test 5 passes     |        |
+| **DD-4** | No origin IP leakage in headers | Test 4 (headers)  |        |
+| **DD-5** | HTTPS enforced                  | Test 5 (redirect) |        |
 
 ### 11.3 Documentation Criteria
 
-| ID | Criterion | Location | Status |
-|----|-----------|----------|--------|
-| **DOC-1** | Authenticated Origin Pulls explained | Section 5 | |
-| **DOC-2** | Origin firewall allowlist explained | Section 6 | |
-| **DOC-3** | Verification tests provided | Section 7 | |
-| **DOC-4** | Expected failure defined | Section 3 | |
-| **DOC-5** | Bypass scenarios documented | Section 9 | |
+| ID        | Criterion                            | Location  | Status |
+| --------- | ------------------------------------ | --------- | ------ |
+| **DOC-1** | Authenticated Origin Pulls explained | Section 5 |        |
+| **DOC-2** | Origin firewall allowlist explained  | Section 6 |        |
+| **DOC-3** | Verification tests provided          | Section 7 |        |
+| **DOC-4** | Expected failure defined             | Section 3 |        |
+| **DOC-5** | Bypass scenarios documented          | Section 9 |        |
 
 ---
 
 ## 12. Related Documents
 
-| Document | Path | Relationship |
-|----------|------|--------------|
-| Security Baseline | `docs/security/SECURITY_BASELINE.md` | Parent (defines NS-3) |
-| TLS Strict Baseline | `docs/security/TLS_STRICT_BASELINE.md` | Prerequisite (SEC-3.1) |
-| WAF Baseline | `docs/security/WAF_BASELINE.md` | Sibling (edge protection) |
-| NO_GAS_GUARD | `docs/security/NO_GAS_GUARD.md` | Related (GAS bypass prevention) |
-| Origins Map | `docs/origins.md` | Reference (origin inventory) |
-| Cloudflare Access | `docs/security/CLOUDFLARE_ACCESS_PRIVILEGED.md` | Related (edge auth) |
-| Bot Controls | `docs/security/BOT_CONTROLS_BASELINE.md` | Sibling (edge protection) |
+| Document            | Path                                            | Relationship                    |
+| ------------------- | ----------------------------------------------- | ------------------------------- |
+| Security Baseline   | `docs/security/SECURITY_BASELINE.md`            | Parent (defines NS-3)           |
+| TLS Strict Baseline | `docs/security/TLS_STRICT_BASELINE.md`          | Prerequisite (SEC-3.1)          |
+| WAF Baseline        | `docs/security/WAF_BASELINE.md`                 | Sibling (edge protection)       |
+| NO_GAS_GUARD        | `docs/security/NO_GAS_GUARD.md`                 | Related (GAS bypass prevention) |
+| Origins Map         | `docs/origins.md`                               | Reference (origin inventory)    |
+| Cloudflare Access   | `docs/security/CLOUDFLARE_ACCESS_PRIVILEGED.md` | Related (edge auth)             |
+| Bot Controls        | `docs/security/BOT_CONTROLS_BASELINE.md`        | Sibling (edge protection)       |
 
 ---
 
 ## 13. Summary
 
-| Aspect | Value |
-|--------|-------|
-| **Architecture** | Worker-only (no origin server) |
-| **NS-3 Status** | COMPLIANT |
-| **Origin IP** | None (eliminated by design) |
-| **Bypass Risk** | ELIMINATED for direct origin access |
-| **Data Backend** | Google Sheets API (service account protected) |
-| **Legacy Backend** | GAS archived, CI gate blocks references |
-| **Verification** | 6 tests in verification script |
+| Aspect               | Value                                           |
+| -------------------- | ----------------------------------------------- |
+| **Architecture**     | Worker-only (no origin server)                  |
+| **NS-3 Status**      | COMPLIANT                                       |
+| **Origin IP**        | None (eliminated by design)                     |
+| **Bypass Risk**      | ELIMINATED for direct origin access             |
+| **Data Backend**     | Google Sheets API (service account protected)   |
+| **Legacy Backend**   | GAS archived, CI gate blocks references         |
+| **Verification**     | 6 tests in verification script                  |
 | **Expected Failure** | Connection refused, timeout, 401/403, SSL error |
 
 ---
 
 ## 14. Glossary
 
-| Term | Definition |
-|------|------------|
-| **NS-3** | North Star Invariant 3: Origin bypass must fail |
-| **Worker-only** | Architecture where application runs entirely at Cloudflare edge |
-| **Origin** | Traditional backend server behind CDN |
-| **AOP** | Authenticated Origin Pulls (mutual TLS) |
-| **Orange cloud** | Cloudflare proxy enabled (DNS returns CF IPs) |
-| **Expected failure** | Documented, predictable failure mode for bypass attempts |
-| **Defense-in-depth** | Multiple layers of protection |
+| Term                 | Definition                                                      |
+| -------------------- | --------------------------------------------------------------- |
+| **NS-3**             | North Star Invariant 3: Origin bypass must fail                 |
+| **Worker-only**      | Architecture where application runs entirely at Cloudflare edge |
+| **Origin**           | Traditional backend server behind CDN                           |
+| **AOP**              | Authenticated Origin Pulls (mutual TLS)                         |
+| **Orange cloud**     | Cloudflare proxy enabled (DNS returns CF IPs)                   |
+| **Expected failure** | Documented, predictable failure mode for bypass attempts        |
+| **Defense-in-depth** | Multiple layers of protection                                   |
 
 ---
 
 ## Document History
 
-| Date | Author | Changes |
-|------|--------|---------|
+| Date       | Author      | Changes                                             |
+| ---------- | ----------- | --------------------------------------------------- |
 | 2026-01-05 | Claude Code | Initial PROMPTSPEC-SEC-8.1 origin bypass prevention |

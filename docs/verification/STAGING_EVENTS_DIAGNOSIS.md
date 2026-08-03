@@ -1,8 +1,8 @@
-# Staging /events Endpoint Diagnosis Report
+﻿# Staging /events Endpoint Diagnosis Report
 
 **Story:** Lock down the diagnosis & baseline for /api_list -> events
 **Date:** 2025-12-11
-**Environment:** Staging (`stg.eventangle.com`)
+**Environment:** Staging (`stg.oursharedevents.com`)
 
 ---
 
@@ -11,14 +11,14 @@
 This document captures the hard diagnosis of why `/events` and `/api/rpc` calls fail on staging. The issue stems from two root causes:
 
 1. **Worker Response Handling**: The Worker blindly returns `Content-Type: application/json` regardless of what GAS actually returns (including HTML error pages)
-2. **Origin Validation**: The staging hostname `stg.eventangle.com` is NOT in the GAS BRANDS hostnames whitelist
+2. **Origin Validation**: The staging hostname `stg.oursharedevents.com` is NOT in the GAS BRANDS hostnames whitelist
 
 ---
 
 ## 1. Architecture Overview
 
 ```
-Browser → stg.eventangle.com → Cloudflare Worker → GAS Web App
+Browser → stg.oursharedevents.com → Cloudflare Worker → GAS Web App
                                     │
                                     └─ Returns HTTP 200 + Content-Type: application/json
                                        (even when GAS returns HTML error!)
@@ -127,14 +127,19 @@ const BRANDS = [
   {
     id: 'root',
     name: 'Zeventbook',
-    hostnames: ['zeventbook.io', 'www.zeventbook.io', 'eventangle.com', 'www.eventangle.com'],
+    hostnames: [
+      'zeventbook.io',
+      'www.zeventbook.io',
+      'oursharedevents.com',
+      'www.oursharedevents.com',
+    ],
     // ...
   },
   // ... other brands
 ];
 ```
 
-**Missing:** `stg.eventangle.com` is NOT in any brand's hostnames array!
+**Missing:** `stg.oursharedevents.com` is NOT in any brand's hostnames array!
 
 **Origin validation logic** (`Code.gs:1618-1665`):
 
@@ -153,7 +158,7 @@ function isAllowedOrigin_(origin, authHeaders) {
 }
 ```
 
-However, the Worker sends `Origin: https://stg.eventangle.com` which should be blocked. But GAS should return a JSON error, not HTML.
+However, the Worker sends `Origin: https://stg.oursharedevents.com` which should be blocked. But GAS should return a JSON error, not HTML.
 
 ### Issue 3: GAS Platform Errors (HTML Responses)
 
@@ -179,7 +184,7 @@ curl -X POST \
   "https://script.google.com/macros/s/AKfycbwFneYCpkio7wCn7y08eDUb2PRCPc2Tdtbv20L4AbEHvuCvoqY9ks7-ONL0pzPPw4Hm/exec" \
   -H "Content-Type: application/json" \
   -H "Accept: application/json" \
-  -H "Origin: https://eventangle.com" \
+  -H "Origin: https://oursharedevents.com" \
   -d '{"action":"list","brandId":"root","scope":"events"}'
 ```
 
@@ -190,7 +195,7 @@ curl -X POST \
   "https://script.google.com/macros/s/AKfycbwFneYCpkio7wCn7y08eDUb2PRCPc2Tdtbv20L4AbEHvuCvoqY9ks7-ONL0pzPPw4Hm/exec" \
   -H "Content-Type: application/json" \
   -H "Accept: application/json" \
-  -H "Origin: https://stg.eventangle.com" \
+  -H "Origin: https://stg.oursharedevents.com" \
   -d '{"action":"list","brandId":"root","scope":"events"}'
 ```
 
@@ -198,7 +203,7 @@ curl -X POST \
 
 ```bash
 curl -X POST \
-  "https://stg.eventangle.com/api/rpc" \
+  "https://stg.oursharedevents.com/api/rpc" \
   -H "Content-Type: application/json" \
   -H "Accept: application/json" \
   -d '{"method":"api_list","payload":{"brandId":"root","scope":"events"}}'
@@ -208,7 +213,7 @@ curl -X POST \
 
 ```bash
 curl -X POST \
-  "https://stg.eventangle.com/api/events/list" \
+  "https://stg.oursharedevents.com/api/events/list" \
   -H "Content-Type: application/json" \
   -H "Accept: application/json" \
   -d '{"brandId":"root","scope":"events"}'
@@ -217,7 +222,7 @@ curl -X POST \
 **Test 5: Status endpoint (simplest health check)**
 
 ```bash
-curl "https://stg.eventangle.com/status"
+curl "https://stg.oursharedevents.com/status"
 ```
 
 ### 4.2 Expected vs Actual Responses
@@ -401,7 +406,7 @@ if (!contentType.includes('application/json') || !responseText.trim().startsWith
 
 ## 8. Production Parity Check
 
-**Production URL:** `https://www.eventangle.com`
+**Production URL:** `https://www.oursharedevents.com`
 
 **Production GAS Deployment ID:**
 
@@ -413,12 +418,12 @@ AKfycbz-RVTCdsQsI913wN3TkPtUP8F8EhSjyFAlWIpLVRgzV6WJ-isDyG-ntaV1VjBNaWZLdw
 
 ```bash
 curl -X POST \
-  "https://www.eventangle.com/api/events/list" \
+  "https://www.oursharedevents.com/api/events/list" \
   -H "Content-Type: application/json" \
   -d '{"brandId":"root","scope":"events"}'
 ```
 
-**Note:** Production likely exhibits the same Worker response handling issue, but origin validation passes because `eventangle.com` is in the BRANDS whitelist.
+**Note:** Production likely exhibits the same Worker response handling issue, but origin validation passes because `oursharedevents.com` is in the BRANDS whitelist.
 
 ---
 
@@ -444,7 +449,7 @@ curl -X POST \
 
 ### Priority 4: Add Staging to Origin Whitelist
 
-- [ ] Add `stg.eventangle.com` to root brand hostnames
+- [ ] Add `stg.oursharedevents.com` to root brand hostnames
 - [ ] Redeploy GAS
 - [ ] Retest
 

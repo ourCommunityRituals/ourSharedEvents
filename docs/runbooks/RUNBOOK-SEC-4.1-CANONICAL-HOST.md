@@ -1,4 +1,4 @@
-# Runbook: Canonical Host Redirect (www to apex)
+﻿# Runbook: Canonical Host Redirect (www to apex)
 
 > **Epic SEC-4 — Route Hygiene (kill the route sprawl)**
 > Story SEC-4.1 — Canonical Host Decision + www Redirect Rule
@@ -29,7 +29,7 @@
 Establish **one canonical host** for the production site and redirect the non-canonical variant:
 
 ```
-www.eventangle.com/* ──── 301 ────► eventangle.com/*
+www.oursharedevents.com/* ──── 301 ────► oursharedevents.com/*
 ```
 
 ### 1.2 Why This Matters
@@ -48,10 +48,10 @@ Having both `www` and non-www hosts active creates problems:
 
 ### 1.3 Architecture Decision
 
-| Option                               | Chosen  | Rationale                                   |
-| ------------------------------------ | ------- | ------------------------------------------- |
-| `eventangle.com` (apex/naked domain) | **YES** | Shorter, modern, avoids www prefix          |
-| `www.eventangle.com`                 | No      | Legacy convention, requires extra subdomain |
+| Option                                    | Chosen  | Rationale                                   |
+| ----------------------------------------- | ------- | ------------------------------------------- |
+| `oursharedevents.com` (apex/naked domain) | **YES** | Shorter, modern, avoids www prefix          |
+| `www.oursharedevents.com`                 | No      | Legacy convention, requires extra subdomain |
 
 ### 1.4 Redirect Mechanism
 
@@ -67,8 +67,8 @@ We use **Cloudflare Redirect Rules** (not Worker code) because:
 │                    Request Flow (Before SEC-4.1)                             │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                              │
-│   www.eventangle.com ────► Cloudflare ────► Worker ────► Response           │
-│   eventangle.com     ────► Cloudflare ────► Worker ────► Response           │
+│   www.oursharedevents.com ────► Cloudflare ────► Worker ────► Response           │
+│   oursharedevents.com     ────► Cloudflare ────► Worker ────► Response           │
 │                                                                              │
 │   Both hosts hit the Worker (unnecessary route sprawl)                       │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -77,10 +77,10 @@ We use **Cloudflare Redirect Rules** (not Worker code) because:
 │                    Request Flow (After SEC-4.1)                              │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                              │
-│   www.eventangle.com ────► Cloudflare Redirect Rule ────► 301               │
+│   www.oursharedevents.com ────► Cloudflare Redirect Rule ────► 301               │
 │                                              │                               │
 │                                              ▼                               │
-│   eventangle.com     ────► Cloudflare ────► Worker ────► Response           │
+│   oursharedevents.com     ────► Cloudflare ────► Worker ────► Response           │
 │                                                                              │
 │   Only canonical host reaches Worker; www redirected at edge                 │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -100,15 +100,15 @@ We use **Cloudflare Redirect Rules** (not Worker code) because:
 
 **Subdomains do NOT get www prefixes.** This is intentional route hygiene:
 
-| Host                     | Status               | Rationale              |
-| ------------------------ | -------------------- | ---------------------- |
-| `eventangle.com`         | ✅ Canonical         | Production site        |
-| `www.eventangle.com`     | 🔄 Redirects to apex | Legacy support         |
-| `stg.eventangle.com`     | ✅ Direct            | Staging (internal use) |
-| `www.stg.eventangle.com` | ❌ Not supported     | Unnecessary sprawl     |
-| `api.eventangle.com`     | ✅ Direct            | API subdomain          |
-| `www.api.eventangle.com` | ❌ Not supported     | Unnecessary sprawl     |
-| `api-stg.eventangle.com` | ✅ Direct            | Staging API            |
+| Host                          | Status               | Rationale              |
+| ----------------------------- | -------------------- | ---------------------- |
+| `oursharedevents.com`         | ✅ Canonical         | Production site        |
+| `www.oursharedevents.com`     | 🔄 Redirects to apex | Legacy support         |
+| `stg.oursharedevents.com`     | ✅ Direct            | Staging (internal use) |
+| `www.stg.oursharedevents.com` | ❌ Not supported     | Unnecessary sprawl     |
+| `api.oursharedevents.com`     | ✅ Direct            | API subdomain          |
+| `www.api.oursharedevents.com` | ❌ Not supported     | Unnecessary sprawl     |
+| `api-stg.oursharedevents.com` | ✅ Direct            | Staging API            |
 
 **Why no www on subdomains?**
 
@@ -119,9 +119,9 @@ We use **Cloudflare Redirect Rules** (not Worker code) because:
 
 **Friendly URLs work without www:**
 
-- `https://stg.eventangle.com/manage` ✅
-- `https://stg.eventangle.com/admin` ✅
-- `https://stg.eventangle.com/public?brand=abc` ✅
+- `https://stg.oursharedevents.com/manage` ✅
+- `https://stg.oursharedevents.com/admin` ✅
+- `https://stg.oursharedevents.com/public?brand=abc` ✅
 
 ---
 
@@ -137,17 +137,17 @@ We use **Cloudflare Redirect Rules** (not Worker code) because:
 
 | Information    | Value                       | Status           |
 | -------------- | --------------------------- | ---------------- |
-| Domain         | `eventangle.com`            |                  |
+| Domain         | `oursharedevents.com`       |                  |
 | Zone ID        | (from Cloudflare dashboard) |                  |
-| Canonical host | `eventangle.com`            | Chosen           |
-| Redirect host  | `www.eventangle.com`        | To be redirected |
+| Canonical host | `oursharedevents.com`       | Chosen           |
+| Redirect host  | `www.oursharedevents.com`   | To be redirected |
 
 ### 2.3 Pre-Flight Checks
 
 Before configuring the redirect:
 
-- [ ] Verify `www.eventangle.com` DNS record exists and is proxied (orange cloud)
-- [ ] Verify `eventangle.com` DNS record exists and is proxied (orange cloud)
+- [ ] Verify `www.oursharedevents.com` DNS record exists and is proxied (orange cloud)
+- [ ] Verify `oursharedevents.com` DNS record exists and is proxied (orange cloud)
 - [ ] Verify SSL certificate covers both hosts (Cloudflare Universal SSL does this automatically)
 - [ ] Confirm no critical functionality depends on www-specific behavior
 - [ ] Back up current Redirect Rules configuration (screenshot or export)
@@ -158,23 +158,23 @@ Before configuring the redirect:
 
 ### 3.1 Decision Record
 
-| Attribute               | Value                                                |
-| ----------------------- | ---------------------------------------------------- |
-| Decision                | Use `eventangle.com` (apex domain) as canonical host |
-| Date                    | 2025-12-21                                           |
-| Rationale               | Shorter URL, modern convention, no www prefix needed |
-| Alternatives considered | `www.eventangle.com` (rejected - legacy convention)  |
+| Attribute               | Value                                                     |
+| ----------------------- | --------------------------------------------------------- |
+| Decision                | Use `oursharedevents.com` (apex domain) as canonical host |
+| Date                    | 2025-12-21                                                |
+| Rationale               | Shorter URL, modern convention, no www prefix needed      |
+| Alternatives considered | `www.oursharedevents.com` (rejected - legacy convention)  |
 
 ### 3.2 Implications
 
-| Area              | Impact                                                  |
-| ----------------- | ------------------------------------------------------- |
-| **URLs**          | All canonical URLs use `eventangle.com`                 |
-| **Links**         | Update external links to use apex domain where possible |
-| **Documentation** | Reference `eventangle.com` in all docs                  |
-| **Email**         | MX records unaffected (mail.eventangle.com or external) |
-| **API**           | `api.eventangle.com` remains unchanged                  |
-| **Staging**       | `stg.eventangle.com` remains unchanged                  |
+| Area              | Impact                                                       |
+| ----------------- | ------------------------------------------------------------ |
+| **URLs**          | All canonical URLs use `oursharedevents.com`                 |
+| **Links**         | Update external links to use apex domain where possible      |
+| **Documentation** | Reference `oursharedevents.com` in all docs                  |
+| **Email**         | MX records unaffected (mail.oursharedevents.com or external) |
+| **API**           | `api.oursharedevents.com` remains unchanged                  |
+| **Staging**       | `stg.oursharedevents.com` remains unchanged                  |
 
 ---
 
@@ -183,7 +183,7 @@ Before configuring the redirect:
 ### 4.1 Via Cloudflare Dashboard (Recommended)
 
 1. Log in to [Cloudflare Dashboard](https://dash.cloudflare.com)
-2. Select your account and the `eventangle.com` domain
+2. Select your account and the `oursharedevents.com` domain
 3. Navigate to **Rules** → **Redirect Rules**
 4. Click **Create rule**
 5. Configure the rule:
@@ -194,12 +194,12 @@ Before configuring the redirect:
 
 - Field: `Hostname`
 - Operator: `equals`
-- Value: `www.eventangle.com`
+- Value: `www.oursharedevents.com`
 
 **Then...**
 
 - Type: `Dynamic`
-- Expression: `concat("https://eventangle.com", http.request.uri.path)`
+- Expression: `concat("https://oursharedevents.com", http.request.uri.path)`
 - Status code: `301` (Permanent Redirect)
 - Preserve query string: `Yes` (checked)
 
@@ -219,14 +219,14 @@ curl -X POST "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/rulesets/phase
   --data '{
     "rules": [
       {
-        "expression": "(http.host eq \"www.eventangle.com\")",
+        "expression": "(http.host eq \"www.oursharedevents.com\")",
         "description": "SEC-4.1: www to apex redirect",
         "action": "redirect",
         "action_parameters": {
           "from_value": {
             "status_code": 301,
             "target_url": {
-              "expression": "concat(\"https://eventangle.com\", http.request.uri.path)"
+              "expression": "concat(\"https://oursharedevents.com\", http.request.uri.path)"
             },
             "preserve_query_string": true
           }
@@ -238,21 +238,21 @@ curl -X POST "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/rulesets/phase
 
 ### 4.3 Rule Configuration Details
 
-| Setting                   | Value                                                     | Rationale                                       |
-| ------------------------- | --------------------------------------------------------- | ----------------------------------------------- |
-| **Status code**           | 301 (Permanent)                                           | Tells browsers/search engines this is permanent |
-| **Preserve query string** | Yes                                                       | Maintains `?page=admin&brand=root` etc.         |
-| **Dynamic expression**    | `concat("https://eventangle.com", http.request.uri.path)` | Preserves full path                             |
+| Setting                   | Value                                                          | Rationale                                       |
+| ------------------------- | -------------------------------------------------------------- | ----------------------------------------------- |
+| **Status code**           | 301 (Permanent)                                                | Tells browsers/search engines this is permanent |
+| **Preserve query string** | Yes                                                            | Maintains `?page=admin&brand=root` etc.         |
+| **Dynamic expression**    | `concat("https://oursharedevents.com", http.request.uri.path)` | Preserves full path                             |
 
 ### 4.4 What the Redirect Covers
 
-| Request                                       | Redirects To                                                 |
-| --------------------------------------------- | ------------------------------------------------------------ |
-| `https://www.eventangle.com/`                 | `https://eventangle.com/`                                    |
-| `https://www.eventangle.com/admin`            | `https://eventangle.com/admin`                               |
-| `https://www.eventangle.com/api/v2/events`    | `https://eventangle.com/api/v2/events`                       |
-| `https://www.eventangle.com/public?brand=abc` | `https://eventangle.com/public?brand=abc`                    |
-| `http://www.eventangle.com/`                  | `https://eventangle.com/` (via Always Use HTTPS + this rule) |
+| Request                                            | Redirects To                                                      |
+| -------------------------------------------------- | ----------------------------------------------------------------- |
+| `https://www.oursharedevents.com/`                 | `https://oursharedevents.com/`                                    |
+| `https://www.oursharedevents.com/admin`            | `https://oursharedevents.com/admin`                               |
+| `https://www.oursharedevents.com/api/v2/events`    | `https://oursharedevents.com/api/v2/events`                       |
+| `https://www.oursharedevents.com/public?brand=abc` | `https://oursharedevents.com/public?brand=abc`                    |
+| `http://www.oursharedevents.com/`                  | `https://oursharedevents.com/` (via Always Use HTTPS + this rule) |
 
 ---
 
@@ -277,9 +277,9 @@ Change from:
 ```toml
 [env.production]
 routes = [
-  { pattern = "eventangle.com/*", zone_name = "eventangle.com" },
-  { pattern = "www.eventangle.com/*", zone_name = "eventangle.com" },
-  { pattern = "api.eventangle.com/*", zone_name = "eventangle.com" }
+  { pattern = "oursharedevents.com/*", zone_name = "oursharedevents.com" },
+  { pattern = "www.oursharedevents.com/*", zone_name = "oursharedevents.com" },
+  { pattern = "api.oursharedevents.com/*", zone_name = "oursharedevents.com" }
 ]
 ```
 
@@ -288,9 +288,9 @@ To:
 ```toml
 [env.production]
 routes = [
-  { pattern = "eventangle.com/*", zone_name = "eventangle.com" },
-  # www.eventangle.com/* removed - SEC-4.1: redirected at edge via Cloudflare Redirect Rule
-  { pattern = "api.eventangle.com/*", zone_name = "eventangle.com" }
+  { pattern = "oursharedevents.com/*", zone_name = "oursharedevents.com" },
+  # www.oursharedevents.com/* removed - SEC-4.1: redirected at edge via Cloudflare Redirect Rule
+  { pattern = "api.oursharedevents.com/*", zone_name = "oursharedevents.com" }
 ]
 ```
 
@@ -317,30 +317,30 @@ Same change in the `[env.production]` section.
 #### Browser Test
 
 1. Open browser (incognito/private mode recommended)
-2. Navigate to `https://www.eventangle.com/`
-3. **Expected**: Redirected to `https://eventangle.com/`
-4. Check address bar shows `eventangle.com`
+2. Navigate to `https://www.oursharedevents.com/`
+3. **Expected**: Redirected to `https://oursharedevents.com/`
+4. Check address bar shows `oursharedevents.com`
 
 #### curl Test
 
 ```bash
 # Test basic redirect
-curl -I https://www.eventangle.com/
+curl -I https://www.oursharedevents.com/
 # Expected output includes:
 # HTTP/2 301
-# location: https://eventangle.com/
+# location: https://oursharedevents.com/
 
 # Test path preservation
-curl -I https://www.eventangle.com/admin
+curl -I https://www.oursharedevents.com/admin
 # Expected:
 # HTTP/2 301
-# location: https://eventangle.com/admin
+# location: https://oursharedevents.com/admin
 
 # Test query string preservation
-curl -I "https://www.eventangle.com/public?brand=abc"
+curl -I "https://www.oursharedevents.com/public?brand=abc"
 # Expected:
 # HTTP/2 301
-# location: https://eventangle.com/public?brand=abc
+# location: https://oursharedevents.com/public?brand=abc
 ```
 
 ### 6.2 Verify After Worker Route Removal
@@ -355,7 +355,7 @@ Or manually:
 ```bash
 #!/bin/bash
 # SEC-4.1 Verification Script
-DOMAIN="eventangle.com"
+DOMAIN="oursharedevents.com"
 
 echo "=== SEC-4.1 Canonical Host Verification ==="
 echo ""
@@ -373,7 +373,7 @@ fi
 echo ""
 
 # Test 2: Canonical host works
-echo "2. Testing canonical host (eventangle.com)..."
+echo "2. Testing canonical host (oursharedevents.com)..."
 CANONICAL_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -I "https://$DOMAIN/")
 if [ "$CANONICAL_STATUS" = "200" ]; then
     echo "   ✅ PASS: Canonical host returns 200 OK"
@@ -405,7 +405,7 @@ fi
 echo ""
 
 # Test 5: API subdomain unaffected
-echo "5. Testing API subdomain (api.eventangle.com)..."
+echo "5. Testing API subdomain (api.oursharedevents.com)..."
 API_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -I "https://api.$DOMAIN/api/status")
 if [ "$API_STATUS" = "200" ]; then
     echo "   ✅ PASS: API subdomain returns 200 OK"
@@ -419,13 +419,13 @@ echo "=== Verification Complete ==="
 
 ### 6.3 Acceptance Criteria Checklist
 
-| Criterion                                       | Verification Method                  | Status   |
-| ----------------------------------------------- | ------------------------------------ | -------- |
-| `www.eventangle.com/*` 301 → `eventangle.com/*` | curl -I shows 301 + correct location | [ ] Pass |
-| Path preserved in redirect                      | `/admin` → `/admin`                  | [ ] Pass |
-| Query string preserved                          | `?brand=abc` → `?brand=abc`          | [ ] Pass |
-| No Worker routes for www                        | Check wrangler.toml                  | [ ] Pass |
-| Browser follows redirect                        | Manual test                          | [ ] Pass |
+| Criterion                                                 | Verification Method                  | Status   |
+| --------------------------------------------------------- | ------------------------------------ | -------- |
+| `www.oursharedevents.com/*` 301 → `oursharedevents.com/*` | curl -I shows 301 + correct location | [ ] Pass |
+| Path preserved in redirect                                | `/admin` → `/admin`                  | [ ] Pass |
+| Query string preserved                                    | `?brand=abc` → `?brand=abc`          | [ ] Pass |
+| No Worker routes for www                                  | Check wrangler.toml                  | [ ] Pass |
+| Browser follows redirect                                  | Manual test                          | [ ] Pass |
 
 ---
 
@@ -445,17 +445,17 @@ echo "=== Verification Complete ==="
 Re-add the Worker route:
 
 1. Edit `worker/wrangler.toml` and `cloudflare-proxy/wrangler.toml`
-2. Add back: `{ pattern = "www.eventangle.com/*", zone_name = "eventangle.com" }`
+2. Add back: `{ pattern = "www.oursharedevents.com/*", zone_name = "oursharedevents.com" }`
 3. Deploy: `wrangler deploy --env production`
 
 ### 7.3 Rollback Decision Tree
 
 ```
-Is www.eventangle.com returning errors?
+Is www.oursharedevents.com returning errors?
 ├── Yes → Is the error a 301/302 loop?
 │   ├── Yes → Disable redirect rule immediately
 │   └── No → Check if redirect rule is misconfigured
-└── No → Is eventangle.com working?
+└── No → Is oursharedevents.com working?
     ├── Yes → Redirect is working, investigate other issues
     └── No → Check Worker health, DNS, SSL settings
 ```
@@ -477,22 +477,22 @@ Is www.eventangle.com returning errors?
 
 ```bash
 # Check what Cloudflare is returning
-curl -vI https://www.eventangle.com/ 2>&1 | grep -E "(HTTP|location|cf-ray)"
+curl -vI https://www.oursharedevents.com/ 2>&1 | grep -E "(HTTP|location|cf-ray)"
 
 # Check redirect chain
-curl -L -v https://www.eventangle.com/ 2>&1 | grep -E "(< HTTP|< location)"
+curl -L -v https://www.oursharedevents.com/ 2>&1 | grep -E "(< HTTP|< location)"
 ```
 
 ### 8.3 Verify DNS Setup
 
 ```bash
 # Both should resolve and be proxied
-dig +short www.eventangle.com
-dig +short eventangle.com
+dig +short www.oursharedevents.com
+dig +short oursharedevents.com
 
 # Check if proxied (should show Cloudflare IPs)
-dig +short www.eventangle.com A
-dig +short eventangle.com A
+dig +short www.oursharedevents.com A
+dig +short oursharedevents.com A
 ```
 
 ### 8.4 Check Redirect Rule in API
@@ -520,7 +520,7 @@ When search engines see the 301 redirect:
 After implementing the redirect:
 
 1. Go to [Google Search Console](https://search.google.com/search-console)
-2. Add `eventangle.com` as a property (if not already)
+2. Add `oursharedevents.com` as a property (if not already)
 3. Request indexing of the canonical version
 4. Monitor for crawl errors
 
@@ -529,7 +529,7 @@ After implementing the redirect:
 Ensure HTML pages include:
 
 ```html
-<link rel="canonical" href="https://eventangle.com/page-path" />
+<link rel="canonical" href="https://oursharedevents.com/page-path" />
 ```
 
 This reinforces the canonical host choice.

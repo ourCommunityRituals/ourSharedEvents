@@ -1,4 +1,4 @@
-# CANONICAL_HOST_SPEC.md — Canonical Host + Redirect Specification
+﻿# CANONICAL_HOST_SPEC.md — Canonical Host + Redirect Specification
 
 > **PROMPTSPEC-SEC-4.1** — Canonical Host + Redirect Spec
 > Role: Director of Security
@@ -11,11 +11,11 @@
 
 Define the canonical hostname for the application and enforce HTTP 301 redirects at the Cloudflare edge to consolidate all traffic to a single hostname. This prevents SEO dilution, cookie scope issues, and duplicate worker route complexity.
 
-| Attribute | Value |
-|-----------|-------|
-| **Scope** | All production hostnames for eventangle.com zone |
-| **Prerequisites** | TLS Strict Baseline (SEC-3.1), HSTS Rollout (SEC-3.2) |
-| **Constraints** | Worker routes must NOT be configured for non-canonical hosts |
+| Attribute         | Value                                                        |
+| ----------------- | ------------------------------------------------------------ |
+| **Scope**         | All production hostnames for oursharedevents.com zone        |
+| **Prerequisites** | TLS Strict Baseline (SEC-3.1), HSTS Rollout (SEC-3.2)        |
+| **Constraints**   | Worker routes must NOT be configured for non-canonical hosts |
 
 ---
 
@@ -23,34 +23,34 @@ Define the canonical hostname for the application and enforce HTTP 301 redirects
 
 ### 2.1 Chosen Canonical Host
 
-| Attribute | Value |
-|-----------|-------|
-| **Canonical Host** | `eventangle.com` |
-| **Non-Canonical (Redirect Source)** | `www.eventangle.com` |
-| **Redirect Direction** | www → apex |
+| Attribute                           | Value                     |
+| ----------------------------------- | ------------------------- |
+| **Canonical Host**                  | `oursharedevents.com`     |
+| **Non-Canonical (Redirect Source)** | `www.oursharedevents.com` |
+| **Redirect Direction**              | www → apex                |
 
 ### 2.2 Rationale
 
-| Factor | Apex (`eventangle.com`) | WWW (`www.eventangle.com`) | Decision |
-|--------|-------------------------|----------------------------|----------|
-| **URL Length** | Shorter, cleaner | Longer | Apex wins |
-| **Modern Preference** | Industry trend toward apex | Traditional/legacy | Apex wins |
-| **Cookie Scope** | Limited to apex only | Can scope to apex via `.eventangle.com` | Tie |
-| **Subdomain Flexibility** | Any subdomain works | `www` is "used" | Apex wins |
-| **HSTS includeSubDomains** | Works naturally | Works naturally | Tie |
-| **Historical Links** | May have some | May have some | Tie |
+| Factor                     | Apex (`oursharedevents.com`) | WWW (`www.oursharedevents.com`)              | Decision  |
+| -------------------------- | ---------------------------- | -------------------------------------------- | --------- |
+| **URL Length**             | Shorter, cleaner             | Longer                                       | Apex wins |
+| **Modern Preference**      | Industry trend toward apex   | Traditional/legacy                           | Apex wins |
+| **Cookie Scope**           | Limited to apex only         | Can scope to apex via `.oursharedevents.com` | Tie       |
+| **Subdomain Flexibility**  | Any subdomain works          | `www` is "used"                              | Apex wins |
+| **HSTS includeSubDomains** | Works naturally              | Works naturally                              | Tie       |
+| **Historical Links**       | May have some                | May have some                                | Tie       |
 
-**Conclusion:** `eventangle.com` (apex) is the canonical host.
+**Conclusion:** `oursharedevents.com` (apex) is the canonical host.
 
 ### 2.3 Hostname Inventory
 
-| Hostname | Purpose | Canonical? | Action |
-|----------|---------|------------|--------|
-| `eventangle.com` | Primary web application | **YES** | Serve via Worker |
-| `www.eventangle.com` | Legacy/alternative | NO | 301 redirect to apex |
-| `api.eventangle.com` | API endpoint | **YES (API)** | Serve via Worker |
-| `api-stg.eventangle.com` | Staging API | YES (Staging) | Serve via Worker |
-| `stg.eventangle.com` | Staging environment | YES (Staging) | Serve via Worker |
+| Hostname                      | Purpose                 | Canonical?    | Action               |
+| ----------------------------- | ----------------------- | ------------- | -------------------- |
+| `oursharedevents.com`         | Primary web application | **YES**       | Serve via Worker     |
+| `www.oursharedevents.com`     | Legacy/alternative      | NO            | 301 redirect to apex |
+| `api.oursharedevents.com`     | API endpoint            | **YES (API)** | Serve via Worker     |
+| `api-stg.oursharedevents.com` | Staging API             | YES (Staging) | Serve via Worker     |
+| `stg.oursharedevents.com`     | Staging environment     | YES (Staging) | Serve via Worker     |
 
 ---
 
@@ -58,42 +58,44 @@ Define the canonical hostname for the application and enforce HTTP 301 redirects
 
 ### 3.1 Redirect Requirements
 
-| Requirement | Specification |
-|-------------|---------------|
-| **Source Host** | `www.eventangle.com` |
-| **Target Host** | `eventangle.com` |
-| **Path Preservation** | **REQUIRED** — Full path must be preserved |
-| **Query String Preservation** | **REQUIRED** — All query parameters must be preserved |
-| **Fragment Preservation** | Browser handles (not sent to server) |
-| **Protocol** | Always redirect to HTTPS (combined with Always Use HTTPS) |
+| Requirement                   | Specification                                             |
+| ----------------------------- | --------------------------------------------------------- |
+| **Source Host**               | `www.oursharedevents.com`                                 |
+| **Target Host**               | `oursharedevents.com`                                     |
+| **Path Preservation**         | **REQUIRED** — Full path must be preserved                |
+| **Query String Preservation** | **REQUIRED** — All query parameters must be preserved     |
+| **Fragment Preservation**     | Browser handles (not sent to server)                      |
+| **Protocol**                  | Always redirect to HTTPS (combined with Always Use HTTPS) |
 
 ### 3.2 Redirect Examples
 
-| Request URL | Redirects To |
-|-------------|--------------|
-| `http://www.eventangle.com/` | `https://eventangle.com/` |
-| `https://www.eventangle.com/` | `https://eventangle.com/` |
-| `https://www.eventangle.com/events/abc123` | `https://eventangle.com/events/abc123` |
-| `https://www.eventangle.com/public?id=xyz&tab=schedule` | `https://eventangle.com/public?id=xyz&tab=schedule` |
-| `https://www.eventangle.com/admin?token=secret` | `https://eventangle.com/admin?token=secret` |
-| `http://www.eventangle.com/path?query=value` | `https://eventangle.com/path?query=value` |
+| Request URL                                                  | Redirects To                                             |
+| ------------------------------------------------------------ | -------------------------------------------------------- |
+| `http://www.oursharedevents.com/`                            | `https://oursharedevents.com/`                           |
+| `https://www.oursharedevents.com/`                           | `https://oursharedevents.com/`                           |
+| `https://www.oursharedevents.com/events/abc123`              | `https://oursharedevents.com/events/abc123`              |
+| `https://www.oursharedevents.com/public?id=xyz&tab=schedule` | `https://oursharedevents.com/public?id=xyz&tab=schedule` |
+| `https://www.oursharedevents.com/admin?token=secret`         | `https://oursharedevents.com/admin?token=secret`         |
+| `http://www.oursharedevents.com/path?query=value`            | `https://oursharedevents.com/path?query=value`           |
 
 ### 3.3 Redirect Expression (Cloudflare)
 
 The redirect preserves path and query using Cloudflare's expression syntax:
 
 ```
-Target URL: concat("https://eventangle.com", http.request.uri.path, "?", http.request.uri.query)
+Target URL: concat("https://oursharedevents.com", http.request.uri.path, "?", http.request.uri.query)
 ```
 
 For requests without query string:
+
 ```
-Target URL: concat("https://eventangle.com", http.request.uri.path)
+Target URL: concat("https://oursharedevents.com", http.request.uri.path)
 ```
 
 Or using dynamic reference:
+
 ```
-Target URL: concat("https://eventangle.com", http.request.uri)
+Target URL: concat("https://oursharedevents.com", http.request.uri)
 ```
 
 > **Note:** `http.request.uri` includes both path and query string (e.g., `/path?query=value`).
@@ -105,27 +107,28 @@ Target URL: concat("https://eventangle.com", http.request.uri)
 ### 4.1 Recommended Status Code
 
 | Status Code | **301 Moved Permanently** |
-|-------------|---------------------------|
+| ----------- | ------------------------- |
 
 ### 4.2 Status Code Comparison
 
-| Status Code | Name | Caching | SEO Impact | Use Case |
-|-------------|------|---------|------------|----------|
-| **301** | Moved Permanently | Cached indefinitely by browsers/proxies | Transfers SEO value to target | **Permanent canonical redirect** |
-| 302 | Found | Not cached | No SEO transfer | Temporary redirects |
-| 307 | Temporary Redirect | Not cached | No SEO transfer | Method-preserving temporary |
-| 308 | Permanent Redirect | Cached | Transfers SEO value | Method-preserving permanent |
+| Status Code | Name               | Caching                                 | SEO Impact                    | Use Case                         |
+| ----------- | ------------------ | --------------------------------------- | ----------------------------- | -------------------------------- |
+| **301**     | Moved Permanently  | Cached indefinitely by browsers/proxies | Transfers SEO value to target | **Permanent canonical redirect** |
+| 302         | Found              | Not cached                              | No SEO transfer               | Temporary redirects              |
+| 307         | Temporary Redirect | Not cached                              | No SEO transfer               | Method-preserving temporary      |
+| 308         | Permanent Redirect | Cached                                  | Transfers SEO value           | Method-preserving permanent      |
 
 ### 4.3 Why 301 (Not 308)
 
-| Consideration | 301 | 308 |
-|---------------|-----|-----|
-| Browser Support | Universal | Modern only |
-| Method Preservation | May convert POST→GET | Preserves method |
-| Use Case | GET-based redirects | POST-based redirects |
-| Our Traffic | Primarily GET requests | N/A |
+| Consideration       | 301                    | 308                  |
+| ------------------- | ---------------------- | -------------------- |
+| Browser Support     | Universal              | Modern only          |
+| Method Preservation | May convert POST→GET   | Preserves method     |
+| Use Case            | GET-based redirects    | POST-based redirects |
+| Our Traffic         | Primarily GET requests | N/A                  |
 
 **Decision:** Use **301** because:
+
 1. Universal browser compatibility
 2. Our www→apex redirect applies to browser navigation (GET requests)
 3. POST requests go directly to API endpoints (not www)
@@ -141,25 +144,25 @@ Target URL: concat("https://eventangle.com", http.request.uri)
 
 Redirect at the Cloudflare edge using **Redirect Rules** (not Page Rules, which are deprecated).
 
-| Method | Recommendation | Notes |
-|--------|----------------|-------|
-| **Redirect Rules** | **RECOMMENDED** | Modern, fast, configurable |
-| Page Rules | Deprecated | Limited to 3 free rules |
-| Worker Redirect | Not recommended | Unnecessary complexity/cost |
-| Bulk Redirects | Overkill | Designed for large redirect lists |
+| Method             | Recommendation  | Notes                             |
+| ------------------ | --------------- | --------------------------------- |
+| **Redirect Rules** | **RECOMMENDED** | Modern, fast, configurable        |
+| Page Rules         | Deprecated      | Limited to 3 free rules           |
+| Worker Redirect    | Not recommended | Unnecessary complexity/cost       |
+| Bulk Redirects     | Overkill        | Designed for large redirect lists |
 
 ### 5.2 UI Implementation Steps
 
 ```
 IMPLEMENTATION CHECKLIST — SEC-4.1 Canonical Host Redirect
 
-DOMAIN: eventangle.com                    DATE: ___________
+DOMAIN: oursharedevents.com                    DATE: ___________
 
 PRE-IMPLEMENTATION
 [ ] 1. Verify TLS Strict Baseline (SEC-3.1) is active
 [ ] 2. Verify "Always Use HTTPS" is enabled
-[ ] 3. Verify www.eventangle.com resolves (DNS A/AAAA or CNAME exists)
-[ ] 4. Verify www.eventangle.com is proxied (orange cloud)
+[ ] 3. Verify www.oursharedevents.com resolves (DNS A/AAAA or CNAME exists)
+[ ] 4. Verify www.oursharedevents.com is proxied (orange cloud)
 [ ] 5. Document current www behavior: ___________
 
 CREATE REDIRECT RULE
@@ -169,10 +172,10 @@ CREATE REDIRECT RULE
 [ ] 9. When incoming requests match:
       Field: Hostname
       Operator: equals
-      Value: www.eventangle.com
+      Value: www.oursharedevents.com
 [ ] 10. Then:
        Type: Dynamic
-       Expression: concat("https://eventangle.com", http.request.uri)
+       Expression: concat("https://oursharedevents.com", http.request.uri)
        Status code: 301
        Preserve query string: Yes (handled by expression)
 [ ] 11. Click "Deploy"
@@ -182,8 +185,8 @@ VERIFICATION
 [ ] 13. Document test results: PASS / FAIL
 
 WORKER ROUTE CLEANUP
-[ ] 14. Verify NO worker route exists for www.eventangle.com
-       Location: Workers & Pages → eventangle-router-prod → Triggers
+[ ] 14. Verify NO worker route exists for www.oursharedevents.com
+       Location: Workers & Pages → oursharedevents-router-prod → Triggers
 [ ] 15. If www route exists, REMOVE IT (not edit, REMOVE)
 
 Implemented by: _____________  Date: _____________
@@ -208,12 +211,12 @@ resource "cloudflare_ruleset" "redirect_www_to_apex" {
       from_value {
         status_code = 301
         target_url {
-          expression = "concat(\"https://eventangle.com\", http.request.uri)"
+          expression = "concat(\"https://oursharedevents.com\", http.request.uri)"
         }
         preserve_query_string = true
       }
     }
-    expression  = "(http.host eq \"www.eventangle.com\")"
+    expression  = "(http.host eq \"www.oursharedevents.com\")"
     description = "SEC-4.1: www to apex canonical redirect"
     enabled     = true
   }
@@ -226,23 +229,23 @@ resource "cloudflare_ruleset" "redirect_www_to_apex" {
 
 ### 6.1 Redirect Verification Tests
 
-| Test ID | Request | Expected Response | Expected Location Header |
-|---------|---------|-------------------|--------------------------|
-| **T-1** | `curl -sI http://www.eventangle.com/` | 301 | `https://eventangle.com/` |
-| **T-2** | `curl -sI https://www.eventangle.com/` | 301 | `https://eventangle.com/` |
-| **T-3** | `curl -sI https://www.eventangle.com/events/abc` | 301 | `https://eventangle.com/events/abc` |
-| **T-4** | `curl -sI "https://www.eventangle.com/public?id=xyz"` | 301 | `https://eventangle.com/public?id=xyz` |
-| **T-5** | `curl -sI "https://www.eventangle.com/path?a=1&b=2"` | 301 | `https://eventangle.com/path?a=1&b=2` |
-| **T-6** | `curl -sI https://eventangle.com/` | 200 | N/A (no redirect) |
-| **T-7** | `curl -sI http://eventangle.com/` | 301 | `https://eventangle.com/` (HTTPS upgrade) |
+| Test ID | Request                                                    | Expected Response | Expected Location Header                       |
+| ------- | ---------------------------------------------------------- | ----------------- | ---------------------------------------------- |
+| **T-1** | `curl -sI http://www.oursharedevents.com/`                 | 301               | `https://oursharedevents.com/`                 |
+| **T-2** | `curl -sI https://www.oursharedevents.com/`                | 301               | `https://oursharedevents.com/`                 |
+| **T-3** | `curl -sI https://www.oursharedevents.com/events/abc`      | 301               | `https://oursharedevents.com/events/abc`       |
+| **T-4** | `curl -sI "https://www.oursharedevents.com/public?id=xyz"` | 301               | `https://oursharedevents.com/public?id=xyz`    |
+| **T-5** | `curl -sI "https://www.oursharedevents.com/path?a=1&b=2"`  | 301               | `https://oursharedevents.com/path?a=1&b=2`     |
+| **T-6** | `curl -sI https://oursharedevents.com/`                    | 200               | N/A (no redirect)                              |
+| **T-7** | `curl -sI http://oursharedevents.com/`                     | 301               | `https://oursharedevents.com/` (HTTPS upgrade) |
 
 ### 6.2 Canonical Host Verification Tests
 
-| Test ID | Request | Expected Response | Notes |
-|---------|---------|-------------------|-------|
-| **T-8** | `curl -sI https://eventangle.com/api/status` | 200 | API responds on apex |
-| **T-9** | `curl -sI https://api.eventangle.com/status` | 200 | API subdomain works |
-| **T-10** | `curl -sI https://www.eventangle.com/api/status` | 301 | www API redirects to apex |
+| Test ID  | Request                                               | Expected Response | Notes                     |
+| -------- | ----------------------------------------------------- | ----------------- | ------------------------- |
+| **T-8**  | `curl -sI https://oursharedevents.com/api/status`     | 200               | API responds on apex      |
+| **T-9**  | `curl -sI https://api.oursharedevents.com/status`     | 200               | API subdomain works       |
+| **T-10** | `curl -sI https://www.oursharedevents.com/api/status` | 301               | www API redirects to apex |
 
 ### 6.3 Verification Script
 
@@ -253,8 +256,8 @@ Save as `scripts/verify-canonical-host.sh`:
 # SEC-4.1 Canonical Host Redirect Verification Script
 # Usage: ./verify-canonical-host.sh
 
-CANONICAL="eventangle.com"
-NON_CANONICAL="www.eventangle.com"
+CANONICAL="oursharedevents.com"
+NON_CANONICAL="www.oursharedevents.com"
 PASS=0
 FAIL=0
 
@@ -355,18 +358,18 @@ fi
 
 ```bash
 # One-liner: Verify www redirects to apex with path preserved
-curl -sI "https://www.eventangle.com/test/path?query=value" | grep -iE "^(HTTP|Location)"
+curl -sI "https://www.oursharedevents.com/test/path?query=value" | grep -iE "^(HTTP|Location)"
 
 # Expected output:
 # HTTP/2 301
-# location: https://eventangle.com/test/path?query=value
+# location: https://oursharedevents.com/test/path?query=value
 
 # Verify canonical host serves content (no redirect)
-curl -sI https://eventangle.com/ | head -1
+curl -sI https://oursharedevents.com/ | head -1
 # Expected: HTTP/2 200
 
 # Follow redirects and show chain
-curl -sIL http://www.eventangle.com/path 2>&1 | grep -iE "^(HTTP|Location)"
+curl -sIL http://www.oursharedevents.com/path 2>&1 | grep -iE "^(HTTP|Location)"
 # Expected: Shows 301 chain ending in 200
 ```
 
@@ -376,21 +379,21 @@ curl -sIL http://www.eventangle.com/path 2>&1 | grep -iE "^(HTTP|Location)"
 
 ### 7.1 Critical Constraint: No Duplicate Worker Routes
 
-> **EXPLICITLY STATED:** Worker routes must NOT be configured for the non-canonical host (`www.eventangle.com`).
+> **EXPLICITLY STATED:** Worker routes must NOT be configured for the non-canonical host (`www.oursharedevents.com`).
 
-| Requirement | Status |
-|-------------|--------|
-| **No worker route for `www.eventangle.com/*`** | **REQUIRED** |
+| Requirement                                         | Status       |
+| --------------------------------------------------- | ------------ |
+| **No worker route for `www.oursharedevents.com/*`** | **REQUIRED** |
 
 ### 7.2 Rationale
 
-| Issue | Problem If www Route Exists |
-|-------|----------------------------|
+| Issue                         | Problem If www Route Exists                    |
+| ----------------------------- | ---------------------------------------------- |
 | **Request Handling Conflict** | Worker may handle request before redirect rule |
-| **Duplicate Processing** | Same logic executed on both hostnames |
-| **Inconsistent Behavior** | Different response on www vs apex |
-| **Wasted Resources** | Worker invocations for redirectable traffic |
-| **SEO/Analytics Confusion** | Traffic split across hostnames |
+| **Duplicate Processing**      | Same logic executed on both hostnames          |
+| **Inconsistent Behavior**     | Different response on www vs apex              |
+| **Wasted Resources**          | Worker invocations for redirectable traffic    |
+| **SEO/Analytics Confusion**   | Traffic split across hostnames                 |
 
 ### 7.3 Correct Worker Route Configuration
 
@@ -399,11 +402,11 @@ curl -sIL http://www.eventangle.com/path 2>&1 | grep -iE "^(HTTP|Location)"
 ```toml
 # worker/wrangler.toml [env.production]
 routes = [
-  { pattern = "eventangle.com/*", zone_name = "eventangle.com" },
-  { pattern = "api.eventangle.com/*", zone_name = "eventangle.com" }
+  { pattern = "oursharedevents.com/*", zone_name = "oursharedevents.com" },
+  { pattern = "api.oursharedevents.com/*", zone_name = "oursharedevents.com" }
 ]
 
-# EXPLICITLY: NO www.eventangle.com/* route
+# EXPLICITLY: NO www.oursharedevents.com/* route
 # www traffic is redirected at edge BEFORE reaching Worker
 ```
 
@@ -411,7 +414,7 @@ routes = [
 
 ```bash
 # Check wrangler.toml for www routes (should find nothing)
-grep -r "www.eventangle.com" worker/wrangler.toml
+grep -r "www.oursharedevents.com" worker/wrangler.toml
 
 # Expected: No output (no www routes configured)
 
@@ -426,23 +429,23 @@ grep -r "www.eventangle.com" worker/wrangler.toml
 
 Both apex and www must have DNS records pointing to Cloudflare (proxied) for the redirect to work.
 
-| Hostname | Record Type | Value | Proxied |
-|----------|-------------|-------|---------|
-| `eventangle.com` | A | Cloudflare IP (or placeholder) | **Yes (orange cloud)** |
-| `eventangle.com` | AAAA | Cloudflare IPv6 (or placeholder) | **Yes (orange cloud)** |
-| `www.eventangle.com` | CNAME | `eventangle.com` | **Yes (orange cloud)** |
+| Hostname                  | Record Type | Value                            | Proxied                |
+| ------------------------- | ----------- | -------------------------------- | ---------------------- |
+| `oursharedevents.com`     | A           | Cloudflare IP (or placeholder)   | **Yes (orange cloud)** |
+| `oursharedevents.com`     | AAAA        | Cloudflare IPv6 (or placeholder) | **Yes (orange cloud)** |
+| `www.oursharedevents.com` | CNAME       | `oursharedevents.com`            | **Yes (orange cloud)** |
 
 ### 8.2 DNS Verification
 
 ```bash
 # Verify www resolves and is proxied
-dig +short www.eventangle.com
+dig +short www.oursharedevents.com
 
 # Should return Cloudflare IP addresses (not origin IPs)
 # Example: 104.21.x.x, 172.67.x.x (Cloudflare IPs)
 
 # Verify apex resolves
-dig +short eventangle.com
+dig +short oursharedevents.com
 ```
 
 ---
@@ -451,44 +454,44 @@ dig +short eventangle.com
 
 ### 9.1 Common Issues
 
-| Symptom | Likely Cause | Resolution |
-|---------|--------------|------------|
-| www returns 522/523 | www DNS not proxied | Enable proxy (orange cloud) for www |
-| www returns 404 | Worker route exists for www | Remove www worker route |
-| www not redirecting | Redirect rule not deployed | Create/deploy redirect rule (Section 5.2) |
-| Path not preserved | Incorrect redirect expression | Use `http.request.uri` in expression |
-| Query string lost | Incorrect redirect expression | Verify expression includes query string |
-| Redirect loop | Multiple conflicting rules | Audit all redirect rules; remove duplicates |
-| 308 instead of 301 | Wrong status code selected | Edit rule, change to 301 |
+| Symptom             | Likely Cause                  | Resolution                                  |
+| ------------------- | ----------------------------- | ------------------------------------------- |
+| www returns 522/523 | www DNS not proxied           | Enable proxy (orange cloud) for www         |
+| www returns 404     | Worker route exists for www   | Remove www worker route                     |
+| www not redirecting | Redirect rule not deployed    | Create/deploy redirect rule (Section 5.2)   |
+| Path not preserved  | Incorrect redirect expression | Use `http.request.uri` in expression        |
+| Query string lost   | Incorrect redirect expression | Verify expression includes query string     |
+| Redirect loop       | Multiple conflicting rules    | Audit all redirect rules; remove duplicates |
+| 308 instead of 301  | Wrong status code selected    | Edit rule, change to 301                    |
 
 ### 9.2 Debugging Commands
 
 ```bash
 # Check what www returns (headers only)
-curl -sI https://www.eventangle.com/
+curl -sI https://www.oursharedevents.com/
 
 # Check full redirect chain
-curl -sIL https://www.eventangle.com/path?query=value
+curl -sIL https://www.oursharedevents.com/path?query=value
 
 # Verbose output for debugging
-curl -v https://www.eventangle.com/ 2>&1 | head -50
+curl -v https://www.oursharedevents.com/ 2>&1 | head -50
 
 # Check DNS resolution
-dig +short www.eventangle.com
-nslookup www.eventangle.com
+dig +short www.oursharedevents.com
+nslookup www.oursharedevents.com
 ```
 
 ### 9.3 Rollback Procedure
 
 If canonical redirect causes issues:
 
-| Step | Action |
-|------|--------|
-| 1 | Navigate to Rules → Redirect Rules |
-| 2 | Find "SEC-4.1: www to apex canonical redirect" |
-| 3 | Toggle rule to **Disabled** (don't delete) |
-| 4 | Verify www now serves content directly |
-| 5 | Investigate root cause before re-enabling |
+| Step | Action                                         |
+| ---- | ---------------------------------------------- |
+| 1    | Navigate to Rules → Redirect Rules             |
+| 2    | Find "SEC-4.1: www to apex canonical redirect" |
+| 3    | Toggle rule to **Disabled** (don't delete)     |
+| 4    | Verify www now serves content directly         |
+| 5    | Investigate root cause before re-enabling      |
 
 ---
 
@@ -496,57 +499,57 @@ If canonical redirect causes issues:
 
 ### 10.1 Manual Confirmation Checklist
 
-| # | Question | Expected Answer | How to Verify |
-|---|----------|-----------------|---------------|
-| 1 | What is the canonical host? | `eventangle.com` | This document |
-| 2 | Does www redirect to apex? | Yes, 301 | `curl -sI https://www.eventangle.com/` |
-| 3 | Is path preserved in redirect? | Yes | Test with path, verify Location header |
-| 4 | Is query string preserved? | Yes | Test with query, verify Location header |
-| 5 | What status code is used? | 301 | Check response headers |
-| 6 | Are there worker routes for www? | **NO** | Check wrangler.toml |
-| 7 | Is www DNS proxied? | Yes | Check Cloudflare DNS dashboard |
+| #   | Question                         | Expected Answer       | How to Verify                               |
+| --- | -------------------------------- | --------------------- | ------------------------------------------- |
+| 1   | What is the canonical host?      | `oursharedevents.com` | This document                               |
+| 2   | Does www redirect to apex?       | Yes, 301              | `curl -sI https://www.oursharedevents.com/` |
+| 3   | Is path preserved in redirect?   | Yes                   | Test with path, verify Location header      |
+| 4   | Is query string preserved?       | Yes                   | Test with query, verify Location header     |
+| 5   | What status code is used?        | 301                   | Check response headers                      |
+| 6   | Are there worker routes for www? | **NO**                | Check wrangler.toml                         |
+| 7   | Is www DNS proxied?              | Yes                   | Check Cloudflare DNS dashboard              |
 
 ### 10.2 Acceptance Criteria Summary
 
-| Criterion | Required | Verification Method |
-|-----------|----------|---------------------|
-| Canonical host is `eventangle.com` | ✓ | Documentation |
-| www redirects to apex | ✓ | Test T-1, T-2 |
-| Redirect uses 301 status | ✓ | Test T-1 through T-5 |
-| Path is preserved | ✓ | Test T-3 |
-| Query string is preserved | ✓ | Test T-4, T-5 |
-| Apex serves content (no redirect) | ✓ | Test T-6 |
-| No worker route for www | ✓ | grep wrangler.toml |
+| Criterion                               | Required | Verification Method  |
+| --------------------------------------- | -------- | -------------------- |
+| Canonical host is `oursharedevents.com` | ✓        | Documentation        |
+| www redirects to apex                   | ✓        | Test T-1, T-2        |
+| Redirect uses 301 status                | ✓        | Test T-1 through T-5 |
+| Path is preserved                       | ✓        | Test T-3             |
+| Query string is preserved               | ✓        | Test T-4, T-5        |
+| Apex serves content (no redirect)       | ✓        | Test T-6             |
+| No worker route for www                 | ✓        | grep wrangler.toml   |
 
 ---
 
 ## 11. Related Documents
 
-| Document | Path | Relationship |
-|----------|------|--------------|
-| TLS Strict Baseline | `docs/security/TLS_STRICT_BASELINE.md` | Prerequisite (SEC-3.1) |
-| HSTS Rollout | `docs/security/HSTS_ROLLOUT.md` | Related (SEC-3.2) |
-| Security Baseline | `docs/security/SECURITY_BASELINE.md` | Parent security model |
-| Worker Configuration | `worker/wrangler.toml` | Route configuration |
+| Document             | Path                                   | Relationship           |
+| -------------------- | -------------------------------------- | ---------------------- |
+| TLS Strict Baseline  | `docs/security/TLS_STRICT_BASELINE.md` | Prerequisite (SEC-3.1) |
+| HSTS Rollout         | `docs/security/HSTS_ROLLOUT.md`        | Related (SEC-3.2)      |
+| Security Baseline    | `docs/security/SECURITY_BASELINE.md`   | Parent security model  |
+| Worker Configuration | `worker/wrangler.toml`                 | Route configuration    |
 
 ---
 
 ## 12. Summary
 
-| Attribute | Value |
-|-----------|-------|
-| **Canonical Host** | `eventangle.com` |
-| **Redirect Source** | `www.eventangle.com` |
-| **Redirect Status** | 301 Moved Permanently |
-| **Path Preservation** | Yes |
-| **Query Preservation** | Yes |
-| **Implementation** | Cloudflare Redirect Rule |
+| Attribute                 | Value                            |
+| ------------------------- | -------------------------------- |
+| **Canonical Host**        | `oursharedevents.com`            |
+| **Redirect Source**       | `www.oursharedevents.com`        |
+| **Redirect Status**       | 301 Moved Permanently            |
+| **Path Preservation**     | Yes                              |
+| **Query Preservation**    | Yes                              |
+| **Implementation**        | Cloudflare Redirect Rule         |
 | **Worker Routes for www** | **NONE** (explicitly prohibited) |
 
 ---
 
 ## Document History
 
-| Date | Author | Changes |
-|------|--------|---------|
+| Date       | Author      | Changes                                                 |
+| ---------- | ----------- | ------------------------------------------------------- |
 | 2026-01-05 | Claude Code | Initial PROMPTSPEC-SEC-4.1 canonical host specification |

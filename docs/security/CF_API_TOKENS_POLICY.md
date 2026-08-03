@@ -1,4 +1,4 @@
-# CF_API_TOKENS_POLICY.md — Scoped API Token Policy
+﻿# CF_API_TOKENS_POLICY.md — Scoped API Token Policy
 
 > **PROMPTSPEC-SEC-1.2** — Scoped API Token Policy
 > Role: Director of Security
@@ -9,7 +9,7 @@
 
 ## 1. Purpose
 
-This policy defines least-privilege Cloudflare API tokens for EventAngle, ensuring each token has constrained blast radius and clear ownership.
+This policy defines least-privilege Cloudflare API tokens for oursharedevents, ensuring each token has constrained blast radius and clear ownership.
 
 | Attribute       | Value                                                          |
 | --------------- | -------------------------------------------------------------- |
@@ -45,16 +45,16 @@ This policy defines least-privilege Cloudflare API tokens for EventAngle, ensuri
 
 **Purpose:** Automated Worker deployments from CI/CD pipelines.
 
-| Permission         | Level    | Scope                  | Required    |
-| ------------------ | -------- | ---------------------- | ----------- |
-| Workers Scripts    | **Edit** | Account                | Yes         |
-| Workers Routes     | **Edit** | Zone: `eventangle.com` | Yes         |
-| Workers KV Storage | **Edit** | Account                | If using KV |
-| Account Settings   | **Read** | Account                | Yes         |
+| Permission         | Level    | Scope                       | Required    |
+| ------------------ | -------- | --------------------------- | ----------- |
+| Workers Scripts    | **Edit** | Account                     | Yes         |
+| Workers Routes     | **Edit** | Zone: `oursharedevents.com` | Yes         |
+| Workers KV Storage | **Edit** | Account                     | If using KV |
+| Account Settings   | **Read** | Account                     | Yes         |
 
 **Zone Restrictions:**
 
-- **Include:** `eventangle.com` (and all subdomains)
+- **Include:** `oursharedevents.com` (and all subdomains)
 - **Exclude:** All other zones
 
 **What This Token CAN Do:**
@@ -79,13 +79,13 @@ This policy defines least-privilege Cloudflare API tokens for EventAngle, ensuri
 
 **Purpose:** DNS record management for infrastructure changes.
 
-| Permission | Level    | Scope                  | Required |
-| ---------- | -------- | ---------------------- | -------- |
-| DNS        | **Edit** | Zone: `eventangle.com` | Yes      |
+| Permission | Level    | Scope                       | Required |
+| ---------- | -------- | --------------------------- | -------- |
+| DNS        | **Edit** | Zone: `oursharedevents.com` | Yes      |
 
 **Zone Restrictions:**
 
-- **Include:** `eventangle.com` only
+- **Include:** `oursharedevents.com` only
 - **Exclude:** All other zones
 
 **What This Token CAN Do:**
@@ -287,12 +287,12 @@ Before deploying a new WORKER_DEPLOY token, verify:
 ```
 [ ] PERMISSIONS
     [ ] Workers Scripts: Edit (Account scope)
-    [ ] Workers Routes: Edit (Zone: eventangle.com)
+    [ ] Workers Routes: Edit (Zone: oursharedevents.com)
     [ ] Workers KV Storage: Edit (Account scope) — if using KV
     [ ] Account Settings: Read (Account scope)
 
 [ ] RESTRICTIONS
-    [ ] Zone limited to eventangle.com only
+    [ ] Zone limited to oursharedevents.com only
     [ ] No DNS permissions granted
     [ ] No Access permissions granted
     [ ] No SSL/TLS permissions granted
@@ -315,11 +315,11 @@ Before deploying a new DNS_EDIT token, verify:
 
 ```
 [ ] PERMISSIONS
-    [ ] DNS: Edit (Zone: eventangle.com)
+    [ ] DNS: Edit (Zone: oursharedevents.com)
     [ ] NO other permissions granted
 
 [ ] RESTRICTIONS
-    [ ] Zone limited to eventangle.com only
+    [ ] Zone limited to oursharedevents.com only
     [ ] No Workers permissions granted
     [ ] No Access permissions granted
     [ ] No account-level permissions granted

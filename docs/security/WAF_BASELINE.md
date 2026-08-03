@@ -1,4 +1,4 @@
-# WAF_BASELINE.md — WAF Baseline + Exception Strategy
+﻿# WAF_BASELINE.md — WAF Baseline + Exception Strategy
 
 > **PROMPTSPEC-SEC-6.1** — WAF Baseline + Exception Strategy
 > Role: Director of Security
@@ -11,11 +11,11 @@
 
 Enable Cloudflare Managed WAF rules safely with a structured rollout and a sane exception strategy that maintains security while accommodating legitimate application requirements.
 
-| Attribute | Value |
-|-----------|-------|
-| **Scope** | Cloudflare WAF configuration for all production and staging domains |
-| **Prerequisites** | Security Baseline (SEC-0.1), TLS Strict Baseline (SEC-3.1) |
-| **Constraints** | Worker-only architecture; WAF operates at Cloudflare edge before Worker |
+| Attribute         | Value                                                                   |
+| ----------------- | ----------------------------------------------------------------------- |
+| **Scope**         | Cloudflare WAF configuration for all production and staging domains     |
+| **Prerequisites** | Security Baseline (SEC-0.1), TLS Strict Baseline (SEC-3.1)              |
+| **Constraints**   | Worker-only architecture; WAF operates at Cloudflare edge before Worker |
 
 ---
 
@@ -27,11 +27,11 @@ Enable Cloudflare Managed WAF rules safely with a structured rollout and a sane 
 
 WAF protection operates at the Cloudflare edge, providing defense-in-depth before requests reach the Worker. This specification ensures:
 
-| Layer | Protection | Implementation |
-|-------|------------|----------------|
-| **Edge (WAF)** | Block known attack patterns | Managed rulesets (this spec) |
-| **Edge (Rate Limiting)** | Prevent abuse/DoS | SEC-EDGE-02 (future) |
-| **Worker (Guards)** | Application-level auth | `guardAdminOAuth()`, etc. |
+| Layer                    | Protection                  | Implementation               |
+| ------------------------ | --------------------------- | ---------------------------- |
+| **Edge (WAF)**           | Block known attack patterns | Managed rulesets (this spec) |
+| **Edge (Rate Limiting)** | Prevent abuse/DoS           | SEC-EDGE-02 (future)         |
+| **Worker (Guards)**      | Application-level auth      | `guardAdminOAuth()`, etc.    |
 
 ### 2.2 Defense-in-Depth Principle
 
@@ -55,33 +55,33 @@ WAF protection operates at the Cloudflare edge, providing defense-in-depth befor
 
 ### 3.1 Available Cloudflare Managed Rulesets
 
-| Ruleset | Description | Recommendation |
-|---------|-------------|----------------|
-| **Cloudflare Managed Ruleset** | Core WAF rules for common vulnerabilities | **REQUIRED** |
-| **Cloudflare OWASP Core Ruleset** | OWASP ModSecurity Core Rule Set | **REQUIRED** |
-| **Cloudflare Exposed Credentials Check** | Detect compromised credentials | **RECOMMENDED** |
-| **Cloudflare Leaked Credentials Check** | Block known leaked passwords | **RECOMMENDED** |
+| Ruleset                                  | Description                               | Recommendation  |
+| ---------------------------------------- | ----------------------------------------- | --------------- |
+| **Cloudflare Managed Ruleset**           | Core WAF rules for common vulnerabilities | **REQUIRED**    |
+| **Cloudflare OWASP Core Ruleset**        | OWASP ModSecurity Core Rule Set           | **REQUIRED**    |
+| **Cloudflare Exposed Credentials Check** | Detect compromised credentials            | **RECOMMENDED** |
+| **Cloudflare Leaked Credentials Check**  | Block known leaked passwords              | **RECOMMENDED** |
 
 ### 3.2 Rule Categories
 
-| Category | Examples | Risk Level |
-|----------|----------|------------|
-| **SQLi** | SQL injection attacks | Critical |
-| **XSS** | Cross-site scripting | Critical |
-| **RCE** | Remote code execution | Critical |
-| **LFI/RFI** | Local/remote file inclusion | High |
-| **Directory Traversal** | Path traversal attacks | High |
-| **Protocol Attacks** | HTTP protocol violations | Medium |
-| **Scanner Detection** | Automated vulnerability scanners | Medium |
+| Category                | Examples                         | Risk Level |
+| ----------------------- | -------------------------------- | ---------- |
+| **SQLi**                | SQL injection attacks            | Critical   |
+| **XSS**                 | Cross-site scripting             | Critical   |
+| **RCE**                 | Remote code execution            | Critical   |
+| **LFI/RFI**             | Local/remote file inclusion      | High       |
+| **Directory Traversal** | Path traversal attacks           | High       |
+| **Protocol Attacks**    | HTTP protocol violations         | Medium     |
+| **Scanner Detection**   | Automated vulnerability scanners | Medium     |
 
 ### 3.3 Default Actions
 
-| Action | Description | Use Case |
-|--------|-------------|----------|
-| **Log** | Record match, allow request | Initial rollout, monitoring |
-| **Challenge (Managed)** | Present CAPTCHA/JS challenge | Suspected bot traffic |
-| **Block** | Reject request with 403 | Confirmed attack patterns |
-| **Skip** | Bypass rule (exception) | Legitimate traffic triggering false positive |
+| Action                  | Description                  | Use Case                                     |
+| ----------------------- | ---------------------------- | -------------------------------------------- |
+| **Log**                 | Record match, allow request  | Initial rollout, monitoring                  |
+| **Challenge (Managed)** | Present CAPTCHA/JS challenge | Suspected bot traffic                        |
+| **Block**               | Reject request with 403      | Confirmed attack patterns                    |
+| **Skip**                | Bypass rule (exception)      | Legitimate traffic triggering false positive |
 
 ---
 
@@ -120,23 +120,23 @@ WAF protection operates at the Cloudflare edge, providing defense-in-depth befor
 
 **Objective:** Observe WAF behavior without impacting users; identify false positives.
 
-| Setting | Value | Rationale |
-|---------|-------|-----------|
-| **Cloudflare Managed Ruleset** | Enabled (Log) | Observe matches |
-| **OWASP Core Ruleset** | Enabled (Log) | Observe matches |
-| **Duration** | Minimum 7 days | Capture diverse traffic patterns |
-| **Action Override** | Log all rules | No blocking in Phase 1 |
+| Setting                        | Value          | Rationale                        |
+| ------------------------------ | -------------- | -------------------------------- |
+| **Cloudflare Managed Ruleset** | Enabled (Log)  | Observe matches                  |
+| **OWASP Core Ruleset**         | Enabled (Log)  | Observe matches                  |
+| **Duration**                   | Minimum 7 days | Capture diverse traffic patterns |
+| **Action Override**            | Log all rules  | No blocking in Phase 1           |
 
 **Implementation Steps:**
 
-| Step | Action | Location |
-|------|--------|----------|
-| 1 | Navigate to Security → WAF → Managed rules | Cloudflare Dashboard |
-| 2 | Enable "Cloudflare Managed Ruleset" | Deploy button |
-| 3 | Click ruleset → Configure → Set all actions to "Log" | Action dropdown |
-| 4 | Enable "Cloudflare OWASP Core Ruleset" | Deploy button |
-| 5 | Click ruleset → Configure → Set all actions to "Log" | Action dropdown |
-| 6 | Document deployment date | This document or ticket |
+| Step | Action                                               | Location                |
+| ---- | ---------------------------------------------------- | ----------------------- |
+| 1    | Navigate to Security → WAF → Managed rules           | Cloudflare Dashboard    |
+| 2    | Enable "Cloudflare Managed Ruleset"                  | Deploy button           |
+| 3    | Click ruleset → Configure → Set all actions to "Log" | Action dropdown         |
+| 4    | Enable "Cloudflare OWASP Core Ruleset"               | Deploy button           |
+| 5    | Click ruleset → Configure → Set all actions to "Log" | Action dropdown         |
+| 6    | Document deployment date                             | This document or ticket |
 
 **Monitoring During Phase 1:**
 
@@ -153,48 +153,48 @@ WAF protection operates at the Cloudflare edge, providing defense-in-depth befor
 
 **Objective:** Enable blocking for high-confidence attack categories while continuing to log others.
 
-| Category | Action | Rationale |
-|----------|--------|-----------|
-| **SQLi** | Block | High confidence, low false-positive rate |
-| **RCE** | Block | Critical severity, rarely false positive |
-| **XSS (Reflected)** | Block | High confidence |
-| **Protocol Attacks** | Block | Clear violations |
-| **XSS (Stored)** | Log → Block | May have false positives with rich text |
-| **LFI/RFI** | Log → Block | May trigger on legitimate paths |
-| **Scanner Detection** | Challenge | May catch legitimate security tools |
+| Category              | Action      | Rationale                                |
+| --------------------- | ----------- | ---------------------------------------- |
+| **SQLi**              | Block       | High confidence, low false-positive rate |
+| **RCE**               | Block       | Critical severity, rarely false positive |
+| **XSS (Reflected)**   | Block       | High confidence                          |
+| **Protocol Attacks**  | Block       | Clear violations                         |
+| **XSS (Stored)**      | Log → Block | May have false positives with rich text  |
+| **LFI/RFI**           | Log → Block | May trigger on legitimate paths          |
+| **Scanner Detection** | Challenge   | May catch legitimate security tools      |
 
 **Implementation Steps:**
 
-| Step | Action | Location |
-|------|--------|----------|
-| 1 | Review Phase 1 logs for false positives | Security → Events |
-| 2 | Create exceptions for confirmed false positives | See Section 5 |
-| 3 | Navigate to Managed Ruleset configuration | WAF → Managed rules |
-| 4 | Set SQLi rules to "Block" | Rule category filter |
-| 5 | Set RCE rules to "Block" | Rule category filter |
-| 6 | Set XSS (Reflected) rules to "Block" | Rule category filter |
-| 7 | Continue monitoring for 7 days | Security → Events |
+| Step | Action                                          | Location             |
+| ---- | ----------------------------------------------- | -------------------- |
+| 1    | Review Phase 1 logs for false positives         | Security → Events    |
+| 2    | Create exceptions for confirmed false positives | See Section 5        |
+| 3    | Navigate to Managed Ruleset configuration       | WAF → Managed rules  |
+| 4    | Set SQLi rules to "Block"                       | Rule category filter |
+| 5    | Set RCE rules to "Block"                        | Rule category filter |
+| 6    | Set XSS (Reflected) rules to "Block"            | Rule category filter |
+| 7    | Continue monitoring for 7 days                  | Security → Events    |
 
 ### 4.4 Phase 3: Full Blocking
 
 **Objective:** Enable blocking for all recommended rules with documented exceptions.
 
-| Category | Action | Notes |
-|----------|--------|-------|
-| **All Critical** | Block | SQLi, RCE, XSS |
-| **All High** | Block | LFI, RFI, Traversal |
-| **All Medium** | Block or Challenge | Based on false-positive history |
-| **Scanner Detection** | Challenge | Allow with verification |
+| Category              | Action             | Notes                           |
+| --------------------- | ------------------ | ------------------------------- |
+| **All Critical**      | Block              | SQLi, RCE, XSS                  |
+| **All High**          | Block              | LFI, RFI, Traversal             |
+| **All Medium**        | Block or Challenge | Based on false-positive history |
+| **Scanner Detection** | Challenge          | Allow with verification         |
 
 **Transition Criteria:**
 
-| Criterion | Required | Verification |
-|-----------|----------|--------------|
-| Phase 2 completed (7+ days) | ✓ | Deployment log |
-| No legitimate traffic blocked | ✓ | User reports, support tickets |
-| All false positives have exceptions | ✓ | Exception registry |
-| Exception registry documented | ✓ | Section 6 |
-| Monitoring alerts configured | ✓ | Dashboard alerts |
+| Criterion                           | Required | Verification                  |
+| ----------------------------------- | -------- | ----------------------------- |
+| Phase 2 completed (7+ days)         | ✓        | Deployment log                |
+| No legitimate traffic blocked       | ✓        | User reports, support tickets |
+| All false positives have exceptions | ✓        | Exception registry            |
+| Exception registry documented       | ✓        | Section 6                     |
+| Monitoring alerts configured        | ✓        | Dashboard alerts              |
 
 ---
 
@@ -204,26 +204,26 @@ WAF protection operates at the Cloudflare edge, providing defense-in-depth befor
 
 > **CRITICAL:** Exceptions must be narrow, timeboxed, and documented. Blanket disabling of entire rulesets is **PROHIBITED**.
 
-| Principle | Description | Enforcement |
-|-----------|-------------|-------------|
-| **Narrow Scope** | Exceptions target specific paths AND methods | Required |
-| **Timeboxed** | Exceptions have expiration dates | Required for new exceptions |
-| **Documented** | Every exception has a justification | Exception registry |
-| **Reviewed** | Exceptions reviewed quarterly | Calendar reminder |
-| **Minimal** | Disable single rules, not categories | Acceptance criteria |
+| Principle        | Description                                  | Enforcement                 |
+| ---------------- | -------------------------------------------- | --------------------------- |
+| **Narrow Scope** | Exceptions target specific paths AND methods | Required                    |
+| **Timeboxed**    | Exceptions have expiration dates             | Required for new exceptions |
+| **Documented**   | Every exception has a justification          | Exception registry          |
+| **Reviewed**     | Exceptions reviewed quarterly                | Calendar reminder           |
+| **Minimal**      | Disable single rules, not categories         | Acceptance criteria         |
 
 ### 5.2 Prohibited Exception Patterns
 
 > **EXPLICITLY PROHIBITED:** These exception patterns are forbidden and will fail security review.
 
-| Prohibited Pattern | Reason | Alternative |
-|--------------------|--------|-------------|
-| **Disable entire ruleset** | Removes all protection | Disable specific rules only |
-| **Disable entire category** (e.g., all XSS) | Too broad, high risk | Disable specific rule IDs |
-| **Path: `/*`** (all paths) | Effectively disables WAF | Specify exact paths |
-| **No expiration** (for new exceptions) | Exceptions become permanent | Set review date |
-| **Undocumented exceptions** | Cannot audit | Require justification |
-| **Method: `*`** (all methods) | Too broad | Specify GET, POST, etc. |
+| Prohibited Pattern                          | Reason                      | Alternative                 |
+| ------------------------------------------- | --------------------------- | --------------------------- |
+| **Disable entire ruleset**                  | Removes all protection      | Disable specific rules only |
+| **Disable entire category** (e.g., all XSS) | Too broad, high risk        | Disable specific rule IDs   |
+| **Path: `/*`** (all paths)                  | Effectively disables WAF    | Specify exact paths         |
+| **No expiration** (for new exceptions)      | Exceptions become permanent | Set review date             |
+| **Undocumented exceptions**                 | Cannot audit                | Require justification       |
+| **Method: `*`** (all methods)               | Too broad                   | Specify GET, POST, etc.     |
 
 ### 5.3 Exception Request Requirements
 
@@ -232,36 +232,36 @@ Every exception request must include:
 ```yaml
 exception_request:
   # Required fields
-  rule_id: "100001"              # Specific rule ID being excepted
-  rule_name: "SQLi - SELECT"     # Human-readable rule name
-  path: "/api/v2/search"         # Specific path (no wildcards to /*)
-  methods: ["GET", "POST"]       # Specific HTTP methods
-  reason: "Search query contains SQL-like keywords in legitimate user input"
-  requested_by: "developer@eventangle.com"
-  request_date: "2026-01-05"
+  rule_id: '100001' # Specific rule ID being excepted
+  rule_name: 'SQLi - SELECT' # Human-readable rule name
+  path: '/api/v2/search' # Specific path (no wildcards to /*)
+  methods: ['GET', 'POST'] # Specific HTTP methods
+  reason: 'Search query contains SQL-like keywords in legitimate user input'
+  requested_by: 'developer@oursharedevents.com'
+  request_date: '2026-01-05'
 
   # Timeboxing
-  expires: "2026-04-05"          # Maximum 90 days for new exceptions
-  review_date: "2026-03-15"      # Review before expiration
+  expires: '2026-04-05' # Maximum 90 days for new exceptions
+  review_date: '2026-03-15' # Review before expiration
 
   # Approval
-  approved_by: ""                # Security lead signature
-  approval_date: ""
+  approved_by: '' # Security lead signature
+  approval_date: ''
 ```
 
 ### 5.4 Exception Implementation
 
 **Option A: Cloudflare Dashboard (Recommended for Simple Cases)**
 
-| Step | Action | Location |
-|------|--------|----------|
-| 1 | Navigate to Security → WAF → Managed rules | Dashboard |
-| 2 | Click the specific ruleset | Ruleset list |
-| 3 | Find the rule by ID or name | Rule list |
-| 4 | Click "Add exception" | Rule row |
-| 5 | Configure path and method filters | Exception form |
-| 6 | Set action to "Skip" | Action dropdown |
-| 7 | Add comment with justification | Notes field |
+| Step | Action                                     | Location        |
+| ---- | ------------------------------------------ | --------------- |
+| 1    | Navigate to Security → WAF → Managed rules | Dashboard       |
+| 2    | Click the specific ruleset                 | Ruleset list    |
+| 3    | Find the rule by ID or name                | Rule list       |
+| 4    | Click "Add exception"                      | Rule row        |
+| 5    | Configure path and method filters          | Exception form  |
+| 6    | Set action to "Skip"                       | Action dropdown |
+| 7    | Add comment with justification             | Notes field     |
 
 **Option B: WAF Custom Rules (For Complex Exceptions)**
 
@@ -286,19 +286,21 @@ Comment: Search endpoint accepts SQL-like operators in query.
 ### 5.5 Exception Scope Examples
 
 **GOOD: Narrow Exception**
+
 ```yaml
-rule_id: "100015"
-path: "/api/v2/events/{id}/description"
-methods: ["PUT"]
-reason: "Event descriptions may contain code examples in markdown"
+rule_id: '100015'
+path: '/api/v2/events/{id}/description'
+methods: ['PUT']
+reason: 'Event descriptions may contain code examples in markdown'
 ```
 
 **BAD: Too Broad**
+
 ```yaml
-rule_id: "100015"
-path: "/*"              # ← PROHIBITED: Affects all paths
-methods: ["*"]          # ← PROHIBITED: Affects all methods
-reason: "Getting false positives"  # ← INSUFFICIENT: No specifics
+rule_id: '100015'
+path: '/*' # ← PROHIBITED: Affects all paths
+methods: ['*'] # ← PROHIBITED: Affects all methods
+reason: 'Getting false positives' # ← INSUFFICIENT: No specifics
 ```
 
 ---
@@ -392,19 +394,19 @@ Key metrics to monitor:
 
 ### 7.2 Alert Configuration
 
-| Alert | Threshold | Priority | Action |
-|-------|-----------|----------|--------|
-| **Block spike** | >2x normal blocks/hour | High | Investigate attack or false positive |
-| **New rule triggering** | First block from recently enabled rule | Medium | Verify not false positive |
-| **Exception expiring** | 7 days before expiration | Medium | Review and renew/remove |
-| **Admin IP blocked** | Known admin IP blocked | High | Verify exception or investigate |
+| Alert                   | Threshold                              | Priority | Action                               |
+| ----------------------- | -------------------------------------- | -------- | ------------------------------------ |
+| **Block spike**         | >2x normal blocks/hour                 | High     | Investigate attack or false positive |
+| **New rule triggering** | First block from recently enabled rule | Medium   | Verify not false positive            |
+| **Exception expiring**  | 7 days before expiration               | Medium   | Review and renew/remove              |
+| **Admin IP blocked**    | Known admin IP blocked                 | High     | Verify exception or investigate      |
 
 ### 7.3 Log Retention
 
-| Environment | WAF Log Retention | Notes |
-|-------------|-------------------|-------|
-| Production | 30 days (Cloudflare default) | Extend via Logpush if needed |
-| Staging | 7 days | Sufficient for development |
+| Environment | WAF Log Retention            | Notes                        |
+| ----------- | ---------------------------- | ---------------------------- |
+| Production  | 30 days (Cloudflare default) | Extend via Logpush if needed |
+| Staging     | 7 days                       | Sufficient for development   |
 
 ---
 
@@ -501,23 +503,23 @@ Completed by: _______________  Date: _______________
 
 ### 9.1 Primary Acceptance Criteria
 
-| ID | Criterion | Verification | Status |
-|----|-----------|--------------|--------|
-| **AC-1** | Cloudflare Managed Ruleset is enabled | Dashboard shows "Deployed" | |
-| **AC-2** | OWASP Core Ruleset is enabled | Dashboard shows "Deployed" | |
-| **AC-3** | Rollout follows log-only → block phases | Deployment log shows phases | |
-| **AC-4** | No entire ruleset is disabled | Ruleset status shows "Enabled" | |
-| **AC-5** | No entire category is disabled | Category rules are individually configured | |
+| ID       | Criterion                               | Verification                               | Status |
+| -------- | --------------------------------------- | ------------------------------------------ | ------ |
+| **AC-1** | Cloudflare Managed Ruleset is enabled   | Dashboard shows "Deployed"                 |        |
+| **AC-2** | OWASP Core Ruleset is enabled           | Dashboard shows "Deployed"                 |        |
+| **AC-3** | Rollout follows log-only → block phases | Deployment log shows phases                |        |
+| **AC-4** | No entire ruleset is disabled           | Ruleset status shows "Enabled"             |        |
+| **AC-5** | No entire category is disabled          | Category rules are individually configured |        |
 
 ### 9.2 Exception Acceptance Criteria
 
-| ID | Criterion | Verification | Status |
-|----|-----------|--------------|--------|
-| **EX-1** | All exceptions have specific path (not `/*`) | Exception registry audit | |
-| **EX-2** | All exceptions have specific method(s) | Exception registry audit | |
-| **EX-3** | All new exceptions have expiration date | Exception registry audit | |
-| **EX-4** | All exceptions have documented reason | Exception registry audit | |
-| **EX-5** | Quarterly exception review is scheduled | Calendar entry exists | |
+| ID       | Criterion                                    | Verification             | Status |
+| -------- | -------------------------------------------- | ------------------------ | ------ |
+| **EX-1** | All exceptions have specific path (not `/*`) | Exception registry audit |        |
+| **EX-2** | All exceptions have specific method(s)       | Exception registry audit |        |
+| **EX-3** | All new exceptions have expiration date      | Exception registry audit |        |
+| **EX-4** | All exceptions have documented reason        | Exception registry audit |        |
+| **EX-5** | Quarterly exception review is scheduled      | Calendar entry exists    |        |
 
 ### 9.3 Prohibited Configuration Audit
 
@@ -562,23 +564,23 @@ Test that WAF blocks known attack patterns:
 ```bash
 # Test SQLi detection (should be blocked in Phase 2+)
 curl -s -o /dev/null -w "%{http_code}" \
-  "https://www.eventangle.com/?id=1' OR '1'='1"
+  "https://www.oursharedevents.com/?id=1' OR '1'='1"
 # Expected: 403 (Forbidden) in blocking mode
 # Expected: 200 with log entry in log-only mode
 
 # Test XSS detection (should be blocked in Phase 2+)
 curl -s -o /dev/null -w "%{http_code}" \
-  "https://www.eventangle.com/?q=<script>alert(1)</script>"
+  "https://www.oursharedevents.com/?q=<script>alert(1)</script>"
 # Expected: 403 (Forbidden) in blocking mode
 
 # Test path traversal (should be blocked in Phase 3)
 curl -s -o /dev/null -w "%{http_code}" \
-  "https://www.eventangle.com/../../etc/passwd"
+  "https://www.oursharedevents.com/../../etc/passwd"
 # Expected: 403 (Forbidden) in blocking mode
 
 # Verify legitimate request is NOT blocked
 curl -s -o /dev/null -w "%{http_code}" \
-  "https://www.eventangle.com/api/events"
+  "https://www.oursharedevents.com/api/events"
 # Expected: 200 (OK)
 ```
 
@@ -587,12 +589,12 @@ curl -s -o /dev/null -w "%{http_code}" \
 ```bash
 # If exception exists for /api/v2/search SQLi:
 curl -s -o /dev/null -w "%{http_code}" \
-  "https://www.eventangle.com/api/v2/search?q=SELECT"
+  "https://www.oursharedevents.com/api/v2/search?q=SELECT"
 # Expected: 200 (exception allows)
 
 # Same pattern on different path (should be blocked):
 curl -s -o /dev/null -w "%{http_code}" \
-  "https://www.eventangle.com/other?q=SELECT * FROM users"
+  "https://www.oursharedevents.com/other?q=SELECT * FROM users"
 # Expected: 403 (no exception for this path)
 ```
 
@@ -619,12 +621,12 @@ curl -s -o /dev/null -w "%{http_code}" \
 
 ### 11.1 Common Issues
 
-| Issue | Symptom | Resolution |
-|-------|---------|------------|
+| Issue                      | Symptom                       | Resolution                                   |
+| -------------------------- | ----------------------------- | -------------------------------------------- |
 | Legitimate traffic blocked | User reports, support tickets | Review Security Events, add narrow exception |
-| All traffic blocked | Site down, 403 everywhere | Emergency: Set ruleset to Log or disable |
-| False positive spike | Many blocks from same rule | Investigate rule, consider exception |
-| Performance degradation | Slow responses | Check Cloudflare status, unlikely WAF cause |
+| All traffic blocked        | Site down, 403 everywhere     | Emergency: Set ruleset to Log or disable     |
+| False positive spike       | Many blocks from same rule    | Investigate rule, consider exception         |
+| Performance degradation    | Slow responses                | Check Cloudflare status, unlikely WAF cause  |
 
 ### 11.2 Emergency Rollback
 
@@ -665,16 +667,17 @@ If WAF is causing widespread blocking of legitimate traffic:
 
 WAF should not log full request bodies containing sensitive data.
 
-| Field Type | Protection | Implementation |
-|------------|------------|----------------|
-| Passwords | Never log | Cloudflare default |
-| API keys | Never log | Cloudflare default |
-| Credit cards | Never log | Cloudflare PCI compliance |
-| Session tokens | Masked | Cloudflare default |
+| Field Type     | Protection | Implementation            |
+| -------------- | ---------- | ------------------------- |
+| Passwords      | Never log  | Cloudflare default        |
+| API keys       | Never log  | Cloudflare default        |
+| Credit cards   | Never log  | Cloudflare PCI compliance |
+| Session tokens | Masked     | Cloudflare default        |
 
 ### 12.2 Log Sanitization
 
 Cloudflare automatically sanitizes sensitive data in WAF logs. Verify:
+
 - Password fields are not visible in Security Events
 - API tokens are masked
 - Only URI path and relevant attack pattern shown
@@ -683,45 +686,45 @@ Cloudflare automatically sanitizes sensitive data in WAF logs. Verify:
 
 ## 13. Related Documents
 
-| Document | Path | Relationship |
-|----------|------|--------------|
-| Security Baseline | `docs/security/SECURITY_BASELINE.md` | Parent security model |
-| TLS Strict Baseline | `docs/security/TLS_STRICT_BASELINE.md` | Prerequisite (SEC-3.1) |
-| Route Classification | `docs/security/ROUTE_CLASSIFICATION_POLICY.md` | Path definitions (SEC-5.1) |
-| Cloudflare Access | `docs/security/CLOUDFLARE_ACCESS_PRIVILEGED.md` | Edge auth (SEC-5.2) |
-| Rate Limiting | Pending SEC-EDGE-02 | Complementary abuse prevention |
-| Cloudflare Account Hardening | `docs/security/CF_ACCOUNT_HARDENING_RUNBOOK.md` | Account security |
+| Document                     | Path                                            | Relationship                   |
+| ---------------------------- | ----------------------------------------------- | ------------------------------ |
+| Security Baseline            | `docs/security/SECURITY_BASELINE.md`            | Parent security model          |
+| TLS Strict Baseline          | `docs/security/TLS_STRICT_BASELINE.md`          | Prerequisite (SEC-3.1)         |
+| Route Classification         | `docs/security/ROUTE_CLASSIFICATION_POLICY.md`  | Path definitions (SEC-5.1)     |
+| Cloudflare Access            | `docs/security/CLOUDFLARE_ACCESS_PRIVILEGED.md` | Edge auth (SEC-5.2)            |
+| Rate Limiting                | Pending SEC-EDGE-02                             | Complementary abuse prevention |
+| Cloudflare Account Hardening | `docs/security/CF_ACCOUNT_HARDENING_RUNBOOK.md` | Account security               |
 
 ---
 
 ## 14. Summary
 
-| Aspect | Value |
-|--------|-------|
-| **Managed Rulesets** | Cloudflare Managed + OWASP Core (both required) |
-| **Rollout Strategy** | Log-only (7d) → Selective Block (7d) → Full Block |
-| **Exception Requirement** | Narrow (path+method), Timeboxed, Documented |
-| **Prohibited Patterns** | Disable entire ruleset, Disable entire category, Path `/*`, No expiration |
-| **Review Cadence** | Quarterly exception review (mandatory) |
-| **Primary AC** | No entire ruleset or category is disabled |
+| Aspect                    | Value                                                                     |
+| ------------------------- | ------------------------------------------------------------------------- |
+| **Managed Rulesets**      | Cloudflare Managed + OWASP Core (both required)                           |
+| **Rollout Strategy**      | Log-only (7d) → Selective Block (7d) → Full Block                         |
+| **Exception Requirement** | Narrow (path+method), Timeboxed, Documented                               |
+| **Prohibited Patterns**   | Disable entire ruleset, Disable entire category, Path `/*`, No expiration |
+| **Review Cadence**        | Quarterly exception review (mandatory)                                    |
+| **Primary AC**            | No entire ruleset or category is disabled                                 |
 
 ---
 
 ## 15. Rollout Status
 
-| Phase | Environment | Status | Date | Notes |
-|-------|-------------|--------|------|-------|
-| Phase 1 (Log-only) | Staging | PENDING | | |
-| Phase 1 (Log-only) | Production | PENDING | | |
-| Phase 2 (Selective Block) | Staging | PENDING | | |
-| Phase 2 (Selective Block) | Production | PENDING | | |
-| Phase 3 (Full Block) | Staging | PENDING | | |
-| Phase 3 (Full Block) | Production | PENDING | | |
+| Phase                     | Environment | Status  | Date | Notes |
+| ------------------------- | ----------- | ------- | ---- | ----- |
+| Phase 1 (Log-only)        | Staging     | PENDING |      |       |
+| Phase 1 (Log-only)        | Production  | PENDING |      |       |
+| Phase 2 (Selective Block) | Staging     | PENDING |      |       |
+| Phase 2 (Selective Block) | Production  | PENDING |      |       |
+| Phase 3 (Full Block)      | Staging     | PENDING |      |       |
+| Phase 3 (Full Block)      | Production  | PENDING |      |       |
 
 ---
 
 ## Document History
 
-| Date | Author | Changes |
-|------|--------|---------|
+| Date       | Author      | Changes                                                      |
+| ---------- | ----------- | ------------------------------------------------------------ |
 | 2026-01-05 | Claude Code | Initial PROMPTSPEC-SEC-6.1 WAF baseline + exception strategy |

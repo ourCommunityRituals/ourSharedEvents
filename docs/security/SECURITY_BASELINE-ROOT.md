@@ -1,4 +1,4 @@
-# Security Baseline - EventAngle
+﻿# Security Baseline - oursharedevents
 
 > **North Star Security Model Inventory**
 > Epic SEC-0, Story SEC-0.1 — Document Current Edge Surface + Trust Boundaries
@@ -25,32 +25,32 @@
 
 ### 1.1 Domains & Subdomains
 
-| Domain                   | Environment | Purpose          | Edge Status        |
-| ------------------------ | ----------- | ---------------- | ------------------ |
-| `eventangle.com`         | Production  | Apex domain      | Cloudflare proxied |
-| `www.eventangle.com`     | Production  | Canonical host   | Cloudflare proxied |
-| `api.eventangle.com`     | Production  | API subdomain    | Cloudflare proxied |
-| `stg.eventangle.com`     | Staging     | Staging frontend | Cloudflare proxied |
-| `api-stg.eventangle.com` | Staging     | Staging API      | Cloudflare proxied |
+| Domain                        | Environment | Purpose          | Edge Status        |
+| ----------------------------- | ----------- | ---------------- | ------------------ |
+| `oursharedevents.com`         | Production  | Apex domain      | Cloudflare proxied |
+| `www.oursharedevents.com`     | Production  | Canonical host   | Cloudflare proxied |
+| `api.oursharedevents.com`     | Production  | API subdomain    | Cloudflare proxied |
+| `stg.oursharedevents.com`     | Staging     | Staging frontend | Cloudflare proxied |
+| `api-stg.oursharedevents.com` | Staging     | Staging API      | Cloudflare proxied |
 
-**Cloudflare Zone:** `eventangle.com`
+**Cloudflare Zone:** `oursharedevents.com`
 
 ### 1.2 Canonical Host Decision
 
-| Decision       | Value                                   | Status                                   |
-| -------------- | --------------------------------------- | ---------------------------------------- |
-| Canonical Host | `www.eventangle.com`                    | **CONFIGURED** (in deploy-manifest.json) |
-| Apex Redirect  | `eventangle.com` → `www.eventangle.com` | **NOT IMPLEMENTED**                      |
-| API Host       | `api.eventangle.com`                    | Separate subdomain                       |
+| Decision       | Value                                             | Status                                   |
+| -------------- | ------------------------------------------------- | ---------------------------------------- |
+| Canonical Host | `www.oursharedevents.com`                         | **CONFIGURED** (in deploy-manifest.json) |
+| Apex Redirect  | `oursharedevents.com` → `www.oursharedevents.com` | **NOT IMPLEMENTED**                      |
+| API Host       | `api.oursharedevents.com`                         | Separate subdomain                       |
 
 > **Gap Identified:** No explicit redirect from apex to www is implemented in the Worker.
 
 ### 1.3 Cloudflare Worker Entrypoints
 
-| Worker Name          | Routes                                                             | Entry Point            |
-| -------------------- | ------------------------------------------------------------------ | ---------------------- |
-| `eventangle-prod`    | `eventangle.com/*`, `www.eventangle.com/*`, `api.eventangle.com/*` | `worker/src/router.ts` |
-| `eventangle-staging` | `stg.eventangle.com/*`, `api-stg.eventangle.com/*`                 | `worker/src/router.ts` |
+| Worker Name               | Routes                                                                            | Entry Point            |
+| ------------------------- | --------------------------------------------------------------------------------- | ---------------------- |
+| `oursharedevents-prod`    | `oursharedevents.com/*`, `www.oursharedevents.com/*`, `api.oursharedevents.com/*` | `worker/src/router.ts` |
+| `oursharedevents-staging` | `stg.oursharedevents.com/*`, `api-stg.oursharedevents.com/*`                      | `worker/src/router.ts` |
 
 ---
 
@@ -179,13 +179,13 @@
 
 **Current State:** Multiple route patterns handled by single Worker router.
 
-| Entry Point            | Routes Count | Status                   |
-| ---------------------- | ------------ | ------------------------ |
-| `eventangle.com/*`     | 1 wildcard   | Good                     |
-| `www.eventangle.com/*` | 1 wildcard   | Good                     |
-| `api.eventangle.com/*` | 1 wildcard   | **Question: Necessary?** |
+| Entry Point                 | Routes Count | Status                   |
+| --------------------------- | ------------ | ------------------------ |
+| `oursharedevents.com/*`     | 1 wildcard   | Good                     |
+| `www.oursharedevents.com/*` | 1 wildcard   | Good                     |
+| `api.oursharedevents.com/*` | 1 wildcard   | **Question: Necessary?** |
 
-> **NS-4 Compliance:** Mostly compliant. Consider consolidating `api.eventangle.com` into main Worker if API is not externally consumed by third parties.
+> **NS-4 Compliance:** Mostly compliant. Consider consolidating `api.oursharedevents.com` into main Worker if API is not externally consumed by third parties.
 
 ---
 
@@ -381,20 +381,20 @@ BACKEND_MODE=worker  (ONLY supported mode in production)
 
 ```bash
 # Verify Worker deployment
-curl -s https://www.eventangle.com/api/status | jq .
+curl -s https://www.oursharedevents.com/api/status | jq .
 
 # Verify backend health
-curl -s https://www.eventangle.com/api/health/backend | jq .
+curl -s https://www.oursharedevents.com/api/health/backend | jq .
 
 # Verify origin configuration
-curl -s https://www.eventangle.com/health/origin | jq .
+curl -s https://www.oursharedevents.com/health/origin | jq .
 
 # Test admin auth (should fail without token)
-curl -s https://www.eventangle.com/api/v2/admin/events | jq .
+curl -s https://www.oursharedevents.com/api/v2/admin/events | jq .
 
 # Test with auth (replace TOKEN)
 curl -s -H "Authorization: Bearer TOKEN" \
-  https://www.eventangle.com/api/v2/admin/events | jq .
+  https://www.oursharedevents.com/api/v2/admin/events | jq .
 ```
 
 ---

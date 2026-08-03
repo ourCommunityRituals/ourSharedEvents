@@ -1,8 +1,8 @@
-# Production Rollback Procedures
+﻿# Production Rollback Procedures
 
 > **Architecture:** Cloudflare Worker + D1 (Phase 2 complete)
 > **Last Updated:** 2026-04-09
-> **Supersedes:** Previous version referencing eventangle.com, GAS, and Google Sheets
+> **Supersedes:** Previous version referencing oursharedevents.com, GAS, and Google Sheets
 
 ---
 

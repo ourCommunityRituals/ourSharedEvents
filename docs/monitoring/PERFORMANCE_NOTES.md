@@ -1,4 +1,4 @@
-# Performance Notes
+﻿# Performance Notes
 
 Performance baselines, SLOs, and load testing documentation for MVP Event Toolkit.
 
@@ -60,7 +60,7 @@ The bundle endpoints serve the public-facing pages (Public, Display, Poster) and
 - **Duration:** 60 seconds
 - **Requests:** ~100-300 per endpoint (depending on response times)
 - **Target Events:** 3-5 events (fetched dynamically)
-- **Environment:** Staging (`https://stg.eventangle.com`)
+- **Environment:** Staging (`https://stg.oursharedevents.com`)
 
 ### Performance Baselines (SLO-Aligned)
 
@@ -77,13 +77,13 @@ These baselines align with our SLO targets:
 
 ```bash
 # Against staging (recommended)
-BASE_URL=https://stg.eventangle.com k6 run tests/load/bundle-load.js
+BASE_URL=https://stg.oursharedevents.com k6 run tests/load/bundle-load.js
 
 # With specific brand
-BASE_URL=https://stg.eventangle.com BRAND_ID=root k6 run tests/load/bundle-load.js
+BASE_URL=https://stg.oursharedevents.com BRAND_ID=root k6 run tests/load/bundle-load.js
 
 # Against production (requires explicit confirmation)
-BASE_URL=https://www.eventangle.com CONFIRM_PRODUCTION=true k6 run tests/load/bundle-load.js
+BASE_URL=https://www.oursharedevents.com CONFIRM_PRODUCTION=true k6 run tests/load/bundle-load.js
 
 # Using npm script
 npm run test:load:bundles

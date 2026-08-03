@@ -1,4 +1,4 @@
-# Story A2: Observability + Runtime Evidence (Playwright & Logs)
+﻿# Story A2: Observability + Runtime Evidence (Playwright & Logs)
 
 ## Purpose / Business Value
 
@@ -15,16 +15,16 @@ Every UI smoke test now logs comprehensive runtime information:
 ============================================================
 [REQUEST LOGGER] TEST SUMMARY (Story A2)
 ============================================================
-  BASE_URL:             https://stg.eventangle.com
-  First Navigation:     https://stg.eventangle.com/manage?brand=root
-  First API Host:       stg.eventangle.com
+  BASE_URL:             https://stg.oursharedevents.com
+  First Navigation:     https://stg.oursharedevents.com/manage?brand=root
+  First API Host:       stg.oursharedevents.com
   Total Requests:       42
   API Requests:         5
   Banned Origin Calls:  0
   API Failures:         0
 
   Hosts contacted:
-    - stg.eventangle.com
+    - stg.oursharedevents.com
     - fonts.googleapis.com
 ============================================================
 ```
@@ -45,7 +45,7 @@ If violated, tests fail with clear error message:
   - GET https://script.google.com/macros/s/.../exec
 
 This violates the "same-origin only" browser rule (Story A2).
-All API calls must go through the Cloudflare Worker at https://stg.eventangle.com.
+All API calls must go through the Cloudflare Worker at https://stg.oursharedevents.com.
 ```
 
 ### 3. API Failure Logging
@@ -60,7 +60,7 @@ When API calls fail, CI logs show:
 ============================================================
 [REQUEST LOGGER] API FAILURE DETECTED
 ============================================================
-  URL:        https://stg.eventangle.com/?page=events
+  URL:        https://stg.oursharedevents.com/?page=events
   Method:     GET
   Status:     503 Service Unavailable
   Request ID: abc123-xyz789

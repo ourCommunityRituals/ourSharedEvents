@@ -1,4 +1,4 @@
-# Environment Parity Report
+﻿# Environment Parity Report
 
 **Story 1.4 (PO)**: Configuration Parity and Environment Alignment
 **Generated**: 2025-12-10
@@ -8,7 +8,7 @@
 
 ## Executive Summary
 
-Staging environment (`stg.eventangle.com`) has been verified as an acceptable UAT proxy for production (`www.eventangle.com`). All critical user journeys function identically, with only intentional environment-specific differences in testing features and debug settings.
+Staging environment (`stg.oursharedevents.com`) has been verified as an acceptable UAT proxy for production (`www.oursharedevents.com`). All critical user journeys function identically, with only intentional environment-specific differences in testing features and debug settings.
 
 ---
 
@@ -32,7 +32,7 @@ All environment configuration is now centralized in:
 
 | Configuration                       | Staging             | Production          | Status |
 | ----------------------------------- | ------------------- | ------------------- | ------ |
-| Cloudflare Zone                     | eventangle.com      | eventangle.com      | MATCH  |
+| Cloudflare Zone                     | oursharedevents.com | oursharedevents.com | MATCH  |
 | MVP Features: EVENTS                | true                | true                | MATCH  |
 | MVP Features: SPONSORS              | true                | true                | MATCH  |
 | MVP Features: ANALYTICS             | true                | true                | MATCH  |
@@ -47,24 +47,24 @@ All environment configuration is now centralized in:
 
 ### Allowed Differences (By Design)
 
-| Configuration         | Staging                        | Production                             | Reason                       |
-| --------------------- | ------------------------------ | -------------------------------------- | ---------------------------- |
-| Base URL              | https://stg.eventangle.com     | https://www.eventangle.com             | Different domains            |
-| API URL               | https://api-stg.eventangle.com | https://api.eventangle.com             | Different domains            |
-| Worker Name           | eventangle-staging             | eventangle-prod                        | Different workers            |
-| Worker Routes         | stg.eventangle.com/\*          | eventangle.com/_, www.eventangle.com/_ | Different domains            |
-| Script ID             | 1gHiPuj7e...                   | 1YO4apLOQ...                           | Separate GAS projects        |
-| Deployment ID         | AKfycbwFne...                  | AKfycbz-RV...                          | Separate deployments         |
-| Debug Level           | debug                          | error                                  | More logging in staging      |
-| Debug Endpoints       | true                           | false                                  | Security (disabled in prod)  |
-| DEMO_MODE_ENABLED     | true                           | false                                  | Testing in staging only      |
-| DEBUG_PANEL           | true                           | false                                  | Testing in staging only      |
-| API_TIMING_LOGS       | true                           | false                                  | Testing in staging only      |
-| ERROR_DETAILS         | true                           | false                                  | Security (hide in prod)      |
-| SAMPLE_DATA_PREFILL   | true                           | false                                  | Testing in staging only      |
-| FEATURE_HIGHLIGHTING  | true                           | false                                  | Testing in staging only      |
-| CONSOLE_LOGGING       | true                           | false                                  | Performance (off in prod)    |
-| Experimental Features | true                           | false                                  | Validation before production |
+| Configuration         | Staging                             | Production                                       | Reason                       |
+| --------------------- | ----------------------------------- | ------------------------------------------------ | ---------------------------- |
+| Base URL              | https://stg.oursharedevents.com     | https://www.oursharedevents.com                  | Different domains            |
+| API URL               | https://api-stg.oursharedevents.com | https://api.oursharedevents.com                  | Different domains            |
+| Worker Name           | oursharedevents-staging             | oursharedevents-prod                             | Different workers            |
+| Worker Routes         | stg.oursharedevents.com/\*          | oursharedevents.com/_, www.oursharedevents.com/_ | Different domains            |
+| Script ID             | 1gHiPuj7e...                        | 1YO4apLOQ...                                     | Separate GAS projects        |
+| Deployment ID         | AKfycbwFne...                       | AKfycbz-RV...                                    | Separate deployments         |
+| Debug Level           | debug                               | error                                            | More logging in staging      |
+| Debug Endpoints       | true                                | false                                            | Security (disabled in prod)  |
+| DEMO_MODE_ENABLED     | true                                | false                                            | Testing in staging only      |
+| DEBUG_PANEL           | true                                | false                                            | Testing in staging only      |
+| API_TIMING_LOGS       | true                                | false                                            | Testing in staging only      |
+| ERROR_DETAILS         | true                                | false                                            | Security (hide in prod)      |
+| SAMPLE_DATA_PREFILL   | true                                | false                                            | Testing in staging only      |
+| FEATURE_HIGHLIGHTING  | true                                | false                                            | Testing in staging only      |
+| CONSOLE_LOGGING       | true                                | false                                            | Performance (off in prod)    |
+| Experimental Features | true                                | false                                            | Validation before production |
 
 ---
 
@@ -104,16 +104,16 @@ All environment configuration is now centralized in:
 
 All critical user journeys verified to work identically in staging and production:
 
-| Journey             | Staging Verified                | Production Equivalent           |
-| ------------------- | ------------------------------- | ------------------------------- |
-| View Public Events  | `stg.eventangle.com/events`     | `www.eventangle.com/events`     |
-| Admin Login         | `stg.eventangle.com/manage`     | `www.eventangle.com/manage`     |
-| Create Event        | Admin CRUD operations           | Same API endpoints              |
-| Sponsor Management  | Sponsor CRUD operations         | Same API endpoints              |
-| Display Mode        | `stg.eventangle.com/display`    | `www.eventangle.com/display`    |
-| Status Check        | `stg.eventangle.com/status`     | `www.eventangle.com/status`     |
-| Multi-brand Routing | `stg.eventangle.com/abc/events` | `www.eventangle.com/abc/events` |
-| Analytics/Reports   | Report pages                    | Same functionality              |
+| Journey             | Staging Verified                     | Production Equivalent                |
+| ------------------- | ------------------------------------ | ------------------------------------ |
+| View Public Events  | `stg.oursharedevents.com/events`     | `www.oursharedevents.com/events`     |
+| Admin Login         | `stg.oursharedevents.com/manage`     | `www.oursharedevents.com/manage`     |
+| Create Event        | Admin CRUD operations                | Same API endpoints                   |
+| Sponsor Management  | Sponsor CRUD operations              | Same API endpoints                   |
+| Display Mode        | `stg.oursharedevents.com/display`    | `www.oursharedevents.com/display`    |
+| Status Check        | `stg.oursharedevents.com/status`     | `www.oursharedevents.com/status`     |
+| Multi-brand Routing | `stg.oursharedevents.com/abc/events` | `www.oursharedevents.com/abc/events` |
+| Analytics/Reports   | Report pages                         | Same functionality                   |
 
 ---
 

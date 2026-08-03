@@ -1,4 +1,4 @@
-# Runbook: Deploying to Staging and Production
+﻿# Runbook: Deploying to Staging and Production
 
 > **Purpose:** Step-by-step deployment procedures for the MVP Event Toolkit.
 > **Last Updated:** 2025-12-17 | **Story:** 6 - Document Baseline & Runbooks
@@ -30,11 +30,11 @@
 │     └── Stage-1 validates (lint, test, contract, guards)        │
 │                                                                  │
 │  2. Merge PR to main                                             │
-│     └── Stage-1 deploys to staging (stg.eventangle.com)         │
+│     └── Stage-1 deploys to staging (stg.oursharedevents.com)         │
 │     └── Stage-2 validates live staging                          │
 │                                                                  │
 │  3. Tag release (vX.Y.Z)                                         │
-│     └── Stage-1 deploys to production (www.eventangle.com)      │
+│     └── Stage-1 deploys to production (www.oursharedevents.com)      │
 │     └── Manual approval required for Stage-2 production tests   │
 │     └── Stage-2 validates live production                       │
 │                                                                  │
@@ -90,10 +90,10 @@ Once approved and all checks pass:
 # Wait for deployment (~2-3 minutes)
 
 # Verify staging is up
-curl -s https://stg.eventangle.com/ping
+curl -s https://stg.oursharedevents.com/ping
 
 # Check backend health
-curl -s https://stg.eventangle.com/api/health/backend | jq
+curl -s https://stg.oursharedevents.com/api/health/backend | jq
 
 # Run staging smoke tests
 npm run test:smoke
@@ -125,7 +125,7 @@ Watch the Stage-2 Orchestrator workflow:
 
 ```bash
 # Ensure staging is healthy
-curl -s https://stg.eventangle.com/api/health/backend | jq '.ok'
+curl -s https://stg.oursharedevents.com/api/health/backend | jq '.ok'
 # Expected: true
 
 # Run synthetic health checks
@@ -174,18 +174,18 @@ Watch for:
 
 ```bash
 # Verify production is up
-curl -s https://www.eventangle.com/ping
+curl -s https://www.oursharedevents.com/ping
 
 # Check backend health
-curl -s https://www.eventangle.com/api/health/backend | jq
+curl -s https://www.oursharedevents.com/api/health/backend | jq
 
 # Verify no GAS HTML leak
-curl -s https://www.eventangle.com/events | grep -c "Google Apps Script"
+curl -s https://www.oursharedevents.com/events | grep -c "Google Apps Script"
 # Expected: 0
 
 # Check Worker headers
-curl -s -I https://www.eventangle.com/events | grep x-proxied-by
-# Expected: x-proxied-by: eventangle-worker
+curl -s -I https://www.oursharedevents.com/events | grep x-proxied-by
+# Expected: x-proxied-by: oursharedevents-worker
 
 # Run production smoke tests
 npm run test:prod:smoke
@@ -211,7 +211,7 @@ cd cloudflare-proxy
 wrangler deploy --env staging
 
 # Verify
-curl -s https://stg.eventangle.com/ping
+curl -s https://stg.oursharedevents.com/ping
 ```
 
 ### Manual Production Deploy
@@ -222,7 +222,7 @@ cd cloudflare-proxy
 wrangler deploy --env production
 
 # Verify
-curl -s https://www.eventangle.com/ping
+curl -s https://www.oursharedevents.com/ping
 ```
 
 ---
@@ -253,10 +253,10 @@ wrangler rollback --env production
 
 ```bash
 # Check staging
-curl -s https://stg.eventangle.com/api/health/backend | jq
+curl -s https://stg.oursharedevents.com/api/health/backend | jq
 
 # Check production
-curl -s https://www.eventangle.com/api/health/backend | jq
+curl -s https://www.oursharedevents.com/api/health/backend | jq
 ```
 
 ---

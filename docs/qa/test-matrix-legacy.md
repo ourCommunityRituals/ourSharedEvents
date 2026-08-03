@@ -1,4 +1,4 @@
-# Test Matrix for MVP Surfaces
+﻿# Test Matrix for MVP Surfaces
 
 > **Purpose**: Clear surface-level test matrix showing what's tested and what needs coverage
 > **Last Updated**: 2025-11-27
@@ -203,7 +203,7 @@ npx playwright test tests/e2e/2-pages/poster-page.spec.js
 npx playwright test tests/e2e/3-flows/shared-reporting.spec.js
 
 # Run with specific environment
-BASE_URL="https://www.eventangle.com" npm run test:pages
+BASE_URL="https://www.oursharedevents.com" npm run test:pages
 ```
 
 ---

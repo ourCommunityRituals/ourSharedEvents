@@ -1,16 +1,16 @@
-# Secrets & Environment Variables Reference
+﻿# Secrets & Environment Variables Reference
 
 > **Last Updated: 2026-04-09 — corrected for D1-native architecture**
 
 > **Story 2** - Confirm Secrets & Environment Variables
 >
 > This document provides a comprehensive inventory of all secrets and environment
-> variables required by the EventAngle platform. It covers GitHub Actions secrets,
+> variables required by the oursharedevents platform. It covers GitHub Actions secrets,
 > Cloudflare Worker secrets, and test environment variables.
 
 ## Overview
 
-The EventAngle platform relies on multiple secrets for:
+The oursharedevents platform relies on multiple secrets for:
 
 - **Cloudflare Workers** - Deployment and routing configuration
 - **Cloudflare D1** - Edge SQLite database (replaced Google Sheets in Phase 2)
@@ -120,7 +120,7 @@ node scripts/verify-secrets.js --json
 
 **Zone Restrictions:**
 
-- Zone: `eventangle.com` only
+- Zone: `oursharedevents.com` only
 
 **Prohibited Permissions (token MUST NOT have):**
 
@@ -135,7 +135,7 @@ node scripts/verify-secrets.js --json
 1. Go to [Cloudflare Dashboard](https://dash.cloudflare.com/profile/api-tokens)
 2. Click **Create Token** → **Edit Cloudflare Workers** template
 3. **Verify permissions match least-privilege requirements above**
-4. Set Zone Resources to **Specific zone: eventangle.com**
+4. Set Zone Resources to **Specific zone: oursharedevents.com**
 5. Add to GitHub Secrets as `CLOUDFLARE_API_TOKEN_OSE` (or `CF_DEPLOY_TOKEN`)
 6. Find Account ID in the Cloudflare dashboard URL or Overview page
 7. Add to GitHub Secrets as `CLOUDFLARE_ACCOUNT_ID`
@@ -237,13 +237,13 @@ wrangler secret put FORMS_ENCRYPTION_KEY --env production
 
 These are configured in workflow files or `wrangler.toml`, not as secrets:
 
-| Variable       | Description                             | Default                    |
-| -------------- | --------------------------------------- | -------------------------- |
-| `BASE_URL`     | Target URL for Playwright tests         | https://stg.eventangle.com |
-| `CI`           | CI environment flag                     | Set by GitHub Actions      |
-| `WORKER_ENV`   | Worker environment (staging/production) | Set in wrangler.toml       |
-| `BACKEND_MODE` | Backend mode (worker/gas/mixed)         | worker                     |
-| `DEBUG_LEVEL`  | Logging level (debug/error)             | error                      |
+| Variable       | Description                             | Default                         |
+| -------------- | --------------------------------------- | ------------------------------- |
+| `BASE_URL`     | Target URL for Playwright tests         | https://stg.oursharedevents.com |
+| `CI`           | CI environment flag                     | Set by GitHub Actions           |
+| `WORKER_ENV`   | Worker environment (staging/production) | Set in wrangler.toml            |
+| `BACKEND_MODE` | Backend mode (worker/gas/mixed)         | worker                          |
+| `DEBUG_LEVEL`  | Logging level (debug/error)             | error                           |
 
 ---
 
@@ -275,10 +275,10 @@ After setting secrets, verify the configuration:
 
 ```bash
 # Staging
-curl -s https://stg.eventangle.com/api/health/backend | jq
+curl -s https://stg.oursharedevents.com/api/health/backend | jq
 
 # Production
-curl -s https://www.eventangle.com/api/health/backend | jq
+curl -s https://www.oursharedevents.com/api/health/backend | jq
 ```
 
 **Expected Response:**

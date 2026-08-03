@@ -1,4 +1,4 @@
-# Customer-Friendly URL System
+﻿# Customer-Friendly URL System
 
 ## Overview
 
@@ -137,17 +137,17 @@ customAliases: {
 **Before (Technical):**
 
 ```
-https://eventangle.com?p=public&brand=abc
-https://eventangle.com?p=display&brand=cbc
-https://eventangle.com?p=admin&mode=advanced&brand=abc
+https://oursharedevents.com?p=public&brand=abc
+https://oursharedevents.com?p=display&brand=cbc
+https://oursharedevents.com?p=admin&mode=advanced&brand=abc
 ```
 
 **After (Friendly):**
 
 ```
-https://eventangle.com/abc/events
-https://eventangle.com/cbc/display
-https://eventangle.com/abc/manage
+https://oursharedevents.com/abc/events
+https://oursharedevents.com/cbc/display
+https://oursharedevents.com/abc/manage
 ```
 
 ### For Marketing Materials
@@ -156,17 +156,17 @@ https://eventangle.com/abc/manage
 
 ```
 Visit our events page:
-eventangle.com/abc/events
+oursharedevents.com/abc/events
 
 Scan QR code or visit:
-eventangle.com/abc/tournaments
+oursharedevents.com/abc/tournaments
 ```
 
 **TV Display Setup:**
 
 ```
 Setup Instructions:
-1. Navigate to: eventangle.com/cbc/display
+1. Navigate to: oursharedevents.com/cbc/display
 2. Let it run in fullscreen
 3. Events will auto-rotate
 ```
@@ -175,10 +175,10 @@ Setup Instructions:
 
 ```
 Manage your events at:
-eventangle.com/abc/manage
+oursharedevents.com/abc/manage
 
 Create a new event:
-eventangle.com/abc/create
+oursharedevents.com/abc/create
 ```
 
 ---
@@ -307,15 +307,15 @@ Both route to the same page.
 ### 1. Marketing & Promotions
 
 ```
-Print materials: eventangle.com/abc/events
-QR codes: eventangle.com/abc/tournaments
-Social media: eventangle.com/cbc/schedule
+Print materials: oursharedevents.com/abc/events
+QR codes: oursharedevents.com/abc/tournaments
+Social media: oursharedevents.com/cbc/schedule
 ```
 
 ### 2. TV/Kiosk Displays
 
 ```
-Simple setup URL: eventangle.com/cbc/display
+Simple setup URL: oursharedevents.com/cbc/display
 Easy to type, no query parameters needed
 ```
 
@@ -331,8 +331,8 @@ Clear, memorable instructions
 
 ```
 Each brand gets branded URLs:
-- americanbocceco.com → eventangle.com/abc/events
-- chicagoboccclub.org → eventangle.com/cbc/events
+- americanbocceco.com → oursharedevents.com/abc/events
+- chicagoboccclub.org → oursharedevents.com/cbc/events
 ```
 
 ---
@@ -343,19 +343,19 @@ Each brand gets branded URLs:
 
 ```bash
 # Public events
-curl https://eventangle.com/abc/events
+curl https://oursharedevents.com/abc/events
 
 # Admin interface
-curl https://eventangle.com/abc/manage
+curl https://oursharedevents.com/abc/manage
 
 # Display page
-curl https://eventangle.com/cbc/display
+curl https://oursharedevents.com/cbc/display
 
 # Custom brand alias
-curl https://eventangle.com/abc/tournaments
+curl https://oursharedevents.com/abc/tournaments
 
 # With demo mode
-curl https://eventangle.com/abc/events?demo=true
+curl https://oursharedevents.com/abc/events?demo=true
 ```
 
 ### Verify Alias Resolution
@@ -418,8 +418,8 @@ Subject: New Easier URLs!
 
 We've simplified our event URLs:
 
-OLD: eventangle.com?p=public&brand=abc
-NEW: eventangle.com/abc/events ✨
+OLD: oursharedevents.com?p=public&brand=abc
+NEW: oursharedevents.com/abc/events ✨
 
 Both URLs work - use whichever you prefer!
 
@@ -438,8 +438,8 @@ Bookmarks and old links still work!
 ### Subdomain Routing (Planned)
 
 ```
-abc.eventangle.com/events
-cbc.eventangle.com/display
+abc.oursharedevents.com/events
+cbc.oursharedevents.com/display
 ```
 
 Requires DNS configuration - set `enableSubdomainRouting: true` when ready.
@@ -447,8 +447,8 @@ Requires DNS configuration - set `enableSubdomainRouting: true` when ready.
 ### Short Link Integration
 
 ```
-eventangle.com/e/summer-tournament → Event detail page
-eventangle.com/s/abc123 → Shortlink redirect
+oursharedevents.com/e/summer-tournament → Event detail page
+oursharedevents.com/s/abc123 → Shortlink redirect
 ```
 
 Already supported via `/e/` and `/s/` patterns.
@@ -467,7 +467,7 @@ Already supported via `/e/` and `/s/` patterns.
 
 **Next Steps:**
 
-1. Test your aliases: [https://eventangle.com/abc/events](https://eventangle.com/abc/events)
+1. Test your aliases: [https://oursharedevents.com/abc/events](https://oursharedevents.com/abc/events)
 2. Add custom aliases for your brands in `Config.gs`
 3. Update marketing materials with new URLs
 4. Enjoy cleaner, more professional URLs!

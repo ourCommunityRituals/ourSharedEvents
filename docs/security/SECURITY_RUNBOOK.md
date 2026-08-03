@@ -1,4 +1,4 @@
-# SECURITY_RUNBOOK.md — Security Operations & Incident Response
+﻿# SECURITY_RUNBOOK.md — Security Operations & Incident Response
 
 > **PROMPTSPEC-SEC-9.1** — Security Runbook + Alerting Plan
 > Role: Director of Security
@@ -11,12 +11,12 @@
 
 Operational readiness for detecting and responding to security incidents. This runbook provides step-by-step procedures for seeing attacks and responding fast.
 
-| Attribute | Value |
-|-----------|-------|
-| **Scope** | Production and staging environments |
-| **Prerequisites** | Security Baseline (SEC-0.1), WAF Baseline (SEC-6.1), Rate Limiting (SEC-6.2) |
-| **On-Call Rotation** | Security team + Engineering lead |
-| **Escalation Path** | On-call → Security Lead → Engineering Lead → CTO |
+| Attribute            | Value                                                                        |
+| -------------------- | ---------------------------------------------------------------------------- |
+| **Scope**            | Production and staging environments                                          |
+| **Prerequisites**    | Security Baseline (SEC-0.1), WAF Baseline (SEC-6.1), Rate Limiting (SEC-6.2) |
+| **On-Call Rotation** | Security team + Engineering lead                                             |
+| **Escalation Path**  | On-call → Security Lead → Engineering Lead → CTO                             |
 
 ---
 
@@ -54,12 +54,12 @@ Operational readiness for detecting and responding to security incidents. This r
 
 #### Phase 1: Cloudflare Native Alerting (Week 1)
 
-| Step | Action | Owner | Status |
-|------|--------|-------|--------|
-| 1 | Enable Cloudflare Notifications | Security Lead | |
-| 2 | Configure alert thresholds | Security Lead | |
-| 3 | Set up notification channels | DevOps | |
-| 4 | Test alert delivery | Security Lead | |
+| Step | Action                          | Owner         | Status |
+| ---- | ------------------------------- | ------------- | ------ |
+| 1    | Enable Cloudflare Notifications | Security Lead |        |
+| 2    | Configure alert thresholds      | Security Lead |        |
+| 3    | Set up notification channels    | DevOps        |        |
+| 4    | Test alert delivery             | Security Lead |        |
 
 **Step 1: Enable Cloudflare Notifications**
 
@@ -81,13 +81,14 @@ See Section 3 for specific thresholds per signal type.
 
 **Step 3: Set Up Notification Channels**
 
-| Channel | Purpose | Setup Location |
-|---------|---------|----------------|
-| Email | All alerts | Cloudflare Notifications → Email |
-| Slack | Real-time ops | Cloudflare Notifications → Webhooks |
+| Channel   | Purpose         | Setup Location                       |
+| --------- | --------------- | ------------------------------------ |
+| Email     | All alerts      | Cloudflare Notifications → Email     |
+| Slack     | Real-time ops   | Cloudflare Notifications → Webhooks  |
 | PagerDuty | P1/P2 incidents | Cloudflare Notifications → PagerDuty |
 
 **Slack Webhook Setup:**
+
 ```
 [ ] 1. Create Slack App at api.slack.com
 [ ] 2. Enable Incoming Webhooks
@@ -98,14 +99,15 @@ See Section 3 for specific thresholds per signal type.
 
 #### Phase 2: Log Pipeline (Week 2)
 
-| Step | Action | Owner | Status |
-|------|--------|-------|--------|
-| 1 | Enable Cloudflare Logpush | DevOps | |
-| 2 | Configure log destination | DevOps | |
-| 3 | Set up SIEM dashboards | Security Lead | |
-| 4 | Create correlation rules | Security Lead | |
+| Step | Action                    | Owner         | Status |
+| ---- | ------------------------- | ------------- | ------ |
+| 1    | Enable Cloudflare Logpush | DevOps        |        |
+| 2    | Configure log destination | DevOps        |        |
+| 3    | Set up SIEM dashboards    | Security Lead |        |
+| 4    | Create correlation rules  | Security Lead |        |
 
 **Logpush Configuration:**
+
 ```
 Location: Cloudflare Dashboard → Analytics → Logpush
 
@@ -129,23 +131,23 @@ Location: Cloudflare Dashboard → Analytics → Logpush
 
 #### Phase 3: Custom Alerting Rules (Week 3)
 
-| Step | Action | Owner | Status |
-|------|--------|-------|--------|
-| 1 | Create SIEM alert rules | Security Lead | |
-| 2 | Configure anomaly detection | Security Lead | |
-| 3 | Set up correlation alerts | Security Lead | |
-| 4 | Test end-to-end | Security Team | |
+| Step | Action                      | Owner         | Status |
+| ---- | --------------------------- | ------------- | ------ |
+| 1    | Create SIEM alert rules     | Security Lead |        |
+| 2    | Configure anomaly detection | Security Lead |        |
+| 3    | Set up correlation alerts   | Security Lead |        |
+| 4    | Test end-to-end             | Security Team |        |
 
 ### 2.3 Alert Types to Configure
 
-| Alert Type | Cloudflare Location | Threshold | Priority |
-|------------|---------------------|-----------|----------|
-| **DDoS Attack** | Notifications → DDoS Protection | Auto-detected | P1 |
-| **WAF Block Spike** | Notifications → Firewall | >100 blocks/min | P2 |
-| **Rate Limit Spike** | Notifications → Rate Limiting | >50 429s/min | P2 |
-| **5xx Error Spike** | Notifications → HTTP/HTTPS | >10 5xx/min | P2 |
-| **SSL Certificate** | Notifications → SSL/TLS | 14 days before expiry | P3 |
-| **Origin Health** | Notifications → Health Checks | 3 consecutive failures | P1 |
+| Alert Type           | Cloudflare Location             | Threshold              | Priority |
+| -------------------- | ------------------------------- | ---------------------- | -------- |
+| **DDoS Attack**      | Notifications → DDoS Protection | Auto-detected          | P1       |
+| **WAF Block Spike**  | Notifications → Firewall        | >100 blocks/min        | P2       |
+| **Rate Limit Spike** | Notifications → Rate Limiting   | >50 429s/min           | P2       |
+| **5xx Error Spike**  | Notifications → HTTP/HTTPS      | >10 5xx/min            | P2       |
+| **SSL Certificate**  | Notifications → SSL/TLS         | 14 days before expiry  | P3       |
+| **Origin Health**    | Notifications → Health Checks   | 3 consecutive failures | P1       |
 
 ---
 
@@ -155,22 +157,22 @@ Location: Cloudflare Dashboard → Analytics → Logpush
 
 #### What It Indicates
 
-| Pattern | Likely Cause | Severity |
-|---------|--------------|----------|
-| Spike from single IP | Credential stuffing attempt | Medium |
-| Spike from multiple IPs | Distributed brute force | High |
-| Spike on `/auth/*` paths | OAuth attack | High |
-| Spike on `/api/admin/*` | Admin endpoint probe | High |
-| Gradual increase | Misconfigured client | Low |
+| Pattern                  | Likely Cause                | Severity |
+| ------------------------ | --------------------------- | -------- |
+| Spike from single IP     | Credential stuffing attempt | Medium   |
+| Spike from multiple IPs  | Distributed brute force     | High     |
+| Spike on `/auth/*` paths | OAuth attack                | High     |
+| Spike on `/api/admin/*`  | Admin endpoint probe        | High     |
+| Gradual increase         | Misconfigured client        | Low      |
 
 #### Thresholds
 
-| Metric | Warning | Critical | Measurement Period |
-|--------|---------|----------|-------------------|
-| 401/403 count | >50/min | >200/min | Rolling 1 minute |
-| 401/403 rate | >5% of requests | >15% of requests | Rolling 5 minutes |
-| Unique IPs with 401/403 | >20/min | >100/min | Rolling 1 minute |
-| Single IP 401/403 count | >10/min | >50/min | Rolling 1 minute |
+| Metric                  | Warning         | Critical         | Measurement Period |
+| ----------------------- | --------------- | ---------------- | ------------------ |
+| 401/403 count           | >50/min         | >200/min         | Rolling 1 minute   |
+| 401/403 rate            | >5% of requests | >15% of requests | Rolling 5 minutes  |
+| Unique IPs with 401/403 | >20/min         | >100/min         | Rolling 1 minute   |
+| Single IP 401/403 count | >10/min         | >50/min          | Rolling 1 minute   |
 
 #### Alert Configuration
 
@@ -243,23 +245,23 @@ STEP 5: DOCUMENT
 
 #### What It Indicates
 
-| Pattern | Likely Cause | Severity |
-|---------|--------------|----------|
-| SQLi rule triggers | SQL injection attempt | High |
-| XSS rule triggers | Cross-site scripting attempt | High |
-| RCE rule triggers | Remote code execution attempt | Critical |
-| Scanner detection | Vulnerability scanner | Medium |
-| Single rule spike | False positive OR targeted attack | Medium |
-| Multiple rules/single IP | Active exploitation attempt | High |
+| Pattern                  | Likely Cause                      | Severity |
+| ------------------------ | --------------------------------- | -------- |
+| SQLi rule triggers       | SQL injection attempt             | High     |
+| XSS rule triggers        | Cross-site scripting attempt      | High     |
+| RCE rule triggers        | Remote code execution attempt     | Critical |
+| Scanner detection        | Vulnerability scanner             | Medium   |
+| Single rule spike        | False positive OR targeted attack | Medium   |
+| Multiple rules/single IP | Active exploitation attempt       | High     |
 
 #### Thresholds
 
-| Metric | Warning | Critical | Measurement Period |
-|--------|---------|----------|-------------------|
-| WAF blocks total | >50/min | >200/min | Rolling 1 minute |
-| Critical rule blocks (SQLi/RCE) | >5/min | >20/min | Rolling 1 minute |
-| Single IP WAF blocks | >10/min | >50/min | Rolling 1 minute |
-| New rule first trigger | Any | - | Immediate |
+| Metric                          | Warning | Critical | Measurement Period |
+| ------------------------------- | ------- | -------- | ------------------ |
+| WAF blocks total                | >50/min | >200/min | Rolling 1 minute   |
+| Critical rule blocks (SQLi/RCE) | >5/min  | >20/min  | Rolling 1 minute   |
+| Single IP WAF blocks            | >10/min | >50/min  | Rolling 1 minute   |
+| New rule first trigger          | Any     | -        | Immediate          |
 
 #### Alert Configuration
 
@@ -342,21 +344,21 @@ STEP 5: DOCUMENT
 
 #### What It Indicates
 
-| Pattern | Likely Cause | Severity |
-|---------|--------------|----------|
-| Single IP 429 spike | Aggressive client/bot | Medium |
-| Distributed 429s | DDoS attempt | High |
-| 429s on `/api/admin/*` | Admin brute force | High |
-| 429s on `/jserror` | Error flood (bug or attack) | Low |
-| Monitoring IP 429s | Threshold too low | Low |
+| Pattern                | Likely Cause                | Severity |
+| ---------------------- | --------------------------- | -------- |
+| Single IP 429 spike    | Aggressive client/bot       | Medium   |
+| Distributed 429s       | DDoS attempt                | High     |
+| 429s on `/api/admin/*` | Admin brute force           | High     |
+| 429s on `/jserror`     | Error flood (bug or attack) | Low      |
+| Monitoring IP 429s     | Threshold too low           | Low      |
 
 #### Thresholds
 
-| Metric | Warning | Critical | Measurement Period |
-|--------|---------|----------|-------------------|
-| 429 responses total | >50/min | >200/min | Rolling 1 minute |
-| Unique IPs receiving 429 | >10/min | >50/min | Rolling 1 minute |
-| 429 on admin endpoints | >5/min | >20/min | Rolling 1 minute |
+| Metric                   | Warning | Critical | Measurement Period |
+| ------------------------ | ------- | -------- | ------------------ |
+| 429 responses total      | >50/min | >200/min | Rolling 1 minute   |
+| Unique IPs receiving 429 | >10/min | >50/min  | Rolling 1 minute   |
+| 429 on admin endpoints   | >5/min  | >20/min  | Rolling 1 minute   |
 
 #### Alert Configuration
 
@@ -435,23 +437,23 @@ STEP 5: DOCUMENT
 
 #### What It Indicates
 
-| Pattern | Likely Cause | Severity |
-|---------|--------------|----------|
-| 500 Internal Server Error | Application bug | High |
-| 502 Bad Gateway | Worker crash or timeout | High |
-| 503 Service Unavailable | Worker overloaded | Critical |
-| 520-527 (Cloudflare) | Edge-to-origin issues | High |
-| Single endpoint 5xx | Handler bug | Medium |
-| Global 5xx spike | System-wide issue | Critical |
+| Pattern                   | Likely Cause            | Severity |
+| ------------------------- | ----------------------- | -------- |
+| 500 Internal Server Error | Application bug         | High     |
+| 502 Bad Gateway           | Worker crash or timeout | High     |
+| 503 Service Unavailable   | Worker overloaded       | Critical |
+| 520-527 (Cloudflare)      | Edge-to-origin issues   | High     |
+| Single endpoint 5xx       | Handler bug             | Medium   |
+| Global 5xx spike          | System-wide issue       | Critical |
 
 #### Thresholds
 
-| Metric | Warning | Critical | Measurement Period |
-|--------|---------|----------|-------------------|
-| 5xx responses total | >5/min | >20/min | Rolling 1 minute |
-| 5xx rate | >1% of requests | >5% of requests | Rolling 5 minutes |
-| 503 responses | >2/min | >10/min | Rolling 1 minute |
-| Single endpoint 5xx | >5/min | >20/min | Rolling 1 minute |
+| Metric              | Warning         | Critical        | Measurement Period |
+| ------------------- | --------------- | --------------- | ------------------ |
+| 5xx responses total | >5/min          | >20/min         | Rolling 1 minute   |
+| 5xx rate            | >1% of requests | >5% of requests | Rolling 5 minutes  |
+| 503 responses       | >2/min          | >10/min         | Rolling 1 minute   |
+| Single endpoint 5xx | >5/min          | >20/min         | Rolling 1 minute   |
 
 #### Alert Configuration
 
@@ -496,7 +498,7 @@ STEP 2: IDENTIFY ROOT CAUSE (5 minutes)
 [ ] Check Worker logs (if available)
     - Error messages: ___________
 [ ] Check backend health
-    curl -s https://www.eventangle.com/api/health/backend | jq .
+    curl -s https://www.oursharedevents.com/api/health/backend | jq .
     - Status: ___________
 [ ] Check Google Sheets API status
     - https://status.cloud.google.com/
@@ -543,13 +545,13 @@ STEP 5: DOCUMENT
 
 When multiple signals occur together, they often indicate coordinated attacks:
 
-| Signal Combination | Likely Attack | Response |
-|--------------------|---------------|----------|
-| 401/403 + WAF blocks from same IP | Active exploitation attempt | Block IP immediately |
-| 429 + 5xx spike | DDoS / application overload | Enable Under Attack Mode |
+| Signal Combination                   | Likely Attack                | Response                      |
+| ------------------------------------ | ---------------------------- | ----------------------------- |
+| 401/403 + WAF blocks from same IP    | Active exploitation attempt  | Block IP immediately          |
+| 429 + 5xx spike                      | DDoS / application overload  | Enable Under Attack Mode      |
 | WAF SQLi + 5xx on database endpoints | SQL injection causing errors | Block IP, investigate queries |
-| 403 spike + scanner detection | Vulnerability reconnaissance | Challenge mode, monitor |
-| Multiple 401s + credential check WAF | Credential stuffing | Block IP, enable CAPTCHA |
+| 403 spike + scanner detection        | Vulnerability reconnaissance | Challenge mode, monitor       |
+| Multiple 401s + credential check WAF | Credential stuffing          | Block IP, enable CAPTCHA      |
 
 ### 4.2 Combined Alert Matrix
 
@@ -607,12 +609,12 @@ Is service down/unavailable?
 
 ### 5.2 Severity Classification
 
-| Severity | Criteria | Response Time | Escalation |
-|----------|----------|---------------|------------|
-| **P1 - Critical** | Service down, data breach suspected, active exploitation | < 5 min | Immediate |
-| **P2 - High** | Significant attack, partial service degradation | < 15 min | Within 30 min |
-| **P3 - Medium** | Suspicious activity, single attacker blocked | < 1 hour | Next business day |
-| **P4 - Low** | Informational, false positive investigation | < 24 hours | Weekly review |
+| Severity          | Criteria                                                 | Response Time | Escalation        |
+| ----------------- | -------------------------------------------------------- | ------------- | ----------------- |
+| **P1 - Critical** | Service down, data breach suspected, active exploitation | < 5 min       | Immediate         |
+| **P2 - High**     | Significant attack, partial service degradation          | < 15 min      | Within 30 min     |
+| **P3 - Medium**   | Suspicious activity, single attacker blocked             | < 1 hour      | Next business day |
+| **P4 - Low**      | Informational, false positive investigation              | < 24 hours    | Weekly review     |
 
 ---
 
@@ -630,7 +632,7 @@ ENABLE UNDER ATTACK MODE
 Time: ___________  Executed By: ___________
 
 [ ] 1. Navigate to Cloudflare Dashboard
-[ ] 2. Select domain (www.eventangle.com)
+[ ] 2. Select domain (www.oursharedevents.com)
 [ ] 3. Click "Under Attack Mode" toggle → ON
 [ ] 4. Verify enabled (banner appears)
 [ ] 5. Monitor traffic in Analytics
@@ -706,7 +708,7 @@ ROLLBACK WORKER DEPLOYMENT
 
 Time: ___________  Executed By: ___________
 
-[ ] 1. Navigate to Workers & Pages → eventangle-prod
+[ ] 1. Navigate to Workers & Pages → oursharedevents-prod
 [ ] 2. Click "Deployments" tab
 [ ] 3. Find last known good deployment
       - Version: ___________
@@ -714,9 +716,9 @@ Time: ___________  Executed By: ___________
 [ ] 4. Click deployment → "Rollback to this deployment"
 [ ] 5. Confirm rollback
 [ ] 6. Verify health:
-      curl -s https://www.eventangle.com/api/status | jq .
+      curl -s https://www.oursharedevents.com/api/status | jq .
 [ ] 7. Verify backend:
-      curl -s https://www.eventangle.com/api/health/backend | jq .
+      curl -s https://www.oursharedevents.com/api/health/backend | jq .
 
 Previous Version: ___________
 Current Version: ___________
@@ -791,13 +793,13 @@ Review date for change: ___________
 
 ### 6.5 Rollback Decision Matrix
 
-| Symptom | Primary Lever | Secondary Lever | Escalation Trigger |
-|---------|---------------|-----------------|-------------------|
-| Service down (5xx) | Worker Rollback | Enable maintenance mode | If not resolved in 15 min |
-| DDoS attack | Under Attack Mode | Block IP ranges | If persists after 1 hour |
-| Active exploitation | Block IP | WAF to Block mode | Any successful breach |
-| False positive blocking | WAF rule to Log | Rate limit adjustment | Business impact |
-| Auth system failure | Worker Rollback | Contact OAuth provider | If auth fully broken |
+| Symptom                 | Primary Lever     | Secondary Lever         | Escalation Trigger        |
+| ----------------------- | ----------------- | ----------------------- | ------------------------- |
+| Service down (5xx)      | Worker Rollback   | Enable maintenance mode | If not resolved in 15 min |
+| DDoS attack             | Under Attack Mode | Block IP ranges         | If persists after 1 hour  |
+| Active exploitation     | Block IP          | WAF to Block mode       | Any successful breach     |
+| False positive blocking | WAF rule to Log   | Rate limit adjustment   | Business impact           |
+| Auth system failure     | Worker Rollback   | Contact OAuth provider  | If auth fully broken      |
 
 ---
 
@@ -805,12 +807,12 @@ Review date for change: ___________
 
 ### 7.1 Communication Matrix
 
-| Incident Severity | Who to Notify | When | How |
-|-------------------|---------------|------|-----|
-| **P1 - Critical** | Security Lead, Engineering Lead, CTO, Affected Users | Immediately | PagerDuty → Slack → Status Page |
-| **P2 - High** | Security Lead, Engineering Lead | < 15 min | Slack #security-alerts → Email |
-| **P3 - Medium** | Security Team | < 1 hour | Slack #security-alerts |
-| **P4 - Low** | Security Log | Next business day | Weekly report |
+| Incident Severity | Who to Notify                                        | When              | How                             |
+| ----------------- | ---------------------------------------------------- | ----------------- | ------------------------------- |
+| **P1 - Critical** | Security Lead, Engineering Lead, CTO, Affected Users | Immediately       | PagerDuty → Slack → Status Page |
+| **P2 - High**     | Security Lead, Engineering Lead                      | < 15 min          | Slack #security-alerts → Email  |
+| **P3 - Medium**   | Security Team                                        | < 1 hour          | Slack #security-alerts          |
+| **P4 - Low**      | Security Log                                         | Next business day | Weekly report                   |
 
 ### 7.2 Stakeholder Contact List
 
@@ -1063,15 +1065,15 @@ Completed by: _______________  Date: _______________
 
 ### 9.1 Runbook Acceptance Criteria
 
-| ID | Criterion | Verification | Status |
-|----|-----------|--------------|--------|
-| **AC-1** | Runbook is step-by-step, not conceptual | All procedures have numbered steps with checkboxes | |
-| **AC-2** | All security signals documented | 401/403, WAF, 429, 5xx covered | |
-| **AC-3** | Thresholds defined for each signal | Warning and critical thresholds specified | |
-| **AC-4** | Triage steps for each signal | Each signal has specific triage procedure | |
-| **AC-5** | Rollback levers documented | Under Attack Mode, IP blocks, Worker rollback, WAF adjustments | |
-| **AC-6** | Communication plan includes who/what/when | Contact matrix, templates, timing defined | |
-| **AC-7** | Alerting implementation plan provided | Phased rollout with specific steps | |
+| ID       | Criterion                                 | Verification                                                   | Status |
+| -------- | ----------------------------------------- | -------------------------------------------------------------- | ------ |
+| **AC-1** | Runbook is step-by-step, not conceptual   | All procedures have numbered steps with checkboxes             |        |
+| **AC-2** | All security signals documented           | 401/403, WAF, 429, 5xx covered                                 |        |
+| **AC-3** | Thresholds defined for each signal        | Warning and critical thresholds specified                      |        |
+| **AC-4** | Triage steps for each signal              | Each signal has specific triage procedure                      |        |
+| **AC-5** | Rollback levers documented                | Under Attack Mode, IP blocks, Worker rollback, WAF adjustments |        |
+| **AC-6** | Communication plan includes who/what/when | Contact matrix, templates, timing defined                      |        |
+| **AC-7** | Alerting implementation plan provided     | Phased rollout with specific steps                             |        |
 
 ### 9.2 Operational Readiness Verification
 
@@ -1113,14 +1115,14 @@ _______________________________________________
 
 ## 10. Related Documents
 
-| Document | Path | Relationship |
-|----------|------|--------------|
-| Security Baseline | `docs/security/SECURITY_BASELINE.md` | Parent security model |
-| WAF Baseline | `docs/security/WAF_BASELINE.md` | WAF configuration details |
-| Rate Limiting | `docs/security/RATE_LIMITING_SPEC.md` | Rate limit configuration |
-| DNSSEC Runbook | `docs/security/DNSSEC_RUNBOOK.md` | DNS security operations |
-| CF Account Hardening | `docs/security/CF_ACCOUNT_HARDENING_RUNBOOK.md` | Account security |
-| TLS Strict Baseline | `docs/security/TLS_STRICT_BASELINE.md` | TLS configuration |
+| Document             | Path                                            | Relationship              |
+| -------------------- | ----------------------------------------------- | ------------------------- |
+| Security Baseline    | `docs/security/SECURITY_BASELINE.md`            | Parent security model     |
+| WAF Baseline         | `docs/security/WAF_BASELINE.md`                 | WAF configuration details |
+| Rate Limiting        | `docs/security/RATE_LIMITING_SPEC.md`           | Rate limit configuration  |
+| DNSSEC Runbook       | `docs/security/DNSSEC_RUNBOOK.md`               | DNS security operations   |
+| CF Account Hardening | `docs/security/CF_ACCOUNT_HARDENING_RUNBOOK.md` | Account security          |
+| TLS Strict Baseline  | `docs/security/TLS_STRICT_BASELINE.md`          | TLS configuration         |
 
 ---
 
@@ -1145,8 +1147,8 @@ _______________________________________________
 │  CF Dashboard:     dash.cloudflare.com                                       │
 │  CF Status:        cloudflarestatus.com                                      │
 │  Google Status:    status.cloud.google.com                                   │
-│  Health Check:     www.eventangle.com/api/status                             │
-│  Backend Health:   www.eventangle.com/api/health/backend                     │
+│  Health Check:     www.oursharedevents.com/api/status                             │
+│  Backend Health:   www.oursharedevents.com/api/health/backend                     │
 │                                                                              │
 │  THRESHOLDS (CRITICAL)                                                       │
 │  ─────────────────────                                                       │
@@ -1167,23 +1169,23 @@ _______________________________________________
 
 ```bash
 # Quick health checks
-curl -s https://www.eventangle.com/api/status | jq .
-curl -s https://www.eventangle.com/api/health/backend | jq .
+curl -s https://www.oursharedevents.com/api/status | jq .
+curl -s https://www.oursharedevents.com/api/health/backend | jq .
 
 # Check DNS (should return Cloudflare IPs)
-dig +short www.eventangle.com
+dig +short www.oursharedevents.com
 
 # Check TLS certificate
-echo | openssl s_client -connect www.eventangle.com:443 2>/dev/null | openssl x509 -noout -dates
+echo | openssl s_client -connect www.oursharedevents.com:443 2>/dev/null | openssl x509 -noout -dates
 
 # Verify staging
-curl -s https://stg.eventangle.com/api/status | jq .
+curl -s https://stg.oursharedevents.com/api/status | jq .
 ```
 
 ---
 
 ## Document History
 
-| Date | Author | Changes |
-|------|--------|---------|
+| Date       | Author      | Changes                                                     |
+| ---------- | ----------- | ----------------------------------------------------------- |
 | 2026-01-05 | Claude Code | Initial PROMPTSPEC-SEC-9.1 security runbook + alerting plan |

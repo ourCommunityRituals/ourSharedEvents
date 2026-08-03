@@ -1,8 +1,8 @@
-# Product Owner Sign-off: Staging Environment Parity
+﻿# Product Owner Sign-off: Staging Environment Parity
 
 **Story 1.4 (PO)**: Configuration Parity and Environment Alignment
 **Date**: 2025-12-10
-**Environment**: Staging (`stg.eventangle.com`)
+**Environment**: Staging (`stg.oursharedevents.com`)
 
 ---
 
@@ -48,14 +48,14 @@ This document certifies that the staging environment is an acceptable User Accep
 
 The following differences between staging and production are **intentional and approved**:
 
-| Difference            | Staging            | Production         | Approval Reason            |
-| --------------------- | ------------------ | ------------------ | -------------------------- |
-| Domain                | stg.eventangle.com | www.eventangle.com | Standard staging subdomain |
-| Debug Level           | debug              | error              | Enhanced logging for UAT   |
-| Debug Endpoints       | Enabled            | Disabled           | Security best practice     |
-| Demo Mode             | Available          | Disabled           | Testing convenience        |
-| Sample Data Prefill   | Available          | Disabled           | Testing convenience        |
-| Experimental Features | Enabled            | Disabled           | Validation before release  |
+| Difference            | Staging                 | Production              | Approval Reason            |
+| --------------------- | ----------------------- | ----------------------- | -------------------------- |
+| Domain                | stg.oursharedevents.com | www.oursharedevents.com | Standard staging subdomain |
+| Debug Level           | debug                   | error                   | Enhanced logging for UAT   |
+| Debug Endpoints       | Enabled                 | Disabled                | Security best practice     |
+| Demo Mode             | Available               | Disabled                | Testing convenience        |
+| Sample Data Prefill   | Available               | Disabled                | Testing convenience        |
+| Experimental Features | Enabled                 | Disabled                | Validation before release  |
 
 ---
 

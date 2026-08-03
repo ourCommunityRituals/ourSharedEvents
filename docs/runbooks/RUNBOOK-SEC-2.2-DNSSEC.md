@@ -1,4 +1,4 @@
-# Runbook: Enable DNSSEC End-to-End
+﻿# Runbook: Enable DNSSEC End-to-End
 
 > **Epic SEC-2 — Domain Control (DNS/Registrar Takeover Prevention)**
 > Story SEC-2.2 — Enable DNSSEC End-to-End
@@ -74,7 +74,7 @@ DNS is the foundation of all internet traffic routing. Without DNSSEC:
                                     │ DS record (hash of your domain's key)
                                     ▼
 ┌──────────────────────────────────────────────────────────────────────────┐
-│                    DOMAIN (eventangle.com)                                │
+│                    DOMAIN (oursharedevents.com)                                │
 │   Cloudflare signs all DNS records with domain's private key             │
 │   ► Verified by DS record published at registrar                          │
 └──────────────────────────────────────────────────────────────────────────┘
@@ -155,7 +155,7 @@ Before enabling DNSSEC, verify:
 
 1. Log in to [Cloudflare Dashboard](https://dash.cloudflare.com)
 2. Select your account
-3. Select the domain (e.g., `eventangle.com`)
+3. Select the domain (e.g., `oursharedevents.com`)
 4. In the left sidebar, click **DNS** > **Settings**
 5. Scroll to the **DNSSEC** section
 
@@ -178,7 +178,7 @@ Digest Type:    2 (SHA-256)
 Digest:         [64-character hex string]
 
 DS Record (full):
-eventangle.com. 3600 IN DS 12345 13 2 [digest...]
+oursharedevents.com. 3600 IN DS 12345 13 2 [digest...]
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
 
@@ -295,9 +295,9 @@ If your domain is registered with Cloudflare Registrar:
 
 ### 4.7 DS Record Publication Audit Log
 
-| Domain         | Registrar | DS Published     | Key Tag | Status | Date       |
-| -------------- | --------- | ---------------- | ------- | ------ | ---------- |
-| eventangle.com |           | [ ] Yes / [ ] No |         |        | YYYY-MM-DD |
+| Domain              | Registrar | DS Published     | Key Tag | Status | Date       |
+| ------------------- | --------- | ---------------- | ------- | ------ | ---------- |
+| oursharedevents.com |           | [ ] Yes / [ ] No |         |        | YYYY-MM-DD |
 
 ---
 
@@ -327,7 +327,7 @@ If your domain is registered with Cloudflare Registrar:
 
 ```bash
 # Query the .com TLD servers for DS record
-dig DS eventangle.com @a.gtld-servers.net +short
+dig DS oursharedevents.com @a.gtld-servers.net +short
 
 # Expected output (example):
 # 12345 13 2 ABC123...
@@ -337,7 +337,7 @@ dig DS eventangle.com @a.gtld-servers.net +short
 
 ```bash
 # Query Cloudflare for DNSKEY records
-dig DNSKEY eventangle.com +short
+dig DNSKEY oursharedevents.com +short
 
 # Expected output: Multiple DNSKEY records (ZSK and KSK)
 ```
@@ -346,7 +346,7 @@ dig DNSKEY eventangle.com +short
 
 ```bash
 # Query for A record with DNSSEC data
-dig A eventangle.com +dnssec +short
+dig A oursharedevents.com +dnssec +short
 
 # Expected output: IP address plus RRSIG signature
 ```
@@ -355,7 +355,7 @@ dig A eventangle.com +dnssec +short
 
 ```bash
 # Use delv (DNSSEC lookup and validation)
-delv @8.8.8.8 eventangle.com A +rtrace
+delv @8.8.8.8 oursharedevents.com A +rtrace
 
 # Expected output should include:
 # ; fully validated
@@ -376,7 +376,7 @@ Use these external tools to verify DNSSEC is properly configured:
 ### 5.5 DNSViz Verification Steps
 
 1. Go to https://dnsviz.net/
-2. Enter your domain: `eventangle.com`
+2. Enter your domain: `oursharedevents.com`
 3. Click **Analyze**
 4. Review the visualization:
    - **Green**: Valid signatures and chain
@@ -396,7 +396,7 @@ Use these external tools to verify DNSSEC is properly configured:
 ```bash
 #!/bin/bash
 # DNSSEC Verification Script
-DOMAIN="eventangle.com"
+DOMAIN="oursharedevents.com"
 
 echo "=== DNSSEC Verification for $DOMAIN ==="
 echo ""
@@ -500,8 +500,8 @@ If DNSSEC validation is failing and blocking access:
 
 ```bash
 # Test if DNSSEC is the issue
-dig @8.8.8.8 eventangle.com +cd    # Should work (CD = Checking Disabled)
-dig @8.8.8.8 eventangle.com +dnssec # Fails if DNSSEC broken
+dig @8.8.8.8 oursharedevents.com +cd    # Should work (CD = Checking Disabled)
+dig @8.8.8.8 oursharedevents.com +dnssec # Fails if DNSSEC broken
 ```
 
 **Resolution:**
@@ -520,7 +520,7 @@ Different registrars may require different formats:
 | ------------------- | ------------------------------------------------------- |
 | **Separate fields** | Key Tag: 12345, Alg: 13, Digest Type: 2, Digest: abc... |
 | **Single line**     | 12345 13 2 abc123def456...                              |
-| **Full DNS format** | eventangle.com. 3600 IN DS 12345 13 2 abc123...         |
+| **Full DNS format** | oursharedevents.com. 3600 IN DS 12345 13 2 abc123...    |
 
 Ensure you're using the format your registrar expects.
 
@@ -578,25 +578,25 @@ Cloudflare automatically rotates DNSSEC keys. When rotation occurs:
 
 ```bash
 # Check DS record at parent TLD
-dig DS eventangle.com +short
+dig DS oursharedevents.com +short
 
 # Check DNSKEY records
-dig DNSKEY eventangle.com +short
+dig DNSKEY oursharedevents.com +short
 
 # Validate with Google DNS
-dig @8.8.8.8 eventangle.com +dnssec +short
+dig @8.8.8.8 oursharedevents.com +dnssec +short
 
 # Full validation trace
-delv eventangle.com +rtrace
+delv oursharedevents.com +rtrace
 
 # Check without validation (troubleshooting)
-dig @8.8.8.8 eventangle.com +cd +short
+dig @8.8.8.8 oursharedevents.com +cd +short
 
 # Check NSEC3 (authenticated denial)
-dig NSEC3PARAM eventangle.com +short
+dig NSEC3PARAM oursharedevents.com +short
 
 # Query specific record with DNSSEC
-dig @8.8.8.8 www.eventangle.com A +dnssec
+dig @8.8.8.8 www.oursharedevents.com A +dnssec
 ```
 
 ---

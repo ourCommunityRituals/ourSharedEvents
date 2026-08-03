@@ -1,4 +1,4 @@
-# CI_SECRET_NAMING.md — CI Secrets Naming and Storage Policy
+﻿# CI_SECRET_NAMING.md — CI Secrets Naming and Storage Policy
 
 > **PROMPTSPEC-SEC-1.2** — CI Secret Naming Conventions
 > Role: Director of Security + DevOps Lead
@@ -9,7 +9,7 @@
 
 ## 1. Purpose
 
-This document defines consistent naming conventions and storage rules for CI/CD secrets across the EventAngle platform.
+This document defines consistent naming conventions and storage rules for CI/CD secrets across the oursharedevents platform.
 
 | Attribute       | Value                                                   |
 | --------------- | ------------------------------------------------------- |

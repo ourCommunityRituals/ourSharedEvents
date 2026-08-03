@@ -1,4 +1,4 @@
-# Test Matrix
+﻿# Test Matrix
 
 > **Accurate as of November 2025**
 >
@@ -156,7 +156,7 @@ npx playwright install chromium
 ### Running Smoke Tests
 
 ```bash
-# Run all smoke tests against eventangle.com (default)
+# Run all smoke tests against oursharedevents.com (default)
 npm run test:smoke
 
 # Run against direct GAS URL
@@ -177,11 +177,11 @@ npx playwright show-report
 
 ### Environment Variables
 
-| Variable    | Description                  | Default                  |
-| ----------- | ---------------------------- | ------------------------ |
-| `BASE_URL`  | Target URL for tests         | `https://eventangle.com` |
-| `ADMIN_KEY` | Admin key for event creation | `CHANGE_ME_root`         |
-| `BRAND_ID`  | Brand to test against        | `root`                   |
+| Variable    | Description                  | Default                       |
+| ----------- | ---------------------------- | ----------------------------- |
+| `BASE_URL`  | Target URL for tests         | `https://oursharedevents.com` |
+| `ADMIN_KEY` | Admin key for event creation | `CHANGE_ME_root`              |
+| `BRAND_ID`  | Brand to test against        | `root`                        |
 
 ### MVP Surface Test Coverage
 

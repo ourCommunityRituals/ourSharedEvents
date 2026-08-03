@@ -1,4 +1,4 @@
-# Production Deployment Policy
+﻿# Production Deployment Policy
 
 **Last Updated:** 2025-12-10
 **Status:** Active
@@ -222,7 +222,7 @@ The CI pipeline uses these secrets (configured by admins only):
 
 Before using any deployment method, ask:
 
-- [ ] Will this change affect `eventangle.com`?
+- [ ] Will this change affect `oursharedevents.com`?
 - [ ] Will this change affect the production Apps Script deployment?
 - [ ] Are real users going to see this change?
 

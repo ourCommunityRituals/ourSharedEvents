@@ -1,13 +1,13 @@
-# Environment Matrix
+﻿# Environment Matrix
 
 Quick reference for deployment environments. This is the authoritative source for "what does staging vs prod actually mean?"
 
 ## TL;DR
 
-| Env            | Public URL                   | GAS Project       | Cloudflare Env     | Deploy Command            |
-| -------------- | ---------------------------- | ----------------- | ------------------ | ------------------------- |
-| **Staging**    | `https://stg.eventangle.com` | Staging Script    | `[env.staging]`    | `npm run deploy:staging`  |
-| **Production** | `https://www.eventangle.com` | Production Script | `[env.production]` | CI only (merge to `main`) |
+| Env            | Public URL                        | GAS Project       | Cloudflare Env     | Deploy Command            |
+| -------------- | --------------------------------- | ----------------- | ------------------ | ------------------------- |
+| **Staging**    | `https://stg.oursharedevents.com` | Staging Script    | `[env.staging]`    | `npm run deploy:staging`  |
+| **Production** | `https://www.oursharedevents.com` | Production Script | `[env.production]` | CI only (merge to `main`) |
 
 ## Environment Details
 
@@ -15,8 +15,8 @@ Quick reference for deployment environments. This is the authoritative source fo
 
 | Property             | Value                                                           |
 | -------------------- | --------------------------------------------------------------- |
-| **URL**              | `https://stg.eventangle.com`                                    |
-| **API URL**          | `https://api-stg.eventangle.com`                                |
+| **URL**              | `https://stg.oursharedevents.com`                               |
+| **API URL**          | `https://api-stg.oursharedevents.com`                           |
 | **GAS Project**      | Staging Apps Script deployment                                  |
 | **Cloudflare Env**   | `[env.staging]` in `wrangler.toml`                              |
 | **Wrangler Command** | `wrangler deploy --env staging`                                 |
@@ -26,26 +26,26 @@ Quick reference for deployment environments. This is the authoritative source fo
 
 ### Production (`prod`)
 
-| Property             | Value                                                   |
-| -------------------- | ------------------------------------------------------- |
-| **URL**              | `https://www.eventangle.com` / `https://eventangle.com` |
-| **API URL**          | `https://api.eventangle.com`                            |
-| **GAS Project**      | Production Apps Script deployment                       |
-| **Cloudflare Env**   | `[env.production]` in `wrangler.toml`                   |
-| **Wrangler Command** | `wrangler deploy --env production`                      |
-| **Purpose**          | Customer-facing live application                        |
-| **Who Can Deploy**   | **CI ONLY** - no manual deployments                     |
-| **Test Command**     | `npm run test:prod:*` (explicit only)                   |
+| Property             | Value                                                             |
+| -------------------- | ----------------------------------------------------------------- |
+| **URL**              | `https://www.oursharedevents.com` / `https://oursharedevents.com` |
+| **API URL**          | `https://api.oursharedevents.com`                                 |
+| **GAS Project**      | Production Apps Script deployment                                 |
+| **Cloudflare Env**   | `[env.production]` in `wrangler.toml`                             |
+| **Wrangler Command** | `wrangler deploy --env production`                                |
+| **Purpose**          | Customer-facing live application                                  |
+| **Who Can Deploy**   | **CI ONLY** - no manual deployments                               |
+| **Test Command**     | `npm run test:prod:*` (explicit only)                             |
 
 ## Cloudflare Worker Environments
 
 The `cloudflare-proxy/wrangler.toml` defines these environments:
 
-| Wrangler Env       | Worker Name          | Routes                                                             | Purpose                        |
-| ------------------ | -------------------- | ------------------------------------------------------------------ | ------------------------------ |
-| `[env.staging]`    | `eventangle-staging` | `stg.eventangle.com/*`, `api-stg.eventangle.com/*`                 | Staging proxy                  |
-| `[env.production]` | `eventangle-prod`    | `eventangle.com/*`, `www.eventangle.com/*`, `api.eventangle.com/*` | Production proxy               |
-| `[env.events]`     | `eventangle-events`  | Friendly URL routes (`/events`, `/manage`, `/display`, etc.)       | Legacy/alternative prod routes |
+| Wrangler Env       | Worker Name               | Routes                                                                            | Purpose                        |
+| ------------------ | ------------------------- | --------------------------------------------------------------------------------- | ------------------------------ |
+| `[env.staging]`    | `oursharedevents-staging` | `stg.oursharedevents.com/*`, `api-stg.oursharedevents.com/*`                      | Staging proxy                  |
+| `[env.production]` | `oursharedevents-prod`    | `oursharedevents.com/*`, `www.oursharedevents.com/*`, `api.oursharedevents.com/*` | Production proxy               |
+| `[env.events]`     | `oursharedevents-events`  | Friendly URL routes (`/events`, `/manage`, `/display`, etc.)                      | Legacy/alternative prod routes |
 
 **Note:** `[env.production]` and `[env.events]` both point to the production GAS backend. Use `[env.production]` for full-site deployment.
 
@@ -60,12 +60,12 @@ The `cloudflare-proxy/wrangler.toml` defines these environments:
 
 ```bash
 # Staging (default - safe sandbox)
-npm run test:smoke              # -> stg.eventangle.com
-npm run test:staging:smoke      # -> stg.eventangle.com (explicit)
+npm run test:smoke              # -> stg.oursharedevents.com
+npm run test:staging:smoke      # -> stg.oursharedevents.com (explicit)
 
 # Production (explicit only)
-npm run test:prod:smoke         # -> www.eventangle.com
-USE_PRODUCTION=true npm test    # -> www.eventangle.com
+npm run test:prod:smoke         # -> www.oursharedevents.com
+USE_PRODUCTION=true npm test    # -> www.oursharedevents.com
 
 # Custom target
 BASE_URL="https://custom.example.com" npm run test:smoke
@@ -81,8 +81,8 @@ config/environments.js    # Canonical source
 
 Key exports:
 
-- `STAGING_URL = 'https://stg.eventangle.com'`
-- `PRODUCTION_URL = 'https://www.eventangle.com'`
+- `STAGING_URL = 'https://stg.oursharedevents.com'`
+- `PRODUCTION_URL = 'https://www.oursharedevents.com'`
 
 ## Related Documentation
 

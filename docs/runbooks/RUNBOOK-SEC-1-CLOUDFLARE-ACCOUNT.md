@@ -1,4 +1,4 @@
-# Runbook: Cloudflare Account Hardening
+﻿# Runbook: Cloudflare Account Hardening
 
 > **Epic SEC-1 — Cloudflare Account Hardening**
 > Story SEC-1.1 — Enforce Strong MFA + Remove Unsafe Auth Paths
@@ -34,7 +34,7 @@ Make Cloudflare account takeover difficult by:
 
 ### 1.2 Why This Matters
 
-The Cloudflare account is the root of trust for EventAngle infrastructure. If compromised:
+The Cloudflare account is the root of trust for oursharedevents infrastructure. If compromised:
 
 - Attackers could redirect DNS to malicious servers
 - Workers could be modified to exfiltrate data

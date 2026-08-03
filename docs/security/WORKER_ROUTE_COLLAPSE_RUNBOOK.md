@@ -1,4 +1,4 @@
-# WORKER_ROUTE_COLLAPSE_RUNBOOK.md — Single Worker Entrypoint Migration
+﻿# WORKER_ROUTE_COLLAPSE_RUNBOOK.md — Single Worker Entrypoint Migration
 
 > **PROMPTSPEC-SEC-4.2** — Worker Route Migration
 > Role: Director of Security
@@ -9,13 +9,13 @@
 
 ## 1. Purpose
 
-Collapse route sprawl into `eventangle.com/*` as the single Worker route entrypoint. This consolidation reduces attack surface, simplifies routing logic, and provides a single point of control for all traffic.
+Collapse route sprawl into `oursharedevents.com/*` as the single Worker route entrypoint. This consolidation reduces attack surface, simplifies routing logic, and provides a single point of control for all traffic.
 
-| Attribute | Value |
-|-----------|-------|
-| **Scope** | Production and staging Worker route configuration |
-| **Prerequisites** | Cloudflare Workers deployed, API subdomain traffic analysis complete |
-| **Constraints** | Zero-downtime migration required; all critical paths must remain functional |
+| Attribute         | Value                                                                       |
+| ----------------- | --------------------------------------------------------------------------- |
+| **Scope**         | Production and staging Worker route configuration                           |
+| **Prerequisites** | Cloudflare Workers deployed, API subdomain traffic analysis complete        |
+| **Constraints**   | Zero-downtime migration required; all critical paths must remain functional |
 
 ---
 
@@ -25,27 +25,27 @@ Collapse route sprawl into `eventangle.com/*` as the single Worker route entrypo
 
 **Production Routes (cloudflare-proxy/wrangler.toml, worker/wrangler.toml):**
 
-| Route Pattern | Zone | Purpose |
-|---------------|------|---------|
-| `eventangle.com/*` | eventangle.com | Main domain - all traffic (canonical) |
-| `api.eventangle.com/*` | eventangle.com | API subdomain (redundant) |
+| Route Pattern               | Zone                | Purpose                               |
+| --------------------------- | ------------------- | ------------------------------------- |
+| `oursharedevents.com/*`     | oursharedevents.com | Main domain - all traffic (canonical) |
+| `api.oursharedevents.com/*` | oursharedevents.com | API subdomain (redundant)             |
 
 **Staging Routes:**
 
-| Route Pattern | Zone | Purpose |
-|---------------|------|---------|
-| `stg.eventangle.com/*` | eventangle.com | Staging main domain |
-| `api-stg.eventangle.com/*` | eventangle.com | Staging API subdomain (redundant) |
+| Route Pattern                   | Zone                | Purpose                           |
+| ------------------------------- | ------------------- | --------------------------------- |
+| `stg.oursharedevents.com/*`     | oursharedevents.com | Staging main domain               |
+| `api-stg.oursharedevents.com/*` | oursharedevents.com | Staging API subdomain (redundant) |
 
 ### 2.2 Why Consolidation is Needed
 
 ```
 CURRENT STATE (Multiple Routes):
 ┌─────────────────┐         ┌─────────────────────────┐
-│   Client        │ ──────▶ │ eventangle.com/*        │───┐
+│   Client        │ ──────▶ │ oursharedevents.com/*        │───┐
 └─────────────────┘         └─────────────────────────┘   │
                             ┌─────────────────────────┐   │
-┌─────────────────┐ ──────▶ │ api.eventangle.com/*    │───┤  Same Worker
+┌─────────────────┐ ──────▶ │ api.oursharedevents.com/*    │───┤  Same Worker
 │   Client        │         └─────────────────────────┘   │
 └─────────────────┘                                       ▼
                                               ┌─────────────────┐
@@ -55,12 +55,12 @@ CURRENT STATE (Multiple Routes):
 ISSUES:
 - Route sprawl increases configuration complexity
 - Multiple entrypoints complicate security auditing
-- api.eventangle.com is redundant (all /api/* routes work on main domain)
+- api.oursharedevents.com is redundant (all /api/* routes work on main domain)
 - Potential for route drift between configurations
 
 TARGET STATE (Single Route):
 ┌─────────────────┐         ┌─────────────────────────┐
-│   All Traffic   │ ──────▶ │ eventangle.com/*        │──▶ Worker Router
+│   All Traffic   │ ──────▶ │ oursharedevents.com/*        │──▶ Worker Router
 └─────────────────┘         └─────────────────────────┘
 
 BENEFITS:
@@ -72,13 +72,13 @@ BENEFITS:
 
 ### 2.3 API Subdomain Analysis
 
-The `api.eventangle.com` subdomain routes to the same Worker and all endpoints are accessible via the main domain:
+The `api.oursharedevents.com` subdomain routes to the same Worker and all endpoints are accessible via the main domain:
 
-| API Endpoint | Main Domain | API Subdomain | Status |
-|--------------|-------------|---------------|--------|
-| `/api/status` | `eventangle.com/api/status` | `api.eventangle.com/api/status` | Both work |
-| `/api/v2/events` | `eventangle.com/api/v2/events` | `api.eventangle.com/api/v2/events` | Both work |
-| `/api/health/backend` | `eventangle.com/api/health/backend` | `api.eventangle.com/api/health/backend` | Both work |
+| API Endpoint          | Main Domain                              | API Subdomain                                | Status    |
+| --------------------- | ---------------------------------------- | -------------------------------------------- | --------- |
+| `/api/status`         | `oursharedevents.com/api/status`         | `api.oursharedevents.com/api/status`         | Both work |
+| `/api/v2/events`      | `oursharedevents.com/api/v2/events`      | `api.oursharedevents.com/api/v2/events`      | Both work |
+| `/api/health/backend` | `oursharedevents.com/api/health/backend` | `api.oursharedevents.com/api/health/backend` | Both work |
 
 **Conclusion:** The API subdomain provides no additional functionality and can be removed.
 
@@ -111,13 +111,13 @@ cat worker_routes_snapshot_*.json | jq '.result[] | {id, pattern, script}'
 
 #### 3.1.2 Export via Dashboard
 
-| Step | Action | Location |
-|------|--------|----------|
-| 1 | Log into Cloudflare dashboard | dash.cloudflare.com |
-| 2 | Select eventangle.com zone | Zone dropdown |
-| 3 | Navigate to Workers & Pages → Routes | Left sidebar |
-| 4 | Screenshot or document all routes | Routes table |
-| 5 | Save to incident response folder | Local documentation |
+| Step | Action                               | Location            |
+| ---- | ------------------------------------ | ------------------- |
+| 1    | Log into Cloudflare dashboard        | dash.cloudflare.com |
+| 2    | Select oursharedevents.com zone      | Zone dropdown       |
+| 3    | Navigate to Workers & Pages → Routes | Left sidebar        |
+| 4    | Screenshot or document all routes    | Routes table        |
+| 5    | Save to incident response folder     | Local documentation |
 
 #### 3.1.3 Document Route Snapshot
 
@@ -150,7 +150,7 @@ Verify all critical paths are working before migration.
 Run these tests against the **main domain** to confirm all functionality exists without the API subdomain:
 
 ```bash
-DOMAIN="eventangle.com"  # Use stg.eventangle.com for staging
+DOMAIN="oursharedevents.com"  # Use stg.oursharedevents.com for staging
 
 echo "=== Critical Path Verification ==="
 echo "Domain: $DOMAIN"
@@ -212,7 +212,7 @@ echo "=== Verification Complete ==="
 PRE-MIGRATION VERIFICATION - DATE: ___________
 DOMAIN: _______________
 
-MAIN DOMAIN TESTS (eventangle.com):
+MAIN DOMAIN TESTS (oursharedevents.com):
 [ ] /events returns HTTP 200
 [ ] /poster returns HTTP 200
 [ ] /admin returns HTTP 200 (or OAuth redirect)
@@ -224,7 +224,7 @@ MAIN DOMAIN TESTS (eventangle.com):
 [ ] / (root) returns HTTP 200
 
 API SUBDOMAIN TRAFFIC ANALYSIS:
-[ ] Reviewed access logs for api.eventangle.com
+[ ] Reviewed access logs for api.oursharedevents.com
 [ ] Identified any external integrations using api. subdomain
 [ ] Notified integration owners of upcoming change (if any)
 [ ] No critical dependencies on api. subdomain confirmed
@@ -243,14 +243,14 @@ Before removing the API subdomain route, add a redirect to preserve any existing
 
 #### 3.3.1 Create Redirect Rule via Dashboard
 
-| Step | Action | Location |
-|------|--------|----------|
-| 1 | Log into Cloudflare dashboard | dash.cloudflare.com |
-| 2 | Select eventangle.com zone | Zone dropdown |
-| 3 | Navigate to Rules → Redirect Rules | Left sidebar |
-| 4 | Click **Create rule** | Top right |
-| 5 | Configure rule (see below) | Rule editor |
-| 6 | Deploy | Save and deploy |
+| Step | Action                             | Location            |
+| ---- | ---------------------------------- | ------------------- |
+| 1    | Log into Cloudflare dashboard      | dash.cloudflare.com |
+| 2    | Select oursharedevents.com zone    | Zone dropdown       |
+| 3    | Navigate to Rules → Redirect Rules | Left sidebar        |
+| 4    | Click **Create rule**              | Top right           |
+| 5    | Configure rule (see below)         | Rule editor         |
+| 6    | Deploy                             | Save and deploy     |
 
 **Redirect Rule Configuration:**
 
@@ -260,11 +260,11 @@ Rule Name: SEC-4.2 API Subdomain to Main Domain Redirect
 When incoming requests match:
   Field: Hostname
   Operator: equals
-  Value: api.eventangle.com
+  Value: api.oursharedevents.com
 
 Then:
   Type: Dynamic
-  Expression: concat("https://eventangle.com", http.request.uri.path)
+  Expression: concat("https://oursharedevents.com", http.request.uri.path)
   Status code: 301 (Permanent Redirect)
   Preserve query string: ON
 ```
@@ -272,7 +272,7 @@ Then:
 #### 3.3.2 Create Redirect Rule via API
 
 ```bash
-# Create redirect rule for api.eventangle.com → eventangle.com
+# Create redirect rule for api.oursharedevents.com → oursharedevents.com
 curl -X POST "https://api.cloudflare.com/client/v4/zones/${CF_ZONE_ID}/rulesets/phases/http_request_dynamic_redirect/entrypoint" \
   -H "Authorization: Bearer ${CF_API_TOKEN}" \
   -H "Content-Type: application/json" \
@@ -287,13 +287,13 @@ curl -X POST "https://api.cloudflare.com/client/v4/zones/${CF_ZONE_ID}/rulesets/
           "from_value": {
             "status_code": 301,
             "target_url": {
-              "expression": "concat(\"https://eventangle.com\", http.request.uri.path)"
+              "expression": "concat(\"https://oursharedevents.com\", http.request.uri.path)"
             },
             "preserve_query_string": true
           }
         },
-        "expression": "(http.host eq \"api.eventangle.com\")",
-        "description": "Redirect api.eventangle.com to main domain"
+        "expression": "(http.host eq \"api.oursharedevents.com\")",
+        "description": "Redirect api.oursharedevents.com to main domain"
       }
     ]
   }'
@@ -303,13 +303,13 @@ curl -X POST "https://api.cloudflare.com/client/v4/zones/${CF_ZONE_ID}/rulesets/
 
 ```bash
 # Test redirect
-curl -sI "https://api.eventangle.com/api/status" 2>&1 | grep -E "^(HTTP|Location)"
+curl -sI "https://api.oursharedevents.com/api/status" 2>&1 | grep -E "^(HTTP|Location)"
 # Expected:
 # HTTP/2 301
-# location: https://eventangle.com/api/status
+# location: https://oursharedevents.com/api/status
 
 # Verify redirect resolves correctly
-curl -sIL "https://api.eventangle.com/api/status" 2>&1 | grep -E "^HTTP"
+curl -sIL "https://api.oursharedevents.com/api/status" 2>&1 | grep -E "^HTTP"
 # Expected:
 # HTTP/2 301 (redirect)
 # HTTP/2 200 (final destination)
@@ -329,58 +329,64 @@ Remove redundant routes one at a time with verification between each.
 **File: `cloudflare-proxy/wrangler.toml`**
 
 Before:
+
 ```toml
 [env.production]
 routes = [
-  { pattern = "eventangle.com/*", zone_name = "eventangle.com" },
-  { pattern = "api.eventangle.com/*", zone_name = "eventangle.com" }
+  { pattern = "oursharedevents.com/*", zone_name = "oursharedevents.com" },
+  { pattern = "api.oursharedevents.com/*", zone_name = "oursharedevents.com" }
 ]
 ```
 
 After:
+
 ```toml
 [env.production]
-# SEC-4.2: Single Worker entrypoint - api.eventangle.com redirected at edge
+# SEC-4.2: Single Worker entrypoint - api.oursharedevents.com redirected at edge
 routes = [
-  { pattern = "eventangle.com/*", zone_name = "eventangle.com" }
+  { pattern = "oursharedevents.com/*", zone_name = "oursharedevents.com" }
 ]
 ```
 
 **File: `worker/wrangler.toml`**
 
 Before:
+
 ```toml
 [env.production]
 routes = [
-  { pattern = "eventangle.com/*", zone_name = "eventangle.com" },
-  { pattern = "api.eventangle.com/*", zone_name = "eventangle.com" }
+  { pattern = "oursharedevents.com/*", zone_name = "oursharedevents.com" },
+  { pattern = "api.oursharedevents.com/*", zone_name = "oursharedevents.com" }
 ]
 ```
 
 After:
+
 ```toml
 [env.production]
-# SEC-4.2: Single Worker entrypoint - api.eventangle.com redirected at edge
+# SEC-4.2: Single Worker entrypoint - api.oursharedevents.com redirected at edge
 routes = [
-  { pattern = "eventangle.com/*", zone_name = "eventangle.com" }
+  { pattern = "oursharedevents.com/*", zone_name = "oursharedevents.com" }
 ]
 ```
 
 **File: `wrangler.toml` (root - staging)**
 
 Before:
+
 ```toml
 routes = [
-  { pattern = "stg.eventangle.com/*", zone_name = "eventangle.com" },
-  { pattern = "api-stg.eventangle.com/*", zone_name = "eventangle.com" }
+  { pattern = "stg.oursharedevents.com/*", zone_name = "oursharedevents.com" },
+  { pattern = "api-stg.oursharedevents.com/*", zone_name = "oursharedevents.com" }
 ]
 ```
 
 After:
+
 ```toml
-# SEC-4.2: Single Worker entrypoint - api-stg.eventangle.com redirected at edge
+# SEC-4.2: Single Worker entrypoint - api-stg.oursharedevents.com redirected at edge
 routes = [
-  { pattern = "stg.eventangle.com/*", zone_name = "eventangle.com" }
+  { pattern = "stg.oursharedevents.com/*", zone_name = "oursharedevents.com" }
 ]
 ```
 
@@ -407,7 +413,7 @@ Step 2: Deploy production changes
 
 Step 3: Remove API subdomain route via API (if not auto-removed)
 [ ] List current routes: curl workers/routes
-[ ] Identify api.eventangle.com route ID
+[ ] Identify api.oursharedevents.com route ID
 [ ] Delete route: curl -X DELETE workers/routes/{id}
 [ ] Verify route removed
 ```
@@ -415,7 +421,7 @@ Step 3: Remove API subdomain route via API (if not auto-removed)
 #### 3.4.3 Route Removal via API
 
 ```bash
-# List all routes to find the api.eventangle.com route ID
+# List all routes to find the api.oursharedevents.com route ID
 curl -s -X GET "https://api.cloudflare.com/client/v4/zones/${CF_ZONE_ID}/workers/routes" \
   -H "Authorization: Bearer ${CF_API_TOKEN}" \
   -H "Content-Type: application/json" | jq '.result[] | select(.pattern | contains("api.")) | {id, pattern}'
@@ -448,7 +454,7 @@ Save as `scripts/verify-route-collapse.sh`:
 # SEC-4.2 Route Collapse Verification Script
 # Usage: ./verify-route-collapse.sh [domain]
 
-DOMAIN="${1:-eventangle.com}"
+DOMAIN="${1:-oursharedevents.com}"
 PASS=0
 FAIL=0
 
@@ -508,7 +514,7 @@ check_json_ok "https://$DOMAIN/health/origin" "/health/origin"
 
 echo ""
 echo "=== API Subdomain Redirect ==="
-# Check that api.eventangle.com redirects properly
+# Check that api.oursharedevents.com redirects properly
 api_redirect=$(curl -sI "https://api.$DOMAIN/api/status" 2>/dev/null | grep -i "^location:" | awk '{print $2}' | tr -d '\r')
 if [[ "$api_redirect" == "https://$DOMAIN/api/status" ]]; then
     echo "  [PASS] api.$DOMAIN redirects to $DOMAIN"
@@ -580,13 +586,13 @@ MAIN DOMAIN FUNCTIONALITY:
 [ ] /health/origin returns ok: true
 
 API SUBDOMAIN REDIRECT:
-[ ] api.eventangle.com/api/status returns 301 redirect
-[ ] Redirect location is https://eventangle.com/api/status
+[ ] api.oursharedevents.com/api/status returns 301 redirect
+[ ] Redirect location is https://oursharedevents.com/api/status
 [ ] Following redirect returns correct response
 
 ROUTE CONFIGURATION:
-[ ] Only eventangle.com/* route exists in Cloudflare
-[ ] No api.eventangle.com/* route in Workers Routes
+[ ] Only oursharedevents.com/* route exists in Cloudflare
+[ ] No api.oursharedevents.com/* route in Workers Routes
 [ ] wrangler.toml files updated with SEC-4.2 comments
 
 MONITORING:
@@ -605,6 +611,7 @@ Timestamp: _______________
 ### 4.1 When to Rollback
 
 Rollback if any of these occur:
+
 - Critical path returns 5xx errors
 - Redirect loop detected
 - User reports of broken functionality
@@ -617,13 +624,13 @@ Rollback if any of these occur:
 #### 4.2.1 Restore API Subdomain Route via API
 
 ```bash
-# Re-add the api.eventangle.com route
+# Re-add the api.oursharedevents.com route
 curl -X POST "https://api.cloudflare.com/client/v4/zones/${CF_ZONE_ID}/workers/routes" \
   -H "Authorization: Bearer ${CF_API_TOKEN}" \
   -H "Content-Type: application/json" \
   --data '{
-    "pattern": "api.eventangle.com/*",
-    "script": "eventangle-prod"
+    "pattern": "api.oursharedevents.com/*",
+    "script": "oursharedevents-prod"
   }'
 
 # Verify route was added
@@ -633,12 +640,12 @@ curl -s -X GET "https://api.cloudflare.com/client/v4/zones/${CF_ZONE_ID}/workers
 
 #### 4.2.2 Disable Redirect Rule
 
-| Step | Action | Location |
-|------|--------|----------|
-| 1 | Navigate to Rules → Redirect Rules | Cloudflare Dashboard |
-| 2 | Find "SEC-4.2 API Subdomain Redirect" rule | Rules list |
-| 3 | Toggle rule to **Disabled** | Rule toggle |
-| 4 | Verify api.eventangle.com serves directly | curl test |
+| Step | Action                                         | Location             |
+| ---- | ---------------------------------------------- | -------------------- |
+| 1    | Navigate to Rules → Redirect Rules             | Cloudflare Dashboard |
+| 2    | Find "SEC-4.2 API Subdomain Redirect" rule     | Rules list           |
+| 3    | Toggle rule to **Disabled**                    | Rule toggle          |
+| 4    | Verify api.oursharedevents.com serves directly | curl test            |
 
 #### 4.2.3 Revert wrangler.toml Files
 
@@ -656,11 +663,11 @@ wrangler deploy --env production
 
 ```bash
 # Verify API subdomain serves directly (not redirect)
-curl -sI "https://api.eventangle.com/api/status" | head -1
+curl -sI "https://api.oursharedevents.com/api/status" | head -1
 # Expected: HTTP/2 200 (not 301)
 
 # Verify response is from Worker
-curl -s "https://api.eventangle.com/api/status" | jq '.ok'
+curl -s "https://api.oursharedevents.com/api/status" | jq '.ok'
 # Expected: true
 ```
 
@@ -673,16 +680,16 @@ TRIGGER:
 [ ] Documented reason for rollback: _______________
 
 ROLLBACK ACTIONS:
-[ ] Re-added api.eventangle.com/* route via API
+[ ] Re-added api.oursharedevents.com/* route via API
 [ ] Disabled redirect rule in dashboard
 [ ] Reverted wrangler.toml files
 [ ] Redeployed Worker (if needed)
 
 VERIFICATION:
-[ ] api.eventangle.com/api/status returns HTTP 200 directly
-[ ] api.eventangle.com/api/status returns ok: true
-[ ] eventangle.com/api/status returns ok: true
-[ ] No 301 redirect from api.eventangle.com
+[ ] api.oursharedevents.com/api/status returns HTTP 200 directly
+[ ] api.oursharedevents.com/api/status returns ok: true
+[ ] oursharedevents.com/api/status returns ok: true
+[ ] No 301 redirect from api.oursharedevents.com
 
 POST-ROLLBACK:
 [ ] Incident documented
@@ -699,33 +706,37 @@ Timestamp: _______________
 
 ### 5.1 Common Issues
 
-| Symptom | Likely Cause | Resolution |
-|---------|--------------|------------|
-| api.eventangle.com returns 522 | Route removed but redirect not added | Add redirect rule (Phase 3) |
-| Redirect loop | Redirect rule misconfigured | Verify redirect target doesn't include api. subdomain |
-| 404 on api.eventangle.com | Route removed, redirect not propagated | Wait 5 minutes for propagation |
-| 5xx errors after deployment | wrangler.toml syntax error | Check deployment logs, revert if needed |
-| External integration broken | Third party using api. subdomain | Contact integration owner, 301 should be followed |
+| Symptom                             | Likely Cause                           | Resolution                                            |
+| ----------------------------------- | -------------------------------------- | ----------------------------------------------------- |
+| api.oursharedevents.com returns 522 | Route removed but redirect not added   | Add redirect rule (Phase 3)                           |
+| Redirect loop                       | Redirect rule misconfigured            | Verify redirect target doesn't include api. subdomain |
+| 404 on api.oursharedevents.com      | Route removed, redirect not propagated | Wait 5 minutes for propagation                        |
+| 5xx errors after deployment         | wrangler.toml syntax error             | Check deployment logs, revert if needed               |
+| External integration broken         | Third party using api. subdomain       | Contact integration owner, 301 should be followed     |
 
 ### 5.2 Redirect Loop Prevention
 
 The redirect rule must NOT:
-- Redirect api.eventangle.com to api.eventangle.com (loop)
+
+- Redirect api.oursharedevents.com to api.oursharedevents.com (loop)
 - Include the api. prefix in the target URL
 
 **Correct:**
+
 ```
-api.eventangle.com/api/status → eventangle.com/api/status
+api.oursharedevents.com/api/status → oursharedevents.com/api/status
 ```
 
 **Incorrect:**
+
 ```
-api.eventangle.com/api/status → api.eventangle.com/api/status (loop!)
+api.oursharedevents.com/api/status → api.oursharedevents.com/api/status (loop!)
 ```
 
 ### 5.3 DNS Considerations
 
-If api.eventangle.com has a separate DNS record:
+If api.oursharedevents.com has a separate DNS record:
+
 - Record can remain (will hit Cloudflare proxy)
 - Redirect rule handles routing to main domain
 - No DNS changes required for this migration
@@ -736,13 +747,13 @@ If api.eventangle.com has a separate DNS record:
 
 ### 6.1 Success Criteria
 
-| # | Criterion | How to Verify |
-|---|-----------|---------------|
-| 1 | Single Worker route exists | Cloudflare Dashboard → Workers Routes shows only `eventangle.com/*` |
-| 2 | API subdomain redirects | `curl -sI api.eventangle.com/api/status` returns 301 to main domain |
-| 3 | All critical paths work | Run verification script (Phase 5) |
-| 4 | wrangler.toml updated | Files show single route with SEC-4.2 comment |
-| 5 | No errors in monitoring | Cloudflare Analytics shows normal error rates |
+| #   | Criterion                  | How to Verify                                                            |
+| --- | -------------------------- | ------------------------------------------------------------------------ |
+| 1   | Single Worker route exists | Cloudflare Dashboard → Workers Routes shows only `oursharedevents.com/*` |
+| 2   | API subdomain redirects    | `curl -sI api.oursharedevents.com/api/status` returns 301 to main domain |
+| 3   | All critical paths work    | Run verification script (Phase 5)                                        |
+| 4   | wrangler.toml updated      | Files show single route with SEC-4.2 comment                             |
+| 5   | No errors in monitoring    | Cloudflare Analytics shows normal error rates                            |
 
 ### 6.2 Final Verification Summary
 
@@ -750,8 +761,8 @@ If api.eventangle.com has a separate DNS record:
 SEC-4.2 COMPLIANCE VERIFICATION - DATE: ___________
 
 SINGLE ENTRYPOINT:
-[ ] Only eventangle.com/* route configured
-[ ] api.eventangle.com/* route removed
+[ ] Only oursharedevents.com/* route configured
+[ ] api.oursharedevents.com/* route removed
 [ ] Redirect rule active for api. subdomain
 
 CRITICAL PATHS FUNCTIONAL:
@@ -784,10 +795,10 @@ curl -s "https://api.cloudflare.com/client/v4/zones/${CF_ZONE_ID}/workers/routes
   -H "Authorization: Bearer ${CF_API_TOKEN}" | jq '.'
 
 # Test redirect
-curl -sIL "https://api.eventangle.com/api/status" | grep -E "^(HTTP|[Ll]ocation)"
+curl -sIL "https://api.oursharedevents.com/api/status" | grep -E "^(HTTP|[Ll]ocation)"
 
 # Verify critical paths
-./scripts/verify-route-collapse.sh eventangle.com
+./scripts/verify-route-collapse.sh oursharedevents.com
 
 # Delete a route
 curl -X DELETE "https://api.cloudflare.com/client/v4/zones/${CF_ZONE_ID}/workers/routes/${ROUTE_ID}" \
@@ -796,12 +807,12 @@ curl -X DELETE "https://api.cloudflare.com/client/v4/zones/${CF_ZONE_ID}/workers
 
 ### 7.2 Key URLs
 
-| Resource | URL |
-|----------|-----|
-| Cloudflare Dashboard | https://dash.cloudflare.com |
-| Workers Routes | Dashboard → Workers & Pages → Routes |
-| Redirect Rules | Dashboard → Rules → Redirect Rules |
-| Workers API Docs | https://developers.cloudflare.com/workers/configuration/routing/routes/ |
+| Resource             | URL                                                                     |
+| -------------------- | ----------------------------------------------------------------------- |
+| Cloudflare Dashboard | https://dash.cloudflare.com                                             |
+| Workers Routes       | Dashboard → Workers & Pages → Routes                                    |
+| Redirect Rules       | Dashboard → Rules → Redirect Rules                                      |
+| Workers API Docs     | https://developers.cloudflare.com/workers/configuration/routing/routes/ |
 
 ### 7.3 Decision Tree
 
@@ -831,18 +842,18 @@ Has the route snapshot been exported?
 
 ## 8. Related Documents
 
-| Document | Path | Relationship |
-|----------|------|--------------|
-| TLS Strict Baseline | `docs/security/TLS_STRICT_BASELINE.md` | TLS requirements for all routes |
-| HSTS Rollout | `docs/security/HSTS_ROLLOUT.md` | HSTS header configuration |
-| Canonical Host Runbook | `docs/RUNBOOK-SEC-4.1-CANONICAL-HOST.md` | www → apex redirect (related) |
-| Cloudflare Account Hardening | `docs/security/CF_ACCOUNT_HARDENING_RUNBOOK.md` | Account security |
-| Security Baseline | `docs/security/SECURITY_BASELINE.md` | Parent security model |
+| Document                     | Path                                            | Relationship                    |
+| ---------------------------- | ----------------------------------------------- | ------------------------------- |
+| TLS Strict Baseline          | `docs/security/TLS_STRICT_BASELINE.md`          | TLS requirements for all routes |
+| HSTS Rollout                 | `docs/security/HSTS_ROLLOUT.md`                 | HSTS header configuration       |
+| Canonical Host Runbook       | `docs/RUNBOOK-SEC-4.1-CANONICAL-HOST.md`        | www → apex redirect (related)   |
+| Cloudflare Account Hardening | `docs/security/CF_ACCOUNT_HARDENING_RUNBOOK.md` | Account security                |
+| Security Baseline            | `docs/security/SECURITY_BASELINE.md`            | Parent security model           |
 
 ---
 
 ## Document History
 
-| Date | Author | Changes |
-|------|--------|---------|
+| Date       | Author      | Changes                            |
+| ---------- | ----------- | ---------------------------------- |
 | 2026-01-05 | Claude Code | Initial PROMPTSPEC-SEC-4.2 runbook |

@@ -1,4 +1,4 @@
-# API Version Check - Sample Output (Story 3.2)
+﻿# API Version Check - Sample Output (Story 3.2)
 
 This document shows example output from the API version comparison tool.
 
@@ -23,8 +23,8 @@ Fetch Errors:  0
 
 ENVIRONMENTS
 ----------------------------------------
-Staging:    https://api-stg.eventangle.com
-Production: https://api.eventangle.com
+Staging:    https://api-stg.oursharedevents.com
+Production: https://api.oursharedevents.com
 
 ENDPOINT RESULTS
 ----------------------------------------
@@ -76,8 +76,8 @@ Fetch Errors:  0
 
 ENVIRONMENTS
 ----------------------------------------
-Staging:    https://api-stg.eventangle.com
-Production: https://api.eventangle.com
+Staging:    https://api-stg.oursharedevents.com
+Production: https://api.oursharedevents.com
 
 ENDPOINT RESULTS
 ----------------------------------------
@@ -130,8 +130,8 @@ Fetch Errors:  0
 
 ENVIRONMENTS
 ----------------------------------------
-Staging:    https://api-stg.eventangle.com
-Production: https://api.eventangle.com
+Staging:    https://api-stg.oursharedevents.com
+Production: https://api.oursharedevents.com
 
 ENDPOINT RESULTS
 ----------------------------------------
@@ -228,11 +228,11 @@ Overall Status: FAIL
   "environments": {
     "staging": {
       "name": "Staging",
-      "baseUrl": "https://api-stg.eventangle.com"
+      "baseUrl": "https://api-stg.oursharedevents.com"
     },
     "production": {
       "name": "Production",
-      "baseUrl": "https://api.eventangle.com"
+      "baseUrl": "https://api.oursharedevents.com"
     }
   }
 }
@@ -259,8 +259,8 @@ Overall Status: FAIL
 
 ## Environments
 
-- **Staging**: https://api-stg.eventangle.com
-- **Production**: https://api.eventangle.com
+- **Staging**: https://api-stg.oursharedevents.com
+- **Production**: https://api.oursharedevents.com
 
 ## Endpoint Results
 

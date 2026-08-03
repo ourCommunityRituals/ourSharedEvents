@@ -1,4 +1,4 @@
-# Worker Routing & HTML Asset Wiring
+﻿# Worker Routing & HTML Asset Wiring
 
 **Date:** 2025-12-08
 **Author:** Discovery / Story 1 & Story 2
@@ -12,7 +12,7 @@
 
 ```
                   +-----------------------+
-                  |   eventangle.com/*    |
+                  |   oursharedevents.com/*    |
                   +-----------+-----------+
                               |
                               v
@@ -192,7 +192,7 @@ const VALID_BRANDS = ['root', 'abc', 'cbc', 'cbl'];
 ### Worker Processing Flow
 
 ```
-1. Request: GET https://eventangle.com/events
+1. Request: GET https://oursharedevents.com/events
                     |
                     v
 2. Worker receives request
@@ -208,7 +208,7 @@ const VALID_BRANDS = ['root', 'abc', 'cbc', 'cbl'];
 4. extractRouteParams() called
    - page = 'events' → resolves to 'public' (via HTML_ROUTE_MAP)
    - brandId = 'root'
-   - brandName = 'EventAngle'
+   - brandName = 'oursharedevents'
    - scope = 'events'
                     |
                     v
@@ -262,13 +262,13 @@ npm run bundle:templates:check
 
 Variables replaced at runtime by Worker:
 
-| Variable          | Source                      | Example               |
-| ----------------- | --------------------------- | --------------------- |
-| `<?= appTitle ?>` | `brandName + ' · ' + scope` | "EventAngle · events" |
-| `<?= brandId ?>`  | URL path or query param     | "root"                |
-| `<?= scope ?>`    | URL path or brand config    | "events"              |
-| `<?= execUrl ?>`  | `env.API_BASE_URL`          | API base URL          |
-| `<?= demoMode ?>` | `?demo=true` query param    | "true" or "false"     |
+| Variable          | Source                      | Example                    |
+| ----------------- | --------------------------- | -------------------------- |
+| `<?= appTitle ?>` | `brandName + ' · ' + scope` | "oursharedevents · events" |
+| `<?= brandId ?>`  | URL path or query param     | "root"                     |
+| `<?= scope ?>`    | URL path or brand config    | "events"                   |
+| `<?= execUrl ?>`  | `env.API_BASE_URL`          | API base URL               |
+| `<?= demoMode ?>` | `?demo=true` query param    | "true" or "false"          |
 
 ### Template Loading (worker.js:260-279)
 
@@ -356,12 +356,12 @@ The function `proxyPageRequest()` has been renamed to `proxyPageRequest_DEPRECAT
 
 ### Deployment Environments
 
-| Environment | Domain                 | Config             |
-| ----------- | ---------------------- | ------------------ |
-| Production  | `eventangle.com/*`     | `[env.production]` |
-| Staging     | `stg.eventangle.com/*` | `[env.staging]`    |
-| API-only    | `api.eventangle.com/*` | `[env.api-only]`   |
-| Development | `*.workers.dev`        | Default            |
+| Environment | Domain                      | Config             |
+| ----------- | --------------------------- | ------------------ |
+| Production  | `oursharedevents.com/*`     | `[env.production]` |
+| Staging     | `stg.oursharedevents.com/*` | `[env.staging]`    |
+| API-only    | `api.oursharedevents.com/*` | `[env.api-only]`   |
+| Development | `*.workers.dev`             | Default            |
 
 ---
 

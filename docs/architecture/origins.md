@@ -1,9 +1,9 @@
-# Origin Map - Epic EA-001
+﻿# Origin Map - Epic EA-001
 
 > **Story 1.1**: Origin Map & Runtime Graph
 >
 > Single source of truth for all origin/base URL configurations across the codebase.
-> Focus: **Staging environment** (`stg.eventangle.com`)
+> Focus: **Staging environment** (`stg.oursharedevents.com`)
 
 **Last Updated**: 2025-12-14
 **Status**: Story 5.3 Complete - GAS backend ARCHIVED, Worker-only architecture
@@ -18,10 +18,10 @@
 
 All public traffic **MUST** flow through Cloudflare Workers:
 
-| Environment    | Canonical URL                | Backend           |
-| -------------- | ---------------------------- | ----------------- |
-| **Staging**    | `https://stg.eventangle.com` | Cloudflare Worker |
-| **Production** | `https://www.eventangle.com` | Cloudflare Worker |
+| Environment    | Canonical URL                     | Backend           |
+| -------------- | --------------------------------- | ----------------- |
+| **Staging**    | `https://stg.oursharedevents.com` | Cloudflare Worker |
+| **Production** | `https://www.oursharedevents.com` | Cloudflare Worker |
 
 These are the **only** origins permitted in CI pipelines, runtime code, and tests.
 
@@ -72,7 +72,7 @@ node scripts/check-banned-origins.mjs
 
 Before merging any new feature, ask:
 
-- [ ] **Does this call any URL not under `eventangle.com`?**
+- [ ] **Does this call any URL not under `oursharedevents.com`?**
   - If yes: **Why?** Document the justification.
   - If calling external APIs (Google Sheets API, etc.): Ensure it's from the Worker, not frontend.
 - [ ] **Does this introduce any `script.google.com` references?**
@@ -81,7 +81,7 @@ Before merging any new feature, ask:
 
 ### Adding New Origins
 
-If you add a new origin (e.g., a dedicated API domain like `api.eventangle.com`):
+If you add a new origin (e.g., a dedicated API domain like `api.oursharedevents.com`):
 
 1. **Update this document** (`docs/origins.md`) in the **same PR**
 2. Add the new origin to the "Public Origins" table above
@@ -97,8 +97,8 @@ As of Story 5.3, **all traffic flows through Cloudflare Workers**. The Google Ap
 
 | Environment    | Canonical URL                                  | Backend            | Status       |
 | -------------- | ---------------------------------------------- | ------------------ | ------------ |
-| **Staging**    | `https://stg.eventangle.com`                   | Cloudflare Worker  | **ACTIVE**   |
-| **Production** | `https://www.eventangle.com`                   | Cloudflare Worker  | **ACTIVE**   |
+| **Staging**    | `https://stg.oursharedevents.com`              | Cloudflare Worker  | **ACTIVE**   |
+| **Production** | `https://www.oursharedevents.com`              | Cloudflare Worker  | **ACTIVE**   |
 | **GAS Direct** | `https://script.google.com/macros/s/{ID}/exec` | Google Apps Script | **ARCHIVED** |
 
 ---
@@ -107,10 +107,10 @@ As of Story 5.3, **all traffic flows through Cloudflare Workers**. The Google Ap
 
 ### 1.1 Primary Staging URLs
 
-| URL                              | Purpose           | Configured In                     | Status     |
-| -------------------------------- | ----------------- | --------------------------------- | ---------- |
-| `https://stg.eventangle.com`     | Main staging site | `wrangler.toml`, workflows, tests | **ACTIVE** |
-| `https://api-stg.eventangle.com` | Staging API       | `wrangler.toml` routes            | **ACTIVE** |
+| URL                                   | Purpose           | Configured In                     | Status     |
+| ------------------------------------- | ----------------- | --------------------------------- | ---------- |
+| `https://stg.oursharedevents.com`     | Main staging site | `wrangler.toml`, workflows, tests | **ACTIVE** |
+| `https://api-stg.oursharedevents.com` | Staging API       | `wrangler.toml` routes            | **ACTIVE** |
 
 ### 1.2 Configuration Sources
 
@@ -119,8 +119,8 @@ As of Story 5.3, **all traffic flows through Cloudflare Workers**. The Google Ap
 ```toml
 # Lines 29-32
 routes = [
-  { pattern = "stg.eventangle.com/*", zone_name = "eventangle.com" },
-  { pattern = "api-stg.eventangle.com/*", zone_name = "eventangle.com" }
+  { pattern = "stg.oursharedevents.com/*", zone_name = "oursharedevents.com" },
+  { pattern = "api-stg.oursharedevents.com/*", zone_name = "oursharedevents.com" }
 ]
 
 # Line 49 - Worker-only mode
@@ -132,8 +132,8 @@ BACKEND_MODE = "worker"
 ```toml
 # [env.staging] Lines 159-166
 routes = [
-  { pattern = "stg.eventangle.com/*", zone_name = "eventangle.com" },
-  { pattern = "api-stg.eventangle.com/*", zone_name = "eventangle.com" }
+  { pattern = "stg.oursharedevents.com/*", zone_name = "oursharedevents.com" },
+  { pattern = "api-stg.oursharedevents.com/*", zone_name = "oursharedevents.com" }
 ]
 
 # Line 194 - Worker-only mode
@@ -142,22 +142,22 @@ BACKEND_MODE = "worker"
 
 #### GitHub Workflows
 
-| Workflow                 | Variable       | Value                        | File:Line |
-| ------------------------ | -------------- | ---------------------------- | --------- |
-| `stage1.yml`             | `STG_BASE_URL` | `https://stg.eventangle.com` | Line 55   |
-| `stage1.yml`             | `STAGING_URL`  | `https://stg.eventangle.com` | Line 58   |
-| `stage2.yml`             | `STG_BASE_URL` | `https://stg.eventangle.com` | Line 94   |
-| `stage2.yml`             | `STAGING_URL`  | `https://stg.eventangle.com` | Line 95   |
-| `stage2-smoke.yml`       | `STG_BASE_URL` | `https://stg.eventangle.com` | Line 78   |
-| `e2e-staging-stable.yml` | `BASE_URL`     | `https://stg.eventangle.com` | Line 44   |
-| `rollback.yml`           | `STG_BASE_URL` | `https://stg.eventangle.com` | Line 56   |
-| `prod-parity-check.yml`  | `STG_BASE_URL` | `https://stg.eventangle.com` | Line 51   |
+| Workflow                 | Variable       | Value                             | File:Line |
+| ------------------------ | -------------- | --------------------------------- | --------- |
+| `stage1.yml`             | `STG_BASE_URL` | `https://stg.oursharedevents.com` | Line 55   |
+| `stage1.yml`             | `STAGING_URL`  | `https://stg.oursharedevents.com` | Line 58   |
+| `stage2.yml`             | `STG_BASE_URL` | `https://stg.oursharedevents.com` | Line 94   |
+| `stage2.yml`             | `STAGING_URL`  | `https://stg.oursharedevents.com` | Line 95   |
+| `stage2-smoke.yml`       | `STG_BASE_URL` | `https://stg.oursharedevents.com` | Line 78   |
+| `e2e-staging-stable.yml` | `BASE_URL`     | `https://stg.oursharedevents.com` | Line 44   |
+| `rollback.yml`           | `STG_BASE_URL` | `https://stg.oursharedevents.com` | Line 56   |
+| `prod-parity-check.yml`  | `STG_BASE_URL` | `https://stg.oursharedevents.com` | Line 51   |
 
 #### Test Configuration
 
 | File                               | Variable/Function | Default Value                           |
 | ---------------------------------- | ----------------- | --------------------------------------- |
-| `config/environments.js:58`        | `STAGING_URL`     | `https://stg.eventangle.com`            |
+| `config/environments.js:58`        | `STAGING_URL`     | `https://stg.oursharedevents.com`       |
 | `playwright.config.js:51`          | `baseURL`         | `env.baseUrl` (defaults to staging)     |
 | `playwright.staging.config.js:20`  | `baseUrl`         | `process.env.BASE_URL \|\| STAGING_URL` |
 | `playwright.ui-smoke.config.ts:70` | `baseURL`         | `getBaseUrl()` (defaults to staging)    |
@@ -170,8 +170,8 @@ BACKEND_MODE = "worker"
   "environments": {
     "staging": {
       "urls": {
-        "baseUrl": "https://stg.eventangle.com",
-        "apiUrl": "https://api-stg.eventangle.com"
+        "baseUrl": "https://stg.oursharedevents.com",
+        "apiUrl": "https://api-stg.oursharedevents.com"
       }
     }
   }
@@ -256,8 +256,10 @@ BACKEND_MODE = "worker"
 ```javascript
 // Lines 781-784 - Environment detection
 state.isStaging =
-  isDomain(hostname, 'stg.eventangle.com') || hostname === 'localhost' || hostname === '127.0.0.1';
-state.isProduction = isDomain(hostname, 'eventangle.com') && !state.isStaging;
+  isDomain(hostname, 'stg.oursharedevents.com') ||
+  hostname === 'localhost' ||
+  hostname === '127.0.0.1';
+state.isProduction = isDomain(hostname, 'oursharedevents.com') && !state.isStaging;
 ```
 
 **Status**: **ACTIVE** - No GAS references, uses relative `/api` paths
@@ -268,7 +270,7 @@ state.isProduction = isDomain(hostname, 'eventangle.com') && !state.isStaging;
 | -------------------------- | ------------------------------------------- | ------------------- |
 | `detectEnvironment()`      | `staging \| production \| local \| unknown` | No GAS detection    |
 | `getApiBackend()`          | Always `'worker'`                           | GAS backend removed |
-| `getBaseApiUrl('staging')` | `https://stg.eventangle.com`                | Hardcoded           |
+| `getBaseApiUrl('staging')` | `https://stg.oursharedevents.com`           | Hardcoded           |
 
 **Status**: **ACTIVE** - Story 5.2 removed all GAS references
 
@@ -282,7 +284,7 @@ state.isProduction = isDomain(hostname, 'eventangle.com') && !state.isStaging;
 1. process.env.BASE_URL          (explicit override)
 2. process.env.USE_PRODUCTION    (if true → production)
 3. getEnvironment().baseUrl      (config/environments.js)
-4. DEFAULT: staging              (https://stg.eventangle.com)
+4. DEFAULT: staging              (https://stg.oursharedevents.com)
 ```
 
 ### 4.2 Playwright Config Files
@@ -302,21 +304,21 @@ state.isProduction = isDomain(hostname, 'eventangle.com') && !state.isStaging;
 
 ### 5.1 Stage-1 Workflow (`stage1.yml`)
 
-| Job                           | Target     | URL Source                        |
-| ----------------------------- | ---------- | --------------------------------- |
-| `deploy-staging-worker`       | Staging    | `stg.eventangle.com` via wrangler |
-| `validate-staging-deployment` | Staging    | `$STG_BASE_URL` env var           |
-| `deploy-production-worker`    | Production | `www.eventangle.com` via wrangler |
+| Job                           | Target     | URL Source                             |
+| ----------------------------- | ---------- | -------------------------------------- |
+| `deploy-staging-worker`       | Staging    | `stg.oursharedevents.com` via wrangler |
+| `validate-staging-deployment` | Staging    | `$STG_BASE_URL` env var                |
+| `deploy-production-worker`    | Production | `www.oursharedevents.com` via wrangler |
 
 **GAS References in Stage-1**: Lines 1373, 1450, 2078, 2165, 2174 - **LEGACY** (GAS deployment steps, now archived)
 
 ### 5.2 Stage-2 Workflow (`stage2.yml`)
 
-| Variable        | Value                        | Used By                |
-| --------------- | ---------------------------- | ---------------------- |
-| `STG_BASE_URL`  | `https://stg.eventangle.com` | Staging smoke tests    |
-| `STAGING_URL`   | `https://stg.eventangle.com` | Legacy alias           |
-| `PROD_BASE_URL` | `https://www.eventangle.com` | Production smoke tests |
+| Variable        | Value                             | Used By                |
+| --------------- | --------------------------------- | ---------------------- |
+| `STG_BASE_URL`  | `https://stg.oursharedevents.com` | Staging smoke tests    |
+| `STAGING_URL`   | `https://stg.oursharedevents.com` | Legacy alias           |
+| `PROD_BASE_URL` | `https://www.oursharedevents.com` | Production smoke tests |
 
 **Status**: **ACTIVE** - No GAS URLs used in runtime tests
 
@@ -369,33 +371,33 @@ For later stories, add these CI gates:
 
 ```bash
 # Primary staging
-https://stg.eventangle.com
+https://stg.oursharedevents.com
 
 # API staging
-https://api-stg.eventangle.com
+https://api-stg.oursharedevents.com
 
 # Test commands
 npm run test:smoke                    # Default: staging
-BASE_URL="https://stg.eventangle.com" npm run test:smoke  # Explicit
+BASE_URL="https://stg.oursharedevents.com" npm run test:smoke  # Explicit
 ```
 
 ### Environment Variables
 
 ```bash
 # Staging (default)
-STG_BASE_URL=https://stg.eventangle.com
-STAGING_URL=https://stg.eventangle.com
+STG_BASE_URL=https://stg.oursharedevents.com
+STAGING_URL=https://stg.oursharedevents.com
 
 # Production
-PROD_BASE_URL=https://www.eventangle.com
-PROD_URL=https://www.eventangle.com
+PROD_BASE_URL=https://www.oursharedevents.com
+PROD_URL=https://www.oursharedevents.com
 ```
 
 ### Cloudflare Worker Routes
 
 ```
-stg.eventangle.com/*      → eventangle-staging worker
-api-stg.eventangle.com/*  → eventangle-staging worker
-www.eventangle.com/*      → eventangle-prod worker
-api.eventangle.com/*      → eventangle-prod worker
+stg.oursharedevents.com/*      → oursharedevents-staging worker
+api-stg.oursharedevents.com/*  → oursharedevents-staging worker
+www.oursharedevents.com/*      → oursharedevents-prod worker
+api.oursharedevents.com/*      → oursharedevents-prod worker
 ```

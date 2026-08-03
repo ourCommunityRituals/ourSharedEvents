@@ -1,4 +1,4 @@
-# RUNBOOK: Releases, Incidents & SEV Response
+﻿# RUNBOOK: Releases, Incidents & SEV Response
 
 **When something breaks, you don't want to think. You want steps.**
 
@@ -104,10 +104,10 @@ npm run test:prod:smoke
 npm run test:prod:health
 
 # 6. Spot check all brands
-curl -s https://www.eventangle.com/status | jq '.ok'
-curl -s https://www.eventangle.com/abc/status | jq '.ok'
-curl -s https://www.eventangle.com/cbc/status | jq '.ok'
-curl -s https://www.eventangle.com/cbl/status | jq '.ok'
+curl -s https://www.oursharedevents.com/status | jq '.ok'
+curl -s https://www.oursharedevents.com/abc/status | jq '.ok'
+curl -s https://www.oursharedevents.com/cbc/status | jq '.ok'
+curl -s https://www.oursharedevents.com/cbl/status | jq '.ok'
 ```
 
 ### Release Gates Summary
@@ -136,20 +136,20 @@ curl -s https://www.eventangle.com/cbl/status | jq '.ok'
 
 ### SEV1 Triggers (Immediate Action)
 
-| Trigger                        | Detection                      | Example                                        |
-| ------------------------------ | ------------------------------ | ---------------------------------------------- |
-| **Status endpoint 500**        | `/status` returns error        | `curl https://www.eventangle.com/status` fails |
-| **All brands unreachable**     | All `/events` return 5xx       | Complete public outage                         |
-| **Cloudflare Worker down**     | 522/523 errors                 | Proxy layer broken                             |
-| **Apps Script quota exceeded** | 403 with quota message         | Backend unreachable                            |
-| **Data corruption**            | Events missing/malformed       | DATA_ISSUES sheet has RED rows                 |
-| **Auth system broken**         | Admin operations fail globally | Cannot manage events                           |
+| Trigger                        | Detection                      | Example                                             |
+| ------------------------------ | ------------------------------ | --------------------------------------------------- |
+| **Status endpoint 500**        | `/status` returns error        | `curl https://www.oursharedevents.com/status` fails |
+| **All brands unreachable**     | All `/events` return 5xx       | Complete public outage                              |
+| **Cloudflare Worker down**     | 522/523 errors                 | Proxy layer broken                                  |
+| **Apps Script quota exceeded** | 403 with quota message         | Backend unreachable                                 |
+| **Data corruption**            | Events missing/malformed       | DATA_ISSUES sheet has RED rows                      |
+| **Auth system broken**         | Admin operations fail globally | Cannot manage events                                |
 
 **SEV1 Immediate Actions:**
 
 ```bash
 # 1. Confirm outage
-curl -s https://www.eventangle.com/status | jq '.ok'
+curl -s https://www.oursharedevents.com/status | jq '.ok'
 
 # 2. If false or error → check if recent deploy
 gh run list --workflow="Stage 1 - Build & Deploy" --limit 5
@@ -181,7 +181,7 @@ npm run test:prod:health
 ```bash
 # 1. Identify affected brand/feature
 for brand in root abc cbc cbl; do
-  echo "$brand: $(curl -s https://www.eventangle.com/$brand/status | jq -r '.ok')"
+  echo "$brand: $(curl -s https://www.oursharedevents.com/$brand/status | jq -r '.ok')"
 done
 
 # 2. Isolate: Is it brand-specific or code?
@@ -233,7 +233,7 @@ npm run test:contract 2>&1 | grep -A5 "FAIL"
 
 ```bash
 # 1. Check sponsor endpoint
-curl -s "https://www.eventangle.com/events?action=api_listSponsors&brand=root" | jq
+curl -s "https://www.oursharedevents.com/events?action=api_listSponsors&brand=root" | jq
 
 # 2. Verify sponsor contract
 npm test -- tests/contract/sponsor-contract.test.js
@@ -250,12 +250,12 @@ npm test -- tests/contract/sponsor-brand-isolation.smoke.test.js
 
 ### 3.1 URLs to Verify System Status
 
-| Check                   | URL                                         | What You're Looking For                                |
-| ----------------------- | ------------------------------------------- | ------------------------------------------------------ |
-| **Ping** (fastest)      | `https://www.eventangle.com/ping`           | `{"status":"ok"}`                                      |
-| **Status** (SLO anchor) | `https://www.eventangle.com/status`         | `{"ok":true,"buildId":"mvp-v19","db":{"ok":true},...}` |
-| **Setup Diagnostics**   | `https://www.eventangle.com/status?p=setup` | 6-point diagnostic check                               |
-| **Staging**             | `https://stg.eventangle.com/ping`           | Verify staging is separate from prod                   |
+| Check                   | URL                                              | What You're Looking For                                |
+| ----------------------- | ------------------------------------------------ | ------------------------------------------------------ |
+| **Ping** (fastest)      | `https://www.oursharedevents.com/ping`           | `{"status":"ok"}`                                      |
+| **Status** (SLO anchor) | `https://www.oursharedevents.com/status`         | `{"ok":true,"buildId":"mvp-v19","db":{"ok":true},...}` |
+| **Setup Diagnostics**   | `https://www.oursharedevents.com/status?p=setup` | 6-point diagnostic check                               |
+| **Staging**             | `https://stg.oursharedevents.com/ping`           | Verify staging is separate from prod                   |
 
 ### 3.2 External Uptime Dashboard
 
@@ -292,20 +292,20 @@ DIAG stale (>24hr)?    → Bad, something stopped logging
 
 ```bash
 # Quick ping - should return instantly
-curl -s https://www.eventangle.com/ping
+curl -s https://www.oursharedevents.com/ping
 
 # Detailed status with timing
 curl -s -w "\nHTTP: %{http_code} | Time: %{time_total}s\n" \
-  https://www.eventangle.com/status | jq
+  https://www.oursharedevents.com/status | jq
 
 # Full 6-point diagnostic
-curl -s "https://www.eventangle.com/status?p=setup&brand=root" | jq '.value.checks'
+curl -s "https://www.oursharedevents.com/status?p=setup&brand=root" | jq '.value.checks'
 
 # Bypass Cloudflare - test GAS directly
 curl -s "https://script.google.com/macros/s/AKfycbyS1cW9VhviR-Jr8AmYY_BAGrb1gzuKkrgEBP2M3bMdqAv4ktqHOZInWV8ogkpz5i8SYQ/exec?p=ping"
 
 # Check current build ID
-curl -s https://www.eventangle.com/status | jq '.buildId'
+curl -s https://www.oursharedevents.com/status | jq '.buildId'
 ```
 
 ### 3.5 Synthetic Health Checks (Story 3.2)
@@ -335,18 +335,18 @@ npm run test:synthetic:json
 
 ```bash
 # Check /health/origin
-curl -s https://stg.eventangle.com/health/origin | jq
+curl -s https://stg.oursharedevents.com/health/origin | jq
 
 # Verify assertions
-curl -s https://stg.eventangle.com/health/origin | jq '{ok, env}'
+curl -s https://stg.oursharedevents.com/health/origin | jq '{ok, env}'
 # Expected: {"ok":true,"env":"staging"}
 
 # Check /events page
-curl -s -o /dev/null -w "%{http_code}" https://stg.eventangle.com/events
+curl -s -o /dev/null -w "%{http_code}" https://stg.oursharedevents.com/events
 # Expected: 200
 
 # Check events page marker
-curl -s https://stg.eventangle.com/events | grep -o 'data-testid="events-root"'
+curl -s https://stg.oursharedevents.com/events | grep -o 'data-testid="events-root"'
 # Expected: data-testid="events-root"
 ```
 
@@ -360,7 +360,7 @@ See: [docs/SYNTHETIC_MONITORING.md](./docs/SYNTHETIC_MONITORING.md) for full set
 
 **Symptoms:**
 
-- 500 errors from eventangle.com
+- 500 errors from oursharedevents.com
 - Status returns `"ok": false`
 - Error messages mention "Script error" or "Service unavailable"
 - Everything was working, then a deployment happened
@@ -368,7 +368,7 @@ See: [docs/SYNTHETIC_MONITORING.md](./docs/SYNTHETIC_MONITORING.md) for full set
 **Diagnosis Checklist:**
 
 1. Check recent GitHub Actions: https://github.com/zeventbooks/MVP-EVENT-TOOLKIT/actions
-2. Compare build IDs: `curl -s https://www.eventangle.com/status | jq '.buildId'`
+2. Compare build IDs: `curl -s https://www.oursharedevents.com/status | jq '.buildId'`
 3. Check Google Apps Script status: https://www.google.com/appsstatus
 4. Test GAS directly (bypasses Cloudflare):
    ```bash
@@ -377,7 +377,7 @@ See: [docs/SYNTHETIC_MONITORING.md](./docs/SYNTHETIC_MONITORING.md) for full set
 
 **Resolution:**
 
-- **If GAS direct URL works but eventangle.com doesn't:** Problem is Cloudflare Worker (see 2.2)
+- **If GAS direct URL works but oursharedevents.com doesn't:** Problem is Cloudflare Worker (see 2.2)
 - **If GAS direct URL also fails:**
   - Check Google Apps Script status page
   - If Google is up, recent deployment likely broke something → **Rollback GAS** (see 3.1)
@@ -396,17 +396,17 @@ See: [docs/SYNTHETIC_MONITORING.md](./docs/SYNTHETIC_MONITORING.md) for full set
 
 **Diagnosis Checklist:**
 
-1. Check Cloudflare Worker logs: Dashboard > Workers > eventangle-events > Logs
+1. Check Cloudflare Worker logs: Dashboard > Workers > oursharedevents-events > Logs
 2. Test specific routes:
 
    ```bash
    # Test friendly URL routing
-   curl -s -I https://www.eventangle.com/manage
-   curl -s -I https://www.eventangle.com/display
-   curl -s -I https://www.eventangle.com/abc/events
+   curl -s -I https://www.oursharedevents.com/manage
+   curl -s -I https://www.oursharedevents.com/display
+   curl -s -I https://www.oursharedevents.com/abc/events
 
    # Check X-Proxied-By header
-   curl -s -I https://www.eventangle.com/ping | grep -i x-proxied
+   curl -s -I https://www.oursharedevents.com/ping | grep -i x-proxied
    ```
 
 3. Verify `DEPLOYMENT_ID` in wrangler.toml matches production GAS deployment
@@ -434,11 +434,11 @@ See: [docs/SYNTHETIC_MONITORING.md](./docs/SYNTHETIC_MONITORING.md) for full set
 2. Check DATA_ISSUES sheet for analytics-related errors
 3. Test the analytics bundle endpoint:
    ```bash
-   curl -s "https://www.eventangle.com/api?action=getSharedAnalytics&brand=root" | jq
+   curl -s "https://www.oursharedevents.com/api?action=getSharedAnalytics&brand=root" | jq
    ```
 4. Check for recent events with analytics:
    ```bash
-   curl -s "https://www.eventangle.com/api?action=listEvents&brand=root" | jq '.value | length'
+   curl -s "https://www.oursharedevents.com/api?action=listEvents&brand=root" | jq '.value | length'
    ```
 
 **Resolution:**
@@ -553,7 +553,7 @@ If you have a manual spreadsheet copy:
 4. Rename original EVENTS to `EVENTS_CORRUPTED_YYYYMMDD`
 5. Rename copied sheet to `EVENTS`
 6. Verify event count matches expected
-7. Test: `curl -s "https://www.eventangle.com/api?action=listEvents&brand=root" | jq '.value | length'`
+7. Test: `curl -s "https://www.oursharedevents.com/api?action=listEvents&brand=root" | jq '.value | length'`
 
 ### Option C: Partial Recovery from Archives
 
@@ -568,10 +568,10 @@ If DIAG_ARCHIVE sheets exist with event creation logs:
 
 ```bash
 # Verify events are accessible
-curl -s "https://www.eventangle.com/api?action=listEvents&brand=root" | jq '.value | length'
+curl -s "https://www.oursharedevents.com/api?action=listEvents&brand=root" | jq '.value | length'
 
 # Test a specific event
-curl -s "https://www.eventangle.com/api?action=getPublicBundle&slug=test-event&brand=root" | jq '.ok'
+curl -s "https://www.oursharedevents.com/api?action=getPublicBundle&slug=test-event&brand=root" | jq '.ok'
 
 # Check for data issues
 # Open DATA_ISSUES sheet - should be empty or have only warnings
@@ -621,8 +621,8 @@ Use this ONLY if CI is completely broken:
 4. **Verify:**
 
    ```bash
-   curl -s https://www.eventangle.com/ping
-   curl -s https://www.eventangle.com/status | jq '.buildId'
+   curl -s https://www.oursharedevents.com/ping
+   curl -s https://www.oursharedevents.com/status | jq '.buildId'
    ```
 
 5. **Document Immediately:**
@@ -653,7 +653,7 @@ cd cloudflare-proxy && wrangler deploy --env events
 **Option B: Cloudflare Dashboard Rollback**
 
 1. **Open Cloudflare Dashboard:**
-   https://dash.cloudflare.com/ > Workers & Pages > eventangle-events
+   https://dash.cloudflare.com/ > Workers & Pages > oursharedevents-events
 
 2. **View Deployments:**
    - Click "Deployments" tab
@@ -662,8 +662,8 @@ cd cloudflare-proxy && wrangler deploy --env events
 
 3. **Verify:**
    ```bash
-   curl -s -I https://www.eventangle.com/ping | grep -i x-worker-version
-   curl -s https://www.eventangle.com/status
+   curl -s -I https://www.oursharedevents.com/ping | grep -i x-worker-version
+   curl -s https://www.oursharedevents.com/status
    ```
 
 **Option C: Fix DEPLOYMENT_ID Mismatch**
@@ -702,9 +702,9 @@ Harbor is likely your operations partner or client. They're calling because some
 
 ```bash
 # Run these immediately
-curl -s https://www.eventangle.com/ping
-curl -s https://www.eventangle.com/status | jq '.ok'
-curl -s "https://www.eventangle.com/status?p=setup" | jq '.value.checks[] | select(.ok == false)'
+curl -s https://www.oursharedevents.com/ping
+curl -s https://www.oursharedevents.com/status | jq '.ok'
+curl -s "https://www.oursharedevents.com/status?p=setup" | jq '.value.checks[] | select(.ok == false)'
 ```
 
 **Report template:**
@@ -734,21 +734,21 @@ curl -s "https://www.eventangle.com/status?p=setup" | jq '.value.checks[] | sele
 
 ```bash
 # List events for the brand
-curl -s "https://www.eventangle.com/api?action=listEvents&brand=abc" | jq '.value[] | {id, slug, name}'
+curl -s "https://www.oursharedevents.com/api?action=listEvents&brand=abc" | jq '.value[] | {id, slug, name}'
 ```
 
 **Check 2: Is the specific event accessible?**
 
 ```bash
 # Get the event by slug
-curl -s "https://www.eventangle.com/api?action=getEvent&slug=their-event-slug&brand=abc" | jq
+curl -s "https://www.oursharedevents.com/api?action=getEvent&slug=their-event-slug&brand=abc" | jq
 ```
 
 **Check 3: Is the public bundle loading?**
 
 ```bash
 # Get the public bundle
-curl -s "https://www.eventangle.com/api?action=getPublicBundle&slug=their-event-slug&brand=abc" | jq '.ok'
+curl -s "https://www.oursharedevents.com/api?action=getPublicBundle&slug=their-event-slug&brand=abc" | jq '.ok'
 ```
 
 **Common Causes & Fixes:**
@@ -770,7 +770,7 @@ When something's broken and you don't know why:
 #### First (0-2 minutes): Is the system alive?
 
 ```bash
-curl -s -w "Time: %{time_total}s\n" https://www.eventangle.com/ping
+curl -s -w "Time: %{time_total}s\n" https://www.oursharedevents.com/ping
 ```
 
 - **If fails:** System is down. Check Cloudflare status, Google status.
@@ -781,7 +781,7 @@ curl -s -w "Time: %{time_total}s\n" https://www.eventangle.com/ping
 
 ```bash
 # Test Cloudflare → GAS chain
-curl -s https://www.eventangle.com/status | jq '.ok'
+curl -s https://www.oursharedevents.com/status | jq '.ok'
 
 # Test GAS directly (bypass Cloudflare)
 curl -s "https://script.google.com/macros/s/AKfycbyS1cW9VhviR-Jr8AmYY_BAGrb1gzuKkrgEBP2M3bMdqAv4ktqHOZInWV8ogkpz5i8SYQ/exec?p=status" | jq '.ok'
@@ -795,7 +795,7 @@ curl -s "https://script.google.com/macros/s/AKfycbyS1cW9VhviR-Jr8AmYY_BAGrb1gzuK
 
 ```bash
 # Run full diagnostics
-curl -s "https://www.eventangle.com/status?p=setup&brand=root" | jq '.value.checks'
+curl -s "https://www.oursharedevents.com/status?p=setup&brand=root" | jq '.value.checks'
 ```
 
 Check each diagnostic point:
@@ -837,11 +837,11 @@ Team Lead:       [Name] - [Phone] - [Slack]
 
 | Resource                | URL                                                                                                           |
 | ----------------------- | ------------------------------------------------------------------------------------------------------------- |
-| Production              | https://www.eventangle.com                                                                                    |
-| Staging                 | https://stg.eventangle.com                                                                                    |
+| Production              | https://www.oursharedevents.com                                                                               |
+| Staging                 | https://stg.oursharedevents.com                                                                               |
 | Apps Script Project     | https://script.google.com/home/projects/1YO4apLOQoAIh208AcAqWO3pWtx_O3yas_QC4z-pkurgMem9UgYOsp86l             |
 | Apps Script Deployments | https://script.google.com/home/projects/1YO4apLOQoAIh208AcAqWO3pWtx_O3yas_QC4z-pkurgMem9UgYOsp86l/deployments |
-| Cloudflare Dashboard    | https://dash.cloudflare.com/ > Workers > eventangle-events                                                    |
+| Cloudflare Dashboard    | https://dash.cloudflare.com/ > Workers > oursharedevents-events                                               |
 | GitHub Actions          | https://github.com/zeventbooks/MVP-EVENT-TOOLKIT/actions                                                      |
 | Google Status           | https://www.google.com/appsstatus                                                                             |
 | Cloudflare Status       | https://www.cloudflarestatus.com/                                                                             |
@@ -859,13 +859,13 @@ Team Lead:       [Name] - [Phone] - [Slack]
 
 ```bash
 # Is it alive?
-curl -s https://www.eventangle.com/ping
+curl -s https://www.oursharedevents.com/ping
 
 # What version is running?
-curl -s https://www.eventangle.com/status | jq '{ok,buildId}'
+curl -s https://www.oursharedevents.com/status | jq '{ok,buildId}'
 
 # What's broken?
-curl -s "https://www.eventangle.com/status?p=setup" | jq '.value.checks[] | select(.ok==false)'
+curl -s "https://www.oursharedevents.com/status?p=setup" | jq '.value.checks[] | select(.ok==false)'
 
 # Bypass Cloudflare
 curl -s "https://script.google.com/macros/s/AKfycbyS1cW9VhviR-Jr8AmYY_BAGrb1gzuKkrgEBP2M3bMdqAv4ktqHOZInWV8ogkpz5i8SYQ/exec?p=ping"
@@ -980,7 +980,7 @@ const result = restoreFromBackup_('BACKUP_2025_12_03_1030');
 console.log(result);
 
 // Step 3: Verify restoration
-// curl -s "https://www.eventangle.com/api?action=listEvents&brand=root" | jq '.value | length'
+// curl -s "https://www.oursharedevents.com/api?action=listEvents&brand=root" | jq '.value | length'
 ```
 
 **Restore Options:**
@@ -992,13 +992,13 @@ console.log(result);
 
 ```bash
 # Check if events are accessible
-curl -s "https://www.eventangle.com/api?action=listEvents&brand=root" | jq '.value | length'
+curl -s "https://www.oursharedevents.com/api?action=listEvents&brand=root" | jq '.value | length'
 
 # Compare with expected count (check EVENTS sheet row count)
 # If mismatch → consider restore
 
 # After restore, verify a specific event
-curl -s "https://www.eventangle.com/api?action=getPublicBundle&slug=test-event&brand=root" | jq '.ok'
+curl -s "https://www.oursharedevents.com/api?action=getPublicBundle&slug=test-event&brand=root" | jq '.ok'
 ```
 
 ### 8.6 Backup Best Practices

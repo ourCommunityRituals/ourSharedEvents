@@ -1,4 +1,4 @@
-# Synthetic Monitoring Setup
+﻿# Synthetic Monitoring Setup
 
 Story 3.2: Synthetic Health for /events + /health/origin
 
@@ -14,10 +14,10 @@ You don't want to learn about 410s by staring at Playwright logs. Synthetic test
 
 ### Endpoints Monitored
 
-| Endpoint          | URL                                        | Assertions                            |
-| ----------------- | ------------------------------------------ | ------------------------------------- |
-| **Health Origin** | `https://stg.eventangle.com/health/origin` | `ok === true`, `env === "staging"`    |
-| **Events Page**   | `https://stg.eventangle.com/events`        | HTTP 200, `data-testid="events-root"` |
+| Endpoint          | URL                                             | Assertions                            |
+| ----------------- | ----------------------------------------------- | ------------------------------------- |
+| **Health Origin** | `https://stg.oursharedevents.com/health/origin` | `ok === true`, `env === "staging"`    |
+| **Events Page**   | `https://stg.oursharedevents.com/events`        | HTTP 200, `data-testid="events-root"` |
 
 ### Alert Routing Logic
 
@@ -38,16 +38,16 @@ Cloudflare Health Checks are the primary synthetic monitoring solution, integrat
 
 1. **Log in to Cloudflare Dashboard**
    - Go to https://dash.cloudflare.com/
-   - Select your account and zone (eventangle.com)
+   - Select your account and zone (oursharedevents.com)
 
 2. **Navigate to Traffic > Health Checks**
 
 3. **Create Health Check 1: /health/origin**
 
    ```
-   Name: eventangle-staging-health-origin
+   Name: oursharedevents-staging-health-origin
    Monitor Type: HTTPS
-   URL: https://stg.eventangle.com/health/origin
+   URL: https://stg.oursharedevents.com/health/origin
    Check Interval: 60 seconds (1 minute)
    Retries: 2
    Expected Response:
@@ -60,9 +60,9 @@ Cloudflare Health Checks are the primary synthetic monitoring solution, integrat
 
 4. **Create Health Check 2: /events**
    ```
-   Name: eventangle-staging-events
+   Name: oursharedevents-staging-events
    Monitor Type: HTTPS
-   URL: https://stg.eventangle.com/events
+   URL: https://stg.oursharedevents.com/events
    Check Interval: 60 seconds (1 minute)
    Retries: 2
    Expected Response:
@@ -82,9 +82,9 @@ For infrastructure-as-code, use the Cloudflare API or Terraform provider:
 # Health Check 1: /health/origin
 resource "cloudflare_healthcheck" "staging_health_origin" {
   zone_id     = var.cloudflare_zone_id
-  name        = "eventangle-staging-health-origin"
+  name        = "oursharedevents-staging-health-origin"
   description = "Story 3.2 - Synthetic health check for /health/origin"
-  address     = "stg.eventangle.com"
+  address     = "stg.oursharedevents.com"
   type        = "HTTPS"
   port        = 443
   method      = "GET"
@@ -108,9 +108,9 @@ resource "cloudflare_healthcheck" "staging_health_origin" {
 # Health Check 2: /events
 resource "cloudflare_healthcheck" "staging_events" {
   zone_id     = var.cloudflare_zone_id
-  name        = "eventangle-staging-events"
+  name        = "oursharedevents-staging-events"
   description = "Story 3.2 - Synthetic health check for /events page"
-  address     = "stg.eventangle.com"
+  address     = "stg.oursharedevents.com"
   type        = "HTTPS"
   port        = 443
   method      = "GET"
@@ -143,7 +143,7 @@ Configure notifications in Cloudflare Dashboard:
    - Alert when: Health check becomes unhealthy
    - Notification method: Webhook (Slack), Email, or PagerDuty
 4. **Add Tags:**
-   - `service:eventangle`
+   - `service:oursharedevents`
    - `env:staging`
 
 ### Cloudflare Health Check API Reference
@@ -159,8 +159,8 @@ curl -X POST "https://api.cloudflare.com/client/v4/zones/{zone_id}/healthchecks"
   -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN_OSE" \
   -H "Content-Type: application/json" \
   --data '{
-    "name": "eventangle-staging-health-origin",
-    "address": "stg.eventangle.com",
+    "name": "oursharedevents-staging-health-origin",
+    "address": "stg.oursharedevents.com",
     "type": "HTTPS",
     "port": 443,
     "path": "/health/origin",
@@ -227,7 +227,7 @@ datadog-synthetic:
       with:
         api_key: ${{ secrets.DATADOG_API_KEY }}
         app_key: ${{ secrets.DATADOG_APP_KEY }}
-        test_search_query: 'tag:env:staging tag:service:eventangle'
+        test_search_query: 'tag:env:staging tag:service:oursharedevents'
         fail_on_critical_errors: true
         fail_on_timeout: true
 ```
@@ -292,9 +292,9 @@ Datadog provides more sophisticated synthetic testing with browser tests, multi-
 1. **Go to Datadog > Synthetics > New Test > API Test**
 2. **Configure:**
    ```
-   Name: [Staging] EventAngle Health Origin
+   Name: [Staging] oursharedevents Health Origin
    Type: HTTP
-   URL: https://stg.eventangle.com/health/origin
+   URL: https://stg.oursharedevents.com/health/origin
    Method: GET
    ```
 3. **Add Assertions:**
@@ -306,7 +306,7 @@ Datadog provides more sophisticated synthetic testing with browser tests, multi-
    ```
 4. **Configure Tags:**
    ```
-   service:eventangle
+   service:oursharedevents
    env:staging
    team:devops
    ```
@@ -319,8 +319,8 @@ Datadog provides more sophisticated synthetic testing with browser tests, multi-
 1. **Go to Datadog > Synthetics > New Test > Browser Test**
 2. **Configure:**
    ```
-   Name: [Staging] EventAngle Events Page
-   Starting URL: https://stg.eventangle.com/events
+   Name: [Staging] oursharedevents Events Page
+   Starting URL: https://stg.oursharedevents.com/events
    ```
 3. **Record steps or add assertions:**
    - Wait for page load
@@ -328,7 +328,7 @@ Datadog provides more sophisticated synthetic testing with browser tests, multi-
    - Assert status code is 200
 4. **Configure Tags:**
    ```
-   service:eventangle
+   service:oursharedevents
    env:staging
    team:devops
    ```
@@ -394,7 +394,7 @@ node scripts/synthetic-health-check.js --env production
 SYNTHETIC HEALTH CHECK VALIDATION
 ============================================
 Environment: staging
-Target: https://stg.eventangle.com
+Target: https://stg.oursharedevents.com
 
 Check 1: /health/origin
   HTTP Status: 200 OK
@@ -476,10 +476,10 @@ Add to your deployment checklist:
 
 ## Environment Matrix
 
-| Environment | Health Origin URL                          | Events URL                          | Check Interval |
-| ----------- | ------------------------------------------ | ----------------------------------- | -------------- |
-| Staging     | `https://stg.eventangle.com/health/origin` | `https://stg.eventangle.com/events` | 1 minute       |
-| Production  | `https://www.eventangle.com/health/origin` | `https://www.eventangle.com/events` | 1 minute       |
+| Environment | Health Origin URL                               | Events URL                               | Check Interval |
+| ----------- | ----------------------------------------------- | ---------------------------------------- | -------------- |
+| Staging     | `https://stg.oursharedevents.com/health/origin` | `https://stg.oursharedevents.com/events` | 1 minute       |
+| Production  | `https://www.oursharedevents.com/health/origin` | `https://www.oursharedevents.com/events` | 1 minute       |
 
 ---
 
@@ -490,25 +490,25 @@ Add to your deployment checklist:
 1. **Check endpoint directly:**
 
    ```bash
-   curl -s https://stg.eventangle.com/health/origin | jq
-   curl -s -o /dev/null -w "%{http_code}" https://stg.eventangle.com/events
+   curl -s https://stg.oursharedevents.com/health/origin | jq
+   curl -s -o /dev/null -w "%{http_code}" https://stg.oursharedevents.com/events
    ```
 
 2. **Verify assertions:**
 
    ```bash
    # Check ok field
-   curl -s https://stg.eventangle.com/health/origin | jq '.ok'
+   curl -s https://stg.oursharedevents.com/health/origin | jq '.ok'
 
    # Check env field
-   curl -s https://stg.eventangle.com/health/origin | jq '.env'
+   curl -s https://stg.oursharedevents.com/health/origin | jq '.env'
 
    # Check events page marker
-   curl -s https://stg.eventangle.com/events | grep -o 'data-testid="events-root"'
+   curl -s https://stg.oursharedevents.com/events | grep -o 'data-testid="events-root"'
    ```
 
 3. **Check worker logs:**
-   - Cloudflare Dashboard > Workers > eventangle-staging > Logs
+   - Cloudflare Dashboard > Workers > oursharedevents-staging > Logs
 
 ### Alert Interpretation
 

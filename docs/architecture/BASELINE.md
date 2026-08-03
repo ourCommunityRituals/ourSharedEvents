@@ -1,4 +1,4 @@
-# Baseline System Architecture
+﻿# Baseline System Architecture
 
 > **Purpose:** Knowledge transfer and on-boarding documentation for the MVP Event Toolkit.
 > This document codifies the established CI/CD discipline, environment configuration,
@@ -38,8 +38,8 @@ The MVP Event Toolkit is a multi-brand event management platform deployed on Clo
 │    │                                                             │
 │    ▼                                                             │
 │  ┌──────────────────────────────────────────────────────────┐   │
-│  │     Cloudflare Workers (eventangle-staging / -prod)       │   │
-│  │     Routes: stg.eventangle.com, www.eventangle.com        │   │
+│  │     Cloudflare Workers (oursharedevents-staging / -prod)       │   │
+│  │     Routes: stg.oursharedevents.com, www.oursharedevents.com        │   │
 │  │     Mode: Worker-Only (BACKEND_MODE=worker)               │   │
 │  └──────────────────────────────────────────────────────────┘   │
 │                          │                                       │
@@ -103,8 +103,8 @@ Stage-1 runs **hermetic validation** with zero external dependencies (no `BASE_U
 │  ┌─────────────────────────────────────────────────────────┐    │
 │  │           DEPLOYMENT (if Quality Gates pass)             │    │
 │  │                                                          │    │
-│  │  main push → Deploy to stg.eventangle.com               │    │
-│  │  tag vX.Y.Z → Deploy to www.eventangle.com              │    │
+│  │  main push → Deploy to stg.oursharedevents.com               │    │
+│  │  tag vX.Y.Z → Deploy to www.oursharedevents.com              │    │
 │  └─────────────────────────────────────────────────────────┘    │
 │                                                                  │
 └─────────────────────────────────────────────────────────────────┘
@@ -183,10 +183,10 @@ Configure in GitHub Settings > Branches > Branch protection rules for `main`:
 
 ### Environment URLs
 
-| Environment    | Worker Name          | Base URL                     | API URL                          |
-| -------------- | -------------------- | ---------------------------- | -------------------------------- |
-| **Staging**    | `eventangle-staging` | `https://stg.eventangle.com` | `https://api-stg.eventangle.com` |
-| **Production** | `eventangle-prod`    | `https://www.eventangle.com` | `https://api.eventangle.com`     |
+| Environment    | Worker Name               | Base URL                          | API URL                               |
+| -------------- | ------------------------- | --------------------------------- | ------------------------------------- |
+| **Staging**    | `oursharedevents-staging` | `https://stg.oursharedevents.com` | `https://api-stg.oursharedevents.com` |
+| **Production** | `oursharedevents-prod`    | `https://www.oursharedevents.com` | `https://api.oursharedevents.com`     |
 
 ### Route Configuration
 
@@ -194,8 +194,8 @@ Configure in GitHub Settings > Branches > Branch protection rules for `main`:
 
 ```toml
 routes = [
-  { pattern = "stg.eventangle.com/*", zone_name = "eventangle.com" },
-  { pattern = "api-stg.eventangle.com/*", zone_name = "eventangle.com" }
+  { pattern = "stg.oursharedevents.com/*", zone_name = "oursharedevents.com" },
+  { pattern = "api-stg.oursharedevents.com/*", zone_name = "oursharedevents.com" }
 ]
 ```
 
@@ -203,9 +203,9 @@ routes = [
 
 ```toml
 routes = [
-  { pattern = "eventangle.com/*", zone_name = "eventangle.com" },
-  { pattern = "www.eventangle.com/*", zone_name = "eventangle.com" },
-  { pattern = "api.eventangle.com/*", zone_name = "eventangle.com" }
+  { pattern = "oursharedevents.com/*", zone_name = "oursharedevents.com" },
+  { pattern = "www.oursharedevents.com/*", zone_name = "oursharedevents.com" },
+  { pattern = "api.oursharedevents.com/*", zone_name = "oursharedevents.com" }
 ]
 ```
 
@@ -317,7 +317,7 @@ If event data cannot be loaded:
 All HTML responses must:
 - Be served by Cloudflare Worker
 - Not contain "Google Apps Script" text
-- Include x-proxied-by: eventangle-worker header
+- Include x-proxied-by: oursharedevents-worker header
 ```
 
 **Guard:** Stage-2 `gas-html-integrity.spec.ts` blocks releases if GAS HTML detected.
@@ -457,7 +457,7 @@ npm run test:prod:smoke
 npm run test:prod:health
 
 # Or via BASE_URL
-BASE_URL="https://www.eventangle.com" npm run test:smoke
+BASE_URL="https://www.oursharedevents.com" npm run test:smoke
 ```
 
 ### Deployment
@@ -493,14 +493,14 @@ wrangler rollback --env production
 
 ```bash
 # Staging health
-curl -s https://stg.eventangle.com/api/health/backend | jq
+curl -s https://stg.oursharedevents.com/api/health/backend | jq
 
 # Production health
-curl -s https://www.eventangle.com/api/health/backend | jq
+curl -s https://www.oursharedevents.com/api/health/backend | jq
 
 # Quick ping
-curl -s https://stg.eventangle.com/ping
-curl -s https://www.eventangle.com/ping
+curl -s https://stg.oursharedevents.com/ping
+curl -s https://www.oursharedevents.com/ping
 ```
 
 ### Secret Management

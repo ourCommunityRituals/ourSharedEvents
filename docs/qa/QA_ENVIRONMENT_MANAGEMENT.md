@@ -1,4 +1,4 @@
-# QA Environment Management (Story 3.5)
+﻿# QA Environment Management (Story 3.5)
 
 This document describes the test environment setup, data management, and stability tracking systems implemented for reliable E2E testing.
 
@@ -83,13 +83,13 @@ Location: `scripts/qa-environment-setup.js`
 
 ### Environment Variables
 
-| Variable       | Description                   | Default                      |
-| -------------- | ----------------------------- | ---------------------------- |
-| `BASE_URL`     | Target environment URL        | `https://stg.eventangle.com` |
-| `ADMIN_KEY`    | Admin authentication key      | Required for CRUD operations |
-| `QA_BRAND_ID`  | QA brand identifier           | `qa-testing`                 |
-| `MAX_TEST_AGE` | Max age of test data (hours)  | `24`                         |
-| `DRY_RUN`      | Log actions without executing | `false`                      |
+| Variable       | Description                   | Default                           |
+| -------------- | ----------------------------- | --------------------------------- |
+| `BASE_URL`     | Target environment URL        | `https://stg.oursharedevents.com` |
+| `ADMIN_KEY`    | Admin authentication key      | Required for CRUD operations      |
+| `QA_BRAND_ID`  | QA brand identifier           | `qa-testing`                      |
+| `MAX_TEST_AGE` | Max age of test data (hours)  | `24`                              |
+| `DRY_RUN`      | Log actions without executing | `false`                           |
 
 ### Example Usage
 
@@ -98,7 +98,7 @@ Location: `scripts/qa-environment-setup.js`
 DRY_RUN=true node scripts/qa-environment-setup.js cleanup
 
 # Setup against a specific environment
-BASE_URL="https://stg.eventangle.com" node scripts/qa-environment-setup.js setup
+BASE_URL="https://stg.oursharedevents.com" node scripts/qa-environment-setup.js setup
 
 # Cleanup data older than 12 hours
 MAX_TEST_AGE=12 node scripts/qa-environment-setup.js cleanup
@@ -111,7 +111,7 @@ The script generates a state file at `.test-data/qa-setup-state.json` containing
 ```json
 {
   "timestamp": "2025-01-15T10:30:00.000Z",
-  "environment": "https://stg.eventangle.com",
+  "environment": "https://stg.oursharedevents.com",
   "qaBrand": "qa-testing",
   "health": { "healthy": true, "buildId": "abc123" },
   "cleanup": { "cleaned": 5, "failed": 0 },
@@ -429,7 +429,7 @@ npx playwright test path/to/test.spec.js --debug
 npx playwright test --config playwright.staging.config.js
 
 # Check network connectivity
-curl -I https://stg.eventangle.com/status
+curl -I https://stg.oursharedevents.com/status
 ```
 
 ### Debug Mode

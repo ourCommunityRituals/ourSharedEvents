@@ -1,4 +1,4 @@
-# Cloudflare Worker Migration Plan
+﻿# Cloudflare Worker Migration Plan
 
 **Status: COMPLETE - GAS RETIRED**
 **Last Updated:** 2025-12-13
@@ -127,7 +127,7 @@ All endpoints use the `/api/v2/` prefix.
 Worker-native health check (no auth required).
 
 ```bash
-curl https://stg.eventangle.com/api/v2/status
+curl https://stg.oursharedevents.com/api/v2/status
 ```
 
 ### GET /api/v2/ping
@@ -135,7 +135,7 @@ curl https://stg.eventangle.com/api/v2/status
 Simple ping endpoint for uptime monitoring.
 
 ```bash
-curl https://stg.eventangle.com/api/v2/ping
+curl https://stg.oursharedevents.com/api/v2/ping
 ```
 
 ### GET /api/v2/events
@@ -148,7 +148,7 @@ List all events for a brand.
 - `full` (optional): Include full event data. Defaults to "false"
 
 ```bash
-curl "https://stg.eventangle.com/api/v2/events?brand=root"
+curl "https://stg.oursharedevents.com/api/v2/events?brand=root"
 ```
 
 ### GET /api/v2/events/:id
@@ -156,7 +156,7 @@ curl "https://stg.eventangle.com/api/v2/events?brand=root"
 Get single event by ID or slug.
 
 ```bash
-curl "https://stg.eventangle.com/api/v2/events/EVT_123?brand=root"
+curl "https://stg.oursharedevents.com/api/v2/events/EVT_123?brand=root"
 ```
 
 ### GET /api/v2/events/:id/bundle/:type
@@ -171,7 +171,7 @@ Get bundle for specific surface (public, display, poster, admin).
 - `admin` - Full event data (requires auth)
 
 ```bash
-curl "https://stg.eventangle.com/api/v2/events/EVT_123/bundle/public?brand=root"
+curl "https://stg.oursharedevents.com/api/v2/events/EVT_123/bundle/public?brand=root"
 ```
 
 ### POST /api/v2/events
@@ -179,7 +179,7 @@ curl "https://stg.eventangle.com/api/v2/events/EVT_123/bundle/public?brand=root"
 Create a new event (requires admin auth).
 
 ```bash
-curl -X POST "https://stg.eventangle.com/api/v2/events" \
+curl -X POST "https://stg.oursharedevents.com/api/v2/events" \
   -H "Authorization: Bearer YOUR_ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"name": "Summer Tournament 2025", "startDateISO": "2025-07-15", "venue": "Main Arena", "brandId": "root"}'
@@ -190,7 +190,7 @@ curl -X POST "https://stg.eventangle.com/api/v2/events" \
 Update an existing event (requires admin auth).
 
 ```bash
-curl -X PUT "https://stg.eventangle.com/api/v2/events/EVT_123" \
+curl -X PUT "https://stg.oursharedevents.com/api/v2/events/EVT_123" \
   -H "Authorization: Bearer YOUR_ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"name": "Summer Tournament 2025 - Updated", "venue": "New Arena"}'

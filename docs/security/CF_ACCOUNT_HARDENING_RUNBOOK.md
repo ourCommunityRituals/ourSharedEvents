@@ -1,4 +1,4 @@
-# CF_ACCOUNT_HARDENING_RUNBOOK.md — Cloudflare Account Hardening
+﻿# CF_ACCOUNT_HARDENING_RUNBOOK.md — Cloudflare Account Hardening
 
 > **PROMPTSPEC-SEC-1.1** — Cloudflare Account Hardening Runbook
 > Role: Director of Security
@@ -9,12 +9,12 @@
 
 ## 1. Purpose
 
-This runbook locks down Cloudflare account access and eliminates common account takeover paths for the EventAngle production environment.
+This runbook locks down Cloudflare account access and eliminates common account takeover paths for the oursharedevents production environment.
 
-| Attribute | Value |
-|-----------|-------|
-| **Scope** | Cloudflare account security configuration |
-| **Non-Goals** | API token creation (see SEC-1.2) |
+| Attribute       | Value                                                    |
+| --------------- | -------------------------------------------------------- |
+| **Scope**       | Cloudflare account security configuration                |
+| **Non-Goals**   | API token creation (see SEC-1.2)                         |
 | **Constraints** | No credentials stored in this document; no SMS-based MFA |
 
 ---
@@ -23,14 +23,14 @@ This runbook locks down Cloudflare account access and eliminates common account 
 
 These practices are **strictly prohibited** and must be remediated immediately if discovered.
 
-| ID | Practice | Reason | Remediation |
-|----|----------|--------|-------------|
+| ID      | Practice                               | Reason                                                                           | Remediation                                         |
+| ------- | -------------------------------------- | -------------------------------------------------------------------------------- | --------------------------------------------------- |
 | **P-1** | **Global API Key usage is prohibited** | Global keys grant full account access; cannot be scoped or rotated independently | Revoke and replace with scoped API tokens (SEC-1.2) |
-| **P-2** | Shared account credentials | No individual attribution; impossible to revoke single user | Create individual member accounts |
-| **P-3** | SMS-based MFA | Vulnerable to SIM swapping and SS7 attacks | Use hardware keys or TOTP only |
-| **P-4** | Email-only authentication | Single factor is insufficient | Enable MFA immediately |
-| **P-5** | Unrecognized active sessions | May indicate compromised account | Revoke and investigate |
-| **P-6** | Multiple Super Administrator accounts | Increases attack surface | Reduce to single owner |
+| **P-2** | Shared account credentials             | No individual attribution; impossible to revoke single user                      | Create individual member accounts                   |
+| **P-3** | SMS-based MFA                          | Vulnerable to SIM swapping and SS7 attacks                                       | Use hardware keys or TOTP only                      |
+| **P-4** | Email-only authentication              | Single factor is insufficient                                                    | Enable MFA immediately                              |
+| **P-5** | Unrecognized active sessions           | May indicate compromised account                                                 | Revoke and investigate                              |
+| **P-6** | Multiple Super Administrator accounts  | Increases attack surface                                                         | Reduce to single owner                              |
 
 > **CRITICAL:** Global API Key is prohibited. Any automation using the Global API Key must be migrated to scoped API tokens immediately. See PROMPTSPEC-SEC-1.2 for token creation procedures.
 
@@ -40,11 +40,11 @@ These practices are **strictly prohibited** and must be remediated immediately i
 
 ### 3.1 Requirements
 
-| Role | MFA Requirement | Acceptable Methods |
-|------|-----------------|-------------------|
-| Super Administrator (Owner) | **MANDATORY** | Hardware security key (FIDO2/WebAuthn) |
-| Administrator | **MANDATORY** | Hardware security key (preferred) or TOTP |
-| All other members | **MANDATORY** | Hardware security key (preferred) or TOTP |
+| Role                        | MFA Requirement | Acceptable Methods                        |
+| --------------------------- | --------------- | ----------------------------------------- |
+| Super Administrator (Owner) | **MANDATORY**   | Hardware security key (FIDO2/WebAuthn)    |
+| Administrator               | **MANDATORY**   | Hardware security key (preferred) or TOTP |
+| All other members           | **MANDATORY**   | Hardware security key (preferred) or TOTP |
 
 ### 3.2 Hardware Key Preference Order
 
@@ -55,6 +55,7 @@ These practices are **strictly prohibited** and must be remediated immediately i
 ### 3.3 Hardware Key Configuration
 
 Each privileged user SHOULD register **two hardware keys**:
+
 - Primary key (daily use)
 - Backup key (stored securely offline)
 
@@ -64,29 +65,29 @@ Each privileged user SHOULD register **two hardware keys**:
 
 ### 4.1 Owner Limit
 
-| Requirement | Value |
-|-------------|-------|
-| Maximum Super Administrators | **1** |
-| Owner account type | Individual (not shared) |
-| Owner MFA | Hardware key required |
+| Requirement                  | Value                   |
+| ---------------------------- | ----------------------- |
+| Maximum Super Administrators | **1**                   |
+| Owner account type           | Individual (not shared) |
+| Owner MFA                    | Hardware key required   |
 
 ### 4.2 Role Assignment (Least Privilege)
 
-| Use Case | Recommended Role | Permissions |
-|----------|------------------|-------------|
-| Full account control | Super Administrator | All (limit to 1 person) |
-| DNS management only | DNS Administrator | DNS read/write only |
-| Worker deployment (CI/CD) | **Use API Token** | Scoped to Workers only |
-| Analytics viewing | Analytics Reader | Read-only analytics |
-| Firewall rule management | Firewall Administrator | WAF/Firewall rules only |
+| Use Case                  | Recommended Role       | Permissions             |
+| ------------------------- | ---------------------- | ----------------------- |
+| Full account control      | Super Administrator    | All (limit to 1 person) |
+| DNS management only       | DNS Administrator      | DNS read/write only     |
+| Worker deployment (CI/CD) | **Use API Token**      | Scoped to Workers only  |
+| Analytics viewing         | Analytics Reader       | Read-only analytics     |
+| Firewall rule management  | Firewall Administrator | WAF/Firewall rules only |
 
 ### 4.3 Member Audit Requirements
 
-| Check | Frequency | Action |
-|-------|-----------|--------|
-| Review all members | Monthly | Remove inactive/unknown members |
-| Verify member roles | Monthly | Downgrade over-privileged accounts |
-| Confirm MFA enabled | Monthly | Enforce MFA on any account without it |
+| Check               | Frequency | Action                                |
+| ------------------- | --------- | ------------------------------------- |
+| Review all members  | Monthly   | Remove inactive/unknown members       |
+| Verify member roles | Monthly   | Downgrade over-privileged accounts    |
+| Confirm MFA enabled | Monthly   | Enforce MFA on any account without it |
 
 ---
 
@@ -94,12 +95,12 @@ Each privileged user SHOULD register **two hardware keys**:
 
 ### 5.1 Session Review
 
-| Check | Action |
-|-------|--------|
+| Check                             | Action                          |
+| --------------------------------- | ------------------------------- |
 | Unknown device in active sessions | Revoke immediately, investigate |
 | Session from unexpected geography | Revoke immediately, investigate |
-| Session older than 30 days | Consider revoking |
-| Multiple concurrent sessions | Verify legitimacy |
+| Session older than 30 days        | Consider revoking               |
+| Multiple concurrent sessions      | Verify legitimacy               |
 
 ### 5.2 Session Revocation Procedure
 
@@ -129,13 +130,13 @@ If an unknown session is discovered:
 
 ### 6.1 Review Cadence
 
-| Log Type | Review Frequency | Reviewer |
-|----------|------------------|----------|
-| Authentication events | Weekly | Security lead |
-| Member changes | Weekly | Security lead |
-| API token creation/deletion | Weekly | Security lead |
-| DNS changes | After each change | DNS administrator |
-| Worker deployments | After each deployment | DevOps lead |
+| Log Type                    | Review Frequency      | Reviewer          |
+| --------------------------- | --------------------- | ----------------- |
+| Authentication events       | Weekly                | Security lead     |
+| Member changes              | Weekly                | Security lead     |
+| API token creation/deletion | Weekly                | Security lead     |
+| DNS changes                 | After each change     | DNS administrator |
+| Worker deployments          | After each deployment | DevOps lead       |
 
 ### 6.2 Audit Log Access
 
@@ -147,15 +148,15 @@ If an unknown session is discovered:
 
 Immediately investigate these audit log entries:
 
-| Event | Severity | Action |
-|-------|----------|--------|
-| New Super Administrator added | Critical | Verify authorization |
-| Global API Key viewed/copied | Critical | Determine who and why |
-| New API token created | High | Verify scope is minimal |
-| MFA disabled on any account | High | Re-enable immediately |
-| Member added from unknown email | High | Verify authorization |
-| DNS record modified | Medium | Verify change was authorized |
-| Password reset requested | Medium | Confirm user initiated |
+| Event                           | Severity | Action                       |
+| ------------------------------- | -------- | ---------------------------- |
+| New Super Administrator added   | Critical | Verify authorization         |
+| Global API Key viewed/copied    | Critical | Determine who and why        |
+| New API token created           | High     | Verify scope is minimal      |
+| MFA disabled on any account     | High     | Re-enable immediately        |
+| Member added from unknown email | High     | Verify authorization         |
+| DNS record modified             | Medium   | Verify change was authorized |
+| Password reset requested        | Medium   | Confirm user initiated       |
 
 ---
 
@@ -230,41 +231,41 @@ Execute these steps in order:
 
 A security reviewer can verify compliance by answering these questions:
 
-| # | Question | Expected Answer | How to Verify |
-|---|----------|-----------------|---------------|
-| 1 | Is MFA enabled on the owner account? | Yes, hardware key | My Profile → Authentication |
-| 2 | How many Super Administrators exist? | Exactly 1 | Manage Account → Members |
-| 3 | Are all members using MFA? | Yes | Members list, 2FA column |
-| 4 | Are there any unknown active sessions? | No | My Profile → Sessions |
-| 5 | Is Global API Key in use? | No (prohibited) | Check CI/CD configs, API Token list |
-| 6 | When was the last audit log review? | Within 7 days | Internal records |
-| 7 | Are there any shared account credentials? | No | Member list shows individual emails |
+| #   | Question                                  | Expected Answer   | How to Verify                       |
+| --- | ----------------------------------------- | ----------------- | ----------------------------------- |
+| 1   | Is MFA enabled on the owner account?      | Yes, hardware key | My Profile → Authentication         |
+| 2   | How many Super Administrators exist?      | Exactly 1         | Manage Account → Members            |
+| 3   | Are all members using MFA?                | Yes               | Members list, 2FA column            |
+| 4   | Are there any unknown active sessions?    | No                | My Profile → Sessions               |
+| 5   | Is Global API Key in use?                 | No (prohibited)   | Check CI/CD configs, API Token list |
+| 6   | When was the last audit log review?       | Within 7 days     | Internal records                    |
+| 7   | Are there any shared account credentials? | No                | Member list shows individual emails |
 
 ### 8.2 Compliance Summary
 
-| Control | Compliant | Non-Compliant |
-|---------|-----------|---------------|
-| Owner MFA | Hardware key registered | No MFA or SMS only |
-| Member count | ≤5 with defined roles | Excessive members or shared accounts |
-| Super Admin count | Exactly 1 | 0 or >1 |
-| Session hygiene | All sessions recognized | Unknown sessions present |
-| Global API Key | Never used | Any automation uses Global Key |
-| Audit log review | Weekly | >30 days since last review |
+| Control           | Compliant               | Non-Compliant                        |
+| ----------------- | ----------------------- | ------------------------------------ |
+| Owner MFA         | Hardware key registered | No MFA or SMS only                   |
+| Member count      | ≤5 with defined roles   | Excessive members or shared accounts |
+| Super Admin count | Exactly 1               | 0 or >1                              |
+| Session hygiene   | All sessions recognized | Unknown sessions present             |
+| Global API Key    | Never used              | Any automation uses Global Key       |
+| Audit log review  | Weekly                  | >30 days since last review           |
 
 ---
 
 ## 9. Related Documents
 
-| Document | Path | Relationship |
-|----------|------|--------------|
-| Security Baseline | `docs/security/SECURITY_BASELINE.md` | Parent security model |
-| Scoped API Tokens | PROMPTSPEC-SEC-1.2 (pending) | Next step: token creation |
-| Registrar Lock | PROMPTSPEC-SEC-2.1 (pending) | Domain protection |
+| Document          | Path                                 | Relationship              |
+| ----------------- | ------------------------------------ | ------------------------- |
+| Security Baseline | `docs/security/SECURITY_BASELINE.md` | Parent security model     |
+| Scoped API Tokens | PROMPTSPEC-SEC-1.2 (pending)         | Next step: token creation |
+| Registrar Lock    | PROMPTSPEC-SEC-2.1 (pending)         | Domain protection         |
 
 ---
 
 ## Document History
 
-| Date | Author | Changes |
-|------|--------|---------|
+| Date       | Author      | Changes                            |
+| ---------- | ----------- | ---------------------------------- |
 | 2026-01-05 | Claude Code | Initial PROMPTSPEC-SEC-1.1 runbook |

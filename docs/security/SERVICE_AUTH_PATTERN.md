@@ -1,4 +1,4 @@
-# SERVICE_AUTH_PATTERN.md — Service-to-Service Authentication Pattern
+﻿# SERVICE_AUTH_PATTERN.md — Service-to-Service Authentication Pattern
 
 > **PROMPTSPEC-SEC-5.3** — Service-to-Service Auth Pattern
 > Role: Director of Security
@@ -11,11 +11,11 @@
 
 Define cryptographic proof for machine-only routes where no user identity is available. This pattern enables secure service-to-service communication using HMAC-based request signing.
 
-| Attribute | Value |
-|-----------|-------|
-| **Scope** | Machine-only routes: webhooks, internal service calls, CI/CD operations |
-| **Prerequisites** | Security Baseline (SEC-0.1), Route Classification (SEC-5.1) |
-| **Enforcement** | Worker request handler, origin verification |
+| Attribute         | Value                                                                   |
+| ----------------- | ----------------------------------------------------------------------- |
+| **Scope**         | Machine-only routes: webhooks, internal service calls, CI/CD operations |
+| **Prerequisites** | Security Baseline (SEC-0.1), Route Classification (SEC-5.1)             |
+| **Enforcement**   | Worker request handler, origin verification                             |
 
 ---
 
@@ -27,19 +27,19 @@ Define cryptographic proof for machine-only routes where no user identity is ava
 
 This specification implements the **cryptographic proof** layer of NS-2 for machine-to-machine communication:
 
-| Authentication Type | Use Case | Mechanism |
-|---------------------|----------|-----------|
-| User Identity | Human operators accessing admin UI | Cloudflare Access + OAuth (SEC-5.2) |
-| **Service Identity** | Machine-to-machine calls | **HMAC request signing (this spec)** |
-| Signed Mutations | Client-signed public writes | HMAC tokens (SEC-IAC-05) |
+| Authentication Type  | Use Case                           | Mechanism                            |
+| -------------------- | ---------------------------------- | ------------------------------------ |
+| User Identity        | Human operators accessing admin UI | Cloudflare Access + OAuth (SEC-5.2)  |
+| **Service Identity** | Machine-to-machine calls           | **HMAC request signing (this spec)** |
+| Signed Mutations     | Client-signed public writes        | HMAC tokens (SEC-IAC-05)             |
 
 ### 2.2 Relationship to Existing Auth Patterns
 
-| Pattern | Spec | Purpose | Signature Scope |
-|---------|------|---------|-----------------|
-| **Signed Mutations** | SEC-IAC-05 | Client-signed public mutations | action + brandId + eventId + payloadHash |
-| **Service Auth** | SEC-5.3 | Machine-to-machine requests | **method + path + timestamp + nonce + bodyHash** |
-| **Cloudflare Access** | SEC-5.2 | User identity at edge | JWT (Cloudflare-signed) |
+| Pattern               | Spec       | Purpose                        | Signature Scope                                  |
+| --------------------- | ---------- | ------------------------------ | ------------------------------------------------ |
+| **Signed Mutations**  | SEC-IAC-05 | Client-signed public mutations | action + brandId + eventId + payloadHash         |
+| **Service Auth**      | SEC-5.3    | Machine-to-machine requests    | **method + path + timestamp + nonce + bodyHash** |
+| **Cloudflare Access** | SEC-5.2    | User identity at edge          | JWT (Cloudflare-signed)                          |
 
 ---
 
@@ -49,13 +49,13 @@ This specification implements the **cryptographic proof** layer of NS-2 for mach
 
 The HMAC signature is computed over a **canonical string** that binds the signature to a specific request.
 
-| Input | Description | Example |
-|-------|-------------|---------|
-| **method** | HTTP method (uppercase) | `POST` |
-| **path** | Request path (no query string) | `/api/v2/internal/sync` |
-| **ts** | Unix timestamp (seconds) | `1704470400` |
-| **nonce** | Unique request identifier (UUID v4) | `a3b4c5d6-7890-1234-5678-abcdef012345` |
-| **bodyHash** | SHA-256 hash of request body (hex) | `e3b0c44298fc1c149...` (empty body hash for no body) |
+| Input        | Description                         | Example                                              |
+| ------------ | ----------------------------------- | ---------------------------------------------------- |
+| **method**   | HTTP method (uppercase)             | `POST`                                               |
+| **path**     | Request path (no query string)      | `/api/v2/internal/sync`                              |
+| **ts**       | Unix timestamp (seconds)            | `1704470400`                                         |
+| **nonce**    | Unique request identifier (UUID v4) | `a3b4c5d6-7890-1234-5678-abcdef012345`               |
+| **bodyHash** | SHA-256 hash of request body (hex)  | `e3b0c44298fc1c149...` (empty body hash for no body) |
 
 ### 3.2 Canonical String Definition
 
@@ -115,13 +115,7 @@ async function signRequest(
   const bodyHash = await sha256Hex(body);
 
   // Step 2: Build canonical string
-  const canonical = [
-    method.toUpperCase(),
-    path,
-    timestamp.toString(),
-    nonce,
-    bodyHash
-  ].join('\n');
+  const canonical = [method.toUpperCase(), path, timestamp.toString(), nonce, bodyHash].join('\n');
 
   // Step 3: Compute HMAC-SHA256
   const signature = await hmacSha256(canonical, secret);
@@ -135,18 +129,18 @@ async function signRequest(
 
 The signature and metadata are transmitted via HTTP headers:
 
-| Header | Value | Required |
-|--------|-------|----------|
-| `X-Service-Signature` | Base64URL-encoded HMAC signature | **Yes** |
-| `X-Service-Timestamp` | Unix timestamp (seconds) | **Yes** |
-| `X-Service-Nonce` | UUID v4 nonce | **Yes** |
-| `X-Service-Id` | Service identifier (for key selection) | Optional |
+| Header                | Value                                  | Required |
+| --------------------- | -------------------------------------- | -------- |
+| `X-Service-Signature` | Base64URL-encoded HMAC signature       | **Yes**  |
+| `X-Service-Timestamp` | Unix timestamp (seconds)               | **Yes**  |
+| `X-Service-Nonce`     | UUID v4 nonce                          | **Yes**  |
+| `X-Service-Id`        | Service identifier (for key selection) | Optional |
 
 **Example Request:**
 
 ```http
 POST /api/v2/internal/sync HTTP/1.1
-Host: www.eventangle.com
+Host: www.oursharedevents.com
 Content-Type: application/json
 X-Service-Signature: dGhpcyBpcyBhIHRlc3Qgc2lnbmF0dXJl...
 X-Service-Timestamp: 1704470400
@@ -163,10 +157,10 @@ X-Service-Nonce: a3b4c5d6-7890-1234-5678-abcdef012345
 
 Requests are rejected if the timestamp is outside the acceptable window.
 
-| Parameter | Value | Rationale |
-|-----------|-------|-----------|
-| **Max clock skew** | ±300 seconds (5 minutes) | Allows for NTP drift |
-| **Window calculation** | `abs(now - ts) <= 300` | Symmetric window |
+| Parameter              | Value                    | Rationale            |
+| ---------------------- | ------------------------ | -------------------- |
+| **Max clock skew**     | ±300 seconds (5 minutes) | Allows for NTP drift |
+| **Window calculation** | `abs(now - ts) <= 300`   | Symmetric window     |
 
 **Verification Logic:**
 
@@ -194,12 +188,12 @@ function isTimestampValid(ts: number): boolean {
 
 Nonces are stored to prevent request replay attacks.
 
-| Component | Implementation |
-|-----------|----------------|
-| **Storage** | Cloudflare KV namespace (`SERVICE_NONCE_KV`) |
-| **Key format** | `svc-nonce:{nonce}` |
-| **TTL** | 600 seconds (10 minutes) |
-| **Lookup** | Check if nonce exists before processing |
+| Component      | Implementation                               |
+| -------------- | -------------------------------------------- |
+| **Storage**    | Cloudflare KV namespace (`SERVICE_NONCE_KV`) |
+| **Key format** | `svc-nonce:{nonce}`                          |
+| **TTL**        | 600 seconds (10 minutes)                     |
+| **Lookup**     | Check if nonce exists before processing      |
 
 **Replay Detection Flow:**
 
@@ -226,11 +220,11 @@ Nonces are stored to prevent request replay attacks.
 
 ### 4.3 Nonce Requirements
 
-| Requirement | Specification |
-|-------------|---------------|
-| **Format** | UUID v4 (lowercase, with hyphens) |
-| **Uniqueness** | Must be unique per request |
-| **Generation** | Caller responsibility (crypto.randomUUID) |
+| Requirement    | Specification                                                                    |
+| -------------- | -------------------------------------------------------------------------------- |
+| **Format**     | UUID v4 (lowercase, with hyphens)                                                |
+| **Uniqueness** | Must be unique per request                                                       |
+| **Generation** | Caller responsibility (crypto.randomUUID)                                        |
 | **Validation** | Regex: `/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/` |
 
 ---
@@ -292,12 +286,12 @@ interface ServiceAuthError {
 }
 
 type ServiceAuthErrorCode =
-  | 'MISSING_SIGNATURE_HEADERS'  // Required headers not present
-  | 'INVALID_TIMESTAMP'          // Timestamp not a valid integer
-  | 'SIGNATURE_EXPIRED'          // Timestamp outside window
-  | 'INVALID_NONCE_FORMAT'       // Nonce not valid UUID v4
-  | 'NONCE_REPLAYED'             // Nonce already used
-  | 'INVALID_SIGNATURE'          // HMAC verification failed
+  | 'MISSING_SIGNATURE_HEADERS' // Required headers not present
+  | 'INVALID_TIMESTAMP' // Timestamp not a valid integer
+  | 'SIGNATURE_EXPIRED' // Timestamp outside window
+  | 'INVALID_NONCE_FORMAT' // Nonce not valid UUID v4
+  | 'NONCE_REPLAYED' // Nonce already used
+  | 'INVALID_SIGNATURE' // HMAC verification failed
   | 'SERVICE_AUTH_NOT_CONFIGURED'; // Secret not configured
 ```
 
@@ -358,7 +352,7 @@ export async function verifyServiceAuth(
     return {
       allowed: false,
       errorResponse: createServiceAuthError('SERVICE_AUTH_NOT_CONFIGURED', requestId),
-      reason: 'Service auth secret not configured'
+      reason: 'Service auth secret not configured',
     };
   }
 
@@ -371,7 +365,7 @@ export async function verifyServiceAuth(
     return {
       allowed: false,
       errorResponse: createServiceAuthError('MISSING_SIGNATURE_HEADERS', requestId),
-      reason: 'Missing required signature headers'
+      reason: 'Missing required signature headers',
     };
   }
 
@@ -381,7 +375,7 @@ export async function verifyServiceAuth(
     return {
       allowed: false,
       errorResponse: createServiceAuthError('INVALID_TIMESTAMP', requestId),
-      reason: 'Timestamp not a valid integer'
+      reason: 'Timestamp not a valid integer',
     };
   }
 
@@ -389,7 +383,7 @@ export async function verifyServiceAuth(
     return {
       allowed: false,
       errorResponse: createServiceAuthError('SIGNATURE_EXPIRED', requestId),
-      reason: 'Timestamp outside acceptable window'
+      reason: 'Timestamp outside acceptable window',
     };
   }
 
@@ -398,7 +392,7 @@ export async function verifyServiceAuth(
     return {
       allowed: false,
       errorResponse: createServiceAuthError('INVALID_NONCE_FORMAT', requestId),
-      reason: 'Invalid nonce format'
+      reason: 'Invalid nonce format',
     };
   }
 
@@ -409,7 +403,7 @@ export async function verifyServiceAuth(
       return {
         allowed: false,
         errorResponse: createServiceAuthError('NONCE_REPLAYED', requestId),
-        reason: 'Nonce already used'
+        reason: 'Nonce already used',
       };
     }
   }
@@ -430,7 +424,7 @@ export async function verifyServiceAuth(
     return {
       allowed: false,
       errorResponse: createServiceAuthError('INVALID_SIGNATURE', requestId),
-      reason: 'Signature verification failed'
+      reason: 'Signature verification failed',
     };
   }
 
@@ -441,7 +435,7 @@ export async function verifyServiceAuth(
 
   return {
     allowed: true,
-    reason: 'Valid service authentication'
+    reason: 'Valid service authentication',
   };
 }
 ```
@@ -487,13 +481,7 @@ async function signServiceRequest(
   const bodyHash = await sha256Hex(body);
 
   // Build canonical string
-  const canonical = [
-    method.toUpperCase(),
-    path,
-    timestamp.toString(),
-    nonce,
-    bodyHash
-  ].join('\n');
+  const canonical = [method.toUpperCase(), path, timestamp.toString(), nonce, bodyHash].join('\n');
 
   // Compute signature
   const signature = await hmacSha256Base64Url(canonical, secret);
@@ -518,9 +506,9 @@ async function callInternalService(endpoint: string, data: object) {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      ...Object.fromEntries(authHeaders)
+      ...Object.fromEntries(authHeaders),
     },
-    body
+    body,
   });
 
   return response;
@@ -529,11 +517,11 @@ async function callInternalService(endpoint: string, data: object) {
 
 ### 6.3 Secret Management
 
-| Environment | Secret Name | Storage |
-|-------------|-------------|---------|
-| Production | `SERVICE_AUTH_SECRET` | Cloudflare Secret (wrangler secret) |
-| Staging | `SERVICE_AUTH_SECRET` | Cloudflare Secret |
-| CI/CD | `SERVICE_AUTH_SECRET` | GitHub Actions Secret |
+| Environment | Secret Name           | Storage                             |
+| ----------- | --------------------- | ----------------------------------- |
+| Production  | `SERVICE_AUTH_SECRET` | Cloudflare Secret (wrangler secret) |
+| Staging     | `SERVICE_AUTH_SECRET` | Cloudflare Secret                   |
+| CI/CD       | `SERVICE_AUTH_SECRET` | GitHub Actions Secret               |
 
 **Secret Requirements:**
 
@@ -558,12 +546,12 @@ node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
 
 ### 7.1 Machine-Only Route Examples
 
-| Route Pattern | Use Case | Caller |
-|---------------|----------|--------|
-| `/api/v2/internal/sync` | Data synchronization | Background Worker |
-| `/api/v2/internal/webhook` | External webhook receiver | External service |
-| `/api/v2/internal/health-report` | Internal health aggregation | Monitoring service |
-| `/api/v2/ci/deploy-notify` | CI/CD deployment notification | GitHub Actions |
+| Route Pattern                    | Use Case                      | Caller             |
+| -------------------------------- | ----------------------------- | ------------------ |
+| `/api/v2/internal/sync`          | Data synchronization          | Background Worker  |
+| `/api/v2/internal/webhook`       | External webhook receiver     | External service   |
+| `/api/v2/internal/health-report` | Internal health aggregation   | Monitoring service |
+| `/api/v2/ci/deploy-notify`       | CI/CD deployment notification | GitHub Actions     |
 
 ### 7.2 Integration with Route Classification
 
@@ -610,25 +598,25 @@ async function guardHybridRoute(
 
 ### 8.1 Threat Model
 
-| Threat | Mitigation | Verification |
-|--------|------------|--------------|
-| **Replay attack** | Nonce storage with TTL | KV lookup before processing |
-| **Timestamp manipulation** | ±5 minute window | Symmetric timestamp check |
-| **Signature forgery** | HMAC-SHA256 with secret | Constant-time comparison |
-| **Body tampering** | Body hash in signature | Hash included in canonical string |
-| **Path manipulation** | Path in signature | Path included in canonical string |
-| **Method confusion** | Method in signature | Method included in canonical string |
-| **Timing attack** | Constant-time compare | XOR-based comparison |
-| **Secret exposure** | Cloudflare Secrets | Never in code or logs |
+| Threat                     | Mitigation              | Verification                        |
+| -------------------------- | ----------------------- | ----------------------------------- |
+| **Replay attack**          | Nonce storage with TTL  | KV lookup before processing         |
+| **Timestamp manipulation** | ±5 minute window        | Symmetric timestamp check           |
+| **Signature forgery**      | HMAC-SHA256 with secret | Constant-time comparison            |
+| **Body tampering**         | Body hash in signature  | Hash included in canonical string   |
+| **Path manipulation**      | Path in signature       | Path included in canonical string   |
+| **Method confusion**       | Method in signature     | Method included in canonical string |
+| **Timing attack**          | Constant-time compare   | XOR-based comparison                |
+| **Secret exposure**        | Cloudflare Secrets      | Never in code or logs               |
 
 ### 8.2 What This Pattern Does NOT Protect
 
-| Scenario | Reason | Alternative |
-|----------|--------|-------------|
-| **Secret compromise** | Attacker can forge signatures | Rotate secrets, use short-lived credentials |
-| **Compromised caller** | Caller has legitimate secret | Audit logging, anomaly detection |
-| **DoS attacks** | Signature verification has cost | Rate limiting at edge |
-| **Internal network sniffing** | HTTPS required | TLS enforcement (SEC-3.1) |
+| Scenario                      | Reason                          | Alternative                                 |
+| ----------------------------- | ------------------------------- | ------------------------------------------- |
+| **Secret compromise**         | Attacker can forge signatures   | Rotate secrets, use short-lived credentials |
+| **Compromised caller**        | Caller has legitimate secret    | Audit logging, anomaly detection            |
+| **DoS attacks**               | Signature verification has cost | Rate limiting at edge                       |
+| **Internal network sniffing** | HTTPS required                  | TLS enforcement (SEC-3.1)                   |
 
 ### 8.3 Secret Rotation
 
@@ -666,7 +654,7 @@ ${BODY_HASH}"
 SIGNATURE=$(echo -n "$CANONICAL" | openssl dgst -sha256 -hmac "$SECRET" -binary | base64 | tr '+/' '-_' | tr -d '=')
 
 # Test the endpoint
-curl -X POST "https://www.eventangle.com${PATH}" \
+curl -X POST "https://www.oursharedevents.com${PATH}" \
   -H "Content-Type: application/json" \
   -H "X-Service-Signature: ${SIGNATURE}" \
   -H "X-Service-Timestamp: ${TIMESTAMP}" \
@@ -720,7 +708,7 @@ describe('Service Auth Pattern', () => {
     const response = await fetch(endpoint, {
       method: 'POST',
       headers: getAuthHeaders(signature),
-      body: '{"tampered": true}' // Different body
+      body: '{"tampered": true}', // Different body
     });
     expect(response.status).toBe(403);
     const body = await response.json();
@@ -733,9 +721,9 @@ describe('Service Auth Pattern', () => {
       headers: {
         'X-Service-Signature': 'invalid-signature',
         'X-Service-Timestamp': String(Math.floor(Date.now() / 1000)),
-        'X-Service-Nonce': crypto.randomUUID()
+        'X-Service-Nonce': crypto.randomUUID(),
       },
-      body: '{}'
+      body: '{}',
     });
     expect(response.status).toBe(403);
     const body = await response.json();
@@ -750,53 +738,53 @@ describe('Service Auth Pattern', () => {
 
 ### 10.1 Primary Acceptance Criteria
 
-| # | Criterion | Verification Method | Status |
-|---|-----------|---------------------|--------|
-| **AC-1** | Pattern resists replay: same nonce rejected on second request | Automated test (9.2) | |
-| **AC-2** | Pattern rejects missing signature headers | Automated test (9.2) | |
-| **AC-3** | Pattern rejects expired timestamps (>5 min skew) | Automated test (9.2) | |
-| **AC-4** | Pattern rejects invalid signatures | Automated test (9.2) | |
-| **AC-5** | Pattern rejects tampered request body | Automated test (9.2) | |
-| **AC-6** | Signature uses constant-time comparison | Code review | |
+| #        | Criterion                                                     | Verification Method  | Status |
+| -------- | ------------------------------------------------------------- | -------------------- | ------ |
+| **AC-1** | Pattern resists replay: same nonce rejected on second request | Automated test (9.2) |        |
+| **AC-2** | Pattern rejects missing signature headers                     | Automated test (9.2) |        |
+| **AC-3** | Pattern rejects expired timestamps (>5 min skew)              | Automated test (9.2) |        |
+| **AC-4** | Pattern rejects invalid signatures                            | Automated test (9.2) |        |
+| **AC-5** | Pattern rejects tampered request body                         | Automated test (9.2) |        |
+| **AC-6** | Signature uses constant-time comparison                       | Code review          |        |
 
 ### 10.2 Security Acceptance Criteria
 
-| # | Criterion | Verification Method |
-|---|-----------|---------------------|
-| **SEC-1** | Secret stored in Cloudflare Secrets (never in code) | Configuration audit |
-| **SEC-2** | Secret minimum 32 bytes | Configuration validation |
-| **SEC-3** | Nonce TTL prevents indefinite storage growth | KV TTL configuration |
-| **SEC-4** | All verification failures logged | Log review |
+| #         | Criterion                                           | Verification Method      |
+| --------- | --------------------------------------------------- | ------------------------ |
+| **SEC-1** | Secret stored in Cloudflare Secrets (never in code) | Configuration audit      |
+| **SEC-2** | Secret minimum 32 bytes                             | Configuration validation |
+| **SEC-3** | Nonce TTL prevents indefinite storage growth        | KV TTL configuration     |
+| **SEC-4** | All verification failures logged                    | Log review               |
 
 ---
 
 ## 11. Related Documents
 
-| Document | Path | Relationship |
-|----------|------|--------------|
-| Security Baseline | `docs/security/SECURITY_BASELINE.md` | Parent policy (NS-2) |
-| Route Classification | `docs/security/ROUTE_CLASSIFICATION_POLICY.md` | Route definitions (SEC-5.1) |
-| Cloudflare Access | `docs/security/CLOUDFLARE_ACCESS_PRIVILEGED.md` | User identity (SEC-5.2) |
-| Signed Mutations | `worker/src/auth/signedMutations.ts` | Client signing (SEC-IAC-05) |
+| Document             | Path                                            | Relationship                |
+| -------------------- | ----------------------------------------------- | --------------------------- |
+| Security Baseline    | `docs/security/SECURITY_BASELINE.md`            | Parent policy (NS-2)        |
+| Route Classification | `docs/security/ROUTE_CLASSIFICATION_POLICY.md`  | Route definitions (SEC-5.1) |
+| Cloudflare Access    | `docs/security/CLOUDFLARE_ACCESS_PRIVILEGED.md` | User identity (SEC-5.2)     |
+| Signed Mutations     | `worker/src/auth/signedMutations.ts`            | Client signing (SEC-IAC-05) |
 
 ---
 
 ## 12. Summary
 
-| Aspect | Value |
-|--------|-------|
-| **Auth Type** | HMAC-SHA256 request signing |
-| **Canonical String** | method + path + timestamp + nonce + bodyHash |
-| **Timestamp Window** | ±300 seconds (5 minutes) |
-| **Replay Prevention** | Nonce storage in KV with 600s TTL |
-| **Headers** | `X-Service-Signature`, `X-Service-Timestamp`, `X-Service-Nonce` |
-| **Secret Storage** | Cloudflare Secrets |
-| **Primary AC** | Pattern resists replay and rejects missing/expired signatures |
+| Aspect                | Value                                                           |
+| --------------------- | --------------------------------------------------------------- |
+| **Auth Type**         | HMAC-SHA256 request signing                                     |
+| **Canonical String**  | method + path + timestamp + nonce + bodyHash                    |
+| **Timestamp Window**  | ±300 seconds (5 minutes)                                        |
+| **Replay Prevention** | Nonce storage in KV with 600s TTL                               |
+| **Headers**           | `X-Service-Signature`, `X-Service-Timestamp`, `X-Service-Nonce` |
+| **Secret Storage**    | Cloudflare Secrets                                              |
+| **Primary AC**        | Pattern resists replay and rejects missing/expired signatures   |
 
 ---
 
 ## Document History
 
-| Date | Author | Changes |
-|------|--------|---------|
+| Date       | Author      | Changes                                                    |
+| ---------- | ----------- | ---------------------------------------------------------- |
 | 2026-01-05 | Claude Code | Initial PROMPTSPEC-SEC-5.3 service-to-service auth pattern |

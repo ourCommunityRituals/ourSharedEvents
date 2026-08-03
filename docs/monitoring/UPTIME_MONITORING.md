@@ -1,4 +1,4 @@
-# Uptime Monitoring Setup
+﻿# Uptime Monitoring Setup
 
 External uptime monitoring ensures you're alerted immediately when the system goes down, not when users start complaining.
 
@@ -6,11 +6,11 @@ External uptime monitoring ensures you're alerted immediately when the system go
 
 ## Production Endpoints
 
-| Endpoint   | URL                                 | Purpose                                 |
-| ---------- | ----------------------------------- | --------------------------------------- |
-| **Ping**   | `https://www.eventangle.com/ping`   | Ultra-simple uptime check (recommended) |
-| **Status** | `https://www.eventangle.com/status` | Detailed status with build info         |
-| **Health** | `https://www.eventangle.com/health` | Alias for status                        |
+| Endpoint   | URL                                      | Purpose                                 |
+| ---------- | ---------------------------------------- | --------------------------------------- |
+| **Ping**   | `https://www.oursharedevents.com/ping`   | Ultra-simple uptime check (recommended) |
+| **Status** | `https://www.oursharedevents.com/status` | Detailed status with build info         |
+| **Health** | `https://www.oursharedevents.com/health` | Alias for status                        |
 
 ### Endpoint Responses
 
@@ -49,8 +49,8 @@ External uptime monitoring ensures you're alerted immediately when the system go
 1. Click **"Add New Monitor"**
 2. Configure:
    - **Monitor Type:** HTTP(s)
-   - **Friendly Name:** EventAngle Production
-   - **URL:** `https://www.eventangle.com/ping`
+   - **Friendly Name:** oursharedevents Production
+   - **URL:** `https://www.oursharedevents.com/ping`
    - **Monitoring Interval:** 5 minutes (free) or 1 minute (Pro)
 
 ### Step 3: Configure Alert Contacts
@@ -98,9 +98,9 @@ External uptime monitoring ensures you're alerted immediately when the system go
 1. Navigate to **Monitoring > Uptime**
 2. Click **"Add new"**
 3. Configure:
-   - **Name:** EventAngle Production
+   - **Name:** oursharedevents Production
    - **Check Interval:** 1 minute
-   - **URL:** `https://www.eventangle.com/ping`
+   - **URL:** `https://www.oursharedevents.com/ping`
    - **Request Method:** GET
 
 ### Step 3: Add Content Check
@@ -157,11 +157,11 @@ When you receive an uptime alert:
 1. **Acknowledge the alert** to prevent escalation
 2. **Check the ping endpoint manually**:
    ```bash
-   curl -s https://www.eventangle.com/ping
+   curl -s https://www.oursharedevents.com/ping
    ```
 3. **If ping fails, check status for details**:
    ```bash
-   curl -s https://www.eventangle.com/status | jq
+   curl -s https://www.oursharedevents.com/status | jq
    ```
 
 ### Diagnostic Steps (5-15 minutes)
@@ -170,7 +170,7 @@ When you receive an uptime alert:
 2. **Check Google Apps Script status**: https://www.google.com/appsstatus
 3. **Check the setup diagnostics**:
    ```bash
-   curl -s "https://www.eventangle.com/status?p=setup" | jq
+   curl -s "https://www.oursharedevents.com/status?p=setup" | jq
    ```
 
 ### Escalation Path
@@ -224,7 +224,7 @@ Both services offer public status pages:
 
 1. Go to **My Settings > Public Status Pages**
 2. Create a new status page
-3. Add your EventAngle monitor
+3. Add your oursharedevents monitor
 4. Share the URL with stakeholders
 
 ### Pingdom Status Page
@@ -240,10 +240,10 @@ Both services offer public status pages:
 
 If you have staging and production environments:
 
-| Environment | URL                                   | Check Interval |
-| ----------- | ------------------------------------- | -------------- |
-| Production  | `https://www.eventangle.com/ping`     | 1 minute       |
-| Staging     | `https://staging.eventangle.com/ping` | 5 minutes      |
+| Environment | URL                                        | Check Interval |
+| ----------- | ------------------------------------------ | -------------- |
+| Production  | `https://www.oursharedevents.com/ping`     | 1 minute       |
+| Staging     | `https://staging.oursharedevents.com/ping` | 5 minutes      |
 
 ---
 

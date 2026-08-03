@@ -1,15 +1,15 @@
-# DNS Cutover: Worker-Only Routing
+﻿# DNS Cutover: Worker-Only Routing
 
 ## Story 5.2: DNS Cutover (stg + prod fully to Cloudflare)
 
-This document describes the complete DNS cutover to route ALL eventangle.com traffic through the Cloudflare Worker, with NO GAS (Google Apps Script) backend calls.
+This document describes the complete DNS cutover to route ALL oursharedevents.com traffic through the Cloudflare Worker, with NO GAS (Google Apps Script) backend calls.
 
 ## Status: COMPLETE ✅
 
 As of Story 5.2, the DNS cutover is fully complete:
 
-- **Staging** (`stg.eventangle.com`): BACKEND_MODE=worker
-- **Production** (`eventangle.com`): BACKEND_MODE=worker
+- **Staging** (`stg.oursharedevents.com`): BACKEND_MODE=worker
+- **Production** (`oursharedevents.com`): BACKEND_MODE=worker
 - **No script.google.com backend calls exist anywhere**
 
 ## Architecture
@@ -17,7 +17,7 @@ As of Story 5.2, the DNS cutover is fully complete:
 ### Before Story 5.2
 
 ```
-eventangle.com → Cloudflare Worker → GAS (for shortlinks, RPC)
+oursharedevents.com → Cloudflare Worker → GAS (for shortlinks, RPC)
                                    → Worker templates (HTML)
                                    → Google Sheets API (data)
 ```
@@ -25,7 +25,7 @@ eventangle.com → Cloudflare Worker → GAS (for shortlinks, RPC)
 ### After Story 5.2 (CURRENT)
 
 ```
-eventangle.com → Cloudflare Worker → Worker templates (HTML)
+oursharedevents.com → Cloudflare Worker → Worker templates (HTML)
                                    → Google Sheets API (data)
                                    → Worker-native shortlinks (Sheets API)
                                    ✗ NO GAS calls anywhere
@@ -89,23 +89,23 @@ Run these verification commands:
 
 ```bash
 # 1. Check Worker headers
-curl -s -I https://www.eventangle.com/events | grep -iE "x-proxied-by|x-worker|x-backend"
-# Expected: x-proxied-by: eventangle-worker
+curl -s -I https://www.oursharedevents.com/events | grep -iE "x-proxied-by|x-worker|x-backend"
+# Expected: x-proxied-by: oursharedevents-worker
 
 # 2. Check no GAS HTML leak (blue banner)
-curl -s https://www.eventangle.com/events | grep -c "Google Apps Script user"
+curl -s https://www.oursharedevents.com/events | grep -c "Google Apps Script user"
 # Expected: 0
 
 # 3. Check API status
-curl -s https://www.eventangle.com/api/status | jq
+curl -s https://www.oursharedevents.com/api/status | jq
 # Expected: {"ok": true, "backendMode": "worker", ...}
 
 # 4. Check events endpoint
-curl -s https://www.eventangle.com/api/v2/events | jq '.ok'
+curl -s https://www.oursharedevents.com/api/v2/events | jq '.ok'
 # Expected: true
 
 # 5. Run smoke tests
-BASE_URL="https://www.eventangle.com" npm run test:api:smoke
+BASE_URL="https://www.oursharedevents.com" npm run test:api:smoke
 ```
 
 ### Step 5: Monitor
@@ -184,7 +184,7 @@ To revert to GAS-first routing:
 
 3. Verify:
    ```bash
-   curl -s https://www.eventangle.com/api/status | jq '.backendMode'
+   curl -s https://www.oursharedevents.com/api/status | jq '.backendMode'
    # Expected: "gas" or "mixed"
    ```
 
@@ -247,8 +247,8 @@ Shortlinks (`/r/...`) still require GAS:
 
 ## Acceptance Criteria (Story 5.2)
 
-- ✅ `eventangle.com/*` routes through Worker
-- ✅ `stg.eventangle.com/*` routes through Worker
+- ✅ `oursharedevents.com/*` routes through Worker
+- ✅ `stg.oursharedevents.com/*` routes through Worker
 - ✅ No `script.google.com` backend calls exist anywhere
 - ✅ Shortlinks use Worker-native Sheets API
 - ✅ Legacy API returns 410 Gone with migration guidance

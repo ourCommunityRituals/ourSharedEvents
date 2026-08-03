@@ -1,4 +1,4 @@
-# Runbook: Replace Global API Key Usage with Scoped Tokens
+﻿# Runbook: Replace Global API Key Usage with Scoped Tokens
 
 > **Epic SEC-1 — Cloudflare Account Hardening**
 > Story SEC-1.2 — Replace Global API Key Usage with Scoped Tokens
@@ -107,16 +107,16 @@ The following scoped tokens must be created in Cloudflare:
 
 **Purpose:** CI/CD pipeline Worker deployments only
 
-| Permission         | Level | Scope                | Justification           |
-| ------------------ | ----- | -------------------- | ----------------------- |
-| Workers Scripts    | Edit  | Account              | Deploy Worker code      |
-| Workers Routes     | Edit  | Zone: eventangle.com | Configure Worker routes |
-| Workers KV Storage | Edit  | Account              | (If using KV)           |
-| Account Settings   | Read  | Account              | Verify account ID       |
+| Permission         | Level | Scope                     | Justification           |
+| ------------------ | ----- | ------------------------- | ----------------------- |
+| Workers Scripts    | Edit  | Account                   | Deploy Worker code      |
+| Workers Routes     | Edit  | Zone: oursharedevents.com | Configure Worker routes |
+| Workers KV Storage | Edit  | Account                   | (If using KV)           |
+| Account Settings   | Read  | Account                   | Verify account ID       |
 
 **Zone Restrictions:**
 
-- Zone: `eventangle.com` (and subdomains)
+- Zone: `oursharedevents.com` (and subdomains)
 
 **IP Restrictions (Optional):**
 
@@ -130,13 +130,13 @@ The following scoped tokens must be created in Cloudflare:
 
 **Purpose:** DNS record management for infrastructure changes
 
-| Permission | Level | Scope                | Justification      |
-| ---------- | ----- | -------------------- | ------------------ |
-| DNS        | Edit  | Zone: eventangle.com | Manage DNS records |
+| Permission | Level | Scope                     | Justification      |
+| ---------- | ----- | ------------------------- | ------------------ |
+| DNS        | Edit  | Zone: oursharedevents.com | Manage DNS records |
 
 **Zone Restrictions:**
 
-- Zone: `eventangle.com` only
+- Zone: `oursharedevents.com` only
 
 **Use Cases:**
 
@@ -268,13 +268,13 @@ Permissions:
 │   └── Workers Scripts: Edit
 │   └── Account Settings: Read
 └── Zone
-    └── eventangle.com
+    └── oursharedevents.com
         └── Workers Routes: Edit
 ```
 
 #### Step 3: Zone Resources
 
-- **Include:** Specific zone → `eventangle.com`
+- **Include:** Specific zone → `oursharedevents.com`
 - **Exclude:** All other zones
 
 #### Step 4: Client IP Filtering (Optional)
@@ -306,13 +306,13 @@ curl -s https://api.github.com/meta | jq -r '.actions[]'
 ```
 Permissions:
 └── Zone
-    └── eventangle.com
+    └── oursharedevents.com
         └── DNS: Edit
 ```
 
 #### Zone Resources
 
-- **Include:** Specific zone → `eventangle.com`
+- **Include:** Specific zone → `oursharedevents.com`
 
 ### 5.4 Create Audit Token
 

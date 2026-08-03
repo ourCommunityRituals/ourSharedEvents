@@ -1,4 +1,4 @@
-# Page Classification
+﻿# Page Classification
 
 > Which pages are shipped MVP surfaces vs internal/archived
 
@@ -73,10 +73,10 @@ https://script.google.com/.../exec?p=poster&eventId=xxx
 https://script.google.com/.../exec?p=report&eventId=xxx
 ```
 
-Custom domain (eventangle.com):
+Custom domain (oursharedevents.com):
 
 ```
-https://eventangle.com/events/[slug]     → Public.html
-https://eventangle.com/display/[brand]   → Display.html
-https://eventangle.com/poster/[eventId]  → Poster.html
+https://oursharedevents.com/events/[slug]     → Public.html
+https://oursharedevents.com/display/[brand]   → Display.html
+https://oursharedevents.com/poster/[eventId]  → Poster.html
 ```

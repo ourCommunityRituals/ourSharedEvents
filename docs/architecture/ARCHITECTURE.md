@@ -1,4 +1,4 @@
-# OurSharedEvents — Architecture
+﻿# OurSharedEvents — Architecture
 
 **Last Updated:** 2026-03-31
 **Status:** Phase 1 Build Complete / Phase 2 Foundation Laid
@@ -103,7 +103,7 @@ workers/oursharedevents/
 | Staging     | `stg.oursharedevents.com`                        |
 | Local dev   | `localhost` via `wrangler dev`                   |
 
-> Old domain `stg.eventangle.com` is retired. All references should use `oursharedevents.com`.
+> Old domain `stg.oursharedevents.com` is retired. All references should use `oursharedevents.com`.
 
 ---
 
@@ -290,7 +290,7 @@ Key conflicts now resolved:
 
 | MIGRATION_EPICS.md (historical)            | Current reality                                             |
 | ------------------------------------------ | ----------------------------------------------------------- |
-| Domain: `stg.eventangle.com`               | Domain: `stg.oursharedevents.com`                           |
+| Domain: `stg.oursharedevents.com`          | Domain: `stg.oursharedevents.com`                           |
 | Worker entry: `cloudflare-proxy/worker.js` | Worker entry: `workers/oursharedevents/src/index.ts`        |
 | Data: Google Sheets only                   | Data: Sheets (Phase 1) + D1 MAIN_DB + D1 FORMS_DB (Phase 2) |
 | No feature flags                           | 18 feature flags, 3-tier system                             |
