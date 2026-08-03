@@ -349,13 +349,13 @@ jobs:
         # architectural contracts were not gated on normal development.
         shard: [lint, typecheck, tests, a11y, invariants]
     steps:
-      # a11y runner: stale _diag log files from prior runs cause checkout to
-      # fail with "file already exists" when clean: false. Clear only on a11y.
-      # RUNNER_WORKSPACE = <runner_root>/_work/<repo> — go up two levels to root.
-      - name: 'a11y: clear stale runner diag files'
-        if: matrix.shard == 'a11y'
+      # Self-hosted runner cleanup: stale _diag/pages/ log files left by
+      # cancelled runs cause checkout to fail with "file already exists".
+      # Run on every shard — concurrent rm -rf is safe (idempotent).
+      # RUNNER_WORKSPACE = <runner_root>/_work/<repo> — go up two levels.
+      - name: 'Clear stale runner diag files'
         shell: bash
-        run: rm -rf "$RUNNER_WORKSPACE/../../_diag" 2>/dev/null || true
+        run: rm -rf "$RUNNER_WORKSPACE/../../_diag/pages" 2>/dev/null || true
 
       - uses: actions/checkout@v7
         with:
