@@ -265,6 +265,13 @@ export default defineConfig({
     include: ['tests/**/*.spec.ts'],
     exclude: ['tests/a11y-axe.spec.ts'],
     pool: cloudflarePool(),
+    // Cap concurrent miniflare runtimes to prevent resource exhaustion on
+    // self-hosted Windows runners. Without a cap, all 100+ test files spawn
+    // independent workerd processes simultaneously, saturating CPU/memory
+    // and causing the runner's Azure relay token renewal to fail
+    // (VssUnauthorizedException), which cancels the entire job.
+    // 4 is enough to keep all CPU cores busy without overwhelming the runner.
+    maxWorkers: 4,
     // 30s — miniflare worker bootstrap + per-spec D1 migration apply (~80 stmts)
     // can exceed vitest's 10s default `hookTimeout` when the self-hosted
     // Bloodraven runners are processing parallel workflow jobs and CPU/IO
