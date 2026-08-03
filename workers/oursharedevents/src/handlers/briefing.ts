@@ -352,8 +352,8 @@ const SECTIONS: Section[] = [
   },
 ];
 
-const BRIEFING_HTML = `<!DOCTYPE html>
-<html lang="en">
+export const BRIEFING_HTML = `<!DOCTYPE html>
+<html lang="en" data-brand="briefing">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
@@ -361,10 +361,11 @@ const BRIEFING_HTML = `<!DOCTYPE html>
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="OCR Briefing">
 <title>ourCommunityRituals — CEO Briefing</title>
+<link rel="stylesheet" href="/ui.css" />
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
 <style>
-:root{--bg:#0a0f1a;--card:#111827;--card2:#1a2332;--t1:#f0f4f8;--t2:#94a3b8;--t3:#64748b;--blue:#3b82f6;--green:#10b981;--amber:#f59e0b;--red:#ef4444;--purple:#8b5cf6;--border:#1e293b}
+[data-brand="briefing"]{--bg:#0a0f1a;--card:#111827;--card2:#1a2332;--t1:#f0f4f8;--t2:#94a3b8;--t3:#64748b;--blue:#3b82f6;--green:#10b981;--amber:#f59e0b;--red:#ef4444;--purple:#8b5cf6;--border:#1e293b}
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display',system-ui,sans-serif;background:var(--bg);color:var(--t1);-webkit-font-smoothing:antialiased;line-height:1.6;overflow-x:hidden}
 .pin-s{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;padding:2rem;text-align:center}
