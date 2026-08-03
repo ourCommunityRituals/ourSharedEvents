@@ -18,6 +18,9 @@
  *   POST   /api/v2/events/:id/sponsors/:sid/impression – log impression
  *   POST   /api/v2/events/:id/sponsors/:sid/click      – log click
  *
+ * Public (no auth):
+ *   GET    /api/v2/sponsors/:id/logo         – proxy + validate external logo (OSE-288)
+ *
  * Data source: D1 database (DB binding)
  */
 
@@ -28,6 +31,7 @@ import {
   buildSponsorBundle,
   type Surface,
 } from '../lib/sponsor-resolver';
+import { validateLogoUrl, fetchAndProxyLogo } from '../lib/sponsor-logo';
 
 // ─── Types ──────────────────────────────────────────────────────────────────────
 
@@ -175,7 +179,16 @@ export async function handleAdminCreateSponsor(
   if (!eventId) return errorResponse('MISSING_FIELD', 'Missing required field: event_id', 400, rid);
 
   const id = generateId('sp');
-  const logoUrl = typeof body.logo_url === 'string' ? body.logo_url.slice(0, 500) : null;
+  const logoValidation = validateLogoUrl(body.logo_url ?? null);
+  if (!logoValidation.valid) {
+    return errorResponse(
+      'INVALID_LOGO_URL',
+      'logo_url must be a valid http:// or https:// URL (max 500 chars)',
+      400,
+      rid
+    );
+  }
+  const logoUrl = logoValidation.url;
   const websiteUrl = typeof body.website_url === 'string' ? body.website_url.slice(0, 500) : null;
   const tier =
     typeof body.tier === 'string' && (VALID_TIERS as readonly string[]).includes(body.tier)
@@ -266,6 +279,20 @@ export async function handleAdminUpdateSponsor(
             400,
             rid
           );
+        }
+        if (field === 'logo_url') {
+          const logoValidation = validateLogoUrl(val);
+          if (!logoValidation.valid) {
+            return errorResponse(
+              'INVALID_LOGO_URL',
+              'logo_url must be a valid http:// or https:// URL (max 500 chars)',
+              400,
+              rid
+            );
+          }
+          sets.push('logo_url = ?');
+          values.push(logoValidation.url);
+          continue;
         }
         sets.push(`${field} = ?`);
         values.push(val.slice(0, max));
@@ -694,6 +721,61 @@ export async function handleLogImpression(
     { ok: true, status: 201 },
     { status: 201, headers: { ...corsHeaders(request), 'X-Request-Id': rid } }
   );
+}
+
+// ─── Logo proxy (OSE-288 / OSE-R-011 / OSE-R-015) ──────────────────────────────
+//
+// GET /api/v2/sponsors/:id/logo
+//
+// Fetches the sponsor's external logo_url, validates its content-type, and
+// re-serves it from the worker with security headers set. The external URL
+// never appears as an <img src> in rendered HTML — surfaces use this internal
+// path exclusively.
+//
+// This is the R2-free implementation. When R2 is provisioned, the handler can
+// be upgraded to store-on-first-fetch and read from R2 on subsequent requests
+// without any contract change on the call sites.
+
+export async function handleSponsorLogo(
+  request: Request,
+  env: SponsorsEnv,
+  sponsorId: string
+): Promise<Response> {
+  const rid = requestId();
+
+  if (!env.DB) {
+    return new Response(null, { status: 404, headers: { 'X-Request-Id': rid } });
+  }
+
+  let row: Record<string, unknown> | null;
+  try {
+    row = await env.DB.prepare('SELECT logo_url FROM sponsors WHERE id = ? AND is_active = 1')
+      .bind(sponsorId)
+      .first<Record<string, unknown>>();
+  } catch {
+    return new Response(null, { status: 503, headers: { 'X-Request-Id': rid } });
+  }
+
+  if (!row || !row.logo_url) {
+    return new Response(null, { status: 404, headers: { 'X-Request-Id': rid } });
+  }
+
+  const logoUrl = row.logo_url as string;
+  const validation = validateLogoUrl(logoUrl);
+  if (!validation.valid || !validation.url) {
+    return new Response(null, { status: 422, headers: { 'X-Request-Id': rid } });
+  }
+
+  const result = await fetchAndProxyLogo(validation.url);
+  if (!result.ok || !result.response) {
+    return new Response(null, {
+      status: 502,
+      headers: { 'X-Request-Id': rid, 'Cache-Control': 'no-store' },
+    });
+  }
+
+  result.response.headers.set('X-Request-Id', rid);
+  return result.response;
 }
 
 /**

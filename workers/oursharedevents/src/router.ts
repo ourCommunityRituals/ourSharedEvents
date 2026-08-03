@@ -161,6 +161,7 @@ import {
   handleGetSponsorBundle,
   handleLogImpression,
   handleLogClick,
+  handleSponsorLogo,
   type SponsorsEnv,
 } from './handlers/sponsors';
 import { handleAdminBackupEvent, type BigQueryHandlerEnv } from './handlers/bigquery';
@@ -773,6 +774,12 @@ export async function route(
   const clickMatch = pathname.match(/^\/api\/v2\/events\/([^/]+)\/sponsors\/([^/]+)\/click$/);
   if (clickMatch && method === 'POST') {
     return handleLogClick(request, env, clickMatch[1], clickMatch[2]);
+  }
+
+  // GET /api/v2/sponsors/:id/logo — proxy external logo through worker (OSE-288)
+  const logoMatch = pathname.match(/^\/api\/v2\/sponsors\/([^/]+)\/logo$/);
+  if (logoMatch && method === 'GET') {
+    return handleSponsorLogo(request, env, logoMatch[1]);
   }
 
   // ── Google Maps venue image proxy (OSE-217) ────────────────────────────────
