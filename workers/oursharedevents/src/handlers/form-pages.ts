@@ -276,7 +276,7 @@ const FORM_JS_SUBMIT = `
       var items = cache.slice(0, 3).map(function(s) {
         var name = escAttr(s.name);
         var logo = s.logo_url && s.id
-          ? '<img src="/api/v2/sponsors/' + encodeURIComponent(s.id) + '/logo" alt="' + name + '" loading="lazy" onerror="this.style.display=\'none\'" />'
+          ? '<img src="/api/v2/sponsors/' + encodeURIComponent(s.id) + '/logo" alt="' + name + '" referrerpolicy="no-referrer" loading="lazy" onerror="this.style.display=\'none\'" />'
           : '';
         return '<span class="sponsor-item">' + logo + '<span class="sponsor-name">' + name + '</span></span>';
       }).join('');
@@ -320,7 +320,7 @@ const FORM_JS_SPONSOR = `
         var items = banner.slice(0, 3).map(function(s) {
           var name = escAttr(s.name);
           var logo = s.logo_url && s.id
-            ? '<img src="/api/v2/sponsors/' + encodeURIComponent(s.id) + '/logo" alt="' + name + '" loading="lazy" onerror="this.style.display=\'none\'" />'
+            ? '<img src="/api/v2/sponsors/' + encodeURIComponent(s.id) + '/logo" alt="' + name + '" referrerpolicy="no-referrer" loading="lazy" onerror="this.style.display=\'none\'" />'
             : '';
           return '<span class="sponsor-item">' + logo + '<span class="sponsor-name">' + name + '</span></span>';
         }).join('');

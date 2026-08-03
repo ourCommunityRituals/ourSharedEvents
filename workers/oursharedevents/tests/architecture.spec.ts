@@ -183,7 +183,14 @@ describe('L1: handlers/data-subject.ts — cross-binding scope guard (invariant 
 });
 
 describe('L1: broad reverse gate — no ungated handler touches FORMS_DB (invariant #1)', () => {
-  // Authorised FORMS_DB handlers: forms.ts, feature-flags.ts, data-subject.ts.
+  // Authorised FORMS_DB handlers and their permitted access scope:
+  //   forms.ts         — reads/writes form submissions (registration, checkin, survey, email)
+  //   feature-flags.ts — reads flag values for access gating
+  //   data-subject.ts  — the ONLY handler authorised to DELETE from FORMS_DB (PII erasure)
+  //   pages.ts         — reads ONLY aggregate counts (reg count, checkin count, survey count,
+  //                      email count) for public event page social proof. Never reads raw form
+  //                      rows or PII columns (email_hash, email_encrypted, attendee_name).
+  //                      Authorized: OSE-ssp1 stakeholder-surfaces phase 1.
   // All other src/handlers/ files must never reference env.FORMS_DB.
   // This gate closes the gap where 9+ handler files were ungated.
   test('non-authorised handlers contain no FORMS_DB reference', () => {
@@ -191,6 +198,7 @@ describe('L1: broad reverse gate — no ungated handler touches FORMS_DB (invari
       'src/handlers/forms.ts',
       'src/handlers/feature-flags.ts',
       'src/handlers/data-subject.ts',
+      'src/handlers/pages.ts',
     ];
     const sources: Record<string, string> = JSON.parse(tenv().TEST_SOURCE_FILES_JSON);
     let checked = 0;
