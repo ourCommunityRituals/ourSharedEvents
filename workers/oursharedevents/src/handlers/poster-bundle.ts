@@ -5,6 +5,7 @@
  *   - QR code data URIs (PNG) for all 4 form types
  *   - Form links for the same 4 destinations
  *   - Human-readable labels for each type
+ *   - UEC ENTER colored SVG QR for the event public page (OSE-191)
  *
  * Two consumption modes (same bundle, same data):
  *   Physical: organiser prints the QR codes on posters/tabletops.
@@ -18,12 +19,21 @@
  * DESIGN-9 (OSE-103)
  */
 
-import { generateQrCode } from '../lib/qr';
+import { generateQrCode, generateSvgQrCode } from '../lib/qr';
 import { assertRenderable, parseEventState } from '../domain/event-state';
+import { getCode } from '../lib/uec';
 
 export interface PosterBundleEnv {
   DB: D1Database;
+  FORMS_DB: D1Database;
 }
+
+// UEC ENTER (01) scan_hex — WCAG AA on white (6.59:1). Sourced via getCode() per OSE-322.
+const UEC_ENTER_HEX = getCode('ENTER')!.scan_hex;
+
+// When config.mock-mode is enabled, the poster QR encodes the demo event public page.
+// Kept in sync with MOCK_EVENT_ID in src/lib/mock-data.ts (MOCK-1a / OSE-147).
+const MOCK_EVENT_ID_PATH = 'evt_00000000-0000-0000-0000-riph-bocce-001';
 
 const FORM_TYPES = ['register', 'checkin', 'survey', 'email-signup'] as const;
 type FormType = (typeof FORM_TYPES)[number];
@@ -73,6 +83,16 @@ export async function handleGetPosterBundle(
     labels[type] = FORM_LABELS[type];
   }
 
+  // UEC ENTER QR — encodes the event public page using UEC color semantics (OSE-191).
+  // When config.mock-mode is active, encodes the demo event URL instead of the live URL.
+  const mockFlag = await env.FORMS_DB.prepare(
+    "SELECT enabled FROM feature_flags WHERE scope = 'global' AND flag_key = 'config.mock-mode'"
+  ).first<{ enabled: number }>();
+  const isMockMode = mockFlag?.enabled === 1;
+  const publicEventId = isMockMode ? MOCK_EVENT_ID_PATH : encodeURIComponent(row.id);
+  const publicUrl = `${origin}/events/${publicEventId}`;
+  const uecQr = generateSvgQrCode(publicUrl, { fgColor: UEC_ENTER_HEX, errorCorrection: 'M' });
+
   return Response.json({
     ok: true,
     eventId: row.id,
@@ -81,5 +101,7 @@ export async function handleGetPosterBundle(
     qr,
     links,
     labels,
+    uecQr,
+    uecEnterHex: UEC_ENTER_HEX,
   });
 }

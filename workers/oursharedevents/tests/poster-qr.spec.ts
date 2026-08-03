@@ -127,9 +127,10 @@ describe('DESIGN-9 L1: static source file checks', () => {
     expect(router).toContain('handleGetPosterBundle');
   });
 
-  test('poster-bundle handler imports generateQrCode from lib/qr', () => {
+  test('poster-bundle handler imports generateQrCode and generateSvgQrCode from lib/qr', () => {
     const handler = sourceFile('handlers/poster-bundle.ts');
     expect(handler).toContain('generateQrCode');
+    expect(handler).toContain('generateSvgQrCode');
     expect(handler, 'missing import from lib/qr').toContain('../lib/qr');
   });
 
@@ -146,6 +147,31 @@ describe('DESIGN-9 L1: static source file checks', () => {
     expect(handler).toContain('Check-in');
     expect(handler).toContain('Survey');
     expect(handler).toContain('Email Signup');
+  });
+
+  // OSE-191: UEC QR static checks
+  test('poster-bundle handler uses getCode() from src/lib/uec (OSE-322 compliance)', () => {
+    const handler = sourceFile('handlers/poster-bundle.ts');
+    expect(handler, 'getCode import missing — must use UEC API not hex literals').toContain(
+      "getCode('ENTER')"
+    );
+    expect(handler, 'UEC_ENTER_HEX constant missing').toContain('UEC_ENTER_HEX');
+    expect(handler, 'must not have raw hex literal — use getCode().scan_hex').not.toContain(
+      "'#1A6B2F'"
+    );
+  });
+
+  test('poster-bundle handler references config.mock-mode flag for UEC QR URL', () => {
+    const handler = sourceFile('handlers/poster-bundle.ts');
+    expect(handler).toContain('config.mock-mode');
+    expect(handler).toContain('uecQr');
+  });
+
+  test('qr.ts exports generateSvgQrCode', () => {
+    const qr = sourceFile('lib/qr.ts');
+    expect(qr).toContain('generateSvgQrCode');
+    expect(qr).toContain('fgColor');
+    expect(qr).toContain('SvgQrOptions');
   });
 });
 
@@ -240,5 +266,51 @@ describe('DESIGN-9 L2: poster-bundle endpoint integration', () => {
     for (const type of ['register', 'checkin', 'survey', 'email-signup']) {
       expect(links[type]).toMatch(/^https?:\/\/.+\/forms\/.+\?type=/);
     }
+  });
+
+  // OSE-191: UEC QR integration checks
+  test('bundle includes uecQr field that is an inline SVG string', async () => {
+    const eventId = await createEvent('UEC QR SVG Check');
+
+    const bundleRes = await SELF.fetch(`https://t.test/api/v2/events/${eventId}/poster-bundle`);
+    const bundle = await json(bundleRes);
+
+    expect(bundle.uecQr, 'uecQr field missing').toBeDefined();
+    const svg = bundle.uecQr as string;
+    expect(svg, 'uecQr must start with <svg').toMatch(/^<svg /);
+    expect(svg, 'uecQr must close with </svg>').toContain('</svg>');
+    expect(svg, 'uecQr must have xmlns attribute').toContain('xmlns="http://www.w3.org/2000/svg"');
+  });
+
+  test('uecQr SVG uses UEC ENTER green (#1A6B2F) fill color', async () => {
+    const eventId = await createEvent('UEC QR Color Check');
+
+    const bundleRes = await SELF.fetch(`https://t.test/api/v2/events/${eventId}/poster-bundle`);
+    const bundle = await json(bundleRes);
+    const svg = bundle.uecQr as string;
+
+    expect(svg, 'UEC ENTER hex #1A6B2F not found in SVG').toContain('#1A6B2F');
+  });
+
+  test('bundle includes uecEnterHex field matching UEC ENTER scan_hex', async () => {
+    const eventId = await createEvent('UEC Hex Field Check');
+
+    const bundleRes = await SELF.fetch(`https://t.test/api/v2/events/${eventId}/poster-bundle`);
+    const bundle = await json(bundleRes);
+
+    expect(bundle.uecEnterHex).toBe('#1A6B2F');
+  });
+
+  test('uecQr encodes event public page URL (live mode: default off)', async () => {
+    const eventId = await createEvent('UEC QR URL Check');
+
+    const bundleRes = await SELF.fetch(`https://t.test/api/v2/events/${eventId}/poster-bundle`);
+    const bundle = await json(bundleRes);
+    const svg = bundle.uecQr as string;
+
+    // In test env config.mock-mode defaults to 0 (disabled), so the live event URL
+    // should be encoded. The SVG rect count should be non-trivial (encoded QR has modules).
+    const rectCount = (svg.match(/<rect /g) ?? []).length;
+    expect(rectCount, 'SVG has too few rects — QR not properly encoded').toBeGreaterThan(10);
   });
 });
