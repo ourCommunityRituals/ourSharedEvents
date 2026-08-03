@@ -153,7 +153,7 @@ routes = [
 [[env.production.d1_databases]]
 binding = "DB"
 database_name = "ocr-db-production"
-database_id = "<production-db-id>"
+database_id = "c19285d2-9c9e-435e-b978-5fc9d737a914"
 migrations_dir = "migrations"
 
 # ── Forms D1 Database (production) — SEPARATE from anonymous scan system ──
@@ -161,7 +161,7 @@ migrations_dir = "migrations"
 [[env.production.d1_databases]]
 binding = "FORMS_DB"
 database_name = "ocr-forms-db-production"
-database_id = "<production-forms-db-id>"
+database_id = "ff327b4a-430d-428e-b134-b3d8071be8e4"
 migrations_dir = "migrations-forms"
 
 # ── R2 Uploads Bucket (production) ───────────────────────────────────────────
