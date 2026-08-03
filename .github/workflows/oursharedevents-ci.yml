@@ -464,7 +464,7 @@ jobs:
 
       - name: 'Quality: Unit + Contract + Guards'
         if: matrix.shard == 'tests'
-        run: npm test
+        run: npx vitest run
 
       # ── OSE-286: @ocr/ui adoption drift check ──────────────────────────────
       # Gates on critical violations (local-root-tokens, missing-shared-
