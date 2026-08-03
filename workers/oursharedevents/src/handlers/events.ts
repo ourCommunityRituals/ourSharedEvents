@@ -81,6 +81,10 @@ export async function handleListEvents(
   const url = new URL(request.url);
   const brand = url.searchParams.get('brand') || 'root';
 
+  // OSE-INV9 — tenant isolation: the DataProvider executes
+  // WHERE brand_id = ? AND status = 'active'
+  // on every public list request. Brand-scoping is the primary
+  // cross-tenant isolation gate for the highest-traffic public surface.
   try {
     const dp = getDataProvider(env, ctx);
     const result = await dp.listEvents(brand);

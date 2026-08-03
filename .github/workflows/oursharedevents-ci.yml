@@ -349,6 +349,13 @@ jobs:
         # architectural contracts were not gated on normal development.
         shard: [lint, typecheck, tests, a11y, invariants]
     steps:
+      # a11y runner: stale _diag log files from prior runs cause checkout to
+      # fail with "file already exists" when clean: false. Clear only on a11y.
+      - name: 'a11y: clear stale runner diag files'
+        if: matrix.shard == 'a11y'
+        shell: bash
+        run: rm -rf "$RUNNER_WORKSPACE/../_diag" 2>/dev/null || true
+
       - uses: actions/checkout@v7
         with:
           clean: false
