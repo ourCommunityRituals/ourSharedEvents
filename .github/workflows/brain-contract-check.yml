@@ -46,12 +46,20 @@ jobs:
           python-version: '3.11'
 
       - name: Install deps
-        run: pip install pyyaml packaging ruamel.yaml
+        run: pip install pyyaml packaging "ruamel.yaml>=0.18"
 
       - name: Run brain test pyramid
         id: brain-pyramid
         working-directory: ocr-docs/ocr-docs-brain
         run: python3 tests/run_all.py
+
+      - name: Validate invariants registry (structural integrity gate)
+        working-directory: ocr-docs/ocr-docs-brain
+        run: python3 scripts/invariant.py validate
+
+      - name: Invariant #22 — cross-repo import isolation gate (OCR-ENF-23)
+        working-directory: ${{ github.workspace }}/ose
+        run: bash scripts/check-cross-repo-imports.sh .
 
       - name: Run OSE contract conformance
         id: conformance
