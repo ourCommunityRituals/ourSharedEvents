@@ -1,24 +1,43 @@
 /**
- * data-provider.ts — Fallback chain for event data access (MOCK-1a / OSE-147).
+ * data-provider.ts — OSE data-access fallback chain (MOCK-1b-ii / OSE-190).
  *
- * Source priority: live → server cache → mock → error
+ * Source priority per request:  live → CF cache → mock → error
  *
- *   1. live   — DB binding present AND mock-mode flag is off
- *   2. cache  — in-memory map keyed by event ID; populated by live reads
+ *   1. live   — DB binding present AND mock-mode is off AND not production-blocked
+ *   2. cache  — Cloudflare Cache API; stale-while-revalidate via ctx.waitUntil()
  *   3. mock   — deterministic fixtures from mock-data.ts
  *   4. error  — no source available; throws DataProviderError
  *
- * The source used for the current request is always reported so callers can
- * surface it in /health responses without additional inspection.
+ * Production guard
+ * ─────────────────
+ * Mock mode is blocked in production (`WORKER_ENV === 'production'`) unless
+ * the `config.mock-mode` feature flag is explicitly true in the DB.  Pass an
+ * already-resolved `mockModeOverride` boolean to the constructor to apply DB
+ * flag checks before instantiation (see `createDataProvider` async factory).
  *
- * Usage:
- *   const provider = new DataProvider(env);
- *   const result   = await provider.getEvent(eventId);
- *   console.log(result.source);  // 'live' | 'cache' | 'mock'
+ * Stale-while-revalidate
+ * ──────────────────────
+ * When a cached entry is stale (age > ttl) but within the SWR window
+ * (age < ttl + swrSeconds), the cached value is returned immediately and a
+ * background revalidation is queued via `ctx.waitUntil()`.  When ctx is not
+ * provided the SWR refresh is skipped (entry served stale without refresh).
+ *
+ * Shared types come from `@ocr/data-provider`.  Each OCR Worker (OSM, OW…)
+ * has its own DataProvider class following the same pattern.
  */
 
 import {
-  getMockSnapshot,
+  makeCacheKey,
+  readCfCache,
+  writeCfCache,
+  DataProviderError,
+  type DataSource,
+  type DataResult,
+  type DataProviderCtx,
+  type CacheTtlConfig,
+} from '@ocr/data-provider';
+
+import {
   getEventFixture,
   getSponsorFixtures,
   getPosterDeployments,
@@ -35,256 +54,355 @@ import {
   type Tier,
 } from './mock-data.js';
 
-// ── Public types ───────────────────────────────────────────────────────────────
+import { resolveSponsorsForEvent, type SponsorRow } from './sponsor-resolver.js';
 
-export type DataSource = 'live' | 'cache' | 'mock';
+// ── Re-export shared types so callers only need one import ─────────────────────
 
-export interface DataResult<T> {
-  data: T;
-  source: DataSource;
-}
+export type { DataSource, DataResult, DataProviderCtx };
+export { DataProviderError };
 
-export class DataProviderError extends Error {
-  constructor(
-    message: string,
-    public readonly reason: string
-  ) {
-    super(message);
-    this.name = 'DataProviderError';
-  }
-}
-
-// ── Minimal env shape (only what DataProvider cares about) ────────────────────
+// ── Env shape ──────────────────────────────────────────────────────────────────
 
 export interface DataProviderEnv {
   DB?: D1Database;
   WORKER_ENV?: string;
-  /** Set to "1" or "true" to force mock mode regardless of DB availability. */
+  /** Set to "1" or "true" to force mock mode in non-production environments. */
   MOCK_MODE?: string;
 }
 
-// ── Cache ─────────────────────────────────────────────────────────────────────
+// ── Per-route TTL config ───────────────────────────────────────────────────────
 
-interface CacheEntry<T> {
-  data: T;
-  fetchedAt: number; // Date.now() at write time
-}
-
-// Module-level cache — survives across requests within a single isolate lifetime.
-const eventCache = new Map<string, CacheEntry<MockEvent>>();
-const sponsorCache = new Map<string, CacheEntry<MockSponsor[]>>();
-
-const CACHE_TTL_MS = 30_000; // 30 s
-
-function isFresh<T>(entry: CacheEntry<T>): boolean {
-  return Date.now() - entry.fetchedAt < CACHE_TTL_MS;
-}
+const TTL: Record<string, CacheTtlConfig> = {
+  event: { ttlSeconds: 60, swrSeconds: 300 },
+  events: { ttlSeconds: 60, swrSeconds: 300 },
+  sponsor: { ttlSeconds: 30, swrSeconds: 300 },
+  flags: { ttlSeconds: 120, swrSeconds: 600 },
+  poster: { ttlSeconds: 120, swrSeconds: 600 },
+  scan: { ttlSeconds: 60, swrSeconds: 300 },
+};
 
 // ── DataProvider ───────────────────────────────────────────────────────────────
 
 export class DataProvider {
   private readonly db: D1Database | null;
   private readonly mockMode: boolean;
+  private readonly ctx: DataProviderCtx | null;
 
-  constructor(env: DataProviderEnv) {
+  constructor(env: DataProviderEnv, ctx?: DataProviderCtx | null, mockModeOverride?: boolean) {
     this.db = env.DB ?? null;
-    this.mockMode = env.MOCK_MODE === '1' || env.MOCK_MODE === 'true';
+    this.ctx = ctx ?? null;
+
+    if (typeof mockModeOverride === 'boolean') {
+      this.mockMode = mockModeOverride;
+    } else {
+      const requested = env.MOCK_MODE === '1' || env.MOCK_MODE === 'true';
+      // Production blocks mock via env var — require explicit DB flag (see createDataProvider).
+      const isProd = env.WORKER_ENV === 'production';
+      this.mockMode = !isProd && requested;
+    }
   }
 
-  /** True when no live DB is available or mock mode is forced. */
   get isMockActive(): boolean {
     return this.mockMode || this.db === null;
   }
 
-  /** Reports which source a fresh request would use. */
   get preferredSource(): DataSource {
-    if (!this.isMockActive) return 'live';
-    return 'mock';
+    return this.isMockActive ? 'mock' : 'live';
   }
 
-  // ── Events ──────────────────────────────────────────────────────────────────
+  // ── Internal helpers ─────────────────────────────────────────────────────────
+
+  private async fromCache<T>(
+    cacheKeyPath: string,
+    ttl: CacheTtlConfig,
+    revalidate: () => Promise<T | null>
+  ): Promise<{ data: T; source: 'cache'; cacheAge: number } | null> {
+    const key = makeCacheKey(cacheKeyPath);
+    const hit = await readCfCache<T>(key);
+    if (!hit) return null;
+
+    const { ttlSeconds, swrSeconds = 300 } = ttl;
+
+    if (hit.age < ttlSeconds * 1000) {
+      // Fresh cache hit
+      return { data: hit.data, source: 'cache', cacheAge: hit.age };
+    }
+
+    if (hit.age < (ttlSeconds + swrSeconds) * 1000) {
+      // Stale — serve immediately, revalidate in background if ctx available
+      if (this.ctx) {
+        this.ctx.waitUntil(
+          revalidate()
+            .then(async (fresh) => {
+              if (fresh !== null) await writeCfCache(key, fresh, ttl);
+            })
+            .catch(() => {
+              /* background errors are silent */
+            })
+        );
+      }
+      return { data: hit.data, source: 'cache', cacheAge: hit.age };
+    }
+
+    // Beyond SWR window — treat as miss
+    return null;
+  }
+
+  private async fetchAndCache<T>(
+    cacheKeyPath: string,
+    ttl: CacheTtlConfig,
+    fetcher: () => Promise<T | null>
+  ): Promise<T | null> {
+    const data = await fetcher();
+    if (data !== null) {
+      await writeCfCache(makeCacheKey(cacheKeyPath), data, ttl);
+    }
+    return data;
+  }
+
+  // ── Events ───────────────────────────────────────────────────────────────────
 
   async getEvent(eventId: string): Promise<DataResult<MockEvent>> {
     if (!this.isMockActive) {
-      const cached = eventCache.get(eventId);
-      if (cached && isFresh(cached)) {
-        return { data: cached.data, source: 'cache' };
-      }
+      const keyPath = `events/single/${eventId}`;
+      const ttl = TTL.event;
 
-      const row = await this.db!.prepare('SELECT * FROM events WHERE id = ?1 LIMIT 1')
-        .bind(eventId)
-        .first<MockEvent>();
+      const cached = await this.fromCache<MockEvent>(keyPath, ttl, () => this.fetchEvent(eventId));
+      if (cached) return cached;
 
-      if (row) {
-        eventCache.set(eventId, { data: row, fetchedAt: Date.now() });
-        return { data: row, source: 'live' };
-      }
+      const row = await this.fetchAndCache(keyPath, ttl, () => this.fetchEvent(eventId));
+      if (row) return { data: row, source: 'live', cacheAge: null };
     }
 
-    // Mock fallback — return fixture if IDs match, otherwise synthesise a stub.
     const fixture =
       eventId === MOCK_EVENT_ID
         ? getEventFixture()
         : { ...getEventFixture(), id: eventId, title: `[mock] Event ${eventId}` };
 
-    return { data: fixture, source: 'mock' };
+    return { data: fixture, source: 'mock', cacheAge: null };
   }
 
-  async listEvents(): Promise<DataResult<MockEvent[]>> {
-    if (!this.isMockActive) {
-      const { results } = await this.db!.prepare(
-        'SELECT * FROM events WHERE status != ? ORDER BY start_date DESC LIMIT 100'
-      )
-        .bind('archived')
-        .all<MockEvent>();
+  private async fetchEvent(eventId: string): Promise<MockEvent | null> {
+    return this.db!.prepare(
+      `SELECT id, brand_id, title, slug, status, description, location,
+              start_date, end_date, timezone, cover_image_url, created_at, updated_at,
+              legal_clearance_tier,
+              what_short, who_host, why_purpose, how_details, where_address,
+              lat, lon, corridor_id, h3_res9, h3_res7
+       FROM events WHERE id = ?1 LIMIT 1`
+    )
+      .bind(eventId)
+      .first<MockEvent>();
+  }
 
-      for (const row of results) {
-        eventCache.set(row.id, { data: row, fetchedAt: Date.now() });
-      }
-      return { data: results, source: 'live' };
+  async listEvents(brand: string = 'root'): Promise<DataResult<MockEvent[]>> {
+    if (!this.isMockActive) {
+      // No CF cache for the list — always live so test isolation is maintained
+      // and newly created events are immediately visible without SWR delay.
+      const rows = await this.fetchEvents(brand);
+      if (rows) return { data: rows, source: 'live', cacheAge: null };
     }
 
-    return { data: [getEventFixture()], source: 'mock' };
+    return { data: [getEventFixture()], source: 'mock', cacheAge: null };
   }
 
-  // ── Sponsors ────────────────────────────────────────────────────────────────
+  private async fetchEvents(brand: string): Promise<MockEvent[] | null> {
+    const { results } = await this.db!.prepare(
+      `SELECT id, brand_id, title, slug, status, description, location,
+              start_date, end_date, timezone, cover_image_url, created_at, updated_at,
+              legal_clearance_tier,
+              what_short, who_host, why_purpose, how_details, where_address,
+              lat, lon, corridor_id, h3_res9, h3_res7
+       FROM events WHERE brand_id = ? AND status = 'active'
+       ORDER BY start_date ASC`
+    )
+      .bind(brand)
+      .all<MockEvent>();
+    return results ?? [];
+  }
+
+  // ── Sponsors ─────────────────────────────────────────────────────────────────
 
   async getSponsors(
     eventId: string,
     opts: { count?: number } = {}
-  ): Promise<DataResult<MockSponsor[]>> {
+  ): Promise<DataResult<SponsorRow[]>> {
     if (!this.isMockActive) {
-      const cacheKey = eventId;
-      const cached = sponsorCache.get(cacheKey);
-      if (cached && isFresh(cached)) {
-        return { data: cached.data, source: 'cache' };
-      }
+      const keyPath = `sponsors/${eventId}`;
+      const ttl = TTL.sponsor;
 
-      const { results } = await this.db!.prepare(
-        'SELECT * FROM sponsors WHERE event_id = ?1 AND active = 1 ORDER BY display_order ASC'
-      )
-        .bind(eventId)
-        .all<MockSponsor>();
+      const cached = await this.fromCache<SponsorRow[]>(keyPath, ttl, () =>
+        this.fetchSponsors(eventId)
+      );
+      if (cached) return cached;
 
-      sponsorCache.set(cacheKey, { data: results, fetchedAt: Date.now() });
-      return { data: results, source: 'live' };
+      const rows = await this.fetchAndCache(keyPath, ttl, () => this.fetchSponsors(eventId));
+      if (rows) return { data: rows, source: 'live', cacheAge: null };
     }
 
     return {
-      data: getSponsorFixtures(opts.count ?? 15),
+      data: getSponsorFixtures(opts.count ?? 15) as unknown as SponsorRow[],
       source: 'mock',
+      cacheAge: null,
     };
   }
 
-  // ── Poster deployments ──────────────────────────────────────────────────────
+  private async fetchSponsors(eventId: string): Promise<SponsorRow[] | null> {
+    return resolveSponsorsForEvent(this.db!, eventId);
+  }
+
+  // ── Poster deployments ───────────────────────────────────────────────────────
 
   async getPosterDeployments(eventId: string): Promise<DataResult<MockPosterDeployment[]>> {
     if (!this.isMockActive) {
-      const { results } = await this.db!.prepare(
-        'SELECT * FROM poster_deployments WHERE event_id = ?1'
-      )
-        .bind(eventId)
-        .all<MockPosterDeployment>();
+      const keyPath = `poster-deployments/${eventId}`;
+      const ttl = TTL.poster;
 
-      return { data: results, source: 'live' };
+      const cached = await this.fromCache<MockPosterDeployment[]>(keyPath, ttl, () =>
+        this.fetchPosterDeployments(eventId)
+      );
+      if (cached) return cached;
+
+      const rows = await this.fetchAndCache(keyPath, ttl, () =>
+        this.fetchPosterDeployments(eventId)
+      );
+      if (rows) return { data: rows, source: 'live', cacheAge: null };
     }
 
-    return { data: getPosterDeployments(), source: 'mock' };
+    return { data: getPosterDeployments(), source: 'mock', cacheAge: null };
   }
 
-  // ── Scan aggregates ─────────────────────────────────────────────────────────
+  private async fetchPosterDeployments(eventId: string): Promise<MockPosterDeployment[] | null> {
+    const { results } = await this.db!.prepare(
+      'SELECT * FROM poster_deployments WHERE event_id = ?1'
+    )
+      .bind(eventId)
+      .all<MockPosterDeployment>();
+    return results ?? [];
+  }
+
+  // ── Scan aggregates ──────────────────────────────────────────────────────────
 
   async getScanAggregates(eventId: string): Promise<DataResult<MockScanAggregate[]>> {
     if (!this.isMockActive) {
-      const { results } = await this.db!.prepare(
-        'SELECT event_id, uec_code, hour_bucket, count ' +
-          'FROM scan_aggregates WHERE event_id = ?1 ORDER BY hour_bucket ASC'
-      )
-        .bind(eventId)
-        .all<MockScanAggregate>();
+      const keyPath = `scan-aggregates/${eventId}`;
+      const ttl = TTL.scan;
 
-      return { data: results, source: 'live' };
+      const cached = await this.fromCache<MockScanAggregate[]>(keyPath, ttl, () =>
+        this.fetchScanAggregates(eventId)
+      );
+      if (cached) return cached;
+
+      const rows = await this.fetchAndCache(keyPath, ttl, () => this.fetchScanAggregates(eventId));
+      if (rows) return { data: rows, source: 'live', cacheAge: null };
     }
 
-    return { data: getScanAggregates(), source: 'mock' };
+    return { data: getScanAggregates(), source: 'mock', cacheAge: null };
   }
 
-  // ── Feature flags ───────────────────────────────────────────────────────────
+  private async fetchScanAggregates(eventId: string): Promise<MockScanAggregate[] | null> {
+    const { results } = await this.db!.prepare(
+      'SELECT event_id, uec_code, hour_bucket, count ' +
+        'FROM scan_aggregates WHERE event_id = ?1 ORDER BY hour_bucket ASC'
+    )
+      .bind(eventId)
+      .all<MockScanAggregate>();
+    return results ?? [];
+  }
+
+  // ── Feature flags ────────────────────────────────────────────────────────────
 
   async getFlags(tier: Tier = 'free'): Promise<DataResult<FlagMap>> {
     if (!this.isMockActive) {
-      // Live path: read from KV or DB flag store.
-      // Fall through to mock if not yet implemented (T0 gate may not have KV).
-      try {
-        const { results } = await this.db!.prepare(
-          "SELECT flag_key, flag_value FROM feature_flags WHERE scope = 'global'"
-        ).all<{ flag_key: string; flag_value: number }>();
+      const keyPath = `flags/global/${tier}`;
+      const ttl = TTL.flags;
 
-        if (results.length > 0) {
-          const flags: FlagMap = {};
-          for (const row of results) {
-            flags[row.flag_key] = row.flag_value === 1;
-          }
-          return { data: flags, source: 'live' };
+      const cached = await this.fromCache<FlagMap>(keyPath, ttl, () => this.fetchFlags());
+      if (cached) return cached;
+
+      try {
+        const flags = await this.fetchFlags();
+        if (flags !== null) {
+          await writeCfCache(makeCacheKey(keyPath), flags, ttl);
+          return { data: flags, source: 'live', cacheAge: null };
         }
       } catch {
-        // Table may not exist yet — fall through to mock.
+        // Fall through to mock
       }
     }
 
-    return { data: getFlagsForTier(tier), source: 'mock' };
+    return { data: getFlagsForTier(tier), source: 'mock', cacheAge: null };
+  }
+
+  private async fetchFlags(): Promise<FlagMap | null> {
+    try {
+      const { results } = await this.db!.prepare(
+        "SELECT flag_key, flag_value FROM feature_flags WHERE scope = 'global'"
+      ).all<{ flag_key: string; flag_value: number }>();
+
+      if (results.length === 0) return null;
+
+      const flags: FlagMap = {};
+      for (const row of results) flags[row.flag_key] = row.flag_value === 1;
+      return flags;
+    } catch {
+      return null;
+    }
   }
 
   async getFeatureFlagFixtures(): Promise<DataResult<MockFeatureFlags[]>> {
-    return { data: getFeatureFlagFixtures(), source: 'mock' };
+    return { data: getFeatureFlagFixtures(), source: 'mock', cacheAge: null };
   }
 
-  // ── Health summary ──────────────────────────────────────────────────────────
+  // ── Health summary ───────────────────────────────────────────────────────────
 
   healthSummary(): {
     db_bound: boolean;
     mock_mode_forced: boolean;
     effective_source: DataSource;
-    cache_entries: { events: number; sponsors: number };
   } {
     return {
       db_bound: this.db !== null,
       mock_mode_forced: this.mockMode,
       effective_source: this.preferredSource,
-      cache_entries: {
-        events: eventCache.size,
-        sponsors: sponsorCache.size,
-      },
     };
   }
-
-  /** Clears module-level in-memory caches (useful in tests). */
-  static clearCache(): void {
-    eventCache.clear();
-    sponsorCache.clear();
-  }
 }
 
-// ── Module-level singleton factory ────────────────────────────────────────────
-
-let _instance: DataProvider | null = null;
+// ── Factories ──────────────────────────────────────────────────────────────────
 
 /**
- * Returns the singleton DataProvider for this isolate. Call once per request
- * handler (env may differ between requests in local dev).
+ * Creates a DataProvider for the current request.
+ * Pass `ctx` to enable stale-while-revalidate background refresh.
  */
-export function getDataProvider(env: DataProviderEnv): DataProvider {
-  // In production Workers, env is stable per isolate — reuse the instance.
-  if (!_instance) {
-    _instance = new DataProvider(env);
-  }
-  return _instance;
+export function getDataProvider(env: DataProviderEnv, ctx?: DataProviderCtx | null): DataProvider {
+  return new DataProvider(env, ctx);
 }
 
 /**
- * Creates a fresh DataProvider without caching (useful in tests where you
- * want isolation between test cases).
+ * Async factory that resolves the `config.mock-mode` feature flag from the DB
+ * before constructing the DataProvider.  Use this when accurate production
+ * mock-mode gating via the DB flag matters (e.g., the /health handler).
  */
-export function createDataProvider(env: DataProviderEnv): DataProvider {
-  return new DataProvider(env);
+export async function createDataProvider(
+  env: DataProviderEnv,
+  ctx?: DataProviderCtx | null
+): Promise<DataProvider> {
+  const isProd = env.WORKER_ENV === 'production';
+
+  if (isProd && env.DB) {
+    // In production, only allow mock if the DB flag is explicitly true.
+    try {
+      const row = await env.DB.prepare(
+        "SELECT flag_value FROM feature_flags WHERE scope = 'global' AND flag_key = 'config.mock-mode' LIMIT 1"
+      ).first<{ flag_value: number }>();
+      const flagEnabled = row?.flag_value === 1;
+      return new DataProvider(env, ctx, flagEnabled);
+    } catch {
+      // DB error — default to no mock in production
+      return new DataProvider(env, ctx, false);
+    }
+  }
+
+  return new DataProvider(env, ctx);
 }

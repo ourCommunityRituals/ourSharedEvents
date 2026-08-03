@@ -95,8 +95,8 @@ describe('Gate F1: Forms table existence', () => {
         `SELECT COUNT(*) as cnt FROM ${table}`
       ).first<{ cnt: number }>();
       if (table === 'feature_flags') {
-        // Seed migration 0007 inserts 17 free-tier flags; 0011 adds 5 regulatory phase flags
-        expect(result?.cnt).toBe(22);
+        // Seed migration 0007 inserts 17 free-tier flags; 0011 adds 5 regulatory phase flags; 0013 adds 2 operational flags
+        expect(result?.cnt).toBe(24);
       } else {
         expect(result?.cnt).toBe(0);
       }
@@ -180,12 +180,12 @@ describe('Gate F5: Forms index verification', () => {
 // ── Gate F6: Free tier seed data integrity ──────────────────────────────────
 
 describe('Gate F6: Free tier seed data integrity', () => {
-  test('exactly 22 global flags seeded with correct defaults', async () => {
+  test('exactly 24 global flags seeded with correct defaults', async () => {
     const flags = await (env as unknown as TestEnv).FORMS_DB.prepare(
       "SELECT flag_key, enabled FROM feature_flags WHERE scope = 'global' ORDER BY flag_key"
     ).all();
 
-    expect(flags.results).toHaveLength(22);
+    expect(flags.results).toHaveLength(24);
 
     // Verify the exact expected state — this is the contract
     const expected: Record<string, number> = {
@@ -196,6 +196,8 @@ describe('Gate F6: Free tier seed data integrity', () => {
       'branding.custom-domain': 0,
       'branding.white-label': 0,
       'config.event-settings': 0,
+      'config.mock-mode': 0,
+      'config.mock-sponsor-count': 0,
       'config.self-serve': 0,
       'forms.checkin': 1,
       'forms.email-signup': 0,

@@ -15,6 +15,8 @@ import { assertRenderable, VALID_EVENT_STATES, parseEventState } from '../domain
 import { computeEventPhase, type EventPhase } from '../domain/event-phase';
 import { createShortlink } from '../lib/shortlinks';
 import { maybeTag } from '../lib/h3-tagging';
+import { getDataProvider, type DataProviderEnv } from '../lib/data-provider.js';
+import type { DataProviderCtx } from '@ocr/data-provider';
 
 // ─── Phase enrichment ──────────────────────────────────────────────────────────
 //
@@ -39,7 +41,7 @@ function enrichWithPhase(
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
-export interface EventsEnv {
+export interface EventsEnv extends DataProviderEnv {
   WORKER_ENV?: string;
   DB?: D1Database;
 }
@@ -68,45 +70,28 @@ function errorResponse(code: string, message: string, status: number, rid: strin
  * GET /api/v2/events?brand=root
  *
  * Returns active events for a brand. Defaults to 'root' brand.
+ * Uses DataProvider for live → CF cache → mock fallback chain.
  */
-export async function handleListEvents(request: Request, env: EventsEnv): Promise<Response> {
+export async function handleListEvents(
+  request: Request,
+  env: EventsEnv,
+  ctx?: DataProviderCtx
+): Promise<Response> {
   const rid = requestId();
   const url = new URL(request.url);
   const brand = url.searchParams.get('brand') || 'root';
 
-  if (!env.DB) {
-    return Response.json(
-      { ok: true, status: 200, items: [] },
-      { headers: { ...corsHeaders(request), 'X-Request-Id': rid } }
-    );
-  }
-
   try {
-    // Public list: project the same column set as admin so public surfaces
-    // (lifecycle page, OG preview, SharedReport) can render 5W content and
-    // venue geo without a second roundtrip. Anonymity is preserved by the
-    // status='active' filter + brand scope — the 5W payload is event-level
-    // metadata, never per-attendee data.
-    const result = await env.DB.prepare(
-      `SELECT id, brand_id, title, slug, status, description, location,
-              start_date, end_date, timezone, cover_image_url, created_at, updated_at,
-              legal_clearance_tier,
-              what_short, who_host, why_purpose, how_details, where_address,
-              lat, lon, corridor_id, h3_res9, h3_res7
-       FROM events
-       WHERE brand_id = ? AND status = 'active'
-       ORDER BY start_date ASC`
-    )
-      .bind(brand)
-      .all();
-
-    const items = (result.results ?? []).map(enrichWithPhase);
+    const dp = getDataProvider(env, ctx);
+    const result = await dp.listEvents(brand);
+    const items = result.data.map((e) => enrichWithPhase(e as unknown as Record<string, unknown>));
     return Response.json(
       { ok: true, status: 200, items },
       {
         headers: {
           ...corsHeaders(request),
           'Cache-Control': 'private, max-age=60, stale-while-revalidate=300',
+          'X-Data-Source': result.source,
           'X-Request-Id': rid,
         },
       }
@@ -128,37 +113,28 @@ export async function handleListEvents(request: Request, env: EventsEnv): Promis
  * GET /api/v2/events/:id
  *
  * Returns a single event by ID. Checks brand isolation.
+ * Uses DataProvider for live → CF cache → mock fallback chain.
  */
 export async function handleGetEvent(
   request: Request,
   env: EventsEnv,
-  id: string
+  id: string,
+  ctx?: DataProviderCtx
 ): Promise<Response> {
   const rid = requestId();
 
-  if (!env.DB) {
-    return errorResponse('NOT_FOUND', `Event not found: ${id}`, 404, rid);
-  }
-
   try {
-    const row = await env.DB.prepare(
-      `SELECT id, brand_id, title, slug, status, description, location,
-              start_date, end_date, timezone, cover_image_url, created_at, updated_at,
-              legal_clearance_tier,
-              what_short, who_host, why_purpose, how_details, where_address,
-              lat, lon, corridor_id, h3_res9, h3_res7
-       FROM events
-       WHERE id = ?`
-    )
-      .bind(id)
-      .first();
+    const dp = getDataProvider(env, ctx);
+    const result = await dp.getEvent(id);
 
-    if (!row) {
+    if (!result.data) {
       return errorResponse('NOT_FOUND', `Event not found: ${id}`, 404, rid);
     }
 
+    const row = result.data as unknown as Record<string, unknown>;
+
     const { allowed, reason } = assertRenderable(
-      parseEventState((row as Record<string, unknown>).status),
+      parseEventState((row.status as string) ?? ''),
       'public'
     );
     if (!allowed) {
@@ -169,11 +145,12 @@ export async function handleGetEvent(
     }
 
     return Response.json(
-      { ok: true, status: 200, item: enrichWithPhase(row as Record<string, unknown>) },
+      { ok: true, status: 200, item: enrichWithPhase(row) },
       {
         headers: {
           ...corsHeaders(request),
           'Cache-Control': 'private, max-age=60, stale-while-revalidate=300',
+          'X-Data-Source': result.source,
           'X-Request-Id': rid,
         },
       }

@@ -4,13 +4,13 @@
  * GET /health
  * GET /api/status
  *
- * Checks Worker liveness and D1 connectivity.
+ * Checks Worker liveness, D1 connectivity, and reports the active data source.
  */
 
-export interface HealthEnv {
-  WORKER_ENV?: string;
+import { getDataProvider, type DataProviderEnv } from '../lib/data-provider.js';
+
+export interface HealthEnv extends DataProviderEnv {
   WORKER_BUILD_VERSION?: string;
-  DB?: D1Database;
 }
 
 export async function handleHealth(env: HealthEnv): Promise<Response> {
@@ -29,12 +29,29 @@ export async function handleHealth(env: HealthEnv): Promise<Response> {
 
   const ok = db !== 'error';
 
+  // DataProvider summary — source and mock-mode state
+  const dp = getDataProvider(env);
+  const { db_bound, mock_mode_forced, effective_source } = dp.healthSummary();
+
+  // Probe the CF cache for a well-known key to surface live cacheAge
+  let cacheAge: number | null = null;
+  try {
+    const { readCfCache, makeCacheKey } = await import('@ocr/data-provider');
+    const probe = await readCfCache(makeCacheKey('health/probe'));
+    cacheAge = probe ? probe.age : null;
+  } catch {
+    // CF cache unavailable in this environment — leave null
+  }
+
   return Response.json(
     {
       ok,
       env: env.WORKER_ENV ?? 'unknown',
       version: env.WORKER_BUILD_VERSION ?? 'unknown',
       db,
+      dataSource: effective_source,
+      cacheAge,
+      _debug: { db_bound, mock_mode_forced },
       timestamp,
     },
     { status: ok ? 200 : 503 }

@@ -65,7 +65,16 @@ const REGULATORY_FLAGS: Record<string, number> = {
   'regulatory.phase5.coppa': 0,
 };
 
-const TOTAL_FLAGS = Object.keys(PAYMENT_FLAGS).length + Object.keys(REGULATORY_FLAGS).length;
+/** Operational / mock-mode axis — 0013_seed_mock_mode_flags.sql (OSE-190) */
+const OPERATIONAL_FLAGS: Record<string, number> = {
+  'config.mock-mode': 0,
+  'config.mock-sponsor-count': 0,
+};
+
+const TOTAL_FLAGS =
+  Object.keys(PAYMENT_FLAGS).length +
+  Object.keys(REGULATORY_FLAGS).length +
+  Object.keys(OPERATIONAL_FLAGS).length;
 
 // ── Setup — apply all forms migrations ───────────────────────────────────────
 
@@ -86,7 +95,7 @@ beforeAll(async () => {
 // L1 Static: migration SQL contains all 22 keys and required seed IDs
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('QA-6 L1: migration SQL text contains all 22 expected flag keys', () => {
+describe('QA-6 L1: migration SQL text contains all 24 expected flag keys', () => {
   function migrationSql(): string {
     return (JSON.parse(tenv().TEST_FORMS_MIGRATION_STATEMENTS) as string[]).join('\n');
   }
@@ -122,13 +131,24 @@ describe('QA-6 L1: migration SQL text contains all 22 expected flag keys', () =>
     ).toBeGreaterThanOrEqual(2);
   });
 
-  test('total distinct flag keys in SQL is 22', () => {
+  test('all 2 operational flag keys present in migration SQL', () => {
     const sql = migrationSql();
-    const allExpected = [...Object.keys(PAYMENT_FLAGS), ...Object.keys(REGULATORY_FLAGS)];
+    for (const key of Object.keys(OPERATIONAL_FLAGS)) {
+      expect(sql, `missing operational flag key: '${key}'`).toContain(key);
+    }
+  });
+
+  test('total distinct flag keys in SQL is 24', () => {
+    const sql = migrationSql();
+    const allExpected = [
+      ...Object.keys(PAYMENT_FLAGS),
+      ...Object.keys(REGULATORY_FLAGS),
+      ...Object.keys(OPERATIONAL_FLAGS),
+    ];
     for (const key of allExpected) {
       expect(sql, `key not found in SQL: '${key}'`).toContain(key);
     }
-    expect(allExpected.length).toBe(22);
+    expect(allExpected.length).toBe(24);
   });
 });
 
@@ -136,7 +156,7 @@ describe('QA-6 L1: migration SQL text contains all 22 expected flag keys', () =>
 // L2 Integration: FORMS_DB has all 22 global-scope flags with correct values
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('QA-6 L2: FORMS_DB seeds — 22 global flags, correct enabled values', () => {
+describe('QA-6 L2: FORMS_DB seeds — 24 global flags, correct enabled values', () => {
   test(`exactly ${TOTAL_FLAGS} global-scope rows in feature_flags after migrations`, async () => {
     const result = await formsDb()
       .prepare("SELECT COUNT(*) as cnt FROM feature_flags WHERE scope = 'global'")
@@ -144,18 +164,22 @@ describe('QA-6 L2: FORMS_DB seeds — 22 global flags, correct enabled values', 
     expect(result?.cnt).toBe(TOTAL_FLAGS);
   });
 
-  test('payment tier axis: all 17 flags present with correct enabled values', async () => {
+  test('payment tier axis: all 17 payment flags + 2 operational flags present with correct enabled values', async () => {
     const rows = await formsDb()
       .prepare(
         "SELECT flag_key, enabled FROM feature_flags WHERE scope = 'global' AND flag_key NOT LIKE 'regulatory.%'"
       )
       .all<{ flag_key: string; enabled: number }>();
 
-    expect(rows.results.length).toBe(17);
+    // 17 payment tier flags + 2 operational flags (config.mock-mode, config.mock-sponsor-count)
+    expect(rows.results.length).toBe(19);
     const map = Object.fromEntries(rows.results.map((r) => [r.flag_key, r.enabled]));
 
     for (const [key, expected] of Object.entries(PAYMENT_FLAGS)) {
       expect(map[key], `payment flag '${key}'`).toBe(expected);
+    }
+    for (const [key, expected] of Object.entries(OPERATIONAL_FLAGS)) {
+      expect(map[key], `operational flag '${key}'`).toBe(expected);
     }
   });
 
