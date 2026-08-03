@@ -144,7 +144,7 @@ describe('OSE-243a: pre-event rendering (full 5W page)', () => {
     // Venue map proxy reference
     expect(html).toContain('/api/v2/maps/venue-image?venue=');
     expect(html).toContain('data-testid="venue-map"');
-    expect(html).toContain('data-testid="gmaps-link"');
+    expect(html).toContain('data-testid="geo-link"');
 
     // RSVP CTA points at the existing register form route
     expect(html).toContain('data-testid="event-rsvp"');
