@@ -549,6 +549,15 @@ jobs:
             tests/e2e/0-architecture/tenant-isolation.invariant.spec.ts \
             tests/e2e/0-architecture/tier-equity.invariant.spec.ts
 
+      # Post-job cleanup: delete _diag/pages/ so the next run's runner agent
+      # can create fresh log files without "file already exists" collisions.
+      # Runs on every shard, always (even on failure/cancel). Concurrent
+      # rm -rf is safe — idempotent on already-missing directories.
+      - name: 'Cleanup: clear diag pages for next run'
+        if: always()
+        shell: bash
+        run: rm -rf "$RUNNER_WORKSPACE/../../_diag/pages" 2>/dev/null || true
+
   # ============================================================================
   # TIER 1: DEPLOY — Push to main or dispatch
   # ============================================================================
