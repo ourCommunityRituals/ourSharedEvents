@@ -261,6 +261,84 @@ function esc(s: string | null | undefined): string {
     .replace(/'/g, '&#39;');
 }
 
+/** Escape a string for embedding inside a JS single-quoted string literal in a <script> block. */
+function jsStr(s: string | null | undefined): string {
+  if (s == null) return '';
+  // U+2028 LINE SEPARATOR and U+2029 PARAGRAPH SEPARATOR must not appear
+  // inside regex literals (OXC parser rejects them). Use split/join instead.
+  const LS = '\u2028';
+  const PS = '\u2029';
+  return String(s)
+    .replace(/\\/g, '\\\\')
+    .replace(/'/g, "\\'")
+    .split(LS)
+    .join('\\u2028')
+    .split(PS)
+    .join('\\u2029')
+    .replace(/</g, '\\u003C')
+    .replace(/>/g, '\\u003E');
+}
+
+/** Detect preferred language from Accept-Language header. Returns 'es' when Spanish is first preference, 'en' otherwise. */
+function preferredLang(request: Request): 'en' | 'es' {
+  const al = request.headers.get('Accept-Language') ?? '';
+  return /^es\b/i.test(al.split(',')[0].trim()) ? 'es' : 'en';
+}
+
+/** Dark mode CSS override — appended inside every public page <style> block. */
+const DARK_MODE_CSS = `
+  @media (prefers-color-scheme: dark) {
+    [data-surface="ose-public"] {
+      --ose-bg: #1a1a1a; --ose-text: #f0ede8; --ose-muted: #a0a0a0;
+      --ose-accent: #7b97f5; --ose-card: #252525; --ose-focus: #ffb800;
+      --ose-accent-tint: rgba(123,151,245,0.12); --ose-live: #f27070;
+    }
+  }`;
+
+/**
+ * Universal geo link — opens native maps app on iOS/Android.
+ * geo: URI scheme: iOS opens Apple Maps, Android opens default maps app.
+ * Falls back to Apple Maps URL search when no lat/lon stored.
+ * No third-party tiles or trackers — link out only, never embed.
+ */
+function renderGeoLink(
+  lat: number | null,
+  lon: number | null,
+  venueName: string | null,
+  addr: string | null,
+  label: string,
+  testid = 'geo-link'
+): string {
+  if (lat !== null && lon !== null) {
+    const qLabel = encodeURIComponent(venueName || addr || '');
+    const href = `geo:${lat},${lon}?q=${lat},${lon}${qLabel ? `(${qLabel})` : ''}`;
+    return `<a class="ose-geo-link" data-testid="${testid}" href="${href}" target="_blank" rel="noopener noreferrer">${label}</a>`;
+  }
+  const q = encodeURIComponent(addr || venueName || '');
+  if (q) {
+    return `<a class="ose-geo-link" data-testid="${testid}" href="https://maps.apple.com/?q=${q}" target="_blank" rel="noopener noreferrer">${label}</a>`;
+  }
+  return '';
+}
+
+/**
+ * Share button — Web Share API with copy-link fallback.
+ * URL and title are passed via HTML data attributes (XSS-safe).
+ * Script tag requires a CSP nonce (passed from the request handler).
+ * Bilingual: Spanish labels when lang='es'.
+ */
+function renderShareBlock(
+  shareUrl: string,
+  title: string,
+  nonce: string,
+  lang: 'en' | 'es'
+): string {
+  const shareLabel = lang === 'es' ? 'Compartir este evento' : 'Share this event';
+  const copiedLabel = lang === 'es' ? 'Enlace copiado' : 'Link copied!';
+  return `<button class="ose-share-btn" data-testid="share-btn" type="button" data-share-url="${esc(shareUrl)}" data-share-title="${esc(title)}">${shareLabel}</button>
+<script nonce="${nonce}">(function(){var btn=document.querySelector('.ose-share-btn');if(!btn)return;var orig=btn.textContent;btn.addEventListener('click',function(){var u=btn.dataset.shareUrl,t=btn.dataset.shareTitle;if(navigator.share){navigator.share({title:t,url:u}).catch(function(){});}else if(navigator.clipboard){navigator.clipboard.writeText(u).then(function(){btn.textContent='${jsStr(copiedLabel)}';setTimeout(function(){btn.textContent=orig;},2000);}).catch(function(){});}});})();</script>`;
+}
+
 interface SponsorBasicRow {
   id: string;
   name: string;
@@ -343,8 +421,11 @@ const ANONYMITY_AFFORDANCE = `
 export function renderPreEventHtml(
   row: PublicEventRow,
   shareUrl: string,
-  social?: EventPageSocialData
+  social?: EventPageSocialData,
+  opts?: { nonce?: string; lang?: 'en' | 'es' }
 ): string {
+  const nonce = opts?.nonce ?? '';
+  const lang = opts?.lang ?? 'en';
   const title = esc(row.title);
   const whatShort = esc(row.what_short);
   const whoHost = esc(row.who_host);
@@ -357,12 +438,16 @@ export function renderPreEventHtml(
   const mapImg = venueParam
     ? `<img src="/api/v2/maps/venue-image?venue=${venueParam}" alt="Map of ${esc(row.location || row.where_address)}" class="ose-venue-map" loading="lazy" width="600" height="240" data-testid="venue-map" />`
     : '';
-  const gmapsLink = venueParam
-    ? `<a class="ose-gmaps-link" data-testid="gmaps-link" href="https://www.google.com/maps/search/?api=1&query=${venueParam}" target="_blank" rel="noopener noreferrer">See on Google Maps</a>`
-    : '';
+  const geoLink = renderGeoLink(
+    row.lat,
+    row.lon,
+    row.location,
+    row.where_address,
+    lang === 'es' ? 'Cómo llegar' : 'Get directions'
+  );
 
   return `<!DOCTYPE html>
-<html lang="en" data-surface="ose-public">
+<html lang="${lang}" data-surface="ose-public">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -391,14 +476,17 @@ export function renderPreEventHtml(
     .ose-meta { color: var(--ose-muted); font-size: 0.95rem; margin-bottom: 1.5rem; }
     .ose-card { background: var(--ose-card); border-radius: 8px; padding: 1.25rem; margin-bottom: 1rem; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
     .ose-venue-map { width: 100%; max-width: 100%; height: auto; border-radius: 6px; display: block; margin-bottom: 0.75rem; }
-    .ose-gmaps-link { color: var(--ose-accent); text-decoration: none; font-weight: 500; }
-    .ose-gmaps-link:hover { text-decoration: underline; }
+    .ose-geo-link { color: var(--ose-accent); text-decoration: none; font-weight: 500; }
+    .ose-geo-link:hover { text-decoration: underline; }
     .ose-rsvp-btn { display: inline-block; background: var(--ose-accent); color: #fff; padding: 0.75rem 1.5rem; border-radius: 6px; text-decoration: none; font-weight: 600; margin: 1.25rem 0; min-height: 44px; line-height: 1.5; }
     .ose-rsvp-btn:focus { outline: 3px solid var(--ose-focus); outline-offset: 2px; }
+    .ose-share-btn { display: inline-flex; align-items: center; justify-content: center; background: transparent; color: var(--ose-accent); border: 1.5px solid var(--ose-accent); padding: 0.65rem 1.25rem; border-radius: 6px; font-size: 1rem; font-weight: 600; cursor: pointer; min-height: 44px; min-width: 180px; margin: 1rem 0 0.5rem; width: 100%; }
+    .ose-share-btn:hover { background: var(--ose-accent-tint); }
+    .ose-share-btn:focus { outline: 3px solid var(--ose-focus); outline-offset: 2px; }
     .ose-anonymity { margin-top: 2rem; padding: 1rem 1.25rem; background: var(--ose-accent-tint); border-left: 3px solid var(--ose-accent); border-radius: 4px; font-size: 0.9rem; color: var(--ose-muted); }
     .ose-anonymity h2 { margin-top: 0; font-size: 1rem; color: var(--ose-text); }
     .ose-anonymity p { margin: 0; }
-    .ose-section p { margin: 0; }
+    .ose-section p { margin: 0; }${DARK_MODE_CSS}
   </style>
 </head>
 <body>
@@ -425,7 +513,7 @@ export function renderPreEventHtml(
            ${mapImg}
            ${venueDisplay ? `<p><strong>${venueDisplay}</strong></p>` : ''}
            ${whereAddress && whereAddress !== venueDisplay ? `<p>${whereAddress}</p>` : ''}
-           ${gmapsLink}
+           ${geoLink}
          </section>`
         : ''
     }
@@ -465,6 +553,8 @@ export function renderPreEventHtml(
         : ''
     }
 
+    ${renderShareBlock(shareUrl, row.title, nonce, lang)}
+
     <a class="ose-rsvp-btn" data-testid="event-rsvp" href="/forms/${esc(row.id)}?type=register">RSVP for this event</a>
 
     ${ANONYMITY_AFFORDANCE}
@@ -492,8 +582,11 @@ export function renderPreEventHtml(
 export function renderEventLiveHtml(
   row: PublicEventRow,
   shareUrl: string,
-  social?: EventPageSocialData
+  social?: EventPageSocialData,
+  opts?: { nonce?: string; lang?: 'en' | 'es' }
 ): string {
+  const nonce = opts?.nonce ?? '';
+  const lang = opts?.lang ?? 'en';
   const title = esc(row.title);
   const whatShort = esc(row.what_short);
   const whoHost = esc(row.who_host);
@@ -505,12 +598,17 @@ export function renderEventLiveHtml(
   const mapImg = venueParam
     ? `<img src="/api/v2/maps/venue-image?venue=${venueParam}" alt="Map of ${esc(row.location || row.where_address)}" class="ose-venue-map" loading="lazy" width="600" height="240" data-testid="venue-map-live" />`
     : '';
-  const gmapsLink = venueParam
-    ? `<a class="ose-gmaps-link" data-testid="gmaps-link-live" href="https://www.google.com/maps/dir/?api=1&destination=${venueParam}" target="_blank" rel="noopener noreferrer">Navigate now</a>`
-    : '';
+  const geoLink = renderGeoLink(
+    row.lat,
+    row.lon,
+    row.location,
+    row.where_address,
+    lang === 'es' ? 'Cómo llegar' : 'Navigate now',
+    'geo-link-live'
+  );
 
   return `<!DOCTYPE html>
-<html lang="en" data-surface="ose-public">
+<html lang="${lang}" data-surface="ose-public">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -536,14 +634,17 @@ export function renderEventLiveHtml(
     h2 { font-size: 1.125rem; margin: 1.5rem 0 0.5rem; color: var(--ose-text); }
     .ose-card { background: var(--ose-card); border-radius: 8px; padding: 1.25rem; margin-bottom: 1rem; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
     .ose-venue-map { width: 100%; max-width: 100%; height: auto; border-radius: 6px; display: block; margin-bottom: 0.75rem; }
-    .ose-gmaps-link { color: var(--ose-accent); text-decoration: none; font-weight: 500; }
-    .ose-gmaps-link:hover { text-decoration: underline; }
+    .ose-geo-link { color: var(--ose-accent); text-decoration: none; font-weight: 500; }
+    .ose-geo-link:hover { text-decoration: underline; }
     .ose-checkin-btn { display: inline-block; background: var(--ose-accent); color: #fff; padding: 0.875rem 1.75rem; border-radius: 6px; text-decoration: none; font-weight: 700; margin: 1.25rem 0; font-size: 1.05rem; min-height: 44px; line-height: 1.5; }
     .ose-checkin-btn:focus { outline: 3px solid var(--ose-focus); outline-offset: 2px; }
+    .ose-share-btn { display: inline-flex; align-items: center; justify-content: center; background: transparent; color: var(--ose-accent); border: 1.5px solid var(--ose-accent); padding: 0.65rem 1.25rem; border-radius: 6px; font-size: 1rem; font-weight: 600; cursor: pointer; min-height: 44px; min-width: 180px; margin: 1rem 0 0.5rem; width: 100%; }
+    .ose-share-btn:hover { background: var(--ose-accent-tint); }
+    .ose-share-btn:focus { outline: 3px solid var(--ose-focus); outline-offset: 2px; }
     .ose-anonymity { margin-top: 2rem; padding: 1rem 1.25rem; background: var(--ose-accent-tint); border-left: 3px solid var(--ose-accent); border-radius: 4px; font-size: 0.9rem; color: var(--ose-muted); }
     .ose-anonymity h2 { margin-top: 0; font-size: 1rem; color: var(--ose-text); }
     .ose-anonymity p { margin: 0; }
-    .ose-section p { margin: 0; }
+    .ose-section p { margin: 0; }${DARK_MODE_CSS}
   </style>
 </head>
 <body>
@@ -555,6 +656,8 @@ export function renderEventLiveHtml(
       </span>
       <h1 id="event-title" data-testid="event-title-live">${title}</h1>
     </header>
+
+    ${renderShareBlock(shareUrl, row.title, nonce, lang)}
 
     <a class="ose-checkin-btn" data-testid="event-checkin" href="/forms/${esc(row.id)}?type=checkin">Check in at this event</a>
 
@@ -578,7 +681,7 @@ export function renderEventLiveHtml(
            ${mapImg}
            ${venueDisplay ? `<p><strong>${venueDisplay}</strong></p>` : ''}
            ${whereAddress && whereAddress !== venueDisplay ? `<p>${whereAddress}</p>` : ''}
-           ${gmapsLink}
+           ${geoLink}
          </section>`
         : ''
     }
@@ -673,8 +776,11 @@ function renderPostEventHtml(
   row: PublicEventRow,
   shareUrl: string,
   nextEvent: NextEventRow | null,
-  social?: EventPageSocialData
+  social?: EventPageSocialData,
+  opts?: { nonce?: string; lang?: 'en' | 'es' }
 ): string {
+  const nonce = opts?.nonce ?? '';
+  const lang = opts?.lang ?? 'en';
   const title = esc(row.title);
   const whatShort = esc(row.what_short);
   const whoHost = esc(row.who_host);
@@ -696,7 +802,7 @@ function renderPostEventHtml(
       </section>`;
 
   return `<!DOCTYPE html>
-<html lang="en" data-surface="ose-public">
+<html lang="${lang}" data-surface="ose-public">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -721,14 +827,18 @@ function renderPostEventHtml(
     .ose-recap-label { display: block; font-size: 0.72rem; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--ose-muted); }
     .ose-cta { display: inline-block; min-height: 44px; line-height: 44px; padding: 0 20px; background: var(--ose-accent); color: #fff; border-radius: 6px; text-decoration: none; font-weight: 600; }
     .ose-cta.ose-cta-secondary { background: transparent; color: var(--ose-accent); border: 1px solid var(--ose-accent); }
+    .ose-share-btn { display: inline-flex; align-items: center; justify-content: center; background: transparent; color: var(--ose-accent); border: 1.5px solid var(--ose-accent); padding: 0.65rem 1.25rem; border-radius: 6px; font-size: 1rem; font-weight: 600; cursor: pointer; min-height: 44px; min-width: 180px; margin: 1rem 0 0.5rem; width: 100%; }
+    .ose-share-btn:hover { background: var(--ose-accent-tint); }
+    .ose-share-btn:focus { outline: 3px solid var(--ose-focus); outline-offset: 2px; }
     .ose-anonymity { margin-top: 2rem; padding: 1rem 1.25rem; background: var(--ose-accent-tint); border-left: 3px solid var(--ose-accent); border-radius: 4px; font-size: 0.9rem; color: var(--ose-muted); }
     .ose-anonymity h2 { margin-top: 0; font-size: 1rem; color: var(--ose-text); }
-    .ose-anonymity p { margin: 0; }
+    .ose-anonymity p { margin: 0; }${DARK_MODE_CSS}
   </style>
 </head>
 <body>
   <main role="main" aria-labelledby="event-title-post" data-testid="event-main-post">
     <span class="ose-phase-chip" data-testid="event-phase-chip">This one's a wrap</span>
+    ${renderShareBlock(shareUrl, row.title, nonce, lang)}
     <h1 id="event-title-post" data-testid="event-title-post">${title}</h1>
     <p class="ose-when" data-testid="event-when-post">${whenHuman ? `Happened ${whenHuman}` : 'This event has ended.'}${venueDisplay ? ` &middot; ${venueDisplay}` : ''}</p>
 
@@ -937,6 +1047,7 @@ export async function handlePublicEventPage(
   // current CSP allows `style-src 'unsafe-inline'` (see CSP-tightening
   // follow-on story) — nonce on <style> would be theater today.
   const nonce = generateNonce();
+  const lang = preferredLang(request);
   const url = new URL(request.url);
   const shareUrl = `${url.origin}/events/${row.id}`;
 
@@ -945,9 +1056,9 @@ export async function handlePublicEventPage(
 
   let body: string;
   if (phase === 'pre_event') {
-    body = renderPreEventHtml(row, shareUrl, social);
+    body = renderPreEventHtml(row, shareUrl, social, { nonce, lang });
   } else if (phase === 'event') {
-    body = renderEventLiveHtml(row, shareUrl, social);
+    body = renderEventLiveHtml(row, shareUrl, social, { nonce, lang });
   } else {
     // post_event: real recap + return loop (OSE-245 ose-client-ready package).
     // renderMinimalPhaseHtml is kept as the defensive fallback for phase==='event'
@@ -967,7 +1078,7 @@ export async function handlePublicEventPage(
     } catch {
       nextEvent = null; // recap must render even if the lookup fails
     }
-    body = renderPostEventHtml(row, shareUrl, nextEvent ?? null, social);
+    body = renderPostEventHtml(row, shareUrl, nextEvent ?? null, social, { nonce, lang });
   }
 
   return new Response(body, {
