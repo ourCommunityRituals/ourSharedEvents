@@ -375,10 +375,47 @@ function matrixToPng(m: QrMatrix, scale: number, margin: number): string {
   return 'data:image/png;base64,' + btoa(bin);
 }
 
+// ── SVG encoder ───────────────────────────────────────────────────────────────
+
+function matrixToSvg(m: QrMatrix, scale: number, margin: number, fg: string, bg: string): string {
+  const sz = m.length;
+  const totalSz = (sz + margin * 2) * scale;
+  const rects: string[] = [];
+  for (let y = 0; y < sz; y++) {
+    for (let x = 0; x < sz; x++) {
+      if (m[y][x]) {
+        const px = (x + margin) * scale;
+        const py = (y + margin) * scale;
+        rects.push(`<rect x="${px}" y="${py}" width="${scale}" height="${scale}" fill="${fg}"/>`);
+      }
+    }
+  }
+  return (
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${totalSz}" height="${totalSz}" ` +
+    `viewBox="0 0 ${totalSz} ${totalSz}">` +
+    `<rect width="${totalSz}" height="${totalSz}" fill="${bg}"/>` +
+    rects.join('') +
+    `</svg>`
+  );
+}
+
 // ── Public API ────────────────────────────────────────────────────────────────
 
 export interface QrOptions {
   /** Module scale in pixels (default 4) */
+  scale?: number;
+  /** Quiet-zone size in modules (default 2) */
+  margin?: number;
+  /** Error correction level (default 'M') */
+  errorCorrection?: 'L' | 'M' | 'Q' | 'H';
+}
+
+export interface SvgQrOptions {
+  /** Foreground (module) color. Default: '#000000' */
+  fgColor?: string;
+  /** Background color. Default: '#FFFFFF' */
+  bgColor?: string;
+  /** Module size in pixels (default 4) */
   scale?: number;
   /** Quiet-zone size in modules (default 2) */
   margin?: number;
@@ -399,4 +436,28 @@ export function generateQrCode(data: string, opts: QrOptions = {}): string {
   const ecLevel = EC_LEVEL[errorCorrection] ?? EC_LEVEL.M;
   const matrix = buildMatrix(data, ecLevel);
   return matrixToPng(matrix, scale, margin);
+}
+
+/**
+ * Generate a QR code as an inline SVG string with custom colors.
+ *
+ * Preferred for UEC poster use: SVG scales infinitely and supports WCAG-validated
+ * UEC semantic colors (see src/lib/uec/uec-codes.ts `scan_hex` values).
+ *
+ * @param data - String to encode (URL, text, etc.)
+ * @param opts - Colors, scale, margin, error correction level
+ * @returns Inline `<svg>...</svg>` string (not a data URI)
+ * @throws If data is too long for version 7 / chosen EC level
+ */
+export function generateSvgQrCode(data: string, opts: SvgQrOptions = {}): string {
+  const {
+    fgColor = '#000000',
+    bgColor = '#FFFFFF',
+    scale = 4,
+    margin = 2,
+    errorCorrection = 'M',
+  } = opts;
+  const ecLevel = EC_LEVEL[errorCorrection] ?? EC_LEVEL.M;
+  const matrix = buildMatrix(data, ecLevel);
+  return matrixToSvg(matrix, scale, margin, fgColor, bgColor);
 }

@@ -495,8 +495,13 @@
               idx++;
             }
             showNext();
-            const ms = bundle.rotation_config?.rotationMs || 5000;
-            setInterval(showNext, ms);
+            // OSE-191: count-based cadence (1→none, ≤5→30s, ≤10→20s, ≤15→15s).
+            var rotMs = total <= 1 ? 0 : total <= 5 ? 30000 : total <= 10 ? 20000 : 15000;
+            var rotTimer = null;
+            function startRot() { if (rotMs > 0 && !rotTimer) rotTimer = setInterval(showNext, rotMs); }
+            function stopRot() { if (rotTimer) { clearInterval(rotTimer); rotTimer = null; } }
+            document.addEventListener('visibilitychange', function() { document.hidden ? stopRot() : startRot(); });
+            startRot();
           }
           // Log impressions
           [...tvTop, ...tvSide].forEach(s => {
