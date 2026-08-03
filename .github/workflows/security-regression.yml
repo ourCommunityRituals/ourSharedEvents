@@ -80,7 +80,7 @@ jobs:
   # ============================================================================
   security-regression:
     name: Security Regression Gate
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
 
     # Allow failures on scheduled runs to not block development
     continue-on-error: ${{ github.event_name == 'schedule' }}
@@ -207,7 +207,7 @@ jobs:
   # ============================================================================
   qr-contract-check:
     name: QR-0 Contract Verification
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     needs: security-regression
     # Only run if main security checks pass
     if: ${{ success() || github.event_name == 'schedule' }}
