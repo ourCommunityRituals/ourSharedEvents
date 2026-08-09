@@ -9,7 +9,8 @@
  *   GET /forms/:eventId?type=register  → registration
  *   GET /forms/:eventId?type=checkin   → check-in
  *   GET /forms/:eventId?type=survey    → survey
- *   GET /forms/:eventId?type=email     → email signup
+ *   GET /forms/:eventId?type=email        → email signup
+ *   GET /forms/:eventId?type=email-signup → email signup (canonical; poster-bundle.ts emits this)
  *
  * Lead FE: Forms post to /api/v2/events/:id/forms/:type via fetch().
  * No page reload. Success state shown inline.
@@ -26,16 +27,28 @@ export interface FormPagesEnv {
   WORKER_ENV?: string;
 }
 
-// ── Security headers (SEC-2) ──────────────────────────────────────────────────
+// ── Security headers (SEC-2 / OSE-638 DESIGN-SEC-1) ─────────────────────────
 
-const SECURITY_HEADERS: Record<string, string> = {
-  'Content-Security-Policy':
-    "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; font-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'",
-  'X-Content-Type-Options': 'nosniff',
-  'X-Frame-Options': 'DENY',
-  'Referrer-Policy': 'strict-origin-when-cross-origin',
-  'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
-};
+function generateNonce(): string {
+  const buf = crypto.getRandomValues(new Uint8Array(16));
+  return btoa(String.fromCharCode(...buf));
+}
+
+// OSE-638: nonce replaces 'unsafe-inline' in script-src.
+// style-src keeps 'unsafe-inline' (nonce for CSS requires moving ALL inline
+// styles — tracked as a follow-on story). base-uri and frame-ancestors
+// are not directives accepted by all browsers but are included for defence depth.
+function buildSecurityHeaders(nonce: string): Record<string, string> {
+  return {
+    'Content-Security-Policy':
+      `default-src 'self'; script-src 'self' 'nonce-${nonce}'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; font-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'`,
+    'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
+    'X-Content-Type-Options': 'nosniff',
+    'X-Frame-Options': 'DENY',
+    'Referrer-Policy': 'strict-origin-when-cross-origin',
+    'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
+  };
+}
 
 // ── GDPR Art. 13 privacy notice (BE-9 / BE-10) ───────────────────────────────
 
@@ -57,6 +70,7 @@ function privacyNotice(formType: string, legalTier = 1): string {
         'Comments are scrubbed of personal information within <strong>24</strong> hours. Aggregate ratings are kept indefinitely.';
       break;
     case 'email':
+    case 'email-signup':
       purpose = 'We collect your email address to notify you about future community events.';
       legalBasis =
         'GDPR Art. 6(1)(a) — your <strong>consent</strong>. You can <strong>withdraw consent</strong> at any time.';
@@ -333,12 +347,16 @@ const FORM_JS_SPONSOR = `
 
 // ── Registration form ────────────────────────────────────────────────────────
 
-function registrationForm(eventId: string, legalTier = 1): string {
+function registrationForm(eventId: string, legalTier = 1, deploymentId?: string, nonce = ''): string {
+  const hiddenDeployment = deploymentId
+    ? `<input type="hidden" name="deploymentId" data-testid="form-deployment-id" value="${escapeHtml(deploymentId)}" />`
+    : '';
   return `
     <div class="form-card" id="form-area" data-testid="form-register">
       <h2>Register for this event</h2>
       <p id="error-msg" class="error-msg" data-testid="form-error" role="alert" aria-live="assertive"></p>
-      <form onsubmit="handleRegister(event)" data-testid="register-form">
+      <form data-testid="register-form">
+        ${hiddenDeployment}
         <label for="name">Your name</label>
         <input type="text" id="name" data-testid="register-name-input" placeholder="Jane Smith" maxlength="200" required autocomplete="name" aria-required="true" aria-describedby="error-msg" />
         <label for="email">Email (optional)</label>
@@ -347,31 +365,33 @@ function registrationForm(eventId: string, legalTier = 1): string {
         ${privacyNotice('register', legalTier)}
       </form>
     </div>
-    <script>
+    <script nonce="${nonce}">
       ${FORM_JS_SUBMIT}
       async function handleRegister(e) {
         e.preventDefault();
         await submitForm('${eventId}', 'register', {
           name: document.getElementById('name').value,
           email: document.getElementById('email').value || undefined,
+          sourcePlacementId: ${JSON.stringify(deploymentId ?? null)},
         });
         showSuccess('You\\'re registered!');
       }
+      document.querySelector('[data-testid="register-form"]').addEventListener('submit', handleRegister);
     </script>`;
 }
 
 // ── Check-in form (tap counter) ──────────────────────────────────────────────
 
-function checkinForm(eventId: string, legalTier = 1): string {
+function checkinForm(eventId: string, legalTier = 1, deploymentId?: string, nonce = ''): string {
   return `
     <div class="checkin-tap" id="form-area" data-testid="form-checkin">
       <h2>Check In</h2>
       <p id="error-msg" class="error-msg" data-testid="form-error" role="alert" aria-live="assertive"></p>
-      <button type="button" id="checkin-btn" data-testid="checkin-submit" ontouchend="handleCheckin(event)" onclick="handleCheckin(event)">Tap to<br/>Check In</button>
+      <button type="button" id="checkin-btn" data-testid="checkin-submit">Tap to<br/>Check In</button>
       <div class="count" id="count" data-testid="checkin-count"></div>
       ${privacyNotice('checkin', legalTier)}
     </div>
-    <script>
+    <script nonce="${nonce}">
       ${FORM_JS_SUBMIT}
       let tapping = false;
       async function handleCheckin(e) {
@@ -382,7 +402,9 @@ function checkinForm(eventId: string, legalTier = 1): string {
         btn.style.transform = 'scale(0.93)';
         btn.style.opacity = '0.7';
         try {
-          const body = await submitForm('${eventId}', 'checkin', {});
+          const body = await submitForm('${eventId}', 'checkin', {
+            sourcePlacementId: ${JSON.stringify(deploymentId ?? null)},
+          });
           document.getElementById('count').textContent = body.count + ' checked in';
         } finally {
           tapping = false;
@@ -391,24 +413,31 @@ function checkinForm(eventId: string, legalTier = 1): string {
           btn.disabled = false;
         }
       }
+      const _checkinBtn = document.getElementById('checkin-btn');
+      _checkinBtn.addEventListener('touchend', handleCheckin);
+      _checkinBtn.addEventListener('click', handleCheckin);
     </script>`;
 }
 
 // ── Survey form ──────────────────────────────────────────────────────────────
 
-function surveyForm(eventId: string, legalTier = 1): string {
+function surveyForm(eventId: string, legalTier = 1, deploymentId?: string, nonce = ''): string {
+  const hiddenDeployment = deploymentId
+    ? `<input type="hidden" name="deploymentId" data-testid="form-deployment-id" value="${escapeHtml(deploymentId)}" />`
+    : '';
   return `
     <div class="form-card" id="form-area" data-testid="form-survey">
       <h2>How was the event?</h2>
       <p id="error-msg" class="error-msg" data-testid="form-error" role="alert" aria-live="assertive"></p>
-      <form onsubmit="handleSurvey(event)" data-testid="survey-form">
+      <form data-testid="survey-form">
+        ${hiddenDeployment}
         <label id="rating-label">Overall rating</label>
         <div class="rating-row" id="rating-overall" data-testid="survey-rating-overall" role="group" aria-labelledby="rating-label">
-          <button type="button" data-testid="survey-rating-1" onclick="setRating('overall',1)" aria-label="Rate 1 out of 5">1</button>
-          <button type="button" data-testid="survey-rating-2" onclick="setRating('overall',2)" aria-label="Rate 2 out of 5">2</button>
-          <button type="button" data-testid="survey-rating-3" onclick="setRating('overall',3)" aria-label="Rate 3 out of 5">3</button>
-          <button type="button" data-testid="survey-rating-4" onclick="setRating('overall',4)" aria-label="Rate 4 out of 5">4</button>
-          <button type="button" data-testid="survey-rating-5" onclick="setRating('overall',5)" aria-label="Rate 5 out of 5">5</button>
+          <button type="button" data-testid="survey-rating-1" aria-label="Rate 1 out of 5">1</button>
+          <button type="button" data-testid="survey-rating-2" aria-label="Rate 2 out of 5">2</button>
+          <button type="button" data-testid="survey-rating-3" aria-label="Rate 3 out of 5">3</button>
+          <button type="button" data-testid="survey-rating-4" aria-label="Rate 4 out of 5">4</button>
+          <button type="button" data-testid="survey-rating-5" aria-label="Rate 5 out of 5">5</button>
         </div>
         <label for="comments">Comments (optional)</label>
         <textarea id="comments" data-testid="survey-comments-input" placeholder="Tell us what you thought..." maxlength="1000" aria-describedby="error-msg"></textarea>
@@ -416,7 +445,7 @@ function surveyForm(eventId: string, legalTier = 1): string {
         ${privacyNotice('survey', legalTier)}
       </form>
     </div>
-    <script>
+    <script nonce="${nonce}">
       ${FORM_JS_SUBMIT}
       const ratings = {};
       function setRating(key, val) {
@@ -430,55 +459,67 @@ function surveyForm(eventId: string, legalTier = 1): string {
         const comments = document.getElementById('comments').value;
         await submitForm('${eventId}', 'survey', {
           responses: { ...ratings, ...(comments ? { comments } : {}) },
+          sourcePlacementId: ${JSON.stringify(deploymentId ?? null)},
         });
         showSuccess('Thanks for your feedback!');
       }
+      document.querySelector('[data-testid="survey-form"]').addEventListener('submit', handleSurvey);
+      document.querySelectorAll('#rating-overall button').forEach(function(btn, i) {
+        btn.addEventListener('click', function() { setRating('overall', i + 1); });
+      });
     </script>`;
 }
 
 // ── Email signup form ────────────────────────────────────────────────────────
 
-function emailSignupForm(eventId: string, legalTier = 1): string {
+function emailSignupForm(eventId: string, legalTier = 1, deploymentId?: string, nonce = ''): string {
+  const hiddenDeployment = deploymentId
+    ? `<input type="hidden" name="deploymentId" data-testid="form-deployment-id" value="${escapeHtml(deploymentId)}" />`
+    : '';
   return `
     <div class="form-card" id="form-area" data-testid="form-email">
       <h2>Stay in the loop</h2>
       <p style="color:#6c757d;font-size:.9rem;margin-bottom:1rem;">Get notified about future events. We'll never share your email.</p>
       <p id="error-msg" class="error-msg" data-testid="form-error" role="alert" aria-live="assertive"></p>
-      <form onsubmit="handleEmail(event)" data-testid="email-form">
+      <form data-testid="email-form">
+        ${hiddenDeployment}
         <label for="email">Your email</label>
         <input type="email" id="email" data-testid="email-email-input" placeholder="you@example.com" maxlength="320" required autocomplete="email" aria-required="true" aria-describedby="error-msg" />
         <button type="submit" data-testid="email-submit">Sign me up</button>
         ${privacyNotice('email', legalTier)}
       </form>
     </div>
-    <script>
+    <script nonce="${nonce}">
       ${FORM_JS_SUBMIT}
       async function handleEmail(e) {
         e.preventDefault();
         const body = await submitForm('${eventId}', 'email-signup', {
           email: document.getElementById('email').value,
+          sourcePlacementId: ${JSON.stringify(deploymentId ?? null)},
         });
         showSuccess(body.duplicate ? 'You\\'re already signed up!' : 'You\\'re on the list!');
       }
+      document.querySelector('[data-testid="email-form"]').addEventListener('submit', handleEmail);
     </script>`;
 }
 
 // ── Page shell ───────────────────────────────────────────────────────────────
 
-function formPage(eventId: string, eventName: string, formType: string, legalTier = 1): string {
+function formPage(eventId: string, eventName: string, formType: string, legalTier = 1, deploymentId?: string, nonce = ''): string {
   let formHtml: string;
   switch (formType) {
     case 'checkin':
-      formHtml = checkinForm(eventId, legalTier);
+      formHtml = checkinForm(eventId, legalTier, deploymentId, nonce);
       break;
     case 'survey':
-      formHtml = surveyForm(eventId, legalTier);
+      formHtml = surveyForm(eventId, legalTier, deploymentId, nonce);
       break;
     case 'email':
-      formHtml = emailSignupForm(eventId, legalTier);
+    case 'email-signup':
+      formHtml = emailSignupForm(eventId, legalTier, deploymentId, nonce);
       break;
     default:
-      formHtml = registrationForm(eventId, legalTier);
+      formHtml = registrationForm(eventId, legalTier, deploymentId, nonce);
       break;
   }
 
@@ -502,7 +543,7 @@ function formPage(eventId: string, eventName: string, formType: string, legalTie
        silently absent if no sponsors are configured for this event. -->
   <div class="form-sponsor-strip" id="form-sponsor-strip" data-testid="form-sponsor-strip" role="complementary" aria-label="Event sponsors"></div>
   <main id="main-content" data-testid="form-main">${formHtml}</main>
-  <script>${FORM_JS_SPONSOR.replace('EVENT_ID_PLACEHOLDER', JSON.stringify(eventId))}</script>
+  <script nonce="${nonce}">${FORM_JS_SPONSOR.replace('EVENT_ID_PLACEHOLDER', JSON.stringify(eventId))}</script>
 </body>
 </html>`;
 }
@@ -517,6 +558,9 @@ export async function handleFormPage(
 ): Promise<Response> {
   const url = new URL(request.url);
   const formType = url.searchParams.get('type') ?? 'register';
+  // OSE-627: deployment ID for poster attribution (written to source_placement_id
+  // on form submission so SharedReport can link scans to form registrations).
+  const deploymentId = url.searchParams.get('deployment') ?? null;
 
   // OSE-R-007 (2026-05-15): event title MUST come from the canonical
   // event row in D1, never from the URL query param. Pre-fix the page
@@ -550,12 +594,13 @@ export async function handleFormPage(
   // shouldn't contain HTML, escape the value and cap length before render.
   const eventName = escapeHtml((canonicalTitle ?? 'Event').slice(0, 200));
 
-  const html = formPage(eventId, eventName, formType, legalTier);
+  const nonce = generateNonce();
+  const html = formPage(eventId, eventName, formType, legalTier, deploymentId ?? undefined, nonce);
   return new Response(html, {
     status: 200,
     headers: {
       'Content-Type': 'text/html; charset=utf-8',
-      ...SECURITY_HEADERS,
+      ...buildSecurityHeaders(nonce),
     },
   });
 }
