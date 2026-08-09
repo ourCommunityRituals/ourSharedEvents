@@ -90,6 +90,7 @@ const EXPECTED_INDEXES = [
   'idx_admin_audit_log_created_at',
   'idx_admin_audit_log_actor',
   'idx_admin_audit_log_resource',
+  'idx_admin_brand_memberships_email', // 0050 (OSE-666/B2 membership scope lookup)
   // OSE-240 (migration 0030)
   'idx_shortlinks_event_id',
   'idx_shortlinks_created_at',
@@ -98,19 +99,29 @@ const EXPECTED_INDEXES = [
   // Campaigns (migrations 0039/0040)
   'idx_campaigns_brand_id',
   'idx_sponsors_campaign_id',
+  // corridor_density_snapshots (migration 0044 — OER longitudinal archive)
+  'idx_cds_corridor_dow_hour',
+  'idx_cds_snapshot_date',
+  // sponsor_impressions geo (migration 0048 — OSE-635 digital click geo privacy)
+  'idx_sponsor_impressions_h3_res7',
 ] as const;
 
 const EXPECTED_COLUMN_COUNTS: Record<string, number> = {
   // events: 23 (pre-OSE-236) + 6 (migration 0029: what_short, who_host,
   // why_purpose, how_details, where_address, corridor_id) + 1 (migration
   // 0034: series_id, OSE-272 Session 2) + 2 (migration 0037: h3_res9,
-  // h3_res7, OSE-450 S-6 H3 NCR tagging) = 32.
+  // h3_res7, OSE-450 S-6 H3 NCR tagging) = 32; +3 (migration 0049: price_cents,
+  // price_model, price_note — OSE-655 "HOW MUCH" event price display) = 35.
   // This count is the canonical floor — any future column add/drop on
   // events MUST bump this number in the same PR, surfacing the change
   // in code review.
-  events: 32,
+  // 35 (pre-0051) + 3 (migration 0051: who_story, who_image_url,
+  // what_video_url — OSE-664 rich WHO/WHAT authoring) = 38.
+  events: 38,
   sponsors: 12,
-  poster_deployments: 10,
+  // poster_deployments: 10 (pre-0047) + 2 (migration 0047: h3_res9, h3_res7,
+  // OSE poster geo-tagging — res9 Node precision for physical placement attribution) = 12.
+  poster_deployments: 12,
   scans: 10,
   // scan_aggregates: 9 (pre-OSE-450) + 2 (migration 0038: h3_res9, h3_res7,
   // OSE-450 S-6.1.2 — denormalized NCR cells for density queries) = 11.
@@ -120,7 +131,8 @@ const EXPECTED_COLUMN_COUNTS: Record<string, number> = {
   corridors: 22,
   sponsor_event_types: 5,
   sponsor_areas: 7,
-  sponsor_impressions: 7,
+  // sponsor_impressions: 7 (pre-OSE-635) + 1 (h3_res7, migration 0048) = 8.
+  sponsor_impressions: 8,
   event_type_registry: 10,
   corridor_regulatory_status: 5,
   // OSE-240 (migration 0030): code TEXT PK, event_id TEXT FK, created_at TEXT,
@@ -130,8 +142,9 @@ const EXPECTED_COLUMN_COUNTS: Record<string, number> = {
 // sponsors: 12 (pre-OSE-330) + 1 (is_local INTEGER NOT NULL DEFAULT 0,
 // migration 0036 — Local Sponsor Covenant enforcement axis) + 1
 // (campaign_id TEXT, migration 0040 — enterprise campaign linking) + 2
-// (logo_width/logo_height INTEGER, migration 0041 — logo aspect ratio metadata) = 16.
-EXPECTED_COLUMN_COUNTS.sponsors = 16;
+// (logo_width/logo_height INTEGER, migration 0041 — logo aspect ratio metadata) + 4
+// (lat REAL, lon REAL, h3_res9 TEXT, h3_res7 TEXT, migration 0045 — H3 geo-tagging) = 20.
+EXPECTED_COLUMN_COUNTS.sponsors = 20;
 
 // ── Apply migrations before tests ────────────────────────────────────────────
 
@@ -228,27 +241,51 @@ describe('Gate 4: scan_aggregates write protection', () => {
     const sources: Record<string, string> = JSON.parse(
       (env as unknown as TestEnv).TEST_SOURCE_FILES_JSON
     );
-    for (const [, content] of Object.entries(sources)) {
-      expect(content).not.toMatch(/INSERT\s+.*scan_aggregates/i);
+    for (const [path, content] of Object.entries(sources)) {
+      const normalPath = path.replace(/\\/g, '/');
+      // Skip test fixtures and spec files — only enforce on handler/lib source
+      if (normalPath.includes('/tests/')) continue;
+      // shared-report.ts is the cron lib — the ONLY permitted writer.
+      // aggregateScanBuckets() (OSE-632) is a scheduled worker function, not a route.
+      if (normalPath.endsWith('lib/shared-report.ts')) continue;
+      expect(content, `${path} must not INSERT into scan_aggregates`).not.toMatch(
+        /INSERT\s+.*scan_aggregates/i
+      );
     }
+  });
+
+  test('scan_aggregates INSERT exists in shared-report.ts (the permitted cron writer)', () => {
+    const sources: Record<string, string> = JSON.parse(
+      (env as unknown as TestEnv).TEST_SOURCE_FILES_JSON
+    );
+    const entry = Object.entries(sources).find(([p]) =>
+      p.replace(/\\/g, '/').endsWith('lib/shared-report.ts')
+    );
+    expect(entry, 'shared-report.ts not in TEST_SOURCE_FILES_JSON').toBeDefined();
+    expect(entry![1]).toMatch(/INSERT\s+.*scan_aggregates/i);
   });
 });
 
 // ── Gate 5: Index verification ───────────────────────────────────────────────
 
 describe('Gate 5: Index verification', () => {
-  test('all 42 custom indexes exist', async () => {
+  test('all 55 custom indexes exist', async () => {
     // 35 (pre-OSE-272) + 4 (OSE-272 Session 2: idx_anon_id_returns_venue_visit,
     // idx_event_series_venue_state, idx_event_series_venue_dow_hour,
     // idx_events_series_start) + 1 (idx_sponsors_is_local, OSE-330 Phase 2
     // — Local Sponsor Covenant enforcement, migration 0036) + 2
-    // (idx_campaigns_brand_id, idx_sponsors_campaign_id — migrations 0039/0040) = 42.
+    // (idx_campaigns_brand_id, idx_sponsors_campaign_id — migrations 0039/0040) = 42
+    // + 4 (idx_security_metrics_*, idx_security_alerts_* — migration 0042)
+    // + 6 (idx_report_access_log_*, idx_export_manifest_* — migration 0043) = 52
+    // + 2 (idx_cds_corridor_dow_hour, idx_cds_snapshot_date — migration 0044) = 54
+    // + 1 (idx_sponsor_impressions_h3_res7 — migration 0048, OSE-635) = 55
+    // + 1 (idx_admin_brand_memberships_email — migration 0050, OSE-666/B2) = 56.
     const indexes = await env.DB.prepare(
       "SELECT name FROM sqlite_master WHERE type='index' AND name LIKE 'idx_%' ORDER BY name"
     ).all();
 
     const names = indexes.results.map((r: Record<string, unknown>) => r.name);
-    expect(names.length).toBe(42);
+    expect(names.length).toBe(56);
     EXPECTED_INDEXES.forEach((idx) => expect(names).toContain(idx));
   });
 });

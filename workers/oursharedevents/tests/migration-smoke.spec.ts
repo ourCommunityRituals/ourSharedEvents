@@ -41,20 +41,26 @@ const tenv = () => env as unknown as TestEnv;
 
 const DB_TABLES = [
   'admin_audit_log', // 0026
+  'admin_brand_memberships', // 0050 (OSE-666/B2 identity→brand+role membership)
   'anon_id_returns', // 0031 (OSE-272 SharedReport pipeline)
   'bigquery_export_state', // 0035 (OSE-272 Session 4 BigQuery export watermark)
   'campaigns', // 0039 (campaigns metadata table — enterprise sponsor comparison)
   'corridor_density_baseline', // 0032 (OSE-272 SharedReport pipeline)
+  'corridor_density_snapshots', // 0044 (OER longitudinal archive — append-only)
   'corridor_regulatory_status', // 0023
   'corridors', // 0010
   'event_series', // 0033 (OSE-272 SharedReport pipeline)
   'event_templates', // 0014
   'event_type_registry', // 0023
   'events', // 0001 + 0034 series_id column
+  'export_manifest', // 0043 (OSE-556 D1→OCR export audit)
   'node_hierarchy', // 0010
   'poster_deployments', // 0003
+  'report_access_log', // 0043 (OSE-557 SharedReport access logging)
   'scan_aggregates', // 0006
   'scans', // 0004
+  'security_alerts', // 0042 (OSE-558 security observability)
+  'security_metrics', // 0042 (OSE-558 security observability)
   'shortlinks', // 0030 (OSE-240)
   'sponsor_areas', // 0020
   'sponsor_event_types', // 0019
@@ -140,6 +146,7 @@ async function listObjects(db: D1Database, type: 'table' | 'index' | 'trigger'):
 // ═════════════════════════════════════════════════════════════════════════════
 
 describe('OSE-209 smoke: DB tables match canonical set', () => {
+  // @born-red TL-031 | method: design-time-negative-assertion | date: 2026-08-03
   test(`DB contains exactly ${DB_TABLES.length} tables, names match`, async () => {
     const actual = await listObjects(tenv().DB, 'table');
     expect(actual).toEqual([...DB_TABLES]);

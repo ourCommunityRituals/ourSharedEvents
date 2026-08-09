@@ -117,7 +117,11 @@ describe('Scenario 1: Registration lifecycle', () => {
     // ── Step 2: Admin reads — sees entry with hashed email ────────────────
     const adminRes = await handleAdminRegistrations(getReq(), formsEnv(), EVENT);
     const adminBody = await json(adminRes);
-    expect(adminBody.count).toBe(1);
+    // OSE-665: the aggregate count is floored uniformly (K=5) — a single
+    // registration is suppressed. The organizer's first-party `items` list is
+    // still exact, so the write is verified by the row below.
+    expect(adminBody.suppressed).toBe(true);
+    expect(adminBody.count).toBeNull();
     const items = adminBody.items as Record<string, unknown>[];
     expect(items[0].id).toBe(regId);
     expect(items[0].attendee_name).toBe('Alice Johnson');
@@ -155,7 +159,11 @@ describe('Scenario 1: Registration lifecycle', () => {
     expect(expired).toBeNull();
 
     const remaining = await handleAdminRegistrations(getReq(), formsEnv(), EVENT);
-    expect((await json(remaining)).count).toBe(1);
+    const remainingBody = await json(remaining);
+    // OSE-665: one row remains — the exact first-party items list proves it;
+    // the aggregate count is floored (suppressed) below K=5.
+    expect((remainingBody.items as unknown[]).length).toBe(1);
+    expect(remainingBody.suppressed).toBe(true);
   });
 });
 
@@ -230,8 +238,12 @@ describe('Scenario 3: Survey lifecycle with PII scrub', () => {
     const surveyId = submitBody.id as string;
 
     // ── Step 2: Admin blocked — pii_scrubbed = 0 ──────────────────────────
+    // No scrubbed surveys are visible; the floored count suppresses the sub-5
+    // aggregate, and the items list is empty (the real "blocked" assertion).
     const blockedRes = await handleAdminSurveys(getReq(), formsEnv(), EVENT);
-    expect((await json(blockedRes)).count).toBe(0);
+    const blockedBody = await json(blockedRes);
+    expect((blockedBody.items as unknown[]).length).toBe(0);
+    expect(blockedBody.suppressed).toBe(true);
 
     // ── Step 3: Verify raw PII is in DB ───────────────────────────────────
     const before = await formsDb()
@@ -288,7 +300,10 @@ describe('Scenario 3: Survey lifecycle with PII scrub', () => {
     // ── Step 6: Admin NOW reads — ratings intact, PII gone ────────────────
     const visibleRes = await handleAdminSurveys(getReq(), formsEnv(), EVENT);
     const visibleBody = await json(visibleRes);
-    expect(visibleBody.count).toBe(1);
+    // OSE-665: the scrubbed survey is now visible in the first-party items list;
+    // the aggregate count is floored (suppressed) below K=5.
+    expect((visibleBody.items as unknown[]).length).toBe(1);
+    expect(visibleBody.suppressed).toBe(true);
     const fullStr = JSON.stringify(visibleBody);
     expect(fullStr).not.toContain('Bob Smith');
     expect(fullStr).not.toContain('bob@example.com');
@@ -341,9 +356,13 @@ describe('Scenario 4: Email signup lifecycle', () => {
     );
     expect((await json(r4)).duplicate).toBeUndefined();
 
-    // ── Step 5: Admin count = 2 ───────────────────────────────────────────
+    // ── Step 5: Admin count floored (2 unique < 5) ────────────────────────
+    // Dedup is verified by r4.duplicate above + the DB rows below; the aggregate
+    // count is suppressed uniformly (K=5).
     const adminRes = await handleAdminEmailSignupCount(getReq(), formsEnv(), EVENT);
-    expect((await json(adminRes)).count).toBe(2);
+    const emailCountBody = await json(adminRes);
+    expect(emailCountBody.suppressed).toBe(true);
+    expect(emailCountBody.count).toBeNull();
 
     // ── Step 6: DB verification — encrypted, not plaintext ────────────────
     const rows = await formsDb()
@@ -373,8 +392,17 @@ describe('Scenario 4: Email signup lifecycle', () => {
       .bind(new Date().toISOString())
       .run();
 
+    // OSE-665: 0 is below the floor → the endpoint suppresses (count null), so
+    // deletion is verified directly against the DB (the true 0-row proof).
+    const remainingRows = await formsDb()
+      .prepare('SELECT COUNT(*) AS n FROM email_signups WHERE event_id = ?')
+      .bind(EVENT)
+      .first<{ n: number }>();
+    expect(remainingRows?.n).toBe(0);
     const afterDelete = await handleAdminEmailSignupCount(getReq(), formsEnv(), EVENT);
-    expect((await json(afterDelete)).count).toBe(0);
+    const afterDeleteBody = await json(afterDelete);
+    expect(afterDeleteBody.suppressed).toBe(true);
+    expect(afterDeleteBody.count).toBeNull();
   });
 });
 
@@ -700,7 +728,9 @@ describe('Scenario 10: Full organizer flow (QA-4 — admin→configure→QR→su
     );
     expect(adminRes.status).toBe(200);
     const adminBody = await json(adminRes);
-    expect(adminBody.count).toBe(1);
+    // OSE-665: single registration → floored count; first-party items exact.
+    expect(adminBody.suppressed).toBe(true);
+    expect(adminBody.count).toBeNull();
     const items = adminBody.items as Record<string, unknown>[];
     expect(items[0].attendee_name).toBe('Flow Test Attendee');
     // Raw email must not be stored (hashed only)

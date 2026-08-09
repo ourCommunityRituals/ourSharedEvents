@@ -466,7 +466,8 @@
       }
       .subscribe-form button[type='submit'] {
         background: var(--accent);
-        color: #000;
+        /* --on-accent: AA-safe label on any accent, brand-swappable (OSE-654). */
+        color: var(--on-accent);
       }
       .subscribe-form button[type='submit']:hover {
         background: var(--accent-hover);
@@ -478,11 +479,18 @@
         background: var(--text-muted);
       }
       .form-message.success {
-        color: #4ade80;
+        color: var(--success);
       }
       .form-message.error {
         color: var(--danger);
       }
+      /* OSE-655 A2/A4: non-color cue so success/error survive colorblindness
+         (deuteranopia) and any palette swap — meaning is never color-only.
+         success = teal --success (not green), paired with a check; error =
+         --danger paired with a cross. The message text (aria-live) carries the
+         full meaning for screen readers; these glyphs are the visual valence. */
+      .form-message.success::before { content: "\2713\00a0"; }
+      .form-message.error::before { content: "\2717\00a0"; }
       .ring-path {
         border-color: var(--border);
       }
@@ -504,16 +512,16 @@
         color: var(--text-muted);
       }
       .feature-icon.events {
-        background: rgba(212, 149, 75, 0.15);
+        background: color-mix(in srgb, var(--accent) 15%, transparent);
         color: var(--accent);
       }
       .feature-icon.sponsors {
-        background: rgba(212, 149, 75, 0.1);
+        background: color-mix(in srgb, var(--accent) 10%, transparent);
         color: var(--accent-hover);
       }
       .feature-icon.community {
-        background: rgba(22, 163, 74, 0.15);
-        color: #4ade80;
+        background: color-mix(in srgb, var(--success) 15%, transparent);
+        color: var(--success);
       }
       footer a {
         color: var(--text-muted);

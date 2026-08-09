@@ -45,8 +45,15 @@ const FORM_LABELS: Record<FormType, string> = {
   'email-signup': 'Email Signup',
 };
 
-function formUrl(origin: string, eventId: string, type: FormType): string {
-  return `${origin}/forms/${encodeURIComponent(eventId)}?type=${type}`;
+function formUrl(origin: string, eventId: string, type: FormType, deploymentId?: string): string {
+  const base = `${origin}/forms/${encodeURIComponent(eventId)}?type=${type}`;
+  return deploymentId ? `${base}&deployment=${encodeURIComponent(deploymentId)}` : base;
+}
+
+// Scan URL for QR codes that record a physical scan before redirect.
+// Used when a deployment ID + qr_token is known (deployment-specific bundle).
+function scanUrl(origin: string, qrToken: string, type: FormType): string {
+  return `${origin}/q/${encodeURIComponent(qrToken)}?type=${type}`;
 }
 
 export async function handleGetPosterBundle(
@@ -70,14 +77,38 @@ export async function handleGetPosterBundle(
     );
   }
 
-  const origin = new URL(request.url).origin;
+  const requestUrl = new URL(request.url);
+  const origin = requestUrl.origin;
+
+  // OSE-627: if ?deployment=<id> is provided, generate deployment-specific QR
+  // codes that route through /q/:qr_token (scan ingestion) before redirecting
+  // to the form. This gives physical poster scans an anonymous scan record
+  // before the attendee sees the form.
+  const requestedDeploymentId = requestUrl.searchParams.get('deployment');
+  let deployment: { id: string; qr_token: string } | null = null;
+  if (requestedDeploymentId) {
+    deployment = await env.DB.prepare(
+      `SELECT id, qr_token FROM poster_deployments
+       WHERE id = ? AND event_id = ? AND is_active = 1 LIMIT 1`
+    )
+      .bind(requestedDeploymentId, eventId)
+      .first<{ id: string; qr_token: string }>();
+  }
 
   const qr: Record<string, string> = {};
   const links: Record<string, string> = {};
   const labels: Record<string, string> = {};
 
   for (const type of FORM_TYPES) {
-    const url = formUrl(origin, eventId, type);
+    let url: string;
+    if (deployment) {
+      // Deployment-specific: QR encodes the scan ingestion URL (/q/:qr_token).
+      // The scan handler records the physical scan and redirects with ?deployment=.
+      url = scanUrl(origin, deployment.qr_token, type);
+    } else {
+      // Generic event bundle: form URL with no deployment context (no scan recorded).
+      url = formUrl(origin, eventId, type);
+    }
     links[type] = url;
     qr[type] = generateQrCode(url, { errorCorrection: 'M' });
     labels[type] = FORM_LABELS[type];
@@ -98,6 +129,7 @@ export async function handleGetPosterBundle(
     eventId: row.id,
     eventName: row.title,
     status: row.status,
+    deploymentId: deployment?.id ?? null,
     qr,
     links,
     labels,

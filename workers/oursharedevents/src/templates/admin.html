@@ -566,6 +566,87 @@
       .create-msg.error {
         color: #dc2626;
       }
+      /* Shared assertive status toast (replaces blocking dialogs). Sticky at the
+         top of the admin main column on mobile; top-right on wide screens. */
+      /* OSE-673: persistent context bar + sticky card nav. */
+      .event-context-bar {
+        position: sticky;
+        top: 0;
+        z-index: 40;
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        flex-wrap: wrap;
+        margin: 0 0 12px;
+        padding: 0.5rem 1rem;
+        background: var(--surface);
+        border-bottom: 1px solid var(--border);
+      }
+      .event-context-bar[hidden] {
+        display: none;
+      }
+      .ecb-caption {
+        font-weight: 600;
+        color: var(--text);
+      }
+      .ecb-nav {
+        display: flex;
+        gap: 0.25rem;
+        flex-wrap: wrap;
+      }
+      .ecb-nav button {
+        min-height: 44px;
+        min-width: 44px;
+        padding: 0.25rem 0.75rem;
+        font-size: 0.9rem;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        background: var(--surface);
+        color: var(--text);
+        cursor: pointer;
+      }
+      .ecb-nav button:hover {
+        background: var(--surface-hover);
+      }
+      .ecb-nav button:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+      }
+      .admin-status {
+        position: sticky;
+        top: 0;
+        z-index: 50;
+        margin: 0 0 12px;
+        padding: 12px 16px;
+        min-height: 44px;
+        box-sizing: border-box;
+        display: flex;
+        align-items: center;
+        border-radius: 8px;
+        font-size: 0.9rem;
+        background: #fff;
+        border: 1px solid currentColor;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+      }
+      .admin-status[hidden] {
+        display: none;
+      }
+      .admin-status.is-ok {
+        color: #16a34a;
+      }
+      .admin-status.is-error {
+        color: #dc2626;
+      }
+      @media (min-width: 900px) {
+        .admin-status {
+          position: fixed;
+          top: 16px;
+          right: 16px;
+          left: auto;
+          max-width: 420px;
+          margin: 0;
+        }
+      }
       /* OSE-262: warnings banner for create-event response.
        Surfaces non-fatal partial-success conditions (e.g.,
        SHORTLINK_CREATE_FAILED) so the admin sees what landed and
@@ -679,6 +760,40 @@
         /* Events table → card layout. Each <tr> becomes a vertical card;
          each <td> shows its label via the data-label attribute the
          renderer now writes. Hide the <thead> entirely. */
+        /* OSE-668: brand-group nodes in the events tree. */
+        tr.brand-group-header {
+          cursor: pointer;
+          background: var(--surface-alt, #f1f3f5);
+          font-weight: 600;
+        }
+        tr.brand-group-header td {
+          padding: 0.5rem 0.75rem;
+        }
+        tr.brand-group-header:hover {
+          background: var(--surface-hover, #e9ecef);
+        }
+        tr.brand-group-header:focus-visible {
+          outline: 2px solid var(--accent);
+          outline-offset: -2px;
+        }
+        .brand-group-caret {
+          display: inline-block;
+          width: 1rem;
+          color: var(--text-muted, #5a5a5a);
+        }
+        .brand-count-pill {
+          display: inline-block;
+          margin-left: 0.5rem;
+          font-size: 0.75rem;
+          font-weight: 600;
+          padding: 0.05rem 0.5rem;
+          border-radius: 10px;
+          background: var(--accent);
+          color: var(--on-accent);
+        }
+        table.events-table tr[hidden] {
+          display: none;
+        }
         table.events-table {
           display: block;
           box-shadow: none;
@@ -889,6 +1004,25 @@
         flex-wrap: wrap;
         margin-top: 0.25rem;
       }
+      /* OSE-670 (#25): uniform-placement covenant note + read-only is_local pill
+         (replaces the retired size/slot toggles). */
+      .spon-covenant-note {
+        margin: 0;
+        font-size: 0.8rem;
+        color: var(--text-muted, #5a5a5a);
+      }
+      .is-local-pill {
+        display: inline-block;
+        margin-top: 0.5rem;
+        font-size: 0.75rem;
+        padding: 0.125rem 0.5rem;
+        border-radius: 10px;
+        background: var(--success-bg, #e6f4ea);
+        color: var(--success, #137333);
+      }
+      .is-local-pill[hidden] {
+        display: none;
+      }
       .placement-check {
         display: flex;
         align-items: center;
@@ -919,6 +1053,36 @@
       }
       .deact-confirm-lbl {
         font-size: 0.8rem;
+      }
+      /* OSE-669 portfolio rollup strip. Role tokens (from @ocr/ui) with hex
+         fallbacks so it swaps with a brand and never hardcodes a palette. */
+      .portfolio-rollup {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 1rem 1.75rem;
+        margin: 0 0 1rem;
+        padding: 1rem 1.25rem;
+        background: var(--surface, #fff);
+        border: 1px solid var(--border, #e5e7eb);
+        border-radius: 8px;
+      }
+      .rollup-stat {
+        display: flex;
+        flex-direction: column;
+        min-width: 92px;
+      }
+      .rollup-num {
+        font-size: 1.5rem;
+        font-weight: 700;
+        line-height: 1.1;
+        color: var(--text, #1f2937);
+      }
+      .rollup-label {
+        font-size: 0.72rem;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--text-muted, #6b7280);
       }
     </style>
     <link rel="stylesheet" href="/ui.css" />
@@ -1060,6 +1224,70 @@
       <span>Admin</span>
     </header>
     <main id="main-content" data-testid="admin-main" aria-label="Admin dashboard">
+      <!-- Shared assertive status region — replaces the blocking browser
+           dialogs. Screen readers announce immediately; writes are
+           textContent-only. -->
+      <div
+        id="admin-status"
+        data-testid="admin-status"
+        class="admin-status"
+        role="alert"
+        aria-live="assertive"
+        aria-atomic="true"
+        hidden
+      ></div>
+      <script>
+        // window._adminAnnounce(message, kind) — the one place admin feedback
+        // is surfaced. INVARIANT #1 guard: identifiers/errors are written with
+        // textContent, NEVER innerHTML, so a sponsor/event id can't inject.
+        window._adminAnnounce = function (message, kind) {
+          var el = document.getElementById('admin-status');
+          if (!el) return;
+          el.textContent = message; // textContent — never innerHTML
+          el.className = 'admin-status ' + (kind === 'error' ? 'is-error' : 'is-ok');
+          el.hidden = false;
+          clearTimeout(window._adminAnnounceT);
+          window._adminAnnounceT = setTimeout(function () {
+            el.hidden = true;
+            el.textContent = '';
+          }, 6000);
+        };
+      </script>
+
+      <!-- OSE-673: persistent context bar + sticky card nav. Populated from the
+           OSE-667 selection store; hidden until an event is selected. -->
+      <div
+        id="event-context-bar"
+        class="event-context-bar"
+        data-testid="event-context-bar"
+        hidden
+      >
+        <span class="ecb-caption" data-testid="ecb-caption" aria-live="polite"></span>
+        <nav class="ecb-nav" aria-label="Jump to management card">
+          <button type="button" data-testid="ecb-nav-forms" onclick="window.ecbJump('forms-card')">Forms</button>
+          <button type="button" data-testid="ecb-nav-poster" onclick="window.ecbJump('poster-deployments-card')">Poster</button>
+          <button type="button" data-testid="ecb-nav-sponsors" onclick="window.ecbJump('sponsors-card')">Sponsors</button>
+          <button type="button" data-testid="ecb-nav-surfaces" onclick="window.ecbJump('surface-cards')">Surfaces</button>
+        </nav>
+      </div>
+      <script>
+        // OSE-673: jump to a management card by its container class.
+        window.ecbJump = function (cls) {
+          const el = document.querySelector('.' + cls);
+          if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        };
+        // Caption + reveal driven by the single selection event (OSE-667).
+        window.addEventListener('ose:event-selected', function (ev) {
+          const d = ev.detail || {};
+          const bar = document.getElementById('event-context-bar');
+          if (!bar) return;
+          const cap = bar.querySelector('.ecb-caption');
+          // Event name is already shown in-page (no PII); id-only fallback (#1).
+          if (cap) cap.textContent = d.name || d.id || '';
+          bar.hidden = false;
+        });
+      </script>
+
       <!-- Create Event Card -->
       <div class="create-card" data-testid="create-event-card">
         <h2>Create Event</h2>
@@ -1113,6 +1341,19 @@
                 maxlength="300"
               />
             </div>
+            <!-- OSE-664: WHAT video reference. Link-out, never an embed. http(s) only. -->
+            <div class="full-width">
+              <label for="create-what-video-url">What (video link — optional)</label>
+              <input
+                type="url"
+                id="create-what-video-url"
+                name="what_video_url"
+                data-testid="create-what-video-url"
+                placeholder="https://… link to a teaser or recap video"
+                maxlength="500"
+                inputmode="url"
+              />
+            </div>
             <div>
               <label for="create-who-host">Who (host / organizer)</label>
               <input
@@ -1122,6 +1363,32 @@
                 data-testid="create-who-host"
                 placeholder="Beverly Hills Bocce League"
                 maxlength="200"
+              />
+            </div>
+            <!-- OSE-664: WHO card is the conversion engine — host/artist story
+               (rich text) + a media image reference. Story is escaped on render;
+               image URL is http(s)-only (validated server-side). -->
+            <div class="full-width">
+              <label for="create-who-story">Who (host / artist story)</label>
+              <textarea
+                id="create-who-story"
+                name="who_story"
+                data-testid="create-who-story"
+                placeholder="Who's behind this? The story that makes a stranger want to show up."
+                maxlength="4000"
+                rows="4"
+              ></textarea>
+            </div>
+            <div class="full-width">
+              <label for="create-who-image-url">Who (host / artist image — optional)</label>
+              <input
+                type="url"
+                id="create-who-image-url"
+                name="who_image_url"
+                data-testid="create-who-image-url"
+                placeholder="https://… link to a host or artist photo"
+                maxlength="500"
+                inputmode="url"
               />
             </div>
             <div class="full-width">
@@ -1191,6 +1458,33 @@
         </form>
       </div>
 
+      <!-- OSE-669: brand-scoped portfolio rollup strip. Server-computed,
+         K≥5 per contributing bucket; a sub-5 event never joins the sum. -->
+      <section
+        id="portfolio-rollup"
+        class="portfolio-rollup"
+        data-testid="portfolio-rollup"
+        aria-label="Portfolio totals across your brand's events"
+        hidden
+      >
+        <div class="rollup-stat" data-testid="rollup-events">
+          <span class="rollup-num" data-testid="rollup-events-num">—</span>
+          <span class="rollup-label">Events</span>
+        </div>
+        <div class="rollup-stat" data-testid="rollup-registrations">
+          <span class="rollup-num" data-testid="rollup-registrations-num">—</span>
+          <span class="rollup-label">Registered</span>
+        </div>
+        <div class="rollup-stat" data-testid="rollup-checkins">
+          <span class="rollup-num" data-testid="rollup-checkins-num">—</span>
+          <span class="rollup-label">Checked in</span>
+        </div>
+        <div class="rollup-stat" data-testid="rollup-sponsors">
+          <span class="rollup-num" data-testid="rollup-sponsors-num">—</span>
+          <span class="rollup-label">Active sponsors</span>
+        </div>
+      </section>
+
       <h2>All Events</h2>
       <div id="events" data-testid="events-container">
         <div class="skeleton-table" data-testid="skeleton-events">
@@ -1229,6 +1523,99 @@
       };
     </script>
     <script>
+      // ── OSE-667: single selected-event store ──
+      // One source of truth for "which event is selected", replacing four
+      // imperative loader calls wired into every row. selectEvent() persists
+      // ONLY the opaque server-validated event id (#1 — no PII/anonymous_id)
+      // and dispatches one event; the four management cards fan out from it.
+      // Selection survives the create-forced reload (restored in the table IIFE).
+      window.SELECTED_EVENT_KEY = 'ose_selected_event_id';
+      window.OSE_selection = window.OSE_selection || null;
+      window.selectEvent = function (id, name, phase) {
+        if (!id) return;
+        window.OSE_selection = {
+          id: String(id),
+          name: name == null ? '' : String(name),
+          phase: Math.max(1, Math.min(5, Number(phase) || 1)),
+        };
+        try { sessionStorage.setItem(window.SELECTED_EVENT_KEY, window.OSE_selection.id); } catch (e) {}
+        window.dispatchEvent(new CustomEvent('ose:event-selected', { detail: window.OSE_selection }));
+      };
+      window.reselectEvent = function () {
+        if (window.OSE_selection) window.selectEvent(
+          window.OSE_selection.id, window.OSE_selection.name, window.OSE_selection.phase
+        );
+      };
+      // The four management cards hydrate from the one selection event instead
+      // of being called imperatively per row (guards: loaders are defined in
+      // later scripts, all present by the time a user can click).
+      window.addEventListener('ose:event-selected', function (ev) {
+        var d = ev.detail || {};
+        if (typeof window.loadForms === 'function') window.loadForms(d.id, d.name, d.phase);
+        if (typeof window.loadPosterDeployments === 'function') window.loadPosterDeployments(d.id);
+        if (typeof window._loadSponsorsForEvent === 'function') window._loadSponsorsForEvent(d.id);
+        if (typeof window.scopeSurfaceCards === 'function') window.scopeSurfaceCards(d.id, d.name);
+      });
+
+      // ── OSE-675: memoized admin-events fetch ──
+      // The events list was fetched up to 4x per page (table, sponsor event
+      // options, sponsor-name cache, ...). Dedupe CONCURRENT calls to one
+      // in-flight request; the promise clears once settled so a later call
+      // still fetches fresh (in-flight dedup only, never a stale cache). Caches
+      // no identifying data — the list is already authorized per request (#1).
+      window._oseEventsInFlight = null;
+      window.OSE_events = function () {
+        if (window._oseEventsInFlight) return window._oseEventsInFlight;
+        const p = fetch('/api/v2/admin/events').then((r) => r.json());
+        window._oseEventsInFlight = p;
+        const clear = () => { window._oseEventsInFlight = null; };
+        p.then(clear, clear);
+        return p;
+      };
+
+      // ── OSE-669: brand-scoped portfolio rollup strip ──
+      // Server-computed + server-scoped; the client only renders. Suppressed
+      // (sub-K) metrics show "Fewer than N", never a number. Left hidden on
+      // 403/forged-brand/unauth or when the caller has no events.
+      window.renderPortfolioRollup = async function () {
+        const strip = document.getElementById('portfolio-rollup');
+        if (!strip) return;
+        try {
+          const res = await fetch('/api/v2/admin/events/portfolio-rollup');
+          if (!res.ok) return;
+          const data = await res.json();
+          const r = data && data.rollup;
+          if (!r) return;
+          const fmt = (f) =>
+            f && f.suppressed
+              ? 'Fewer than ' + (f.floor || 5)
+              : String(f && f.count != null ? f.count : 0);
+          const set = (id, val) => {
+            const el = document.querySelector('[data-testid="' + id + '"]');
+            if (el) el.textContent = val;
+          };
+          set('rollup-events-num', String(r.events || 0));
+          set('rollup-registrations-num', fmt(r.registrations));
+          set('rollup-checkins-num', fmt(r.checkins));
+          set('rollup-sponsors-num', String(r.activeSponsors || 0));
+          if ((r.events || 0) > 0) strip.hidden = false;
+        } catch (e) {
+          /* leave the strip hidden on any error */
+        }
+      };
+      window.renderPortfolioRollup();
+
+      // ── OSE-668: collapse/expand a brand group in the events tree ──
+      window.toggleBrandGroup = function (brand, headerEl) {
+        const next = headerEl.getAttribute('aria-expanded') === 'false';
+        headerEl.setAttribute('aria-expanded', String(next));
+        const caret = headerEl.querySelector('.brand-group-caret');
+        if (caret) caret.textContent = next ? '▾' : '▸';
+        document.querySelectorAll('tr[data-brand-row]').forEach(function (r) {
+          if (r.getAttribute('data-brand-row') === brand) r.hidden = !next;
+        });
+      };
+
       (async () => {
         const esc = (s) => {
           const d = document.createElement('div');
@@ -1237,20 +1624,19 @@
         };
         const container = document.getElementById('events');
         try {
-          const res = await fetch('/api/v2/admin/events');
-          const data = await res.json();
+          const data = await window.OSE_events();
           if (!data.ok || !data.items.length) {
             container.innerHTML = '<p class="loading">No events found.</p>';
             return;
           }
-          const rows = data.items
-            .map((e) => {
-              const safeName = esc(e.name || 'Untitled');
-              const safeId = esc(String(e.id));
-              const safePhase = Math.max(1, Math.min(5, Number(e.legal_clearance_tier) || 1));
-              const phaseLabel = esc(window.friendlyPhase(safePhase));
-              return `
-          <tr onclick="window.loadForms('${safeId}', '${safeName.replace(/'/g, "\\'")}', ${safePhase}); document.querySelectorAll('tr.selected').forEach(r=>r.classList.remove('selected')); this.classList.add('selected');" onkeydown="if(event.key==='Enter'||event.key===' '){this.click();event.preventDefault();}" class="clickable-row" tabindex="0" data-testid="event-row-${safeId}" data-phase="${safePhase}">
+          const rowFor = (e) => {
+            const safeName = esc(e.name || 'Untitled');
+            const safeId = esc(String(e.id));
+            const safeBrand = esc(String(e.brand_id || '—'));
+            const safePhase = Math.max(1, Math.min(5, Number(e.legal_clearance_tier) || 1));
+            const phaseLabel = esc(window.friendlyPhase(safePhase));
+            return `
+          <tr onclick="window.selectEvent('${safeId}', '${safeName.replace(/'/g, "\\'")}', ${safePhase}); document.querySelectorAll('tr.selected').forEach(r=>r.classList.remove('selected')); this.classList.add('selected');" onkeydown="if(event.key==='Enter'||event.key===' '){this.click();event.preventDefault();}" class="clickable-row" tabindex="0" data-testid="event-row-${safeId}" data-brand-row="${safeBrand}" data-phase="${safePhase}">
             <td class="col-internal-id" data-label="ID" data-testid="event-id">${safeId}</td>
             <td data-label="Name" data-testid="event-name">${safeName}</td>
             <td data-label="Date" data-testid="event-date">${e.startDateISO ? esc(new Date(e.startDateISO).toLocaleDateString()) : '—'}</td>
@@ -1259,6 +1645,28 @@
             <td data-label="Event type"><span class="phase-badge phase-${safePhase}" data-testid="event-phase" title="Internal phase ${safePhase}">${phaseLabel}</span></td>
           </tr>
         `;
+          };
+
+          // OSE-668: group the (already brand-scoped) events under collapsible
+          // brand nodes with a per-brand count pill. A single-brand operator
+          // sees one implicit group (no header noise); a brand owner with
+          // several brands gets the tree. Rows carry data-brand-row so the
+          // group header can collapse them.
+          const byBrand = {};
+          for (const e of data.items) {
+            const b = String(e.brand_id || '—');
+            (byBrand[b] = byBrand[b] || []).push(e);
+          }
+          const brandIds = Object.keys(byBrand).sort();
+          const multiBrand = brandIds.length > 1;
+          const rows = brandIds
+            .map((b) => {
+              const safeBrand = esc(b);
+              const evs = byBrand[b];
+              const header = multiBrand
+                ? `<tr class="brand-group-header" data-testid="brand-group-${safeBrand}" data-brand-group="${safeBrand}" tabindex="0" role="button" aria-expanded="true" onclick="window.toggleBrandGroup('${safeBrand.replace(/'/g, "\\'")}', this)" onkeydown="if(event.key==='Enter'||event.key===' '){this.click();event.preventDefault();}"><td colspan="6"><span class="brand-group-caret" aria-hidden="true">▾</span> <span class="brand-group-name">${safeBrand}</span> <span class="brand-count-pill" data-testid="brand-count-${safeBrand}">${evs.length}</span></td></tr>`
+                : '';
+              return header + evs.map(rowFor).join('');
             })
             .join('');
           container.innerHTML = `
@@ -1281,6 +1689,26 @@
               }
             });
           }
+
+          // OSE-667: restore the previously-selected event across reloads (the
+          // create flow forces a reload). Only the opaque id was persisted —
+          // re-select it, re-hydrate the four cards, and scroll it into view.
+          try {
+            const savedId = sessionStorage.getItem(window.SELECTED_EVENT_KEY);
+            if (savedId) {
+              const savedRow = container.querySelector('[data-testid="event-row-' + savedId + '"]');
+              const saved = data.items.find((e) => String(e.id) === savedId);
+              if (savedRow && saved) {
+                savedRow.classList.add('selected');
+                savedRow.scrollIntoView({ block: 'center' });
+                const ph = Math.max(1, Math.min(5, Number(saved.legal_clearance_tier) || 1));
+                window.selectEvent(savedId, saved.name || 'Untitled', ph);
+              } else {
+                // The saved event no longer exists (deleted / not on this page).
+                sessionStorage.removeItem(window.SELECTED_EVENT_KEY);
+              }
+            }
+          } catch (e) {}
         } catch (err) {
           container.innerHTML =
             '<div class="card-error" data-testid="events-error"><div class="error-icon">&#9888;</div><div class="error-msg">Could not load events.</div><button class="retry-btn" data-testid="events-retry" onclick="location.reload()">Retry</button></div>';
@@ -1316,7 +1744,10 @@
           // so the handler's null-on-empty semantics work.
           const fivew = [
             ['create-what-short', 'what_short'],
+            ['create-what-video-url', 'what_video_url'],
             ['create-who-host', 'who_host'],
+            ['create-who-story', 'who_story'],
+            ['create-who-image-url', 'who_image_url'],
             ['create-why-purpose', 'why_purpose'],
             ['create-how-details', 'how_details'],
             ['create-where-address', 'where_address'],
@@ -1339,7 +1770,12 @@
             // IDs. Stash the id in a dataset attribute for support/test access
             // while the visible toast stays in plain English.
             msg.textContent = 'Event created.';
-            if (data.id) msg.dataset.eventId = String(data.id);
+            if (data.id) {
+              msg.dataset.eventId = String(data.id);
+              // OSE-667: remember the new event so the forced reload re-selects
+              // it (id-only, #1) instead of dropping back to "Select an event…".
+              try { sessionStorage.setItem(window.SELECTED_EVENT_KEY, String(data.id)); } catch (e) {}
+            }
             msg.className = 'create-msg success';
             document.getElementById('create-title').value = '';
             document.getElementById('create-date').value = '';
@@ -1433,16 +1869,44 @@
         ];
         const encodedName = encodeURIComponent(eventName);
 
-        // Resolve flags for this specific event
-        const eventFlagsRes = await fetch('/api/v2/admin/flags/resolve?eventId=' + eventId).then(r => r.json()).catch(() => null);
-        const flags = (eventFlagsRes && eventFlagsRes.ok) ? eventFlagsRes.flags : (window._resolvedFlags || {});
-
-        // Fetch counts in parallel
+        // OSE-675: resolve flags + all four counts in ONE Promise.all so the
+        // card hydrates in a single round-trip generation instead of serial
+        // flag-then-counts.
+        // OSE-665 (2026-08-08): "0-5 consistency so everyone sees the same
+        // information". The server floors the aggregate count with the SAME K
+        // the SharedReport surface uses, so a sub-5 cohort is represented
+        // identically everywhere and no surface side-channels the exact number.
+        // Three states, all decided server-side: an exact count (>=5), a
+        // suppressed band (<5), or a failed fetch (retry — never a masked 0).
         const adminPaths = ['registrations', 'checkin-count', 'surveys', 'email-signups'];
-        const counts = await Promise.all(adminPaths.map(p =>
-          fetch('/api/v2/admin/events/' + eventId + '/forms/' + p).then(r => r.json()).then(d => d.count || 0).catch(() => 0)
-        ));
+        const [eventFlagsRes, ...counts] = await Promise.all([
+          fetch('/api/v2/admin/flags/resolve?eventId=' + eventId).then(r => r.json()).catch(() => null),
+          ...adminPaths.map(p =>
+            fetch('/api/v2/admin/events/' + eventId + '/forms/' + p)
+              .then(r => r.json())
+              .then(d => {
+                if (!d || !d.ok) return 'error';
+                if (d.suppressed) return 'suppressed';
+                return (typeof d.count === 'number') ? d.count : 'error';
+              })
+              .catch(() => 'error')
+          ),
+        ]);
+        const flags = (eventFlagsRes && eventFlagsRes.ok) ? eventFlagsRes.flags : (window._resolvedFlags || {});
         const countLabels = ['Registrations', 'Check-ins', 'Surveys', 'Emails'];
+        // Retry re-runs the whole load for the currently-selected event.
+        window._lastFormsArgs = [eventId, eventName, legalPhase];
+        window.reloadForms = function () {
+          if (window._lastFormsArgs) window.loadForms.apply(null, window._lastFormsArgs);
+        };
+        const renderCount = (c) => {
+          if (c === 'error') return '<button type="button" class="count-retry" data-testid="count-retry" onclick="window.reloadForms()"'
+            + ' title="Could not load — tap to retry" aria-label="Count failed to load. Retry."'
+            + ' style="background:none;border:none;color:inherit;cursor:pointer;font:inherit;padding:0;min-width:44px;min-height:44px">&#8635;</button>';
+          if (c === 'suppressed') return '<span class="count-suppressed" data-testid="count-suppressed"'
+            + ' title="Below the reporting floor of 5 — shown the same on every surface" aria-label="Fewer than 5">&lt;5</span>';
+          return String(c);
+        };
 
         // Form links — locked if flag is off (payment tier) or regulatory phase insufficient
         const eventPhase = Math.max(1, Math.min(5, Number(legalPhase) || 1));
@@ -1473,7 +1937,7 @@
           const checked = eventEnabled ? ' checked' : '';
           return '<div class="form-config" data-testid="form-config-' + t.key + '">' +
             '<div>' +
-              '<div class="form-config-label">' + t.label + ' <span class="muted-sm">(' + counts[i] + ')</span></div>' +
+              '<div class="form-config-label">' + t.label + ' <span class="muted-sm">(' + renderCount(counts[i]) + ')</span></div>' +
               '<div class="form-config-desc">' + t.desc + (disabled ? ' — requires ' + (t.upgradeTier || 'upgrade') : '') + '</div>' +
             '</div>' +
             '<label class="toggle">' +
@@ -1490,7 +1954,7 @@
           '<div class="forms-grid" data-testid="forms-grid">' + linksHtml + '</div>' +
           '<div class="form-counts" data-testid="form-counts">' +
             counts.map((c, i) =>
-              '<div class="count-box" data-testid="count-' + countLabels[i].toLowerCase().replace(/s+/g, '-') + '"><div class="count-num" data-testid="count-num">' + c + '</div><div class="count-label" data-testid="count-label-' + countLabels[i].toLowerCase().replace(/\s+/g, '-') + '">' + countLabels[i] + '</div></div>'
+              '<div class="count-box" data-testid="count-' + countLabels[i].toLowerCase().replace(/s+/g, '-') + '"><div class="count-num" data-testid="count-num">' + renderCount(c) + '</div><div class="count-label" data-testid="count-label-' + countLabels[i].toLowerCase().replace(/\s+/g, '-') + '">' + countLabels[i] + '</div></div>'
             ).join('') +
           '</div>' +
           '<div class="config-section" data-testid="config-section">' +
@@ -1547,7 +2011,7 @@
 
       // S-3.5.1 — generate a signed link token via the admin mint endpoint
       window.mintReportLink = async function(eventId, btn) {
-        if (!eventId) { alert('Select an event first.'); return; }
+        if (!eventId) { window._adminAnnounce('Select an event first.', 'error'); return; }
         const role = document.getElementById('mint-role').value;
         const isSponsor = role === 'sponsor';
         const depthEl = document.getElementById('mint-depth');
@@ -1598,7 +2062,12 @@
       window.toggleFormFlag = async function(el) {
         const flagKey = el.dataset.flag;
         const eventId = el.dataset.event;
+        // OSE-675: the checkbox flips instantly (native) — this is a UI INTENT
+        // on a boolean flag, display-only, NOT a count. The adjacent count span
+        // is never recomputed here (#7 — optimism must never reach an aggregate).
+        // Disable during the audited PUT, announce the outcome, revert on error.
         const enabled = el.checked;
+        el.disabled = true;
         try {
           const res = await fetch('/api/v2/admin/events/' + eventId + '/flags/' + flagKey, {
             method: 'PUT',
@@ -1607,14 +2076,225 @@
           });
           const data = await res.json();
           if (!data.ok) throw new Error(data.error || 'Failed');
+          if (typeof window._adminAnnounce === 'function')
+            window._adminAnnounce((enabled ? 'Enabled' : 'Disabled') + ' ' + flagKey + '.', 'ok');
         } catch (err) {
           el.checked = !enabled; // revert on failure
+          if (typeof window._adminAnnounce === 'function')
+            window._adminAnnounce('Could not update ' + flagKey + ' — reverted.', 'error');
           console.error('Flag toggle failed:', err);
+        } finally {
+          el.disabled = false;
         }
       };
     </script>
 
-    <!-- Card 3: Sponsor Management (SPON-6) -->
+    <!-- Card 3: Poster Deployment Management (OSE-636) -->
+    <div class="poster-deployments-card" data-testid="poster-deployments-card">
+      <div class="sponsors-card-header">
+        <h2>Poster Deployments (Card 3)</h2>
+        <button
+          class="add-spon-btn"
+          id="add-pd-toggle"
+          data-testid="add-poster-deployment-toggle"
+          aria-expanded="false"
+          aria-controls="pd-form-wrap"
+          onclick="
+            const w = document.getElementById('pd-form-wrap');
+            const open = w.hidden;
+            w.hidden = !open;
+            this.setAttribute('aria-expanded', String(open));
+          "
+        >+ Add Deployment</button>
+      </div>
+
+      <div id="pd-form-wrap" class="spon-form-wrap" hidden data-testid="poster-deployment-form-wrap">
+        <form id="pd-create-form" data-testid="poster-deployment-create-form" novalidate>
+          <div class="create-form">
+            <div>
+              <label for="pd-placement-label">Label <span class="required-star" aria-hidden="true">*</span></label>
+              <input
+                type="text"
+                id="pd-placement-label"
+                name="placement_label"
+                data-testid="pd-placement-label"
+                placeholder="Front door, sidewalk billboard…"
+                maxlength="200"
+                required
+                aria-required="true"
+              />
+            </div>
+            <div>
+              <label for="pd-location-desc">Location description</label>
+              <input
+                type="text"
+                id="pd-location-desc"
+                name="location_desc"
+                data-testid="pd-location-desc"
+                placeholder="Optional — e.g. corner of Main &amp; Oak"
+                maxlength="500"
+              />
+            </div>
+            <div>
+              <label for="pd-latitude">Latitude</label>
+              <input
+                type="number"
+                id="pd-latitude"
+                name="latitude"
+                data-testid="pd-latitude"
+                placeholder="41.8781"
+                step="any"
+                min="-90"
+                max="90"
+              />
+            </div>
+            <div>
+              <label for="pd-longitude">Longitude</label>
+              <input
+                type="number"
+                id="pd-longitude"
+                name="longitude"
+                data-testid="pd-longitude"
+                placeholder="-87.6298"
+                step="any"
+                min="-180"
+                max="180"
+              />
+            </div>
+          </div>
+          <div class="form-actions">
+            <button type="submit" data-testid="pd-create-btn" class="copy-btn">Create Deployment</button>
+            <span class="create-msg" id="pd-create-msg" data-testid="pd-create-msg"></span>
+          </div>
+        </form>
+      </div>
+
+      <div id="pd-panel" data-testid="poster-deployments-panel">
+        <p class="loading" data-testid="poster-deployments-loading-initial">Select an event to view poster deployments&hellip;</p>
+      </div>
+    </div>
+    <script>
+      (function () {
+        const esc = (s) => {
+          const d = document.createElement('div');
+          d.textContent = String(s ?? '');
+          return d.innerHTML;
+        };
+
+        window.loadPosterDeployments = async function (eventId) {
+          window._pdEventId = eventId;
+          const panel = document.getElementById('pd-panel');
+          panel.innerHTML = '<div class="skeleton-table" data-testid="skeleton-poster-deployments"><div class="skeleton skeleton-row"></div><div class="skeleton skeleton-row"></div></div>';
+          try {
+            const res = await fetch('/api/v2/admin/events/' + encodeURIComponent(eventId) + '/poster-deployments');
+            const data = await res.json();
+            const items = (data.ok && data.items) ? data.items : [];
+            if (!items.length) {
+              panel.innerHTML = '<p class="loading" data-testid="poster-deployments-empty">No deployments yet. Use the form above to add one.</p>';
+              return;
+            }
+            const rows = items.map((pd) =>
+              '<tr data-testid="poster-deployment-row" data-id="' + esc(pd.id) + '">' +
+              '<td data-label="Label" data-testid="pd-label">' + esc(pd.placement_label || '—') + '</td>' +
+              '<td data-label="Location" data-testid="pd-location">' + esc(pd.location_desc || '—') + '</td>' +
+              '<td data-label="Cell (res9)" data-testid="pd-h3-res9">' + esc(pd.h3_res9 || '—') + '</td>' +
+              '<td data-label="Active" data-testid="pd-is-active">' + (pd.is_active ? 'Yes' : 'No') + '</td>' +
+              '<td data-label="QR Token" data-testid="pd-qr-token"><code>' + esc(pd.qr_token) + '</code></td>' +
+              '<td data-label="Actions">' +
+              '<button class="copy-btn" style="font-size:12px;padding:4px 10px" data-testid="pd-delete-btn" data-pd-id="' + esc(pd.id) + '" onclick="window.deletePosterDeployment(\'' + esc(pd.id) + '\')">Delete</button>' +
+              '</td>' +
+              '</tr>'
+            ).join('');
+            panel.innerHTML =
+              '<table class="report-table" data-testid="poster-deployments-table">' +
+              '<thead><tr>' +
+              '<th scope="col">Label</th><th scope="col">Location</th><th scope="col">Cell (res9)</th>' +
+              '<th scope="col">Active</th><th scope="col">QR Token</th><th scope="col">Actions</th>' +
+              '</tr></thead>' +
+              '<tbody>' + rows + '</tbody>' +
+              '</table>';
+          } catch (err) {
+            panel.innerHTML = '<div class="card-error" data-testid="poster-deployments-error"><div class="error-icon">&#9888;</div><div class="error-msg">Could not load poster deployments.</div></div>';
+          }
+        };
+
+        // Two-step inline confirm (mirrors window._deactivateSponsor) — replaces
+        // the blocking browser dialogs so venue organizers on mobile never
+        // hit a focus-stealing prompt on a destructive action.
+        window.deletePosterDeployment = function (pdId) {
+          const btn = document.querySelector('[data-testid="pd-delete-btn"][data-pd-id="' + pdId + '"]');
+          if (!btn) return;
+          const cell = btn.parentElement;
+          cell.innerHTML =
+            '<span class="muted-sm">Deactivate?</span> ' +
+            '<button class="copy-btn" style="font-size:12px;padding:4px 10px" data-testid="confirm-delete-pd-' + esc(pdId) + '" onclick="window._confirmDeletePd(\'' + esc(pdId) + '\')" aria-label="Confirm deactivate poster deployment">Yes</button> ' +
+            '<button class="copy-btn" style="font-size:12px;padding:4px 10px" data-testid="cancel-delete-pd-' + esc(pdId) + '" onclick="window.loadPosterDeployments(window._pdEventId)" aria-label="Cancel">No</button>';
+          const yes = cell.querySelector('[data-testid="confirm-delete-pd-' + esc(pdId) + '"]');
+          if (yes) yes.focus();
+        };
+        window._confirmDeletePd = async function (pdId) {
+          try {
+            const res = await fetch('/api/v2/admin/poster-deployments/' + encodeURIComponent(pdId), { method: 'DELETE' });
+            const data = await res.json();
+            if (!res.ok || !data.ok) throw new Error(data.error || 'Delete failed.');
+            window._adminAnnounce('Poster deployment deactivated.', 'ok');
+            if (window._pdEventId) window.loadPosterDeployments(window._pdEventId);
+          } catch (err) {
+            window._adminAnnounce(err.message || 'Network error — could not delete.', 'error');
+          }
+        };
+
+        const form = document.getElementById('pd-create-form');
+        if (form) {
+          form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const eventId = window._pdEventId;
+            const msg = document.getElementById('pd-create-msg');
+            const btn = form.querySelector('[data-testid="pd-create-btn"]');
+            if (!eventId) { msg.textContent = 'Select an event first.'; msg.className = 'create-msg error'; return; }
+            const label = document.getElementById('pd-placement-label').value.trim();
+            if (!label) { msg.textContent = 'Label is required.'; msg.className = 'create-msg error'; return; }
+            const locationDesc = document.getElementById('pd-location-desc').value.trim() || undefined;
+            const latRaw = document.getElementById('pd-latitude').value;
+            const lonRaw = document.getElementById('pd-longitude').value;
+            const body = { placement_label: label };
+            if (locationDesc) body.location_desc = locationDesc;
+            if (latRaw !== '' && lonRaw !== '') {
+              body.latitude = parseFloat(latRaw);
+              body.longitude = parseFloat(lonRaw);
+            }
+            btn.disabled = true;
+            btn.textContent = 'Creating…';
+            msg.textContent = '';
+            try {
+              const res = await fetch('/api/v2/admin/events/' + encodeURIComponent(eventId) + '/poster-deployments', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body),
+              });
+              const data = await res.json();
+              if (data.ok) {
+                msg.textContent = 'Deployment created.';
+                msg.className = 'create-msg success';
+                form.reset();
+                window.loadPosterDeployments(eventId);
+              } else {
+                msg.textContent = data.error || 'Create failed.';
+                msg.className = 'create-msg error';
+              }
+            } catch (err) {
+              msg.textContent = 'Network error.';
+              msg.className = 'create-msg error';
+            } finally {
+              btn.disabled = false;
+              btn.textContent = 'Create Deployment';
+            }
+          });
+        }
+      })();
+    </script>
+
+    <!-- Card 4: Sponsor Management (SPON-6) -->
     <div class="sponsors-card" data-testid="sponsors-card">
       <div class="sponsors-card-header">
         <h2>Sponsors</h2>
@@ -1696,46 +2376,34 @@
               />
             </div>
             <div class="full-width">
-              <label>Placements</label>
-              <div
-                class="placements-group"
-                role="group"
-                aria-label="Placement surfaces"
-                data-testid="placements-group"
+              <label id="spon-placement-label">Placement &amp; share</label>
+              <!--
+                OSE-670 (#25 sponsor_share_covenant): placement is UNIFORM and
+                non-purchasable. Every sponsor renders at the same size/slot on
+                every surface; only rotation FREQUENCY varies, governed by the
+                Tier (above) + the covenant math (premium cap 40% / local floor
+                30%). There are deliberately NO size/slot/position toggles — a
+                sponsor cannot buy a bigger logo, a better slot, or a fixed
+                position. is_local is geo-derived and shown read-only.
+              -->
+              <p
+                class="spon-covenant-note"
+                role="note"
+                data-testid="spon-covenant-note"
+                aria-labelledby="spon-placement-label"
               >
-                <label class="placement-check"
-                  ><input
-                    type="checkbox"
-                    id="spon-placement-poster"
-                    data-testid="placement-poster-top"
-                  />
-                  Poster Top</label
-                >
-                <label class="placement-check"
-                  ><input
-                    type="checkbox"
-                    id="spon-placement-tvtop"
-                    data-testid="placement-tv-top"
-                  />
-                  TV Top</label
-                >
-                <label class="placement-check"
-                  ><input
-                    type="checkbox"
-                    id="spon-placement-tvside"
-                    data-testid="placement-tv-side"
-                  />
-                  TV Side</label
-                >
-                <label class="placement-check"
-                  ><input
-                    type="checkbox"
-                    id="spon-placement-mobile"
-                    data-testid="placement-mobile-banner"
-                  />
-                  Mobile Banner</label
-                >
-              </div>
+                Uniform placement — same size &amp; slot on every surface. Tier sets a
+                <strong>capped, locally-floored share of rotation frequency</strong>
+                (never a bigger logo, better slot, or fixed position).
+              </p>
+              <span
+                class="is-local-pill"
+                id="spon-is-local-pill"
+                data-testid="spon-is-local-pill"
+                hidden
+                aria-live="polite"
+                >Local business — geo-derived</span
+              >
             </div>
             <div class="full-width form-actions">
               <button
@@ -1794,7 +2462,7 @@
           const sel = document.getElementById('spon-event');
           sel.innerHTML = '<option value="" disabled selected>Loading events…</option>';
           try {
-            const data = await fetch('/api/v2/admin/events').then(function(r) { return r.json(); });
+            const data = await window.OSE_events();
             const items = (data.ok && data.items) ? data.items : [];
             sel.innerHTML = items.length
               ? items.map(function(e) {
@@ -1806,15 +2474,38 @@
           }
         }
 
-        async function loadSponsors() {
+        // OSE — Sponsor card is scoped to the currently-selected event so an
+        // organizer only ever sees/edits their own event's sponsors. The scope
+        // is ALSO enforced server-side (SQL WHERE) — this is the UX half.
+        let _sponsorsEventId = null;
+        const _eventNameById = {};
+        async function refreshEventNames() {
+          if (Object.keys(_eventNameById).length) return; // one-shot cache
+          try {
+            const data = await window.OSE_events();
+            (data.items || []).forEach(function(e) {
+              _eventNameById[String(e.id)] = e.name || String(e.id);
+            });
+          } catch (e) { /* fall back to raw id below */ }
+        }
+        async function loadSponsors(eventId) {
           const wrap = document.getElementById('sponsors-list');
+          if (eventId !== undefined && eventId !== null && eventId !== '') {
+            _sponsorsEventId = String(eventId);
+          }
+          const scopeId = _sponsorsEventId;
+          if (!scopeId) {
+            wrap.innerHTML = '<p class="loading" data-testid="sponsors-loading-initial">Select an event to manage its sponsors.</p>';
+            return;
+          }
           wrap.innerHTML = '<div class="skeleton-table"><div class="skeleton skeleton-row"></div><div class="skeleton skeleton-row"></div><div class="skeleton skeleton-row"></div></div>';
           try {
-            const data = await fetch('/api/v2/admin/sponsors').then(function(r) { return r.json(); });
+            await refreshEventNames();
+            const data = await fetch('/api/v2/admin/sponsors?eventId=' + encodeURIComponent(scopeId)).then(function(r) { return r.json(); });
             if (!data.ok) throw new Error(data.error || 'Load failed');
             const items = data.items || [];
             if (!items.length) {
-              wrap.innerHTML = '<p class="loading" data-testid="sponsors-empty">No sponsors yet. Click &ldquo;+ Add Sponsor&rdquo; to add the first one.</p>';
+              wrap.innerHTML = '<p class="loading" data-testid="sponsors-empty">No sponsors for this event yet. Click &ldquo;+ Add Sponsor&rdquo; to add the first one.</p>';
               return;
             }
             const rows = items.map(function(s) {
@@ -1826,10 +2517,11 @@
                 ? '<button class="spon-action-btn" data-testid="edit-' + esc(s.id) + '" onclick="window._editSponsor('' + esc(s.id) + '')">Edit</button> ' +
                   '<button class="spon-action-btn deactivate" data-testid="deactivate-' + esc(s.id) + '" onclick="window._deactivateSponsor('' + esc(s.id) + '')">Deactivate</button>'
                 : '<span class="muted-sm">Deactivated</span>';
+              const eventName = _eventNameById[String(s.event_id)] || s.event_id;
               return '<tr data-testid="sponsor-row-' + esc(s.id) + '"' + dimStyle + '>' +
                 '<td data-label="Name" data-testid="spon-name-' + esc(s.id) + '">' + esc(s.name) + '</td>' +
                 '<td data-label="Tier"><span class="spon-tier-pill ' + esc(s.tier) + '" data-testid="spon-tier-' + esc(s.id) + '">' + esc(s.tier) + '</span></td>' +
-                '<td data-label="Event" class="muted-sm" data-testid="spon-event-' + esc(s.id) + '">' + esc(s.event_id) + '</td>' +
+                '<td data-label="Event" class="muted-sm" data-testid="spon-event-' + esc(s.id) + '">' + esc(eventName) + '</td>' +
                 '<td data-label="Placements" data-testid="spon-placements-' + esc(s.id) + '">' + pipHtml(s.placement_formats) + '</td>' +
                 '<td data-label="Status">' + statusBadge + '</td>' +
                 '<td data-label="Actions" class="flex-row">' + actions + '</td>' +
@@ -1842,7 +2534,10 @@
             wrap.innerHTML = '<div class="card-error" data-testid="sponsors-error"><div class="error-icon">&#9888;</div><div class="error-msg">Could not load sponsors.</div><button class="retry-btn" data-testid="sponsors-retry" onclick="window._loadSponsors()">Retry</button></div>';
           }
         }
-        window._loadSponsors = loadSponsors;
+        // Retry/cancel/post-mutation reloads keep the current scope (no arg).
+        window._loadSponsors = function() { return loadSponsors(); };
+        // Event-row selection drives the scope.
+        window._loadSponsorsForEvent = function(id) { return loadSponsors(id); };
 
         function openForm() {
           const wrap = document.getElementById('spon-form-wrap');
@@ -1923,11 +2618,10 @@
             document.getElementById('spon-tier').value = s.tier || 'primary';
             document.getElementById('spon-logo').value = s.logo_url || '';
             document.getElementById('spon-website').value = s.website_url || '';
-            const p = parsePlc(s.placement_formats);
-            document.getElementById('spon-placement-poster').checked = !!p.posterTop;
-            document.getElementById('spon-placement-tvtop').checked = !!p.tvTop;
-            document.getElementById('spon-placement-tvside').checked = !!p.tvSide;
-            document.getElementById('spon-placement-mobile').checked = !!p.mobileBanner;
+            // OSE-670 (#25): placement is uniform — no slot checkboxes. Show the
+            // geo-derived is_local classification read-only (non-purchasable).
+            const localPill = document.getElementById('spon-is-local-pill');
+            if (localPill) localPill.hidden = !(s.is_local === 1 || s.is_local === true);
             document.getElementById('spon-submit-btn').textContent = 'Update Sponsor';
             const ctx = document.getElementById('spon-edit-ctx');
             ctx.textContent = 'Editing: ' + (s.name || s.id);
@@ -1959,7 +2653,7 @@
             if (!res.ok || !data.ok) throw new Error(data.error || 'Failed');
             loadSponsors();
           } catch (err) {
-            alert('Could not deactivate: ' + (err.message || 'Unknown error'));
+            window._adminAnnounce('Could not deactivate: ' + (err.message || 'Unknown error'), 'error');
             loadSponsors();
           }
         };
@@ -1975,13 +2669,10 @@
           if (!name) { msg.textContent = 'Name is required.'; msg.className = 'create-msg error'; return; }
           if (!event_id) { msg.textContent = 'Event is required.'; msg.className = 'create-msg error'; return; }
 
-          const placements = JSON.stringify({
-            posterTop: document.getElementById('spon-placement-poster').checked,
-            tvTop: document.getElementById('spon-placement-tvtop').checked,
-            tvSide: document.getElementById('spon-placement-tvside').checked,
-            mobileBanner: document.getElementById('spon-placement-mobile').checked,
-          });
-          const body = { name: name, event_id: event_id, tier: document.getElementById('spon-tier').value, placement_formats: placements };
+          // OSE-670 (#25): the form never sends placement_formats — placement is
+          // uniform and non-purchasable; the server forces the uniform value and
+          // ignores any client-supplied slot. Tier is what governs share.
+          const body = { name: name, event_id: event_id, tier: document.getElementById('spon-tier').value };
           const logoVal = document.getElementById('spon-logo').value.trim();
           if (logoVal) body.logo_url = logoVal;
           const siteVal = document.getElementById('spon-website').value.trim();
@@ -2015,8 +2706,11 @@
     </script>
 
     <!-- Cards 4-7: Surface Links -->
-    <div class="surface-cards" data-testid="surface-cards">
-      <div class="surface-card poster" data-testid="card-poster">
+    <!-- Selecting an event row upgrades these cards to that event's scoped
+         surface (data-surface drives window.scopeSurfaceCards). Unscoped they
+         open the event-agnostic shell, so the cards are always functional. -->
+    <div class="surface-cards" data-testid="surface-cards" data-scope-caption="all events">
+      <div class="surface-card poster" data-surface="poster" data-scoped="0" data-testid="card-poster">
         <h3>Poster Page</h3>
         <p>Print-ready event poster with QR codes</p>
         <a href="/poster" target="_blank" data-testid="link-poster">Open Poster</a>
@@ -2025,7 +2719,7 @@
         </button>
         <div class="qr-hint" data-testid="qr-hint-poster">QR-ready: /poster</div>
       </div>
-      <div class="surface-card display" data-testid="card-display">
+      <div class="surface-card display" data-surface="display" data-scoped="0" data-testid="card-display">
         <h3>TV Display</h3>
         <p>Bar TV / kiosk live event display</p>
         <a href="/display" target="_blank" data-testid="link-display">Open Display</a>
@@ -2034,7 +2728,7 @@
         </button>
         <div class="qr-hint" data-testid="qr-hint-display">QR-ready: /display</div>
       </div>
-      <div class="surface-card public" data-testid="card-public">
+      <div class="surface-card public" data-surface="public" data-scoped="0" data-testid="card-public">
         <h3>Public Page</h3>
         <p>Customer-facing events listing</p>
         <a href="/" target="_blank" data-testid="link-public">Open Public Page</a>
@@ -2043,7 +2737,7 @@
         </button>
         <div class="qr-hint" data-testid="qr-hint-public">QR-ready: /</div>
       </div>
-      <div class="surface-card report" data-testid="card-report">
+      <div class="surface-card report" data-surface="report" data-scoped="0" data-testid="card-report">
         <h3>Shared Report</h3>
         <p>Post-event analytics dashboard</p>
         <a href="/sharedReport" target="_blank" data-testid="link-report">Open Report</a>
@@ -2054,9 +2748,48 @@
       </div>
     </div>
 
-    <!-- Copy URL helper -->
+    <!-- Copy URL helper + event-scoped surface deep-links -->
     <script>
+      // INVARIANT #1 guard: the ONLY dynamic segment in a scoped surface URL is
+      // the opaque, server-validated event id (^[A-Za-z0-9_-]{1,128}$). No
+      // anonymous_id, cookie, or PII is ever read when building these paths.
+      function scopedSurfaceUrl(surface, eventId) {
+        if (!eventId) return null;
+        const id = encodeURIComponent(eventId);
+        switch (surface) {
+          case 'poster':
+            return '/poster?event=' + id;
+          case 'display':
+            return '/display?event=' + id;
+          case 'public':
+            return '/events/' + id; // existing public-event route
+          case 'report':
+            return '/sharedReport?event=' + id; // aggregate proof surface only
+          default:
+            return null;
+        }
+      }
+      // Upgrade all four surface cards to the selected event's scoped surface.
+      window.scopeSurfaceCards = function (eventId, eventName) {
+        document.querySelectorAll('.surface-card').forEach(function (card) {
+          const url = scopedSurfaceUrl(card.dataset.surface, eventId);
+          if (!url) return;
+          const a = card.querySelector('a');
+          const copyBtn = card.querySelector('.copy-btn');
+          const hint = card.querySelector('.qr-hint');
+          if (a) a.setAttribute('href', url);
+          if (copyBtn) copyBtn.dataset.copyPath = url; // copyUrl prefers this
+          if (hint) hint.textContent = 'QR-ready: ' + url; // textContent — safe
+          card.setAttribute('data-scoped', '1');
+          card.setAttribute('data-event-id', eventId);
+        });
+        const wrap = document.querySelector('.surface-cards');
+        if (wrap && eventName) wrap.setAttribute('data-scope-caption', eventName);
+      };
+
       function copyUrl(path, btn) {
+        // A scoped card stashes its event-scoped path in data-copy-path.
+        if (btn && btn.dataset && btn.dataset.copyPath) path = btn.dataset.copyPath;
         const url = location.origin + path;
         navigator.clipboard.writeText(url)
           .then(() => {

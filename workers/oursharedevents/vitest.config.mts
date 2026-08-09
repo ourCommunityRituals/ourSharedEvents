@@ -7,9 +7,12 @@ import * as yaml from 'js-yaml';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const rootDir = resolve(__dirname);
+const repoRoot = resolve(rootDir, '..', '..');
 const migrationsDir = join(rootDir, 'migrations');
 const formsMigrationsDir = join(rootDir, 'migrations-forms');
 const srcDir = join(rootDir, 'src');
+const testsDir = join(rootDir, 'tests');
+const workflowsDir = join(repoRoot, '.github', 'workflows');
 
 // ── Read migration SQL at config time (Node.js context) ──────────────────────
 const migrationSQL = readdirSync(migrationsDir)
@@ -41,6 +44,25 @@ function collectTsFiles(dir: string): Record<string, string> {
       if (entry.isDirectory()) {
         Object.assign(result, collectTsFiles(full));
       } else if (entry.name.endsWith('.ts') && !entry.name.endsWith('.spec.ts')) {
+        result[full] = readFileSync(full, 'utf8');
+      }
+    }
+  } catch {
+    // dir may not exist
+  }
+  return result;
+}
+
+// OSE-591: Include test spec files so the born-red harness can scan for
+// @born-red annotations bidirectionally on Windows CI (backslash paths).
+function collectSpecFiles(dir: string): Record<string, string> {
+  const result: Record<string, string> = {};
+  try {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const full = join(dir, entry.name);
+      if (entry.isDirectory()) {
+        Object.assign(result, collectSpecFiles(full));
+      } else if (entry.name.endsWith('.spec.ts')) {
         result[full] = readFileSync(full, 'utf8');
       }
     }
@@ -88,12 +110,46 @@ function collectSqlFiles(dir: string): Record<string, string> {
   return result;
 }
 
+function collectYmlFiles(dir: string): Record<string, string> {
+  const result: Record<string, string> = {};
+  try {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const full = join(dir, entry.name);
+      if (entry.isFile() && (entry.name.endsWith('.yml') || entry.name.endsWith('.yaml'))) {
+        result[full] = readFileSync(full, 'utf8');
+      }
+    }
+  } catch {
+    // dir may not exist (e.g. in isolated test envs)
+  }
+  return result;
+}
+
+const wranglerTomlPath = join(rootDir, 'wrangler.toml');
+const wranglerToml = readFileSync(wranglerTomlPath, 'utf8');
+
+// TL-016: .gitleaks.toml included so gitleaks-ci-gate.spec.ts can assert
+// allowlists and useDefault are correctly configured (prevents silent removal).
+const gitleaksTomlPath = join(repoRoot, '.gitleaks.toml');
+const gitleaksToml = existsSync(gitleaksTomlPath) ? readFileSync(gitleaksTomlPath, 'utf8') : '';
+
 const sourceFiles = {
   ...collectTsFiles(srcDir),
   ...collectHtmlFiles(join(srcDir, 'templates')),
   ...collectSqlFiles(join(rootDir, 'migrations')),
+  // OSE-591: spec files included so born-red harness can scan @born-red
+  // annotations on Windows CI where paths use backslashes.
+  ...collectSpecFiles(testsDir),
+  // OSE-589: .github/workflows/*.yml included so runner-env.spec.ts can
+  // assert runner-env-validation.yml exists and is wired to push events.
+  ...collectYmlFiles(workflowsDir),
+  // TL-017/TL-019: wrangler.toml included so born-red harness can scan for
+  // hardcoded secrets and CF_API_KEY usage without a separate binding.
+  [wranglerTomlPath]: wranglerToml,
+  // TL-016: .gitleaks.toml included so the gitleaks CI gate test can assert
+  // allowlist configuration is correct.
+  ...(gitleaksToml ? { [gitleaksTomlPath]: gitleaksToml } : {}),
 };
-const wranglerToml = readFileSync(join(rootDir, 'wrangler.toml'), 'utf8');
 
 // ── Load brain UEC artifact for OSE-323 drift check ─────────────────────────
 // The drift check (tests/uec-drift-check.spec.ts) compares this artifact
@@ -235,6 +291,13 @@ export default defineConfig({
           ALLOW_ADMIN_KEY_FALLBACK: 'true',
           X_OCR_INTERNAL: 'test-ocr-internal-secret-2026',
           ALLOW_OCR_INTERNAL: 'true',
+          // OSE-666/B1: CI/test authenticates as automation (Bearer key /
+          // X-OCR-Internal → `key:` actor). ADMIN_SCOPE_ALL lets those key
+          // actors list events unscoped, mirroring CI. Real (email) operators
+          // are NEVER elevated by this flag — they resolve via the membership
+          // map (fail-closed). Specs asserting per-brand scope use email actors
+          // and set ADMIN_BRAND_MEMBERSHIP locally.
+          ADMIN_SCOPE_ALL: 'true',
           FORMS_ENCRYPTION_KEY: 'test-forms-encryption-secret-32ch',
           WORKER_ENV: 'test',
           WORKER_BUILD_VERSION: 'e2e-mock',
@@ -258,6 +321,10 @@ export default defineConfig({
           // OSE-272 Session 5: SharedReport read API auth.
           SHARED_REPORT_SIGNING_SECRET: 'test-shared-report-signing-secret-do-not-use',
           WKRP_SERVICE_TOKEN: 'test-wkrp-service-token-do-not-use',
+          // OSE-598: HMAC-SHA256 pepper for email hashing (rank-9 finding).
+          // Must be set in production via Wrangler secret; test value here
+          // ensures peppered path exercises correctly in CI.
+          FORMS_HASH_PEPPER: 'test-forms-hash-pepper-do-not-use-in-prod',
         },
       },
     }),

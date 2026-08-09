@@ -12,6 +12,7 @@
  */
 
 import { backupEvents, isBigQueryConfigured, type BigQueryEnv } from '../cloud/bigquery';
+import { logExportManifest } from '../lib/audit-log';
 
 export type BigQueryHandlerEnv = BigQueryEnv & { DB: D1Database };
 
@@ -39,6 +40,16 @@ export async function handleAdminBackupEvent(
   }
 
   const result = await backupEvents(env, [event]);
+  const reqId = crypto.randomUUID ? crypto.randomUUID() : `bq-${Date.now()}`;
+  // OSE-594: log OER emission manifest entry for on-demand backup (invariant #17)
+  await logExportManifest(env, {
+    export_type: 'BIGQUERY',
+    event_id: eventId,
+    actor: null,
+    request_id: reqId,
+    rows_exported: result.rowCount ?? 1,
+    outcome: 'success',
+  });
   return Response.json({ ok: true, eventId, rowCount: result.rowCount });
 }
 
@@ -55,17 +66,45 @@ export async function runBigQueryBackup(env: BigQueryHandlerEnv): Promise<void> 
   let bqEventsBackedUp = 0;
   let bqBackupError: string | undefined;
 
+  const cronReqId = crypto.randomUUID ? crypto.randomUUID() : `cron-bq-${Date.now()}`;
   try {
     const recentEvents = await env.DB.prepare(
       "SELECT * FROM events WHERE updated_at > datetime('now', '-24 hours')"
     ).all();
     const bqResult = await backupEvents(env, recentEvents.results as Record<string, unknown>[]);
     bqEventsBackedUp = bqResult.rowCount ?? 0;
+
+    // OSE-594: log OER emission manifest for cron backup (invariant #17).
+    // No ctx.waitUntil in scheduled handlers — this is a direct await.
+    // Fire-and-forget semantics: if this throws, the backup already succeeded;
+    // we log the error but do not fail the cron job.
+    await logExportManifest(env, {
+      export_type: 'BIGQUERY',
+      event_id: 'cron:batch',
+      actor: 'cron:scheduler',
+      request_id: cronReqId,
+      rows_exported: bqEventsBackedUp,
+      outcome: 'success',
+    });
   } catch (err) {
     bqBackupError = err instanceof Error ? err.message : String(err);
     console.error(
       JSON.stringify({ type: 'BQ_BACKUP_ERROR', error: bqBackupError, timestamp: now })
     );
+    // Attempt to log the failure to the manifest even when backup itself failed.
+    try {
+      await logExportManifest(env, {
+        export_type: 'BIGQUERY',
+        event_id: 'cron:batch',
+        actor: 'cron:scheduler',
+        request_id: cronReqId,
+        rows_exported: 0,
+        outcome: 'failed',
+        details: { error: bqBackupError },
+      });
+    } catch {
+      // Manifest write failure is non-fatal — the backup error is already logged above.
+    }
   }
 
   console.log(

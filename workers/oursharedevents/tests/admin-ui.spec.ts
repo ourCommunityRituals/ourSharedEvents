@@ -396,7 +396,7 @@ describe('ADMIN-15 Structure: Copy buttons', () => {
     // (e.g. mint-link-btn, mint-copy-btn); only surface-card static buttons count.
     const htmlNoScripts = html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '');
     const copyBtns = htmlNoScripts.match(/<button[^>]*class="copy-btn"[^>]*>/g) ?? [];
-    expect(copyBtns.length).toBe(4);
+    expect(copyBtns.length).toBe(5); // +1: pd-create-btn (OSE-636 poster deployment form)
   });
 });
 
@@ -583,11 +583,13 @@ describe('ADMIN-2: Events table phase column', () => {
     expect(html).toContain('Math.max(1, Math.min(5, Number(e.legal_clearance_tier) || 1))');
   });
 
-  test('event row passes safePhase to loadForms as third argument', async () => {
+  test('event row passes safePhase to selectEvent, fanned out to loadForms (OSE-667)', async () => {
     const html = await fetchAdminHtml();
-    // JS builds: loadForms('${safeId}', '${safeName...}', ${safePhase})
-    expect(html).toContain("loadForms('${safeId}',");
+    // OSE-667: the row selects via the single store; loadForms receives the
+    // phase from the ose:event-selected event, not a direct imperative call.
+    expect(html).toContain("selectEvent('${safeId}',");
     expect(html).toContain(', ${safePhase});');
+    expect(html).toContain('window.loadForms(d.id, d.name, d.phase)');
   });
 
   test('event row carries data-phase attribute populated from safePhase', async () => {

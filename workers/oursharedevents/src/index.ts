@@ -10,6 +10,7 @@ import { route, type RouterEnv } from './router';
 import { runBigQueryBackup } from './handlers/bigquery';
 import { runSharedReportMaterialization } from './handlers/shared-report-materialize';
 import { runSharedReportBigQueryExport } from './handlers/shared-report-export';
+import { raiseSecurityAlert } from './lib/security-alert';
 
 export type { RouterEnv as Env };
 
@@ -54,6 +55,9 @@ export default {
     //   AND streams to BigQuery; off by default (BQ config unset → no-op).
     //   Same cron tick as materialization (S4-Q1 ratified). Per-phase
     //   failure-isolated (S4-Q4); materialization never blocks on export.
+    // runSecurityMetricsCron (OSE-SEC-1): reads DB.admin_audit_log + RATE_LIMIT_KV;
+    //   writes to DB.security_metrics + DB.security_alerts. Opens Linear issues
+    //   for anomalies. Off-by-default guard: skips gracefully if tables don't exist.
     ctx.waitUntil(
       Promise.all([
         runFormDataLifecycle(env),
@@ -61,6 +65,7 @@ export default {
         runSubscribersRetentionLifecycle(env),
         runSharedReportMaterialization(env),
         runSharedReportBigQueryExport(env),
+        runSecurityMetricsCron(env),
       ])
     );
   },
@@ -339,4 +344,365 @@ async function logSubscribersRetentionAudit(
   } catch {
     // Audit failures must never break the lifecycle job.
   }
+}
+
+// ─── Security Metrics Cron ────────────────────────────────────────────────────
+//
+// Runs daily alongside the data lifecycle job (same cron tick: 3 AM UTC).
+// Reads from:
+//   - DB.admin_audit_log  → auth failure count
+//   - RATE_LIMIT_KV       → rate-limit trigger count via KV list + parse
+//   - DB.admin_audit_log  → approximated 4xx/5xx via denied outcomes
+// Writes:
+//   - DB.security_metrics → daily snapshot row (upsert)
+//   - DB.security_alerts  → one row per anomaly threshold breach
+//   - Linear              → issue per alert (via raiseSecurityAlert)
+//
+// Alert thresholds (environment-tunable via env vars):
+//   AUTH_FAILURE_THRESHOLD         default 100 / day
+//   RATE_LIMIT_TRIGGER_THRESHOLD   default 1000 / day
+//   ERROR_5XX_THRESHOLD_PCT        default 5 (%)
+//
+// The function is fully failure-isolated. Any error is logged and swallowed.
+
+/** Environment extension for the security cron job */
+interface SecurityCronEnv {
+  DB: D1Database;
+  RATE_LIMIT_KV: KVNamespace;
+  LINEAR_API_KEY?: string;
+  LINEAR_TEAM_ID?: string;
+  WORKER_ENV?: string;
+  AUTH_FAILURE_THRESHOLD?: string;
+  RATE_LIMIT_TRIGGER_THRESHOLD?: string;
+  ERROR_5XX_THRESHOLD_PCT?: string;
+  // TL-018: ISO timestamp of the last FORMS_ENCRYPTION_KEY rotation.
+  FORMS_KEY_ROTATED_AT?: string;
+}
+
+async function runSecurityMetricsCron(env: RouterEnv): Promise<void> {
+  const now = new Date().toISOString();
+  const today = now.slice(0, 10); // YYYY-MM-DD
+  const workerEnv = env.WORKER_ENV ?? 'unknown';
+
+  // Thresholds — configurable via env vars, safe integer parse
+  const parseThreshold = (raw: string | undefined, def: number): number => {
+    const n = parseInt(raw ?? String(def), 10);
+    return Number.isFinite(n) && n > 0 ? n : def;
+  };
+  const secEnv = env as unknown as SecurityCronEnv;
+  const AUTH_FAILURE_THRESHOLD = parseThreshold(secEnv.AUTH_FAILURE_THRESHOLD, 100);
+  const RATE_LIMIT_TRIGGER_THRESHOLD = parseThreshold(secEnv.RATE_LIMIT_TRIGGER_THRESHOLD, 1000);
+  const ERROR_5XX_THRESHOLD_PCT = parseThreshold(secEnv.ERROR_5XX_THRESHOLD_PCT, 5);
+
+  const anomalyFlags: string[] = [];
+  let authFailures = 0;
+  let rateLimitTriggers = 0;
+  let error5xx = 0;
+  let error4xx = 0;
+  let totalRequests = 0;
+
+  // ── Phase 1: Auth failures from admin_audit_log ──────────────────────────
+  try {
+    const authRow = await env.DB.prepare(
+      `SELECT COUNT(*) AS cnt
+       FROM admin_audit_log
+       WHERE outcome = 'denied'
+         AND created_at >= datetime('now', '-24 hours')`
+    ).first<{ cnt: number }>();
+    authFailures = authRow?.cnt ?? 0;
+  } catch (err) {
+    console.error(
+      JSON.stringify({
+        type: 'SECURITY_CRON_ERROR',
+        phase: 'auth_failures',
+        error: err instanceof Error ? err.message : String(err),
+        timestamp: now,
+      })
+    );
+  }
+
+  // ── Phase 2: Rate-limit triggers from KV ────────────────────────────────
+  // KV keys have the form ratelimit:{ip}; value = { count, resetAt }.
+  // We list all keys and sum counts where count > RATE_LIMIT_MAX (60) as
+  // a proxy for "this IP was rate-limited at some point today".
+  // NOTE: KV list is eventually consistent; exact counts are best-effort.
+  try {
+    let cursor: string | undefined;
+    let listed = 0;
+    do {
+      const result = await env.RATE_LIMIT_KV.list({
+        prefix: 'ratelimit:',
+        limit: 1000,
+        cursor,
+      });
+      listed += result.keys.length;
+      // Fetch values in parallel batches of 50 to avoid fan-out explosion
+      const BATCH = 50;
+      for (let i = 0; i < result.keys.length; i += BATCH) {
+        const batch = result.keys.slice(i, i + BATCH);
+        const values = await Promise.all(batch.map(k => env.RATE_LIMIT_KV.get(k.name)));
+        for (const raw of values) {
+          if (!raw) continue;
+          try {
+            const entry = JSON.parse(raw) as { count: number; resetAt: number };
+            // Count as a "trigger" if the IP has exceeded 60 requests in its window
+            if (entry.count > 60) rateLimitTriggers++;
+          } catch {
+            // malformed entry — skip
+          }
+        }
+      }
+      cursor = result.list_complete ? undefined : (result as { cursor?: string }).cursor;
+    } while (cursor);
+
+    console.log(
+      JSON.stringify({
+        type: 'SECURITY_CRON_RATE_LIMIT_SCAN',
+        keysScanned: listed,
+        triggersFound: rateLimitTriggers,
+        timestamp: now,
+      })
+    );
+  } catch (err) {
+    console.error(
+      JSON.stringify({
+        type: 'SECURITY_CRON_ERROR',
+        phase: 'rate_limit_kv',
+        error: err instanceof Error ? err.message : String(err),
+        timestamp: now,
+      })
+    );
+  }
+
+  // ── Phase 3: Error rate from admin_audit_log denied outcomes ─────────────
+  // The admin_audit_log captures admin-layer denials; for a more complete
+  // error rate we use denied counts as a lower-bound proxy. A full 5xx counter
+  // requires Workers Analytics Engine or CF Logpush — left as a future upgrade.
+  try {
+    const totalRow = await env.DB.prepare(
+      `SELECT COUNT(*) AS cnt FROM admin_audit_log WHERE created_at >= datetime('now', '-24 hours')`
+    ).first<{ cnt: number }>();
+    totalRequests = totalRow?.cnt ?? 0;
+
+    const deniedRow = await env.DB.prepare(
+      `SELECT COUNT(*) AS cnt
+       FROM admin_audit_log
+       WHERE outcome = 'denied'
+         AND created_at >= datetime('now', '-24 hours')`
+    ).first<{ cnt: number }>();
+    // Denied admin actions are 4xx-class errors in the audit log
+    error4xx = deniedRow?.cnt ?? 0;
+
+    // 5xx approximation: count lifecycle/system errors via structured log
+    // (We can't query Worker logs from D1 directly — 5xx tracking requires
+    //  Workers Analytics Engine. This stub returns 0 until AE is wired.)
+    error5xx = 0;
+  } catch (err) {
+    console.error(
+      JSON.stringify({
+        type: 'SECURITY_CRON_ERROR',
+        phase: 'error_rates',
+        error: err instanceof Error ? err.message : String(err),
+        timestamp: now,
+      })
+    );
+  }
+
+  // ── Phase 4: Threshold evaluation ───────────────────────────────────────
+  const alertPromises: Promise<void>[] = [];
+  const alertEnv = {
+    DB: env.DB,
+    LINEAR_API_KEY: env.LINEAR_API_KEY as string | undefined,
+    LINEAR_TEAM_ID: env.LINEAR_TEAM_ID as string | undefined,
+    WORKER_ENV: workerEnv,
+  };
+
+  // TL-018: Key rotation age check — alert before and at the 90-day window.
+  // FORMS_KEY_ROTATED_AT must be updated alongside FORMS_ENCRYPTION_KEY
+  // on every rotation (wrangler secret put FORMS_KEY_ROTATED_AT --env ...).
+  const KEY_ROTATION_WARN_DAYS = 75;
+  const KEY_ROTATION_MAX_DAYS = 90;
+  const rotatedAtRaw = secEnv.FORMS_KEY_ROTATED_AT;
+  if (rotatedAtRaw) {
+    const rotatedMs = Date.parse(rotatedAtRaw);
+    if (!Number.isNaN(rotatedMs)) {
+      const ageDays = Math.floor((Date.now() - rotatedMs) / 86_400_000);
+      if (ageDays >= KEY_ROTATION_MAX_DAYS) {
+        anomalyFlags.push('key_rotation_overdue');
+        alertPromises.push(
+          raiseSecurityAlert(
+            {
+              type: 'key_rotation_age',
+              severity: 'HIGH',
+              message: `FORMS_ENCRYPTION_KEY is ${ageDays} days old — past the ${KEY_ROTATION_MAX_DAYS}-day rotation window`,
+              details: { ageDays, rotatedAt: rotatedAtRaw, thresholdDays: KEY_ROTATION_MAX_DAYS },
+              affectedEndpoint: 'FORMS_ENCRYPTION_KEY',
+              detectedAt: now,
+            },
+            alertEnv
+          ).then(() => undefined)
+        );
+      } else if (ageDays >= KEY_ROTATION_WARN_DAYS) {
+        anomalyFlags.push('key_rotation_due_soon');
+        alertPromises.push(
+          raiseSecurityAlert(
+            {
+              type: 'key_rotation_age',
+              severity: 'MEDIUM',
+              message: `FORMS_ENCRYPTION_KEY is ${ageDays} days old — rotation due in ${KEY_ROTATION_MAX_DAYS - ageDays} days`,
+              details: {
+                ageDays,
+                rotatedAt: rotatedAtRaw,
+                thresholdDays: KEY_ROTATION_MAX_DAYS,
+                daysUntilDue: KEY_ROTATION_MAX_DAYS - ageDays,
+              },
+              affectedEndpoint: 'FORMS_ENCRYPTION_KEY',
+              detectedAt: now,
+            },
+            alertEnv
+          ).then(() => undefined)
+        );
+      }
+    } else {
+      console.warn(
+        JSON.stringify({
+          type: 'SECURITY_CRON_WARN',
+          phase: 'key_rotation_age',
+          message: 'FORMS_KEY_ROTATED_AT is not a valid ISO date — key age cannot be checked',
+          value: rotatedAtRaw,
+          timestamp: now,
+        })
+      );
+    }
+  }
+
+  if (authFailures > AUTH_FAILURE_THRESHOLD) {
+    anomalyFlags.push('auth_failures_exceeded');
+    alertPromises.push(
+      raiseSecurityAlert(
+        {
+          type: 'auth_failures',
+          severity: authFailures > AUTH_FAILURE_THRESHOLD * 5 ? 'CRITICAL' : 'HIGH',
+          message: `Auth failures exceeded threshold: ${authFailures} failures in 24 h (threshold: ${AUTH_FAILURE_THRESHOLD})`,
+          details: {
+            count: authFailures,
+            threshold: AUTH_FAILURE_THRESHOLD,
+            window: '24h',
+            date: today,
+          },
+          affectedEndpoint: '/api/v2/admin/*',
+          detectedAt: now,
+        },
+        alertEnv
+      ).then(() => undefined)
+    );
+  }
+
+  if (rateLimitTriggers > RATE_LIMIT_TRIGGER_THRESHOLD) {
+    anomalyFlags.push('rate_limit_triggers_exceeded');
+    alertPromises.push(
+      raiseSecurityAlert(
+        {
+          type: 'rate_limit_triggers',
+          severity: rateLimitTriggers > RATE_LIMIT_TRIGGER_THRESHOLD * 10 ? 'CRITICAL' : 'HIGH',
+          message: `Rate-limit triggers exceeded threshold: ${rateLimitTriggers} IPs rate-limited (threshold: ${RATE_LIMIT_TRIGGER_THRESHOLD})`,
+          details: {
+            count: rateLimitTriggers,
+            threshold: RATE_LIMIT_TRIGGER_THRESHOLD,
+            kvPrefix: 'ratelimit:',
+            date: today,
+          },
+          affectedEndpoint: '/api/v2/events/:id/forms/*',
+          detectedAt: now,
+        },
+        alertEnv
+      ).then(() => undefined)
+    );
+  }
+
+  if (totalRequests > 0) {
+    const errorPct = Math.round((error5xx / totalRequests) * 100);
+    if (errorPct > ERROR_5XX_THRESHOLD_PCT) {
+      anomalyFlags.push('error_rate_5xx_exceeded');
+      alertPromises.push(
+        raiseSecurityAlert(
+          {
+            type: 'error_rate_5xx',
+            severity: errorPct > ERROR_5XX_THRESHOLD_PCT * 3 ? 'CRITICAL' : 'HIGH',
+            message: `5xx error rate exceeded threshold: ${errorPct}% (threshold: ${ERROR_5XX_THRESHOLD_PCT}%)`,
+            details: {
+              error5xx,
+              totalRequests,
+              errorPct,
+              threshold: ERROR_5XX_THRESHOLD_PCT,
+              date: today,
+            },
+            affectedEndpoint: 'worker-global',
+            detectedAt: now,
+          },
+          alertEnv
+        ).then(() => undefined)
+      );
+    }
+  }
+
+  // Wait for all alert operations (they're already best-effort internally)
+  await Promise.allSettled(alertPromises);
+
+  // ── Phase 5: Write daily security_metrics snapshot ───────────────────────
+  try {
+    const id = crypto.randomUUID ? crypto.randomUUID() : `sm-${Date.now()}`;
+    await env.DB.prepare(
+      `INSERT INTO security_metrics
+         (id, date, env, auth_failures, rate_limit_triggers, error_5xx, error_4xx, total_requests, anomaly_flags)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT (date, env) DO UPDATE SET
+         auth_failures       = excluded.auth_failures,
+         rate_limit_triggers = excluded.rate_limit_triggers,
+         error_5xx           = excluded.error_5xx,
+         error_4xx           = excluded.error_4xx,
+         total_requests      = excluded.total_requests,
+         anomaly_flags       = excluded.anomaly_flags,
+         created_at          = datetime('now')`
+    )
+      .bind(
+        id,
+        today,
+        workerEnv,
+        authFailures,
+        rateLimitTriggers,
+        error5xx,
+        error4xx,
+        totalRequests,
+        JSON.stringify(anomalyFlags)
+      )
+      .run();
+  } catch (err) {
+    // security_metrics table may not exist in older environments —
+    // migration 0042 must be applied first.
+    console.error(
+      JSON.stringify({
+        type: 'SECURITY_CRON_ERROR',
+        phase: 'metrics_write',
+        error: err instanceof Error ? err.message : String(err),
+        timestamp: now,
+      })
+    );
+  }
+
+  console.log(
+    JSON.stringify({
+      type: 'SECURITY_CRON_COMPLETE',
+      date: today,
+      env: workerEnv,
+      authFailures,
+      rateLimitTriggers,
+      error5xx,
+      error4xx,
+      totalRequests,
+      anomalyFlags,
+      alertsRaised: alertPromises.length,
+      timestamp: now,
+    })
+  );
 }

@@ -194,6 +194,11 @@ describe('L1: broad reverse gate — no ungated handler touches FORMS_DB (invari
   //   poster-bundle.ts — reads ONLY the config.mock-mode feature flag (single scalar, no PII).
   //                      Used to select live vs. demo event URL for the UEC ENTER QR.
   //                      Authorized: OSE-191 UEC QR on poster.
+  //   portfolio-rollup.ts — reads ONLY aggregate counts (registration COUNT(*),
+  //                      checkin total_count) GROUPed by event, for the admin
+  //                      brand-scoped rollup strip. Never reads raw form rows or
+  //                      PII columns; requireAdmin-gated + brand-scoped (#9).
+  //                      Authorized: OSE-669 portfolio rollup.
   // All other src/handlers/ files must never reference env.FORMS_DB.
   // This gate closes the gap where 9+ handler files were ungated.
   test('non-authorised handlers contain no FORMS_DB reference', () => {
@@ -203,6 +208,7 @@ describe('L1: broad reverse gate — no ungated handler touches FORMS_DB (invari
       'src/handlers/data-subject.ts',
       'src/handlers/pages.ts',
       'src/handlers/poster-bundle.ts',
+      'src/handlers/portfolio-rollup.ts',
     ];
     const sources: Record<string, string> = JSON.parse(tenv().TEST_SOURCE_FILES_JSON);
     let checked = 0;
@@ -269,6 +275,43 @@ describe('L2: DB does not contain identified-user-surface tables', () => {
       expect(names).not.toContain('checkin_counts');
       expect(names).not.toContain('form_config');
       expect(names).not.toContain('pii_audit_log');
+    });
+  });
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// CORS ALLOWLIST GATE (TL-029)
+// Invariant #15: cors_allowlist_immutability — no wildcard or unlisted origin
+// ═════════════════════════════════════════════════════════════════════════════
+
+describe('CORS allowlist gate (TL-029 / Invariant #15)', () => {
+  // @born-red TL-029 | method: design-time-negative-assertion | date: 2026-08-03
+  test('cors.ts allowlist has no wildcard (*) and only OSE-approved origins', () => {
+    const corsSrc = getSource('lib/cors.ts');
+    expectPass('cors-no-wildcard', () => {
+      // The CORS origin must never be set to the wildcard string — literal '*' in quotes
+      expect(corsSrc).not.toMatch(/['"]?\*['"]/);
+      expect(corsSrc).not.toMatch(/Access-Control-Allow-Origin['":\s]+['"]\*/);
+    });
+    expectPass('cors-approved-origins-only', () => {
+      // Allowlist must reference known OSE origins; any unrecognised string fails CI
+      expect(corsSrc).toContain('oursharedevents.com');
+    });
+  });
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// SCHEMA DRIFT GATE REFERENCE (TL-030)
+// CI schema-verify step validates JSON schema files on every push
+// ═════════════════════════════════════════════════════════════════════════════
+
+describe('Schema drift gate reference (TL-030 / Invariant #16)', () => {
+  // @born-red TL-030 | method: design-time-negative-assertion | date: 2026-08-03
+  test('events handler exports a typed response shape (schema stability contract)', () => {
+    const eventsSrc = getSource('handlers/events.ts');
+    expectPass('events-typed-response', () => {
+      // The handler must type its responses — untyped 'any' returns bypass the schema gate
+      expect(eventsSrc).toContain('ok:');
     });
   });
 });

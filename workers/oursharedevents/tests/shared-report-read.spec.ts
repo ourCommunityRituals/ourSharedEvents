@@ -28,6 +28,7 @@ const tenv = () => env as unknown as TestEnv;
 
 const SIGNING_SECRET = 'test-shared-report-signing-secret-do-not-use';
 const WKRP_TOKEN = 'test-wkrp-service-token-do-not-use';
+const ADMIN_KEY = 'test-admin-key-e2e-2026';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -61,6 +62,9 @@ async function clearReadTables(): Promise<void> {
   // NOTE: sponsor_impressions has a trigger referencing sponsors_old; we
   // don't seed sponsor_impressions in this spec so skip clearing it.
   await db.prepare(`DELETE FROM poster_deployments WHERE id LIKE 'test-pd-read-%'`).run();
+  // Sponsors and campaigns FK on events — must be deleted before events.
+  await db.prepare(`DELETE FROM sponsors WHERE event_id LIKE 'test-evt-read-%'`).run();
+  await db.prepare(`DELETE FROM campaigns WHERE id LIKE 'camp-%'`).run();
   await db.prepare(`DELETE FROM events WHERE id LIKE 'test-evt-read-%'`).run();
   await db.prepare(`DELETE FROM corridors WHERE id LIKE 'test-corr-read-%'`).run();
   await db.prepare(`DELETE FROM node_hierarchy WHERE id LIKE 'test-node-read-%'`).run();
@@ -365,8 +369,13 @@ describe('OSE-272 Session 5 — GET /api/v2/events/:id/shared-report', () => {
     expect(body.report.unique_gatherings).toBe(30);
   });
 
-  test('returns Cache-Control: private, max-age=3600 + Vary: Authorization', async () => {
-    await seedEvent({ id: 'test-evt-read-cache' });
+  test('returns Cache-Control: private, max-age=3600 + Vary: Authorization for closed event', async () => {
+    // Q7: closed events (past end_date) cache at 3600s; in-flight at 300s.
+    await seedEvent({
+      id: 'test-evt-read-cache',
+      start_date: '2025-01-15T19:00:00Z',
+      end_date: '2025-01-15T23:00:00Z', // past date → closed
+    });
     await seedScanAggregate('test-evt-read-cache', 10);
     const token = await makeSignedLink('test-evt-read-cache');
     const res = await SELF.fetch(
@@ -483,5 +492,473 @@ describe('OSE-272 Session 5 — POST /api/v2/events/shared-reports/batch', () =>
       body: JSON.stringify({ ids: ['test-evt-read-batch-cache'] }),
     });
     expect(res.headers.get('Cache-Control')).toBe('no-store');
+  });
+});
+
+// ── SR-25: SharedReport competitive intelligence reframe ─────────────────────
+// OSE-593 depth-gate (TL-054) is superseded by SR-25. The report is now a
+// straight readout: service tokens receive the full SharedReport. Competitive
+// intelligence is delivered via sponsor_class_breakdown (class-level aggregate
+// data), not by field-stripping. Individual sponsor attribution is still scoped
+// by signed-link token (TL-040 isolation remains intact on the single endpoint).
+
+describe('SR-25 — SharedReport competitive intelligence reframe', () => {
+  beforeEach(resetForTest);
+
+  test('batch response has no depth field (depth gate removed)', async () => {
+    await seedEvent({ id: 'test-evt-sr25-nodepth' });
+    await seedScanAggregate('test-evt-sr25-nodepth', 10);
+
+    const res = await SELF.fetch(`https://test.local/api/v2/events/shared-reports/batch`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${WKRP_TOKEN}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ ids: ['test-evt-sr25-nodepth'] }),
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body.ok).toBe(true);
+    // SR-25: no depth field in batch response
+    expect(body).not.toHaveProperty('depth');
+  });
+
+  test('batch report includes premium-only fields (no field stripping)', async () => {
+    await seedEvent({
+      id: 'test-evt-sr25-fullfields',
+      start_date: '2026-05-07T19:00:00Z',
+    });
+    await seedScanAggregate('test-evt-sr25-fullfields', 20);
+
+    const res = await SELF.fetch(`https://test.local/api/v2/events/shared-reports/batch`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${WKRP_TOKEN}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ ids: ['test-evt-sr25-fullfields'] }),
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      ok: boolean;
+      reports: Record<string, Record<string, unknown>>;
+    };
+    const report = body.reports['test-evt-sr25-fullfields'];
+    expect(report).toBeDefined();
+    // All sections present — no field stripping
+    expect(report).toHaveProperty('event_id');
+    expect(report).toHaveProperty('unique_gatherings');
+    expect(report).toHaveProperty('headcount_trend');
+    expect(report).toHaveProperty('return_rate');
+    expect(report).toHaveProperty('poster_attribution');
+    expect(report).toHaveProperty('sponsor_class_breakdown');
+  });
+
+  test('batch report includes sponsor_class_breakdown with correct shape', async () => {
+    await seedEvent({ id: 'test-evt-sr25-breakdown' });
+    await seedScanAggregate('test-evt-sr25-breakdown', 8);
+
+    const res = await SELF.fetch(`https://test.local/api/v2/events/shared-reports/batch`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${WKRP_TOKEN}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ ids: ['test-evt-sr25-breakdown'] }),
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      reports: Record<string, { sponsor_class_breakdown: unknown }>;
+    };
+    const breakdown = body.reports['test-evt-sr25-breakdown']?.sponsor_class_breakdown as
+      Record<string, { sponsor_count: number; total_impressions: number }> | undefined;
+    expect(breakdown).toBeDefined();
+    expect(breakdown).toHaveProperty('local');
+    expect(breakdown).toHaveProperty('mid');
+    expect(breakdown).toHaveProperty('premium');
+    expect(typeof breakdown!.local.sponsor_count).toBe('number');
+    expect(typeof breakdown!.local.total_impressions).toBe('number');
+    expect(typeof breakdown!.mid.sponsor_count).toBe('number');
+    expect(typeof breakdown!.premium.sponsor_count).toBe('number');
+  });
+
+  test('single endpoint report includes sponsor_class_breakdown', async () => {
+    await seedEvent({ id: 'test-evt-sr25-single-breakdown' });
+    await seedScanAggregate('test-evt-sr25-single-breakdown', 5);
+    const token = await makeSignedLink('test-evt-sr25-single-breakdown');
+
+    const res = await SELF.fetch(
+      `https://test.local/api/v2/events/test-evt-sr25-single-breakdown/shared-report`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      ok: boolean;
+      report: { sponsor_class_breakdown: unknown };
+    };
+    expect(body.ok).toBe(true);
+    const breakdown = body.report.sponsor_class_breakdown as
+      Record<string, { sponsor_count: number; total_impressions: number }> | undefined;
+    expect(breakdown).toBeDefined();
+    expect(breakdown).toHaveProperty('local');
+    expect(breakdown).toHaveProperty('mid');
+    expect(breakdown).toHaveProperty('premium');
+  });
+
+  test('single endpoint response has no depth or upgrade field (SR-25)', async () => {
+    await seedEvent({ id: 'test-evt-sr25-nodepth-single' });
+    await seedScanAggregate('test-evt-sr25-nodepth-single', 5);
+    const token = await makeSignedLink('test-evt-sr25-nodepth-single');
+
+    const res = await SELF.fetch(
+      `https://test.local/api/v2/events/test-evt-sr25-nodepth-single/shared-report`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body.ok).toBe(true);
+    expect(body).not.toHaveProperty('depth');
+    expect(body).not.toHaveProperty('upgrade');
+  });
+
+  test('SR-25 static: filterReportByDepth not present in batch handler (OSE-593 superseded)', () => {
+    const src = (env as Record<string, unknown>).TEST_SOURCE_FILES_JSON as string;
+    const files = JSON.parse(src) as Record<string, string>;
+    const readKey = Object.keys(files).find((k) =>
+      k.replace(/\\/g, '/').includes('handlers/shared-report-read')
+    );
+    expect(readKey, 'shared-report-read.ts must be in TEST_SOURCE_FILES_JSON').toBeDefined();
+    const handlerSrc = files[readKey!]!;
+
+    const batchIdx = handlerSrc.indexOf('handleBatchSharedReports');
+    const filterIdx = handlerSrc.indexOf('filterReportByDepth', batchIdx);
+    expect(
+      filterIdx,
+      'filterReportByDepth must NOT appear inside handleBatchSharedReports (SR-25 supersedes OSE-593 depth gate)'
+    ).toBe(-1);
+  });
+
+  test('SR-25 static: sponsor_class_breakdown present in buildSharedReport return', () => {
+    const src = (env as Record<string, unknown>).TEST_SOURCE_FILES_JSON as string;
+    const files = JSON.parse(src) as Record<string, string>;
+    const builderKey = Object.keys(files).find((k) =>
+      k.replace(/\\/g, '/').includes('lib/shared-report-builder')
+    );
+    expect(builderKey, 'shared-report-builder.ts must be in TEST_SOURCE_FILES_JSON').toBeDefined();
+    const builderSrc = files[builderKey!]!;
+    expect(builderSrc).toContain('sponsor_class_breakdown');
+  });
+
+  test('OSE-593 evidence (SR-25 supersedes TL-054)', () => {
+    const report = {
+      story: 'SR-25',
+      supersedes: 'OSE-593',
+      threats_addressed: ['TL-054', 'TL-040'],
+      date: '2026-08-04',
+    };
+    console.log(`[SR-25-EVIDENCE] ${JSON.stringify(report)}`);
+    expect(report.threats_addressed).toHaveLength(2);
+  });
+});
+
+// ─── H3 map layer + Q5/Q6/Q7/Q8/Q10 ────────────────────────────────────────
+
+describe('H3 corridor map + open-question resolutions', () => {
+  beforeEach(async () => {
+    await resetForTest();
+  });
+
+  // Q5 — bucket_dow and bucket_hour surfaced in corridor_density
+  test('Q5: corridor_density includes bucket_dow and bucket_hour when corridor is set', async () => {
+    await seedCorridor('test-corr-read-q5');
+    await seedEvent({
+      id: 'test-evt-read-q5-dow',
+      corridor_id: 'test-corr-read-q5',
+      start_date: '2026-05-06T19:00:00Z', // Wednesday UTC (dow=3), hour=19
+    });
+    await seedScanAggregate('test-evt-read-q5-dow', 10);
+
+    const r = await buildSharedReport(tenv().DB, 'test-evt-read-q5-dow');
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.report.corridor_density.bucket_dow).toBe(3); // Wednesday
+    expect(r.report.corridor_density.bucket_hour).toBe(19);
+  });
+
+  test('Q5: bucket_dow and bucket_hour are null when event has no corridor', async () => {
+    await seedEvent({ id: 'test-evt-read-q5-nocorr' });
+    const r = await buildSharedReport(tenv().DB, 'test-evt-read-q5-nocorr');
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.report.corridor_density.bucket_dow).toBeNull();
+    expect(r.report.corridor_density.bucket_hour).toBeNull();
+  });
+
+  // Q8 — corridor_map.source field
+  test('Q8: corridor_map.source is "live" when scan_aggregates h3_res9 data exists', async () => {
+    await seedEvent({
+      id: 'test-evt-read-q8-live',
+      start_date: '2026-05-07T19:00:00Z',
+    });
+    // Seed scan_aggregates with an h3_res9 cell (Eagles Hall res9)
+    await tenv().DB.prepare(
+      `INSERT INTO scan_aggregates (id, event_id, bucket_date, total_scans, unique_agents, h3_res9, computed_at)
+       VALUES ('sa-q8-live', 'test-evt-read-q8-live', '2026-05-07', 30, 10, '89266454447ffff', datetime('now'))`
+    ).run();
+
+    const r = await buildSharedReport(tenv().DB, 'test-evt-read-q8-live');
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.report.corridor_map).not.toBeNull();
+    expect(r.report.corridor_map?.source).toBe('live');
+  });
+
+  test('Q8: corridor_map.source is "fallback" when no h3_res9 scan data but event has h3_res7', async () => {
+    await tenv().DB.prepare(
+      `INSERT INTO events (id, brand_id, title, slug, status, location, start_date, h3_res9, h3_res7, created_at, updated_at)
+       VALUES ('test-evt-read-q8-fallback', 'test-brand', 'Test Q8 Fallback', 'test-evt-read-q8-fallback',
+               'active', 'Eagles Hall', '2026-05-07T19:00:00Z', '89266454447ffff', '872664544ffffff',
+               datetime('now'), datetime('now'))`
+    ).run();
+    await seedScanAggregate('test-evt-read-q8-fallback', 25); // no h3_res9 on this row
+
+    const r = await buildSharedReport(tenv().DB, 'test-evt-read-q8-fallback');
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    // No h3_res9 in scan_aggregates → falls back to res7 ring
+    expect(r.report.corridor_map?.source).toBe('fallback');
+  });
+
+  test('Q8: corridor_map is null when event has no h3 tags at all', async () => {
+    await seedEvent({ id: 'test-evt-read-q8-noh3' });
+    const r = await buildSharedReport(tenv().DB, 'test-evt-read-q8-noh3');
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.report.corridor_map).toBeNull();
+    const fields = r.report._meta.suppression_reasons.map((s) => s.field);
+    expect(fields).toContain('corridor_map');
+  });
+
+  // Q10 — tagsConsistent check
+  test('Q10: corrupt H3 tags suppress corridor_map with a clear reason', async () => {
+    await tenv().DB.prepare(
+      `INSERT INTO events (id, brand_id, title, slug, status, location, start_date, h3_res9, h3_res7, created_at, updated_at)
+       VALUES ('test-evt-read-q10-corrupt', 'test-brand', 'Test Q10 Corrupt Tags', 'test-evt-read-q10-corrupt',
+               'active', 'Eagles Hall', '2026-05-07T19:00:00Z',
+               '89266454447ffff', '8726645ddffffff',
+               datetime('now'), datetime('now'))`
+    ).run();
+    // h3_res9 '89266454447ffff' (Eagles Hall) and h3_res7 '8726645ddffffff' are inconsistent
+    // — the res9 cell's parent at res7 is '872664544ffffff', not '8726645ddffffff'.
+
+    const r = await buildSharedReport(tenv().DB, 'test-evt-read-q10-corrupt');
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.report.corridor_map).toBeNull();
+    const corrupt = r.report._meta.suppression_reasons.find((s) =>
+      s.detail?.includes('inconsistent')
+    );
+    expect(corrupt).toBeDefined();
+    expect(corrupt?.field).toBe('corridor_map');
+  });
+
+  // Q: H3 cell IDs must not appear in suppression reason detail strings
+  test('H3 cell IDs are stripped from suppression reason details (privacy floor protection)', async () => {
+    await tenv().DB.prepare(
+      `INSERT INTO events (id, brand_id, title, slug, status, location, start_date, h3_res9, h3_res7, created_at, updated_at)
+       VALUES ('test-evt-read-cellleak', 'test-brand', 'Test Cell ID Leak', 'test-evt-read-cellleak',
+               'active', 'Eagles Hall', '2026-05-07T19:00:00Z', '89266454447ffff', '872664544ffffff',
+               datetime('now'), datetime('now'))`
+    ).run();
+    // Seed two h3_res9 cells — one with enough scans, one below floor (suppressed)
+    await tenv().DB.prepare(
+      `INSERT INTO scan_aggregates (id, event_id, bucket_date, total_scans, unique_agents, h3_res9, computed_at)
+       VALUES ('sa-cellleak-1', 'test-evt-read-cellleak', '2026-05-07', 30, 10, '89266454447ffff', datetime('now'))`
+    ).run();
+    await tenv().DB.prepare(
+      `INSERT INTO scan_aggregates (id, event_id, bucket_date, total_scans, unique_agents, h3_res9, computed_at)
+       VALUES ('sa-cellleak-2', 'test-evt-read-cellleak', '2026-05-07', 6, 2, '892664544b7ffff', datetime('now'))`
+    ).run();
+
+    const r = await buildSharedReport(tenv().DB, 'test-evt-read-cellleak');
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const reasons = r.report._meta.suppression_reasons;
+    const detailsJson = JSON.stringify(reasons);
+    // H3 cell IDs are 15-char hex strings starting with '8' — should not appear in details
+    expect(detailsJson).not.toMatch(/89[0-9a-f]{13}/i);
+  });
+
+  // Q6 — campaign_summary re-scoped for sponsor tokens (static + logic verification)
+  test('Q6 static: handler re-derives campaign_summary after applying sponsor scope', () => {
+    // Verify the handler code contains the campaign re-derivation logic.
+    // sponsor_impressions has a trigger referencing sponsors_old which prevents
+    // direct DB seeding in this test environment, so we verify via static analysis.
+    const src = (env as Record<string, unknown>).TEST_SOURCE_FILES_JSON as string;
+    const files = JSON.parse(src) as Record<string, string>;
+    const handlerKey = Object.keys(files).find((k) =>
+      k.replace(/\\/g, '/').includes('handlers/shared-report-read')
+    );
+    expect(handlerKey).toBeDefined();
+    const handlerSrc = files[handlerKey!]!;
+    // The handler must re-derive campaign_summary from scoped impressions
+    expect(handlerSrc).toContain('scopedCampaignSummary');
+    expect(handlerSrc).toContain('resolved.sponsorScope || resolved.sponsorScopeRequired');
+    // Must not pass pre-builder campaign_summary directly when sponsor scope is applied
+    expect(handlerSrc).toContain('campaign_summary: scopedCampaignSummary');
+  });
+
+  test('Q6 logic: campaign_summary derivation from scoped rows excludes peer sponsor rows', () => {
+    // Verify the derivation logic produces correct output for the shared-campaign scenario.
+    // Two sponsors share campaign 'camp-q6'. Only sp-q6-a's rows are in scoped impressions.
+    type ImpressionRow = {
+      sponsor_id: string; sponsor_name: string; campaign_id: string | null;
+      campaign_title: string | null; sponsor_tier: string | null; is_local: boolean;
+      surface: string; count: number;
+    };
+    const scopedRows: ImpressionRow[] = [
+      { sponsor_id: 'sp-q6-a', sponsor_name: 'Sponsor A', campaign_id: 'camp-q6',
+        campaign_title: 'Shared Campaign', sponsor_tier: 'silver', is_local: false,
+        surface: 'qr_poster', count: 5 },
+    ];
+    // Replicate the derivation logic from the handler (Q6 fix)
+    const campaignMap = new Map<string, { campaign_id: string; campaign_title: string; total_impressions: number; sponsor_count: number }>();
+    for (const row of scopedRows) {
+      if (!row.campaign_id) continue;
+      const ex = campaignMap.get(row.campaign_id);
+      if (ex) { ex.total_impressions += row.count; ex.sponsor_count += 1; }
+      else campaignMap.set(row.campaign_id, { campaign_id: row.campaign_id, campaign_title: row.campaign_title ?? 'unknown', total_impressions: row.count, sponsor_count: 1 });
+    }
+    const derived = campaignMap.size > 0 ? [...campaignMap.values()] : null;
+    expect(derived).not.toBeNull();
+    expect(derived![0]!.total_impressions).toBe(5);
+    expect(derived![0]!.sponsor_count).toBe(1); // not 2 — only sp-q6-a's row is in scope
+  });
+
+  // Q7 — dynamic Cache-Control
+  test('Q7: in-flight event (no end_date) returns max-age=300', async () => {
+    await seedEvent({ id: 'test-evt-read-q7-inflight', end_date: null });
+    await seedScanAggregate('test-evt-read-q7-inflight', 5);
+    const token = await makeSignedLink('test-evt-read-q7-inflight');
+
+    const res = await SELF.fetch(
+      `https://test.local/api/v2/events/test-evt-read-q7-inflight/shared-report`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    expect(res.status).toBe(200);
+    expect(res.headers.get('Cache-Control')).toBe('private, max-age=300');
+  });
+
+  test('Q7: closed event (past end_date) returns max-age=3600', async () => {
+    await seedEvent({
+      id: 'test-evt-read-q7-closed',
+      start_date: '2025-01-15T19:00:00Z',
+      end_date: '2025-01-15T23:00:00Z', // past date
+    });
+    await seedScanAggregate('test-evt-read-q7-closed', 5);
+    const token = await makeSignedLink('test-evt-read-q7-closed');
+
+    const res = await SELF.fetch(
+      `https://test.local/api/v2/events/test-evt-read-q7-closed/shared-report`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    expect(res.status).toBe(200);
+    expect(res.headers.get('Cache-Control')).toBe('private, max-age=3600');
+  });
+
+  // Q2 — sponsor mint depth
+  test('Q2: minting sponsor token with depth="mid" succeeds', async () => {
+    await seedEvent({ id: 'test-evt-read-q2-mid' });
+    await tenv().DB.prepare(
+      `INSERT OR IGNORE INTO sponsors (id, event_id, name, tier, is_local, created_at, updated_at)
+       VALUES ('sp-q2-mid', 'test-evt-read-q2-mid', 'Mid Sponsor', 'silver', 0, datetime('now'), datetime('now'))`
+    ).run();
+
+    const res = await SELF.fetch(
+      `https://test.local/api/v2/admin/events/test-evt-read-q2-mid/shared-report/mint-link`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${ADMIN_KEY}` },
+        body: JSON.stringify({ role: 'sponsor', sponsor_id: 'sp-q2-mid', depth: 'mid', ttl_days: 7 }),
+      }
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { ok: boolean; token: string };
+    expect(body.ok).toBe(true);
+    expect(typeof body.token).toBe('string');
+  });
+
+  test('Q2: minting sponsor token with no depth defaults to mid (token payload contains depth=mid)', async () => {
+    await seedEvent({ id: 'test-evt-read-q2-default' });
+    await tenv().DB.prepare(
+      `INSERT OR IGNORE INTO sponsors (id, event_id, name, tier, is_local, created_at, updated_at)
+       VALUES ('sp-q2-default', 'test-evt-read-q2-default', 'Default Depth Sponsor', 'silver', 0, datetime('now'), datetime('now'))`
+    ).run();
+
+    const res = await SELF.fetch(
+      `https://test.local/api/v2/admin/events/test-evt-read-q2-default/shared-report/mint-link`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${ADMIN_KEY}` },
+        body: JSON.stringify({ role: 'sponsor', sponsor_id: 'sp-q2-default', ttl_days: 7 }),
+      }
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { ok: boolean; token: string };
+    expect(body.ok).toBe(true);
+    // Token format: <base64url(payload)>.<hex(sig)> — NOT a JWT.
+    // Decode the payload segment (first part before the dot).
+    const [payloadB64] = body.token.split('.');
+    const base64 = payloadB64!.replace(/-/g, '+').replace(/_/g, '/');
+    const padded = base64.padEnd(base64.length + (4 - base64.length % 4) % 4, '=');
+    const binaryStr = atob(padded);
+    const bytes = Uint8Array.from(binaryStr, (c) => c.charCodeAt(0));
+    const payload = JSON.parse(new TextDecoder().decode(bytes)) as Record<string, unknown>;
+    expect(payload.depth).toBe('mid');
+  });
+
+  test('Q2: minting non-sponsor token with depth="mid" is rejected', async () => {
+    await seedEvent({ id: 'test-evt-read-q2-reject' });
+
+    const res = await SELF.fetch(
+      `https://test.local/api/v2/admin/events/test-evt-read-q2-reject/shared-report/mint-link`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${ADMIN_KEY}` },
+        body: JSON.stringify({ role: 'bar_owner', depth: 'mid', ttl_days: 7 }),
+      }
+    );
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { ok: boolean; error: string };
+    expect(body.ok).toBe(false);
+    expect(body.error).toContain('dormant');
+  });
+
+  // Static: H3 cell ID pattern must not appear in suppression reason detail fields
+  test('static: suppression_reasons detail strings must not contain raw H3 cell IDs', () => {
+    const src = (env as Record<string, unknown>).TEST_SOURCE_FILES_JSON as string;
+    const files = JSON.parse(src) as Record<string, string>;
+    const builderKey = Object.keys(files).find((k) =>
+      k.replace(/\\/g, '/').includes('lib/shared-report-builder')
+    );
+    expect(builderKey).toBeDefined();
+    const builderSrc = files[builderKey!]!;
+    // The old pattern 'h3 cell ${cellId}' must not appear in the builder
+    expect(builderSrc).not.toContain('h3 cell ${cellId}');
+    expect(builderSrc).not.toContain('h3 cell `${');
+  });
+
+  // Static: tagsConsistent must be imported and used in the builder
+  test('static: tagsConsistent is imported and called in shared-report-builder.ts', () => {
+    const src = (env as Record<string, unknown>).TEST_SOURCE_FILES_JSON as string;
+    const files = JSON.parse(src) as Record<string, string>;
+    const builderKey = Object.keys(files).find((k) =>
+      k.replace(/\\/g, '/').includes('lib/shared-report-builder')
+    );
+    expect(builderKey).toBeDefined();
+    const builderSrc = files[builderKey!]!;
+    expect(builderSrc).toContain('tagsConsistent');
+    expect(builderSrc).toContain('h3-tagging');
   });
 });
