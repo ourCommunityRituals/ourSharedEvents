@@ -107,196 +107,55 @@ async function getResolvedSponsorIds(eventId: string): Promise<string[]> {
   return (body.items ?? []).map((s) => s.id);
 }
 
-describe('OSE-330 — tierSort Local Sponsor Covenant invariant', () => {
-  test('OSE-330 | local primary beats non-local platinum (the covenant in one sentence)', async () => {
-    const eventId = `ose330-evt-cov-1`;
+describe('OSE-661 — covenant share rotation (Invariant #25)', () => {
+  // The local guarantee is a FLOOR in rotation frequency, NOT a rank (ratified
+  // 2026-08-08). These integration tests assert the OBSERVABLE guarantees via
+  // the /sponsors endpoint (uniform presence, local never zeroed, determinism);
+  // the floor(>=30%)/cap(<=40%) MAGNITUDES are unit-tested in
+  // tests/sponsor-share-rotation.spec.ts against buildShareRotation directly.
+
+  test('#25 | uniform placement: every seeded sponsor is returned (no named-slot drop)', async () => {
+    const eventId = `ose661-evt-uniform`;
     await seedEvent(eventId);
-    // Adversarial seed: highest non-local tier vs lowest local tier.
-    await seedSponsor({
-      eventId,
-      id: 'ose330-platinum-nonlocal',
-      name: 'Platinum NonLocal',
-      tier: 'platinum',
-      is_local: 0,
-    });
-    await seedSponsor({
-      eventId,
-      id: 'ose330-primary-local',
-      name: 'Primary Local',
-      tier: 'primary',
-      is_local: 1,
-    });
+    await seedSponsor({ eventId, id: 'u-title-nl', name: 'Title NL', tier: 'title', is_local: 0 });
+    await seedSponsor({ eventId, id: 'u-primary-loc', name: 'Primary Local', tier: 'primary', is_local: 1 });
+    await seedSponsor({ eventId, id: 'u-bronze-nl', name: 'Bronze NL', tier: 'bronze', is_local: 0 });
 
     const ids = await getResolvedSponsorIds(eventId);
-    // Local must appear BEFORE non-local regardless of tier
-    const localIdx = ids.indexOf('ose330-primary-local');
-    const nonLocalIdx = ids.indexOf('ose330-platinum-nonlocal');
-    expect(localIdx, 'primary-local must be present').toBeGreaterThan(-1);
-    expect(nonLocalIdx, 'platinum-nonlocal must be present').toBeGreaterThan(-1);
-    expect(
-      localIdx,
-      'COVENANT VIOLATION: primary-tier local must appear before platinum-tier non-local'
-    ).toBeLessThan(nonLocalIdx);
+    // Every sponsor is eligible for the surface — none filtered by a named slot.
+    expect(ids).toContain('u-title-nl');
+    expect(ids).toContain('u-primary-loc');
+    expect(ids).toContain('u-bronze-nl');
   });
 
-  test('OSE-330 | within local group, tier breaks ties (platinum-local > primary-local)', async () => {
-    const eventId = `ose330-evt-cov-2`;
+  test('#25 | local floor: a local is never zeroed, even against many premium non-locals', async () => {
+    const eventId = `ose661-evt-floor`;
     await seedEvent(eventId);
-    await seedSponsor({
-      eventId,
-      id: 'ose330-primary-local-2',
-      name: 'Primary Local',
-      tier: 'primary',
-      is_local: 1,
-    });
-    await seedSponsor({
-      eventId,
-      id: 'ose330-platinum-local-2',
-      name: 'Platinum Local',
-      tier: 'platinum',
-      is_local: 1,
-    });
+    await seedSponsor({ eventId, id: 'f-loc', name: 'Local', tier: 'primary', is_local: 1 });
+    await seedSponsor({ eventId, id: 'f-p1', name: 'Prem1', tier: 'title', is_local: 0 });
+    await seedSponsor({ eventId, id: 'f-p2', name: 'Prem2', tier: 'platinum', is_local: 0 });
+    await seedSponsor({ eventId, id: 'f-p3', name: 'Prem3', tier: 'title', is_local: 0 });
 
     const ids = await getResolvedSponsorIds(eventId);
-    const platinumIdx = ids.indexOf('ose330-platinum-local-2');
-    const primaryIdx = ids.indexOf('ose330-primary-local-2');
-    expect(
-      platinumIdx,
-      'within the local group, platinum tier must beat primary tier'
-    ).toBeLessThan(primaryIdx);
+    // The local guarantee is a FLOOR (never zeroed) — the local is always in the
+    // rotation regardless of how many premium non-locals want in.
+    expect(ids, 'local sponsor must never be dropped from the rotation').toContain('f-loc');
   });
 
-  test('OSE-330 | within non-local group, tier breaks ties (platinum-nonlocal > primary-nonlocal)', async () => {
-    const eventId = `ose330-evt-cov-3`;
+  test('#25 | deterministic covenant order (share-based, stable across calls)', async () => {
+    const eventId = `ose661-evt-determ`;
     await seedEvent(eventId);
-    await seedSponsor({
-      eventId,
-      id: 'ose330-primary-nonlocal-3',
-      name: 'Primary NonLocal',
-      tier: 'primary',
-      is_local: 0,
-    });
-    await seedSponsor({
-      eventId,
-      id: 'ose330-platinum-nonlocal-3',
-      name: 'Platinum NonLocal',
-      tier: 'platinum',
-      is_local: 0,
-    });
+    await seedSponsor({ eventId, id: 'd-a', name: 'A', tier: 'gold', is_local: 0 });
+    await seedSponsor({ eventId, id: 'd-b', name: 'B', tier: 'bronze', is_local: 1 });
+    await seedSponsor({ eventId, id: 'd-c', name: 'C', tier: 'title', is_local: 0 });
 
-    const ids = await getResolvedSponsorIds(eventId);
-    const platinumIdx = ids.indexOf('ose330-platinum-nonlocal-3');
-    const primaryIdx = ids.indexOf('ose330-primary-nonlocal-3');
-    expect(platinumIdx).toBeLessThan(primaryIdx);
+    const first = await getResolvedSponsorIds(eventId);
+    const second = await getResolvedSponsorIds(eventId);
+    expect(first.length).toBe(3);
+    expect(second).toEqual(first);
   });
 
-  test('OSE-330 | mixed 2 locals + 2 non-locals (full 4-sponsor sort order)', async () => {
-    const eventId = `ose330-evt-cov-4`;
-    await seedEvent(eventId);
-    await seedSponsor({
-      eventId,
-      id: 'ose330-mix-platinum-nonlocal',
-      name: 'Platinum NonLocal',
-      tier: 'platinum',
-      is_local: 0,
-    });
-    await seedSponsor({
-      eventId,
-      id: 'ose330-mix-gold-local',
-      name: 'Gold Local',
-      tier: 'gold',
-      is_local: 1,
-    });
-    await seedSponsor({
-      eventId,
-      id: 'ose330-mix-bronze-nonlocal',
-      name: 'Bronze NonLocal',
-      tier: 'bronze',
-      is_local: 0,
-    });
-    await seedSponsor({
-      eventId,
-      id: 'ose330-mix-title-local',
-      name: 'Title Local',
-      tier: 'title',
-      is_local: 1,
-    });
-
-    const ids = await getResolvedSponsorIds(eventId);
-    const expectedOrder = [
-      'ose330-mix-title-local', // local + title (highest tier in local group)
-      'ose330-mix-gold-local', // local + gold
-      'ose330-mix-platinum-nonlocal', // non-local + platinum (highest tier in non-local group)
-      'ose330-mix-bronze-nonlocal', // non-local + bronze
-    ];
-    for (const id of expectedOrder) {
-      expect(ids).toContain(id);
-    }
-    // Assert the relative ordering matches expectedOrder
-    const positions = expectedOrder.map((id) => ids.indexOf(id));
-    for (let i = 1; i < positions.length; i++) {
-      expect(
-        positions[i - 1],
-        `expected ${expectedOrder[i - 1]} (pos ${positions[i - 1]}) to come before ${expectedOrder[i]} (pos ${positions[i]})`
-      ).toBeLessThan(positions[i]);
-    }
-  });
-
-  test('OSE-330 | all-local event (no non-locals) — sort is pure tier order within locals', async () => {
-    const eventId = `ose330-evt-cov-5`;
-    await seedEvent(eventId);
-    await seedSponsor({
-      eventId,
-      id: 'ose330-all-local-bronze',
-      name: 'Bronze Local',
-      tier: 'bronze',
-      is_local: 1,
-    });
-    await seedSponsor({
-      eventId,
-      id: 'ose330-all-local-gold',
-      name: 'Gold Local',
-      tier: 'gold',
-      is_local: 1,
-    });
-
-    const ids = await getResolvedSponsorIds(eventId);
-    const goldIdx = ids.indexOf('ose330-all-local-gold');
-    const bronzeIdx = ids.indexOf('ose330-all-local-bronze');
-    expect(goldIdx).toBeLessThan(bronzeIdx);
-  });
-
-  test('OSE-330 | all-non-local event (backward compat) — sort behavior unchanged', async () => {
-    // Critical backward-compat check: existing events with no locals must
-    // sort exactly as they did pre-OSE-330. The covenant only KICKS IN
-    // when at least one sponsor is is_local=1. Otherwise: pure tier sort.
-    const eventId = `ose330-evt-cov-6`;
-    await seedEvent(eventId);
-    await seedSponsor({
-      eventId,
-      id: 'ose330-all-nonlocal-silver',
-      name: 'Silver NonLocal',
-      tier: 'silver',
-      is_local: 0,
-    });
-    await seedSponsor({
-      eventId,
-      id: 'ose330-all-nonlocal-platinum',
-      name: 'Platinum NonLocal',
-      tier: 'platinum',
-      is_local: 0,
-    });
-
-    const ids = await getResolvedSponsorIds(eventId);
-    const platinumIdx = ids.indexOf('ose330-all-nonlocal-platinum');
-    const silverIdx = ids.indexOf('ose330-all-nonlocal-silver');
-    expect(
-      platinumIdx,
-      'backward compat: non-local sort is unchanged when no locals exist'
-    ).toBeLessThan(silverIdx);
-  });
-
-  test('OSE-330 | schema rejects NULL is_local — belt-and-suspenders for the covenant', async () => {
+  test('#25 | schema rejects NULL is_local — belt-and-suspenders for the covenant', async () => {
     // Migration 0036 declares `is_local INTEGER NOT NULL DEFAULT 0`, which
     // means SQLite physically refuses to land a NULL is_local row. This is
     // the schema-level guard that complements the sort-level guard in
