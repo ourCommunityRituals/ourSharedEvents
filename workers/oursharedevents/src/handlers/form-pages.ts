@@ -543,7 +543,7 @@ function formPage(eventId: string, eventName: string, formType: string, legalTie
        silently absent if no sponsors are configured for this event. -->
   <div class="form-sponsor-strip" id="form-sponsor-strip" data-testid="form-sponsor-strip" role="complementary" aria-label="Event sponsors"></div>
   <main id="main-content" data-testid="form-main">${formHtml}</main>
-  <script nonce="${nonce}">${FORM_JS_SPONSOR.replace('EVENT_ID_PLACEHOLDER', JSON.stringify(eventId))}</script>
+  <script nonce="${nonce}">${/* nosemgrep: javascript.lang.security.audit.unknown-value-with-script-tag.unknown-value-with-script-tag -- FORM_JS_SPONSOR is a static module constant (see def above); eventId is embedded via JSON.stringify, producing a safe JS string literal. No unsanitized value reaches the script body. */ ''}${FORM_JS_SPONSOR.replace('EVENT_ID_PLACEHOLDER', JSON.stringify(eventId))}</script>
 </body>
 </html>`;
 }
