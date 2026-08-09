@@ -22,6 +22,8 @@
  * cross the local/non-local boundary.
  */
 
+import { allocateShares, sovTierOf } from './sponsor-allocation';
+
 // ─── Types ──────────────────────────────────────────────────────────────────────
 
 export interface SponsorRow {
@@ -70,45 +72,17 @@ export interface SponsorBundle {
   };
 }
 
-// ─── Tier Priority ──────────────────────────────────────────────────────────────
-
-const TIER_PRIORITY: Record<string, number> = {
-  title: 1,
-  platinum: 2,
-  gold: 3,
-  silver: 4,
-  bronze: 5,
-  primary: 6,
-};
-
-/**
- * Two-level sort implementing the Local Sponsor Covenant (OSE-330 / brain
- * Invariant #5). Locals first (regardless of tier); then non-locals
- * (regardless of tier). Tier breaks ties WITHIN each group. No
- * interleaving across the local/non-local boundary.
- *
- * Invariant: for any (a, b) where a.is_local === 1 and b.is_local === 0,
- * tierSort(a, b) MUST be negative (a sorts before b) regardless of tier
- * values. Tested in tests/e2e/0-architecture/tier-equity.invariant.spec.ts.
- *
- * Brand promise (per brain canonical sponsor-allocation.yaml + ADR-013):
- * "A sponsor matching platform that pushes the highest bidder to the top
- * is a standard ad network. OSE's covenant — that the local stays in — is
- * the differentiating brand promise that creates the local-economy
- * flywheel."
- */
-function tierSort(a: SponsorRow, b: SponsorRow): number {
-  // Level 1: locals before non-locals (the covenant).
-  // Coerce to boolean to handle null/undefined defensively (existing rows
-  // pre-migration 0036 might lack is_local — treat them as non-local).
-  const aLocal = a.is_local === 1;
-  const bLocal = b.is_local === 1;
-  if (aLocal !== bLocal) {
-    return aLocal ? -1 : 1;
-  }
-  // Level 2: within the same locality group, tier priority breaks ties.
-  return (TIER_PRIORITY[a.tier] ?? 99) - (TIER_PRIORITY[b.tier] ?? 99);
-}
+// ─── Covenant ordering (OSE-661 / Invariant #25) ─────────────────────────────
+//
+// The OSE-330 locals-first `tierSort` priority sort is RETIRED. Under the share
+// covenant (#25, ratified 2026-08-08), the local guarantee is a FLOOR in
+// rotation frequency (allocateShares), NOT a rank: a premium non-local may be
+// seen MORE often than a local, so long as the is_local class holds its floor
+// (≥ local_floor_pct) and no tier exceeds its cap. Ordering is therefore by
+// covenant SHARE (buildShareRotation), and size/slot/position are uniform —
+// only frequency is purchasable. The "local stays in" brand promise survives as
+// the floor; its mechanism changed from priority-sort to share-floor. See the
+// project memory (project-sponsor-covenant-local-floor) + OSE-661.
 
 // ─── Geo Helpers ────────────────────────────────────────────────────────────────
 
@@ -225,7 +199,7 @@ export async function resolveSponsorsForEvent(
     }
   }
 
-  // Deduplicate by sponsor ID, then sort by tier
+  // Deduplicate by sponsor ID.
   const seen = new Set<string>();
   const all: SponsorRow[] = [];
   for (const s of [...directSponsors, ...templateGeoSponsors]) {
@@ -235,65 +209,91 @@ export async function resolveSponsorsForEvent(
     }
   }
 
-  return all.sort(tierSort);
+  // OSE-661 (#25): order by covenant rotation SHARE, not locals-first priority.
+  return buildShareRotation(all).map((r) => r.sponsor);
 }
 
 // ─── Surface Filtering ──────────────────────────────────────────────────────────
 
-function parsePlacements(raw: string): Placements {
-  try {
-    const parsed = JSON.parse(raw);
-    if (typeof parsed === 'object' && parsed !== null) return parsed as Placements;
-  } catch {
-    // fall through
-  }
-  return {};
+/**
+ * Filter sponsors for a rendering surface.
+ *
+ * OSE-661 (#25): placement is UNIFORM — every active sponsor is eligible for
+ * every surface. Surface distinctions are RENDERING-only (e.g. poster = no
+ * clickable links, print-safe), never a membership / size / slot / position
+ * purchase. The old placement_formats slot filter (posterTop/tvTop/tvSide/
+ * mobileBanner) is retired — it was the #25 violation (buying a named slot).
+ * `surface` is retained in the signature for call-site compatibility.
+ */
+export function filterSponsorsForSurface(sponsors: SponsorRow[], _surface: Surface): SponsorRow[] {
+  return sponsors;
+}
+
+// ─── OSE-661: Covenant share rotation (Invariant #25) ─────────────────────────
+//
+// The ADDITIVE replacement for the spend-visible tier-priority sort + named-slot
+// filtering. Under the covenant, every ACTIVE sponsor is eligible for every
+// surface UNIFORMLY — no size, slot, or position differentiation. Only rotation
+// FREQUENCY varies, computed by allocateShares() under the capped + locally-
+// floored share model. Surfaces migrate to this seam; the old tierSort/
+// filterSponsorsForSurface path is retired once every surface has flipped.
+//
+// This is the single covenant seam consumed by BOTH the backend renderer and
+// (via sovTierOf) the admin authoring form — one source of truth for the wall.
+
+export interface RotationEntry {
+  sponsor: SponsorRow;
+  /** Percent of rotation impressions — the ONLY purchasable dimension (WALL 3). */
+  sharePct: number;
 }
 
 /**
- * Filter sponsors for a specific rendering surface.
+ * Build the covenant frequency rotation for a set of resolved sponsors. Pure.
  *
- * - poster: posterTop only, NO clickable links (print-safe)
- * - display: tvTop or tvSide
- * - public: mobileBanner
- * - sharedReport: all sponsors (aggregate metrics only)
+ * - Only is_active sponsors participate.
+ * - Every participant is eligible for the surface (uniform placement); the
+ *   surface is NOT chosen per-sponsor (that was the #25 violation).
+ * - sharePct comes from allocateShares() → cap (premium/mid) + local floor hold.
+ * - Sorted by share desc for a deterministic rotation order; order carries NO
+ *   size/slot meaning (all entries render identically — frequency is the only
+ *   differentiator).
  */
-export function filterSponsorsForSurface(sponsors: SponsorRow[], surface: Surface): SponsorRow[] {
-  if (surface === 'sharedReport') return sponsors;
-
-  return sponsors.filter((s) => {
-    const p = parsePlacements(s.placement_formats);
-    switch (surface) {
-      case 'poster':
-        return p.posterTop === true;
-      case 'display':
-        return p.tvTop === true || p.tvSide === true;
-      case 'public':
-        return p.mobileBanner === true;
-      default:
-        return false;
-    }
-  });
+export function buildShareRotation(sponsors: SponsorRow[]): RotationEntry[] {
+  const active = sponsors.filter((s) => s.is_active === 1);
+  if (active.length === 0) return [];
+  const alloc = allocateShares(
+    active.map((s) => ({ id: s.id, tier: sovTierOf(s.tier), is_local: s.is_local === 1 }))
+  );
+  const byId = new Map(alloc.map((a) => [a.id, a.sharePct]));
+  return active
+    .map((s) => ({ sponsor: s, sharePct: byId.get(s.id) ?? 0 }))
+    .sort((a, b) => b.sharePct - a.sharePct);
 }
 
 /**
  * Build the full sponsor bundle for a surface.
  *
- * Q3 rule: more sponsors = more rotation slots, never fewer.
- * Base rotation is 5s per sponsor; minimum 3s, maximum 15s.
+ * OSE-661 (#25): every active sponsor is eligible for every surface (uniform
+ * placement); each surface bucket is the SAME covenant-share-ordered rotation.
+ * Only rotation FREQUENCY (share) differs between sponsors — order carries no
+ * size/slot/position meaning. Q3 rule: more sponsors = more rotation slots.
  */
 export function buildSponsorBundle(sponsors: SponsorRow[]): SponsorBundle {
-  const posterTop = filterSponsorsForSurface(sponsors, 'poster');
-  const tvTop = sponsors.filter((s) => parsePlacements(s.placement_formats).tvTop === true);
-  const tvSide = sponsors.filter((s) => parsePlacements(s.placement_formats).tvSide === true);
-  const mobileBanner = filterSponsorsForSurface(sponsors, 'public');
+  const rotation = buildShareRotation(sponsors).map((r) => r.sponsor);
 
-  const maxSlots = Math.max(posterTop.length, tvTop.length, tvSide.length, mobileBanner.length, 1);
+  const maxSlots = Math.max(rotation.length, 1);
   const rotationMs = Math.min(15000, Math.max(3000, 5000 * Math.ceil(maxSlots / 3)));
 
   return {
-    sponsors,
-    surface_sponsors: { posterTop, tvTop, tvSide, mobileBanner },
+    sponsors: rotation,
+    // Uniform: identical eligibility on every surface. Frequency is the only
+    // differentiator (allocateShares), enforced by buildShareRotation.
+    surface_sponsors: {
+      posterTop: rotation,
+      tvTop: rotation,
+      tvSide: rotation,
+      mobileBanner: rotation,
+    },
     rotation_config: {
       sponsorSlots: maxSlots,
       rotationMs,

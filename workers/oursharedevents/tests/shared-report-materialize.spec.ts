@@ -14,9 +14,10 @@
  *   - Anonymity: no raw anon_id ever persisted; hash determinism preserved
  */
 
-import { describe, test, expect, beforeAll, beforeEach } from 'vitest';
+import { describe, test, expect, vi, beforeAll, beforeEach } from 'vitest';
 import { env } from 'cloudflare:test';
 import {
+  aggregateScanBuckets,
   materializeAnonIdReturns,
   refreshCorridorBaselines,
   detectEventSeriesClusters,
@@ -72,7 +73,12 @@ async function clearPipelineTables(): Promise<void> {
   // assertions that exercise FK enforcement.
   const db = tenv().DB;
   await db.prepare(`DELETE FROM anon_id_returns`).run();
+  // corridor_density_snapshots references corridors via FK — must be cleared
+  // before corridors (migration 0044 appends snapshot rows alongside baselines).
+  await db.prepare(`DELETE FROM corridor_density_snapshots`).run();
   await db.prepare(`DELETE FROM corridor_density_baseline`).run();
+  // scan_aggregates references events(id) via FK — must clear before events.
+  await db.prepare(`DELETE FROM scan_aggregates WHERE event_id LIKE 'test-evt-mat-%'`).run();
   // Break the events → event_series back-reference before deleting event_series
   await db.prepare(`UPDATE events SET series_id = NULL`).run();
   await db.prepare(`DELETE FROM event_series`).run();
@@ -326,8 +332,10 @@ describe('OSE-272 Phase 2: refreshCorridorBaselines', () => {
       )
       .run();
 
-    // Seed an event in that corridor with a Thursday 7 PM start (something deterministic)
-    // We use a known past date: 2026-05-07T19:00:00Z is a Thursday
+    // Use a relative date (30 days ago) so the event stays within the 90-day
+    // rolling window regardless of when CI runs. The hardcoded 2026-05-07
+    // date drifted outside the window as wall-clock time advanced past Aug 2026.
+    const thirtyDaysAgoIso = new Date(Date.now() - 30 * 86400 * 1000).toISOString();
     await db
       .prepare(
         `INSERT INTO events
@@ -342,7 +350,7 @@ describe('OSE-272 Phase 2: refreshCorridorBaselines', () => {
         'active',
         'Test Bar A',
         'test-corr-mat-A',
-        '2026-05-07T19:00:00Z'
+        thirtyDaysAgoIso
       )
       .run();
 
@@ -480,6 +488,334 @@ describe('OSE-272 Phase 3: detectEventSeriesClusters', () => {
   });
 });
 
+// ─── OSE-631: refreshCorridorBaselines — h3_res7 COALESCE path ──────────────
+//
+// BE-24b (migration 0046) introduced COALESCE(h3_res7, corridor_id) so events
+// with h3_res7 directly use the H3 cell string as the corridor key — no FK
+// to the corridors table required. The existing Phase 2 tests only seed
+// events with corridor_id (the legacy path). These three tests cover the
+// new path and verify COALESCE priority.
+
+describe('OSE-631: refreshCorridorBaselines — h3_res7 COALESCE path', () => {
+  beforeEach(async () => {
+    await resetForTest();
+  });
+
+  test('h3_res7-only event (corridor_id=NULL) uses h3_res7 as the corridor key', async () => {
+    const db = tenv().DB;
+    await seedEvent({ id: 'test-evt-mat-h3-only', start_offset_hours: -24 * 10 });
+    await db
+      .prepare(`UPDATE events SET h3_res7 = ? WHERE id = ?`)
+      .bind('872664544ffffff', 'test-evt-mat-h3-only')
+      .run();
+    const nowIso = new Date().toISOString();
+    await db
+      .prepare(
+        `INSERT INTO anon_id_returns
+           (anon_id_hash, venue_id, first_seen_at, last_seen_at, visit_count, computed_at)
+         VALUES (?, ?, ?, ?, 1, ?)`
+      )
+      .bind('a'.repeat(32), 'test-evt-mat-h3-only', nowIso, nowIso, nowIso)
+      .run();
+
+    const r = await refreshCorridorBaselines({ DB: db });
+    expect(r.errors).toBe(0);
+    expect(r.rowsUpserted).toBeGreaterThanOrEqual(1);
+
+    // Baseline row must be stored under the h3 cell string, not a corridors FK
+    const row = await db
+      .prepare(`SELECT corridor_id FROM corridor_density_baseline WHERE corridor_id = ?`)
+      .bind('872664544ffffff')
+      .first<{ corridor_id: string }>();
+    expect(row).not.toBeNull();
+    expect(row!.corridor_id).toBe('872664544ffffff');
+  });
+
+  test('h3_res7 wins over corridor_id when both are set (COALESCE left-priority)', async () => {
+    const db = tenv().DB;
+    await db
+      .prepare(
+        `INSERT OR IGNORE INTO node_hierarchy (id, brand_id, name, level, level_label)
+         VALUES (?, ?, ?, ?, ?)`
+      )
+      .bind('test-node-mat-coalesce', 'test-brand', 'Coalesce Node', 4, 'Metro')
+      .run();
+    await db
+      .prepare(
+        `INSERT OR IGNORE INTO corridors (id, brand_id, name, origin_node_id, destination_node_id)
+         VALUES (?, ?, ?, ?, ?)`
+      )
+      .bind(
+        'test-corr-mat-coalesce',
+        'test-brand',
+        'Coalesce Corridor',
+        'test-node-mat-coalesce',
+        'test-node-mat-coalesce'
+      )
+      .run();
+    await seedEvent({
+      id: 'test-evt-mat-coalesce',
+      corridor_id: 'test-corr-mat-coalesce',
+      start_offset_hours: -24 * 10,
+    });
+    // Both h3_res7 and corridor_id are set — COALESCE must pick h3_res7
+    await db
+      .prepare(`UPDATE events SET h3_res7 = ? WHERE id = ?`)
+      .bind('872664544ffffff', 'test-evt-mat-coalesce')
+      .run();
+    const nowIso = new Date().toISOString();
+    await db
+      .prepare(
+        `INSERT INTO anon_id_returns
+           (anon_id_hash, venue_id, first_seen_at, last_seen_at, visit_count, computed_at)
+         VALUES (?, ?, ?, ?, 1, ?)`
+      )
+      .bind('b'.repeat(32), 'test-evt-mat-coalesce', nowIso, nowIso, nowIso)
+      .run();
+
+    const r = await refreshCorridorBaselines({ DB: db });
+    expect(r.errors).toBe(0);
+
+    // Row stored under h3_res7 key
+    const h3Row = await db
+      .prepare(`SELECT corridor_id FROM corridor_density_baseline WHERE corridor_id = ?`)
+      .bind('872664544ffffff')
+      .first<{ corridor_id: string }>();
+    expect(h3Row).not.toBeNull();
+
+    // No row stored under the legacy corridor_id key — COALESCE chose h3
+    const legacyRow = await db
+      .prepare(`SELECT corridor_id FROM corridor_density_baseline WHERE corridor_id = ?`)
+      .bind('test-corr-mat-coalesce')
+      .first();
+    expect(legacyRow).toBeNull();
+  });
+
+  test('legacy corridor_id-only event still produces a baseline row (backward compat)', async () => {
+    const db = tenv().DB;
+    await db
+      .prepare(
+        `INSERT OR IGNORE INTO node_hierarchy (id, brand_id, name, level, level_label)
+         VALUES (?, ?, ?, ?, ?)`
+      )
+      .bind('test-node-mat-legacy', 'test-brand', 'Legacy Node', 4, 'Metro')
+      .run();
+    await db
+      .prepare(
+        `INSERT OR IGNORE INTO corridors (id, brand_id, name, origin_node_id, destination_node_id)
+         VALUES (?, ?, ?, ?, ?)`
+      )
+      .bind(
+        'test-corr-mat-legacy',
+        'test-brand',
+        'Legacy Corridor',
+        'test-node-mat-legacy',
+        'test-node-mat-legacy'
+      )
+      .run();
+    await seedEvent({
+      id: 'test-evt-mat-legacy-compat',
+      corridor_id: 'test-corr-mat-legacy',
+      start_offset_hours: -24 * 10,
+    });
+    const nowIso = new Date().toISOString();
+    await db
+      .prepare(
+        `INSERT INTO anon_id_returns
+           (anon_id_hash, venue_id, first_seen_at, last_seen_at, visit_count, computed_at)
+         VALUES (?, ?, ?, ?, 1, ?)`
+      )
+      .bind('c'.repeat(32), 'test-evt-mat-legacy-compat', nowIso, nowIso, nowIso)
+      .run();
+
+    const r = await refreshCorridorBaselines({ DB: db });
+    expect(r.errors).toBe(0);
+    expect(r.rowsUpserted).toBeGreaterThanOrEqual(1);
+
+    const row = await db
+      .prepare(`SELECT corridor_id FROM corridor_density_baseline WHERE corridor_id = ?`)
+      .bind('test-corr-mat-legacy')
+      .first<{ corridor_id: string }>();
+    expect(row).not.toBeNull();
+    expect(row!.corridor_id).toBe('test-corr-mat-legacy');
+  });
+});
+
+// ─── OSE-634: SRE-OBS-01 — CORRIDOR_BASELINE_REFRESH_COMPLETE log ────────────
+
+describe('OSE-634: refreshCorridorBaselines — CORRIDOR_BASELINE_REFRESH_COMPLETE structured log', () => {
+  beforeEach(async () => {
+    await resetForTest();
+  });
+
+  test('OSE-634 | SRE-OBS-01 | emits CORRIDOR_BASELINE_REFRESH_COMPLETE log on every run', async () => {
+    const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      await refreshCorridorBaselines({ DB: tenv().DB });
+      const calls = consoleSpy.mock.calls.map((c) => {
+        try {
+          return JSON.parse(String(c[0]));
+        } catch {
+          return null;
+        }
+      });
+      const completionLog = calls.find((c) => c?.type === 'CORRIDOR_BASELINE_REFRESH_COMPLETE');
+      expect(completionLog, 'CORRIDOR_BASELINE_REFRESH_COMPLETE log was not emitted').toBeDefined();
+    } finally {
+      consoleSpy.mockRestore();
+    }
+  });
+
+  test('OSE-634 | SRE-OBS-01 | completion log contains required SRE fields', async () => {
+    const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      await refreshCorridorBaselines({ DB: tenv().DB });
+      const calls = consoleSpy.mock.calls.map((c) => {
+        try {
+          return JSON.parse(String(c[0]));
+        } catch {
+          return null;
+        }
+      });
+      const log = calls.find((c) => c?.type === 'CORRIDOR_BASELINE_REFRESH_COMPLETE');
+      expect(typeof log.rows_upserted).toBe('number');
+      expect(typeof log.rows_skipped).toBe('number');
+      expect(typeof log.errors).toBe('number');
+      expect(typeof log.duration_ms).toBe('number');
+      expect(log.duration_ms).toBeGreaterThanOrEqual(0);
+    } finally {
+      consoleSpy.mockRestore();
+    }
+  });
+
+  test('OSE-634 | SRE-OBS-01 | completion log emitted even when no corridors exist (empty DB)', async () => {
+    // Ensure no corridor/event data interferes
+    const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      const r = await refreshCorridorBaselines({ DB: tenv().DB });
+      expect(r.errors).toBe(0);
+      const calls = consoleSpy.mock.calls.map((c) => {
+        try {
+          return JSON.parse(String(c[0]));
+        } catch {
+          return null;
+        }
+      });
+      const log = calls.find((c) => c?.type === 'CORRIDOR_BASELINE_REFRESH_COMPLETE');
+      expect(log).toBeDefined();
+      expect(log.rows_upserted).toBe(0);
+    } finally {
+      consoleSpy.mockRestore();
+    }
+  });
+});
+
+// ─── OSE-632: aggregateScanBuckets ───────────────────────────────────────────
+
+describe('OSE-632: aggregateScanBuckets — scan bucket aggregation', () => {
+  beforeEach(async () => {
+    await resetForTest();
+  });
+
+  test('OSE-632 | BE-SCAN-2 | scans for an event | produces a scan_aggregates row', async () => {
+    const db = tenv().DB;
+    await seedEvent({ id: 'test-evt-mat-agg', start_offset_hours: -24 * 10 });
+    const posterId = await seedPosterDeployment('test-evt-mat-agg');
+    const bucket = new Date(Date.now() - 24 * 3600 * 1000).toISOString().slice(0, 13) + ':00';
+    await db.prepare(
+      `INSERT INTO scans (id, event_id, poster_deployment_id, scan_bucket, anonymous_id, created_at)
+       VALUES (?, ?, ?, ?, ?, datetime('now'))`
+    ).bind('scan-agg-1', 'test-evt-mat-agg', posterId, bucket, 'anon_aaa').run();
+    await db.prepare(
+      `INSERT INTO scans (id, event_id, poster_deployment_id, scan_bucket, anonymous_id, created_at)
+       VALUES (?, ?, ?, ?, ?, datetime('now'))`
+    ).bind('scan-agg-2', 'test-evt-mat-agg', posterId, bucket, 'anon_bbb').run();
+
+    const r = await aggregateScanBuckets({ DB: db });
+    expect(r.errors).toBe(0);
+    expect(r.rowsUpserted).toBeGreaterThanOrEqual(1);
+    expect(r.eventsProcessed).toBe(1);
+
+    const row = await db.prepare(
+      `SELECT total_scans, unique_agents FROM scan_aggregates WHERE event_id = ?`
+    ).bind('test-evt-mat-agg').first<{ total_scans: number; unique_agents: number }>();
+    expect(row).not.toBeNull();
+    expect(row!.total_scans).toBe(2);
+    expect(row!.unique_agents).toBe(2);
+  });
+
+  test('OSE-632 | BE-SCAN-2 | same anon scans twice in bucket | unique_agents counts 1', async () => {
+    const db = tenv().DB;
+    await seedEvent({ id: 'test-evt-mat-agg-dedup', start_offset_hours: -24 * 5 });
+    const posterId = await seedPosterDeployment('test-evt-mat-agg-dedup');
+    const bucket = new Date(Date.now() - 12 * 3600 * 1000).toISOString().slice(0, 13) + ':00';
+    await db.prepare(
+      `INSERT INTO scans (id, event_id, poster_deployment_id, scan_bucket, anonymous_id, created_at)
+       VALUES (?, ?, ?, ?, ?, datetime('now'))`
+    ).bind('scan-dedup-1', 'test-evt-mat-agg-dedup', posterId, bucket, 'anon_same').run();
+    await db.prepare(
+      `INSERT INTO scans (id, event_id, poster_deployment_id, scan_bucket, anonymous_id, created_at)
+       VALUES (?, ?, ?, ?, ?, datetime('now'))`
+    ).bind('scan-dedup-2', 'test-evt-mat-agg-dedup', posterId, bucket, 'anon_same').run();
+
+    await aggregateScanBuckets({ DB: db });
+
+    const row = await db.prepare(
+      `SELECT total_scans, unique_agents FROM scan_aggregates WHERE event_id = ?`
+    ).bind('test-evt-mat-agg-dedup').first<{ total_scans: number; unique_agents: number }>();
+    expect(row!.total_scans).toBe(2);
+    expect(row!.unique_agents).toBe(1);
+  });
+
+  test('OSE-632 | BE-SCAN-2 | running twice is idempotent | same row count, no duplicates', async () => {
+    const db = tenv().DB;
+    await seedEvent({ id: 'test-evt-mat-agg-idem', start_offset_hours: -24 * 7 });
+    const posterId = await seedPosterDeployment('test-evt-mat-agg-idem');
+    const bucket = new Date(Date.now() - 6 * 3600 * 1000).toISOString().slice(0, 13) + ':00';
+    await db.prepare(
+      `INSERT INTO scans (id, event_id, poster_deployment_id, scan_bucket, anonymous_id, created_at)
+       VALUES (?, ?, ?, ?, ?, datetime('now'))`
+    ).bind('scan-idem-1', 'test-evt-mat-agg-idem', posterId, bucket, 'anon_idem').run();
+
+    await aggregateScanBuckets({ DB: db });
+    await aggregateScanBuckets({ DB: db });
+    await aggregateScanBuckets({ DB: db });
+
+    const count = await db.prepare(
+      `SELECT COUNT(*) AS c FROM scan_aggregates WHERE event_id = ?`
+    ).bind('test-evt-mat-agg-idem').first<{ c: number }>();
+    expect(count!.c).toBe(1);
+  });
+
+  test('OSE-632 | BE-SCAN-2 | scan_bucket format | bucket_date and bucket_hour extracted correctly', async () => {
+    const db = tenv().DB;
+    await seedEvent({ id: 'test-evt-mat-agg-bucket', start_offset_hours: -24 * 3 });
+    const posterId = await seedPosterDeployment('test-evt-mat-agg-bucket');
+    // Specific bucket: 2026-07-15T14:00
+    const bucket = '2026-07-15T14:00';
+    await db.prepare(
+      `INSERT INTO scans (id, event_id, poster_deployment_id, scan_bucket, anonymous_id, created_at)
+       VALUES (?, ?, ?, ?, ?, datetime('now'))`
+    ).bind('scan-bucket-1', 'test-evt-mat-agg-bucket', posterId, bucket, 'anon_bucket').run();
+
+    await aggregateScanBuckets({ DB: db });
+
+    const row = await db.prepare(
+      `SELECT bucket_date, bucket_hour FROM scan_aggregates WHERE event_id = ?`
+    ).bind('test-evt-mat-agg-bucket').first<{ bucket_date: string; bucket_hour: number }>();
+    expect(row).not.toBeNull();
+    expect(row!.bucket_date).toBe('2026-07-15');
+    expect(row!.bucket_hour).toBe(14);
+  });
+
+  test('OSE-632 | BE-SCAN-2 | no scans | result is zero rows, no errors', async () => {
+    const r = await aggregateScanBuckets({ DB: tenv().DB });
+    expect(r.errors).toBe(0);
+    expect(r.rowsUpserted).toBe(0);
+    expect(r.eventsProcessed).toBe(0);
+  });
+});
+
 // ─── Orchestrator — runSharedReportMaterialization ──────────────────────────
 
 describe('OSE-272 Session 3: runSharedReportMaterialization (cron orchestrator)', () => {
@@ -487,13 +823,14 @@ describe('OSE-272 Session 3: runSharedReportMaterialization (cron orchestrator)'
     await resetForTest();
   });
 
-  test('runs all 4 phases and returns aggregated result shape', async () => {
+  test('runs all 5 phases and returns aggregated result shape', async () => {
     const r = await runSharedReportMaterialization({
       DB: tenv().DB,
       ANON_ID_HASH_PEPPER: TEST_PEPPER,
     });
-    expect(r.phases).toHaveLength(4);
+    expect(r.phases).toHaveLength(5);
     expect(r.phases.map((p) => p.phase)).toEqual([
+      'scan_aggregation',
       'h3_cell_backfill',
       'anon_id_returns',
       'corridor_density_baseline',
@@ -516,8 +853,8 @@ describe('OSE-272 Session 3: runSharedReportMaterialization (cron orchestrator)'
     await seedScan('test-evt-mat-orch', 'anon_orch');
     const r = await runSharedReportMaterialization({ DB: tenv().DB });
     // anon_id_returns noops gracefully (pepper missing); all other phases still run
-    expect(r.phases).toHaveLength(4);
+    expect(r.phases).toHaveLength(5);
     expect(r.totalErrors).toBe(0);
-    expect(r.phases[1].rowsUpserted).toBe(0); // anon_id_returns is phases[1]; skipped without pepper
+    expect(r.phases[2].rowsUpserted).toBe(0); // anon_id_returns is phases[2]; skipped without pepper
   });
 });

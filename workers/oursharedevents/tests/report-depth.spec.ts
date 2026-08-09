@@ -92,4 +92,107 @@ describe('OSE-459: report-depth — filterReportByDepth (additive ladder + equit
     // Premium is the top tier — no upgrade hint
     expect(upgrade).toBeNull();
   });
+
+  // OSE-595 — TL-056 born-red: sponsor token without sponsor_id must not leak
+  // competitor impression data. Pre-fix, sponsorScope=null fell through to the
+  // else branch and returned all rows to any bearer of a scopeless sponsor token.
+
+  // @born-red TL-056 | method: deliberate-fixture-break | date: 2026-08-03
+  it('sponsor token without sponsor_id receives empty sponsor_impressions (no cross-competitor leak)', () => {
+    // Resolve as sponsor role with no sponsor_id — simulates a legacy or
+    // carelessly-minted sponsor token that omitted the sponsor_id claim.
+    const resolved = resolveDepth({ role: 'sponsor', depth: 'local' });
+    expect(resolved.sponsorScope).toBeNull();
+    expect(resolved.sponsorScopeRequired).toBe(true);
+
+    const { report } = filterReportByDepth({ ...SAMPLE_REPORT }, resolved);
+    // Must be empty — not [sp_A, sp_B]
+    expect(report.sponsor_impressions).toEqual([]);
+  });
+
+  // @born-red TL-056 | method: deliberate-fixture-break | date: 2026-08-03
+  it('admin token with null sponsorScope still receives all sponsor rows', () => {
+    // Admin sees cross-sponsor intelligence — null scope here means "no filter"
+    const resolved = resolveDepth({ role: 'admin' });
+    expect(resolved.sponsorScope).toBeNull();
+    expect(resolved.sponsorScopeRequired).toBe(false);
+
+    const { report } = filterReportByDepth({ ...SAMPLE_REPORT }, resolved);
+    expect(Array.isArray(report.sponsor_impressions)).toBe(true);
+    expect((report.sponsor_impressions as unknown[]).length).toBe(2);
+  });
+
+  // @born-red TL-056 | method: deliberate-fixture-break | date: 2026-08-03
+  it('scoped sponsor token receives only own rows, not competitor rows', () => {
+    const resolved = resolveDepth({ role: 'sponsor', depth: 'local', sponsor_id: 'sp_A' });
+    expect(resolved.sponsorScope).toBe('sp_A');
+
+    const { report } = filterReportByDepth({ ...SAMPLE_REPORT }, resolved);
+    const rows = report.sponsor_impressions as Array<{ sponsor_id: string }>;
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.sponsor_id).toBe('sp_A');
+  });
+});
+
+// TL-010 | Depth escalation guard
+//
+// Threat: "Depth escalation: local-depth signed-link token used to request
+// premium-depth SharedReport fields"
+// Target: Invariant #21 — shared_report_schema_stability
+// Mitigation: resolveDepth() caps sponsor depth at SPONSOR_MAX (mid);
+//             filterReportByDepth() strips fields not in the resolved tier.
+
+// @born-red TL-010 | method: design-time-negative-assertion | date: 2026-08-06
+describe('TL-010 | Depth escalation guard — resolveDepth caps + filterReportByDepth strips', () => {
+  it('sponsor cannot self-grant premium depth — premium claim is capped to local (SPONSOR_MAX = mid)', () => {
+    const resolved = resolveDepth({ role: 'sponsor', depth: 'premium', sponsor_id: 'sp_A' });
+    expect(resolved.depth).toBe('local');
+    expect(resolved.sponsorScopeRequired).toBe(true);
+  });
+
+  it('sponsor mid claim is accepted (within SPONSOR_MAX)', () => {
+    const resolved = resolveDepth({ role: 'sponsor', depth: 'mid', sponsor_id: 'sp_A' });
+    expect(resolved.depth).toBe('mid');
+  });
+
+  it('local depth strips mid-tier fields (poster_attribution, return_rate, corridor_density)', () => {
+    const resolved = resolveDepth({ role: 'sponsor', depth: 'local', sponsor_id: 'sp_A' });
+    const { report } = filterReportByDepth({ ...SAMPLE_REPORT }, resolved);
+    expect(report.poster_attribution).toBeUndefined();
+    expect(report.return_rate).toBeUndefined();
+    expect(report.corridor_density).toBeUndefined();
+  });
+
+  it('local depth strips premium-tier field (headcount_trend)', () => {
+    const resolved = resolveDepth({ role: 'sponsor', depth: 'local', sponsor_id: 'sp_A' });
+    const { report } = filterReportByDepth({ ...SAMPLE_REPORT }, resolved);
+    expect(report.headcount_trend).toBeUndefined();
+  });
+
+  it('local depth still allows base fields (event_id, event_title, unique_gatherings, _meta)', () => {
+    const resolved = resolveDepth({ role: 'sponsor', depth: 'local', sponsor_id: 'sp_A' });
+    const { report } = filterReportByDepth({ ...SAMPLE_REPORT }, resolved);
+    expect(report.event_id).toBe('evt_test');
+    expect(report.event_title).toBe('Test Event');
+    expect(report.unique_gatherings).toBe(99);
+    expect(report._meta).toBeDefined();
+  });
+
+  it('mid depth exposes mid-tier fields but strips premium-only field (headcount_trend)', () => {
+    const resolved = resolveDepth({ role: 'sponsor', depth: 'mid', sponsor_id: 'sp_A' });
+    const { report } = filterReportByDepth({ ...SAMPLE_REPORT }, resolved);
+    expect(report.poster_attribution).toBeDefined();
+    expect(report.return_rate).toBe(0.42);
+    expect(report.corridor_density).toBeDefined();
+    expect(report.headcount_trend).toBeUndefined();
+  });
+
+  it('upgrade hint names the locked sections when depth is not premium', () => {
+    const resolved = resolveDepth({ role: 'sponsor', depth: 'local', sponsor_id: 'sp_A' });
+    const { upgrade } = filterReportByDepth({ ...SAMPLE_REPORT }, resolved);
+    expect(upgrade).not.toBeNull();
+    expect(upgrade!.next_depth).toBe('mid');
+    // mid has fields not in local — upgrade hint lists them as locked
+    expect(upgrade!.locked_sections.length).toBeGreaterThan(0);
+  });
 });

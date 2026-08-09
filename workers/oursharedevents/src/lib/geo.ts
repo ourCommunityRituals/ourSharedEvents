@@ -1,5 +1,5 @@
 /**
- * Google Maps Geocoding helper — OSE-238 / BE-24.
+ * Google Maps Geocoding helper — OSE-238 / BE-24 / BE-24b.
  *
  * Companion to `lib/maps.ts` (Static Maps, OSE-217). Same auth pattern (server-
  * side API key, never exposed to the browser); same graceful-degradation
@@ -32,6 +32,7 @@
  * spec uses SELF.fetch + the same fetcher seam through env binding.
  */
 
+import { latLngToCell } from 'h3-js';
 import { isGoogleMapsConfigured, type MapsEnv } from './maps';
 
 export interface GeocodeResult {
@@ -211,32 +212,37 @@ export async function geocodeVenue(
 }
 
 /**
- * STUB (Option C, OSE-238). Returns null + emits a structured signal so
- * monitoring can find the call site once a real corridor geometry strategy
- * lands (BE-24b follow-on story).
+ * BE-24b: Resolve corridor identifier from lat/lng via H3 res7 cell.
  *
- * Callers (admin event-card form, future bulk geocode jobs) treat null as
- * "corridor unknown" — events.corridor_id is nullable (OSE-236) precisely
- * to allow this safe deferral.
+ * Treats the H3 resolution-7 cell string (~5km² / ~2mi² hexagon) as the
+ * canonical corridor identifier. This eliminates the corridors table
+ * indirection for density purposes — the cell string IS the corridor_id
+ * stored in events, corridor_density_baseline, and corridor_density_snapshots.
  *
- * When BE-24b lands, this function gets a real implementation and every
- * existing caller upgrades automatically. No caller changes required.
+ * Resolution choice: res7 (~5km²) maps to the NCR "corridor" concept — large
+ * enough to span a commercial strip, small enough to be commercially distinct
+ * from adjacent neighborhoods.
+ *
+ * Returns null only if the h3 cell computation fails (invalid coordinates).
  */
 export async function resolveCorridorId(
   _env: MapsEnv,
   lat: number,
   lng: number
 ): Promise<string | null> {
-  console.log(
-    JSON.stringify({
-      type: 'RESOLVE_CORRIDOR_UNAVAILABLE',
-      reason: 'OSE-238 Option C: corridor geometry resolution deferred to BE-24b',
-      lat,
-      lng,
-      timestamp: new Date().toISOString(),
-    })
-  );
-  return null;
+  try {
+    return latLngToCell(lat, lng, 7);
+  } catch {
+    console.log(
+      JSON.stringify({
+        type: 'RESOLVE_CORRIDOR_ERROR',
+        reason: 'h3_cell_computation_failed',
+        lat,
+        lng,
+      })
+    );
+    return null;
+  }
 }
 
 // ─── Internal types for the Google response envelope ─────────────────────────

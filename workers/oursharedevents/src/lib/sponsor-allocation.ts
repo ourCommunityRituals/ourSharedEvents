@@ -34,9 +34,24 @@ export interface SurfaceAllocation {
   rationale: string;
 }
 
+/** Share-of-voice frequency allocation (OSE-663, brain Invariant #25). */
+export interface ShareOfVoiceConfig {
+  status: 'planned' | 'active';
+  unit: string;
+  walls: {
+    local_floor_pct: number;
+    premium_cap_pct: number;
+    mid_cap_pct: number;
+    min_presence_pct: number;
+    uniform_size_slot: true;
+  };
+  weights: { base: number; mid: number; premium: number };
+}
+
 /** The covenant's canonical rules (mirrors sponsor-allocation.yaml top-level fields). */
 export interface SponsorAllocationCanonical {
   version: string;
+  share_of_voice: ShareOfVoiceConfig;
   classification: {
     field: 'is_local';
     type: 'boolean';
@@ -61,7 +76,19 @@ export interface SponsorAllocationCanonical {
  * check ships.
  */
 export const SPONSOR_ALLOCATION: SponsorAllocationCanonical = {
-  version: '1.0',
+  version: '1.1',
+  share_of_voice: {
+    status: 'active',
+    unit: 'percent_of_rotation_impressions',
+    walls: {
+      local_floor_pct: 30,
+      premium_cap_pct: 40,
+      mid_cap_pct: 20,
+      min_presence_pct: 2,
+      uniform_size_slot: true,
+    },
+    weights: { base: 1, mid: 3, premium: 7 },
+  },
   classification: {
     field: 'is_local',
     type: 'boolean',
@@ -120,4 +147,160 @@ export function isSlotFloorActive(): boolean {
  */
 export function getLocalFloor(surface: string): number {
   return SPONSOR_ALLOCATION.slot_floor.surfaces[surface]?.local_floor ?? 0;
+}
+
+// ─── Share-of-voice allocation (OSE-663, brain Invariant #25 sponsor_share_covenant) ──
+// Pure function turning sponsor demand + tiers into a rotation FREQUENCY % per
+// sponsor, under three walls: (1) premium cap, (2) local floor, (3) uniform
+// size/slot — only frequency is purchasable. It returns ONLY a sharePct, never
+// a size/slot/position, so WALL 3 holds by construction. Params come from
+// SPONSOR_ALLOCATION.share_of_voice (mirror of the brain canonical).
+
+export type SponsorTier = 'base' | 'mid' | 'premium';
+
+export interface RotationSponsor {
+  id: string;
+  tier: SponsorTier;
+  /** Geo-derived (corridor-cell match), NEVER purchasable — see Invariant #25. */
+  is_local: boolean;
+}
+
+export interface ShareAllocation {
+  id: string;
+  /** Percent of rotation impressions — the only purchasable dimension (WALL 3). */
+  sharePct: number;
+}
+
+/**
+ * OSE-661 — map the 6 legacy pricing tiers (the DB `tier` column) to the 3
+ * share-of-voice tiers allocateShares() consumes. SINGLE SOURCE OF TRUTH: both
+ * the backend renderer (sponsor-resolver.buildShareRotation) and the admin
+ * authoring form resolve tiers through here, so the covenant is one seam.
+ *
+ * Ratified 2026-08-08:  premium = {title, platinum}
+ *                       mid     = {gold, silver}
+ *                       base    = {bronze, primary}
+ * An unrecognized tier maps to `base` — the LOWEST weight + no premium cap
+ * exemption. Fail-safe, not fail-open: an unknown tier can never buy a premium
+ * share (matches OSE-663 AC "unknown tier ⇒ base, never > cap").
+ */
+const SOV_TIER_MAP: Record<string, SponsorTier> = {
+  title: 'premium',
+  platinum: 'premium',
+  gold: 'mid',
+  silver: 'mid',
+  bronze: 'base',
+  primary: 'base',
+};
+
+export function sovTierOf(dbTier: string): SponsorTier {
+  return SOV_TIER_MAP[(dbTier || '').toLowerCase()] ?? 'base';
+}
+
+const SOV_EPS = 1e-9;
+
+function sovWeightOf(t: SponsorTier): number {
+  const w = SPONSOR_ALLOCATION.share_of_voice.weights;
+  return t === 'premium' ? w.premium : t === 'mid' ? w.mid : w.base;
+}
+
+function sovCapOf(t: SponsorTier): number {
+  const walls = SPONSOR_ALLOCATION.share_of_voice.walls;
+  // base has no per-sponsor cap (bounded by the pool); premium/mid do.
+  return t === 'premium' ? walls.premium_cap_pct : t === 'mid' ? walls.mid_cap_pct : 100;
+}
+
+function sovNormalizeTo100(a: ShareAllocation[]): void {
+  const t = a.reduce((x, e) => x + e.sharePct, 0);
+  if (t > SOV_EPS) for (const e of a) e.sharePct = (e.sharePct * 100) / t;
+}
+
+/**
+ * Allocate rotation frequency shares. Pure + deterministic.
+ *
+ * Guarantees (brain Invariant #25):
+ *   - sum(sharePct) === 100 for any non-empty input.
+ *   - the is_local class collectively holds >= local_floor_pct whenever any
+ *     is_local sponsor is present (WALL 2).
+ *   - no premium/mid sponsor exceeds its cap WHEN the cap is satisfiable —
+ *     i.e. enough sponsors that the weighted share falls at/below the cap
+ *     (WALL 1). With too few sponsors to fill the surface, shares are forced
+ *     above the cap: the sponsor-sparse regime, where the cap is not binding
+ *     (a single sponsor is necessarily 100%). This is the demand-driven
+ *     behavior — fewer sponsors → each a higher share.
+ *   - fail-closed: an unknown tier throws.
+ *
+ * Returns ONLY frequency (sharePct); no size/slot field exists, so size/slot
+ * are uniform by construction (WALL 3).
+ */
+export function allocateShares(sponsors: RotationSponsor[]): ShareAllocation[] {
+  for (const s of sponsors) {
+    if (s.tier !== 'base' && s.tier !== 'mid' && s.tier !== 'premium') {
+      throw new Error(`allocateShares: unknown sponsor tier "${String(s.tier)}" (fail-closed)`);
+    }
+  }
+  const n = sponsors.length;
+  if (n === 0) return [];
+  if (n === 1) return [{ id: sponsors[0]!.id, sharePct: 100 }];
+
+  const walls = SPONSOR_ALLOCATION.share_of_voice.walls;
+  const locals = sponsors.filter((s) => s.is_local);
+  const localIds = new Set(locals.map((s) => s.id));
+  const floor = locals.length > 0 ? walls.local_floor_pct : 0;
+
+  const share: Record<string, number> = {};
+  for (const s of sponsors) share[s.id] = 0;
+
+  // Step 1 — reserve the local floor collectively, split evenly across locals.
+  if (locals.length > 0) {
+    const per = floor / locals.length;
+    for (const s of locals) share[s.id] = per;
+  }
+
+  // Step 2 — weighted water-fill of the remaining pool over ALL sponsors,
+  // clamped to per-sponsor caps (locals may earn above their floor).
+  let pool = 100 - floor;
+  const capped = new Set<string>();
+  for (let iter = 0; iter < 128 && pool > SOV_EPS; iter++) {
+    const active = sponsors.filter(
+      (s) => !capped.has(s.id) && share[s.id] < sovCapOf(s.tier) - SOV_EPS
+    );
+    if (active.length === 0) break;
+    const wSum = active.reduce((a, s) => a + sovWeightOf(s.tier), 0);
+    let distributed = 0;
+    for (const s of active) {
+      const want = (pool * sovWeightOf(s.tier)) / wSum;
+      const room = sovCapOf(s.tier) - share[s.id];
+      const give = Math.min(want, room);
+      share[s.id] += give;
+      distributed += give;
+      if (room - give <= SOV_EPS) capped.add(s.id);
+    }
+    pool -= distributed;
+    if (distributed <= SOV_EPS) break; // all capped; residual pool normalized away
+  }
+
+  const out: ShareAllocation[] = sponsors.map((s) => ({ id: s.id, sharePct: share[s.id]! }));
+  sovNormalizeTo100(out);
+
+  // Step 3 — min-presence: no accepted sponsor rounded below the visibility
+  // floor. Steal proportionally from NON-local donors above the min so the
+  // local floor is never raided. Skipped when infeasible (n*min > 100).
+  const min = walls.min_presence_pct;
+  if (n * min <= 100) {
+    const below = out.filter((e) => e.sharePct < min - SOV_EPS);
+    if (below.length > 0) {
+      const donors = out.filter((e) => e.sharePct > min + SOV_EPS && !localIds.has(e.id));
+      const surplus = donors.reduce((a, e) => a + (e.sharePct - min), 0);
+      const need = below.reduce((a, e) => a + (min - e.sharePct), 0);
+      if (surplus > SOV_EPS) {
+        const take = Math.min(need, surplus);
+        for (const e of below) e.sharePct = min;
+        for (const e of donors) e.sharePct -= ((e.sharePct - min) / surplus) * take;
+        sovNormalizeTo100(out);
+      }
+    }
+  }
+
+  return out;
 }

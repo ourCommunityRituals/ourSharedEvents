@@ -150,6 +150,7 @@ describe('DESIGN-9 L1: static source file checks', () => {
   });
 
   // OSE-191: UEC QR static checks
+  // @born-red TL-006 | method: design-time-negative-assertion | date: 2026-08-03
   test('poster-bundle handler uses getCode() from src/lib/uec (OSE-322 compliance)', () => {
     const handler = sourceFile('handlers/poster-bundle.ts');
     expect(handler, 'getCode import missing — must use UEC API not hex literals').toContain(

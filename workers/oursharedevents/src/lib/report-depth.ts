@@ -86,6 +86,14 @@ export interface ResolvedDepth {
   depth: ReportDepth;
   /** When set, sponsor_impressions is filtered to this sponsor only. */
   sponsorScope: string | null;
+  /**
+   * True when the token role is 'sponsor'. Distinguishes the two null-scope cases:
+   *   admin/bar_owner + null → see ALL sponsor rows (cross-event intelligence)
+   *   sponsor + null         → see NONE (no sponsor_id on token = block all rows)
+   * Without this flag, filterReportByDepth cannot tell them apart and would
+   * leak every competitor's impression data to an un-scoped sponsor token.
+   */
+  sponsorScopeRequired: boolean;
 }
 
 /** Resolve effective depth from token claims. Fail-closed on garbage. */
@@ -98,13 +106,20 @@ export function resolveDepth(claim: DepthClaimInput): ResolvedDepth {
   if (claim.role === 'admin' || claim.role === 'bar_owner') {
     // Organizer/admin links always see everything; a depth claim on these
     // roles is ignored rather than trusted downward (least surprise).
-    return { depth: 'premium', sponsorScope: null };
+    return { depth: 'premium', sponsorScope: null, sponsorScopeRequired: false };
   }
-  // role === 'sponsor'
+  // role === 'sponsor' — scope is required; null scope blocks all impressions.
+  // Sponsors cannot self-grant premium depth; cap at 'mid' (fail-closed to 'local').
+  const SPONSOR_MAX: ReportDepth = 'mid';
+  const sponsorDepth: ReportDepth =
+    requested && DEPTH_ORDER.indexOf(requested) <= DEPTH_ORDER.indexOf(SPONSOR_MAX)
+      ? requested
+      : 'local';
   return {
-    depth: requested ?? 'local', // legacy sponsor tokens default to Local
+    depth: sponsorDepth,
     sponsorScope:
       typeof claim.sponsor_id === 'string' && claim.sponsor_id.length > 0 ? claim.sponsor_id : null,
+    sponsorScopeRequired: true,
   };
 }
 
@@ -126,16 +141,26 @@ export function filterReportByDepth<T extends Record<string, unknown>>(
 
   for (const key of Object.keys(report)) {
     if (!allowed.has(key)) continue;
-    if (key === 'sponsor_impressions' && resolved.sponsorScope) {
+    if (key === 'sponsor_impressions') {
       const rows = report[key];
-      out[key] = Array.isArray(rows)
-        ? rows.filter(
-            (r) =>
-              typeof r === 'object' &&
-              r !== null &&
-              (r as Record<string, unknown>).sponsor_id === resolved.sponsorScope
-          )
-        : rows;
+      if (resolved.sponsorScope) {
+        // Scoped sponsor token — filter to own rows only
+        out[key] = Array.isArray(rows)
+          ? rows.filter(
+              (r) =>
+                typeof r === 'object' &&
+                r !== null &&
+                (r as Record<string, unknown>).sponsor_id === resolved.sponsorScope
+            )
+          : rows;
+      } else if (resolved.sponsorScopeRequired) {
+        // Sponsor role but no sponsor_id on token — return empty rather than
+        // leaking every competitor's impression data (OSE-595, rank-6 finding)
+        out[key] = [];
+      } else {
+        // admin / bar_owner — see all rows
+        out[key] = report[key];
+      }
     } else {
       out[key] = report[key];
     }

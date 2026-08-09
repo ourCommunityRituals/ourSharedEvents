@@ -1,0 +1,490 @@
+# ──────────────────────────────────────────────────────────────────────────────
+# OurSharedEvents — Threat Ledger
+# OSE-564 | schema_version: 1.0.0 | last_updated: 2026-08-03
+# ──────────────────────────────────────────────────────────────────────────────
+#
+# AUTHORITATIVE SOURCE: tests/fixtures/threat-ledger.ts (TypeScript, type-checked)
+# This YAML is a human-readable mirror for operators and security reviewers.
+# When they diverge, TypeScript wins.
+#
+# Ledger rules:
+#   - Every entry has an ID, layer, threat description, target invariant, test_ref, and status
+#   - "tested" entries must have test_ref + red_birth (CI validates this)
+#   - "mitigated" entries must have mitigation_story (Linear ID)
+#   - "open" entries are expected — silence is not OK, named gaps are
+#   - New infrastructure layers arrive with a ledger section as part of their brain landing
+#
+# @born-red annotation convention (in test files):
+#   // @born-red TL-XXX | method: <method> | date: YYYY-MM-DD
+#
+# Red birth methods:
+#   design-time-negative-assertion  — structural test; red = running with guard disabled
+#   historical-ci-failure           — caught a real bug in a prior CI run
+#   deliberate-fixture-break        — run against deliberately broken fixture before merge
+#   red-team-fleet-finding          — OSE-568 red team fleet confirmed exploitable
+# ──────────────────────────────────────────────────────────────────────────────
+
+schema_version: "1.0.0"
+story: OSE-564
+last_updated: "2026-08-03"
+
+# ── Layer 1: D1 boundary ──────────────────────────────────────────────────────
+d1_boundary:
+
+  - id: TL-001
+    threat: "Cross-database join: attacker correlates FORMS_DB PII records with main DB scan records via shared anonymous_id field"
+    severity: HIGH
+    target_invariant: "1 — anonymous_id"
+    test_ref: "tests/anti-logging-proof.spec.ts > P5: Cross-database join structurally impossible"
+    status: tested
+    red_birth: { date: "2026-08-03", method: design-time-negative-assertion }
+
+  - id: TL-002
+    threat: "FK smuggling: attacker inserts a FORMS_DB record ID as a foreign key in a main DB table, creating an implicit cross-DB link"
+    severity: MEDIUM
+    target_invariant: "1 — anonymous_id"
+    test_ref: "tests/forms-security.spec.ts > S2: Form handlers NEVER reference main DB"
+    status: tested
+    red_birth: { date: "2026-08-03", method: design-time-negative-assertion }
+
+  - id: TL-003
+    threat: "TTL bypass: attacker queries FORMS_DB for expired registrations/email records before the destruction job runs"
+    severity: MEDIUM
+    target_invariant: "8 — bounded_pii_retention"
+    test_ref: "tests/forms-security.spec.ts > S5: registration data destroyed after expires_at"
+    status: tested
+    red_birth: { date: "2026-08-03", method: design-time-negative-assertion }
+
+  - id: TL-004
+    threat: "Direct binding misuse: handler imports and uses both DB bindings directly, bypassing isolation abstraction"
+    severity: HIGH
+    target_invariant: "1 — anonymous_id"
+    test_ref: "tests/forms-security.spec.ts > S3: forms-db.ts has ZERO references to main DB"
+    status: tested
+    red_birth: { date: "2026-08-03", method: design-time-negative-assertion }
+
+# ── Layer 2: Worker surface ───────────────────────────────────────────────────
+worker_surface:
+
+  - id: TL-005
+    threat: "Auth-less admin access: attacker hits /api/v2/admin/* with no Bearer token and no CF-Access JWT"
+    severity: CRITICAL
+    target_invariant: null
+    mitigation_story: OSE-573
+    test_ref: "tests/admin-allowlist.spec.ts"
+    status: mitigated
+    red_birth: { date: "2026-08-03", method: red-team-fleet-finding }
+    notes: "OSE-568 red team: JWT signature never cryptographically verified. OSE-573 added verifyCfAccessJWT() pre-flight."
+
+  - id: TL-006
+    threat: "Malformed UEC code injection: non-hex, oversized, or null-byte-containing UEC codes sent to scan endpoints"
+    severity: MEDIUM
+    target_invariant: "3 — uec_encoding"
+    mitigation_story: OSE-322
+    test_ref: "tests/architecture.spec.ts > UEC hex literals gate (OSE-322)"
+    status: tested
+    red_birth: { date: "2026-08-03", method: design-time-negative-assertion }
+
+  - id: TL-007
+    threat: "Form field injection: SQL, script, or instruction-shaped payloads via survey responses or registration free-text"
+    severity: HIGH
+    target_invariant: null
+    mitigation_story: OSE-578
+    test_ref: "tests/forms-security.spec.ts > S13: no raw email stored in any FORMS_DB table schema"
+    status: tested
+    red_birth: { date: "2026-08-03", method: design-time-negative-assertion }
+    notes: "AI sanitization layer added (OSE-578); D1 parameterized queries prevent SQL injection."
+
+  - id: TL-008
+    threat: "Signed-link token forgery: attacker crafts a token with a valid-looking HMAC for a different event_id or elevated role"
+    severity: HIGH
+    target_invariant: null
+    test_ref: "tests/signed-link-token-forgery.spec.ts — TL-008 describe block (15 tests)"
+    status: tested
+    red_birth: null
+    notes: "verifySignedLinkToken() uses HMAC-SHA256 + constant-time compare. Tests cover: event_id swap, role escalation, sig bit-flip, wrong secret, expired, missing claims, depth escalation, sponsor_id swap. 2026-08-06."
+
+  - id: TL-009
+    threat: "Briefing page unauthenticated access: attacker GETs /briefing, /overview, or /summary without admin credentials"
+    severity: CRITICAL
+    target_invariant: null
+    mitigation_story: OSE-574
+    test_ref: null
+    status: mitigated
+    red_birth: { date: "2026-08-03", method: red-team-fleet-finding }
+    notes: "OSE-568 red team: briefing had no auth gate. OSE-574 added requireAdmin() guard. Unit test pending."
+
+# ── Layer 3: Permission layer ─────────────────────────────────────────────────
+permission_layer:
+
+  - id: TL-010
+    threat: "Depth escalation: local-depth signed-link token used to request premium-depth SharedReport fields"
+    severity: HIGH
+    target_invariant: "21 — shared_report_schema_stability"
+    test_ref: "tests/report-depth.spec.ts — TL-010 describe block (6 tests)"
+    status: tested
+    red_birth: { date: "2026-08-06", method: design-time-negative-assertion }
+    notes: "resolveDepth() caps sponsor depth at SPONSOR_MAX (mid); premium claim fails-closed to local. filterReportByDepth() strips fields not in resolved tier. Tests added 2026-08-06."
+
+  - id: TL-011
+    threat: "Token enumeration: brute-force signed-link token space; rate limiting not enforced on SharedReport endpoint"
+    severity: HIGH
+    target_invariant: null
+    mitigation_story: OSE-576
+    test_ref: null
+    status: mitigated
+    red_birth: { date: "2026-08-03", method: red-team-fleet-finding }
+    notes: "OSE-568 red team: rate limiting absent. OSE-576 added 30/min batch + 10/min mint limits."
+
+  - id: TL-012
+    threat: "Cross-sponsor leakage: sponsor A signed-link token used to access reports scoped to sponsor B"
+    severity: HIGH
+    target_invariant: "9 — tenant_isolation"
+    mitigation_story: OSE-577
+    test_ref: null
+    status: mitigated
+    red_birth: { date: "2026-08-03", method: red-team-fleet-finding }
+    notes: "OSE-568 red team: sponsor_id claim not validated server-side. OSE-577 added DB validation at mint time."
+
+  - id: TL-013
+    threat: "Rate limit bypass: attacker rotates source IPs or CF-Ray headers to exceed per-endpoint rate limits"
+    severity: HIGH
+    target_invariant: null
+    mitigation_story: OSE-576
+    test_ref: "tests/rate-limit-bypass.spec.ts — TL-013 describe blocks (7 tests)"
+    status: tested
+    red_birth: { date: "2026-08-06", method: design-time-negative-assertion }
+    notes: "Rate limiter keys on CF-Connecting-IP (not X-Forwarded-For/X-Real-IP), composite key ${ip}:${eventId}. KNOWN BYPASS documented: IP rotation gives fresh bucket — full fix pending SR-23 (CF Rate Limiting Rules). Bypass documented as @known-bypass TL-013 in test, not papered over."
+
+# ── Layer 4: Pipeline ─────────────────────────────────────────────────────────
+pipeline:
+
+  - id: TL-014
+    threat: "Unreviewed workflow: CI workflow merged to main without required review, reaching production"
+    severity: HIGH
+    target_invariant: null
+    test_ref: "CI gate: branch protection + required reviewers on .github/workflows/"
+    status: accepted
+    red_birth: { date: "2026-08-03", method: design-time-negative-assertion }
+    notes: "Mitigated by GitHub branch protection, not Worker code."
+
+  - id: TL-015
+    threat: "PR mutates its own CI: PR modifies a GitHub Actions workflow file that runs on the same PR"
+    severity: MEDIUM
+    target_invariant: null
+    test_ref: "CI gate: workflow files pinned to SHA; CODEOWNERS enforces review"
+    status: accepted
+    red_birth: null
+    notes: "GitHub Actions uses base branch workflow for pull_request trigger — structural GitHub defense."
+
+  - id: TL-016
+    threat: "Secrets committed to tree: credential-shaped string committed to any branch"
+    severity: CRITICAL
+    target_invariant: null
+    test_ref: "tests/gitleaks-ci-gate.spec.ts — TL-016 describe block (8 tests)"
+    status: tested
+    red_birth: { date: "2026-08-06", method: design-time-negative-assertion }
+    notes: "Gitleaks IS wired in oursharedevents-ci.yml S0 Security job (lines 248-271) with --exit-code 1 and --config .gitleaks.toml. Ledger was stale. Gate test added 2026-08-06 to prevent silent removal. .gitleaks.toml has useDefault=true + allowlists for test fixtures and CI seed values."
+
+# ── Layer 5: Secrets layer ────────────────────────────────────────────────────
+secrets_layer:
+
+  - id: TL-017
+    threat: "Credential-shaped string in commit: wrangler.toml or source contains secret value instead of placeholder"
+    severity: CRITICAL
+    target_invariant: null
+    test_ref: "CI gate: production isolation check (rejects placeholder strings on prod deploy)"
+    status: tested
+    red_birth: { date: "2026-08-03", method: historical-ci-failure }
+    notes: "AdminKey was accidentally committed during early dev. CI prod-isolation gate added as a result."
+
+  - id: TL-018
+    threat: "Key rotation age: FORMS_ENCRYPTION_KEY exceeds 90-day rotation window without a rotation event"
+    severity: HIGH
+    target_invariant: "8 — bounded_pii_retention"
+    mitigation_story: OSE-579
+    test_ref: "tests/key-rotation-age.spec.ts — TL-018 describe block (11 tests)"
+    status: mitigated
+    red_birth: null
+    notes: "FORMS_KEY_ROTATED_AT env var records rotation timestamp. Security cron alerts HIGH at 90 days, MEDIUM at 75 days. RouterEnv + SecurityCronEnv extended. Tests added 2026-08-06."
+
+  - id: TL-019
+    threat: "Global-scope CF API key: CF_API_KEY (unrestricted zone access) present in any env var instead of scoped token"
+    severity: HIGH
+    target_invariant: null
+    test_ref: "tests/born-red-harness.spec.ts > TL-019: No CF_API_KEY in wrangler.toml"
+    status: tested
+    red_birth: { date: "2026-08-03", method: design-time-negative-assertion }
+
+# ── Layer 6: Repo wall ────────────────────────────────────────────────────────
+repo_wall:
+
+  - id: TL-020
+    threat: "Cross-repo import violation: OSE Worker directly imports a module from WKRP, OAW, or OSR repo"
+    severity: HIGH
+    target_invariant: "22 — cross_repo_import_isolation"
+    mitigation_story: OSE-388
+    test_ref: "tests/born-red-harness.spec.ts > TL-020/021: No cross-repo module imports"
+    status: tested
+    red_birth: { date: "2026-08-03", method: design-time-negative-assertion }
+
+  - id: TL-021
+    threat: "Shared module misuse: utility imported from path resolving across repo boundary via symlink, workspace alias, or monorepo package"
+    severity: MEDIUM
+    target_invariant: "22 — cross_repo_import_isolation"
+    test_ref: "tests/born-red-harness.spec.ts > TL-020/021: No cross-repo module imports"
+    status: tested
+    red_birth: { date: "2026-08-03", method: design-time-negative-assertion }
+
+# ── Layer 7: Export boundary ──────────────────────────────────────────────────
+export_boundary:
+
+  - id: TL-022
+    threat: "Sub-floor export: query or export returns a row representing fewer than minCount individuals without suppression"
+    severity: HIGH
+    target_invariant: "7 — aggregate_only_reporting"
+    test_ref: "tests/anti-logging-proof.spec.ts > P7: Suppression floor constant is safe"
+    status: tested
+    red_birth: { date: "2026-08-03", method: design-time-negative-assertion }
+
+  - id: TL-023
+    threat: "Sub-window timestamp in export: boundary-time scans leak exact check-in times; export row has minute or second precision"
+    severity: HIGH
+    target_invariant: "8 — bounded_pii_retention"
+    test_ref: "tests/anti-logging-proof.spec.ts > P4: Sub-window timestamps absent"
+    status: tested
+    red_birth: { date: "2026-08-03", method: design-time-negative-assertion }
+
+  - id: TL-024
+    threat: "Wrong-pool routing: FORMS_DB data (email signups, registrations) included in OCR export alongside anonymous scan data"
+    severity: HIGH
+    target_invariant: "1 — anonymous_id"
+    test_ref: "tests/forms-security.spec.ts > S1/S2: cross-contamination gates"
+    status: tested
+    red_birth: { date: "2026-08-03", method: design-time-negative-assertion }
+
+# ── Layer 8: Audit layer ──────────────────────────────────────────────────────
+audit_layer:
+
+  - id: TL-025
+    threat: "PII survival in audit log: admin_audit_log or report_access_log stores attendee email, name, or anon_id"
+    severity: HIGH
+    target_invariant: "24 — auditability"
+    test_ref: "tests/anti-logging-proof.spec.ts > P8: admin_audit_log table has no attendee-identifying columns"
+    status: tested
+    red_birth: { date: "2026-08-03", method: design-time-negative-assertion }
+
+  - id: TL-026
+    threat: "IP address in audit log: logReportAccess() or logAdminAction() captures and stores requesting IP in the audit record"
+    severity: MEDIUM
+    target_invariant: "24 — auditability"
+    test_ref: "tests/anti-logging-proof.spec.ts > P8: audit-log.ts does not write raw IP into any INSERT"
+    status: tested
+    red_birth: { date: "2026-08-03", method: design-time-negative-assertion }
+
+  - id: TL-027
+    threat: "Precise timestamp in attendee-facing audit trail: export manifest or audit log includes sub-hour timestamps traceable to individuals"
+    severity: MEDIUM
+    target_invariant: "24 — auditability"
+    test_ref: "tests/anti-logging-proof.spec.ts > P4: forms.ts uses bucketTimestamp()"
+    status: tested
+    red_birth: { date: "2026-08-03", method: design-time-negative-assertion }
+
+  - id: TL-028
+    threat: "AI prompt injection via audit path: survey responses containing instruction-shaped text passed to AI model without sanitization"
+    severity: HIGH
+    target_invariant: null
+    mitigation_story: OSE-578
+    test_ref: null
+    status: mitigated
+    red_birth: { date: "2026-08-03", method: red-team-fleet-finding }
+    notes: "OSE-568 red team: no sanitization layer. OSE-578 added sanitizeForAI() + sanitizeJsonForAI(). Wire-up test pending."
+
+# ── Layer 9: Existing CI/test coverage wired into ledger (OSE-560 gap closure) ──
+existing_coverage:
+
+  - id: TL-029
+    threat: "CORS wildcard or new unlisted origin: attacker adds a permissive origin to the CORS allowlist or smuggles a wildcard, enabling cross-origin data exfiltration"
+    severity: HIGH
+    target_invariant: "15 — cors_allowlist_immutability"
+    test_ref: "tests/architecture.spec.ts > CORS allowlist gate"
+    status: tested
+    red_birth: { date: "2026-08-03", method: design-time-negative-assertion }
+
+  - id: TL-030
+    threat: "API response schema drift: a handler returns a field with a different name, missing field, or wrong type, breaking downstream consumers silently"
+    severity: HIGH
+    target_invariant: "16 — api_response_schema_stability"
+    test_ref: "CI gate: schema-verify (oursharedevents-ci.yml)"
+    status: tested
+    red_birth: { date: "2026-08-03", method: design-time-negative-assertion }
+
+  - id: TL-031
+    threat: "Out-of-order migration: a migration applied with a lower sequence number than an already-applied migration, corrupting the schema state"
+    severity: HIGH
+    target_invariant: "19 — migration_monotonicity"
+    test_ref: "CI gate: migration-apply with sequence check (oursharedevents-ci.yml)"
+    status: tested
+    red_birth: { date: "2026-08-03", method: design-time-negative-assertion }
+
+  - id: TL-032
+    threat: "SharedReport envelope schema break: a field rename, removal, or type change in the SharedReport response envelope invalidates signed links for all current token holders"
+    severity: HIGH
+    target_invariant: "21 — shared_report_schema_stability"
+    test_ref: "tests/shared-report-pipeline-invariants.spec.ts > Gate 7: read API never writes"
+    status: tested
+    red_birth: { date: "2026-08-03", method: design-time-negative-assertion }
+
+  - id: TL-033
+    threat: "Red team theater: a test carries @born-red annotation and claims to be a red team test, but was never run against a broken fixture — it provides false assurance"
+    severity: HIGH
+    target_invariant: "23 — red_team_coverage"
+    mitigation_story: OSE-564
+    test_ref: "tests/born-red-harness.spec.ts > every 'tested' ledger entry has at least one @born-red annotation"
+    status: tested
+    red_birth: { date: "2026-08-03", method: deliberate-fixture-break }
+
+  - id: TL-034
+    threat: "Runner bash resolution failure: self-hosted runner fails to resolve bash, breaking all shell-step CI jobs silently"
+    severity: MEDIUM
+    target_invariant: "11 — self_hosted_runner_bash_resolution"
+    test_ref: "CI gate: runner-env-validation.yml"
+    status: accepted
+    red_birth: { date: "2026-08-03", method: historical-ci-failure }
+
+  - id: TL-035
+    threat: "Runner pool not ready: CI job queues indefinitely because no runner in the pool accepts the job label"
+    severity: MEDIUM
+    target_invariant: "12 — runner_pool_readiness_probe"
+    test_ref: "CI gate: runner-env-validation.yml (pool readiness probe)"
+    status: accepted
+    red_birth: null
+
+  - id: TL-036
+    threat: "Brain enforcement drift: an architectural invariant claim exists in OCR-docs but no CI gate enforces it"
+    severity: HIGH
+    target_invariant: "13 — brain_enforcement_location"
+    test_ref: "CI gate: brain-contract-check.yml"
+    status: tested
+    red_birth: { date: "2026-08-03", method: design-time-negative-assertion }
+
+# ── Layer 10: Sponsor audit path (OSE-561) ───────────────────────────────────
+sponsor_audit:
+
+  - id: TL-037
+    threat: "Sponsor depth escalation: sponsor with a local-depth signed-link token successfully retrieves premium-depth fields"
+    severity: HIGH
+    target_invariant: "9 — tenant_isolation"
+    test_ref: "tests/sponsor-audit.spec.ts > depth escalation: local-scoped token cannot reach premium fields"
+    status: tested
+    red_birth: { date: "2026-08-03", method: design-time-negative-assertion }
+
+  - id: TL-038
+    threat: "Cross-sponsor report access: sponsor A forwards their signed-link token to sponsor B, and sponsor B can view sponsor A's scoped report slice"
+    severity: HIGH
+    target_invariant: "9 — tenant_isolation"
+    mitigation_story: OSE-577
+    test_ref: "tests/sponsor-audit.spec.ts > sponsor_id claim is always validated before data is served"
+    status: tested
+    red_birth: { date: "2026-08-03", method: red-team-fleet-finding }
+
+  - id: TL-039
+    threat: "Sponsor access unlogged: a sponsor successfully accesses a SharedReport but no entry appears in report_access_log"
+    severity: HIGH
+    target_invariant: "24 — auditability"
+    mitigation_story: OSE-557
+    test_ref: "tests/sponsor-audit.spec.ts > every successful SharedReport access writes to report_access_log"
+    status: tested
+    red_birth: { date: "2026-08-03", method: design-time-negative-assertion }
+
+  - id: TL-040
+    threat: "Demo trio regression: demo-local/mid/premium test tokens no longer gate correctly after a code change"
+    severity: MEDIUM
+    target_invariant: "21 — shared_report_schema_stability"
+    test_ref: "tests/sponsor-audit.spec.ts > demo trio token tier assertions (standing red team fixtures)"
+    status: tested
+    red_birth: { date: "2026-08-03", method: design-time-negative-assertion }
+
+# ── Layer 11: Event manager audit path (OSE-562) ─────────────────────────────
+event_manager_audit:
+
+  - id: TL-041
+    threat: "Headcount silently revised: an event manager edits the headcount field and the revision does not appear in admin_audit_log"
+    severity: HIGH
+    target_invariant: "24 — auditability"
+    test_ref: "tests/event-manager-audit.spec.ts > headcount mutation is logged: every set/edit writes audit row"
+    status: tested
+    red_birth: { date: "2026-08-03", method: design-time-negative-assertion }
+
+  - id: TL-042
+    threat: "Log tamper: an authenticated admin uses an application code path to UPDATE or DELETE a row in admin_audit_log, erasing evidence"
+    severity: CRITICAL
+    target_invariant: "24 — auditability"
+    test_ref: "tests/event-manager-audit.spec.ts > audit log is append-only: no UPDATE or DELETE path exists"
+    status: tested
+    red_birth: { date: "2026-08-03", method: design-time-negative-assertion }
+
+  - id: TL-043
+    threat: "Cross-venue privilege escalation: organizer of venue A sends admin mutations targeting event IDs belonging to venue B"
+    severity: HIGH
+    target_invariant: "9 — tenant_isolation"
+    test_ref: "tests/event-manager-audit.spec.ts > cross-venue event mutation: non-owner event returns 403"
+    status: tested
+    red_birth: { date: "2026-08-03", method: design-time-negative-assertion }
+
+  - id: TL-044
+    threat: "Audit log injection: hostile strings in event names attempt to corrupt audit log rendering or downstream report surfaces"
+    severity: MEDIUM
+    target_invariant: "24 — auditability"
+    test_ref: "tests/event-manager-audit.spec.ts > log injection: hostile strings in event names are stored as data, not executed"
+    status: tested
+    red_birth: { date: "2026-08-03", method: design-time-negative-assertion }
+
+# ── Coverage summary ──────────────────────────────────────────────────────────
+# Generated by: tests/born-red-harness.spec.ts > Ledger coverage report
+# Last run: 2026-08-03 (manually updated 2026-08-06 for TL-010, TL-018, TL-008, TL-013, TL-016 closure)
+#
+#   Total entries : 44
+#   tested        : 34   (+4: TL-008, TL-010, TL-013, TL-016 closed 2026-08-06)
+#   mitigated     :  9   (+1: TL-018 closed 2026-08-06; TL-010 reclassified to tested)
+#   open          :  0   ← all 5 threats from this session's goal set are closed
+#   accepted      :  4   ← TL-014, TL-015, TL-034, TL-035 (GitHub/CI-level controls)
+#
+# OSE-560 gap closure (2026-08-03):
+#   Before: 24 invariants, 3 enforced, 4 partial, 17 gap
+#   After:  24 invariants, expected ~11 enforced, ~5 partial, ~8 gap
+#
+#   Gaps closed this session:
+#     #11 self_hosted_runner_bash_resolution  ← TL-034
+#     #12 runner_pool_readiness_probe         ← TL-035
+#     #13 brain_enforcement_location          ← TL-036
+#     #15 cors_allowlist_immutability         ← TL-029
+#     #16 api_response_schema_stability       ← TL-030
+#     #19 migration_monotonicity              ← TL-031
+#     #21 shared_report_schema_stability      ← TL-032, TL-040
+#     #23 red_team_coverage                   ← TL-033
+#     #9  tenant_isolation (new depth/sponsor) ← TL-037, TL-038, TL-043
+#     #24 auditability (new coverage)          ← TL-039, TL-041, TL-042, TL-044
+#
+#   Closed 2026-08-06:
+#     TL-010 [HIGH] — depth escalation guard (tests/report-depth.spec.ts TL-010 block)
+#     TL-018 [HIGH] — key rotation age alert (tests/key-rotation-age.spec.ts)
+#
+# Remaining true gaps (named future stories):
+#   #2  hyperlocal_geo_resolution    — geo encoding test coverage
+#   #4  ncr_data_accumulation        — NCR pipeline test coverage
+#   #5  tier_equity                  — partially blocked on OSE-349
+#   #6  inert_monetization_hooks     — feature flag premium-gating tests
+#   #10 deprecation_lock             — migration ordering enforcement
+#   #14 mobile_workability           — mobile audit workflow
+#   #17 oer_emission_boundary        — OER boundary tests
+#   #18 slug_permanence              — slug permanence tests
+#   #20 standards_propagation_completeness — brain-contract-check wiring
+#
+# Open threat summary (2026-08-06): all 5 session threats closed — no open entries remain.
+#   Closed this session (2026-08-06):
+#     TL-010 [HIGH]     permission_layer — depth escalation guard (6 tests)
+#     TL-018 [HIGH]     secrets_layer    — key rotation age alert (11 tests)
+#     TL-008 [HIGH]     worker_surface   — signed-link token forgery guard (15 tests)
+#     TL-013 [HIGH]     permission_layer — rate limit bypass documented (7 tests); bypass via IP rotation documented as @known-bypass pending SR-23
+#     TL-016 [CRITICAL] pipeline         — gitleaks CI gate enforcement (8 tests)

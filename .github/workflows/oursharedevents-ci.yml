@@ -547,7 +547,8 @@ jobs:
             tests/e2e/0-architecture/slug-permanence.invariant.spec.ts \
             tests/e2e/0-architecture/shared-report-schema.invariant.spec.ts \
             tests/e2e/0-architecture/tenant-isolation.invariant.spec.ts \
-            tests/e2e/0-architecture/tier-equity.invariant.spec.ts
+            tests/e2e/0-architecture/tier-equity.invariant.spec.ts \
+            tests/e2e/0-architecture/sponsor-share-covenant.invariant.spec.ts
 
       # Post-job cleanup: delete _diag/pages/ so the next run's runner agent
       # can create fresh log files without "file already exists" collisions.
@@ -1002,9 +1003,15 @@ jobs:
   functional-staging:
     name: 'T4 Functional → Staging'
     runs-on: self-hosted
-    needs: [security, gate]
+    needs: [security, gate, deploy-staging, smoke-staging]
     if: |
-      github.event_name == 'workflow_dispatch' && github.event.inputs.run_functional == 'true'
+      always() &&
+      needs.security.result == 'success' &&
+      needs.gate.result == 'success' &&
+      (
+        (github.event_name == 'workflow_dispatch' && github.event.inputs.run_functional == 'true') ||
+        (needs.deploy-staging.result == 'success' && needs.smoke-staging.result == 'success')
+      )
     permissions:
       contents: read
       checks: write
@@ -1078,6 +1085,18 @@ jobs:
             tests/e2e/3-flows/form-submission-flows.spec.ts \
             tests/e2e/4-negative/form-validation.spec.ts
         timeout-minutes: 10
+
+      - name: Seed smoke fixtures
+        id: seed-fixtures
+        continue-on-error: true
+        timeout-minutes: 2
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        working-directory: ${{ env.WORKER_DIR }}
+        run: |
+          npx wrangler d1 execute DB --env staging --remote \
+            --file ../../tests/ui/smoke/fixtures/smoke-events.sql
 
       - name: 'T4d: UI Smoke — Tier-1 page smoke'
         id: ui-tests

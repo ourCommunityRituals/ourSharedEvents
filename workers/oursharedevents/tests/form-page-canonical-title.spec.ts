@@ -171,6 +171,27 @@ describe('OSE-R-007 form page canonical title — API layer', () => {
     }
   });
 
+  // OSE-626 regression: poster-bundle.ts generates ?type=email-signup.
+  // Before the fix, formPage() switch had `case 'email':` only — 'email-signup'
+  // fell through to the registration form, silently miscollecting data on every
+  // deployed email-signup poster QR. Both aliases must now route to emailSignupForm().
+  test('OSE-626 | API | GET /forms/:id?type=email-signup | renders email signup form, NOT registration form', async () => {
+    const html = await fetchFormPage(KNOWN_EVENT_ID, '?type=email-signup');
+    expect(html).toContain('data-testid="form-email"');
+    expect(html).not.toContain('data-testid="form-register"');
+    // Verify the canonical email signup CTA is present
+    expect(html).toContain('data-testid="email-submit"');
+    expect(html).not.toContain('data-testid="register-submit"');
+  });
+
+  test('OSE-626 | API | GET /forms/:id?type=email | legacy alias still routes to email signup form', async () => {
+    // The legacy `?type=email` param must still work alongside the canonical
+    // `?type=email-signup` — both map to emailSignupForm().
+    const html = await fetchFormPage(KNOWN_EVENT_ID, '?type=email');
+    expect(html).toContain('data-testid="form-email"');
+    expect(html).not.toContain('data-testid="form-register"');
+  });
+
   test('OSE-R-007 | API | GET /forms/:id (long title, 250+ chars) | title clamped to 200 chars for display', async () => {
     // Defense in depth: even if an admin somehow saves a 10KB title, the
     // form page truncates to 200 chars in the display slot. Prevents a

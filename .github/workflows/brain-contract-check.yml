@@ -1,6 +1,8 @@
 name: Brain contract check
 
 on:
+  push:
+    branches: [main]
   pull_request:
     branches: [main, staging]
   workflow_dispatch:

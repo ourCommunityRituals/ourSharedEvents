@@ -13,11 +13,14 @@
  *     for _meta.suppression_reasons. The resolution-floor rule (candidate
  *     invariant; Tom question outstanding) has its enforcement point here.
  *
- * DEPTH GATE: this module is called ONLY from the premium branch after
- * report-depth filtering — asserted by the sharedreport-depth journey
- * (wrong depth never receives map markup). Wired in S-6.3.1b.
+ * DEPTH GATE: as of SR-25, report-depth field-stripping is NOT applied in
+ * the read handler. This module is called for all token roles that have
+ * H3 cells tagged on the event. The client enforces the sponsor exclusion
+ * list (see screen design spec). If depth-stripping is reinstated (open
+ * question #1), restore the gate in shared-report-read.ts, not here.
  */
 import { cellToBoundary, isValidCell } from 'h3-js';
+import { CORRIDOR_MAP_MIN_COUNT } from './shared-report';
 
 export interface CellDensity {
   cell: string;
@@ -43,7 +46,7 @@ export function renderCorridorMap(
   cells: CellDensity[],
   opts: CorridorMapOptions = {}
 ): CorridorMapResult {
-  const minCount = opts.minCount ?? 5;
+  const minCount = opts.minCount ?? CORRIDOR_MAP_MIN_COUNT;
   const width = opts.width ?? 600;
   const height = opts.height ?? 360;
   const accent = opts.accent ?? '#4361ee';
