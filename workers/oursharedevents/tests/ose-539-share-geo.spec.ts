@@ -89,11 +89,18 @@ describe('OSE-539 L1: static source checks', () => {
   test('pages.ts has geo-link testid', () => {
     expect(sourceFile('handlers/pages.ts')).toContain('geo-link');
   });
-  test('pages.ts has dark mode CSS (prefers-color-scheme: dark)', () => {
-    expect(sourceFile('handlers/pages.ts')).toContain('prefers-color-scheme: dark');
+  test('pages.ts wires dark mode via the /ui.css role-token stylesheet (OSE-655 A2)', () => {
+    // OSE-655 A2 migration: dark mode moved from an inline
+    // `prefers-color-scheme: dark` block to the @ocr/ui role tokens served at
+    // /ui.css (per-mode light/dark values). pages.ts links that stylesheet; the
+    // dark support is covered by tests/public-surface-swappable.spec.ts.
+    expect(sourceFile('handlers/pages.ts')).toContain('/ui.css');
   });
-  test('pages.ts uses geo: URI scheme for lat/lon', () => {
-    expect(sourceFile('handlers/pages.ts')).toContain('geo:');
+  test('pages.ts builds the geo: link via the extracted renderGeoLink helper (OSE-660)', () => {
+    // OSE-660: the geo: URI builder was extracted to src/lib/geo-link.ts. pages.ts
+    // consumes renderGeoLink; the geo: scheme lives (and is unit-tested) there.
+    expect(sourceFile('handlers/pages.ts')).toContain('renderGeoLink');
+    expect(sourceFile('lib/geo-link.ts')).toContain('geo:');
   });
   test('pages.ts has Spanish share label', () => {
     expect(sourceFile('handlers/pages.ts')).toContain('Compartir este evento');
@@ -151,11 +158,13 @@ describe('OSE-539 L2: pre-event phase', () => {
     expect(html).toContain('Compartir este evento');
   });
 
-  test('dark mode CSS present in pre-event page', async () => {
+  test('pre-event page carries dark-capable theming via the /ui.css role tokens', async () => {
     const id = await createEventWithGeo('Dark Mode Test');
     const res = await SELF.fetch(`https://t.test/events/${id}`);
     const html = await res.text();
-    expect(html).toContain('prefers-color-scheme: dark');
+    // OSE-655 A2: dark support ships through the linked @ocr/ui stylesheet
+    // (role tokens with per-mode values), not an inline prefers-color-scheme block.
+    expect(html).toContain('/ui.css');
   });
 
   test('share button has data-share-url attribute with event URL', async () => {

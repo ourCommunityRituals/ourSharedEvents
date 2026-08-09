@@ -1,18 +1,17 @@
 /**
- * OSE-238 / BE-24 — Admin geocoding endpoint behavioral tests.
+ * OSE-238 / BE-24 / BE-24b — Admin geocoding endpoint behavioral tests.
  *
  * POST /api/v2/admin/geocode behaviour through SELF.fetch:
  *   - admin auth required (401 when key missing)
  *   - 400 for malformed JSON body / missing address
  *   - 503 when GOOGLE_MAPS_API_KEY is not configured (env-binding test)
- *   - 200 success path requires mocking globalThis.fetch since the actual
- *     Google API isn't reachable from CI. The unit test in geo.spec.ts
- *     already covers every branch of geocodeVenue with the injected fetcher;
- *     this spec confirms the handler is wired end-to-end and corridor_id is
- *     returned as null per Option C.
+ *   - 200 success path: corridor_id is now a non-null H3 res7 cell string
+ *     (BE-24b landed — resolveCorridorId computes h3_res7 from lat/lng).
+ *     The unit test in geo.spec.ts covers resolveCorridorId directly;
+ *     this spec confirms the handler is wired end-to-end.
  */
 
-import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, test, expect } from 'vitest';
 import { SELF, env } from 'cloudflare:test';
 
 const ADMIN_HEADERS = { Authorization: 'Bearer test-admin-key-e2e-2026' };
@@ -104,29 +103,15 @@ describe('OSE-238: GOOGLE_MAPS_API_KEY env-binding behaviour', () => {
   });
 });
 
-describe('OSE-238 Option C: corridor_id is always null on the round-trip', () => {
-  // This is the load-bearing assertion for the BE-24b deferral. When the
-  // corridor geometry resolver lands, this spec needs to be updated to
-  // assert a real corridor_id for known coordinates. Until then, ANY
-  // successful geocode MUST return corridor_id: null so callers
-  // (admin form, future bulk jobs) can rely on the contract.
+describe('BE-24b: corridor_id is a non-null H3 res7 cell string on successful geocode', () => {
+  // resolveCorridorId now computes h3_res7 from lat/lng (BE-24b landed).
+  // On a successful geocode, corridor_id MUST be a non-null h3 cell string.
 
-  let logSpy: ReturnType<typeof vi.spyOn>;
-
-  beforeEach(() => {
-    logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-  });
-
-  afterEach(() => {
-    logSpy.mockRestore();
-  });
-
-  test('on a successful geocode, response carries corridor_id: null AND emits RESOLVE_CORRIDOR_UNAVAILABLE', async () => {
+  test('on a successful geocode, response carries a non-null corridor_id', async () => {
     const tenv = env as unknown as TestEnv;
     if (!tenv.GOOGLE_MAPS_API_KEY) {
       // Without a key bound, we can't exercise the success path here.
-      // The unit test in geo.spec.ts covers the stub directly; this
-      // assertion is gated on test-env config.
+      // The unit test in geo.spec.ts covers resolveCorridorId directly.
       return;
     }
 
@@ -137,20 +122,10 @@ describe('OSE-238 Option C: corridor_id is always null on the round-trip', () =>
     }
     const body = (await res.json()) as AnyResponse;
     expect(body.ok).toBe(true);
-    expect(body.corridor_id).toBeNull();
-
-    // The stub MUST emit the structured log so monitoring can find the
-    // call site once BE-24b's real implementation lands.
-    const stubLogged = logSpy.mock.calls.some((args) => {
-      const first = args[0];
-      if (typeof first !== 'string') return false;
-      try {
-        const parsed = JSON.parse(first);
-        return parsed.type === 'RESOLVE_CORRIDOR_UNAVAILABLE';
-      } catch {
-        return false;
-      }
-    });
-    expect(stubLogged).toBe(true);
+    // BE-24b: corridor_id is now an H3 res7 cell string, not null
+    expect(body.corridor_id).not.toBeNull();
+    expect(typeof body.corridor_id).toBe('string');
+    // H3 res7 cells are ~15 hex chars long
+    expect((body.corridor_id as string).length).toBeGreaterThan(10);
   });
 });
