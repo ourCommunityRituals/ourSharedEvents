@@ -120,6 +120,40 @@ describe('OSE-294 admin mobile workability — API layer', () => {
   });
 });
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// OSE-585 — TL-049: Mobile workability conformance gate
+// Extends OSE-294 coverage with the threat ledger cross-reference.
+// These tests are born-red: they prove the mobile contract has enforcement.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('OSE-585 — TL-049: mobile workability conformance gate', () => {
+  // @born-red TL-049 | method: historical-ci-failure | date: 2026-08-03
+  test('admin page includes @media (max-width: 768px) block (mobile layout is present)', async () => {
+    const html = await fetchAdminHtml();
+    expect(html, '@media (max-width: 768px) block must exist in admin HTML').toMatch(
+      /@media\s*\(\s*max-width:\s*768px\s*\)\s*\{/
+    );
+  });
+
+  // @born-red TL-049 | method: historical-ci-failure | date: 2026-08-03
+  test('admin page events table has mobile card layout (display:block on tr/td)', async () => {
+    const html = await fetchAdminHtml();
+    const mediaBlock = extractMediaBlock(html, 768);
+    expect(
+      mediaBlock,
+      'events-table tr must display:block in mobile (card layout prevents horizontal scroll)'
+    ).toMatch(/table\.events-table\s+tr\s*\{[^}]*display:\s*block/);
+  });
+
+  test('admin page has at least one data-label attribute (touch-friendly card labeling)', async () => {
+    const html = await fetchAdminHtml();
+    expect(
+      html,
+      'data-label attributes must exist so mobile card layout can render field labels'
+    ).toMatch(/data-label=/);
+  });
+});
+
 /**
  * Extract the contents of the @media (max-width: Npx) { ... } block at
  * the given breakpoint. Returns the body text between the opening and
