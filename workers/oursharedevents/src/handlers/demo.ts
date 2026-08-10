@@ -27,15 +27,15 @@
 import { esc, escUrl } from '@ocr/ui';
 import {
   getEventFixture,
-  getSponsorFixtures,
   getFlagsForTier,
   getScanRecords,
   getCheckinFixtures,
   getRegistrationFixtures,
   getSurveyFixtures,
   getPosterDeployments,
+  getRiphDataset,
+  RIPH_VENUE_NAME,
   type Tier as FlagTier,
-  type MockSponsor,
 } from '../lib/mock-data.js';
 import { DEPTH_SECTIONS, type ReportDepth } from '../lib/report-depth.js';
 
@@ -160,6 +160,12 @@ const DEMO_STYLE = `<style>
   .roster-tier { margin: 0.75rem 0; }
   .roster-tier h4 { margin: 0 0 0.35rem; text-transform: capitalize; }
   .roster-tier ul { margin: 0; padding-left: 1.1rem; color: var(--text-muted); }
+  .camp-title { font-weight: 700; margin: 0.6rem 0 0.2rem; font-size: 0.9rem; }
+  .camp-list { margin: 0 0 0.25rem; padding-left: 1.1rem; color: var(--text-muted); font-size: 0.88rem; }
+  .season-list { list-style: none; margin: 0; padding: 0; }
+  .season-list li { display: flex; justify-content: space-between; gap: 0.5rem; padding: 0.35rem 0; border-bottom: 1px solid var(--border); font-size: 0.88rem; }
+  .season-list li span:last-child { color: var(--text-muted); white-space: nowrap; }
+  .fallback-note { margin-top: 0.6rem; padding: 0.6rem 0.85rem; border-left: 3px solid var(--text-muted); background: var(--surface); border-radius: 0 0.4rem 0.4rem 0; color: var(--text-muted); font-size: 0.85rem; }
   .demo-note { color: var(--text-muted); font-size: 0.85rem; margin-top: 0.5rem; }
   .ladder { width: 100%; border-collapse: collapse; margin: 0.5rem 0; }
   .ladder caption { text-align: left; padding: 0 0 0.6rem; color: var(--text-muted); font-size: 0.9rem; }
@@ -480,28 +486,78 @@ function statCard(
 }
 
 /** Sponsor roster grouped by display tier — the composition that makes tiers visible. */
+// Sponsors by campaign, grouped by tier class — the 15-minute script's opening view.
 function sponsorRoster(): string {
-  const sponsors = getSponsorFixtures(15);
-  const byTier: Record<MockSponsor['tier'], MockSponsor[]> = { premium: [], mid: [], local: [] };
-  for (const s of sponsors) byTier[s.tier].push(s);
+  const { campaigns, sponsors } = getRiphDataset();
+  const tierLabels: Record<'premium' | 'mid' | 'local', string> = {
+    premium: 'Premium',
+    mid: 'Mid',
+    local: 'Local',
+  };
 
   const groups = (['premium', 'mid', 'local'] as const)
     .map((tier) => {
-      const list = byTier[tier];
-      if (list.length === 0) return '';
-      const items = list.map((s) => `<li>${esc(s.name)} — ${esc(s.event_type)}</li>`).join('');
-      return `<div class="roster-tier">
-        <h4>${esc(tier)} (${list.length})</h4>
-        <ul>${items}</ul>
+      const tierCampaigns = campaigns.filter((c) => c.tier === tier);
+      if (tierCampaigns.length === 0) return '';
+      const campBlocks = tierCampaigns
+        .map((c) => {
+          const members = sponsors.filter((s) => s.campaign_id === c.id);
+          const items = members
+            .map((s) => `<li>${esc(s.name)} — ${esc(s.event_type)}</li>`)
+            .join('');
+          return `<p class="camp-title">${esc(c.title)}</p><ul class="camp-list">${items}</ul>`;
+        })
+        .join('');
+      const n = tierCampaigns.length;
+      return `<div class="demo-card">
+        <h3>${esc(tierLabels[tier])} class · ${n} campaign${n > 1 ? 's' : ''}</h3>
+        ${campBlocks}
       </div>`;
     })
     .join('');
 
   return `<section class="demo-section" aria-labelledby="roster-h">
-    <h3 id="roster-h">Sponsor roster</h3>
-    <p class="demo-note">The neighborhood texture — the same roster at every depth; the tier decides
-    how much of the analysis each sponsor can see.</p>
-    ${groups}
+    <h3 id="roster-h">Sponsors — by campaign, grouped by tier</h3>
+    <p class="demo-note">The 15-minute script's opening view: the RIPH property's sponsors grouped by
+    campaign within each tier class. Premium renders as a class (two campaigns), not a lone example.</p>
+    <div class="demo-grid">${groups}</div>
+  </section>`;
+}
+
+// The RIPH season — three leagues across a mock season, with the honesty feature visible.
+function seasonSection(): string {
+  const { leagues, events, ladderBuckets } = getRiphDataset();
+  const leagueBlocks = leagues
+    .map((lg) => {
+      const insts = events.filter((e) => e.league_id === lg.id);
+      const items = insts
+        .map(
+          (e) =>
+            `<li><span>${esc(e.title)}</span><span>${e.headcount} attended · ${esc(e.start_date)}</span></li>`
+        )
+        .join('');
+      return `<div class="demo-card">
+        <h3>${esc(lg.name)}</h3>
+        <ul class="season-list">${items}</ul>
+      </div>`;
+    })
+    .join('');
+
+  const fb = ladderBuckets.find((b) => b.suppressed);
+  const fbNote = fb
+    ? `<p class="fallback-note"><strong>Honesty feature on display:</strong> one ${esc(
+        fb.hour_bucket.slice(11, 16)
+      )} bucket had only ${fb.count} scans — below the K&ge;5 floor — so it renders as
+      &ldquo;${esc(fb.label)}&rdquo; instead of a raw count. The night's total still shows;
+      only the fine grain is withheld. A demo that never shows this hides the platform's honesty.</p>`
+    : '';
+
+  return `<section class="demo-section" aria-labelledby="season-h">
+    <h3 id="season-h">The RIPH season — three leagues</h3>
+    <p class="demo-note">One venue, three recurring containers (bocce · trivia · record night) across a
+    mock season. Headcounts vary and climb, so the ladder shows real states — not a flat demo.</p>
+    <div class="demo-grid">${leagueBlocks}</div>
+    ${fbNote}
   </section>`;
 }
 
@@ -515,17 +571,17 @@ export function handleDemoSite(tier: string): Response {
     return demoHtml(body, 404);
   }
 
-  const event = getEventFixture();
   const body = `
   <section class="demo-hero">
     <h2>Demo — ${esc(cfg.label)}</h2>
     <p class="demo-lede">${esc(cfg.tagline)}</p>
-    <p class="demo-note">Venue: ${esc(event.title)} · ${esc(event.location ?? '')}</p>
+    <p class="demo-note">Venue: ${esc(RIPH_VENUE_NAME)} · one property, three leagues</p>
   </section>
   ${tierTabs(cfg.slug)}
   ${fourFlowLoop(cfg.slug)}
   ${depthExhibit(cfg.depth)}
-  ${flagPanel(cfg.flagTier)}
-  ${sponsorRoster()}`;
+  ${seasonSection()}
+  ${sponsorRoster()}
+  ${flagPanel(cfg.flagTier)}`;
   return demoHtml(body);
 }

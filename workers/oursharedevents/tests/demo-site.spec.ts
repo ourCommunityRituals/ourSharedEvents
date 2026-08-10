@@ -54,6 +54,18 @@ describe('demo site — three depths, same data', () => {
     expect(html).toContain('White-label branding');
   });
 
+  it('renders the RIPH multi-league dataset (OSE-608): season, campaign roster, honesty feature', async () => {
+    const html = await text(handleDemoSite('mid'));
+    // three leagues across a season
+    expect(html).toContain('The RIPH season — three leagues');
+    expect(html).toContain('RIPH Bocce League');
+    // sponsors by campaign, grouped by tier — Premium as a class of 2
+    expect(html).toContain('by campaign, grouped by tier');
+    expect(html).toContain('Premium class · 2 campaigns');
+    // the K-anon honesty feature is visible, not hidden
+    expect(html).toContain('Honesty feature on display');
+  });
+
   it('flag panel reflects the REAL per-tier flag set (not hardcoded)', async () => {
     const free = await text(handleDemoSite('free'));
     const premium = await text(handleDemoSite('premium'));

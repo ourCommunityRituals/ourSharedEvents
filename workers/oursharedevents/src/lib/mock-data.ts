@@ -639,3 +639,400 @@ export function getMockSnapshot(sponsorCount: number = 15): MockSnapshot {
     featureFlags: getFeatureFlagFixtures(),
   };
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// RIPH multi-league demo dataset (OSE-608)
+//
+// The shared dataset all three demo sites render: RIPH (Ridge-Irish-Prairie Hills)
+// as a multi-league sponsor property — one venue, three recurring containers
+// (bocce / trivia / record night), campaign-grouped sponsors distributed across
+// Local / Mid / Premium, a mock season with realistic scan distributions, real
+// H3 cells for the corridor map, and — deliberately — at least one visible ladder
+// fallback bucket (the "too small alone" honesty feature on display).
+//
+// Everything here is data_class = 'demo': labeled at write time, lives in prod
+// indefinitely, never enters vintage / reports-for-sale / research corpus. Pure &
+// deterministic (no Date.now / randomness) so reset is one call and byte-identical.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/** Third data class beside production/synthetic (OSE-606 doctrine, forward-compatible). */
+export type DataClass = 'production' | 'synthetic' | 'demo';
+
+export interface MockLeague {
+  id: string;
+  brand_id: string;
+  name: string;
+  event_type: string;
+  slug: string;
+}
+
+export interface MockCampaign {
+  id: string;
+  brand_id: string;
+  title: string;
+  /** Tier CLASS of the campaign (display/covenant vocabulary), not report depth. */
+  tier: 'premium' | 'mid' | 'local';
+  status: 'active';
+}
+
+/** One instance of a league across the season — an event carrying its league + data_class. */
+export interface MockSeasonEvent {
+  id: string;
+  brand_id: string;
+  league_id: string;
+  title: string;
+  slug: string;
+  event_type: string;
+  status: EventState;
+  phase: EventPhase;
+  start_date: string;
+  end_date: string;
+  timezone: string;
+  lat: number;
+  lon: number;
+  h3_res9: string;
+  h3_res7: string;
+  corridor_id: string;
+  data_class: DataClass;
+  /** Unique gatherings (headcount) — the free-tier "smoke test" number. */
+  headcount: number;
+}
+
+/** A sponsor as it appears in the RIPH property — carries campaign + tier. */
+export interface MockSeasonSponsor {
+  id: string;
+  brand_id: string;
+  campaign_id: string;
+  name: string;
+  tier: 'premium' | 'mid' | 'local';
+  area: string;
+  event_type: string;
+  is_local: boolean;
+  data_class: DataClass;
+}
+
+/** Per-sponsor impression rollup within one event (campaign-groupable). */
+export interface MockSponsorImpression {
+  event_id: string;
+  sponsor_id: string;
+  campaign_id: string;
+  campaign_title: string;
+  surface: string;
+  count: number;
+}
+
+/**
+ * A fine-grain (per-hour, per-cell) bucket. `suppressed` marks a bucket that
+ * falls below the K-anon floor (K≥5) — the platform's honesty feature: it is
+ * never published as a raw count; the demo shows the "too small alone" label.
+ */
+export interface MockLadderBucket {
+  event_id: string;
+  h3_res9: string;
+  hour_bucket: string;
+  count: number;
+  suppressed: boolean;
+  label: string;
+}
+
+export const RIPH_BRAND_ID = 'riph-beverly';
+export const RIPH_VENUE_NAME = 'Ridge-Irish-Prairie Hills (RIPH) — Beverly';
+const RIPH_CORRIDOR = 'beverly-morgan-park';
+// Real H3 cells around the RIPH venue coordinates (Beverly, Chicago).
+const RIPH_H3_RES9 = '892698a6d0bffff';
+const RIPH_H3_RES7 = '872698a6dffffff';
+const RIPH_H3_RES9_B = '892698a6d0fffff'; // an adjacent cell so the corridor map has spread
+
+const K_ANON_FLOOR = 5;
+
+// ── Leagues (3 recurring containers) ──────────────────────────────────────────
+
+export function getRiphLeagues(): MockLeague[] {
+  return [
+    {
+      id: 'league_bocce',
+      brand_id: RIPH_BRAND_ID,
+      name: 'RIPH Bocce League',
+      event_type: 'bocce',
+      slug: 'riph-bocce',
+    },
+    {
+      id: 'league_trivia',
+      brand_id: RIPH_BRAND_ID,
+      name: 'RIPH Trivia Nights',
+      event_type: 'trivia',
+      slug: 'riph-trivia',
+    },
+    {
+      id: 'league_record',
+      brand_id: RIPH_BRAND_ID,
+      name: 'RIPH Record Night',
+      event_type: 'record-night',
+      slug: 'riph-record-night',
+    },
+  ];
+}
+
+// ── Campaigns (Premium: exactly 2 · Mid: 3 · Local: 1 shared) ─────────────────
+
+export function getRiphCampaigns(): MockCampaign[] {
+  return [
+    // Premium — exactly 2, so the class renders as a class (not a lone example)
+    {
+      id: 'camp_premium_1',
+      brand_id: RIPH_BRAND_ID,
+      title: 'Beverly Arts Center — Season Presenting',
+      tier: 'premium',
+      status: 'active',
+    },
+    {
+      id: 'camp_premium_2',
+      brand_id: RIPH_BRAND_ID,
+      title: 'Ridge Home + Garden — Season Presenting',
+      tier: 'premium',
+      status: 'active',
+    },
+    // Mid — a few different campaigns so placement/attribution has real variety
+    {
+      id: 'camp_mid_1',
+      brand_id: RIPH_BRAND_ID,
+      title: 'Prairie Hills Brewing — League Nights',
+      tier: 'mid',
+      status: 'active',
+    },
+    {
+      id: 'camp_mid_2',
+      brand_id: RIPH_BRAND_ID,
+      title: 'South Side Realty — Community Series',
+      tier: 'mid',
+      status: 'active',
+    },
+    {
+      id: 'camp_mid_3',
+      brand_id: RIPH_BRAND_ID,
+      title: 'Beverly Taqueria — Taco Nights',
+      tier: 'mid',
+      status: 'active',
+    },
+    // Local — the neighborhood texture, grouped under one shared local campaign
+    {
+      id: 'camp_local_1',
+      brand_id: RIPH_BRAND_ID,
+      title: 'Local Friends of RIPH',
+      tier: 'local',
+      status: 'active',
+    },
+  ];
+}
+
+// ── Sponsors (Premium 2 · Mid 3 · Local 5), each carrying a campaign ──────────
+
+export function getRiphSponsors(): MockSeasonSponsor[] {
+  const s = (
+    id: string,
+    campaign_id: string,
+    name: string,
+    tier: MockSeasonSponsor['tier'],
+    area: string,
+    event_type: string
+  ): MockSeasonSponsor => ({
+    id,
+    brand_id: RIPH_BRAND_ID,
+    campaign_id,
+    name,
+    tier,
+    area,
+    event_type,
+    is_local: tier === 'local',
+    data_class: 'demo',
+  });
+  return [
+    // Premium (2)
+    s('sp_riph_prem_1', 'camp_premium_1', 'Beverly Arts Center', 'premium', 'beverly', 'arts'),
+    s('sp_riph_prem_2', 'camp_premium_2', 'Ridge Home + Garden', 'premium', 'beverly', 'home'),
+    // Mid (3)
+    s('sp_riph_mid_1', 'camp_mid_1', 'Prairie Hills Brewing', 'mid', 'prairie-hills', 'drinks'),
+    s('sp_riph_mid_2', 'camp_mid_2', 'South Side Realty Group', 'mid', 'beverly', 'real-estate'),
+    s('sp_riph_mid_3', 'camp_mid_3', 'Beverly Taqueria', 'mid', 'beverly', 'food'),
+    // Local (5)
+    s('sp_riph_loc_1', 'camp_local_1', 'Beverly Bakehouse', 'local', 'beverly', 'food'),
+    s('sp_riph_loc_2', 'camp_local_1', 'Ridge Dry Cleaners', 'local', 'beverly', 'retail'),
+    s('sp_riph_loc_3', 'camp_local_1', "Kelly's Corner Pub", 'local', 'beverly', 'food'),
+    s('sp_riph_loc_4', 'camp_local_1', 'Prairie Paws Vet Clinic', 'local', 'prairie-hills', 'pets'),
+    s('sp_riph_loc_5', 'camp_local_1', 'Greenwood Locksmith', 'local', 'mt-greenwood', 'services'),
+  ];
+}
+
+// ── Season: 3 leagues × 3 instances = 9 events (headcounts vary; some climb) ───
+
+const SEASON_PLAN: {
+  league_id: string;
+  event_type: string;
+  name: string;
+  dates: string[];
+  headcounts: number[];
+  cell: string;
+}[] = [
+  {
+    league_id: 'league_bocce',
+    event_type: 'bocce',
+    name: 'RIPH Bocce',
+    dates: ['2026-06-06', '2026-07-11', '2026-08-01'],
+    headcounts: [42, 58, 71], // climbing across the season
+    cell: RIPH_H3_RES9,
+  },
+  {
+    league_id: 'league_trivia',
+    event_type: 'trivia',
+    name: 'RIPH Trivia',
+    dates: ['2026-06-18', '2026-07-16', '2026-08-06'],
+    headcounts: [31, 38, 45],
+    cell: RIPH_H3_RES9,
+  },
+  {
+    league_id: 'league_record',
+    event_type: 'record-night',
+    name: 'RIPH Record Night',
+    dates: ['2026-06-27', '2026-07-25', '2026-08-08'],
+    headcounts: [18, 12, 27], // a small night in the middle — realistic
+    cell: RIPH_H3_RES9_B,
+  },
+];
+
+export function getRiphSeasonEvents(): MockSeasonEvent[] {
+  const events: MockSeasonEvent[] = [];
+  for (const plan of SEASON_PLAN) {
+    plan.dates.forEach((date, i) => {
+      const n = i + 1;
+      events.push({
+        id: `evt_riph_${plan.league_id.replace('league_', '')}_${n}`,
+        brand_id: RIPH_BRAND_ID,
+        league_id: plan.league_id,
+        title: `${plan.name} — Night ${n}`,
+        slug: `${plan.league_id.replace('league_', 'riph-')}-night-${n}`,
+        event_type: plan.event_type,
+        status: 'active',
+        phase: 'post',
+        start_date: date,
+        end_date: date,
+        timezone: 'America/Chicago',
+        lat: BEVERLY_LAT,
+        lon: BEVERLY_LON,
+        h3_res9: plan.cell,
+        h3_res7: RIPH_H3_RES7,
+        corridor_id: RIPH_CORRIDOR,
+        data_class: 'demo',
+        headcount: plan.headcounts[i],
+      });
+    });
+  }
+  return events;
+}
+
+// ── Sponsor impressions per event (campaign-groupable, tier-weighted) ─────────
+
+// Premium campaigns run full rotation, mid mid-weight, local lightest — but every
+// sponsor clears K≥5 at the event grain (locals are served, never suppressed at
+// their own level). Weighting is by tier, scaled by each event's headcount.
+const TIER_IMPRESSION_WEIGHT: Record<MockSeasonSponsor['tier'], number> = {
+  premium: 3,
+  mid: 2,
+  local: 1,
+};
+
+export function getRiphSponsorImpressions(): MockSponsorImpression[] {
+  const events = getRiphSeasonEvents();
+  const sponsors = getRiphSponsors();
+  const campaigns = getRiphCampaigns();
+  const campaignTitle = (id: string) => campaigns.find((c) => c.id === id)?.title ?? 'unknown';
+
+  const rows: MockSponsorImpression[] = [];
+  for (const ev of events) {
+    for (const sp of sponsors) {
+      // Deterministic: base on headcount × tier weight, floored above K-anon.
+      const base = Math.max(
+        K_ANON_FLOOR,
+        Math.round((ev.headcount * TIER_IMPRESSION_WEIGHT[sp.tier]) / 4)
+      );
+      rows.push({
+        event_id: ev.id,
+        sponsor_id: sp.id,
+        campaign_id: sp.campaign_id,
+        campaign_title: campaignTitle(sp.campaign_id),
+        surface: 'display',
+        count: base,
+      });
+    }
+  }
+  return rows;
+}
+
+// ── Ladder fallback buckets (the honesty feature on display) ──────────────────
+
+// Deliberately includes at least one fine-grain bucket below the K-anon floor so
+// the demo shows "by the hour — too small alone" rather than a raw small count.
+// The season-level headcount still renders (cleared the floor); only the fine
+// grain is suppressed — exactly the platform's honesty feature.
+export function getRiphLadderBuckets(): MockLadderBucket[] {
+  return [
+    {
+      event_id: 'evt_riph_record_2', // the small record night (headcount 12)
+      h3_res9: RIPH_H3_RES9_B,
+      hour_bucket: '2026-07-25T19:00:00Z',
+      count: 3, // below K≥5
+      suppressed: true,
+      label: 'By the hour — too small alone (K≥5)',
+    },
+    {
+      event_id: 'evt_riph_record_2',
+      h3_res9: RIPH_H3_RES9_B,
+      hour_bucket: '2026-07-25T20:00:00Z',
+      count: 9, // clears the floor — shown
+      suppressed: false,
+      label: '8–9pm',
+    },
+    {
+      event_id: 'evt_riph_bocce_3',
+      h3_res9: RIPH_H3_RES9,
+      hour_bucket: '2026-08-01T14:00:00Z',
+      count: 34,
+      suppressed: false,
+      label: '2–3pm (peak)',
+    },
+  ];
+}
+
+// ── Full canonical dataset (one call = deterministic reset) ────────────────────
+
+export interface RiphDataset {
+  venue_name: string;
+  brand_id: string;
+  data_class: DataClass;
+  leagues: MockLeague[];
+  campaigns: MockCampaign[];
+  sponsors: MockSeasonSponsor[];
+  events: MockSeasonEvent[];
+  sponsorImpressions: MockSponsorImpression[];
+  ladderBuckets: MockLadderBucket[];
+  corridorCells: string[];
+}
+
+/**
+ * The canonical RIPH demo dataset. Pure + deterministic — calling it twice
+ * yields byte-identical data, so "reset to canonical state" is exactly this
+ * function (the fixtures ARE the versioned seed).
+ */
+export function getRiphDataset(): RiphDataset {
+  return {
+    venue_name: RIPH_VENUE_NAME,
+    brand_id: RIPH_BRAND_ID,
+    data_class: 'demo',
+    leagues: getRiphLeagues(),
+    campaigns: getRiphCampaigns(),
+    sponsors: getRiphSponsors(),
+    events: getRiphSeasonEvents(),
+    sponsorImpressions: getRiphSponsorImpressions(),
+    ladderBuckets: getRiphLadderBuckets(),
+    corridorCells: [RIPH_H3_RES9, RIPH_H3_RES9_B],
+  };
+}
