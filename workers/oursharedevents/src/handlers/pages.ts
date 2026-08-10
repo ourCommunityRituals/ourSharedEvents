@@ -13,6 +13,7 @@ import { computeEventPhase } from '../domain/event-phase';
 import { publicEventCacheControl } from '../lib/phase-cache';
 import { renderGeoLink } from '../lib/geo-link';
 import { formatEventPrice } from '../lib/event-price';
+import { validateLogoUrl } from '../lib/sponsor-logo';
 import { DEFAULT_POSTER_CODE, posterProductForPath } from '../lib/poster-products';
 
 // Page shells extracted to template files (Wrangler [[rules]] type="Text").
@@ -451,6 +452,12 @@ export function renderPreEventHtml(
   const whatShort = esc(row.what_short);
   const whoHost = esc(row.who_host);
   const whoStory = esc(row.who_story);
+  // OSE-655: rich media for the funnel (OSE-664 supplied the columns + authoring
+  // wall). Re-guard at render (defense-in-depth): http(s)-only, so a scheme that
+  // ever slipped past authoring (javascript:, data:) can never reach an
+  // src/href here. URL is attribute-escaped on output.
+  const whoImage = validateLogoUrl(row.who_image_url).url;
+  const whatVideo = validateLogoUrl(row.what_video_url).url;
   const whyPurpose = esc(row.why_purpose);
   const howDetails = esc(row.how_details);
   const whereAddress = esc(row.where_address) || esc(row.location);
@@ -507,7 +514,13 @@ ${buildOgMeta({ title, description: whatShort, url: esc(shareUrl), twitterCard: 
     .ose-anonymity { margin-top: 2rem; padding: 1rem 1.25rem; background: var(--ose-accent-tint); border-left: 3px solid var(--ose-accent); border-radius: 4px; font-size: 0.9rem; color: var(--ose-muted); }
     .ose-anonymity h2 { margin-top: 0; font-size: 1rem; color: var(--ose-text); }
     .ose-anonymity p { margin: 0; }
-    .ose-section p { margin: 0; }${DARK_MODE_CSS}
+    .ose-section p { margin: 0; }
+    /* OSE-655: WHO host photo (the conversion engine gets a face) + WHAT video
+       link-out. Circular avatar; tasteful, mobile-first, 44px tap target on the link. */
+    .ose-who-image { width: 120px; height: 120px; object-fit: cover; border-radius: 50%; display: block; margin-bottom: 0.75rem; background: var(--ose-accent-tint); }
+    .ose-what-video { color: var(--ose-accent); text-decoration: none; font-weight: 600; display: inline-block; min-height: 44px; line-height: 44px; }
+    .ose-what-video:hover { text-decoration: underline; }
+    .ose-what-video:focus { outline: 3px solid var(--ose-focus); outline-offset: 2px; }${DARK_MODE_CSS}
   </style>
 </head>
 <body>
@@ -519,18 +532,20 @@ ${buildOgMeta({ title, description: whatShort, url: esc(shareUrl), twitterCard: 
     </header>
 
     ${
-      whatShort
+      whatShort || whatVideo
         ? `<section class="ose-card ose-section" data-testid="event-what" aria-labelledby="what-heading">
            <h2 id="what-heading">What</h2>
-           <p>${whatShort}</p>
+           ${whatShort ? `<p>${whatShort}</p>` : ''}
+           ${whatVideo ? `<p><a class="ose-what-video" data-testid="event-what-video" href="${esc(whatVideo)}" target="_blank" rel="noopener noreferrer nofollow">${lang === 'es' ? '▶ Ver el video' : '▶ Watch the video'}</a></p>` : ''}
          </section>`
         : ''
     }
 
     ${
-      whoHost || whoStory
+      whoHost || whoStory || whoImage
         ? `<section class="ose-card ose-section" data-testid="event-who" aria-labelledby="who-heading">
            <h2 id="who-heading">Who</h2>
+           ${whoImage ? `<img class="ose-who-image" data-testid="event-who-image" src="${esc(whoImage)}" alt="${whoHost ? `Photo of ${whoHost}` : 'Host'}" loading="lazy" width="120" height="120" />` : ''}
            ${whoHost ? `<p data-testid="event-who-host">${whoHost}</p>` : ''}
            ${whoStory ? `<p class="ose-who-story" data-testid="event-who-story">${whoStory}</p>` : ''}
          </section>`
@@ -678,7 +693,13 @@ ${buildOgMeta({ title, description: whatShort, url: esc(shareUrl), twitterCard: 
     .ose-anonymity { margin-top: 2rem; padding: 1rem 1.25rem; background: var(--ose-accent-tint); border-left: 3px solid var(--ose-accent); border-radius: 4px; font-size: 0.9rem; color: var(--ose-muted); }
     .ose-anonymity h2 { margin-top: 0; font-size: 1rem; color: var(--ose-text); }
     .ose-anonymity p { margin: 0; }
-    .ose-section p { margin: 0; }${DARK_MODE_CSS}
+    .ose-section p { margin: 0; }
+    /* OSE-655: WHO host photo (the conversion engine gets a face) + WHAT video
+       link-out. Circular avatar; tasteful, mobile-first, 44px tap target on the link. */
+    .ose-who-image { width: 120px; height: 120px; object-fit: cover; border-radius: 50%; display: block; margin-bottom: 0.75rem; background: var(--ose-accent-tint); }
+    .ose-what-video { color: var(--ose-accent); text-decoration: none; font-weight: 600; display: inline-block; min-height: 44px; line-height: 44px; }
+    .ose-what-video:hover { text-decoration: underline; }
+    .ose-what-video:focus { outline: 3px solid var(--ose-focus); outline-offset: 2px; }${DARK_MODE_CSS}
   </style>
 </head>
 <body>
