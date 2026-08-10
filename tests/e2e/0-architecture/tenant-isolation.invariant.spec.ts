@@ -187,7 +187,16 @@ test.describe('Invariant 9: Tenant Isolation — structural code-shape lock', ()
     const adminRouteLines: number[] = [];
     const requireAdminLines: number[] = [];
 
+    // The OSE-576 admin rate-limit pre-flight references admin paths inside a
+    // boolean predicate — `pathname.startsWith('/api/v2/admin') || pathname === '/admin' || ...`.
+    // It is a PRE-AUTH guard (rate-limit before paying the auth cost), NOT a
+    // route handler, so it is intentionally exempt from the requireAdmin-proximity
+    // check. Real admin routes match the pathname with === or .match(), never
+    // with .startsWith — so keying the exemption on .startsWith cannot mask a
+    // real unguarded route.
+    const preAuthRateLimitPredicate = /\.startsWith\(\s*['"]\/api\/v2\/admin/;
     lines.forEach((line, i) => {
+      if (preAuthRateLimitPredicate.test(line)) return;
       if (adminRoutePattern.test(line)) adminRouteLines.push(i);
       if (/requireAdmin\s*\(/.test(line)) requireAdminLines.push(i);
     });

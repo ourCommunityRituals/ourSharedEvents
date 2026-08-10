@@ -44,7 +44,9 @@ describe('Admin Auth Module Structure (Story 3.1)', () => {
 
   describe('Module Exports', () => {
     it('should export requireAdmin function', () => {
-      expect(adminAuthSource).toContain('export function requireAdmin(');
+      // OSE-666 made requireAdmin async (awaits brand+role scope resolution).
+      // Accept the async form; the export must still be present.
+      expect(adminAuthSource).toMatch(/export\s+(?:async\s+)?function\s+requireAdmin\s*\(/);
     });
 
     it('should export AdminEnv interface', () => {
