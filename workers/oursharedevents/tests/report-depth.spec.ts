@@ -81,6 +81,19 @@ describe('OSE-459: report-depth — filterReportByDepth (additive ladder + equit
     }
   });
 
+  // OSE-682 (ratified 2026-08-10): the visible map is the PAID value line.
+  // Free (local) = honest smoke test (headcount + own impressions), no map.
+  // Both paid tiers (mid + premium) get corridor_map; premium differs by a
+  // couple extra features (cross-event) + top governance covenant share.
+  it('OSE-682: corridor_map is the paid value line — Mid + Premium, never free', () => {
+    expect(DEPTH_SECTIONS.local, 'free must NOT get the map').not.toContain('corridor_map');
+    expect(DEPTH_SECTIONS.mid, 'Mid (paid) gets the map').toContain('corridor_map');
+    expect(DEPTH_SECTIONS.premium, 'Premium (paid) gets the map').toContain('corridor_map');
+    // Free stays honest-essential, not crippled: it keeps the smoke-test basics.
+    expect(DEPTH_SECTIONS.local).toContain('unique_gatherings');
+    expect(DEPTH_SECTIONS.local).toContain('sponsor_impressions');
+  });
+
   it('equity-by-construction: premium tier passes all numeric values identically', () => {
     const resolved = resolveDepth({ role: 'admin' });
     const { report, upgrade } = filterReportByDepth({ ...SAMPLE_REPORT }, resolved);
