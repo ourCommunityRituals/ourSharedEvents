@@ -38,6 +38,7 @@ import {
   type Tier as FlagTier,
 } from '../lib/mock-data.js';
 import { DEPTH_SECTIONS, type ReportDepth } from '../lib/report-depth.js';
+import { DEMO_LINKS, DEMO_REGISTRY_VERSION, demoTierLinks } from '../lib/demo-registry.js';
 
 // ── Demo tier model — the three site slugs, mapped to the other two vocabularies ──
 //
@@ -327,15 +328,36 @@ function tierLadder(): string {
 
 // ── /demo — the front door ───────────────────────────────────────────────────────
 
+// Canonical link registry, rendered as the "address book" (OSE-610). Same list
+// the CI gate checks — published and checked URLs can never diverge.
+function linkRegistry(): string {
+  const rows = DEMO_LINKS.map(
+    (l) =>
+      `<li><a class="demo-tab" href="${escUrl(l.path)}"><code>${esc(l.path)}</code></a> — ${esc(
+        l.title
+      )}: ${esc(l.description)}</li>`
+  ).join('');
+  return `<section class="demo-section" aria-labelledby="registry-h">
+    <h3 id="registry-h">Canonical link registry <span class="depth-badge">v${esc(DEMO_REGISTRY_VERSION)}</span></h3>
+    <p class="demo-note">The one address book. Every outward reference points here, and the CI gate
+    (OSE-609) checks these exact paths — one list, never two. Slugs are permanent (Invariant #18 spirit).</p>
+    <ul>${rows}</ul>
+  </section>`;
+}
+
 export function handleDemoIndex(): Response {
-  const cards = DEMO_TIER_ORDER.map((t) => {
-    const cfg = DEMO_TIERS[t];
-    return `<div class="demo-card">
+  // Trio cards are built FROM the registry, so the published links and the
+  // registry are the same list by construction (OSE-610).
+  const cards = demoTierLinks()
+    .map((link) => {
+      const cfg = DEMO_TIERS[link.tier];
+      return `<div class="demo-card">
       <h3>${esc(cfg.label)}</h3>
       <p>${esc(cfg.tagline)}</p>
-      <a class="demo-tab" href="/demo/${cfg.slug}" aria-label="Open the ${esc(cfg.label)} demo site">Enter →</a>
+      <a class="demo-tab" href="${escUrl(link.path)}" aria-label="Open the ${esc(cfg.label)} demo site">Enter →</a>
     </div>`;
-  }).join('');
+    })
+    .join('');
 
   const body = `
   <section class="demo-hero">
@@ -351,7 +373,8 @@ export function handleDemoIndex(): Response {
     rendering at three tier configurations — one platform being configured, not three versions.
     Flags change; the numbers underneath do not (Invariant #5, Tier Equity).</p>
   </section>
-  ${fourFlowLoop(null)}`;
+  ${fourFlowLoop(null)}
+  ${linkRegistry()}`;
   return demoHtml(body);
 }
 
