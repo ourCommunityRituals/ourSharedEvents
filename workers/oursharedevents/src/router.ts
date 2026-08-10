@@ -119,8 +119,14 @@ import {
   type PagesEnv,
 } from './handlers/pages';
 import { handleBriefingPage } from './handlers/briefing';
+import { handleDemoIndex, handleDemoSite } from './handlers/demo';
 import { requireAdmin, extractAdminActor, verifyCfAccessJWT, type AdminEnv } from './auth/admin';
-import { logAdminAction, logReportAccess, logExportManifest, type AuditLogEnv } from './lib/audit-log';
+import {
+  logAdminAction,
+  logReportAccess,
+  logExportManifest,
+  type AuditLogEnv,
+} from './lib/audit-log';
 import { handleListAuditLog, type AuditHandlerEnv } from './handlers/audit';
 import { handleListSubscribers, type SubscribersAdminEnv } from './handlers/subscribers';
 import { handleAdminGeocode, type GeocodeAdminEnv } from './handlers/geocode';
@@ -289,7 +295,11 @@ export async function route(
   // ── HTTPS redirect ──────────────────────────────────────────────────────
   // Use 308 (Permanent Redirect) to preserve the HTTP method across the upgrade.
   // 301 historically causes POST→GET downgrade; 308 guarantees method preservation.
-  if (url.protocol === 'http:') {
+  // Loopback hosts are exempt so `wrangler dev` (plain HTTP on localhost) is
+  // reachable in a browser; this never affects production, which is never loopback.
+  const isLoopbackHost =
+    url.hostname === 'localhost' || url.hostname === '127.0.0.1' || url.hostname === '[::1]';
+  if (url.protocol === 'http:' && !isLoopbackHost) {
     url.protocol = 'https:';
     return Response.redirect(url.toString(), 308);
   }
@@ -361,6 +371,17 @@ export async function route(
     return handleUiPreview();
   }
 
+  // ── Demo Site — permanent reference installation (OSE-605, thin slice) ─────
+  // PUBLIC, no auth. Front door + three standing tier sites rendering the same
+  // mock dataset at three depths. Depth is render-side only (SR-25 respected).
+  if (pathname === '/demo' && method === 'GET') {
+    return handleDemoIndex();
+  }
+  const demoSiteMatch = pathname.match(/^\/demo\/([^/]+)$/);
+  if (demoSiteMatch && method === 'GET') {
+    return handleDemoSite(demoSiteMatch[1]);
+  }
+
   if (pathname === '/health' || pathname === '/api/status') {
     return handleHealth(env);
   }
@@ -395,7 +416,12 @@ export async function route(
     );
     if (!_jwtResult.valid) {
       return new Response(
-        JSON.stringify({ ok: false, status: 401, code: 'INVALID_JWT', error: 'Token signature verification failed' }),
+        JSON.stringify({
+          ok: false,
+          status: 401,
+          code: 'INVALID_JWT',
+          error: 'Token signature verification failed',
+        }),
         { status: 401, headers: { 'Content-Type': 'application/json' } }
       );
     }
@@ -686,13 +712,17 @@ export async function route(
   // ── Admin poster deployment routes (auth-gated) ────────────────────────────
 
   // POST/GET /api/v2/admin/events/:id/poster-deployments
-  const adminPosterListMatch = pathname.match(/^\/api\/v2\/admin\/events\/([^/]+)\/poster-deployments$/);
+  const adminPosterListMatch = pathname.match(
+    /^\/api\/v2\/admin\/events\/([^/]+)\/poster-deployments$/
+  );
   if (adminPosterListMatch) {
     const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
     const deny = await requireAdmin(request, env, reqId);
     if (deny) return deny;
-    if (method === 'POST') return handleAdminCreatePosterDeployment(request, env, adminPosterListMatch[1]);
-    if (method === 'GET') return handleAdminListPosterDeployments(request, env, adminPosterListMatch[1]);
+    if (method === 'POST')
+      return handleAdminCreatePosterDeployment(request, env, adminPosterListMatch[1]);
+    if (method === 'GET')
+      return handleAdminListPosterDeployments(request, env, adminPosterListMatch[1]);
   }
 
   // POST /api/v2/admin/poster-deployments/backfill-h3 (must match before /:id)
@@ -704,14 +734,19 @@ export async function route(
   }
 
   // GET/PUT/DELETE /api/v2/admin/poster-deployments/:id
-  const adminPosterDeploymentMatch = pathname.match(/^\/api\/v2\/admin\/poster-deployments\/([^/]+)$/);
+  const adminPosterDeploymentMatch = pathname.match(
+    /^\/api\/v2\/admin\/poster-deployments\/([^/]+)$/
+  );
   if (adminPosterDeploymentMatch) {
     const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
     const deny = await requireAdmin(request, env, reqId);
     if (deny) return deny;
-    if (method === 'GET') return handleAdminGetPosterDeployment(request, env, adminPosterDeploymentMatch[1]);
-    if (method === 'PUT') return handleAdminUpdatePosterDeployment(request, env, adminPosterDeploymentMatch[1]);
-    if (method === 'DELETE') return handleAdminDeletePosterDeployment(request, env, adminPosterDeploymentMatch[1]);
+    if (method === 'GET')
+      return handleAdminGetPosterDeployment(request, env, adminPosterDeploymentMatch[1]);
+    if (method === 'PUT')
+      return handleAdminUpdatePosterDeployment(request, env, adminPosterDeploymentMatch[1]);
+    if (method === 'DELETE')
+      return handleAdminDeletePosterDeployment(request, env, adminPosterDeploymentMatch[1]);
   }
 
   // ── Admin form export (auth-gated) ─────────────────────────────────────────
@@ -725,7 +760,13 @@ export async function route(
     }
     const res = await handleAdminExport(request, env, adminExportMatch[1]);
     const exportOutcome = res.status < 400 ? 'success' : 'failed';
-    _audit(reqId, 'EXPORT_FORMS', exportOutcome === 'success' ? 'success' : 'denied', 'forms-export', adminExportMatch[1]);
+    _audit(
+      reqId,
+      'EXPORT_FORMS',
+      exportOutcome === 'success' ? 'success' : 'denied',
+      'forms-export',
+      adminExportMatch[1]
+    );
     // OSE-594: log OER emission manifest for forms CSV export (invariant #17)
     ctx.waitUntil(
       logExportManifest(env, {
@@ -759,10 +800,18 @@ export async function route(
     };
     let formsRes: Response | undefined;
     switch (formType) {
-      case 'registrations': formsRes = await handleAdminRegistrations(request, env, eventId); break;
-      case 'checkin-count': formsRes = await handleAdminCheckinCount(request, env, eventId); break;
-      case 'surveys':       formsRes = await handleAdminSurveys(request, env, eventId); break;
-      case 'email-signups': formsRes = await handleAdminEmailSignupCount(request, env, eventId); break;
+      case 'registrations':
+        formsRes = await handleAdminRegistrations(request, env, eventId);
+        break;
+      case 'checkin-count':
+        formsRes = await handleAdminCheckinCount(request, env, eventId);
+        break;
+      case 'surveys':
+        formsRes = await handleAdminSurveys(request, env, eventId);
+        break;
+      case 'email-signups':
+        formsRes = await handleAdminEmailSignupCount(request, env, eventId);
+        break;
     }
     if (formsRes) {
       _audit(
@@ -1322,7 +1371,7 @@ async function handleRateLimitStats(request: Request, env: RouterEnv): Promise<R
       const BATCH = 50;
       for (let i = 0; i < listResult.keys.length; i += BATCH) {
         const batch = listResult.keys.slice(i, i + BATCH);
-        const values = await Promise.all(batch.map(k => env.RATE_LIMIT_KV.get(k.name)));
+        const values = await Promise.all(batch.map((k) => env.RATE_LIMIT_KV.get(k.name)));
         for (let j = 0; j < batch.length; j++) {
           const raw = values[j];
           if (!raw) continue;
@@ -1359,7 +1408,7 @@ async function handleRateLimitStats(request: Request, env: RouterEnv): Promise<R
 
   // Sort descending by count, take top 10
   ipEntries.sort((a, b) => b.count - a.count);
-  const top10 = ipEntries.slice(0, 10).map(e => ({
+  const top10 = ipEntries.slice(0, 10).map((e) => ({
     ip: e.ip,
     count: e.count,
     reset_at: new Date(e.resetAt).toISOString(),

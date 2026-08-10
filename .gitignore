@@ -20,6 +20,11 @@ yarn.lock
 .env.local
 .env.*.local
 
+# Wrangler local dev secrets/vars — machine-local, may contain the DEV_OPEN_ADMIN
+# bypass and dev ADMIN_KEY. NEVER commit.
+.dev.vars
+.dev.vars.*
+
 # IDE
 .vscode/
 .idea/
