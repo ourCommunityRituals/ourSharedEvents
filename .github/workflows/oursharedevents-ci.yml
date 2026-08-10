@@ -1433,10 +1433,128 @@ jobs:
   # ============================================================================
   # SUMMARY
   # ============================================================================
+  # ============================================================================
+  # GATE 4: POST-EXECUTION SECURITY — the closing bookend
+  #
+  # PO design (ratified 2026-08-09): security bookends the execution phase.
+  # Gate 1 (S0 Security) proves the committed input was clean; this gate runs
+  # AFTER the Gate-3 execution phase (T2 smoke / T3 Postman contract / T4
+  # Playwright functional) to confirm nothing — a test, a package lifecycle
+  # script, or any CI/CD execution — mutated the source or injected files
+  # DURING execution. A single up-front scan cannot detect injection introduced
+  # BY running the suite; this closes that gap.
+  #
+  # always()+result-guards (mirroring smoke/contract) so it still re-scans when
+  # the execution jobs are skipped (e.g. on PRs), and is suppressed only when
+  # Gate 2 failed or an execution job actually FAILED.
+  # ============================================================================
+  security-post:
+    name: 'S2 Post-Execution Security'
+    runs-on: self-hosted
+    needs: [gate, smoke-staging, contract-staging, functional-staging]
+    if: |
+      always() &&
+      needs.gate.result == 'success' &&
+      needs.smoke-staging.result != 'failure' &&
+      needs.contract-staging.result != 'failure' &&
+      needs.functional-staging.result != 'failure'
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          clean: false          # preserve what the execution phase left behind, so we can detect it
+          fetch-depth: 50
+
+      - name: 'Integrity — no tracked source mutated during execution'
+        shell: bash
+        run: |
+          echo "## S2 Post-Execution Security" >> $GITHUB_STEP_SUMMARY
+          if ! git diff --exit-code --stat; then
+            echo "::error::Tracked source files were modified during the execution phase (Gates 2-3). Possible injection."
+            exit 1
+          fi
+          echo "- **Tracked-source integrity:** clean (no post-execution mutation)" >> $GITHUB_STEP_SUMMARY
+
+      - name: 'Integrity — no files injected into src/ or migrations/'
+        shell: bash
+        run: |
+          INJECTED=$(git ls-files --others --exclude-standard -- \
+            workers/oursharedevents/src workers/oursharedevents/migrations || true)
+          if [ -n "$INJECTED" ]; then
+            echo "::error::Untracked files appeared under src/ or migrations/ during execution. Possible injection:"
+            echo "$INJECTED"
+            exit 1
+          fi
+          echo "- **No injected source/migration files:** confirmed" >> $GITHUB_STEP_SUMMARY
+
+      - name: 'Integrity — lockfile unchanged'
+        shell: bash
+        run: |
+          if ! git diff --exit-code -- package-lock.json workers/oursharedevents/package-lock.json; then
+            echo "::error::package-lock.json changed during the run — dependency drift / possible supply-chain injection."
+            exit 1
+          fi
+          echo "- **Lockfile integrity:** unchanged" >> $GITHUB_STEP_SUMMARY
+
+      - name: 'Deps install without lifecycle scripts'
+        shell: bash
+        run: |
+          # Production deps must install with NO lifecycle scripts. A dependency
+          # that needs a postinstall to function is a supply-chain red flag,
+          # surfaced here rather than trusted silently.
+          npm ci --ignore-scripts --prefer-offline || npm ci --ignore-scripts
+          echo "- **npm ci --ignore-scripts:** succeeded" >> $GITHUB_STEP_SUMMARY
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+
+      - name: 'Semgrep re-scan (post-execution)'
+        shell: bash
+        run: |
+          python3 -m pip install semgrep --quiet
+          semgrep scan \
+            --config=p/nodejs \
+            --config=p/owasp-top-ten \
+            --config=p/r2c-security-audit \
+            --error \
+            --exclude=node_modules \
+            --exclude=.wrangler \
+            --exclude=coverage \
+            --exclude=dist \
+            --exclude=.claude \
+            --json-output=semgrep-post.json || SEMGREP_EXIT=$?
+          FINDING_COUNT=$(jq '.results | length' semgrep-post.json 2>/dev/null || echo 0)
+          echo "- **Semgrep (post-execution):** $FINDING_COUNT findings" >> $GITHUB_STEP_SUMMARY
+          exit ${SEMGREP_EXIT:-0}
+
+      - name: 'gitleaks re-scan (post-execution)'
+        shell: bash
+        run: |
+          GITLEAKS_VER=$(curl -sSL "https://api.github.com/repos/gitleaks/gitleaks/releases/latest" \
+            -H "Authorization: Bearer ${{ github.token }}" | jq -r '.tag_name' | sed 's/v//')
+          GITLEAKS_ZIP="gitleaks_${GITLEAKS_VER}_windows_x64.zip"
+          curl -sSL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VER}/${GITLEAKS_ZIP}" -o /tmp/gitleaks-post.zip
+          unzip -o -q /tmp/gitleaks-post.zip gitleaks.exe -d /tmp/gitleaks-post-bin
+          git fetch origin main --depth=50 2>/dev/null || true
+          BASE=$(git merge-base origin/main HEAD 2>/dev/null || echo "HEAD~1")
+          /tmp/gitleaks-post-bin/gitleaks.exe detect \
+            --source . \
+            --config .gitleaks.toml \
+            --log-opts="${BASE}..HEAD" \
+            --exit-code 1 \
+            --report-format json \
+            --report-path gitleaks-post.json 2>&1 || GITLEAKS_EXIT=$?
+          LEAK_COUNT=$(jq '. | length' gitleaks-post.json 2>/dev/null || echo 0)
+          echo "- **gitleaks (post-execution):** $LEAK_COUNT secrets in PR commits" >> $GITHUB_STEP_SUMMARY
+          exit ${GITLEAKS_EXIT:-0}
+
   summary:
     name: 'Pipeline Summary'
     runs-on: self-hosted
-    needs: [security, gate, deploy-staging, smoke-staging, contract-staging, functional-staging, deploy-production, smoke-production]
+    needs: [security, gate, deploy-staging, smoke-staging, contract-staging, functional-staging, deploy-production, smoke-production, security-post]
     if: always()
     steps:
       - name: Summary
