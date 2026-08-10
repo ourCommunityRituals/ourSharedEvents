@@ -48,7 +48,13 @@ jobs:
           python-version: '3.11'
 
       - name: Install deps
-        run: pip install pyyaml packaging "ruamel.yaml>=0.18"
+        # Install into the SAME interpreter the scripts run under (python3). On the
+        # self-hosted runners bare `pip` resolves to a different Python than
+        # `python3`, so ruamel.yaml landed where check_brain_contract.py couldn't
+        # import it -> "ERROR: ruamel.yaml is required" -> conformance-report.json
+        # never written -> the failure handler's open_drift_ticket.py then dies on
+        # a missing report. `python3 -m pip` pins the install to the right env.
+        run: python3 -m pip install pyyaml packaging "ruamel.yaml>=0.18"
 
       - name: Run brain test pyramid
         id: brain-pyramid
