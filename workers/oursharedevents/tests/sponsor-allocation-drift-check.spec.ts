@@ -77,6 +77,16 @@ interface BrainSponsorAllocationArtifact {
     status: string;
     surfaces: Record<string, BrainSurfaceAllocation>;
   };
+  // share_of_voice (OSE-663, Invariant #25). OSE mirrors status/unit/walls/
+  // weights; brain-only sub-fields (ratified, redistribution, fail_closed,
+  // is_local_derivation, consumed_by, attacked_by) are NOT compared.
+  share_of_voice?: {
+    status: string;
+    unit: string;
+    walls: Record<string, number | boolean>;
+    weights: Record<string, number>;
+    [k: string]: unknown;
+  };
   // brain-side-only fields (NOT compared):
   covenant?: unknown;
   drift_detection?: unknown;
@@ -218,6 +228,41 @@ export function findSponsorAllocationDrift(
     }
   }
 
+  // ── share_of_voice block (OSE-663, Invariant #25) ──────────────────────────
+  // Compare ONLY the fields the OSE mirror consumes: status, unit, walls,
+  // weights. Brain-only enrichment (ratified, redistribution, fail_closed,
+  // is_local_derivation, consumed_by, attacked_by) is intentionally skipped.
+  const brainSov = brain.share_of_voice;
+  const oseSov = ose.share_of_voice as unknown as
+    | { status: string; unit: string; walls: Record<string, unknown>; weights: Record<string, unknown> }
+    | undefined;
+  if (brainSov && oseSov) {
+    if (brainSov.status !== oseSov.status) {
+      findings.push({ scope: 'share_of_voice', field: 'status', brain_value: brainSov.status, ose_value: oseSov.status });
+    }
+    if (brainSov.unit !== oseSov.unit) {
+      findings.push({ scope: 'share_of_voice', field: 'unit', brain_value: brainSov.unit, ose_value: oseSov.unit });
+    }
+    const wallsB = brainSov.walls as Record<string, unknown>;
+    const wallsO = oseSov.walls;
+    for (const k of ['local_floor_pct', 'premium_cap_pct', 'mid_cap_pct', 'min_presence_pct', 'uniform_size_slot']) {
+      if (wallsB[k] !== wallsO[k]) {
+        findings.push({ scope: 'share_of_voice.walls', field: k, brain_value: wallsB[k], ose_value: wallsO[k] });
+      }
+    }
+    const weightsB = brainSov.weights as Record<string, unknown>;
+    const weightsO = oseSov.weights;
+    for (const k of ['base', 'mid', 'premium']) {
+      if (weightsB[k] !== weightsO[k]) {
+        findings.push({ scope: 'share_of_voice.weights', field: k, brain_value: weightsB[k], ose_value: weightsO[k] });
+      }
+    }
+  } else if (brainSov && !oseSov) {
+    findings.push({ scope: 'share_of_voice', field: '<entire block>', brain_value: 'present', ose_value: 'MISSING — OSE consumed copy is missing share_of_voice' });
+  } else if (!brainSov && oseSov) {
+    findings.push({ scope: 'share_of_voice', field: '<entire block>', brain_value: 'MISSING — brain canonical does not declare share_of_voice', ose_value: 'present' });
+  }
+
   return findings;
 }
 
@@ -285,6 +330,12 @@ describe('OSE-336 — sponsor-allocation drift detector (synthetic positive test
     return {
       schema_version: '1.0.0',
       version: '1.0',
+      share_of_voice: {
+        status: 'planned',
+        unit: 'percent_of_rotation_impressions',
+        walls: { local_floor_pct: 30, premium_cap_pct: 40, mid_cap_pct: 20, min_presence_pct: 2, uniform_size_slot: true },
+        weights: { base: 1, mid: 3, premium: 7 },
+      },
       classification: { field: 'is_local', type: 'boolean', default: false },
       display_priority: { rule: 'locals_first' },
       slot_floor: {
@@ -311,6 +362,12 @@ describe('OSE-336 — sponsor-allocation drift detector (synthetic positive test
   ): SponsorAllocationCanonical {
     return {
       version: '1.0',
+      share_of_voice: {
+        status: 'planned',
+        unit: 'percent_of_rotation_impressions',
+        walls: { local_floor_pct: 30, premium_cap_pct: 40, mid_cap_pct: 20, min_presence_pct: 2, uniform_size_slot: true },
+        weights: { base: 1, mid: 3, premium: 7 },
+      },
       classification: { field: 'is_local', type: 'boolean', default: false },
       display_priority: { rule: 'locals_first' },
       slot_floor: {
@@ -479,6 +536,64 @@ describe('OSE-336 — sponsor-allocation drift detector (synthetic positive test
     expect(
       findings.some((f) => f.scope === 'slot_floor.surfaces.posterTop' && f.field === 'rationale')
     ).toBe(true);
+  });
+
+  test('OSE-336 | detector | share_of_voice premium_cap drift (brain 40 → OSE 50) → flagged — Invariant #25 cap divergence', () => {
+    // THE #25 adversarial test: the ratified premium cap silently diverges
+    // between brain and the OSE mirror. Without this comparison, a cap change
+    // in one file and not the other would ship undetected.
+    const findings = findSponsorAllocationDrift(
+      fakeBrain(),
+      fakeOse({
+        share_of_voice: {
+          status: 'planned',
+          unit: 'percent_of_rotation_impressions',
+          walls: { local_floor_pct: 30, premium_cap_pct: 50, mid_cap_pct: 20, min_presence_pct: 2, uniform_size_slot: true },
+          weights: { base: 1, mid: 3, premium: 7 },
+        },
+      })
+    );
+    const v = findings.find((f) => f.scope === 'share_of_voice.walls' && f.field === 'premium_cap_pct');
+    expect(v).toBeDefined();
+    expect(v?.brain_value).toBe(40);
+    expect(v?.ose_value).toBe(50);
+  });
+
+  test('OSE-336 | detector | share_of_voice local_floor drift (brain 30 → OSE 20) → flagged', () => {
+    const findings = findSponsorAllocationDrift(
+      fakeBrain(),
+      fakeOse({
+        share_of_voice: {
+          status: 'planned',
+          unit: 'percent_of_rotation_impressions',
+          walls: { local_floor_pct: 20, premium_cap_pct: 40, mid_cap_pct: 20, min_presence_pct: 2, uniform_size_slot: true },
+          weights: { base: 1, mid: 3, premium: 7 },
+        },
+      })
+    );
+    expect(findings.some((f) => f.scope === 'share_of_voice.walls' && f.field === 'local_floor_pct')).toBe(true);
+  });
+
+  test('OSE-336 | detector | share_of_voice weight drift (premium 7 → 5) → flagged', () => {
+    const findings = findSponsorAllocationDrift(
+      fakeBrain(),
+      fakeOse({
+        share_of_voice: {
+          status: 'planned',
+          unit: 'percent_of_rotation_impressions',
+          walls: { local_floor_pct: 30, premium_cap_pct: 40, mid_cap_pct: 20, min_presence_pct: 2, uniform_size_slot: true },
+          weights: { base: 1, mid: 3, premium: 5 },
+        },
+      })
+    );
+    const v = findings.find((f) => f.scope === 'share_of_voice.weights' && f.field === 'premium');
+    expect(v).toBeDefined();
+    expect(v?.brain_value).toBe(7);
+    expect(v?.ose_value).toBe(5);
+  });
+
+  test('OSE-336 | detector | share_of_voice identical → zero findings (no false positive)', () => {
+    expect(findSponsorAllocationDrift(fakeBrain(), fakeOse())).toEqual([]);
   });
 
   test('OSE-336 | detector | brain-only enrichment ignored (covenant + drift_detection + notes)', () => {

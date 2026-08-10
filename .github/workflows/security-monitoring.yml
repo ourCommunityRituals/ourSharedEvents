@@ -1,0 +1,739 @@
+# Security Monitoring — Daily AI-Powered Security Digest
+#
+# Runs on a daily schedule (06:00 UTC) and can be triggered manually.
+# Each job is failure-isolated; a broken scanner does not silence others.
+#
+# Jobs:
+#   npm-audit      — vulnerability scan across all workspace packages
+#   secret-scan    — gitleaks over commits pushed in the last 24 h
+#   health-check   — Playwright security + availability check against staging
+#   linear-issues  — opens a Linear issue for every failing check
+#   digest         — posts a webhook summary regardless of outcome
+#
+# Required secrets:
+#   LINEAR_API_KEY          — Linear personal API token
+#   LINEAR_TEAM_ID          — Linear team identifier (e.g. "OUR")
+#   SECURITY_WEBHOOK_URL    — Slack (or compatible) incoming webhook
+#   STAGING_ADMIN_KEY       — Bearer token for staging admin health endpoints
+#   STAGING_BASE_URL        — https://stg.oursharedevents.com
+#
+# Self-hosted runner note: this workflow targets the same `self-hosted` pool
+# used by the rest of the CI pipeline. If you want it isolated, add a label
+# and update the `runs-on` fields below.
+
+name: Security Monitoring — Daily
+
+on:
+  schedule:
+    # 06:00 UTC every day
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run — do not open Linear issues or post webhooks'
+        required: false
+        default: 'false'
+        type: boolean
+
+concurrency:
+  group: security-monitoring-daily
+  cancel-in-progress: false   # never cancel a running audit
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  DRY_RUN: ${{ inputs.dry_run || 'false' }}
+  STAGING_URL: ${{ secrets.STAGING_BASE_URL || 'https://stg.oursharedevents.com' }}
+
+# ─── Job 1: npm audit ────────────────────────────────────────────────────────
+jobs:
+  npm-audit:
+    name: npm audit — all packages
+    runs-on: self-hosted
+    outputs:
+      status: ${{ steps.audit.outputs.status }}
+      critical: ${{ steps.audit.outputs.critical }}
+      high: ${{ steps.audit.outputs.high }}
+      moderate: ${{ steps.audit.outputs.moderate }}
+      low: ${{ steps.audit.outputs.low }}
+      total: ${{ steps.audit.outputs.total }}
+      summary: ${{ steps.audit.outputs.summary }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Stage @ocr/flags workspace package
+        run: bash scripts/ci-stage-ocr-workspace.sh
+
+      - name: Install dependencies (root)
+        run: |
+          HASH="$(node --version)-$(git hash-object package-lock.json)"
+          STAMP=node_modules/.install-stamp
+          if [ -f "$STAMP" ] && [ "$(cat $STAMP)" = "$HASH" ] && [ -f "node_modules/.package-lock.json" ]; then
+            echo "node_modules up-to-date — skipping npm ci"
+          else
+            npm ci --prefer-offline || npm ci
+            echo "$HASH" > "$STAMP"
+          fi
+
+      - name: Install dependencies (worker)
+        working-directory: workers/oursharedevents
+        run: |
+          HASH="$(node --version)-$(git hash-object package-lock.json 2>/dev/null || echo '')"
+          STAMP=node_modules/.install-stamp
+          if [ -f "$STAMP" ] && [ "$(cat $STAMP)" = "$HASH" ] && [ -f "node_modules/.package-lock.json" ]; then
+            echo "worker node_modules up-to-date — skipping npm ci"
+          else
+            npm ci --prefer-offline || npm ci
+            echo "$HASH" > "$STAMP"
+          fi
+
+      - name: Run npm audit — root
+        id: audit
+        run: |
+          mkdir -p .security-reports
+
+          set +e
+          npm audit --json > .security-reports/npm-audit-root.json 2>&1
+          ROOT_EXIT=$?
+
+          npm audit --json --prefix workers/oursharedevents > .security-reports/npm-audit-worker.json 2>&1
+          WORKER_EXIT=$?
+          set -e
+
+          # Merge counts from both reports
+          parse_count() {
+            local file="$1" field="$2"
+            jq --arg f "$field" '.metadata.vulnerabilities[$f] // 0' "$file" 2>/dev/null || echo 0
+          }
+
+          R_CRIT=$(parse_count .security-reports/npm-audit-root.json critical)
+          R_HIGH=$(parse_count .security-reports/npm-audit-root.json high)
+          R_MOD=$(parse_count .security-reports/npm-audit-root.json moderate)
+          R_LOW=$(parse_count .security-reports/npm-audit-root.json low)
+
+          W_CRIT=$(parse_count .security-reports/npm-audit-worker.json critical)
+          W_HIGH=$(parse_count .security-reports/npm-audit-worker.json high)
+          W_MOD=$(parse_count .security-reports/npm-audit-worker.json moderate)
+          W_LOW=$(parse_count .security-reports/npm-audit-worker.json low)
+
+          CRITICAL=$((R_CRIT + W_CRIT))
+          HIGH=$((R_HIGH + W_HIGH))
+          MODERATE=$((R_MOD + W_MOD))
+          LOW=$((R_LOW + W_LOW))
+          TOTAL=$((CRITICAL + HIGH + MODERATE + LOW))
+          BLOCKING=$((CRITICAL + HIGH))
+
+          echo "critical=$CRITICAL" >> "$GITHUB_OUTPUT"
+          echo "high=$HIGH"         >> "$GITHUB_OUTPUT"
+          echo "moderate=$MODERATE" >> "$GITHUB_OUTPUT"
+          echo "low=$LOW"           >> "$GITHUB_OUTPUT"
+          echo "total=$TOTAL"       >> "$GITHUB_OUTPUT"
+
+          if [ "$BLOCKING" -gt 0 ]; then
+            STATUS="FAILED"
+            SUMMARY="npm audit: $CRITICAL critical + $HIGH high vulnerabilities detected"
+          else
+            STATUS="PASSED"
+            SUMMARY="npm audit: no critical/high vulnerabilities ($MODERATE moderate, $LOW low)"
+          fi
+          echo "status=$STATUS"   >> "$GITHUB_OUTPUT"
+          echo "summary=$SUMMARY" >> "$GITHUB_OUTPUT"
+
+          echo "=== npm audit result ==="
+          echo "$SUMMARY"
+
+      - name: Upload audit reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: npm-audit-${{ github.run_number }}
+          path: .security-reports/
+          retention-days: 90
+
+# ─── Job 2: gitleaks secret scan ─────────────────────────────────────────────
+  secret-scan:
+    name: gitleaks — commits last 24 h
+    runs-on: self-hosted
+    outputs:
+      status: ${{ steps.gitleaks.outputs.status }}
+      leak_count: ${{ steps.gitleaks.outputs.leak_count }}
+      summary: ${{ steps.gitleaks.outputs.summary }}
+    steps:
+      - name: Checkout (full history for log range)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run gitleaks on recent commits
+        id: gitleaks
+        run: |
+          SINCE=$(date -u -d '24 hours ago' '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null \
+            || date -u -v-24H '+%Y-%m-%dT%H:%M:%SZ')  # macOS fallback
+
+          # Collect commits from the last 24h on all branches that were pushed
+          LOG_REFS=$(git log --oneline --since="$SINCE" --all --format="%H" | head -200)
+
+          if [ -z "$LOG_REFS" ]; then
+            echo "No commits in the last 24 h — skipping scan"
+            echo "status=PASSED"    >> "$GITHUB_OUTPUT"
+            echo "leak_count=0"     >> "$GITHUB_OUTPUT"
+            echo "summary=gitleaks: no commits in window" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          OLDEST=$(echo "$LOG_REFS" | tail -1)
+          NEWEST=$(echo "$LOG_REFS" | head -1)
+
+          mkdir -p .security-reports
+          set +e
+          gitleaks detect \
+            --source . \
+            --config .gitleaks.toml \
+            --log-opts "${OLDEST}^..${NEWEST}" \
+            --report-format json \
+            --report-path .security-reports/gitleaks.json \
+            --no-banner \
+            --exit-code 1
+          GL_EXIT=$?
+          set -e
+
+          if [ "$GL_EXIT" -eq 0 ]; then
+            LEAK_COUNT=0
+            STATUS="PASSED"
+            SUMMARY="gitleaks: no secrets detected in last 24 h of commits"
+          else
+            LEAK_COUNT=$(jq 'length' .security-reports/gitleaks.json 2>/dev/null || echo "unknown")
+            STATUS="FAILED"
+            SUMMARY="gitleaks: $LEAK_COUNT potential secret(s) detected — review gitleaks.json"
+          fi
+
+          echo "status=$STATUS"         >> "$GITHUB_OUTPUT"
+          echo "leak_count=$LEAK_COUNT" >> "$GITHUB_OUTPUT"
+          echo "summary=$SUMMARY"       >> "$GITHUB_OUTPUT"
+          echo "=== gitleaks result ==="
+          echo "$SUMMARY"
+
+      - name: Upload gitleaks report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gitleaks-${{ github.run_number }}
+          path: .security-reports/gitleaks.json
+          retention-days: 90
+
+# ─── Job 3: Playwright health + security check ───────────────────────────────
+  health-check:
+    name: Playwright — staging health + security headers
+    runs-on: self-hosted
+    outputs:
+      status: ${{ steps.pw.outputs.status }}
+      summary: ${{ steps.pw.outputs.summary }}
+      findings: ${{ steps.pw.outputs.findings }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Playwright deps
+        run: npx playwright install --with-deps chromium
+
+      - name: Run security health check
+        id: pw
+        env:
+          STAGING_BASE_URL: ${{ env.STAGING_URL }}
+          STAGING_ADMIN_KEY: ${{ secrets.STAGING_ADMIN_KEY }}
+        run: |
+          mkdir -p .security-reports
+
+          # Inline Playwright script — no external test file needed
+          cat > /tmp/security-health-check.js << 'PWEOF'
+          const { chromium } = require('@playwright/test');
+          const BASE = process.env.STAGING_BASE_URL || 'https://stg.oursharedevents.com';
+          const ADMIN_KEY = process.env.STAGING_ADMIN_KEY || '';
+
+          const REQUIRED_SECURITY_HEADERS = [
+            'content-security-policy',
+            'x-content-type-options',
+            'x-frame-options',
+            'strict-transport-security',
+          ];
+
+          const FORBIDDEN_RESPONSE_HEADERS = [
+            'x-powered-by',
+            'server',
+          ];
+
+          const findings = [];
+          let passed = 0;
+          let failed = 0;
+
+          async function check(label, fn) {
+            try {
+              await fn();
+              console.log(`PASS  ${label}`);
+              passed++;
+            } catch (err) {
+              console.error(`FAIL  ${label}: ${err.message}`);
+              findings.push({ label, error: err.message });
+              failed++;
+            }
+          }
+
+          (async () => {
+            const browser = await chromium.launch();
+            const ctx = await browser.newContext();
+            const page = await ctx.newPage();
+
+            // 1. Health endpoint
+            await check('GET /health returns 200', async () => {
+              const res = await page.request.get(`${BASE}/health`);
+              if (res.status() !== 200) throw new Error(`HTTP ${res.status()}`);
+              const body = await res.json();
+              if (!body.ok) throw new Error('health.ok is not true');
+            });
+
+            // 2. HTTPS redirect from http (only if not on localhost)
+            if (!BASE.startsWith('http://localhost')) {
+              await check('HTTP redirects to HTTPS', async () => {
+                const httpUrl = BASE.replace('https://', 'http://');
+                const res = await page.request.get(httpUrl, { maxRedirects: 0 }).catch(() => null);
+                // Cloudflare handles this at edge; accept 301/302/307/308
+                if (res && ![301, 302, 307, 308].includes(res.status())) {
+                  throw new Error(`Expected redirect, got ${res.status()}`);
+                }
+              });
+            }
+
+            // 3. Required security headers on public page
+            await check('Public page has required security headers', async () => {
+              const res = await page.request.get(`${BASE}/`);
+              const headers = res.headers();
+              const missing = REQUIRED_SECURITY_HEADERS.filter(h => !headers[h]);
+              if (missing.length > 0) throw new Error(`Missing headers: ${missing.join(', ')}`);
+            });
+
+            // 4. Forbidden response headers
+            await check('Public page does not leak server identity headers', async () => {
+              const res = await page.request.get(`${BASE}/`);
+              const headers = res.headers();
+              const present = FORBIDDEN_RESPONSE_HEADERS.filter(h => headers[h]);
+              if (present.length > 0) throw new Error(`Forbidden headers present: ${present.join(', ')}`);
+            });
+
+            // 5. Admin endpoint without token returns 401/302
+            await check('Admin endpoint rejects unauthenticated requests', async () => {
+              const res = await page.request.get(`${BASE}/api/v2/admin/events`, {
+                maxRedirects: 0,
+              });
+              if (![401, 302, 403].includes(res.status())) {
+                throw new Error(`Expected 401/302/403, got ${res.status()}`);
+              }
+            });
+
+            // 6. XSS reflection check — inject payload in query param
+            await check('Public API does not reflect XSS payloads', async () => {
+              const xss = '<script>alert(1)</script>';
+              const res = await page.request.get(
+                `${BASE}/api/v2/events?search=${encodeURIComponent(xss)}`
+              );
+              const text = await res.text();
+              if (text.includes('<script>alert(1)</script>')) {
+                throw new Error('XSS payload reflected verbatim in response');
+              }
+            });
+
+            // 7. Rate limit endpoint exists and is protected
+            await check('Rate-limit-stats endpoint requires admin auth', async () => {
+              const res = await page.request.get(`${BASE}/api/v2/admin/security/rate-limit-stats`, {
+                maxRedirects: 0,
+              });
+              if (![401, 302, 403].includes(res.status())) {
+                throw new Error(`Expected 401/302/403, got ${res.status()}`);
+              }
+            });
+
+            // 8. Authenticated admin health (only if STAGING_ADMIN_KEY set)
+            if (ADMIN_KEY) {
+              await check('Authenticated admin endpoint returns 200', async () => {
+                const res = await page.request.get(`${BASE}/api/v2/admin/events`, {
+                  headers: { Authorization: `Bearer ${ADMIN_KEY}` },
+                });
+                if (res.status() !== 200) throw new Error(`HTTP ${res.status()}`);
+              });
+            }
+
+            await browser.close();
+
+            const result = { passed, failed, findings };
+            require('fs').writeFileSync(
+              '.security-reports/health-check.json',
+              JSON.stringify(result, null, 2)
+            );
+
+            if (failed > 0) {
+              console.error(`\nHealth check FAILED: ${failed} check(s) failed`);
+              process.exit(1);
+            } else {
+              console.log(`\nHealth check PASSED: ${passed} check(s) passed`);
+            }
+          })();
+          PWEOF
+
+          set +e
+          node /tmp/security-health-check.js
+          PW_EXIT=$?
+          set -e
+
+          if [ "$PW_EXIT" -eq 0 ]; then
+            STATUS="PASSED"
+            SUMMARY="Playwright health check: all security checks passed"
+          else
+            FAILED_COUNT=$(jq '.failed' .security-reports/health-check.json 2>/dev/null || echo "?")
+            SUMMARY="Playwright health check: $FAILED_COUNT check(s) failed — see health-check.json"
+            STATUS="FAILED"
+          fi
+
+          FINDINGS=$(jq -c '.findings' .security-reports/health-check.json 2>/dev/null || echo '[]')
+
+          echo "status=$STATUS"     >> "$GITHUB_OUTPUT"
+          echo "summary=$SUMMARY"   >> "$GITHUB_OUTPUT"
+          # findings may be large — write to file, pass path
+          echo "findings=$FINDINGS" >> "$GITHUB_OUTPUT"
+
+      - name: Upload health check report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: health-check-${{ github.run_number }}
+          path: .security-reports/health-check.json
+          retention-days: 90
+
+# ─── Job 4: Create Linear issues for failures ────────────────────────────────
+  linear-issues:
+    name: Create Linear issues for findings
+    runs-on: self-hosted
+    needs: [npm-audit, secret-scan, health-check]
+    if: always()
+    outputs:
+      issues_created: ${{ steps.create.outputs.issues_created }}
+    steps:
+      - name: Create Linear issues for failed checks
+        id: create
+        env:
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+          LINEAR_TEAM_ID: ${{ secrets.LINEAR_TEAM_ID }}
+          NPM_STATUS: ${{ needs.npm-audit.outputs.status }}
+          NPM_SUMMARY: ${{ needs.npm-audit.outputs.summary }}
+          NPM_CRITICAL: ${{ needs.npm-audit.outputs.critical }}
+          SECRET_STATUS: ${{ needs.secret-scan.outputs.status }}
+          SECRET_SUMMARY: ${{ needs.secret-scan.outputs.summary }}
+          SECRET_LEAK_COUNT: ${{ needs.secret-scan.outputs.leak_count }}
+          HEALTH_STATUS: ${{ needs.health-check.outputs.status }}
+          HEALTH_SUMMARY: ${{ needs.health-check.outputs.summary }}
+          HEALTH_FINDINGS: ${{ needs.health-check.outputs.findings }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          DRY_RUN: ${{ env.DRY_RUN }}
+        run: |
+          if [ -z "$LINEAR_API_KEY" ] || [ -z "$LINEAR_TEAM_ID" ]; then
+            echo "LINEAR_API_KEY or LINEAR_TEAM_ID not set — skipping Linear issue creation"
+            echo "issues_created=0" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          ISSUES_CREATED=0
+          TODAY=$(date -u '+%Y-%m-%d')
+
+          create_issue() {
+            local title="$1"
+            local description="$2"
+            local priority="$3"   # 1=urgent, 2=high, 3=medium, 4=low
+            local label_name="$4" # e.g. "security"
+
+            if [ "$DRY_RUN" = "true" ]; then
+              echo "[DRY RUN] Would create Linear issue: $title (priority=$priority)"
+              return 0
+            fi
+
+            # GraphQL mutation — Linear API v2
+            QUERY=$(cat << GQLEOF
+          mutation CreateIssue(\$input: IssueCreateInput!) {
+            issueCreate(input: \$input) {
+              success
+              issue { id identifier url }
+            }
+          }
+          GQLEOF
+)
+            VARIABLES=$(jq -n \
+              --arg teamId "$LINEAR_TEAM_ID" \
+              --arg title "$title" \
+              --arg description "$description" \
+              --argjson priority "$priority" \
+              '{
+                input: {
+                  teamId: $teamId,
+                  title: $title,
+                  description: $description,
+                  priority: $priority
+                }
+              }')
+
+            RESPONSE=$(curl -s -X POST https://api.linear.app/graphql \
+              -H "Authorization: $LINEAR_API_KEY" \
+              -H "Content-Type: application/json" \
+              -d "$(jq -n --arg q "$QUERY" --argjson v "$VARIABLES" '{query: $q, variables: $v}')")
+
+            ISSUE_URL=$(echo "$RESPONSE" | jq -r '.data.issueCreate.issue.url // empty')
+            SUCCESS=$(echo "$RESPONSE" | jq -r '.data.issueCreate.success // false')
+
+            if [ "$SUCCESS" = "true" ]; then
+              echo "Created Linear issue: $ISSUE_URL"
+              ISSUES_CREATED=$((ISSUES_CREATED + 1))
+            else
+              echo "Failed to create Linear issue. Response: $RESPONSE"
+            fi
+          }
+
+          # npm audit failures
+          if [ "$NPM_STATUS" = "FAILED" ]; then
+            PRIORITY=2  # high
+            if [ "${NPM_CRITICAL:-0}" -gt 0 ]; then
+              PRIORITY=1  # urgent when critical vulns exist
+            fi
+
+            DESCRIPTION=$(cat << EOF
+          ## Security Alert — npm Vulnerability Scan
+
+          **Date:** $TODAY
+          **Run:** $RUN_URL
+
+          ### Summary
+          $NPM_SUMMARY
+
+          ### Severity Breakdown
+          - Critical: ${NPM_CRITICAL:-0}
+          - High: ${{ needs.npm-audit.outputs.high }}
+          - Moderate: ${{ needs.npm-audit.outputs.moderate }}
+          - Low: ${{ needs.npm-audit.outputs.low }}
+
+          ### Steps to Investigate
+          1. Download the \`npm-audit-${{ github.run_number }}\` artifact from the workflow run
+          2. Run \`npm audit\` locally to reproduce
+          3. Run \`npm audit fix\` for auto-fixable vulnerabilities
+          4. For manual fixes, consult \`npm audit --json\` advisory URLs
+          5. If a CVE cannot be fixed, create a security exception in \`.nsprc\` with justification
+
+          ### References
+          - [Workflow Run]($RUN_URL)
+          - [docs/SECURITY.md](../docs/SECURITY.md)
+          EOF
+          )
+            create_issue "[Security] npm audit: critical/high vulnerabilities — $TODAY" "$DESCRIPTION" "$PRIORITY" "security"
+          fi
+
+          # Secret scan failures
+          if [ "$SECRET_STATUS" = "FAILED" ]; then
+            DESCRIPTION=$(cat << EOF
+          ## CRITICAL Security Alert — Potential Secret Detected
+
+          **Date:** $TODAY
+          **Run:** $RUN_URL
+
+          ### Summary
+          $SECRET_SUMMARY
+
+          ### IMMEDIATE Steps Required
+          1. Download the \`gitleaks-${{ github.run_number }}\` artifact — review \`gitleaks.json\`
+          2. **Rotate any exposed credentials immediately** — treat them as compromised
+          3. Check Cloudflare dashboard: Secrets → invalidate and re-issue affected secrets
+          4. Review commit history for the leak window
+          5. If a secret was pushed to main, consider it fully compromised — rotate before any other step
+          6. Add false-positive patterns to \`.gitleaks.toml\` only after confirming the match is safe
+
+          ### Affected Commits Window
+          Last 24 hours of commits across all branches
+
+          ### References
+          - [Workflow Run]($RUN_URL)
+          - [gitleaks docs](https://github.com/gitleaks/gitleaks)
+          - [Cloudflare Secrets Rotation](https://developers.cloudflare.com/workers/configuration/secrets/)
+          EOF
+          )
+            create_issue "[Security][CRITICAL] Secret detected in commits — $TODAY" "$DESCRIPTION" 1 "security"
+          fi
+
+          # Health check failures
+          if [ "$HEALTH_STATUS" = "FAILED" ]; then
+            DESCRIPTION=$(cat << EOF
+          ## Security Alert — Staging Health Check Failed
+
+          **Date:** $TODAY
+          **Run:** $RUN_URL
+          **Environment:** $STAGING_URL
+
+          ### Summary
+          $HEALTH_SUMMARY
+
+          ### Failed Checks
+          \`\`\`json
+          $HEALTH_FINDINGS
+          \`\`\`
+
+          ### Steps to Investigate
+          1. Review the failed checks listed above
+          2. Download \`health-check-${{ github.run_number }}\` artifact for full details
+          3. Check Cloudflare Workers dashboard for errors/exceptions
+          4. Verify security headers in CF Zone settings
+          5. Check if admin auth (CF Access) is still correctly configured
+          6. For XSS findings: grep worker source for reflection patterns
+
+          ### Affected Endpoint
+          $STAGING_URL
+
+          ### References
+          - [Workflow Run]($RUN_URL)
+          - [Cloudflare Access Dashboard](https://dash.cloudflare.com/)
+          EOF
+          )
+            create_issue "[Security] Staging health check failed — $TODAY" "$DESCRIPTION" 2 "security"
+          fi
+
+          echo "issues_created=$ISSUES_CREATED" >> "$GITHUB_OUTPUT"
+
+# ─── Job 5: Daily digest webhook ─────────────────────────────────────────────
+  digest:
+    name: Post daily security digest
+    runs-on: self-hosted
+    needs: [npm-audit, secret-scan, health-check, linear-issues]
+    if: always()
+    steps:
+      - name: Send digest to webhook
+        env:
+          WEBHOOK_URL: ${{ secrets.SECURITY_WEBHOOK_URL }}
+          NPM_STATUS: ${{ needs.npm-audit.outputs.status }}
+          NPM_SUMMARY: ${{ needs.npm-audit.outputs.summary }}
+          SECRET_STATUS: ${{ needs.secret-scan.outputs.status }}
+          SECRET_SUMMARY: ${{ needs.secret-scan.outputs.summary }}
+          HEALTH_STATUS: ${{ needs.health-check.outputs.status }}
+          HEALTH_SUMMARY: ${{ needs.health-check.outputs.summary }}
+          ISSUES_CREATED: ${{ needs.linear-issues.outputs.issues_created }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          DRY_RUN: ${{ env.DRY_RUN }}
+        run: |
+          TODAY=$(date -u '+%Y-%m-%d')
+
+          status_emoji() {
+            if [ "$1" = "PASSED" ]; then echo "green"; else echo "danger"; fi
+          }
+
+          status_icon() {
+            if [ "$1" = "PASSED" ]; then echo "PASS"; else echo "FAIL"; fi
+          }
+
+          OVERALL="PASSED"
+          if [ "$NPM_STATUS" != "PASSED" ] || [ "$SECRET_STATUS" != "PASSED" ] || [ "$HEALTH_STATUS" != "PASSED" ]; then
+            OVERALL="FAILED"
+          fi
+
+          OVERALL_ICON=$(status_icon "$OVERALL")
+          OVERALL_COLOR=$(status_emoji "$OVERALL")
+
+          if [ -z "$WEBHOOK_URL" ]; then
+            echo "SECURITY_WEBHOOK_URL not set — skipping webhook"
+            exit 0
+          fi
+
+          if [ "$DRY_RUN" = "true" ]; then
+            echo "[DRY RUN] Would post digest to webhook"
+            exit 0
+          fi
+
+          # Slack Block Kit payload
+          PAYLOAD=$(jq -n \
+            --arg overall "$OVERALL_ICON daily security: $TODAY" \
+            --arg color "$OVERALL_COLOR" \
+            --arg npm_icon "$(status_icon "$NPM_STATUS")" \
+            --arg npm_text "$NPM_SUMMARY" \
+            --arg secret_icon "$(status_icon "$SECRET_STATUS")" \
+            --arg secret_text "$SECRET_SUMMARY" \
+            --arg health_icon "$(status_icon "$HEALTH_STATUS")" \
+            --arg health_text "$HEALTH_SUMMARY" \
+            --arg issues "$ISSUES_CREATED Linear issue(s) created" \
+            --arg run_url "$RUN_URL" \
+            '{
+              attachments: [{
+                color: $color,
+                blocks: [
+                  {
+                    type: "header",
+                    text: { type: "plain_text", text: $overall }
+                  },
+                  {
+                    type: "section",
+                    fields: [
+                      { type: "mrkdwn", text: ("*npm audit*\n" + $npm_icon + " " + $npm_text) },
+                      { type: "mrkdwn", text: ("*Secret scan*\n" + $secret_icon + " " + $secret_text) },
+                      { type: "mrkdwn", text: ("*Health check*\n" + $health_icon + " " + $health_text) },
+                      { type: "mrkdwn", text: ("*Linear*\n" + $issues) }
+                    ]
+                  },
+                  {
+                    type: "actions",
+                    elements: [{
+                      type: "button",
+                      text: { type: "plain_text", text: "View Workflow Run" },
+                      url: $run_url
+                    }]
+                  }
+                ]
+              }]
+            }')
+
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$WEBHOOK_URL" \
+            -H "Content-Type: application/json" \
+            -d "$PAYLOAD")
+
+          if [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 300 ]; then
+            echo "Digest posted successfully (HTTP $HTTP_CODE)"
+          else
+            echo "Webhook post failed (HTTP $HTTP_CODE) — non-fatal"
+          fi
+
+      - name: Write job summary
+        if: always()
+        env:
+          NPM_STATUS: ${{ needs.npm-audit.outputs.status }}
+          NPM_SUMMARY: ${{ needs.npm-audit.outputs.summary }}
+          SECRET_STATUS: ${{ needs.secret-scan.outputs.status }}
+          SECRET_SUMMARY: ${{ needs.secret-scan.outputs.summary }}
+          HEALTH_STATUS: ${{ needs.health-check.outputs.status }}
+          HEALTH_SUMMARY: ${{ needs.health-check.outputs.summary }}
+          ISSUES_CREATED: ${{ needs.linear-issues.outputs.issues_created }}
+        run: |
+          TODAY=$(date -u '+%Y-%m-%d')
+
+          icon() { if [ "$1" = "PASSED" ]; then echo "OK"; else echo "FAIL"; fi; }
+
+          {
+            echo "## Security Monitoring Digest — $TODAY"
+            echo ""
+            echo "| Check | Status | Summary |"
+            echo "|-------|--------|---------|"
+            echo "| npm audit | $(icon "$NPM_STATUS") | $NPM_SUMMARY |"
+            echo "| Secret scan | $(icon "$SECRET_STATUS") | $SECRET_SUMMARY |"
+            echo "| Health check | $(icon "$HEALTH_STATUS") | $HEALTH_SUMMARY |"
+            echo ""
+            echo "**Linear issues created:** ${ISSUES_CREATED:-0}"
+          } >> "$GITHUB_STEP_SUMMARY"

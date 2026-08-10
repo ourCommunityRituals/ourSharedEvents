@@ -65,6 +65,7 @@ beforeAll(async () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('S1: Form handlers NEVER reference main DB', () => {
+  // @born-red TL-024 | method: design-time-negative-assertion | date: 2026-08-03
   test('forms.ts has zero references to env.DB or .DB.prepare', () => {
     const sources: Record<string, string> = JSON.parse(tenv().TEST_SOURCE_FILES_JSON);
     for (const [path, content] of Object.entries(sources)) {
@@ -81,6 +82,7 @@ describe('S1: Form handlers NEVER reference main DB', () => {
 });
 
 describe('S2: Scan/event handlers NEVER reference FORMS_DB', () => {
+  // @born-red TL-002 | method: design-time-negative-assertion | date: 2026-08-03
   test('events.ts, health.ts, pages.ts have zero references to FORMS_DB', () => {
     const sources: Record<string, string> = JSON.parse(tenv().TEST_SOURCE_FILES_JSON);
     for (const [path, content] of Object.entries(sources)) {
@@ -101,6 +103,7 @@ describe('S2: Scan/event handlers NEVER reference FORMS_DB', () => {
 });
 
 describe('S3: forms-db.ts utility has ZERO main DB references', () => {
+  // @born-red TL-004 | method: design-time-negative-assertion | date: 2026-08-03
   test('forms-db.ts never mentions DB binding, sheets, or scan tables', () => {
     const sources: Record<string, string> = JSON.parse(tenv().TEST_SOURCE_FILES_JSON);
     for (const [path, content] of Object.entries(sources)) {
@@ -167,6 +170,7 @@ describe('S4: Lifecycle job isolation', () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('S5: Registration destruction after expiry', () => {
+  // @born-red TL-003 | method: design-time-negative-assertion | date: 2026-08-03
   test('registrations with past expires_at are deleted by lifecycle query', async () => {
     const pastDate = '2020-01-01T00:00:00.000Z';
     const futureDate = '2099-01-01T00:00:00.000Z';
@@ -425,6 +429,7 @@ describe('S12: Check-in stores zero PII', () => {
 });
 
 describe('S13: No raw email column in any FORMS_DB table', () => {
+  // @born-red TL-007 | method: design-time-negative-assertion | date: 2026-08-03
   test('no table has a column named "email" (only email_hash or email_encrypted)', async () => {
     const tables = ['form_registrations', 'checkin_counts', 'form_surveys', 'email_signups'];
     for (const table of tables) {

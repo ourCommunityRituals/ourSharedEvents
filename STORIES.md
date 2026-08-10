@@ -67,6 +67,7 @@ Stories are ordered by the sequence you work through them. Each row unlocks the 
 | SR-22                                              | —        | 📋 BACKLOG     | White-label branding on report (enterprise)                           | —                |
 | SR-23                                              | —        | 📋 BACKLOG     | Distributed rate limiting (CF Rules)                                  | SR-16            |
 | SR-24                                              | —        | 📋 BACKLOG     | Report email share (enterprise)                                       | SR-18            |
+| SR-25                                              | —        | 📋 BACKLOG     | SharedReport competitive intelligence — local-vs-paid sponsor frame   | SR-12            |
 | **Epic AS — All-Surface FE Uniformity**            |          |                |                                                                       |                  |
 | AS-1                                               | —        | 📋 BACKLOG     | Uniform DesignTokens across all surfaces _(xref DESIGN-8)_            | —                |
 | AS-2                                               | —        | ✅ DONE        | data-testid on Poster (0→10+) _(xref DESIGN-3)_                       | —                |
@@ -673,6 +674,68 @@ _Stories sourced from CCR audit (docs/CCR_SHARED_REPORT_AUDIT.md). SR-1 through 
 - "Share via Email" button for enterprise tier
 - Sends link or PDF attachment
 - Respects PII firewall (no customer data in email)
+
+---
+
+### SR-25: SharedReport competitive intelligence — local-vs-paid sponsor frame
+
+**Status:** 📋 BACKLOG
+**Rating:** MVP-CORE
+**Prerequisite:** SR-12
+**Effort:** M
+
+**Why this story exists:**
+The SharedReport's core value proposition to a paying sponsor is the local-vs-paid comparison: *Are local grassroots advertisers out-clicking your investment, or is your spend doing real work against them?* That comparison IS the proof of ROI — the data that drives renewal decisions.
+
+The current `filterReportByDepth` implementation treats `local`/`mid`/`premium` as access gates, stripping report fields from sponsor readers. This is architecturally backwards: those labels are sponsor classification metadata that belong **in** the report as competitive intelligence, not on the read path as a filter.
+
+**The correct model:**
+- `local`/`mid`/`premium` are sponsor class labels — they describe what class of competitor is at the event
+- The SharedReport shows the full competitive picture: all sponsor classes, all impression counts, the local-vs-paid breakdown by class
+- Authorization controls WHO reads the report (signed-link token, service token) — TL-040 boundary stays (sponsor tokens can't read another individual sponsor's raw attribution)
+- The `platform tier` (free/mid/enterprise feature flags) controls what tools the organizer has; the SharedReport reflects what those tools produced — it is a straight readout, not a gated view
+- The report is the truth: a premium-tier sponsor bought premium placement, so they see premium results because that's what they earned
+
+**PO Acceptance Criteria:**
+
+- [ ] `filterReportByDepth` is removed from the batch and single-event read paths — report output is no longer field-stripped by depth parameter
+- [ ] SharedReport output includes a `sponsor_class_breakdown` section: impression counts and scan attribution aggregated by sponsor class (`local`, `mid`, `premium`) — no individual sponsor names or tokens, just class-level aggregates
+- [ ] The local-vs-paid delta is computable from the report: total local impressions vs. total paid (mid + premium) impressions for the event
+- [ ] TL-040 security boundary is preserved: individual sponsor attribution (impression token, click token, specific placement data) remains scoped to that sponsor's signed-link token — only class-level aggregates are in the shared view
+- [ ] The `depth` field on signed-link tokens is repurposed: it now controls whether the reader sees their own individual attribution detail (`local` = class aggregate only, `mid` = own placement breakdown, `premium` = admin/bar_owner full cross-class view)
+- [ ] `buildSharedReport` emits `sponsor_class_breakdown` from existing scan aggregate + sponsor tier data — no new DB tables required
+- [ ] All existing SharedReport tests remain green; new tests cover the class breakdown shape and the local-vs-paid delta computation
+
+**BE Route Spec:**
+
+- `GET /api/v2/events/:id/shared-report` — response gains `sponsor_class_breakdown: { local: { count, impressions }, mid: { count, impressions }, premium: { count, impressions } }`
+- `POST /api/v2/events/shared-reports/batch` — same shape on each report in `reports` map
+- `filterReportByDepth` removed from both paths; `resolveDepth` retained only for TL-040 individual-attribution scoping
+
+**Data shape (new `sponsor_class_breakdown` field):**
+```json
+"sponsor_class_breakdown": {
+  "local":   { "sponsor_count": 3, "total_impressions": 142 },
+  "mid":     { "sponsor_count": 1, "total_impressions": 87  },
+  "premium": { "sponsor_count": 1, "total_impressions": 210 }
+}
+```
+
+**FD UI Spec:**
+
+- `sharedReport.html` gains a "Sponsor Competitive View" section
+- Shows local vs. paid bar comparison: local class aggregate vs. mid+premium aggregate
+- Copy: "Your [Premium] placement earned X impressions vs. Y from local sponsors" — data-driven proof of ROI
+- Available to all authorized report readers (not gated by tier)
+
+**QA Test Pyramid:**
+
+- [ ] Security: TL-040 preserved — sponsor token cannot read individual cross-sponsor attribution
+- [ ] Contract: `sponsor_class_breakdown` present and shaped correctly on single + batch endpoints
+- [ ] Unit: `buildSharedReport` emits correct class breakdown from seeded sponsor + scan data
+- [ ] Unit: local-vs-paid delta computable (local.impressions vs mid.impressions + premium.impressions)
+- [ ] Integration: batch endpoint returns class breakdown per event in reports map
+- [ ] Regression: all 2204 existing tests remain green after `filterReportByDepth` removal from read paths
 
 ---
 

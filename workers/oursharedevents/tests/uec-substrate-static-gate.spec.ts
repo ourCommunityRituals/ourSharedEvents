@@ -65,6 +65,7 @@ const norm = (p: string) => p.replace(/\\/g, '/');
  */
 const EXEMPT_PATH_PREFIXES: ReadonlyArray<string> = [
   'src/lib/uec/', // canonical home — UEC values flow OUT from here only
+  '/tests/',      // test files legitimately reference hex literals for assertion purposes
 ] as const;
 
 /** A violation finding — file, line number, offending hex literal. */

@@ -17,6 +17,9 @@ import { createShortlink } from '../lib/shortlinks';
 import { maybeTag } from '../lib/h3-tagging';
 import { getDataProvider, type DataProviderEnv } from '../lib/data-provider.js';
 import type { DataProviderCtx } from '@ocr/data-provider';
+import { extractAdminActor, type AdminEnv } from '../auth/admin';
+import { resolveAdminBrandScopeAsync, type AdminBrandScopeEnv } from '../lib/admin-brand-scope';
+import { validateLogoUrl } from '../lib/sponsor-logo';
 
 // ─── Phase enrichment ──────────────────────────────────────────────────────────
 //
@@ -41,7 +44,7 @@ function enrichWithPhase(
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
-export interface EventsEnv extends DataProviderEnv {
+export interface EventsEnv extends DataProviderEnv, AdminEnv, AdminBrandScopeEnv {
   WORKER_ENV?: string;
   DB?: D1Database;
 }
@@ -215,21 +218,44 @@ export async function handleAdminListEvents(request: Request, env: EventsEnv): P
     );
   }
 
-  try {
-    const where = cursor ? 'WHERE created_at < ?' : '';
-    const bindings: (string | number)[] = cursor ? [cursor, limit + 1] : [limit + 1];
+  // OSE-666 / B1 (#9 tenant_isolation) — derive the caller's brand scope from
+  // the SERVER-VERIFIED actor identity, never from a client `?brand_id=`. An
+  // unscopable operator is denied (zero rows), never handed the whole table.
+  const scope = await resolveAdminBrandScopeAsync(extractAdminActor(request, env), env);
+  if (scope.mode === 'deny') {
+    return Response.json(
+      { ok: true, items: [], pagination: { limit, hasMore: false, nextCursor: null } },
+      { headers: { ...corsHeaders(request), 'Cache-Control': 'no-store', 'X-Request-Id': rid } }
+    );
+  }
 
-    const result = await env.DB.prepare(
-      `SELECT id, brand_id, title, slug, status, description, location,
-              start_date, end_date, timezone, cover_image_url, created_at, updated_at,
-              legal_clearance_tier,
-              what_short, who_host, why_purpose, how_details, where_address,
-              lat, lon, corridor_id, h3_res9, h3_res7
-       FROM   events
-       ${where}
-       ORDER  BY created_at DESC
-       LIMIT  ?`
-    )
+  try {
+    const EVENT_SELECT_COLS =
+      'id, brand_id, title, slug, status, description, location,' +
+      ' start_date, end_date, timezone, cover_image_url, created_at, updated_at,' +
+      ' legal_clearance_tier,' +
+      ' what_short, who_host, why_purpose, how_details, where_address,' +
+      ' who_story, who_image_url, what_video_url,' +
+      ' lat, lon, corridor_id, h3_res9, h3_res7';
+
+    // WHERE is composed from server-derived scope + the opaque cursor only.
+    const whereParts: string[] = [];
+    const bindings: (string | number)[] = [];
+    if (cursor) {
+      whereParts.push('created_at < ?');
+      bindings.push(cursor);
+    }
+    if (scope.mode === 'scoped') {
+      const placeholders = scope.brandIds.map(() => '?').join(', ');
+      whereParts.push(`brand_id IN (${placeholders})`);
+      bindings.push(...scope.brandIds);
+    }
+    bindings.push(limit + 1);
+    const whereClause = whereParts.length ? ' WHERE ' + whereParts.join(' AND ') : '';
+    const adminListSql =
+      'SELECT ' + EVENT_SELECT_COLS + ' FROM events' + whereClause + ' ORDER BY created_at DESC LIMIT ?';
+
+    const result = await env.DB.prepare(adminListSql)
       .bind(...bindings)
       .all();
 
@@ -374,6 +400,24 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
   const howDetails = trimOrNull(body.how_details, 2000);
   const whereAddress = trimOrNull(body.where_address, 500);
 
+  // OSE-664: rich WHO / WHAT authoring — the supply side of the pre-event funnel.
+  // who_story is the host/artist story (rich text, the WHO conversion engine);
+  // stored raw and escaped on render (esc()) so an authored <script> can never
+  // execute on the public funnel. The media URLs are references (never embeds):
+  // validated http(s)-only via the canonical validateLogoUrl scheme guard, so a
+  // javascript:/data: payload is rejected here (born-red) and never reaches D1.
+  const whoStory = trimOrNull(body.who_story, 4000);
+  const whoImage = validateLogoUrl(body.who_image_url);
+  if (!whoImage.valid) {
+    return errorResponse('INVALID_URL', 'who_image_url must be a http(s) URL under 500 chars', 400, rid);
+  }
+  const whatVideo = validateLogoUrl(body.what_video_url);
+  if (!whatVideo.valid) {
+    return errorResponse('INVALID_URL', 'what_video_url must be a http(s) URL under 500 chars', 400, rid);
+  }
+  const whoImageUrl = whoImage.url;
+  const whatVideoUrl = whatVideo.url;
+
   // Date validation
   const startDate = typeof body.start_date === 'string' ? body.start_date.slice(0, 30) : null;
   if (startDate !== null && !isValidIsoDate(startDate)) {
@@ -401,9 +445,10 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
     await env.DB.prepare(
       `INSERT INTO events (id, brand_id, title, slug, status, description, location, start_date, end_date, timezone, cover_image_url, template_id,
                            what_short, who_host, why_purpose, how_details, where_address,
+                           who_story, who_image_url, what_video_url,
                            lat, lon, h3_res9, h3_res7,
                            created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
       .bind(
         id,
@@ -423,6 +468,9 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
         whyPurpose,
         howDetails,
         whereAddress,
+        whoStory,
+        whoImageUrl,
+        whatVideoUrl,
         lat,
         lon,
         h3Tags?.h3_res9 ?? null,
@@ -563,6 +611,9 @@ export async function handleUpdateEvent(
     why_purpose: { max: 2000 },
     how_details: { max: 2000 },
     where_address: { max: 500 },
+    // OSE-664: rich host/artist story. Media URLs are handled separately below
+    // (they need scheme validation, not a blind slice).
+    who_story: { max: 4000 },
   };
 
   const sets: string[] = [];
@@ -600,6 +651,20 @@ export async function handleUpdateEvent(
     }
   }
 
+  // OSE-664: media reference URLs — validated http(s)-only (born-red XSS wall)
+  // rather than blind-sliced, so a javascript:/data: payload is rejected here
+  // and never reaches the column. null clears the field.
+  for (const field of ['who_image_url', 'what_video_url'] as const) {
+    if (field in body) {
+      const check = validateLogoUrl(body[field]);
+      if (!check.valid) {
+        return errorResponse('INVALID_URL', `${field} must be a http(s) URL under 500 chars`, 400, rid);
+      }
+      sets.push(`${field} = ?`);
+      values.push(check.url);
+    }
+  }
+
   if (sets.length === 0) {
     return errorResponse('NO_FIELDS', 'No valid fields to update', 400, rid);
   }
@@ -609,7 +674,7 @@ export async function handleUpdateEvent(
   values.push(eventId);
 
   try {
-    const result = await env.DB.prepare(`UPDATE events SET ${sets.join(', ')} WHERE id = ?`)
+    const result = await env.DB.prepare('UPDATE events SET ' + sets.join(', ') + ' WHERE id = ?')
       .bind(...values)
       .run();
 

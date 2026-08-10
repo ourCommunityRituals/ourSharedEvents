@@ -34,6 +34,7 @@ import {
   generateId,
 } from '../lib/forms-db';
 import { corsHeaders } from '../lib/cors';
+import { applyCountFloor } from '../lib/count-floor';
 import { getOrCreateAnonId, setAnonCookie } from '../lib/anonymous-id';
 import {
   validateFormRequest,
@@ -46,12 +47,73 @@ import {
 
 export interface FormsEnv extends FormsDbEnv {
   FORMS_ENCRYPTION_KEY?: string;
+  // OSE-598: HMAC-SHA256 pepper for email hashing. Without this, bare SHA-256
+  // is rainbow-table-precomputable. Production MUST set this via Wrangler secret.
+  FORMS_HASH_PEPPER?: string;
 }
 
 // ─── Constants ──────────────────────────────────────────────────────────────────
 
 const REGISTRATION_TTL_MS = 90 * 24 * 60 * 60 * 1000;
 const EMAIL_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
+
+// ─── Rate limiter (per-isolate, sliding window) ─────────────────────────────
+// Keys: `${ip}:${eventId}` — different eventIds have independent limits.
+// Matches the pattern in pages.ts handleSubscribe.
+
+const FORM_RATE_WINDOW_MS = 60_000; // 1 minute
+const FORM_RATE_MAX = 10; // 10 submissions per IP per eventId per minute
+const FORM_RATE_MAX_BUCKETS = 50_000;
+const FORM_RATE_EVICT_BATCH = 200;
+const formRateBuckets = new Map<string, number[]>();
+let formRateEvictCursor: string | undefined;
+
+function isFormRateLimited(ip: string, eventId: string): boolean {
+  const key = `${ip}:${eventId}`;
+  const now = Date.now();
+  const timestamps = formRateBuckets.get(key) ?? [];
+  const recent = timestamps.filter((t) => now - t < FORM_RATE_WINDOW_MS);
+
+  if (recent.length >= FORM_RATE_MAX) {
+    formRateBuckets.set(key, recent);
+    return true;
+  }
+
+  recent.push(now);
+  formRateBuckets.set(key, recent);
+
+  if (formRateBuckets.size > FORM_RATE_MAX_BUCKETS) {
+    let evicted = 0;
+    let started = false;
+    for (const [k, ts] of formRateBuckets) {
+      if (formRateEvictCursor && !started) {
+        if (k === formRateEvictCursor) started = true;
+        else continue;
+      }
+      const active = ts.filter((t) => now - t < FORM_RATE_WINDOW_MS);
+      if (active.length === 0) {
+        formRateBuckets.delete(k);
+      } else {
+        formRateBuckets.set(k, active);
+      }
+      evicted++;
+      if (evicted >= FORM_RATE_EVICT_BATCH) {
+        formRateEvictCursor = k;
+        return false;
+      }
+    }
+    formRateEvictCursor = undefined;
+  }
+
+  return false;
+}
+
+function formRateLimitedResponse(request: Request): Response {
+  return Response.json(
+    { ok: false, status: 429, code: 'RATE_LIMITED', error: 'Too many requests. Please try again later.', timestamp: new Date().toISOString() },
+    { status: 429, headers: { 'Retry-After': '60', ...corsHeaders(request) } }
+  );
+}
 
 // ─── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -85,12 +147,18 @@ export async function handleFormRegistration(
   env: FormsEnv,
   eventId: string
 ): Promise<Response> {
+  // Rate limit by CF edge IP only — null means local dev or test; skip limiting.
+  const clientIp = request.headers.get('CF-Connecting-IP');
+  if (clientIp && isFormRateLimited(clientIp, eventId)) return formRateLimitedResponse(request);
   const start = Date.now();
   const { body, error } = await validateFormRequest(request, eventId, true);
   if (error) return error;
 
   const { anonId, isNew } = getOrCreateAnonId(request);
   const name = trimStr(body!.name, 200);
+  if (typeof body!.email === 'string' && body!.email.length > 320) {
+    return errorResponse('INVALID_EMAIL', 'Invalid email format', 400, request);
+  }
   const rawEmail = trimStr(body!.email, 320);
   if (rawEmail && !isValidEmail(rawEmail)) {
     return errorResponse('INVALID_EMAIL', 'Invalid email format', 400, request);
@@ -101,7 +169,7 @@ export async function handleFormRegistration(
   const sourcePlacementId =
     typeof body!.sourcePlacementId === 'string' ? body!.sourcePlacementId.slice(0, 128) : undefined;
 
-  const emailHash = email ? await hashEmail(email) : undefined;
+  const emailHash = email ? await hashEmail(email, env.FORMS_HASH_PEPPER) : undefined;
   const bucket = bucketTimestamp();
   const id = generateId();
   const expiresAt = new Date(Date.now() + REGISTRATION_TTL_MS).toISOString();
@@ -130,6 +198,58 @@ export async function handleFormRegistration(
   logFormEvent('register', eventId, 'submit', { id, anonId, isNew, latencyMs: Date.now() - start });
   const res = jsonResponse({ ok: true, id, registrationBucket: bucket }, request);
   return isNew ? setAnonCookie(res, anonId) : res;
+}
+
+// ─── Public: Self-delete a registration (OSE-659) ───────────────────────────────
+//
+// "Destroyed by architecture" includes the person's own right to remove their
+// opt-in PII before the TTL expires. The deleter is authenticated by KNOWING the
+// email they registered with (its peppered hash must match) — NOT by any new
+// credential or identity surface (#1: no new login, no cross-linking). Writes
+// ONLY to FORMS_DB; never touches the scan DB, never joins registration↔scan.
+export async function handleSelfDeleteRegistration(
+  request: Request,
+  env: FormsEnv,
+  eventId: string
+): Promise<Response> {
+  const clientIp = request.headers.get('CF-Connecting-IP');
+  if (clientIp && isFormRateLimited(clientIp, eventId)) return formRateLimitedResponse(request);
+
+  let body: { email?: unknown } | null = null;
+  try {
+    body = (await request.json()) as { email?: unknown };
+  } catch {
+    return errorResponse('INVALID_BODY', 'Expected a JSON body with an email', 400, request);
+  }
+
+  // Self-delete requires the registered email — the hash match is the proof of
+  // ownership. A registration made without an email cannot be self-deleted (it
+  // is destroyed by the TTL instead); we do not accept name-only deletion (a
+  // name is not a secret and would let anyone remove another attendee).
+  const rawEmail = typeof body?.email === 'string' ? trimStr(body.email, 320) : '';
+  if (!rawEmail || !isValidEmail(rawEmail)) {
+    return errorResponse(
+      'INVALID_EMAIL',
+      'A valid email (the one you registered with) is required to remove your registration.',
+      400,
+      request
+    );
+  }
+
+  try {
+    const emailHash = await hashEmail(rawEmail, env.FORMS_HASH_PEPPER);
+    const result = await env.FORMS_DB.prepare(
+      'DELETE FROM form_registrations WHERE event_id = ? AND attendee_email_hash = ?'
+    )
+      .bind(eventId, emailHash)
+      .run();
+    const deleted = result.meta?.changes ?? 0;
+    logFormEvent('register', eventId, 'lifecycle', { op: 'self_delete', deleted });
+    // Do not reveal whether a registration existed — always ok, report count.
+    return jsonResponse({ ok: true, deleted }, request);
+  } catch (err) {
+    return handleDbError('register', eventId, err, request);
+  }
 }
 
 // ─── Public: Check-in ───────────────────────────────────────────────────────────
@@ -218,6 +338,8 @@ export async function handleFormEmailSignup(
   env: FormsEnv,
   eventId: string
 ): Promise<Response> {
+  const clientIp = request.headers.get('CF-Connecting-IP');
+  if (clientIp && isFormRateLimited(clientIp, eventId)) return formRateLimitedResponse(request);
   const start = Date.now();
   const { body, error } = await validateFormRequest(request, eventId, true);
   if (error) return error;
@@ -233,7 +355,7 @@ export async function handleFormEmailSignup(
     return errorResponse('CONFIG_ERROR', 'FORMS_ENCRYPTION_KEY not configured', 503, request);
 
   try {
-    const emailHash = await hashEmail(email);
+    const emailHash = await hashEmail(email, env.FORMS_HASH_PEPPER);
 
     const existing = await env.FORMS_DB.prepare(
       'SELECT id FROM email_signups WHERE event_id = ? AND email_hash = ?'
@@ -300,7 +422,15 @@ export async function handleAdminRegistrations(
       .all();
 
     logFormEvent('register', eventId, 'admin_read', { count: result.results.length });
-    return jsonResponse({ ok: true, items: result.results, count: result.results.length }, request);
+    // OSE-665: the aggregate `count` is floored uniformly (same K as the
+    // SharedReport surface) so every viewer sees the same representation of a
+    // sub-5 cohort. `items` remains the organizer's first-party operational
+    // list (#1/#8), exact — running the event needs the actual attendees.
+    const floored = applyCountFloor(result.results.length);
+    return jsonResponse(
+      { ok: true, items: result.results, count: floored.count, suppressed: floored.suppressed, floor: floored.floor },
+      request
+    );
   } catch (err) {
     return handleDbError('register', eventId, err, request);
   }
@@ -322,7 +452,12 @@ export async function handleAdminCheckinCount(
 
     const count = result?.total_count ?? 0;
     logFormEvent('checkin', eventId, 'admin_read', { count });
-    return jsonResponse({ ok: true, count }, request);
+    // OSE-665: uniform count floor (count-only endpoint — a true suppression).
+    const floored = applyCountFloor(count);
+    return jsonResponse(
+      { ok: true, count: floored.count, suppressed: floored.suppressed, floor: floored.floor },
+      request
+    );
   } catch (err) {
     return handleDbError('checkin', eventId, err, request);
   }
@@ -343,7 +478,13 @@ export async function handleAdminSurveys(
       .all();
 
     logFormEvent('survey', eventId, 'admin_read', { count: result.results.length });
-    return jsonResponse({ ok: true, items: result.results, count: result.results.length }, request);
+    // OSE-665: aggregate `count` floored uniformly; `items` stays first-party
+    // (PII-scrubbed survey rows the organizer owns).
+    const floored = applyCountFloor(result.results.length);
+    return jsonResponse(
+      { ok: true, items: result.results, count: floored.count, suppressed: floored.suppressed, floor: floored.floor },
+      request
+    );
   } catch (err) {
     return handleDbError('survey', eventId, err, request);
   }
@@ -365,7 +506,12 @@ export async function handleAdminEmailSignupCount(
 
     const count = result?.cnt ?? 0;
     logFormEvent('email-signup', eventId, 'admin_read', { count });
-    return jsonResponse({ ok: true, count }, request);
+    // OSE-665: uniform count floor (count-only endpoint — a true suppression).
+    const floored = applyCountFloor(count);
+    return jsonResponse(
+      { ok: true, count: floored.count, suppressed: floored.suppressed, floor: floored.floor },
+      request
+    );
   } catch (err) {
     return handleDbError('email-signup', eventId, err, request);
   }

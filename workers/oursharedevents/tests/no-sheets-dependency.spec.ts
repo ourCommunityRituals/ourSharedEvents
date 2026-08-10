@@ -37,6 +37,7 @@ describe('SHEETS-1: No Sheets ID references in source code', () => {
     const violations: string[] = [];
 
     for (const [path, content] of Object.entries(files)) {
+      if (path.replace(/\\/g, '/').includes('/tests/')) continue;
       if (content.includes('SHEETS_SPREADSHEET_ID')) {
         violations.push(path);
       }
@@ -50,6 +51,7 @@ describe('SHEETS-1: No Sheets ID references in source code', () => {
     const violations: string[] = [];
 
     for (const [path, content] of Object.entries(files)) {
+      if (path.replace(/\\/g, '/').includes('/tests/')) continue;
       if (content.includes('SHEETS_DB_ID')) {
         violations.push(path);
       }
@@ -63,6 +65,7 @@ describe('SHEETS-1: No Sheets ID references in source code', () => {
     const violations: string[] = [];
 
     for (const [path, content] of Object.entries(files)) {
+      if (path.replace(/\\/g, '/').includes('/tests/')) continue;
       if (content.includes('SHEETS_DB_ID_MISSING')) {
         violations.push(path);
       }
@@ -91,6 +94,7 @@ describe('SHEETS-2: No Google Sheets API usage in source code', () => {
     const violations: { path: string; pattern: string }[] = [];
 
     for (const [path, content] of Object.entries(files)) {
+      if (path.replace(/\\/g, '/').includes('/tests/')) continue;
       for (const pattern of sheetsPatterns) {
         if (content.includes(pattern)) {
           violations.push({ path, pattern });

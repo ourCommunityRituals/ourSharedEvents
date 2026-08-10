@@ -25,6 +25,9 @@ import { type FormsDbEnv, hashEmail } from '../lib/forms-db';
 export type DataSubjectEnv = FormsDbEnv & {
   /** Main DB binding — host of `subscribers` (OSE-207). */
   DB: D1Database;
+  // OSE-598: must match FORMS_HASH_PEPPER used at write time so deletion
+  // lookups produce the same hash value as the stored email_hash columns.
+  FORMS_HASH_PEPPER?: string;
 };
 
 export async function handleDataSubjectErase(
@@ -49,7 +52,7 @@ export async function handleDataSubjectErase(
     );
   }
 
-  const emailHash = await hashEmail(rawEmail);
+  const emailHash = await hashEmail(rawEmail, env.FORMS_HASH_PEPPER);
   const now = new Date().toISOString();
   let signupsDeleted = 0;
   let registrationsDeleted = 0;

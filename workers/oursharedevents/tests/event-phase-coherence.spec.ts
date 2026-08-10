@@ -146,8 +146,13 @@ async function fetchPublicSingle(id: string): Promise<Record<string, unknown> | 
 }
 
 async function fetchAdminList(): Promise<Record<string, unknown>[]> {
+  // OSE-666/B1: the admin list is now brand-scoped and fail-closed. Authenticate
+  // as the automation key (key:admin + ADMIN_SCOPE_ALL in the test env) so this
+  // cross-surface coherence check sees the full admin view, as before.
   const res = await handleAdminListEvents(
-    new Request('https://test/api/v2/admin/events'),
+    new Request('https://test/api/v2/admin/events', {
+      headers: { Authorization: 'Bearer test-admin-key-e2e-2026' },
+    }),
     eventsEnv()
   );
   const body = (await res.json()) as { items: Record<string, unknown>[] };

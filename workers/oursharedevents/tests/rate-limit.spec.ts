@@ -46,6 +46,7 @@ describe('rate-limit — L1 static', () => {
 // ── L2: isRateLimited ────────────────────────────────────────────────────────
 
 describe('isRateLimited', () => {
+  // @born-red TL-053 | method: deliberate-fixture-break | date: 2026-08-03
   it('allows the first request for a new IP', async () => {
     expect(await isRateLimited('1.2.3.4', env.RATE_LIMIT_KV)).toBe(false);
   });

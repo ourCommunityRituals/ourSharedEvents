@@ -75,21 +75,35 @@ test.describe('Invariant 5: Local Sponsor Covenant — display-priority structur
     );
   });
 
-  test('OSE-330 | FE | code shape | tierSort checks is_local BEFORE tier priority', () => {
-    const resolver = readFileSync(SPONSOR_RESOLVER_PATH, 'utf8');
-    // Extract the tierSort function body to assert ordering of comparisons.
-    const tierSortMatch = resolver.match(/function\s+tierSort\([^)]*\)[^{]*\{([\s\S]*?)\n\}/);
-    expect(tierSortMatch, 'tierSort function must exist in sponsor-resolver.ts').not.toBeNull();
-    const body = tierSortMatch![1];
-    // is_local comparison MUST appear before the TIER_PRIORITY lookup.
-    const isLocalIdx = body.indexOf('is_local');
-    const tierPriorityIdx = body.indexOf('TIER_PRIORITY');
-    expect(isLocalIdx, 'tierSort must reference is_local').toBeGreaterThan(-1);
-    expect(tierPriorityIdx, 'tierSort must reference TIER_PRIORITY').toBeGreaterThan(-1);
+  test('OSE-25 | FE | code shape | covenant is a share-of-voice FLOOR (locals >=30%, never zeroed) — the ratified #25 model', () => {
+    // COVENANT MODEL RECONCILIATION (ratified 2026-08-08, brain #5→#25 = live):
+    // the Local Sponsor Covenant is now a SHARE-OF-VOICE FLOOR — locals hold at
+    // least 30% of rotation share and are never zeroed — NOT local-first
+    // ORDERING. `tierSort` (the old ordering primitive) was retired in favour of
+    // uniform share rotation (OSE-661). This invariant locks the floor contract
+    // in the consumed canonical copy and locks tierSort's retirement so the
+    // superseded ordering model cannot silently return.
+    const alloc = readFileSync(SPONSOR_ALLOCATION_PATH, 'utf8');
+    expect(alloc, 'covenant must remain keyed on is_local').toContain("'is_local'");
+
+    const floorMatch = alloc.match(/local_floor_pct:\s*(\d+)/);
     expect(
-      isLocalIdx,
-      'is_local comparison MUST appear before TIER_PRIORITY in tierSort — otherwise tier could push a non-local above a local, breaking the covenant'
-    ).toBeLessThan(tierPriorityIdx);
+      floorMatch,
+      'SPONSOR_ALLOCATION must declare a numeric local_floor_pct — the covenant floor'
+    ).not.toBeNull();
+    const floorPct = Number(floorMatch![1]);
+    expect(
+      floorPct,
+      'local_floor_pct MUST be >=30 — the ratified covenant guarantees locals never drop below 30% share-of-voice and are never zeroed'
+    ).toBeGreaterThanOrEqual(30);
+
+    // tierSort must stay RETIRED — reintroducing it reverts to the superseded
+    // local-first ORDERING model (#5) that the floor model (#25) replaced.
+    const resolver = readFileSync(SPONSOR_RESOLVER_PATH, 'utf8');
+    expect(
+      /function\s+tierSort\s*\(/.test(resolver),
+      'tierSort must remain retired — the covenant is a share floor (#25), not local-first ordering (#5). Reintroducing tierSort reverts the ratified model.'
+    ).toBe(false);
   });
 
   test('OSE-330 | FE | code shape | sponsor-allocation.ts (OSE consumed brain copy) exists', () => {

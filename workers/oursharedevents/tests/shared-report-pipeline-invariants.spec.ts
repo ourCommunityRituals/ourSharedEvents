@@ -223,6 +223,7 @@ describe('OSE-272 Gate 6: SharedReport read API is read-only', () => {
   // would break the cron-only invariant AND defeat the read/write
   // separation that anchors the Session-3 / Session-5 boundary.
 
+  // @born-red TL-032 | method: design-time-negative-assertion | date: 2026-08-03
   test('shared-report-builder.ts contains no INSERT/UPDATE/DELETE statements', () => {
     const src = loadSource('src/lib/shared-report-builder.ts');
     expect(src, 'shared-report-builder.ts not in TEST_SOURCE_FILES_JSON').not.toBeNull();
