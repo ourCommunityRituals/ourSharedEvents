@@ -523,14 +523,6 @@ function formPage(eventId: string, eventName: string, formType: string, legalTie
       break;
   }
 
-  // Sponsor-strip bootstrap script, built outside the HTML template so the
-  // suppression applies to the finding line. Verified safe: FORM_JS_SPONSOR is a
-  // static module constant (see def above) and eventId is embedded via
-  // JSON.stringify, producing a safe JS string literal — no unsanitized value
-  // reaches the script body.
-  // nosemgrep: javascript.lang.security.audit.unknown-value-with-script-tag.unknown-value-with-script-tag
-  const sponsorScriptTag = `<script nonce="${nonce}">${FORM_JS_SPONSOR.replace('EVENT_ID_PLACEHOLDER', JSON.stringify(eventId))}</script>`;
-
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -551,7 +543,7 @@ function formPage(eventId: string, eventName: string, formType: string, legalTie
        silently absent if no sponsors are configured for this event. -->
   <div class="form-sponsor-strip" id="form-sponsor-strip" data-testid="form-sponsor-strip" role="complementary" aria-label="Event sponsors"></div>
   <main id="main-content" data-testid="form-main">${formHtml}</main>
-  ${sponsorScriptTag}
+  <script nonce="${nonce}">${FORM_JS_SPONSOR.replace('EVENT_ID_PLACEHOLDER', JSON.stringify(eventId))}</script>
 </body>
 </html>`;
 }

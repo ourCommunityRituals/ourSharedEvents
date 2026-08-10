@@ -235,9 +235,11 @@ describe('OSE-625: QR scan ingestion — handleQrScan()', () => {
 
   test('OSE-625 | UNIT | redirect URL type passthrough | unknown type falls back to register', async () => {
     const kv = makeInMemoryKV();
+    // The '<script>' below is ADVERSARIAL TEST INPUT — this test asserts it is
+    // neutralized (redirect must NOT contain '<script>', see assertion below).
     const res = await handleQrScan(
       makeRequest(VALID_QR_TOKEN, { type: 'malicious<script>' }),
-      makeEnv(kv),
+      makeEnv(kv), // nosemgrep: javascript.lang.security.audit.unknown-value-with-script-tag.unknown-value-with-script-tag
       VALID_QR_TOKEN
     );
 
