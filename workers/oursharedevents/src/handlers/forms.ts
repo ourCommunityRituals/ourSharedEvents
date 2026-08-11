@@ -110,7 +110,13 @@ function isFormRateLimited(ip: string, eventId: string): boolean {
 
 function formRateLimitedResponse(request: Request): Response {
   return Response.json(
-    { ok: false, status: 429, code: 'RATE_LIMITED', error: 'Too many requests. Please try again later.', timestamp: new Date().toISOString() },
+    {
+      ok: false,
+      status: 429,
+      code: 'RATE_LIMITED',
+      error: 'Too many requests. Please try again later.',
+      timestamp: new Date().toISOString(),
+    },
     { status: 429, headers: { 'Retry-After': '60', ...corsHeaders(request) } }
   );
 }
@@ -428,7 +434,13 @@ export async function handleAdminRegistrations(
     // list (#1/#8), exact — running the event needs the actual attendees.
     const floored = applyCountFloor(result.results.length);
     return jsonResponse(
-      { ok: true, items: result.results, count: floored.count, suppressed: floored.suppressed, floor: floored.floor },
+      {
+        ok: true,
+        items: result.results,
+        count: floored.count,
+        suppressed: floored.suppressed,
+        floor: floored.floor,
+      },
       request
     );
   } catch (err) {
@@ -482,7 +494,13 @@ export async function handleAdminSurveys(
     // (PII-scrubbed survey rows the organizer owns).
     const floored = applyCountFloor(result.results.length);
     return jsonResponse(
-      { ok: true, items: result.results, count: floored.count, suppressed: floored.suppressed, floor: floored.floor },
+      {
+        ok: true,
+        items: result.results,
+        count: floored.count,
+        suppressed: floored.suppressed,
+        floor: floored.floor,
+      },
       request
     );
   } catch (err) {
@@ -579,8 +597,23 @@ export async function handleAdminExport(
           if (typeof email_encrypted === 'string') {
             try {
               return { ...rest, email: await decryptEmail(email_encrypted, key) };
-            } catch {
-              return { ...rest, email: null };
+            } catch (err) {
+              // OSE-713: a decryption failure (e.g. key-rotation mismatch — the
+              // ciphertext was encrypted under a key no longer present in
+              // FORMS_ENCRYPTION_KEY) MUST surface as an explicit error marker,
+              // never a silent `email: null`. A null is indistinguishable from a
+              // legitimately-absent email and would hide data loss / key
+              // misconfiguration from the operator. Emit a non-null sentinel plus
+              // a machine-readable error field, and log the egress fault.
+              logFormEvent('email-signup', String(rest.event_id ?? eventId), 'error', {
+                decrypt_error: true,
+                row_id: typeof rest.id === 'string' ? rest.id : undefined,
+              });
+              return {
+                ...rest,
+                email: '[decryption-failed]',
+                email_error: err instanceof Error ? err.message : 'decryption failed',
+              };
             }
           }
           return rest;
