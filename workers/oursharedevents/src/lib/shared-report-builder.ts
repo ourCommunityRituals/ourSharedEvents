@@ -143,8 +143,8 @@ export interface SharedReport {
    * data IN the report, not access gates ON the reader.
    */
   sponsor_class_breakdown: {
-    local:   { sponsor_count: number; total_impressions: number };
-    mid:     { sponsor_count: number; total_impressions: number };
+    local: { sponsor_count: number; total_impressions: number };
+    mid: { sponsor_count: number; total_impressions: number };
     premium: { sponsor_count: number; total_impressions: number };
   };
 
@@ -465,12 +465,12 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
     return tier !== null && PREMIUM_TIERS.has(tier) ? 'premium' : 'mid';
   }
   const sponsorClassBreakdown: {
-    local:   { sponsor_count: number; total_impressions: number };
-    mid:     { sponsor_count: number; total_impressions: number };
+    local: { sponsor_count: number; total_impressions: number };
+    mid: { sponsor_count: number; total_impressions: number };
     premium: { sponsor_count: number; total_impressions: number };
   } = {
-    local:   { sponsor_count: 0, total_impressions: 0 },
-    mid:     { sponsor_count: 0, total_impressions: 0 },
+    local: { sponsor_count: 0, total_impressions: 0 },
+    mid: { sponsor_count: 0, total_impressions: 0 },
     premium: { sponsor_count: 0, total_impressions: 0 },
   };
   // OSE-683: each (sponsor × surface) impression row is a contributing bucket —
@@ -530,13 +530,22 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
   //    Fallback (launch-day honesty): event's own h3_res7 corridor cell +
   //    gridRingUnsafe ring neighbors, so "one venue lighting one cell on
   //    day one IS the product" (ring gives the saturation promise context).
-  let corridorMap: { svg: string; suppressed: string[]; cell_count: number; source: 'live' | 'fallback' } | null = null;
+  let corridorMap: {
+    svg: string;
+    suppressed: string[];
+    cell_count: number;
+    source: 'live' | 'fallback';
+  } | null = null;
 
   // Q10: integrity check — if stored H3 tags are inconsistent (res9 parent ≠ stored res7),
   // the map cells are geographically incoherent. Emit a suppression warning and skip the
   // fallback path so the map doesn't render misleading neighborhood geometry.
   let h3TagsCorrupt = false;
-  if (event.h3_res9 && event.h3_res7 && !tagsConsistent({ h3_res9: event.h3_res9, h3_res7: event.h3_res7 })) {
+  if (
+    event.h3_res9 &&
+    event.h3_res7 &&
+    !tagsConsistent({ h3_res9: event.h3_res9, h3_res7: event.h3_res7 })
+  ) {
     h3TagsCorrupt = true;
     suppression.push({
       field: 'corridor_map',
@@ -545,8 +554,13 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
     });
   }
 
-  function buildCorridorMap(cells: Array<{ cell: string; count: number }>, source: 'live' | 'fallback'): void {
-    const { svg, suppressed: suppressedCells } = renderCorridorMap(cells, { minCount: CORRIDOR_MAP_MIN_COUNT });
+  function buildCorridorMap(
+    cells: Array<{ cell: string; count: number }>,
+    source: 'live' | 'fallback'
+  ): void {
+    const { svg, suppressed: suppressedCells } = renderCorridorMap(cells, {
+      minCount: CORRIDOR_MAP_MIN_COUNT,
+    });
     corridorMap = { svg, suppressed: suppressedCells, cell_count: cells.length, source };
     // Q: strip H3 cell IDs from suppression detail — cell IDs are trivially reverse-geocoded,
     // which would undermine the privacy floor's intent. Count is enough context.
@@ -572,17 +586,20 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
   const cellData = cellRows.results ?? [];
 
   if (cellData.length > 0) {
-    buildCorridorMap(cellData.map((r) => ({ cell: r.cell, count: r.count })), 'live');
+    buildCorridorMap(
+      cellData.map((r) => ({ cell: r.cell, count: r.count })),
+      'live'
+    );
   } else if (event.h3_res7 && !h3TagsCorrupt) {
     // Launch-day fallback: res7 neighborhood hex lit with uniqueGatherings count +
     // ring-1 neighbors at count=0 (suppressed by privacy floor — correct).
     // source='fallback' lets the client render accurate "neighborhood" copy (not "block").
     const ring = gridRingUnsafe(event.h3_res7, 1);
     const count = uniqueGatherings ?? 0;
-    buildCorridorMap([
-      { cell: event.h3_res7, count },
-      ...ring.map((c: string) => ({ cell: c, count: 0 })),
-    ], 'fallback');
+    buildCorridorMap(
+      [{ cell: event.h3_res7, count }, ...ring.map((c: string) => ({ cell: c, count: 0 }))],
+      'fallback'
+    );
   } else if (!h3TagsCorrupt) {
     suppression.push({
       field: 'corridor_map',
@@ -607,25 +624,41 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
     if (series && series.state === 'confirmed') {
       trendSeriesId = series.id;
       trendSeriesName = series.series_name;
+      // OSE-683: each scan_aggregates bucket is a contributing bucket to a trend
+      // instance's headcount — the SAME grain as the top-level unique_gatherings.
+      // The previous `SELECT SUM(unique_agents) ...` subquery summed buckets RAW
+      // per instance, so a per-instance trend point could publish a sub-K sum
+      // (or launder a sub-K bucket into it) — exactly the leak the ratified
+      // per-bucket rule forbids. Fetch the events in the series and their raw
+      // buckets, then floor PER CONTRIBUTING BUCKET before summation (drop
+      // sub-K buckets; a survivor sum that itself fails to clear K is nulled),
+      // mirroring `uniqueGatherings` above. An instance with no buckets at all
+      // stays null (materialization pending for that instance).
       const inst = await db
         .prepare(
-          `SELECT
-             e.id              AS event_id,
-             e.start_date      AS start_date,
-             (SELECT SUM(unique_agents) FROM scan_aggregates WHERE event_id = e.id)
-                               AS unique_gatherings
-           FROM events e
-           WHERE e.series_id = ?
-             AND e.start_date IS NOT NULL
-           ORDER BY e.start_date ASC`
+          `SELECT id AS event_id, start_date
+             FROM events
+            WHERE series_id = ?
+              AND start_date IS NOT NULL
+            ORDER BY start_date ASC`
         )
         .bind(event.series_id)
-        .all<{ event_id: string; start_date: string; unique_gatherings: number | null }>();
+        .all<{ event_id: string; start_date: string }>();
       for (const r of inst.results ?? []) {
+        const instBuckets = await db
+          .prepare(
+            `SELECT unique_agents AS count
+               FROM scan_aggregates WHERE event_id = ?`
+          )
+          .bind(r.event_id)
+          .all<{ count: number | null }>();
+        const instRows = instBuckets.results ?? [];
+        const instHasBucket = instRows.length > 0;
+        const instFloored = applyCountFloor(sumContributingBuckets(instRows));
         trendInstances.push({
           event_id: r.event_id,
           start_date: r.start_date,
-          unique_gatherings: r.unique_gatherings,
+          unique_gatherings: instHasBucket ? instFloored.count : null,
         });
       }
     } else {
