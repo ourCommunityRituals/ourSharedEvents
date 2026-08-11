@@ -1,0 +1,34 @@
+# Conformance gap allowlist
+#
+# Each detected conformance gap (an architectural invariant with no mapped
+# enforcement) must either be closed OR explicitly allow-listed here with a
+# blocking ticket and an expiry date. On expiry the gate FAILS CI, forcing a
+# re-triage instead of letting the waiver rot silently.
+#
+# Consumed by: scripts/check-conformance-gaps.js
+#
+# Entry shape:
+#   - invariant:       <int | string>   invariant id the gap is reported against
+#     gap:             <str>            short human description of the gap
+#     blocking_ticket: <str>            the ticket tracking closure (OSE-XXX)
+#     expiry:          'YYYY-MM-DD'     date after which this waiver is invalid
+#
+# Expiries seeded 2026-11-09 = 90 days from 2026-08-11.
+
+allowlist:
+  - invariant: 663
+    gap: 'OSE-663 conformance gap — enforcement not yet mapped'
+    blocking_ticket: 'OSE-663'
+    expiry: '2026-11-09'
+  - invariant: 662
+    gap: 'OSE-662 conformance gap — enforcement not yet mapped'
+    blocking_ticket: 'OSE-662'
+    expiry: '2026-11-09'
+  - invariant: 564
+    gap: 'OSE-564 conformance gap — enforcement not yet mapped'
+    blocking_ticket: 'OSE-564'
+    expiry: '2026-11-09'
+  - invariant: 560
+    gap: 'OSE-560 conformance gap — enforcement not yet mapped'
+    blocking_ticket: 'OSE-560'
+    expiry: '2026-11-09'
