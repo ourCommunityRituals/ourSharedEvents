@@ -31,6 +31,25 @@ import { CORRIDOR_BASELINE_MIN_SAMPLE, CORRIDOR_MAP_MIN_COUNT } from './shared-r
 import { renderCorridorMap } from './corridor-map';
 import { gridRingUnsafe } from 'h3-js';
 import { tagsConsistent } from './h3-tagging';
+import { applyCountFloor } from './count-floor';
+
+// OSE-683 — ratified rule "K-anon Per-Bucket Consistency" (2026-08-09): the
+// per-bucket K-anon floor (K = CORRIDOR_MAP_MIN_COUNT = 5) is applied PER
+// CONTRIBUTING BUCKET BEFORE summation, never to the final sum alone. A
+// contributing bucket whose count is below K is DROPPED (it never joins the
+// sum); only survivors (count >= K) are summed. This mirrors the portfolio
+// -rollup #7 pattern (sumContributingBuckets → applyCountFloor) so a sub-K
+// cohort can't be laundered into a large aggregate — nor recovered by
+// differencing the aggregate against per-bucket views the same reader can see.
+function sumContributingBuckets(rows: Array<{ count: number | null }>): number {
+  let sum = 0;
+  for (const r of rows) {
+    const raw = r.count ?? 0;
+    const n = Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 0;
+    if (n >= CORRIDOR_MAP_MIN_COUNT) sum += n;
+  }
+  return sum;
+}
 
 // OSE-596 (rank-8 finding): bucket raw DB timestamps to the hour boundary
 // before surfacing in poster_attribution. Sub-second precision exposes timing
@@ -195,17 +214,33 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
 
   const suppression: SuppressionReason[] = [];
 
-  // 2. unique_gatherings — sum scan_aggregates.unique_agents over all
-  //    buckets for this event. NULL if no scan_aggregates rows yet.
-  const sa = await db
+  // 2. unique_gatherings — sum scan_aggregates.unique_agents over all buckets
+  //    for this event. OSE-683: each bucket is a contributing bucket — apply the
+  //    per-bucket K-anon floor BEFORE summation (a bucket with unique_agents < K
+  //    is dropped, not summed raw). NULL if no scan_aggregates rows exist at all
+  //    (materialization pending); a suppressed sum (all buckets sub-K, or the
+  //    survivors' sum somehow below K) is nulled too so a sub-K value never ships.
+  const saMeta = await db
     .prepare(
-      `SELECT SUM(unique_agents) AS total, MAX(computed_at) AS computed_at
+      `SELECT COUNT(*) AS bucket_count, MAX(computed_at) AS computed_at
        FROM scan_aggregates WHERE event_id = ?`
     )
     .bind(eventId)
-    .first<{ total: number | null; computed_at: string | null }>();
-  const uniqueGatherings = sa?.total ?? null;
-  const materializedAt = sa?.computed_at ?? null;
+    .first<{ bucket_count: number; computed_at: string | null }>();
+  const saBuckets = await db
+    .prepare(
+      `SELECT unique_agents AS count
+       FROM scan_aggregates WHERE event_id = ?`
+    )
+    .bind(eventId)
+    .all<{ count: number | null }>();
+  const materializedAt = saMeta?.computed_at ?? null;
+  const hasAnyBucket = (saMeta?.bucket_count ?? 0) > 0;
+  // Sum survivors (>= K) per the ratified per-bucket rule, then pass the sum
+  // through the shared OSE-665 renderer. floored.count is exact when the
+  // survivor sum clears K, else null (suppressed).
+  const flooredGatherings = applyCountFloor(sumContributingBuckets(saBuckets.results ?? []));
+  const uniqueGatherings = hasAnyBucket ? flooredGatherings.count : null;
 
   // 3. return_rate — for distinct anon_id_hashes at this event, how many
   //    were also seen at prior events (any other venue_id).
@@ -380,6 +415,11 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
 
   // Derive campaign_summary by aggregating sponsorImpressions rows that have
   // a campaign_id. No extra DB call — the data is already fetched above.
+  // OSE-683: each (sponsor × surface) impression row is a contributing bucket.
+  // Apply the per-bucket K-anon floor BEFORE summation — a row with count < K is
+  // DROPPED, never summed raw — so a sub-K impression cohort can't be laundered
+  // into a campaign total (nor recovered by differencing against the exact
+  // per-surface sponsor_impressions rows the same reader can already see).
   const campaignMap = new Map<
     string,
     {
@@ -392,19 +432,22 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
   >();
   for (const row of sponsorImpressions) {
     if (!row.campaign_id) continue;
+    const floored = applyCountFloor(row.count);
+    if (floored.count === null) continue; // sub-K bucket — drop before summation
+    const contribution = floored.count;
     const existing = campaignMap.get(row.campaign_id);
     if (existing) {
-      existing.total_impressions += row.count;
+      existing.total_impressions += contribution;
       existing.sponsor_count += 1;
       existing.impressions_by_surface[row.surface] =
-        (existing.impressions_by_surface[row.surface] ?? 0) + row.count;
+        (existing.impressions_by_surface[row.surface] ?? 0) + contribution;
     } else {
       campaignMap.set(row.campaign_id, {
         campaign_id: row.campaign_id,
         campaign_title: row.campaign_title ?? 'unknown',
-        total_impressions: row.count,
+        total_impressions: contribution,
         sponsor_count: 1,
-        impressions_by_surface: { [row.surface]: row.count },
+        impressions_by_surface: { [row.surface]: contribution },
       });
     }
   }
@@ -430,14 +473,21 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
     mid:     { sponsor_count: 0, total_impressions: 0 },
     premium: { sponsor_count: 0, total_impressions: 0 },
   };
+  // OSE-683: each (sponsor × surface) impression row is a contributing bucket —
+  // floor it per bucket BEFORE summation. A sub-K row is dropped from the class
+  // total (and does not, on its own, count the sponsor into the class): only
+  // rows that individually clear K contribute, matching the campaign_summary and
+  // unique_gatherings treatment so no surface leaks a sub-K aggregate.
   const seenSponsorClass = new Map<string, 'local' | 'mid' | 'premium'>();
   for (const row of sponsorImpressions) {
+    const floored = applyCountFloor(row.count);
+    if (floored.count === null) continue; // sub-K bucket — drop before summation
     const cls = classifySponsor(row.sponsor_tier, row.is_local);
     if (!seenSponsorClass.has(row.sponsor_id)) {
       seenSponsorClass.set(row.sponsor_id, cls);
       sponsorClassBreakdown[cls].sponsor_count += 1;
     }
-    sponsorClassBreakdown[cls].total_impressions += row.count;
+    sponsorClassBreakdown[cls].total_impressions += floored.count;
   }
 
   // 6. poster_attribution — per poster_deployment_id
