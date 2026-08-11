@@ -256,6 +256,76 @@ function splitMigrationSQL(sql: string): string[] {
   });
 }
 
+/**
+ * Derive the set of main-DB index NAMEs that exist AFTER all migrations are
+ * applied, straight from the migration SQL. This kills the brittle "bump the
+ * hardcoded count by hand in two spec files every time a migration adds an
+ * index" tax: the schema specs assert set-equality against this derived set,
+ * so adding/dropping an index is caught automatically.
+ *
+ * Rules:
+ *   - CREATE [UNIQUE] INDEX [IF NOT EXISTS] <name> ...  → add <name>
+ *   - DROP INDEX [IF EXISTS] <name>                     → remove <name>
+ *   - only idx_* names are tracked (matches the spec's `LIKE 'idx_%'` query)
+ *   - statements are processed in migration order (files are read sorted),
+ *     so a later DROP correctly removes an earlier CREATE (e.g. migration
+ *     0009 drops idx_checkins_event_id created in 0007).
+ *
+ * Comment lines were already stripped from migrationSQL at read time, so the
+ * regexes never match names inside `-- ...` comments.
+ */
+function deriveIndexNames(sql: string): string[] {
+  const present = new Set<string>();
+  const createRe = /CREATE\s+(?:UNIQUE\s+)?INDEX\s+(?:IF\s+NOT\s+EXISTS\s+)?([A-Za-z0-9_."]+)/gi;
+  const dropRe = /DROP\s+INDEX\s+(?:IF\s+EXISTS\s+)?([A-Za-z0-9_."]+)/gi;
+
+  // Preserve migration order: walk statements sequentially so CREATE/DROP
+  // interleave correctly. A single statement is either a CREATE or a DROP.
+  for (const stmt of sql.split(';')) {
+    createRe.lastIndex = 0;
+    dropRe.lastIndex = 0;
+    let m: RegExpExecArray | null;
+    while ((m = createRe.exec(stmt)) !== null) {
+      const name = m[1].replace(/"/g, '');
+      if (name.startsWith('idx_')) present.add(name);
+    }
+    while ((m = dropRe.exec(stmt)) !== null) {
+      const name = m[1].replace(/"/g, '');
+      if (name.startsWith('idx_')) present.delete(name);
+    }
+  }
+  return [...present].sort();
+}
+
+/**
+ * Derive the set of forms-DB table NAMEs that exist AFTER all forms migrations
+ * are applied. Mirrors deriveIndexNames but for CREATE TABLE / DROP TABLE.
+ * Catches the 5-vs-6 forms-table drift class (a stale hardcoded count already
+ * shipped before this seam existed).
+ */
+function deriveTableNames(sql: string): string[] {
+  const present = new Set<string>();
+  const createRe = /CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?([A-Za-z0-9_."]+)/gi;
+  const dropRe = /DROP\s+TABLE\s+(?:IF\s+EXISTS\s+)?([A-Za-z0-9_."]+)/gi;
+
+  for (const stmt of sql.split(';')) {
+    createRe.lastIndex = 0;
+    dropRe.lastIndex = 0;
+    let m: RegExpExecArray | null;
+    while ((m = createRe.exec(stmt)) !== null) {
+      const name = m[1].replace(/"/g, '');
+      if (!name.startsWith('sqlite_') && !name.startsWith('_cf_')) present.add(name);
+    }
+    while ((m = dropRe.exec(stmt)) !== null) {
+      present.delete(m[1].replace(/"/g, ''));
+    }
+  }
+  return [...present].sort();
+}
+
+const expectedIndexes = deriveIndexNames(migrationSQL);
+const expectedFormsTables = deriveTableNames(formsMigrationSQL);
+
 const migrationStatements = splitMigrationSQL(migrationSQL);
 
 const formsMigrationStatements = formsMigrationSQL
@@ -277,6 +347,11 @@ export default defineConfig({
         bindings: {
           TEST_MIGRATION_STATEMENTS: JSON.stringify(migrationStatements),
           TEST_FORMS_MIGRATION_STATEMENTS: JSON.stringify(formsMigrationStatements),
+          // Derived schema-count seam: the schema/constraints specs assert
+          // set-equality against these instead of hardcoding counts that go
+          // stale every time a migration adds/drops an index or forms table.
+          TEST_EXPECTED_INDEXES: JSON.stringify(expectedIndexes),
+          TEST_EXPECTED_FORMS_TABLES: JSON.stringify(expectedFormsTables),
           TEST_SOURCE_FILES_JSON: JSON.stringify(sourceFiles),
           TEST_WRANGLER_TOML: wranglerToml,
           // OSE-323 drift check input — brain canonical UEC artifact loaded
