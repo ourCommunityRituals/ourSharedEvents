@@ -496,7 +496,12 @@ jobs:
 
       - name: 'Quality: Worker D1 schema'
         if: matrix.shard == 'tests'
-        run: npm test
+        # OSE-696: route the vitest-pool-workers run through the retry-once
+        # wrapper. workerd intermittently segfaults with
+        # "Check failed: std::numeric_limits<int>::max() >= length_"; the wrapper
+        # re-runs ONCE only on that crash signature and preserves the real exit
+        # code otherwise (a genuine test failure still fails the gate).
+        run: node ../../scripts/vitest-retry.mjs npm test
         working-directory: ${{ env.WORKER_DIR }}
         env:
           BRAIN_DIR: ${{ github.workspace }}/ocr-docs-brain-checkout/ocr-docs-brain
