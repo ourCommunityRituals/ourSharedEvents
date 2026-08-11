@@ -27,9 +27,20 @@
  * calls this N times in parallel via Promise.all (S5-Q3 capped at 50).
  */
 
-import { CORRIDOR_BASELINE_MIN_SAMPLE } from './shared-report';
+import { CORRIDOR_BASELINE_MIN_SAMPLE, CORRIDOR_MAP_MIN_COUNT } from './shared-report';
 import { renderCorridorMap } from './corridor-map';
 import { gridRingUnsafe } from 'h3-js';
+import { tagsConsistent } from './h3-tagging';
+
+// OSE-596 (rank-8 finding): bucket raw DB timestamps to the hour boundary
+// before surfacing in poster_attribution. Sub-second precision exposes timing
+// patterns that can correlate individual scan events across anonymised reports.
+function bucketToHour(iso: string): string {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return iso; // pass through unparseable values unchanged
+  d.setUTCMinutes(0, 0, 0);
+  return d.toISOString().replace('.000Z', 'Z');
+}
 
 // Minimum number of distinct anons before return_rate is computed. Below
 // this, the denominator is so small that the percentage is identifying
@@ -69,6 +80,10 @@ export interface SharedReport {
     baseline_90d: number | null;
     density_ratio_30d: number | null;
     density_ratio_90d: number | null;
+    /** Q5: day-of-week (0=Sunday) used to look up the baseline — same bucket the builder queried. */
+    bucket_dow: number | null;
+    /** Q5: hour-of-day (0-23 UTC) used to look up the baseline. */
+    bucket_hour: number | null;
   };
 
   sponsor_impressions: Array<{
@@ -98,9 +113,26 @@ export interface SharedReport {
     impressions_by_surface: Record<string, number>;
   }> | null;
 
+  /**
+   * SR-25: Competitive intelligence frame — class-level impression aggregates.
+   * local   = community advertisers (is_local=true, Local Sponsor Covenant)
+   * mid     = non-local sponsors at silver/bronze/primary tier or unknown tier
+   * premium = non-local sponsors at title/platinum/gold tier
+   *
+   * Lets readers compute: "Are local organic advertisers out-clicking paid
+   * investment, or is the spend doing real work?" Classification labels are
+   * data IN the report, not access gates ON the reader.
+   */
+  sponsor_class_breakdown: {
+    local:   { sponsor_count: number; total_impressions: number };
+    mid:     { sponsor_count: number; total_impressions: number };
+    premium: { sponsor_count: number; total_impressions: number };
+  };
+
   poster_attribution: Array<{
     poster_deployment_id: string;
     location: string;
+    h3_res9: string | null;
     scan_count: number;
     first_scan_at: string;
     last_scan_at: string;
@@ -120,6 +152,8 @@ export interface SharedReport {
     svg: string;
     suppressed: string[]; // cell IDs under privacy floor — also in _meta.suppression_reasons
     cell_count: number;
+    /** Q8: 'live' = per-cell res9 scan data; 'fallback' = res7 neighborhood hex on launch day. */
+    source: 'live' | 'fallback';
   } | null;
 
   _meta: {
@@ -202,27 +236,29 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
     venuePct = ((repeatRow?.c ?? 0) / distinctAnonsHere) * 100;
 
     // corridor_pct — fraction of anons at THIS event who appeared at any
-    // OTHER event in the same corridor. Requires corridor_id.
-    if (event.corridor_id) {
+    // OTHER event in the same corridor. Uses h3_res7 (BE-24b) falling back
+    // to corridor_id for legacy events geocoded before BE-24b landed.
+    const corridorKey = event.h3_res7 ?? event.corridor_id;
+    if (corridorKey) {
       const corridorRow = await db
         .prepare(
           `SELECT COUNT(DISTINCT a.anon_id_hash) AS c
            FROM anon_id_returns a
            JOIN events e ON e.id = a.venue_id
-           WHERE e.corridor_id = ?
+           WHERE COALESCE(e.h3_res7, e.corridor_id) = ?
              AND a.venue_id != ?
              AND a.anon_id_hash IN (
                SELECT anon_id_hash FROM anon_id_returns WHERE venue_id = ?
              )`
         )
-        .bind(event.corridor_id, eventId, eventId)
+        .bind(corridorKey, eventId, eventId)
         .first<{ c: number }>();
       corridorPct = ((corridorRow?.c ?? 0) / distinctAnonsHere) * 100;
     } else {
       suppression.push({
         field: 'return_rate.corridor_pct',
         reason: 'no_baseline_yet',
-        detail: 'event has no corridor_id',
+        detail: 'event has no h3_res7 or corridor_id',
       });
     }
   } else if (distinctAnonsHere > 0) {
@@ -240,17 +276,23 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
   let baseline90d: number | null = null;
   let densityRatio30d: number | null = null;
   let densityRatio90d: number | null = null;
-  if (event.corridor_id) {
+  // Q5: hoisted so dow/hour are available in the return object regardless of branch taken.
+  let corridorDow: number | null = null;
+  let corridorHour: number | null = null;
+  const densityCorridorKey = event.h3_res7 ?? event.corridor_id;
+  if (densityCorridorKey && event.start_date) {
     const startDate = new Date(event.start_date);
-    const dow = startDate.getUTCDay();
-    const hour = startDate.getUTCHours();
+    corridorDow = startDate.getUTCDay();
+    corridorHour = startDate.getUTCHours();
+    const dow = corridorDow;
+    const hour = corridorHour;
     const baseline = await db
       .prepare(
         `SELECT window_30d_count, window_90d_count
          FROM corridor_density_baseline
          WHERE corridor_id = ? AND bucket_dow = ? AND bucket_hour = ?`
       )
-      .bind(event.corridor_id, dow, hour)
+      .bind(densityCorridorKey, dow, hour)
       .first<{ window_30d_count: number; window_90d_count: number }>();
 
     thisEventCount = distinctAnonsHere;
@@ -290,7 +332,7 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
     suppression.push({
       field: 'corridor_density',
       reason: 'no_baseline_yet',
-      detail: 'event has no corridor_id',
+      detail: 'event has no h3_res7 or corridor_id',
     });
   }
 
@@ -371,19 +413,47 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
       ? [...campaignMap.values()].sort((a, b) => b.total_impressions - a.total_impressions)
       : null;
 
+  // SR-25: sponsor_class_breakdown — class-level aggregates from sponsorImpressions.
+  // Mapping: is_local=true → 'local'; non-local + tier in top set → 'premium'; else → 'mid'.
+  // Inline classification — this file must stay tier-blind (invariant #5 tier_equity).
+  const PREMIUM_TIERS = new Set(['title', 'platinum', 'gold']);
+  function classifySponsor(tier: string | null, isLocal: boolean): 'local' | 'mid' | 'premium' {
+    if (isLocal) return 'local';
+    return tier !== null && PREMIUM_TIERS.has(tier) ? 'premium' : 'mid';
+  }
+  const sponsorClassBreakdown: {
+    local:   { sponsor_count: number; total_impressions: number };
+    mid:     { sponsor_count: number; total_impressions: number };
+    premium: { sponsor_count: number; total_impressions: number };
+  } = {
+    local:   { sponsor_count: 0, total_impressions: 0 },
+    mid:     { sponsor_count: 0, total_impressions: 0 },
+    premium: { sponsor_count: 0, total_impressions: 0 },
+  };
+  const seenSponsorClass = new Map<string, 'local' | 'mid' | 'premium'>();
+  for (const row of sponsorImpressions) {
+    const cls = classifySponsor(row.sponsor_tier, row.is_local);
+    if (!seenSponsorClass.has(row.sponsor_id)) {
+      seenSponsorClass.set(row.sponsor_id, cls);
+      sponsorClassBreakdown[cls].sponsor_count += 1;
+    }
+    sponsorClassBreakdown[cls].total_impressions += row.count;
+  }
+
   // 6. poster_attribution — per poster_deployment_id
   const posters = await db
     .prepare(
       `SELECT
          pd.id                  AS poster_deployment_id,
          COALESCE(pd.location_desc, pd.placement_label, '(no label)') AS location,
+         pd.h3_res9             AS h3_res9,
          COUNT(s.id)            AS scan_count,
          MIN(s.created_at)      AS first_scan_at,
          MAX(s.created_at)      AS last_scan_at
        FROM poster_deployments pd
        LEFT JOIN scans s ON s.poster_deployment_id = pd.id AND s.event_id = ?
        WHERE pd.event_id = ?
-       GROUP BY pd.id, pd.location_desc, pd.placement_label
+       GROUP BY pd.id, pd.location_desc, pd.placement_label, pd.h3_res9
        HAVING scan_count > 0
        ORDER BY scan_count DESC`
     )
@@ -391,6 +461,7 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
     .all<{
       poster_deployment_id: string;
       location: string;
+      h3_res9: string | null;
       scan_count: number;
       first_scan_at: string;
       last_scan_at: string;
@@ -398,9 +469,10 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
   const posterAttribution = (posters.results ?? []).map((r) => ({
     poster_deployment_id: r.poster_deployment_id,
     location: r.location,
+    h3_res9: r.h3_res9 ?? null,
     scan_count: r.scan_count,
-    first_scan_at: r.first_scan_at,
-    last_scan_at: r.last_scan_at,
+    first_scan_at: bucketToHour(r.first_scan_at),
+    last_scan_at: bucketToHour(r.last_scan_at),
   }));
 
   // 7. corridor_map — premium hex map of per-cell scan densities (S-6.3.1b).
@@ -408,16 +480,31 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
   //    Fallback (launch-day honesty): event's own h3_res7 corridor cell +
   //    gridRingUnsafe ring neighbors, so "one venue lighting one cell on
   //    day one IS the product" (ring gives the saturation promise context).
-  let corridorMap: { svg: string; suppressed: string[]; cell_count: number } | null = null;
+  let corridorMap: { svg: string; suppressed: string[]; cell_count: number; source: 'live' | 'fallback' } | null = null;
 
-  function buildCorridorMap(cells: Array<{ cell: string; count: number }>): void {
-    const { svg, suppressed: suppressedCells } = renderCorridorMap(cells);
-    corridorMap = { svg, suppressed: suppressedCells, cell_count: cells.length };
-    for (const cellId of suppressedCells) {
+  // Q10: integrity check — if stored H3 tags are inconsistent (res9 parent ≠ stored res7),
+  // the map cells are geographically incoherent. Emit a suppression warning and skip the
+  // fallback path so the map doesn't render misleading neighborhood geometry.
+  let h3TagsCorrupt = false;
+  if (event.h3_res9 && event.h3_res7 && !tagsConsistent({ h3_res9: event.h3_res9, h3_res7: event.h3_res7 })) {
+    h3TagsCorrupt = true;
+    suppression.push({
+      field: 'corridor_map',
+      reason: 'materialization_pending',
+      detail: 'stored H3 tags are inconsistent — re-tag the event to restore corridor map',
+    });
+  }
+
+  function buildCorridorMap(cells: Array<{ cell: string; count: number }>, source: 'live' | 'fallback'): void {
+    const { svg, suppressed: suppressedCells } = renderCorridorMap(cells, { minCount: CORRIDOR_MAP_MIN_COUNT });
+    corridorMap = { svg, suppressed: suppressedCells, cell_count: cells.length, source };
+    // Q: strip H3 cell IDs from suppression detail — cell IDs are trivially reverse-geocoded,
+    // which would undermine the privacy floor's intent. Count is enough context.
+    for (let i = 0; i < suppressedCells.length; i++) {
       suppression.push({
         field: 'corridor_map',
         reason: 'below_min_sample_size',
-        detail: `h3 cell ${cellId} suppressed (below privacy floor)`,
+        detail: `area ${i + 1} of ${suppressedCells.length} suppressed — fewer than ${CORRIDOR_MAP_MIN_COUNT} scans recorded`,
       });
     }
   }
@@ -435,17 +522,18 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
   const cellData = cellRows.results ?? [];
 
   if (cellData.length > 0) {
-    buildCorridorMap(cellData.map((r) => ({ cell: r.cell, count: r.count })));
-  } else if (event.h3_res7) {
-    // Launch-day fallback: corridor cell with uniqueGatherings count +
-    // ring neighbors at count=0 (suppressed by privacy floor — correct).
+    buildCorridorMap(cellData.map((r) => ({ cell: r.cell, count: r.count })), 'live');
+  } else if (event.h3_res7 && !h3TagsCorrupt) {
+    // Launch-day fallback: res7 neighborhood hex lit with uniqueGatherings count +
+    // ring-1 neighbors at count=0 (suppressed by privacy floor — correct).
+    // source='fallback' lets the client render accurate "neighborhood" copy (not "block").
     const ring = gridRingUnsafe(event.h3_res7, 1);
     const count = uniqueGatherings ?? 0;
     buildCorridorMap([
       { cell: event.h3_res7, count },
       ...ring.map((c: string) => ({ cell: c, count: 0 })),
-    ]);
-  } else {
+    ], 'fallback');
+  } else if (!h3TagsCorrupt) {
     suppression.push({
       field: 'corridor_map',
       reason: 'materialization_pending',
@@ -533,9 +621,12 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
         baseline_90d: baseline90d,
         density_ratio_30d: densityRatio30d,
         density_ratio_90d: densityRatio90d,
+        bucket_dow: corridorDow,
+        bucket_hour: corridorHour,
       },
       sponsor_impressions: sponsorImpressions,
       campaign_summary: campaignSummary,
+      sponsor_class_breakdown: sponsorClassBreakdown,
       poster_attribution: posterAttribution,
       headcount_trend: {
         series_id: trendSeriesId,

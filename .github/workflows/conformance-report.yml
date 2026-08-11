@@ -1,0 +1,101 @@
+# OSE-560 — Conformance report generator
+#
+# Generates CONFORMANCE.md and conformance.json from:
+#   - tests/fixtures/threat-ledger.ts (threat → invariant mapping + red birth dates)
+#   - @born-red annotations in test files (test → ledger → invariant chain)
+#   - OCR-docs/architectural-invariants.yaml (invariant claim statements)
+#
+# "Generated, never written." — the report is the CI artifact, not a document.
+# Empty rows are the product: gaps render loudly, not silently.
+#
+# Triggers: push to main, weekly cron (Sundays 06:00 UTC), manual dispatch.
+
+name: Conformance Report
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'workers/oursharedevents/tests/fixtures/threat-ledger.ts'
+      - 'workers/oursharedevents/tests/**/*.spec.ts'
+      - 'OCR-docs/ocr-docs-brain/architectural-invariants.yaml'
+      - 'workers/oursharedevents/scripts/generate-conformance-report.ts'
+  schedule:
+    - cron: '0 6 * * 0'   # Weekly — Sundays 06:00 UTC
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run — generate but do not commit'
+        type: boolean
+        default: false
+
+jobs:
+  generate:
+    name: Generate conformance report
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write    # to commit CONFORMANCE.md back to main
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: workers/oursharedevents/package-lock.json
+
+      - name: Install dependencies
+        working-directory: workers/oursharedevents
+        run: npm ci
+
+      - name: Generate conformance report
+        working-directory: workers/oursharedevents
+        env:
+          GITHUB_SHA: ${{ github.sha }}
+          GITHUB_SERVER_URL: ${{ github.server_url }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+        run: |
+          node --experimental-strip-types scripts/generate-conformance-report.ts \
+            --invariants-yaml "../../OCR-docs/ocr-docs-brain/architectural-invariants.yaml" \
+            --test-dir tests \
+            --out-dir docs/security \
+            --commit "$GITHUB_SHA" \
+            --run-url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+            --run-date "$(date -u +%Y-%m-%d)"
+
+      - name: Check for gaps (informational — never fails CI)
+        working-directory: workers/oursharedevents
+        run: |
+          if grep -q '❌ Gap' docs/security/CONFORMANCE.md; then
+            echo "::warning::Conformance gaps detected — review docs/security/CONFORMANCE.md"
+          fi
+          echo "Gap count: $(grep -c '❌ Gap' docs/security/CONFORMANCE.md || echo 0)"
+
+      - name: Commit report
+        if: ${{ github.event.inputs.dry_run != 'true' && github.ref == 'refs/heads/main' }}
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add workers/oursharedevents/docs/security/CONFORMANCE.md
+          git add workers/oursharedevents/docs/security/conformance.json
+          if git diff --cached --quiet; then
+            echo "No changes to conformance report."
+          else
+            git commit -m "chore: regenerate conformance report [skip ci]"
+            git push
+          fi
+
+      - name: Upload report as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: conformance-report-${{ github.sha }}
+          path: |
+            workers/oursharedevents/docs/security/CONFORMANCE.md
+            workers/oursharedevents/docs/security/conformance.json
+          retention-days: 90

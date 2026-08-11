@@ -10,6 +10,10 @@
 
 import { isGoogleMapsConfigured } from '../lib/maps';
 import { computeEventPhase } from '../domain/event-phase';
+import { publicEventCacheControl } from '../lib/phase-cache';
+import { renderGeoLink } from '../lib/geo-link';
+import { formatEventPrice } from '../lib/event-price';
+import { validateLogoUrl } from '../lib/sponsor-logo';
 import { DEFAULT_POSTER_CODE, posterProductForPath } from '../lib/poster-products';
 
 // Page shells extracted to template files (Wrangler [[rules]] type="Text").
@@ -247,8 +251,15 @@ export interface PublicEventRow {
   why_purpose: string | null;
   how_details: string | null;
   where_address: string | null;
+  // OSE-664: rich WHO / WHAT supply for the pre-event funnel.
+  who_story: string | null;
+  who_image_url: string | null;
+  what_video_url: string | null;
   lat: number | null;
   lon: number | null;
+  price_cents: number | null;
+  price_model: string | null;
+  price_note: string | null;
 }
 
 function esc(s: string | null | undefined): string {
@@ -279,47 +290,58 @@ function jsStr(s: string | null | undefined): string {
     .replace(/>/g, '\\u003E');
 }
 
+/**
+ * OSE-637 (MKTB-1) — Build complete OpenGraph + Twitter Card meta block.
+ *
+ * Call once per page render; drop the output into <head> after <title>.
+ * Consistent across pre_event / event / post_event phases so all three
+ * share the same social-preview surface area.
+ */
+function buildOgMeta(opts: {
+  title: string;
+  description: string;
+  url: string;
+  type?: string;
+  twitterCard?: 'summary' | 'summary_large_image';
+  startTime?: string | null;
+  endTime?: string | null;
+}): string {
+  const type = opts.type ?? 'event';
+  const twitterCard = opts.twitterCard ?? 'summary_large_image';
+  const lines: string[] = [
+    `  <meta property="og:title" content="${opts.title}" />`,
+    `  <meta property="og:description" content="${opts.description}" />`,
+    `  <meta property="og:url" content="${opts.url}" />`,
+    `  <meta property="og:type" content="${type}" />`,
+    `  <meta property="og:site_name" content="OurSharedEvents" />`,
+    `  <meta property="og:locale" content="en_US" />`,
+    `  <meta name="twitter:card" content="${twitterCard}" />`,
+    `  <meta name="twitter:title" content="${opts.title}" />`,
+    `  <meta name="twitter:description" content="${opts.description}" />`,
+  ];
+  if (opts.startTime) lines.push(`  <meta property="og:event:start_time" content="${esc(opts.startTime)}" />`);
+  if (opts.endTime) lines.push(`  <meta property="og:event:end_time" content="${esc(opts.endTime)}" />`);
+  return lines.join('\n');
+}
+
 /** Detect preferred language from Accept-Language header. Returns 'es' when Spanish is first preference, 'en' otherwise. */
 function preferredLang(request: Request): 'en' | 'es' {
   const al = request.headers.get('Accept-Language') ?? '';
   return /^es\b/i.test(al.split(',')[0].trim()) ? 'es' : 'en';
 }
 
-/** Dark mode CSS override — appended inside every public page <style> block. */
-const DARK_MODE_CSS = `
-  @media (prefers-color-scheme: dark) {
-    [data-surface="ose-public"] {
-      --ose-bg: #1a1a1a; --ose-text: #f0ede8; --ose-muted: #a0a0a0;
-      --ose-accent: #7b97f5; --ose-card: #252525; --ose-focus: #ffb800;
-      --ose-accent-tint: rgba(123,151,245,0.12); --ose-live: #f27070;
-    }
-  }`;
-
 /**
- * Universal geo link — opens native maps app on iOS/Android.
- * geo: URI scheme: iOS opens Apple Maps, Android opens default maps app.
- * Falls back to Apple Maps URL search when no lat/lon stored.
- * No third-party tiles or trackers — link out only, never embed.
+ * OSE-655 A2: dark/light theming now comes from the @ocr/ui role tokens
+ * (/ui.css) that the public surface consumes (--bg/--surface/--accent/--text/…),
+ * which carry their own prefers-color-scheme handling. The former manual
+ * --ose-* dark override (raw hex) is removed so the palette stays swappable in
+ * BOTH modes and a [data-brand] reaches it. Kept as an empty string so the
+ * `${DARK_MODE_CSS}` interpolations in each render remain valid.
  */
-function renderGeoLink(
-  lat: number | null,
-  lon: number | null,
-  venueName: string | null,
-  addr: string | null,
-  label: string,
-  testid = 'geo-link'
-): string {
-  if (lat !== null && lon !== null) {
-    const qLabel = encodeURIComponent(venueName || addr || '');
-    const href = `geo:${lat},${lon}?q=${lat},${lon}${qLabel ? `(${qLabel})` : ''}`;
-    return `<a class="ose-geo-link" data-testid="${testid}" href="${href}" target="_blank" rel="noopener noreferrer">${label}</a>`;
-  }
-  const q = encodeURIComponent(addr || venueName || '');
-  if (q) {
-    return `<a class="ose-geo-link" data-testid="${testid}" href="https://maps.apple.com/?q=${q}" target="_blank" rel="noopener noreferrer">${label}</a>`;
-  }
-  return '';
-}
+const DARK_MODE_CSS = '';
+
+// renderGeoLink extracted to src/lib/geo-link.ts (OSE-660) — pure, unit-tested,
+// maps!=H3 wall-guarded. Imported above.
 
 /**
  * Share button — Web Share API with copy-link fallback.
@@ -429,6 +451,13 @@ export function renderPreEventHtml(
   const title = esc(row.title);
   const whatShort = esc(row.what_short);
   const whoHost = esc(row.who_host);
+  const whoStory = esc(row.who_story);
+  // OSE-655: rich media for the funnel (OSE-664 supplied the columns + authoring
+  // wall). Re-guard at render (defense-in-depth): http(s)-only, so a scheme that
+  // ever slipped past authoring (javascript:, data:) can never reach an
+  // src/href here. URL is attribute-escaped on output.
+  const whoImage = validateLogoUrl(row.who_image_url).url;
+  const whatVideo = validateLogoUrl(row.what_video_url).url;
   const whyPurpose = esc(row.why_purpose);
   const howDetails = esc(row.how_details);
   const whereAddress = esc(row.where_address) || esc(row.location);
@@ -452,13 +481,12 @@ export function renderPreEventHtml(
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>${title}</title>
-  <meta property="og:title" content="${title}" />
-  <meta property="og:description" content="${whatShort}" />
-  <meta property="og:url" content="${esc(shareUrl)}" />
-  <meta property="og:type" content="event" />
-  <meta name="twitter:card" content="summary_large_image" />
+${buildOgMeta({ title, description: whatShort, url: esc(shareUrl), twitterCard: 'summary_large_image', startTime: row.start_date, endTime: row.end_date })}
+  <link rel="stylesheet" href="/ui.css" />
   <style>
-    [data-surface="ose-public"] { --ose-bg: #faf7f2; --ose-text: #2a2a2a; --ose-muted: #5a5a5a; --ose-accent: #4361ee; --ose-card: #fff; --ose-focus: #ffb800; --ose-accent-tint: rgba(67, 97, 238, 0.06); }
+    /* OSE-655 A2: palette driven by @ocr/ui role tokens (from /ui.css), so a
+       [data-brand] on <html> swaps the whole surface. No raw hex here. */
+    [data-surface="ose-public"] { --ose-bg: var(--bg); --ose-card: var(--surface); --ose-text: var(--text); --ose-muted: var(--text-muted); --ose-accent: var(--accent); --ose-live: var(--live); --ose-focus: var(--accent); --ose-accent-tint: color-mix(in srgb, var(--accent) 8%, transparent); }
     * { box-sizing: border-box; }
     html, body { margin: 0; padding: 0; background: var(--ose-bg); color: var(--ose-text); font-family: system-ui, -apple-system, "Segoe UI", sans-serif; line-height: 1.5; }
     /* OSE-298 DRAIN 5/7: defensive horizontal-scroll guard for the
@@ -470,7 +498,7 @@ export function renderPreEventHtml(
     html, body { overflow-x: hidden; }
     body { max-width: 720px; margin: 0 auto; padding: 1.5rem 1.25rem 3rem; overflow-wrap: anywhere; word-break: break-word; }
     .ose-skip { position: absolute; left: -9999px; }
-    .ose-skip:focus { left: 1rem; top: 1rem; background: var(--ose-accent); color: #fff; padding: 0.5rem 1rem; border-radius: 4px; }
+    .ose-skip:focus { left: 1rem; top: 1rem; background: var(--ose-accent); color: var(--on-accent); padding: 0.5rem 1rem; border-radius: 4px; }
     h1 { font-size: 1.875rem; margin: 0 0 0.5rem; line-height: 1.2; }
     h2 { font-size: 1.125rem; margin: 1.5rem 0 0.5rem; color: var(--ose-text); }
     .ose-meta { color: var(--ose-muted); font-size: 0.95rem; margin-bottom: 1.5rem; }
@@ -478,7 +506,7 @@ export function renderPreEventHtml(
     .ose-venue-map { width: 100%; max-width: 100%; height: auto; border-radius: 6px; display: block; margin-bottom: 0.75rem; }
     .ose-geo-link { color: var(--ose-accent); text-decoration: none; font-weight: 500; }
     .ose-geo-link:hover { text-decoration: underline; }
-    .ose-rsvp-btn { display: inline-block; background: var(--ose-accent); color: #fff; padding: 0.75rem 1.5rem; border-radius: 6px; text-decoration: none; font-weight: 600; margin: 1.25rem 0; min-height: 44px; line-height: 1.5; }
+    .ose-rsvp-btn { display: inline-block; background: var(--ose-accent); color: var(--on-accent); padding: 0.75rem 1.5rem; border-radius: 6px; text-decoration: none; font-weight: 600; margin: 1.25rem 0; min-height: 44px; line-height: 1.5; }
     .ose-rsvp-btn:focus { outline: 3px solid var(--ose-focus); outline-offset: 2px; }
     .ose-share-btn { display: inline-flex; align-items: center; justify-content: center; background: transparent; color: var(--ose-accent); border: 1.5px solid var(--ose-accent); padding: 0.65rem 1.25rem; border-radius: 6px; font-size: 1rem; font-weight: 600; cursor: pointer; min-height: 44px; min-width: 180px; margin: 1rem 0 0.5rem; width: 100%; }
     .ose-share-btn:hover { background: var(--ose-accent-tint); }
@@ -486,7 +514,13 @@ export function renderPreEventHtml(
     .ose-anonymity { margin-top: 2rem; padding: 1rem 1.25rem; background: var(--ose-accent-tint); border-left: 3px solid var(--ose-accent); border-radius: 4px; font-size: 0.9rem; color: var(--ose-muted); }
     .ose-anonymity h2 { margin-top: 0; font-size: 1rem; color: var(--ose-text); }
     .ose-anonymity p { margin: 0; }
-    .ose-section p { margin: 0; }${DARK_MODE_CSS}
+    .ose-section p { margin: 0; }
+    /* OSE-655: WHO host photo (the conversion engine gets a face) + WHAT video
+       link-out. Circular avatar; tasteful, mobile-first, 44px tap target on the link. */
+    .ose-who-image { width: 120px; height: 120px; object-fit: cover; border-radius: 50%; display: block; margin-bottom: 0.75rem; background: var(--ose-accent-tint); }
+    .ose-what-video { color: var(--ose-accent); text-decoration: none; font-weight: 600; display: inline-block; min-height: 44px; line-height: 44px; }
+    .ose-what-video:hover { text-decoration: underline; }
+    .ose-what-video:focus { outline: 3px solid var(--ose-focus); outline-offset: 2px; }${DARK_MODE_CSS}
   </style>
 </head>
 <body>
@@ -498,10 +532,31 @@ export function renderPreEventHtml(
     </header>
 
     ${
-      whatShort
+      whatShort || whatVideo
         ? `<section class="ose-card ose-section" data-testid="event-what" aria-labelledby="what-heading">
            <h2 id="what-heading">What</h2>
-           <p>${whatShort}</p>
+           ${whatShort ? `<p>${whatShort}</p>` : ''}
+           ${whatVideo ? `<p><a class="ose-what-video" data-testid="event-what-video" href="${esc(whatVideo)}" target="_blank" rel="noopener noreferrer nofollow">${lang === 'es' ? '▶ Ver el video' : '▶ Watch the video'}</a></p>` : ''}
+         </section>`
+        : ''
+    }
+
+    ${
+      whoHost || whoStory || whoImage
+        ? `<section class="ose-card ose-section" data-testid="event-who" aria-labelledby="who-heading">
+           <h2 id="who-heading">Who</h2>
+           ${whoImage ? `<img class="ose-who-image" data-testid="event-who-image" src="${esc(whoImage)}" alt="${whoHost ? `Photo of ${whoHost}` : 'Host'}" loading="lazy" width="120" height="120" />` : ''}
+           ${whoHost ? `<p data-testid="event-who-host">${whoHost}</p>` : ''}
+           ${whoStory ? `<p class="ose-who-story" data-testid="event-who-story">${whoStory}</p>` : ''}
+         </section>`
+        : ''
+    }
+
+    ${
+      whyPurpose
+        ? `<section class="ose-card ose-section" data-testid="event-why" aria-labelledby="why-heading">
+           <h2 id="why-heading">Why</h2>
+           <p>${whyPurpose}</p>
          </section>`
         : ''
     }
@@ -518,23 +573,17 @@ export function renderPreEventHtml(
         : ''
     }
 
-    ${
-      whoHost
-        ? `<section class="ose-card ose-section" data-testid="event-who" aria-labelledby="who-heading">
-           <h2 id="who-heading">Who</h2>
-           <p>${whoHost}</p>
-         </section>`
-        : ''
-    }
-
-    ${
-      whyPurpose
-        ? `<section class="ose-card ose-section" data-testid="event-why" aria-labelledby="why-heading">
-           <h2 id="why-heading">Why</h2>
-           <p>${whyPurpose}</p>
-         </section>`
-        : ''
-    }
+    ${(() => {
+      // HOW MUCH — the event's own price (display only; #6 inert_monetization
+      // holds — no charge logic). Positioned before HOW: cost gates commitment.
+      const howMuch = formatEventPrice(row);
+      return howMuch === null
+        ? ''
+        : `<section class="ose-card ose-section" data-testid="event-how-much" aria-labelledby="how-much-heading">
+           <h2 id="how-much-heading">How much</h2>
+           <p>${esc(howMuch)}</p>
+         </section>`;
+    })()}
 
     ${
       howDetails
@@ -613,12 +662,12 @@ export function renderEventLiveHtml(
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>${title}</title>
-  <meta property="og:title" content="${title}" />
-  <meta property="og:description" content="${whatShort}" />
-  <meta property="og:url" content="${esc(shareUrl)}" />
-  <meta property="og:type" content="event" />
+${buildOgMeta({ title, description: whatShort, url: esc(shareUrl), twitterCard: 'summary_large_image', startTime: row.start_date, endTime: row.end_date })}
+  <link rel="stylesheet" href="/ui.css" />
   <style>
-    [data-surface="ose-public"] { --ose-bg: #faf7f2; --ose-text: #2a2a2a; --ose-muted: #5a5a5a; --ose-accent: #4361ee; --ose-card: #fff; --ose-live: #d63b3b; --ose-focus: #ffb800; --ose-accent-tint: rgba(67, 97, 238, 0.06); }
+    /* OSE-655 A2: palette from @ocr/ui role tokens (from /ui.css); [data-brand]
+       swaps the surface. --ose-live -> teal --live (colorblind-safe). No hex. */
+    [data-surface="ose-public"] { --ose-bg: var(--bg); --ose-card: var(--surface); --ose-text: var(--text); --ose-muted: var(--text-muted); --ose-accent: var(--accent); --ose-live: var(--live); --ose-focus: var(--accent); --ose-accent-tint: color-mix(in srgb, var(--accent) 8%, transparent); }
     * { box-sizing: border-box; }
     html, body { margin: 0; padding: 0; background: var(--ose-bg); color: var(--ose-text); font-family: system-ui, -apple-system, "Segoe UI", sans-serif; line-height: 1.5; }
     /* OSE-298 DRAIN 5/7: defensive horizontal-scroll guard for the
@@ -626,7 +675,7 @@ export function renderEventLiveHtml(
     html, body { overflow-x: hidden; }
     body { max-width: 720px; margin: 0 auto; padding: 1.5rem 1.25rem 3rem; overflow-wrap: anywhere; word-break: break-word; }
     .ose-skip { position: absolute; left: -9999px; }
-    .ose-skip:focus { left: 1rem; top: 1rem; background: var(--ose-accent); color: #fff; padding: 0.5rem 1rem; border-radius: 4px; }
+    .ose-skip:focus { left: 1rem; top: 1rem; background: var(--ose-accent); color: var(--on-accent); padding: 0.5rem 1rem; border-radius: 4px; }
     .ose-live-badge { display: inline-flex; align-items: center; gap: 0.4rem; background: var(--ose-live); color: #fff; padding: 0.25rem 0.75rem; border-radius: 999px; font-size: 0.8rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.75rem; }
     .ose-live-dot { width: 0.6rem; height: 0.6rem; background: #fff; border-radius: 50%; animation: ose-pulse 1.5s ease-in-out infinite; }
     @keyframes ose-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
@@ -636,7 +685,7 @@ export function renderEventLiveHtml(
     .ose-venue-map { width: 100%; max-width: 100%; height: auto; border-radius: 6px; display: block; margin-bottom: 0.75rem; }
     .ose-geo-link { color: var(--ose-accent); text-decoration: none; font-weight: 500; }
     .ose-geo-link:hover { text-decoration: underline; }
-    .ose-checkin-btn { display: inline-block; background: var(--ose-accent); color: #fff; padding: 0.875rem 1.75rem; border-radius: 6px; text-decoration: none; font-weight: 700; margin: 1.25rem 0; font-size: 1.05rem; min-height: 44px; line-height: 1.5; }
+    .ose-checkin-btn { display: inline-block; background: var(--ose-accent); color: var(--on-accent); padding: 0.875rem 1.75rem; border-radius: 6px; text-decoration: none; font-weight: 700; margin: 1.25rem 0; font-size: 1.05rem; min-height: 44px; line-height: 1.5; }
     .ose-checkin-btn:focus { outline: 3px solid var(--ose-focus); outline-offset: 2px; }
     .ose-share-btn { display: inline-flex; align-items: center; justify-content: center; background: transparent; color: var(--ose-accent); border: 1.5px solid var(--ose-accent); padding: 0.65rem 1.25rem; border-radius: 6px; font-size: 1rem; font-weight: 600; cursor: pointer; min-height: 44px; min-width: 180px; margin: 1rem 0 0.5rem; width: 100%; }
     .ose-share-btn:hover { background: var(--ose-accent-tint); }
@@ -644,7 +693,13 @@ export function renderEventLiveHtml(
     .ose-anonymity { margin-top: 2rem; padding: 1rem 1.25rem; background: var(--ose-accent-tint); border-left: 3px solid var(--ose-accent); border-radius: 4px; font-size: 0.9rem; color: var(--ose-muted); }
     .ose-anonymity h2 { margin-top: 0; font-size: 1rem; color: var(--ose-text); }
     .ose-anonymity p { margin: 0; }
-    .ose-section p { margin: 0; }${DARK_MODE_CSS}
+    .ose-section p { margin: 0; }
+    /* OSE-655: WHO host photo (the conversion engine gets a face) + WHAT video
+       link-out. Circular avatar; tasteful, mobile-first, 44px tap target on the link. */
+    .ose-who-image { width: 120px; height: 120px; object-fit: cover; border-radius: 50%; display: block; margin-bottom: 0.75rem; background: var(--ose-accent-tint); }
+    .ose-what-video { color: var(--ose-accent); text-decoration: none; font-weight: 600; display: inline-block; min-height: 44px; line-height: 44px; }
+    .ose-what-video:hover { text-decoration: underline; }
+    .ose-what-video:focus { outline: 3px solid var(--ose-focus); outline-offset: 2px; }${DARK_MODE_CSS}
   </style>
 </head>
 <body>
@@ -733,8 +788,11 @@ function renderMinimalPhaseHtml(row: PublicEventRow, phase: 'event' | 'post_even
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>${title}</title>
+  <link rel="stylesheet" href="/ui.css" />
   <style>
-    [data-surface="ose-public"] { --ose-bg: #faf7f2; --ose-text: #2a2a2a; --ose-muted: #5a5a5a; --ose-accent: #4361ee; --ose-accent-tint: rgba(67, 97, 238, 0.06); }
+    /* OSE-655 A2: palette from @ocr/ui role tokens (from /ui.css); [data-brand]
+       swaps the surface. No raw hex here. */
+    [data-surface="ose-public"] { --ose-bg: var(--bg); --ose-card: var(--surface); --ose-text: var(--text); --ose-muted: var(--text-muted); --ose-accent: var(--accent); --ose-live: var(--live); --ose-focus: var(--accent); --ose-accent-tint: color-mix(in srgb, var(--accent) 8%, transparent); }
     body { font-family: system-ui, -apple-system, sans-serif; max-width: 600px; margin: 3rem auto; padding: 1rem; line-height: 1.5; color: var(--ose-text); background: var(--ose-bg); }
     h1 { font-size: 1.5rem; margin: 0 0 0.5rem; }
     .msg { color: var(--ose-muted); font-size: 1.05rem; margin: 0.5rem 0 1.5rem; }
@@ -762,6 +820,14 @@ interface NextEventRow {
 }
 
 /**
+ * OSE-657 recap-first invariant: post-event suggestions are a CURATED few at the
+ * margin, never an exhaustive listing. This bound is what makes "tasteful, not
+ * bombardment" structural rather than a preference — the render slices to it and
+ * the layout-invariant test asserts the rendered count never exceeds it.
+ */
+const MAX_POST_EVENT_SUGGESTIONS = 3;
+
+/**
  * Post-event recap render (OSE-245 / ose-client-ready package).
  *
  * Replaces the "This event has ended." stub with a real recap + return loop.
@@ -775,7 +841,7 @@ interface NextEventRow {
 function renderPostEventHtml(
   row: PublicEventRow,
   shareUrl: string,
-  nextEvent: NextEventRow | null,
+  nextEvents: NextEventRow[],
   social?: EventPageSocialData,
   opts?: { nonce?: string; lang?: 'en' | 'es' }
 ): string {
@@ -788,18 +854,29 @@ function renderPostEventHtml(
   const venueDisplay = esc(row.location) || esc(row.where_address);
   const whenHuman = formatHumanDate(row.start_date);
 
-  const nextCard = nextEvent
-    ? `<section class="ose-card ose-next" data-testid="next-event-card" aria-labelledby="next-heading">
-        <h2 id="next-heading">Next at ${venueDisplay || 'this venue'}</h2>
-        <p class="ose-next-title" data-testid="next-event-title">${esc(nextEvent.title)}</p>
-        <p class="ose-next-when" data-testid="next-event-when">${formatHumanDate(nextEvent.start_date)}</p>
-        <a class="ose-cta" data-testid="next-event-link" href="/events/${esc(nextEvent.id)}">See details</a>
-      </section>`
-    : `<section class="ose-card ose-next" data-testid="next-event-fallback" aria-labelledby="next-heading">
-        <h2 id="next-heading">The corridor keeps going</h2>
-        <p>More gatherings are always coming together nearby.</p>
-        <a class="ose-cta" data-testid="browse-events-link" href="/public">See what's coming up</a>
-      </section>`;
+  // OSE-657: curated, bounded suggestions — the subtle margin. Sliced defensively
+  // to MAX_POST_EVENT_SUGGESTIONS so this can never become an exhaustive listing.
+  // The first item keeps the OSE-454 next-event-card testids for continuity; any
+  // further items are indexed. When none exist, the corridor fallback stands in.
+  const curated = nextEvents.slice(0, MAX_POST_EVENT_SUGGESTIONS);
+  const suggestionItems = curated
+    .map((ev, i) => {
+      const testid = i === 0 ? 'next-event-card' : `next-event-suggestion-${i}`;
+      const linkTestid = i === 0 ? 'next-event-link' : `next-event-suggestion-link-${i}`;
+      return `<li class="ose-suggestion" data-testid="${testid}">
+          <a class="ose-suggestion-link" data-testid="${linkTestid}" href="/events/${esc(ev.id)}">
+            <span class="ose-suggestion-title">${esc(ev.title)}</span>
+            <span class="ose-suggestion-when">${formatHumanDate(ev.start_date)}</span>
+          </a>
+        </li>`;
+    })
+    .join('');
+  const suggestionsInner = curated.length
+    ? `<h2 id="next-heading" class="ose-suggestions-heading">Next at ${venueDisplay || 'this venue'}</h2>
+        <ul class="ose-suggestion-list">${suggestionItems}</ul>`
+    : `<h2 id="next-heading" class="ose-suggestions-heading" data-testid="next-event-fallback">The corridor keeps going</h2>
+        <p class="ose-suggestions-note">More gatherings are always coming together nearby.</p>
+        <a class="ose-cta ose-cta-secondary" data-testid="browse-events-link" href="/public">See what's coming up</a>`;
 
   return `<!DOCTYPE html>
 <html lang="${lang}" data-surface="ose-public">
@@ -807,13 +884,12 @@ function renderPostEventHtml(
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>${title} — recap</title>
-  <meta property="og:title" content="${title}" />
-  <meta property="og:description" content="${whatShort}" />
-  <meta property="og:url" content="${esc(shareUrl)}" />
-  <meta property="og:type" content="event" />
-  <meta name="twitter:card" content="summary" />
+${buildOgMeta({ title, description: whatShort, url: esc(shareUrl), twitterCard: 'summary', startTime: row.start_date, endTime: row.end_date })}
+  <link rel="stylesheet" href="/ui.css" />
   <style>
-    [data-surface="ose-public"] { --ose-bg: #faf7f2; --ose-text: #2a2a2a; --ose-muted: #5a5a5a; --ose-accent: #4361ee; --ose-card: #fff; --ose-focus: #ffb800; --ose-accent-tint: rgba(67, 97, 238, 0.06); }
+    /* OSE-655 A2: palette driven by @ocr/ui role tokens (from /ui.css), so a
+       [data-brand] on <html> swaps the whole surface. No raw hex here. */
+    [data-surface="ose-public"] { --ose-bg: var(--bg); --ose-card: var(--surface); --ose-text: var(--text); --ose-muted: var(--text-muted); --ose-accent: var(--accent); --ose-live: var(--live); --ose-focus: var(--accent); --ose-accent-tint: color-mix(in srgb, var(--accent) 8%, transparent); }
     * { box-sizing: border-box; }
     html, body { margin: 0; padding: 0; background: var(--ose-bg); color: var(--ose-text); font-family: system-ui, -apple-system, "Segoe UI", sans-serif; line-height: 1.5; }
     main { max-width: 640px; margin: 0 auto; padding: 1.25rem 1rem 3rem; }
@@ -825,7 +901,19 @@ function renderPostEventHtml(
     .ose-card p { margin: 0 0 0.5rem; }
     .ose-recap-row { margin: 0 0 0.6rem; }
     .ose-recap-label { display: block; font-size: 0.72rem; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--ose-muted); }
-    .ose-cta { display: inline-block; min-height: 44px; line-height: 44px; padding: 0 20px; background: var(--ose-accent); color: #fff; border-radius: 6px; text-decoration: none; font-weight: 600; }
+    /* OSE-657 recap-first: the recap is the hero; suggestions are demoted to a
+       quiet margin — smaller type, muted, set off by a divider, never a card
+       loud enough to compete with the keepsake above it. Palette-agnostic. */
+    .ose-recap-primary { margin: 0 0 1.5rem; }
+    .ose-suggestions { margin: 1.5rem 0 0; padding: 1rem 0 0; border-top: 1px solid var(--ose-muted); opacity: 0.92; }
+    .ose-suggestions-heading { font-size: 0.85rem; font-weight: 600; letter-spacing: 0.03em; color: var(--ose-muted); margin: 0 0 0.5rem; }
+    .ose-suggestions-note { font-size: 0.85rem; color: var(--ose-muted); margin: 0 0 0.5rem; }
+    .ose-suggestion-list { list-style: none; margin: 0 0 0.75rem; padding: 0; display: flex; flex-direction: column; gap: 0.35rem; }
+    .ose-suggestion-link { display: flex; justify-content: space-between; gap: 0.75rem; align-items: baseline; min-height: 44px; padding: 0.4rem 0; text-decoration: none; color: var(--ose-text); }
+    .ose-suggestion-title { font-size: 0.95rem; }
+    .ose-suggestion-when { font-size: 0.8rem; color: var(--ose-muted); white-space: nowrap; }
+    .ose-suggestions-connect { margin-top: 0.75rem; }
+    .ose-cta { display: inline-block; min-height: 44px; line-height: 44px; padding: 0 20px; background: var(--ose-accent); color: var(--on-accent); border-radius: 6px; text-decoration: none; font-weight: 600; }
     .ose-cta.ose-cta-secondary { background: transparent; color: var(--ose-accent); border: 1px solid var(--ose-accent); }
     .ose-share-btn { display: inline-flex; align-items: center; justify-content: center; background: transparent; color: var(--ose-accent); border: 1.5px solid var(--ose-accent); padding: 0.65rem 1.25rem; border-radius: 6px; font-size: 1rem; font-weight: 600; cursor: pointer; min-height: 44px; min-width: 180px; margin: 1rem 0 0.5rem; width: 100%; }
     .ose-share-btn:hover { background: var(--ose-accent-tint); }
@@ -842,43 +930,53 @@ function renderPostEventHtml(
     <h1 id="event-title-post" data-testid="event-title-post">${title}</h1>
     <p class="ose-when" data-testid="event-when-post">${whenHuman ? `Happened ${whenHuman}` : 'This event has ended.'}${venueDisplay ? ` &middot; ${venueDisplay}` : ''}</p>
 
-    <section class="ose-card" data-testid="event-recap-card" aria-labelledby="recap-heading">
-      <h2 id="recap-heading">What this was</h2>
-      ${whatShort ? `<p class="ose-recap-row" data-testid="recap-what">${whatShort}</p>` : ''}
-      ${whoHost ? `<p class="ose-recap-row" data-testid="recap-who"><span class="ose-recap-label">Hosted by</span>${whoHost}</p>` : ''}
-      ${whyPurpose ? `<p class="ose-recap-row" data-testid="recap-why"><span class="ose-recap-label">Why it exists</span>${whyPurpose}</p>` : ''}
-    </section>
+    <!-- OSE-657 PRIMARY: the recap is the keepsake and the hero. This region is
+       a HARD layout invariant — it MUST precede the suggestions margin below.
+       The recap-first-invariant test fails if this order is reversed. -->
+    <div class="ose-recap-primary" data-testid="recap-primary" data-region="recap">
+      <section class="ose-card" data-testid="event-recap-card" aria-labelledby="recap-heading">
+        <h2 id="recap-heading">What this was</h2>
+        ${whatShort ? `<p class="ose-recap-row" data-testid="recap-what">${whatShort}</p>` : ''}
+        ${whoHost ? `<p class="ose-recap-row" data-testid="recap-who"><span class="ose-recap-label">Hosted by</span>${whoHost}</p>` : ''}
+        ${whyPurpose ? `<p class="ose-recap-row" data-testid="recap-why"><span class="ose-recap-label">Why it exists</span>${whyPurpose}</p>` : ''}
+      </section>
 
-    ${nextCard}
+      ${(() => {
+        if (!social) return '';
+        const { checkinCount, regCount, surveyCount, emailCount, sponsors } = social;
+        const hasStats = checkinCount > 0 || regCount > 0 || surveyCount > 0 || emailCount > 0;
+        const statsCard = hasStats
+          ? `<section class="ose-card ose-stats-card" data-testid="event-stats-card" aria-labelledby="stats-heading">
+              <h2 id="stats-heading">By the numbers</h2>
+              ${checkinCount > 0 ? `<p data-testid="stat-checkins"><strong>${checkinCount}</strong> Checked in</p>` : ''}
+              ${regCount > 0 ? `<p data-testid="stat-registrations"><strong>${regCount}</strong> Registered</p>` : ''}
+              ${checkinCount > 0 && regCount > 0 ? `<p data-testid="stat-attendance-rate">${Math.round((checkinCount / regCount) * 100)}% attendance rate</p>` : ''}
+              ${surveyCount > 0 ? `<p data-testid="stat-surveys"><strong>${surveyCount}</strong> Surveys submitted</p>` : ''}
+              ${emailCount > 0 ? `<p data-testid="stat-email-signups"><strong>${emailCount}</strong> Email signups</p>` : ''}
+            </section>`
+          : '';
+        // Sponsor rotation stays ambient + spend-blind here (names/links only,
+        // no tier/spend) — a warm, receptive-attention placement, not a wall.
+        const sponsorThanks = sponsors.length
+          ? `<section class="ose-card ose-sponsor-thanks" data-testid="post-sponsor-thanks" aria-labelledby="thanks-heading">
+              <h2 id="thanks-heading">Thanks to our sponsors</h2>
+              <div class="ose-sponsor-list">${sponsors.map(renderSponsorItem).join('')}</div>
+            </section>`
+          : '';
+        return statsCard + sponsorThanks;
+      })()}
+    </div>
 
-    ${(() => {
-      if (!social) return '';
-      const { checkinCount, regCount, surveyCount, emailCount, sponsors } = social;
-      const hasStats = checkinCount > 0 || regCount > 0 || surveyCount > 0 || emailCount > 0;
-      const statsCard = hasStats
-        ? `<section class="ose-card ose-stats-card" data-testid="event-stats-card" aria-labelledby="stats-heading">
-            <h2 id="stats-heading">By the numbers</h2>
-            ${checkinCount > 0 ? `<p data-testid="stat-checkins"><strong>${checkinCount}</strong> Checked in</p>` : ''}
-            ${regCount > 0 ? `<p data-testid="stat-registrations"><strong>${regCount}</strong> Registered</p>` : ''}
-            ${checkinCount > 0 && regCount > 0 ? `<p data-testid="stat-attendance-rate">${Math.round((checkinCount / regCount) * 100)}% attendance rate</p>` : ''}
-            ${surveyCount > 0 ? `<p data-testid="stat-surveys"><strong>${surveyCount}</strong> Surveys submitted</p>` : ''}
-            ${emailCount > 0 ? `<p data-testid="stat-email-signups"><strong>${emailCount}</strong> Email signups</p>` : ''}
-          </section>`
-        : '';
-      const sponsorThanks = sponsors.length
-        ? `<section class="ose-card ose-sponsor-thanks" data-testid="post-sponsor-thanks" aria-labelledby="thanks-heading">
-            <h2 id="thanks-heading">Thanks to our sponsors</h2>
-            <div class="ose-sponsor-list">${sponsors.map(renderSponsorItem).join('')}</div>
-          </section>`
-        : '';
-      return statsCard + sponsorThanks;
-    })()}
-
-    <section class="ose-card" data-testid="stay-connected-card" aria-labelledby="connect-heading">
-      <h2 id="connect-heading">Hear about the next one</h2>
-      <p>One email when something's coming up. Nothing else.</p>
-      <a class="ose-cta ose-cta-secondary" data-testid="email-signup-link" href="/forms/${esc(row.id)}?type=email">Keep me posted</a>
-    </section>
+    <!-- OSE-657 SUBORDINATE: curated, bounded margin. Secondary by layout (an
+       <aside>, visually demoted, always after the recap), never a full listing. -->
+    <aside class="ose-suggestions" data-testid="suggestions-margin" data-region="suggestions" aria-labelledby="next-heading">
+      ${suggestionsInner}
+      <section class="ose-suggestions-connect" data-testid="stay-connected-card" aria-labelledby="connect-heading">
+        <h2 id="connect-heading" class="ose-suggestions-heading">Hear about the next one</h2>
+        <p class="ose-suggestions-note">One email when something's coming up. Nothing else.</p>
+        <a class="ose-cta ose-cta-secondary" data-testid="email-signup-link" href="/forms/${esc(row.id)}?type=email">Keep me posted</a>
+      </section>
+    </aside>
 
     ${ANONYMITY_AFFORDANCE}
   </main>
@@ -993,7 +1091,8 @@ export async function handlePublicEventPage(
       `SELECT id, brand_id, title, slug, status, description, location,
               start_date, end_date, timezone,
               what_short, who_host, why_purpose, how_details, where_address,
-              lat, lon
+              who_story, who_image_url, what_video_url,
+              lat, lon, price_cents, price_model, price_note
        FROM events WHERE id = ?`
     )
       .bind(eventId)
@@ -1063,27 +1162,39 @@ export async function handlePublicEventPage(
     // post_event: real recap + return loop (OSE-245 ose-client-ready package).
     // renderMinimalPhaseHtml is kept as the defensive fallback for phase==='event'
     // only — do NOT delete (Invariant #10 deprecation_lock).
-    let nextEvent: NextEventRow | null = null;
+    // OSE-657: a curated few upcoming events at the same venue — the subtle
+    // margin, bounded by MAX_POST_EVENT_SUGGESTIONS (never an exhaustive list).
+    let nextEvents: NextEventRow[] = [];
     try {
       if (row.location) {
-        nextEvent = await env.DB.prepare(
+        const rs = await env.DB.prepare(
           `SELECT id, title, start_date, location FROM events
            WHERE status = 'active' AND location = ?1 AND id != ?2
              AND start_date IS NOT NULL AND datetime(start_date) > datetime('now')
-           ORDER BY datetime(start_date) ASC LIMIT 1`
+           ORDER BY datetime(start_date) ASC LIMIT ?3`
         )
-          .bind(row.location, row.id)
-          .first<NextEventRow>();
+          .bind(row.location, row.id, MAX_POST_EVENT_SUGGESTIONS)
+          .all<NextEventRow>();
+        nextEvents = rs.results ?? [];
       }
     } catch {
-      nextEvent = null; // recap must render even if the lookup fails
+      nextEvents = []; // recap must render even if the lookup fails
     }
-    body = renderPostEventHtml(row, shareUrl, nextEvent ?? null, social, { nonce, lang });
+    body = renderPostEventHtml(row, shareUrl, nextEvents, social, { nonce, lang });
   }
 
+  // OSE-658 cache-coherence: private (never shared-edge — the body may carry a
+  // sub-floor count, #7) and hard-expiring by the next phase pivot so no stale
+  // pre/in/post state is ever served past the start/end boundary.
   return new Response(body, {
     status: 200,
-    headers: securityHeaders(nonce),
+    headers: {
+      ...securityHeaders(nonce),
+      'Cache-Control': publicEventCacheControl(
+        { status: row.status, start_date: row.start_date, end_date: row.end_date },
+        phase
+      ),
+    },
   });
 }
 

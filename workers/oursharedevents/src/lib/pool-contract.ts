@@ -78,6 +78,24 @@ export type RequiredTag = (typeof REQUIRED_TAGS)[number];
 export type RequiredTagMap = Record<RequiredTag, string>;
 
 /**
+ * Thrown when an event's `legal_clearance_tier` cannot be resolved to a known
+ * regulatory pool. Callers at the export boundary catch this and WITHHOLD the
+ * row (fail closed) rather than leaking it to the least-protected pool.
+ */
+export class PoolRoutingError extends Error {
+  readonly phase: unknown;
+  constructor(phase: unknown) {
+    super(
+      `[pool-contract] cannot resolve regulatory pool for legal_clearance_tier=${JSON.stringify(
+        phase
+      )} — refusing to default sensitive data to the 'general' pool (fail-closed, OSE-380 / Invariant #4)`
+    );
+    this.name = 'PoolRoutingError';
+    this.phase = phase;
+  }
+}
+
+/**
  * Map an event's `legal_clearance_tier` (Phase 1-5 per migration 0023) to
  * the regulatory pool it belongs to. Codifies the routing rule that until
  * Session 4 (OSE-272) lived only in migration comments:
@@ -86,18 +104,27 @@ export type RequiredTagMap = Record<RequiredTag, string>;
  *   Phase 4   → 'hipaa'   (health events, institutional)
  *   Phase 5   → 'coppa'   (youth events, school functions)
  *
- * Defensive against NaN/undefined: any non-finite or invalid phase falls
- * back to 'general' (the least-restrictive pool). This is the safe default
- * — a misconfigured event still gets exported but lands in the lowest-
- * sensitivity dataset where general analytics applies.
+ * FAIL-CLOSED (OSE-380 / Invariant #4). `null`/`undefined` is the documented
+ * default meaning Phase 1 (matches the router's `legal_clearance_tier ?? 1`)
+ * and maps to 'general'. But any *unrecognized* value — NaN, non-finite,
+ * non-integer, or an out-of-range phase (< 1 or > 5) — now THROWS rather than
+ * silently falling through to 'general'. The previous behavior was a
+ * compliance fail-OPEN: a malformed HIPAA/COPPA phase could leak into the
+ * general (least-protected) dataset. A value we cannot classify must never be
+ * treated as least-sensitive.
  *
  * Brain conformance verifies the mapping appears in repo code.
  */
 export function phaseToPool(phase: number | null | undefined): RegulatoryPool {
-  if (typeof phase !== 'number' || !Number.isFinite(phase)) return 'general';
-  if (phase >= 5) return 'coppa';
-  if (phase >= 4) return 'hipaa';
-  return 'general';
+  // Documented default: an unset tier means Phase 1 (community/recreational),
+  // matching the router's `legal_clearance_tier ?? 1`. Phases 1-3 → general.
+  if (phase === null || phase === undefined) return 'general';
+  if (!Number.isInteger(phase) || phase < 1 || phase > 5) {
+    throw new PoolRoutingError(phase);
+  }
+  if (phase === 5) return 'coppa';
+  if (phase === 4) return 'hipaa';
+  return 'general'; // phases 1-3
 }
 
 /**

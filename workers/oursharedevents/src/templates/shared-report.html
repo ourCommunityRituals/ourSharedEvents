@@ -319,6 +319,24 @@
         text-align: right;
         min-width: 36px;
       }
+      .local-vs-paid-bar {
+        display: flex;
+        height: 12px;
+        border-radius: 6px;
+        overflow: hidden;
+        margin: 0.75rem 0 0.5rem;
+        background: #f1f3f5;
+      }
+      .local-vs-paid-bar .bar-local {
+        background: #6c757d;
+        height: 100%;
+        transition: width 0.3s;
+      }
+      .local-vs-paid-bar .bar-paid {
+        background: #4361ee;
+        height: 100%;
+        transition: width 0.3s;
+      }
       .upgrade-prompt {
         text-align: center;
         padding: 2rem 1.5rem;
@@ -799,6 +817,8 @@
             : '—';
         const fmtPct = (n) => (n == null ? '—' : (Math.round(n * 10) / 10).toFixed(1) + '%');
         const fmtInt = (n) => (n == null ? '—' : Number(n).toLocaleString());
+        // Density ratio: 1.0× = at baseline; >1 = above; <1 = below.
+        const fmtRatio = (n) => (n == null ? '—' : (Math.round(n * 100) / 100).toFixed(2) + '×');
 
         const params = new URLSearchParams(location.search);
         // Support both ?eventId=... and the legacy ?id=... shape so older
@@ -939,6 +959,9 @@
               '<td data-label="Last">' +
               esc(fmtDate(p.last_scan_at)) +
               '</td>' +
+              '<td data-label="Cell (res9)" data-testid="poster-row-h3-res9">' +
+              (p.h3_res9 ? esc(p.h3_res9) : '—') +
+              '</td>' +
               '</tr>'
           )
           .join('');
@@ -981,12 +1004,33 @@
           suppressionNote('return_rate') +
           '</div>' +
           '<div class="stat-card" data-testid="signed-link-corridor-density">' +
-          '<dl class="stat-dl"><dt>Corridor Density (30d)</dt><dd>' +
+          '<dl class="stat-dl"><dt>Corridor Scans</dt><dd data-testid="corridor-density-count">' +
           fmtInt(report.corridor_density && report.corridor_density.this_event_count) +
+          '</dd></dl>' +
+          '<dl class="stat-dl"><dt>vs 30d Baseline</dt><dd data-testid="corridor-density-ratio-30d">' +
+          fmtRatio(report.corridor_density && report.corridor_density.density_ratio_30d) +
+          '</dd></dl>' +
+          '<dl class="stat-dl"><dt>vs 90d Baseline</dt><dd data-testid="corridor-density-ratio-90d">' +
+          fmtRatio(report.corridor_density && report.corridor_density.density_ratio_90d) +
           '</dd></dl>' +
           suppressionNote('corridor_density') +
           '</div>' +
           '</section>' +
+          (report.corridor_map
+            ? '<section class="funnel-card" data-testid="signed-link-corridor-map">' +
+              '<h3>' +
+              (report.corridor_map.source === 'fallback' ? 'Neighborhood Preview' : 'Corridor Scan Map') +
+              '</h3>' +
+              report.corridor_map.svg +
+              (report.corridor_map.source === 'fallback'
+                ? '<p class="report-note" data-testid="corridor-map-source-note">Neighborhood estimate — scan density fills in as events accumulate.</p>'
+                : '') +
+              '</section>'
+            : suppressionByField['corridor_map']
+              ? '<section class="funnel-card" data-testid="signed-link-corridor-map">' +
+                suppressionNote('corridor_map') +
+                '</section>'
+              : '') +
           (sponsorRows
             ? '<section class="funnel-card" data-testid="signed-link-sponsor-section">' +
               '<h3>Sponsor Impressions</h3>' +
@@ -998,11 +1042,43 @@
               '</table>' +
               '</section>'
             : '') +
+          // SR-25: Sponsor Competitive View — local-vs-paid breakdown
+          (report.sponsor_class_breakdown
+            ? (function() {
+                const scb = report.sponsor_class_breakdown;
+                const localImpr = scb.local ? scb.local.total_impressions : 0;
+                const paidImpr = (scb.mid ? scb.mid.total_impressions : 0) + (scb.premium ? scb.premium.total_impressions : 0);
+                const localSponsors = scb.local ? scb.local.sponsor_count : 0;
+                const midSponsors = scb.mid ? scb.mid.sponsor_count : 0;
+                const premiumSponsors = scb.premium ? scb.premium.sponsor_count : 0;
+                const totalImpr = localImpr + paidImpr || 1;
+                const localPct = Math.round((localImpr / totalImpr) * 100);
+                const paidPct = 100 - localPct;
+                return (
+                  '<section class="funnel-card" data-testid="signed-link-sponsor-class-breakdown">' +
+                  '<h3>Sponsor Competitive View</h3>' +
+                  '<p class="report-note">Class-level totals — individual sponsor details are scoped to their own signed link.</p>' +
+                  '<table class="funnel-table" aria-label="Sponsor class breakdown" data-testid="sponsor-class-table">' +
+                  '<thead><tr><th scope="col">Class</th><th scope="col">Sponsors</th><th scope="col">Impressions</th></tr></thead>' +
+                  '<tbody>' +
+                  '<tr data-testid="sponsor-class-row-local"><td>Local</td><td data-testid="local-sponsor-count">' + fmtInt(localSponsors) + '</td><td data-testid="local-impressions">' + fmtInt(localImpr) + '</td></tr>' +
+                  '<tr data-testid="sponsor-class-row-mid"><td>Mid</td><td data-testid="mid-sponsor-count">' + fmtInt(midSponsors) + '</td><td data-testid="mid-impressions">' + fmtInt(scb.mid ? scb.mid.total_impressions : 0) + '</td></tr>' +
+                  '<tr data-testid="sponsor-class-row-premium"><td>Premium</td><td data-testid="premium-sponsor-count">' + fmtInt(premiumSponsors) + '</td><td data-testid="premium-impressions">' + fmtInt(scb.premium ? scb.premium.total_impressions : 0) + '</td></tr>' +
+                  '</tbody></table>' +
+                  '<div class="local-vs-paid-bar" data-testid="local-vs-paid-bar" aria-label="Local ' + localPct + '% vs Paid ' + paidPct + '%">' +
+                  '<div class="bar-local" data-testid="bar-local" style="width:' + localPct + '%" title="Local ' + localPct + '%"></div>' +
+                  '<div class="bar-paid" data-testid="bar-paid" style="width:' + paidPct + '%" title="Paid ' + paidPct + '%"></div>' +
+                  '</div>' +
+                  '<p class="report-note" data-testid="local-vs-paid-delta">Local: <strong data-testid="local-impressions-total">' + fmtInt(localImpr) + '</strong> impressions · Paid: <strong data-testid="paid-impressions-total">' + fmtInt(paidImpr) + '</strong> impressions</p>' +
+                  '</section>'
+                );
+              })()
+            : '') +
           (posterRows
             ? '<section class="funnel-card" data-testid="signed-link-poster-section">' +
               '<h3>Poster Attribution</h3>' +
               '<table class="funnel-table" aria-label="Poster scans">' +
-              '<thead><tr><th scope="col">Location</th><th scope="col">Scans</th><th scope="col">First</th><th scope="col">Last</th></tr></thead>' +
+              '<thead><tr><th scope="col">Location</th><th scope="col">Scans</th><th scope="col">First</th><th scope="col">Last</th><th scope="col">Cell (res9)</th></tr></thead>' +
               '<tbody>' +
               posterRows +
               '</tbody>' +

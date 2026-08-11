@@ -171,7 +171,9 @@ export class DataProvider {
       if (cached) return cached;
 
       const row = await this.fetchAndCache(keyPath, ttl, () => this.fetchEvent(eventId));
-      if (row) return { data: row, source: 'live', cacheAge: null };
+      // Return null data when event not found in live mode — do not fall through to mock fixture.
+      // Callers (handleGetEvent) check `result.data` and return 404 when null.
+      return { data: row as unknown as MockEvent, source: 'live', cacheAge: null };
     }
 
     const fixture =

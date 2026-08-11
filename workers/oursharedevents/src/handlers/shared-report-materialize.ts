@@ -2,8 +2,10 @@
  * OSE-272 — SharedReport materialization cron orchestrator
  *
  * Single entry point called from the scheduled() handler in src/index.ts.
- * Runs the three SharedReport materialization phases sequentially:
+ * Runs the SharedReport materialization phases sequentially:
  *
+ *  -1. scan_aggregation  — roll up raw scans into scan_aggregates (OSE-632)
+ *   0. h3_cell_backfill  — tag scan_aggregates rows with h3 cells from events
  *   1. anon_id_returns   — per-event upsert of return-rate signal
  *   2. corridor_density  — rolling 30/90d baseline refresh
  *   3. event_series      — Q2 hybrid auto-detector (pending candidates)
@@ -22,6 +24,7 @@
  */
 
 import {
+  aggregateScanBuckets,
   backfillH3Cells,
   materializeAnonIdReturns,
   refreshCorridorBaselines,
@@ -43,6 +46,17 @@ export async function runSharedReportMaterialization(
   const start = Date.now();
   const phases: MaterializationResult[] = [];
   let totalErrors = 0;
+
+  // Phase -1 — scan bucket aggregation (must run before h3_cell_backfill
+  //             so backfill has rows to tag with h3 cells)
+  try {
+    const r = await aggregateScanBuckets(env);
+    phases.push(r);
+    totalErrors += r.errors;
+  } catch (err) {
+    totalErrors++;
+    phases.push(makeErrorResult('scan_aggregation', err));
+  }
 
   // Phase 0 — H3 cell backfill (must run before read-side corridor-map queries)
   try {

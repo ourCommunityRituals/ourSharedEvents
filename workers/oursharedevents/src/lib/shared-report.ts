@@ -63,6 +63,13 @@ const SERIES_HOUR_TOLERANCE = 1;
 // Stored for cross-reference; not used in this file directly.
 export const CORRIDOR_BASELINE_MIN_SAMPLE = 10;
 
+// OSE-597 (rank-10 finding): single source of truth for the corridor-map
+// render suppression floor. Previously corridor-map.ts defaulted to 5 as a
+// magic number; callers who omitted minCount silently used a different floor
+// than the one documented in the privacy spec. Export here so shared-report-
+// builder.ts, corridor-map.ts, and any future consumer share one constant.
+export const CORRIDOR_MAP_MIN_COUNT = 5;
+
 // Auto-detector clustering window: look back 8 weeks of events per venue.
 const SERIES_DETECTOR_LOOKBACK_DAYS = 56;
 
@@ -231,7 +238,7 @@ export async function refreshCorridorBaselines(
   try {
     const cells = await env.DB.prepare(
       `SELECT
-         e.corridor_id          AS corridor_id,
+         COALESCE(e.h3_res7, e.corridor_id) AS corridor_id,
          CAST(strftime('%w', e.start_date) AS INTEGER) AS bucket_dow,
          CAST(strftime('%H', e.start_date) AS INTEGER) AS bucket_hour,
          COUNT(DISTINCT
@@ -242,10 +249,10 @@ export async function refreshCorridorBaselines(
          ) AS window_90d_count
        FROM events e
        LEFT JOIN anon_id_returns air ON air.venue_id = e.id
-       WHERE e.corridor_id IS NOT NULL
+       WHERE (e.h3_res7 IS NOT NULL OR e.corridor_id IS NOT NULL)
          AND e.start_date IS NOT NULL
          AND e.start_date >= ?
-       GROUP BY e.corridor_id, bucket_dow, bucket_hour`
+       GROUP BY COALESCE(e.h3_res7, e.corridor_id), bucket_dow, bucket_hour`
     )
       .bind(floor30dIso, floor90dIso, floor90dIso)
       .all<{
@@ -281,6 +288,40 @@ export async function refreshCorridorBaselines(
           )
           .run();
         result.rowsUpserted++;
+
+        // Append a snapshot row for OER longitudinal archive.
+        // INSERT OR IGNORE: idempotent — if the cron reruns on the same date, skip.
+        const snapDate = nowIso.slice(0, 10); // YYYY-MM-DD
+        try {
+          await env.DB.prepare(
+            `INSERT OR IGNORE INTO corridor_density_snapshots
+               (id, corridor_id, bucket_dow, bucket_hour, snapshot_date,
+                window_30d_count, window_90d_count, computed_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+          )
+            .bind(
+              `cds_${c.corridor_id}_${c.bucket_dow}_${c.bucket_hour}_${snapDate}`,
+              c.corridor_id,
+              c.bucket_dow,
+              c.bucket_hour,
+              snapDate,
+              c.window_30d_count,
+              c.window_90d_count,
+              nowIso
+            )
+            .run();
+        } catch (snapErr) {
+          // Snapshot failure is logged but NOT thrown — the baseline is authoritative.
+          // A snapshot write failure must never surface as a baseline failure.
+          console.error(
+            JSON.stringify({
+              type: 'SHARED_REPORT_MATERIALIZE_ERROR',
+              phase: 'corridor_density_snapshot',
+              cell: `${c.corridor_id}/${c.bucket_dow}/${c.bucket_hour}`,
+              error: snapErr instanceof Error ? snapErr.message : String(snapErr),
+            })
+          );
+        }
       } catch (err) {
         result.errors++;
         console.error(
@@ -305,6 +346,19 @@ export async function refreshCorridorBaselines(
   }
 
   result.durationMs = Date.now() - start;
+
+  // OSE-634: SRE-OBS-01 — structured completion log for dashboards + alerting.
+  // Emitted after every run so SRE can alert on missing heartbeat or elevated errors.
+  console.log(
+    JSON.stringify({
+      type: 'CORRIDOR_BASELINE_REFRESH_COMPLETE',
+      rows_upserted: result.rowsUpserted,
+      rows_skipped: result.rowsSkipped,
+      errors: result.errors,
+      duration_ms: result.durationMs,
+    })
+  );
+
   return result;
 }
 
@@ -496,6 +550,140 @@ function formatHour(hour: number): string {
   if (hour === 12) return '12 PM';
   if (hour < 12) return `${hour} AM`;
   return `${hour - 12} PM`;
+}
+
+/**
+ * Phase BE-SCAN-2 — roll up raw scan rows into scan_aggregates.
+ *
+ * Groups scans by (event_id, bucket_date, bucket_hour) for events whose
+ * start_date falls within the last 90 days. Computes:
+ *   - total_scans   = COUNT(*) of scan rows in the bucket
+ *   - unique_agents = COUNT(DISTINCT COALESCE(anonymous_id, user_agent_hash))
+ *   - top_country   = most frequent non-null country_code in the bucket
+ *
+ * IDs are deterministic — `agg_{event_id}_{bucket_date}_{bucket_hour}` — so
+ * INSERT OR REPLACE is safe and the operation is fully idempotent.
+ *
+ * h3_res9/h3_res7 are NOT set here; Phase 0 (backfillH3Cells) copies them
+ * from the event row after this phase runs. OSE-632 / BE-SCAN-2.
+ */
+export async function aggregateScanBuckets(
+  env: SharedReportMaterializeEnv
+): Promise<MaterializationResult> {
+  const start = Date.now();
+  const result: MaterializationResult = {
+    phase: 'scan_aggregation',
+    eventsProcessed: 0,
+    rowsUpserted: 0,
+    rowsSkipped: 0,
+    errors: 0,
+    durationMs: 0,
+  };
+
+  if (!env.DB) {
+    result.durationMs = Date.now() - start;
+    return result;
+  }
+
+  const nowMs = Date.now();
+  const floor90dIso = new Date(nowMs - 90 * 86400 * 1000).toISOString();
+  const nowIso = new Date(nowMs).toISOString();
+
+  try {
+    // Aggregate totals per (event_id, bucket_date, bucket_hour).
+    // scan_bucket format: YYYY-MM-DDTHH:00 → date = first 10 chars, hour = chars 12-13.
+    const buckets = await env.DB.prepare(
+      `SELECT
+         event_id,
+         substr(scan_bucket, 1, 10)             AS bucket_date,
+         CAST(substr(scan_bucket, 12, 2) AS INTEGER) AS bucket_hour,
+         COUNT(*)                               AS total_scans,
+         COUNT(DISTINCT COALESCE(anonymous_id, user_agent_hash)) AS unique_agents
+       FROM scans
+       WHERE event_id IN (
+         SELECT id FROM events WHERE start_date >= ?
+       )
+       GROUP BY event_id, bucket_date, bucket_hour`
+    )
+      .bind(floor90dIso)
+      .all<{
+        event_id: string;
+        bucket_date: string;
+        bucket_hour: number;
+        total_scans: number;
+        unique_agents: number;
+      }>();
+
+    // Fetch top_country per (event_id, scan_bucket) — separate query to avoid
+    // correlated-subquery fan-out inside the main GROUP BY.
+    const topCountries = await env.DB.prepare(
+      `SELECT event_id, substr(scan_bucket, 1, 13) AS bucket_prefix, country_code
+       FROM (
+         SELECT event_id, scan_bucket, country_code, COUNT(*) AS cnt
+         FROM scans
+         WHERE country_code IS NOT NULL
+           AND event_id IN (SELECT id FROM events WHERE start_date >= ?)
+         GROUP BY event_id, scan_bucket, country_code
+       ) ranked
+       GROUP BY event_id, bucket_prefix
+       HAVING COUNT(*) = MAX(cnt) OR 1=1`
+    )
+      .bind(floor90dIso)
+      .all<{ event_id: string; bucket_prefix: string; country_code: string }>();
+
+    // Build a lookup: "{event_id}:{YYYY-MM-DDTHH}" → top country_code
+    const countryMap = new Map<string, string>();
+    for (const row of topCountries.results ?? []) {
+      const key = `${row.event_id}:${row.bucket_prefix}`;
+      if (!countryMap.has(key)) countryMap.set(key, row.country_code);
+    }
+
+    const seenEvents = new Set<string>();
+
+    for (const b of buckets.results ?? []) {
+      seenEvents.add(b.event_id);
+      const id = `agg_${b.event_id}_${b.bucket_date}_${b.bucket_hour}`;
+      const bucketPrefix = `${b.bucket_date}T${String(b.bucket_hour).padStart(2, '0')}`;
+      const topCountry = countryMap.get(`${b.event_id}:${bucketPrefix}`) ?? null;
+
+      try {
+        await env.DB.prepare(
+          `INSERT OR REPLACE INTO scan_aggregates
+             (id, event_id, bucket_date, bucket_hour,
+              total_scans, unique_agents, top_country, computed_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+        )
+          .bind(id, b.event_id, b.bucket_date, b.bucket_hour,
+                b.total_scans, b.unique_agents, topCountry, nowIso)
+          .run();
+        result.rowsUpserted++;
+      } catch (err) {
+        result.errors++;
+        console.error(
+          JSON.stringify({
+            type: 'SHARED_REPORT_MATERIALIZE_ERROR',
+            phase: 'scan_aggregation',
+            agg_id: id,
+            error: err instanceof Error ? err.message : String(err),
+          })
+        );
+      }
+    }
+
+    result.eventsProcessed = seenEvents.size;
+  } catch (err) {
+    result.errors++;
+    console.error(
+      JSON.stringify({
+        type: 'SHARED_REPORT_MATERIALIZE_ERROR',
+        phase: 'scan_aggregation',
+        error: err instanceof Error ? err.message : String(err),
+      })
+    );
+  }
+
+  result.durationMs = Date.now() - start;
+  return result;
 }
 
 /**

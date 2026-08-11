@@ -280,33 +280,37 @@ describe('Surface filtering', () => {
     updated_at: '',
   });
 
-  test('poster surface only includes posterTop sponsors', () => {
+  // OSE-661 (#25): placement is UNIFORM — every active sponsor is eligible for
+  // every surface; the named-slot filter (posterTop/tvTop/tvSide/mobileBanner)
+  // is retired (it was the covenant violation — buying a named slot). Surface
+  // distinctions are rendering-only. So filterSponsorsForSurface returns ALL.
+  test('poster surface includes ALL sponsors (uniform placement, #25)', () => {
     const sponsors = [
       makeSponsor('a', { posterTop: true, tvTop: true }),
       makeSponsor('b', { tvTop: true }),
       makeSponsor('c', { posterTop: true }),
     ];
     const filtered = filterSponsorsForSurface(sponsors, 'poster');
-    expect(filtered.map((s) => s.id)).toEqual(['a', 'c']);
+    expect(filtered.map((s) => s.id)).toEqual(['a', 'b', 'c']);
   });
 
-  test('display surface includes tvTop and tvSide sponsors', () => {
+  test('display surface includes ALL sponsors (uniform placement, #25)', () => {
     const sponsors = [
       makeSponsor('a', { tvTop: true }),
       makeSponsor('b', { tvSide: true }),
       makeSponsor('c', { mobileBanner: true }),
     ];
     const filtered = filterSponsorsForSurface(sponsors, 'display');
-    expect(filtered.map((s) => s.id)).toEqual(['a', 'b']);
+    expect(filtered.map((s) => s.id)).toEqual(['a', 'b', 'c']);
   });
 
-  test('public surface only includes mobileBanner sponsors', () => {
+  test('public surface includes ALL sponsors (uniform placement, #25)', () => {
     const sponsors = [
       makeSponsor('a', { mobileBanner: true }),
       makeSponsor('b', { posterTop: true }),
     ];
     const filtered = filterSponsorsForSurface(sponsors, 'public');
-    expect(filtered.map((s) => s.id)).toEqual(['a']);
+    expect(filtered.map((s) => s.id)).toEqual(['a', 'b']);
   });
 
   test('sharedReport surface returns all sponsors', () => {

@@ -101,11 +101,16 @@ export async function parseJsonBody(request: Request): Promise<ParseBodyResult> 
   if (text.length > MAX_BODY_BYTES) {
     return { ok: false, reason: 'PAYLOAD_TOO_LARGE' };
   }
+  let parsed: unknown;
   try {
-    return { ok: true, body: JSON.parse(text) as Record<string, unknown> };
+    parsed = JSON.parse(text);
   } catch {
     return { ok: false, reason: 'INVALID_BODY' };
   }
+  if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    return { ok: false, reason: 'INVALID_BODY' };
+  }
+  return { ok: true, body: parsed as Record<string, unknown> };
 }
 
 // ─── Response helpers ─────────────────────────────────────────────────────────

@@ -37,7 +37,7 @@ import {
   type SharedReportExportEnv,
 } from '../src/lib/shared-report-export';
 import { runSharedReportBigQueryExport } from '../src/handlers/shared-report-export';
-import { phaseToPool } from '../src/lib/pool-contract';
+import { phaseToPool, PoolRoutingError } from '../src/lib/pool-contract';
 
 interface TestEnv {
   DB: D1Database;
@@ -256,10 +256,22 @@ describe('OSE-272 Session 4: phaseToPool() boundary mapping', () => {
   test('phase 5 → coppa', () => {
     expect(phaseToPool(5)).toBe('coppa');
   });
-  test('null / undefined / NaN → general (safe default)', () => {
+  test('null / undefined → general (documented Phase-1 default)', () => {
+    // Unset tier means Phase 1 (community/recreational), matching the router's
+    // `legal_clearance_tier ?? 1`. This legitimate default is preserved.
     expect(phaseToPool(null)).toBe('general');
     expect(phaseToPool(undefined)).toBe('general');
-    expect(phaseToPool(Number.NaN)).toBe('general');
+  });
+  test('unrecognized phase FAILS CLOSED (OSE-380) — never defaults to general', () => {
+    // Previously NaN / out-of-range / non-integer silently fell through to the
+    // least-protected 'general' pool (compliance fail-OPEN). Now they throw so
+    // malformed HIPAA/COPPA rows can never leak into general.
+    expect(() => phaseToPool(Number.NaN)).toThrow(PoolRoutingError);
+    expect(() => phaseToPool(0)).toThrow(PoolRoutingError);
+    expect(() => phaseToPool(-1)).toThrow(PoolRoutingError);
+    expect(() => phaseToPool(6)).toThrow(PoolRoutingError);
+    expect(() => phaseToPool(4.5)).toThrow(PoolRoutingError);
+    expect(() => phaseToPool(Infinity)).toThrow(PoolRoutingError);
   });
 });
 

@@ -109,6 +109,9 @@ describe('L1 Lint: data-testid naming conventions', () => {
     const sources = getSourceFiles();
     const violations: string[] = [];
     for (const [path, content] of Object.entries(sources)) {
+      // Skip spec files — they contain regex patterns like data-testid="([^"]+)" that
+      // are not actual testid values and would produce false positives.
+      if (path.replace(/\\/g, '/').includes('/tests/')) continue;
       const matches = content.match(/data-testid="([^"]+)"/g) ?? [];
       for (const m of matches) {
         const id = m.match(/data-testid="([^"]+)"/)?.[1] ?? '';
@@ -325,11 +328,14 @@ describe('L2 Contract: Form admin endpoints schema', () => {
     expect(Array.isArray(body.items)).toBe(true);
   });
 
-  test('GET /api/v2/admin/events/:id/forms/checkin-count returns { ok, count }', async () => {
+  test('GET /api/v2/admin/events/:id/forms/checkin-count returns { ok, count, suppressed, floor }', async () => {
     const body = await fetchJson('/api/v2/admin/events/evt-contract-test/forms/checkin-count');
     expect(body).toHaveProperty('ok', true);
     expect(body).toHaveProperty('count');
-    expect(typeof body.count).toBe('number');
+    // OSE-665: count is floored — a number (>=5) or null (suppressed, <5).
+    expect(body).toHaveProperty('suppressed');
+    expect(body).toHaveProperty('floor', 5);
+    expect(body.count === null || typeof body.count === 'number').toBe(true);
   });
 
   test('GET /api/v2/admin/events/:id/forms/export?type=registrations returns { ok, items, count }', async () => {
@@ -422,9 +428,11 @@ describe('L3 Integration: DB → Forms handler → Admin forms panel', () => {
     const submitBody = (await submitRes.json()) as Record<string, unknown>;
     expect(submitBody.ok).toBe(true);
 
-    // Admin reads it back
+    // Admin reads it back. OSE-665: a single registration is floored (count
+    // suppressed); the first-party items list still proves the write.
     const adminBody = await fetchJson(`/api/v2/admin/events/${eventId}/forms/registrations`);
-    expect(adminBody.count).toBeGreaterThanOrEqual(1);
+    expect(adminBody.suppressed).toBe(true);
+    expect(adminBody.count).toBeNull();
     const items = adminBody.items as { attendee_name: string }[];
     expect(items.some((r) => r.attendee_name === 'Integration Tester')).toBe(true);
   });
@@ -432,12 +440,15 @@ describe('L3 Integration: DB → Forms handler → Admin forms panel', () => {
   test('checkin increments via public API, admin reads count', async () => {
     const eventId = 'evt-integ-checkin';
 
-    await SELF.fetch(`https://t.test/api/v2/events/${eventId}/forms/checkin`, { method: 'POST' });
-    await SELF.fetch(`https://t.test/api/v2/events/${eventId}/forms/checkin`, { method: 'POST' });
-    await SELF.fetch(`https://t.test/api/v2/events/${eventId}/forms/checkin`, { method: 'POST' });
+    // OSE-665: 5 check-ins (>= floor) so the exact-count path is exercised —
+    // proving the increments reach the admin without a suppressed reading.
+    for (let i = 0; i < 5; i++) {
+      await SELF.fetch(`https://t.test/api/v2/events/${eventId}/forms/checkin`, { method: 'POST' });
+    }
 
     const body = await fetchJson(`/api/v2/admin/events/${eventId}/forms/checkin-count`);
-    expect(body.count).toBe(3);
+    expect(body.count).toBe(5);
+    expect(body.suppressed).toBe(false);
   });
 });
 
@@ -606,19 +617,21 @@ describe('L4 E2E: Admin create → update → forms → export → flags → sur
     });
     expect(((await regRes.json()) as Record<string, unknown>).ok).toBe(true);
 
-    // Step 5: 3 check-ins
-    for (let i = 0; i < 3; i++) {
+    // Step 5: 5 check-ins (>= floor, so the exact count is visible per OSE-665)
+    for (let i = 0; i < 5; i++) {
       const res = await SELF.fetch(`https://t.test/api/v2/events/${eventId}/forms/checkin`, {
         method: 'POST',
       });
       expect(res.status).toBe(200);
     }
 
-    // Step 6: Admin reads counts
+    // Step 6: Admin reads counts. OSE-665: the single registration is floored
+    // (suppressed); 5 check-ins clear the floor and show the exact count.
     const regs = await fetchJson(`/api/v2/admin/events/${eventId}/forms/registrations`);
-    expect(regs.count).toBeGreaterThanOrEqual(1);
+    expect(regs.suppressed).toBe(true);
+    expect(regs.count).toBeNull();
     const checkins = await fetchJson(`/api/v2/admin/events/${eventId}/forms/checkin-count`);
-    expect(checkins.count).toBe(3);
+    expect(checkins.count).toBe(5);
 
     // Step 7: Export JSON + CSV
     const exportJson = await fetchJson(

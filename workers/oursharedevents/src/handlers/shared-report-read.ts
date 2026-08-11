@@ -9,7 +9,7 @@
  *      Service-token auth. Returns SharedReports for up to 50 events
  *      in a single response.
  *
- * Both delegate to buildSharedReport() — single source of truth.
+ * Both delegate to a shared report builder — single source of truth.
  *
  * Cache headers (S5-Q4 ratified):
  *   - Single endpoint: `Cache-Control: private, max-age=3600` + `Vary: Authorization`
@@ -19,7 +19,6 @@
  * the read API NEVER writes to SharedReport tables — read-only.
  */
 
-import { buildSharedReport, type SharedReport } from '../lib/shared-report-builder';
 import {
   extractBearerToken,
   mintSignedLinkToken,
@@ -28,9 +27,15 @@ import {
   type SharedReportAuthEnv,
   type SignedLinkRole,
 } from '../lib/shared-report-auth';
-import { resolveDepth, filterReportByDepth } from '../lib/report-depth';
+import { buildSharedReport, type SharedReport } from '../lib/shared-report-builder';
+import { resolveDepth } from '../lib/report-depth';
+import { logReportAccess } from '../lib/audit-log';
+import { checkRateLimit, RATE_LIMIT_BATCH_MAX, RATE_LIMIT_WINDOW_MS } from '../lib/rate-limit';
 
-export type SharedReportReadEnv = SharedReportAuthEnv & { DB: D1Database };
+export type SharedReportReadEnv = SharedReportAuthEnv & {
+  DB: D1Database;
+  RATE_LIMIT_KV?: KVNamespace;
+};
 
 const BATCH_MAX_IDS = 50; // S5-Q3 ratified
 
@@ -53,7 +58,8 @@ function jsonResponse(
 export async function handleGetSharedReport(
   request: Request,
   env: SharedReportReadEnv,
-  eventId: string
+  eventId: string,
+  ctx: ExecutionContext
 ): Promise<Response> {
   const token = extractBearerToken(request.headers.get('Authorization'));
   if (!token) {
@@ -64,6 +70,7 @@ export async function handleGetSharedReport(
 
   const claim = await verifySignedLinkToken(env, token);
   if (!claim) {
+    ctx.waitUntil(logReportAccess(env, eventId, 'unknown', 'denied'));
     return jsonResponse(
       { ok: false, code: 'UNAUTHORIZED', error: 'invalid or expired token' },
       401
@@ -71,7 +78,7 @@ export async function handleGetSharedReport(
   }
 
   if (claim.eventId !== eventId) {
-    // Token is valid but scoped to a different event. Refuse.
+    ctx.waitUntil(logReportAccess(env, eventId, claim.role, 'denied'));
     return jsonResponse(
       {
         ok: false,
@@ -87,9 +94,6 @@ export async function handleGetSharedReport(
     if (result.error === 'NOT_FOUND') {
       return jsonResponse({ ok: false, code: 'NOT_FOUND' }, 404);
     }
-    // MATERIALIZATION_PENDING — let consumer know to retry after the
-    // next cron tick. We use 409 Conflict here because the resource
-    // exists but isn't ready for delivery.
     return jsonResponse(
       {
         ok: false,
@@ -100,24 +104,86 @@ export async function handleGetSharedReport(
     );
   }
 
+  // SR-25: report is a straight readout — no field-stripping by depth.
+  // resolveDepth is still called to determine sponsor scope (TL-040 isolation).
   const resolved = resolveDepth(claim);
-  const { report, upgrade } = filterReportByDepth(
-    result.report as unknown as Record<string, unknown>,
-    resolved
-  );
-  return jsonResponse(
-    { ok: true, depth: resolved.depth, report, ...(upgrade ? { upgrade } : {}) },
-    200,
-    { 'Cache-Control': 'private, max-age=3600', Vary: 'Authorization' }
-  );
+  let scopedImpressions = result.report.sponsor_impressions;
+  if (resolved.sponsorScope) {
+    // Scoped sponsor token: filter to own rows only
+    scopedImpressions = scopedImpressions.filter(
+      (r) => r.sponsor_id === resolved.sponsorScope
+    );
+  } else if (resolved.sponsorScopeRequired) {
+    // Sponsor role but no sponsor_id on token — block all rows (OSE-595)
+    scopedImpressions = [];
+  }
+
+  // Q6: re-derive campaign_summary from scoped impressions when a sponsor scope
+  // was applied. The builder derives campaign_summary pre-scope; for events where
+  // multiple sponsors share a campaign_id the unscoped summary would leak peers'
+  // impression counts into the scoped response.
+  let scopedCampaignSummary = result.report.campaign_summary;
+  if (resolved.sponsorScope || resolved.sponsorScopeRequired) {
+    const campaignMap = new Map<string, {
+      campaign_id: string; campaign_title: string;
+      total_impressions: number; sponsor_count: number;
+      impressions_by_surface: Record<string, number>;
+    }>();
+    for (const row of scopedImpressions) {
+      if (!row.campaign_id) continue;
+      const ex = campaignMap.get(row.campaign_id);
+      if (ex) {
+        ex.total_impressions += row.count;
+        ex.sponsor_count += 1;
+        ex.impressions_by_surface[row.surface] = (ex.impressions_by_surface[row.surface] ?? 0) + row.count;
+      } else {
+        campaignMap.set(row.campaign_id, {
+          campaign_id: row.campaign_id,
+          campaign_title: row.campaign_title ?? 'unknown',
+          total_impressions: row.count,
+          sponsor_count: 1,
+          impressions_by_surface: { [row.surface]: row.count },
+        });
+      }
+    }
+    scopedCampaignSummary = campaignMap.size > 0
+      ? [...campaignMap.values()].sort((a, b) => b.total_impressions - a.total_impressions)
+      : null;
+  }
+
+  const report = { ...result.report, sponsor_impressions: scopedImpressions, campaign_summary: scopedCampaignSummary };
+
+  // Q7: in-flight events cache at 5 min so impression counts update visibly between
+  // sponsor visits mid-event. Closed events cache at 1 hour (numbers are stable).
+  const endDate = result.report.event_end_date;
+  const isInFlight = !endDate || new Date(endDate) > new Date();
+  const cacheControl = isInFlight ? 'private, max-age=300' : 'private, max-age=3600';
+
+  ctx.waitUntil(logReportAccess(env, eventId, claim.role, 'granted'));
+  return jsonResponse({ ok: true, report }, 200, {
+    'Cache-Control': cacheControl,
+    Vary: 'Authorization',
+  });
 }
 
 // ─── Batch endpoint (WKRP consumer pattern) ────────────────────────────────
 
 export async function handleBatchSharedReports(
   request: Request,
-  env: SharedReportReadEnv
+  env: SharedReportReadEnv,
+  ctx: ExecutionContext
 ): Promise<Response> {
+  // OSE-593: Rate limit batch endpoint by service token (IP as proxy for token identity)
+  if (env.RATE_LIMIT_KV) {
+    const batchIp = request.headers.get('CF-Connecting-IP') ?? 'unknown';
+    const batchKey = `batch-sr:${batchIp}`;
+    if (await checkRateLimit(batchKey, env.RATE_LIMIT_KV, RATE_LIMIT_BATCH_MAX, RATE_LIMIT_WINDOW_MS)) {
+      return jsonResponse({ ok: false, code: 'RATE_LIMITED', error: 'too many batch requests' }, 429, {
+        'Retry-After': '60',
+      });
+    }
+  }
+
   const token = extractBearerToken(request.headers.get('Authorization'));
   if (!token || !verifyServiceToken(env, token)) {
     return jsonResponse({ ok: false, code: 'UNAUTHORIZED', error: 'invalid service token' }, 401, {
@@ -134,7 +200,9 @@ export async function handleBatchSharedReports(
   if (!body || typeof body !== 'object') {
     return jsonResponse({ ok: false, code: 'BAD_REQUEST', error: 'body must be an object' }, 400);
   }
-  const ids = (body as Record<string, unknown>).ids;
+
+  const bodyObj = body as Record<string, unknown>;
+  const ids = bodyObj.ids;
   if (!Array.isArray(ids)) {
     return jsonResponse({ ok: false, code: 'BAD_REQUEST', error: '`ids` must be an array' }, 400);
   }
@@ -158,6 +226,10 @@ export async function handleBatchSharedReports(
     );
   }
 
+  // SR-25: depth parameter removed from batch endpoint — service tokens receive
+  // the full report. sponsor_class_breakdown delivers competitive intelligence
+  // at the class level without individual cross-sponsor attribution.
+
   // Deduplicate (consumer might pass the same id twice).
   const uniqueIds = Array.from(new Set(ids as string[]));
 
@@ -173,6 +245,8 @@ export async function handleBatchSharedReports(
   const errors: Record<string, { code: string; message: string }> = {};
   for (const { id, result } of settled) {
     if (result.ok) {
+      // SR-25: pass the full report — competitive intelligence is in
+      // sponsor_class_breakdown (aggregate class labels), not field-stripping.
       reports[id] = result.report;
     } else if (result.error === 'NOT_FOUND') {
       errors[id] = { code: 'NOT_FOUND', message: 'event does not exist' };
@@ -182,6 +256,14 @@ export async function handleBatchSharedReports(
         message: 'event exists but has no materialized signal yet',
       };
     }
+  }
+
+  // Log aggregate access for each successfully-served event (service role)
+  const servedIds = Object.keys(reports);
+  if (servedIds.length > 0) {
+    ctx.waitUntil(
+      Promise.all(servedIds.map((id) => logReportAccess(env, id, 'service', 'granted')))
+    );
   }
 
   return jsonResponse({ ok: true, reports, errors }, 200, {
@@ -226,26 +308,65 @@ export async function handleAdminMintSharedReportLink(
     );
   }
 
-  // Validate depth — local and premium only; mid is dormant
+  // Validate depth.
+  // Sponsor tokens: local | mid | premium all valid. mid is the correct operating
+  // depth for sponsors — it exposes campaign_summary and poster_attribution.
+  // Non-sponsor tokens (bar_owner, admin): mid is dormant — they always resolve
+  // to premium via resolveDepth regardless of depth claim.
   const depth = b.depth;
-  if (depth !== undefined && depth !== 'local' && depth !== 'premium') {
+  if (depth !== undefined) {
+    const isSponsorRole = role === 'sponsor';
+    const validDepths = isSponsorRole ? ['local', 'mid', 'premium'] : ['local', 'premium'];
+    if (!validDepths.includes(depth as string)) {
+      return jsonResponse(
+        {
+          ok: false,
+          code: 'BAD_REQUEST',
+          error: isSponsorRole
+            ? 'depth must be "local", "mid", or "premium"'
+            : 'depth must be "local" or "premium" (mid is dormant for non-sponsor roles)',
+        },
+        400
+      );
+    }
+  }
+  // Q2: sponsor tokens with no explicit depth default to mid — ensures campaign_summary
+  // and poster_attribution are available. Depth-absent sponsor tokens (State C) are a
+  // configuration error; defaulting here prevents them from being minted.
+  const effectiveDepth = role === 'sponsor' && depth === undefined ? 'mid' : depth;
+
+  // OSE-595: sponsor role requires sponsor_id — a token without one would let
+  // the bearer see all competitors' impression data (the single-endpoint scope
+  // check blocks this at read time, but blocking at mint is defence-in-depth
+  // and prevents the token from being issued at all).
+  const sponsorId = b.sponsor_id;
+  if (role === 'sponsor' && (typeof sponsorId !== 'string' || sponsorId.length === 0)) {
     return jsonResponse(
-      {
-        ok: false,
-        code: 'BAD_REQUEST',
-        error: 'depth must be "local" or "premium" (mid is dormant)',
-      },
+      { ok: false, code: 'BAD_REQUEST', error: 'sponsor_id is required for role "sponsor"' },
       400
     );
   }
-
-  // Validate sponsor_id when present
-  const sponsorId = b.sponsor_id;
   if (sponsorId !== undefined && (typeof sponsorId !== 'string' || sponsorId.length === 0)) {
     return jsonResponse(
       { ok: false, code: 'BAD_REQUEST', error: 'sponsor_id must be a non-empty string' },
       400
     );
+  }
+
+  // OSE-577: verify sponsor_id exists for this event before embedding in token.
+  // Prevents minting tokens scoped to a sponsor that doesn't belong to the event.
+  if (role === 'sponsor' && typeof sponsorId === 'string') {
+    const sponsorRow = await env.DB.prepare(
+      'SELECT id FROM sponsors WHERE id = ? AND event_id = ? LIMIT 1'
+    )
+      .bind(sponsorId, eventId)
+      .first();
+    if (!sponsorRow) {
+      return jsonResponse(
+        { ok: false, code: 'BAD_REQUEST', error: 'sponsor_id does not belong to this event' },
+        400
+      );
+    }
   }
 
   // Validate TTL (1–365 days, default 7)
@@ -263,7 +384,7 @@ export async function handleAdminMintSharedReportLink(
     role as SignedLinkRole,
     (ttlDays as number) * 24 * 60 * 60,
     {
-      ...(depth !== undefined ? { depth: depth as string } : {}),
+      ...(effectiveDepth !== undefined ? { depth: effectiveDepth as string } : {}),
       ...(typeof sponsorId === 'string' ? { sponsor_id: sponsorId } : {}),
     }
   );

@@ -33,10 +33,19 @@ import {
 import { validateLogoUrl, fetchAndProxyLogo } from '../lib/sponsor-logo';
 import { getDataProvider, type DataProviderEnv } from '../lib/data-provider.js';
 import type { DataProviderCtx } from '@ocr/data-provider';
+import { extractAdminActor, type AdminEnv } from '../auth/admin';
+import {
+  resolveAdminBrandScopeAsync,
+  type AdminBrandScopeEnv,
+} from '../lib/admin-brand-scope';
+// NOTE: maybeTag is imported here because sponsors.ts is an admin/creation-time
+// handler — NOT a scan-path handler. The hot-path invariant (S-6.3.1c) permits
+// this import. Do NOT add sponsors.ts to the SCAN_PATH list in h3-tagging.spec.ts.
+import { maybeTag } from '../lib/h3-tagging';
 
 // ─── Types ──────────────────────────────────────────────────────────────────────
 
-export interface SponsorsEnv extends DataProviderEnv {
+export interface SponsorsEnv extends DataProviderEnv, AdminBrandScopeEnv, AdminEnv {
   WORKER_ENV?: string;
   DB?: D1Database;
 }
@@ -68,6 +77,13 @@ function generateId(prefix = 'sp'): string {
 const MAX_BODY = 16 * 1024;
 const VALID_TIERS = ['title', 'platinum', 'gold', 'silver', 'bronze', 'primary'] as const;
 const VALID_SURFACES: Surface[] = ['poster', 'display', 'public', 'sharedReport'];
+
+// OSE-670 (#25): the uniform, non-purchasable placement value. Every sponsor is
+// eligible for every surface — only rotation frequency (share) is purchasable.
+// The resolver ignores placement_formats entirely (buildShareRotation); this is
+// stored only so legacy readers see "eligible everywhere", never a named slot.
+const UNIFORM_PLACEMENT_FORMATS =
+  '{"posterTop":true,"tvTop":true,"tvSide":true,"mobileBanner":true}';
 
 function isValidContentType(request: Request): boolean {
   const ct = request.headers.get('content-type') || '';
@@ -106,16 +122,71 @@ export async function handleAdminListSponsors(
     );
   }
 
+  // OSE — Sponsor card event-scoping. On a shared/multi-tenant instance an
+  // unscoped list lets an organizer see (and mis-edit/deactivate) another
+  // organizer's sponsor. Scope is enforced HERE in the SQL WHERE clause with a
+  // bound parameter — never client-side .filter() — so no query string can
+  // widen it.
+  const url = new URL(request.url);
+  const eventId = url.searchParams.get('eventId');
+  const brandId = url.searchParams.get('brand_id');
+
+  // OSE-674 (#9 tenant_isolation) — the cross-event manager view keys off a
+  // client ?brand_id=, which is caller-CHOSEN scope, not authorized scope. The
+  // SQL WHERE being server-side does NOT make the scope authorized. Derive the
+  // caller's real brand membership from the SERVER-VERIFIED actor (OSE-666/B2)
+  // and INTERSECT: a forged brand_id outside the caller's membership is 403, an
+  // unscopable caller gets zero rows, and the server scope also caps the final
+  // set so a forged ?eventId= from another tenant can never widen it. Mirrors
+  // handleAdminListEvents — the canonical #9 enforcement point.
+  const scope = await resolveAdminBrandScopeAsync(extractAdminActor(request, env), env);
+  if (scope.mode === 'deny') {
+    return Response.json(
+      { ok: true, status: 200, items: [], scopedTo: eventId ?? null },
+      { headers: { ...corsHeaders(request), 'Cache-Control': 'no-store', 'X-Request-Id': rid } }
+    );
+  }
+  if (scope.mode === 'scoped' && brandId && !scope.brandIds.includes(brandId)) {
+    return errorResponse(
+      'BRAND_FORBIDDEN',
+      `Not entitled to brand_id "${brandId}"`,
+      403,
+      rid
+    );
+  }
+
+  const cols = `id, event_id, name, logo_url, website_url, tier, placement_formats,
+                click_token, impression_token, is_active, created_at, updated_at`;
+  const where: string[] = [];
+  const binds: string[] = [];
+  if (eventId) {
+    where.push('event_id = ?');
+    binds.push(eventId);
+  }
+  if (brandId) {
+    where.push('event_id IN (SELECT id FROM events WHERE brand_id = ?)');
+    binds.push(brandId);
+  }
+  // Server-derived scope cap (intersection): scoped callers only ever reach
+  // sponsors whose event belongs to a brand they are a member of. 'all' (CI/
+  // automation opt-in) applies no cap.
+  if (scope.mode === 'scoped') {
+    const ph = scope.brandIds.map(() => '?').join(', ');
+    where.push(`event_id IN (SELECT id FROM events WHERE brand_id IN (${ph}))`);
+    binds.push(...scope.brandIds);
+  }
+  const sql =
+    `SELECT ${cols} FROM sponsors` +
+    (where.length ? ` WHERE ${where.join(' AND ')}` : '') +
+    ` ORDER BY updated_at DESC`;
+
   try {
-    const result = await env.DB.prepare(
-      `SELECT id, event_id, name, logo_url, website_url, tier, placement_formats,
-              click_token, impression_token, is_active, created_at, updated_at
-       FROM sponsors
-       ORDER BY updated_at DESC`
-    ).all();
+    const result = await env.DB.prepare(sql)
+      .bind(...binds)
+      .all();
 
     return Response.json(
-      { ok: true, status: 200, items: result.results ?? [] },
+      { ok: true, status: 200, items: result.results ?? [], scopedTo: eventId ?? null },
       { headers: { ...corsHeaders(request), 'Cache-Control': 'no-store', 'X-Request-Id': rid } }
     );
   } catch (err) {
@@ -195,21 +266,64 @@ export async function handleAdminCreateSponsor(
     typeof body.tier === 'string' && (VALID_TIERS as readonly string[]).includes(body.tier)
       ? body.tier
       : 'primary';
-  const placementFormats =
-    typeof body.placement_formats === 'string'
-      ? body.placement_formats.slice(0, 1000)
-      : typeof body.placement_formats === 'object'
-        ? JSON.stringify(body.placement_formats)
-        : '{}';
+  // OSE-670 (#25): placement is UNIFORM and non-purchasable. The client CANNOT
+  // choose a named slot — that was the covenant violation (buying a bigger/
+  // better slot). Every sponsor is eligible for every surface; the resolver
+  // ignores this column (buildShareRotation). Stored as the uniform marker for
+  // legacy readers — body.placement_formats is intentionally ignored.
+  const placementFormats = UNIFORM_PLACEMENT_FORMATS;
   const clickToken = typeof body.click_token === 'string' ? body.click_token.slice(0, 256) : null;
   const impressionToken =
     typeof body.impression_token === 'string' ? body.impression_token.slice(0, 256) : null;
   const now = new Date().toISOString();
 
+  // ── H3 geo-tagging (opt-in, admin creation path) ─────────────────────────
+  const rawLat = body.lat;
+  const rawLon = body.lon;
+  const hasCoords =
+    typeof rawLat === 'number' &&
+    typeof rawLon === 'number' &&
+    Number.isFinite(rawLat) &&
+    Number.isFinite(rawLon);
+
+  if (hasCoords && (rawLat < -90 || rawLat > 90 || rawLon < -180 || rawLon > 180)) {
+    return errorResponse(
+      'INVALID_COORDINATES',
+      'lat must be -90..90 and lon must be -180..180',
+      400,
+      rid
+    );
+  }
+
+  const sponsorLat = hasCoords ? (rawLat as number) : null;
+  const sponsorLon = hasCoords ? (rawLon as number) : null;
+  const h3Tags = maybeTag(sponsorLat, sponsorLon);
+  const sponsorH3Res9 = h3Tags?.h3_res9 ?? null;
+  const sponsorH3Res7 = h3Tags?.h3_res7 ?? null;
+
+  // ── is_local: GEO-DERIVED, non-purchasable (OSE-661 / #25) ────────────────
+  // A sponsor is local iff its corridor cell (h3_res7) matches the event's.
+  // Derived server-side from geo BEFORE the insert — never from the request
+  // body, never admin-set. Requires both the sponsor and the event to carry an
+  // h3_res7 (i.e. both geocoded); otherwise the sponsor is not local.
+  let eventH3Res7: string | null = null;
+  if (sponsorH3Res7 !== null) {
+    try {
+      const eventRow = await env.DB.prepare('SELECT h3_res7 FROM events WHERE id = ?')
+        .bind(eventId)
+        .first<{ h3_res7: string | null }>();
+      eventH3Res7 = eventRow?.h3_res7 ?? null;
+    } catch {
+      // Non-fatal: if we cannot read the event cell, treat the sponsor as non-local.
+    }
+  }
+  const isLocal =
+    sponsorH3Res7 !== null && eventH3Res7 !== null && sponsorH3Res7 === eventH3Res7 ? 1 : 0;
+
   try {
     await env.DB.prepare(
-      `INSERT INTO sponsors (id, event_id, name, logo_url, website_url, tier, placement_formats, click_token, impression_token, is_active, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`
+      `INSERT INTO sponsors (id, event_id, name, logo_url, website_url, tier, placement_formats, click_token, impression_token, is_active, is_local, lat, lon, h3_res9, h3_res7, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?)`
     )
       .bind(
         id,
@@ -221,6 +335,11 @@ export async function handleAdminCreateSponsor(
         placementFormats,
         clickToken,
         impressionToken,
+        isLocal,
+        sponsorLat,
+        sponsorLon,
+        sponsorH3Res9,
+        sponsorH3Res7,
         now,
         now
       )
@@ -233,10 +352,22 @@ export async function handleAdminCreateSponsor(
     return errorResponse('DB_ERROR', 'Failed to create sponsor', 503, rid);
   }
 
-  return Response.json(
-    { ok: true, status: 201, id },
-    { status: 201, headers: { ...corsHeaders(request), 'X-Request-Id': rid } }
-  );
+  // is_local is now authoritative (geo-derived). is_local_suggested is retained
+  // for back-compat and equals is_local.
+  const responseBody: Record<string, unknown> = {
+    ok: true,
+    status: 201,
+    id,
+    is_local: isLocal === 1,
+  };
+  if (sponsorH3Res7 !== null && eventH3Res7 !== null) {
+    responseBody.is_local_suggested = isLocal === 1;
+  }
+
+  return Response.json(responseBody, {
+    status: 201,
+    headers: { ...corsHeaders(request), 'X-Request-Id': rid },
+  });
 }
 
 // ─── Admin: Update Sponsor ──────────────────────────────────────────────────────
@@ -258,13 +389,14 @@ export async function handleAdminUpdateSponsor(
     logo_url: { max: 500 },
     website_url: { max: 500 },
     tier: { max: 20 },
-    placement_formats: { max: 1000 },
+    // OSE-670 (#25): placement_formats is uniform + non-purchasable — deliberately
+    // NOT an updatable field, so no client can write a named slot on update.
     click_token: { max: 256 },
     impression_token: { max: 256 },
   };
 
   const sets: string[] = [];
-  const values: (string | null)[] = [];
+  const values: (string | number | null)[] = [];
 
   for (const [field, { max }] of Object.entries(allowedFields)) {
     if (field in body) {
@@ -297,11 +429,66 @@ export async function handleAdminUpdateSponsor(
         }
         sets.push(`${field} = ?`);
         values.push(val.slice(0, max));
-      } else if (field === 'placement_formats' && typeof val === 'object') {
-        sets.push(`${field} = ?`);
-        values.push(JSON.stringify(val).slice(0, max));
       }
     }
+  }
+
+  // ── H3 geo-tagging on update (re-tag when lat/lon provided) ──────────────
+  const rawLat = body.lat;
+  const rawLon = body.lon;
+  const hasCoords =
+    typeof rawLat === 'number' &&
+    typeof rawLon === 'number' &&
+    Number.isFinite(rawLat) &&
+    Number.isFinite(rawLon);
+
+  if (hasCoords && (rawLat < -90 || rawLat > 90 || rawLon < -180 || rawLon > 180)) {
+    return errorResponse(
+      'INVALID_COORDINATES',
+      'lat must be -90..90 and lon must be -180..180',
+      400,
+      rid
+    );
+  }
+
+  let updateH3Res7: string | null = null;
+  let updateEventId: string | null = null;
+
+  if (hasCoords) {
+    const updateLat = rawLat as number;
+    const updateLon = rawLon as number;
+    const h3Tags = maybeTag(updateLat, updateLon);
+    sets.push('lat = ?', 'lon = ?', 'h3_res9 = ?', 'h3_res7 = ?');
+    values.push(updateLat, updateLon, h3Tags?.h3_res9 ?? null, h3Tags?.h3_res7 ?? null);
+    updateH3Res7 = h3Tags?.h3_res7 ?? null;
+
+    // Look up event_id (for is_local re-derivation + the advisory response).
+    try {
+      const sp = await env.DB.prepare('SELECT event_id FROM sponsors WHERE id = ?')
+        .bind(sponsorId)
+        .first<{ event_id: string }>();
+      updateEventId = sp?.event_id ?? null;
+    } catch {
+      // advisory — not fatal
+    }
+
+    // OSE-661/#25: is_local is GEO-DERIVED — re-derive it whenever coords change,
+    // from the sponsor↔event corridor-cell (h3_res7) match. Server-side only.
+    let eventH3Res7: string | null = null;
+    if (updateEventId) {
+      try {
+        const ev = await env.DB.prepare('SELECT h3_res7 FROM events WHERE id = ?')
+          .bind(updateEventId)
+          .first<{ h3_res7: string | null }>();
+        eventH3Res7 = ev?.h3_res7 ?? null;
+      } catch {
+        // non-fatal — treat as non-local if the event cell can't be read
+      }
+    }
+    const isLocal =
+      updateH3Res7 !== null && eventH3Res7 !== null && updateH3Res7 === eventH3Res7 ? 1 : 0;
+    sets.push('is_local = ?');
+    values.push(isLocal);
   }
 
   if (sets.length === 0) {
@@ -331,10 +518,25 @@ export async function handleAdminUpdateSponsor(
     return errorResponse('DB_ERROR', 'Failed to update sponsor', 503, rid);
   }
 
-  return Response.json(
-    { ok: true, status: 200, id: sponsorId },
-    { headers: { ...corsHeaders(request), 'X-Request-Id': rid } }
-  );
+  // ── is_local_suggested (advisory, only when H3 was updated) ──────────────
+  const updateResponseBody: Record<string, unknown> = { ok: true, status: 200, id: sponsorId };
+
+  if (updateH3Res7 !== null && updateEventId !== null) {
+    try {
+      const eventRow = await env.DB.prepare('SELECT h3_res7 FROM events WHERE id = ?')
+        .bind(updateEventId)
+        .first<{ h3_res7: string | null }>();
+      if (eventRow?.h3_res7) {
+        updateResponseBody.is_local_suggested = updateH3Res7 === eventRow.h3_res7;
+      }
+    } catch {
+      // advisory — not fatal
+    }
+  }
+
+  return Response.json(updateResponseBody, {
+    headers: { ...corsHeaders(request), 'X-Request-Id': rid },
+  });
 }
 
 // ─── Admin: Delete Sponsor (soft) ───────────────────────────────────────────────
@@ -689,13 +891,20 @@ export async function handleLogImpression(
   const surface = typeof body.surface === 'string' ? body.surface.slice(0, 50) : 'unknown';
   const placement = typeof body.placement === 'string' ? body.placement.slice(0, 50) : 'unknown';
 
+  // OSE-635: read h3_res7 from event at write-time. res7 (~5km²) only —
+  // res9 is deliberately omitted here (digital click ≠ physical poster location).
+  const eventGeo = await env.DB.prepare(`SELECT h3_res7 FROM events WHERE id = ? LIMIT 1`)
+    .bind(eventId)
+    .first<{ h3_res7: string | null }>();
+  const h3Res7 = eventGeo?.h3_res7 ?? null;
+
   try {
     const id = generateId('si');
     await env.DB.prepare(
-      `INSERT INTO sponsor_impressions (id, sponsor_id, event_id, surface, placement, event_type)
-       VALUES (?, ?, ?, ?, ?, 'impression')`
+      `INSERT INTO sponsor_impressions (id, sponsor_id, event_id, surface, placement, event_type, h3_res7)
+       VALUES (?, ?, ?, ?, ?, 'impression', ?)`
     )
-      .bind(id, sponsorId, eventId, surface, placement)
+      .bind(id, sponsorId, eventId, surface, placement, h3Res7)
       .run();
   } catch (err) {
     console.error(
@@ -788,13 +997,20 @@ export async function handleLogClick(
   const surface = typeof body.surface === 'string' ? body.surface.slice(0, 50) : 'unknown';
   const placement = typeof body.placement === 'string' ? body.placement.slice(0, 50) : 'unknown';
 
+  // OSE-635: read h3_res7 from event at write-time. res7 (~5km²) only —
+  // res9 is deliberately omitted here (digital click ≠ physical poster location).
+  const eventGeo = await env.DB.prepare(`SELECT h3_res7 FROM events WHERE id = ? LIMIT 1`)
+    .bind(eventId)
+    .first<{ h3_res7: string | null }>();
+  const h3Res7 = eventGeo?.h3_res7 ?? null;
+
   try {
     const id = generateId('sc');
     await env.DB.prepare(
-      `INSERT INTO sponsor_impressions (id, sponsor_id, event_id, surface, placement, event_type)
-       VALUES (?, ?, ?, ?, ?, 'click')`
+      `INSERT INTO sponsor_impressions (id, sponsor_id, event_id, surface, placement, event_type, h3_res7)
+       VALUES (?, ?, ?, ?, ?, 'click', ?)`
     )
-      .bind(id, sponsorId, eventId, surface, placement)
+      .bind(id, sponsorId, eventId, surface, placement, h3Res7)
       .run();
   } catch (err) {
     console.error(

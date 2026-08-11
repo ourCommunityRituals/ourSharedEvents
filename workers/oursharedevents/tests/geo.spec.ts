@@ -11,7 +11,7 @@
  * here too.
  */
 
-import { describe, test, expect, vi, beforeEach } from 'vitest';
+import { describe, test, expect, vi } from 'vitest';
 import { geocodeVenue, resolveCorridorId } from '../src/lib/geo';
 
 interface MockEnv {
@@ -171,47 +171,51 @@ describe('geocodeVenue', () => {
   });
 });
 
-describe('resolveCorridorId (Option C stub, OSE-238)', () => {
-  let logSpy: ReturnType<typeof vi.spyOn>;
-
-  beforeEach(() => {
-    // Replace + reset between cases so call counts are deterministic.
-    logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-  });
-
-  test('always returns null (corridor resolution deferred to BE-24b)', async () => {
+describe('resolveCorridorId (BE-24b: H3 res7 cell as corridor identifier)', () => {
+  test('returns a non-null h3 cell string for valid coordinates', async () => {
     const result = await resolveCorridorId({}, 41.6, -87.7);
+    expect(result).not.toBeNull();
+    expect(typeof result).toBe('string');
+    expect(result!.length).toBeGreaterThan(0);
+  });
+
+  test('returns the correct h3 res7 cell for Eagles Hall ground-truth coordinates', async () => {
+    // Eagles Hall, Blue Island IL: lat=41.6571, lon=-87.6798
+    // Expected h3_res7 = '872664544ffffff' (same as h3-tagging.spec.ts NCR ground truth)
+    const result = await resolveCorridorId({}, 41.6571, -87.6798);
+    expect(result).toBe('872664544ffffff');
+  });
+
+  test('returns a different cell for a distant location (Chicago Loop ~15km away)', async () => {
+    const eagles = await resolveCorridorId({}, 41.6571, -87.6798);
+    const loop = await resolveCorridorId({}, 41.8827, -87.6233);
+    expect(eagles).not.toBe(loop);
+    expect(loop).not.toBeNull();
+  });
+
+  test('env parameter is not required for computation (corridor_id is pure geo)', async () => {
+    // Geocode API key is irrelevant — computation is purely geometric
+    const withKey = await resolveCorridorId({ GOOGLE_MAPS_API_KEY: 'real-key' }, 41.6571, -87.6798);
+    const withoutKey = await resolveCorridorId({}, 41.6571, -87.6798);
+    expect(withKey).toBe(withoutKey);
+  });
+
+  // ── OSE-633: TEST-GEO-01 — RESOLVE_CORRIDOR_ERROR catch branch ─────────────
+  // h3-js throws when coordinates are NaN (the only input that triggers the
+  // catch branch — out-of-range numeric values are silently wrapped by h3-js).
+  // resolveCorridorId must return null (not throw) and emit RESOLVE_CORRIDOR_ERROR.
+
+  test('OSE-633 | TEST-GEO-01 | NaN lat | returns null without throwing', async () => {
+    const result = await resolveCorridorId({}, NaN, -87);
     expect(result).toBeNull();
   });
 
-  test('emits structured RESOLVE_CORRIDOR_UNAVAILABLE log line on the call', async () => {
-    // Find the call that came FROM this test (not any other tests that
-    // share the spec-level beforeEach reset). The spy is reset per-test
-    // above; any other console.log invocations inside the lib itself
-    // would still count here.
-    await resolveCorridorId({}, 41.6, -87.7);
-    expect(logSpy).toHaveBeenCalled();
-    const stubLog = logSpy.mock.calls
-      .map((args) => args[0])
-      .filter((arg): arg is string => typeof arg === 'string')
-      .map((s) => {
-        try {
-          return JSON.parse(s) as Record<string, unknown>;
-        } catch {
-          return null;
-        }
-      })
-      .find((parsed) => parsed?.type === 'RESOLVE_CORRIDOR_UNAVAILABLE');
-    expect(stubLog, 'RESOLVE_CORRIDOR_UNAVAILABLE log not emitted').toBeDefined();
-    expect(stubLog!.lat).toBe(41.6);
-    expect(stubLog!.lng).toBe(-87.7);
-    expect(stubLog!.reason).toContain('BE-24b');
-    // ISO timestamp present so log aggregators can sort.
-    expect(stubLog!.timestamp as string).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+  test('OSE-633 | TEST-GEO-01 | NaN lng | returns null without throwing', async () => {
+    const result = await resolveCorridorId({}, 41.6, NaN);
+    expect(result).toBeNull();
   });
 
-  test('returns null even when env carries an API key (the stub is the point)', async () => {
-    const result = await resolveCorridorId({ GOOGLE_MAPS_API_KEY: 'real-key' }, 0, 0);
-    expect(result).toBeNull();
+  test('OSE-633 | TEST-GEO-01 | both NaN | resolveCorridorId is exception-safe (never throws)', async () => {
+    await expect(resolveCorridorId({}, NaN, NaN)).resolves.toBeNull();
   });
 });

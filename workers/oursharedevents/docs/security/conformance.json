@@ -1,0 +1,281 @@
+{
+  "generated_at": "2026-08-03",
+  "commit": "local-gap-closure-2",
+  "run_url": "",
+  "schema_version": "1.0.0",
+  "story": "OSE-560",
+  "summary": {
+    "total": 24,
+    "enforced": 15,
+    "partial": 8,
+    "gap": 1,
+    "threat_entries": 52,
+    "open_threats": 5
+  },
+  "invariants": [
+    {
+      "id": 1,
+      "name": "anonymous_id",
+      "label": "#1 — Anonymous ID",
+      "invariant_status": "live",
+      "enforcement_status": "enforced",
+      "last_attacked": "2026-08-03",
+      "last_green": "2026-08-03",
+      "threat_count": 4,
+      "open_threat_count": 0
+    },
+    {
+      "id": 2,
+      "name": "hyperlocal_geo_resolution",
+      "label": "#2 — Hyperlocal Geo Resolution",
+      "invariant_status": "live",
+      "enforcement_status": "enforced",
+      "last_attacked": "2026-08-03",
+      "last_green": "2026-08-03",
+      "threat_count": 1,
+      "open_threat_count": 0
+    },
+    {
+      "id": 3,
+      "name": "uec_encoding",
+      "label": "#3 — UEC Encoding",
+      "invariant_status": "live",
+      "enforcement_status": "enforced",
+      "last_attacked": "2026-08-03",
+      "last_green": "2026-08-03",
+      "threat_count": 1,
+      "open_threat_count": 0
+    },
+    {
+      "id": 4,
+      "name": "ncr_data_accumulation",
+      "label": "#4 — NCR Data Accumulation",
+      "invariant_status": "live",
+      "enforcement_status": "enforced",
+      "last_attacked": "2026-08-03",
+      "last_green": "2026-08-03",
+      "threat_count": 1,
+      "open_threat_count": 0
+    },
+    {
+      "id": 5,
+      "name": "tier_equity",
+      "label": "#5 — Tier Equity",
+      "invariant_status": "partial",
+      "enforcement_status": "gap",
+      "last_attacked": null,
+      "last_green": null,
+      "threat_count": 0,
+      "open_threat_count": 0
+    },
+    {
+      "id": 6,
+      "name": "inert_monetization_hooks",
+      "label": "#6 — Inert Monetization Hooks",
+      "invariant_status": "live",
+      "enforcement_status": "enforced",
+      "last_attacked": "2026-08-03",
+      "last_green": "2026-08-03",
+      "threat_count": 1,
+      "open_threat_count": 0
+    },
+    {
+      "id": 7,
+      "name": "aggregate_only_reporting",
+      "label": "#7 — Aggregate-Only Reporting",
+      "invariant_status": "partial",
+      "enforcement_status": "partial",
+      "last_attacked": "2026-08-03",
+      "last_green": "2026-08-03",
+      "threat_count": 1,
+      "open_threat_count": 0
+    },
+    {
+      "id": 8,
+      "name": "bounded_pii_retention",
+      "label": "#8 — Bounded PII Retention",
+      "invariant_status": "live",
+      "enforcement_status": "partial",
+      "last_attacked": "2026-08-03",
+      "last_green": "2026-08-03",
+      "threat_count": 3,
+      "open_threat_count": 1
+    },
+    {
+      "id": 9,
+      "name": "tenant_isolation",
+      "label": "#9 — Tenant Isolation",
+      "invariant_status": "partial",
+      "enforcement_status": "partial",
+      "last_attacked": "2026-08-03",
+      "last_green": "2026-08-03",
+      "threat_count": 4,
+      "open_threat_count": 0
+    },
+    {
+      "id": 10,
+      "name": "deprecation_lock",
+      "label": "#10 — Deprecation Lock",
+      "invariant_status": "live",
+      "enforcement_status": "enforced",
+      "last_attacked": "2026-08-03",
+      "last_green": "2026-08-03",
+      "threat_count": 1,
+      "open_threat_count": 0
+    },
+    {
+      "id": 11,
+      "name": "self_hosted_runner_bash_resolution",
+      "label": "#11 — Runner Bash Resolution",
+      "invariant_status": "live",
+      "enforcement_status": "enforced",
+      "last_attacked": "2026-08-03",
+      "last_green": "2026-08-03",
+      "threat_count": 1,
+      "open_threat_count": 0
+    },
+    {
+      "id": 12,
+      "name": "runner_pool_readiness_probe",
+      "label": "#12 — Runner Pool Readiness Probe",
+      "invariant_status": "live",
+      "enforcement_status": "enforced",
+      "last_attacked": "2026-08-03",
+      "last_green": "2026-08-03",
+      "threat_count": 1,
+      "open_threat_count": 0
+    },
+    {
+      "id": 13,
+      "name": "brain_enforcement_location",
+      "label": "#13 — Brain Enforcement Location",
+      "invariant_status": "live",
+      "enforcement_status": "enforced",
+      "last_attacked": "2026-08-03",
+      "last_green": "2026-08-03",
+      "threat_count": 1,
+      "open_threat_count": 0
+    },
+    {
+      "id": 14,
+      "name": "mobile_workability",
+      "label": "#14 — Mobile Workability",
+      "invariant_status": "partial",
+      "enforcement_status": "partial",
+      "last_attacked": "2026-08-03",
+      "last_green": "2026-08-03",
+      "threat_count": 1,
+      "open_threat_count": 0
+    },
+    {
+      "id": 15,
+      "name": "cors_allowlist_immutability",
+      "label": "#15 — CORS Allowlist Immutability",
+      "invariant_status": "live",
+      "enforcement_status": "enforced",
+      "last_attacked": "2026-08-03",
+      "last_green": "2026-08-03",
+      "threat_count": 1,
+      "open_threat_count": 0
+    },
+    {
+      "id": 16,
+      "name": "api_response_schema_stability",
+      "label": "#16 — API Response Schema Stability",
+      "invariant_status": "live",
+      "enforcement_status": "enforced",
+      "last_attacked": "2026-08-03",
+      "last_green": "2026-08-03",
+      "threat_count": 1,
+      "open_threat_count": 0
+    },
+    {
+      "id": 17,
+      "name": "oer_emission_boundary",
+      "label": "#17 — OER Emission Boundary",
+      "invariant_status": "live",
+      "enforcement_status": "enforced",
+      "last_attacked": "2026-08-03",
+      "last_green": "2026-08-03",
+      "threat_count": 1,
+      "open_threat_count": 0
+    },
+    {
+      "id": 18,
+      "name": "slug_permanence",
+      "label": "#18 — Slug Permanence",
+      "invariant_status": "live",
+      "enforcement_status": "enforced",
+      "last_attacked": "2026-08-03",
+      "last_green": "2026-08-03",
+      "threat_count": 1,
+      "open_threat_count": 0
+    },
+    {
+      "id": 19,
+      "name": "migration_monotonicity",
+      "label": "#19 — Migration Monotonicity",
+      "invariant_status": "live",
+      "enforcement_status": "enforced",
+      "last_attacked": "2026-08-03",
+      "last_green": "2026-08-03",
+      "threat_count": 1,
+      "open_threat_count": 0
+    },
+    {
+      "id": 20,
+      "name": "standards_propagation_completeness",
+      "label": "#20 — Standards Propagation",
+      "invariant_status": "partial",
+      "enforcement_status": "partial",
+      "last_attacked": "2026-08-03",
+      "last_green": "2026-08-03",
+      "threat_count": 1,
+      "open_threat_count": 0
+    },
+    {
+      "id": 21,
+      "name": "shared_report_schema_stability",
+      "label": "#21 — SharedReport Schema Stability",
+      "invariant_status": "live",
+      "enforcement_status": "partial",
+      "last_attacked": "2026-08-03",
+      "last_green": "2026-08-03",
+      "threat_count": 3,
+      "open_threat_count": 1
+    },
+    {
+      "id": 22,
+      "name": "cross_repo_import_isolation",
+      "label": "#22 — Cross-Repo Import Isolation",
+      "invariant_status": "live",
+      "enforcement_status": "enforced",
+      "last_attacked": "2026-08-03",
+      "last_green": "2026-08-03",
+      "threat_count": 2,
+      "open_threat_count": 0
+    },
+    {
+      "id": 23,
+      "name": "red_team_coverage",
+      "label": "#23 — Red Team Coverage",
+      "invariant_status": "partial",
+      "enforcement_status": "partial",
+      "last_attacked": "2026-08-03",
+      "last_green": "2026-08-03",
+      "threat_count": 1,
+      "open_threat_count": 0
+    },
+    {
+      "id": 24,
+      "name": "auditability",
+      "label": "#24 — Auditability",
+      "invariant_status": "partial",
+      "enforcement_status": "partial",
+      "last_attacked": "2026-08-03",
+      "last_green": "2026-08-03",
+      "threat_count": 7,
+      "open_threat_count": 0
+    }
+  ]
+}

@@ -52,11 +52,19 @@
  *   POST   /api/v2/events/:id/sponsors/:sid/click      → log click
  *   GET    /api/v2/events/:id/poster-bundle    → poster bundle (QR data URIs + form links)
  *
- *   Admin Audit Log (auth required — OSE-212):
- *   GET    /api/v2/admin/audit-log          → paginated audit entries
+ *   Poster Deployments Admin (auth required):
+ *   POST   /api/v2/admin/events/:id/poster-deployments  → create deployment (with H3 tagging)
+ *   GET    /api/v2/admin/events/:id/poster-deployments  → list deployments for event
+ *   GET    /api/v2/admin/poster-deployments/:id         → get single deployment
+ *   PUT    /api/v2/admin/poster-deployments/:id         → update (re-tags H3 when coords change)
+ *   DELETE /api/v2/admin/poster-deployments/:id         → soft-delete (is_active=0)
+ *   POST   /api/v2/admin/poster-deployments/backfill-h3 → backfill H3 for existing rows
  *
  *   Admin Audit Log (auth required — OSE-212):
  *   GET    /api/v2/admin/audit-log          → paginated audit entries
+ *
+ *   Security Monitoring (auth required — OSE-SEC-1):
+ *   GET    /api/v2/admin/security/rate-limit-stats → top-10 rate-limited IPs (last hour, from KV)
  *
  *   QR Verify/Unverify (auth required — OSE-213):
  *   POST   /api/v2/admin/events/:id/verify-qr    → handleV2AdminVerifyQr (READY→ACTIVE)
@@ -96,6 +104,7 @@ import {
   handleBackfillH3Cells,
   type EventsEnv,
 } from './handlers/events';
+import { handlePortfolioRollup } from './handlers/portfolio-rollup';
 import {
   handlePublicPage,
   handlePublicEventPage,
@@ -110,8 +119,14 @@ import {
   type PagesEnv,
 } from './handlers/pages';
 import { handleBriefingPage } from './handlers/briefing';
-import { requireAdmin, extractAdminActor, type AdminEnv } from './auth/admin';
-import { logAdminAction, type AuditLogEnv } from './lib/audit-log';
+import { handleDemoIndex, handleDemoSite } from './handlers/demo';
+import { requireAdmin, extractAdminActor, verifyCfAccessJWT, type AdminEnv } from './auth/admin';
+import {
+  logAdminAction,
+  logReportAccess,
+  logExportManifest,
+  type AuditLogEnv,
+} from './lib/audit-log';
 import { handleListAuditLog, type AuditHandlerEnv } from './handlers/audit';
 import { handleListSubscribers, type SubscribersAdminEnv } from './handlers/subscribers';
 import { handleAdminGeocode, type GeocodeAdminEnv } from './handlers/geocode';
@@ -124,6 +139,7 @@ import {
 } from './handlers/qr-verify';
 import {
   handleFormRegistration,
+  handleSelfDeleteRegistration,
   handleFormCheckin,
   handleFormSurvey,
   handleFormEmailSignup,
@@ -167,10 +183,29 @@ import {
 import { handleAdminBackupEvent, type BigQueryHandlerEnv } from './handlers/bigquery';
 import { fetchStaticMapImage, type MapsEnv } from './lib/maps';
 import { handleGetPosterBundle, type PosterBundleEnv } from './handlers/poster-bundle';
+import {
+  handleAdminCreatePosterDeployment,
+  handleAdminListPosterDeployments,
+  handleAdminGetPosterDeployment,
+  handleAdminUpdatePosterDeployment,
+  handleAdminDeletePosterDeployment,
+  handleBackfillPosterH3,
+  type PosterDeploymentsEnv,
+} from './handlers/poster-deployments';
+import { handleQrScan, type QrScanEnv } from './handlers/qr-scan';
 import { corsOrigin } from './lib/cors';
 import { guardPublicReadOnly } from './lib/public-readonly';
 import { assertRenderable, parseEventState } from './domain/event-state';
-import { isRateLimited, clientIp, rateLimitResponse, type RateLimitEnv } from './lib/rate-limit';
+import {
+  isRateLimited,
+  checkRateLimit,
+  clientIp,
+  rateLimitResponse,
+  RATE_LIMIT_ADMIN_MAX,
+  RATE_LIMIT_BATCH_MAX,
+  RATE_LIMIT_MINT_MAX,
+  type RateLimitEnv,
+} from './lib/rate-limit';
 import { handleAdminUploadFile, handleGetUploadedFile, type UploadEnv } from './handlers/upload';
 import { handleDataSubjectErase, type DataSubjectEnv } from './handlers/data-subject';
 import {
@@ -192,6 +227,8 @@ export type RouterEnv = PagesEnv &
   MapsEnv &
   BigQueryHandlerEnv &
   PosterBundleEnv &
+  PosterDeploymentsEnv &
+  QrScanEnv &
   UploadEnv &
   DataSubjectEnv &
   SharedReportReadEnv &
@@ -211,6 +248,17 @@ export type RouterEnv = PagesEnv &
     // OSE-272 Session 5: WKRP service-account bearer token for the batch
     // SharedReport endpoint. Unset → batch endpoint rejects all callers.
     WKRP_SERVICE_TOKEN?: string;
+    // Security cron — Linear integration (OSE-SEC-1)
+    LINEAR_API_KEY?: string;
+    LINEAR_TEAM_ID?: string;
+    // Security cron — tunable alert thresholds
+    AUTH_FAILURE_THRESHOLD?: string;
+    RATE_LIMIT_TRIGGER_THRESHOLD?: string;
+    ERROR_5XX_THRESHOLD_PCT?: string;
+    // TL-018: ISO timestamp of the last FORMS_ENCRYPTION_KEY rotation.
+    // Set this alongside the key whenever rotating; the security cron uses it
+    // to alert when the key age exceeds the 90-day rotation window.
+    FORMS_KEY_ROTATED_AT?: string;
   };
 
 export async function route(
@@ -245,9 +293,15 @@ export async function route(
   }
 
   // ── HTTPS redirect ──────────────────────────────────────────────────────
-  if (url.protocol === 'http:') {
+  // Use 308 (Permanent Redirect) to preserve the HTTP method across the upgrade.
+  // 301 historically causes POST→GET downgrade; 308 guarantees method preservation.
+  // Loopback hosts are exempt so `wrangler dev` (plain HTTP on localhost) is
+  // reachable in a browser; this never affects production, which is never loopback.
+  const isLoopbackHost =
+    url.hostname === 'localhost' || url.hostname === '127.0.0.1' || url.hostname === '[::1]';
+  if (url.protocol === 'http:' && !isLoopbackHost) {
     url.protocol = 'https:';
-    return Response.redirect(url.toString(), 301);
+    return Response.redirect(url.toString(), 308);
   }
 
   // ── OIDC well-known endpoints (for GCP Workload Identity Federation) ──────────
@@ -290,6 +344,16 @@ export async function route(
   }
 
   // ── Health ─────────────────────────────────────────────────────────────────
+  // ── QR scan ingestion (OSE-625) — `/q/<qr_token>` ─────────────────────────
+  // PUBLIC route. Records an anonymous scan row and 302-redirects to the
+  // form page with ?deployment=<id> for attribution. qr_token starts with
+  // 'qrt_' (distinguishes from /s/ shortlink codes). Set-Cookie for anon_id
+  // if the visitor is new.
+  if (pathname.startsWith('/q/') && method === 'GET') {
+    const qrToken = pathname.slice('/q/'.length);
+    return handleQrScan(request, env, qrToken);
+  }
+
   // ── Shortlink resolver (OSE-240) — `/s/<code>` ────────────────────────────
   // PUBLIC route. NO auth. Anonymity-principle compliant: counter +
   // last_clicked_at increments only; no IP, no anon_id, no session.
@@ -305,6 +369,17 @@ export async function route(
 
   if (pathname === '/ui-preview') {
     return handleUiPreview();
+  }
+
+  // ── Demo Site — permanent reference installation (OSE-605, thin slice) ─────
+  // PUBLIC, no auth. Front door + three standing tier sites rendering the same
+  // mock dataset at three depths. Depth is render-side only (SR-25 respected).
+  if (pathname === '/demo' && method === 'GET') {
+    return handleDemoIndex();
+  }
+  const demoSiteMatch = pathname.match(/^\/demo\/([^/]+)$/);
+  if (demoSiteMatch && method === 'GET') {
+    return handleDemoSite(demoSiteMatch[1]);
   }
 
   if (pathname === '/health' || pathname === '/api/status') {
@@ -323,6 +398,48 @@ export async function route(
   // /api/v2/uec/* family will serve shortlink-creation and other surfaces.
   if (pathname === '/api/v2/uec/resolve' && method === 'GET') {
     return handleUecResolve(request);
+  }
+
+  // ── CF Access JWT pre-flight (OSE-573) ────────────────────────────────────
+  // Verify the cryptographic signature of any CF Access JWT present on the
+  // request BEFORE any route handler reads its claims. This closes the gap
+  // where requireAdmin decoded-without-verifying; any forged token is rejected
+  // here, once, rather than per-callsite.
+  //
+  // Skip when CF_ACCESS_TEAM_DOMAIN is not configured (local dev / CI with
+  // ALLOW_ADMIN_KEY_FALLBACK or ALLOW_OCR_INTERNAL — those paths carry no JWT).
+  const _cfJwt = request.headers.get('Cf-Access-Jwt-Assertion');
+  if (_cfJwt && (env as AdminEnv).CF_ACCESS_TEAM_DOMAIN) {
+    const _jwtResult = await verifyCfAccessJWT(
+      _cfJwt,
+      (env as AdminEnv).CF_ACCESS_TEAM_DOMAIN as string
+    );
+    if (!_jwtResult.valid) {
+      return new Response(
+        JSON.stringify({
+          ok: false,
+          status: 401,
+          code: 'INVALID_JWT',
+          error: 'Token signature verification failed',
+        }),
+        { status: 401, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+  }
+
+  // ── Admin route rate limit pre-flight (OSE-576) ────────────────────────────
+  // Rate-limit admin-path requests by CF-Ray-ID before paying the auth cost.
+  // Applies to any /admin or /api/v2/admin/* request in production only — skip
+  // in test/staging to avoid exhausting the limit during automated test suites.
+  if (
+    env.RATE_LIMIT_KV &&
+    env.WORKER_ENV === 'production' &&
+    (pathname.startsWith('/api/v2/admin') || pathname === '/admin' || pathname === '/manage')
+  ) {
+    const adminKey = `admin:${clientIp(request)}`;
+    if (await checkRateLimit(adminKey, env.RATE_LIMIT_KV, RATE_LIMIT_ADMIN_MAX)) {
+      return rateLimitResponse();
+    }
   }
 
   // ── Admin routes (auth-gated) ──────────────────────────────────────────────
@@ -350,7 +467,7 @@ export async function route(
   // dashboard HTML is never served" — and accept either CF Access
   // 302/200 OR worker 401 as satisfying that contract.
   if (pathname === '/admin' && method === 'GET') {
-    const deny = requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
+    const deny = await requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
     if (deny) {
       const accept = request.headers.get('Accept') ?? '';
       if (accept.includes('text/html')) {
@@ -362,14 +479,14 @@ export async function route(
   }
 
   if (pathname === '/api/v2/admin/events' && method === 'GET') {
-    const deny = requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
+    const deny = await requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
     if (deny) return deny;
     return handleAdminListEvents(request, env);
   }
 
   if (pathname === '/api/v2/admin/events' && method === 'POST') {
     const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
-    const deny = requireAdmin(request, env, reqId);
+    const deny = await requireAdmin(request, env, reqId);
     if (deny) {
       _audit(reqId, 'CREATE_EVENT', 'denied', 'event');
       return deny;
@@ -381,16 +498,25 @@ export async function route(
 
   // POST /api/v2/admin/events/backfill-h3-cells — OSE-489 one-shot H3 backfill
   if (pathname === '/api/v2/admin/events/backfill-h3-cells' && method === 'POST') {
-    const deny = requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
+    const deny = await requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
     if (deny) return deny;
     return handleBackfillH3Cells(request, env);
+  }
+
+  // GET /api/v2/admin/events/portfolio-rollup — OSE-669 brand-scoped rollup strip.
+  // Exact match placed BEFORE the /:id matcher so "portfolio-rollup" is never
+  // parsed as an event id.
+  if (pathname === '/api/v2/admin/events/portfolio-rollup' && method === 'GET') {
+    const deny = await requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
+    if (deny) return deny;
+    return handlePortfolioRollup(request, env);
   }
 
   // PUT /api/v2/admin/events/:id — update event
   const adminEventMatch = pathname.match(/^\/api\/v2\/admin\/events\/([^/]+)$/);
   if (adminEventMatch && method === 'PUT') {
     const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
-    const deny = requireAdmin(request, env, reqId);
+    const deny = await requireAdmin(request, env, reqId);
     if (deny) {
       _audit(reqId, 'UPDATE_EVENT', 'denied', 'event', adminEventMatch[1]);
       return deny;
@@ -405,7 +531,7 @@ export async function route(
   // POST /api/v2/admin/events/:id/verify-qr
   if (method === 'POST' && /^\/api\/v2\/admin\/events\/([^/]+)\/verify-qr$/.test(pathname)) {
     const eventId = pathname.split('/')[5];
-    const authRes = requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
+    const authRes = await requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
     if (authRes) {
       _audit(crypto.randomUUID(), 'VERIFY_QR', 'denied', 'event', eventId);
       return authRes;
@@ -424,7 +550,7 @@ export async function route(
   // POST /api/v2/admin/events/:id/unverify-qr
   if (method === 'POST' && /^\/api\/v2\/admin\/events\/([^/]+)\/unverify-qr$/.test(pathname)) {
     const eventId = pathname.split('/')[5];
-    const authRes = requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
+    const authRes = await requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
     if (authRes) {
       _audit(crypto.randomUUID(), 'UNVERIFY_QR', 'denied', 'event', eventId);
       return authRes;
@@ -443,30 +569,62 @@ export async function route(
   // POST /api/v2/admin/events/:id/backup — BigQuery event backup (OSE-215)
   if (method === 'POST' && /^\/api\/v2\/admin\/events\/([^/]+)\/backup$/.test(pathname)) {
     const eventId = pathname.split('/')[5];
-    const authRes = requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
-    if (authRes) return authRes;
-    return handleAdminBackupEvent(request, env, eventId);
+    const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
+    const authRes = await requireAdmin(request, env, reqId);
+    if (authRes) {
+      _audit(reqId, 'BACKUP_EVENT', 'denied', 'event', eventId);
+      return authRes;
+    }
+    const res = await handleAdminBackupEvent(request, env, eventId);
+    const backupOutcome = res.status < 400 ? 'success' : 'denied';
+    _audit(reqId, 'BACKUP_EVENT', backupOutcome, 'event', eventId);
+    ctx.waitUntil(
+      logExportManifest(env, {
+        export_type: 'BIGQUERY',
+        event_id: eventId,
+        actor: _actor,
+        request_id: reqId,
+        outcome: backupOutcome === 'success' ? 'success' : 'failed',
+      })
+    );
+    return res;
   }
 
   // POST /api/v2/admin/events/:id/uploads — R2 file upload (OSE-200)
   if (method === 'POST' && /^\/api\/v2\/admin\/events\/([^/]+)\/uploads$/.test(pathname)) {
     const eventId = pathname.split('/')[5];
-    const authRes = requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
-    if (authRes) return authRes;
-    return handleAdminUploadFile(request, env, eventId);
+    const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
+    const authRes = await requireAdmin(request, env, reqId);
+    if (authRes) {
+      _audit(reqId, 'UPLOAD_FILE', 'denied', 'event', eventId);
+      return authRes;
+    }
+    const res = await handleAdminUploadFile(request, env, eventId);
+    const uploadOutcome = res.status < 400 ? 'success' : 'denied';
+    _audit(reqId, 'UPLOAD_FILE', uploadOutcome, 'event', eventId);
+    ctx.waitUntil(
+      logExportManifest(env, {
+        export_type: 'UPLOAD_FILE',
+        event_id: eventId,
+        actor: _actor,
+        request_id: reqId,
+        outcome: uploadOutcome === 'success' ? 'success' : 'failed',
+      })
+    );
+    return res;
   }
 
   // ── Admin sponsor routes (auth-gated) ──────────────────────────────────────
 
   if (pathname === '/api/v2/admin/sponsors' && method === 'GET') {
-    const deny = requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
+    const deny = await requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
     if (deny) return deny;
     return handleAdminListSponsors(request, env);
   }
 
   if (pathname === '/api/v2/admin/sponsors' && method === 'POST') {
     const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
-    const deny = requireAdmin(request, env, reqId);
+    const deny = await requireAdmin(request, env, reqId);
     if (deny) {
       _audit(reqId, 'CREATE_SPONSOR', 'denied', 'sponsor');
       return deny;
@@ -482,7 +640,7 @@ export async function route(
   );
   if (adminSponsorEventTypesMatch) {
     const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
-    const deny = requireAdmin(request, env, reqId);
+    const deny = await requireAdmin(request, env, reqId);
     if (deny) {
       _audit(
         reqId,
@@ -516,7 +674,7 @@ export async function route(
   const adminSponsorAreasMatch = pathname.match(/^\/api\/v2\/admin\/sponsors\/([^/]+)\/areas$/);
   if (adminSponsorAreasMatch) {
     const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
-    const deny = requireAdmin(request, env, reqId);
+    const deny = await requireAdmin(request, env, reqId);
     if (deny) {
       _audit(reqId, 'UPDATE_SPONSOR_AREAS', 'denied', 'sponsor', adminSponsorAreasMatch[1]);
       return deny;
@@ -533,7 +691,7 @@ export async function route(
   const adminSponsorMatch = pathname.match(/^\/api\/v2\/admin\/sponsors\/([^/]+)$/);
   if (adminSponsorMatch) {
     const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
-    const deny = requireAdmin(request, env, reqId);
+    const deny = await requireAdmin(request, env, reqId);
     if (deny) {
       _audit(reqId, 'SPONSOR_MUTATE', 'denied', 'sponsor', adminSponsorMatch[1]);
       return deny;
@@ -551,12 +709,75 @@ export async function route(
     }
   }
 
+  // ── Admin poster deployment routes (auth-gated) ────────────────────────────
+
+  // POST/GET /api/v2/admin/events/:id/poster-deployments
+  const adminPosterListMatch = pathname.match(
+    /^\/api\/v2\/admin\/events\/([^/]+)\/poster-deployments$/
+  );
+  if (adminPosterListMatch) {
+    const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
+    const deny = await requireAdmin(request, env, reqId);
+    if (deny) return deny;
+    if (method === 'POST')
+      return handleAdminCreatePosterDeployment(request, env, adminPosterListMatch[1]);
+    if (method === 'GET')
+      return handleAdminListPosterDeployments(request, env, adminPosterListMatch[1]);
+  }
+
+  // POST /api/v2/admin/poster-deployments/backfill-h3 (must match before /:id)
+  if (pathname === '/api/v2/admin/poster-deployments/backfill-h3' && method === 'POST') {
+    const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
+    const deny = await requireAdmin(request, env, reqId);
+    if (deny) return deny;
+    return handleBackfillPosterH3(request, env);
+  }
+
+  // GET/PUT/DELETE /api/v2/admin/poster-deployments/:id
+  const adminPosterDeploymentMatch = pathname.match(
+    /^\/api\/v2\/admin\/poster-deployments\/([^/]+)$/
+  );
+  if (adminPosterDeploymentMatch) {
+    const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
+    const deny = await requireAdmin(request, env, reqId);
+    if (deny) return deny;
+    if (method === 'GET')
+      return handleAdminGetPosterDeployment(request, env, adminPosterDeploymentMatch[1]);
+    if (method === 'PUT')
+      return handleAdminUpdatePosterDeployment(request, env, adminPosterDeploymentMatch[1]);
+    if (method === 'DELETE')
+      return handleAdminDeletePosterDeployment(request, env, adminPosterDeploymentMatch[1]);
+  }
+
   // ── Admin form export (auth-gated) ─────────────────────────────────────────
   const adminExportMatch = pathname.match(/^\/api\/v2\/admin\/events\/([^/]+)\/forms\/export$/);
   if (adminExportMatch && method === 'GET') {
-    const deny = requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
-    if (deny) return deny;
-    return handleAdminExport(request, env, adminExportMatch[1]);
+    const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
+    const deny = await requireAdmin(request, env, reqId);
+    if (deny) {
+      _audit(reqId, 'EXPORT_FORMS', 'denied', 'forms-export', adminExportMatch[1]);
+      return deny;
+    }
+    const res = await handleAdminExport(request, env, adminExportMatch[1]);
+    const exportOutcome = res.status < 400 ? 'success' : 'failed';
+    _audit(
+      reqId,
+      'EXPORT_FORMS',
+      exportOutcome === 'success' ? 'success' : 'denied',
+      'forms-export',
+      adminExportMatch[1]
+    );
+    // OSE-594: log OER emission manifest for forms CSV export (invariant #17)
+    ctx.waitUntil(
+      logExportManifest(env, {
+        export_type: 'UPLOAD_FILE',
+        event_id: adminExportMatch[1],
+        actor: extractAdminActor(request, env),
+        request_id: reqId,
+        outcome: exportOutcome,
+      })
+    );
+    return res;
   }
 
   // ── Admin form endpoints (auth-gated) ──────────────────────────────────────
@@ -564,18 +785,43 @@ export async function route(
     /^\/api\/v2\/admin\/events\/([^/]+)\/forms\/(registrations|checkin-count|surveys|email-signups)$/
   );
   if (adminFormsMatch && method === 'GET') {
-    const deny = requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
-    if (deny) return deny;
+    const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
+    const deny = await requireAdmin(request, env, reqId);
+    if (deny) {
+      _audit(reqId, 'READ_FORMS_DATA', 'denied', 'forms', adminFormsMatch[1]);
+      return deny;
+    }
     const [, eventId, formType] = adminFormsMatch;
+    const formsActionMap: Record<string, string> = {
+      registrations: 'READ_REGISTRATIONS',
+      'checkin-count': 'READ_CHECKIN_COUNT',
+      surveys: 'READ_SURVEYS',
+      'email-signups': 'READ_EMAIL_SIGNUPS',
+    };
+    let formsRes: Response | undefined;
     switch (formType) {
       case 'registrations':
-        return handleAdminRegistrations(request, env, eventId);
+        formsRes = await handleAdminRegistrations(request, env, eventId);
+        break;
       case 'checkin-count':
-        return handleAdminCheckinCount(request, env, eventId);
+        formsRes = await handleAdminCheckinCount(request, env, eventId);
+        break;
       case 'surveys':
-        return handleAdminSurveys(request, env, eventId);
+        formsRes = await handleAdminSurveys(request, env, eventId);
+        break;
       case 'email-signups':
-        return handleAdminEmailSignupCount(request, env, eventId);
+        formsRes = await handleAdminEmailSignupCount(request, env, eventId);
+        break;
+    }
+    if (formsRes) {
+      _audit(
+        reqId,
+        formsActionMap[formType] ?? 'READ_FORMS_DATA',
+        formsRes.status < 400 ? 'success' : 'denied',
+        'forms',
+        eventId
+      );
+      return formsRes;
     }
   }
 
@@ -585,7 +831,7 @@ export async function route(
   const eventFlagMatch = pathname.match(/^\/api\/v2\/admin\/events\/([^/]+)\/flags\/([^/]+)$/);
   if (eventFlagMatch && (method === 'PUT' || method === 'DELETE')) {
     const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
-    const deny = requireAdmin(request, env, reqId);
+    const deny = await requireAdmin(request, env, reqId);
     const [, eventId, flagKey] = eventFlagMatch;
     if (deny) {
       _audit(
@@ -608,25 +854,25 @@ export async function route(
   }
 
   if (pathname === '/api/v2/admin/flags' && method === 'GET') {
-    const deny = requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
+    const deny = await requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
     if (deny) return deny;
     return handleListFlags(request, env);
   }
 
   if (pathname === '/api/v2/admin/flags/tiers' && method === 'GET') {
-    const deny = requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
+    const deny = await requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
     if (deny) return deny;
     return handleListTiers();
   }
 
   if (pathname === '/api/v2/admin/flags/current-tier' && method === 'GET') {
-    const deny = requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
+    const deny = await requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
     if (deny) return deny;
     return handleGetCurrentTier(env);
   }
 
   if (pathname === '/api/v2/admin/flags/resolve' && method === 'GET') {
-    const deny = requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
+    const deny = await requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
     if (deny) return deny;
     return handleResolveFlags(request, env);
   }
@@ -635,7 +881,7 @@ export async function route(
   const flagKeyMatch = pathname.match(/^\/api\/v2\/admin\/flags\/([^/]+)$/);
   if (flagKeyMatch && method === 'PUT') {
     const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
-    const deny = requireAdmin(request, env, reqId);
+    const deny = await requireAdmin(request, env, reqId);
     if (deny) {
       _audit(reqId, 'SET_FLAG', 'denied', 'flag', flagKeyMatch[1]);
       return deny;
@@ -647,7 +893,7 @@ export async function route(
 
   if (pathname === '/api/v2/admin/flags/apply-tier' && method === 'POST') {
     const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
-    const deny = requireAdmin(request, env, reqId);
+    const deny = await requireAdmin(request, env, reqId);
     if (deny) {
       _audit(reqId, 'APPLY_TIER', 'denied', 'flag');
       return deny;
@@ -660,7 +906,7 @@ export async function route(
   // POST /api/v2/admin/data-subject/erase — GDPR Art. 17 / CCPA erasure (OSE-203)
   if (pathname === '/api/v2/admin/data-subject/erase' && method === 'POST') {
     const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
-    const deny = requireAdmin(request, env, reqId);
+    const deny = await requireAdmin(request, env, reqId);
     if (deny) {
       _audit(reqId, 'DATA_SUBJECT_ERASE', 'denied', 'data-subject');
       return deny;
@@ -677,9 +923,19 @@ export async function route(
 
   // ── Admin audit log (OSE-212) ──────────────────────────────────────────────
   if (pathname === '/api/v2/admin/audit-log' && method === 'GET') {
-    const deny = requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
+    const deny = await requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
     if (deny) return deny;
     return handleListAuditLog(request, env);
+  }
+
+  // ── Security: rate-limit visibility (OSE-SEC-1) ────────────────────────────
+  // GET /api/v2/admin/security/rate-limit-stats
+  // Returns top-10 rate-limited IPs in the last hour from RATE_LIMIT_KV.
+  // Requires admin auth. Read-only — never modifies KV state.
+  if (pathname === '/api/v2/admin/security/rate-limit-stats' && method === 'GET') {
+    const deny = await requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
+    if (deny) return deny;
+    return handleRateLimitStats(request, env);
   }
 
   // ── Admin subscribers list (OSE-207) ──────────────────────────────────────
@@ -688,7 +944,7 @@ export async function route(
   // mirrors the audit-log endpoint (created_at-descending cursor).
   if (pathname === '/api/v2/admin/subscribers' && method === 'GET') {
     const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
-    const deny = requireAdmin(request, env, reqId);
+    const deny = await requireAdmin(request, env, reqId);
     if (deny) return deny;
     return handleListSubscribers(request, env, ctx, reqId);
   }
@@ -699,7 +955,7 @@ export async function route(
   // returning null (Option C); BE-24b will fill it in once the corridor
   // geometry source-of-truth lands.
   if (pathname === '/api/v2/admin/geocode' && method === 'POST') {
-    const deny = requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
+    const deny = await requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
     if (deny) return deny;
     return handleAdminGeocode(request, env);
   }
@@ -716,9 +972,28 @@ export async function route(
     /^\/api\/v2\/admin\/events\/([^/]+)\/shared-report\/mint-link$/
   );
   if (mintLinkMatch && method === 'POST') {
-    const authRes = requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
-    if (authRes) return authRes;
-    return handleAdminMintSharedReportLink(request, env, mintLinkMatch[1]);
+    // OSE-576: rate limit mint by actor+eventId before paying auth cost
+    if (env.RATE_LIMIT_KV) {
+      const mintKey = `mint:${clientIp(request)}:${mintLinkMatch[1]}`;
+      if (await checkRateLimit(mintKey, env.RATE_LIMIT_KV, RATE_LIMIT_MINT_MAX)) {
+        return rateLimitResponse();
+      }
+    }
+    const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
+    const authRes = await requireAdmin(request, env, reqId);
+    if (authRes) {
+      _audit(reqId, 'MINT_REPORT_LINK', 'denied', 'shared-report', mintLinkMatch[1]);
+      return authRes;
+    }
+    const res = await handleAdminMintSharedReportLink(request, env, mintLinkMatch[1]);
+    _audit(
+      reqId,
+      'MINT_REPORT_LINK',
+      res.status < 400 ? 'success' : 'denied',
+      'shared-report',
+      mintLinkMatch[1]
+    );
+    return res;
   }
 
   // ── OSE-272 Session 5: SharedReport read API ──────────────────────────────
@@ -727,14 +1002,22 @@ export async function route(
   // single-event matcher to avoid `shared-reports` being interpreted as
   // an event id.
   if (pathname === '/api/v2/events/shared-reports/batch' && method === 'POST') {
-    return handleBatchSharedReports(request, env);
+    // OSE-576: rate limit by service token identity (Authorization header hash)
+    if (env.RATE_LIMIT_KV) {
+      const tokenId = request.headers.get('Authorization')?.slice(-16) ?? clientIp(request);
+      const batchKey = `batch:${tokenId}`;
+      if (await checkRateLimit(batchKey, env.RATE_LIMIT_KV, RATE_LIMIT_BATCH_MAX)) {
+        return rateLimitResponse();
+      }
+    }
+    return handleBatchSharedReports(request, env, ctx);
   }
 
   // GET /api/v2/events/:id/shared-report
   // Signed-link-authenticated single-event SharedReport read.
   const sharedReportMatch = pathname.match(/^\/api\/v2\/events\/([^/]+)\/shared-report$/);
   if (sharedReportMatch && method === 'GET') {
-    return handleGetSharedReport(request, env, sharedReportMatch[1]);
+    return handleGetSharedReport(request, env, sharedReportMatch[1], ctx);
   }
 
   // /api/v2/events/:id
@@ -796,6 +1079,18 @@ export async function route(
   if (pathname === '/api/v2/maps/venue-image' && method === 'GET') {
     const venueParam = url.searchParams.get('venue') ?? '';
     return fetchStaticMapImage(env, venueParam);
+  }
+
+  // ── Public: self-delete a registration (OSE-659) ───────────────────────────
+  // DELETE on the register path — the attendee removes their own opt-in PII
+  // before TTL, authenticated only by the registered email's hash (#1 — no new
+  // identity surface). Writes only to FORMS_DB.
+  const selfDeleteMatch = pathname.match(/^\/api\/v2\/events\/([^/]+)\/forms\/register$/);
+  if (selfDeleteMatch && method === 'DELETE') {
+    if (await isRateLimited(clientIp(request), env.RATE_LIMIT_KV)) {
+      return rateLimitResponse();
+    }
+    return handleSelfDeleteRegistration(request, env, selfDeleteMatch[1]);
   }
 
   // ── Public form endpoints (no auth) ────────────────────────────────────────
@@ -944,7 +1239,7 @@ export async function route(
   // ── Admin aliases ─────────────────────────────────────────────────────────
   // Same R-001 HTML-vs-JSON-aware auth pattern as /admin proper.
   if (pathname === '/manage' || pathname === '/dashboard' || pathname === '/create') {
-    const deny = requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
+    const deny = await requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
     if (deny) {
       const accept = request.headers.get('Accept') ?? '';
       if (method === 'GET' && accept.includes('text/html')) {
@@ -955,7 +1250,9 @@ export async function route(
     return handleAdminPage(env);
   }
 
-  // ── CEO Briefing ───────────────────────────────────────────────────────────
+  // ── CEO Briefing (OSE-574 — client-side PIN gate) ─────────────────────────
+  // No server-side auth — the React app embedded in the HTML handles PIN entry.
+  // The PIN is the access control; there is no sensitive data in the HTML itself.
   if (
     (pathname === '/briefing' || pathname === '/overview' || pathname === '/summary') &&
     method === 'GET'
@@ -1016,4 +1313,116 @@ export async function route(
 
   // ── 404 ────────────────────────────────────────────────────────────────────
   return Response.json({ ok: false, status: 404, error: 'Not found' }, { status: 404 });
+}
+
+// ─── Rate-limit stats handler (OSE-SEC-1) ─────────────────────────────────────
+//
+// GET /api/v2/admin/security/rate-limit-stats
+//
+// Returns the top-10 rate-limited IPs from the last hour.
+// "Rate-limited" means the KV entry has count > RATE_LIMIT_MAX (60).
+//
+// KV key format: ratelimit:{ip}
+// KV value format: { count: number, resetAt: number }
+//
+// The resetAt field is a Unix ms timestamp. We only return entries whose
+// resetAt is in the future (i.e. the window is still active) as a proxy
+// for "this happened in the last minute", which is the actual rate-limit
+// window. For a 1-hour view we return all active KV entries — expired keys
+// have been deleted by KV TTL already.
+//
+// Response shape:
+// {
+//   ok: true,
+//   generated_at: ISO string,
+//   window: "1h (KV TTL)",
+//   total_rate_limited_ips: number,
+//   top_ips: [{ ip: string, count: number, reset_at: ISO string }]
+// }
+
+interface RateLimitEntry {
+  count: number;
+  resetAt: number;
+}
+
+async function handleRateLimitStats(request: Request, env: RouterEnv): Promise<Response> {
+  const corsOriginHeader = corsOrigin(request);
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'Cache-Control': 'no-store',
+    ...(corsOriginHeader ? { 'Access-Control-Allow-Origin': corsOriginHeader } : {}),
+  };
+
+  const now = Date.now();
+  const ipEntries: Array<{ ip: string; count: number; resetAt: number }> = [];
+  let totalRateLimited = 0;
+
+  try {
+    // Paginate through all ratelimit: keys
+    let cursor: string | undefined;
+    do {
+      const listResult = await env.RATE_LIMIT_KV.list({
+        prefix: 'ratelimit:',
+        limit: 1000,
+        cursor,
+      });
+
+      // Batch-fetch values in groups of 50
+      const BATCH = 50;
+      for (let i = 0; i < listResult.keys.length; i += BATCH) {
+        const batch = listResult.keys.slice(i, i + BATCH);
+        const values = await Promise.all(batch.map((k) => env.RATE_LIMIT_KV.get(k.name)));
+        for (let j = 0; j < batch.length; j++) {
+          const raw = values[j];
+          if (!raw) continue;
+          try {
+            const entry = JSON.parse(raw) as RateLimitEntry;
+            // Only include active (non-expired) windows
+            if (entry.resetAt <= now) continue;
+            // Only entries that have actually been rate-limited (count > max)
+            if (entry.count <= 60) continue;
+            const ip = batch[j].name.slice('ratelimit:'.length);
+            ipEntries.push({ ip, count: entry.count, resetAt: entry.resetAt });
+            totalRateLimited++;
+          } catch {
+            // malformed KV value — skip
+          }
+        }
+      }
+
+      cursor = listResult.list_complete
+        ? undefined
+        : (listResult as unknown as { cursor?: string }).cursor;
+    } while (cursor);
+  } catch (err) {
+    return Response.json(
+      {
+        ok: false,
+        status: 500,
+        error: 'Failed to read rate-limit KV',
+        detail: err instanceof Error ? err.message : String(err),
+      },
+      { status: 500, headers }
+    );
+  }
+
+  // Sort descending by count, take top 10
+  ipEntries.sort((a, b) => b.count - a.count);
+  const top10 = ipEntries.slice(0, 10).map((e) => ({
+    ip: e.ip,
+    count: e.count,
+    reset_at: new Date(e.resetAt).toISOString(),
+  }));
+
+  return Response.json(
+    {
+      ok: true,
+      generated_at: new Date(now).toISOString(),
+      window: '1h (KV TTL)',
+      rate_limit_max: 60,
+      total_rate_limited_ips: totalRateLimited,
+      top_ips: top10,
+    },
+    { status: 200, headers }
+  );
 }

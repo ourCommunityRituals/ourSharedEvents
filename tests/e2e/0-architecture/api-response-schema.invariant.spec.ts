@@ -58,11 +58,26 @@ const EVENTS_HANDLER = join(
   'handlers',
   'events.ts'
 );
+// The public read path (handleListEvents / handleGetEvent) delegates to the
+// DataProvider — the actual list/detail SELECT (and therefore the projected
+// column contract) lives in fetchEvents / fetchEvent here. The column-schema
+// checks below read this file; the envelope/enrichWithPhase checks still read
+// EVENTS_HANDLER (those shapes stayed in the handler).
+const DATA_PROVIDER = join(
+  REPO_ROOT,
+  'workers',
+  'oursharedevents',
+  'src',
+  'lib',
+  'data-provider.ts'
+);
 
-/** Extract the SELECT column list between a handler function and its FROM clause. */
+/** Extract the SELECT column list between a handler/method definition and its FROM clause. */
 function extractSelectColumns(src: string, handlerName: string): string[] {
-  // Find the handler function definition
-  const fnIdx = src.indexOf(`async function ${handlerName}`);
+  // Find the function OR method definition — supports both
+  // `async function handleListEvents(` and `private async fetchEvents(`.
+  const fnMatch = src.match(new RegExp(`async\\s+(?:function\\s+)?${handlerName}\\s*\\(`));
+  const fnIdx = fnMatch ? (fnMatch.index as number) : -1;
   if (fnIdx === -1) return [];
 
   // Find the first SELECT after the function definition
@@ -100,24 +115,26 @@ test.describe('Invariant 16: API Response Schema Stability — structural code-s
     expect(snapshot.version.length, 'snapshot version must be non-empty').toBeGreaterThan(0);
   });
 
-  test('OSE-INV16 | api | schema | every snapshot column is present in handleListEvents SELECT (public list)', () => {
-    expect(existsSync(EVENTS_HANDLER), 'handlers/events.ts must exist').toBe(true);
-    const src = readFileSync(EVENTS_HANDLER, 'utf8');
+  test('OSE-INV16 | api | schema | every snapshot column is present in the public list SELECT (DataProvider.fetchEvents)', () => {
+    expect(existsSync(DATA_PROVIDER), 'lib/data-provider.ts must exist').toBe(true);
+    const src = readFileSync(DATA_PROVIDER, 'utf8');
     const snapshot = JSON.parse(readFileSync(SNAPSHOT_PATH, 'utf8'));
 
     const listEndpoint = snapshot.endpoints['GET /api/v2/events'];
     expect(listEndpoint, 'snapshot must define GET /api/v2/events endpoint').toBeTruthy();
 
-    const selectCols = extractSelectColumns(src, 'handleListEvents');
+    // handleListEvents delegates to DataProvider.listEvents → fetchEvents, which
+    // holds the actual public list SELECT.
+    const selectCols = extractSelectColumns(src, 'fetchEvents');
     expect(
       selectCols.length,
-      'handleListEvents SELECT must project at least 10 columns — if this fails, the column extractor regex needs updating'
+      'public list SELECT (DataProvider.fetchEvents) must project at least 10 columns — if this fails, the column extractor regex needs updating'
     ).toBeGreaterThan(9);
 
     for (const col of listEndpoint.projected_columns as string[]) {
       expect(
         selectCols,
-        `handleListEvents SELECT is missing '${col}' — ` +
+        `public list SELECT is missing '${col}' — ` +
           `this field is in the snapshot contract (v${snapshot.version}); ` +
           'removing it breaks public list consumers. To intentionally remove it, ' +
           'also remove it from public-events.snapshot.json and bump the version.'
@@ -125,17 +142,19 @@ test.describe('Invariant 16: API Response Schema Stability — structural code-s
     }
   });
 
-  test('OSE-INV16 | api | schema | every snapshot column is present in handleGetEvent SELECT (public detail)', () => {
-    const src = readFileSync(EVENTS_HANDLER, 'utf8');
+  test('OSE-INV16 | api | schema | every snapshot column is present in the public detail SELECT (DataProvider.fetchEvent)', () => {
+    const src = readFileSync(DATA_PROVIDER, 'utf8');
     const snapshot = JSON.parse(readFileSync(SNAPSHOT_PATH, 'utf8'));
 
     const detailEndpoint = snapshot.endpoints['GET /api/v2/events/:id'];
     expect(detailEndpoint, 'snapshot must define GET /api/v2/events/:id endpoint').toBeTruthy();
 
-    const selectCols = extractSelectColumns(src, 'handleGetEvent');
+    // handleGetEvent delegates to DataProvider.getEvent → fetchEvent, which
+    // holds the actual public detail SELECT.
+    const selectCols = extractSelectColumns(src, 'fetchEvent');
     expect(
       selectCols.length,
-      'handleGetEvent SELECT must project at least 10 columns — if this fails, the column extractor regex needs updating'
+      'public detail SELECT (DataProvider.fetchEvent) must project at least 10 columns — if this fails, the column extractor regex needs updating'
     ).toBeGreaterThan(9);
 
     for (const col of detailEndpoint.projected_columns as string[]) {
