@@ -69,13 +69,16 @@ jobs:
             --run-url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
             --run-date "$(date -u +%Y-%m-%d)"
 
-      - name: Check for gaps (informational — never fails CI)
-        working-directory: workers/oursharedevents
+      - name: Compute run date
+        id: rundate
+        run: echo "today=$(date -u +%Y-%m-%d)" >> "$GITHUB_OUTPUT"
+
+      - name: Conformance gap gate (fails CI on un-allowlisted or expired gaps)
         run: |
-          if grep -q '❌ Gap' docs/security/CONFORMANCE.md; then
-            echo "::warning::Conformance gaps detected — review docs/security/CONFORMANCE.md"
-          fi
-          echo "Gap count: $(grep -c '❌ Gap' docs/security/CONFORMANCE.md || echo 0)"
+          node scripts/check-conformance-gaps.js \
+            --today "${{ steps.rundate.outputs.today }}" \
+            --allowlist tests/fixtures/conformance-gap-allowlist.yaml \
+            --conformance-json workers/oursharedevents/docs/security/conformance.json
 
       - name: Commit report
         if: ${{ github.event.inputs.dry_run != 'true' && github.ref == 'refs/heads/main' }}
