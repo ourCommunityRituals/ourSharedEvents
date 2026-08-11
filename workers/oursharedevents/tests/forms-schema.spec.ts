@@ -17,6 +17,7 @@ import { describe, test, expect, beforeAll } from 'vitest';
 interface TestEnv {
   FORMS_DB: D1Database;
   TEST_FORMS_MIGRATION_STATEMENTS: string;
+  TEST_EXPECTED_FORMS_TABLES: string; // JSON array of table names derived from forms migration SQL
 }
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -80,13 +81,24 @@ beforeAll(async () => {
 // ── Gate F1: Table existence ─────────────────────────────────────────────────
 
 describe('Gate F1: Forms table existence', () => {
-  test('all 5 forms tables exist post-migration', async () => {
+  test('live forms table set equals the set derived from forms migration SQL', async () => {
+    // Set-equality against TEST_EXPECTED_FORMS_TABLES (derived from the
+    // forms migration SQL at config time). Replaces the stale hardcoded
+    // "all 5 forms tables" wording whose EXPECTED_TABLES array had already
+    // drifted to 6 — set-equality catches that 5-vs-6 drift class going
+    // forward: add/drop a forms table and this fails until both sides agree.
+    const expected: string[] = JSON.parse((env as unknown as TestEnv).TEST_EXPECTED_FORMS_TABLES);
+
     const tables = await (env as unknown as TestEnv).FORMS_DB.prepare(
       "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' ORDER BY name"
     ).all();
 
-    const names = tables.results.map((r: Record<string, unknown>) => r.name);
-    EXPECTED_TABLES.forEach((t) => expect(names).toContain(t));
+    const names = tables.results.map((r: Record<string, unknown>) => r.name) as string[];
+    expect(new Set(names)).toEqual(new Set(expected));
+
+    // Doc cross-check: the curated EXPECTED_TABLES list matches the derived
+    // set exactly (this is what caught the 5-vs-6 drift originally).
+    expect(new Set(EXPECTED_TABLES)).toEqual(new Set(expected));
   });
 
   test('each forms table returns 0 rows (empty, not missing) — except feature_flags (seeded)', async () => {

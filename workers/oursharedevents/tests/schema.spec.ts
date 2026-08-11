@@ -23,6 +23,7 @@ interface TestEnv {
   TEST_MIGRATION_STATEMENTS: string; // JSON array of SQL statements
   TEST_SOURCE_FILES_JSON: string;
   TEST_WRANGLER_TOML: string;
+  TEST_EXPECTED_INDEXES: string; // JSON array of idx_ names derived from migration SQL
 }
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -271,24 +272,26 @@ describe('Gate 4: scan_aggregates write protection', () => {
 // ── Gate 5: Index verification ───────────────────────────────────────────────
 
 describe('Gate 5: Index verification', () => {
-  test('all 57 custom indexes exist', async () => {
-    // 35 (pre-OSE-272) + 4 (OSE-272 Session 2: idx_anon_id_returns_venue_visit,
-    // idx_event_series_venue_state, idx_event_series_venue_dow_hour,
-    // idx_events_series_start) + 1 (idx_sponsors_is_local, OSE-330 Phase 2
-    // — Local Sponsor Covenant enforcement, migration 0036) + 2
-    // (idx_campaigns_brand_id, idx_sponsors_campaign_id — migrations 0039/0040) = 42
-    // + 4 (idx_security_metrics_*, idx_security_alerts_* — migration 0042)
-    // + 6 (idx_report_access_log_*, idx_export_manifest_* — migration 0043) = 52
-    // + 2 (idx_cds_corridor_dow_hour, idx_cds_snapshot_date — migration 0044) = 54
-    // + 1 (idx_sponsor_impressions_h3_res7 — migration 0048, OSE-635) = 55
-    // + 1 (idx_admin_brand_memberships_email — migration 0050, OSE-666/B2) = 56.
-    // + 1 (idx_events_data_class — migration 0052, OSE-606/608) = 57.
+  // Set-equality against the index set DERIVED from migration SQL at config
+  // time (TEST_EXPECTED_INDEXES). This replaces the old hardcoded count (57),
+  // which forced a manual bump in two spec files on every migration that
+  // touched an index — a stale-count drift class. Adding or dropping an
+  // idx_* now flows through automatically: the derived set changes, and any
+  // divergence between the live DB and the migrations fails here.
+  test('live idx_ set equals the set derived from migration SQL', async () => {
+    const expected: string[] = JSON.parse((env as unknown as TestEnv).TEST_EXPECTED_INDEXES);
+
     const indexes = await env.DB.prepare(
       "SELECT name FROM sqlite_master WHERE type='index' AND name LIKE 'idx_%' ORDER BY name"
     ).all();
+    const names = (indexes.results.map((r: Record<string, unknown>) => r.name) as string[]).sort();
 
-    const names = indexes.results.map((r: Record<string, unknown>) => r.name);
-    expect(names.length).toBe(57);
-    EXPECTED_INDEXES.forEach((idx) => expect(names).toContain(idx));
+    expect(new Set(names)).toEqual(new Set(expected));
+
+    // Doc cross-check: the curated EXPECTED_INDEXES list stays a subset of
+    // what the migrations actually produce (catches a doc entry that names an
+    // index no migration creates).
+    const derived = new Set(expected);
+    EXPECTED_INDEXES.forEach((idx) => expect(derived.has(idx)).toBe(true));
   });
 });
