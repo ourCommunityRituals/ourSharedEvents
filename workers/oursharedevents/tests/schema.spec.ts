@@ -91,6 +91,7 @@ const EXPECTED_INDEXES = [
   'idx_admin_audit_log_actor',
   'idx_admin_audit_log_resource',
   'idx_admin_brand_memberships_email', // 0050 (OSE-666/B2 membership scope lookup)
+  'idx_events_data_class', // 0052 (OSE-606/608 demo data-class filtering)
   // OSE-240 (migration 0030)
   'idx_shortlinks_event_id',
   'idx_shortlinks_created_at',
@@ -117,7 +118,8 @@ const EXPECTED_COLUMN_COUNTS: Record<string, number> = {
   // in code review.
   // 35 (pre-0051) + 3 (migration 0051: who_story, who_image_url,
   // what_video_url — OSE-664 rich WHO/WHAT authoring) = 38.
-  events: 38,
+  // + 1 (migration 0052: data_class — OSE-606/608 demo data class) = 39.
+  events: 39,
   sponsors: 12,
   // poster_deployments: 10 (pre-0047) + 2 (migration 0047: h3_res9, h3_res7,
   // OSE poster geo-tagging — res9 Node precision for physical placement attribution) = 12.
@@ -269,7 +271,7 @@ describe('Gate 4: scan_aggregates write protection', () => {
 // ── Gate 5: Index verification ───────────────────────────────────────────────
 
 describe('Gate 5: Index verification', () => {
-  test('all 55 custom indexes exist', async () => {
+  test('all 57 custom indexes exist', async () => {
     // 35 (pre-OSE-272) + 4 (OSE-272 Session 2: idx_anon_id_returns_venue_visit,
     // idx_event_series_venue_state, idx_event_series_venue_dow_hour,
     // idx_events_series_start) + 1 (idx_sponsors_is_local, OSE-330 Phase 2
@@ -280,12 +282,13 @@ describe('Gate 5: Index verification', () => {
     // + 2 (idx_cds_corridor_dow_hour, idx_cds_snapshot_date — migration 0044) = 54
     // + 1 (idx_sponsor_impressions_h3_res7 — migration 0048, OSE-635) = 55
     // + 1 (idx_admin_brand_memberships_email — migration 0050, OSE-666/B2) = 56.
+    // + 1 (idx_events_data_class — migration 0052, OSE-606/608) = 57.
     const indexes = await env.DB.prepare(
       "SELECT name FROM sqlite_master WHERE type='index' AND name LIKE 'idx_%' ORDER BY name"
     ).all();
 
     const names = indexes.results.map((r: Record<string, unknown>) => r.name);
-    expect(names.length).toBe(56);
+    expect(names.length).toBe(57);
     EXPECTED_INDEXES.forEach((idx) => expect(names).toContain(idx));
   });
 });
