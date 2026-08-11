@@ -34,10 +34,7 @@ import { validateLogoUrl, fetchAndProxyLogo } from '../lib/sponsor-logo';
 import { getDataProvider, type DataProviderEnv } from '../lib/data-provider.js';
 import type { DataProviderCtx } from '@ocr/data-provider';
 import { extractAdminActor, type AdminEnv } from '../auth/admin';
-import {
-  resolveAdminBrandScopeAsync,
-  type AdminBrandScopeEnv,
-} from '../lib/admin-brand-scope';
+import { resolveAdminBrandScopeAsync, type AdminBrandScopeEnv } from '../lib/admin-brand-scope';
 // NOTE: maybeTag is imported here because sponsors.ts is an admin/creation-time
 // handler — NOT a scan-path handler. The hot-path invariant (S-6.3.1c) permits
 // this import. Do NOT add sponsors.ts to the SCAN_PATH list in h3-tagging.spec.ts.
@@ -147,12 +144,7 @@ export async function handleAdminListSponsors(
     );
   }
   if (scope.mode === 'scoped' && brandId && !scope.brandIds.includes(brandId)) {
-    return errorResponse(
-      'BRAND_FORBIDDEN',
-      `Not entitled to brand_id "${brandId}"`,
-      403,
-      rid
-    );
+    return errorResponse('BRAND_FORBIDDEN', `Not entitled to brand_id "${brandId}"`, 403, rid);
   }
 
   const cols = `id, event_id, name, logo_url, website_url, tier, placement_formats,
@@ -201,6 +193,37 @@ export async function handleAdminListSponsors(
   }
 }
 
+// ─── Per-ID brand-scope guard (OSE-710 / #9 tenant_isolation) ───────────────────
+//
+// The LIST endpoint (handleAdminListSponsors) enforces #9 in its SQL WHERE, but
+// the per-ID GET/PUT/DELETE handlers historically took the :id straight to the
+// query with NO scope predicate — so a brand-A operator who knew a brand-B
+// sponsor id could read AND mutate it cross-tenant. This helper mirrors the list
+// endpoint's server-derived-scope pattern for a single id: it returns a bound
+// SQL fragment (+ params) that caps the row to sponsors whose event belongs to a
+// brand the SERVER-VERIFIED actor is a member of.
+//
+//   - mode 'deny'  (anon / unmapped / unscopable): { reachable: false } → the
+//                  caller reaches nothing; handlers return 404 (indistinguishable
+//                  from "does not exist" — a forged id is never confirmed).
+//   - mode 'all'   (CI/automation opt-in): no predicate — the id alone.
+//   - mode 'scoped': `event_id IN (SELECT id FROM events WHERE brand_id IN (?..))`
+//                  bound-parameterised, never a client-side filter.
+type PerIdScope = { reachable: false } | { reachable: true; sql: string; params: string[] };
+
+async function resolvePerIdSponsorScope(request: Request, env: SponsorsEnv): Promise<PerIdScope> {
+  const scope = await resolveAdminBrandScopeAsync(extractAdminActor(request, env), env);
+  if (scope.mode === 'deny') return { reachable: false };
+  if (scope.mode === 'all') return { reachable: true, sql: '', params: [] };
+  // scoped
+  const ph = scope.brandIds.map(() => '?').join(', ');
+  return {
+    reachable: true,
+    sql: ` AND event_id IN (SELECT id FROM events WHERE brand_id IN (${ph}))`,
+    params: scope.brandIds,
+  };
+}
+
 // ─── Admin: Get Sponsor ─────────────────────────────────────────────────────────
 
 export async function handleAdminGetSponsor(
@@ -211,8 +234,15 @@ export async function handleAdminGetSponsor(
   const rid = requestId();
   if (!env.DB) return errorResponse('NOT_FOUND', `Sponsor not found: ${id}`, 404, rid);
 
+  // OSE-710 (#9): cap the lookup to the caller's authorized brand scope. A forged
+  // id from another tenant collapses to the same NOT_FOUND as a non-existent id.
+  const scope = await resolvePerIdSponsorScope(request, env);
+  if (!scope.reachable) return errorResponse('NOT_FOUND', `Sponsor not found: ${id}`, 404, rid);
+
   try {
-    const row = await env.DB.prepare('SELECT * FROM sponsors WHERE id = ?').bind(id).first();
+    const row = await env.DB.prepare(`SELECT * FROM sponsors WHERE id = ?${scope.sql}`)
+      .bind(id, ...scope.params)
+      .first();
     if (!row) return errorResponse('NOT_FOUND', `Sponsor not found: ${id}`, 404, rid);
 
     return Response.json(
@@ -380,6 +410,14 @@ export async function handleAdminUpdateSponsor(
   const rid = requestId();
   if (!env.DB) return errorResponse('DB_NOT_CONFIGURED', 'Database not available', 503, rid);
 
+  // OSE-710 (#9): resolve the caller's authorized brand scope up front. A
+  // cross-tenant (or anon/unmapped) caller must not be able to mutate a sponsor
+  // they cannot see — the scope predicate is appended to the UPDATE's WHERE so a
+  // forged id lands zero changes → the same NOT_FOUND as a non-existent id.
+  const scope = await resolvePerIdSponsorScope(request, env);
+  if (!scope.reachable)
+    return errorResponse('NOT_FOUND', `Sponsor not found: ${sponsorId}`, 404, rid);
+
   const bodyOrErr = await parseBody(request, rid);
   if (bodyOrErr instanceof Response) return bodyOrErr;
   const body = bodyOrErr;
@@ -498,9 +536,13 @@ export async function handleAdminUpdateSponsor(
   sets.push('updated_at = ?');
   values.push(new Date().toISOString());
   values.push(sponsorId);
+  // OSE-710 (#9): scope the write to the caller's brands. 'all' adds no predicate.
+  values.push(...scope.params);
 
   try {
-    const result = await env.DB.prepare(`UPDATE sponsors SET ${sets.join(', ')} WHERE id = ?`)
+    const result = await env.DB.prepare(
+      `UPDATE sponsors SET ${sets.join(', ')} WHERE id = ?${scope.sql}`
+    )
       .bind(...values)
       .run();
 
@@ -549,11 +591,18 @@ export async function handleAdminDeleteSponsor(
   const rid = requestId();
   if (!env.DB) return errorResponse('DB_NOT_CONFIGURED', 'Database not available', 503, rid);
 
+  // OSE-710 (#9): scope the soft-delete to the caller's authorized brands. A
+  // forged/cross-tenant (or anon/unmapped) id lands zero changes → NOT_FOUND,
+  // indistinguishable from a non-existent id. Mirrors the list endpoint.
+  const scope = await resolvePerIdSponsorScope(request, env);
+  if (!scope.reachable)
+    return errorResponse('NOT_FOUND', `Sponsor not found: ${sponsorId}`, 404, rid);
+
   try {
     const result = await env.DB.prepare(
-      'UPDATE sponsors SET is_active = 0, updated_at = ? WHERE id = ?'
+      `UPDATE sponsors SET is_active = 0, updated_at = ? WHERE id = ?${scope.sql}`
     )
-      .bind(new Date().toISOString(), sponsorId)
+      .bind(new Date().toISOString(), sponsorId, ...scope.params)
       .run();
 
     if ((result.meta?.changes ?? 0) === 0) {
