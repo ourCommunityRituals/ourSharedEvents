@@ -90,10 +90,11 @@ describe('QA-1: Migration idempotency', () => {
     // + 2 (idx_cds_corridor_dow_hour, idx_cds_snapshot_date — migration 0044) = 54
     // + 1 (idx_sponsor_impressions_h3_res7 — migration 0048, OSE-635) = 55
     // + 1 (idx_admin_brand_memberships_email — migration 0050, OSE-666/B2) = 56.
+    // + 1 (idx_events_data_class — migration 0052, OSE-606/608) = 57.
     const indexes = await env.DB.prepare(
       "SELECT name FROM sqlite_master WHERE type='index' AND name LIKE 'idx_%'"
     ).all();
-    expect(indexes.results).toHaveLength(56);
+    expect(indexes.results).toHaveLength(57);
   });
 });
 
