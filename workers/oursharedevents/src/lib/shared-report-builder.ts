@@ -31,6 +31,25 @@ import { CORRIDOR_BASELINE_MIN_SAMPLE, CORRIDOR_MAP_MIN_COUNT } from './shared-r
 import { renderCorridorMap } from './corridor-map';
 import { gridRingUnsafe } from 'h3-js';
 import { tagsConsistent } from './h3-tagging';
+import { applyCountFloor } from './count-floor';
+
+// OSE-683 — ratified rule "K-anon Per-Bucket Consistency" (2026-08-09): the
+// per-bucket K-anon floor (K = CORRIDOR_MAP_MIN_COUNT = 5) is applied PER
+// CONTRIBUTING BUCKET BEFORE summation, never to the final sum alone. A
+// contributing bucket whose count is below K is DROPPED (it never joins the
+// sum); only survivors (count >= K) are summed. This mirrors the portfolio
+// -rollup #7 pattern (sumContributingBuckets → applyCountFloor) so a sub-K
+// cohort can't be laundered into a large aggregate — nor recovered by
+// differencing the aggregate against per-bucket views the same reader can see.
+function sumContributingBuckets(rows: Array<{ count: number | null }>): number {
+  let sum = 0;
+  for (const r of rows) {
+    const raw = r.count ?? 0;
+    const n = Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 0;
+    if (n >= CORRIDOR_MAP_MIN_COUNT) sum += n;
+  }
+  return sum;
+}
 
 // OSE-596 (rank-8 finding): bucket raw DB timestamps to the hour boundary
 // before surfacing in poster_attribution. Sub-second precision exposes timing
@@ -124,8 +143,8 @@ export interface SharedReport {
    * data IN the report, not access gates ON the reader.
    */
   sponsor_class_breakdown: {
-    local:   { sponsor_count: number; total_impressions: number };
-    mid:     { sponsor_count: number; total_impressions: number };
+    local: { sponsor_count: number; total_impressions: number };
+    mid: { sponsor_count: number; total_impressions: number };
     premium: { sponsor_count: number; total_impressions: number };
   };
 
@@ -195,17 +214,33 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
 
   const suppression: SuppressionReason[] = [];
 
-  // 2. unique_gatherings — sum scan_aggregates.unique_agents over all
-  //    buckets for this event. NULL if no scan_aggregates rows yet.
-  const sa = await db
+  // 2. unique_gatherings — sum scan_aggregates.unique_agents over all buckets
+  //    for this event. OSE-683: each bucket is a contributing bucket — apply the
+  //    per-bucket K-anon floor BEFORE summation (a bucket with unique_agents < K
+  //    is dropped, not summed raw). NULL if no scan_aggregates rows exist at all
+  //    (materialization pending); a suppressed sum (all buckets sub-K, or the
+  //    survivors' sum somehow below K) is nulled too so a sub-K value never ships.
+  const saMeta = await db
     .prepare(
-      `SELECT SUM(unique_agents) AS total, MAX(computed_at) AS computed_at
+      `SELECT COUNT(*) AS bucket_count, MAX(computed_at) AS computed_at
        FROM scan_aggregates WHERE event_id = ?`
     )
     .bind(eventId)
-    .first<{ total: number | null; computed_at: string | null }>();
-  const uniqueGatherings = sa?.total ?? null;
-  const materializedAt = sa?.computed_at ?? null;
+    .first<{ bucket_count: number; computed_at: string | null }>();
+  const saBuckets = await db
+    .prepare(
+      `SELECT unique_agents AS count
+       FROM scan_aggregates WHERE event_id = ?`
+    )
+    .bind(eventId)
+    .all<{ count: number | null }>();
+  const materializedAt = saMeta?.computed_at ?? null;
+  const hasAnyBucket = (saMeta?.bucket_count ?? 0) > 0;
+  // Sum survivors (>= K) per the ratified per-bucket rule, then pass the sum
+  // through the shared OSE-665 renderer. floored.count is exact when the
+  // survivor sum clears K, else null (suppressed).
+  const flooredGatherings = applyCountFloor(sumContributingBuckets(saBuckets.results ?? []));
+  const uniqueGatherings = hasAnyBucket ? flooredGatherings.count : null;
 
   // 3. return_rate — for distinct anon_id_hashes at this event, how many
   //    were also seen at prior events (any other venue_id).
@@ -380,6 +415,11 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
 
   // Derive campaign_summary by aggregating sponsorImpressions rows that have
   // a campaign_id. No extra DB call — the data is already fetched above.
+  // OSE-683: each (sponsor × surface) impression row is a contributing bucket.
+  // Apply the per-bucket K-anon floor BEFORE summation — a row with count < K is
+  // DROPPED, never summed raw — so a sub-K impression cohort can't be laundered
+  // into a campaign total (nor recovered by differencing against the exact
+  // per-surface sponsor_impressions rows the same reader can already see).
   const campaignMap = new Map<
     string,
     {
@@ -392,19 +432,22 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
   >();
   for (const row of sponsorImpressions) {
     if (!row.campaign_id) continue;
+    const floored = applyCountFloor(row.count);
+    if (floored.count === null) continue; // sub-K bucket — drop before summation
+    const contribution = floored.count;
     const existing = campaignMap.get(row.campaign_id);
     if (existing) {
-      existing.total_impressions += row.count;
+      existing.total_impressions += contribution;
       existing.sponsor_count += 1;
       existing.impressions_by_surface[row.surface] =
-        (existing.impressions_by_surface[row.surface] ?? 0) + row.count;
+        (existing.impressions_by_surface[row.surface] ?? 0) + contribution;
     } else {
       campaignMap.set(row.campaign_id, {
         campaign_id: row.campaign_id,
         campaign_title: row.campaign_title ?? 'unknown',
-        total_impressions: row.count,
+        total_impressions: contribution,
         sponsor_count: 1,
-        impressions_by_surface: { [row.surface]: row.count },
+        impressions_by_surface: { [row.surface]: contribution },
       });
     }
   }
@@ -422,22 +465,29 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
     return tier !== null && PREMIUM_TIERS.has(tier) ? 'premium' : 'mid';
   }
   const sponsorClassBreakdown: {
-    local:   { sponsor_count: number; total_impressions: number };
-    mid:     { sponsor_count: number; total_impressions: number };
+    local: { sponsor_count: number; total_impressions: number };
+    mid: { sponsor_count: number; total_impressions: number };
     premium: { sponsor_count: number; total_impressions: number };
   } = {
-    local:   { sponsor_count: 0, total_impressions: 0 },
-    mid:     { sponsor_count: 0, total_impressions: 0 },
+    local: { sponsor_count: 0, total_impressions: 0 },
+    mid: { sponsor_count: 0, total_impressions: 0 },
     premium: { sponsor_count: 0, total_impressions: 0 },
   };
+  // OSE-683: each (sponsor × surface) impression row is a contributing bucket —
+  // floor it per bucket BEFORE summation. A sub-K row is dropped from the class
+  // total (and does not, on its own, count the sponsor into the class): only
+  // rows that individually clear K contribute, matching the campaign_summary and
+  // unique_gatherings treatment so no surface leaks a sub-K aggregate.
   const seenSponsorClass = new Map<string, 'local' | 'mid' | 'premium'>();
   for (const row of sponsorImpressions) {
+    const floored = applyCountFloor(row.count);
+    if (floored.count === null) continue; // sub-K bucket — drop before summation
     const cls = classifySponsor(row.sponsor_tier, row.is_local);
     if (!seenSponsorClass.has(row.sponsor_id)) {
       seenSponsorClass.set(row.sponsor_id, cls);
       sponsorClassBreakdown[cls].sponsor_count += 1;
     }
-    sponsorClassBreakdown[cls].total_impressions += row.count;
+    sponsorClassBreakdown[cls].total_impressions += floored.count;
   }
 
   // 6. poster_attribution — per poster_deployment_id
@@ -480,13 +530,22 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
   //    Fallback (launch-day honesty): event's own h3_res7 corridor cell +
   //    gridRingUnsafe ring neighbors, so "one venue lighting one cell on
   //    day one IS the product" (ring gives the saturation promise context).
-  let corridorMap: { svg: string; suppressed: string[]; cell_count: number; source: 'live' | 'fallback' } | null = null;
+  let corridorMap: {
+    svg: string;
+    suppressed: string[];
+    cell_count: number;
+    source: 'live' | 'fallback';
+  } | null = null;
 
   // Q10: integrity check — if stored H3 tags are inconsistent (res9 parent ≠ stored res7),
   // the map cells are geographically incoherent. Emit a suppression warning and skip the
   // fallback path so the map doesn't render misleading neighborhood geometry.
   let h3TagsCorrupt = false;
-  if (event.h3_res9 && event.h3_res7 && !tagsConsistent({ h3_res9: event.h3_res9, h3_res7: event.h3_res7 })) {
+  if (
+    event.h3_res9 &&
+    event.h3_res7 &&
+    !tagsConsistent({ h3_res9: event.h3_res9, h3_res7: event.h3_res7 })
+  ) {
     h3TagsCorrupt = true;
     suppression.push({
       field: 'corridor_map',
@@ -495,8 +554,13 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
     });
   }
 
-  function buildCorridorMap(cells: Array<{ cell: string; count: number }>, source: 'live' | 'fallback'): void {
-    const { svg, suppressed: suppressedCells } = renderCorridorMap(cells, { minCount: CORRIDOR_MAP_MIN_COUNT });
+  function buildCorridorMap(
+    cells: Array<{ cell: string; count: number }>,
+    source: 'live' | 'fallback'
+  ): void {
+    const { svg, suppressed: suppressedCells } = renderCorridorMap(cells, {
+      minCount: CORRIDOR_MAP_MIN_COUNT,
+    });
     corridorMap = { svg, suppressed: suppressedCells, cell_count: cells.length, source };
     // Q: strip H3 cell IDs from suppression detail — cell IDs are trivially reverse-geocoded,
     // which would undermine the privacy floor's intent. Count is enough context.
@@ -522,17 +586,20 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
   const cellData = cellRows.results ?? [];
 
   if (cellData.length > 0) {
-    buildCorridorMap(cellData.map((r) => ({ cell: r.cell, count: r.count })), 'live');
+    buildCorridorMap(
+      cellData.map((r) => ({ cell: r.cell, count: r.count })),
+      'live'
+    );
   } else if (event.h3_res7 && !h3TagsCorrupt) {
     // Launch-day fallback: res7 neighborhood hex lit with uniqueGatherings count +
     // ring-1 neighbors at count=0 (suppressed by privacy floor — correct).
     // source='fallback' lets the client render accurate "neighborhood" copy (not "block").
     const ring = gridRingUnsafe(event.h3_res7, 1);
     const count = uniqueGatherings ?? 0;
-    buildCorridorMap([
-      { cell: event.h3_res7, count },
-      ...ring.map((c: string) => ({ cell: c, count: 0 })),
-    ], 'fallback');
+    buildCorridorMap(
+      [{ cell: event.h3_res7, count }, ...ring.map((c: string) => ({ cell: c, count: 0 }))],
+      'fallback'
+    );
   } else if (!h3TagsCorrupt) {
     suppression.push({
       field: 'corridor_map',
@@ -557,25 +624,41 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
     if (series && series.state === 'confirmed') {
       trendSeriesId = series.id;
       trendSeriesName = series.series_name;
+      // OSE-683: each scan_aggregates bucket is a contributing bucket to a trend
+      // instance's headcount — the SAME grain as the top-level unique_gatherings.
+      // The previous `SELECT SUM(unique_agents) ...` subquery summed buckets RAW
+      // per instance, so a per-instance trend point could publish a sub-K sum
+      // (or launder a sub-K bucket into it) — exactly the leak the ratified
+      // per-bucket rule forbids. Fetch the events in the series and their raw
+      // buckets, then floor PER CONTRIBUTING BUCKET before summation (drop
+      // sub-K buckets; a survivor sum that itself fails to clear K is nulled),
+      // mirroring `uniqueGatherings` above. An instance with no buckets at all
+      // stays null (materialization pending for that instance).
       const inst = await db
         .prepare(
-          `SELECT
-             e.id              AS event_id,
-             e.start_date      AS start_date,
-             (SELECT SUM(unique_agents) FROM scan_aggregates WHERE event_id = e.id)
-                               AS unique_gatherings
-           FROM events e
-           WHERE e.series_id = ?
-             AND e.start_date IS NOT NULL
-           ORDER BY e.start_date ASC`
+          `SELECT id AS event_id, start_date
+             FROM events
+            WHERE series_id = ?
+              AND start_date IS NOT NULL
+            ORDER BY start_date ASC`
         )
         .bind(event.series_id)
-        .all<{ event_id: string; start_date: string; unique_gatherings: number | null }>();
+        .all<{ event_id: string; start_date: string }>();
       for (const r of inst.results ?? []) {
+        const instBuckets = await db
+          .prepare(
+            `SELECT unique_agents AS count
+               FROM scan_aggregates WHERE event_id = ?`
+          )
+          .bind(r.event_id)
+          .all<{ count: number | null }>();
+        const instRows = instBuckets.results ?? [];
+        const instHasBucket = instRows.length > 0;
+        const instFloored = applyCountFloor(sumContributingBuckets(instRows));
         trendInstances.push({
           event_id: r.event_id,
           start_date: r.start_date,
-          unique_gatherings: r.unique_gatherings,
+          unique_gatherings: instHasBucket ? instFloored.count : null,
         });
       }
     } else {
