@@ -10,7 +10,7 @@
  *   Admin-only: caller must pass requireAdmin before this handler is invoked.
  */
 
-import { type FormsDbEnv, hashEmail } from '../lib/forms-db';
+import { type FormsDbEnv, hashEmail, assertPepperConfigured } from '../lib/forms-db';
 
 /**
  * OSE-207 — subscribers table erase support.
@@ -52,7 +52,35 @@ export async function handleDataSubjectErase(
     );
   }
 
-  const emailHash = await hashEmail(rawEmail, env.FORMS_HASH_PEPPER);
+  // OSE-712 (BLOCKER): the pepper MUST be provisioned on the erasure path.
+  // A missing/rotated pepper would silently degrade to bare SHA-256, produce a
+  // hash that cannot match rows written WITH a pepper, delete zero rows, and
+  // return ok:true — a GDPR Art.17 / CCPA erasure that never happened, reported
+  // as success. Fail loudly instead so the caller sees a real error.
+  try {
+    assertPepperConfigured(env.FORMS_HASH_PEPPER);
+  } catch (err) {
+    console.error(
+      JSON.stringify({
+        type: 'DATA_SUBJECT_ERASE_PREFLIGHT_FAILED',
+        reason: 'FORMS_HASH_PEPPER_MISSING',
+        timestamp: new Date().toISOString(),
+      })
+    );
+    return Response.json(
+      {
+        ok: false,
+        status: 503,
+        code: 'PEPPER_NOT_CONFIGURED',
+        error:
+          'Erasure is unavailable: the email-hash pepper is not provisioned. ' +
+          'Refusing to run so a missing pepper cannot silently no-op an erasure.',
+      },
+      { status: 503 }
+    );
+  }
+
+  const emailHash = await hashEmail(rawEmail, env.FORMS_HASH_PEPPER, { requirePepper: true });
   const now = new Date().toISOString();
   let signupsDeleted = 0;
   let registrationsDeleted = 0;

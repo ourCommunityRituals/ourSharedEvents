@@ -54,6 +54,37 @@ function activeVersion(keyMap: Record<string, string>): string {
 // ─── Hashing ────────────────────────────────────────────────────────────────────
 
 /**
+ * OSE-712 (BLOCKER) — preflight guard: assert FORMS_HASH_PEPPER is provisioned.
+ *
+ * Throws loudly when the pepper is unset (undefined / '' — both falsy). Call
+ * this on any path where a MISSING pepper would silently corrupt a hash lookup
+ * — most critically GDPR Art.17 / CCPA §1798.105 erasure, where a mismatched
+ * hash matches zero rows and would otherwise report a success that never
+ * happened. A loud throw converts a silent data-protection failure into a
+ * visible, auditable error.
+ */
+export function assertPepperConfigured(pepper?: string): asserts pepper is string {
+  if (!pepper) {
+    throw new Error(
+      'FORMS_HASH_PEPPER is not configured. Email hashing requires the pepper to ' +
+        'be provisioned; a missing pepper would silently produce a non-matching ' +
+        'hash and cause GDPR/CCPA erasure lookups to no-op while reporting success. ' +
+        'Set the FORMS_HASH_PEPPER secret (wrangler secret put FORMS_HASH_PEPPER).'
+    );
+  }
+}
+
+/** Options for {@link hashEmail}. */
+export interface HashEmailOptions {
+  /**
+   * When true, a missing/empty FORMS_HASH_PEPPER throws instead of silently
+   * falling back to bare SHA-256. Use on read/lookup/erase paths where a
+   * hash mismatch would silently no-op (GDPR/CCPA erasure). OSE-712.
+   */
+  requirePepper?: boolean;
+}
+
+/**
  * HMAC-SHA256 hash of normalized email, keyed with FORMS_HASH_PEPPER.
  * Returns 64-char hex string. Falls back to bare SHA-256 when no pepper is
  * provided (backward-compatible for local dev / tests that don't set the
@@ -62,8 +93,22 @@ function activeVersion(keyMap: Record<string, string>): string {
  * OSE-598 (rank-9 finding): bare SHA-256 is rainbow-table-precomputable for
  * common email addresses. HMAC-SHA256 binds the hash to the secret pepper so
  * a stolen DB dump is useless without the key.
+ *
+ * OSE-712 (BLOCKER): pass `{ requirePepper: true }` on erase/lookup paths so a
+ * missing pepper FAILS LOUDLY rather than silently degrading to bare SHA-256.
+ * The silent fallback produces a hash that cannot match rows written WITH a
+ * pepper, so a GDPR/CCPA erasure would delete zero rows yet return ok:true —
+ * an erasure that never happened, reported as success.
  */
-export async function hashEmail(email: string, pepper?: string): Promise<string> {
+export async function hashEmail(
+  email: string,
+  pepper?: string,
+  options?: HashEmailOptions
+): Promise<string> {
+  if (options?.requirePepper) {
+    assertPepperConfigured(pepper);
+  }
+
   const normalized = email.trim().toLowerCase();
   const data = new TextEncoder().encode(normalized);
 
