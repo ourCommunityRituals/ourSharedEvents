@@ -24,6 +24,14 @@ export interface AdminEnv extends AdminAllowlistEnv {
   X_OCR_INTERNAL?: string; // CI/CD internal auth secret
   ALLOW_OCR_INTERNAL?: string; // gate for X-OCR-Internal header
   CF_ACCESS_TEAM_DOMAIN?: string; // e.g. "mzdano.cloudflareaccess.com"
+  WORKER_ENV?: string; // 'production' | 'staging' | undefined (local dev)
+  /**
+   * LOCAL DEV ONLY. When 'true' AND WORKER_ENV is not production/staging,
+   * opens the admin UI without auth so the dashboard is viewable on
+   * `wrangler dev` (where Cloudflare Access — the real login — doesn't exist).
+   * Set ONLY in the gitignored .dev.vars. Never in wrangler.toml [vars]/secrets.
+   */
+  DEV_OPEN_ADMIN?: string;
 }
 
 // ─── CF Access JWT cryptographic verification (OSE-573) ───────────────────────
@@ -177,6 +185,31 @@ export async function requireAdmin(
   env: AdminEnv,
   requestId: string
 ): Promise<Response | null> {
+  // ── LOCAL DEV ONLY — open-admin bypass (local demo walkthrough, OSE-681) ─────
+  // Lets the admin UI load in a browser on `wrangler dev`, where Cloudflare
+  // Access (the real login) does not exist. Guarded THREE ways so it can never
+  // open a deployed environment:
+  //   1. Requires explicit opt-in: DEV_OPEN_ADMIN === 'true' (set only in the
+  //      gitignored .dev.vars — never in wrangler.toml [vars] or secrets).
+  //   2. Refused when WORKER_ENV is 'production' or 'staging'.
+  //   3. Emits a loud warning so an accidental enable is always visible.
+  if (
+    env.DEV_OPEN_ADMIN === 'true' &&
+    env.WORKER_ENV !== 'production' &&
+    env.WORKER_ENV !== 'staging'
+  ) {
+    console.warn(
+      JSON.stringify({
+        event: 'DEV_OPEN_ADMIN_BYPASS',
+        warning:
+          'admin auth bypassed for LOCAL DEV — must never be enabled in a deployed environment',
+        worker_env: env.WORKER_ENV ?? null,
+        request_id: requestId,
+      })
+    );
+    return null;
+  }
+
   // Method 1: Cloudflare Access JWT + RSA signature verification (OSE-590 / OSE-211)
   const cfJwt = request.headers.get('Cf-Access-Jwt-Assertion');
   if (cfJwt) {
@@ -186,17 +219,14 @@ export async function requireAdmin(
     if (env.CF_ACCESS_TEAM_DOMAIN) {
       const verification = await verifyCfAccessJWT(cfJwt, env.CF_ACCESS_TEAM_DOMAIN);
       if (!verification.valid) {
-        return new Response(
-          JSON.stringify({ ok: false, status: 401, code: 'UNAUTH', requestId }),
-          {
-            status: 401,
-            headers: {
-              'Content-Type': 'application/json',
-              'WWW-Authenticate': 'Bearer realm="OurSharedEvents Admin"',
-              'X-Request-Id': requestId,
-            },
-          }
-        );
+        return new Response(JSON.stringify({ ok: false, status: 401, code: 'UNAUTH', requestId }), {
+          status: 401,
+          headers: {
+            'Content-Type': 'application/json',
+            'WWW-Authenticate': 'Bearer realm="OurSharedEvents Admin"',
+            'X-Request-Id': requestId,
+          },
+        });
       }
     }
 

@@ -42,7 +42,10 @@ export const DEPTH_SECTIONS: Record<ReportDepth, readonly string[]> = {
     'sponsor_impressions',
     '_meta',
   ],
-  // Mid buys optimization: placement breakdown, temporal signal, campaign comparison.
+  // Mid buys the MAP + optimization: the visible corridor map (its own corridor),
+  // placement breakdown, temporal signal, campaign comparison. The map is the
+  // paid value line (OSE-682, ratified 2026-08-10) — paid tiers get it, free does
+  // not. Premium goes deeper (cross-corridor + cross-event) below.
   mid: [
     'event_id',
     'event_title',
@@ -54,9 +57,11 @@ export const DEPTH_SECTIONS: Record<ReportDepth, readonly string[]> = {
     'poster_attribution',
     'return_rate',
     'corridor_density',
+    'corridor_map',
     '_meta',
   ],
-  // Premium buys intelligence: cross-event comparison + corridor truth + map.
+  // Premium buys deeper intelligence: everything Mid has PLUS cross-event
+  // comparison (headcount_trend) and the fuller cross-corridor picture.
   premium: [
     'event_id',
     'event_title',

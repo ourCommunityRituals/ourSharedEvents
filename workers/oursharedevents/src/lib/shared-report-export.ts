@@ -47,6 +47,7 @@ import {
 import {
   PRODUCT_ID,
   REGULATORY_POOLS,
+  PoolRoutingError,
   assertRequiredTags,
   datasetForPool,
   phaseToPool,
@@ -83,6 +84,43 @@ const EPOCH_WATERMARK = '1970-01-01T00:00:00.000Z';
 
 function makeEmptyPerPool(): Record<RegulatoryPool, number> {
   return Object.fromEntries(REGULATORY_POOLS.map((p) => [p, 0])) as Record<RegulatoryPool, number>;
+}
+
+/**
+ * Resolve the regulatory pool for a row, failing CLOSED (OSE-380 / Invariant #4).
+ *
+ * A row whose `legal_clearance_tier` cannot be classified is WITHHELD from every
+ * pool — including 'general' — rather than leaked to the least-protected dataset.
+ * The row is counted in `rowsSkipped` and a structured `POOL_ROUTING_QUARANTINE`
+ * warning is emitted so the misconfiguration is auditable, not silent.
+ *
+ * NOTE: the caller advances the watermark across all read rows, so a quarantined
+ * row is not re-read on the next tick — it stays withheld until the source event
+ * is corrected and back-filled. Withholding (never leaking) is the safe direction.
+ *
+ * Returns null when the row must be skipped.
+ */
+function resolvePoolFailClosed(
+  legalClearanceTier: number | null | undefined,
+  rowLocator: string | null,
+  result: ExportResult
+): RegulatoryPool | null {
+  try {
+    return phaseToPool(legalClearanceTier);
+  } catch (e) {
+    if (!(e instanceof PoolRoutingError)) throw e;
+    result.rowsSkipped++;
+    console.warn(
+      JSON.stringify({
+        event: 'POOL_ROUTING_QUARANTINE',
+        product_id: PRODUCT_ID,
+        row_locator: rowLocator,
+        legal_clearance_tier: legalClearanceTier ?? null,
+        reason: e.message,
+      })
+    );
+    return null;
+  }
 }
 
 /**
@@ -250,7 +288,8 @@ export async function exportAnonIdReturns(env: SharedReportExportEnv): Promise<E
     let maxComputedAt = watermark;
     for (const r of sourceRows) {
       if (r.computed_at > maxComputedAt) maxComputedAt = r.computed_at;
-      const pool = phaseToPool(r.legal_clearance_tier);
+      const pool = resolvePoolFailClosed(r.legal_clearance_tier, r.venue_id ?? null, result);
+      if (pool === null) continue; // fail closed: withhold unclassifiable rows
       const tags = {
         corridor_id: r.corridor_id ?? 'unknown',
         venue_id: r.venue_id,
@@ -498,7 +537,8 @@ export async function exportEventSeries(env: SharedReportExportEnv): Promise<Exp
     let maxUpdatedAt = watermark;
     for (const r of sourceRows) {
       if (r.updated_at > maxUpdatedAt) maxUpdatedAt = r.updated_at;
-      const pool = phaseToPool(r.legal_clearance_tier);
+      const pool = resolvePoolFailClosed(r.legal_clearance_tier, r.id ?? null, result);
+      if (pool === null) continue; // fail closed: withhold unclassifiable rows
       const tags = {
         corridor_id: r.corridor_id ?? 'unknown',
         venue_id: r.venue_id,
