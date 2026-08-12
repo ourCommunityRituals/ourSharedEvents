@@ -7,8 +7,13 @@
 This document covers all migrations applied to both D1 databases bound to
 the OSE Worker:
 
-- `DB` — main / anonymous public surface (28 migrations: 0001–0028)
+- `DB` — main / anonymous public surface (highest migration: 0053; append-only 0001–0053)
 - `FORMS_DB` — identified-user surface (12 migrations: 0001–0012)
+
+> **Rollback posture:** rollback-forward is the primary production recovery
+> path. The reverse SQL below is the canonical surgical rollback for DevOps /
+> CI use only. SQLite has no reliable `ALTER TABLE ... DROP COLUMN`, so
+> column-additive migrations note "rollback-forward" rather than a true reverse.
 
 Companion CI gate: [`tests/migration-smoke.spec.ts`](../tests/migration-smoke.spec.ts)
 locks in the canonical post-migration shape (table count, trigger count,
@@ -92,6 +97,16 @@ the relevant sections from the bottom up.
 #### B.1 — `DB` (main database)
 
 ```sql
+-- 0053: sponsor_business_draft (OSE-724 Sponsor Onboarding — resolver-invisible draft)
+DROP INDEX IF EXISTS idx_sponsor_business_draft_status;
+DROP INDEX IF EXISTS idx_sponsor_business_draft_event;
+DROP INDEX IF EXISTS idx_sponsor_business_draft_brand;
+DROP TABLE IF EXISTS sponsor_business_draft;
+
+-- 0029–0052: reverse SQL tracked incrementally as each migration lands; the
+-- primary production posture for these is rollback-forward (see header note).
+-- Pre-0029 canonical reverse SQL continues below.
+
 -- 0028: Replace ip_address with ip_hash on subscribers
 ALTER TABLE subscribers ADD COLUMN ip_address TEXT;
 ALTER TABLE subscribers DROP COLUMN ip_hash;
