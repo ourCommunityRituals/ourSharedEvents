@@ -516,14 +516,26 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
       first_scan_at: string;
       last_scan_at: string;
     }>();
-  const posterAttribution = (posters.results ?? []).map((r) => ({
-    poster_deployment_id: r.poster_deployment_id,
-    location: r.location,
-    h3_res9: r.h3_res9 ?? null,
-    scan_count: r.scan_count,
-    first_scan_at: bucketToHour(r.first_scan_at),
-    last_scan_at: bucketToHour(r.last_scan_at),
-  }));
+  // OSE-711: K-anon floor on poster scan_count. `HAVING scan_count > 0` is a
+  // presence filter, NOT a privacy floor — a poster with 1–4 scans would
+  // publish an exact sub-K count ALONGSIDE its h3_res9 geolocation, i.e. a
+  // location-correlated small-cohort disclosure available at mid+ depth. Every
+  // other aggregate here already routes through applyCountFloor; poster rows did
+  // not. Apply the same uniform floor and DROP any deployment below it: a
+  // suppressed-but-present row still discloses "a poster at this hex drew a
+  // small crowd," which is exactly the leak, so sub-K deployments must not
+  // appear at all. Deployments at or above the floor keep their exact count.
+  const posterAttribution = (posters.results ?? [])
+    .map((r) => ({ r, floored: applyCountFloor(r.scan_count) }))
+    .filter((x) => !x.floored.suppressed)
+    .map(({ r, floored }) => ({
+      poster_deployment_id: r.poster_deployment_id,
+      location: r.location,
+      h3_res9: r.h3_res9 ?? null,
+      scan_count: floored.count as number,
+      first_scan_at: bucketToHour(r.first_scan_at),
+      last_scan_at: bucketToHour(r.last_scan_at),
+    }));
 
   // 7. corridor_map — premium hex map of per-cell scan densities (S-6.3.1b).
   //    Source: scan_aggregates.h3_res9 rows for this event.

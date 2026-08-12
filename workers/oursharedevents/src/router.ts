@@ -1250,13 +1250,23 @@ export async function route(
     return handleAdminPage(env);
   }
 
-  // ── CEO Briefing (OSE-574 — client-side PIN gate) ─────────────────────────
-  // No server-side auth — the React app embedded in the HTML handles PIN entry.
-  // The PIN is the access control; there is no sensitive data in the HTML itself.
+  // ── CEO Briefing (OSE-574 — SERVER-SIDE auth gate) ────────────────────────
+  // The full confidential briefing (revenue model, IP portfolio, risk register,
+  // OurWKRP entity, CEO handoff) is embedded directly in the served HTML, and
+  // the embedded React PIN gate is a CLIENT-SIDE convenience only: both the PIN
+  // and every section's content ship in the page payload, so an unauthenticated
+  // GET could read the entire briefing straight from the HTML source. Prior code
+  // served the page with no server check — a plain `curl /briefing` leaked it in
+  // full. requireAdmin now runs BEFORE any HTML is produced: unauthenticated
+  // requests receive the standard 401 JSON (or a CF Access 302 redirect when CF
+  // Access fronts the route) and never see page content. The in-app PIN remains
+  // as a secondary lock, not the sole gate.
   if (
     (pathname === '/briefing' || pathname === '/overview' || pathname === '/summary') &&
     method === 'GET'
   ) {
+    const deny = await requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
+    if (deny) return deny;
     return handleBriefingPage();
   }
 
