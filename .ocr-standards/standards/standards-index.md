@@ -42,6 +42,7 @@
 |---|------|--------|-----------|
 | 5 | Local Sponsor Covenant | partial | `tests/e2e/0-architecture/tier-equity.invariant.spec.ts` |
 | 6 | Inert Monetization Hooks | live | `tests/e2e/0-architecture/monetization-inert.invariant.spec.ts` |
+| 25 | Sponsor Share Covenant | live | `tests/e2e/0-architecture/sponsor-share-covenant.invariant.spec.ts` |
 
 ---
 
