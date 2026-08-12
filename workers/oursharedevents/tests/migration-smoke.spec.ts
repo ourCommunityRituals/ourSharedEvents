@@ -69,6 +69,7 @@ const DB_TABLES = [
   'sponsor_impressions', // 0022
   'sponsors', // 0002
   'subscribers', // 0008
+  'template_event_types', // 0056 (OSE-727 Sponsor Onboarding — template×registry clearance join)
 ] as const;
 
 const FORMS_DB_TABLES = [

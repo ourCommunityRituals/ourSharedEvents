@@ -97,6 +97,13 @@ the relevant sections from the bottom up.
 #### B.1 — `DB` (main database)
 
 ```sql
+-- 0056: template_event_types join + event_templates.max_clearance_tier (OSE-727)
+DROP INDEX IF EXISTS idx_template_event_types_uec;
+DROP INDEX IF EXISTS idx_template_event_types_template;
+DROP TABLE IF EXISTS template_event_types;
+-- event_templates.max_clearance_tier: rollback-forward (SQLite DROP COLUMN
+-- unreliable on this seeded table); set to NULL via a corrective migration.
+
 -- 0055: sponsors ADD 12 four-format asset columns (OSE-726 Sponsor Onboarding)
 -- SQLite has no reliable ALTER TABLE ... DROP COLUMN on a LOAD_BEARING table
 -- (a true reverse needs the recreate-and-copy dance). Primary posture is
