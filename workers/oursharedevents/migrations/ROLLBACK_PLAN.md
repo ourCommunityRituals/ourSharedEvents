@@ -97,6 +97,13 @@ the relevant sections from the bottom up.
 #### B.1 — `DB` (main database)
 
 ```sql
+-- 0060: SEED business_type_category_map (OSE-731 Sponsor Onboarding) — data-only
+DELETE FROM business_type_category_map;
+
+-- 0059: business_type_category_map schema (OSE-730 Sponsor Onboarding)
+DROP INDEX IF EXISTS idx_business_type_category_map_bt;
+DROP TABLE IF EXISTS business_type_category_map;
+
 -- 0058: category_registry create + seed (OSE-729 Sponsor Onboarding)
 DROP TABLE IF EXISTS category_registry;
 
