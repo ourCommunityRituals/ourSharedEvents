@@ -78,7 +78,8 @@ describe('QA-1: Migration idempotency', () => {
     // + 1 (sponsor_business_draft — migration 0053, OSE-724 Sponsor Onboarding) = 28.
     // + 1 (sponsor_asset_draft — migration 0054, OSE-725 Sponsor Onboarding) = 29.
     // + 1 (template_event_types — migration 0056, OSE-727 Sponsor Onboarding) = 30.
-    expect(names).toHaveLength(30);
+    // + 1 (category_registry — migration 0058, OSE-729 Sponsor Onboarding) = 31.
+    expect(names).toHaveLength(31);
   });
 
   test('indexes remain at exactly 63 after idempotent re-run', async () => {

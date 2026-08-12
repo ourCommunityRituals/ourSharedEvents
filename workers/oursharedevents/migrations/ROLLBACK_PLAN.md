@@ -97,6 +97,9 @@ the relevant sections from the bottom up.
 #### B.1 — `DB` (main database)
 
 ```sql
+-- 0058: category_registry create + seed (OSE-729 Sponsor Onboarding)
+DROP TABLE IF EXISTS category_registry;
+
 -- 0057: SEED template_event_types + recompute max_clearance_tier (OSE-728) — data-only
 DELETE FROM template_event_types;
 UPDATE event_templates SET max_clearance_tier = NULL;

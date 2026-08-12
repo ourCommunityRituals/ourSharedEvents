@@ -45,6 +45,7 @@ const DB_TABLES = [
   'anon_id_returns', // 0031 (OSE-272 SharedReport pipeline)
   'bigquery_export_state', // 0035 (OSE-272 Session 4 BigQuery export watermark)
   'campaigns', // 0039 (campaigns metadata table — enterprise sponsor comparison)
+  'category_registry', // 0058 (OSE-729 Sponsor Onboarding — canonical category lookup)
   'corridor_density_baseline', // 0032 (OSE-272 SharedReport pipeline)
   'corridor_density_snapshots', // 0044 (OER longitudinal archive — append-only)
   'corridor_regulatory_status', // 0023
