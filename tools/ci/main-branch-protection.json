@@ -1,0 +1,22 @@
+{
+  "_comment": "Source-of-truth for main branch protection (OSE-CI robustness). Apply/verify with scripts/apply-branch-protection.mjs. Required checks = the jobs that ALWAYS run to completion on a pull_request event (see .github/workflows/oursharedevents-ci.yml). Deliberately EXCLUDES: (a) the two known false-reds 'Claude PR Review' + 'Validate against OCR-docs brain' so they neither block nor need manual override; (b) the T1-T4 deploy/smoke/contract/functional jobs, which if:-skip on PRs and would deadlock every PR if required. strict=false because the single-runner pool cannot afford forced up-to-date re-runs of every open PR. See tools/ci/README-branch-protection.md.",
+  "required_status_checks": {
+    "strict": false,
+    "checks": [
+      { "context": "S0 Security" },
+      { "context": "S2 Post-Execution Security" },
+      { "context": "T0 Gate (lint)" },
+      { "context": "T0 Gate (typecheck)" },
+      { "context": "T0 Gate (tests)" },
+      { "context": "T0 Gate (a11y)" },
+      { "context": "T0 Gate (invariants)" }
+    ]
+  },
+  "enforce_admins": true,
+  "required_pull_request_reviews": null,
+  "restrictions": null,
+  "required_linear_history": false,
+  "allow_force_pushes": false,
+  "allow_deletions": false,
+  "required_conversation_resolution": false
+}
