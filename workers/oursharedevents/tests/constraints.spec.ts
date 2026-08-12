@@ -76,10 +76,11 @@ describe('QA-1: Migration idempotency', () => {
     // + 1 (corridor_density_snapshots — migration 0044) = 26
     // + 1 (admin_brand_memberships — migration 0050, OSE-666/B2) = 27.
     // + 1 (sponsor_business_draft — migration 0053, OSE-724 Sponsor Onboarding) = 28.
-    expect(names).toHaveLength(28);
+    // + 1 (sponsor_asset_draft — migration 0054, OSE-725 Sponsor Onboarding) = 29.
+    expect(names).toHaveLength(29);
   });
 
-  test('indexes remain at exactly 60 after idempotent re-run', async () => {
+  test('indexes remain at exactly 61 after idempotent re-run', async () => {
     // 33 (pre-OSE-240) + 2 (idx_shortlinks_*, OSE-240) + 4 (OSE-272 Session 2:
     // idx_anon_id_returns_venue_visit, idx_event_series_venue_state,
     // idx_event_series_venue_dow_hour, idx_events_series_start) + 1
@@ -94,10 +95,11 @@ describe('QA-1: Migration idempotency', () => {
     // + 1 (idx_events_data_class — migration 0052, OSE-606/608) = 57.
     // + 3 (idx_sponsor_business_draft_brand/_event/_status — migration 0053,
     //   OSE-724 Sponsor Onboarding) = 60.
+    // + 1 (idx_sponsor_asset_draft_token — migration 0054, OSE-725) = 61.
     const indexes = await env.DB.prepare(
       "SELECT name FROM sqlite_master WHERE type='index' AND name LIKE 'idx_%'"
     ).all();
-    expect(indexes.results).toHaveLength(60);
+    expect(indexes.results).toHaveLength(61);
   });
 });
 

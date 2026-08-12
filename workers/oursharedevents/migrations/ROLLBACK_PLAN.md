@@ -97,6 +97,10 @@ the relevant sections from the bottom up.
 #### B.1 — `DB` (main database)
 
 ```sql
+-- 0054: sponsor_asset_draft (OSE-725 Sponsor Onboarding — per-format render inputs)
+DROP INDEX IF EXISTS idx_sponsor_asset_draft_token;
+DROP TABLE IF EXISTS sponsor_asset_draft;
+
 -- 0053: sponsor_business_draft (OSE-724 Sponsor Onboarding — resolver-invisible draft)
 DROP INDEX IF EXISTS idx_sponsor_business_draft_status;
 DROP INDEX IF EXISTS idx_sponsor_business_draft_event;

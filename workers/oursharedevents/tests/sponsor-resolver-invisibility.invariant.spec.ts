@@ -80,6 +80,12 @@ beforeAll(async () => {
   )
     .bind(EVENT_ID)
     .run();
+
+  // 4. Asset-draft row (0054) hanging off the business draft — also invisible.
+  await env.DB.prepare(
+    `INSERT INTO sponsor_asset_draft (id, draft_token, format, url)
+     VALUES ('adraft_invis_1', 'draft_invis_1', 'poster', 'https://example.test/p.png')`
+  ).run();
 });
 
 describe('Invariant 25: draft resolver-invisibility (runtime reachability)', () => {
@@ -114,6 +120,23 @@ describe('Invariant 25: draft resolver-invisibility (runtime reachability)', () 
     expect(colNames).not.toContain('draft');
     expect(colNames).not.toContain('is_draft');
     expect(colNames).not.toContain('draft_token');
+  });
+
+  test('sponsor_asset_draft carries NO share-weighting column (#25 render-inputs wall)', async () => {
+    const cols = await env.DB.prepare('PRAGMA table_info(sponsor_asset_draft)').all<{
+      name: string;
+    }>();
+    const colNames = (cols.results ?? []).map((r) => String(r.name).toLowerCase());
+    // The four formats are render inputs, never purchasable slots — allocateShares
+    // must have no format dimension to weight by. None of these may ever appear.
+    for (const forbidden of ['tier', 'placement', 'placement_formats', 'share', 'weight', 'rank']) {
+      expect(colNames, `sponsor_asset_draft must not have a '${forbidden}' column`).not.toContain(
+        forbidden
+      );
+    }
+    // Positive control: the table did seed and has its real render-input columns.
+    expect(colNames).toContain('format');
+    expect(colNames).toContain('focal_x');
   });
 
   test('defense-in-depth: resolver + allocation source never reference a *_draft table', () => {
