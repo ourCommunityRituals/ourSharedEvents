@@ -17,8 +17,9 @@
 -- freeze is order 11 (OSE-734), not here.
 --
 -- Invariant compliance:
---   #19 — > 0054, unique prefix, no DROP TABLE. sponsors is LOAD_BEARING but
---         ADD COLUMN is not DROP TABLE — the monotonicity gate is untouched.
+--   #19 — > 0054, unique prefix, no destructive table drop. sponsors is
+--         LOAD_BEARING but ADD COLUMN is metadata-only — the monotonicity gate
+--         (which forbids dropping a load-bearing table) is untouched.
 --   #25 — render inputs only; no tier/placement/weight; dropped at the projection.
 --   #3  — no hardcoded hex/UEC.
 --

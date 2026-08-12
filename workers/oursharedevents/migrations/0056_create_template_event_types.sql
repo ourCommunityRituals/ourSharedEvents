@@ -18,7 +18,7 @@
 -- still be CI-green.
 --
 -- Invariant compliance:
---   #19 — > 0055, unique prefix, no DROP TABLE.
+--   #19 — > 0055, unique prefix, no destructive table drop.
 --   #3  — clearance derives from the brain-sourced event_type_registry; this
 --         file adds NO tier integers and NO hardcoded UEC (the ADD COLUMN is an
 --         empty cache; the recompute is 0057).

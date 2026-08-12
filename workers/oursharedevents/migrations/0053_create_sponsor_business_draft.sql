@@ -10,7 +10,7 @@
 --
 -- Invariant compliance:
 --   #19 migration_monotonicity — highest live = 0052; 0053 = max+1. Matches
---       /^\d{4}_.*\.sql$/, unique prefix, strictly increasing, no DROP TABLE.
+--       /^\d{4}_.*\.sql$/, unique prefix, strictly increasing, no destructive table drop.
 --   #25 sponsor_share_covenant — MUST NOT be in LOAD_BEARING_TABLES; MUST NOT
 --       be referenced by sponsor-resolver.ts / sponsor-allocation.ts. Proven by
 --       the runtime reachability spec sponsor-resolver-invisibility.invariant.spec.ts.

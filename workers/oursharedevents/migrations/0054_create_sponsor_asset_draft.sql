@@ -16,7 +16,7 @@
 -- order-10 R2 path segment, and the order-12 route enum.
 --
 -- Invariant compliance:
---   #19 — > 0053, matches /^\d{4}_.*\.sql$/, unique prefix, no DROP TABLE.
+--   #19 — > 0053, matches /^\d{4}_.*\.sql$/, unique prefix, no destructive table drop.
 --   #25 — no tier/placement/share/weight/rank column (render-inputs wall).
 --   #9  — scoped via the parent draft (brand_id lives on sponsor_business_draft).
 --   ADR-001 — FK stays in MAIN DB.
