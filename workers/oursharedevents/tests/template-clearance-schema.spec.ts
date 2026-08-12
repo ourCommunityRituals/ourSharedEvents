@@ -37,21 +37,25 @@ beforeAll(async () => {
 });
 
 describe('OSE-727 — template_event_types schema (0056)', () => {
-  test('template_event_types exists and is empty (seed is 0057)', async () => {
-    const row = await env.DB.prepare('SELECT COUNT(*) AS cnt FROM template_event_types').first<{
-      cnt: number;
-    }>();
-    expect(row?.cnt).toBe(0);
+  // NOTE: the vitest harness applies the FULL migration set (incl. the 0057
+  // seed/recompute), so runtime "empty join" / "all-NULL" assertions are NOT
+  // valid here — they were only true at the 0056 apply point. 0056's purity is
+  // proven instead by the DDL-only file test below (0056 has no INSERT/UPDATE),
+  // which is the property that matters for the schema-before-seed fail-safe
+  // window. Seeded tier values are asserted by template-clearance-gate.spec.ts.
+
+  test('template_event_types table exists with the join structure + UNIQUE guard', async () => {
+    const sql = await env.DB.prepare(
+      "SELECT sql FROM sqlite_master WHERE type='table' AND name='template_event_types'"
+    ).first<{ sql: string }>();
+    expect(sql?.sql).toMatch(/template_id/);
+    expect(sql?.sql).toMatch(/uec_code/);
+    expect(sql?.sql).toMatch(/UNIQUE\s*\(\s*template_id\s*,\s*uec_code\s*\)/i);
   });
 
-  test('event_templates.max_clearance_tier exists and is NULL for every row (distinct from tier 1)', async () => {
+  test('event_templates.max_clearance_tier column exists', async () => {
     const info = await env.DB.prepare('PRAGMA table_info(event_templates)').all<{ name: string }>();
     expect((info.results ?? []).map((r) => r.name)).toContain('max_clearance_tier');
-
-    const nonNull = await env.DB.prepare(
-      'SELECT COUNT(*) AS cnt FROM event_templates WHERE max_clearance_tier IS NOT NULL'
-    ).first<{ cnt: number }>();
-    expect(nonNull?.cnt).toBe(0);
   });
 
   test('UNIQUE(template_id,uec_code) rejects a duplicate mapping', async () => {

@@ -97,6 +97,10 @@ the relevant sections from the bottom up.
 #### B.1 — `DB` (main database)
 
 ```sql
+-- 0057: SEED template_event_types + recompute max_clearance_tier (OSE-728) — data-only
+DELETE FROM template_event_types;
+UPDATE event_templates SET max_clearance_tier = NULL;
+
 -- 0056: template_event_types join + event_templates.max_clearance_tier (OSE-727)
 DROP INDEX IF EXISTS idx_template_event_types_uec;
 DROP INDEX IF EXISTS idx_template_event_types_template;
