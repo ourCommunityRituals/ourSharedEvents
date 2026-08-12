@@ -97,6 +97,13 @@ the relevant sections from the bottom up.
 #### B.1 — `DB` (main database)
 
 ```sql
+-- 0055: sponsors ADD 12 four-format asset columns (OSE-726 Sponsor Onboarding)
+-- SQLite has no reliable ALTER TABLE ... DROP COLUMN on a LOAD_BEARING table
+-- (a true reverse needs the recreate-and-copy dance). Primary posture is
+-- ROLLBACK-FORWARD: land a corrective migration rather than dropping columns.
+-- If a destructive reverse is truly required (pre-launch only), recreate the
+-- sponsors table without these 12 columns — DevOps sign-off mandatory.
+
 -- 0054: sponsor_asset_draft (OSE-725 Sponsor Onboarding — per-format render inputs)
 DROP INDEX IF EXISTS idx_sponsor_asset_draft_token;
 DROP TABLE IF EXISTS sponsor_asset_draft;
