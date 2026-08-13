@@ -212,8 +212,10 @@ export async function handleGetUploadedFile(
     return err('NOT_CONFIGURED', 'File storage is not configured.', 503, requestId);
   }
 
-  // Path traversal guard
-  if (!key || key.includes('..') || !key.startsWith('events/')) {
+  // Path traversal guard. OSE-733 extends the allowed prefixes to include
+  // `sponsors/` (sponsor onboarding assets) — the `..` traversal check is
+  // SHARED across BOTH prefixes so widening the allowlist never widens traversal.
+  if (!key || key.includes('..') || (!key.startsWith('events/') && !key.startsWith('sponsors/'))) {
     return err('BAD_INPUT', 'Invalid file path.', 400, requestId);
   }
 
@@ -247,4 +249,191 @@ export async function handleGetUploadedFile(
     );
     return err('RETRIEVAL_FAILED', 'Something went wrong loading this file.', 500, requestId);
   }
+}
+
+// ── Sponsor onboarding asset upload (OSE-733 / T6) ─────────────────────────────
+
+import { ASSET_FORMATS, isAssetFormat, type AssetFormat } from '../lib/sponsor-asset';
+import { verifySponsorInviteToken, type SponsorInviteEnv } from '../lib/sponsor-invite';
+
+export type SponsorAssetUploadEnv = UploadEnv & SponsorInviteEnv & { DB: D1Database };
+
+// Raster-only crop sources. SVG (script/animation vector) and GIF (animation)
+// are DELIBERATELY excluded — a focal/crop source must be a static raster.
+const SPONSOR_ASSET_TYPES: Record<string, string> = {
+  'image/jpeg': '.jpg',
+  'image/png': '.png',
+  'image/webp': '.webp',
+};
+
+function bearerToken(request: Request): string | null {
+  const m = (request.headers.get('Authorization') ?? '').match(/^Bearer\s+(.+)$/i);
+  return m ? m[1].trim() : null;
+}
+
+/**
+ * Magic-byte sniff — confirms the bytes actually match the declared raster MIME
+ * and, crucially, rejects an SVG or GIF disguised under an allowed content-type
+ * (defense against content-type spoofing of the crop source).
+ */
+function rasterSignatureOk(mime: string, head: Uint8Array): boolean {
+  // Reject obvious SVG ('<') / GIF ('GIF8') regardless of declared type.
+  if (head[0] === 0x3c) return false; // '<' → XML/SVG
+  if (head[0] === 0x47 && head[1] === 0x49 && head[2] === 0x46 && head[3] === 0x38) return false; // GIF8
+  if (mime === 'image/jpeg') return head[0] === 0xff && head[1] === 0xd8 && head[2] === 0xff;
+  if (mime === 'image/png') {
+    return head[0] === 0x89 && head[1] === 0x50 && head[2] === 0x4e && head[3] === 0x47;
+  }
+  if (mime === 'image/webp') {
+    return (
+      head[0] === 0x52 &&
+      head[1] === 0x49 &&
+      head[2] === 0x46 &&
+      head[3] === 0x46 && // RIFF
+      head[8] === 0x57 &&
+      head[9] === 0x45 &&
+      head[10] === 0x42 &&
+      head[11] === 0x50 // WEBP
+    );
+  }
+  return false;
+}
+
+/**
+ * POST /api/v2/sponsors/draft/:draftToken/asset/:format
+ *
+ * Uploads one per-format creative for a sponsor onboarding draft. Authorized by
+ * the invite token (NOT admin bearer); the draft must belong to the token's
+ * brand (cross-tenant write blocked). Stores under R2 key
+ * `sponsors/{draftToken}/{format}` and UPSERTs sponsor_asset_draft. 503 when
+ * UPLOADS_BUCKET is unbound.
+ */
+export async function handleSponsorAssetUpload(
+  request: Request,
+  env: SponsorAssetUploadEnv,
+  draftToken: string,
+  format: string
+): Promise<Response> {
+  const requestId = rid();
+
+  // 1. Invite-token auth → brand scope from the signed claim.
+  const claim = await verifySponsorInviteToken(env, bearerToken(request));
+  if (!claim) return err('UNAUTHORIZED', 'Valid sponsor invite token required.', 401, requestId);
+
+  // 2. Format must be one of the four frozen values (shared constant).
+  if (!isAssetFormat(format)) {
+    return err('BAD_FORMAT', `format must be one of ${ASSET_FORMATS.join(', ')}.`, 400, requestId);
+  }
+  const fmt: AssetFormat = format;
+
+  // 3. R2 binding (optional) — graceful 503 when unbound.
+  if (!env.UPLOADS_BUCKET) {
+    return err('NOT_CONFIGURED', 'Uploads are not available right now.', 503, requestId);
+  }
+
+  // 4. The draft must exist AND belong to the token's brand (cross-tenant guard).
+  if (!/^[a-zA-Z0-9_-]+$/.test(draftToken)) {
+    return err('BAD_DRAFT_TOKEN', 'Invalid draft token.', 400, requestId);
+  }
+  const draft = await env.DB.prepare(
+    'SELECT brand_id, status FROM sponsor_business_draft WHERE draft_token = ?'
+  )
+    .bind(draftToken)
+    .first<{ brand_id: string; status: string }>();
+  if (!draft) return err('NOT_FOUND', 'Draft not found.', 404, requestId);
+  if (draft.brand_id !== claim.brand_id) {
+    return err('FORBIDDEN', 'Draft belongs to another brand.', 403, requestId);
+  }
+
+  // 5. Multipart parse + size/MIME/raster validation.
+  const contentType = request.headers.get('Content-Type') || '';
+  if (!contentType.includes('multipart/form-data') || !contentType.includes('boundary=')) {
+    return err('BAD_CONTENT_TYPE', 'File must be uploaded as form data.', 400, requestId);
+  }
+  let formData: FormData;
+  try {
+    formData = await request.formData();
+  } catch {
+    return err('BAD_FORM_DATA', 'File upload was corrupted or incomplete.', 400, requestId);
+  }
+  const fileEntry = formData.get('file');
+  if (!fileEntry || typeof fileEntry === 'string') {
+    return err('MISSING_FILE', 'No file was included in the upload.', 400, requestId);
+  }
+  const file = fileEntry as unknown as File;
+
+  if (file.size === 0) return err('FILE_EMPTY', 'The selected file is empty.', 400, requestId);
+  if (file.size > MAX_FILE_SIZE) {
+    return err('FILE_TOO_LARGE', 'File exceeds the 25 MB limit.', 413, requestId);
+  }
+  const mimeType = file.type || 'application/octet-stream';
+  if (!SPONSOR_ASSET_TYPES[mimeType]) {
+    return err(
+      'UNSUPPORTED_FILE_TYPE',
+      'Sponsor assets must be a static raster image (JPEG, PNG, or WebP). SVG and GIF are not allowed.',
+      415,
+      requestId
+    );
+  }
+  const head = new Uint8Array(await file.slice(0, 16).arrayBuffer());
+  if (!rasterSignatureOk(mimeType, head)) {
+    return err(
+      'BAD_IMAGE',
+      'File content does not match a static raster image (possible SVG/GIF or spoofed type).',
+      415,
+      requestId
+    );
+  }
+
+  // 6. Store under the sponsors/ namespace and UPSERT the asset draft.
+  const key = `sponsors/${draftToken}/${fmt}`;
+  try {
+    await env.UPLOADS_BUCKET.put(key, file.stream(), {
+      httpMetadata: { contentType: mimeType },
+      customMetadata: { draftToken, format: fmt, uploadedAt: new Date().toISOString(), requestId },
+    });
+  } catch (error) {
+    console.error(
+      JSON.stringify({
+        type: 'R2_SPONSOR_ASSET_UPLOAD_ERROR',
+        requestId,
+        draftToken,
+        format: fmt,
+        error: error instanceof Error ? error.message : String(error),
+      })
+    );
+    return err('UPLOAD_FAILED', 'Something went wrong saving your file.', 500, requestId);
+  }
+
+  const url = `/api/v2/uploads/${key}`;
+  const focalX = readNum(formData.get('focal_x'));
+  const focalY = readNum(formData.get('focal_y'));
+  const cropRect = readStr(formData.get('crop_rect'));
+  await env.DB.prepare(
+    `INSERT INTO sponsor_asset_draft (id, draft_token, format, url, content_type, focal_x, focal_y, crop_rect, validated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+     ON CONFLICT(draft_token, format) DO UPDATE SET
+       url = excluded.url,
+       content_type = excluded.content_type,
+       focal_x = excluded.focal_x,
+       focal_y = excluded.focal_y,
+       crop_rect = excluded.crop_rect,
+       validated_at = datetime('now')`
+  )
+    .bind(crypto.randomUUID(), draftToken, fmt, url, mimeType, focalX, focalY, cropRect)
+    .run();
+
+  return ok201(
+    { key, url, filename: file.name, contentType: mimeType, size: file.size },
+    requestId
+  );
+}
+
+function readNum(v: FormDataEntryValue | null): number | null {
+  if (typeof v !== 'string' || v.trim() === '') return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+function readStr(v: FormDataEntryValue | null): string | null {
+  return typeof v === 'string' && v.length > 0 ? v : null;
 }

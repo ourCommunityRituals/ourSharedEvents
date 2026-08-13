@@ -207,7 +207,12 @@ import {
   RATE_LIMIT_MINT_MAX,
   type RateLimitEnv,
 } from './lib/rate-limit';
-import { handleAdminUploadFile, handleGetUploadedFile, type UploadEnv } from './handlers/upload';
+import {
+  handleAdminUploadFile,
+  handleGetUploadedFile,
+  handleSponsorAssetUpload,
+  type UploadEnv,
+} from './handlers/upload';
 import { handleDataSubjectErase, type DataSubjectEnv } from './handlers/data-subject';
 import {
   handleAdminMintSharedReportLink,
@@ -1067,6 +1072,13 @@ export async function route(
   // the literal 'draft' segment is never mistaken for a sponsor id.
   if (pathname === '/api/v2/sponsors/draft' && method === 'POST') {
     return handleCreateSponsorDraft(request, env);
+  }
+
+  // POST /api/v2/sponsors/draft/:draftToken/asset/:format — per-format asset
+  // upload for an onboarding draft (invite-token auth, R2 sponsors/ namespace, OSE-733).
+  const draftAssetMatch = pathname.match(/^\/api\/v2\/sponsors\/draft\/([^/]+)\/asset\/([^/]+)$/);
+  if (draftAssetMatch && method === 'POST') {
+    return handleSponsorAssetUpload(request, env, draftAssetMatch[1], draftAssetMatch[2]);
   }
 
   // GET /api/v2/sponsors/:id/logo — proxy external logo through worker (OSE-288)
