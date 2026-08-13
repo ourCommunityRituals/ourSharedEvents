@@ -224,6 +224,29 @@ async function resolvePerIdSponsorScope(request: Request, env: SponsorsEnv): Pro
   };
 }
 
+/**
+ * OSE-722 (#9): parent-reachability gate for sponsor SUB-resources (event-types,
+ * areas). Those tables key off `sponsor_id` and carry no brand column, so we
+ * first confirm the PARENT sponsor is inside the caller's authorized brand scope
+ * (the same predicate as resolvePerIdSponsorScope). A forged / cross-tenant id is
+ * unreachable → the caller gets the same 404 as a non-existent sponsor and never
+ * reads or mutates another brand's sub-resources. Sibling fix to OSE-710, which
+ * closed the identical hole on the sponsor GET/PUT/DELETE handlers.
+ */
+async function isSponsorReachable(
+  request: Request,
+  env: SponsorsEnv,
+  sponsorId: string
+): Promise<boolean> {
+  if (!env.DB) return false;
+  const scope = await resolvePerIdSponsorScope(request, env);
+  if (!scope.reachable) return false;
+  const row = await env.DB.prepare(`SELECT id FROM sponsors WHERE id = ?${scope.sql}`)
+    .bind(sponsorId, ...scope.params)
+    .first();
+  return !!row;
+}
+
 // ─── Admin: Get Sponsor ─────────────────────────────────────────────────────────
 
 export async function handleAdminGetSponsor(
@@ -640,6 +663,11 @@ export async function handleSetSponsorEventTypes(
   const rid = requestId();
   if (!env.DB) return errorResponse('DB_NOT_CONFIGURED', 'Database not available', 503, rid);
 
+  // OSE-722 (#9): a forged/cross-tenant sponsor id must not be mutable.
+  if (!(await isSponsorReachable(request, env, sponsorId))) {
+    return errorResponse('NOT_FOUND', `Sponsor not found: ${sponsorId}`, 404, rid);
+  }
+
   const bodyOrErr = await parseBody(request, rid);
   if (bodyOrErr instanceof Response) return bodyOrErr;
   const body = bodyOrErr;
@@ -703,6 +731,12 @@ export async function handleGetSponsorEventTypes(
     );
   }
 
+  // OSE-722 (#9): a forged/cross-tenant sponsor id must not be readable —
+  // collapse to 404 (indistinguishable from a non-existent sponsor).
+  if (!(await isSponsorReachable(request, env, sponsorId))) {
+    return errorResponse('NOT_FOUND', `Sponsor not found: ${sponsorId}`, 404, rid);
+  }
+
   try {
     const result = await env.DB.prepare(
       'SELECT * FROM sponsor_event_types WHERE sponsor_id = ? ORDER BY template_id'
@@ -740,6 +774,11 @@ export async function handleSetSponsorAreas(
 ): Promise<Response> {
   const rid = requestId();
   if (!env.DB) return errorResponse('DB_NOT_CONFIGURED', 'Database not available', 503, rid);
+
+  // OSE-722 (#9): a forged/cross-tenant sponsor id must not be mutable.
+  if (!(await isSponsorReachable(request, env, sponsorId))) {
+    return errorResponse('NOT_FOUND', `Sponsor not found: ${sponsorId}`, 404, rid);
+  }
 
   const bodyOrErr = await parseBody(request, rid);
   if (bodyOrErr instanceof Response) return bodyOrErr;
@@ -800,6 +839,12 @@ export async function handleGetSponsorAreas(
       { ok: true, status: 200, items: [] },
       { headers: { ...corsHeaders(request), 'X-Request-Id': rid } }
     );
+  }
+
+  // OSE-722 (#9): a forged/cross-tenant sponsor id must not be readable —
+  // collapse to 404 (indistinguishable from a non-existent sponsor).
+  if (!(await isSponsorReachable(request, env, sponsorId))) {
+    return errorResponse('NOT_FOUND', `Sponsor not found: ${sponsorId}`, 404, rid);
   }
 
   try {
