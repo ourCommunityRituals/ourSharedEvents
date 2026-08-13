@@ -97,6 +97,16 @@ the relevant sections from the bottom up.
 #### B.1 — `DB` (main database)
 
 ```sql
+-- 0060: SEED business_type_category_map (OSE-731 Sponsor Onboarding) — data-only
+DELETE FROM business_type_category_map;
+
+-- 0059: business_type_category_map schema (OSE-730 Sponsor Onboarding)
+DROP INDEX IF EXISTS idx_business_type_category_map_bt;
+DROP TABLE IF EXISTS business_type_category_map;
+
+-- 0058: category_registry create + seed (OSE-729 Sponsor Onboarding)
+DROP TABLE IF EXISTS category_registry;
+
 -- 0057: SEED template_event_types + recompute max_clearance_tier (OSE-728) — data-only
 DELETE FROM template_event_types;
 UPDATE event_templates SET max_clearance_tier = NULL;

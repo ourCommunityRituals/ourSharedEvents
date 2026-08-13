@@ -288,12 +288,13 @@ describe('Gate 5: Index verification', () => {
     // + 3 (idx_sponsor_business_draft_brand/_event/_status — migration 0053, OSE-724) = 60.
     // + 1 (idx_sponsor_asset_draft_token — migration 0054, OSE-725) = 61.
     // + 2 (idx_template_event_types_template/_uec — migration 0056, OSE-727) = 63.
+    // + 1 (idx_business_type_category_map_bt — migration 0059, OSE-730) = 64.
     const indexes = await env.DB.prepare(
       "SELECT name FROM sqlite_master WHERE type='index' AND name LIKE 'idx_%' ORDER BY name"
     ).all();
 
     const names = indexes.results.map((r: Record<string, unknown>) => r.name);
-    expect(names.length).toBe(63);
+    expect(names.length).toBe(64);
     EXPECTED_INDEXES.forEach((idx) => expect(names).toContain(idx));
   });
 });
