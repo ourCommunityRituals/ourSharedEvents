@@ -53,8 +53,9 @@ async function seedDraft(
 ): Promise<void> {
   await env.DB.prepare(
     `INSERT INTO sponsor_business_draft
-       (draft_token, brand_id, event_id, name, category_selections, covenant_acknowledged_at, status)
-     VALUES (?, ?, ?, ?, ?, ?, 'draft')`
+       (draft_token, brand_id, event_id, name, category_selections, covenant_acknowledged_at, status,
+        free_tier_eligible, eligibility_source)
+     VALUES (?, ?, ?, ?, ?, ?, 'draft', ?, ?)`
   )
     .bind(
       token,
@@ -62,7 +63,11 @@ async function seedDraft(
       eventId,
       `Co ${token}`,
       JSON.stringify(opts.categories ?? [{ category: 'bar_events', mode: 'whole' }]),
-      opts.covenant === false ? null : '2026-08-12T00:00:00Z'
+      opts.covenant === false ? null : '2026-08-12T00:00:00Z',
+      // OSE-744: grant eligibility so the happy path clears the new promotion gate.
+      // (community-benefit lane; server-set). opts.ineligible seeds a 402 case.
+      opts.ineligible === true ? 0 : 1,
+      opts.ineligible === true ? null : 'community_benefit'
     )
     .run();
 }
@@ -132,8 +137,8 @@ describe('OSE-736 — gates refuse before any write', () => {
 
   test('malformed category_selections → 400, fail closed, no write', async () => {
     await env.DB.prepare(
-      `INSERT INTO sponsor_business_draft (draft_token, brand_id, event_id, name, category_selections, covenant_acknowledged_at, status)
-       VALUES ('d_badjson','brand-P','evt-P','Bad JSON Co','{not valid json','2026-08-12T00:00:00Z','draft')`
+      `INSERT INTO sponsor_business_draft (draft_token, brand_id, event_id, name, category_selections, covenant_acknowledged_at, status, free_tier_eligible, eligibility_source)
+       VALUES ('d_badjson','brand-P','evt-P','Bad JSON Co','{not valid json','2026-08-12T00:00:00Z','draft', 1, 'community_benefit')`
     ).run();
     const before = await env.DB.prepare('SELECT COUNT(*) AS c FROM sponsors').first<{
       c: number;
