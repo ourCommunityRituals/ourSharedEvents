@@ -181,7 +181,7 @@ import {
   type SponsorsEnv,
 } from './handlers/sponsors';
 import { handleAdminBackupEvent, type BigQueryHandlerEnv } from './handlers/bigquery';
-import { handleCreateSponsorDraft } from './handlers/sponsors-draft';
+import { handleCreateSponsorDraft, handlePromoteSponsorDraft } from './handlers/sponsors-draft';
 import { handleSponsorAsset } from './handlers/sponsor-asset-route';
 import { fetchStaticMapImage, type MapsEnv } from './lib/maps';
 import { handleGetPosterBundle, type PosterBundleEnv } from './handlers/poster-bundle';
@@ -638,6 +638,21 @@ export async function route(
     }
     const response = await handleAdminCreateSponsor(request, env);
     _audit(reqId, 'CREATE_SPONSOR', 'success', 'sponsor');
+    return response;
+  }
+
+  // POST /api/v2/admin/sponsors/promote — promote a sponsor onboarding draft to a
+  // live sponsor (OSE-736 / T8). Placed BEFORE the /:id matchers so 'promote' is
+  // never parsed as a sponsor id. Admin-gated + audited.
+  if (pathname === '/api/v2/admin/sponsors/promote' && method === 'POST') {
+    const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
+    const deny = await requireAdmin(request, env, reqId);
+    if (deny) {
+      _audit(reqId, 'PROMOTE_SPONSOR_DRAFT', 'denied', 'sponsor');
+      return deny;
+    }
+    const response = await handlePromoteSponsorDraft(request, env);
+    _audit(reqId, 'PROMOTE_SPONSOR_DRAFT', response.ok ? 'success' : 'denied', 'sponsor');
     return response;
   }
 

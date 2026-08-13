@@ -21,6 +21,7 @@ import { type MapsEnv } from '../lib/maps';
 import { tagCoordinates } from '../lib/h3-tagging';
 import { verifySponsorInviteToken, type SponsorInviteEnv } from '../lib/sponsor-invite';
 import { parseJsonBody, errorResponse, jsonResponse } from '../lib/form-validation';
+import { promoteSponsorDraft, type PromotionEnv } from '../lib/sponsor-promotion';
 
 export type SponsorDraftEnv = { DB: D1Database } & SponsorInviteEnv & MapsEnv;
 
@@ -209,6 +210,32 @@ export async function handleCreateSponsorDraft(
 
   return jsonResponse(
     { ok: true, draft_token: draftToken, is_local_review_flag: isLocalReviewFlag },
+    request
+  );
+}
+
+/**
+ * POST /api/v2/admin/sponsors/promote  (admin-gated in the router, OSE-736 / T8).
+ * Body: { draft_token }. Promotes a covenant-acknowledged, brand-matched draft to
+ * a live sponsor — the single crossing of the #25 resolver-invisibility wall.
+ * All the security invariants (tier force, double-promote guard, brand match,
+ * JSON-subset) live in promoteSponsorDraft; this is a thin HTTP wrapper.
+ */
+export async function handlePromoteSponsorDraft(
+  request: Request,
+  env: PromotionEnv
+): Promise<Response> {
+  const parsed = await parseJsonBody(request);
+  if (!parsed.ok) {
+    return errorResponse('INVALID_BODY', 'Request body must be valid JSON', 400, request);
+  }
+  const draftToken = typeof parsed.body.draft_token === 'string' ? parsed.body.draft_token : '';
+  if (!draftToken) return errorResponse('MISSING_FIELD', 'draft_token is required', 400, request);
+
+  const result = await promoteSponsorDraft(env, draftToken);
+  if (!result.ok) return errorResponse(result.code, result.code, result.status, request);
+  return jsonResponse(
+    { ok: true, sponsor_id: result.sponsor_id, template_ids: result.template_ids },
     request
   );
 }
