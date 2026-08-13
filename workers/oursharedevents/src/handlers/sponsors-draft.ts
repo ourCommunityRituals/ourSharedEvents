@@ -22,6 +22,8 @@ import { tagCoordinates } from '../lib/h3-tagging';
 import { verifySponsorInviteToken, type SponsorInviteEnv } from '../lib/sponsor-invite';
 import { parseJsonBody, errorResponse, jsonResponse } from '../lib/form-validation';
 import { promoteSponsorDraft, type PromotionEnv } from '../lib/sponsor-promotion';
+import { logAdminAction, type AuditLogEnv } from '../lib/audit-log';
+import { extractAdminActor, type AdminEnv } from '../auth/admin';
 
 export type SponsorDraftEnv = { DB: D1Database } & SponsorInviteEnv & MapsEnv;
 
@@ -223,7 +225,9 @@ export async function handleCreateSponsorDraft(
  */
 export async function handlePromoteSponsorDraft(
   request: Request,
-  env: PromotionEnv
+  env: PromotionEnv & AdminEnv & AuditLogEnv,
+  ctx: ExecutionContext,
+  reqId: string
 ): Promise<Response> {
   const parsed = await parseJsonBody(request);
   if (!parsed.ok) {
@@ -232,7 +236,32 @@ export async function handlePromoteSponsorDraft(
   const draftToken = typeof parsed.body.draft_token === 'string' ? parsed.body.draft_token : '';
   if (!draftToken) return errorResponse('MISSING_FIELD', 'draft_token is required', 400, request);
 
-  const result = await promoteSponsorDraft(env, draftToken);
+  // Optional comp/prepaid path: a SIGNED sponsor-invite token. The lib verifies it
+  // and requires its claim.brand_id to match the draft's brand (#9); we never read
+  // a brand from the request body here.
+  const compInviteToken =
+    typeof parsed.body.comp_invite_token === 'string' ? parsed.body.comp_invite_token : undefined;
+
+  const result = await promoteSponsorDraft(env, draftToken, { compInviteToken });
+
+  // Eligibility-decision audit (#24 auditability). PII-FREE: brand_id is a tenant
+  // id, and the details carry only the decision + granting source — no email, ip,
+  // name, or anon_id. Fire-and-forget via waitUntil so it never blocks the wall
+  // crossing or the 402.
+  ctx.waitUntil(
+    logAdminAction(env, {
+      action: 'SPONSOR_ELIGIBILITY_DECISION',
+      actor: extractAdminActor(request, env),
+      resource_type: 'sponsor_draft',
+      resource_id: result.brand_id,
+      request_id: reqId,
+      outcome: result.ok ? 'success' : 'denied',
+      details: result.ok
+        ? { decision: 'granted', source: result.eligibility_source }
+        : { decision: result.code === 'PAYMENT_REQUIRED' ? 'payment_required' : result.code },
+    })
+  );
+
   if (!result.ok) return errorResponse(result.code, result.code, result.status, request);
   return jsonResponse(
     { ok: true, sponsor_id: result.sponsor_id, template_ids: result.template_ids },

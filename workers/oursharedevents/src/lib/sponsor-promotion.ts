@@ -26,9 +26,10 @@
 
 import { resolveAllowedMaxTier, type ClearanceEnv } from './template-clearance';
 import { ASSET_FORMATS } from './sponsor-asset';
-import { resolveSponsorEligibility } from './sponsor-eligibility';
+import { resolveSponsorEligibility, type EligibilitySource } from './sponsor-eligibility';
+import { verifySponsorInviteToken, type SponsorInviteEnv } from './sponsor-invite';
 
-export interface PromotionEnv extends ClearanceEnv {
+export interface PromotionEnv extends ClearanceEnv, SponsorInviteEnv {
   DB: D1Database;
   UPLOADS_BUCKET?: R2Bucket;
 }
@@ -47,8 +48,16 @@ const UNIFORM_PLACEMENT_FORMATS =
   '{"posterTop":true,"tvTop":true,"tvSide":true,"mobileBanner":true}';
 
 export type PromotionResult =
-  | { ok: true; sponsor_id: string; template_ids: string[] }
-  | { ok: false; code: string; status: number };
+  | {
+      ok: true;
+      sponsor_id: string;
+      template_ids: string[];
+      /** Which eligibility source admitted this promotion (audit detail, #24). */
+      eligibility_source: EligibilitySource;
+      /** Brand this sponsor belongs to (tenant id, not PII — for the audit row). */
+      brand_id: string;
+    }
+  | { ok: false; code: string; status: number; brand_id?: string };
 
 interface DraftRow {
   draft_token: string;
@@ -81,7 +90,7 @@ function genId(prefix: string): string {
 export async function promoteSponsorDraft(
   env: PromotionEnv,
   draftToken: string,
-  opts: { compClaimValid?: boolean } = {}
+  opts: { compClaimValid?: boolean; compInviteToken?: string } = {}
 ): Promise<PromotionResult> {
   if (!env.DB) return { ok: false, code: 'DB_NOT_CONFIGURED', status: 503 };
 
@@ -123,9 +132,22 @@ export async function promoteSponsorDraft(
   // compose free_tier -> comp -> subscription(stub) -> store_credit(stub);
   // fail-closed. A 402 leaves draft.status untouched (re-submittable) and writes
   // no sponsors row. 402 is a normal outcome — info-level log, never error/page.
+  // Comp/prepaid path: a valid comp is a SIGNED sponsor-invite token whose claim
+  // binds to THIS draft's brand (#9 — the brand is read from the signed claim,
+  // never the request). `opts.compClaimValid` stays supported for direct
+  // callers/tests; `opts.compInviteToken` is the wired path — verify signature +
+  // expiry, then require claim.brand_id === draft.brand_id. Fail-closed on any
+  // mismatch. (Single-use is bounded by promotion idempotency: the draft flips to
+  // 'promoted' and a second promote is a 409; a token-nonce ledger is OSE-745.)
+  let compValid = opts.compClaimValid === true;
+  if (!compValid && opts.compInviteToken) {
+    const claim = await verifySponsorInviteToken(env, opts.compInviteToken);
+    compValid = claim !== null && claim.brand_id === draft.brand_id;
+  }
+
   const eligibility = resolveSponsorEligibility({
     free_tier: draft.free_tier_eligible === 1,
-    comp: opts.compClaimValid === true,
+    comp: compValid,
     subscription: false, // stub until OSE-745 hasActiveSubscription()
     store_credit: false, // stub until OSE-745 hasStoreCredit()
   });
@@ -138,7 +160,7 @@ export async function promoteSponsorDraft(
         brand_id: draft.brand_id,
       })
     );
-    return { ok: false, code: 'PAYMENT_REQUIRED', status: 402 };
+    return { ok: false, code: 'PAYMENT_REQUIRED', status: 402, brand_id: draft.brand_id };
   }
 
   // is_local — GEO-DERIVED (draft cell vs event cell), never a client toggle.
@@ -270,5 +292,11 @@ export async function promoteSponsorDraft(
 
   await env.DB.batch(statements);
 
-  return { ok: true, sponsor_id: sponsorId, template_ids: [...templateIds] };
+  return {
+    ok: true,
+    sponsor_id: sponsorId,
+    template_ids: [...templateIds],
+    eligibility_source: eligibility.source,
+    brand_id: draft.brand_id,
+  };
 }
