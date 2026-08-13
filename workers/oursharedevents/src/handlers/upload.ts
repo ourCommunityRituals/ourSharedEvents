@@ -429,11 +429,11 @@ export async function handleSponsorAssetUpload(
   );
 }
 
-function readNum(v: FormDataEntryValue | null): number | null {
+function readNum(v: File | string | null): number | null {
   if (typeof v !== 'string' || v.trim() === '') return null;
   const n = Number(v);
   return Number.isFinite(n) ? n : null;
 }
-function readStr(v: FormDataEntryValue | null): string | null {
+function readStr(v: File | string | null): string | null {
   return typeof v === 'string' && v.length > 0 ? v : null;
 }
