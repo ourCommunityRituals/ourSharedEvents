@@ -97,6 +97,11 @@ the relevant sections from the bottom up.
 #### B.1 — `DB` (main database)
 
 ```sql
+-- 0061: sponsor eligibility columns on sponsor_business_draft (OSE-744 / P1)
+-- Metadata-only ADD COLUMN (nullable/defaulted), no count-gate change. SQLite
+-- DROP COLUMN unreliable -> rollback-forward (a corrective migration), never a
+-- destructive reverse on this table.
+
 -- 0060: SEED business_type_category_map (OSE-731 Sponsor Onboarding) — data-only
 DELETE FROM business_type_category_map;
 

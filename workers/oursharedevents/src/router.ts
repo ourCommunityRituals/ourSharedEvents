@@ -651,7 +651,7 @@ export async function route(
       _audit(reqId, 'PROMOTE_SPONSOR_DRAFT', 'denied', 'sponsor');
       return deny;
     }
-    const response = await handlePromoteSponsorDraft(request, env);
+    const response = await handlePromoteSponsorDraft(request, env, ctx, reqId);
     _audit(reqId, 'PROMOTE_SPONSOR_DRAFT', response.ok ? 'success' : 'denied', 'sponsor');
     return response;
   }

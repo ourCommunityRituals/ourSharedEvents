@@ -1282,6 +1282,112 @@ const PAYMENT_OPS: ThreatEntry[] = [
   },
 ];
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// Layer: sponsor eligibility gate (OSE-744 / P1 — 402 at the promotion seam)
+// TL-059/TL-060 are the P0 payment-ops group above; this P1 group starts at
+// TL-061 (unique + format, contiguity not required). Every gate test asserts by
+// calling the promotion lib directly (no auth path), so it CANNOT false-green
+// under DEV_OPEN_ADMIN — production auth posture by construction.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const SPONSOR_ELIGIBILITY_GATE: ThreatEntry[] = [
+  {
+    id: 'TL-061',
+    layer: 'permission_layer',
+    threat:
+      'Client-forged eligibility: a caller supplies free_tier / eligibility in the promote request to bypass payment. The gate reads only the SERVER-SET sponsor_business_draft.free_tier_eligible column — promoteSponsorDraft takes no client eligibility input — so a forged claim yields 402 regardless.',
+    severity: 'HIGH',
+    target_invariant: { number: 25, name: 'sponsor_share_covenant' },
+    mitigation_story: 'OSE-744',
+    test_ref:
+      'tests/red-team/sponsor-eligibility-gate.spec.ts > OSE-744 — gate at the promotion seam > server-set only: the gate reads the DB column, not caller intent',
+    status: 'tested',
+    red_birth: {
+      date: '2026-08-13',
+      method: 'design-time-negative-assertion',
+      notes:
+        'Draft seeded free_tier_eligible=0; promoteSponsorDraft returns 402 PAYMENT_REQUIRED. No request-body path can set eligibility — the reducer input is derived from the DB row only.',
+    },
+    last_run_green: '2026-08-13',
+  },
+  {
+    id: 'TL-062',
+    layer: 'd1_boundary',
+    threat:
+      'Unpaid wall crossing: an ineligible draft is promoted to a live, resolver-visible sponsor without payment. The gate returns 402 BEFORE any write — no sponsors row is minted and the draft stays status=draft (re-submittable), so the #25 wall stays closed for the unpaid.',
+    severity: 'CRITICAL',
+    target_invariant: { number: 25, name: 'sponsor_share_covenant' },
+    mitigation_story: 'OSE-744',
+    test_ref:
+      'tests/red-team/sponsor-eligibility-gate.spec.ts > OSE-744 — gate at the promotion seam > ineligible draft → 402 PAYMENT_REQUIRED, no sponsor, draft.status untouched',
+    status: 'tested',
+    red_birth: {
+      date: '2026-08-13',
+      method: 'design-time-negative-assertion',
+      notes:
+        'sponsors COUNT(*) unchanged across the 402; draft.status still draft and promoted_sponsor_id null. Would go red if the gate wrote before deciding.',
+    },
+    last_run_green: '2026-08-13',
+  },
+  {
+    id: 'TL-063',
+    layer: 'permission_layer',
+    threat:
+      'Cross-brand comp token: a signed sponsor-invite/comp token minted for brand X is presented to promote a draft belonging to brand Y. The comp path reads brand_id from the SIGNED claim and requires claim.brand_id === draft.brand_id (#9); a mismatched token is rejected and promotion falls through to 402.',
+    severity: 'HIGH',
+    target_invariant: { number: 9, name: 'tenant_isolation' },
+    mitigation_story: 'OSE-744',
+    test_ref:
+      'tests/red-team/sponsor-eligibility-gate.spec.ts > OSE-744 — comp invite token is brand-bound > cross-brand comp token is rejected',
+    status: 'tested',
+    red_birth: {
+      date: '2026-08-13',
+      method: 'design-time-negative-assertion',
+      notes:
+        'A valid token for a foreign brand does not admit the draft (402); only a token whose signed brand_id matches the draft brand admits. Signature+expiry verified via verifySponsorInviteToken.',
+    },
+    last_run_green: '2026-08-13',
+  },
+  {
+    id: 'TL-064',
+    layer: 'permission_layer',
+    threat:
+      'Eligibility source as an allocation dimension: the WAY a promotion was funded (free_tier vs comp vs subscription) leaks into share-of-voice. Promotion server-forces the covenant base tier regardless of source, and allocateShares takes no payment/eligibility input — so identical output tier and {id,sharePct}-only shape hold (#25).',
+    severity: 'HIGH',
+    target_invariant: { number: 25, name: 'sponsor_share_covenant' },
+    mitigation_story: 'OSE-744',
+    test_ref:
+      'tests/red-team/sponsor-eligibility-gate.spec.ts > OSE-744 — #25 allocation invariant to payment/eligibility > eligibility SOURCE never changes the promoted tier',
+    status: 'tested',
+    red_birth: {
+      date: '2026-08-13',
+      method: 'design-time-negative-assertion',
+      notes:
+        'comp-funded and free_tier-funded promotions both write tier=COVENANT_BASE_TIER; allocateShares output keys are exactly [id, sharePct]. Would go red if a source-derived tier or weight were introduced.',
+    },
+    last_run_green: '2026-08-13',
+  },
+  {
+    id: 'TL-065',
+    layer: 'audit_layer',
+    threat:
+      'Silent or PII-bearing eligibility decision: the promotion gate admits/denies without an audit trail, or writes personal data into the trail. Every decision emits a SPONSOR_ELIGIBILITY_DECISION admin_audit_log row whose details carry ONLY {decision, source} and resource_id = brand_id (a tenant id) — no email/ip/name/anon_id.',
+    severity: 'MEDIUM',
+    target_invariant: { number: 24, name: 'auditability' },
+    mitigation_story: 'OSE-744',
+    test_ref:
+      'tests/red-team/sponsor-eligibility-gate.spec.ts > OSE-744 — the eligibility decision is audited, PII-free (#24) > grant writes a SPONSOR_ELIGIBILITY_DECISION row carrying only decision+source',
+    status: 'tested',
+    red_birth: {
+      date: '2026-08-13',
+      method: 'design-time-negative-assertion',
+      notes:
+        'Grant path asserts an audit row with outcome=success, resource_id=brand_id, ip null, and details keys exactly [decision, source]; the 402 path asserts outcome=denied with decision=payment_required. Would go red if the row were missing or carried PII.',
+    },
+    last_run_green: '2026-08-13',
+  },
+];
+
 export const THREAT_LEDGER: ThreatEntry[] = [
   ...D1_BOUNDARY,
   ...WORKER_SURFACE,
@@ -1296,6 +1402,7 @@ export const THREAT_LEDGER: ThreatEntry[] = [
   ...EVENT_MANAGER_AUDIT,
   ...GAP_CLOSURE,
   ...PAYMENT_OPS,
+  ...SPONSOR_ELIGIBILITY_GATE,
 ];
 
 export const THREAT_LEDGER_META = {
