@@ -63,10 +63,13 @@ const DB_TABLES = [
   'security_metrics', // 0042 (OSE-558 security observability)
   'shortlinks', // 0030 (OSE-240)
   'sponsor_areas', // 0020
+  'sponsor_asset_draft', // 0054 (OSE-725 Sponsor Onboarding — per-format render inputs)
+  'sponsor_business_draft', // 0053 (OSE-724 Sponsor Onboarding — resolver-invisible draft)
   'sponsor_event_types', // 0019
   'sponsor_impressions', // 0022
   'sponsors', // 0002
   'subscribers', // 0008
+  'template_event_types', // 0056 (OSE-727 Sponsor Onboarding — template×registry clearance join)
 ] as const;
 
 const FORMS_DB_TABLES = [

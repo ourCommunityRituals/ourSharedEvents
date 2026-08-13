@@ -7,8 +7,13 @@
 This document covers all migrations applied to both D1 databases bound to
 the OSE Worker:
 
-- `DB` — main / anonymous public surface (28 migrations: 0001–0028)
+- `DB` — main / anonymous public surface (highest migration: 0053; append-only 0001–0053)
 - `FORMS_DB` — identified-user surface (12 migrations: 0001–0012)
+
+> **Rollback posture:** rollback-forward is the primary production recovery
+> path. The reverse SQL below is the canonical surgical rollback for DevOps /
+> CI use only. SQLite has no reliable `ALTER TABLE ... DROP COLUMN`, so
+> column-additive migrations note "rollback-forward" rather than a true reverse.
 
 Companion CI gate: [`tests/migration-smoke.spec.ts`](../tests/migration-smoke.spec.ts)
 locks in the canonical post-migration shape (table count, trigger count,
@@ -92,6 +97,38 @@ the relevant sections from the bottom up.
 #### B.1 — `DB` (main database)
 
 ```sql
+-- 0057: SEED template_event_types + recompute max_clearance_tier (OSE-728) — data-only
+DELETE FROM template_event_types;
+UPDATE event_templates SET max_clearance_tier = NULL;
+
+-- 0056: template_event_types join + event_templates.max_clearance_tier (OSE-727)
+DROP INDEX IF EXISTS idx_template_event_types_uec;
+DROP INDEX IF EXISTS idx_template_event_types_template;
+DROP TABLE IF EXISTS template_event_types;
+-- event_templates.max_clearance_tier: rollback-forward (SQLite DROP COLUMN
+-- unreliable on this seeded table); set to NULL via a corrective migration.
+
+-- 0055: sponsors ADD 12 four-format asset columns (OSE-726 Sponsor Onboarding)
+-- SQLite has no reliable ALTER TABLE ... DROP COLUMN on a LOAD_BEARING table
+-- (a true reverse needs the recreate-and-copy dance). Primary posture is
+-- ROLLBACK-FORWARD: land a corrective migration rather than dropping columns.
+-- If a destructive reverse is truly required (pre-launch only), recreate the
+-- sponsors table without these 12 columns — DevOps sign-off mandatory.
+
+-- 0054: sponsor_asset_draft (OSE-725 Sponsor Onboarding — per-format render inputs)
+DROP INDEX IF EXISTS idx_sponsor_asset_draft_token;
+DROP TABLE IF EXISTS sponsor_asset_draft;
+
+-- 0053: sponsor_business_draft (OSE-724 Sponsor Onboarding — resolver-invisible draft)
+DROP INDEX IF EXISTS idx_sponsor_business_draft_status;
+DROP INDEX IF EXISTS idx_sponsor_business_draft_event;
+DROP INDEX IF EXISTS idx_sponsor_business_draft_brand;
+DROP TABLE IF EXISTS sponsor_business_draft;
+
+-- 0029–0052: reverse SQL tracked incrementally as each migration lands; the
+-- primary production posture for these is rollback-forward (see header note).
+-- Pre-0029 canonical reverse SQL continues below.
+
 -- 0028: Replace ip_address with ip_hash on subscribers
 ALTER TABLE subscribers ADD COLUMN ip_address TEXT;
 ALTER TABLE subscribers DROP COLUMN ip_hash;

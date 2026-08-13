@@ -146,7 +146,9 @@ const EXPECTED_COLUMN_COUNTS: Record<string, number> = {
 // (campaign_id TEXT, migration 0040 — enterprise campaign linking) + 2
 // (logo_width/logo_height INTEGER, migration 0041 — logo aspect ratio metadata) + 4
 // (lat REAL, lon REAL, h3_res9 TEXT, h3_res7 TEXT, migration 0045 — H3 geo-tagging) = 20.
-EXPECTED_COLUMN_COUNTS.sponsors = 20;
+// + 12 (four-format asset columns poster/banner/vertical/square ×
+// url/content_type/validated_at, migration 0055 — OSE-726 Sponsor Onboarding) = 32.
+EXPECTED_COLUMN_COUNTS.sponsors = 32;
 
 // ── Apply migrations before tests ────────────────────────────────────────────
 
@@ -283,12 +285,15 @@ describe('Gate 5: Index verification', () => {
     // + 1 (idx_sponsor_impressions_h3_res7 — migration 0048, OSE-635) = 55
     // + 1 (idx_admin_brand_memberships_email — migration 0050, OSE-666/B2) = 56.
     // + 1 (idx_events_data_class — migration 0052, OSE-606/608) = 57.
+    // + 3 (idx_sponsor_business_draft_brand/_event/_status — migration 0053, OSE-724) = 60.
+    // + 1 (idx_sponsor_asset_draft_token — migration 0054, OSE-725) = 61.
+    // + 2 (idx_template_event_types_template/_uec — migration 0056, OSE-727) = 63.
     const indexes = await env.DB.prepare(
       "SELECT name FROM sqlite_master WHERE type='index' AND name LIKE 'idx_%' ORDER BY name"
     ).all();
 
     const names = indexes.results.map((r: Record<string, unknown>) => r.name);
-    expect(names.length).toBe(57);
+    expect(names.length).toBe(63);
     EXPECTED_INDEXES.forEach((idx) => expect(names).toContain(idx));
   });
 });
