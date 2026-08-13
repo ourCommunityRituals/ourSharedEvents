@@ -320,6 +320,8 @@ export default defineConfig({
           // SUBSCRIBERS_RETENTION_DAYS intentionally NOT set here.
           // OSE-272 Session 5: SharedReport read API auth.
           SHARED_REPORT_SIGNING_SECRET: 'test-shared-report-signing-secret-do-not-use',
+          // OSE-732: HMAC secret for sponsor onboarding invite tokens (T6a).
+          SPONSOR_INVITE_SIGNING_SECRET: 'test-sponsor-invite-signing-secret-do-not-use',
           WKRP_SERVICE_TOKEN: 'test-wkrp-service-token-do-not-use',
           // OSE-598: HMAC-SHA256 pepper for email hashing (rank-9 finding).
           // Must be set in production via Wrangler secret; test value here

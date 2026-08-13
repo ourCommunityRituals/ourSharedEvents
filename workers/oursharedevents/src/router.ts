@@ -181,6 +181,7 @@ import {
   type SponsorsEnv,
 } from './handlers/sponsors';
 import { handleAdminBackupEvent, type BigQueryHandlerEnv } from './handlers/bigquery';
+import { handleCreateSponsorDraft } from './handlers/sponsors-draft';
 import { fetchStaticMapImage, type MapsEnv } from './lib/maps';
 import { handleGetPosterBundle, type PosterBundleEnv } from './handlers/poster-bundle';
 import {
@@ -1058,6 +1059,14 @@ export async function route(
   const clickMatch = pathname.match(/^\/api\/v2\/events\/([^/]+)\/sponsors\/([^/]+)\/click$/);
   if (clickMatch && method === 'POST') {
     return handleLogClick(request, env, clickMatch[1], clickMatch[2]);
+  }
+
+  // POST /api/v2/sponsors/draft — onboarding draft capture (invite-token auth, OSE-732).
+  // Public route: authorized by a signed sponsor invite token (NOT admin bearer);
+  // brand scope comes from the token claim. Placed before the /:id/logo matcher so
+  // the literal 'draft' segment is never mistaken for a sponsor id.
+  if (pathname === '/api/v2/sponsors/draft' && method === 'POST') {
+    return handleCreateSponsorDraft(request, env);
   }
 
   // GET /api/v2/sponsors/:id/logo — proxy external logo through worker (OSE-288)
