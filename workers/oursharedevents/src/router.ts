@@ -182,6 +182,7 @@ import {
 } from './handlers/sponsors';
 import { handleAdminBackupEvent, type BigQueryHandlerEnv } from './handlers/bigquery';
 import { handleCreateSponsorDraft } from './handlers/sponsors-draft';
+import { handleSponsorAsset } from './handlers/sponsor-asset-route';
 import { fetchStaticMapImage, type MapsEnv } from './lib/maps';
 import { handleGetPosterBundle, type PosterBundleEnv } from './handlers/poster-bundle';
 import {
@@ -1081,7 +1082,15 @@ export async function route(
     return handleSponsorAssetUpload(request, env, draftAssetMatch[1], draftAssetMatch[2]);
   }
 
-  // GET /api/v2/sponsors/:id/logo — proxy external logo through worker (OSE-288)
+  // GET /api/v2/sponsors/:id/asset/:format — always-200 per-format asset serve
+  // (R2 | logo proxy | UEC monogram), extends the OSE-288 pipeline (OSE-735).
+  const assetMatch = pathname.match(/^\/api\/v2\/sponsors\/([^/]+)\/asset\/([^/]+)$/);
+  if (assetMatch && method === 'GET') {
+    return handleSponsorAsset(request, env, assetMatch[1], assetMatch[2]);
+  }
+
+  // GET /api/v2/sponsors/:id/logo — proxy external logo through worker (OSE-288).
+  // Retained as a back-compat alias with its unchanged OSE-288 contract.
   const logoMatch = pathname.match(/^\/api\/v2\/sponsors\/([^/]+)\/logo$/);
   if (logoMatch && method === 'GET') {
     return handleSponsorLogo(request, env, logoMatch[1]);
