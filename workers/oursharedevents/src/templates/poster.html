@@ -598,7 +598,11 @@
           strip.innerHTML = '<div class="poster-sponsor-label" data-testid="poster-sponsor-label">Sponsored By</div>' +
             sponsors.map(function(s) {
               // OSE-R-015 (2026-05-15): referrerpolicy + onerror.
-              const logo = s.logo_url ? '<img src="' + esc(s.logo_url) + '" alt="' + esc(s.name) + ' logo" referrerpolicy="no-referrer" onerror="this.style.display='none'" data-testid="poster-sponsor-logo">' : '';
+              // NOTE: the inner single quotes around 'none' MUST stay escaped
+              // (\'). Unescaped, they terminate this single-quoted JS string
+              // early ("Unexpected identifier 'none'") and kill the ENTIRE
+              // poster inline script — no picker, no QR, no sponsors render.
+              const logo = s.logo_url ? '<img src="' + esc(s.logo_url) + '" alt="' + esc(s.name) + ' logo" referrerpolicy="no-referrer" onerror="this.style.display=\'none\'" data-testid="poster-sponsor-logo">' : '';
               const validTiers = ['title','platinum','gold','silver','bronze','primary'];
               const tier = validTiers.indexOf(String(s.tier || '')) >= 0 ? s.tier : 'primary';
               return '<div class="poster-sponsor poster-sponsor--' + esc(tier) + '" data-tier="' + esc(tier) + '" data-testid="poster-sponsor-item" role="listitem" aria-label="' + esc(s.name) + '">' + logo + '<span class="poster-sponsor-name" data-testid="poster-sponsor-name">' + esc(s.name) + '</span></div>';
