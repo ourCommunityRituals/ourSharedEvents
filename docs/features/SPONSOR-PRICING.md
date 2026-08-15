@@ -19,7 +19,7 @@ Sponsor signs up → picks weight class → pool-based share calculation
                          Low activity     Normal          High activity
                         (standard)      (standard)       (share compression)
                               │               │               │
-                         3x/2x/1x        3x/2x/1x       20% haircut on premium
+                         7x/3x/1x        7x/3x/1x       20% haircut on premium
                          multipliers     multipliers      redistributed to local
 ```
 
@@ -29,17 +29,23 @@ Sponsor signs up → picks weight class → pool-based share calculation
 
 ## Weight Classes
 
-Screen time is **pool-based**: every sponsor gets `multiplier / sum(all multipliers)`. The ratio between tiers is locked to the multiplier (3:1 premium vs local) regardless of pool size.
+Screen time is **pool-based**: every sponsor gets `multiplier / sum(all multipliers)`. The ratio between tiers is locked to the multiplier (7:1 premium vs local, 3:1 mid vs local) regardless of pool size.
+
+> **Canonical source:** these multipliers are owned by the org brain at
+> `OCR-docs/ocr-docs-brain/sponsor-allocation.yaml` (`weights:` — `base: 1`,
+> `mid: 3`, `premium: 7`) and mirrored byte-for-byte into the OSE substrate at
+> `workers/oursharedevents/src/lib/sponsor-allocation.ts`. The OSE-336 drift
+> gate fails CI on any mismatch. If these ever disagree, the YAML wins.
 
 | Class       | Multiplier | Display Placement     | Public Placement |
 | ----------- | :--------: | --------------------- | ---------------- |
-| **Premium** |     3x     | Headers (top banner)  | Sidebars         |
-| **Mid**     |     2x     | Headers (top banner)  | Sidebars         |
+| **Premium** |     7x     | Headers (top banner)  | Sidebars         |
+| **Mid**     |     3x     | Headers (top banner)  | Sidebars         |
 | **Local**   |     1x     | Sidebars (side panel) | Sidebars         |
 
-**Multipliers are global** — same for every event type. One set of numbers for the entire platform. Sponsors know exactly what they're buying: "Mid = 2x screen time at every event."
+**Multipliers are global** — same for every event type. One set of numbers for the entire platform. Sponsors know exactly what they're buying: "Mid = 3x screen time at every event."
 
-When the governor activates during high activity, it applies **share compression** (20% haircut on premium's computed share, redistributed to local). This preserves the premium investment — premium still gets ~2.2:1 vs local — while giving local sponsors a meaningful boost when the crowd is biggest.
+When the governor activates during high activity, it applies **share compression** (20% haircut on premium's computed share, redistributed to local). Premium still gets the largest share by far, while local sponsors get a meaningful boost when the crowd is biggest. The exact compressed ratio depends on pool composition and is computed by the governor at runtime (see [GOVERNOR-DESIGN.md](GOVERNOR-DESIGN.md)).
 
 See [GOVERNOR-DESIGN.md](GOVERNOR-DESIGN.md) for the full security, functional, and error handling analysis.
 
@@ -87,11 +93,11 @@ INACTIVE ──(scans >= threshold)──→ ACTIVE ──(scans < threshold)─
                                ACTIVE ←──(scans >= threshold)────────────┘
 ```
 
-| State            | Effect                           | Behavior                                              |
-| ---------------- | -------------------------------- | ----------------------------------------------------- |
-| **INACTIVE**     | Standard pool math (3x/2x/1x)    | Normal rotation — premium gets 3:1 vs local           |
-| **ACTIVE**       | 20% share compression on premium | High traffic — premium drops to ~2.2:1, local boosted |
-| **COOLING_DOWN** | Standard pool math               | Hysteresis — waits 2 windows before deactivating      |
+| State            | Effect                           | Behavior                                            |
+| ---------------- | -------------------------------- | --------------------------------------------------- |
+| **INACTIVE**     | Standard pool math (7x/3x/1x)    | Normal rotation — premium gets 7:1 vs local         |
+| **ACTIVE**       | 20% share compression on premium | High traffic — premium share cut 20%, local boosted |
+| **COOLING_DOWN** | Standard pool math               | Hysteresis — waits 2 windows before deactivating    |
 
 ### Configuration
 
@@ -105,7 +111,7 @@ INACTIVE ──(scans >= threshold)──→ ACTIVE ──(scans < threshold)─
 
 ### Why This Matters
 
-During a packed bocce night with 200 people scanning QR codes, the governor activates. Premium's share gets a 20% haircut — from 25% to 20% in a typical pool. The freed time goes to local. The national brand still gets the most time — they paid for 3x and they're getting ~2.2x — but the neighborhood bar gets a meaningful boost when it matters most: when the crowd is biggest.
+During a packed bocce night with 200 people scanning QR codes, the governor activates. Premium's computed share gets a 20% haircut, and the freed time is redistributed to local. The national brand still gets the most time — they paid for 7x weight and they still lead the pool — but the neighborhood bar gets a meaningful boost when it matters most: when the crowd is biggest.
 
 The 2-second minimum dwell floor ensures no sponsor's impression drops below the threshold where a human eye can register the brand. Below 2 seconds, the impression has no value.
 
