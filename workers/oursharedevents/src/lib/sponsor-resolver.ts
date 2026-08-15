@@ -40,9 +40,11 @@ export interface SponsorRow {
   /**
    * Local-business classification (OSE-330 Phase 2). D1 returns SQLite
    * BOOLEAN as 0/1 integer. is_local=1 means the sponsor is a local
-   * business and gets top-of-display position via the Local Sponsor
-   * Covenant — see tierSort() below. Defaults to 0 for existing sponsors
-   * (backward-compatible per migration 0036).
+   * business and, under the Local Sponsor Covenant (OSE-661 / Invariant #25),
+   * the is_local class collectively holds a rotation-frequency FLOOR
+   * (>= local_floor_pct) via allocateShares — NOT a top-of-display rank (the
+   * old locals-first tierSort is retired; see buildShareRotation below).
+   * Defaults to 0 for existing sponsors (backward-compatible per migration 0036).
    */
   is_local: number;
   created_at: string;
@@ -130,7 +132,9 @@ export async function resolveSponsorsForEvent(
 
   // Path 1: Direct sponsors for this event
   const directResult = await db
-    .prepare('SELECT * FROM sponsors WHERE event_id = ? AND is_active = 1')
+    // ORDER BY id: give the direct query a stable, deterministic row order so
+    // the equal-share tie-break in buildShareRotation is fed reproducible input.
+    .prepare('SELECT * FROM sponsors WHERE event_id = ? AND is_active = 1 ORDER BY id')
     .bind(eventId)
     .all<SponsorRow>();
 
@@ -145,7 +149,8 @@ export async function resolveSponsorsForEvent(
       .prepare(
         `SELECT s.* FROM sponsors s
          JOIN sponsor_event_types st ON s.id = st.sponsor_id
-         WHERE st.template_id = ? AND st.is_active = 1 AND s.is_active = 1`
+         WHERE st.template_id = ? AND st.is_active = 1 AND s.is_active = 1
+         ORDER BY s.id`
       )
       .bind(event.template_id)
       .all<SponsorRow>();
@@ -265,9 +270,22 @@ export function buildShareRotation(sponsors: SponsorRow[]): RotationEntry[] {
     active.map((s) => ({ id: s.id, tier: sovTierOf(s.tier), is_local: s.is_local === 1 }))
   );
   const byId = new Map(alloc.map((a) => [a.id, a.sharePct]));
-  return active
-    .map((s) => ({ sponsor: s, sharePct: byId.get(s.id) ?? 0 }))
-    .sort((a, b) => b.sharePct - a.sharePct);
+  return (
+    active
+      .map((s) => ({ sponsor: s, sharePct: byId.get(s.id) ?? 0 }))
+      // Share desc, then a deterministic secondary tie-break by id. The floor is
+      // split EVENLY across locals and equal-weight tiers water-fill equally
+      // (allocateShares), so equal sharePct ties are common; without the id
+      // tie-break their order fell to D1 physical row order (the SELECTs below
+      // had no ORDER BY) and flipped between calls — a nondeterministic covenant
+      // rotation. Shares within 1e-9 are treated as tied (float water-fill can
+      // differ at ~1e-14 by input order) so the id order is the stable decider.
+      .sort((a, b) => {
+        const d = b.sharePct - a.sharePct;
+        if (Math.abs(d) > 1e-9) return d;
+        return a.sponsor.id < b.sponsor.id ? -1 : a.sponsor.id > b.sponsor.id ? 1 : 0;
+      })
+  );
 }
 
 /**
