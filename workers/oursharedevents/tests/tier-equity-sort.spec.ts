@@ -1,27 +1,27 @@
 /**
- * OSE-330 — tierSort() functional invariant tests.
+ * Sponsor Share Covenant — functional/integration tests (Invariant #25).
  *
  * Companion to tests/e2e/0-architecture/tier-equity.invariant.spec.ts
- * (Playwright structural). This vitest spec proves the locals-first
- * sort BEHAVIOR holds for synthetic inputs — the Playwright spec proves
- * the CODE SHAPE is in place.
+ * (Playwright structural). This vitest spec exercises the OBSERVABLE covenant
+ * guarantees through the public /api/v2/events/:id/sponsors endpoint
+ * (resolveSponsorsForEvent → buildShareRotation), seeding D1 per-test.
  *
- * Property tested:
- *   For any non-empty mix of SponsorRow inputs, after sort():
- *     - All is_local=1 sponsors appear BEFORE all is_local=0 sponsors
- *     - Within each group, tier priority breaks ties
- *     - No tier value can push a non-local above a local
+ * MODEL NOTE (OSE-661 / OSE-663, ratified 2026-08-08): the old OSE-330
+ * locals-first *rank* (`tierSort`, Brain Invariant #5) is RETIRED. The local
+ * guarantee is now a rotation-frequency FLOOR (Brain Invariant #25): the
+ * is_local class collectively holds >= local_floor_pct of rotation share via
+ * allocateShares() — a local is never zeroed, but order carries no slot/rank
+ * meaning. See ADR-013 (Superseded) and tests/sponsor-share-rotation.spec.ts
+ * for the share-magnitude unit tests.
  *
- * This is the Local Sponsor Covenant — Brain Invariant #5, mechanical
- * enforcement layer.
+ * Properties asserted here (via seeded D1 + SELF.fetch):
+ *   - uniform placement: every seeded sponsor is returned (no named-slot drop)
+ *   - local floor: a local is never dropped, even against many premium non-locals
+ *   - deterministic covenant order: stable across repeated calls
+ *   - schema guard: sponsors.is_local stays NOT NULL (migration 0036)
  *
- * Note: tierSort is module-private in sponsor-resolver.ts. We test it
- * INDIRECTLY by calling resolveSponsorsForEvent() with seeded D1 data
- * AND by asserting the sort order property of the returned list. The
- * functional outcome is what matters; the function name is implementation.
- *
- * Per OCR_STANDARD_perStoryTestPyramid these tests carry no layer
- * qualifier (UNIT — pure-function sort behavior, runs in <100ms).
+ * Per OCR_STANDARD_perStoryTestPyramid these are integration tests (they seed
+ * D1 and hit the endpoint via SELF.fetch), not pure-unit.
  */
 
 import { describe, test, expect, beforeAll } from 'vitest';
@@ -118,8 +118,20 @@ describe('OSE-661 — covenant share rotation (Invariant #25)', () => {
     const eventId = `ose661-evt-uniform`;
     await seedEvent(eventId);
     await seedSponsor({ eventId, id: 'u-title-nl', name: 'Title NL', tier: 'title', is_local: 0 });
-    await seedSponsor({ eventId, id: 'u-primary-loc', name: 'Primary Local', tier: 'primary', is_local: 1 });
-    await seedSponsor({ eventId, id: 'u-bronze-nl', name: 'Bronze NL', tier: 'bronze', is_local: 0 });
+    await seedSponsor({
+      eventId,
+      id: 'u-primary-loc',
+      name: 'Primary Local',
+      tier: 'primary',
+      is_local: 1,
+    });
+    await seedSponsor({
+      eventId,
+      id: 'u-bronze-nl',
+      name: 'Bronze NL',
+      tier: 'bronze',
+      is_local: 0,
+    });
 
     const ids = await getResolvedSponsorIds(eventId);
     // Every sponsor is eligible for the surface — none filtered by a named slot.

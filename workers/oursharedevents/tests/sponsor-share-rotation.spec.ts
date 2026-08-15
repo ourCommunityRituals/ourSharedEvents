@@ -14,7 +14,11 @@ import { describe, test, expect } from 'vitest';
 import { buildShareRotation, type SponsorRow } from '../src/lib/sponsor-resolver';
 import { sovTierOf, SPONSOR_ALLOCATION } from '../src/lib/sponsor-allocation';
 
-function row(id: string, tier: string, opts: { local?: boolean; active?: boolean } = {}): SponsorRow {
+function row(
+  id: string,
+  tier: string,
+  opts: { local?: boolean; active?: boolean } = {}
+): SponsorRow {
   return {
     id,
     event_id: 'e',
@@ -56,10 +60,7 @@ describe('OSE-661 — sovTierOf: ratified 6→3 tier map (single source of truth
 
 describe('OSE-661 — buildShareRotation covenant walls', () => {
   test('only active sponsors participate', () => {
-    const r = buildShareRotation([
-      row('a', 'gold'),
-      row('b', 'gold', { active: false }),
-    ]);
+    const r = buildShareRotation([row('a', 'gold'), row('b', 'gold', { active: false })]);
     expect(r.map((e) => e.sponsor.id)).toEqual(['a']);
   });
 
@@ -117,14 +118,37 @@ describe('OSE-661 — buildShareRotation covenant walls', () => {
   });
 
   test('deterministic order by share desc (order carries no size meaning, just rotation sequence)', () => {
-    const r = buildShareRotation([
-      row('b', 'bronze'),
-      row('t', 'title'),
-      row('g', 'gold'),
-    ]);
+    const r = buildShareRotation([row('b', 'bronze'), row('t', 'title'), row('g', 'gold')]);
     const shares = r.map((e) => e.sharePct);
     for (let i = 1; i < shares.length; i++) {
       expect(shares[i - 1]).toBeGreaterThanOrEqual(shares[i]!);
     }
+  });
+
+  // Regression guard for the covenant-rotation determinism gap: equal-share
+  // sponsors (the floor splits evenly across locals, equal-weight tiers
+  // water-fill equally) must order by a stable id tie-break, NOT by input /
+  // D1 row order. Born-red: without the id tie-break in buildShareRotation the
+  // sort is stable-by-input, so `forward` and `reversed` return DIFFERENT orders
+  // and neither equals the id-sorted expectation below.
+  test('equal-share sponsors get a stable id tie-break, independent of input order', () => {
+    // Three base non-locals → identical sharePct (no local floor, equal weights).
+    const forward = buildShareRotation([
+      row('z', 'bronze'),
+      row('a', 'bronze'),
+      row('m', 'bronze'),
+    ]);
+    const reversed = buildShareRotation([
+      row('m', 'bronze'),
+      row('a', 'bronze'),
+      row('z', 'bronze'),
+    ]);
+
+    // All three shares are equal, so ordering is decided purely by the id tie-break.
+    const shares = forward.map((e) => e.sharePct);
+    expect(shares[0]).toBeCloseTo(shares[2]!, 6); // confirm it really is a tie
+
+    expect(forward.map((e) => e.sponsor.id)).toEqual(['a', 'm', 'z']);
+    expect(reversed.map((e) => e.sponsor.id)).toEqual(['a', 'm', 'z']);
   });
 });

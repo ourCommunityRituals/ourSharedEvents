@@ -1,8 +1,29 @@
 # ADR-013: Enforce the Local Sponsor Covenant via display-priority sort, not a slot allocator
 
-**Status:** Accepted
+**Status:** Superseded by OSE-661 / OSE-663 (share-of-voice frequency-floor covenant, Brain Invariant #25 — ratified 2026-08-08)
 **Date:** 2026-05-18
+**Superseded:** 2026-08-08
 **Deciders:** mzdan + Co-Architect
+
+> **⚠️ SUPERSEDED (2026-08-08) — do not implement the decision below.**
+>
+> The decision in this ADR — a two-level **locals-first display-priority sort**
+> (`sponsor-resolver.ts::tierSort()`, Brain Invariant #5) — has been replaced.
+> Under the ratified **Sponsor Share Covenant** (Brain Invariant #25; OSE-661
+> rotation + OSE-663 allocation math), the local guarantee is a
+> **rotation-frequency FLOOR**, not a rank: the `is_local` class collectively
+> holds ≥ `local_floor_pct` of rotation share via `allocateShares()`, and a
+> premium non-local may legitimately be _seen more often_ than any single local
+> so long as the local class holds its floor and no tier exceeds its cap.
+> `tierSort` is **retired** (its retirement is now locked by
+> `tests/e2e/0-architecture/tier-equity.invariant.spec.ts`). Rotation order is
+> produced by `buildShareRotation()` — sorted by share, then a deterministic
+> `id` tie-break — and carries **no** slot/size/position meaning.
+>
+> The historical decision, alternatives, and consequences are preserved below
+> for context. Current source of truth: `src/lib/sponsor-allocation.ts`,
+> `src/lib/sponsor-resolver.ts` (`buildShareRotation`), and
+> `tests/sponsor-share-rotation.spec.ts`.
 
 ## Context
 
