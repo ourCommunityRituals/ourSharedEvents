@@ -6,10 +6,11 @@ Positioning artifacts are **descriptive, not aspirational**. They capture how OS
 
 ## Status
 
-| Document                                                           | Audience                                                 | Date       | Status  |
-| ------------------------------------------------------------------ | -------------------------------------------------------- | ---------- | ------- |
-| [BEACHHEAD-ICP-2026-05-14.md](BEACHHEAD-ICP-2026-05-14.md)         | Internal — strategic spine for GTM + eng prioritization  | 2026-05-14 | Current |
-| [COMPETITIVE-BRIEF-2026-05-14.md](COMPETITIVE-BRIEF-2026-05-14.md) | Internal — sales, organizer conversations, sponsor pitch | 2026-05-14 | Current |
+| Document                                                           | Audience                                                                               | Date       | Status  |
+| ------------------------------------------------------------------ | -------------------------------------------------------------------------------------- | ---------- | ------- |
+| [BEACHHEAD-ICP-2026-05-14.md](BEACHHEAD-ICP-2026-05-14.md)         | Internal — strategic spine for GTM + eng prioritization                                | 2026-05-14 | Current |
+| [COMPETITIVE-BRIEF-2026-05-14.md](COMPETITIVE-BRIEF-2026-05-14.md) | Internal — sales, organizer conversations, sponsor pitch                               | 2026-05-14 | Current |
+| [PRICING-PLAN.md](PRICING-PLAN.md)                                 | Internal — pricing & free-to-paid business plan (folds the two 2026-08-14 root drafts) | 2026-08-14 | Current |
 
 ## Relationship to other artifacts
 

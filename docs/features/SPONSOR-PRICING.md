@@ -3,6 +3,9 @@
 > How sponsor pricing, screen time, and pool governance work together.
 > The governor state machine IS the pricing mechanism — dollar amounts are just the entry ticket to a weight class.
 > See [VISION.md](VISION.md) for the fair marketplace principle.
+> This is the **mechanism**; for the go-to-market pricing & free-to-paid business
+> plan (dollar strategy, term structure, conversion playbook) see
+> [../positioning/PRICING-PLAN.md](../positioning/PRICING-PLAN.md).
 
 ---
 
