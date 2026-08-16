@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 /**
  * CI cost collector (COST-302 / OSE-781).
  *
