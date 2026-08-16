@@ -1,2 +1,14 @@
 # All changes require review from Matt
 * @mzdano
+
+# ── AI seam review-lock (COST-102 / ADR-014) ─────────────────────────────────
+# The single sanctioned AI entry point and the guardrails that keep the OSE
+# runtime LLM-free. Any change here shifts the platform's cost posture
+# (free-forever thesis) and its prompt-injection posture, so it MUST get an
+# explicit security-owner review before merge — it can never ride through under
+# the broad default-owner rule above. Today the security owner is the founder
+# (@mzdano); update the handle here when a dedicated security team exists.
+# See docs/adr/ADR-014-ai-sanitization-sanctioned-seam.md.
+/workers/oursharedevents/src/lib/ai-sanitization.ts            @mzdano
+/tests/e2e/0-architecture/runtime-llm-free.invariant.spec.ts   @mzdano
+/docs/adr/ADR-014-ai-sanitization-sanctioned-seam.md           @mzdano

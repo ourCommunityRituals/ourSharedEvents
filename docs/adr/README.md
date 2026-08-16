@@ -16,6 +16,7 @@ ADRs are **descriptive, not prescriptive**. They record decisions that have alre
 | [ADR-011](ADR-011-shared-report-wkrp-consumer-boundary.md)    | SharedReport read API as the WKRP consumer boundary        | Accepted | 2026-05-15 |
 | [ADR-012](ADR-012-uec-build-time-consumption.md)              | UEC build-time consumption via manually-synced TS module   | Accepted | 2026-05-17 |
 | [ADR-013](ADR-013-local-sponsor-covenant-display-priority.md) | Local Sponsor Covenant via display-priority sort           | Accepted | 2026-05-18 |
+| [ADR-014](ADR-014-ai-sanitization-sanctioned-seam.md)         | `ai-sanitization.ts` as the single sanctioned AI seam      | Accepted | 2026-08-15 |
 
 ADR series in progress (planned, in numerical order — none of these block any current work):
 
