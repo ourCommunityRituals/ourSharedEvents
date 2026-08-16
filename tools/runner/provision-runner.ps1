@@ -14,7 +14,8 @@
   How it works:
     The actions-runner reads a `.env` file from its install folder at
     Runner.Listener startup and exports those vars to every job process.
-    This script writes a canonical PATH into `.env` and verifies it.
+    This script writes a canonical PATH (plus the ACTIONS_RUNNER_PRINT_LOG_TO_STDOUT
+    verbosity flag) into `.env` and verifies bash resolution.
 
   Run after `config.cmd` registers a new runner, and any time you suspect
   drift (PATH changes, Git for Windows reinstall, WSL upgrade, etc.).
@@ -87,7 +88,23 @@ $canonicalPath = @(
 ) -join ';'
 
 $envFilePath = Join-Path $RunnerPath '.env'
-$desiredContent = "PATH=$canonicalPath"
+
+# Canonical .env is multi-line. The runner reads every KEY=VALUE line at
+# Listener startup and exports them to job processes:
+#   PATH=...                              → invariant #11 (Git Bash resolves
+#                                           before WSL bash).
+#   ACTIONS_RUNNER_PRINT_LOG_TO_STDOUT=1  → mirror the full listener/job trace to
+#                                           the runner's console window so an
+#                                           operator can see WHAT is running
+#                                           WHERE, instead of an opaque
+#                                           "Running job:" line (COST-222).
+# verify-runner-env.ps1 inspects only the `PATH=` line, so additional vars here
+# do not affect the bash-resolution check.
+$runnerEnvLines = @(
+    "PATH=$canonicalPath"
+    'ACTIONS_RUNNER_PRINT_LOG_TO_STDOUT=1'
+)
+$desiredContent = $runnerEnvLines -join "`n"
 
 # ── Idempotency: skip if already canonical ────────────────────────────────────
 
