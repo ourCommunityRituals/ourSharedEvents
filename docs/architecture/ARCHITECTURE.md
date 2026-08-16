@@ -305,6 +305,7 @@ No action needed on MIGRATION_EPICS.md — it is an accurate historical record a
 
 - **[CLOUDFLARE_WORKER_MIGRATION.md](./CLOUDFLARE_WORKER_MIGRATION.md)** — Migration history
 - **[INTEGRATION-FLOWS.md](./INTEGRATION-FLOWS.md)** — Detailed API request/response schemas
+- **[SCALING-WATCH-ITEMS.md](./SCALING-WATCH-ITEMS.md)** — Tracked non-actioned scaling risks (SharedReport D1 fan-out, BigQuery egress)
 - **[DEPLOYMENT.md](./DEPLOYMENT.md)** — Deployment and CI/CD
 - **[docs/deployment/MIGRATION_EPICS.md](../deployment/MIGRATION_EPICS.md)** — Closed planning doc (GAS→CF migration history)
 - **[archive/gas/README.md](../../archive/gas/README.md)** — GAS restoration guide (emergency only)

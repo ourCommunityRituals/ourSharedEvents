@@ -126,6 +126,10 @@ are the first costs that could threaten free-forever.
 indicator. This is tracked as **COST-503 / OSE-788** (100× SharedReport/BigQuery
 scaling watch-item); the CI-side cost view is **COST-302 / OSE-781**.
 
+The full risk register — the fan-out hot path, the BigQuery egress surface,
+their leading indicators and non-actioned mitigations — lives in
+`docs/architecture/SCALING-WATCH-ITEMS.md`.
+
 ## Related
 
 - Implementation: `workers/oursharedevents/src/lib/cost-metric.ts`
