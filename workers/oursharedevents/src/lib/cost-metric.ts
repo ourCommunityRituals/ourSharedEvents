@@ -26,8 +26,14 @@
  * structural invariant `tests/e2e/0-architecture/cost-metric-never-who.invariant.spec.ts`
  * and the unit boundary test `workers/oursharedevents/tests/cost-metric.spec.ts`.
  *
- * HONEST LIMITS (no silent caps — see COST-303 contract doc)
- * ----------------------------------------------------------
+ * CONTRACT
+ * --------
+ * The full emitted/forbidden schema, sampling policy, and 100× watch-item are
+ * documented in `docs/monitoring/COST-METRIC-CONTRACT.md` (COST-303), bound to
+ * this code by `tests/contract/cost-metric-contract.contract.test.js`.
+ *
+ * HONEST LIMITS (no silent caps — see the contract doc)
+ * -----------------------------------------------------
  * - `wallMs` is wall-clock, a proxy for CPU-ms. True CPU-ms comes from
  *   Cloudflare's own billing analytics; we cannot read it in-request.
  * - `d1RowsRead/Written` are captured only from `.run()`/`.all()` results,
