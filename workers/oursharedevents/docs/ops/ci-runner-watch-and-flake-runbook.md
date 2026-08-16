@@ -18,10 +18,17 @@ flow for watching a PR to green, diagnosing a flake, and restarting a runner
 
 **Runners (self-hosted, on the operator's Windows box):**
 
-| Registered name | Scope          | Scheduled task          | Dir                  | Notes                                                                                            |
-| --------------- | -------------- | ----------------------- | -------------------- | ------------------------------------------------------------------------------------------------ |
-| `BLOODRAVEN-2`  | **org-level**  | `GitHubActionsRunner-2` | `…\actions-runner-2` | The **flaky** one (~1/3 no-log hangs). Not visible via the repo runners API (org endpoint only). |
-| `BLOODRAVEN-3`  | **repo-level** | `GitHubActionsRunner-3` | `…\actions-runner-3` | Visible via `repos/.../actions/runners`. Generally healthy.                                      |
+| Registered name | Scope          | Scheduled task          | Dir                  | Notes                                                                                                                                                                              |
+| --------------- | -------------- | ----------------------- | -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `BLOODRAVEN`    | **org-level**  | `GitHubActionsRunner`   | `…\actions-runner`   | **Always-on primary** org executor (re-registered 2026-08-16, COST-221). Second org executor means the hub's independent downstream jobs run concurrently instead of serial (§11). |
+| `BLOODRAVEN-2`  | **org-level**  | `GitHubActionsRunner-2` | `…\actions-runner-2` | The **flaky** one (~1/3 no-log hangs). Not visible via the repo runners API (org endpoint only).                                                                                   |
+| `BLOODRAVEN-3`  | **repo-level** | `GitHubActionsRunner-3` | `…\actions-runner-3` | Visible via `repos/.../actions/runners`. Generally healthy. OSE-only — does **not** serve the org/hub.                                                                             |
+
+> **Org runners are visible only via the org endpoint:**
+> `gh api orgs/ourCommunityRituals/actions/runners`. The repo endpoint
+> (`repos/…/actions/runners`) shows `BLOODRAVEN-3` only. `runner_name` is `null`
+> in completed-run job JSON for self-hosted runners — use **overlapping
+> `startedAt`/`completedAt` timestamps** as the proof two jobs ran in parallel.
 
 **Required gates (branch protection — must be green to merge):**
 `S0 Security` · `S2 Post-Execution Security` · `T0 Gate (lint | tests | typecheck | invariants | a11y)`.
@@ -245,3 +252,95 @@ git rebase --onto origin/main <old-base> <child-branch>
 
 > Root cause of the flake is tracked separately (runner-2 mis-provisioning). Until
 > it's fixed, this runbook is the operational workaround — re-run, don't bypass.
+
+---
+
+## 11. Org-executor parallelism (COST-221)
+
+The hub `ci.yml` runs a `gate` job, then three **independent** downstream jobs
+that only `needs: [gate]` with no ordering between them —
+`Vision invariants`, `Brain parity`, `Shared security_gate.py drift`. They
+parallelize **automatically the moment ≥2 org-level executors are online**; there
+is **no YAML change that fixes serialization** — matrix concurrency still needs
+real executors. With a single online org runner all three sat serial behind it
+(the SPOF this ticket named).
+
+**Topology:** keep **two** always-on org executors — `BLOODRAVEN` (primary) and
+`BLOODRAVEN-2`. Both scheduled tasks carry the same durable config (logon
+trigger, `RestartCount=3` @ 1 min, `StartWhenAvailable=True`), so a transient
+outage self-heals. `BLOODRAVEN-3` is repo-level OSE-only and does not count
+toward hub parallelism.
+
+**Validation (acceptance).** Re-run a hub `ci.yml` run and confirm the downstream
+jobs **overlap**:
+
+```
+gh run view <RUN_ID> --repo ourCommunityRituals/ourCommunityRituals \
+  --json jobs --jq '.jobs[] | "\(.name)  start=\(.startedAt)  end=\(.completedAt)"'
+```
+
+Two of the three should share a start second (2-way parallelism with 2
+executors); wall-clock from gate-done → all-downstream-done drops toward the
+slowest single job instead of the serial sum (observed 2026-08-16: **133s → 61s**).
+Full 3-way concurrency would require a **third** org executor.
+
+### Re-registering a dropped org runner
+
+If an org runner falls out of the org list (stale local creds, a plain
+`Start-ScheduledTask` can't reconnect), re-register it from the workspace root in
+an **elevated** shell with `gh` authed as an org admin:
+
+```powershell
+.\_reregister-bloodraven-org.ps1   # mint org token → clear stale reg → config --replace → start → verify
+```
+
+> **⚠️ Prefix-match lesson (2026-08-16).** An early version of that script killed
+> stale listeners by `ExecutablePath.StartsWith('…\actions-runner')` — which also
+> prefix-matches `actions-runner-2` and `actions-runner-3`, so it took **all three
+> runners dark at once**. Always match on the runner dir **plus a trailing
+> separator** (`…\actions-runner\`). Recovery is cheap — the sibling runners' config
+> is intact, only their listeners were killed, so
+> `Start-ScheduledTask GitHubActionsRunner-2` / `-3` brings them back. Two other
+> gotchas in the same script: delete `.runner_migrated` alongside
+> `.runner`/`.credentials*` (runner ≥ v2.336 treats that marker as "already
+> configured" and `config.cmd` refuses), and avoid inline `=="NAME"` jq string
+> literals in Windows PowerShell (the inner double-quotes are stripped → jq reads
+> the bare name as an undefined function).
+
+---
+
+## 12. Runner window verbosity (COST-222)
+
+By default the runner's `run.cmd` console prints only `Running job:` /
+`Job … completed` — opaque about what is executing where. Two levers make it
+legible:
+
+1. **Full trace in the runner window.** The canonical runner `.env` (written by
+   `tools/runner/provision-runner.ps1`) sets:
+
+   ```
+   ACTIONS_RUNNER_PRINT_LOG_TO_STDOUT=1
+   ```
+
+   This mirrors the full listener/job trace to the console window. The verifier
+   (`verify-runner-env.ps1`) reads only the `PATH=` line, so this extra var does
+   not affect the invariant-#11 bash-resolution check. It applies to **every repo
+   this org runner serves** — that's intended (one window, all jobs legible).
+   Do **not** put `ACTIONS_STEP_DEBUG` / `ACTIONS_RUNNER_DEBUG` here: in `.env`
+   they are org-wide and very noisy — set those as **per-repo Actions Variables**
+   when you want a one-off debug run.
+
+   > **Editing `.env` by hand:** the file has no trailing newline, so
+   > `Add-Content` glues the new var onto the end of the `PATH=` line. Rewrite it
+   > as a clean multi-line file
+   > (`[IO.File]::WriteAllText($p, "PATH=…`nACTIONS_RUNNER_PRINT_LOG_TO_STDOUT=1", [Text.Encoding]::ASCII)`)
+or just re-run the provisioner. Bounce the runner (§5) so the Listener reloads
+`.env`.
+
+2. **Repo / PR / Linear "up front."** The runner can't know PR or Linear context —
+   that lives in the workflow. The hub composite action
+   `.github/actions/context-banner` prints repo / PR # + title / branch / actor /
+   SHA / runner + any Linear IDs parsed from the branch and PR title, as the first
+   post-checkout step of every hub CI job (and into the job summary). Combined with
+   lever 1 it appears in the runner window too. Untrusted values (PR title, branch)
+   are passed via `env:`, never interpolated inline — avoids shell injection.
