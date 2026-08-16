@@ -12,8 +12,10 @@ committed time-series a future dashboard can read.
   (`gh run list` + `gh run view --json jobs`), computes each job's wall-clock
   duration, and appends new records to the history file.
 - **Schedule:** [`.github/workflows/ci-cost-collector.yml`](../../.github/workflows/ci-cost-collector.yml)
-  runs daily on GitHub-hosted ubuntu (read-only Actions-API work, not a build),
-  then commits the updated history back to `main` with `[skip ci]`.
+  runs daily (05:17 UTC) on GitHub-hosted ubuntu (read-only Actions-API work,
+  not a build), then commits the updated history back to `main` with `[skip ci]`.
+  It can also be run on demand via **workflow_dispatch** (with an optional
+  `dry_run` that collects without committing).
 - **History:** [`ci-cost-history.jsonl`](./ci-cost-history.jsonl) — one JSON
   record per line, appended over time. Machine-written; do not hand-edit.
 
