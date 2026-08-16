@@ -403,7 +403,10 @@ describe('Index Entry Point (Story 1.1)', () => {
   });
 
   it('should call route() in fetch handler', () => {
-    expect(indexSource).toContain('await route(request, env, ctx)');
+    // COST-301 (OSE-780): fetch dispatches through the cost-instrumented env
+    // (costEnv wraps env's D1 bindings for the per-operation cost metric). The
+    // router call is otherwise unchanged.
+    expect(indexSource).toContain('await route(request, costEnv, ctx)');
   });
 
   it('should catch unhandled errors', () => {
