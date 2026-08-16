@@ -11,14 +11,27 @@ import { runBigQueryBackup } from './handlers/bigquery';
 import { runSharedReportMaterialization } from './handlers/shared-report-materialize';
 import { runSharedReportBigQueryExport } from './handlers/shared-report-export';
 import { raiseSecurityAlert } from './lib/security-alert';
+import {
+  createCostAccumulator,
+  instrumentEnvForCost,
+  normalizeOperation,
+  emitOperationCost,
+} from './lib/cost-metric';
 
 export type { RouterEnv as Env };
 
 export default {
   async fetch(request: Request, env: RouterEnv, ctx: ExecutionContext): Promise<Response> {
+    // COST-301 (OSE-780): aggregate-only, never-who per-operation cost metric.
+    // Instrument the D1 bindings so handlers transparently accumulate rows, and
+    // time the whole request at this single choke point. Emission below is
+    // fail-safe and identifier-free — see src/lib/cost-metric.ts.
+    const startedAt = Date.now();
+    const costAcc = createCostAccumulator();
+    const costEnv = instrumentEnvForCost(env, costAcc);
     let response: Response;
     try {
-      response = await route(request, env, ctx);
+      response = await route(request, costEnv, ctx);
     } catch (err) {
       console.error(
         JSON.stringify({
@@ -33,6 +46,13 @@ export default {
         { status: 500 }
       );
     }
+    // Emit exactly one aggregate-only cost line per request. Never throws.
+    emitOperationCost({
+      op: normalizeOperation(request.method, new URL(request.url).pathname),
+      wallMs: Date.now() - startedAt,
+      acc: costAcc,
+      status: response.status,
+    });
     // Invariant #6 — Inert Monetization Hooks: every HTTP response carries
     // this header to assert no billing logic executed during the request.
     // Pre-revenue by contract, not by choice.
@@ -440,7 +460,7 @@ async function runSecurityMetricsCron(env: RouterEnv): Promise<void> {
       const BATCH = 50;
       for (let i = 0; i < result.keys.length; i += BATCH) {
         const batch = result.keys.slice(i, i + BATCH);
-        const values = await Promise.all(batch.map(k => env.RATE_LIMIT_KV.get(k.name)));
+        const values = await Promise.all(batch.map((k) => env.RATE_LIMIT_KV.get(k.name)));
         for (const raw of values) {
           if (!raw) continue;
           try {
