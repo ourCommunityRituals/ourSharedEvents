@@ -207,7 +207,9 @@ describe('L1: static — audit wiring in router.ts', () => {
     const files = JSON.parse(src) as Record<string, string>;
     const indexTs = Object.entries(files).find(([k]) => normPath(k).endsWith('/src/index.ts'));
     expect(indexTs).toBeDefined();
-    expect(indexTs![1]).toContain('route(request, env, ctx)');
+    // COST-301 (OSE-780): env is cost-instrumented (costEnv) before dispatch;
+    // ctx is still threaded through to route().
+    expect(indexTs![1]).toContain('route(request, costEnv, ctx)');
   });
 });
 
