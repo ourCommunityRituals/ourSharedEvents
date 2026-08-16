@@ -4,6 +4,7 @@
 **Date:** 2026-05-15
 **Owner:** mzdan
 **Triggered by:** Founder reframe (2026-05-15) — _"For every story, write Postman and Playwright tests"_
+**Revised:** 2026-08-16 — added the **L0 architectural floor** (runtime stays LLM-free) as a standing fleet-wide assertion (COST-504 / OSE-789; enforced by COST-101 / OSE-770).
 
 ---
 
@@ -16,6 +17,24 @@
 3. **UI / browser flow** — Playwright (`tests/playwright/*.spec.ts`)
 
 A PR that ships code without all three layers is not "code review ready." It's "developer slop being thrown over the wall to the tester."
+
+---
+
+## L0 — the architectural floor (runtime stays LLM-free)
+
+The three layers above verify **behavior**. Beneath them sits an **L0 architectural floor**: structural invariants that must hold for the product to exist at all, enforced as `tests/e2e/0-architecture/*.invariant.spec.ts` — the executable source of truth the org brain mirrors (see `CLAUDE.md` § "The ten invariants"). L0 specs are not customer-flow scenario tests; they read the source tree and fail the build when a structural property is violated. They run in the blocking L0/T0 gate **before** lint, before the three behavior layers — security and architecture gate first (`feedback_security_first_gate.md`).
+
+### The standing fleet-wide L0 assertion — runtime stays LLM-free
+
+**Every product repo inherits this floor: runtime request-handling code must not import a model SDK or call an LLM.** The only sanctioned AI seam is a single build/ops-time sanitization module, allowlisted as the sole exception.
+
+**Why it is a standing standard, not a repo-local choice.** Free-forever is structurally sustainable **only while runtime stays LLM-free** — runtime ops cost ≈ 0 tokens, so a live model call is the one change that would flip a product from structurally-free to metered-per-request. Making the assertion executable turns "we intend to stay free" into "the build fails if we don't." Because every OCR product makes the same free-forever promise, the assertion belongs at fleet level, inherited by construction — not re-decided per repo. (Decision recorded: **promote to standing standard**, not repo-local. Rationale in ADR-006.)
+
+**Reference implementation (COST-101 / OSE-770).** `ourSharedEvents/tests/e2e/0-architecture/runtime-llm-free.invariant.spec.ts` fails CI on any runtime model-SDK / LLM-client import under `src/`; the allowlist is exactly one file, the sanctioned sanitization seam `src/lib/ai-sanitization.ts` (ratified in OSE `ADR-014`). It is wired into the blocking T0 invariants gate, and the OSE-350 enforcement-continuity meta-test requires every structural spec be registered there — so the assertion cannot be silently dropped.
+
+**How a spoke inherits it.** Each product repo adds an equivalent `runtime-llm-free.invariant.spec.ts` to its own `tests/e2e/0-architecture/`, registered in its L0/T0 gate — or, if the repo has no runtime surface (e.g. a docs/governance repo like OCR-docs, or a human-delivered product like OSP), records that it carries no runtime and is therefore vacuously compliant. Named-identity platforms (OW) and OSE-derived repos (OSG) inherit the same floor; the sanctioned-seam allowlist is per-repo but must stay an explicit allowlist-of-few, never an open door.
+
+**L0 naming.** L0 invariant specs follow the existing `*.invariant.spec.ts` convention at `tests/e2e/0-architecture/`, **not** the four-segment pipe format above — they assert a structural property of the tree, not a `<method + path>` scenario. The pipe format governs the three behavior layers only.
 
 ---
 
@@ -181,6 +200,8 @@ The rule is "every **customer-facing** story." Carve-outs:
 
 When in doubt, ask: **"could a customer see this change?"** If yes, all three layers.
 
+**The L0 architectural floor is orthogonal to these carve-outs.** The runtime-LLM-free assertion (and any other `0-architecture` invariant) applies to *every* PR in a runtime-bearing repo, whether or not the three behavior layers are required — a docs-only or cron-only PR still must not introduce a runtime LLM import. L0 is a property of the tree, not of the story type.
+
 ---
 
 ## What the audit / refinement workflow looks like in practice
@@ -250,8 +271,11 @@ This standard does NOT require new tooling. It requires writing tests in the exi
 - `OPERATING_SYSTEM.md §3` — routing matrix (where each test layer lives per repo)
 - `OCR_STANDARD_testNaming.md` — naming convention (file + test names)
 - `OCR_STANDARD_d1Migration.md` — migration-test exemption rule
-- `feedback_security_first_gate.md` — pyramid principle (security gates BEFORE lint)
+- `feedback_security_first_gate.md` — pyramid principle (security gates BEFORE lint); the L0 floor gates first
 - `REFINEMENT-BACKLOG-YYYY-MM-DD.md` in each repo's `docs/qa/` — the per-story IDs this standard references
+- `docs/adr/ADR-006-cost-sustainability-free-forever-guardrails.md` — why the runtime-LLM-free floor exists (free-forever as a structural property)
+- `ourSharedEvents/tests/e2e/0-architecture/runtime-llm-free.invariant.spec.ts` — the executable L0 assertion (COST-101 / OSE-770)
+- `ourSharedEvents/docs/adr/ADR-014-ai-sanitization-sanctioned-seam.md` — the single sanctioned AI seam the allowlist permits
 
 ---
 
