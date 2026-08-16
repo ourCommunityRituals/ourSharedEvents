@@ -564,7 +564,8 @@ jobs:
             tests/e2e/0-architecture/shared-report-schema.invariant.spec.ts \
             tests/e2e/0-architecture/tenant-isolation.invariant.spec.ts \
             tests/e2e/0-architecture/tier-equity.invariant.spec.ts \
-            tests/e2e/0-architecture/sponsor-share-covenant.invariant.spec.ts
+            tests/e2e/0-architecture/sponsor-share-covenant.invariant.spec.ts \
+            tests/e2e/0-architecture/worker-claude-md.invariant.spec.ts
 
       # Post-job cleanup: delete _diag/pages/ so the next run's runner agent
       # can create fresh log files without "file already exists" collisions.
