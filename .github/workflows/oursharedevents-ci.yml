@@ -444,6 +444,15 @@ jobs:
         if: matrix.shard == 'lint'
         run: npm run guard:no-gas
 
+      # OSE-803 — schema guard constants must track the migration directories.
+      # Static, deps-free, ~1s. Runs on every PR so a forgotten constant bump is
+      # a red check pre-merge, not a silently-weakened guard discovered at deploy.
+      # The pre-deploy migrations-list gate (deploy jobs below) is the runtime half.
+      - name: 'Security: Schema guard constants in step (OSE-803)'
+        if: matrix.shard == 'lint'
+        working-directory: ${{ env.WORKER_DIR }}
+        run: node scripts/check-schema-guard.mjs
+
       - name: 'Quality: Lint'
         if: matrix.shard == 'lint'
         run: npx eslint config/ scripts/ tests/unit/ tests/contract/ --cache --cache-location node_modules/.eslintcache
@@ -723,6 +732,46 @@ jobs:
           echo "✓ Triggers: 0 on both DBs (matches canonical)"
 
           echo "{\"type\":\"OSE_209_POST_WRANGLER_SMOKE_STAGING\",\"tables_db\":$DB_COUNT,\"tables_forms\":$FORMS_COUNT,\"triggers_db\":0,\"triggers_forms\":0}"
+
+      # ────────────────────────────────────────────────────────────────────
+      # OSE-803 — pre-deploy schema gate.
+      #
+      # `wrangler d1 migrations apply` can fail partway: some DDL lands, the
+      # d1_migrations row is never written, and the step can still exit 0. The
+      # Worker then deploys against a database it is ahead of, the deploy goes
+      # green, and the failure surfaces later as SQLITE_ERROR at prepare time.
+      #
+      # This gate asserts ZERO unapplied migrations on BOTH bindings immediately
+      # before the Worker ships. Read-only (`migrations list`), reuses the
+      # credentials the apply steps above already hold, adds no new secret and no
+      # new permission. Fails closed — an auth error also stops the deploy.
+      #
+      # Runtime backstop for what CI cannot see (Worker rollback, binding
+      # repointed in the dashboard): src/lib/schema-guard.ts.
+      # ────────────────────────────────────────────────────────────────────
+      - name: 'Gate: zero unapplied D1 migrations before deploy (OSE-803)'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        working-directory: ${{ env.WORKER_DIR }}
+        run: |
+          set -euo pipefail
+          node scripts/check-schema-guard.mjs
+          FAILED=0
+          for BINDING in DB FORMS_DB; do
+            OUT="$(npx wrangler d1 migrations list "$BINDING" --env staging --remote 2>&1 || true)"
+            if printf '%s' "$OUT" | grep -qi 'No migrations to apply'; then
+              echo "ok    $BINDING (staging): no unapplied migrations"
+            else
+              echo "FAIL  $BINDING (staging): unapplied migrations remain, or the check could not run"
+              printf '%s\n' "$OUT"
+              FAILED=1
+            fi
+          done
+          if [ "$FAILED" -ne 0 ]; then
+            echo "Refusing to deploy a Worker ahead of its database."
+            exit 1
+          fi
 
       - name: Stamp build version
         working-directory: ${{ env.WORKER_DIR }}
@@ -1329,6 +1378,33 @@ jobs:
           echo "✓ Production triggers: 0 on both DBs"
 
           echo "{\"type\":\"OSE_209_POST_WRANGLER_SMOKE_PRODUCTION\",\"tables_db\":$DB_COUNT,\"tables_forms\":$FORMS_COUNT,\"triggers_db\":0,\"triggers_forms\":0}"
+
+      # OSE-803 — pre-deploy schema gate. Mirror of the staging step in
+      # T1 Deploy → Staging; keep both in sync.
+      # ────────────────────────────────────────────────────────────────────
+      - name: 'Gate: zero unapplied D1 migrations before deploy (OSE-803)'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        working-directory: ${{ env.WORKER_DIR }}
+        run: |
+          set -euo pipefail
+          node scripts/check-schema-guard.mjs
+          FAILED=0
+          for BINDING in DB FORMS_DB; do
+            OUT="$(npx wrangler d1 migrations list "$BINDING" --env production --remote 2>&1 || true)"
+            if printf '%s' "$OUT" | grep -qi 'No migrations to apply'; then
+              echo "ok    $BINDING (production): no unapplied migrations"
+            else
+              echo "FAIL  $BINDING (production): unapplied migrations remain, or the check could not run"
+              printf '%s\n' "$OUT"
+              FAILED=1
+            fi
+          done
+          if [ "$FAILED" -ne 0 ]; then
+            echo "Refusing to deploy a Worker ahead of its database."
+            exit 1
+          fi
 
       - name: Stamp build version
         working-directory: ${{ env.WORKER_DIR }}

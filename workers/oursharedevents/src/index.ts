@@ -7,6 +7,7 @@
  */
 
 import { route, type RouterEnv } from './router';
+import { checkSchema, schemaDriftResponse, isDiagnosticPath } from './lib/schema-guard';
 import { runBigQueryBackup } from './handlers/bigquery';
 import { runSharedReportMaterialization } from './handlers/shared-report-materialize';
 import { runSharedReportBigQueryExport } from './handlers/shared-report-export';
@@ -26,6 +27,14 @@ export default {
     // Instrument the D1 bindings so handlers transparently accumulate rows, and
     // time the whole request at this single choke point. Emission below is
     // fail-safe and identifier-free — see src/lib/cost-metric.ts.
+    // OSE-803 — schema version guard. One check per isolate. A binding behind the
+    // migration this Worker was built against is refused rather than served, except
+    // on the diagnostic routes so the drift stays readable.
+    const drift = await checkSchema(env);
+    if (drift && !isDiagnosticPath(new URL(request.url).pathname)) {
+      return schemaDriftResponse(drift);
+    }
+
     const startedAt = Date.now();
     const costAcc = createCostAccumulator();
     const costEnv = instrumentEnvForCost(env, costAcc);
