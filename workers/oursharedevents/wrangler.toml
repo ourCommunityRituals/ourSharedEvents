@@ -66,6 +66,9 @@ enabled = true
 # ── Cron trigger: data lifecycle job (destroy expired forms data) ──
 # Runs daily at 3 AM UTC. Deletes expired registrations, scrubs survey PII,
 # removes email signups past 30-day retention.
+# NOTE (OSE-813): this top-level block applies to LOCAL DEV / workers.dev ONLY.
+# Named environments do NOT inherit triggers. See [env.staging.triggers] and
+# [env.production.triggers] below — if you add an environment, add its triggers too.
 [triggers]
 crons = ["0 3 * * *"]
 
@@ -121,6 +124,16 @@ bucket_name = "ose-uploads-staging"
 [[env.staging.kv_namespaces]]
 binding = "RATE_LIMIT_KV"
 id = "PROVISION-wrangler-kv-namespace-create-rate-limit-staging"
+
+# ── Cron trigger: data lifecycle (staging) ────────────────────────────────────
+# OSE-813 — Wrangler does NOT inherit [triggers] into named environments, the same
+# rule that applies to vars / d1_databases / kv_namespaces / r2_buckets. The
+# top-level [triggers] block above covers local dev only. Without this block the
+# scheduled() handler in src/index.ts is never invoked on staging, and the
+# retention promises rendered on the forms (90d registrations, 30d emails) are
+# printed but never executed.
+[env.staging.triggers]
+crons = ["0 3 * * *"]
 
 [env.staging.vars]
 WORKER_ENV = "staging"
@@ -199,6 +212,11 @@ bucket_name = "ose-uploads-production"
 [[env.production.kv_namespaces]]
 binding = "RATE_LIMIT_KV"
 id = "PROVISION-wrangler-kv-namespace-create-rate-limit-production"
+
+# ── Cron trigger: data lifecycle (production) ─────────────────────────────────
+# OSE-813 — see the staging block. Must be declared per-environment; not inherited.
+[env.production.triggers]
+crons = ["0 3 * * *"]
 
 [env.production.vars]
 WORKER_ENV = "production"

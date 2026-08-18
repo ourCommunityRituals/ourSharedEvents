@@ -633,6 +633,23 @@ jobs:
         run: npx wrangler d1 migrations apply FORMS_DB --env staging --remote
 
       # ────────────────────────────────────────────────────────────────────
+      # OSE-813 — unprovisioned binding IDs.
+      #
+      # NON-BLOCKING BY DESIGN, FOR NOW. RATE_LIMIT_KV is still a placeholder in
+      # both environments, so making this a hard gate today would break the very
+      # deploy that ships the fix. It reports on every run instead.
+      #
+      # >>> FLIP continue-on-error TO false ONCE THE KV NAMESPACES ARE PROVISIONED. <<<
+      # That is the whole point of the step: the next placeholder must not be
+      # able to survive the way this one did (OSE-544 closed the D1 placeholders
+      # and never saw the KV ones).
+      # ────────────────────────────────────────────────────────────────────
+      - name: 'Report: unprovisioned binding IDs (OSE-813, non-blocking)'
+        continue-on-error: true
+        working-directory: ${{ env.WORKER_DIR }}
+        run: node scripts/check-binding-placeholders.mjs
+
+      # ────────────────────────────────────────────────────────────────────
       # Post-migration canonical-shape verification (OSE-209 hardening).
       #
       # Asserts the staging D1 schema, AFTER wrangler applies migrations,
@@ -1258,6 +1275,14 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         working-directory: ${{ env.WORKER_DIR }}
         run: npx wrangler d1 migrations apply FORMS_DB --env production --remote
+
+      # OSE-813 — unprovisioned binding IDs (non-blocking). Mirror of the
+      # staging step in T1 Deploy → Staging; keep both in sync.
+      # >>> FLIP continue-on-error TO false ONCE THE KV NAMESPACES ARE PROVISIONED. <<<
+      - name: 'Report: unprovisioned binding IDs (OSE-813, non-blocking)'
+        continue-on-error: true
+        working-directory: ${{ env.WORKER_DIR }}
+        run: node scripts/check-binding-placeholders.mjs
 
       # Canonical-shape verification on production. Mirror of the staging
       # step in T1 Deploy → Staging; keep both in sync. Source of truth:
