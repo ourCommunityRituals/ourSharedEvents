@@ -421,6 +421,14 @@ jobs:
         if: matrix.shard == 'lint'
         run: npm run check:banned-origins
 
+      # Brain Invariant #25 (sponsor_share_covenant, live): the sponsor-facing
+      # pricing doc must not claim spend buys size/slot/position/dwell/rank.
+      # Static prose-conformance guard (OSE-883); self-contained (brain YAML is
+      # not vendored into OSE — same convention as the OSE-336 drift check).
+      - name: 'Security: Sponsor pricing covenant (Invariant #25)'
+        if: matrix.shard == 'lint'
+        run: node scripts/check-sponsor-pricing-covenant.mjs
+
       # Brain Invariant #10 (deprecation_lock): the canonical instance of
       # the deprecation-lock pattern. OSE migrated off Google Apps Script
       # to Cloudflare Workers + D1; this guard scans the repo for any
