@@ -119,11 +119,10 @@ binding = "UPLOADS_BUCKET"
 bucket_name = "ose-uploads-staging"
 
 # ── Rate Limit KV (staging) ───────────────────────────────────────────────────
-# Provision: wrangler kv namespace create rate-limit-staging
-# Then fill id: wrangler kv namespace list | grep rate-limit-staging
+# Provisioned 2026-08-18 (OSE-813) in account c4dee735… — namespace `rate-limit-staging`.
 [[env.staging.kv_namespaces]]
 binding = "RATE_LIMIT_KV"
-id = "PROVISION-wrangler-kv-namespace-create-rate-limit-staging"
+id = "4418eb1709e24987bf86b1aa280725c2"
 
 # ── Cron trigger: data lifecycle (staging) ────────────────────────────────────
 # OSE-813 — Wrangler does NOT inherit [triggers] into named environments, the same
@@ -207,11 +206,10 @@ binding = "UPLOADS_BUCKET"
 bucket_name = "ose-uploads-production"
 
 # ── Rate Limit KV (production) ────────────────────────────────────────────────
-# Provision: wrangler kv namespace create rate-limit-production
-# Then fill id: wrangler kv namespace list | grep rate-limit-production
+# Provisioned 2026-08-18 (OSE-813) in account c4dee735… — namespace `rate-limit-production`.
 [[env.production.kv_namespaces]]
 binding = "RATE_LIMIT_KV"
-id = "PROVISION-wrangler-kv-namespace-create-rate-limit-production"
+id = "e44974e89361435e97b3cb79bd10abbb"
 
 # ── Cron trigger: data lifecycle (production) ─────────────────────────────────
 # OSE-813 — see the staging block. Must be declared per-environment; not inherited.
