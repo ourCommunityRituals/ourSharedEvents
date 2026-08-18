@@ -151,6 +151,29 @@
         text-transform: uppercase;
         letter-spacing: 0.05em;
       }
+      /* OSE-887: GAS .qr-card frame (archive/v2-code/components/QRRegenerator.html)
+         wrapping each poster QR — header carries the label, body holds the QR that
+         loadPosterQR injects into #qr-img-{type}. Themed in the token-overlay block
+         below; flattened for print (see @media print). */
+      .qr-card {
+        display: flex;
+        flex-direction: column;
+        border: 1px solid #e2e8f0;
+        border-radius: 10px;
+        overflow: hidden;
+        background: #fff;
+      }
+      .qr-card-header {
+        padding: 0.4rem 0.75rem;
+        background: #f8fafc;
+        border-bottom: 1px solid #e2e8f0;
+      }
+      .qr-card-body {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 0.85rem 0.75rem;
+      }
       .poster-footer {
         text-align: center;
         padding: 1rem;
@@ -424,6 +447,19 @@
         .qr-link-url {
           display: none !important;
         }
+        /* OSE-887: flatten the .qr-card chrome for print so the poster keeps its
+           clean label-over-QR look (no card borders/fills on the page). */
+        .qr-card {
+          border: none;
+        }
+        .qr-card-header {
+          background: transparent;
+          border-bottom: none;
+          padding: 0 0 0.2rem;
+        }
+        .qr-card-body {
+          padding: 0;
+        }
       }
     </style>
     <link rel="stylesheet" href="/ui.css" />
@@ -465,6 +501,14 @@
       }
       .qr-label {
         color: var(--text-muted);
+      }
+      .qr-card {
+        background: var(--surface);
+        border-color: var(--border);
+      }
+      .qr-card-header {
+        background: var(--surface-hover);
+        border-bottom-color: var(--border);
       }
       .qr-link-url {
         color: var(--text-muted);
@@ -542,10 +586,10 @@
             (venue ? '<div class="meta-row" data-testid="poster-meta-venue"><div class="meta-icon" aria-hidden="true">&#x1F4CD;</div><div class="meta-text">' + esc(venue) + (address ? '<br><small>' + esc(address) + '</small>' : '') + '</div></div>' : '') +
             '</div>' +
             '<div class="qr-section" data-testid="poster-qr-section">' +
-              '<div class="qr-item" data-testid="poster-qr-register"><div id="qr-img-register" class="qr-loading" aria-busy="true">&#x23F3;</div><div class="qr-label" data-testid="poster-qr-register-label">Registration</div></div>' +
-              '<div class="qr-item" data-testid="poster-qr-checkin"><div id="qr-img-checkin" class="qr-loading" aria-busy="true">&#x23F3;</div><div class="qr-label" data-testid="poster-qr-checkin-label">Check-in</div></div>' +
-              '<div class="qr-item" data-testid="poster-qr-survey"><div id="qr-img-survey" class="qr-loading" aria-busy="true">&#x23F3;</div><div class="qr-label" data-testid="poster-qr-survey-label">Survey</div></div>' +
-              '<div class="qr-item" data-testid="poster-qr-email-signup"><div id="qr-img-email-signup" class="qr-loading" aria-busy="true">&#x23F3;</div><div class="qr-label" data-testid="poster-qr-email-signup-label">Email Signup</div></div>' +
+              '<div class="qr-card qr-item" data-testid="poster-qr-register"><div class="qr-card-header"><span class="qr-card-title qr-label" data-testid="poster-qr-register-label">Registration</span></div><div class="qr-card-body"><div id="qr-img-register" class="qr-loading" aria-busy="true">&#x23F3;</div></div></div>' +
+              '<div class="qr-card qr-item" data-testid="poster-qr-checkin"><div class="qr-card-header"><span class="qr-card-title qr-label" data-testid="poster-qr-checkin-label">Check-in</span></div><div class="qr-card-body"><div id="qr-img-checkin" class="qr-loading" aria-busy="true">&#x23F3;</div></div></div>' +
+              '<div class="qr-card qr-item" data-testid="poster-qr-survey"><div class="qr-card-header"><span class="qr-card-title qr-label" data-testid="poster-qr-survey-label">Survey</span></div><div class="qr-card-body"><div id="qr-img-survey" class="qr-loading" aria-busy="true">&#x23F3;</div></div></div>' +
+              '<div class="qr-card qr-item" data-testid="poster-qr-email-signup"><div class="qr-card-header"><span class="qr-card-title qr-label" data-testid="poster-qr-email-signup-label">Email Signup</span></div><div class="qr-card-body"><div id="qr-img-email-signup" class="qr-loading" aria-busy="true">&#x23F3;</div></div></div>' +
             '</div>' +
           '</div>' +
           '<div id="poster-sponsor-strip" class="poster-sponsors" data-testid="poster-sponsor-strip" role="list" aria-label="Event sponsors"></div>' +
