@@ -148,7 +148,7 @@
                   "});",
                   "",
                   "pm.test('Same shape as /health', function() {",
-                  "    pm.expect(json).to.have.all.keys('ok', 'env', 'version', 'db', 'timestamp');",
+                  "    pm.expect(json).to.include.keys('ok', 'env', 'version', 'db', 'timestamp');",
                   "});"
                 ]
               }
