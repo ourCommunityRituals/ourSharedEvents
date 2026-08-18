@@ -1084,6 +1084,133 @@
         text-transform: uppercase;
         color: var(--text-muted, #6b7280);
       }
+
+      /* ── OSE-886: Event Dashboard card ───────────────────────────────────────
+         GAS frame (archive/v2-code/components/DashboardCard.html) dressed in
+         baseline /ui.css tokens (var(--token, #fallback), same convention the
+         rest of this file uses). Hidden until ose:event-selected (OSE-667/673). */
+      .dashboard-card {
+        margin: 0 0 1rem;
+        padding: 1.25rem;
+        background: var(--surface, #fff);
+        border: 1px solid var(--border, #e5e7eb);
+        border-radius: 8px;
+      }
+      .dashboard-card[hidden] {
+        display: none;
+      }
+      .dashboard-card__title {
+        margin: 0 0 1rem;
+        font-size: 1.15rem;
+        color: var(--text, #1f2937);
+      }
+      .dashboard-stats {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 0.75rem;
+      }
+      .dash-stat {
+        display: flex;
+        flex-direction: column;
+        padding: 0.85rem 1rem;
+        background: var(--surface, #fff);
+        border: 1px solid var(--border, #e5e7eb);
+        border-left: 4px solid var(--dash-accent, var(--accent, #2563eb));
+        border-radius: 8px;
+      }
+      /* Per-tile accent hints — carried over from the GAS frame's colour-coding.
+         Token-first with hex fallback; swap to /ui.css tokens when they exist. */
+      .dash-stat.scans {
+        --dash-accent: var(--accent, #2563eb);
+      }
+      .dash-stat.appearances {
+        --dash-accent: var(--dash-accent-appearances, #10b981);
+      }
+      .dash-stat.registrations {
+        --dash-accent: var(--dash-accent-registrations, #8b5cf6);
+      }
+      .dash-stat.checkins {
+        --dash-accent: var(--dash-accent-checkins, #f59e0b);
+      }
+      .dash-stat__num {
+        font-size: 1.5rem;
+        font-weight: 700;
+        line-height: 1.1;
+        color: var(--text, #1f2937);
+      }
+      .dash-stat__label {
+        font-size: 0.72rem;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--text-muted, #6b7280);
+      }
+      .dash-lifecycle-title {
+        margin: 1.25rem 0 0.5rem;
+        font-size: 0.95rem;
+        color: var(--text, #1f2937);
+      }
+      .dash-phase {
+        padding: 0.85rem 1rem;
+        margin-bottom: 0.6rem;
+        background: var(--surface-alt, #f8fafc);
+        border: 1px solid var(--border, #e5e7eb);
+        border-radius: 8px;
+      }
+      .dash-phase__header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 0.5rem;
+      }
+      .dash-phase__title {
+        font-weight: 600;
+        font-size: 0.9rem;
+        color: var(--text, #1f2937);
+      }
+      .dash-phase__badge {
+        display: inline-block;
+        padding: 0.15rem 0.6rem;
+        border-radius: 999px;
+        font-size: 0.68rem;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--text-muted, #6b7280);
+        background: var(--surface-hover, #e9ecef);
+      }
+      .dash-phase__badge[data-active='true'] {
+        color: var(--on-accent, #fff);
+        background: var(--accent, #2563eb);
+      }
+      .dash-phase__desc {
+        margin: 0.4rem 0 0;
+        font-size: 0.8rem;
+        color: var(--text-muted, #6b7280);
+      }
+      .dash-progress {
+        height: 8px;
+        margin-top: 0.6rem;
+        background: var(--surface-hover, #e9ecef);
+        border-radius: 4px;
+        overflow: hidden;
+      }
+      .dash-progress__fill {
+        height: 100%;
+        width: 0;
+        background: var(--accent, #2563eb);
+        border-radius: 4px;
+        transition: width 0.6s ease;
+      }
+      @media (max-width: 640px) {
+        .dashboard-stats {
+          grid-template-columns: 1fr 1fr;
+        }
+        .dash-phase__header {
+          flex-direction: column;
+          align-items: flex-start;
+        }
+      }
     </style>
     <link rel="stylesheet" href="/ui.css" />
     <style>
@@ -1264,6 +1391,7 @@
       >
         <span class="ecb-caption" data-testid="ecb-caption" aria-live="polite"></span>
         <nav class="ecb-nav" aria-label="Jump to management card">
+          <button type="button" data-testid="ecb-nav-dashboard" onclick="window.ecbJump('dashboard-card')">Dashboard</button>
           <button type="button" data-testid="ecb-nav-forms" onclick="window.ecbJump('forms-card')">Forms</button>
           <button type="button" data-testid="ecb-nav-poster" onclick="window.ecbJump('poster-deployments-card')">Poster</button>
           <button type="button" data-testid="ecb-nav-sponsors" onclick="window.ecbJump('sponsors-card')">Sponsors</button>
@@ -1457,6 +1585,145 @@
           </div>
         </form>
       </div>
+
+      <!-- OSE-886: Event Dashboard card. GAS frame (DashboardCard.html) + baseline
+           details. Hidden until an event is selected (ose:event-selected, OSE-667/673).
+           Stat values are placeholders (—); EventDashboard.init(data) is the seam
+           that wires real Scans / Sponsor appearances / Registrations / Check-ins
+           in the follow-up functionality slice. No fabricated metrics. -->
+      <section
+        id="dashboard-card"
+        class="dashboard-card"
+        data-testid="admin-dashboard-card"
+        aria-label="Event dashboard for the selected event"
+        hidden
+      >
+        <h2 class="dashboard-card__title" data-testid="admin-dashboard-title">Event Dashboard</h2>
+
+        <div class="dashboard-stats" role="group" aria-label="Event statistics">
+          <div class="dash-stat scans" data-testid="admin-stat-scans">
+            <span class="dash-stat__num" data-testid="admin-stat-scans-num">—</span>
+            <span class="dash-stat__label">Scans</span>
+          </div>
+          <div class="dash-stat appearances" data-testid="admin-stat-appearances">
+            <span class="dash-stat__num" data-testid="admin-stat-appearances-num">—</span>
+            <span class="dash-stat__label">Sponsor appearances</span>
+          </div>
+          <div class="dash-stat registrations" data-testid="admin-stat-registrations">
+            <span class="dash-stat__num" data-testid="admin-stat-registrations-num">—</span>
+            <span class="dash-stat__label">Registrations</span>
+          </div>
+          <div class="dash-stat checkins" data-testid="admin-stat-checkins">
+            <span class="dash-stat__num" data-testid="admin-stat-checkins-num">—</span>
+            <span class="dash-stat__label">Check-ins</span>
+          </div>
+        </div>
+
+        <h3 class="dash-lifecycle-title">Event Lifecycle</h3>
+
+        <div class="dash-phase" data-testid="admin-phase-pre" data-phase="pre-event">
+          <div class="dash-phase__header">
+            <span class="dash-phase__title">Pre-Event</span>
+            <span class="dash-phase__badge" data-testid="admin-phase-pre-badge">Preparation</span>
+          </div>
+          <p class="dash-phase__desc">Advertise with sponsors, print posters, set up displays, drive registration.</p>
+          <div class="dash-progress" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" aria-label="Pre-event progress">
+            <div class="dash-progress__fill" data-testid="admin-phase-pre-fill"></div>
+          </div>
+        </div>
+
+        <div class="dash-phase" data-testid="admin-phase-day" data-phase="event-day">
+          <div class="dash-phase__header">
+            <span class="dash-phase__title">Event Day</span>
+            <span class="dash-phase__badge" data-testid="admin-phase-day-badge">Live</span>
+          </div>
+          <p class="dash-phase__desc">Displays at the entrance, check-in at the door, sponsor rotation on screens.</p>
+          <div class="dash-progress" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" aria-label="Event day progress">
+            <div class="dash-progress__fill" data-testid="admin-phase-day-fill"></div>
+          </div>
+        </div>
+
+        <div class="dash-phase" data-testid="admin-phase-post" data-phase="post-event">
+          <div class="dash-phase__header">
+            <span class="dash-phase__title">Post-Event</span>
+            <span class="dash-phase__badge" data-testid="admin-phase-post-badge">Analytics</span>
+          </div>
+          <p class="dash-phase__desc">Surveys, email sign-ups, and the SharedReport for the corridor.</p>
+          <div class="dash-progress" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" aria-label="Post-event progress">
+            <div class="dash-progress__fill" data-testid="admin-phase-post-fill"></div>
+          </div>
+        </div>
+      </section>
+      <script>
+        // OSE-886: Event Dashboard controller. Reveals the card on event selection
+        // and derives the lifecycle phase honestly from the event date. Stat tiles
+        // stay "—" until EventDashboard.init(data) is wired to D1/forms counts.
+        (function () {
+          'use strict';
+          function phaseFor(dateISO) {
+            if (!dateISO) return 'pre-event';
+            var day = new Date(dateISO);
+            if (isNaN(day.getTime())) return 'pre-event';
+            day.setHours(0, 0, 0, 0);
+            var today = new Date();
+            today.setHours(0, 0, 0, 0);
+            if (day.getTime() === today.getTime()) return 'event-day';
+            return day.getTime() < today.getTime() ? 'post-event' : 'pre-event';
+          }
+          function setProgress(testid, pct) {
+            var fill = document.querySelector('[data-testid="' + testid + '"]');
+            if (!fill) return;
+            fill.style.width = pct + '%';
+            var bar = fill.closest('.dash-progress');
+            if (bar) bar.setAttribute('aria-valuenow', String(pct));
+          }
+          var Dashboard = {
+            render: function (detail) {
+              detail = detail || {};
+              var card = document.getElementById('dashboard-card');
+              if (!card) return;
+              var phase = phaseFor(detail.dateISO || detail.date);
+              [
+                ['pre', 'pre-event'],
+                ['day', 'event-day'],
+                ['post', 'post-event'],
+              ].forEach(function (pair) {
+                var badge = document.querySelector(
+                  '[data-testid="admin-phase-' + pair[0] + '-badge"]'
+                );
+                if (badge) badge.setAttribute('data-active', String(pair[1] === phase));
+              });
+              setProgress('admin-phase-pre-fill', phase === 'pre-event' ? 50 : 100);
+              setProgress(
+                'admin-phase-day-fill',
+                phase === 'event-day' ? 50 : phase === 'post-event' ? 100 : 0
+              );
+              setProgress('admin-phase-post-fill', phase === 'post-event' ? 50 : 0);
+              card.hidden = false;
+            },
+            // Functionality seam (OSE-886 follow-up): feed real aggregate counts as
+            // { scans, appearances, registrations, checkins }. Anything omitted
+            // keeps its "—" placeholder — never invents a value.
+            init: function (data) {
+              data = data || {};
+              var map = {
+                'admin-stat-scans-num': data.scans,
+                'admin-stat-appearances-num': data.appearances,
+                'admin-stat-registrations-num': data.registrations,
+                'admin-stat-checkins-num': data.checkins,
+              };
+              Object.keys(map).forEach(function (id) {
+                var el = document.querySelector('[data-testid="' + id + '"]');
+                if (el && map[id] != null) el.textContent = String(map[id]);
+              });
+            },
+          };
+          window.EventDashboard = Dashboard;
+          window.addEventListener('ose:event-selected', function (ev) {
+            Dashboard.render(ev.detail || {});
+          });
+        })();
+      </script>
 
       <!-- OSE-669: brand-scoped portfolio rollup strip. Server-computed,
          K≥5 per contributing bucket; a sub-5 event never joins the sum. -->
