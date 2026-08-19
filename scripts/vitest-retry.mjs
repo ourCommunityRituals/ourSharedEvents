@@ -3,15 +3,26 @@
 //
 // OSE-696: workerd pool retry-once wrapper.
 //
-// The @cloudflare/vitest-pool-workers test step intermittently crashes with a
-// workerd segfault:
+// The @cloudflare/vitest-pool-workers test step intermittently crashes in two
+// observed, non-deterministic ways — both host-level, neither a real test
+// failure — that clear on a plain re-run:
 //
-//   Check failed: std::numeric_limits<int>::max() >= length_
+//   1. workerd segfault:
+//        Check failed: std::numeric_limits<int>::max() >= length_
 //
-// This is a non-deterministic runtime crash in workerd (observed ~4x in CI and
-// locally); it clears on a plain re-run but currently needs a human to click
-// "re-run". This wrapper makes that retry automatic — and ONLY for that crash
-// signature, so a genuine test failure still fails the gate immediately.
+//   2. pool worker dies mid-run (the workerd child exits / its control socket
+//      resets), surfacing as one of:
+//        [vitest-pool]: Worker cloudflare-pool emitted error.
+//        Caused by: Error: Worker exited unexpectedly
+//        Failed to start cloudflare-pool worker for test files ...
+//      (root cause seen as `read ECONNRESET` on the miniflare control socket).
+//      Signature: "191 passed (192)" + "1 error", zero assertion failures.
+//
+// Both need a human to click "re-run" today. This wrapper makes that retry
+// automatic — and ONLY for these infrastructure crash signatures, so a genuine
+// test failure (a failed assertion never kills the worker) still fails the gate
+// immediately. See also the runner-fleet notes: this is HOST-level, not runner-
+// specific — it lands on -1 or -2 alike, so re-run beats rebuilding the fleet.
 //
 // Contract:
 //   1. Runs the given command (argv after this script) exactly as passed.
@@ -33,9 +44,21 @@
 
 import { spawn } from 'node:child_process';
 
-// Crash signatures that indicate the workerd segfault (NOT a real test failure).
-// Kept as plain substrings so matching is exact and cheap.
-const CRASH_SIGNATURES = ['std::numeric_limits', 'Check failed'];
+// Crash signatures that indicate a workerd / pool-worker infrastructure crash
+// (NOT a real test failure). Kept as plain substrings so matching is exact and
+// cheap. Each string is chosen to be emitted ONLY by the pool infrastructure
+// tearing down — a failed assertion does not kill the worker, so these cannot
+// mask a genuine test failure. Bare "ECONNRESET" is deliberately excluded (a
+// test exercising connection-reset handling could log it); the accompanying
+// "Worker exited unexpectedly" / "Failed to start cloudflare-pool worker"
+// covers those cases without that false-positive risk.
+const CRASH_SIGNATURES = [
+  'std::numeric_limits',
+  'Check failed',
+  'Worker exited unexpectedly',
+  'Failed to start cloudflare-pool worker',
+  '[vitest-pool]: Worker cloudflare-pool emitted error',
+];
 
 function hasCrashSignature(output) {
   return CRASH_SIGNATURES.some((sig) => output.includes(sig));
