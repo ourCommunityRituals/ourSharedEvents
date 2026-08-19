@@ -69,7 +69,10 @@ export async function handleQrScan(
 ): Promise<Response> {
   if (!env.DB) {
     // Infrastructure not ready — redirect to homepage rather than stranding the attendee.
-    return new Response(null, { status: 302, headers: { Location: '/', 'Cache-Control': 'no-store' } });
+    return new Response(null, {
+      status: 302,
+      headers: { Location: '/', 'Cache-Control': 'no-store' },
+    });
   }
 
   if (!isValidQrTokenShape(qrToken)) {
@@ -119,18 +122,26 @@ export async function handleQrScan(
     const ua = request.headers.get('User-Agent') ?? '';
     const uaHash = await hashUserAgent(ua);
     const countryCode = request.headers.get('CF-IPCountry') ?? null;
-    const regionCode = request.headers.get('CF-IPContinent') ?? null;
-    const scanId = `scan_${crypto.randomUUID()}`;
+    const placementId = `spe_${crypto.randomUUID()}`;
+    const returnId = `snr_${crypto.randomUUID()}`;
 
     try {
-      await env.DB.prepare(
-        `INSERT INTO scans
-           (id, event_id, poster_deployment_id, scan_bucket, user_agent_hash,
-            country_code, region_code, anonymous_id, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`
-      )
-        .bind(scanId, eventId, deploymentId, bucket, uaHash, countryCode, regionCode, anonId)
-        .run();
+      // OSE-798: split write — the placement event (WHERE) and the node return
+      // (WHO) go to SEPARATE tables so no durable row carries both a placement
+      // id and a session-derived value (doctrine rule 6). Batched so both land
+      // or neither does.
+      await env.DB.batch([
+        env.DB.prepare(
+          `INSERT INTO scan_placement_events
+             (id, event_id, poster_deployment_id, scan_bucket, created_at)
+           VALUES (?, ?, ?, ?, datetime('now'))`
+        ).bind(placementId, eventId, deploymentId, bucket),
+        env.DB.prepare(
+          `INSERT INTO scan_node_returns
+             (id, event_id, anonymous_id, user_agent_hash, country_code, scan_bucket, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, datetime('now'))`
+        ).bind(returnId, eventId, anonId, uaHash, countryCode, bucket),
+      ]);
 
       console.log(
         JSON.stringify({

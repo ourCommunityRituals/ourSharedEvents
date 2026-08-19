@@ -72,14 +72,14 @@ function loadSource(relPath: string): string {
 
 /** Extract a named exported function body by walking braces. */
 function extractFunctionBody(src: string, exportName: string): string | null {
-  const patterns = [
-    `export async function ${exportName}`,
-    `export function ${exportName}`,
-  ];
+  const patterns = [`export async function ${exportName}`, `export function ${exportName}`];
   let start = -1;
   for (const p of patterns) {
     const idx = src.indexOf(p);
-    if (idx > -1) { start = idx; break; }
+    if (idx > -1) {
+      start = idx;
+      break;
+    }
   }
   if (start < 0) return null;
   let depth = 0;
@@ -97,9 +97,7 @@ function extractFunctionBody(src: string, exportName: string): string | null {
 }
 
 async function getTableColumns(db: D1Database, tableName: string): Promise<string[]> {
-  const rows = await db
-    .prepare(`PRAGMA table_info(${tableName})`)
-    .all<{ name: string }>();
+  const rows = await db.prepare(`PRAGMA table_info(${tableName})`).all<{ name: string }>();
   return (rows.results ?? []).map((r) => r.name.toLowerCase());
 }
 
@@ -139,7 +137,10 @@ describe('P1: No PII columns in anonymous write table schemas (born-red schema p
     if (cols.length === 0) return;
 
     for (const forbidden of FORBIDDEN_PII_COLUMNS) {
-      expect(cols, `checkin_counts has forbidden column "${forbidden}" — the anonymous check-in path must never store identity`).not.toContain(forbidden);
+      expect(
+        cols,
+        `checkin_counts has forbidden column "${forbidden}" — the anonymous check-in path must never store identity`
+      ).not.toContain(forbidden);
     }
   });
 
@@ -149,17 +150,30 @@ describe('P1: No PII columns in anonymous write table schemas (born-red schema p
     if (cols.length === 0) return;
 
     for (const forbidden of FORBIDDEN_PII_COLUMNS) {
-      expect(cols, `form_surveys has forbidden column "${forbidden}" — survey responses are anonymous by design`).not.toContain(forbidden);
+      expect(
+        cols,
+        `form_surveys has forbidden column "${forbidden}" — survey responses are anonymous by design`
+      ).not.toContain(forbidden);
     }
   });
 
   // @born-red TL-001 | method: design-time-negative-assertion | date: 2026-08-03
-  test('scans table (main DB) has no IP, email, UA, or fingerprint columns', async () => {
-    const cols = await getTableColumns(tenv().DB, 'scans');
-    if (cols.length === 0) return; // scans may not exist yet — not a failure
+  // OSE-798: `scans` was split into scan_placement_events (WHERE) +
+  // scan_node_returns (WHO). The absence proof must hold on BOTH new anonymous
+  // write tables — the QR scan path is structurally anonymous on either side.
+  // (user_agent_hash on scan_node_returns is a HASH, not the raw 'user_agent'
+  // string in FORBIDDEN_PII_COLUMNS, so it is correctly not flagged.)
+  test('split scan tables (main DB) have no IP, email, UA, or fingerprint columns', async () => {
+    for (const table of ['scan_placement_events', 'scan_node_returns']) {
+      const cols = await getTableColumns(tenv().DB, table);
+      if (cols.length === 0) continue; // table may not exist yet — not a failure
 
-    for (const forbidden of FORBIDDEN_PII_COLUMNS) {
-      expect(cols, `scans has forbidden column "${forbidden}" — the QR scan path is structurally anonymous`).not.toContain(forbidden);
+      for (const forbidden of FORBIDDEN_PII_COLUMNS) {
+        expect(
+          cols,
+          `${table} has forbidden column "${forbidden}" — the QR scan path is structurally anonymous`
+        ).not.toContain(forbidden);
+      }
     }
   });
 });
@@ -217,8 +231,13 @@ describe('P3: Anonymous write handlers do not capture device fingerprints (stati
       const body = extractFunctionBody(src, fn);
       expect(body, `${fn} not found in forms.ts`).not.toBeNull();
 
-      expect(body!, `${fn} reads User-Agent — device fingerprinting risk on anonymous path`).not.toMatch(/User-Agent/i);
-      expect(body!, `${fn} reads device identifier — fingerprinting risk`).not.toMatch(/device[_-]?id/i);
+      expect(
+        body!,
+        `${fn} reads User-Agent — device fingerprinting risk on anonymous path`
+      ).not.toMatch(/User-Agent/i);
+      expect(body!, `${fn} reads device identifier — fingerprinting risk`).not.toMatch(
+        /device[_-]?id/i
+      );
       expect(body!, `${fn} reads fingerprint — fingerprinting risk`).not.toMatch(/fingerprint/i);
     }
   });
@@ -228,7 +247,10 @@ describe('P3: Anonymous write handlers do not capture device fingerprints (stati
 
     // Shortlink resolve is the first attendee touchpoint — must be identity-blind
     for (const pattern of IDENTITY_HEADER_PATTERNS) {
-      expect(src, `shortlink-resolve reads identity header ${pattern.source} — the first QR scan touchpoint must be blind`).not.toMatch(pattern);
+      expect(
+        src,
+        `shortlink-resolve reads identity header ${pattern.source} — the first QR scan touchpoint must be blind`
+      ).not.toMatch(pattern);
     }
     expect(src).not.toMatch(/User-Agent/i);
     expect(src).not.toMatch(/fingerprint/i);
@@ -277,13 +299,17 @@ describe('P4: Timestamps bucketed — no sub-window precision on anonymous path'
     const src = loadSource('src/handlers/forms.ts');
 
     // bucketTimestamp must be imported
-    expect(src, 'forms.ts must import bucketTimestamp for privacy-safe timestamps').toMatch(/bucketTimestamp/);
+    expect(src, 'forms.ts must import bucketTimestamp for privacy-safe timestamps').toMatch(
+      /bucketTimestamp/
+    );
 
     // The survey and registration handlers must call bucketTimestamp()
     for (const fn of ['handleFormSurvey', 'handleFormRegistration']) {
       const body = extractFunctionBody(src, fn);
       expect(body, `${fn} not found`).not.toBeNull();
-      expect(body!, `${fn} must call bucketTimestamp() for its time bucket field`).toMatch(/bucketTimestamp\s*\(/);
+      expect(body!, `${fn} must call bucketTimestamp() for its time bucket field`).toMatch(
+        /bucketTimestamp\s*\(/
+      );
     }
   });
 
@@ -313,12 +339,25 @@ describe('P5: Cross-database join structurally impossible (static code gate)', (
   // Tables in FORMS_DB — if a SQL string mentions these AND main-DB tables, it's a join
   const FORMS_DB_TABLES = ['form_registrations', 'form_surveys', 'checkin_counts', 'email_signups'];
   // Tables in main DB that could anchor a cross-DB join
-  const MAIN_DB_TABLES = ['events', 'sponsors', 'scans', 'qr_codes', 'shortlinks'];
+  // OSE-798: `scans` split into scan_placement_events + scan_node_returns.
+  const MAIN_DB_TABLES = [
+    'events',
+    'sponsors',
+    'scan_placement_events',
+    'scan_node_returns',
+    'qr_codes',
+    'shortlinks',
+  ];
 
   // @born-red TL-001 | method: design-time-negative-assertion | date: 2026-08-03
   test('forms.ts handler bodies never reference env.DB (main database isolation)', () => {
     const src = loadSource('src/handlers/forms.ts');
-    const handlers = ['handleFormCheckin', 'handleFormSurvey', 'handleFormRegistration', 'handleFormEmailSignup'];
+    const handlers = [
+      'handleFormCheckin',
+      'handleFormSurvey',
+      'handleFormRegistration',
+      'handleFormEmailSignup',
+    ];
 
     for (const fn of handlers) {
       const body = extractFunctionBody(src, fn);
@@ -338,7 +377,10 @@ describe('P5: Cross-database join structurally impossible (static code gate)', (
     // Check for SQL-context references only: FROM/JOIN/INSERT INTO/UPDATE/DELETE FROM <table>
     // This avoids false positives from URL path strings like '/api/v2/events/:id/forms/...'
     const containsMainTable = MAIN_DB_TABLES.some((t) =>
-      new RegExp(`\\b(FROM|JOIN|INSERT\\s+INTO|UPDATE|DELETE\\s+FROM)\\s+(\\w+\\s+)?${t}\\b`, 'i').test(body)
+      new RegExp(
+        `\\b(FROM|JOIN|INSERT\\s+INTO|UPDATE|DELETE\\s+FROM)\\s+(\\w+\\s+)?${t}\\b`,
+        'i'
+      ).test(body)
     );
 
     // forms.ts should reference FORMS_DB tables but NOT main DB tables in SQL
@@ -350,7 +392,7 @@ describe('P5: Cross-database join structurally impossible (static code gate)', (
     }
   });
 
-  test('no single source file joins scans (main DB) with FORMS_DB tables', () => {
+  test('no single source file joins main-DB scan tables with FORMS_DB tables', () => {
     const sources: Record<string, string> = JSON.parse(tenv().TEST_SOURCE_FILES_JSON);
     const violations: string[] = [];
 
@@ -386,15 +428,30 @@ describe('P5: Cross-database join structurally impossible (static code gate)', (
 describe('P6: Token linkability absent — ose_anon IDs cannot be correlated across sessions', () => {
   test('no anon_token_history or rotation_log table exists in FORMS_DB', async () => {
     // If a rotation history table existed, it could be used to link old→new sessions
-    const historyTableNames = ['anon_token_history', 'token_rotation', 'anon_id_log', 'session_chain', 'token_map'];
+    const historyTableNames = [
+      'anon_token_history',
+      'token_rotation',
+      'anon_id_log',
+      'session_chain',
+      'token_map',
+    ];
     for (const tableName of historyTableNames) {
       const cols = await getTableColumns(tenv().FORMS_DB, tableName);
-      expect(cols, `FORMS_DB contains token history table "${tableName}" — this would enable longitudinal tracking of anonymous attendees`).toHaveLength(0);
+      expect(
+        cols,
+        `FORMS_DB contains token history table "${tableName}" — this would enable longitudinal tracking of anonymous attendees`
+      ).toHaveLength(0);
     }
   });
 
   test('no anon_token_history or rotation_log table exists in main DB', async () => {
-    const historyTableNames = ['anon_token_history', 'token_rotation', 'anon_id_log', 'session_chain', 'token_map'];
+    const historyTableNames = [
+      'anon_token_history',
+      'token_rotation',
+      'anon_id_log',
+      'session_chain',
+      'token_map',
+    ];
     for (const tableName of historyTableNames) {
       const cols = await getTableColumns(tenv().DB, tableName);
       expect(cols, `main DB contains token history table "${tableName}"`).toHaveLength(0);
@@ -404,9 +461,10 @@ describe('P6: Token linkability absent — ose_anon IDs cannot be correlated acr
   test('getOrCreateAnonId uses crypto.randomUUID — statistically unique per session', () => {
     // Find the anon ID helper file — could be auth/anon-id.ts, lib/anon-id.ts, etc.
     const sources: Record<string, string> = JSON.parse(tenv().TEST_SOURCE_FILES_JSON);
-    const anonFiles = Object.entries(sources).filter(([p]) =>
-      p.replace(/\\/g, '/').includes('anon') ||
-      Object.values(sources).some((_, i) => i === 0 && false) // placeholder
+    const anonFiles = Object.entries(sources).filter(
+      ([p]) =>
+        p.replace(/\\/g, '/').includes('anon') ||
+        Object.values(sources).some((_, i) => i === 0 && false) // placeholder
     );
 
     // Search all source files for getOrCreateAnonId definition
@@ -415,9 +473,15 @@ describe('P6: Token linkability absent — ose_anon IDs cannot be correlated acr
       if (content.includes('getOrCreateAnonId') && content.includes('function getOrCreateAnonId')) {
         found = true;
         // The function must use randomUUID for fresh session tokens — not a counter or timestamp
-        expect(content, 'getOrCreateAnonId must use crypto.randomUUID for statistically unique session tokens').toMatch(/randomUUID/);
+        expect(
+          content,
+          'getOrCreateAnonId must use crypto.randomUUID for statistically unique session tokens'
+        ).toMatch(/randomUUID/);
         // Must NOT use a sequential counter (predictable IDs could be correlated)
-        expect(content, 'getOrCreateAnonId must not use sequential counter — predictable IDs are linkable').not.toMatch(/\banonCounter\b|\bid\+\+\b|\banonSeq\b/);
+        expect(
+          content,
+          'getOrCreateAnonId must not use sequential counter — predictable IDs are linkable'
+        ).not.toMatch(/\banonCounter\b|\bid\+\+\b|\banonSeq\b/);
       }
     }
     // If the function wasn't found as a definition, it might be defined inline — that's OK
@@ -428,11 +492,16 @@ describe('P6: Token linkability absent — ose_anon IDs cannot be correlated acr
   test('ose_anon cookie is UUID-shaped — not a timestamp or counter', () => {
     const sources: Record<string, string> = JSON.parse(tenv().TEST_SOURCE_FILES_JSON);
     // Find forms.ts and check that getOrCreateAnonId is called, not a counter
-    const formsSrc = Object.entries(sources).find(([p]) => p.replace(/\\/g, '/').endsWith('handlers/forms.ts'));
+    const formsSrc = Object.entries(sources).find(([p]) =>
+      p.replace(/\\/g, '/').endsWith('handlers/forms.ts')
+    );
     if (!formsSrc) return;
 
     const [, content] = formsSrc;
-    expect(content, 'forms.ts must use getOrCreateAnonId (UUID-based) not a manual counter for session tracking').toMatch(/getOrCreateAnonId/);
+    expect(
+      content,
+      'forms.ts must use getOrCreateAnonId (UUID-based) not a manual counter for session tracking'
+    ).toMatch(/getOrCreateAnonId/);
   });
 });
 
@@ -449,18 +518,34 @@ describe('P7: Suppression floor — small cohorts render suppressed, not reveale
     const corridorEntry = Object.entries(sources).find(([p]) =>
       p.replace(/\\/g, '/').endsWith('lib/corridor-map.ts')
     );
-    expect(corridorEntry, 'src/lib/corridor-map.ts not found in TEST_SOURCE_FILES_JSON').toBeDefined();
+    expect(
+      corridorEntry,
+      'src/lib/corridor-map.ts not found in TEST_SOURCE_FILES_JSON'
+    ).toBeDefined();
     const [, content] = corridorEntry!;
 
     // Floor must be defined or imported — corridor-map may import it from shared-report.ts
-    const hasFloorRef = /\b(minCount|MIN_COUNT|privacyFloor|PRIVACY_FLOOR|suppressionFloor|SUPPRESSION_FLOOR|CORRIDOR_MAP_MIN_COUNT)\b/.test(content);
-    expect(content, 'corridor-map.ts must define or import a minCount / privacy floor constant').toMatch(/\b(minCount|MIN_COUNT|privacyFloor|PRIVACY_FLOOR|suppressionFloor|SUPPRESSION_FLOOR|CORRIDOR_MAP_MIN_COUNT)\b/);
+    const hasFloorRef =
+      /\b(minCount|MIN_COUNT|privacyFloor|PRIVACY_FLOOR|suppressionFloor|SUPPRESSION_FLOOR|CORRIDOR_MAP_MIN_COUNT)\b/.test(
+        content
+      );
+    expect(
+      content,
+      'corridor-map.ts must define or import a minCount / privacy floor constant'
+    ).toMatch(
+      /\b(minCount|MIN_COUNT|privacyFloor|PRIVACY_FLOOR|suppressionFloor|SUPPRESSION_FLOOR|CORRIDOR_MAP_MIN_COUNT)\b/
+    );
 
     // Extract the numeric value — accept inline definition or look in shared-report.ts for the import
-    const inlineMatch = content.match(/\b(?:minCount|MIN_COUNT|privacyFloor|PRIVACY_FLOOR|suppressionFloor|SUPPRESSION_FLOOR|CORRIDOR_MAP_MIN_COUNT)\s*[=:]\s*(\d+)/);
+    const inlineMatch = content.match(
+      /\b(?:minCount|MIN_COUNT|privacyFloor|PRIVACY_FLOOR|suppressionFloor|SUPPRESSION_FLOOR|CORRIDOR_MAP_MIN_COUNT)\s*[=:]\s*(\d+)/
+    );
     if (inlineMatch) {
       const floorValue = parseInt(inlineMatch[1], 10);
-      expect(floorValue, `Privacy floor is ${floorValue} — must be >= 5 to prevent re-identification of small groups`).toBeGreaterThanOrEqual(5);
+      expect(
+        floorValue,
+        `Privacy floor is ${floorValue} — must be >= 5 to prevent re-identification of small groups`
+      ).toBeGreaterThanOrEqual(5);
     } else {
       // Floor constant is imported from another module (e.g. shared-report.ts) — find the definition there
       const sharedEntry = Object.entries(sources).find(([p]) =>
@@ -469,11 +554,20 @@ describe('P7: Suppression floor — small cohorts render suppressed, not reveale
       if (sharedEntry) {
         const sharedSrc = sharedEntry[1];
         const importedMatch = sharedSrc.match(/\bCORRIDOR_MAP_MIN_COUNT\s*=\s*(\d+)/);
-        expect(importedMatch, 'CORRIDOR_MAP_MIN_COUNT must be defined with a numeric value in shared-report.ts').not.toBeNull();
+        expect(
+          importedMatch,
+          'CORRIDOR_MAP_MIN_COUNT must be defined with a numeric value in shared-report.ts'
+        ).not.toBeNull();
         const floorValue = parseInt(importedMatch![1], 10);
-        expect(floorValue, `CORRIDOR_MAP_MIN_COUNT is ${floorValue} — must be >= 5`).toBeGreaterThanOrEqual(5);
+        expect(
+          floorValue,
+          `CORRIDOR_MAP_MIN_COUNT is ${floorValue} — must be >= 5`
+        ).toBeGreaterThanOrEqual(5);
       } else {
-        expect(hasFloorRef, 'Could not find floor constant definition — check corridor-map.ts or shared-report.ts').toBe(true);
+        expect(
+          hasFloorRef,
+          'Could not find floor constant definition — check corridor-map.ts or shared-report.ts'
+        ).toBe(true);
       }
     }
   });
@@ -482,27 +576,34 @@ describe('P7: Suppression floor — small cohorts render suppressed, not reveale
     const src = loadSource('src/lib/shared-report-builder.ts');
 
     // The report builder must apply suppression — presence of the word in output is evidence
-    expect(src, 'shared-report-builder.ts must implement suppression logic').toMatch(/suppressed|suppression|below.*floor|floor.*suppress/i);
+    expect(src, 'shared-report-builder.ts must implement suppression logic').toMatch(
+      /suppressed|suppression|below.*floor|floor.*suppress/i
+    );
     // The builder must NOT simply return raw counts without checking against the floor
     // (This is a presence test: we can assert suppression is in the code, not just the name)
-    expect(src).toMatch(/minCount|MIN_COUNT|privacyFloor|PRIVACY_FLOOR|suppressionFloor|SUPPRESSION_FLOOR/);
+    expect(src).toMatch(
+      /minCount|MIN_COUNT|privacyFloor|PRIVACY_FLOOR|suppressionFloor|SUPPRESSION_FLOOR/
+    );
   });
 
   test('suppression is applied before export — no raw below-floor data reaches callers', async () => {
     // Insert a single scan record into DB (count = 1, below any reasonable floor)
     // Then verify corridor-map either returns null/suppressed or does not expose count=1
     try {
-      await tenv().DB.prepare(
-        `INSERT OR IGNORE INTO events (id, title, status, created_at) VALUES ('evt-p7-probe', 'P7 Probe Event', 'active', datetime('now'))`
-      ).run();
+      await tenv()
+        .DB.prepare(
+          `INSERT OR IGNORE INTO events (id, title, status, created_at) VALUES ('evt-p7-probe', 'P7 Probe Event', 'active', datetime('now'))`
+        )
+        .run();
     } catch {
       // Events table may have required columns — skip behavioral test if schema differs
       return;
     }
 
-    // If a `scans` table exists, insert a single below-floor scan
-    const scanCols = await getTableColumns(tenv().DB, 'scans');
-    if (scanCols.length === 0) return; // scans table not in migrations yet
+    // OSE-798: the session-side scan table is scan_node_returns. If it exists,
+    // a single below-floor scan is the probe input.
+    const scanCols = await getTableColumns(tenv().DB, 'scan_node_returns');
+    if (scanCols.length === 0) return; // split scan tables not in migrations yet
 
     // Do not attempt a full report build here — that would require materializer state.
     // Instead, assert the structural gate above (corridor-map has a floor) is sufficient
@@ -523,9 +624,20 @@ describe('P8: Audit layer is clean — operator and boundary logging only, never
     const cols = await getTableColumns(tenv().DB, 'admin_audit_log');
     if (cols.length === 0) return; // table may not be in test migrations yet
 
-    const attendeeColumns = ['attendee_id', 'attendee_email', 'user_email', 'scan_id', 'anon_id', 'cookie', 'session_id'];
+    const attendeeColumns = [
+      'attendee_id',
+      'attendee_email',
+      'user_email',
+      'scan_id',
+      'anon_id',
+      'cookie',
+      'session_id',
+    ];
     for (const col of attendeeColumns) {
-      expect(cols, `admin_audit_log has column "${col}" — audit log must track operators, not attendees`).not.toContain(col);
+      expect(
+        cols,
+        `admin_audit_log has column "${col}" — audit log must track operators, not attendees`
+      ).not.toContain(col);
     }
   });
 
@@ -533,9 +645,19 @@ describe('P8: Audit layer is clean — operator and boundary logging only, never
     const cols = await getTableColumns(tenv().DB, 'report_access_log');
     if (cols.length === 0) return;
 
-    const attendeeColumns = ['attendee_id', 'attendee_email', 'user_email', 'scan_id', 'anon_id', 'cookie'];
+    const attendeeColumns = [
+      'attendee_id',
+      'attendee_email',
+      'user_email',
+      'scan_id',
+      'anon_id',
+      'cookie',
+    ];
     for (const col of attendeeColumns) {
-      expect(cols, `report_access_log has column "${col}" — this log tracks report access actors (roles), not individual attendees`).not.toContain(col);
+      expect(
+        cols,
+        `report_access_log has column "${col}" — this log tracks report access actors (roles), not individual attendees`
+      ).not.toContain(col);
     }
   });
 
@@ -548,15 +670,21 @@ describe('P8: Audit layer is clean — operator and boundary logging only, never
     const [, content] = auditEntry!;
 
     // logReportAccess signature: extract from source
-    const sigMatch = content.match(/export\s+(?:async\s+)?function\s+logReportAccess\s*\(([^)]+)\)/);
+    const sigMatch = content.match(
+      /export\s+(?:async\s+)?function\s+logReportAccess\s*\(([^)]+)\)/
+    );
     expect(sigMatch, 'logReportAccess not found in audit-log.ts').not.toBeNull();
 
     const params = sigMatch![1];
     // Parameters must not include attendee-level identifiers
     expect(params, 'logReportAccess must not accept raw email parameter').not.toMatch(/\bemail\b/i);
-    expect(params, 'logReportAccess must not accept attendee_id parameter').not.toMatch(/\battendee[_-]?id\b/i);
+    expect(params, 'logReportAccess must not accept attendee_id parameter').not.toMatch(
+      /\battendee[_-]?id\b/i
+    );
     expect(params, 'logReportAccess must not accept ip parameter').not.toMatch(/\bip\b/);
-    expect(params, 'logReportAccess must not accept cookie or session parameter').not.toMatch(/\b(cookie|session|anon_id|anonId)\b/i);
+    expect(params, 'logReportAccess must not accept cookie or session parameter').not.toMatch(
+      /\b(cookie|session|anon_id|anonId)\b/i
+    );
   });
 
   test('logAdminAction() parameters do not include attendee PII', () => {
@@ -571,8 +699,12 @@ describe('P8: Audit layer is clean — operator and boundary logging only, never
     if (!sigMatch) return; // function may not exist yet
 
     const params = sigMatch![1];
-    expect(params, 'logAdminAction must not accept attendee email').not.toMatch(/\battendee[Ee]mail\b/);
-    expect(params, 'logAdminAction must not accept scan_id of individual attendee').not.toMatch(/\bscan[Ii]d\b/);
+    expect(params, 'logAdminAction must not accept attendee email').not.toMatch(
+      /\battendee[Ee]mail\b/
+    );
+    expect(params, 'logAdminAction must not accept scan_id of individual attendee').not.toMatch(
+      /\bscan[Ii]d\b/
+    );
   });
 
   // @born-red TL-026 | method: design-time-negative-assertion | date: 2026-08-03
@@ -585,9 +717,14 @@ describe('P8: Audit layer is clean — operator and boundary logging only, never
     const [, content] = auditEntry;
 
     // The audit log INSERT must not bind IP or email values
-    expect(content, 'audit-log.ts binds IP to an INSERT — operator logs must not persist network identifiers').not.toMatch(/clientIp\s*\(|getClientIp\s*\(/);
+    expect(
+      content,
+      'audit-log.ts binds IP to an INSERT — operator logs must not persist network identifiers'
+    ).not.toMatch(/clientIp\s*\(|getClientIp\s*\(/);
     // Must not store raw email (hashed is OK; raw is not)
-    expect(content, 'audit-log.ts stores raw email — should store role/actor_id only').not.toMatch(/rawEmail|raw_email/);
+    expect(content, 'audit-log.ts stores raw email — should store role/actor_id only').not.toMatch(
+      /rawEmail|raw_email/
+    );
   });
 
   test('CI log summary — emit structured evidence record for conformance report (OSE-560)', () => {
@@ -598,7 +735,16 @@ describe('P8: Audit layer is clean — operator and boundary logging only, never
       story: 'OSE-563',
       last_attacked: new Date().toISOString().slice(0, 10),
       properties_tested: 8,
-      properties: ['P1_no_pii_schema', 'P2_no_ip_write', 'P3_no_ua_write', 'P4_bucketed_timestamps', 'P5_no_cross_db_join', 'P6_no_token_linkability', 'P7_suppression_floor', 'P8_audit_clean'],
+      properties: [
+        'P1_no_pii_schema',
+        'P2_no_ip_write',
+        'P3_no_ua_write',
+        'P4_bucketed_timestamps',
+        'P5_no_cross_db_join',
+        'P6_no_token_linkability',
+        'P7_suppression_floor',
+        'P8_audit_clean',
+      ],
     };
     console.info(`[OSE-563-EVIDENCE] ${JSON.stringify(evidence)}`);
     expect(evidence.properties_tested).toBe(8);

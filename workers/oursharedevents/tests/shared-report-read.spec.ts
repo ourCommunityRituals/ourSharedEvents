@@ -58,7 +58,9 @@ async function clearReadTables(): Promise<void> {
   await db.prepare(`DELETE FROM scan_aggregates`).run();
   await db.prepare(`UPDATE events SET series_id = NULL`).run();
   await db.prepare(`DELETE FROM event_series`).run();
-  await db.prepare(`DELETE FROM scans`).run();
+  // OSE-798: `scans` split into scan_placement_events + scan_node_returns.
+  await db.prepare(`DELETE FROM scan_placement_events`).run();
+  await db.prepare(`DELETE FROM scan_node_returns`).run();
   // NOTE: sponsor_impressions has a trigger referencing sponsors_old; we
   // don't seed sponsor_impressions in this spec so skip clearing it.
   await db.prepare(`DELETE FROM poster_deployments WHERE id LIKE 'test-pd-read-%'`).run();
@@ -702,10 +704,12 @@ describe('H3 corridor map + open-question resolutions', () => {
       start_date: '2026-05-07T19:00:00Z',
     });
     // Seed scan_aggregates with an h3_res9 cell (Eagles Hall res9)
-    await tenv().DB.prepare(
-      `INSERT INTO scan_aggregates (id, event_id, bucket_date, total_scans, unique_agents, h3_res9, computed_at)
+    await tenv()
+      .DB.prepare(
+        `INSERT INTO scan_aggregates (id, event_id, bucket_date, total_scans, unique_agents, h3_res9, computed_at)
        VALUES ('sa-q8-live', 'test-evt-read-q8-live', '2026-05-07', 30, 10, '89266454447ffff', datetime('now'))`
-    ).run();
+      )
+      .run();
 
     const r = await buildSharedReport(tenv().DB, 'test-evt-read-q8-live');
     expect(r.ok).toBe(true);
@@ -715,12 +719,14 @@ describe('H3 corridor map + open-question resolutions', () => {
   });
 
   test('Q8: corridor_map.source is "fallback" when no h3_res9 scan data but event has h3_res7', async () => {
-    await tenv().DB.prepare(
-      `INSERT INTO events (id, brand_id, title, slug, status, location, start_date, h3_res9, h3_res7, created_at, updated_at)
+    await tenv()
+      .DB.prepare(
+        `INSERT INTO events (id, brand_id, title, slug, status, location, start_date, h3_res9, h3_res7, created_at, updated_at)
        VALUES ('test-evt-read-q8-fallback', 'test-brand', 'Test Q8 Fallback', 'test-evt-read-q8-fallback',
                'active', 'Eagles Hall', '2026-05-07T19:00:00Z', '89266454447ffff', '872664544ffffff',
                datetime('now'), datetime('now'))`
-    ).run();
+      )
+      .run();
     await seedScanAggregate('test-evt-read-q8-fallback', 25); // no h3_res9 on this row
 
     const r = await buildSharedReport(tenv().DB, 'test-evt-read-q8-fallback');
@@ -742,13 +748,15 @@ describe('H3 corridor map + open-question resolutions', () => {
 
   // Q10 — tagsConsistent check
   test('Q10: corrupt H3 tags suppress corridor_map with a clear reason', async () => {
-    await tenv().DB.prepare(
-      `INSERT INTO events (id, brand_id, title, slug, status, location, start_date, h3_res9, h3_res7, created_at, updated_at)
+    await tenv()
+      .DB.prepare(
+        `INSERT INTO events (id, brand_id, title, slug, status, location, start_date, h3_res9, h3_res7, created_at, updated_at)
        VALUES ('test-evt-read-q10-corrupt', 'test-brand', 'Test Q10 Corrupt Tags', 'test-evt-read-q10-corrupt',
                'active', 'Eagles Hall', '2026-05-07T19:00:00Z',
                '89266454447ffff', '8726645ddffffff',
                datetime('now'), datetime('now'))`
-    ).run();
+      )
+      .run();
     // h3_res9 '89266454447ffff' (Eagles Hall) and h3_res7 '8726645ddffffff' are inconsistent
     // — the res9 cell's parent at res7 is '872664544ffffff', not '8726645ddffffff'.
 
@@ -765,21 +773,27 @@ describe('H3 corridor map + open-question resolutions', () => {
 
   // Q: H3 cell IDs must not appear in suppression reason detail strings
   test('H3 cell IDs are stripped from suppression reason details (privacy floor protection)', async () => {
-    await tenv().DB.prepare(
-      `INSERT INTO events (id, brand_id, title, slug, status, location, start_date, h3_res9, h3_res7, created_at, updated_at)
+    await tenv()
+      .DB.prepare(
+        `INSERT INTO events (id, brand_id, title, slug, status, location, start_date, h3_res9, h3_res7, created_at, updated_at)
        VALUES ('test-evt-read-cellleak', 'test-brand', 'Test Cell ID Leak', 'test-evt-read-cellleak',
                'active', 'Eagles Hall', '2026-05-07T19:00:00Z', '89266454447ffff', '872664544ffffff',
                datetime('now'), datetime('now'))`
-    ).run();
+      )
+      .run();
     // Seed two h3_res9 cells — one with enough scans, one below floor (suppressed)
-    await tenv().DB.prepare(
-      `INSERT INTO scan_aggregates (id, event_id, bucket_date, total_scans, unique_agents, h3_res9, computed_at)
+    await tenv()
+      .DB.prepare(
+        `INSERT INTO scan_aggregates (id, event_id, bucket_date, total_scans, unique_agents, h3_res9, computed_at)
        VALUES ('sa-cellleak-1', 'test-evt-read-cellleak', '2026-05-07', 30, 10, '89266454447ffff', datetime('now'))`
-    ).run();
-    await tenv().DB.prepare(
-      `INSERT INTO scan_aggregates (id, event_id, bucket_date, total_scans, unique_agents, h3_res9, computed_at)
+      )
+      .run();
+    await tenv()
+      .DB.prepare(
+        `INSERT INTO scan_aggregates (id, event_id, bucket_date, total_scans, unique_agents, h3_res9, computed_at)
        VALUES ('sa-cellleak-2', 'test-evt-read-cellleak', '2026-05-07', 6, 2, '892664544b7ffff', datetime('now'))`
-    ).run();
+      )
+      .run();
 
     const r = await buildSharedReport(tenv().DB, 'test-evt-read-cellleak');
     expect(r.ok).toBe(true);
@@ -813,22 +827,50 @@ describe('H3 corridor map + open-question resolutions', () => {
     // Verify the derivation logic produces correct output for the shared-campaign scenario.
     // Two sponsors share campaign 'camp-q6'. Only sp-q6-a's rows are in scoped impressions.
     type ImpressionRow = {
-      sponsor_id: string; sponsor_name: string; campaign_id: string | null;
-      campaign_title: string | null; sponsor_tier: string | null; is_local: boolean;
-      surface: string; count: number;
+      sponsor_id: string;
+      sponsor_name: string;
+      campaign_id: string | null;
+      campaign_title: string | null;
+      sponsor_tier: string | null;
+      is_local: boolean;
+      surface: string;
+      count: number;
     };
     const scopedRows: ImpressionRow[] = [
-      { sponsor_id: 'sp-q6-a', sponsor_name: 'Sponsor A', campaign_id: 'camp-q6',
-        campaign_title: 'Shared Campaign', sponsor_tier: 'silver', is_local: false,
-        surface: 'qr_poster', count: 5 },
+      {
+        sponsor_id: 'sp-q6-a',
+        sponsor_name: 'Sponsor A',
+        campaign_id: 'camp-q6',
+        campaign_title: 'Shared Campaign',
+        sponsor_tier: 'silver',
+        is_local: false,
+        surface: 'qr_poster',
+        count: 5,
+      },
     ];
     // Replicate the derivation logic from the handler (Q6 fix)
-    const campaignMap = new Map<string, { campaign_id: string; campaign_title: string; total_impressions: number; sponsor_count: number }>();
+    const campaignMap = new Map<
+      string,
+      {
+        campaign_id: string;
+        campaign_title: string;
+        total_impressions: number;
+        sponsor_count: number;
+      }
+    >();
     for (const row of scopedRows) {
       if (!row.campaign_id) continue;
       const ex = campaignMap.get(row.campaign_id);
-      if (ex) { ex.total_impressions += row.count; ex.sponsor_count += 1; }
-      else campaignMap.set(row.campaign_id, { campaign_id: row.campaign_id, campaign_title: row.campaign_title ?? 'unknown', total_impressions: row.count, sponsor_count: 1 });
+      if (ex) {
+        ex.total_impressions += row.count;
+        ex.sponsor_count += 1;
+      } else
+        campaignMap.set(row.campaign_id, {
+          campaign_id: row.campaign_id,
+          campaign_title: row.campaign_title ?? 'unknown',
+          total_impressions: row.count,
+          sponsor_count: 1,
+        });
     }
     const derived = campaignMap.size > 0 ? [...campaignMap.values()] : null;
     expect(derived).not.toBeNull();
@@ -870,17 +912,24 @@ describe('H3 corridor map + open-question resolutions', () => {
   // Q2 — sponsor mint depth
   test('Q2: minting sponsor token with depth="mid" succeeds', async () => {
     await seedEvent({ id: 'test-evt-read-q2-mid' });
-    await tenv().DB.prepare(
-      `INSERT OR IGNORE INTO sponsors (id, event_id, name, tier, is_local, created_at, updated_at)
+    await tenv()
+      .DB.prepare(
+        `INSERT OR IGNORE INTO sponsors (id, event_id, name, tier, is_local, created_at, updated_at)
        VALUES ('sp-q2-mid', 'test-evt-read-q2-mid', 'Mid Sponsor', 'silver', 0, datetime('now'), datetime('now'))`
-    ).run();
+      )
+      .run();
 
     const res = await SELF.fetch(
       `https://test.local/api/v2/admin/events/test-evt-read-q2-mid/shared-report/mint-link`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${ADMIN_KEY}` },
-        body: JSON.stringify({ role: 'sponsor', sponsor_id: 'sp-q2-mid', depth: 'mid', ttl_days: 7 }),
+        body: JSON.stringify({
+          role: 'sponsor',
+          sponsor_id: 'sp-q2-mid',
+          depth: 'mid',
+          ttl_days: 7,
+        }),
       }
     );
     expect(res.status).toBe(200);
@@ -891,10 +940,12 @@ describe('H3 corridor map + open-question resolutions', () => {
 
   test('Q2: minting sponsor token with no depth defaults to mid (token payload contains depth=mid)', async () => {
     await seedEvent({ id: 'test-evt-read-q2-default' });
-    await tenv().DB.prepare(
-      `INSERT OR IGNORE INTO sponsors (id, event_id, name, tier, is_local, created_at, updated_at)
+    await tenv()
+      .DB.prepare(
+        `INSERT OR IGNORE INTO sponsors (id, event_id, name, tier, is_local, created_at, updated_at)
        VALUES ('sp-q2-default', 'test-evt-read-q2-default', 'Default Depth Sponsor', 'silver', 0, datetime('now'), datetime('now'))`
-    ).run();
+      )
+      .run();
 
     const res = await SELF.fetch(
       `https://test.local/api/v2/admin/events/test-evt-read-q2-default/shared-report/mint-link`,
@@ -911,7 +962,7 @@ describe('H3 corridor map + open-question resolutions', () => {
     // Decode the payload segment (first part before the dot).
     const [payloadB64] = body.token.split('.');
     const base64 = payloadB64!.replace(/-/g, '+').replace(/_/g, '/');
-    const padded = base64.padEnd(base64.length + (4 - base64.length % 4) % 4, '=');
+    const padded = base64.padEnd(base64.length + ((4 - (base64.length % 4)) % 4), '=');
     const binaryStr = atob(padded);
     const bytes = Uint8Array.from(binaryStr, (c) => c.charCodeAt(0));
     const payload = JSON.parse(new TextDecoder().decode(bytes)) as Record<string, unknown>;

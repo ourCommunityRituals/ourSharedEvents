@@ -148,7 +148,7 @@ export async function materializeAnonIdReturns(
     result.eventsProcessed++;
     try {
       const anonRows = await env.DB.prepare(
-        `SELECT DISTINCT anonymous_id FROM scans
+        `SELECT DISTINCT anonymous_id FROM scan_node_returns
            WHERE event_id = ?
              AND anonymous_id IS NOT NULL`
       )
@@ -599,7 +599,7 @@ export async function aggregateScanBuckets(
          CAST(substr(scan_bucket, 12, 2) AS INTEGER) AS bucket_hour,
          COUNT(*)                               AS total_scans,
          COUNT(DISTINCT COALESCE(anonymous_id, user_agent_hash)) AS unique_agents
-       FROM scans
+       FROM scan_node_returns
        WHERE event_id IN (
          SELECT id FROM events WHERE start_date >= ?
        )
@@ -620,7 +620,7 @@ export async function aggregateScanBuckets(
       `SELECT event_id, substr(scan_bucket, 1, 13) AS bucket_prefix, country_code
        FROM (
          SELECT event_id, scan_bucket, country_code, COUNT(*) AS cnt
-         FROM scans
+         FROM scan_node_returns
          WHERE country_code IS NOT NULL
            AND event_id IN (SELECT id FROM events WHERE start_date >= ?)
          GROUP BY event_id, scan_bucket, country_code
@@ -653,8 +653,16 @@ export async function aggregateScanBuckets(
               total_scans, unique_agents, top_country, computed_at)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
         )
-          .bind(id, b.event_id, b.bucket_date, b.bucket_hour,
-                b.total_scans, b.unique_agents, topCountry, nowIso)
+          .bind(
+            id,
+            b.event_id,
+            b.bucket_date,
+            b.bucket_hour,
+            b.total_scans,
+            b.unique_agents,
+            topCountry,
+            nowIso
+          )
           .run();
         result.rowsUpserted++;
       } catch (err) {

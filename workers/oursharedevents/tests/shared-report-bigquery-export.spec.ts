@@ -90,7 +90,9 @@ async function clearExportTables(): Promise<void> {
   await db.prepare(`DELETE FROM corridor_density_baseline`).run();
   await db.prepare(`UPDATE events SET series_id = NULL`).run();
   await db.prepare(`DELETE FROM event_series`).run();
-  await db.prepare(`DELETE FROM scans`).run();
+  // OSE-798: `scans` split into scan_placement_events + scan_node_returns.
+  await db.prepare(`DELETE FROM scan_placement_events`).run();
+  await db.prepare(`DELETE FROM scan_node_returns`).run();
   await db.prepare(`DELETE FROM poster_deployments WHERE id LIKE 'test-pd-exp-%'`).run();
   await db.prepare(`DELETE FROM events WHERE id LIKE 'test-evt-exp-%'`).run();
   await db.prepare(`DELETE FROM corridors WHERE id LIKE 'test-corr-exp-%'`).run();

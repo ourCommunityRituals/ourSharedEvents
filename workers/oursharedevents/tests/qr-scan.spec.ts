@@ -117,9 +117,13 @@ async function seedEventAndDeployment(db: D1Database): Promise<void> {
     .run();
 }
 
+// OSE-798: `scans` was split into scan_placement_events (WHERE) +
+// scan_node_returns (WHO). Each real scan writes exactly one row to EACH table,
+// so counting the placement side gives the same per-scan count the old
+// `COUNT(*) FROM scans` gave. Placement is authoritative for "a scan happened".
 async function countScans(db: D1Database): Promise<number> {
   const row = await db
-    .prepare(`SELECT COUNT(*) AS c FROM scans WHERE event_id = ?`)
+    .prepare(`SELECT COUNT(*) AS c FROM scan_placement_events WHERE event_id = ?`)
     .bind(TEST_EVENT_ID)
     .first<{ c: number }>();
   return row?.c ?? 0;
@@ -153,8 +157,15 @@ beforeAll(async () => {
 });
 
 beforeEach(async () => {
-  // Clear scans between tests for count assertions
-  await tenv().DB.prepare(`DELETE FROM scans WHERE event_id = ?`).bind(TEST_EVENT_ID).run();
+  // Clear scans between tests for count assertions (both split tables).
+  await tenv()
+    .DB.prepare(`DELETE FROM scan_placement_events WHERE event_id = ?`)
+    .bind(TEST_EVENT_ID)
+    .run();
+  await tenv()
+    .DB.prepare(`DELETE FROM scan_node_returns WHERE event_id = ?`)
+    .bind(TEST_EVENT_ID)
+    .run();
 });
 
 // ── Tests ────────────────────────────────────────────────────────────────────
@@ -162,7 +173,11 @@ beforeEach(async () => {
 describe('OSE-625: QR scan ingestion — handleQrScan()', () => {
   test('OSE-625 | UNIT | valid token, new visitor | writes scan row and 302-redirects to form page', async () => {
     const kv = makeInMemoryKV();
-    const res = await handleQrScan(makeRequest(VALID_QR_TOKEN, { type: 'register' }), makeEnv(kv), VALID_QR_TOKEN);
+    const res = await handleQrScan(
+      makeRequest(VALID_QR_TOKEN, { type: 'register' }),
+      makeEnv(kv),
+      VALID_QR_TOKEN
+    );
 
     expect(res.status).toBe(302);
     const location = res.headers.get('Location') ?? '';
@@ -227,7 +242,11 @@ describe('OSE-625: QR scan ingestion — handleQrScan()', () => {
 
   test('OSE-625 | UNIT | redirect URL type passthrough | checkin type preserved in redirect', async () => {
     const kv = makeInMemoryKV();
-    const res = await handleQrScan(makeRequest(VALID_QR_TOKEN, { type: 'checkin' }), makeEnv(kv), VALID_QR_TOKEN);
+    const res = await handleQrScan(
+      makeRequest(VALID_QR_TOKEN, { type: 'checkin' }),
+      makeEnv(kv),
+      VALID_QR_TOKEN
+    );
 
     const location = res.headers.get('Location') ?? '';
     expect(location).toContain('type=checkin');
@@ -253,7 +272,7 @@ describe('OSE-625: QR scan ingestion — handleQrScan()', () => {
     await handleQrScan(makeRequest(VALID_QR_TOKEN), makeEnv(kv), VALID_QR_TOKEN);
 
     const row = await tenv()
-      .DB.prepare(`SELECT scan_bucket FROM scans WHERE event_id = ? LIMIT 1`)
+      .DB.prepare(`SELECT scan_bucket FROM scan_placement_events WHERE event_id = ? LIMIT 1`)
       .bind(TEST_EVENT_ID)
       .first<{ scan_bucket: string }>();
 
@@ -264,14 +283,10 @@ describe('OSE-625: QR scan ingestion — handleQrScan()', () => {
 
   test('OSE-625 | UNIT | scan row values | country_code stored from CF-IPCountry header', async () => {
     const kv = makeInMemoryKV();
-    await handleQrScan(
-      makeRequest(VALID_QR_TOKEN, { country: 'US' }),
-      makeEnv(kv),
-      VALID_QR_TOKEN
-    );
+    await handleQrScan(makeRequest(VALID_QR_TOKEN, { country: 'US' }), makeEnv(kv), VALID_QR_TOKEN);
 
     const row = await tenv()
-      .DB.prepare(`SELECT country_code FROM scans WHERE event_id = ? LIMIT 1`)
+      .DB.prepare(`SELECT country_code FROM scan_node_returns WHERE event_id = ? LIMIT 1`)
       .bind(TEST_EVENT_ID)
       .first<{ country_code: string }>();
 
@@ -283,7 +298,7 @@ describe('OSE-625: QR scan ingestion — handleQrScan()', () => {
     await handleQrScan(makeRequest(VALID_QR_TOKEN), makeEnv(kv), VALID_QR_TOKEN);
 
     const row = await tenv()
-      .DB.prepare(`SELECT anonymous_id FROM scans WHERE event_id = ? LIMIT 1`)
+      .DB.prepare(`SELECT anonymous_id FROM scan_node_returns WHERE event_id = ? LIMIT 1`)
       .bind(TEST_EVENT_ID)
       .first<{ anonymous_id: string }>();
 
@@ -326,11 +341,7 @@ describe('OSE-625: QR scan ingestion — handleQrScan()', () => {
 
   test('OSE-625 | UNIT | inactive deployment token | 302 to homepage, no DB write', async () => {
     const kv = makeInMemoryKV();
-    const res = await handleQrScan(
-      makeRequest(INACTIVE_QR_TOKEN),
-      makeEnv(kv),
-      INACTIVE_QR_TOKEN
-    );
+    const res = await handleQrScan(makeRequest(INACTIVE_QR_TOKEN), makeEnv(kv), INACTIVE_QR_TOKEN);
 
     expect(res.status).toBe(302);
     expect(res.headers.get('Location')).toBe('/');

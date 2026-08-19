@@ -60,7 +60,8 @@ const DB_TABLES = [
   'poster_deployments', // 0003
   'report_access_log', // 0043 (OSE-557 SharedReport access logging)
   'scan_aggregates', // 0006
-  'scans', // 0004
+  'scan_node_returns', // 0063 (OSE-798 A1 — session side of the split scan path; no placement id)
+  'scan_placement_events', // 0063 (OSE-798 A1 — placement side; no session-derived column)
   'security_alerts', // 0042 (OSE-558 security observability)
   'security_metrics', // 0042 (OSE-558 security observability)
   'shortlinks', // 0030 (OSE-240)
@@ -99,7 +100,7 @@ const CRITICAL_DB_INDEXES = [
   'idx_events_brand_status',
   'idx_events_slug',
   'idx_poster_deployments_qr_token', // QR scan lookup hot path
-  'idx_scans_anonymous', // OSE-199 anonymous lookups
+  'idx_spe_event_poster', // OSE-798 poster scan-volume lookup (replaced idx_scans_anonymous)
   'idx_admin_audit_log_created_at', // OSE-212 audit feed pagination
 ] as const;
 
