@@ -21,6 +21,18 @@
 
 import { corsHeaders } from '../lib/cors';
 import { maybeTag } from '../lib/h3-tagging';
+import { generateQrCode } from '../lib/qr';
+
+/**
+ * Physical scan URL a poster QR encodes: `{origin}/q/{qr_token}`.
+ * Hitting it records an anonymous `scans` row (handlers/qr-scan.ts) and
+ * redirects the attendee to the register form. This is the artifact the
+ * admin QR card renders so an organizer can actually put a poster up
+ * (OSE-895). No `?type` → qr-scan defaults to register.
+ */
+function scanUrlFor(origin: string, qrToken: string): string {
+  return `${origin}/q/${encodeURIComponent(qrToken)}`;
+}
 
 export interface PosterDeploymentsEnv {
   DB?: D1Database;
@@ -38,12 +50,22 @@ function requestId(): string {
 
 function errorResponse(code: string, message: string, status: number, rid: string): Response {
   return Response.json(
-    { ok: false, status, code, error: message, requestId: rid, timestamp: new Date().toISOString() },
+    {
+      ok: false,
+      status,
+      code,
+      error: message,
+      requestId: rid,
+      timestamp: new Date().toISOString(),
+    },
     { status }
   );
 }
 
-async function parseBody(request: Request, rid: string): Promise<Record<string, unknown> | Response> {
+async function parseBody(
+  request: Request,
+  rid: string
+): Promise<Record<string, unknown> | Response> {
   try {
     return (await request.json()) as Record<string, unknown>;
   } catch {
@@ -65,7 +87,12 @@ function validateCoords(
   if (hasLat !== hasLon) {
     return {
       ok: false,
-      response: errorResponse('INVALID_COORDINATES', 'Both latitude and longitude must be provided together', 400, rid),
+      response: errorResponse(
+        'INVALID_COORDINATES',
+        'Both latitude and longitude must be provided together',
+        400,
+        rid
+      ),
     };
   }
 
@@ -74,7 +101,12 @@ function validateCoords(
   if (lat < -90 || lat > 90 || lon < -180 || lon > 180) {
     return {
       ok: false,
-      response: errorResponse('INVALID_COORDINATES', 'latitude must be -90..90 and longitude must be -180..180', 400, rid),
+      response: errorResponse(
+        'INVALID_COORDINATES',
+        'latitude must be -90..90 and longitude must be -180..180',
+        400,
+        rid
+      ),
     };
   }
 
@@ -126,7 +158,9 @@ export async function handleAdminCreatePosterDeployment(
       .run();
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    console.error(JSON.stringify({ type: 'DB_ERROR', handler: 'handleAdminCreatePosterDeployment', error: msg }));
+    console.error(
+      JSON.stringify({ type: 'DB_ERROR', handler: 'handleAdminCreatePosterDeployment', error: msg })
+    );
     return errorResponse('DB_ERROR', 'Failed to create poster deployment', 503, rid);
   }
 
@@ -169,8 +203,25 @@ export async function handleAdminListPosterDeployments(
       updated_at: string;
     }>();
 
+  // Enrich each row with the physical scan URL and an in-bundle QR data-URI
+  // (OSE-895). QR generation stays deterministic/LLM-free — same native
+  // generateQrCode the poster bundle uses; no external QR API. A generation
+  // failure (e.g. token too long) degrades to empty string rather than 500-ing
+  // the whole list — the admin card falls back to showing the token text.
+  const origin = new URL(request.url).origin;
+  const items = (rows.results ?? []).map((row) => {
+    const scan_url = scanUrlFor(origin, row.qr_token);
+    let qr_data_uri = '';
+    try {
+      qr_data_uri = generateQrCode(scan_url, { errorCorrection: 'M', scale: 4 });
+    } catch {
+      qr_data_uri = '';
+    }
+    return { ...row, scan_url, qr_data_uri };
+  });
+
   return Response.json(
-    { ok: true, items: rows.results ?? [] },
+    { ok: true, items },
     { headers: { ...corsHeaders(request), 'X-Request-Id': rid } }
   );
 }
@@ -193,7 +244,8 @@ export async function handleAdminGetPosterDeployment(
     .bind(deploymentId)
     .first();
 
-  if (!row) return errorResponse('NOT_FOUND', `Poster deployment not found: ${deploymentId}`, 404, rid);
+  if (!row)
+    return errorResponse('NOT_FOUND', `Poster deployment not found: ${deploymentId}`, 404, rid);
 
   return Response.json(
     { ok: true, item: row },
@@ -219,12 +271,14 @@ export async function handleAdminUpdatePosterDeployment(
   const values: (string | number | null)[] = [];
 
   if ('placement_label' in body) {
-    const val = typeof body.placement_label === 'string' ? body.placement_label.trim().slice(0, 200) : null;
+    const val =
+      typeof body.placement_label === 'string' ? body.placement_label.trim().slice(0, 200) : null;
     sets.push('placement_label = ?');
     values.push(val);
   }
   if ('location_desc' in body) {
-    const val = typeof body.location_desc === 'string' ? body.location_desc.trim().slice(0, 500) : null;
+    const val =
+      typeof body.location_desc === 'string' ? body.location_desc.trim().slice(0, 500) : null;
     sets.push('location_desc = ?');
     values.push(val);
   }
@@ -270,7 +324,9 @@ export async function handleAdminUpdatePosterDeployment(
     }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    console.error(JSON.stringify({ type: 'DB_ERROR', handler: 'handleAdminUpdatePosterDeployment', error: msg }));
+    console.error(
+      JSON.stringify({ type: 'DB_ERROR', handler: 'handleAdminUpdatePosterDeployment', error: msg })
+    );
     return errorResponse('DB_ERROR', 'Failed to update poster deployment', 503, rid);
   }
 
@@ -336,20 +392,20 @@ export async function handleBackfillPosterH3(
       skipped++;
       continue;
     }
-    await env.DB.prepare(
-      'UPDATE poster_deployments SET h3_res9 = ?, h3_res7 = ? WHERE id = ?'
-    )
+    await env.DB.prepare('UPDATE poster_deployments SET h3_res9 = ?, h3_res7 = ? WHERE id = ?')
       .bind(h3Tags.h3_res9, h3Tags.h3_res7, row.id)
       .run();
     tagged++;
   }
 
-  console.log(JSON.stringify({
-    type: 'POSTER_H3_BACKFILL',
-    candidates: candidates.length,
-    tagged,
-    skipped,
-  }));
+  console.log(
+    JSON.stringify({
+      type: 'POSTER_H3_BACKFILL',
+      candidates: candidates.length,
+      tagged,
+      skipped,
+    })
+  );
 
   return Response.json(
     { ok: true, candidates: candidates.length, tagged, skipped },
