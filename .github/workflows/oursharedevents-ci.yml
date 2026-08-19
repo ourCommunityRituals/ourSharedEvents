@@ -409,7 +409,9 @@ jobs:
       # share this box are untouched. Idempotent no-op; never fails the job.
       - name: 'Pre-install: clear locked workerd (Windows self-hosted)'
         if: runner.os == 'Windows' && matrix.shard != 'lint' && matrix.shard != 'invariants'
-        shell: pwsh
+        # Windows PowerShell 5.1 — the self-hosted runners do NOT have pwsh
+        # (PowerShell Core) installed. The script below is 5.1-compatible.
+        shell: powershell
         working-directory: ${{ env.WORKER_DIR }}
         run: |
           $ErrorActionPreference = 'Continue'
