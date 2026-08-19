@@ -1,3 +1,8 @@
 # Worker HTML templates — tests pin specific CSS formatting (whitespace, quote style,
 # shorthand values). Prettier reformats these and breaks the assertions.
 workers/oursharedevents/src/templates/
+
+# npm lockfiles are machine-generated — prettier reformatting them diverges from
+# npm's canonical output and produces huge spurious diffs (OSE-790).
+package-lock.json
+**/package-lock.json
