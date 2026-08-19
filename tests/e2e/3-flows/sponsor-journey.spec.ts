@@ -505,7 +505,7 @@ test.describe('Sponsor Journey — Tier Upgrade', () => {
     expect(res.body.ok).toBe(true);
   });
 
-  test('Step 4: Verify platinum tier renders with gold accent on Display', async ({
+  test('Step 4: Verify platinum tier renders with UNIFORM treatment on Display (#25)', async ({
     page,
     request,
   }) => {
@@ -519,14 +519,16 @@ test.describe('Sponsor Journey — Tier Upgrade', () => {
     for (let i = 0; i < count; i++) {
       const name = await items.nth(i).locator('.name').textContent();
       if (name?.includes('Tier Upgrade')) {
+        // data-tier is retained for rotation/frequency identity…
         const tier = await items.nth(i).getAttribute('data-tier');
         expect(tier).toBe('platinum');
 
-        // Platinum gets gold accent border
+        // …but #25/OSE-878: it drives NO visual accent — the platinum item carries the
+        // same default border as every other sponsor (the retired gold accent is gone).
         const borderColor = await items
           .nth(i)
           .evaluate((el) => window.getComputedStyle(el).borderColor);
-        expect(borderColor).not.toContain('0.06');
+        expect(borderColor).toContain('0.06');
         break;
       }
     }

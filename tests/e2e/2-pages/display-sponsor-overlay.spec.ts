@@ -183,35 +183,18 @@ test.describe('Display Sponsors — Banner (tvTop)', () => {
 // 2. TIER-BASED RENDERING
 // ═══════════════════════════════════════════════════════════════════════════════
 
-test.describe('Display Sponsors — Tier Rendering', () => {
-  test('title tier gets gold accent border', async ({ page }) => {
-    await mockEvents(page, [evt()]);
-    await mockSponsorBundle(page, [sponsor({ name: 'Title', tier: 'title' })], []);
-    await navigateToDisplay(page);
+test.describe('Display Sponsors — Uniform Rendering (#25 / OSE-878)', () => {
+  // INVERTED from the retired tier-accent model. #25 forbids tier-keyed treatment:
+  // every sponsor renders identically regardless of tier. Each test seeds a tiered
+  // sponsor + a base (primary) sponsor and asserts their computed border/size are
+  // EQUAL — so reintroducing a tier accent or size detonates it. CSS lock: WALL-3b.
 
-    const item = page.locator('[data-testid="display-sponsor-item"][data-tier="title"]');
-    await expect(item).toBeVisible();
-
-    const borderColor = await item.evaluate((el) => window.getComputedStyle(el).borderColor);
-    // gold accent: rgba(234,179,8,.4) → will render as some form of amber/gold
-    expect(borderColor).not.toBe('rgba(255, 255, 255, 0.06)');
-  });
-
-  test('platinum tier gets gold accent border', async ({ page }) => {
-    await mockEvents(page, [evt()]);
-    await mockSponsorBundle(page, [sponsor({ name: 'Plat', tier: 'platinum' })], []);
-    await navigateToDisplay(page);
-
-    const item = page.locator('[data-testid="display-sponsor-item"][data-tier="platinum"]');
-    await expect(item).toBeVisible();
-  });
-
-  test('title/platinum logos are larger than primary', async ({ page }) => {
+  async function seedPair(page: import('@playwright/test').Page, tier: string) {
     await mockEvents(page, [evt()]);
     await mockSponsorBundle(
       page,
       [
-        sponsor({ name: 'Title', tier: 'title', logo_url: 'https://via.placeholder.com/200x80' }),
+        sponsor({ name: 'Tiered', tier, logo_url: 'https://via.placeholder.com/200x80' }),
         sponsor({
           name: 'Primary',
           tier: 'primary',
@@ -221,27 +204,36 @@ test.describe('Display Sponsors — Tier Rendering', () => {
       []
     );
     await navigateToDisplay(page);
+  }
+  const borderOf = (page: import('@playwright/test').Page, tier: string) =>
+    page
+      .locator(`[data-testid="display-sponsor-item"][data-tier="${tier}"]`)
+      .evaluate((el) => window.getComputedStyle(el).borderColor);
 
+  test('title tier border matches a base sponsor (no gold accent)', async ({ page }) => {
+    await seedPair(page, 'title');
+    expect(await borderOf(page, 'title')).toBe(await borderOf(page, 'primary'));
+  });
+
+  test('platinum tier border matches a base sponsor (no gold accent)', async ({ page }) => {
+    await seedPair(page, 'platinum');
+    expect(await borderOf(page, 'platinum')).toBe(await borderOf(page, 'primary'));
+  });
+
+  test('title and primary logos are the SAME size (no tier sizing)', async ({ page }) => {
+    await seedPair(page, 'title');
     const titleImgHeight = await page
       .locator('[data-tier="title"] img')
       .evaluate((el) => parseFloat(window.getComputedStyle(el).height));
     const primaryImgHeight = await page
       .locator('[data-tier="primary"] img')
       .evaluate((el) => parseFloat(window.getComputedStyle(el).height));
-
-    expect(titleImgHeight).toBeGreaterThan(primaryImgHeight);
+    expect(titleImgHeight).toBe(primaryImgHeight);
   });
 
-  test('gold tier has subtle accent', async ({ page }) => {
-    await mockEvents(page, [evt()]);
-    await mockSponsorBundle(page, [sponsor({ name: 'Gold', tier: 'gold' })], []);
-    await navigateToDisplay(page);
-
-    const item = page.locator('[data-tier="gold"]');
-    await expect(item).toBeVisible();
-
-    const borderColor = await item.evaluate((el) => window.getComputedStyle(el).borderColor);
-    expect(borderColor).not.toBe('rgba(255, 255, 255, 0.06)');
+  test('gold tier border matches a base sponsor (no accent)', async ({ page }) => {
+    await seedPair(page, 'gold');
+    expect(await borderOf(page, 'gold')).toBe(await borderOf(page, 'primary'));
   });
 });
 
@@ -380,14 +372,15 @@ test.describe('Display Sponsors — 1080p TV Layout', () => {
     expect(minHeight).toBeGreaterThanOrEqual(60);
   });
 
-  test('title/platinum logos scale up at 1920px', async ({ page }) => {
+  test('sponsor logos scale up UNIFORMLY at 1920px (no tier bump)', async ({ page }) => {
     await mockEvents(page, [evt()]);
     await mockSponsorBundle(
       page,
       [
+        sponsor({ name: 'Title', tier: 'title', logo_url: 'https://via.placeholder.com/200x80' }),
         sponsor({
-          name: 'Big Logo',
-          tier: 'title',
+          name: 'Primary',
+          tier: 'primary',
           logo_url: 'https://via.placeholder.com/200x80',
         }),
       ],
@@ -395,10 +388,16 @@ test.describe('Display Sponsors — 1080p TV Layout', () => {
     );
     await navigateToDisplay(page);
 
-    const imgHeight = await page
-      .locator('[data-tier="title"] img')
-      .evaluate((el) => parseFloat(window.getComputedStyle(el).height));
-    expect(imgHeight).toBeGreaterThanOrEqual(60);
+    const heightOf = (tier: string) =>
+      page
+        .locator(`[data-tier="${tier}"] img`)
+        .evaluate((el) => parseFloat(window.getComputedStyle(el).height));
+    const titleH = await heightOf('title');
+    const primaryH = await heightOf('primary');
+    // Responsive clamp scales the logo up on the big viewport (well above the 32px min)…
+    expect(titleH).toBeGreaterThanOrEqual(40);
+    // …but tier-blind (#25/OSE-878): title equals primary — no 64px title-only bump.
+    expect(titleH).toBe(primaryH);
   });
 
   test('no horizontal overflow with sponsors at 1920px', async ({ page }) => {

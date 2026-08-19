@@ -226,10 +226,13 @@
         align-items: center;
         gap: 0.5rem;
       }
+      /* OSE-864/#25: ONE uniform logo box for every sponsor regardless of tier.
+         Responsive (clamp) across viewports, tier-blind — money buys frequency,
+         never size. WALL-3b (OSE-835) fails CI on any tier-keyed sponsor geometry. */
       .poster-sponsor img {
-        height: 28px;
+        height: clamp(24px, 4.5vw, 40px);
         width: auto;
-        max-width: 80px;
+        max-width: clamp(80px, 14vw, 140px);
         object-fit: contain;
       }
       .poster-sponsor-name {
@@ -262,35 +265,11 @@
         width: 100%;
         margin-bottom: 0.15rem;
       }
-      .poster-sponsor--title img,
-      .poster-sponsor--platinum img {
-        height: 40px;
-      }
-      .poster-sponsor--title .poster-sponsor-name,
-      .poster-sponsor--platinum .poster-sponsor-name {
-        font-size: 0.85rem;
-        font-weight: 700;
-        color: #1e293b;
-      }
-      .poster-sponsor--gold img {
-        height: 34px;
-      }
-      .poster-sponsor--gold .poster-sponsor-name {
-        font-size: 0.8rem;
-        font-weight: 600;
-        color: #1e293b;
-      }
-      .poster-sponsor--silver img,
-      .poster-sponsor--bronze img {
-        height: 28px;
-      }
-      .poster-sponsor--primary img {
-        height: 22px;
-      }
-      .poster-sponsor--primary .poster-sponsor-name {
-        font-size: 0.65rem;
-        color: #6c757d;
-      }
+      /* OSE-864/#25: the six per-tier logo-height + name-typography rules
+         (40/34/28/22px; title>...>primary) are DELETED. Every sponsor renders at
+         the one .poster-sponsor img box and the one .poster-sponsor-name style
+         above, regardless of tier. `data-tier` remains on the element for
+         frequency-share/rotation identity, but NO CSS keys off it (WALL-3b). */
       .page-header a:focus-visible {
         outline: 2px solid #fff;
         outline-offset: 2px;
@@ -534,11 +513,8 @@
       .poster-sponsor-tier-label {
         color: var(--text-muted);
       }
-      .poster-sponsor--title .poster-sponsor-name,
-      .poster-sponsor--platinum .poster-sponsor-name,
-      .poster-sponsor--gold .poster-sponsor-name {
-        color: var(--text);
-      }
+      /* OSE-864/#25: the per-tier name-colour override (title/platinum/gold →
+         brighter --text) is removed — every sponsor name is uniform --text-muted. */
       .skip-link:focus {
         background: var(--surface);
         color: var(--text);
@@ -648,8 +624,10 @@
               // poster inline script — no picker, no QR, no sponsors render.
               const logo = s.logo_url ? '<img src="' + esc(s.logo_url) + '" alt="' + esc(s.name) + ' logo" referrerpolicy="no-referrer" onerror="this.style.display=\'none\'" data-testid="poster-sponsor-logo">' : '';
               const validTiers = ['title','platinum','gold','silver','bronze','primary'];
+              // data-tier retained for rotation/frequency-share identity only; NO
+              // poster-sponsor--<tier> class — #25 forbids tier-keyed geometry (OSE-864).
               const tier = validTiers.indexOf(String(s.tier || '')) >= 0 ? s.tier : 'primary';
-              return '<div class="poster-sponsor poster-sponsor--' + esc(tier) + '" data-tier="' + esc(tier) + '" data-testid="poster-sponsor-item" role="listitem" aria-label="' + esc(s.name) + '">' + logo + '<span class="poster-sponsor-name" data-testid="poster-sponsor-name">' + esc(s.name) + '</span></div>';
+              return '<div class="poster-sponsor" data-tier="' + esc(tier) + '" data-testid="poster-sponsor-item" role="listitem" aria-label="' + esc(s.name) + '">' + logo + '<span class="poster-sponsor-name" data-testid="poster-sponsor-name">' + esc(s.name) + '</span></div>';
             }).join('');
         } catch { strip.setAttribute('aria-busy', 'false'); strip.innerHTML = ''; }
       }
