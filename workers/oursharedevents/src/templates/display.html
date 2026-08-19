@@ -378,14 +378,14 @@
           const [featured, ...rest] = items;
           let html = '<div class="event-card" data-testid="display-featured-card">' +
             '<div class="label" data-testid="display-featured-label">Upcoming Event</div>' +
-            '<h2 data-testid="display-featured-title">' + esc(featured.name || 'Untitled Event') + '</h2>' +
+            '<h2 data-testid="display-featured-title">' + esc(featured.name || '') + '</h2>' +
             '<div class="meta" data-testid="display-featured-meta">' +
             (featured.startDateISO ? '<span data-testid="display-featured-date">' + esc(fmt(featured.startDateISO)) + '</span>' : '') +
             (featured.venue ? '<span data-testid="display-featured-venue">' + esc(featured.venue) + '</span>' : '') +
             '</div></div>';
           if (rest.length) {
             html += '<div class="next-events" data-testid="display-upcoming"><h3 data-testid="display-upcoming-heading">Also Coming Up</h3>' +
-              rest.slice(0, 4).map(e => '<div class="next-card" data-testid="display-upcoming-card"><div class="name" data-testid="display-upcoming-name">' + esc(e.name || 'Untitled') + '</div>' +
+              rest.slice(0, 4).map(e => '<div class="next-card" data-testid="display-upcoming-card"><div class="name" data-testid="display-upcoming-name">' + esc(e.name || '') + '</div>' +
                 '<div class="date" data-testid="display-upcoming-date">' + esc(fmt(e.startDateISO)) + '</div></div>').join('') +
               '</div>';
           }

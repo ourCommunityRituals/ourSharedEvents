@@ -215,4 +215,46 @@ test.describe('Invariant 16: API Response Schema Stability — structural code-s
         'this injects the computed phase field'
     ).toMatch(/enrichWithPhase/);
   });
+
+  // OSE-844 (X-10) — canonical field-name mapping. The DB columns are
+  // title/start_date/location; every surface template reads name/startDateISO/
+  // venue. enrichWithPhase is the single seam that bridges the two. This gate is
+  // the object whose job is to go red if that mapping is deleted and the drift
+  // returns (which is what silently rendered "Untitled Event" on the TV before).
+  test('OSE-INV16 | api | fieldmap | enrichWithPhase maps title→name, start_date→startDateISO, location→venue', () => {
+    const src = readFileSync(EVENTS_HANDLER, 'utf8');
+    const fnIdx = src.indexOf('function enrichWithPhase');
+    expect(fnIdx, 'enrichWithPhase must exist in events.ts').toBeGreaterThan(-1);
+    // Bound the read to the function body (up to the next top-level declaration).
+    const body = src.slice(fnIdx, fnIdx + 1200);
+    expect(
+      body,
+      'enrichWithPhase must emit `name` mapped from the `title` column — ' +
+        'templates read `name`; without this the display featured card falls back to "Untitled Event"'
+    ).toMatch(/name:\s*typeof row\.title/);
+    expect(
+      body,
+      'enrichWithPhase must emit `startDateISO` mapped from the `start_date` column — ' +
+        'templates read `startDateISO`; without this the date renders empty'
+    ).toMatch(/startDateISO:\s*[\s\S]*row\.start_date/);
+    expect(
+      body,
+      'enrichWithPhase must emit `venue` mapped from the `location` column — ' +
+        'templates read `venue`; without this the venue and the display ticker render empty'
+    ).toMatch(/venue:\s*typeof row\.location/);
+  });
+
+  test('OSE-INV16 | api | fieldmap | snapshot declares name/startDateISO/venue as computed fields on both endpoints', () => {
+    const snapshot = JSON.parse(readFileSync(SNAPSHOT_PATH, 'utf8'));
+    for (const ep of ['GET /api/v2/events', 'GET /api/v2/events/:id']) {
+      const computed = (snapshot.endpoints[ep]?.computed_fields ?? []) as string[];
+      for (const field of ['name', 'startDateISO', 'venue']) {
+        expect(
+          computed,
+          `${ep} must declare '${field}' in computed_fields — ` +
+            'the API emits it (mapped in enrichWithPhase) and the contract snapshot must record it (v1.1.0, OSE-844)'
+        ).toContain(field);
+      }
+    }
+  });
 });

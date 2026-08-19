@@ -228,21 +228,24 @@
           container.innerHTML = data.items
             .map((e) => {
               const safeId = esc(String(e.id || ''));
-              const safeName = esc(e.name || e.title || 'Untitled Event');
-              const encodedName = encodeURIComponent(e.name || e.title || 'Event');
-              const dateStr =
-                e.startDateISO || e.start_date
-                  ? esc(
-                      new Date(e.startDateISO || e.start_date).toLocaleDateString('en-US', {
-                        weekday: 'long',
-                        year: 'numeric',
-                        month: 'long',
-                        day: 'numeric',
-                      })
-                    )
-                  : '';
-              const venueStr =
-                e.venue || e.location ? esc(e.venue || e.location) : '';
+              // OSE-871 (P-1): read ONE canonical name per value. The API emits
+              // name/startDateISO/venue (OSE-844, mapped in enrichWithPhase), so
+              // the `|| e.title` / `|| e.start_date` / `|| e.location` dual-reads
+              // are gone — public no longer teaches future surfaces that two
+              // names per value is normal. Empty renders its empty state.
+              const safeName = esc(e.name || '');
+              const encodedName = encodeURIComponent(e.name || '');
+              const dateStr = e.startDateISO
+                ? esc(
+                    new Date(e.startDateISO).toLocaleDateString('en-US', {
+                      weekday: 'long',
+                      year: 'numeric',
+                      month: 'long',
+                      day: 'numeric',
+                    })
+                  )
+                : '';
+              const venueStr = e.venue ? esc(e.venue) : '';
               const datePart = dateStr ? '<span data-testid="public-event-date">' + dateStr + '</span>' : '';
               const venuePart = venueStr ? ' &middot; <span data-testid="public-event-venue">' + venueStr + '</span>' : '';
               return `

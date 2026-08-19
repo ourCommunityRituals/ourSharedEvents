@@ -165,7 +165,12 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('Returns 200 or 403 (feature flag)', function() { pm.expect([200, 403]).to.include(pm.response.code); });",
-                  "if (pm.response.code === 200) { pm.test('Is HTML', function() { pm.expect(pm.response.headers.get('Content-Type')).to.include('text/html'); }); }"
+                  "if (pm.response.code === 200) { pm.test('Is HTML', function() { pm.expect(pm.response.headers.get('Content-Type')).to.include('text/html'); }); }",
+                  "// OSE-871 (P-1): the public grid reads one canonical name per value now",
+                  "// (name/startDateISO/venue) with no '|| Untitled Event' fallback. The drift",
+                  "// literal must be absent from the shipped template — the assertion that",
+                  "// matters most: 'Untitled Event' never renders for a seeded event.",
+                  "if (pm.response.code === 200) { pm.test('OSE-871: no Untitled Event drift literal in shipped /events template', function() { pm.expect(pm.response.text()).to.not.include('Untitled Event'); }); }"
                 ]
               }
             }

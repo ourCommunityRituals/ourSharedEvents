@@ -545,11 +545,15 @@
       const fmtTime = iso => iso ? new Date(iso).toLocaleTimeString('en-US', { hour:'numeric', minute:'2-digit' }) : '';
 
       function renderPoster(event) {
-        const data = event.data || {};
-        const venue = data.venue || event.venue || '';
-        const address = data.address || '';
-        const startISO = data.startDateISO || event.startDateISO || '';
-        const name = data.name || event.name || 'Event';
+        // OSE-844 (X-10): the API item now carries name/startDateISO/venue
+        // directly (mapped in enrichWithPhase). The old `const data = event.data
+        // || {}` first branch was permanently dead — no SELECT ever exposed a
+        // `data` column — so it is removed and the banned 'Event' fallback with
+        // it. A genuinely-missing value renders its empty state, not a literal.
+        const venue = event.venue || '';
+        const address = '';
+        const startISO = event.startDateISO || '';
+        const name = event.name || '';
 
         return '<div class="poster" data-testid="poster-card" role="article" aria-label="' + esc(name) + ' event poster">' +
           '<div class="poster-header" data-testid="poster-card-header">' +
@@ -586,7 +590,10 @@
             return;
           }
           picker.innerHTML = items.map((e, i) =>
-            '<option value="' + i + '">' + esc(e.name || 'Untitled Event') + '</option>'
+            // OSE-844: read the single canonical `name`; fall back to the event
+            // id (always present) so options stay distinguishable without the
+            // banned Untitled-Event literal that made every option identical.
+            '<option value="' + i + '">' + esc(e.name || e.id || '') + '</option>'
           ).join('');
           area.innerHTML = renderPoster(items[0]);
           loadPosterSponsors(items[0].id);
