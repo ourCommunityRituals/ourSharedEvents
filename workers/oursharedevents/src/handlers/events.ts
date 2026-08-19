@@ -34,6 +34,18 @@ function enrichWithPhase(
 ): Record<string, unknown> & { phase: EventPhase } {
   return {
     ...row,
+    // OSE-844 (X-10) — canonical field-name mapping. The DB SELECT projects the
+    // column names `title`/`start_date`/`location`; every surface template
+    // (display/poster/public) reads `name`/`startDateISO`/`venue`. Map ONCE here
+    // — the single enrichment seam feeding list, detail and admin-list — instead
+    // of four `||` fallbacks scattered across the templates (which taught every
+    // future surface author that two names per value is normal). The DB columns
+    // stay in the payload (additive; #16 is a floor, so this never breaks the
+    // snapshot). ADR-016. Decision: PO + backend lead chose Option A (map in the
+    // API, one name per value out).
+    name: typeof row.title === 'string' ? row.title : (row.name ?? null),
+    startDateISO: typeof row.start_date === 'string' ? row.start_date : (row.startDateISO ?? null),
+    venue: typeof row.location === 'string' ? row.location : (row.venue ?? null),
     phase: computeEventPhase({
       status: typeof row.status === 'string' ? row.status : '',
       start_date: typeof row.start_date === 'string' ? row.start_date : null,
@@ -253,7 +265,11 @@ export async function handleAdminListEvents(request: Request, env: EventsEnv): P
     bindings.push(limit + 1);
     const whereClause = whereParts.length ? ' WHERE ' + whereParts.join(' AND ') : '';
     const adminListSql =
-      'SELECT ' + EVENT_SELECT_COLS + ' FROM events' + whereClause + ' ORDER BY created_at DESC LIMIT ?';
+      'SELECT ' +
+      EVENT_SELECT_COLS +
+      ' FROM events' +
+      whereClause +
+      ' ORDER BY created_at DESC LIMIT ?';
 
     const result = await env.DB.prepare(adminListSql)
       .bind(...bindings)
@@ -409,11 +425,21 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
   const whoStory = trimOrNull(body.who_story, 4000);
   const whoImage = validateLogoUrl(body.who_image_url);
   if (!whoImage.valid) {
-    return errorResponse('INVALID_URL', 'who_image_url must be a http(s) URL under 500 chars', 400, rid);
+    return errorResponse(
+      'INVALID_URL',
+      'who_image_url must be a http(s) URL under 500 chars',
+      400,
+      rid
+    );
   }
   const whatVideo = validateLogoUrl(body.what_video_url);
   if (!whatVideo.valid) {
-    return errorResponse('INVALID_URL', 'what_video_url must be a http(s) URL under 500 chars', 400, rid);
+    return errorResponse(
+      'INVALID_URL',
+      'what_video_url must be a http(s) URL under 500 chars',
+      400,
+      rid
+    );
   }
   const whoImageUrl = whoImage.url;
   const whatVideoUrl = whatVideo.url;
@@ -658,7 +684,12 @@ export async function handleUpdateEvent(
     if (field in body) {
       const check = validateLogoUrl(body[field]);
       if (!check.valid) {
-        return errorResponse('INVALID_URL', `${field} must be a http(s) URL under 500 chars`, 400, rid);
+        return errorResponse(
+          'INVALID_URL',
+          `${field} must be a http(s) URL under 500 chars`,
+          400,
+          rid
+        );
       }
       sets.push(`${field} = ?`);
       values.push(check.url);

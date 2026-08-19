@@ -183,8 +183,17 @@ test.describe('Display Flow — Alias Equivalence', () => {
 // 4. D1 FIELD COMPATIBILITY
 // ═══════════════════════════════════════════════════════════════════════════════
 
-test.describe('Display Flow — D1 Field Compatibility', () => {
-  test('renders title when name is absent', async ({ page }) => {
+test.describe('Display Flow — API field-name contract (OSE-844)', () => {
+  test('renders the API-mapped name on the featured card, never the "Untitled Event" fallback', async ({
+    page,
+  }) => {
+    // OSE-844 (X-10): the events API now emits the canonical `name` field
+    // (mapped from the `title` column in enrichWithPhase). The display template
+    // reads `name` and no longer carries an `|| 'Untitled Event'` fallback.
+    // This test previously *documented the gap* (mocking { name: undefined,
+    // title } and asserting only non-empty text — which let "Untitled Event"
+    // pass). It now asserts the REAL emitted shape and that the drift literal
+    // never renders — the honest cross-layer assertion the ticket demanded.
     await page.route('**/api/v2/events', (route) =>
       route.fulfill({
         status: 200,
@@ -192,16 +201,14 @@ test.describe('Display Flow — D1 Field Compatibility', () => {
         body: JSON.stringify({
           ok: true,
           status: 200,
-          items: [evt({ name: undefined, title: 'D1 Title' })],
+          items: [evt({ name: 'Reconciled Event Title' })],
         }),
       })
     );
     await page.goto('/display', { waitUntil: 'networkidle', timeout: TIMEOUT });
 
-    // The template uses `e.name || 'Untitled Event'`
-    // D1 returns `title` not `name` — this may show "Untitled Event"
-    // This test documents the current behavior for the D1 migration gap
-    const h2 = await page.locator('.event-card h2').textContent();
-    expect(h2?.trim().length).toBeGreaterThan(0);
+    const h2 = await page.locator('.event-card h2').first().textContent();
+    expect(h2?.trim()).toBe('Reconciled Event Title');
+    expect(h2).not.toContain('Untitled Event');
   });
 });
