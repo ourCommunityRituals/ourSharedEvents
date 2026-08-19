@@ -396,6 +396,64 @@ jobs:
             echo "$HASH" > "$STAMP"
           fi
 
+      # OSE-900: on self-hosted Windows a leftover workerd.exe from a prior job
+      # can be pinned by a kernel System (PID 4) image-section handle that only
+      # releases on reboot. `npm ci` on a lockfile-changing PR (stamp miss) must
+      # delete node_modules and then dies on that locked file with
+      # ENOTEMPTY/EPERM — which is why only Dependabot-style PRs fail install.
+      # Pre-clear THIS workspace's workerd package so npm never has to delete a
+      # locked file: try Remove-Item, else MOVE the dir aside (a directory
+      # rename succeeds even when the file inside is section-locked; Remove-Item
+      # alone cannot beat it). Path-scoped to $GITHUB_WORKSPACE — never a global
+      # `taskkill /IM workerd.exe` — so concurrent jobs on the other runners that
+      # share this box are untouched. Idempotent no-op; never fails the job.
+      - name: 'Pre-install: clear locked workerd (Windows self-hosted)'
+        if: runner.os == 'Windows' && matrix.shard != 'lint' && matrix.shard != 'invariants'
+        # Windows PowerShell 5.1 — the self-hosted runners do NOT have pwsh
+        # (PowerShell Core) installed. The script below is 5.1-compatible.
+        shell: powershell
+        working-directory: ${{ env.WORKER_DIR }}
+        run: |
+          $ErrorActionPreference = 'Continue'
+          $ws = $env:GITHUB_WORKSPACE
+          # 1) Kill ONLY workerd processes whose exe lives under this workspace.
+          try {
+            Get-CimInstance Win32_Process -Filter "Name='workerd.exe'" -ErrorAction Stop |
+              Where-Object { $_.ExecutablePath -and $ws -and $_.ExecutablePath.StartsWith($ws, [System.StringComparison]::OrdinalIgnoreCase) } |
+              ForEach-Object {
+                Write-Host "stopping in-workspace workerd PID $($_.ProcessId): $($_.ExecutablePath)"
+                try { Stop-Process -Id $_.ProcessId -Force -ErrorAction Stop } catch {}
+              }
+          } catch { Write-Host "workerd scan skipped: $($_.Exception.Message)" }
+          # 2) Clear every workerd-windows-64 copy: delete, else move aside.
+          $targets = @(
+            'node_modules\wrangler\node_modules\@cloudflare\workerd-windows-64',
+            'node_modules\@cloudflare\workerd-windows-64',
+            'node_modules\@cloudflare\vitest-pool-workers\node_modules\wrangler\node_modules\@cloudflare\workerd-windows-64'
+          )
+          # Quarantine OUTSIDE the checkout (RUNNER_WORKSPACE = parent of the repo
+          # dir, same volume) so it never lands in the git tree; it clears on reboot.
+          $quarBase = if ($env:RUNNER_WORKSPACE) { $env:RUNNER_WORKSPACE } else { (Get-Location).Path }
+          foreach ($t in $targets) {
+            $full = Join-Path (Get-Location) $t
+            $present = $true
+            try { $present = Test-Path $full } catch { $present = $true }  # access-denied => treat as locked/present
+            if (-not $present) { continue }
+            try {
+              Remove-Item -Recurse -Force -ErrorAction Stop $full
+              Write-Host "removed $t"
+            } catch {
+              try {
+                $dest = Join-Path $quarBase "_locked_workerd_quarantine_$([System.IO.Path]::GetRandomFileName())"
+                [System.IO.Directory]::Move($full, $dest)
+                Write-Host "quarantined (move-aside) $t -> $dest"
+              } catch {
+                Write-Host "WARN: could not clear $t ($($_.Exception.Message)); npm ci will attempt it"
+              }
+            }
+          }
+          exit 0
+
       # Worker deps not needed for the lint shard (eslint targets root paths)
       # nor the invariants shard (structural specs read source via node:fs —
       # they never import worker runtime code). All other shards exercise the
