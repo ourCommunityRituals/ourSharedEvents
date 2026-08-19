@@ -84,7 +84,7 @@ describe('OSE-636 | INT-04+05 | Poster Deployment Management UI gate', () => {
   test('deletePosterDeployment function is defined', () => {
     const src = getAdminTemplate();
     expect(src).toContain('window.deletePosterDeployment');
-    expect(src).toContain('method: \'DELETE\'');
+    expect(src).toContain("method: 'DELETE'");
   });
 
   test('GET list endpoint is called with correct path pattern', () => {
@@ -112,5 +112,44 @@ describe('OSE-636 | INT-04+05 | Poster Deployment Management UI gate', () => {
     const src = getAdminTemplate();
     expect(src).toContain('pd.h3_res9');
     expect(src).toContain('Cell (res9)');
+  });
+
+  // ── OSE-895: GAS QRRegenerator frame → .qr-card grid (functional slice) ──────
+  test('OSE-895: deployments render as the .qr-card frame, not a report-table', () => {
+    const src = getAdminTemplate();
+    // The canonical frame from OSE-887 (poster.html) is reused here.
+    expect(src).toContain('class="qr-card pd-qr-card"');
+    expect(src).toContain('class="pd-qr-grid"');
+    expect(src).toContain('class="qr-card-header"');
+    expect(src).toContain('class="qr-card-body"');
+    expect(src).toContain('class="qr-card-footer"');
+  });
+
+  test('OSE-895: each card renders the scannable QR image with a testid', () => {
+    const src = getAdminTemplate();
+    expect(src).toContain('data-testid="pd-qr-img"');
+    // The image source is the server-supplied data-URI, not an external QR API.
+    expect(src).toContain('pd.qr_data_uri');
+    expect(src).not.toContain('chart.googleapis.com');
+  });
+
+  test('OSE-895: Download and Print actions are wired', () => {
+    const src = getAdminTemplate();
+    expect(src).toContain('data-testid="pd-download-btn"');
+    expect(src).toContain('data-testid="pd-print-btn"');
+    expect(src).toContain('window.downloadPosterQr');
+    expect(src).toContain('window.printPosterQr');
+  });
+
+  test('OSE-895: existing deployment testids are preserved on the card frame', () => {
+    const src = getAdminTemplate();
+    // Card carries the same row/label/cell/token/delete testids the prior
+    // table did, so downstream selectors and the two-step delete still resolve.
+    expect(src).toContain('data-testid="poster-deployment-row"');
+    expect(src).toContain('data-testid="pd-label"');
+    expect(src).toContain('data-testid="pd-location"');
+    expect(src).toContain('data-testid="pd-h3-res9"');
+    expect(src).toContain('data-testid="pd-qr-token"');
+    expect(src).toContain('data-testid="pd-delete-btn"');
   });
 });

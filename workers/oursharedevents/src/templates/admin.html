@@ -2440,6 +2440,67 @@
         <p class="loading" data-testid="poster-deployments-loading-initial">Select an event to view poster deployments&hellip;</p>
       </div>
     </div>
+    <style>
+      /* OSE-895: GAS QRRegenerator .qr-card frame
+         (archive/v2-code/components/QRRegenerator.html) ported onto the admin
+         Poster Deployments card. Reuses the canonical .qr-card geometry
+         established for poster.html in OSE-887, dressed in admin baseline
+         tokens. Each deployment becomes a card carrying its scannable
+         /q/<qr_token> QR so an organizer can download or print a physical
+         poster — the artifact First Scan needs. */
+      .pd-qr-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+        gap: 16px;
+        margin-top: 12px;
+      }
+      .poster-deployments-card .qr-card {
+        display: flex;
+        flex-direction: column;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        overflow: hidden;
+        background: var(--surface);
+      }
+      .poster-deployments-card .qr-card-header {
+        padding: 10px 12px;
+        background: var(--surface-hover);
+        border-bottom: 1px solid var(--border);
+      }
+      .pd-card-title { font-weight: 600; color: var(--text); font-size: 14px; }
+      .pd-card-sub { color: var(--text-muted); font-size: 12px; margin-top: 2px; }
+      .poster-deployments-card .qr-card-body {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 10px;
+        padding: 14px 12px;
+      }
+      .poster-deployments-card .qr-img {
+        width: 160px;
+        height: 160px;
+        image-rendering: pixelated;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        background: #fff;
+      }
+      .pd-meta { width: 100%; margin: 0; font-size: 12px; color: var(--text-muted); }
+      .pd-meta-row { display: flex; justify-content: space-between; gap: 8px; padding: 2px 0; }
+      .pd-meta-row code { word-break: break-all; }
+      .poster-deployments-card .qr-card-footer {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        justify-content: center;
+        padding: 10px 12px;
+        background: var(--surface-hover);
+        border-top: 1px solid var(--border);
+      }
+      @media print {
+        .poster-deployments-card .qr-card { break-inside: avoid; }
+        .poster-deployments-card .qr-card-footer { display: none; }
+      }
+    </style>
     <script>
       (function () {
         const esc = (s) => {
@@ -2447,6 +2508,7 @@
           d.textContent = String(s ?? '');
           return d.innerHTML;
         };
+        window._pdItems = window._pdItems || {};
 
         window.loadPosterDeployments = async function (eventId) {
           window._pdEventId = eventId;
@@ -2460,26 +2522,41 @@
               panel.innerHTML = '<p class="loading" data-testid="poster-deployments-empty">No deployments yet. Use the form above to add one.</p>';
               return;
             }
-            const rows = items.map((pd) =>
-              '<tr data-testid="poster-deployment-row" data-id="' + esc(pd.id) + '">' +
-              '<td data-label="Label" data-testid="pd-label">' + esc(pd.placement_label || '—') + '</td>' +
-              '<td data-label="Location" data-testid="pd-location">' + esc(pd.location_desc || '—') + '</td>' +
-              '<td data-label="Cell (res9)" data-testid="pd-h3-res9">' + esc(pd.h3_res9 || '—') + '</td>' +
-              '<td data-label="Active" data-testid="pd-is-active">' + (pd.is_active ? 'Yes' : 'No') + '</td>' +
-              '<td data-label="QR Token" data-testid="pd-qr-token"><code>' + esc(pd.qr_token) + '</code></td>' +
-              '<td data-label="Actions">' +
-              '<button class="copy-btn" style="font-size:12px;padding:4px 10px" data-testid="pd-delete-btn" data-pd-id="' + esc(pd.id) + '" onclick="window.deletePosterDeployment(\'' + esc(pd.id) + '\')">Delete</button>' +
-              '</td>' +
-              '</tr>'
-            ).join('');
-            panel.innerHTML =
-              '<table class="report-table" data-testid="poster-deployments-table">' +
-              '<thead><tr>' +
-              '<th scope="col">Label</th><th scope="col">Location</th><th scope="col">Cell (res9)</th>' +
-              '<th scope="col">Active</th><th scope="col">QR Token</th><th scope="col">Actions</th>' +
-              '</tr></thead>' +
-              '<tbody>' + rows + '</tbody>' +
-              '</table>';
+            window._pdItems = {};
+            const cards = items.map((pd) => {
+              window._pdItems[pd.id] = {
+                qr_data_uri: pd.qr_data_uri || '',
+                scan_url: pd.scan_url || '',
+                label: pd.placement_label || '',
+              };
+              // Prefer the scannable QR; degrade to the raw token if the
+              // server could not generate a data-URI (see poster-deployments.ts).
+              const qrCell = pd.qr_data_uri
+                ? '<img class="qr-img" src="' + esc(pd.qr_data_uri) + '" alt="Scan QR for ' + esc(pd.placement_label || 'poster deployment') + '" data-testid="pd-qr-img" width="160" height="160" />'
+                : '<code data-testid="pd-qr-fallback">' + esc(pd.qr_token) + '</code>';
+              return (
+                '<div class="qr-card pd-qr-card" data-testid="poster-deployment-row" data-id="' + esc(pd.id) + '">' +
+                  '<div class="qr-card-header">' +
+                    '<div class="pd-card-title" data-testid="pd-label">' + esc(pd.placement_label || '—') + '</div>' +
+                    '<div class="pd-card-sub" data-testid="pd-location">' + esc(pd.location_desc || '—') + '</div>' +
+                  '</div>' +
+                  '<div class="qr-card-body">' +
+                    qrCell +
+                    '<dl class="pd-meta">' +
+                      '<div class="pd-meta-row"><span>Cell (res9)</span><span data-testid="pd-h3-res9">' + esc(pd.h3_res9 || '—') + '</span></div>' +
+                      '<div class="pd-meta-row"><span>Active</span><span data-testid="pd-is-active">' + (pd.is_active ? 'Yes' : 'No') + '</span></div>' +
+                      '<div class="pd-meta-row"><span>QR Token</span><code data-testid="pd-qr-token">' + esc(pd.qr_token) + '</code></div>' +
+                    '</dl>' +
+                  '</div>' +
+                  '<div class="qr-card-footer">' +
+                    '<button class="copy-btn" style="font-size:12px;padding:4px 10px" data-testid="pd-download-btn" onclick="window.downloadPosterQr(\'' + esc(pd.id) + '\')" aria-label="Download poster QR">Download</button>' +
+                    '<button class="copy-btn" style="font-size:12px;padding:4px 10px" data-testid="pd-print-btn" onclick="window.printPosterQr(\'' + esc(pd.id) + '\')" aria-label="Print poster QR">Print</button>' +
+                    '<button class="copy-btn" style="font-size:12px;padding:4px 10px" data-testid="pd-delete-btn" data-pd-id="' + esc(pd.id) + '" onclick="window.deletePosterDeployment(\'' + esc(pd.id) + '\')">Delete</button>' +
+                  '</div>' +
+                '</div>'
+              );
+            }).join('');
+            panel.innerHTML = '<div class="pd-qr-grid" data-testid="poster-deployments-table">' + cards + '</div>';
           } catch (err) {
             panel.innerHTML = '<div class="card-error" data-testid="poster-deployments-error"><div class="error-icon">&#9888;</div><div class="error-msg">Could not load poster deployments.</div></div>';
           }
@@ -2509,6 +2586,56 @@
           } catch (err) {
             window._adminAnnounce(err.message || 'Network error — could not delete.', 'error');
           }
+        };
+
+        // Download the deployment's QR (the in-bundle data-URI) as a PNG so an
+        // organizer can drop it into a physical poster. No canvas/redraw — the
+        // server already produced the image (poster-deployments.ts / lib/qr).
+        window.downloadPosterQr = function (pdId) {
+          const item = window._pdItems[pdId];
+          if (!item || !item.qr_data_uri) {
+            window._adminAnnounce('QR not available for download.', 'error');
+            return;
+          }
+          const safeName =
+            (item.label || pdId).replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '').toLowerCase() || pdId;
+          const a = document.createElement('a');
+          a.href = item.qr_data_uri;
+          a.download = 'poster-qr-' + safeName + '.png';
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+        };
+
+        // Open a minimal print window for a single deployment QR. Mirrors the
+        // GAS QRRegenerator printQR frame, stripped of banned-lexicon copy.
+        window.printPosterQr = function (pdId) {
+          const item = window._pdItems[pdId];
+          if (!item || !item.qr_data_uri) {
+            window._adminAnnounce('QR not available to print.', 'error');
+            return;
+          }
+          const w = window.open('', '_blank');
+          if (!w) {
+            window._adminAnnounce('Pop-up blocked — allow pop-ups to print the QR.', 'error');
+            return;
+          }
+          const label = esc(item.label || 'Poster deployment');
+          const scanUrl = esc(item.scan_url || '');
+          w.document.write(
+            '<!DOCTYPE html><html><head><title>' + label + ' — QR</title>' +
+            '<style>body{font-family:system-ui,Arial,sans-serif;display:flex;flex-direction:column;' +
+            'align-items:center;justify-content:center;min-height:100vh;margin:0;padding:24px}' +
+            'img{width:320px;height:320px;image-rendering:pixelated;margin:16px 0}' +
+            'h1{font-size:18px;margin:0}p{font-size:12px;color:#555;word-break:break-all}' +
+            '@media print{@page{margin:0.5in}}</style></head><body>' +
+            '<h1>' + label + '</h1>' +
+            '<img src="' + item.qr_data_uri + '" alt="Scan QR" />' +
+            '<p>' + scanUrl + '</p></body></html>'
+          );
+          w.document.close();
+          w.focus();
+          setTimeout(function () { w.print(); }, 250);
         };
 
         const form = document.getElementById('pd-create-form');

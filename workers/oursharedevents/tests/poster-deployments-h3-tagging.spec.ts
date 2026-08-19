@@ -75,10 +75,7 @@ async function seedEvent(id: string): Promise<void> {
     .run();
 }
 
-async function createDeployment(
-  eventId: string,
-  body: Record<string, unknown>
-): Promise<Response> {
+async function createDeployment(eventId: string, body: Record<string, unknown>): Promise<Response> {
   return SELF.fetch(`https://t.test/api/v2/admin/events/${eventId}/poster-deployments`, {
     method: 'POST',
     headers: ADMIN_HEADERS,
@@ -99,7 +96,9 @@ beforeAll(async () => {
   await applyMigrations();
   const tenv = env as unknown as TestEnv;
   await tenv.DB.prepare("DELETE FROM events WHERE brand_id = 'pd-h3-test'").run();
-  await tenv.DB.prepare("DELETE FROM poster_deployments WHERE placement_label LIKE 'PDH3Test%'").run();
+  await tenv.DB.prepare(
+    "DELETE FROM poster_deployments WHERE placement_label LIKE 'PDH3Test%'"
+  ).run();
 
   await seedEvent('evt-pdh3-eagles');
   await seedEvent('evt-pdh3-backfill');
@@ -115,7 +114,12 @@ describe('OSE H3 poster-deployment geo-tagging — migration 0047', () => {
       longitude: EAGLES.lon,
     });
     expect(res.status).toBe(201);
-    const body = (await res.json()) as { ok: boolean; id: string; h3_res9: string; h3_res7: string };
+    const body = (await res.json()) as {
+      ok: boolean;
+      id: string;
+      h3_res9: string;
+      h3_res7: string;
+    };
     expect(body.ok).toBe(true);
     expect(body.id).toMatch(/^pd_/);
     expect(body.h3_res9).toBe('89266454447ffff');
@@ -195,7 +199,11 @@ describe('OSE H3 poster-deployment geo-tagging — migration 0047', () => {
       body: JSON.stringify({ latitude: EAGLES.lat, longitude: EAGLES.lon }),
     });
     expect(updateRes.status).toBe(200);
-    const updateBody = (await updateRes.json()) as { ok: boolean; h3_res9: string; h3_res7: string };
+    const updateBody = (await updateRes.json()) as {
+      ok: boolean;
+      h3_res9: string;
+      h3_res7: string;
+    };
     expect(updateBody.ok).toBe(true);
     expect(updateBody.h3_res9).toBe('89266454447ffff');
     expect(updateBody.h3_res7).toBe('872664544ffffff');
@@ -272,7 +280,11 @@ describe('OSE H3 poster-deployment geo-tagging — migration 0047', () => {
       { method: 'POST', headers: ADMIN_HEADERS }
     );
     expect(backfillRes.status).toBe(200);
-    const backfillBody = (await backfillRes.json()) as { ok: boolean; tagged: number; skipped: number };
+    const backfillBody = (await backfillRes.json()) as {
+      ok: boolean;
+      tagged: number;
+      skipped: number;
+    };
     expect(backfillBody.ok).toBe(true);
     expect(backfillBody.tagged).toBeGreaterThanOrEqual(1);
 
@@ -317,8 +329,8 @@ describe('OSE H3 poster-deployment geo-tagging — migration 0047', () => {
     const eaglesBody = (await eaglesRes.json()) as { h3_res9: string; h3_res7: string };
     const riphBody = (await riphRes.json()) as { h3_res9: string; h3_res7: string };
 
-    expect(eaglesBody.h3_res9).not.toBe(riphBody.h3_res9);  // different blocks
-    expect(eaglesBody.h3_res7).toBe(riphBody.h3_res7);      // same corridor
+    expect(eaglesBody.h3_res9).not.toBe(riphBody.h3_res9); // different blocks
+    expect(eaglesBody.h3_res7).toBe(riphBody.h3_res7); // same corridor
   });
 
   test('10. list endpoint returns all deployments for an event', async () => {
@@ -327,10 +339,35 @@ describe('OSE H3 poster-deployment geo-tagging — migration 0047', () => {
       { method: 'GET', headers: ADMIN_HEADERS }
     );
     expect(listRes.status).toBe(200);
-    const body = (await listRes.json()) as { ok: boolean; items: unknown[] };
+    const body = (await listRes.json()) as {
+      ok: boolean;
+      items: Array<{ qr_token: string; scan_url: string; qr_data_uri: string }>;
+    };
     expect(body.ok).toBe(true);
     expect(Array.isArray(body.items)).toBe(true);
     expect(body.items.length).toBeGreaterThan(0);
+  });
+
+  test('10b. list endpoint enriches each row with the physical scan URL + in-bundle QR (OSE-895)', async () => {
+    const listRes = await SELF.fetch(
+      'https://t.test/api/v2/admin/events/evt-pdh3-eagles/poster-deployments',
+      { method: 'GET', headers: ADMIN_HEADERS }
+    );
+    expect(listRes.status).toBe(200);
+    const body = (await listRes.json()) as {
+      ok: boolean;
+      items: Array<{ qr_token: string; scan_url: string; qr_data_uri: string }>;
+    };
+    expect(body.items.length).toBeGreaterThan(0);
+    for (const item of body.items) {
+      // scan_url encodes the /q/<qr_token> ingestion path — the URL the poster
+      // QR must carry so a scan writes a `scans` row (handlers/qr-scan.ts).
+      expect(item.scan_url).toContain('/q/' + item.qr_token);
+      // QR generated in-bundle (native lib/qr) — a real PNG data-URI, never an
+      // external QR service. This keeps the runtime LLM-free / dependency-free.
+      expect(item.qr_data_uri.startsWith('data:image/png;base64,')).toBe(true);
+      expect(item.qr_data_uri.length).toBeGreaterThan(100);
+    }
   });
 
   test('11. get-single endpoint returns one deployment with H3 fields', async () => {
@@ -342,10 +379,10 @@ describe('OSE H3 poster-deployment geo-tagging — migration 0047', () => {
     expect(createRes.status).toBe(201);
     const { id } = (await createRes.json()) as { id: string };
 
-    const getRes = await SELF.fetch(
-      `https://t.test/api/v2/admin/poster-deployments/${id}`,
-      { method: 'GET', headers: ADMIN_HEADERS }
-    );
+    const getRes = await SELF.fetch(`https://t.test/api/v2/admin/poster-deployments/${id}`, {
+      method: 'GET',
+      headers: ADMIN_HEADERS,
+    });
     expect(getRes.status).toBe(200);
     const body = (await getRes.json()) as { ok: boolean; item: Record<string, unknown> };
     expect(body.ok).toBe(true);
