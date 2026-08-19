@@ -48,26 +48,53 @@ import { spawn } from 'node:child_process';
 // (NOT a real test failure). Kept as plain substrings so matching is exact and
 // cheap. Each string is chosen to be emitted ONLY by the pool infrastructure
 // tearing down — a failed assertion does not kill the worker, so these cannot
-// mask a genuine test failure. Bare "ECONNRESET" is deliberately excluded (a
-// test exercising connection-reset handling could log it); the accompanying
-// "Worker exited unexpectedly" / "Failed to start cloudflare-pool worker"
-// covers those cases without that false-positive risk.
+// mask a genuine test failure.
+//
+// Deliberately NOT retried (would mask real regressions, so let them fail):
+//   - bare "ECONNRESET" / "ECONNREFUSED": a test exercising connection-reset
+//     handling could log it. The accompanying "Worker exited unexpectedly" /
+//     "Failed to start cloudflare-pool worker" covers the flake without the risk.
+//   - "JavaScript heap out of memory" / "Reached heap limit": often infra on a
+//     RAM-bound box, but can equally be a genuine memory-leak regression —
+//     retrying hides it. Surface/alert on OOM instead of silently re-running.
+//   - "EBUSY" / "EPERM" (Windows file locks): too ambiguous with real bugs.
 const CRASH_SIGNATURES = [
   'std::numeric_limits',
   'Check failed',
   'Worker exited unexpectedly',
   'Failed to start cloudflare-pool worker',
   '[vitest-pool]: Worker cloudflare-pool emitted error',
+  'listen EADDRINUSE', // two pool workers race for a port on the shared box
+  'The service was stopped', // esbuild daemon crash (transient)
+  'The service is no longer running', // esbuild daemon crash (transient)
 ];
+
+// Exit codes / signals that mean the child process HARD-CRASHED (segfault,
+// abort, Windows access violation) rather than reporting a test result. A real
+// assertion failure exits 1; these codes cannot come from vitest reporting a
+// failed test, so retrying on them is safe. This closes the canonical OSE-696
+// "exit-139 SIGSEGV" case, where the crash produces NO matchable log string —
+// only a crash exit code — and the output-only matcher above would miss it.
+const CRASH_EXIT_CODES = new Set([
+  134, // 128 + SIGABRT(6)  — abort
+  139, // 128 + SIGSEGV(11) — segfault (POSIX)
+  3221225477, // 0xC0000005 — access violation (Windows workerd segfault)
+]);
+const CRASH_SIGNALS = new Set(['SIGSEGV', 'SIGABRT', 'SIGBUS', 'SIGILL']);
 
 function hasCrashSignature(output) {
   return CRASH_SIGNATURES.some((sig) => output.includes(sig));
 }
 
+function isCrashExit(code, signal) {
+  return CRASH_EXIT_CODES.has(code) || CRASH_SIGNALS.has(signal);
+}
+
 /**
- * Run a command once. Resolves with { code, output }.
+ * Run a command once. Resolves with { code, signal, output }.
  *   - code: numeric exit code (a signal-terminated child is normalized to a
  *     non-zero code so the caller still sees "failure").
+ *   - signal: the terminating signal name (e.g. 'SIGSEGV') or null.
  *   - output: combined stdout+stderr as a string (also streamed live).
  */
 function runOnce(commandLine) {
@@ -100,7 +127,7 @@ function runOnce(commandLine) {
       // captured so the signature check can still see it if relevant.
       output += `\n[vitest-retry] spawn error: ${err.message}\n`;
       process.stderr.write(`[vitest-retry] spawn error: ${err.message}\n`);
-      resolvePromise({ code: 1, output });
+      resolvePromise({ code: 1, signal: null, output });
     });
 
     child.on('close', (code, signal) => {
@@ -109,7 +136,7 @@ function runOnce(commandLine) {
       if (signal) {
         output += `\n[vitest-retry] child terminated by signal ${signal}\n`;
       }
-      resolvePromise({ code: exitCode, output });
+      resolvePromise({ code: exitCode, signal: signal ?? null, output });
     });
   });
 }
@@ -139,7 +166,10 @@ async function main() {
     return;
   }
 
-  if (!hasCrashSignature(first.output)) {
+  const matchedSignature = hasCrashSignature(first.output);
+  const matchedCrashExit = isCrashExit(first.code, first.signal);
+
+  if (!matchedSignature && !matchedCrashExit) {
     // Genuine failure (or any non-crash failure) — do NOT retry.
     process.stderr.write(
       '[vitest-retry] attempt 1 failed without a workerd crash signature — not retrying.\n'
@@ -148,11 +178,11 @@ async function main() {
     return;
   }
 
-  // ── Attempt 2 (retry once, signature matched) ───────────────────────────────
-  process.stderr.write(
-    '[vitest-retry] attempt 1 hit a workerd crash signature ' +
-      `(one of: ${CRASH_SIGNATURES.join(', ')}) — retrying once.\n`
-  );
+  // ── Attempt 2 (retry once, crash detected) ──────────────────────────────────
+  const reason = matchedSignature
+    ? `crash signature (one of: ${CRASH_SIGNATURES.join(', ')})`
+    : `hard-crash exit (code ${first.code}${first.signal ? `, signal ${first.signal}` : ''})`;
+  process.stderr.write(`[vitest-retry] attempt 1 hit a workerd ${reason} — retrying once.\n`);
 
   const second = await runOnce(commandLine);
 
