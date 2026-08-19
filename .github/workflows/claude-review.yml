@@ -17,8 +17,15 @@ on:
   issue_comment:
     types: [created]
 
+# Concurrency is scoped by EVENT as well as PR number. Without the event in the
+# group, a bot comment on a PR fires `issue_comment` ~seconds after a push's
+# `pull_request` run starts; both landed in the same group and cancel-in-progress
+# meant the comment run CANCELLED the real review run (which then showed red on
+# the PR while never running a review). The comment run itself skips (no @claude),
+# so nothing reviewed. Separating groups by event lets a push's review complete
+# green while still de-duping rapid pushes within the pull_request group.
 concurrency:
-  group: claude-review-${{ github.event.pull_request.number || github.event.issue.number }}
+  group: claude-review-${{ github.event.pull_request.number || github.event.issue.number }}-${{ github.event_name }}
   cancel-in-progress: true
 
 jobs:
