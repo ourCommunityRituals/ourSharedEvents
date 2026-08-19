@@ -306,6 +306,10 @@ export function buildSponsorBundle(sponsors: SponsorRow[]): SponsorBundle {
     sponsors: rotation,
     // Uniform: identical eligibility on every surface. Frequency is the only
     // differentiator (allocateShares), enforced by buildShareRotation.
+    // NOTE (X-7 / OSE-839): the posterTop/tvTop/tvSide/mobileBanner keys are
+    // retained ONLY for response-schema stability under Invariant #16 — they are
+    // NOT purchasable named slots. #2's old named-slot filter and #5's tier sort
+    // are RETIRED (superseded by #25); every key gets the SAME uniform rotation.
     surface_sponsors: {
       posterTop: rotation,
       tvTop: rotation,

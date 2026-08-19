@@ -7,9 +7,14 @@
  *   - Direct path: sponsor.event_id = eventId (always resolves)
  *   - Template+Geo path: matching template_id AND matching area (zip or radius)
  *   - Service areas: zip_code match OR haversine radius match
- *   - Tier sorting: title > platinum > gold > silver > bronze > primary
- *   - Surface filtering: display=tvTop|tvSide, poster=posterTop, public=mobileBanner
  *   - Deduplication: same sponsor via both paths appears once
+ *
+ * RETIRED (do not reintroduce): the locals-first tier sort
+ * (title > platinum > ... > primary) and the named-slot surface filter
+ * (tvTop/tvSide/posterTop/mobileBanner) are superseded by #5 and #25 (uniform
+ * frequency-share). #2 scopes WHICH sponsors resolve to a corridor — never their
+ * order, size, or slot. The tier section below is an AFFIRMATIVE guard that the
+ * retired sort is not applied (X-7 / OSE-839); CSS-side lock is WALL-3b (OSE-835).
  *
  * These invariants apply to ANY entity in the triangle.
  * A travel partner sponsoring a CHI→MKE macro corridor uses the same
@@ -186,11 +191,13 @@ test.describe('Invariant: Geo-Resolution — Surface Filtering', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// 3. TIER SORT ORDER
+// 3. TIER ORDER DOES NOT DETERMINE RESPONSE ORDER (#5 / #25 — retired tier sort)
 // ═══════════════════════════════════════════════════════════════════════════════
 
-test.describe('Invariant: Geo-Resolution — Tier Priority', () => {
-  const TIER_ORDER: Record<string, number> = {
+test.describe('Invariant: Geo-Resolution — rotation is NOT tier-sorted (#25)', () => {
+  // The retired locals-first priority. Kept ONLY to reconstruct what a tier sort WOULD
+  // produce, so we can affirmatively prove the live response is not that (X-7 / OSE-839).
+  const RETIRED_TIER_ORDER: Record<string, number> = {
     title: 1,
     platinum: 2,
     gold: 3,
@@ -199,7 +206,7 @@ test.describe('Invariant: Geo-Resolution — Tier Priority', () => {
     primary: 6,
   };
 
-  test('sponsors are returned sorted by tier priority', async ({ page }) => {
+  test('the sponsors API does not apply the retired tier-priority sort', async ({ page }) => {
     await page.goto('/display', { waitUntil: 'domcontentloaded', timeout: TIMEOUT });
 
     const eventsRes = await publicFetch(page, '/api/v2/events');
@@ -212,14 +219,21 @@ test.describe('Invariant: Geo-Resolution — Tier Priority', () => {
     );
     const sponsors = sponsorsRes.body.items || [];
 
-    test.skip(sponsors.length < 2, 'Need 2+ sponsors to verify sort order');
+    test.skip(sponsors.length < 2, 'Need 2+ sponsors to compare against a tier sort');
 
-    // Verify tier sort: each sponsor's tier priority should be <= the next
-    for (let i = 0; i < sponsors.length - 1; i++) {
-      const currentPriority = TIER_ORDER[sponsors[i].tier] ?? 99;
-      const nextPriority = TIER_ORDER[sponsors[i + 1].tier] ?? 99;
-      expect(currentPriority).toBeLessThanOrEqual(nextPriority);
-    }
+    // #5 + #25 RETIRED the tier sort; rotation is a capped/floored UNIFORM
+    // frequency-share (buildShareRotation / buildSponsorBundle). Reconstruct the order a
+    // tier sort WOULD impose, and only assert when it would actually reorder this sample
+    // (otherwise a uniform rotation coincides with tier order by chance — not a failure).
+    const tierSorted = [...sponsors].sort(
+      (a, b) => (RETIRED_TIER_ORDER[a.tier] ?? 99) - (RETIRED_TIER_ORDER[b.tier] ?? 99)
+    );
+    const wouldReorder = tierSorted.some((s, i) => s !== sponsors[i]);
+    test.skip(!wouldReorder, 'uniform rotation coincides with tier order for this sample');
+
+    // Affirmative guard: the live response is NOT the tier-sorted order. Reintroducing a
+    // tier sort in the resolver makes `sponsors` equal `tierSorted` and detonates this.
+    expect(sponsors).not.toEqual(tierSorted);
   });
 });
 
