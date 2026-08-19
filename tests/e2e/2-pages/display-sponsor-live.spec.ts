@@ -182,8 +182,11 @@ test.describe('Live Display — Sponsor Rendering', () => {
 // 3. LIVE: TIER CSS DIFFERENTIATION
 // ═══════════════════════════════════════════════════════════════════════════════
 
-test.describe('Live Display — Tier CSS', () => {
-  test('title/platinum sponsors have distinct border color', async ({ page }) => {
+test.describe('Live Display — Uniform sponsor treatment (#25 / OSE-878)', () => {
+  // INVERTED from the retired tier-accent model. The `if (...)` guards that let these
+  // pass vacuously are replaced with explicit test.skip — an honest skip, not a silent
+  // green. Once X-3 (OSE-834) seeds ≥2-tier fixtures the skips no longer fire.
+  test('title/platinum sponsors use the DEFAULT border — no tier accent', async ({ page }) => {
     await navigateToDisplay(page);
 
     const premiumItems = page.locator(
@@ -191,17 +194,19 @@ test.describe('Live Display — Tier CSS', () => {
         '[data-testid="display-sponsor-item"][data-tier="platinum"]'
     );
     const count = await premiumItems.count();
+    test.skip(count === 0, 'No title/platinum sponsors on this deployment (seed via X-3/OSE-834)');
 
-    if (count > 0) {
-      const borderColor = await premiumItems
-        .first()
-        .evaluate((el) => window.getComputedStyle(el).borderColor);
-      // Should NOT be the default rgba(255,255,255,0.06)
-      expect(borderColor).not.toContain('0.06');
-    }
+    const borderColor = await premiumItems
+      .first()
+      .evaluate((el) => window.getComputedStyle(el).borderColor);
+    // #25: uniform — the premium item carries the SAME default border as every other
+    // sponsor; the retired gold accent is gone. Reintroducing an accent detonates this.
+    expect(borderColor).toContain('0.06');
   });
 
-  test('title/platinum logos are taller than standard', async ({ page }) => {
+  test('title/platinum logos are the SAME height as standard (no tier sizing)', async ({
+    page,
+  }) => {
     await navigateToDisplay(page);
 
     const premiumImg = page.locator('[data-tier="title"] img, [data-tier="platinum"] img');
@@ -211,16 +216,18 @@ test.describe('Live Display — Tier CSS', () => {
 
     const hasPremium = (await premiumImg.count()) > 0;
     const hasStandard = (await standardImg.count()) > 0;
+    test.skip(
+      !hasPremium || !hasStandard,
+      'Need both a premium and a standard sponsor present (seed via X-3/OSE-834)'
+    );
 
-    if (hasPremium && hasStandard) {
-      const premiumHeight = await premiumImg
-        .first()
-        .evaluate((el) => parseFloat(window.getComputedStyle(el).height));
-      const standardHeight = await standardImg
-        .first()
-        .evaluate((el) => parseFloat(window.getComputedStyle(el).height));
-      expect(premiumHeight).toBeGreaterThan(standardHeight);
-    }
+    const premiumHeight = await premiumImg
+      .first()
+      .evaluate((el) => parseFloat(window.getComputedStyle(el).height));
+    const standardHeight = await standardImg
+      .first()
+      .evaluate((el) => parseFloat(window.getComputedStyle(el).height));
+    expect(premiumHeight).toBe(standardHeight);
   });
 });
 

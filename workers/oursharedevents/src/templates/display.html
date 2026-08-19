@@ -180,10 +180,13 @@
       .display-sponsor-item.fade-out {
         opacity: 0;
       }
+      /* OSE-878/#25: ONE uniform logo box for every sponsor regardless of tier,
+         responsive (clamp) from phone to the 10-foot TV. Tier-blind — money buys
+         frequency, never size/slot/treatment. WALL-3b (OSE-835) enforces this. */
       .display-sponsor-item img {
-        height: 36px;
+        height: clamp(32px, 3.5vw, 56px);
         width: auto;
-        max-width: 80px;
+        max-width: clamp(80px, 12vw, 160px);
         object-fit: contain;
         filter: brightness(1.1);
       }
@@ -191,30 +194,11 @@
         font-size: 0.8rem;
         color: #64748b;
       }
-      .display-sponsor-item[data-tier='title'],
-      .display-sponsor-item[data-tier='platinum'] {
-        border-color: rgba(234, 179, 8, 0.4);
-        background: rgba(234, 179, 8, 0.08);
-        padding: 0.625rem 0.75rem;
-      }
-      .display-sponsor-item[data-tier='title'] img,
-      .display-sponsor-item[data-tier='platinum'] img {
-        height: 48px;
-        max-width: 120px;
-      }
-      .display-sponsor-item[data-tier='title'] .name,
-      .display-sponsor-item[data-tier='platinum'] .name {
-        font-size: 0.9rem;
-        color: #e2e8f0;
-        font-weight: 600;
-      }
-      .display-sponsor-item[data-tier='gold'] {
-        border-color: rgba(234, 179, 8, 0.2);
-      }
-      .display-sponsor-item[data-tier='gold'] img {
-        height: 42px;
-        max-width: 100px;
-      }
+      /* OSE-878/#25: the per-tier treatment blocks (title/platinum gold accent
+         border + background + padding + 48px/64px logos + brighter/bolder name;
+         gold mid-strength border + 42px logo) are DELETED. Every sponsor item
+         renders identically; `data-tier` stays for rotation identity but NO CSS
+         keys off it. Rotation FREQUENCY (buildShareRotation) is the only diff. */
       .sponsor-counter {
         font-size: 0.65rem;
         color: #64748b;
@@ -248,15 +232,10 @@
           padding: 1.5rem;
           top: 80px;
         }
-        .display-sponsor-item img {
-          height: 48px;
-          max-width: 120px;
-        }
-        .display-sponsor-item[data-tier='title'] img,
-        .display-sponsor-item[data-tier='platinum'] img {
-          height: 64px;
-          max-width: 160px;
-        }
+        /* OSE-878/#25: per-breakpoint sponsor logo sizes removed — the tier-blind
+           clamp() on .display-sponsor-item img already scales to the TV; the old
+           uniform 48px + tier 64px overrides here would (a) freeze the clamp and
+           (b) reintroduce a tier-keyed dimension. Only the uniform name bump stays. */
         .display-sponsor-item .name {
           font-size: 1rem;
         }
