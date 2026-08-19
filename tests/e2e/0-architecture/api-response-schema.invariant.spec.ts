@@ -71,6 +71,14 @@ const DATA_PROVIDER = join(
   'lib',
   'data-provider.ts'
 );
+const POSTER_BUNDLE_HANDLER = join(
+  REPO_ROOT,
+  'workers',
+  'oursharedevents',
+  'src',
+  'handlers',
+  'poster-bundle.ts'
+);
 
 /** Extract the SELECT column list between a handler/method definition and its FROM clause. */
 function extractSelectColumns(src: string, handlerName: string): string[] {
@@ -256,5 +264,37 @@ test.describe('Invariant 16: API Response Schema Stability — structural code-s
         ).toContain(field);
       }
     }
+  });
+
+  // OSE-842 (X-9) — poster-bundle's `status` used to mean two things: a numeric
+  // HTTP status on the 404/403 error paths and the event-state string ('active',
+  // …) on the success path. That polymorphism forced every consumer to know which
+  // path it was on. The success envelope now emits a numeric `status` and moves
+  // the event-state string to `eventStatus`, so `status` means exactly one thing
+  // (the HTTP status) on every path. This gate keeps the collision from returning.
+  test('OSE-INV16 | poster-bundle | status | success envelope reserves numeric status and moves event-state to eventStatus (OSE-842)', () => {
+    expect(existsSync(POSTER_BUNDLE_HANDLER), 'handlers/poster-bundle.ts must exist').toBe(true);
+    const src = readFileSync(POSTER_BUNDLE_HANDLER, 'utf8');
+
+    // The event-state string must live under `eventStatus`.
+    expect(
+      src,
+      'poster-bundle success envelope must emit `eventStatus: row.status` — the event-state ' +
+        'string may not sit under `status` (that field is the numeric HTTP status on every path)'
+    ).toMatch(/eventStatus:\s*row\.status/);
+
+    // The collision must be gone: `status` must never be bound to the event-state string.
+    expect(
+      src,
+      'poster-bundle must not bind `status` to the event-state string `row.status` — ' +
+        'use `eventStatus` for the state and reserve `status` for the numeric HTTP code'
+    ).not.toMatch(/\bstatus:\s*row\.status/);
+
+    // The success path must emit a numeric status, matching the 404/403 error paths.
+    expect(
+      src,
+      'poster-bundle success envelope must emit a numeric `status: 200` so `status` is the ' +
+        'HTTP status on every path'
+    ).toMatch(/status:\s*200/);
   });
 });
