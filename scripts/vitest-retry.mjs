@@ -3,15 +3,26 @@
 //
 // OSE-696: workerd pool retry-once wrapper.
 //
-// The @cloudflare/vitest-pool-workers test step intermittently crashes with a
-// workerd segfault:
+// The @cloudflare/vitest-pool-workers test step intermittently crashes in two
+// observed, non-deterministic ways — both host-level, neither a real test
+// failure — that clear on a plain re-run:
 //
-//   Check failed: std::numeric_limits<int>::max() >= length_
+//   1. workerd segfault:
+//        Check failed: std::numeric_limits<int>::max() >= length_
 //
-// This is a non-deterministic runtime crash in workerd (observed ~4x in CI and
-// locally); it clears on a plain re-run but currently needs a human to click
-// "re-run". This wrapper makes that retry automatic — and ONLY for that crash
-// signature, so a genuine test failure still fails the gate immediately.
+//   2. pool worker dies mid-run (the workerd child exits / its control socket
+//      resets), surfacing as one of:
+//        [vitest-pool]: Worker cloudflare-pool emitted error.
+//        Caused by: Error: Worker exited unexpectedly
+//        Failed to start cloudflare-pool worker for test files ...
+//      (root cause seen as `read ECONNRESET` on the miniflare control socket).
+//      Signature: "191 passed (192)" + "1 error", zero assertion failures.
+//
+// Both need a human to click "re-run" today. This wrapper makes that retry
+// automatic — and ONLY for these infrastructure crash signatures, so a genuine
+// test failure (a failed assertion never kills the worker) still fails the gate
+// immediately. See also the runner-fleet notes: this is HOST-level, not runner-
+// specific — it lands on -1 or -2 alike, so re-run beats rebuilding the fleet.
 //
 // Contract:
 //   1. Runs the given command (argv after this script) exactly as passed.
@@ -33,18 +44,57 @@
 
 import { spawn } from 'node:child_process';
 
-// Crash signatures that indicate the workerd segfault (NOT a real test failure).
-// Kept as plain substrings so matching is exact and cheap.
-const CRASH_SIGNATURES = ['std::numeric_limits', 'Check failed'];
+// Crash signatures that indicate a workerd / pool-worker infrastructure crash
+// (NOT a real test failure). Kept as plain substrings so matching is exact and
+// cheap. Each string is chosen to be emitted ONLY by the pool infrastructure
+// tearing down — a failed assertion does not kill the worker, so these cannot
+// mask a genuine test failure.
+//
+// Deliberately NOT retried (would mask real regressions, so let them fail):
+//   - bare "ECONNRESET" / "ECONNREFUSED": a test exercising connection-reset
+//     handling could log it. The accompanying "Worker exited unexpectedly" /
+//     "Failed to start cloudflare-pool worker" covers the flake without the risk.
+//   - "JavaScript heap out of memory" / "Reached heap limit": often infra on a
+//     RAM-bound box, but can equally be a genuine memory-leak regression —
+//     retrying hides it. Surface/alert on OOM instead of silently re-running.
+//   - "EBUSY" / "EPERM" (Windows file locks): too ambiguous with real bugs.
+const CRASH_SIGNATURES = [
+  'std::numeric_limits',
+  'Check failed',
+  'Worker exited unexpectedly',
+  'Failed to start cloudflare-pool worker',
+  '[vitest-pool]: Worker cloudflare-pool emitted error',
+  'listen EADDRINUSE', // two pool workers race for a port on the shared box
+  'The service was stopped', // esbuild daemon crash (transient)
+  'The service is no longer running', // esbuild daemon crash (transient)
+];
+
+// Exit codes / signals that mean the child process HARD-CRASHED (segfault,
+// abort, Windows access violation) rather than reporting a test result. A real
+// assertion failure exits 1; these codes cannot come from vitest reporting a
+// failed test, so retrying on them is safe. This closes the canonical OSE-696
+// "exit-139 SIGSEGV" case, where the crash produces NO matchable log string —
+// only a crash exit code — and the output-only matcher above would miss it.
+const CRASH_EXIT_CODES = new Set([
+  134, // 128 + SIGABRT(6)  — abort
+  139, // 128 + SIGSEGV(11) — segfault (POSIX)
+  3221225477, // 0xC0000005 — access violation (Windows workerd segfault)
+]);
+const CRASH_SIGNALS = new Set(['SIGSEGV', 'SIGABRT', 'SIGBUS', 'SIGILL']);
 
 function hasCrashSignature(output) {
   return CRASH_SIGNATURES.some((sig) => output.includes(sig));
 }
 
+function isCrashExit(code, signal) {
+  return CRASH_EXIT_CODES.has(code) || CRASH_SIGNALS.has(signal);
+}
+
 /**
- * Run a command once. Resolves with { code, output }.
+ * Run a command once. Resolves with { code, signal, output }.
  *   - code: numeric exit code (a signal-terminated child is normalized to a
  *     non-zero code so the caller still sees "failure").
+ *   - signal: the terminating signal name (e.g. 'SIGSEGV') or null.
  *   - output: combined stdout+stderr as a string (also streamed live).
  */
 function runOnce(commandLine) {
@@ -77,7 +127,7 @@ function runOnce(commandLine) {
       // captured so the signature check can still see it if relevant.
       output += `\n[vitest-retry] spawn error: ${err.message}\n`;
       process.stderr.write(`[vitest-retry] spawn error: ${err.message}\n`);
-      resolvePromise({ code: 1, output });
+      resolvePromise({ code: 1, signal: null, output });
     });
 
     child.on('close', (code, signal) => {
@@ -86,7 +136,7 @@ function runOnce(commandLine) {
       if (signal) {
         output += `\n[vitest-retry] child terminated by signal ${signal}\n`;
       }
-      resolvePromise({ code: exitCode, output });
+      resolvePromise({ code: exitCode, signal: signal ?? null, output });
     });
   });
 }
@@ -116,7 +166,10 @@ async function main() {
     return;
   }
 
-  if (!hasCrashSignature(first.output)) {
+  const matchedSignature = hasCrashSignature(first.output);
+  const matchedCrashExit = isCrashExit(first.code, first.signal);
+
+  if (!matchedSignature && !matchedCrashExit) {
     // Genuine failure (or any non-crash failure) — do NOT retry.
     process.stderr.write(
       '[vitest-retry] attempt 1 failed without a workerd crash signature — not retrying.\n'
@@ -125,11 +178,11 @@ async function main() {
     return;
   }
 
-  // ── Attempt 2 (retry once, signature matched) ───────────────────────────────
-  process.stderr.write(
-    '[vitest-retry] attempt 1 hit a workerd crash signature ' +
-      `(one of: ${CRASH_SIGNATURES.join(', ')}) — retrying once.\n`
-  );
+  // ── Attempt 2 (retry once, crash detected) ──────────────────────────────────
+  const reason = matchedSignature
+    ? `crash signature (one of: ${CRASH_SIGNATURES.join(', ')})`
+    : `hard-crash exit (code ${first.code}${first.signal ? `, signal ${first.signal}` : ''})`;
+  process.stderr.write(`[vitest-retry] attempt 1 hit a workerd ${reason} — retrying once.\n`);
 
   const second = await runOnce(commandLine);
 
