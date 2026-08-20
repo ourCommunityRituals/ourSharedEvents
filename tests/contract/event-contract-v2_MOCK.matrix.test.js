@@ -14,7 +14,7 @@
  *
  * This file uses TestRunner for actual API calls against deployed/local server.
  *
- * @see /schemas/event.schema.json
+ * @see /reference/gas-mvp/schemas/event.schema.json
  * @see EVENT_CONTRACT.md v2.0
  */
 

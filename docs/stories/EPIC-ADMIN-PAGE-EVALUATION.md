@@ -227,7 +227,7 @@ CREATE TABLE feature_tiers (
 | --------------- | ----------------------------------- | ------------------------------------------------------------------------------------ |
 | Unit (Jest)     | Admin auth, create, update, archive | Form submit handlers, PII scrub, flag resolution                                     |
 | Contract (Pact) | Kill-switch feature flags           | Form submit/response contracts, tier flag contracts                                  |
-| Integration     | Worker ↔ Sheets                    | Worker ↔ D1 forms DB, flag resolution chain                                         |
+| Integration     | Worker ↔ Sheets                     | Worker ↔ D1 forms DB, flag resolution chain                                          |
 | Postman/Newman  | Smoke collection exists             | E2E chaining: create event → configure form → submit → verify count → export → scrub |
 
 ### Feature Flag Architecture
@@ -1141,22 +1141,22 @@ test(`${surface} renders correctly on ${viewport.name}`, async ({ page }) => {
 
 ---
 
-| File                                          | Purpose                            |
-| --------------------------------------------- | ---------------------------------- |
-| `cloudflare-proxy/templates/admin.html`       | Main admin template (13,042 lines) |
-| `src/mvp/Admin.html`                          | Legacy source template             |
-| `src/mvp/AdminEvents.html`                    | Event selector + Worker API module |
-| `src/mvp/AdminForms.html`                     | Form config + Google Forms module  |
-| `src/mvp/AdminDisplay.html`                   | Display config + sponsor module    |
-| `src/mvp/AdminTemplates.html`                 | Template picker module             |
-| `src/mvp/AdminDiagnostics.html`               | Diagnostics panel module           |
-| `schemas/event.schema.json`                   | Event contract (v1.0 frozen)       |
-| `workers/oursharedevents/migrations/`         | D1 main migrations (9 files)       |
-| `migrations-forms/`                           | D1 forms migrations (7 files)      |
-| `config/feature-flags.js`                     | Feature flag definitions           |
-| `worker/src/lib/feature-flags.ts`             | Worker-side flag resolution        |
-| `tests/e2e/1-smoke/admin-seven-cards.spec.js` | 7-card E2E smoke tests             |
-| `tests/e2e/3-flows/admin-wizard-flow.spec.js` | Wizard flow E2E                    |
+| File                                          | Purpose                                                                             |
+| --------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `cloudflare-proxy/templates/admin.html`       | Main admin template (13,042 lines)                                                  |
+| `src/mvp/Admin.html`                          | Legacy source template                                                              |
+| `src/mvp/AdminEvents.html`                    | Event selector + Worker API module                                                  |
+| `src/mvp/AdminForms.html`                     | Form config + Google Forms module                                                   |
+| `src/mvp/AdminDisplay.html`                   | Display config + sponsor module                                                     |
+| `src/mvp/AdminTemplates.html`                 | Template picker module                                                              |
+| `src/mvp/AdminDiagnostics.html`               | Diagnostics panel module                                                            |
+| `reference/gas-mvp/schemas/event.schema.json` | Retired zeventbook event schema (OSE-882); contract of record = D1 migrations below |
+| `workers/oursharedevents/migrations/`         | D1 main migrations (9 files)                                                        |
+| `migrations-forms/`                           | D1 forms migrations (7 files)                                                       |
+| `config/feature-flags.js`                     | Feature flag definitions                                                            |
+| `worker/src/lib/feature-flags.ts`             | Worker-side flag resolution                                                         |
+| `tests/e2e/1-smoke/admin-seven-cards.spec.js` | 7-card E2E smoke tests                                                              |
+| `tests/e2e/3-flows/admin-wizard-flow.spec.js` | Wizard flow E2E                                                                     |
 
 ---
 

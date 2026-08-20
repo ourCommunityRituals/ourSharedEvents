@@ -2,12 +2,27 @@
 
 ## MVP v1.0 – frozen
 
-> **Schema lock date:** 2025-11-30
-> **Source of truth:** `/schemas/event.schema.json`
-> **Breaking changes require migration scripts.**
+> **Contract of record (persisted):** the `events` D1 table —
+> `workers/oursharedevents/migrations/0001_create_events.sql`. The flat columns
+> (`title`, `start_date`, `location`, `status`, …) are the durable truth, not any
+> JSON schema.
+> **Contract of record (API output):** `enrichWithPhase()` in
+> `workers/oursharedevents/src/handlers/events.ts` maps the DB columns to the
+> canonical output names (`title→name`, `start_date→startDateISO`,
+> `location→venue`) and adds `phase`, per **ADR-016**. The shape is guarded by
+> `workers/oursharedevents/src/api-schema-snapshots/public-events.snapshot.json`
+> (v1.1.0) and `tests/e2e/0-architecture/api-response-schema.invariant.spec.ts`.
+> **Retired (historical reference only):**
+> `reference/gas-mvp/schemas/event.schema.json` — the abandoned zeventbook.com
+> JSON shape. It is **not** a contract of record (OSE-882); the D1 table is.
+> **Breaking changes to the persisted contract require a migration script.**
 
-This table is the single source of truth for what fields are allowed in MVP v1.0.
-Any field marked V2 cannot be depended on by MVP surfaces without a feature flag.
+The field matrix below is the composed **surface view** an event presents to the
+five surfaces. The MVP identity fields (`id`, `name`, `startDateISO`, `venue`)
+map directly to D1 columns via `enrichWithPhase`; the richer nesting
+(`links.*`, `qr.*`, `ctas.*`, `schedule[]`, `settings.show*`) is composed at the
+handler/template layer (partly from the `data_json` column) and V2 fields are
+gated behind feature flags.
 
 ---
 
@@ -70,7 +85,10 @@ Any field marked V2 cannot be depended on by MVP surfaces without a feature flag
 
 ### SharedAnalytics (read by SharedReport)
 
-SharedReport uses a separate schema: `/schemas/shared-analytics.schema.json`
+SharedReport reads a separate analytics shape. The historical schema
+`reference/gas-mvp/schemas/shared-analytics.schema.json` is retired reference
+only (OSE-882); the SharedReport response shape is locked at runtime by
+Invariant #21 `shared_report_schema_stability`.
 
 | field                      | required | used by surfaces | MVP/V2 |
 | -------------------------- | :------: | ---------------- | :----: |
@@ -113,7 +131,10 @@ SharedReport uses a separate schema: `/schemas/shared-analytics.schema.json`
 - **MVP fields**: Cannot remove or change types. Additive changes only.
 - **V2 fields**: Optional with `null` default. MVP surfaces must not depend on them without feature flags.
 - **Breaking changes**: Require new schema version + migration script.
-- **CI enforcement**: `npm run test:schemas` validates all surfaces.
+- **CI enforcement**: the API response shape is guarded by
+  `tests/e2e/0-architecture/api-response-schema.invariant.spec.ts` and the
+  `public-events.snapshot.json` diff gate (the retired `test:schemas` harness
+  lives at `reference/gas-mvp/scripts/test-schemas.js`).
 
 ---
 

@@ -10,7 +10,7 @@
  * FEATURE FLAG: TEMPLATE_MANAGEMENT_V2 (disabled by default)
  *
  * @see TemplateManagementService.gs
- * @see /schemas/event.schema.json
+ * @see /reference/gas-mvp/schemas/event.schema.json
  */
 
 // ============================================================================

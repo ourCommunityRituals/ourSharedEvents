@@ -1,7 +1,7 @@
 /**
  * SharedAnalytics Fixtures for E2E Testing
  *
- * Schema: /schemas/shared-analytics.schema.json (v1.1 frozen)
+ * Schema: /reference/gas-mvp/schemas/shared-analytics.schema.json (v1.1 frozen)
  *
  * These fixtures provide test data for SharedReport mobile E2E tests.
  * All fixtures comply with the SharedAnalytics schema contract.

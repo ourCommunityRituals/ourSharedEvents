@@ -3,7 +3,7 @@
  *
  * Shared sponsor data for all test types across Triangle phases
  *
- * CONTRACT: /schemas/sponsor.schema.json
+ * CONTRACT: /reference/gas-mvp/schemas/sponsor.schema.json
  * Required fields: id, name, logoUrl, (placement OR placements)
  * Optional fields: linkUrl, clickToken, impressionToken, tier
  */

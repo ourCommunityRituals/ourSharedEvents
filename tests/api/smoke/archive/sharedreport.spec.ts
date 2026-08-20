@@ -4,7 +4,7 @@
  * Validates that shared analytics endpoints return correct shape per v4.1.2 contract.
  * These are ENVELOPE endpoints (Ok/Err wrapper).
  *
- * Contract: schemas/shared-analytics.schema.json
+ * Contract: reference/gas-mvp/schemas/shared-analytics.schema.json
  *
  * @see API_CONTRACT.md - Analytics Endpoints section
  */

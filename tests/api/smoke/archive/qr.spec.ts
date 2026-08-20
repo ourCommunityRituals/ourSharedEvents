@@ -4,7 +4,7 @@
  * Validates that QR code endpoints return valid PNG/SVG data.
  * Tests both embedded QR codes in events and dedicated QR endpoints.
  *
- * Contract: schemas/sponsor-report-qr.schema.json
+ * Contract: reference/gas-mvp/schemas/sponsor-report-qr.schema.json
  *
  * @see API_CONTRACT.md - QR Code section
  */

@@ -23,10 +23,10 @@
  * - STRICT mode validation fails on any extra or missing fields (additionalProperties: false)
  *
  * SCHEMA REFERENCES:
- * - /schemas/event.schema.json (MVP-frozen v2.2)
- * - /schemas/shared-analytics.schema.json (MVP-frozen v1.1)
- * - /schemas/sponsor-report-qr.schema.json (v1.0)
- * - /schemas/sponsor.schema.json
+ * - /reference/gas-mvp/schemas/event.schema.json (MVP-frozen v2.2)
+ * - /reference/gas-mvp/schemas/shared-analytics.schema.json (MVP-frozen v1.1)
+ * - /reference/gas-mvp/schemas/sponsor-report-qr.schema.json (v1.0)
+ * - /reference/gas-mvp/schemas/sponsor.schema.json
  */
 
 const {
@@ -134,23 +134,28 @@ const FIXTURE_EVENT_WITH_SPONSORS = {
 // ============================================================================
 
 /**
- * Validates Event shape per /schemas/event.schema.json v2.2 (MVP-frozen)
+ * Validates Event shape per /reference/gas-mvp/schemas/event.schema.json v2.2 (MVP-frozen)
  * MVP REQUIRED: id, slug, name, startDateISO, venue, links, qr, ctas, settings, createdAtISO, updatedAtISO
  */
 const validateEventSchema = (event) => {
   const errors = [];
 
   // MVP REQUIRED - Identity
-  if (typeof event.id !== 'string' || event.id.length === 0)
+  if (typeof event.id !== 'string' || event.id.length === 0) {
     errors.push('id: must be non-empty string');
-  if (typeof event.slug !== 'string' || !/^[a-z0-9-]+$/.test(event.slug))
+  }
+  if (typeof event.slug !== 'string' || !/^[a-z0-9-]+$/.test(event.slug)) {
     errors.push('slug: must match ^[a-z0-9-]+$');
-  if (typeof event.name !== 'string' || event.name.length === 0)
+  }
+  if (typeof event.name !== 'string' || event.name.length === 0) {
     errors.push('name: must be non-empty string');
-  if (typeof event.startDateISO !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(event.startDateISO))
+  }
+  if (typeof event.startDateISO !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(event.startDateISO)) {
     errors.push('startDateISO: must match YYYY-MM-DD');
-  if (typeof event.venue !== 'string' || event.venue.length === 0)
+  }
+  if (typeof event.venue !== 'string' || event.venue.length === 0) {
     errors.push('venue: must be non-empty string');
+  }
 
   // MVP REQUIRED - Links
   if (!event.links || typeof event.links !== 'object') {
@@ -177,10 +182,12 @@ const validateEventSchema = (event) => {
     if (!event.ctas.primary || typeof event.ctas.primary !== 'object') {
       errors.push('ctas.primary: must be object');
     } else {
-      if (typeof event.ctas.primary.label !== 'string')
+      if (typeof event.ctas.primary.label !== 'string') {
         errors.push('ctas.primary.label: must be string');
-      if (typeof event.ctas.primary.url !== 'string')
+      }
+      if (typeof event.ctas.primary.url !== 'string') {
         errors.push('ctas.primary.url: must be string');
+      }
     }
   }
 
@@ -188,12 +195,15 @@ const validateEventSchema = (event) => {
   if (!event.settings || typeof event.settings !== 'object') {
     errors.push('settings: must be object');
   } else {
-    if (typeof event.settings.showSchedule !== 'boolean')
+    if (typeof event.settings.showSchedule !== 'boolean') {
       errors.push('settings.showSchedule: must be boolean');
-    if (typeof event.settings.showStandings !== 'boolean')
+    }
+    if (typeof event.settings.showStandings !== 'boolean') {
       errors.push('settings.showStandings: must be boolean');
-    if (typeof event.settings.showBracket !== 'boolean')
+    }
+    if (typeof event.settings.showBracket !== 'boolean') {
       errors.push('settings.showBracket: must be boolean');
+    }
   }
 
   // MVP REQUIRED - Timestamps
@@ -204,7 +214,7 @@ const validateEventSchema = (event) => {
 };
 
 /**
- * Validates SharedAnalytics shape per /schemas/shared-analytics.schema.json v1.1 (MVP-frozen)
+ * Validates SharedAnalytics shape per /reference/gas-mvp/schemas/shared-analytics.schema.json v1.1 (MVP-frozen)
  * MVP REQUIRED: lastUpdatedISO, summary, surfaces
  */
 const validateSharedAnalyticsSchema = (analytics) => {
@@ -219,18 +229,24 @@ const validateSharedAnalyticsSchema = (analytics) => {
   if (!analytics.summary || typeof analytics.summary !== 'object') {
     errors.push('summary: must be object');
   } else {
-    if (typeof analytics.summary.totalImpressions !== 'number')
+    if (typeof analytics.summary.totalImpressions !== 'number') {
       errors.push('summary.totalImpressions: must be number');
-    if (typeof analytics.summary.totalClicks !== 'number')
+    }
+    if (typeof analytics.summary.totalClicks !== 'number') {
       errors.push('summary.totalClicks: must be number');
-    if (typeof analytics.summary.totalQrScans !== 'number')
+    }
+    if (typeof analytics.summary.totalQrScans !== 'number') {
       errors.push('summary.totalQrScans: must be number');
-    if (typeof analytics.summary.totalSignups !== 'number')
+    }
+    if (typeof analytics.summary.totalSignups !== 'number') {
       errors.push('summary.totalSignups: must be number');
-    if (typeof analytics.summary.uniqueEvents !== 'number')
+    }
+    if (typeof analytics.summary.uniqueEvents !== 'number') {
       errors.push('summary.uniqueEvents: must be number');
-    if (typeof analytics.summary.uniqueSponsors !== 'number')
+    }
+    if (typeof analytics.summary.uniqueSponsors !== 'number') {
       errors.push('summary.uniqueSponsors: must be number');
+    }
   }
 
   // MVP REQUIRED - surfaces (array)
@@ -240,11 +256,13 @@ const validateSharedAnalyticsSchema = (analytics) => {
     analytics.surfaces.forEach((surface, i) => {
       if (typeof surface.id !== 'string') errors.push(`surfaces[${i}].id: must be string`);
       if (typeof surface.label !== 'string') errors.push(`surfaces[${i}].label: must be string`);
-      if (typeof surface.impressions !== 'number')
+      if (typeof surface.impressions !== 'number') {
         errors.push(`surfaces[${i}].impressions: must be number`);
+      }
       if (typeof surface.clicks !== 'number') errors.push(`surfaces[${i}].clicks: must be number`);
-      if (typeof surface.qrScans !== 'number')
+      if (typeof surface.qrScans !== 'number') {
         errors.push(`surfaces[${i}].qrScans: must be number`);
+      }
     });
   }
 
@@ -256,10 +274,12 @@ const validateSharedAnalyticsSchema = (analytics) => {
       analytics.sponsors.forEach((sponsor, i) => {
         if (typeof sponsor.id !== 'string') errors.push(`sponsors[${i}].id: must be string`);
         if (typeof sponsor.name !== 'string') errors.push(`sponsors[${i}].name: must be string`);
-        if (typeof sponsor.impressions !== 'number')
+        if (typeof sponsor.impressions !== 'number') {
           errors.push(`sponsors[${i}].impressions: must be number`);
-        if (typeof sponsor.clicks !== 'number')
+        }
+        if (typeof sponsor.clicks !== 'number') {
           errors.push(`sponsors[${i}].clicks: must be number`);
+        }
         if (typeof sponsor.ctr !== 'number') errors.push(`sponsors[${i}].ctr: must be number`);
       });
     }
@@ -273,12 +293,14 @@ const validateSharedAnalyticsSchema = (analytics) => {
       analytics.events.forEach((event, i) => {
         if (typeof event.id !== 'string') errors.push(`events[${i}].id: must be string`);
         if (typeof event.name !== 'string') errors.push(`events[${i}].name: must be string`);
-        if (typeof event.impressions !== 'number')
+        if (typeof event.impressions !== 'number') {
           errors.push(`events[${i}].impressions: must be number`);
+        }
         if (typeof event.clicks !== 'number') errors.push(`events[${i}].clicks: must be number`);
         if (typeof event.ctr !== 'number') errors.push(`events[${i}].ctr: must be number`);
-        if (typeof event.signupsCount !== 'number')
+        if (typeof event.signupsCount !== 'number') {
           errors.push(`events[${i}].signupsCount: must be number`);
+        }
       });
     }
   }
@@ -321,27 +343,32 @@ const validateBundleSchema = (response) => {
   if (!response.value.config) {
     errors.push('value.config: required');
   } else {
-    if (typeof response.value.config.brandId !== 'string')
+    if (typeof response.value.config.brandId !== 'string') {
       errors.push('value.config.brandId: must be string');
-    if (typeof response.value.config.brandName !== 'string')
+    }
+    if (typeof response.value.config.brandName !== 'string') {
       errors.push('value.config.brandName: must be string');
+    }
   }
 
   return errors.length === 0 ? true : errors;
 };
 
 /**
- * Validates Sponsor schema per /schemas/sponsor.schema.json
+ * Validates Sponsor schema per /reference/gas-mvp/schemas/sponsor.schema.json
  */
 const validateSponsorSchema = (sponsor) => {
   const errors = [];
 
-  if (typeof sponsor.id !== 'string' || sponsor.id.length === 0)
+  if (typeof sponsor.id !== 'string' || sponsor.id.length === 0) {
     errors.push('id: must be non-empty string');
-  if (typeof sponsor.name !== 'string' || sponsor.name.length === 0)
+  }
+  if (typeof sponsor.name !== 'string' || sponsor.name.length === 0) {
     errors.push('name: must be non-empty string');
-  if (typeof sponsor.logoUrl !== 'string' || !sponsor.logoUrl.match(/^https?:\/\/.+/))
+  }
+  if (typeof sponsor.logoUrl !== 'string' || !sponsor.logoUrl.match(/^https?:\/\/.+/)) {
     errors.push('logoUrl: must be valid URL');
+  }
   if (
     typeof sponsor.placement !== 'string' ||
     !['poster', 'display', 'public', 'tv-banner'].includes(sponsor.placement)
@@ -353,7 +380,7 @@ const validateSponsorSchema = (sponsor) => {
 };
 
 /**
- * Validates SponsorReportQr shape per /schemas/sponsor-report-qr.schema.json v1.0
+ * Validates SponsorReportQr shape per /reference/gas-mvp/schemas/sponsor-report-qr.schema.json v1.0
  * MVP REQUIRED: url, qrB64, verified
  * STRICT: additionalProperties: false - extra fields will fail validation
  */
@@ -429,18 +456,24 @@ const validateSharedAnalyticsSchemaStrict = (analytics, strict = false) => {
   if (!analytics.summary || typeof analytics.summary !== 'object') {
     errors.push('summary: must be object');
   } else {
-    if (typeof analytics.summary.totalImpressions !== 'number')
+    if (typeof analytics.summary.totalImpressions !== 'number') {
       errors.push('summary.totalImpressions: must be number');
-    if (typeof analytics.summary.totalClicks !== 'number')
+    }
+    if (typeof analytics.summary.totalClicks !== 'number') {
       errors.push('summary.totalClicks: must be number');
-    if (typeof analytics.summary.totalQrScans !== 'number')
+    }
+    if (typeof analytics.summary.totalQrScans !== 'number') {
       errors.push('summary.totalQrScans: must be number');
-    if (typeof analytics.summary.totalSignups !== 'number')
+    }
+    if (typeof analytics.summary.totalSignups !== 'number') {
       errors.push('summary.totalSignups: must be number');
-    if (typeof analytics.summary.uniqueEvents !== 'number')
+    }
+    if (typeof analytics.summary.uniqueEvents !== 'number') {
       errors.push('summary.uniqueEvents: must be number');
-    if (typeof analytics.summary.uniqueSponsors !== 'number')
+    }
+    if (typeof analytics.summary.uniqueSponsors !== 'number') {
       errors.push('summary.uniqueSponsors: must be number');
+    }
 
     // STRICT: Check for extra summary fields
     if (strict) {
@@ -460,11 +493,13 @@ const validateSharedAnalyticsSchemaStrict = (analytics, strict = false) => {
     analytics.surfaces.forEach((surface, i) => {
       if (typeof surface.id !== 'string') errors.push(`surfaces[${i}].id: must be string`);
       if (typeof surface.label !== 'string') errors.push(`surfaces[${i}].label: must be string`);
-      if (typeof surface.impressions !== 'number')
+      if (typeof surface.impressions !== 'number') {
         errors.push(`surfaces[${i}].impressions: must be number`);
+      }
       if (typeof surface.clicks !== 'number') errors.push(`surfaces[${i}].clicks: must be number`);
-      if (typeof surface.qrScans !== 'number')
+      if (typeof surface.qrScans !== 'number') {
         errors.push(`surfaces[${i}].qrScans: must be number`);
+      }
 
       // STRICT: Check for extra surface fields
       if (strict) {
@@ -488,10 +523,12 @@ const validateSharedAnalyticsSchemaStrict = (analytics, strict = false) => {
       analytics.sponsors.forEach((sponsor, i) => {
         if (typeof sponsor.id !== 'string') errors.push(`sponsors[${i}].id: must be string`);
         if (typeof sponsor.name !== 'string') errors.push(`sponsors[${i}].name: must be string`);
-        if (typeof sponsor.impressions !== 'number')
+        if (typeof sponsor.impressions !== 'number') {
           errors.push(`sponsors[${i}].impressions: must be number`);
-        if (typeof sponsor.clicks !== 'number')
+        }
+        if (typeof sponsor.clicks !== 'number') {
           errors.push(`sponsors[${i}].clicks: must be number`);
+        }
         if (typeof sponsor.ctr !== 'number') errors.push(`sponsors[${i}].ctr: must be number`);
 
         // STRICT: Check for extra sponsor fields
@@ -517,12 +554,14 @@ const validateSharedAnalyticsSchemaStrict = (analytics, strict = false) => {
       analytics.events.forEach((event, i) => {
         if (typeof event.id !== 'string') errors.push(`events[${i}].id: must be string`);
         if (typeof event.name !== 'string') errors.push(`events[${i}].name: must be string`);
-        if (typeof event.impressions !== 'number')
+        if (typeof event.impressions !== 'number') {
           errors.push(`events[${i}].impressions: must be number`);
+        }
         if (typeof event.clicks !== 'number') errors.push(`events[${i}].clicks: must be number`);
         if (typeof event.ctr !== 'number') errors.push(`events[${i}].ctr: must be number`);
-        if (typeof event.signupsCount !== 'number')
+        if (typeof event.signupsCount !== 'number') {
           errors.push(`events[${i}].signupsCount: must be number`);
+        }
 
         // STRICT: Check for extra event fields
         if (strict) {
@@ -1061,7 +1100,7 @@ describe('Explicit API Response Contracts', () => {
      *
      * Request: { action: 'api_getSharedAnalytics', brandId: string, eventId?: string, sponsorId?: string }
      *
-     * Success Response (per /schemas/shared-analytics.schema.json v1.1):
+     * Success Response (per /reference/gas-mvp/schemas/shared-analytics.schema.json v1.1):
      * {
      *   ok: true,
      *   value: {
@@ -1318,7 +1357,7 @@ describe('Explicit API Response Contracts', () => {
      *
      * Request: { action: 'api_getSponsorAnalytics', brandId: string, sponsorId: string, eventId?: string }
      *
-     * Success Response (per /schemas/shared-analytics.schema.json v1.1 - sponsor-scoped):
+     * Success Response (per /reference/gas-mvp/schemas/shared-analytics.schema.json v1.1 - sponsor-scoped):
      * Same structure as api_getSharedAnalytics but scoped to specific sponsor
      * sponsors array will be null (single sponsor view)
      */
@@ -1419,7 +1458,7 @@ describe('Explicit API Response Contracts', () => {
      *
      * Request: { action: 'api_getSponsorReportQr', sponsorId: string, brandId?: string, adminKey?: string }
      *
-     * Success Response (per /schemas/sponsor-report-qr.schema.json v1.0):
+     * Success Response (per /reference/gas-mvp/schemas/sponsor-report-qr.schema.json v1.0):
      * {
      *   ok: true,
      *   value: {

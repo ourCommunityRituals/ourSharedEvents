@@ -12,7 +12,7 @@
  * BASE_URL-Aware: Tests work against GAS or oursharedevents.com:
  *   BASE_URL="https://oursharedevents.com" npm run test:e2e-public
  *
- * SCHEMA: /schemas/event.schema.json (EVENT_CONTRACT.md v2.0)
+ * SCHEMA: /reference/gas-mvp/schemas/event.schema.json (EVENT_CONTRACT.md v2.0)
  */
 
 const { test, expect } = require('@playwright/test');
@@ -49,7 +49,7 @@ function setupConsoleErrorCollection(page) {
 
 /**
  * Full Event Fixture - All sections enabled with data
- * Schema: /schemas/event.schema.json
+ * Schema: /reference/gas-mvp/schemas/event.schema.json
  */
 const FULL_EVENT_FIXTURE = {
   id: 'test-full-event-e2e',
@@ -172,7 +172,7 @@ const FULL_EVENT_FIXTURE = {
 
 /**
  * Minimal Event Fixture - Just basic info (Name, Date, Venue, One CTA)
- * Schema: /schemas/event.schema.json (MVP Required fields only)
+ * Schema: /reference/gas-mvp/schemas/event.schema.json (MVP Required fields only)
  */
 const MINIMAL_EVENT_FIXTURE = {
   id: 'test-minimal-event-e2e',

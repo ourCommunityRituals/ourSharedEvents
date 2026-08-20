@@ -11,8 +11,8 @@
  * 4. Contract alignment with sponsor.schema.json
  *
  * @see /src/mvp/SharedReport.html - renderTopSponsorsCard()
- * @see /schemas/shared-analytics.schema.json - topSponsors[] shape
- * @see /schemas/sponsor.schema.json - Sponsor contract
+ * @see /reference/gas-mvp/schemas/shared-analytics.schema.json - topSponsors[] shape
+ * @see /reference/gas-mvp/schemas/sponsor.schema.json - Sponsor contract
  */
 
 const {
