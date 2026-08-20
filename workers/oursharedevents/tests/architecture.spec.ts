@@ -199,6 +199,11 @@ describe('L1: broad reverse gate — no ungated handler touches FORMS_DB (invari
   //                      brand-scoped rollup strip. Never reads raw form rows or
   //                      PII columns; requireAdmin-gated + brand-scoped (#9).
   //                      Authorized: OSE-669 portfolio rollup.
+  //   event-stats.ts   — reads ONLY aggregate counts (registration COUNT(*),
+  //                      checkin total_count) for one event's admin dashboard
+  //                      tiles. Floored server-side via applyCountFloor (K-anon);
+  //                      never reads raw form rows or PII columns; requireAdmin-
+  //                      gated. Authorized: OSE-896 dashboard counts.
   // All other src/handlers/ files must never reference env.FORMS_DB.
   // This gate closes the gap where 9+ handler files were ungated.
   test('non-authorised handlers contain no FORMS_DB reference', () => {
@@ -209,6 +214,7 @@ describe('L1: broad reverse gate — no ungated handler touches FORMS_DB (invari
       'src/handlers/pages.ts',
       'src/handlers/poster-bundle.ts',
       'src/handlers/portfolio-rollup.ts',
+      'src/handlers/event-stats.ts',
     ];
     const sources: Record<string, string> = JSON.parse(tenv().TEST_SOURCE_FILES_JSON);
     let checked = 0;
