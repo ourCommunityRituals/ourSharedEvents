@@ -126,9 +126,14 @@ export async function handleGetPosterBundle(
 
   return Response.json({
     ok: true,
+    // OSE-842: `status` is reserved for the numeric HTTP status on every path
+    // (the 404/403 returns above already emit it as a number); the event-state
+    // string lives under `eventStatus`. This ends the polymorphic-`status`
+    // collision so #16 consumers can read one meaning per field.
+    status: 200,
     eventId: row.id,
     eventName: row.title,
-    status: row.status,
+    eventStatus: row.status,
     deploymentId: deployment?.id ?? null,
     qr,
     links,

@@ -188,7 +188,7 @@ describe('DESIGN-9 L2: poster-bundle endpoint integration', () => {
     expect(body.ok).toBe(false);
   });
 
-  test('active event → 200 with ok:true, eventId, eventName, status, qr, links, labels', async () => {
+  test('active event → 200 with ok:true, eventId, eventName, numeric status, eventStatus, qr, links, labels', async () => {
     const eventId = await createEvent('Poster QR Test Event');
 
     const bundleRes = await SELF.fetch(`https://t.test/api/v2/events/${eventId}/poster-bundle`);
@@ -198,7 +198,10 @@ describe('DESIGN-9 L2: poster-bundle endpoint integration', () => {
     expect(bundle.ok).toBe(true);
     expect(bundle.eventId).toBe(eventId);
     expect(bundle.eventName).toBe('Poster QR Test Event');
-    expect(bundle.status).toBe('active');
+    // OSE-842: `status` is the numeric HTTP status (matching the error paths);
+    // the event-state string moved to `eventStatus`.
+    expect(bundle.status).toBe(200);
+    expect(bundle.eventStatus).toBe('active');
     expect(bundle.qr).toBeDefined();
     expect(bundle.links).toBeDefined();
     expect(bundle.labels).toBeDefined();
