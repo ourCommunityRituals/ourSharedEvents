@@ -59,7 +59,7 @@ describe('QA-1: Migration idempotency', () => {
 
     // 16 tables: admin_audit_log (OSE-212), corridors, event_template_*,
     // events, node_hierarchy, poster_deployments, scan_aggregates, scans,
-    // (scans dropped by migration 0063 / OSE-798, replaced by
+    // (scans dropped by migration 0062 / OSE-798, replaced by
     // scan_placement_events + scan_node_returns — see the net +1 below),
     // shortlinks (OSE-240, migration 0030), sponsors, sponsor_areas,
     // sponsor_event_types, sponsor_impressions, subscribers,
@@ -82,7 +82,7 @@ describe('QA-1: Migration idempotency', () => {
     // + 1 (template_event_types — migration 0056, OSE-727 Sponsor Onboarding) = 30.
     // + 1 (category_registry — migration 0058, OSE-729 Sponsor Onboarding) = 31.
     // + 1 (business_type_category_map — migration 0059, OSE-730) = 32.
-    // + net 1 (migration 0063, OSE-798: DROP scans, ADD scan_placement_events
+    // + net 1 (migration 0062, OSE-798: DROP scans, ADD scan_placement_events
     //   + scan_node_returns → −1 +2) = 33.
     expect(names).toHaveLength(33);
   });
@@ -105,7 +105,7 @@ describe('QA-1: Migration idempotency', () => {
     // + 1 (idx_sponsor_asset_draft_token — migration 0054, OSE-725) = 61.
     // + 2 (idx_template_event_types_template/_uec — migration 0056, OSE-727) = 63.
     // + 1 (idx_business_type_category_map_bt — migration 0059, OSE-730) = 64.
-    // − 3 + 2 (migration 0063, OSE-798): DROP TABLE scans removes its THREE
+    // − 3 + 2 (migration 0062, OSE-798): DROP TABLE scans removes its THREE
     //   indexes — idx_scans_anonymous (0016, the WHO↔WHERE correlation index)
     //   AND the two from 0007 on scans(event_id,scan_bucket) +
     //   scans(poster_deployment_id). ADD idx_spe_event_poster +

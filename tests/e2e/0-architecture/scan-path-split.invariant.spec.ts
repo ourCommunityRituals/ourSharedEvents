@@ -70,7 +70,7 @@ test.describe('Invariant: Split Scan Path — no table couples placement + sessi
     const sql = allMigrationSql();
     // The invariant is about the FINAL (live) schema, so a historical CREATE
     // TABLE for a table that a later migration DROPs (e.g. the old `scans` table,
-    // created in 0004, dropped in 0063) does not count — it no longer exists.
+    // created in 0004, dropped in 0062) does not count — it no longer exists.
     const dropped = new Set<string>();
     const dropRe = /DROP\s+TABLE\s+(?:IF\s+EXISTS\s+)?["'`]?(\w+)["'`]?/gi;
     let dm: RegExpExecArray | null;
@@ -101,7 +101,7 @@ test.describe('Invariant: Split Scan Path — no table couples placement + sessi
     expect(
       /DROP\s+TABLE\s+(?:IF\s+EXISTS\s+)?["'`]?scans["'`]?/i.test(sql),
       'the combined `scans` table must be dropped by the scan-path split migration ' +
-        '(0063) — leaving it in place preserves the placement↔session coupling'
+        '(0062) — leaving it in place preserves the placement↔session coupling'
     ).toBe(true);
     // The correlating index must be gone too.
     expect(
