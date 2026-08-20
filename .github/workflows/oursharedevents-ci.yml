@@ -11,8 +11,7 @@
 #   S0: Security — Static vulnerability analysis + supply chain inventory
 #       - CodeQL SAST (JS/TS)          → github/codeql-action/analyze@v4
 #       - Semgrep SAST                 → p/nodejs + p/owasp-top-ten + p/r2c-security-audit
-#       - gitleaks secret scan         → gitleaks detect (self-hosted Windows binary)
-#       - detect-secrets               → Yelp detect-secrets baseline scan
+#       - detect-secrets               → Yelp detect-secrets baseline scan (secret gate; OSE-911)
 #       - npm audit (CVE check)        → npm audit --omit=dev --audit-level=moderate
 #       - SBOM generation              → npx @cyclonedx/cyclonedx-npm --omit dev
 #
@@ -202,8 +201,8 @@ jobs:
       # slot for no signal gain. codeql.yml is now the canonical entry
       # point: it owns the pull_request + push + scheduled + dispatch
       # triggers and emits the SARIF artifact. Keep S0 Security focused on
-      # the non-CodeQL scanners (Semgrep, detect-secrets, gitleaks, npm
-      # audit, SBOM) where the duplication didn't exist.
+      # the non-CodeQL scanners (Semgrep, detect-secrets, npm audit, SBOM)
+      # where the duplication didn't exist.
 
       # ── Semgrep + detect-secrets (Python-based) ──────────────────────────
       - name: Set up Python for Semgrep + detect-secrets
@@ -238,46 +237,19 @@ jobs:
           echo "- **Semgrep:** $FINDING_COUNT findings" >> $GITHUB_STEP_SUMMARY
           exit ${SEMGREP_EXIT:-0}
 
-      - name: detect-secrets baseline scan
+      # Committed-secret gate (OSE-911). detect-secrets replaces gitleaks, whose
+      # go-re2/wazero WASM-JIT panicked nondeterministically on the self-hosted
+      # Windows runners (exit 2 = a tooling crash, not a finding) and intermittently
+      # failed this required check. detect-secrets is pure Python (no WASM JIT), so
+      # it is stable here. The check compares the scanned (file, hashed_secret) set
+      # against the committed .secrets.baseline and fails ONLY on a NEW secret — it
+      # is enforcing like gitleaks was (gitleaks used --exit-code 1), not the prior
+      # warn-only posture. Version pinned so a scanner upgrade can't silently
+      # reclassify the baseline. Semgrep continues to cover SAST.
+      - name: detect-secrets scan (committed-secret gate)
         run: |
-          python -m pip install detect-secrets --quiet
-          python -m detect_secrets scan \
-            --exclude-files 'package-lock\.json' \
-            --exclude-files '\.gitleaks\.toml' \
-            --exclude-files '.*\.spec\.ts' \
-            --exclude-files 'vitest\.config.*' \
-            > .secrets.baseline 2>&1 || true
-          SECRET_COUNT=$(jq '.results | to_entries | map(.value | length) | add // 0' .secrets.baseline 2>/dev/null || echo 0)
-          echo "- **detect-secrets:** $SECRET_COUNT potential secrets found" >> $GITHUB_STEP_SUMMARY
-          if [ "$SECRET_COUNT" -gt "0" ]; then
-            echo "::warning::detect-secrets found $SECRET_COUNT potential secrets — review .secrets.baseline"
-            jq '.results' .secrets.baseline 2>/dev/null || true
-          fi
-
-      # ── gitleaks (Windows binary via GitHub Releases) ────────────────────
-      - name: gitleaks secret scan
-        run: |
-          GITLEAKS_VER=$(curl -sSL "https://api.github.com/repos/gitleaks/gitleaks/releases/latest" \
-            -H "Authorization: Bearer ${{ github.token }}" \
-            | jq -r '.tag_name' | sed 's/v//')
-          GITLEAKS_ZIP="gitleaks_${GITLEAKS_VER}_windows_x64.zip"
-          curl -sSL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VER}/${GITLEAKS_ZIP}" \
-            -o /tmp/gitleaks.zip
-          unzip -o -q /tmp/gitleaks.zip gitleaks.exe -d /tmp/gitleaks-bin
-          # Scan only commits introduced by this PR (base..HEAD), not full history.
-          # Full-history scan floods findings with historical test fixture credentials.
-          git fetch origin main --depth=50 2>/dev/null || true
-          BASE=$(git merge-base origin/main HEAD 2>/dev/null || echo "HEAD~1")
-          /tmp/gitleaks-bin/gitleaks.exe detect \
-            --source . \
-            --config .gitleaks.toml \
-            --log-opts="${BASE}..HEAD" \
-            --exit-code 1 \
-            --report-format json \
-            --report-path gitleaks-report.json 2>&1 || GITLEAKS_EXIT=$?
-          LEAK_COUNT=$(jq '. | length' gitleaks-report.json 2>/dev/null || echo 0)
-          echo "- **gitleaks:** $LEAK_COUNT secrets detected in PR commits" >> $GITHUB_STEP_SUMMARY
-          exit ${GITLEAKS_EXIT:-0}
+          python -m pip install 'detect-secrets==1.5.0' --quiet
+          python scripts/check-secrets-baseline.py
 
       - name: npm audit
         run: npm audit --omit=dev --audit-level=moderate
@@ -1724,36 +1696,16 @@ jobs:
           echo "- **Semgrep (post-execution):** $FINDING_COUNT findings" >> $GITHUB_STEP_SUMMARY
           exit ${SEMGREP_EXIT:-0}
 
-      - name: 'gitleaks re-scan (post-execution)'
+      # Post-execution committed-secret re-scan (OSE-911). Replaces the gitleaks
+      # re-scan (its go-re2/wazero WASM-JIT panicked on the Windows runners). Same
+      # enforcing detect-secrets gate as S0: fails only on a secret not present in
+      # the committed .secrets.baseline — catching anything a build/test step may
+      # have written into the tree.
+      - name: 'detect-secrets re-scan (post-execution)'
         shell: bash
         run: |
-          GITLEAKS_VER=$(curl -sSL "https://api.github.com/repos/gitleaks/gitleaks/releases/latest" \
-            -H "Authorization: Bearer ${{ github.token }}" | jq -r '.tag_name' | sed 's/v//')
-          GITLEAKS_ZIP="gitleaks_${GITLEAKS_VER}_windows_x64.zip"
-          curl -sSL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VER}/${GITLEAKS_ZIP}" -o /tmp/gitleaks-post.zip
-          unzip -o -q /tmp/gitleaks-post.zip gitleaks.exe -d /tmp/gitleaks-post-bin
-          git fetch origin main --depth=50 2>/dev/null || true
-          BASE=$(git merge-base origin/main HEAD 2>/dev/null || echo "HEAD~1")
-          /tmp/gitleaks-post-bin/gitleaks.exe detect \
-            --source . \
-            --config .gitleaks.toml \
-            --log-opts="${BASE}..HEAD" \
-            --exit-code 1 \
-            --report-format json \
-            --report-path gitleaks-post.json 2>&1 || GITLEAKS_EXIT=$?
-          LEAK_COUNT=$(jq '. | length' gitleaks-post.json 2>/dev/null || echo 0)
-          echo "- **gitleaks (post-execution):** $LEAK_COUNT secrets in PR commits" >> $GITHUB_STEP_SUMMARY
-          # gitleaks exit codes: 0 = clean, 1 = real leak found. Anything else
-          # (e.g. 2 = a Go panic on a shallow-clone log range) is a TOOLING crash,
-          # not a security finding — it must not take Gate 4 down. The integrity
-          # checks + semgrep re-scan above already ran; only a genuine leak (1) fails.
-          if [ "${GITLEAKS_EXIT:-0}" = "1" ]; then
-            echo "::error::gitleaks found a secret introduced during the execution phase."
-            exit 1
-          fi
-          if [ "${GITLEAKS_EXIT:-0}" != "0" ]; then
-            echo "::warning::gitleaks exited ${GITLEAKS_EXIT} (tooling error, not a leak) — skipping as non-fatal."
-          fi
+          python -m pip install 'detect-secrets==1.5.0' --quiet
+          python scripts/check-secrets-baseline.py
 
   summary:
     name: 'Pipeline Summary'
