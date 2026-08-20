@@ -24,8 +24,8 @@
  * scripts/check-schema-guard.mjs.
  */
 
-/** Highest migration in migrations/ — currently 0062_split_scan_path.sql */
-export const REQUIRED_DB_MIGRATION = 62;
+/** Highest migration in migrations/ — currently 0063_seed_community_gathering_reachability.sql */
+export const REQUIRED_DB_MIGRATION = 63;
 
 /** Highest migration in migrations-forms/ — currently 0013_seed_mock_mode_flags.sql */
 export const REQUIRED_FORMS_MIGRATION = 13;
