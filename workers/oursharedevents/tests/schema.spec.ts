@@ -40,9 +40,11 @@ const EXPECTED_TABLES = [
   'scan_placement_events', // 0062 (OSE-798 A1 — placement side of the split scan path)
   'shortlinks', // OSE-240 (migration 0030)
   'sponsor_areas',
+  'sponsor_asset', // 0066 (OSE-799 A2 — durable creative)
+  'sponsor_business', // 0065 (OSE-799 A2 — durable identity)
   'sponsor_event_types',
   'sponsor_impressions',
-  'sponsors',
+  'sponsor_placement', // 0067 (OSE-799 A2 — per-event attachment; replaces sponsors)
   'subscribers',
 ] as const;
 
@@ -50,9 +52,15 @@ const EXPECTED_INDEXES = [
   // Original (migrations 0001-0007)
   'idx_events_brand_status',
   'idx_events_slug',
-  'idx_sponsors_event_id',
   'idx_poster_deployments_event_id',
   'idx_poster_deployments_qr_token',
+  // Split sponsor identity (migration 0065-0067 — OSE-799 A2): idx_sponsors_* retired
+  'idx_sponsor_business_brand',
+  'idx_sponsor_business_h3_res7',
+  'idx_sponsor_asset_business',
+  'idx_sponsor_placement_event',
+  'idx_sponsor_placement_business',
+  'idx_sponsor_placement_locality',
   // Split scan path (migration 0062 — OSE-798 A1): scans + idx_scans_* retired
   'idx_spe_event_poster',
   'idx_snr_event_bucket',
@@ -95,11 +103,9 @@ const EXPECTED_INDEXES = [
   // OSE-240 (migration 0030)
   'idx_shortlinks_event_id',
   'idx_shortlinks_created_at',
-  // OSE-330 Phase 2 (migration 0036) — Local Sponsor Covenant enforcement
-  'idx_sponsors_is_local',
-  // Campaigns (migrations 0039/0040)
+  // Campaigns (migrations 0039/0040) — idx_sponsors_is_local + idx_sponsors_campaign_id
+  // retired by OSE-799 A2 (0067): locality/campaign moved to sponsor_placement.
   'idx_campaigns_brand_id',
-  'idx_sponsors_campaign_id',
   // corridor_density_snapshots (migration 0044 — OER longitudinal archive)
   'idx_cds_corridor_dow_hour',
   'idx_cds_snapshot_date',
@@ -120,7 +126,17 @@ const EXPECTED_COLUMN_COUNTS: Record<string, number> = {
   // what_video_url — OSE-664 rich WHO/WHAT authoring) = 38.
   // + 1 (migration 0052: data_class — OSE-606/608 demo data class) = 39.
   events: 39,
-  sponsors: 12,
+  // OSE-799 A2 (0065-0067): `sponsors` (32) retired → split into three tables.
+  // sponsor_business: id, brand_id, name, website_url, business_type, lat, lon,
+  //   h3_res9, h3_res7, created_at, updated_at = 11.
+  sponsor_business: 11,
+  // sponsor_asset: id, sponsor_business_id, format, url, content_type, focal_x,
+  //   focal_y, crop_rect, validated_at, created_at, updated_at = 11.
+  sponsor_asset: 11,
+  // sponsor_placement: id, sponsor_business_id, event_id, tier, campaign_id, source,
+  //   polarity, locality_band, click_token, display_token, is_active, created_at,
+  //   updated_at = 13.
+  sponsor_placement: 13,
   // poster_deployments: 10 (pre-0047) + 2 (migration 0047: h3_res9, h3_res7,
   // OSE poster geo-tagging — res9 Node precision for physical placement attribution) = 12.
   poster_deployments: 12,
@@ -146,14 +162,8 @@ const EXPECTED_COLUMN_COUNTS: Record<string, number> = {
   // clicks INTEGER, last_clicked_at TEXT. 5 columns.
   shortlinks: 5,
 };
-// sponsors: 12 (pre-OSE-330) + 1 (is_local INTEGER NOT NULL DEFAULT 0,
-// migration 0036 — Local Sponsor Covenant enforcement axis) + 1
-// (campaign_id TEXT, migration 0040 — enterprise campaign linking) + 2
-// (logo_width/logo_height INTEGER, migration 0041 — logo aspect ratio metadata) + 4
-// (lat REAL, lon REAL, h3_res9 TEXT, h3_res7 TEXT, migration 0045 — H3 geo-tagging) = 20.
-// + 12 (four-format asset columns poster/banner/vertical/square ×
-// url/content_type/validated_at, migration 0055 — OSE-726 Sponsor Onboarding) = 32.
-EXPECTED_COLUMN_COUNTS.sponsors = 32;
+// sponsors (32 cols) retired by OSE-799 A2 (0065-0067): identity → sponsor_business,
+// creative → sponsor_asset, per-event attachment → sponsor_placement (counts above).
 
 // ── Apply migrations before tests ────────────────────────────────────────────
 
@@ -303,12 +313,17 @@ describe('Gate 5: Index verification', () => {
     //   removes idx_scans_event_bucket + idx_scans_poster_deployment, and
     //   idx_scans_anonymous is dropped; idx_spe_event_poster + idx_snr_event_bucket
     //   are added = 63.
+    // − 3 + 6 (migration 0065-0067, OSE-799 A2 split sponsor identity): DROP TABLE
+    //   sponsors removes idx_sponsors_event_id/_is_local/_campaign_id; add
+    //   idx_sponsor_business_brand/_h3_res7, idx_sponsor_asset_business,
+    //   idx_sponsor_placement_event/_business/_locality = 66. (The recreated
+    //   sponsor_event_types/areas/impressions indexes keep their names → net 0.)
     const indexes = await env.DB.prepare(
       "SELECT name FROM sqlite_master WHERE type='index' AND name LIKE 'idx_%' ORDER BY name"
     ).all();
 
     const names = indexes.results.map((r: Record<string, unknown>) => r.name);
-    expect(names.length).toBe(63);
+    expect(names.length).toBe(66);
     EXPECTED_INDEXES.forEach((idx) => expect(names).toContain(idx));
   });
 });

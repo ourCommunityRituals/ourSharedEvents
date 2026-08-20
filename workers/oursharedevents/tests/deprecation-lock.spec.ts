@@ -22,6 +22,11 @@
  *   0062_split_scan_path.sql — OSE-798 A1: DROP TABLE scans (doctrine rule 6 — the combined table
  *     coupled a placement id with session-derived columns). scans = 0 rows in every environment, so
  *     no data loss; replaced by scan_placement_events + scan_node_returns.
+ *   0067_split_sponsor_placement.sql — OSE-799 A2: DROP TABLE sponsors (doctrine rule 7 — a sponsor
+ *     was a child of one night, no durable identity) + recreate sponsor_event_types/sponsor_areas/
+ *     sponsor_impressions to repoint their sponsor_id FK from sponsors → sponsor_business (SQLite
+ *     cannot ALTER a FK). All tables = 0 rows in every environment, so no data loss; identity moves
+ *     to sponsor_business, creative to sponsor_asset, per-event attachment to sponsor_placement.
  */
 
 import { describe, test, expect } from 'vitest';
@@ -45,6 +50,7 @@ const APPROVED_DROP_MIGRATIONS = [
   '0028_subscribers_replace_ip_address', // PII reduction: ip_address → ip_hash
   '0046_density_tables_drop_corridor_fk', // BE-24b: FK removal — h3_res7 as corridor identifier
   '0062_split_scan_path', // OSE-798 A1: DROP TABLE scans (0 rows) — doctrine rule 6 uncoupling
+  '0067_split_sponsor_placement', // OSE-799 A2: DROP TABLE sponsors + recreate sponsor_event_types/areas/impressions (FK repoint to sponsor_business); all 0 rows — doctrine rule 7
 ] as const;
 
 function normalizePath(p: string): string {
@@ -136,7 +142,7 @@ describe('OSE-584 — TL-048: No unapproved DROP COLUMN or DROP TABLE in migrati
       date: '2026-08-03',
     };
     console.log(`[OSE-584-EVIDENCE] ${JSON.stringify(report)}`);
-    expect(report.approved_drops).toBe(5);
+    expect(report.approved_drops).toBe(6);
   });
 });
 
