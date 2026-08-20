@@ -335,12 +335,13 @@
 ```
 
 **Key Fields Added by Bundle:**
-| Field | Source | Description |
-|-------|--------|-------------|
+
+| Field                   | Source               | Description             |
+| ----------------------- | -------------------- | ----------------------- |
 | `rotation.sponsorSlots` | `ZEB.DISPLAY_CONFIG` | Number of sponsor tiles |
-| `rotation.rotationMs` | `ZEB.DISPLAY_CONFIG` | Rotation interval |
-| `layout.hasSidePane` | Template override | Side panel visibility |
-| `layout.emphasis` | Template override | Content emphasis mode |
+| `rotation.rotationMs`   | `ZEB.DISPLAY_CONFIG` | Rotation interval       |
+| `layout.hasSidePane`    | Template override    | Side panel visibility   |
+| `layout.emphasis`       | Template override    | Content emphasis mode   |
 
 **Template-Specific Overrides:**
 
@@ -834,13 +835,13 @@ type ErrorCode =
 
 ## File Locations
 
-| File                                   | Purpose                    |
-| -------------------------------------- | -------------------------- |
-| `src/mvp/NUSDK.html`                   | Client-side RPC wrapper    |
-| `src/mvp/Code.gs`                      | All backend API functions  |
-| `src/mvp/ApiSchemas.gs`                | Schema validation          |
-| `src/mvp/SharedReporting.gs`           | Analytics response builder |
-| `src/mvp/AnalyticsService.gs`          | Metrics aggregation        |
-| `src/mvp/Config.gs`                    | Display config defaults    |
-| `schemas/event.schema.json`            | Canonical Event schema     |
-| `schemas/shared-analytics.schema.json` | Analytics schema           |
+| File                                                     | Purpose                                                                                     |
+| -------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `src/mvp/NUSDK.html`                                     | Client-side RPC wrapper                                                                     |
+| `src/mvp/Code.gs`                                        | All backend API functions                                                                   |
+| `src/mvp/ApiSchemas.gs`                                  | Schema validation                                                                           |
+| `src/mvp/SharedReporting.gs`                             | Analytics response builder                                                                  |
+| `src/mvp/AnalyticsService.gs`                            | Metrics aggregation                                                                         |
+| `src/mvp/Config.gs`                                      | Display config defaults                                                                     |
+| `reference/gas-mvp/schemas/event.schema.json`            | Retired zeventbook Event schema (OSE-882); contract of record = `events` D1 table + ADR-016 |
+| `reference/gas-mvp/schemas/shared-analytics.schema.json` | Retired Analytics schema (OSE-882); SharedReport shape locked by Invariant #21              |

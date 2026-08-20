@@ -1,7 +1,7 @@
 /**
  * Contract Tests for V2 Sponsor Portfolio Analytics APIs
  *
- * Tests the API contracts defined in /schemas/sponsor-portfolio-v2.schema.json
+ * Tests the API contracts defined in /reference/gas-mvp/schemas/sponsor-portfolio-v2.schema.json
  *
  * These tests validate:
  * - Response envelope structure (Ok/Err)
@@ -10,7 +10,7 @@
  * - Sponsor report structure
  * - Error handling for invalid requests
  *
- * @see /schemas/sponsor-portfolio-v2.schema.json
+ * @see /reference/gas-mvp/schemas/sponsor-portfolio-v2.schema.json
  * @see /src/mvp/SponsorPortfolioV2.gs
  */
 

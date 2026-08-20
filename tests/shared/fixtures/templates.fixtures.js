@@ -14,7 +14,7 @@
  *   sections.gallery   → settings.showGallery
  *
  * @see src/mvp/TemplateService.gs EVENT_TEMPLATES
- * @see schemas/event.schema.json Settings
+ * @see reference/gas-mvp/schemas/event.schema.json Settings
  */
 
 /**

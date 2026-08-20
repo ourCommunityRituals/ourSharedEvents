@@ -4,7 +4,7 @@
  * Validates that events endpoints return correct shape per v4.1.2 contract.
  * These are ENVELOPE endpoints (Ok/Err wrapper).
  *
- * Contract: schemas/event.schema.json
+ * Contract: reference/gas-mvp/schemas/event.schema.json
  *
  * @see API_CONTRACT.md - Envelope Endpoints section
  * @see EVENT_CONTRACT.md - Event entity contract v1.0

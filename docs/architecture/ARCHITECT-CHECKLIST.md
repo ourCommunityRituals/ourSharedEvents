@@ -23,9 +23,9 @@
 
 **Definition:** `Code.gs:2098` - **Single source of truth for event shape**
 
-**Schema:** `/schemas/event.schema.json`
+**Schema (retired, historical):** `reference/gas-mvp/schemas/event.schema.json` — the abandoned zeventbook shape (OSE-882). The current contract of record is the `events` D1 table (`workers/oursharedevents/migrations/0001_create_events.sql`) mapped by `enrichWithPhase` per ADR-016.
 
-**Invariant:** Every time an Event is loaded from storage, it MUST pass through `_buildEventContract_()` to ensure canonical shape matching `/schemas/event.schema.json`:
+**Invariant (GAS-era):** Every time an Event is loaded from storage, it MUST pass through `_buildEventContract_()` to ensure canonical shape matching `reference/gas-mvp/schemas/event.schema.json`:
 
 - Normalized fields (name, startDateISO, venue)
 - Generated links (publicUrl, displayUrl, posterUrl, signupUrl)

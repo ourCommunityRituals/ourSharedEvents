@@ -1,7 +1,7 @@
 /**
  * Contract Tests for Sponsor Entity
  *
- * Tests the Sponsor Contract defined in /schemas/sponsor.schema.json
+ * Tests the Sponsor Contract defined in /reference/gas-mvp/schemas/sponsor.schema.json
  * Validates the validateSponsorContract() function from SponsorService.gs
  *
  * These tests validate:
@@ -11,7 +11,7 @@
  * - Legacy placement string compatibility
  * - Surface filtering logic
  *
- * @see /schemas/sponsor.schema.json
+ * @see /reference/gas-mvp/schemas/sponsor.schema.json
  * @see /src/mvp/SponsorService.gs - validateSponsorContract()
  */
 

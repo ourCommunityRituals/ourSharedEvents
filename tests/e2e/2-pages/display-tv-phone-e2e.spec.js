@@ -11,7 +11,7 @@
  * BASE_URL-Aware: Tests work against GAS or oursharedevents.com:
  *   BASE_URL="https://oursharedevents.com" npm run test:e2e
  *
- * SCHEMA: /schemas/event.schema.json (EVENT_CONTRACT.md v2.0)
+ * SCHEMA: /reference/gas-mvp/schemas/event.schema.json (EVENT_CONTRACT.md v2.0)
  */
 
 const { test, expect } = require('@playwright/test');

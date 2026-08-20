@@ -19,7 +19,7 @@
  * - API responses scope data by brandId parameter
  *
  * @see /config/brand-config.js - Brand hierarchy definitions
- * @see /schemas/sponsor.schema.json - Sponsor contract
+ * @see /reference/gas-mvp/schemas/sponsor.schema.json - Sponsor contract
  */
 
 const {

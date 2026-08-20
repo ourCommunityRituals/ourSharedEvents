@@ -23,7 +23,7 @@
  *   }
  * }
  *
- * @see /schemas/event.schema.json (v2.2 MVP-frozen)
+ * @see /reference/gas-mvp/schemas/event.schema.json (v2.2 MVP-frozen)
  * @see /src/mvp/Admin.html (7-card layout)
  */
 

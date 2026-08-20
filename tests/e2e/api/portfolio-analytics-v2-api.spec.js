@@ -7,7 +7,7 @@
  * - api_getPortfolioSponsorReportV2
  * - api_getPortfolioSponsorsV2
  *
- * @see /schemas/sponsor-portfolio-v2.schema.json
+ * @see /reference/gas-mvp/schemas/sponsor-portfolio-v2.schema.json
  * @see /src/mvp/SponsorPortfolioV2.gs
  */
 

@@ -10,7 +10,7 @@
  * - summary object includes: totalImpressions, totalClicks, totalQrScans, totalSignups
  * - Each field is a number >= 0
  *
- * Schema: /schemas/shared-analytics.schema.json (v1.1 MVP-frozen)
+ * Schema: /reference/gas-mvp/schemas/shared-analytics.schema.json (v1.1 MVP-frozen)
  */
 
 const {
@@ -352,7 +352,7 @@ describe('SharedAnalytics Summary Contract', () => {
    */
   describe('Schema Compliance', () => {
     it('should have summary as required field in SharedAnalytics', () => {
-      // This verifies alignment with schemas/shared-analytics.schema.json
+      // This verifies alignment with reference/gas-mvp/schemas/shared-analytics.schema.json
       const analytics = withFreshTimestamp(fullSharedAnalytics);
 
       // Required top-level fields per schema
