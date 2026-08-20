@@ -92,7 +92,7 @@ Currently has bolted-on pane fields. Should properly model:
 
 ### Phase 3: Pipeline Validation
 
-1. Update `check-schema-fields.js` to validate triangle relationships
+1. Update `reference/gas-mvp/scripts/check-schema-fields.js` to validate triangle relationships
 2. Add schema cross-reference validation
 3. Ensure all surfaces use schema-compliant data access
 
