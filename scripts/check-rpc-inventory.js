@@ -49,25 +49,16 @@ const EXPECTED_INVENTORY = {
     'api_get',
     'api_getEventsSafe',
     'api_createFormFromTemplate',
-    'api_generateFormShortlink'
+    'api_generateFormShortlink',
   ],
-  'Public.html': [
-    'api_getPublicBundle',
-    'api_list',
-    'api_logExternalClick'
-  ],
-  'Display.html': [
-    'api_getDisplayBundle',
-    'api_logExternalClick'
-  ],
-  'Poster.html': [
-    'api_getPosterBundle'
-  ],
+  'Public.html': ['api_getPublicBundle', 'api_list', 'api_logExternalClick'],
+  'Display.html': ['api_getDisplayBundle', 'api_logExternalClick'],
+  'Poster.html': ['api_getPosterBundle'],
   'SharedReport.html': [
     'api_getSharedAnalytics',
     'api_getSponsorAnalytics',
-    'api_getSponsorReportQr'
-  ]
+    'api_getSponsorReportQr',
+  ],
 };
 
 // ============================================================================
@@ -84,32 +75,32 @@ const EXPECTED_INVENTORY = {
 //   5. Redeploy
 
 const V2_BLOCKED_ENDPOINTS = [
-  'api_exportSharedReport',       // Export to CSV/JSON/PDF - V2 feature
-  'api_generateSharedReport',     // Report generation with recommendations
-  'api_getPortfolioAnalyticsV2',  // Multi-event portfolio mode
-  'api_getAdvancedAnalytics',     // V2 advanced analytics
-  'api_webhookRegister',          // V2 webhooks
-  'api_webhookUnregister',        // V2 webhooks
-  'api_webhookList',              // V2 webhooks
-  'api_webhookTest',              // V2 webhooks
+  'api_exportSharedReport', // Export to CSV/JSON/PDF - V2 feature
+  'api_generateSharedReport', // Report generation with recommendations
+  'api_getPortfolioAnalyticsV2', // Multi-event portfolio mode
+  'api_getAdvancedAnalytics', // V2 advanced analytics
+  'api_webhookRegister', // V2 webhooks
+  'api_webhookUnregister', // V2 webhooks
+  'api_webhookList', // V2 webhooks
+  'api_webhookTest', // V2 webhooks
 ];
 
-// Mapping from api_* to schema path (subset of check-apis-vs-schemas.js)
+// Mapping from api_* to schema path (subset of reference/gas-mvp/scripts/check-apis-vs-schemas.js)
 const API_TO_SCHEMA = {
-  'api_getEventTemplates': 'templates.getEventTemplates',
-  'api_saveEvent': 'events.saveEvent',
-  'api_get': 'events.get',
-  'api_getEventsSafe': 'events.getEventsSafe',
-  'api_createFormFromTemplate': 'forms.createFromTemplate',
-  'api_generateFormShortlink': 'forms.generateShortlink',
-  'api_getPublicBundle': 'bundles.public',
-  'api_list': 'events.list',
-  'api_logExternalClick': 'analytics.logExternalClick',
-  'api_getDisplayBundle': 'bundles.display',
-  'api_getPosterBundle': 'bundles.poster',
-  'api_getSharedAnalytics': 'analytics.getSharedReport',
-  'api_getSponsorAnalytics': 'analytics.getSponsorAnalytics',
-  'api_getSponsorReportQr': 'analytics.getSponsorReportQr'
+  api_getEventTemplates: 'templates.getEventTemplates',
+  api_saveEvent: 'events.saveEvent',
+  api_get: 'events.get',
+  api_getEventsSafe: 'events.getEventsSafe',
+  api_createFormFromTemplate: 'forms.createFromTemplate',
+  api_generateFormShortlink: 'forms.generateShortlink',
+  api_getPublicBundle: 'bundles.public',
+  api_list: 'events.list',
+  api_logExternalClick: 'analytics.logExternalClick',
+  api_getDisplayBundle: 'bundles.display',
+  api_getPosterBundle: 'bundles.poster',
+  api_getSharedAnalytics: 'analytics.getSharedReport',
+  api_getSponsorAnalytics: 'analytics.getSponsorAnalytics',
+  api_getSponsorReportQr: 'analytics.getSponsorReportQr',
 };
 
 // ============================================================================
@@ -189,7 +180,7 @@ function parseInventoryComment(inventoryBlock) {
 function extractApiFunctions() {
   const apis = new Set();
   const mvpDir = path.join(ROOT, 'src', 'mvp');
-  const gsFiles = fs.readdirSync(mvpDir).filter(f => f.endsWith('.gs'));
+  const gsFiles = fs.readdirSync(mvpDir).filter((f) => f.endsWith('.gs'));
 
   for (const file of gsFiles) {
     const content = fs.readFileSync(path.join(mvpDir, file), 'utf8');
@@ -295,11 +286,11 @@ function validateInventory(verbose = false) {
   console.log('='.repeat(60));
   console.log(`\nBlocked V2 endpoints: ${V2_BLOCKED_ENDPOINTS.length}`);
   if (verbose) {
-    V2_BLOCKED_ENDPOINTS.forEach(e => console.log(`  - ${e}`));
+    V2_BLOCKED_ENDPOINTS.forEach((e) => console.log(`  - ${e}`));
   }
 
   let v2Violations = 0;
-  const htmlFiles = fs.readdirSync(MVP_HTML_DIR).filter(f => f.endsWith('.html'));
+  const htmlFiles = fs.readdirSync(MVP_HTML_DIR).filter((f) => f.endsWith('.html'));
 
   for (const htmlFile of htmlFiles) {
     const htmlPath = path.join(MVP_HTML_DIR, htmlFile);
@@ -357,8 +348,8 @@ function validateInventory(verbose = false) {
     const inventorySet = new Set(inventoryForSurface);
     const expectedSet = new Set(expectedEndpoints);
 
-    const missingFromInventory = expectedEndpoints.filter(e => !inventorySet.has(e));
-    const extraInInventory = inventoryForSurface.filter(e => !expectedSet.has(e));
+    const missingFromInventory = expectedEndpoints.filter((e) => !inventorySet.has(e));
+    const extraInInventory = inventoryForSurface.filter((e) => !expectedSet.has(e));
 
     if (missingFromInventory.length > 0) {
       errors.push(`${surface}: Missing from inventory: ${missingFromInventory.join(', ')}`);
@@ -396,15 +387,17 @@ function validateInventory(verbose = false) {
     // Check 4: Actual HTML calls match inventory (warning only)
     if (actualCalls.length > 0) {
       const htmlSet = new Set(actualCalls);
-      const notInHtml = expectedEndpoints.filter(e => !htmlSet.has(e));
-      const notInInventory = actualCalls.filter(e => !expectedSet.has(e));
+      const notInHtml = expectedEndpoints.filter((e) => !htmlSet.has(e));
+      const notInInventory = actualCalls.filter((e) => !expectedSet.has(e));
 
       if (notInHtml.length > 0 && verbose) {
         console.log(`  NOTE: In inventory but not called by ${surface}: ${notInHtml.join(', ')}`);
       }
       if (notInInventory.length > 0) {
         // Filter out dynamic calls that might be intentional
-        const nonDynamic = notInInventory.filter(e => !e.includes('V2') && !e.includes('Portfolio'));
+        const nonDynamic = notInInventory.filter(
+          (e) => !e.includes('V2') && !e.includes('Portfolio')
+        );
         if (nonDynamic.length > 0) {
           warnings.push(`${surface}: Calls ${nonDynamic.join(', ')} but not in inventory`);
           console.log(`  WARN: ${surface} calls ${nonDynamic.join(', ')} but not in inventory`);
@@ -425,7 +418,7 @@ function validateInventory(verbose = false) {
   // Count unique endpoints
   const allEndpoints = new Set();
   for (const endpoints of Object.values(EXPECTED_INVENTORY)) {
-    endpoints.forEach(e => allEndpoints.add(e));
+    endpoints.forEach((e) => allEndpoints.add(e));
   }
   console.log(`\nMVP Contract:`);
   console.log(`  - Unique MVP endpoints: ${allEndpoints.size}`);
@@ -438,17 +431,17 @@ function validateInventory(verbose = false) {
     console.log('='.repeat(60));
     if (warnings.length > 0) {
       console.log(`\nWarnings (${warnings.length}):`);
-      warnings.forEach(w => console.log(`  - ${w}`));
+      warnings.forEach((w) => console.log(`  - ${w}`));
     }
     return 0;
   } else {
     console.log('\n' + '='.repeat(60));
     console.log(`FAILED: Found ${errors.length} error(s)`);
     console.log('='.repeat(60));
-    errors.forEach(e => console.log(`  - ${e}`));
+    errors.forEach((e) => console.log(`  - ${e}`));
     if (warnings.length > 0) {
       console.log(`\nWarnings (${warnings.length}):`);
-      warnings.forEach(w => console.log(`  - ${w}`));
+      warnings.forEach((w) => console.log(`  - ${w}`));
     }
     return 1;
   }
@@ -470,7 +463,9 @@ function main() {
     if (!fs.existsSync(CODE_GS)) {
       console.log('   - Code.gs: archived');
     }
-    console.log('ℹ️  Skipping RPC inventory check - HTML surfaces still validate against V2 quarantine');
+    console.log(
+      'ℹ️  Skipping RPC inventory check - HTML surfaces still validate against V2 quarantine'
+    );
     console.log('ℹ️  See docs/GAS-TO-CLOUDFLARE-MIGRATION.md for architecture details\n');
     console.log('SUCCESS: RPC inventory check skipped (migrated to Cloudflare Workers)');
     process.exit(0);

@@ -235,7 +235,7 @@ npm run guards
 node scripts/check-surfaces.js    # Surface count
 node scripts/check-dead-code.js   # Dead exports
 node scripts/check-v2-files.js    # V2 files in MVP
-node scripts/check-schema-fields.js # Schema compliance
+node reference/gas-mvp/scripts/check-schema-fields.js # Schema compliance (retired harness)
 ```
 
 ### API Smoke Tests Failed

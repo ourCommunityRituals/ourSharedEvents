@@ -398,13 +398,13 @@ npm run stage1-local  # Runs all validation steps
 
 ### MVP Guards (Automated Enforcement)
 
-| Guard         | File                     | Enforces                                                    |
-| ------------- | ------------------------ | ----------------------------------------------------------- |
-| Surface Count | `check-surfaces.js`      | Only 5 MVP surfaces: admin, public, display, poster, report |
-| Dead Code     | `check-dead-code.js`     | No unused `api_*` exports (zombie functions)                |
-| V2 Files      | `check-v2-files.js`      | No V2 files in MVP directory                                |
-| Schema Fields | `check-schema-fields.js` | Surfaces only use schema-defined fields                     |
-| RPC Inventory | `check-rpc-inventory.js` | All `api_*` functions have schemas                          |
+| Guard         | File                                                         | Enforces                                                    |
+| ------------- | ------------------------------------------------------------ | ----------------------------------------------------------- |
+| Surface Count | `check-surfaces.js`                                          | Only 5 MVP surfaces: admin, public, display, poster, report |
+| Dead Code     | `check-dead-code.js`                                         | No unused `api_*` exports (zombie functions)                |
+| V2 Files      | `check-v2-files.js`                                          | No V2 files in MVP directory                                |
+| Schema Fields | `reference/gas-mvp/scripts/check-schema-fields.js` (retired) | Surfaces only use schema-defined fields                     |
+| RPC Inventory | `check-rpc-inventory.js`                                     | All `api_*` functions have schemas                          |
 
 ### Hermetic Principle
 

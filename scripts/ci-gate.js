@@ -17,13 +17,13 @@
  * This gate includes ALL contract guards:
  *   1. MVP Surfaces (check-surfaces.js)
  *   2. RPC Inventory (check-rpc-inventory.js)
- *   3. API vs Schemas (check-apis-vs-schemas.js)
- *   4. Event Schema (test-event-schema.js)
+ *   3. API vs Schemas — retired (reference/gas-mvp/scripts/check-apis-vs-schemas.js)
+ *   4. Event Schema — retired (reference/gas-mvp/scripts/test-event-schema.js)
  *   5. Service Tests (test-services.js)
  *   6. URL Routing (test-url-routing.js) - requires BASE_URL
  *   7. Dead Exports (check-dead-code.js)
- *   8. Schema Fields (check-schema-fields.js)
- *   9. Analytics Schema (test-analytics-schema.js)
+ *   8. Schema Fields — retired (reference/gas-mvp/scripts/check-schema-fields.js)
+ *   9. Analytics Schema — retired (reference/gas-mvp/scripts/test-analytics-schema.js)
  *   10. Triangle Happy-Path (test:triangle:happy-path) - requires BASE_URL + ADMIN_KEY, non-blocking
  *
  * Correlation ID: Each run gets a unique ID for tracing.

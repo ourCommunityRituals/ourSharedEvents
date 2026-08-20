@@ -245,7 +245,7 @@ Schema validation runs automatically in:
 ### Test Output
 
 ```
-PASS  tests/contract/api-schema-validation.contract.test.js
+PASS  reference/gas-mvp/tests/api-schema-validation.contract.test.js
   API Schema Validation (Story 3.1)
     Schema Loading & Compilation
       ✓ should load all registered schemas successfully
@@ -366,7 +366,7 @@ Ensure you're using valid JSON Schema draft 2020-12 keywords.
 
 ## Support
 
-- **Schema Issues:** Check `/tests/contract/api-schema-validation.contract.test.js`
-- **Validation Utility:** See `/tests/shared/helpers/schema-validator.js`
+- **Schema Issues:** Check `/reference/gas-mvp/tests/api-schema-validation.contract.test.js` (retired harness)
+- **Validation Utility:** See `/reference/gas-mvp/helpers/schema-validator.js` (retired harness)
 - **API Contract:** See `/API_CONTRACT.md`
 - **Event Schema:** See `/EVENT_CONTRACT.md`
