@@ -36,7 +36,8 @@ const EXPECTED_TABLES = [
   'node_hierarchy',
   'poster_deployments',
   'scan_aggregates',
-  'scans',
+  'scan_node_returns', // 0062 (OSE-798 A1 — session side of the split scan path)
+  'scan_placement_events', // 0062 (OSE-798 A1 — placement side of the split scan path)
   'shortlinks', // OSE-240 (migration 0030)
   'sponsor_areas',
   'sponsor_event_types',
@@ -52,8 +53,9 @@ const EXPECTED_INDEXES = [
   'idx_sponsors_event_id',
   'idx_poster_deployments_event_id',
   'idx_poster_deployments_qr_token',
-  'idx_scans_event_bucket',
-  'idx_scans_poster_deployment',
+  // Split scan path (migration 0062 — OSE-798 A1): scans + idx_scans_* retired
+  'idx_spe_event_poster',
+  'idx_snr_event_bucket',
   'idx_scan_aggregates_event_date',
   // NCR v2 hierarchy (migration 0010)
   'idx_node_hierarchy_brand_level',
@@ -71,8 +73,6 @@ const EXPECTED_INDEXES = [
   'idx_node_hierarchy_ring_role',
   // Event templates (migration 0014)
   'idx_event_templates_category',
-  // Anonymous ID (migration 0016)
-  'idx_scans_anonymous',
   // Sponsor event types (migration 0019)
   'idx_sponsor_event_types_sponsor',
   'idx_sponsor_event_types_template',
@@ -124,7 +124,12 @@ const EXPECTED_COLUMN_COUNTS: Record<string, number> = {
   // poster_deployments: 10 (pre-0047) + 2 (migration 0047: h3_res9, h3_res7,
   // OSE poster geo-tagging — res9 Node precision for physical placement attribution) = 12.
   poster_deployments: 12,
-  scans: 10,
+  // Split scan path (migration 0062 — OSE-798 A1): scans (10) retired →
+  // scan_placement_events (id, event_id, poster_deployment_id, scan_bucket,
+  // created_at = 5) + scan_node_returns (id, event_id, anonymous_id,
+  // user_agent_hash, country_code, scan_bucket, created_at = 7).
+  scan_placement_events: 5,
+  scan_node_returns: 7,
   // scan_aggregates: 9 (pre-OSE-450) + 2 (migration 0038: h3_res9, h3_res7,
   // OSE-450 S-6.1.2 — denormalized NCR cells for density queries) = 11.
   scan_aggregates: 11,
@@ -208,28 +213,33 @@ describe('Gate 2: Column counts', () => {
 // ── Gate 3: PII firewall ─────────────────────────────────────────────────────
 
 describe('Gate 3: PII firewall', () => {
-  test('scans table has NO user_email or user_name column', async () => {
-    const info = await env.DB.prepare('PRAGMA table_info(scans)').all();
-    const cols = info.results.map((r: Record<string, unknown>) => r.name);
-    expect(cols).not.toContain('user_email');
-    expect(cols).not.toContain('user_name');
-    expect(cols).not.toContain('ip_address');
+  // Split scan path (migration 0062 — OSE-798 A1): scans → scan_node_returns
+  // (session side) + scan_placement_events (placement side). The PII firewall
+  // now guards both, and the session side must carry only bucketed time.
+  test('split scan tables have NO user_email / user_name / ip_address column', async () => {
+    for (const table of ['scan_node_returns', 'scan_placement_events']) {
+      const info = await env.DB.prepare(`PRAGMA table_info(${table})`).all();
+      const cols = info.results.map((r: Record<string, unknown>) => r.name);
+      expect(cols, `${table} must not carry raw PII`).not.toContain('user_email');
+      expect(cols, `${table} must not carry raw PII`).not.toContain('user_name');
+      expect(cols, `${table} must not carry raw PII`).not.toContain('ip_address');
+    }
   });
 
-  test('scans table has NO exact timestamp column', async () => {
-    const info = await env.DB.prepare('PRAGMA table_info(scans)').all();
+  test('scan_node_returns has NO exact timestamp column (bucketed time only)', async () => {
+    const info = await env.DB.prepare('PRAGMA table_info(scan_node_returns)').all();
     const cols = info.results.map((r: Record<string, unknown>) => r.name);
     expect(cols).not.toContain('exact_timestamp');
     expect(cols).not.toContain('scanned_at');
     expect(cols).toContain('scan_bucket');
   });
 
-  test('no route handler INSERTs PII columns into scans', () => {
+  test('no route handler INSERTs PII columns into the split scan tables', () => {
     const sources: Record<string, string> = JSON.parse(
       (env as unknown as TestEnv).TEST_SOURCE_FILES_JSON
     );
     for (const [, content] of Object.entries(sources)) {
-      if (/INSERT\s+INTO\s+scans/i.test(content)) {
+      if (/INSERT\s+INTO\s+scan_(node_returns|placement_events)/i.test(content)) {
         expect(content).not.toMatch(/user_email/i);
         expect(content).not.toMatch(/user_name/i);
         expect(content).not.toMatch(/ip_address/i);
@@ -289,12 +299,16 @@ describe('Gate 5: Index verification', () => {
     // + 1 (idx_sponsor_asset_draft_token — migration 0054, OSE-725) = 61.
     // + 2 (idx_template_event_types_template/_uec — migration 0056, OSE-727) = 63.
     // + 1 (idx_business_type_category_map_bt — migration 0059, OSE-730) = 64.
+    // − 3 + 2 (migration 0062, OSE-798 A1 split scan path): DROP TABLE scans
+    //   removes idx_scans_event_bucket + idx_scans_poster_deployment, and
+    //   idx_scans_anonymous is dropped; idx_spe_event_poster + idx_snr_event_bucket
+    //   are added = 63.
     const indexes = await env.DB.prepare(
       "SELECT name FROM sqlite_master WHERE type='index' AND name LIKE 'idx_%' ORDER BY name"
     ).all();
 
     const names = indexes.results.map((r: Record<string, unknown>) => r.name);
-    expect(names.length).toBe(64);
+    expect(names.length).toBe(63);
     EXPECTED_INDEXES.forEach((idx) => expect(names).toContain(idx));
   });
 });

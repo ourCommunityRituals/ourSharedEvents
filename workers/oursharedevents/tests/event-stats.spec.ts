@@ -57,8 +57,9 @@ async function seedScan(eventId: string): Promise<void> {
   await env.DB.prepare('INSERT INTO poster_deployments (id, event_id, qr_token) VALUES (?, ?, ?)')
     .bind(dep, eventId, crypto.randomUUID())
     .run();
+  // OSE-798: a scan is one placement event (WHERE side of the split scan path).
   await env.DB.prepare(
-    'INSERT INTO scans (id, event_id, poster_deployment_id, scan_bucket) VALUES (?, ?, ?, ?)'
+    'INSERT INTO scan_placement_events (id, event_id, poster_deployment_id, scan_bucket) VALUES (?, ?, ?, ?)'
   )
     .bind(crypto.randomUUID(), eventId, dep, 'b1')
     .run();
