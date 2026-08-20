@@ -35,7 +35,7 @@ export interface SponsorRow {
   tier: string;
   placement_formats: string;
   click_token: string | null;
-  impression_token: string | null;
+  display_token: string | null;
   is_active: number;
   /**
    * Local-business classification (OSE-330 Phase 2). D1 returns SQLite

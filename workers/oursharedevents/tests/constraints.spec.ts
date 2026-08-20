@@ -262,23 +262,23 @@ describe('QA-3: UNIQUE constraints', () => {
     }
   });
 
-  test('sponsors.impression_token UNIQUE — duplicate impression_token insert fails', async () => {
+  test('sponsors.display_token UNIQUE — duplicate display_token insert fails', async () => {
     await env.DB.prepare(
       `INSERT OR IGNORE INTO events (id, brand_id, title, slug)
        VALUES ('evt_imp_uniq', 'brand_1', 'Impression Uniq Event', 'impression-unique-test')`
     ).run();
 
     await env.DB.prepare(
-      `INSERT INTO sponsors (id, event_id, name, impression_token)
+      `INSERT INTO sponsors (id, event_id, name, display_token)
        VALUES ('spn_uniq_3', 'evt_imp_uniq', 'Sponsor C', 'imp_token_dup')`
     ).run();
 
     try {
       await env.DB.prepare(
-        `INSERT INTO sponsors (id, event_id, name, impression_token)
+        `INSERT INTO sponsors (id, event_id, name, display_token)
          VALUES ('spn_uniq_4', 'evt_imp_uniq', 'Sponsor D', 'imp_token_dup')`
       ).run();
-      expect.fail('Duplicate impression_token INSERT should have thrown UNIQUE constraint error');
+      expect.fail('Duplicate display_token INSERT should have thrown UNIQUE constraint error');
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
       expect(msg.toUpperCase()).toMatch(/UNIQUE/);

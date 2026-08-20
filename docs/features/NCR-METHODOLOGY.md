@@ -59,7 +59,7 @@ Cross-event rollup by:
   - venue (poster_deployment lat/lng clustering)
   - time (bucket_date + bucket_hour patterns)
   - event type (from event data_json)
-  - sponsor (click_token + impression_token patterns)
+  - sponsor (click_token + display_token patterns)
         │
         ▼
 Pattern tables:
@@ -135,7 +135,7 @@ CREATE TABLE scan_aggregates (
   bucket_date     TEXT NOT NULL,          -- daily rollup
   bucket_hour     INTEGER,               -- 0-23
   total_scans     INTEGER NOT NULL DEFAULT 0,
-  unique_agents   INTEGER NOT NULL DEFAULT 0,
+  distinct_agent_hashes   INTEGER NOT NULL DEFAULT 0,
   top_country     TEXT,
   top_region      TEXT,
   computed_at     TEXT NOT NULL DEFAULT (datetime('now'))
@@ -146,7 +146,7 @@ Pre-computed rollups written by a scheduled Worker. These become the input for N
 
 ### `sponsors` — The Economic Layer
 
-The sponsors table tracks `click_token` and `impression_token` per sponsor per event. When aggregated across events and venues, this reveals which locations and event types generate the most sponsor ROI — the economic signal that makes NCR valuable to local businesses.
+The sponsors table tracks `click_token` and `display_token` per sponsor per event. When aggregated across events and venues, this reveals which locations and event types generate the most sponsor ROI — the economic signal that makes NCR valuable to local businesses.
 
 ---
 

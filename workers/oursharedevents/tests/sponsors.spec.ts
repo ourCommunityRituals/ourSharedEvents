@@ -274,7 +274,7 @@ describe('Surface filtering', () => {
     tier: 'primary',
     placement_formats: JSON.stringify(placements),
     click_token: null,
-    impression_token: null,
+    display_token: null,
     is_active: 1,
     created_at: '',
     updated_at: '',

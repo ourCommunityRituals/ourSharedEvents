@@ -69,7 +69,7 @@ form_surveys                               poster_deployment_id (FK)
                                            bucket_date     (daily rollup)
 email_signups                              bucket_hour     (hourly rollup)
   email_hash      (SHA-256 dedup)          total_scans     (count)
-  encrypted_email (AES-256-GCM)            unique_agents   (count)
+  encrypted_email (AES-256-GCM)            distinct_agent_hashes   (count)
   retention_expires_at (30-day TTL)
                                          poster_deployments
 checkin_counts                             qr_token        (unique)
@@ -132,7 +132,7 @@ CREATE TABLE IF NOT EXISTS scan_aggregates (
   bucket_date     TEXT NOT NULL,
   bucket_hour     INTEGER,
   total_scans     INTEGER NOT NULL DEFAULT 0,
-  unique_agents   INTEGER NOT NULL DEFAULT 0,
+  distinct_agent_hashes   INTEGER NOT NULL DEFAULT 0,
   top_country     TEXT,
   top_region      TEXT,
   computed_at     TEXT NOT NULL DEFAULT (datetime('now'))

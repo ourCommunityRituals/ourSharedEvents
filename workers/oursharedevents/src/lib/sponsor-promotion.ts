@@ -243,7 +243,7 @@ export async function promoteSponsorDraft(
     env.DB.prepare(
       `INSERT INTO sponsors (
          id, event_id, name, logo_url, website_url, tier, placement_formats,
-         click_token, impression_token, is_active, is_local, lat, lon, h3_res9, h3_res7,
+         click_token, display_token, is_active, is_local, lat, lon, h3_res9, h3_res7,
          poster_url, poster_content_type, banner_url, banner_content_type,
          vertical_url, vertical_content_type, square_url, square_content_type,
          created_at, updated_at

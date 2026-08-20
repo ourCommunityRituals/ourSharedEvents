@@ -38,7 +38,7 @@ CREATE TABLE scan_aggregates (
   bucket_date     TEXT NOT NULL,
   bucket_hour     INTEGER,
   total_scans     INTEGER NOT NULL DEFAULT 0,
-  unique_agents   INTEGER NOT NULL DEFAULT 0,
+  distinct_agent_hashes   INTEGER NOT NULL DEFAULT 0,
   top_country     TEXT,
   top_region      TEXT,
   computed_at     TEXT NOT NULL,
@@ -46,7 +46,7 @@ CREATE TABLE scan_aggregates (
 );
 ```
 
-**Role in SharedReport:** Provides **(1) unique gatherings** for an event when filtered to its `bucket_date` window. `unique_agents` = distinct anon_id count in the bucket. ✅ already aligned with the SharedReport spec.
+**Role in SharedReport:** Provides **(1) unique gatherings** for an event when filtered to its `bucket_date` window. `distinct_agent_hashes` = distinct anon_id count in the bucket. ✅ already aligned with the SharedReport spec.
 
 **Critical note:** the comment in 0006 says _"WRITTEN BY SCHEDULED WORKER ONLY — never by user-facing endpoints."_ That discipline is preserved. The new pipeline below builds on this — no real-time aggregation, all materialization is cron-driven.
 
@@ -172,7 +172,7 @@ CREATE TABLE event_series (
 ALTER TABLE events ADD COLUMN series_id TEXT REFERENCES event_series(id);
 ```
 
-**SharedReport read pattern:** for event E with `series_id = S`, the report computes headcount trend by ordering `scan_aggregates.unique_agents` for all events in S by `start_date` ASC, showing the trend line.
+**SharedReport read pattern:** for event E with `series_id = S`, the report computes headcount trend by ordering `scan_aggregates.distinct_agent_hashes` for all events in S by `start_date` ASC, showing the trend line.
 
 **Anonymity:** no per-attendee data; just event-level aggregates linked via series.
 
@@ -213,9 +213,9 @@ A single read-time view `v_shared_report` (or a query function) that the SharedR
 -- Pseudocode — actual implementation likely a function in src/lib/
 SELECT
   sa.event_id,
-  sa.unique_agents              AS unique_gatherings,
+  sa.distinct_agent_hashes              AS unique_gatherings,
   rr.return_rate                AS return_rate_pct,
-  (sa.unique_agents * 1.0 / cdb.window_30d_count) AS corridor_density_ratio,
+  (sa.distinct_agent_hashes * 1.0 / cdb.window_30d_count) AS corridor_density_ratio,
   si.impression_count,
   si.click_count,
   hcs.trend_array               AS headcount_trend
@@ -238,7 +238,7 @@ Export contract (one row per event):
 | event_id               | string     | events.id                                               |
 | corridor_id            | string     | events.corridor_id                                      |
 | event_date             | date       | events.start_date                                       |
-| unique_gatherings      | int        | scan_aggregates.unique_agents                           |
+| unique_gatherings      | int        | scan_aggregates.distinct_agent_hashes                   |
 | return_rate_pct        | float      | anon_id_returns aggregate                               |
 | corridor_density_ratio | float      | scan_aggregates ÷ corridor_density_baseline.window_30d  |
 | sponsor_impressions    | int        | sponsor_impressions count where event_type='impression' |

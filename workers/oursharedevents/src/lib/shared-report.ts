@@ -558,7 +558,7 @@ function formatHour(hour: number): string {
  * Groups scans by (event_id, bucket_date, bucket_hour) for events whose
  * start_date falls within the last 90 days. Computes:
  *   - total_scans   = COUNT(*) of scan rows in the bucket
- *   - unique_agents = COUNT(DISTINCT COALESCE(anonymous_id, user_agent_hash))
+ *   - distinct_agent_hashes = COUNT(DISTINCT COALESCE(anonymous_id, user_agent_hash))
  *   - top_country   = most frequent non-null country_code in the bucket
  *
  * IDs are deterministic — `agg_{event_id}_{bucket_date}_{bucket_hour}` — so
@@ -598,7 +598,7 @@ export async function aggregateScanBuckets(
          substr(scan_bucket, 1, 10)             AS bucket_date,
          CAST(substr(scan_bucket, 12, 2) AS INTEGER) AS bucket_hour,
          COUNT(*)                               AS total_scans,
-         COUNT(DISTINCT COALESCE(anonymous_id, user_agent_hash)) AS unique_agents
+         COUNT(DISTINCT COALESCE(anonymous_id, user_agent_hash)) AS distinct_agent_hashes
        FROM scan_node_returns
        WHERE event_id IN (
          SELECT id FROM events WHERE start_date >= ?
@@ -611,7 +611,7 @@ export async function aggregateScanBuckets(
         bucket_date: string;
         bucket_hour: number;
         total_scans: number;
-        unique_agents: number;
+        distinct_agent_hashes: number;
       }>();
 
     // Fetch top_country per (event_id, scan_bucket) — separate query to avoid
@@ -650,7 +650,7 @@ export async function aggregateScanBuckets(
         await env.DB.prepare(
           `INSERT OR REPLACE INTO scan_aggregates
              (id, event_id, bucket_date, bucket_hour,
-              total_scans, unique_agents, top_country, computed_at)
+              total_scans, distinct_agent_hashes, top_country, computed_at)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
         )
           .bind(
@@ -659,7 +659,7 @@ export async function aggregateScanBuckets(
             b.bucket_date,
             b.bucket_hour,
             b.total_scans,
-            b.unique_agents,
+            b.distinct_agent_hashes,
             topCountry,
             nowIso
           )

@@ -226,7 +226,7 @@ test.describe('Invariant: Anonymous ID — SharedReport Aggregate Only', () => {
       return res.text();
     }, items[0].id);
 
-    // Public sponsor API should not leak click_token or impression_token raw values
+    // Public sponsor API should not leak click_token or display_token raw values
     // (These are internal attribution tokens, not public data)
     // Note: the current API does return these — this test documents the contract
     // and will catch if additional sensitive fields are added

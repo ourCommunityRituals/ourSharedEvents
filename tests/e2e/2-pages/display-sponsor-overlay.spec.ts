@@ -79,7 +79,7 @@ function sponsor(overrides: Record<string, unknown> = {}) {
     tier: 'primary',
     placement_formats: '{}',
     click_token: null,
-    impression_token: null,
+    display_token: null,
     is_active: 1,
     ...overrides,
   };

@@ -90,7 +90,7 @@ Admin can see which placements drove registrations
 | `tier`              | Sponsor tier (standard, premium, etc.) |
 | `placement_formats` | JSON array of display configurations   |
 | `click_token`       | Unique token for click tracking        |
-| `impression_token`  | Unique token for impression tracking   |
+| `display_token`     | Unique token for impression tracking   |
 | `is_active`         | Whether the sponsorship is active      |
 
 ---

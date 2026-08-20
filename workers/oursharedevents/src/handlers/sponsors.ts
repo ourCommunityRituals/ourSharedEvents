@@ -148,7 +148,7 @@ export async function handleAdminListSponsors(
   }
 
   const cols = `id, event_id, name, logo_url, website_url, tier, placement_formats,
-                click_token, impression_token, is_active, created_at, updated_at`;
+                click_token, display_token, is_active, created_at, updated_at`;
   const where: string[] = [];
   const binds: string[] = [];
   if (eventId) {
@@ -326,8 +326,8 @@ export async function handleAdminCreateSponsor(
   // legacy readers — body.placement_formats is intentionally ignored.
   const placementFormats = UNIFORM_PLACEMENT_FORMATS;
   const clickToken = typeof body.click_token === 'string' ? body.click_token.slice(0, 256) : null;
-  const impressionToken =
-    typeof body.impression_token === 'string' ? body.impression_token.slice(0, 256) : null;
+  const displayToken =
+    typeof body.display_token === 'string' ? body.display_token.slice(0, 256) : null;
   const now = new Date().toISOString();
 
   // ── H3 geo-tagging (opt-in, admin creation path) ─────────────────────────
@@ -375,7 +375,7 @@ export async function handleAdminCreateSponsor(
 
   try {
     await env.DB.prepare(
-      `INSERT INTO sponsors (id, event_id, name, logo_url, website_url, tier, placement_formats, click_token, impression_token, is_active, is_local, lat, lon, h3_res9, h3_res7, created_at, updated_at)
+      `INSERT INTO sponsors (id, event_id, name, logo_url, website_url, tier, placement_formats, click_token, display_token, is_active, is_local, lat, lon, h3_res9, h3_res7, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?)`
     )
       .bind(
@@ -387,7 +387,7 @@ export async function handleAdminCreateSponsor(
         tier,
         placementFormats,
         clickToken,
-        impressionToken,
+        displayToken,
         isLocal,
         sponsorLat,
         sponsorLon,
@@ -453,7 +453,7 @@ export async function handleAdminUpdateSponsor(
     // OSE-670 (#25): placement_formats is uniform + non-purchasable — deliberately
     // NOT an updatable field, so no client can write a named slot on update.
     click_token: { max: 256 },
-    impression_token: { max: 256 },
+    display_token: { max: 256 },
   };
 
   const sets: string[] = [];

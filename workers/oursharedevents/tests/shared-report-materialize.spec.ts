@@ -734,15 +734,15 @@ describe('OSE-632: aggregateScanBuckets — scan bucket aggregation', () => {
     expect(r.eventsProcessed).toBe(1);
 
     const row = await db
-      .prepare(`SELECT total_scans, unique_agents FROM scan_aggregates WHERE event_id = ?`)
+      .prepare(`SELECT total_scans, distinct_agent_hashes FROM scan_aggregates WHERE event_id = ?`)
       .bind('test-evt-mat-agg')
-      .first<{ total_scans: number; unique_agents: number }>();
+      .first<{ total_scans: number; distinct_agent_hashes: number }>();
     expect(row).not.toBeNull();
     expect(row!.total_scans).toBe(2);
-    expect(row!.unique_agents).toBe(2);
+    expect(row!.distinct_agent_hashes).toBe(2);
   });
 
-  test('OSE-632 | BE-SCAN-2 | same anon scans twice in bucket | unique_agents counts 1', async () => {
+  test('OSE-632 | BE-SCAN-2 | same anon scans twice in bucket | distinct_agent_hashes counts 1', async () => {
     const db = tenv().DB;
     await seedEvent({ id: 'test-evt-mat-agg-dedup', start_offset_hours: -24 * 5 });
     const bucket = new Date(Date.now() - 12 * 3600 * 1000).toISOString().slice(0, 13) + ':00';
@@ -764,11 +764,11 @@ describe('OSE-632: aggregateScanBuckets — scan bucket aggregation', () => {
     await aggregateScanBuckets({ DB: db });
 
     const row = await db
-      .prepare(`SELECT total_scans, unique_agents FROM scan_aggregates WHERE event_id = ?`)
+      .prepare(`SELECT total_scans, distinct_agent_hashes FROM scan_aggregates WHERE event_id = ?`)
       .bind('test-evt-mat-agg-dedup')
-      .first<{ total_scans: number; unique_agents: number }>();
+      .first<{ total_scans: number; distinct_agent_hashes: number }>();
     expect(row!.total_scans).toBe(2);
-    expect(row!.unique_agents).toBe(1);
+    expect(row!.distinct_agent_hashes).toBe(1);
   });
 
   test('OSE-632 | BE-SCAN-2 | running twice is idempotent | same row count, no duplicates', async () => {

@@ -154,7 +154,7 @@ Phase 3: Geo-Spatial Intelligence (horizon)
     Real signal for: urban planning, local business development, sponsor ROI
 ```
 
-**The data model is already built for this.** The `poster_deployments` table stores `latitude` and `longitude`. The `scan_aggregates` table rolls up by `bucket_date` and `bucket_hour`. The `sponsors` table tracks `click_token` and `impression_token`. When event density is high enough, these tables become a geo-spatial dataset of hyperlocal economic activity — all built from anonymous presence signal.
+**The data model is already built for this.** The `poster_deployments` table stores `latitude` and `longitude`. The `scan_aggregates` table rolls up by `bucket_date` and `bucket_hour`. The `sponsors` table tracks `click_token` and `display_token`. When event density is high enough, these tables become a geo-spatial dataset of hyperlocal economic activity — all built from anonymous presence signal.
 
 **Future audiences** that this unlocks:
 
