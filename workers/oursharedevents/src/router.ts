@@ -194,6 +194,7 @@ import {
   handleBackfillPosterH3,
   type PosterDeploymentsEnv,
 } from './handlers/poster-deployments';
+import { handleAdminEventStats } from './handlers/event-stats';
 import { handleQrScan, type QrScanEnv } from './handlers/qr-scan';
 import { corsOrigin } from './lib/cors';
 import { guardPublicReadOnly } from './lib/public-readonly';
@@ -745,6 +746,15 @@ export async function route(
       return handleAdminCreatePosterDeployment(request, env, adminPosterListMatch[1]);
     if (method === 'GET')
       return handleAdminListPosterDeployments(request, env, adminPosterListMatch[1]);
+  }
+
+  // GET /api/v2/admin/events/:id/stats — dashboard aggregate counts (OSE-896)
+  const adminEventStatsMatch = pathname.match(/^\/api\/v2\/admin\/events\/([^/]+)\/stats$/);
+  if (adminEventStatsMatch && method === 'GET') {
+    const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
+    const deny = await requireAdmin(request, env, reqId);
+    if (deny) return deny;
+    return handleAdminEventStats(request, env, adminEventStatsMatch[1]);
   }
 
   // POST /api/v2/admin/poster-deployments/backfill-h3 (must match before /:id)

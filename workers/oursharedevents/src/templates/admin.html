@@ -1589,8 +1589,8 @@
       <!-- OSE-886: Event Dashboard card. GAS frame (DashboardCard.html) + baseline
            details. Hidden until an event is selected (ose:event-selected, OSE-667/673).
            Stat values are placeholders (—); EventDashboard.init(data) is the seam
-           that wires real Scans / Sponsor appearances / Registrations / Check-ins
-           in the follow-up functionality slice. No fabricated metrics. -->
+           that wires real Scans / Sponsors / Registrations / Check-ins
+           (OSE-896). No fabricated metrics. -->
       <section
         id="dashboard-card"
         class="dashboard-card"
@@ -1607,7 +1607,7 @@
           </div>
           <div class="dash-stat appearances" data-testid="admin-stat-appearances">
             <span class="dash-stat__num" data-testid="admin-stat-appearances-num">—</span>
-            <span class="dash-stat__label">Sponsor appearances</span>
+            <span class="dash-stat__label">Sponsors</span>
           </div>
           <div class="dash-stat registrations" data-testid="admin-stat-registrations">
             <span class="dash-stat__num" data-testid="admin-stat-registrations-num">—</span>
@@ -1677,6 +1677,20 @@
             var bar = fill.closest('.dash-progress');
             if (bar) bar.setAttribute('aria-valuenow', String(pct));
           }
+          // Render one stat value. Accepts a plain number (exact counts: scans,
+          // sponsors) OR the uniform floored shape { count, suppressed, floor }
+          // from the stats endpoint (registrations, check-ins). A suppressed
+          // value renders "<N" so the K-anon floor is communicated — never a raw
+          // sub-floor count. null/undefined → keep the "—" placeholder.
+          function formatStat(v) {
+            if (v == null) return null;
+            if (typeof v === 'number') return String(v);
+            if (typeof v === 'object') {
+              if (v.suppressed) return '<' + (v.floor || 5);
+              if (v.count != null) return String(v.count);
+            }
+            return null;
+          }
           var Dashboard = {
             render: function (detail) {
               detail = detail || {};
@@ -1714,13 +1728,52 @@
               };
               Object.keys(map).forEach(function (id) {
                 var el = document.querySelector('[data-testid="' + id + '"]');
-                if (el && map[id] != null) el.textContent = String(map[id]);
+                if (!el) return;
+                var text = formatStat(map[id]);
+                if (text != null) el.textContent = text; // omitted → keep "—"
               });
             },
           };
           window.EventDashboard = Dashboard;
+
+          // OSE-896: fetch real aggregate counts for the selected event and feed
+          // them into Dashboard.init(). Same-origin admin fetch (auth rides the
+          // CF Access session, as the rest of admin.html does). Loading → "…";
+          // any error/unauth → restore "—" (never invent a number).
+          var STAT_NUM_IDS = [
+            'admin-stat-scans-num',
+            'admin-stat-appearances-num',
+            'admin-stat-registrations-num',
+            'admin-stat-checkins-num',
+          ];
+          function setStatNums(text) {
+            STAT_NUM_IDS.forEach(function (id) {
+              var el = document.querySelector('[data-testid="' + id + '"]');
+              if (el) el.textContent = text;
+            });
+          }
+          function fetchStats(eventId) {
+            if (!eventId) return;
+            setStatNums('…');
+            fetch('/api/v2/admin/events/' + encodeURIComponent(eventId) + '/stats')
+              .then(function (r) {
+                return r.ok ? r.json() : null;
+              })
+              .then(function (data) {
+                if (data && data.ok && data.stats) {
+                  Dashboard.init(data.stats);
+                } else {
+                  setStatNums('—');
+                }
+              })
+              .catch(function () {
+                setStatNums('—');
+              });
+          }
           window.addEventListener('ose:event-selected', function (ev) {
-            Dashboard.render(ev.detail || {});
+            var detail = ev.detail || {};
+            Dashboard.render(detail);
+            fetchStats(detail.id);
           });
         })();
       </script>
