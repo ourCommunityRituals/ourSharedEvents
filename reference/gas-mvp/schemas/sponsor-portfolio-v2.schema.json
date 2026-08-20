@@ -297,10 +297,7 @@
       "description": "Top performing events by impressions"
     },
     "roi": {
-      "oneOf": [
-        { "$ref": "#/$defs/ROIMetrics" },
-        { "type": "null" }
-      ],
+      "oneOf": [{ "$ref": "#/$defs/ROIMetrics" }, { "type": "null" }],
       "description": "[V2+] ROI metrics when cost data available"
     },
     "generatedAt": {

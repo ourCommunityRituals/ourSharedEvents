@@ -5,10 +5,7 @@
   "description": "API response schema for create/update endpoints (saveEvent, updateEventData, create). Story 3.1 - API Response Schema Validation.",
   "$comment": "Version 1.0 - Created 2025-12-11. Used by POST mutation endpoints.",
   "type": "object",
-  "oneOf": [
-    { "$ref": "#/$defs/SuccessSaveResponse" },
-    { "$ref": "#/$defs/ErrorResponse" }
-  ],
+  "oneOf": [{ "$ref": "#/$defs/SuccessSaveResponse" }, { "$ref": "#/$defs/ErrorResponse" }],
   "$defs": {
     "SuccessSaveResponse": {
       "type": "object",
@@ -56,7 +53,15 @@
         },
         "code": {
           "type": "string",
-          "enum": ["BAD_INPUT", "NOT_FOUND", "RATE_LIMITED", "INTERNAL", "CONTRACT", "FEATURE_DISABLED", "UNAUTHORIZED"]
+          "enum": [
+            "BAD_INPUT",
+            "NOT_FOUND",
+            "RATE_LIMITED",
+            "INTERNAL",
+            "CONTRACT",
+            "FEATURE_DISABLED",
+            "UNAUTHORIZED"
+          ]
         },
         "message": {
           "type": "string",

@@ -40,7 +40,7 @@ const colors = {
   green: '\x1b[32m',
   yellow: '\x1b[33m',
   cyan: '\x1b[36m',
-  dim: '\x1b[2m'
+  dim: '\x1b[2m',
 };
 
 // ============================================================================
@@ -62,7 +62,7 @@ const FULL_ANALYTICS_FIXTURE = {
     totalQrScans: 42,
     totalSignups: 18,
     uniqueEvents: 3,
-    uniqueSponsors: 5
+    uniqueSponsors: 5,
   },
 
   // MVP REQUIRED - Surface breakdown
@@ -73,7 +73,7 @@ const FULL_ANALYTICS_FIXTURE = {
       impressions: 500,
       clicks: 25,
       qrScans: 30,
-      engagementRate: 11.0
+      engagementRate: 11.0,
     },
     {
       id: 'display',
@@ -81,7 +81,7 @@ const FULL_ANALYTICS_FIXTURE = {
       impressions: 400,
       clicks: 20,
       qrScans: 5,
-      engagementRate: 6.25
+      engagementRate: 6.25,
     },
     {
       id: 'public',
@@ -89,7 +89,7 @@ const FULL_ANALYTICS_FIXTURE = {
       impressions: 350,
       clicks: 18,
       qrScans: 7,
-      engagementRate: 7.14
+      engagementRate: 7.14,
     },
     {
       id: 'signup',
@@ -97,8 +97,8 @@ const FULL_ANALYTICS_FIXTURE = {
       impressions: 250,
       clicks: 12,
       qrScans: 0,
-      engagementRate: 4.8
-    }
+      engagementRate: 4.8,
+    },
   ],
 
   // MVP OPTIONAL - Sponsor breakdown (organizer view)
@@ -108,36 +108,36 @@ const FULL_ANALYTICS_FIXTURE = {
       name: 'Acme Corporation',
       impressions: 450,
       clicks: 25,
-      ctr: 5.56
+      ctr: 5.56,
     },
     {
       id: 'sp_joe_tavern',
       name: "Joe's Tavern",
       impressions: 380,
       clicks: 20,
-      ctr: 5.26
+      ctr: 5.26,
     },
     {
       id: 'sp_mega_sports',
       name: 'Mega Sports',
       impressions: 320,
       clicks: 15,
-      ctr: 4.69
+      ctr: 4.69,
     },
     {
       id: 'sp_local_bank',
       name: 'Local Bank',
       impressions: 200,
       clicks: 10,
-      ctr: 5.0
+      ctr: 5.0,
     },
     {
       id: 'sp_pizza_palace',
       name: 'Pizza Palace',
       impressions: 150,
       clicks: 5,
-      ctr: 3.33
-    }
+      ctr: 3.33,
+    },
   ],
 
   // MVP OPTIONAL - Event breakdown
@@ -148,7 +148,7 @@ const FULL_ANALYTICS_FIXTURE = {
       impressions: 600,
       clicks: 35,
       ctr: 5.83,
-      signupsCount: 12
+      signupsCount: 12,
     },
     {
       id: 'evt_winter_league_2024',
@@ -156,7 +156,7 @@ const FULL_ANALYTICS_FIXTURE = {
       impressions: 500,
       clicks: 25,
       ctr: 5.0,
-      signupsCount: 4
+      signupsCount: 4,
     },
     {
       id: 'evt_spring_championship',
@@ -164,8 +164,8 @@ const FULL_ANALYTICS_FIXTURE = {
       impressions: 400,
       clicks: 15,
       ctr: 3.75,
-      signupsCount: 2
-    }
+      signupsCount: 2,
+    },
   ],
 
   // MVP OPTIONAL - Top 3 sponsors by clicks
@@ -175,23 +175,23 @@ const FULL_ANALYTICS_FIXTURE = {
       name: 'Acme Corporation',
       impressions: 450,
       clicks: 25,
-      ctr: 5.56
+      ctr: 5.56,
     },
     {
       id: 'sp_joe_tavern',
       name: "Joe's Tavern",
       impressions: 380,
       clicks: 20,
-      ctr: 5.26
+      ctr: 5.26,
     },
     {
       id: 'sp_mega_sports',
       name: 'Mega Sports',
       impressions: 320,
       clicks: 15,
-      ctr: 4.69
-    }
-  ]
+      ctr: 4.69,
+    },
+  ],
 };
 
 /**
@@ -208,11 +208,11 @@ const MINIMAL_ANALYTICS_FIXTURE = {
     totalQrScans: 0,
     totalSignups: 0,
     uniqueEvents: 0,
-    uniqueSponsors: 0
+    uniqueSponsors: 0,
   },
 
   // MVP REQUIRED - Surfaces (empty but valid)
-  surfaces: []
+  surfaces: [],
 };
 
 /**
@@ -228,7 +228,7 @@ const NULL_OPTIONALS_FIXTURE = {
     totalQrScans: 2,
     totalSignups: 1,
     uniqueEvents: 1,
-    uniqueSponsors: 0
+    uniqueSponsors: 0,
   },
 
   surfaces: [
@@ -237,13 +237,13 @@ const NULL_OPTIONALS_FIXTURE = {
       label: 'Public',
       impressions: 100,
       clicks: 5,
-      qrScans: 2
-    }
+      qrScans: 2,
+    },
   ],
 
   sponsors: null,
   events: null,
-  topSponsors: null
+  topSponsors: null,
 };
 
 /**
@@ -258,7 +258,7 @@ const MAX_TOP_SPONSORS_FIXTURE = {
     totalQrScans: 50,
     totalSignups: 25,
     uniqueEvents: 2,
-    uniqueSponsors: 3
+    uniqueSponsors: 3,
   },
 
   surfaces: [
@@ -268,15 +268,15 @@ const MAX_TOP_SPONSORS_FIXTURE = {
       impressions: 1000,
       clicks: 100,
       qrScans: 50,
-      engagementRate: 15.0
-    }
+      engagementRate: 15.0,
+    },
   ],
 
   topSponsors: [
     { id: 'sp1', name: 'Sponsor 1', impressions: 400, clicks: 50, ctr: 12.5 },
     { id: 'sp2', name: 'Sponsor 2', impressions: 350, clicks: 30, ctr: 8.57 },
-    { id: 'sp3', name: 'Sponsor 3', impressions: 250, clicks: 20, ctr: 8.0 }
-  ]
+    { id: 'sp3', name: 'Sponsor 3', impressions: 250, clicks: 20, ctr: 8.0 },
+  ],
 };
 
 // ============================================================================
@@ -288,7 +288,7 @@ const MAX_TOP_SPONSORS_FIXTURE = {
  */
 const INVALID_MISSING_SUMMARY = {
   lastUpdatedISO: '2025-01-15T10:00:00Z',
-  surfaces: []
+  surfaces: [],
 };
 
 /**
@@ -302,8 +302,8 @@ const INVALID_MISSING_SURFACES = {
     totalQrScans: 0,
     totalSignups: 0,
     uniqueEvents: 0,
-    uniqueSponsors: 0
-  }
+    uniqueSponsors: 0,
+  },
 };
 
 /**
@@ -316,9 +316,9 @@ const INVALID_MISSING_TIMESTAMP = {
     totalQrScans: 0,
     totalSignups: 0,
     uniqueEvents: 0,
-    uniqueSponsors: 0
+    uniqueSponsors: 0,
   },
-  surfaces: []
+  surfaces: [],
 };
 
 /**
@@ -332,7 +332,7 @@ const INVALID_SURFACE_ID = {
     totalQrScans: 2,
     totalSignups: 1,
     uniqueEvents: 1,
-    uniqueSponsors: 0
+    uniqueSponsors: 0,
   },
   surfaces: [
     {
@@ -340,9 +340,9 @@ const INVALID_SURFACE_ID = {
       label: 'Invalid',
       impressions: 100,
       clicks: 5,
-      qrScans: 2
-    }
-  ]
+      qrScans: 2,
+    },
+  ],
 };
 
 /**
@@ -356,17 +356,15 @@ const INVALID_TOO_MANY_TOP_SPONSORS = {
     totalQrScans: 50,
     totalSignups: 25,
     uniqueEvents: 2,
-    uniqueSponsors: 5
+    uniqueSponsors: 5,
   },
-  surfaces: [
-    { id: 'poster', label: 'Poster', impressions: 1000, clicks: 100, qrScans: 50 }
-  ],
+  surfaces: [{ id: 'poster', label: 'Poster', impressions: 1000, clicks: 100, qrScans: 50 }],
   topSponsors: [
     { id: 'sp1', name: 'Sponsor 1', impressions: 400, clicks: 50, ctr: 12.5 },
     { id: 'sp2', name: 'Sponsor 2', impressions: 350, clicks: 30, ctr: 8.57 },
     { id: 'sp3', name: 'Sponsor 3', impressions: 250, clicks: 20, ctr: 8.0 },
-    { id: 'sp4', name: 'Sponsor 4', impressions: 200, clicks: 15, ctr: 7.5 } // 4th sponsor - invalid
-  ]
+    { id: 'sp4', name: 'Sponsor 4', impressions: 200, clicks: 15, ctr: 7.5 }, // 4th sponsor - invalid
+  ],
 };
 
 /**
@@ -380,9 +378,9 @@ const INVALID_NEGATIVE_METRICS = {
     totalQrScans: 2,
     totalSignups: 1,
     uniqueEvents: 1,
-    uniqueSponsors: 0
+    uniqueSponsors: 0,
   },
-  surfaces: []
+  surfaces: [],
 };
 
 /**
@@ -396,9 +394,9 @@ const INVALID_TIMESTAMP_TYPE = {
     totalQrScans: 0,
     totalSignups: 0,
     uniqueEvents: 0,
-    uniqueSponsors: 0
+    uniqueSponsors: 0,
   },
-  surfaces: []
+  surfaces: [],
 };
 
 /**
@@ -412,20 +410,18 @@ const INVALID_SPONSOR_EMPTY_ID = {
     totalQrScans: 2,
     totalSignups: 1,
     uniqueEvents: 1,
-    uniqueSponsors: 1
+    uniqueSponsors: 1,
   },
-  surfaces: [
-    { id: 'public', label: 'Public', impressions: 100, clicks: 5, qrScans: 2 }
-  ],
+  surfaces: [{ id: 'public', label: 'Public', impressions: 100, clicks: 5, qrScans: 2 }],
   sponsors: [
     {
       id: '', // Empty string - invalid (minLength: 1)
       name: 'Test Sponsor',
       impressions: 100,
       clicks: 5,
-      ctr: 5.0
-    }
-  ]
+      ctr: 5.0,
+    },
+  ],
 };
 
 // ============================================================================
@@ -438,17 +434,71 @@ const INVALID_SPONSOR_EMPTY_ID = {
  */
 const ANALYTICS_SERVICE_INPUT = [
   // Event 1 - Summer Tournament
-  { timestamp: '2025-01-10T09:00:00Z', eventId: 'evt1', surface: 'poster', metric: 'impression', sponsorId: 'sp1' },
-  { timestamp: '2025-01-10T09:05:00Z', eventId: 'evt1', surface: 'poster', metric: 'impression', sponsorId: 'sp1' },
-  { timestamp: '2025-01-10T09:10:00Z', eventId: 'evt1', surface: 'poster', metric: 'click', sponsorId: 'sp1' },
-  { timestamp: '2025-01-10T10:00:00Z', eventId: 'evt1', surface: 'public', metric: 'impression', sponsorId: 'sp2' },
-  { timestamp: '2025-01-10T10:05:00Z', eventId: 'evt1', surface: 'public', metric: 'qr_scan', sponsorId: null },
-  { timestamp: '2025-01-10T11:00:00Z', eventId: 'evt1', surface: 'signup', metric: 'signup', sponsorId: null },
+  {
+    timestamp: '2025-01-10T09:00:00Z',
+    eventId: 'evt1',
+    surface: 'poster',
+    metric: 'impression',
+    sponsorId: 'sp1',
+  },
+  {
+    timestamp: '2025-01-10T09:05:00Z',
+    eventId: 'evt1',
+    surface: 'poster',
+    metric: 'impression',
+    sponsorId: 'sp1',
+  },
+  {
+    timestamp: '2025-01-10T09:10:00Z',
+    eventId: 'evt1',
+    surface: 'poster',
+    metric: 'click',
+    sponsorId: 'sp1',
+  },
+  {
+    timestamp: '2025-01-10T10:00:00Z',
+    eventId: 'evt1',
+    surface: 'public',
+    metric: 'impression',
+    sponsorId: 'sp2',
+  },
+  {
+    timestamp: '2025-01-10T10:05:00Z',
+    eventId: 'evt1',
+    surface: 'public',
+    metric: 'qr_scan',
+    sponsorId: null,
+  },
+  {
+    timestamp: '2025-01-10T11:00:00Z',
+    eventId: 'evt1',
+    surface: 'signup',
+    metric: 'signup',
+    sponsorId: null,
+  },
 
   // Event 2 - Winter League
-  { timestamp: '2025-01-11T14:00:00Z', eventId: 'evt2', surface: 'display', metric: 'impression', sponsorId: 'sp1' },
-  { timestamp: '2025-01-11T14:05:00Z', eventId: 'evt2', surface: 'display', metric: 'click', sponsorId: 'sp1' },
-  { timestamp: '2025-01-11T15:00:00Z', eventId: 'evt2', surface: 'public', metric: 'impression', sponsorId: 'sp3' }
+  {
+    timestamp: '2025-01-11T14:00:00Z',
+    eventId: 'evt2',
+    surface: 'display',
+    metric: 'impression',
+    sponsorId: 'sp1',
+  },
+  {
+    timestamp: '2025-01-11T14:05:00Z',
+    eventId: 'evt2',
+    surface: 'display',
+    metric: 'click',
+    sponsorId: 'sp1',
+  },
+  {
+    timestamp: '2025-01-11T15:00:00Z',
+    eventId: 'evt2',
+    surface: 'public',
+    metric: 'impression',
+    sponsorId: 'sp3',
+  },
 ];
 
 /**
@@ -462,19 +512,19 @@ const EXPECTED_ANALYTICS_OUTPUT = {
     totalQrScans: 1,
     totalSignups: 1,
     uniqueEvents: 2,
-    uniqueSponsors: 3
+    uniqueSponsors: 3,
   },
   surfaces: {
     poster: { impressions: 2, clicks: 1, qrScans: 0 },
     public: { impressions: 2, clicks: 0, qrScans: 1 },
     display: { impressions: 1, clicks: 1, qrScans: 0 },
-    signup: { impressions: 0, clicks: 0, qrScans: 0 }
+    signup: { impressions: 0, clicks: 0, qrScans: 0 },
   },
   sponsors: {
     sp1: { impressions: 3, clicks: 2 },
     sp2: { impressions: 1, clicks: 0 },
-    sp3: { impressions: 1, clicks: 0 }
-  }
+    sp3: { impressions: 1, clicks: 0 },
+  },
 };
 
 // ============================================================================
@@ -504,12 +554,14 @@ function validateWithAjv(schema, data, label) {
   return {
     valid,
     label,
-    errors: valid ? [] : validate.errors.map(e => ({
-      path: e.instancePath || '/',
-      message: e.message,
-      keyword: e.keyword,
-      params: e.params
-    }))
+    errors: valid
+      ? []
+      : validate.errors.map((e) => ({
+          path: e.instancePath || '/',
+          message: e.message,
+          keyword: e.keyword,
+          params: e.params,
+        })),
   };
 }
 
@@ -518,17 +570,17 @@ function validateWithAjv(schema, data, label) {
  * This mirrors the logic in buildSharedAnalyticsResponse_().
  */
 function simulateAnalyticsService(analytics) {
-  const impressions = analytics.filter(a => a.metric === 'impression');
-  const clicks = analytics.filter(a => a.metric === 'click');
-  const qrScans = analytics.filter(a => a.metric === 'qr_scan');
-  const signups = analytics.filter(a => a.metric === 'signup');
+  const impressions = analytics.filter((a) => a.metric === 'impression');
+  const clicks = analytics.filter((a) => a.metric === 'click');
+  const qrScans = analytics.filter((a) => a.metric === 'qr_scan');
+  const signups = analytics.filter((a) => a.metric === 'signup');
 
-  const eventIds = new Set(analytics.map(a => a.eventId).filter(Boolean));
-  const sponsorIds = new Set(analytics.map(a => a.sponsorId).filter(Boolean));
+  const eventIds = new Set(analytics.map((a) => a.eventId).filter(Boolean));
+  const sponsorIds = new Set(analytics.map((a) => a.sponsorId).filter(Boolean));
 
   // Aggregate by surface
   const surfaces = {};
-  analytics.forEach(a => {
+  analytics.forEach((a) => {
     const surfaceId = (a.surface || 'unknown').toLowerCase();
     if (!surfaces[surfaceId]) {
       surfaces[surfaceId] = { impressions: 0, clicks: 0, qrScans: 0 };
@@ -540,7 +592,7 @@ function simulateAnalyticsService(analytics) {
 
   // Aggregate by sponsor
   const sponsors = {};
-  analytics.forEach(a => {
+  analytics.forEach((a) => {
     if (!a.sponsorId) return;
     if (!sponsors[a.sponsorId]) {
       sponsors[a.sponsorId] = { impressions: 0, clicks: 0 };
@@ -556,10 +608,10 @@ function simulateAnalyticsService(analytics) {
       totalQrScans: qrScans.length,
       totalSignups: signups.length,
       uniqueEvents: eventIds.size,
-      uniqueSponsors: sponsorIds.size
+      uniqueSponsors: sponsorIds.size,
     },
     surfaces,
-    sponsors
+    sponsors,
   };
 }
 
@@ -584,7 +636,9 @@ function compareAggregations(actual, expected) {
     }
     for (const metric of Object.keys(expected.surfaces[surface])) {
       if (actual.surfaces[surface][metric] !== expected.surfaces[surface][metric]) {
-        issues.push(`surfaces.${surface}.${metric}: expected ${expected.surfaces[surface][metric]}, got ${actual.surfaces[surface][metric]}`);
+        issues.push(
+          `surfaces.${surface}.${metric}: expected ${expected.surfaces[surface][metric]}, got ${actual.surfaces[surface][metric]}`
+        );
       }
     }
   }
@@ -597,7 +651,9 @@ function compareAggregations(actual, expected) {
     }
     for (const metric of Object.keys(expected.sponsors[sponsor])) {
       if (actual.sponsors[sponsor][metric] !== expected.sponsors[sponsor][metric]) {
-        issues.push(`sponsors.${sponsor}.${metric}: expected ${expected.sponsors[sponsor][metric]}, got ${actual.sponsors[sponsor][metric]}`);
+        issues.push(
+          `sponsors.${sponsor}.${metric}: expected ${expected.sponsors[sponsor][metric]}, got ${actual.sponsors[sponsor][metric]}`
+        );
       }
     }
   }
@@ -615,9 +671,16 @@ function testGracefulDegradation() {
   // Test 1: No sponsors array - should not crash
   const noSponsors = {
     lastUpdatedISO: new Date().toISOString(),
-    summary: { totalImpressions: 0, totalClicks: 0, totalQrScans: 0, totalSignups: 0, uniqueEvents: 0, uniqueSponsors: 0 },
+    summary: {
+      totalImpressions: 0,
+      totalClicks: 0,
+      totalQrScans: 0,
+      totalSignups: 0,
+      uniqueEvents: 0,
+      uniqueSponsors: 0,
+    },
     surfaces: [],
-    sponsors: null
+    sponsors: null,
   };
 
   if (!canRenderSponsorsSection(noSponsors)) {
@@ -629,9 +692,16 @@ function testGracefulDegradation() {
   // Test 2: No events array - should not crash
   const noEvents = {
     lastUpdatedISO: new Date().toISOString(),
-    summary: { totalImpressions: 0, totalClicks: 0, totalQrScans: 0, totalSignups: 0, uniqueEvents: 0, uniqueSponsors: 0 },
+    summary: {
+      totalImpressions: 0,
+      totalClicks: 0,
+      totalQrScans: 0,
+      totalSignups: 0,
+      uniqueEvents: 0,
+      uniqueSponsors: 0,
+    },
     surfaces: [],
-    events: null
+    events: null,
   };
 
   if (!canRenderEventsSection(noEvents)) {
@@ -643,9 +713,16 @@ function testGracefulDegradation() {
   // Test 3: No topSponsors array - should not crash
   const noTopSponsors = {
     lastUpdatedISO: new Date().toISOString(),
-    summary: { totalImpressions: 0, totalClicks: 0, totalQrScans: 0, totalSignups: 0, uniqueEvents: 0, uniqueSponsors: 0 },
+    summary: {
+      totalImpressions: 0,
+      totalClicks: 0,
+      totalQrScans: 0,
+      totalSignups: 0,
+      uniqueEvents: 0,
+      uniqueSponsors: 0,
+    },
     surfaces: [],
-    topSponsors: null
+    topSponsors: null,
   };
 
   if (!canRenderTopSponsorsSection(noTopSponsors)) {
@@ -657,11 +734,18 @@ function testGracefulDegradation() {
   // Test 4: Empty arrays - should show "No data" messages
   const emptyArrays = {
     lastUpdatedISO: new Date().toISOString(),
-    summary: { totalImpressions: 0, totalClicks: 0, totalQrScans: 0, totalSignups: 0, uniqueEvents: 0, uniqueSponsors: 0 },
+    summary: {
+      totalImpressions: 0,
+      totalClicks: 0,
+      totalQrScans: 0,
+      totalSignups: 0,
+      uniqueEvents: 0,
+      uniqueSponsors: 0,
+    },
     surfaces: [],
     sponsors: [],
     events: [],
-    topSponsors: []
+    topSponsors: [],
   };
 
   if (emptyArrays.sponsors.length === 0 && emptyArrays.events.length === 0) {
@@ -723,7 +807,9 @@ function printDetail(message) {
 
 function main() {
   console.log(`\n${colors.cyan}SharedAnalytics Schema Test Harness${colors.reset}`);
-  console.log(`${colors.dim}Validating AnalyticsService + SharedReporting alignment${colors.reset}`);
+  console.log(
+    `${colors.dim}Validating AnalyticsService + SharedReporting alignment${colors.reset}`
+  );
 
   let totalErrors = 0;
   let totalWarnings = 0;
@@ -753,7 +839,7 @@ function main() {
     { data: FULL_ANALYTICS_FIXTURE, label: 'Full Analytics (all fields populated)' },
     { data: MINIMAL_ANALYTICS_FIXTURE, label: 'Minimal Analytics (MVP Required only)' },
     { data: NULL_OPTIONALS_FIXTURE, label: 'Null Optionals (explicit nulls)' },
-    { data: MAX_TOP_SPONSORS_FIXTURE, label: 'Max TopSponsors (exactly 3)' }
+    { data: MAX_TOP_SPONSORS_FIXTURE, label: 'Max TopSponsors (exactly 3)' },
   ];
 
   printSection('Validating valid fixtures...');
@@ -765,7 +851,7 @@ function main() {
       totalPassed++;
     } else {
       printFailure(`${result.label} - ${result.errors.length} error(s)`);
-      result.errors.forEach(e => {
+      result.errors.forEach((e) => {
         printDetail(`${e.path}: ${e.message}`);
       });
       totalErrors++;
@@ -778,14 +864,42 @@ function main() {
   printHeader('3. Negative Path Validation (Invalid Fixtures)');
 
   const invalidFixtures = [
-    { data: INVALID_MISSING_SUMMARY, label: 'Missing summary (should fail)', expectedError: 'summary' },
-    { data: INVALID_MISSING_SURFACES, label: 'Missing surfaces (should fail)', expectedError: 'surfaces' },
-    { data: INVALID_MISSING_TIMESTAMP, label: 'Missing lastUpdatedISO (should fail)', expectedError: 'lastUpdatedISO' },
+    {
+      data: INVALID_MISSING_SUMMARY,
+      label: 'Missing summary (should fail)',
+      expectedError: 'summary',
+    },
+    {
+      data: INVALID_MISSING_SURFACES,
+      label: 'Missing surfaces (should fail)',
+      expectedError: 'surfaces',
+    },
+    {
+      data: INVALID_MISSING_TIMESTAMP,
+      label: 'Missing lastUpdatedISO (should fail)',
+      expectedError: 'lastUpdatedISO',
+    },
     { data: INVALID_SURFACE_ID, label: 'Invalid surface id (should fail)', expectedError: 'enum' },
-    { data: INVALID_TOO_MANY_TOP_SPONSORS, label: 'Too many topSponsors (should fail)', expectedError: 'maxItems' },
-    { data: INVALID_NEGATIVE_METRICS, label: 'Negative metrics (should fail)', expectedError: 'minimum' },
-    { data: INVALID_TIMESTAMP_TYPE, label: 'Wrong timestamp type (should fail)', expectedError: 'type' },
-    { data: INVALID_SPONSOR_EMPTY_ID, label: 'Empty sponsor id (should fail)', expectedError: 'minLength' }
+    {
+      data: INVALID_TOO_MANY_TOP_SPONSORS,
+      label: 'Too many topSponsors (should fail)',
+      expectedError: 'maxItems',
+    },
+    {
+      data: INVALID_NEGATIVE_METRICS,
+      label: 'Negative metrics (should fail)',
+      expectedError: 'minimum',
+    },
+    {
+      data: INVALID_TIMESTAMP_TYPE,
+      label: 'Wrong timestamp type (should fail)',
+      expectedError: 'type',
+    },
+    {
+      data: INVALID_SPONSOR_EMPTY_ID,
+      label: 'Empty sponsor id (should fail)',
+      expectedError: 'minLength',
+    },
   ];
 
   printSection('Validating invalid fixtures (expect failures)...');
@@ -794,17 +908,18 @@ function main() {
     const result = validateWithAjv(analyticsSchema, fixture.data, fixture.label);
     if (!result.valid) {
       // Good - invalid fixture correctly rejected
-      const hasExpectedError = result.errors.some(e =>
-        e.path.includes(fixture.expectedError) ||
-        e.keyword === fixture.expectedError ||
-        e.message.includes(fixture.expectedError)
+      const hasExpectedError = result.errors.some(
+        (e) =>
+          e.path.includes(fixture.expectedError) ||
+          e.keyword === fixture.expectedError ||
+          e.message.includes(fixture.expectedError)
       );
       if (hasExpectedError) {
         printSuccess(`${fixture.label} - correctly rejected`);
         totalPassed++;
       } else {
         printWarning(`${fixture.label} - rejected but for unexpected reason`);
-        result.errors.forEach(e => printDetail(`${e.path}: ${e.message}`));
+        result.errors.forEach((e) => printDetail(`${e.path}: ${e.message}`));
         totalWarnings++;
       }
     } else {
@@ -830,7 +945,7 @@ function main() {
     totalPassed += 3;
   } else {
     printFailure(`Aggregation mismatch - ${aggregationIssues.length} issue(s)`);
-    aggregationIssues.forEach(issue => printDetail(issue));
+    aggregationIssues.forEach((issue) => printDetail(issue));
     totalErrors += aggregationIssues.length;
   }
 
@@ -851,7 +966,7 @@ function main() {
     totalPassed += 4;
   } else {
     printFailure(`Graceful degradation issues - ${degradationIssues.length} issue(s)`);
-    degradationIssues.forEach(issue => printDetail(issue));
+    degradationIssues.forEach((issue) => printDetail(issue));
     totalErrors += degradationIssues.length;
   }
 
@@ -866,7 +981,7 @@ function main() {
   const requiredFields = analyticsSchema.required || [];
   const expectedRequired = ['lastUpdatedISO', 'summary', 'surfaces'];
 
-  const missingRequired = expectedRequired.filter(f => !requiredFields.includes(f));
+  const missingRequired = expectedRequired.filter((f) => !requiredFields.includes(f));
   if (missingRequired.length === 0) {
     printSuccess(`Required fields: ${expectedRequired.join(', ')}`);
     totalPassed++;
@@ -877,9 +992,16 @@ function main() {
 
   // Check Summary fields
   const summaryRequired = analyticsSchema.$defs?.Summary?.required || [];
-  const expectedSummary = ['totalImpressions', 'totalClicks', 'totalQrScans', 'totalSignups', 'uniqueEvents', 'uniqueSponsors'];
+  const expectedSummary = [
+    'totalImpressions',
+    'totalClicks',
+    'totalQrScans',
+    'totalSignups',
+    'uniqueEvents',
+    'uniqueSponsors',
+  ];
 
-  const missingSummary = expectedSummary.filter(f => !summaryRequired.includes(f));
+  const missingSummary = expectedSummary.filter((f) => !summaryRequired.includes(f));
   if (missingSummary.length === 0) {
     printSuccess(`Summary fields: ${expectedSummary.join(', ')}`);
     totalPassed++;
@@ -892,7 +1014,7 @@ function main() {
   const surfaceRequired = analyticsSchema.$defs?.SurfaceMetrics?.required || [];
   const expectedSurface = ['id', 'label', 'impressions', 'clicks', 'qrScans'];
 
-  const missingSurface = expectedSurface.filter(f => !surfaceRequired.includes(f));
+  const missingSurface = expectedSurface.filter((f) => !surfaceRequired.includes(f));
   if (missingSurface.length === 0) {
     printSuccess(`SurfaceMetrics fields: ${expectedSurface.join(', ')}`);
     totalPassed++;
@@ -905,7 +1027,7 @@ function main() {
   const sponsorRequired = analyticsSchema.$defs?.SponsorMetrics?.required || [];
   const expectedSponsor = ['id', 'name', 'impressions', 'clicks', 'ctr'];
 
-  const missingSponsor = expectedSponsor.filter(f => !sponsorRequired.includes(f));
+  const missingSponsor = expectedSponsor.filter((f) => !sponsorRequired.includes(f));
   if (missingSponsor.length === 0) {
     printSuccess(`SponsorMetrics fields: ${expectedSponsor.join(', ')}`);
     totalPassed++;
@@ -918,7 +1040,7 @@ function main() {
   const eventRequired = analyticsSchema.$defs?.EventMetrics?.required || [];
   const expectedEvent = ['id', 'name', 'impressions', 'clicks', 'ctr', 'signupsCount'];
 
-  const missingEvent = expectedEvent.filter(f => !eventRequired.includes(f));
+  const missingEvent = expectedEvent.filter((f) => !eventRequired.includes(f));
   if (missingEvent.length === 0) {
     printSuccess(`EventMetrics fields: ${expectedEvent.join(', ')}`);
     totalPassed++;
@@ -957,7 +1079,9 @@ function main() {
     if (totalWarnings > 0) {
       console.log(`${colors.yellow}  (${totalWarnings} warning(s) - non-blocking)${colors.reset}`);
     }
-    console.log(`\n${colors.dim}SharedAnalytics schema is locked and consistent across:${colors.reset}`);
+    console.log(
+      `\n${colors.dim}SharedAnalytics schema is locked and consistent across:${colors.reset}`
+    );
     console.log(`${colors.dim}  - /schemas/shared-analytics.schema.json${colors.reset}`);
     console.log(`${colors.dim}  - src/mvp/AnalyticsService.gs${colors.reset}`);
     console.log(`${colors.dim}  - src/mvp/SharedReporting.gs${colors.reset}\n`);
@@ -968,7 +1092,9 @@ function main() {
       console.log(`${colors.yellow}  (${totalWarnings} warning(s))${colors.reset}`);
     }
     console.log(`\n${colors.dim}Fix the issues above to ensure schema consistency.${colors.reset}`);
-    console.log(`${colors.dim}See /schemas/shared-analytics.schema.json for the canonical definition.${colors.reset}\n`);
+    console.log(
+      `${colors.dim}See /schemas/shared-analytics.schema.json for the canonical definition.${colors.reset}\n`
+    );
     process.exit(1);
   }
 }
@@ -990,5 +1116,5 @@ module.exports = {
   validateWithAjv,
   simulateAnalyticsService,
   compareAggregations,
-  testGracefulDegradation
+  testGracefulDegradation,
 };

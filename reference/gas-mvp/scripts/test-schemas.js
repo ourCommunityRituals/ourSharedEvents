@@ -44,15 +44,15 @@ const SAMPLE_EVENT = {
     displayUrl: 'https://example.com/display',
     posterUrl: 'https://example.com/poster',
     signupUrl: 'https://example.com/signup',
-    sharedReportUrl: null
+    sharedReportUrl: null,
   },
   qr: {
     public: 'data:image/png;base64,iVBORw0...',
-    signup: 'data:image/png;base64,iVBORw0...'
+    signup: 'data:image/png;base64,iVBORw0...',
   },
   ctas: {
     primary: { label: 'Register Now', url: 'https://example.com/signup' },
-    secondary: null
+    secondary: null,
   },
   settings: {
     showSchedule: true,
@@ -65,7 +65,7 @@ const SAMPLE_EVENT = {
     showSponsorBanner: true,
     showSponsorStrip: true,
     showLeagueStrip: true,
-    showQRSection: true
+    showQRSection: true,
   },
   schedule: null,
   standings: null,
@@ -76,7 +76,7 @@ const SAMPLE_EVENT = {
   analytics: null,
   payments: null,
   createdAtISO: '2024-01-15T10:30:00.000Z',
-  updatedAtISO: '2024-01-15T10:30:00.000Z'
+  updatedAtISO: '2024-01-15T10:30:00.000Z',
 };
 
 const SAMPLE_SPONSOR = {
@@ -84,7 +84,7 @@ const SAMPLE_SPONSOR = {
   name: 'Acme Corp',
   logoUrl: 'https://example.com/logo.png',
   linkUrl: 'https://acmecorp.com',
-  placement: 'poster'
+  placement: 'poster',
 };
 
 const SAMPLE_FORM_CONFIG = {
@@ -92,7 +92,7 @@ const SAMPLE_FORM_CONFIG = {
   signupUrl: 'https://docs.google.com/forms/d/e/1FAIpQLSc.../viewform',
   shortLink: 'https://bit.ly/event-signup',
   qrB64: 'data:image/png;base64,iVBORw0...',
-  totalResponses: 42
+  totalResponses: 42,
 };
 
 const SAMPLE_SHARED_ANALYTICS = {
@@ -103,23 +103,54 @@ const SAMPLE_SHARED_ANALYTICS = {
     totalQrScans: 34,
     totalSignups: 28,
     uniqueEvents: 5,
-    uniqueSponsors: 3
+    uniqueSponsors: 3,
   },
   surfaces: [
-    { id: 'public', label: 'Public Page', impressions: 500, clicks: 35, qrScans: 12, engagementRate: 9.4 },
-    { id: 'display', label: 'Display', impressions: 400, clicks: 28, qrScans: 8, engagementRate: 9.0 },
-    { id: 'poster', label: 'Poster', impressions: 200, clicks: 15, qrScans: 10, engagementRate: 12.5 },
-    { id: 'signup', label: 'Sign Up', impressions: 150, clicks: 9, qrScans: 4, engagementRate: 8.7 }
+    {
+      id: 'public',
+      label: 'Public Page',
+      impressions: 500,
+      clicks: 35,
+      qrScans: 12,
+      engagementRate: 9.4,
+    },
+    {
+      id: 'display',
+      label: 'Display',
+      impressions: 400,
+      clicks: 28,
+      qrScans: 8,
+      engagementRate: 9.0,
+    },
+    {
+      id: 'poster',
+      label: 'Poster',
+      impressions: 200,
+      clicks: 15,
+      qrScans: 10,
+      engagementRate: 12.5,
+    },
+    {
+      id: 'signup',
+      label: 'Sign Up',
+      impressions: 150,
+      clicks: 9,
+      qrScans: 4,
+      engagementRate: 8.7,
+    },
   ],
-  sponsors: [
-    { id: 'sp_1', name: 'Acme Corp', impressions: 800, clicks: 45, ctr: 5.6 }
-  ],
+  sponsors: [{ id: 'sp_1', name: 'Acme Corp', impressions: 800, clicks: 45, ctr: 5.6 }],
   events: [
-    { id: 'evt_1', name: 'Summer Tournament', impressions: 600, clicks: 40, ctr: 6.7, signupsCount: 15 }
+    {
+      id: 'evt_1',
+      name: 'Summer Tournament',
+      impressions: 600,
+      clicks: 40,
+      ctr: 6.7,
+      signupsCount: 15,
+    },
   ],
-  topSponsors: [
-    { id: 'sp_1', name: 'Acme Corp', impressions: 800, clicks: 45, ctr: 5.6 }
-  ]
+  topSponsors: [{ id: 'sp_1', name: 'Acme Corp', impressions: 800, clicks: 45, ctr: 5.6 }],
 };
 
 // ============================================================================
@@ -209,7 +240,7 @@ function main() {
     'event.schema.json',
     'sponsor.schema.json',
     'form-config.schema.json',
-    'shared-analytics.schema.json'
+    'shared-analytics.schema.json',
   ];
 
   console.log('1. Checking schema files exist...');
@@ -321,7 +352,11 @@ function main() {
   if (sharedAnalyticsSchema) {
     const schemaKeys = getSchemaKeys(sharedAnalyticsSchema);
     const sampleKeys = getSampleKeys(SAMPLE_SHARED_ANALYTICS);
-    const { missingInSample, extraInSample } = compareKeys(schemaKeys, sampleKeys, 'sharedAnalytics');
+    const { missingInSample, extraInSample } = compareKeys(
+      schemaKeys,
+      sampleKeys,
+      'sharedAnalytics'
+    );
 
     if (missingInSample.length === 0 && extraInSample.length === 0) {
       console.log('   ✓ SharedAnalytics: All fields match');
