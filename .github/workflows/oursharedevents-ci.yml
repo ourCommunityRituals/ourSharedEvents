@@ -464,9 +464,18 @@ jobs:
         run: |
           HASH="$(node --version)-$(git hash-object package-lock.json)"
           STAMP=node_modules/.install-stamp
-          if [ '${{ inputs.force_clean }}' != 'true' ] && [ -f "$STAMP" ] && [ "$(cat $STAMP)" = "$HASH" ] && [ -f "node_modules/.package-lock.json" ]; then
+          # OSE-904: the "Pre-install: clear locked workerd" guard (OSE-900)
+          # deletes/quarantines @cloudflare/workerd-windows-64 on EVERY run to
+          # beat the image-section lock. The install-stamp alone does not know
+          # workerd was cleared, so a lockfile-unchanged PR would skip npm ci and
+          # leave workerd absent -> vitest dies at startup ("workerd-windows-64
+          # could not be found"). Gate the skip on the workerd binary actually
+          # being present so the clear/restore cycle self-heals every run.
+          WORKERD=node_modules/@cloudflare/workerd-windows-64/bin/workerd.exe
+          if [ '${{ inputs.force_clean }}' != 'true' ] && [ -f "$STAMP" ] && [ "$(cat $STAMP)" = "$HASH" ] && [ -f "node_modules/.package-lock.json" ] && [ -f "$WORKERD" ]; then
             echo "worker node_modules up-to-date, skipping npm ci"
           else
+            [ -f "$WORKERD" ] || echo "workerd binary absent (cleared by the pre-install lock guard or a partial install) — forcing npm ci"
             npm ci --prefer-offline || npm ci
             echo "$HASH" > "$STAMP"
           fi
