@@ -128,10 +128,18 @@ function collectYmlFiles(dir: string): Record<string, string> {
 const wranglerTomlPath = join(rootDir, 'wrangler.toml');
 const wranglerToml = readFileSync(wranglerTomlPath, 'utf8');
 
-// TL-016: .gitleaks.toml included so gitleaks-ci-gate.spec.ts can assert
-// allowlists and useDefault are correctly configured (prevents silent removal).
-const gitleaksTomlPath = join(repoRoot, '.gitleaks.toml');
-const gitleaksToml = existsSync(gitleaksTomlPath) ? readFileSync(gitleaksTomlPath, 'utf8') : '';
+// TL-016 (OSE-911): the committed-secret gate is detect-secrets, driven by
+// scripts/check-secrets-baseline.py against the committed .secrets.baseline.
+// Both are included so gitleaks-ci-gate.spec.ts can assert the gate is wired,
+// enforcing, and version-pinned (prevents silent removal).
+const secretGateScriptPath = join(repoRoot, 'scripts', 'check-secrets-baseline.py');
+const secretGateScript = existsSync(secretGateScriptPath)
+  ? readFileSync(secretGateScriptPath, 'utf8')
+  : '';
+const secretsBaselinePath = join(repoRoot, '.secrets.baseline');
+const secretsBaseline = existsSync(secretsBaselinePath)
+  ? readFileSync(secretsBaselinePath, 'utf8')
+  : '';
 
 const sourceFiles = {
   ...collectTsFiles(srcDir),
@@ -146,9 +154,10 @@ const sourceFiles = {
   // TL-017/TL-019: wrangler.toml included so born-red harness can scan for
   // hardcoded secrets and CF_API_KEY usage without a separate binding.
   [wranglerTomlPath]: wranglerToml,
-  // TL-016: .gitleaks.toml included so the gitleaks CI gate test can assert
-  // allowlist configuration is correct.
-  ...(gitleaksToml ? { [gitleaksTomlPath]: gitleaksToml } : {}),
+  // TL-016 (OSE-911): the detect-secrets gate script + committed baseline so the
+  // secret-gate test can assert the gate is wired, enforcing, and version-pinned.
+  ...(secretGateScript ? { [secretGateScriptPath]: secretGateScript } : {}),
+  ...(secretsBaseline ? { [secretsBaselinePath]: secretsBaseline } : {}),
 };
 
 // ── Load brain UEC artifact for OSE-323 drift check ─────────────────────────

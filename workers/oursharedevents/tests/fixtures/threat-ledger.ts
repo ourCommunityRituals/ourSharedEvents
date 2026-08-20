@@ -377,13 +377,13 @@ const PIPELINE: ThreatEntry[] = [
     severity: 'CRITICAL',
     target_invariant: null,
     mitigation_story: null,
-    test_ref: 'tests/gitleaks-ci-gate.spec.ts — TL-016 describe block (8 tests)',
+    test_ref: 'tests/gitleaks-ci-gate.spec.ts — TL-016 describe block (7 tests)',
     status: 'tested',
     red_birth: {
       date: '2026-08-06',
       method: 'design-time-negative-assertion',
       notes:
-        'Gitleaks IS wired in oursharedevents-ci.yml S0 Security job. Gate test added to prevent silent removal.',
+        'Committed-secret gate wired in oursharedevents-ci.yml S0 + S2. OSE-911: gate moved gitleaks → detect-secrets (scripts/check-secrets-baseline.py + .secrets.baseline; gitleaks wazero JIT flaked on Windows). Threat unchanged; test retargeted to the enforcing detect-secrets gate to prevent silent removal.',
     },
     last_run_green: null,
     notes:

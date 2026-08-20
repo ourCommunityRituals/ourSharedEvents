@@ -1,29 +1,33 @@
 /**
- * TL-016 — Gitleaks CI integration gate
+ * TL-016 — Committed-secret CI gate (prevent silent removal)
  *
  * Threat: "Secrets committed to tree: credential-shaped string committed
- * to any branch"
+ * to any branch" (historical basis: ADMIN_KEY committed during early dev).
  *
- * Historical basis: ADMIN_KEY was accidentally committed during early dev.
+ * This test locks the committed-secret scanner into the CI pipeline so the
+ * ADMIN_KEY class of incident cannot slip through if the gate is silently
+ * removed or downgraded to advisory.
  *
- * This test verifies that gitleaks is and remains wired into the CI
- * pipeline — preventing the ADMIN_KEY class of incident from slipping
- * through silently if the CI step is accidentally removed or disabled.
+ * MECHANISM CHANGE (OSE-911): the gate was gitleaks, whose go-re2/wazero WASM
+ * JIT panicked nondeterministically on the self-hosted Windows runners. It is
+ * now `detect-secrets` (pure Python, no WASM JIT — stable there), promoted to an
+ * ENFORCING baseline gate via `scripts/check-secrets-baseline.py` +
+ * `.secrets.baseline`. The threat and this test's intent are unchanged; only the
+ * tool moved. (Filename kept to avoid threat-ledger / registry churn.)
  *
- * Source gate: reads the CI workflow yaml from TEST_SOURCE_FILES_JSON and
- * asserts structural properties of the gitleaks step.
+ * Source gate: reads the CI workflow yaml, the gate script, and the committed
+ * baseline from TEST_SOURCE_FILES_JSON and asserts structural properties.
  *
  * @born-red TL-016 | method: design-time-negative-assertion | date: 2026-08-06
  *
  * Properties asserted:
- *   1. CI workflow contains the 'gitleaks' step name
- *   2. gitleaks is run with --exit-code 1 (blocking, not advisory)
- *   3. gitleaks uses --config .gitleaks.toml (custom allowlist applied)
- *   4. gitleaks scans PR commits only (--log-opts pattern, not --no-git)
- *   5. .gitleaks.toml has useDefault = true (all built-in rules active)
- *   6. .gitleaks.toml allowlists test fixtures (prevents false-positive noise)
- *   7. .gitleaks.toml allowlist covers vitest config (test key patterns)
- *   8. .gitleaks.toml allowlist covers spec files (test assertion literals)
+ *   1. CI workflow invokes the gate script (scripts/check-secrets-baseline.py)
+ *   2. the gate runs in BOTH S0 (pre-exec) and S2 (post-exec) — ≥2 invocations
+ *   3. detect-secrets is version-pinned (baseline can't be silently reclassified)
+ *   4. the committed .secrets.baseline exists and is valid (accepted-detection set)
+ *   5. the gate script is ENFORCING — fails (exit non-zero) on a NEW secret
+ *   6. the gate keys on hashed_secret vs the baseline (blocking, not advisory)
+ *   7. the script allowlists test fixtures (spec files + vitest config + lockfile)
  */
 
 import { env } from 'cloudflare:test';
@@ -37,64 +41,67 @@ function getSourceFile(suffix: string): string | null {
   const sources: Record<string, string> = JSON.parse(
     (env as unknown as TestEnv).TEST_SOURCE_FILES_JSON
   );
-  const entry = Object.entries(sources).find(([p]) =>
-    p.replace(/\\/g, '/').endsWith(suffix)
-  );
+  const entry = Object.entries(sources).find(([p]) => p.replace(/\\/g, '/').endsWith(suffix));
   return entry ? entry[1] : null;
 }
 
-describe('TL-016 | Gitleaks CI gate — prevent silent removal', () => {
-  test('CI workflow contains the gitleaks step', () => {
+function countOccurrences(haystack: string, needle: string): number {
+  return haystack.split(needle).length - 1;
+}
+
+describe('TL-016 | Committed-secret CI gate — prevent silent removal', () => {
+  test('CI workflow invokes the committed-secret gate script', () => {
     const ci = getSourceFile('.github/workflows/oursharedevents-ci.yml');
     expect(ci, 'oursharedevents-ci.yml not found in TEST_SOURCE_FILES_JSON').not.toBeNull();
-    expect(ci).toContain('gitleaks');
+    expect(ci).toContain('scripts/check-secrets-baseline.py');
   });
 
-  test('gitleaks step uses --exit-code 1 (blocking, not advisory)', () => {
-    const ci = getSourceFile('.github/workflows/oursharedevents-ci.yml');
-    expect(ci).not.toBeNull();
-    expect(ci).toContain('--exit-code 1');
+  test('the gate runs in both S0 (pre-exec) and S2 (post-exec)', () => {
+    const ci = getSourceFile('.github/workflows/oursharedevents-ci.yml') ?? '';
+    // At least two invocations — the pre-execution S0 gate and the
+    // post-execution S2 re-scan. Dropping either weakens the coverage.
+    expect(
+      countOccurrences(ci, 'scripts/check-secrets-baseline.py'),
+      'the secret gate must run in both S0 and S2 (≥2 invocations)'
+    ).toBeGreaterThanOrEqual(2);
   });
 
-  test('gitleaks step uses --config .gitleaks.toml (custom allowlist)', () => {
-    const ci = getSourceFile('.github/workflows/oursharedevents-ci.yml');
-    expect(ci).not.toBeNull();
-    expect(ci).toContain('--config .gitleaks.toml');
+  test('detect-secrets is version-pinned (baseline cannot be silently reclassified)', () => {
+    const ci = getSourceFile('.github/workflows/oursharedevents-ci.yml') ?? '';
+    // A pinned version keeps a scanner upgrade from reclassifying the baseline.
+    expect(ci).toMatch(/detect-secrets==\d+\.\d+\.\d+/);
   });
 
-  test('gitleaks scans PR commits range (--log-opts), not full unscoped history', () => {
-    const ci = getSourceFile('.github/workflows/oursharedevents-ci.yml');
-    expect(ci).not.toBeNull();
-    // Must scan PR commits only — not the full repo history (which floods with test fixtures)
-    expect(ci).toContain('--log-opts=');
+  test('the committed .secrets.baseline exists and is a valid baseline', () => {
+    const baseline = getSourceFile('.secrets.baseline');
+    expect(baseline, '.secrets.baseline not found in TEST_SOURCE_FILES_JSON').not.toBeNull();
+    const parsed = JSON.parse(baseline as string);
+    // The baseline is the committed set of accepted detections; the gate fails
+    // only on secrets NOT in here.
+    expect(parsed).toHaveProperty('results');
   });
 
-  test('.gitleaks.toml has useDefault = true (all built-in rules active)', () => {
-    const toml = getSourceFile('.gitleaks.toml');
-    expect(toml, '.gitleaks.toml not found in TEST_SOURCE_FILES_JSON').not.toBeNull();
-    expect(toml).toContain('useDefault = true');
+  test('the gate script is ENFORCING — fails on a NEW secret (blocking, not advisory)', () => {
+    const script = getSourceFile('scripts/check-secrets-baseline.py');
+    expect(script, 'scripts/check-secrets-baseline.py not found').not.toBeNull();
+    // Non-zero exit on a new secret is what makes this a gate rather than a warning.
+    expect(script).toContain('return 1');
+    expect(script).toContain('::error::');
   });
 
-  test('.gitleaks.toml allowlists test fixture paths (prevents false-positive noise)', () => {
-    const toml = getSourceFile('.gitleaks.toml');
-    expect(toml).not.toBeNull();
-    // Must allowlist vitest config (contains test-only key bindings)
-    expect(toml).toContain('vitest');
-    // Must allowlist spec files — allowlist path covers workers/oursharedevents/tests/
-    expect(toml).toContain('workers/oursharedevents/tests');
+  test('the gate keys on hashed_secret vs the baseline (immune to line churn)', () => {
+    const script = getSourceFile('scripts/check-secrets-baseline.py') ?? '';
+    // A NEW secret = a (file, hashed_secret) pair not in the baseline.
+    expect(script).toContain('hashed_secret');
+    expect(script).toMatch(/pairs\([^)]*current[^)]*\)\s*-\s*pairs\([^)]*base/);
   });
 
-  test('.gitleaks.toml allowlists CI seed value patterns (predictable test credentials)', () => {
-    const toml = getSourceFile('.gitleaks.toml');
-    expect(toml).not.toBeNull();
-    // CI seed patterns are predictable by design — not real secrets
-    expect(toml).toContain('test-admin-key-e2e');
-    expect(toml).toContain('test-forms-encryption-secret');
-  });
-
-  test('.gitleaks.toml allowlists package-lock.json (checksums, not secrets)', () => {
-    const toml = getSourceFile('.gitleaks.toml');
-    expect(toml).not.toBeNull();
-    expect(toml).toContain('package-lock');
+  test('the gate allowlists test fixtures (spec files, vitest config, lockfile)', () => {
+    const script = getSourceFile('scripts/check-secrets-baseline.py') ?? '';
+    // Predictable test credentials must not create false-positive noise —
+    // the EXCLUDES cover spec files, vitest config, and the lockfile.
+    expect(script).toContain('spec');
+    expect(script).toContain('vitest');
+    expect(script).toContain('package-lock');
   });
 });

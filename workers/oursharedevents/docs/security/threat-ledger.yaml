@@ -181,10 +181,10 @@ pipeline:
     threat: "Secrets committed to tree: credential-shaped string committed to any branch"
     severity: CRITICAL
     target_invariant: null
-    test_ref: "tests/gitleaks-ci-gate.spec.ts — TL-016 describe block (8 tests)"
+    test_ref: "tests/gitleaks-ci-gate.spec.ts — TL-016 describe block (7 tests)"
     status: tested
     red_birth: { date: "2026-08-06", method: design-time-negative-assertion }
-    notes: "Gitleaks IS wired in oursharedevents-ci.yml S0 Security job (lines 248-271) with --exit-code 1 and --config .gitleaks.toml. Ledger was stale. Gate test added 2026-08-06 to prevent silent removal. .gitleaks.toml has useDefault=true + allowlists for test fixtures and CI seed values."
+    notes: "Committed-secret gate wired in oursharedevents-ci.yml S0 + S2. OSE-911 (2026-08-19): gate moved gitleaks -> detect-secrets (scripts/check-secrets-baseline.py + committed .secrets.baseline; gitleaks go-re2/wazero JIT flaked nondeterministically on the self-hosted Windows runners). Enforcing (fails on a NEW secret not in the baseline), version-pinned. Threat unchanged; TL-016 test retargeted to the detect-secrets gate to prevent silent removal."
 
 # ── Layer 5: Secrets layer ────────────────────────────────────────────────────
 secrets_layer:
@@ -487,4 +487,4 @@ event_manager_audit:
 #     TL-018 [HIGH]     secrets_layer    — key rotation age alert (11 tests)
 #     TL-008 [HIGH]     worker_surface   — signed-link token forgery guard (15 tests)
 #     TL-013 [HIGH]     permission_layer — rate limit bypass documented (7 tests); bypass via IP rotation documented as @known-bypass pending SR-23
-#     TL-016 [CRITICAL] pipeline         — gitleaks CI gate enforcement (8 tests)
+#     TL-016 [CRITICAL] pipeline         — committed-secret CI gate enforcement (detect-secrets, 7 tests)
