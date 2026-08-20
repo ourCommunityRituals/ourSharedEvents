@@ -41,7 +41,14 @@
     "Summary": {
       "type": "object",
       "description": "MVP REQUIRED - Aggregate metrics across all dimensions",
-      "required": ["totalImpressions", "totalClicks", "totalQrScans", "totalSignups", "uniqueEvents", "uniqueSponsors"],
+      "required": [
+        "totalImpressions",
+        "totalClicks",
+        "totalQrScans",
+        "totalSignups",
+        "uniqueEvents",
+        "uniqueSponsors"
+      ],
       "additionalProperties": false,
       "properties": {
         "totalImpressions": {
@@ -158,8 +165,15 @@
             "type": "object",
             "required": ["surface", "count"],
             "properties": {
-              "surface": { "type": "string", "description": "Surface name (poster, display, etc.)" },
-              "count": { "type": "integer", "minimum": 0, "description": "Number of placements on this surface" }
+              "surface": {
+                "type": "string",
+                "description": "Surface name (poster, display, etc.)"
+              },
+              "count": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Number of placements on this surface"
+              }
             }
           }
         }
@@ -224,7 +238,10 @@
           "description": "QR code metrics for the event",
           "properties": {
             "scans": { "type": "integer", "minimum": 0, "description": "Total QR code scans" },
-            "verifiedOnly": { "type": "boolean", "description": "Whether only verified scans are counted" }
+            "verifiedOnly": {
+              "type": "boolean",
+              "description": "Whether only verified scans are counted"
+            }
           }
         }
       }

@@ -45,6 +45,8 @@ module.exports = [
       'tests/load/**',
       // Archive folder - legacy V2 code not in active use
       'archive/**',
+      // Retired GAS/zeventbook MVP reference — kept as history, not linted (OSE-882)
+      'reference/**',
       // Claude worktrees — isolated git branches, not part of active codebase
       '.claude/**',
       // Generated files

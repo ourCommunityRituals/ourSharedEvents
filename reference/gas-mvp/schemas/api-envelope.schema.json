@@ -86,7 +86,15 @@
     },
     "ErrorCode": {
       "type": "string",
-      "enum": ["BAD_INPUT", "NOT_FOUND", "RATE_LIMITED", "INTERNAL", "CONTRACT", "FEATURE_DISABLED", "UNAUTHORIZED"],
+      "enum": [
+        "BAD_INPUT",
+        "NOT_FOUND",
+        "RATE_LIMITED",
+        "INTERNAL",
+        "CONTRACT",
+        "FEATURE_DISABLED",
+        "UNAUTHORIZED"
+      ],
       "description": "Standardized error codes matching Code.gs ERROR_CODES"
     }
   },

@@ -44,38 +44,38 @@ const API_SCHEMAS_GS = path.join(ROOT, 'src', 'mvp', 'ApiSchemas.gs');
 
 const EXPLICIT_MAPPING = {
   // Events API
-  'api_list': 'events.list',
-  'api_get': 'events.get',
-  'api_getEventsSafe': 'events.getEventsSafe',
-  'api_saveEvent': 'events.saveEvent',
+  api_list: 'events.list',
+  api_get: 'events.get',
+  api_getEventsSafe: 'events.getEventsSafe',
+  api_saveEvent: 'events.saveEvent',
 
   // Bundle APIs (surface-optimized payloads)
-  'api_getPublicBundle': 'bundles.public',
-  'api_getDisplayBundle': 'bundles.display',
-  'api_getPosterBundle': 'bundles.poster',
+  api_getPublicBundle: 'bundles.public',
+  api_getDisplayBundle: 'bundles.display',
+  api_getPosterBundle: 'bundles.poster',
 
   // Template APIs
-  'api_getEventTemplates': 'templates.getEventTemplates',
+  api_getEventTemplates: 'templates.getEventTemplates',
 
   // Analytics APIs
-  'api_logExternalClick': 'analytics.logExternalClick',
-  'api_getSharedAnalytics': 'analytics.getSharedReport',  // Surface name differs from schema
-  'api_exportSharedReport': 'analytics.exportReport',     // Surface name differs from schema
-  'api_getSponsorReportQr': 'analytics.getSponsorReportQr',
-  'api_logEvents': 'analytics.logEvents',
-  'api_getReport': 'analytics.getReport',
+  api_logExternalClick: 'analytics.logExternalClick',
+  api_getSharedAnalytics: 'analytics.getSharedReport', // Surface name differs from schema
+  api_exportSharedReport: 'analytics.exportReport', // Surface name differs from schema
+  api_getSponsorReportQr: 'analytics.getSponsorReportQr',
+  api_logEvents: 'analytics.logEvents',
+  api_getReport: 'analytics.getReport',
 
   // Sponsor APIs
-  'api_getSponsorAnalytics': 'analytics.getSponsorAnalytics',  // In analytics category, not sponsors
-  'api_getSponsorROI': 'sponsors.getROI',
+  api_getSponsorAnalytics: 'analytics.getSponsorAnalytics', // In analytics category, not sponsors
+  api_getSponsorROI: 'sponsors.getROI',
 
   // Form APIs
-  'api_listFormTemplates': 'forms.listTemplates',
-  'api_createFormFromTemplate': 'forms.createFromTemplate',
-  'api_generateFormShortlink': 'forms.generateShortlink',
+  api_listFormTemplates: 'forms.listTemplates',
+  api_createFormFromTemplate: 'forms.createFromTemplate',
+  api_generateFormShortlink: 'forms.generateShortlink',
 
   // Auth APIs
-  'api_generateToken': 'auth.generateToken'
+  api_generateToken: 'auth.generateToken',
 };
 
 // ============================================================================
@@ -91,43 +91,43 @@ const EXPLICIT_MAPPING = {
 const WHITELIST = {
   // === SYSTEM/DIAGNOSTICS ENDPOINTS ===
   // These return system status, not business data. No contract needed.
-  'api_status': 'System status endpoint - returns health/config data',
-  'api_statusPure': 'Pure function version of api_status for testing',
-  'api_statusMvp': 'MVP status endpoint - returns MVP-specific health data',
-  'api_health': 'Story 5: CI/CD health check - validates GAS connectivity and events index',
-  'api_whoami': 'Story 4: Deployment/account info for CI comparison with Worker /env-status',
-  'api_setupCheck': 'Admin setup verification - internal use only',
-  'api_checkPermissions': 'Permission check endpoint - internal diagnostics',
-  'api_healthCheck': 'Health check endpoint for monitoring',
-  'api_getConfig': 'Config getter - returns runtime configuration',
-  'api_runDiagnostics': 'Diagnostic runner - dev/admin tool',
+  api_status: 'System status endpoint - returns health/config data',
+  api_statusPure: 'Pure function version of api_status for testing',
+  api_statusMvp: 'MVP status endpoint - returns MVP-specific health data',
+  api_health: 'Story 5: CI/CD health check - validates GAS connectivity and events index',
+  api_whoami: 'Story 4: Deployment/account info for CI comparison with Worker /env-status',
+  api_setupCheck: 'Admin setup verification - internal use only',
+  api_checkPermissions: 'Permission check endpoint - internal diagnostics',
+  api_healthCheck: 'Health check endpoint for monitoring',
+  api_getConfig: 'Config getter - returns runtime configuration',
+  api_runDiagnostics: 'Diagnostic runner - dev/admin tool',
 
   // === LEGACY/ORPHANED ENDPOINTS ===
   // These are superseded by api_saveEvent but kept for backward compatibility.
   // See ZEVENT-003: api_saveEvent is the canonical write endpoint.
-  'api_create': 'ORPHANED: Superseded by api_saveEvent (ZEVENT-003)',
-  'api_updateEventData': 'ORPHANED: Superseded by api_saveEvent (ZEVENT-003)',
+  api_create: 'ORPHANED: Superseded by api_saveEvent (ZEVENT-003)',
+  api_updateEventData: 'ORPHANED: Superseded by api_saveEvent (ZEVENT-003)',
 
   // === V2/FEATURE-GATED ENDPOINTS ===
   // These bundles exist but are not yet canonicalized with full schemas.
   // They extend the base bundle pattern and will be schema'd in V2.
-  'api_getAdminBundle': 'V2: Admin bundle - extends base bundle pattern',
-  'api_getSponsorBundle': 'V2: Sponsor bundle - extends base bundle pattern',
-  'api_getSharedReportBundle': 'V2: SharedReport bundle - extends base bundle pattern',
+  api_getAdminBundle: 'V2: Admin bundle - extends base bundle pattern',
+  api_getSponsorBundle: 'V2: Sponsor bundle - extends base bundle pattern',
+  api_getSharedReportBundle: 'V2: SharedReport bundle - extends base bundle pattern',
 
   // === SPECIALIZED ENDPOINTS ===
   // These have specialized behavior not captured by standard schemas.
-  'api_trackEventMetric': 'Analytics tracking - fire-and-forget, no response contract',
-  'api_createShortlink': 'URL shortener - simple utility endpoint',
-  'api_exportReport': 'Report export - returns file data, not JSON',
-  'api_getSponsorSettings': 'Sponsor settings getter - internal admin use',
-  'api_validateSponsorPlacements': 'Sponsor validation - admin utility',
+  api_trackEventMetric: 'Analytics tracking - fire-and-forget, no response contract',
+  api_createShortlink: 'URL shortener - simple utility endpoint',
+  api_exportReport: 'Report export - returns file data, not JSON',
+  api_getSponsorSettings: 'Sponsor settings getter - internal admin use',
+  api_validateSponsorPlacements: 'Sponsor validation - admin utility',
 
   // === PORTFOLIO ENDPOINTS (V2 FEATURE) ===
   // SponsorPortfolioV2 is a feature-gated module not yet schema'd.
-  'api_getPortfolioSponsorReport': 'V2: Portfolio feature - not yet schema\'d',
-  'api_getPortfolioSummary': 'V2: Portfolio feature - not yet schema\'d',
-  'api_getPortfolioSponsors': 'V2: Portfolio feature - not yet schema\'d'
+  api_getPortfolioSponsorReport: "V2: Portfolio feature - not yet schema'd",
+  api_getPortfolioSummary: "V2: Portfolio feature - not yet schema'd",
+  api_getPortfolioSponsors: "V2: Portfolio feature - not yet schema'd",
 };
 
 // ============================================================================
@@ -213,19 +213,16 @@ function extractSchemasFromApiSchemasGs() {
     // i18n
     'i18n.translate',
     'i18n.getSupportedLocales',
-    'i18n.setUserLocale'
+    'i18n.setUserLocale',
   ];
 
   // Verify each expected schema exists in the file
-  expectedSchemas.forEach(schemaPath => {
+  expectedSchemas.forEach((schemaPath) => {
     const [category, operation] = schemaPath.split('.');
 
     // Build pattern to check: categoryName: { ... operationName: { ... request:
     // We check for operation name followed by request/response to confirm it's an API schema
-    const operationPattern = new RegExp(
-      `${operation}:\\s*\\{[^}]*(?:request:|response:)`,
-      's'
-    );
+    const operationPattern = new RegExp(`${operation}:\\s*\\{[^}]*(?:request:|response:)`, 's');
 
     if (operationPattern.test(content)) {
       schemas.push(schemaPath);
@@ -287,7 +284,7 @@ function checkApisVsSchemas(verbose = false) {
 
   if (verbose) {
     console.log('\nSchema paths found:');
-    schemas.forEach(s => console.log(`  - ${s}`));
+    schemas.forEach((s) => console.log(`  - ${s}`));
     console.log('');
   }
 
@@ -296,7 +293,7 @@ function checkApisVsSchemas(verbose = false) {
   const whitelisted = [];
   const missing = [];
 
-  apis.forEach(api => {
+  apis.forEach((api) => {
     // First check explicit mapping
     if (EXPLICIT_MAPPING[api]) {
       const schemaPath = EXPLICIT_MAPPING[api];
@@ -346,7 +343,9 @@ function main() {
     if (!fs.existsSync(API_SCHEMAS_GS)) {
       console.log('   - ApiSchemas.gs: archived');
     }
-    console.log('ℹ️  Skipping API vs Schema check - JSON schemas in /schemas/ are the source of truth');
+    console.log(
+      'ℹ️  Skipping API vs Schema check - JSON schemas in /schemas/ are the source of truth'
+    );
     console.log('ℹ️  See docs/GAS-TO-CLOUDFLARE-MIGRATION.md for architecture details\n');
     console.log('SUCCESS: GAS check skipped (migrated to Cloudflare Workers)');
     process.exit(0);
@@ -368,7 +367,7 @@ function main() {
 
   console.log(`\nWhitelisted APIs (intentionally no schema): ${whitelisted.length}`);
   if (verbose || whitelisted.length > 0) {
-    whitelisted.forEach(api => {
+    whitelisted.forEach((api) => {
       console.log(`  ${api}: ${WHITELIST[api]}`);
     });
   }
@@ -387,7 +386,7 @@ function main() {
     console.log('='.repeat(60));
 
     console.log(`\nMissing schemas for ${missing.length} API(s):\n`);
-    missing.forEach(api => {
+    missing.forEach((api) => {
       console.log(`  ${api}`);
     });
 

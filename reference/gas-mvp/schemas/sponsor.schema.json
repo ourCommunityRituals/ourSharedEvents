@@ -76,10 +76,7 @@
       "description": "Optional sponsorship tier for display priority"
     }
   },
-  "anyOf": [
-    { "required": ["placement"] },
-    { "required": ["placements"] }
-  ],
+  "anyOf": [{ "required": ["placement"] }, { "required": ["placements"] }],
   "$defs": {
     "SponsorContract": {
       "description": "Canonical sponsor contract fields enforced by validateSponsorContract",

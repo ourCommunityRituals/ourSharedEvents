@@ -5,10 +5,7 @@
   "description": "API response schema for analytics endpoints (getSharedAnalytics, getSponsorAnalytics, getReport). Story 3.1 - API Response Schema Validation.",
   "$comment": "Version 1.0 - Created 2025-12-11. Used by analytics/reporting endpoints.",
   "type": "object",
-  "oneOf": [
-    { "$ref": "#/$defs/SuccessAnalyticsResponse" },
-    { "$ref": "#/$defs/ErrorResponse" }
-  ],
+  "oneOf": [{ "$ref": "#/$defs/SuccessAnalyticsResponse" }, { "$ref": "#/$defs/ErrorResponse" }],
   "$defs": {
     "SuccessAnalyticsResponse": {
       "type": "object",
@@ -106,7 +103,15 @@
         },
         "code": {
           "type": "string",
-          "enum": ["BAD_INPUT", "NOT_FOUND", "RATE_LIMITED", "INTERNAL", "CONTRACT", "FEATURE_DISABLED", "UNAUTHORIZED"]
+          "enum": [
+            "BAD_INPUT",
+            "NOT_FOUND",
+            "RATE_LIMITED",
+            "INTERNAL",
+            "CONTRACT",
+            "FEATURE_DISABLED",
+            "UNAUTHORIZED"
+          ]
         },
         "message": {
           "type": "string",
@@ -133,8 +138,20 @@
           "uniqueSponsors": 3
         },
         "surfaces": [
-          { "id": "public", "label": "Public Page", "impressions": 500, "clicks": 25, "qrScans": 15 },
-          { "id": "display", "label": "TV Display", "impressions": 500, "clicks": 25, "qrScans": 10 }
+          {
+            "id": "public",
+            "label": "Public Page",
+            "impressions": 500,
+            "clicks": 25,
+            "qrScans": 15
+          },
+          {
+            "id": "display",
+            "label": "TV Display",
+            "impressions": 500,
+            "clicks": 25,
+            "qrScans": 10
+          }
         ]
       }
     }

@@ -169,7 +169,7 @@ function runCheck(name, command, options = {}) {
       critical,
       durationMs,
       output: err.stdout ? err.stdout.slice(-2000) : null,
-      error: err.stderr ? err.stderr.slice(-2000) : (err.message || 'Unknown error'),
+      error: err.stderr ? err.stderr.slice(-2000) : err.message || 'Unknown error',
     };
     results.checks.push(result);
     results.summary.failed++;
@@ -211,8 +211,10 @@ function printSummary() {
   }
 
   // Count critical vs non-critical failures
-  const criticalFailed = results.checks.filter(c => c.status === 'failed' && c.critical).length;
-  const nonCriticalFailed = results.checks.filter(c => c.status === 'failed' && !c.critical).length;
+  const criticalFailed = results.checks.filter((c) => c.status === 'failed' && c.critical).length;
+  const nonCriticalFailed = results.checks.filter(
+    (c) => c.status === 'failed' && !c.critical
+  ).length;
   const gatePassed = criticalFailed === 0;
 
   console.log(`
@@ -235,10 +237,13 @@ ${c.bold}Run ID:${c.reset} ${c.dim}${runId}${c.reset}
   // Per-check timing breakdown
   if (verbose) {
     console.log(`${c.bold}Check Breakdown:${c.reset}`);
-    results.checks.forEach(check => {
-      const icon = check.status === 'passed' ? c.green + '✓' :
-                   check.status === 'failed' ? c.red + '✗' :
-                   c.yellow + '⊘';
+    results.checks.forEach((check) => {
+      const icon =
+        check.status === 'passed'
+          ? c.green + '✓'
+          : check.status === 'failed'
+            ? c.red + '✗'
+            : c.yellow + '⊘';
       console.log(`  ${icon}${c.reset} ${check.name}: ${formatDuration(check.durationMs)}`);
     });
     console.log('');
@@ -246,45 +251,57 @@ ${c.bold}Run ID:${c.reset} ${c.dim}${runId}${c.reset}
 
   // Final verdict
   if (gatePassed && nonCriticalFailed === 0) {
-    console.log(`${c.bgGreen}${c.white}${c.bold}                    ✓ GATE PASSED                              ${c.reset}`);
+    console.log(
+      `${c.bgGreen}${c.white}${c.bold}                    ✓ GATE PASSED                              ${c.reset}`
+    );
     console.log(`\n${c.green}All checks passed. Ready to commit/push.${c.reset}\n`);
   } else if (gatePassed) {
-    console.log(`${c.bgGreen}${c.white}${c.bold}                    ✓ GATE PASSED                              ${c.reset}`);
+    console.log(
+      `${c.bgGreen}${c.white}${c.bold}                    ✓ GATE PASSED                              ${c.reset}`
+    );
     console.log(`\n${c.green}All critical checks passed.${c.reset}`);
-    console.log(`${c.yellow}${nonCriticalFailed} non-critical check(s) failed (warnings only).${c.reset}`);
+    console.log(
+      `${c.yellow}${nonCriticalFailed} non-critical check(s) failed (warnings only).${c.reset}`
+    );
 
     // List non-critical failures
-    const nonCritical = results.checks.filter(c => c.status === 'failed' && !c.critical);
+    const nonCritical = results.checks.filter((c) => c.status === 'failed' && !c.critical);
     if (nonCritical.length > 0) {
       console.log(`\n${c.bold}Non-Critical Warnings:${c.reset}`);
-      nonCritical.forEach(check => {
+      nonCritical.forEach((check) => {
         console.log(`  ${c.yellow}•${c.reset} ${check.name}`);
       });
     }
     console.log('');
   } else {
-    console.log(`${c.bgRed}${c.white}${c.bold}                    ✗ GATE FAILED                              ${c.reset}`);
-    console.log(`\n${c.red}${criticalFailed} critical check(s) failed. Fix issues before proceeding.${c.reset}`);
+    console.log(
+      `${c.bgRed}${c.white}${c.bold}                    ✗ GATE FAILED                              ${c.reset}`
+    );
+    console.log(
+      `\n${c.red}${criticalFailed} critical check(s) failed. Fix issues before proceeding.${c.reset}`
+    );
 
     // List critical failures
-    const critical = results.checks.filter(c => c.status === 'failed' && c.critical);
+    const critical = results.checks.filter((c) => c.status === 'failed' && c.critical);
     if (critical.length > 0) {
       console.log(`\n${c.bold}Critical Failures (blocks gate):${c.reset}`);
-      critical.forEach(check => {
+      critical.forEach((check) => {
         console.log(`  ${c.red}•${c.reset} ${check.name}`);
       });
     }
 
     // Also list non-critical if any
-    const nonCritical = results.checks.filter(c => c.status === 'failed' && !c.critical);
+    const nonCritical = results.checks.filter((c) => c.status === 'failed' && !c.critical);
     if (nonCritical.length > 0) {
       console.log(`\n${c.bold}Non-Critical Warnings:${c.reset}`);
-      nonCritical.forEach(check => {
+      nonCritical.forEach((check) => {
         console.log(`  ${c.yellow}•${c.reset} ${check.name}`);
       });
     }
 
-    console.log(`\n${c.dim}Use '${c.white}npm run ci:all -- --verbose${c.dim}' for detailed output${c.reset}\n`);
+    console.log(
+      `\n${c.dim}Use '${c.white}npm run ci:all -- --verbose${c.dim}' for detailed output${c.reset}\n`
+    );
   }
 }
 
@@ -315,24 +332,11 @@ async function main() {
     allCriticalPassed = false;
   }
 
-  // ═══════════════════════════════════════════════════════════════
-  // GATE 3: API vs Schemas (check-apis-vs-schemas.js)
-  // Ensures all api_* functions have corresponding schemas
-  // ═══════════════════════════════════════════════════════════════
-  log(`\n${c.bold}[3/9] API vs Schemas${c.reset}`, c.cyan);
-  if (!runCheck('API vs Schemas', 'node scripts/check-apis-vs-schemas.js', { critical: true })) {
-    allCriticalPassed = false;
-  }
-
-  // ═══════════════════════════════════════════════════════════════
-  // GATE 4: Event Schema (test-event-schema.js)
-  // Validates event schema consistency
-  // Non-critical: Requires Ajv setup - tracked separately
-  // ═══════════════════════════════════════════════════════════════
-  log(`\n${c.bold}[4/9] Event Schema${c.reset}`, c.cyan);
-  if (!runCheck('Event Schema', 'node scripts/test-event-schema.js', { critical: false, skipInFastMode: true })) {
-    // Non-critical - warn but don't fail (requires schema infrastructure)
-  }
+  // GATES 3 & 4 (API-vs-Schemas, Event Schema) RETIRED — OSE-882 (X-17).
+  // They validated the abandoned zeventbook schemas (moved to
+  // reference/gas-mvp/). The contract of record is the D1 table + the ADR-016
+  // envelope, gated by tests/e2e/0-architecture/api-response-schema.invariant.spec.ts.
+  log(`\n${c.dim}[3-4/9] API-vs-Schemas + Event Schema — retired (OSE-882)${c.reset}`, c.cyan);
 
   // ═══════════════════════════════════════════════════════════════
   // GATE 5: Service Tests (test-services.js)
@@ -373,28 +377,15 @@ async function main() {
   // Detects unused api_* functions in Code.gs
   // ═══════════════════════════════════════════════════════════════
   log(`\n${c.bold}[7/9] Dead Exports${c.reset}`, c.cyan);
-  if (!runCheck('Dead Exports', 'node scripts/check-dead-code.js --fail-on-dead', { critical: true })) {
+  if (
+    !runCheck('Dead Exports', 'node scripts/check-dead-code.js --fail-on-dead', { critical: true })
+  ) {
     allCriticalPassed = false;
   }
 
-  // ═══════════════════════════════════════════════════════════════
-  // GATE 8: Schema Fields (check-schema-fields.js)
-  // Validates HTML surfaces only reference schema-defined fields
-  // Non-critical: Pre-existing field drift - tracked separately
-  // ═══════════════════════════════════════════════════════════════
-  log(`\n${c.bold}[8/9] Schema Fields${c.reset}`, c.cyan);
-  if (!runCheck('Schema Fields', 'node scripts/check-schema-fields.js', { critical: false, skipInFastMode: true })) {
-    // Non-critical - warn but don't fail (pre-existing schema drift)
-  }
-
-  // ═══════════════════════════════════════════════════════════════
-  // GATE 9: Analytics Schema (test-analytics-schema.js)
-  // Validates analytics schema consistency
-  // ═══════════════════════════════════════════════════════════════
-  log(`\n${c.bold}[9/10] Analytics Schema${c.reset}`, c.cyan);
-  if (!runCheck('Analytics Schema', 'node scripts/test-analytics-schema.js', { critical: false, skipInFastMode: true })) {
-    // Non-critical - warn but don't fail
-  }
+  // GATES 8 & 9 (Schema Fields, Analytics Schema) RETIRED — OSE-882 (X-17).
+  // Same reason as gates 3-4: they enforced the abandoned zeventbook schemas.
+  log(`\n${c.dim}[8-9/9] Schema Fields + Analytics Schema — retired (OSE-882)${c.reset}`, c.cyan);
 
   // ═══════════════════════════════════════════════════════════════
   // GATE 10: Triangle Happy-Path Integration Test
@@ -405,12 +396,21 @@ async function main() {
   log(`\n${c.bold}[10/10] Triangle Happy-Path${c.reset}`, c.cyan);
   const hasAdminKey = !!process.env.ADMIN_KEY;
   if (hasBaseUrl && hasAdminKey) {
-    if (!runCheck('Triangle Happy-Path', 'npm run test:triangle:happy-path', { critical: false, skipInFastMode: true })) {
+    if (
+      !runCheck('Triangle Happy-Path', 'npm run test:triangle:happy-path', {
+        critical: false,
+        skipInFastMode: true,
+      })
+    ) {
       // Non-critical - warn but don't fail (integration test, may have timing issues)
     }
   } else {
-    const skipReason = !hasBaseUrl && !hasAdminKey ? 'no BASE_URL or ADMIN_KEY set' :
-                       !hasBaseUrl ? 'no BASE_URL set' : 'no ADMIN_KEY set';
+    const skipReason =
+      !hasBaseUrl && !hasAdminKey
+        ? 'no BASE_URL or ADMIN_KEY set'
+        : !hasBaseUrl
+          ? 'no BASE_URL set'
+          : 'no ADMIN_KEY set';
     log(`${c.yellow}⊘${c.reset} ${c.dim}Triangle Happy-Path (skipped - ${skipReason})${c.reset}`);
     results.checks.push({
       name: 'Triangle Happy-Path',
@@ -433,7 +433,7 @@ async function main() {
 }
 
 // Run the gate
-main().catch(err => {
+main().catch((err) => {
   if (!jsonOutput) {
     console.error(`${c.red}Gate runner error: ${err.message}${c.reset}`);
   } else {

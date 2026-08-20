@@ -74,10 +74,7 @@
       "description": "MVP OPTIONAL - Team/player standings"
     },
     "bracket": {
-      "oneOf": [
-        { "$ref": "#/$defs/BracketTree" },
-        { "type": "null" }
-      ],
+      "oneOf": [{ "$ref": "#/$defs/BracketTree" }, { "type": "null" }],
       "description": "MVP OPTIONAL - Tournament bracket (V2-ready)"
     },
     "ctas": {
@@ -89,17 +86,11 @@
       "description": "V2 OPTIONAL - Sponsor logos with placement"
     },
     "media": {
-      "oneOf": [
-        { "$ref": "#/$defs/Media" },
-        { "type": "null" }
-      ],
+      "oneOf": [{ "$ref": "#/$defs/Media" }, { "type": "null" }],
       "description": "V2 OPTIONAL - Video, map, gallery URLs"
     },
     "externalData": {
-      "oneOf": [
-        { "$ref": "#/$defs/ExternalData" },
-        { "type": "null" }
-      ],
+      "oneOf": [{ "$ref": "#/$defs/ExternalData" }, { "type": "null" }],
       "description": "V2 OPTIONAL - External data source URLs"
     },
     "checkinUrl": {
@@ -118,24 +109,15 @@
       "description": "V2 OPTIONAL - Post-event survey form URL"
     },
     "display": {
-      "oneOf": [
-        { "$ref": "#/$defs/DisplayConfig" },
-        { "type": "null" }
-      ],
+      "oneOf": [{ "$ref": "#/$defs/DisplayConfig" }, { "type": "null" }],
       "description": "V2 OPTIONAL - Display surface configuration"
     },
     "analytics": {
-      "oneOf": [
-        { "$ref": "#/$defs/Analytics" },
-        { "type": "null" }
-      ],
+      "oneOf": [{ "$ref": "#/$defs/Analytics" }, { "type": "null" }],
       "description": "RESERVED - Event analytics data"
     },
     "payments": {
-      "oneOf": [
-        { "$ref": "#/$defs/Payments" },
-        { "type": "null" }
-      ],
+      "oneOf": [{ "$ref": "#/$defs/Payments" }, { "type": "null" }],
       "description": "RESERVED - Stripe payment integration"
     },
     "settings": {
@@ -321,10 +303,7 @@
           "description": "MVP REQUIRED - Primary CTA button"
         },
         "secondary": {
-          "oneOf": [
-            { "$ref": "#/$defs/CTA" },
-            { "type": "null" }
-          ],
+          "oneOf": [{ "$ref": "#/$defs/CTA" }, { "type": "null" }],
           "description": "V2 OPTIONAL - Secondary CTA button"
         }
       }
@@ -334,10 +313,7 @@
       "description": "V2 sponsor entity with multi-placement support",
       "required": ["id", "name", "logoUrl"],
       "additionalProperties": false,
-      "anyOf": [
-        { "required": ["placement"] },
-        { "required": ["placements"] }
-      ],
+      "anyOf": [{ "required": ["placement"] }, { "required": ["placements"] }],
       "properties": {
         "id": {
           "type": "string",
@@ -579,10 +555,7 @@
           "description": "MVP OPTIONAL - Show QR code section on public page (default: true)"
         },
         "displayRotation": {
-          "oneOf": [
-            { "$ref": "#/$defs/DisplayRotation" },
-            { "type": "null" }
-          ],
+          "oneOf": [{ "$ref": "#/$defs/DisplayRotation" }, { "type": "null" }],
           "description": "V2 OPTIONAL - Display rotation configuration for TV mode panes"
         }
       }

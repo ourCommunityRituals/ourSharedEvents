@@ -180,7 +180,7 @@ const DOM_EVENT_METHODS = [
 
 // Skip patterns - file references, schema contract mentions, etc.
 const SKIP_FIELD_PATTERNS = [
-  /^schema\.json$/,  // event.schema.json is a filename, not a field
+  /^schema\.json$/, // event.schema.json is a filename, not a field
 ];
 
 /**
@@ -253,7 +253,7 @@ function extractFieldReferences(content, prefix) {
       }
 
       // Skip known non-field patterns
-      if (SKIP_FIELD_PATTERNS.some(p => p.test(fieldPath))) {
+      if (SKIP_FIELD_PATTERNS.some((p) => p.test(fieldPath))) {
         continue;
       }
 
@@ -308,21 +308,21 @@ function extractIterationReferences(content, validPaths) {
   // Map known schema array names to their schema paths
   // Only include arrays that are clearly defined in the schemas
   const arrayToSchemaPath = {
-    'sponsors': 'sponsors',
-    'surfaces': 'surfaces',
-    'events': 'events',
-    'topSponsors': 'topSponsors',
-    'schedule': 'schedule',
-    'standings': 'standings',
+    sponsors: 'sponsors',
+    surfaces: 'surfaces',
+    events: 'events',
+    topSponsors: 'topSponsors',
+    schedule: 'schedule',
+    standings: 'standings',
   };
 
   // Explicitly named iterator variables that map to schema arrays
   // We only track these specific, unambiguous variable names
   const knownIteratorVars = {
-    'sponsor': 'sponsors',
-    'surface': 'surfaces',
-    'evt': 'events',
-    'topSponsor': 'topSponsors',
+    sponsor: 'sponsors',
+    surface: 'surfaces',
+    evt: 'events',
+    topSponsor: 'topSponsors',
   };
 
   // Build a set of schema item fields for quick lookup
@@ -376,10 +376,12 @@ function extractIterationReferences(content, validPaths) {
         if (!validPaths.has(fullPath) && !schemaItemFields[iterVar]?.has(fieldName)) {
           // Double-check: make sure this looks like an array iteration context
           // by checking if the schema array is referenced nearby
-          if (content.includes(`${schemaPath}.forEach`) ||
-              content.includes(`${schemaPath}.map`) ||
-              content.includes(`${schemaPath}.filter`) ||
-              content.includes(`for (const ${iterVar} of`)) {
+          if (
+            content.includes(`${schemaPath}.forEach`) ||
+            content.includes(`${schemaPath}.map`) ||
+            content.includes(`${schemaPath}.filter`) ||
+            content.includes(`for (const ${iterVar} of`)
+          ) {
             results.push({
               line: index + 1,
               field: fullPath,
@@ -450,7 +452,7 @@ function isValidField(fieldPath, validPaths) {
 function isKnownException(fileName, fieldPath) {
   const exceptions = KNOWN_EXCEPTIONS[fileName] || [];
   // Check if the field or any parent path is in the exception list
-  return exceptions.some(exc => fieldPath === exc || fieldPath.startsWith(exc + '.'));
+  return exceptions.some((exc) => fieldPath === exc || fieldPath.startsWith(exc + '.'));
 }
 
 /**
@@ -467,7 +469,7 @@ function validateSurface(fileName, config) {
   if (verbose) {
     console.log(`\n  Schema paths for ${config.schema}:`);
     const sortedPaths = [...validPaths].sort();
-    sortedPaths.slice(0, 20).forEach(p => console.log(`    - ${p}`));
+    sortedPaths.slice(0, 20).forEach((p) => console.log(`    - ${p}`));
     if (sortedPaths.length > 20) {
       console.log(`    ... and ${sortedPaths.length - 20} more`);
     }
