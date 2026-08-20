@@ -91,7 +91,7 @@
 
   "_section_remaining_scripts": "Additional deployment/test scripts",
   "scripts/setup-staging.js": ["*"],
-  "scripts/test-event-schema.js": ["*"],
+  "reference/gas-mvp/scripts/test-event-schema.js": ["*"],
   "scripts/test-url-routing.js": ["*"],
   "scripts/update-manifest.js": ["*"],
   "scripts/validate-ci-secrets.js": ["*"],
