@@ -57,10 +57,13 @@ export async function handleAdminEventStats(
   env: EventStatsEnv,
   eventId: string
 ): Promise<Response> {
-  // Anonymous, exact — the First-Scan gauge (scans.event_id, migration 0004).
+  // Anonymous, exact — the First-Scan gauge. One physical scan = one placement
+  // event (WHERE side of the split scan path; migration 0062 / OSE-798). Counting
+  // scan_placement_events (not scan_node_returns) keeps the gauge = scans, and
+  // never touches a session-derived column.
   const scans = await countExact(
     env.DB,
-    'SELECT COUNT(*) AS cnt FROM scans WHERE event_id = ?',
+    'SELECT COUNT(*) AS cnt FROM scan_placement_events WHERE event_id = ?',
     eventId
   );
 

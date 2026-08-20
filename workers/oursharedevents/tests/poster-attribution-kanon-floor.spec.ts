@@ -35,7 +35,8 @@ const tenv = () => env as unknown as TestEnv;
 // Migrations must apply EXACTLY ONCE per isolate (migration 0018 renames the
 // sponsors table, which is not idempotent on re-apply — see the OSE-683 spec
 // header for the full rationale). We only touch events/poster_deployments/scans
-// here, but the guard keeps us consistent with the sibling spec's harness.
+// here (now scan_placement_events after the OSE-798 split), but the guard keeps
+// us consistent with the sibling spec's harness.
 let migrated = false;
 async function applyMigrations(): Promise<void> {
   if (migrated) return;
@@ -60,8 +61,10 @@ async function applyMigrations(): Promise<void> {
 
 async function clearTables(): Promise<void> {
   const db = tenv().DB;
-  // Child rows first (FK order): scans → poster_deployments → events.
-  await db.prepare(`DELETE FROM scans WHERE id LIKE 'scan-711-%'`).run();
+  // Child rows first (FK order): scan_placement_events → poster_deployments → events.
+  // OSE-798: poster_attribution counts the PLACEMENT side only, so this spec
+  // seeds/clears scan_placement_events (never the session table).
+  await db.prepare(`DELETE FROM scan_placement_events WHERE id LIKE 'spe-711-%'`).run();
   await db.prepare(`DELETE FROM poster_deployments WHERE id LIKE 'pd-711-%'`).run();
   await db.prepare(`DELETE FROM events WHERE id LIKE 'test-evt-711-%'`).run();
 }
@@ -90,18 +93,21 @@ async function seedDeployment(id: string, eventId: string, label: string): Promi
 }
 
 /**
- * Seed exactly `n` scans for one deployment. COUNT(s.id) in the builder query is
- * the per-deployment scan_count the floor sees, so `n` is the count under test.
+ * Seed exactly `n` placement scans for one deployment. COUNT(s.id) in the
+ * builder query is the per-deployment scan_count the floor sees, so `n` is the
+ * count under test. OSE-798: poster_attribution counts scan_placement_events
+ * (the placement side); anonymous_id lives only on scan_node_returns and is not
+ * needed for this floor test, so we seed the placement table only.
  */
 async function seedScans(eventId: string, posterId: string, n: number): Promise<void> {
   const db = tenv().DB;
   for (let i = 0; i < n; i++) {
     await db
       .prepare(
-        `INSERT INTO scans (id, event_id, poster_deployment_id, scan_bucket, created_at)
+        `INSERT INTO scan_placement_events (id, event_id, poster_deployment_id, scan_bucket, created_at)
          VALUES (?, ?, ?, '2026-W20', datetime('now'))`
       )
-      .bind(`scan-711-${posterId}-${i}`, eventId, posterId)
+      .bind(`spe-711-${posterId}-${i}`, eventId, posterId)
       .run();
   }
 }

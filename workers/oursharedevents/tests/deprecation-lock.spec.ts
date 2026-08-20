@@ -19,6 +19,9 @@
  *     corridor_density_baseline and corridor_density_snapshots so H3 res7 cell strings can serve
  *     as corridor identifiers without requiring rows in the corridors table. Data loss is acceptable
  *     because both tables are populated only by the nightly cron and will be repopulated on next run.
+ *   0062_split_scan_path.sql — OSE-798 A1: DROP TABLE scans (doctrine rule 6 — the combined table
+ *     coupled a placement id with session-derived columns). scans = 0 rows in every environment, so
+ *     no data loss; replaced by scan_placement_events + scan_node_returns.
  */
 
 import { describe, test, expect } from 'vitest';
@@ -37,10 +40,11 @@ const tenv = () => env as unknown as TestEnv;
 // To add a new approved DROP: add the migration filename here + rationale above.
 
 const APPROVED_DROP_MIGRATIONS = [
-  '0009_drop_form_tables_from_main_db',    // architectural: form tables moved to FORMS_DB
-  '0018_fix_sponsor_tier_default',          // table recreation: sponsors_old is temporary artifact
-  '0028_subscribers_replace_ip_address',    // PII reduction: ip_address → ip_hash
-  '0046_density_tables_drop_corridor_fk',  // BE-24b: FK removal — h3_res7 as corridor identifier
+  '0009_drop_form_tables_from_main_db', // architectural: form tables moved to FORMS_DB
+  '0018_fix_sponsor_tier_default', // table recreation: sponsors_old is temporary artifact
+  '0028_subscribers_replace_ip_address', // PII reduction: ip_address → ip_hash
+  '0046_density_tables_drop_corridor_fk', // BE-24b: FK removal — h3_res7 as corridor identifier
+  '0062_split_scan_path', // OSE-798 A1: DROP TABLE scans (0 rows) — doctrine rule 6 uncoupling
 ] as const;
 
 function normalizePath(p: string): string {
@@ -67,10 +71,9 @@ describe('OSE-584 — TL-048: No unapproved DROP COLUMN or DROP TABLE in migrati
       const hasDropTable = /DROP\s+TABLE/i.test(src);
 
       if ((hasDropColumn || hasDropTable) && !isApproved(path)) {
-        const dropType = [
-          hasDropColumn ? 'DROP COLUMN' : null,
-          hasDropTable ? 'DROP TABLE' : null,
-        ].filter(Boolean).join(', ');
+        const dropType = [hasDropColumn ? 'DROP COLUMN' : null, hasDropTable ? 'DROP TABLE' : null]
+          .filter(Boolean)
+          .join(', ');
         violations.push(`${normalized} [${dropType}] — NOT in approved whitelist`);
       }
     }
@@ -92,8 +95,9 @@ describe('OSE-584 — TL-048: No unapproved DROP COLUMN or DROP TABLE in migrati
   // @born-red TL-048 | method: design-time-negative-assertion | date: 2026-08-03
   test('approved DROPs in whitelist actually exist in the codebase (whitelist is not stale)', () => {
     const sources = loadSources();
-    const migrationPaths = Object.keys(sources).filter((p) =>
-      normalizePath(p).includes('/migrations/') || normalizePath(p).includes('\\migrations\\')
+    const migrationPaths = Object.keys(sources).filter(
+      (p) =>
+        normalizePath(p).includes('/migrations/') || normalizePath(p).includes('\\migrations\\')
     );
 
     for (const approved of APPROVED_DROP_MIGRATIONS) {
@@ -132,7 +136,7 @@ describe('OSE-584 — TL-048: No unapproved DROP COLUMN or DROP TABLE in migrati
       date: '2026-08-03',
     };
     console.log(`[OSE-584-EVIDENCE] ${JSON.stringify(report)}`);
-    expect(report.approved_drops).toBe(4);
+    expect(report.approved_drops).toBe(5);
   });
 });
 

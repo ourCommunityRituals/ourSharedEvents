@@ -68,10 +68,7 @@ function bucketToHour(iso: string): string {
 const RETURN_RATE_MIN_SAMPLE = 3;
 
 export type SuppressionReasonCode =
-  | 'below_min_sample_size'
-  | 'no_baseline_yet'
-  | 'no_series'
-  | 'materialization_pending';
+  'below_min_sample_size' | 'no_baseline_yet' | 'no_series' | 'materialization_pending';
 
 export interface SuppressionReason {
   field: string;
@@ -501,7 +498,7 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
          MIN(s.created_at)      AS first_scan_at,
          MAX(s.created_at)      AS last_scan_at
        FROM poster_deployments pd
-       LEFT JOIN scans s ON s.poster_deployment_id = pd.id AND s.event_id = ?
+       LEFT JOIN scan_placement_events s ON s.poster_deployment_id = pd.id AND s.event_id = ?
        WHERE pd.event_id = ?
        GROUP BY pd.id, pd.location_desc, pd.placement_label, pd.h3_res9
        HAVING scan_count > 0

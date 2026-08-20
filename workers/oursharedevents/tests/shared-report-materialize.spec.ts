@@ -60,8 +60,8 @@ async function clearPipelineTables(): Promise<void> {
   //
   //   events.series_id  → event_series.id   (need events.series_id=NULL or events deleted before event_series rows for those events)
   //   event_series.venue_id → events.id     (need event_series rows deleted before events with those IDs)
-  //   scans.event_id    → events.id         (need scans deleted before events)
-  //   scans.poster_deployment_id → poster_deployments.id
+  //   scan_node_returns.event_id → events.id (need cleared before events)
+  //   scan_placement_events.event_id → events.id; .poster_deployment_id → poster_deployments.id
   //   anon_id_returns.venue_id → events.id  (need anon_id_returns deleted before events)
   //   poster_deployments.event_id → events.id (need poster_deployments deleted before events)
   //   corridor_density_baseline.corridor_id → corridors.id
@@ -82,7 +82,8 @@ async function clearPipelineTables(): Promise<void> {
   // Break the events → event_series back-reference before deleting event_series
   await db.prepare(`UPDATE events SET series_id = NULL`).run();
   await db.prepare(`DELETE FROM event_series`).run();
-  await db.prepare(`DELETE FROM scans`).run();
+  await db.prepare(`DELETE FROM scan_placement_events`).run();
+  await db.prepare(`DELETE FROM scan_node_returns`).run();
   await db.prepare(`DELETE FROM poster_deployments WHERE id LIKE 'test-pd-mat-%'`).run();
   // Only clear events we explicitly seed (preserve any pre-seeded events)
   await db.prepare(`DELETE FROM events WHERE id LIKE 'test-evt-mat-%'`).run();
@@ -130,28 +131,18 @@ async function seedEvent(opts: {
     .run();
 }
 
-async function seedPosterDeployment(eventId: string): Promise<string> {
-  const id = `test-pd-mat-${eventId}`;
-  await tenv()
-    .DB.prepare(
-      `INSERT OR IGNORE INTO poster_deployments
-         (id, event_id, qr_token, created_at)
-       VALUES (?, ?, ?, datetime('now'))`
-    )
-    .bind(id, eventId, `qr-${id}`)
-    .run();
-  return id;
-}
-
+// OSE-798: anon_id_returns + scan-bucket aggregation read the SESSION side
+// (scan_node_returns: anonymous_id / user_agent_hash / country_code, keyed by
+// event_id + scan_bucket). No poster_deployment_id lives on this side, so we
+// seed scan_node_returns only — the placement table is irrelevant here.
 async function seedScan(eventId: string, anonId: string | null): Promise<void> {
-  const posterId = await seedPosterDeployment(eventId);
   await tenv()
     .DB.prepare(
-      `INSERT INTO scans
-         (id, event_id, poster_deployment_id, scan_bucket, anonymous_id, created_at)
-       VALUES (?, ?, ?, '2026-W20', ?, datetime('now'))`
+      `INSERT INTO scan_node_returns
+         (id, event_id, anonymous_id, scan_bucket, created_at)
+       VALUES (?, ?, ?, '2026-W20', datetime('now'))`
     )
-    .bind(`scan-${crypto.randomUUID()}`, eventId, posterId, anonId)
+    .bind(`snr-${crypto.randomUUID()}`, eventId, anonId)
     .run();
 }
 
@@ -720,25 +711,32 @@ describe('OSE-632: aggregateScanBuckets — scan bucket aggregation', () => {
   test('OSE-632 | BE-SCAN-2 | scans for an event | produces a scan_aggregates row', async () => {
     const db = tenv().DB;
     await seedEvent({ id: 'test-evt-mat-agg', start_offset_hours: -24 * 10 });
-    const posterId = await seedPosterDeployment('test-evt-mat-agg');
+    // OSE-798: scan-bucket aggregation reads the session side (scan_node_returns).
     const bucket = new Date(Date.now() - 24 * 3600 * 1000).toISOString().slice(0, 13) + ':00';
-    await db.prepare(
-      `INSERT INTO scans (id, event_id, poster_deployment_id, scan_bucket, anonymous_id, created_at)
-       VALUES (?, ?, ?, ?, ?, datetime('now'))`
-    ).bind('scan-agg-1', 'test-evt-mat-agg', posterId, bucket, 'anon_aaa').run();
-    await db.prepare(
-      `INSERT INTO scans (id, event_id, poster_deployment_id, scan_bucket, anonymous_id, created_at)
-       VALUES (?, ?, ?, ?, ?, datetime('now'))`
-    ).bind('scan-agg-2', 'test-evt-mat-agg', posterId, bucket, 'anon_bbb').run();
+    await db
+      .prepare(
+        `INSERT INTO scan_node_returns (id, event_id, scan_bucket, anonymous_id, created_at)
+       VALUES (?, ?, ?, ?, datetime('now'))`
+      )
+      .bind('snr-agg-1', 'test-evt-mat-agg', bucket, 'anon_aaa')
+      .run();
+    await db
+      .prepare(
+        `INSERT INTO scan_node_returns (id, event_id, scan_bucket, anonymous_id, created_at)
+       VALUES (?, ?, ?, ?, datetime('now'))`
+      )
+      .bind('snr-agg-2', 'test-evt-mat-agg', bucket, 'anon_bbb')
+      .run();
 
     const r = await aggregateScanBuckets({ DB: db });
     expect(r.errors).toBe(0);
     expect(r.rowsUpserted).toBeGreaterThanOrEqual(1);
     expect(r.eventsProcessed).toBe(1);
 
-    const row = await db.prepare(
-      `SELECT total_scans, unique_agents FROM scan_aggregates WHERE event_id = ?`
-    ).bind('test-evt-mat-agg').first<{ total_scans: number; unique_agents: number }>();
+    const row = await db
+      .prepare(`SELECT total_scans, unique_agents FROM scan_aggregates WHERE event_id = ?`)
+      .bind('test-evt-mat-agg')
+      .first<{ total_scans: number; unique_agents: number }>();
     expect(row).not.toBeNull();
     expect(row!.total_scans).toBe(2);
     expect(row!.unique_agents).toBe(2);
@@ -747,22 +745,28 @@ describe('OSE-632: aggregateScanBuckets — scan bucket aggregation', () => {
   test('OSE-632 | BE-SCAN-2 | same anon scans twice in bucket | unique_agents counts 1', async () => {
     const db = tenv().DB;
     await seedEvent({ id: 'test-evt-mat-agg-dedup', start_offset_hours: -24 * 5 });
-    const posterId = await seedPosterDeployment('test-evt-mat-agg-dedup');
     const bucket = new Date(Date.now() - 12 * 3600 * 1000).toISOString().slice(0, 13) + ':00';
-    await db.prepare(
-      `INSERT INTO scans (id, event_id, poster_deployment_id, scan_bucket, anonymous_id, created_at)
-       VALUES (?, ?, ?, ?, ?, datetime('now'))`
-    ).bind('scan-dedup-1', 'test-evt-mat-agg-dedup', posterId, bucket, 'anon_same').run();
-    await db.prepare(
-      `INSERT INTO scans (id, event_id, poster_deployment_id, scan_bucket, anonymous_id, created_at)
-       VALUES (?, ?, ?, ?, ?, datetime('now'))`
-    ).bind('scan-dedup-2', 'test-evt-mat-agg-dedup', posterId, bucket, 'anon_same').run();
+    await db
+      .prepare(
+        `INSERT INTO scan_node_returns (id, event_id, scan_bucket, anonymous_id, created_at)
+       VALUES (?, ?, ?, ?, datetime('now'))`
+      )
+      .bind('snr-dedup-1', 'test-evt-mat-agg-dedup', bucket, 'anon_same')
+      .run();
+    await db
+      .prepare(
+        `INSERT INTO scan_node_returns (id, event_id, scan_bucket, anonymous_id, created_at)
+       VALUES (?, ?, ?, ?, datetime('now'))`
+      )
+      .bind('snr-dedup-2', 'test-evt-mat-agg-dedup', bucket, 'anon_same')
+      .run();
 
     await aggregateScanBuckets({ DB: db });
 
-    const row = await db.prepare(
-      `SELECT total_scans, unique_agents FROM scan_aggregates WHERE event_id = ?`
-    ).bind('test-evt-mat-agg-dedup').first<{ total_scans: number; unique_agents: number }>();
+    const row = await db
+      .prepare(`SELECT total_scans, unique_agents FROM scan_aggregates WHERE event_id = ?`)
+      .bind('test-evt-mat-agg-dedup')
+      .first<{ total_scans: number; unique_agents: number }>();
     expect(row!.total_scans).toBe(2);
     expect(row!.unique_agents).toBe(1);
   });
@@ -770,39 +774,45 @@ describe('OSE-632: aggregateScanBuckets — scan bucket aggregation', () => {
   test('OSE-632 | BE-SCAN-2 | running twice is idempotent | same row count, no duplicates', async () => {
     const db = tenv().DB;
     await seedEvent({ id: 'test-evt-mat-agg-idem', start_offset_hours: -24 * 7 });
-    const posterId = await seedPosterDeployment('test-evt-mat-agg-idem');
     const bucket = new Date(Date.now() - 6 * 3600 * 1000).toISOString().slice(0, 13) + ':00';
-    await db.prepare(
-      `INSERT INTO scans (id, event_id, poster_deployment_id, scan_bucket, anonymous_id, created_at)
-       VALUES (?, ?, ?, ?, ?, datetime('now'))`
-    ).bind('scan-idem-1', 'test-evt-mat-agg-idem', posterId, bucket, 'anon_idem').run();
+    await db
+      .prepare(
+        `INSERT INTO scan_node_returns (id, event_id, scan_bucket, anonymous_id, created_at)
+       VALUES (?, ?, ?, ?, datetime('now'))`
+      )
+      .bind('snr-idem-1', 'test-evt-mat-agg-idem', bucket, 'anon_idem')
+      .run();
 
     await aggregateScanBuckets({ DB: db });
     await aggregateScanBuckets({ DB: db });
     await aggregateScanBuckets({ DB: db });
 
-    const count = await db.prepare(
-      `SELECT COUNT(*) AS c FROM scan_aggregates WHERE event_id = ?`
-    ).bind('test-evt-mat-agg-idem').first<{ c: number }>();
+    const count = await db
+      .prepare(`SELECT COUNT(*) AS c FROM scan_aggregates WHERE event_id = ?`)
+      .bind('test-evt-mat-agg-idem')
+      .first<{ c: number }>();
     expect(count!.c).toBe(1);
   });
 
   test('OSE-632 | BE-SCAN-2 | scan_bucket format | bucket_date and bucket_hour extracted correctly', async () => {
     const db = tenv().DB;
     await seedEvent({ id: 'test-evt-mat-agg-bucket', start_offset_hours: -24 * 3 });
-    const posterId = await seedPosterDeployment('test-evt-mat-agg-bucket');
     // Specific bucket: 2026-07-15T14:00
     const bucket = '2026-07-15T14:00';
-    await db.prepare(
-      `INSERT INTO scans (id, event_id, poster_deployment_id, scan_bucket, anonymous_id, created_at)
-       VALUES (?, ?, ?, ?, ?, datetime('now'))`
-    ).bind('scan-bucket-1', 'test-evt-mat-agg-bucket', posterId, bucket, 'anon_bucket').run();
+    await db
+      .prepare(
+        `INSERT INTO scan_node_returns (id, event_id, scan_bucket, anonymous_id, created_at)
+       VALUES (?, ?, ?, ?, datetime('now'))`
+      )
+      .bind('snr-bucket-1', 'test-evt-mat-agg-bucket', bucket, 'anon_bucket')
+      .run();
 
     await aggregateScanBuckets({ DB: db });
 
-    const row = await db.prepare(
-      `SELECT bucket_date, bucket_hour FROM scan_aggregates WHERE event_id = ?`
-    ).bind('test-evt-mat-agg-bucket').first<{ bucket_date: string; bucket_hour: number }>();
+    const row = await db
+      .prepare(`SELECT bucket_date, bucket_hour FROM scan_aggregates WHERE event_id = ?`)
+      .bind('test-evt-mat-agg-bucket')
+      .first<{ bucket_date: string; bucket_hour: number }>();
     expect(row).not.toBeNull();
     expect(row!.bucket_date).toBe('2026-07-15');
     expect(row!.bucket_hour).toBe(14);
