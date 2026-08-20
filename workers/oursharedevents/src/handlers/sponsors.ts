@@ -319,12 +319,11 @@ export async function handleAdminCreateSponsor(
     typeof body.tier === 'string' && (VALID_TIERS as readonly string[]).includes(body.tier)
       ? body.tier
       : 'primary';
-  // OSE-670 (#25): placement is UNIFORM and non-purchasable. The client CANNOT
-  // choose a named slot — that was the covenant violation (buying a bigger/
-  // better slot). Every sponsor is eligible for every surface; the resolver
-  // ignores this column (buildShareRotation). Stored as the uniform marker for
-  // legacy readers — body.placement_formats is intentionally ignored.
-  const placementFormats = UNIFORM_PLACEMENT_FORMATS;
+  // OSE-670/OSE-799 (#25): placement is UNIFORM and non-purchasable. The client
+  // CANNOT choose a named slot — that was the covenant violation. sponsor_placement
+  // carries NO placement_formats column at all now (the split retired it); the
+  // resolver treats every sponsor as eligible for every surface (buildShareRotation).
+  // body.placement_formats is intentionally ignored.
   const clickToken = typeof body.click_token === 'string' ? body.click_token.slice(0, 256) : null;
   const displayToken =
     typeof body.display_token === 'string' ? body.display_token.slice(0, 256) : null;
@@ -359,44 +358,68 @@ export async function handleAdminCreateSponsor(
   // Derived server-side from geo BEFORE the insert — never from the request
   // body, never admin-set. Requires both the sponsor and the event to carry an
   // h3_res7 (i.e. both geocoded); otherwise the sponsor is not local.
+  // Event context: brand_id (sponsor_business tenant scope, #9) + corridor cell
+  // (locality_band derivation). Both read server-side, never from the body.
+  let eventBrandId: string | null = null;
   let eventH3Res7: string | null = null;
-  if (sponsorH3Res7 !== null) {
-    try {
-      const eventRow = await env.DB.prepare('SELECT h3_res7 FROM events WHERE id = ?')
-        .bind(eventId)
-        .first<{ h3_res7: string | null }>();
-      eventH3Res7 = eventRow?.h3_res7 ?? null;
-    } catch {
-      // Non-fatal: if we cannot read the event cell, treat the sponsor as non-local.
-    }
+  try {
+    const eventRow = await env.DB.prepare('SELECT brand_id, h3_res7 FROM events WHERE id = ?')
+      .bind(eventId)
+      .first<{ brand_id: string | null; h3_res7: string | null }>();
+    eventBrandId = eventRow?.brand_id ?? null;
+    eventH3Res7 = eventRow?.h3_res7 ?? null;
+  } catch {
+    // Non-fatal for locality; brand_id is required below.
+  }
+  if (!eventBrandId) {
+    return errorResponse('EVENT_NOT_FOUND', 'event_id does not resolve to a brand', 400, rid);
   }
   const isLocal =
     sponsorH3Res7 !== null && eventH3Res7 !== null && sponsorH3Res7 === eventH3Res7 ? 1 : 0;
 
+  // OSE-799 A2: write the split model in one atomic batch —
+  //   identity → sponsor_business, creative → sponsor_asset (logo), attachment →
+  //   sponsor_placement (locality_band replaces is_local; NO placement_formats).
+  // `id` (sp_…) is the business identity id returned to the caller; the placement
+  // gets its own id.
+  const businessId = id;
+  const placementId = generateId('spl');
+  const stmts = [
+    env.DB.prepare(
+      `INSERT INTO sponsor_business
+         (id, brand_id, name, website_url, lat, lon, h3_res9, h3_res7, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).bind(
+      businessId,
+      eventBrandId,
+      name,
+      websiteUrl,
+      sponsorLat,
+      sponsorLon,
+      sponsorH3Res9,
+      sponsorH3Res7,
+      now,
+      now
+    ),
+    env.DB.prepare(
+      `INSERT INTO sponsor_placement
+         (id, sponsor_business_id, event_id, tier, source, polarity, locality_band,
+          click_token, display_token, is_active, created_at, updated_at)
+       VALUES (?, ?, ?, ?, 'organizer', 1, ?, ?, ?, 1, ?, ?)`
+    ).bind(placementId, businessId, eventId, tier, isLocal, clickToken, displayToken, now, now),
+  ];
+  if (logoUrl) {
+    stmts.push(
+      env.DB.prepare(
+        `INSERT INTO sponsor_asset
+           (id, sponsor_business_id, format, url, created_at, updated_at)
+         VALUES (?, ?, 'logo', ?, ?, ?)`
+      ).bind(generateId('sa'), businessId, logoUrl, now, now)
+    );
+  }
+
   try {
-    await env.DB.prepare(
-      `INSERT INTO sponsors (id, event_id, name, logo_url, website_url, tier, placement_formats, click_token, display_token, is_active, is_local, lat, lon, h3_res9, h3_res7, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?)`
-    )
-      .bind(
-        id,
-        eventId,
-        name,
-        logoUrl,
-        websiteUrl,
-        tier,
-        placementFormats,
-        clickToken,
-        displayToken,
-        isLocal,
-        sponsorLat,
-        sponsorLon,
-        sponsorH3Res9,
-        sponsorH3Res7,
-        now,
-        now
-      )
-      .run();
+    await env.DB.batch(stmts);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error(

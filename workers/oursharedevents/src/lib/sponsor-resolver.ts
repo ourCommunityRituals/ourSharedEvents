@@ -38,13 +38,15 @@ export interface SponsorRow {
   display_token: string | null;
   is_active: number;
   /**
-   * Local-business classification (OSE-330 Phase 2). D1 returns SQLite
-   * BOOLEAN as 0/1 integer. is_local=1 means the sponsor is a local
-   * business and, under the Local Sponsor Covenant (OSE-661 / Invariant #25),
-   * the is_local class collectively holds a rotation-frequency FLOOR
-   * (>= local_floor_pct) via allocateShares — NOT a top-of-display rank (the
-   * old locals-first tierSort is retired; see buildShareRotation below).
-   * Defaults to 0 for existing sponsors (backward-compatible per migration 0036).
+   * Local-business classification (0/1). OSE-799 (A2): this is the resolver's
+   * mapping of sponsor_placement.locality_band (persisted, geo-derived at
+   * attachment) — the SINGLE seam that feeds the allocator's is_local boolean, so
+   * allocateShares() is untouched and the #25 local-floor is preserved. For a
+   * template-matched business with no persisted placement it is derived at read
+   * time from business.h3_res7 vs event.h3_res7. Under the Local Sponsor Covenant
+   * (OSE-661 / Invariant #25) the is_local class collectively holds a
+   * rotation-frequency FLOOR (>= local_floor_pct) via allocateShares — NOT a
+   * top-of-display rank (see buildShareRotation).
    */
   is_local: number;
   created_at: string;
@@ -117,45 +119,106 @@ export async function resolveSponsorsForEvent(
   db: D1Database,
   eventId: string
 ): Promise<SponsorRow[]> {
-  // Fetch event context: template_id and geo
+  // Fetch event context: template_id, geo, and corridor cell (h3_res7) for the
+  // OSE-799 locality_band derivation on template-matched businesses.
   const event = await db
-    .prepare('SELECT template_id, zip_code, lat, lon FROM events WHERE id = ?')
+    .prepare('SELECT template_id, zip_code, lat, lon, h3_res7 FROM events WHERE id = ?')
     .bind(eventId)
     .first<{
       template_id: string | null;
       zip_code: string | null;
       lat: number | null;
       lon: number | null;
+      h3_res7: string | null;
     }>();
 
   if (!event) return [];
 
-  // Path 1: Direct sponsors for this event
+  // ── OSE-799 A2: read the split model ──
+  // A "sponsor row" for an event is now a JOIN: identity from sponsor_business,
+  // logo from sponsor_asset (format='logo'), per-event economics from
+  // sponsor_placement. is_local is derived from placement.locality_band (the
+  // allocator's boolean contract is preserved via this single mapping seam).
+  // `id` is the sponsor_business id (the durable identity — the dedup + rotation
+  // + tie-break key), NOT the placement id.
+  const SELECT_PLACEMENT_ROW = `
+    sb.id AS id,
+    sp.event_id AS event_id,
+    sb.name AS name,
+    la.url AS logo_url,
+    sb.website_url AS website_url,
+    sp.tier AS tier,
+    '[]' AS placement_formats,
+    sp.click_token AS click_token,
+    sp.display_token AS display_token,
+    sp.is_active AS is_active,
+    COALESCE(sp.locality_band, 0) AS is_local,
+    sp.created_at AS created_at,
+    sp.updated_at AS updated_at`;
+
+  // Path 1: Direct placements for this event (source organizer|corridor_covenant|
+  // platform_seed). ORDER BY sb.id: stable, deterministic input for the
+  // equal-share tie-break in buildShareRotation.
   const directResult = await db
-    // ORDER BY id: give the direct query a stable, deterministic row order so
-    // the equal-share tie-break in buildShareRotation is fed reproducible input.
-    .prepare('SELECT * FROM sponsors WHERE event_id = ? AND is_active = 1 ORDER BY id')
+    .prepare(
+      `SELECT ${SELECT_PLACEMENT_ROW}
+       FROM sponsor_placement sp
+       JOIN sponsor_business sb ON sb.id = sp.sponsor_business_id
+       LEFT JOIN sponsor_asset la ON la.sponsor_business_id = sb.id AND la.format = 'logo'
+       WHERE sp.event_id = ? AND sp.is_active = 1
+       ORDER BY sb.id`
+    )
     .bind(eventId)
     .all<SponsorRow>();
 
   const directSponsors = directResult.results ?? [];
 
-  // Path 2: Template+Geo matching (only if event has a template)
+  // Path 2: Template+Geo matching (only if event has a template).
+  // A business subscribed to the event's template appears WITHOUT a persisted
+  // placement (Option A, behavior-preserving). We derive an implicit placement:
+  // locality_band from business.h3_res7 vs event.h3_res7, tier 'standard', no
+  // tokens. Materializing these as real placement rows (source=corridor_covenant/
+  // platform_seed) is tracked separately — see OSE-799 follow-up.
   let templateGeoSponsors: SponsorRow[] = [];
 
   if (event.template_id) {
-    // Find sponsors subscribed to this template
+    // Find businesses subscribed to this template (identity + logo + corridor cell).
     const templateResult = await db
       .prepare(
-        `SELECT s.* FROM sponsors s
-         JOIN sponsor_event_types st ON s.id = st.sponsor_id
-         WHERE st.template_id = ? AND st.is_active = 1 AND s.is_active = 1
-         ORDER BY s.id`
+        `SELECT sb.id AS id, sb.name AS name, sb.website_url AS website_url,
+                sb.h3_res7 AS h3_res7, la.url AS logo_url
+         FROM sponsor_business sb
+         JOIN sponsor_event_types st ON st.sponsor_id = sb.id
+         LEFT JOIN sponsor_asset la ON la.sponsor_business_id = sb.id AND la.format = 'logo'
+         WHERE st.template_id = ? AND st.is_active = 1
+         ORDER BY sb.id`
       )
       .bind(event.template_id)
-      .all<SponsorRow>();
+      .all<{
+        id: string;
+        name: string;
+        website_url: string | null;
+        h3_res7: string | null;
+        logo_url: string | null;
+      }>();
 
-    const candidateSponsors = templateResult.results ?? [];
+    // Derive an implicit placement SponsorRow per template-matched business.
+    const candidateSponsors: SponsorRow[] = (templateResult.results ?? []).map((b) => ({
+      id: b.id,
+      event_id: eventId,
+      name: b.name,
+      logo_url: b.logo_url,
+      website_url: b.website_url,
+      tier: 'standard',
+      placement_formats: '[]',
+      click_token: null,
+      display_token: null,
+      is_active: 1,
+      // locality_band derived: local iff sponsor + event share the corridor cell.
+      is_local: b.h3_res7 && event.h3_res7 && b.h3_res7 === event.h3_res7 ? 1 : 0,
+      created_at: '',
+      updated_at: '',
+    }));
 
     // Geo filter: each candidate must have at least one matching area
     if (
