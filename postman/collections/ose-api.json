@@ -1991,7 +1991,7 @@
     },
     {
       "name": "11. Sponsor Covenant (Brain Invariant #5 — Local Sponsor Covenant)",
-      "description": "T3 (Newman against staging) coverage of Brain Invariant #5: the Local Sponsor Covenant. On any event with mixed-locality sponsors, the covenant is a rotation-frequency FLOOR (Invariant #25), NOT a locals-first display rank (the OSE-330 tierSort is retired): every active sponsor is present (uniform eligibility) and locals are never zeroed/dropped, but a local is not forced ahead of a higher-share non-local. The list is ordered by covenant share (allocateShares).\n\nTest pyramid context — this section is the network-staging layer. Companions:\n  • L0 structural: tests/e2e/0-architecture/tier-equity.invariant.spec.ts (code shape)\n  • L0 schema:     workers/oursharedevents/tests/schema.spec.ts + constraints.spec.ts + shared-report-pipeline-invariants.spec.ts\n  • L0 drift:      workers/oursharedevents/tests/sponsor-allocation-drift-check.spec.ts (brain↔OSE)\n  • L1 in-process: workers/oursharedevents/tests/tier-equity-sort.spec.ts (7 cases via SELF.fetch in miniflare)\n  • L3 (this):     covenant assertion against deployed worker on stg.oursharedevents.com\n\nFlow per run:\n  1. seed 4 sponsors on test-event-001 with mixed (is_local × tier) — stable IDs prefixed `covenant-fixture-` so re-runs upsert rather than duplicate\n  2. assert GET /api/v2/events/test-event-001/sponsors honors the covenant: all 4 present (uniform eligibility) and both locals never zeroed (floor) — NOT a locals-first order. Runnable L1 twin: tier-equity-sort.spec.ts '#25 | OSE-INV5 covenant twin'\n  3. cleanup — DELETE the 4 fixture sponsors\n\nRequires CF Access service token in env (cfAccessClientId + cfAccessClientSecret) — seed/cleanup POST/DELETE hit /api/v2/admin/* which CF Access shadows at edge. Without the service token the seed step's CF-Access-Blocked branch fails the test with an actionable message (the covenant cannot be proven if seeding cannot succeed).",
+      "description": "T3 (Newman against staging) coverage of Brain Invariant #5: the Local Sponsor Covenant. On any event with mixed-locality sponsors, the covenant is a rotation-frequency FLOOR (Invariant #25), NOT a locals-first display rank (the OSE-330 tierSort is retired): every active sponsor is present (uniform eligibility) and locals are never zeroed/dropped, but a local is not forced ahead of a higher-share non-local. The list is ordered by covenant share (allocateShares).\n\nTest pyramid context — this section is the network-staging layer. Companions:\n  • L0 structural: tests/e2e/0-architecture/tier-equity.invariant.spec.ts (code shape)\n  • L0 schema:     workers/oursharedevents/tests/schema.spec.ts + constraints.spec.ts + shared-report-pipeline-invariants.spec.ts\n  • L0 drift:      workers/oursharedevents/tests/sponsor-allocation-drift-check.spec.ts (brain↔OSE)\n  • L1 in-process: workers/oursharedevents/tests/tier-equity-sort.spec.ts (7 cases via SELF.fetch in miniflare)\n  • L3 (this):     covenant assertion against deployed worker on stg.oursharedevents.com\n\nFlow per run:\n  1. seed 4 sponsors on test-event-001 (geo-tagged to Beverly Arts Center, Chicago, by fixture postman/fixtures/covenant-event-geo.sql — applied to staging D1 by the T3 job's 'Seed covenant event geo' step) via POST /api/v2/admin/sponsors: two carry Chicago coords in the event's res7 CORRIDOR cell (is_local GEO-DERIVES true) and two carry distant NYC/LA coords (false), across mixed tiers. OSE-891: the endpoint MINTS the id (sp_<uuid>) and derives is_local server-side — body `id`/`is_local` are IGNORED — so each seed step captures the returned id into a collection var (covId_*). No client id means each run inserts NEW rows (no upsert); step 3 removes them.\n  2. assert GET /api/v2/events/test-event-001/sponsors honors the covenant: all 4 present (uniform eligibility) and both locals never zeroed (floor) — NOT a locals-first order — matched by the captured sp_ ids; and, if the public list surfaces is_local, the two locals read local and the two non-locals do not. Runnable L1 twin: tier-equity-sort.spec.ts '#25 | OSE-INV5 covenant twin'\n  3. cleanup — DELETE the 4 sponsors by their captured sp_ ids\n\nDependency: locality can only derive if the EVENT carries an h3_res7 — fixture postman/fixtures/covenant-event-geo.sql backfills test-event-001's coordinates + NCR cells (kept out of the migration chain so it doesn't bump the schema guard / couple to the deferred prod migrate). Without it every sponsor resolves is_local=0 and the locality dimension is untestable at L3.\n\nRequires CF Access service token in env (cfAccessClientId + cfAccessClientSecret) — seed/cleanup POST/DELETE hit /api/v2/admin/* which CF Access shadows at edge. Without the service token the seed step's CF-Access-Blocked branch fails the test with an actionable message (the covenant cannot be proven if seeding cannot succeed).",
       "auth": {
         "type": "bearer",
         "bearer": [{ "key": "token", "value": "{{adminKey}}", "type": "string" }]
@@ -2025,8 +2025,15 @@
                   "pm.test('Seed POST status is 200 or 201', function() { pm.expect([200, 201]).to.include(pm.response.code); });",
                   "const json = pm.response.json();",
                   "const sponsor = json.item || json.sponsor || json;",
-                  "pm.test('Seeded sponsor id is covenant-fixture-local-bronze', function() { pm.expect(sponsor.id).to.eql('covenant-fixture-local-bronze'); });",
-                  "pm.test('Seeded sponsor is_local is 1', function() { pm.expect(sponsor.is_local).to.eql(true); });"
+                  "// OSE-891: the create endpoint GENERATES the id (sp_<uuid>) and GEO-DERIVES is_local",
+                  "// from the sponsor's h3_res7 CORRIDOR cell vs the event's — body `id`/`is_local` are",
+                  "// ignored. Capture the server id so the assert + cleanup steps reference this exact row.",
+                  "pm.test('Create returned a server-generated sp_ id', function() { pm.expect(sponsor.id).to.be.a('string').and.to.match(/^sp_/); });",
+                  "pm.collectionVariables.set('covId_localBronze', sponsor.id);",
+                  "// This sponsor's lat/lon sit in the SAME res7 cell as test-event-001 (geo-tagged by",
+                  "// migration 0068) → is_local derives TRUE. Proves locality is geo-derived, not purchasable.",
+                  "pm.test('is_local is geo-derived TRUE (sponsor cell matches event corridor cell)', function() { pm.expect(sponsor.is_local).to.eql(true); });",
+                  "pm.test('Seeded tier is bronze', function() { pm.expect(sponsor.tier).to.eql('bronze'); });"
                 ]
               }
             }
@@ -2040,7 +2047,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\"id\":\"covenant-fixture-local-bronze\",\"event_id\":\"test-event-001\",\"name\":\"Covenant Local Bronze\",\"tier\":\"bronze\",\"is_local\":1,\"placement_formats\":{\"posterTop\":true,\"tvTop\":true,\"tvSide\":true,\"mobileBanner\":true}}"
+              "raw": "{\"event_id\":\"test-event-001\",\"name\":\"Covenant Local Bronze\",\"tier\":\"bronze\",\"lat\":41.6903,\"lon\":-87.6768}"
             },
             "url": {
               "raw": "{{baseUrl}}/api/v2/admin/sponsors",
@@ -2061,7 +2068,10 @@
                   "if (!ct.includes('application/json')) { pm.test(`CF Access shadow on seed POST (HTTP ${pm.response.code}, Content-Type=${ct}) — see OSE-349`, function() { pm.expect.fail('admin path edge-shadowed; likely STALE service token rather than missing wiring'); }); return; }",
                   "pm.test('Seed POST status is 200 or 201', function() { pm.expect([200, 201]).to.include(pm.response.code); });",
                   "const sponsor = (pm.response.json().item || pm.response.json().sponsor || pm.response.json());",
-                  "pm.test('Seeded local-platinum sponsor', function() { pm.expect(sponsor.id).to.eql('covenant-fixture-local-platinum'); pm.expect(sponsor.is_local).to.eql(true); pm.expect(sponsor.tier).to.eql('platinum'); });"
+                  "pm.test('Create returned a server-generated sp_ id', function() { pm.expect(sponsor.id).to.be.a('string').and.to.match(/^sp_/); });",
+                  "pm.collectionVariables.set('covId_localPlatinum', sponsor.id);",
+                  "// Coords ~1km from the venue — still the SAME res7 corridor cell → is_local TRUE.",
+                  "pm.test('Seeded local-platinum sponsor: geo-derived local + platinum tier', function() { pm.expect(sponsor.is_local).to.eql(true); pm.expect(sponsor.tier).to.eql('platinum'); });"
                 ]
               }
             }
@@ -2075,7 +2085,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\"id\":\"covenant-fixture-local-platinum\",\"event_id\":\"test-event-001\",\"name\":\"Covenant Local Platinum\",\"tier\":\"platinum\",\"is_local\":1,\"placement_formats\":{\"posterTop\":true,\"tvTop\":true,\"tvSide\":true,\"mobileBanner\":true}}"
+              "raw": "{\"event_id\":\"test-event-001\",\"name\":\"Covenant Local Platinum\",\"tier\":\"platinum\",\"lat\":41.6975,\"lon\":-87.682}"
             },
             "url": {
               "raw": "{{baseUrl}}/api/v2/admin/sponsors",
@@ -2096,7 +2106,10 @@
                   "if (!ct.includes('application/json')) { pm.test(`CF Access shadow on seed POST (HTTP ${pm.response.code}, Content-Type=${ct}) — see OSE-349`, function() { pm.expect.fail('admin path edge-shadowed; likely STALE service token rather than missing wiring'); }); return; }",
                   "pm.test('Seed POST status is 200 or 201', function() { pm.expect([200, 201]).to.include(pm.response.code); });",
                   "const sponsor = (pm.response.json().item || pm.response.json().sponsor || pm.response.json());",
-                  "pm.test('Seeded nonlocal-bronze sponsor', function() { pm.expect(sponsor.id).to.eql('covenant-fixture-nonlocal-bronze'); pm.expect(sponsor.is_local).to.eql(false); });"
+                  "pm.test('Create returned a server-generated sp_ id', function() { pm.expect(sponsor.id).to.be.a('string').and.to.match(/^sp_/); });",
+                  "pm.collectionVariables.set('covId_nonlocalBronze', sponsor.id);",
+                  "// NYC coords — a DIFFERENT res7 cell from the Chicago event → is_local FALSE.",
+                  "pm.test('Seeded nonlocal-bronze sponsor: geo-derived non-local', function() { pm.expect(sponsor.is_local).to.eql(false); });"
                 ]
               }
             }
@@ -2110,7 +2123,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\"id\":\"covenant-fixture-nonlocal-bronze\",\"event_id\":\"test-event-001\",\"name\":\"Covenant NonLocal Bronze\",\"tier\":\"bronze\",\"is_local\":0,\"placement_formats\":{\"posterTop\":true,\"tvTop\":true,\"tvSide\":true,\"mobileBanner\":true}}"
+              "raw": "{\"event_id\":\"test-event-001\",\"name\":\"Covenant NonLocal Bronze\",\"tier\":\"bronze\",\"lat\":40.7128,\"lon\":-74.006}"
             },
             "url": {
               "raw": "{{baseUrl}}/api/v2/admin/sponsors",
@@ -2131,7 +2144,11 @@
                   "if (!ct.includes('application/json')) { pm.test(`CF Access shadow on seed POST (HTTP ${pm.response.code}, Content-Type=${ct}) — see OSE-349`, function() { pm.expect.fail('admin path edge-shadowed; likely STALE service token rather than missing wiring'); }); return; }",
                   "pm.test('Seed POST status is 200 or 201', function() { pm.expect([200, 201]).to.include(pm.response.code); });",
                   "const sponsor = (pm.response.json().item || pm.response.json().sponsor || pm.response.json());",
-                  "pm.test('Seeded nonlocal-title sponsor (highest tier non-local)', function() { pm.expect(sponsor.id).to.eql('covenant-fixture-nonlocal-title'); pm.expect(sponsor.is_local).to.eql(false); pm.expect(sponsor.tier).to.eql('title'); });"
+                  "pm.test('Create returned a server-generated sp_ id', function() { pm.expect(sponsor.id).to.be.a('string').and.to.match(/^sp_/); });",
+                  "pm.collectionVariables.set('covId_nonlocalTitle', sponsor.id);",
+                  "// LA coords — a DIFFERENT res7 cell → is_local FALSE even at the highest tier. This is",
+                  "// the adversarial seed: a title (highest) non-local must NOT be able to buy locality.",
+                  "pm.test('Seeded nonlocal-title sponsor: geo-derived non-local at highest tier', function() { pm.expect(sponsor.is_local).to.eql(false); pm.expect(sponsor.tier).to.eql('title'); });"
                 ]
               }
             }
@@ -2145,7 +2162,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\"id\":\"covenant-fixture-nonlocal-title\",\"event_id\":\"test-event-001\",\"name\":\"Covenant NonLocal Title\",\"tier\":\"title\",\"is_local\":0,\"placement_formats\":{\"posterTop\":true,\"tvTop\":true,\"tvSide\":true,\"mobileBanner\":true}}"
+              "raw": "{\"event_id\":\"test-event-001\",\"name\":\"Covenant NonLocal Title\",\"tier\":\"title\",\"lat\":34.0522,\"lon\":-118.2437}"
             },
             "url": {
               "raw": "{{baseUrl}}/api/v2/admin/sponsors",
@@ -2171,19 +2188,38 @@
                   "const json = pm.response.json();",
                   "pm.test('Response has items array', function() { pm.expect(json.items).to.be.an('array'); });",
                   "",
-                  "// Locate our 4 fixture sponsors by their stable IDs.",
+                  "// Locate our 4 fixtures by the SERVER-GENERATED ids captured at seed time",
+                  "// (the create endpoint mints sp_<uuid>; there are no client-chosen ids).",
+                  "const idLocalBronze   = pm.collectionVariables.get('covId_localBronze');",
+                  "const idLocalPlatinum = pm.collectionVariables.get('covId_localPlatinum');",
+                  "const idNonlocBronze  = pm.collectionVariables.get('covId_nonlocalBronze');",
+                  "const idNonlocTitle   = pm.collectionVariables.get('covId_nonlocalTitle');",
                   "const ids = json.items.map(s => s.id);",
-                  "const idxLocalBronze   = ids.indexOf('covenant-fixture-local-bronze');",
-                  "const idxLocalPlatinum = ids.indexOf('covenant-fixture-local-platinum');",
-                  "const idxNonlocBronze  = ids.indexOf('covenant-fixture-nonlocal-bronze');",
-                  "const idxNonlocTitle   = ids.indexOf('covenant-fixture-nonlocal-title');",
+                  "const idxLocalBronze   = ids.indexOf(idLocalBronze);",
+                  "const idxLocalPlatinum = ids.indexOf(idLocalPlatinum);",
+                  "const idxNonlocBronze  = ids.indexOf(idNonlocBronze);",
+                  "const idxNonlocTitle   = ids.indexOf(idNonlocTitle);",
                   "",
                   "pm.test('All 4 covenant fixture sponsors are present in the public response', function() {",
-                  "    pm.expect(idxLocalBronze,   'covenant-fixture-local-bronze').to.be.above(-1);",
-                  "    pm.expect(idxLocalPlatinum, 'covenant-fixture-local-platinum').to.be.above(-1);",
-                  "    pm.expect(idxNonlocBronze,  'covenant-fixture-nonlocal-bronze').to.be.above(-1);",
-                  "    pm.expect(idxNonlocTitle,   'covenant-fixture-nonlocal-title').to.be.above(-1);",
+                  "    pm.expect(idxLocalBronze,   'local-bronze ('   + idLocalBronze   + ')').to.be.above(-1);",
+                  "    pm.expect(idxLocalPlatinum, 'local-platinum (' + idLocalPlatinum + ')').to.be.above(-1);",
+                  "    pm.expect(idxNonlocBronze,  'nonlocal-bronze (' + idNonlocBronze + ')').to.be.above(-1);",
+                  "    pm.expect(idxNonlocTitle,   'nonlocal-title ('  + idNonlocTitle  + ')').to.be.above(-1);",
                   "});",
+                  "",
+                  "// Corroborate the geo-derivation on the PUBLIC list too, if the resolver surfaces",
+                  "// is_local per item: the two Chicago sponsors must read local, the NYC/LA ones non-local.",
+                  "// Guarded so the covenant floor above stays the load-bearing assertion regardless of shape.",
+                  "const byId = Object.fromEntries(json.items.map(s => [s.id, s]));",
+                  "const localBronze = byId[idLocalBronze];",
+                  "if (localBronze && Object.prototype.hasOwnProperty.call(localBronze, 'is_local')) {",
+                  "    pm.test('Public list agrees: locals are is_local, non-locals are not (geo-derived)', function() {",
+                  "        pm.expect(!!byId[idLocalBronze].is_local,   'local-bronze is_local').to.eql(true);",
+                  "        pm.expect(!!byId[idLocalPlatinum].is_local, 'local-platinum is_local').to.eql(true);",
+                  "        pm.expect(!!byId[idNonlocBronze].is_local,  'nonlocal-bronze is_local').to.eql(false);",
+                  "        pm.expect(!!byId[idNonlocTitle].is_local,   'nonlocal-title is_local').to.eql(false);",
+                  "    });",
+                  "}",
                   "",
                   "// THE COVENANT (OSE-891 reconcile) — Invariant #25 is a rotation-frequency",
                   "// FLOOR, NOT a locals-first display rank. The OSE-330 tierSort is RETIRED",
@@ -2220,7 +2256,7 @@
           }
         },
         {
-          "name": "OSE-INV5 | T3 | cleanup | DELETE covenant-fixture-local-bronze",
+          "name": "OSE-INV5 | T3 | cleanup | DELETE captured local-bronze id",
           "event": [
             {
               "listen": "test",
@@ -2242,14 +2278,14 @@
               { "key": "CF-Access-Client-Secret", "value": "{{cfAccessClientSecret}}" }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/v2/admin/sponsors/covenant-fixture-local-bronze",
+              "raw": "{{baseUrl}}/api/v2/admin/sponsors/{{covId_localBronze}}",
               "host": ["{{baseUrl}}"],
-              "path": ["api", "v2", "admin", "sponsors", "covenant-fixture-local-bronze"]
+              "path": ["api", "v2", "admin", "sponsors", "{{covId_localBronze}}"]
             }
           }
         },
         {
-          "name": "OSE-INV5 | T3 | cleanup | DELETE covenant-fixture-local-platinum",
+          "name": "OSE-INV5 | T3 | cleanup | DELETE captured local-platinum id",
           "event": [
             {
               "listen": "test",
@@ -2270,14 +2306,14 @@
               { "key": "CF-Access-Client-Secret", "value": "{{cfAccessClientSecret}}" }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/v2/admin/sponsors/covenant-fixture-local-platinum",
+              "raw": "{{baseUrl}}/api/v2/admin/sponsors/{{covId_localPlatinum}}",
               "host": ["{{baseUrl}}"],
-              "path": ["api", "v2", "admin", "sponsors", "covenant-fixture-local-platinum"]
+              "path": ["api", "v2", "admin", "sponsors", "{{covId_localPlatinum}}"]
             }
           }
         },
         {
-          "name": "OSE-INV5 | T3 | cleanup | DELETE covenant-fixture-nonlocal-bronze",
+          "name": "OSE-INV5 | T3 | cleanup | DELETE captured nonlocal-bronze id",
           "event": [
             {
               "listen": "test",
@@ -2298,14 +2334,14 @@
               { "key": "CF-Access-Client-Secret", "value": "{{cfAccessClientSecret}}" }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/v2/admin/sponsors/covenant-fixture-nonlocal-bronze",
+              "raw": "{{baseUrl}}/api/v2/admin/sponsors/{{covId_nonlocalBronze}}",
               "host": ["{{baseUrl}}"],
-              "path": ["api", "v2", "admin", "sponsors", "covenant-fixture-nonlocal-bronze"]
+              "path": ["api", "v2", "admin", "sponsors", "{{covId_nonlocalBronze}}"]
             }
           }
         },
         {
-          "name": "OSE-INV5 | T3 | cleanup | DELETE covenant-fixture-nonlocal-title",
+          "name": "OSE-INV5 | T3 | cleanup | DELETE captured nonlocal-title id",
           "event": [
             {
               "listen": "test",
@@ -2326,9 +2362,9 @@
               { "key": "CF-Access-Client-Secret", "value": "{{cfAccessClientSecret}}" }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/v2/admin/sponsors/covenant-fixture-nonlocal-title",
+              "raw": "{{baseUrl}}/api/v2/admin/sponsors/{{covId_nonlocalTitle}}",
               "host": ["{{baseUrl}}"],
-              "path": ["api", "v2", "admin", "sponsors", "covenant-fixture-nonlocal-title"]
+              "path": ["api", "v2", "admin", "sponsors", "{{covId_nonlocalTitle}}"]
             }
           }
         }
