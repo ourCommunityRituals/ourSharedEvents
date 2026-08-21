@@ -1991,7 +1991,7 @@
     },
     {
       "name": "11. Sponsor Covenant (Brain Invariant #5 — Local Sponsor Covenant)",
-      "description": "T3 (Newman against staging) coverage of Brain Invariant #5: the Local Sponsor Covenant. On any event with mixed-locality sponsors, local sponsors MUST appear in the resolved sponsor list BEFORE non-local sponsors regardless of pricing tier; within each group, tier breaks ties.\n\nTest pyramid context — this section is the network-staging layer. Companions:\n  • L0 structural: tests/e2e/0-architecture/tier-equity.invariant.spec.ts (code shape)\n  • L0 schema:     workers/oursharedevents/tests/schema.spec.ts + constraints.spec.ts + shared-report-pipeline-invariants.spec.ts\n  • L0 drift:      workers/oursharedevents/tests/sponsor-allocation-drift-check.spec.ts (brain↔OSE)\n  • L1 in-process: workers/oursharedevents/tests/tier-equity-sort.spec.ts (7 cases via SELF.fetch in miniflare)\n  • L3 (this):     covenant assertion against deployed worker on stg.oursharedevents.com\n\nFlow per run:\n  1. seed 4 sponsors on test-event-001 with mixed (is_local × tier) — stable IDs prefixed `covenant-fixture-` so re-runs upsert rather than duplicate\n  2. assert GET /api/v2/events/test-event-001/sponsors returns them in covenant order:\n     locals first (platinum-local, bronze-local), then non-locals by tier (title-nonlocal, bronze-nonlocal)\n  3. cleanup — DELETE the 4 fixture sponsors\n\nRequires CF Access service token in env (cfAccessClientId + cfAccessClientSecret) — seed/cleanup POST/DELETE hit /api/v2/admin/* which CF Access shadows at edge. Without the service token the seed step's CF-Access-Blocked branch fails the test with an actionable message (the covenant cannot be proven if seeding cannot succeed).",
+      "description": "T3 (Newman against staging) coverage of Brain Invariant #5: the Local Sponsor Covenant. On any event with mixed-locality sponsors, the covenant is a rotation-frequency FLOOR (Invariant #25), NOT a locals-first display rank (the OSE-330 tierSort is retired): every active sponsor is present (uniform eligibility) and locals are never zeroed/dropped, but a local is not forced ahead of a higher-share non-local. The list is ordered by covenant share (allocateShares).\n\nTest pyramid context — this section is the network-staging layer. Companions:\n  • L0 structural: tests/e2e/0-architecture/tier-equity.invariant.spec.ts (code shape)\n  • L0 schema:     workers/oursharedevents/tests/schema.spec.ts + constraints.spec.ts + shared-report-pipeline-invariants.spec.ts\n  • L0 drift:      workers/oursharedevents/tests/sponsor-allocation-drift-check.spec.ts (brain↔OSE)\n  • L1 in-process: workers/oursharedevents/tests/tier-equity-sort.spec.ts (7 cases via SELF.fetch in miniflare)\n  • L3 (this):     covenant assertion against deployed worker on stg.oursharedevents.com\n\nFlow per run:\n  1. seed 4 sponsors on test-event-001 with mixed (is_local × tier) — stable IDs prefixed `covenant-fixture-` so re-runs upsert rather than duplicate\n  2. assert GET /api/v2/events/test-event-001/sponsors honors the covenant: all 4 present (uniform eligibility) and both locals never zeroed (floor) — NOT a locals-first order. Runnable L1 twin: tier-equity-sort.spec.ts '#25 | OSE-INV5 covenant twin'\n  3. cleanup — DELETE the 4 fixture sponsors\n\nRequires CF Access service token in env (cfAccessClientId + cfAccessClientSecret) — seed/cleanup POST/DELETE hit /api/v2/admin/* which CF Access shadows at edge. Without the service token the seed step's CF-Access-Blocked branch fails the test with an actionable message (the covenant cannot be proven if seeding cannot succeed).",
       "auth": {
         "type": "bearer",
         "bearer": [{ "key": "token", "value": "{{adminKey}}", "type": "string" }]
@@ -2026,7 +2026,7 @@
                   "const json = pm.response.json();",
                   "const sponsor = json.item || json.sponsor || json;",
                   "pm.test('Seeded sponsor id is covenant-fixture-local-bronze', function() { pm.expect(sponsor.id).to.eql('covenant-fixture-local-bronze'); });",
-                  "pm.test('Seeded sponsor is_local is 1', function() { pm.expect(sponsor.is_local).to.eql(1); });"
+                  "pm.test('Seeded sponsor is_local is 1', function() { pm.expect(sponsor.is_local).to.eql(true); });"
                 ]
               }
             }
@@ -2061,7 +2061,7 @@
                   "if (!ct.includes('application/json')) { pm.test(`CF Access shadow on seed POST (HTTP ${pm.response.code}, Content-Type=${ct}) — see OSE-349`, function() { pm.expect.fail('admin path edge-shadowed; likely STALE service token rather than missing wiring'); }); return; }",
                   "pm.test('Seed POST status is 200 or 201', function() { pm.expect([200, 201]).to.include(pm.response.code); });",
                   "const sponsor = (pm.response.json().item || pm.response.json().sponsor || pm.response.json());",
-                  "pm.test('Seeded local-platinum sponsor', function() { pm.expect(sponsor.id).to.eql('covenant-fixture-local-platinum'); pm.expect(sponsor.is_local).to.eql(1); pm.expect(sponsor.tier).to.eql('platinum'); });"
+                  "pm.test('Seeded local-platinum sponsor', function() { pm.expect(sponsor.id).to.eql('covenant-fixture-local-platinum'); pm.expect(sponsor.is_local).to.eql(true); pm.expect(sponsor.tier).to.eql('platinum'); });"
                 ]
               }
             }
@@ -2096,7 +2096,7 @@
                   "if (!ct.includes('application/json')) { pm.test(`CF Access shadow on seed POST (HTTP ${pm.response.code}, Content-Type=${ct}) — see OSE-349`, function() { pm.expect.fail('admin path edge-shadowed; likely STALE service token rather than missing wiring'); }); return; }",
                   "pm.test('Seed POST status is 200 or 201', function() { pm.expect([200, 201]).to.include(pm.response.code); });",
                   "const sponsor = (pm.response.json().item || pm.response.json().sponsor || pm.response.json());",
-                  "pm.test('Seeded nonlocal-bronze sponsor', function() { pm.expect(sponsor.id).to.eql('covenant-fixture-nonlocal-bronze'); pm.expect(sponsor.is_local).to.eql(0); });"
+                  "pm.test('Seeded nonlocal-bronze sponsor', function() { pm.expect(sponsor.id).to.eql('covenant-fixture-nonlocal-bronze'); pm.expect(sponsor.is_local).to.eql(false); });"
                 ]
               }
             }
@@ -2131,7 +2131,7 @@
                   "if (!ct.includes('application/json')) { pm.test(`CF Access shadow on seed POST (HTTP ${pm.response.code}, Content-Type=${ct}) — see OSE-349`, function() { pm.expect.fail('admin path edge-shadowed; likely STALE service token rather than missing wiring'); }); return; }",
                   "pm.test('Seed POST status is 200 or 201', function() { pm.expect([200, 201]).to.include(pm.response.code); });",
                   "const sponsor = (pm.response.json().item || pm.response.json().sponsor || pm.response.json());",
-                  "pm.test('Seeded nonlocal-title sponsor (highest tier non-local)', function() { pm.expect(sponsor.id).to.eql('covenant-fixture-nonlocal-title'); pm.expect(sponsor.is_local).to.eql(0); pm.expect(sponsor.tier).to.eql('title'); });"
+                  "pm.test('Seeded nonlocal-title sponsor (highest tier non-local)', function() { pm.expect(sponsor.id).to.eql('covenant-fixture-nonlocal-title'); pm.expect(sponsor.is_local).to.eql(false); pm.expect(sponsor.tier).to.eql('title'); });"
                 ]
               }
             }
@@ -2185,33 +2185,25 @@
                   "    pm.expect(idxNonlocTitle,   'covenant-fixture-nonlocal-title').to.be.above(-1);",
                   "});",
                   "",
-                  "// THE COVENANT — the load-bearing assertion of Brain Invariant #5.",
-                  "// Local sponsors MUST appear before non-locals regardless of tier.",
-                  "// The adversarial case is local-bronze vs nonlocal-title: lowest local tier vs highest non-local tier.",
-                  "pm.test('COVENANT: local-bronze appears BEFORE nonlocal-title (lowest local tier beats highest non-local tier)', function() {",
-                  "    pm.expect(idxLocalBronze, `bronze-local at index ${idxLocalBronze} must come before title-nonlocal at ${idxNonlocTitle}`).to.be.below(idxNonlocTitle);",
+                  "// THE COVENANT (OSE-891 reconcile) — Invariant #25 is a rotation-frequency",
+                  "// FLOOR, NOT a locals-first display rank. The OSE-330 tierSort is RETIRED",
+                  "// (see src/lib/sponsor-resolver.ts buildShareRotation + tier-equity.invariant).",
+                  "// The resolved list is ordered by covenant SHARE (allocateShares, share desc with",
+                  "// a stable id tie-break) — order carries no size/slot/position meaning. So we assert",
+                  "// the OBSERVABLE covenant on the public list: locals are never zeroed/dropped (the",
+                  "// floor) and non-locals are present too (uniform eligibility). We deliberately do NOT",
+                  "// assert 'local before non-local' — that would re-encode the retired model. Runnable",
+                  "// L1 twin (verifiable without staging/creds): tier-equity-sort.spec.ts",
+                  "// '#25 | OSE-INV5 covenant twin: local-bronze survives vs nonlocal-title'.",
+                  "pm.test('COVENANT floor: local-bronze is never zeroed vs nonlocal-title (adversarial: lowest local tier vs highest non-local tier)', function() {",
+                  "    pm.expect(idxLocalBronze, 'local-bronze must remain in the covenant rotation, never dropped').to.be.above(-1);",
                   "});",
-                  "pm.test('COVENANT: local-platinum appears BEFORE nonlocal-title', function() {",
-                  "    pm.expect(idxLocalPlatinum).to.be.below(idxNonlocTitle);",
+                  "pm.test('COVENANT floor: local-platinum is never zeroed', function() {",
+                  "    pm.expect(idxLocalPlatinum).to.be.above(-1);",
                   "});",
-                  "pm.test('COVENANT: local-bronze appears BEFORE nonlocal-bronze', function() {",
-                  "    pm.expect(idxLocalBronze).to.be.below(idxNonlocBronze);",
-                  "});",
-                  "",
-                  "// Within-group tier ordering — secondary covenant claim.",
-                  "pm.test('Within local group: platinum tier beats bronze tier', function() {",
-                  "    pm.expect(idxLocalPlatinum, `local-platinum at ${idxLocalPlatinum} must beat local-bronze at ${idxLocalBronze}`).to.be.below(idxLocalBronze);",
-                  "});",
-                  "pm.test('Within non-local group: title tier beats bronze tier', function() {",
-                  "    pm.expect(idxNonlocTitle).to.be.below(idxNonlocBronze);",
-                  "});",
-                  "",
-                  "// Full expected order: local-platinum, local-bronze, nonlocal-title, nonlocal-bronze.",
-                  "// Both groups respect tier internally; locals come first as a group.",
-                  "pm.test('Full covenant order: local-platinum < local-bronze < nonlocal-title < nonlocal-bronze', function() {",
-                  "    pm.expect(idxLocalPlatinum).to.be.below(idxLocalBronze);",
-                  "    pm.expect(idxLocalBronze).to.be.below(idxNonlocTitle);",
-                  "    pm.expect(idxNonlocTitle).to.be.below(idxNonlocBronze);",
+                  "pm.test('Uniform eligibility: non-local sponsors are present too (no named-slot drop)', function() {",
+                  "    pm.expect(idxNonlocTitle, 'nonlocal-title present').to.be.above(-1);",
+                  "    pm.expect(idxNonlocBronze, 'nonlocal-bronze present').to.be.above(-1);",
                   "});"
                 ]
               }

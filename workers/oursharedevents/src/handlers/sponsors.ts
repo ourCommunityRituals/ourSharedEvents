@@ -470,6 +470,9 @@ export async function handleAdminCreateSponsor(
     ok: true,
     status: 201,
     id,
+    // Echo what was stored on the placement so callers (and the OSE-INV5 seed) can
+    // confirm the create landed with the intended tier + geo-derived locality.
+    tier,
     is_local: isLocal === 1,
   };
   if (sponsorH3Res7 !== null && eventH3Res7 !== null) {
