@@ -1,25 +1,26 @@
 /**
  * Sponsor Resolution Engine — pure business logic, no HTTP.
  *
- * Resolves which sponsors should appear for a given event using two paths:
- *   1. Direct: sponsor.event_id = eventId (legacy, always included)
- *   2. Template+Geo: matching template_id AND matching area (zip or radius)
+ * Resolves which sponsors should appear for a given event using two paths (OSE-799
+ * split model — a "sponsor" is sponsor_business ⨝ sponsor_placement ⨝ sponsor_asset):
+ *   1. Direct: an active sponsor_placement.event_id = eventId (always included)
+ *   2. Template+Geo: a business subscribed to the event's template_id AND matching
+ *      area (zip or radius) — an implicit placement is derived (Option A)
  *
- * Surface filtering determines which placements each sponsor qualifies for.
- * All qualifying sponsors accumulate (rotation, never replacement).
+ * Every ACTIVE sponsor is eligible for every surface UNIFORMLY (no named-slot
+ * filtering) and all qualifying sponsors accumulate (rotation, never replacement).
  *
- * ─── Display priority (OSE-330 — Local Sponsor Covenant) ───────────────────
- * Two-level sort, locals-first:
- *   1. is_local=true sponsors (sorted by tier priority within the group)
- *   2. is_local=false sponsors (sorted by tier priority within the group)
- * No interleaving. A primary-tier local appears BEFORE a platinum-tier
- * non-local. This is the LITERAL mechanical implementation of the
- * Local Sponsor Covenant — see brain Invariant #5 + ADR-013 +
- * ocr-docs-brain/sponsor-allocation.yaml.
- *
- * Tier priority within each group: title(1) > platinum(2) > gold(3) >
- * silver(4) > bronze(5) > primary(6). Tier does NOT affect UX access OR
- * cross the local/non-local boundary.
+ * ─── Covenant model (OSE-661 / Invariant #25) — the locals-first SORT is RETIRED ─
+ * The old OSE-330 two-level "locals-first, then tier priority" DISPLAY SORT no
+ * longer exists. Under #25 the Local Sponsor Covenant is a rotation-frequency
+ * FLOOR, not a display rank: money buys frequency-share + report depth only —
+ * never size, slot, position, or is_local status. The resolved list is ordered by
+ * covenant SHARE (buildShareRotation → allocateShares, share desc with a stable id
+ * tie-break); that order carries NO size/slot meaning (every entry renders
+ * identically). A local is guaranteed a share FLOOR (never zeroed), but is NOT
+ * forced ahead of a higher-share non-local. See brain Invariant #25 +
+ * ocr-docs-brain/sponsor-allocation.yaml (the tierSort/named-slot path in
+ * Invariant #5 was superseded by #25).
  */
 
 import { allocateShares, sovTierOf } from './sponsor-allocation';

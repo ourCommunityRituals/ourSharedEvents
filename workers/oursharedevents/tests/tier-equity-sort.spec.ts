@@ -162,6 +162,69 @@ describe('OSE-661 — covenant share rotation (Invariant #25)', () => {
     expect(second).toEqual(first);
   });
 
+  test('#25 | OSE-INV5 covenant twin: local-bronze survives vs nonlocal-title (floor, NOT a locals-first rank)', async () => {
+    // OSE-891: the RUNNABLE in-process twin of the Newman OSE-INV5 covenant
+    // section (postman/collections/ose-api.json). Same 4 fixtures + the same
+    // adversarial case (lowest-tier local vs highest-tier non-local), asserted
+    // against the real resolver via SELF.fetch so the covenant is proven WITHOUT
+    // staging/admin creds. The Newman L3 layer proves the same thing over the
+    // network once OSE-889 clears; this is its corroborating L1.
+    //
+    // CRITICAL: under #25 the covenant is a rotation-frequency FLOOR, not a
+    // locals-first DISPLAY RANK (the OSE-330 tierSort is retired). So we assert
+    // the local is never ZEROED/dropped — NOT that it renders before the
+    // non-local. Asserting "local-bronze before nonlocal-title" would re-encode
+    // the retired model (which is exactly the stale Newman assertion this fixes).
+    const eventId = `ose-inv5-covenant-twin`;
+    await seedEvent(eventId);
+    await seedSponsor({
+      eventId,
+      id: 'covenant-fixture-local-bronze',
+      name: 'Local Bronze',
+      tier: 'bronze',
+      is_local: 1,
+    });
+    await seedSponsor({
+      eventId,
+      id: 'covenant-fixture-local-platinum',
+      name: 'Local Platinum',
+      tier: 'platinum',
+      is_local: 1,
+    });
+    await seedSponsor({
+      eventId,
+      id: 'covenant-fixture-nonlocal-bronze',
+      name: 'NonLocal Bronze',
+      tier: 'bronze',
+      is_local: 0,
+    });
+    await seedSponsor({
+      eventId,
+      id: 'covenant-fixture-nonlocal-title',
+      name: 'NonLocal Title',
+      tier: 'title',
+      is_local: 0,
+    });
+
+    const ids = await getResolvedSponsorIds(eventId);
+
+    // 1. Uniform eligibility — all 4 present (the correct half of the Newman assert).
+    expect(ids).toContain('covenant-fixture-local-bronze');
+    expect(ids).toContain('covenant-fixture-local-platinum');
+    expect(ids).toContain('covenant-fixture-nonlocal-bronze');
+    expect(ids).toContain('covenant-fixture-nonlocal-title');
+
+    // 2. Local floor (the real covenant): the lowest-tier local is never zeroed,
+    //    even against the highest-tier non-local (the adversarial case).
+    expect(ids, 'local-bronze must survive vs nonlocal-title (floor, never dropped)').toContain(
+      'covenant-fixture-local-bronze'
+    );
+
+    // 3. Deterministic covenant order (share desc + id tie-break), stable across calls.
+    const again = await getResolvedSponsorIds(eventId);
+    expect(again).toEqual(ids);
+  });
+
   test('#25 | schema rejects NULL is_local — belt-and-suspenders for the covenant', async () => {
     // Migration 0036 declares `is_local INTEGER NOT NULL DEFAULT 0`, which
     // means SQLite physically refuses to land a NULL is_local row. This is

@@ -209,11 +209,15 @@ test.describe('Sponsor Journey — Full Lifecycle', () => {
     const bundle = res.body.bundle;
     expect(bundle).toBeTruthy();
 
-    // Should be in tvTop AND tvSide (placement_formats has both true)
-    const inTvTop = bundle.surface_sponsors.tvTop.find((s: any) => s.id === sponsorId);
-    const inTvSide = bundle.surface_sponsors.tvSide.find((s: any) => s.id === sponsorId);
-    expect(inTvTop).toBeTruthy();
-    expect(inTvSide).toBeTruthy();
+    // OSE-891/#25: placement is UNIFORM — every active sponsor is eligible for
+    // EVERY surface bucket (the retired placement_formats named-slot selection is
+    // gone; buildSponsorBundle gives all four buckets the same covenant rotation).
+    // So assert presence on all four surfaces, not just the two a legacy
+    // placement_formats would have picked.
+    for (const surface of ['posterTop', 'tvTop', 'tvSide', 'mobileBanner']) {
+      const inSurface = bundle.surface_sponsors[surface].find((s: any) => s.id === sponsorId);
+      expect(inSurface, `sponsor must appear on ${surface} (uniform eligibility)`).toBeTruthy();
+    }
 
     // Rotation config should be valid
     expect(bundle.rotation_config.rotationMs).toBeGreaterThanOrEqual(3000);
