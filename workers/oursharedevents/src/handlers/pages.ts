@@ -319,8 +319,10 @@ function buildOgMeta(opts: {
     `  <meta name="twitter:title" content="${opts.title}" />`,
     `  <meta name="twitter:description" content="${opts.description}" />`,
   ];
-  if (opts.startTime) lines.push(`  <meta property="og:event:start_time" content="${esc(opts.startTime)}" />`);
-  if (opts.endTime) lines.push(`  <meta property="og:event:end_time" content="${esc(opts.endTime)}" />`);
+  if (opts.startTime)
+    lines.push(`  <meta property="og:event:start_time" content="${esc(opts.startTime)}" />`);
+  if (opts.endTime)
+    lines.push(`  <meta property="og:event:end_time" content="${esc(opts.endTime)}" />`);
   return lines.join('\n');
 }
 
@@ -1000,7 +1002,13 @@ async function fetchEventPageSocialData(
     await Promise.allSettled([
       env.DB
         ? env.DB.prepare(
-            `SELECT id, name, website_url FROM sponsors WHERE event_id = ? AND is_active = 1 ORDER BY id ASC`
+            // OSE-799 A2: reconstruct the public sponsor list from the split model —
+            // active placements on this event, joined to their business identity.
+            `SELECT sb.id AS id, sb.name AS name, sb.website_url AS website_url
+               FROM sponsor_placement sp
+               JOIN sponsor_business sb ON sb.id = sp.sponsor_business_id
+              WHERE sp.event_id = ? AND sp.is_active = 1
+              ORDER BY sb.id ASC`
           )
             .bind(eventId)
             .all<SponsorBasicRow>()

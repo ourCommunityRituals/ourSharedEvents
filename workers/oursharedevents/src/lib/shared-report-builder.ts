@@ -370,22 +370,28 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
 
   // 5. sponsor_impressions — per sponsor × surface, including campaign linkage,
   //    sponsor tier, and local-sponsor flag. D1 returns INTEGER booleans (0/1).
+  // OSE-799 A2: identity (name) comes from sponsor_business; the per-event
+  // economics (campaign, tier, locality) come from the sponsor_placement for THIS
+  // event. Join both off si.sponsor_id (= sponsor_business.id) — placement scoped
+  // to si.event_id so a business at multiple events reads its own per-event tier.
   const impressions = await db
     .prepare(
       `SELECT
          si.sponsor_id      AS sponsor_id,
-         s.name             AS sponsor_name,
-         s.campaign_id      AS campaign_id,
+         sb.name            AS sponsor_name,
+         sp.campaign_id     AS campaign_id,
          c.title            AS campaign_title,
-         s.tier             AS sponsor_tier,
-         s.is_local         AS is_local,
+         sp.tier            AS sponsor_tier,
+         sp.locality_band   AS is_local,
          si.surface         AS surface,
          COUNT(*)           AS count
        FROM sponsor_impressions si
-       LEFT JOIN sponsors s ON s.id = si.sponsor_id
-       LEFT JOIN campaigns c ON c.id = s.campaign_id
+       LEFT JOIN sponsor_business sb ON sb.id = si.sponsor_id
+       LEFT JOIN sponsor_placement sp
+              ON sp.sponsor_business_id = si.sponsor_id AND sp.event_id = si.event_id
+       LEFT JOIN campaigns c ON c.id = sp.campaign_id
        WHERE si.event_id = ?
-       GROUP BY si.sponsor_id, s.name, s.campaign_id, c.title, s.tier, s.is_local, si.surface
+       GROUP BY si.sponsor_id, sb.name, sp.campaign_id, c.title, sp.tier, sp.locality_band, si.surface
        ORDER BY count DESC`
     )
     .bind(eventId)

@@ -16,6 +16,7 @@
 
 import { describe, test, expect, beforeAll, beforeEach } from 'vitest';
 import { env, SELF } from 'cloudflare:test';
+import { seedSplitSponsor } from './helpers/seed-sponsor';
 import { buildSharedReport } from '../src/lib/shared-report-builder';
 import { mintSignedLinkToken } from '../src/lib/shared-report-auth';
 
@@ -65,7 +66,8 @@ async function clearReadTables(): Promise<void> {
   // don't seed sponsor_impressions in this spec so skip clearing it.
   await db.prepare(`DELETE FROM poster_deployments WHERE id LIKE 'test-pd-read-%'`).run();
   // Sponsors and campaigns FK on events — must be deleted before events.
-  await db.prepare(`DELETE FROM sponsors WHERE event_id LIKE 'test-evt-read-%'`).run();
+  // OSE-799 A2: the event FK is on sponsor_placement now (sponsor_business has none).
+  await db.prepare(`DELETE FROM sponsor_placement WHERE event_id LIKE 'test-evt-read-%'`).run();
   await db.prepare(`DELETE FROM campaigns WHERE id LIKE 'camp-%'`).run();
   await db.prepare(`DELETE FROM events WHERE id LIKE 'test-evt-read-%'`).run();
   await db.prepare(`DELETE FROM corridors WHERE id LIKE 'test-corr-read-%'`).run();
@@ -912,12 +914,13 @@ describe('H3 corridor map + open-question resolutions', () => {
   // Q2 — sponsor mint depth
   test('Q2: minting sponsor token with depth="mid" succeeds', async () => {
     await seedEvent({ id: 'test-evt-read-q2-mid' });
-    await tenv()
-      .DB.prepare(
-        `INSERT OR IGNORE INTO sponsors (id, event_id, name, tier, is_local, created_at, updated_at)
-       VALUES ('sp-q2-mid', 'test-evt-read-q2-mid', 'Mid Sponsor', 'silver', 0, datetime('now'), datetime('now'))`
-      )
-      .run();
+    // OSE-799 A2: split model — the #21 sponsor scope check reads sponsor_placement.
+    await seedSplitSponsor(tenv().DB, {
+      id: 'sp-q2-mid',
+      eventId: 'test-evt-read-q2-mid',
+      name: 'Mid Sponsor',
+      tier: 'silver',
+    });
 
     const res = await SELF.fetch(
       `https://test.local/api/v2/admin/events/test-evt-read-q2-mid/shared-report/mint-link`,
@@ -940,12 +943,13 @@ describe('H3 corridor map + open-question resolutions', () => {
 
   test('Q2: minting sponsor token with no depth defaults to mid (token payload contains depth=mid)', async () => {
     await seedEvent({ id: 'test-evt-read-q2-default' });
-    await tenv()
-      .DB.prepare(
-        `INSERT OR IGNORE INTO sponsors (id, event_id, name, tier, is_local, created_at, updated_at)
-       VALUES ('sp-q2-default', 'test-evt-read-q2-default', 'Default Depth Sponsor', 'silver', 0, datetime('now'), datetime('now'))`
-      )
-      .run();
+    // OSE-799 A2: split model — the #21 sponsor scope check reads sponsor_placement.
+    await seedSplitSponsor(tenv().DB, {
+      id: 'sp-q2-default',
+      eventId: 'test-evt-read-q2-default',
+      name: 'Default Depth Sponsor',
+      tier: 'silver',
+    });
 
     const res = await SELF.fetch(
       `https://test.local/api/v2/admin/events/test-evt-read-q2-default/shared-report/mint-link`,

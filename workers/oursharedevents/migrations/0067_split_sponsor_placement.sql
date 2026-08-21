@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS sponsor_placement (
   id                   TEXT PRIMARY KEY,
   sponsor_business_id  TEXT NOT NULL,
   event_id             TEXT NOT NULL,
-  tier                 TEXT NOT NULL DEFAULT 'standard',  -- per-event, #25 does not buy size/slot
+  tier                 TEXT NOT NULL DEFAULT 'standard',  -- per-event rotation weight only (#25)
   campaign_id          TEXT,
   source               TEXT NOT NULL DEFAULT 'organizer', -- 'organizer' | 'corridor_covenant' | 'platform_seed'
   polarity             INTEGER NOT NULL DEFAULT 1,        -- engagement tone (reserved)

@@ -175,18 +175,24 @@ export async function resolveSponsorsForEvent(
 
   // Path 2: Template+Geo matching (only if event has a template).
   // A business subscribed to the event's template appears WITHOUT a persisted
-  // placement (Option A, behavior-preserving). We derive an implicit placement:
-  // locality_band from business.h3_res7 vs event.h3_res7, tier 'standard', no
-  // tokens. Materializing these as real placement rows (source=corridor_covenant/
-  // platform_seed) is tracked separately — see OSE-799 follow-up.
+  // placement on THIS event (Option A, behavior-preserving). We derive an implicit
+  // placement: locality_band from business.h3_res7 vs event.h3_res7, no tokens, and
+  // — to preserve the pre-split behavior where the single `sponsors` row carried
+  // the sponsor's tier — the tier of the business's most recent real placement
+  // (falling back to 'standard' for a business that has none yet). Materializing
+  // these as real placement rows is tracked separately — see OSE-799 follow-up.
   let templateGeoSponsors: SponsorRow[] = [];
 
   if (event.template_id) {
-    // Find businesses subscribed to this template (identity + logo + corridor cell).
+    // Find businesses subscribed to this template (identity + logo + corridor cell
+    // + the representative tier from their latest placement).
     const templateResult = await db
       .prepare(
         `SELECT sb.id AS id, sb.name AS name, sb.website_url AS website_url,
-                sb.h3_res7 AS h3_res7, la.url AS logo_url
+                sb.h3_res7 AS h3_res7, la.url AS logo_url,
+                (SELECT sp2.tier FROM sponsor_placement sp2
+                  WHERE sp2.sponsor_business_id = sb.id
+                  ORDER BY sp2.created_at DESC, sp2.id DESC LIMIT 1) AS tier
          FROM sponsor_business sb
          JOIN sponsor_event_types st ON st.sponsor_id = sb.id
          LEFT JOIN sponsor_asset la ON la.sponsor_business_id = sb.id AND la.format = 'logo'
@@ -200,6 +206,7 @@ export async function resolveSponsorsForEvent(
         website_url: string | null;
         h3_res7: string | null;
         logo_url: string | null;
+        tier: string | null;
       }>();
 
     // Derive an implicit placement SponsorRow per template-matched business.
@@ -209,7 +216,7 @@ export async function resolveSponsorsForEvent(
       name: b.name,
       logo_url: b.logo_url,
       website_url: b.website_url,
-      tier: 'standard',
+      tier: b.tier ?? 'standard',
       placement_formats: '[]',
       click_token: null,
       display_token: null,

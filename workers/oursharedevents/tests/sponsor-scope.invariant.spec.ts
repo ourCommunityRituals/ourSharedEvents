@@ -19,6 +19,7 @@ import { env } from 'cloudflare:test';
 import { describe, test, expect, beforeAll } from 'vitest';
 import { handleAdminListSponsors, type SponsorsEnv } from '../src/handlers/sponsors';
 import { filterSponsorsForSurface, buildSponsorBundle } from '../src/lib/sponsor-resolver';
+import { seedSplitSponsor } from './helpers/seed-sponsor';
 
 interface TestEnv {
   DB: D1Database;
@@ -49,12 +50,8 @@ async function seedEvent(id: string, brandId: string, title: string): Promise<vo
 }
 
 async function seedSponsor(id: string, eventId: string, name: string): Promise<void> {
-  await env.DB.prepare(
-    `INSERT INTO sponsors (id, event_id, name, tier, placement_formats, is_active)
-     VALUES (?, ?, ?, 'gold', '{}', 1)`
-  )
-    .bind(id, eventId, name)
-    .run();
+  // OSE-799 A2: split model; brand_id is inherited from the event (the #9 key).
+  await seedSplitSponsor(env.DB, { id, eventId, name, tier: 'gold' });
 }
 
 /** base64url-encode a JSON object (no padding), for a decode-only fake JWT. */
@@ -84,19 +81,29 @@ const sponsorsEnv = env as unknown as SponsorsEnv;
 
 beforeAll(async () => {
   await applyMigrations();
-  // Two organizers / brands, one event each, plus a second event under brand A.
+  // OSE-799 A2: THREE tenants prove the direct sponsor_business.brand_id scope —
+  // a two-brand A/B pair can't exercise the multi-brand `brand_id IN (?..)` clause
+  // nor a third bystander tenant a scoped operator must never reach. brand-A holds
+  // two events; brand-B and brand-C one each. Each sponsor's business inherits its
+  // event's brand (the new #9 key), so isolation is asserted on real brand rows.
   await seedEvent('evt-A1', 'brand-A', 'Brand A Launch');
   await seedEvent('evt-A2', 'brand-A', 'Brand A Followup');
   await seedEvent('evt-B1', 'brand-B', 'Brand B Gala');
+  await seedEvent('evt-C1', 'brand-C', 'Brand C Fair');
   await seedSponsor('sp-A1', 'evt-A1', 'Acme (A1)');
   await seedSponsor('sp-A2', 'evt-A2', 'Beta (A2)');
   await seedSponsor('sp-B1', 'evt-B1', 'Competitor (B1)');
+  await seedSponsor('sp-C1', 'evt-C1', 'Bystander (C1)');
 
-  // OSE-674 / OSE-666 B2: scope is now derived from the SERVER-VERIFIED actor,
-  // not the client query. Map the brand-A operator; brand-B has no operator here
-  // so cross-tenant reach is provably impossible. (Email actors ignore
+  // OSE-674 / OSE-666 B2: scope is derived from the SERVER-VERIFIED actor, not the
+  // client query. Map a brand-A-only operator AND a multi-brand operator that
+  // belongs to A+B but NOT C — so the `brand_id IN (?..)` union is exercised and
+  // the third tenant (C) is provably unreachable by either. (Email actors ignore
   // ADMIN_SCOPE_ALL, so the global test opt-in cannot mask these assertions.)
-  sponsorsEnv.ADMIN_BRAND_MEMBERSHIP = JSON.stringify({ 'a@brand-a.test': ['brand-A'] });
+  sponsorsEnv.ADMIN_BRAND_MEMBERSHIP = JSON.stringify({
+    'a@brand-a.test': ['brand-A'],
+    'ab@multi.test': ['brand-A', 'brand-B'],
+  });
 });
 
 describe('INVARIANT #2 — Sponsor card server-side event scoping (now actor-gated, OSE-674)', () => {
@@ -179,6 +186,39 @@ describe('INVARIANT #9 — cross-event sponsor tenant isolation (OSE-674, the sh
     const res = await handleAdminListSponsors(reqAsEmail('outsider@nowhere.test'), sponsorsEnv);
     const body = (await res.json()) as { items: unknown[] };
     expect(body.items).toEqual([]);
+  });
+
+  test('third-tenant bystander: brand-A operator never sees brand-C’s sponsor', async () => {
+    // OSE-799 A2: a two-brand pair can hide a scope bug that only surfaces with a
+    // third, wholly-unrelated tenant. brand-C shares no event/operator with A.
+    const res = await handleAdminListSponsors(reqAsEmail('a@brand-a.test'), sponsorsEnv);
+    const body = (await res.json()) as { items: Array<{ event_id: string }> };
+    expect(body.items.some((s) => s.event_id === 'evt-C1')).toBe(false);
+  });
+
+  test('multi-brand operator (A+B) sees A+B via brand_id IN(…), never the C bystander', async () => {
+    // Exercises the direct `sponsor_business.brand_id IN (?..)` union — the new A2
+    // scope shape — with a genuinely multi-brand actor.
+    const res = await handleAdminListSponsors(reqAsEmail('ab@multi.test'), sponsorsEnv);
+    const body = (await res.json()) as { ok: boolean; items: Array<{ event_id: string }> };
+    expect(body.ok).toBe(true);
+    expect(body.items.map((s) => s.event_id).sort()).toEqual(['evt-A1', 'evt-A2', 'evt-B1']);
+    expect(body.items.some((s) => s.event_id === 'evt-C1')).toBe(false);
+  });
+
+  test('multi-brand operator may forge ?brand_id= within membership, never outside (C → 403)', async () => {
+    const okRes = await handleAdminListSponsors(
+      reqAsEmail('ab@multi.test', '?brand_id=brand-B'),
+      sponsorsEnv
+    );
+    const okBody = (await okRes.json()) as { items: Array<{ event_id: string }> };
+    expect(okBody.items.map((s) => s.event_id)).toEqual(['evt-B1']);
+
+    const denied = await handleAdminListSponsors(
+      reqAsEmail('ab@multi.test', '?brand_id=brand-C'),
+      sponsorsEnv
+    );
+    expect(denied.status).toBe(403);
   });
 });
 

@@ -63,7 +63,9 @@ const GEO_EVENT = 'ose670-geo-evt';
 const GEO_LAT = 40.7128;
 const GEO_LON = -74.006;
 
-async function createSponsor(payload: Record<string, unknown>): Promise<{ status: number; body: { id?: string; is_local?: boolean } }> {
+async function createSponsor(
+  payload: Record<string, unknown>
+): Promise<{ status: number; body: { id?: string; is_local?: boolean } }> {
   const res = await SELF.fetch('https://t.test/api/v2/admin/sponsors', {
     method: 'POST',
     headers: { ...ADMIN, 'Content-Type': 'application/json' },
@@ -73,13 +75,13 @@ async function createSponsor(payload: Record<string, unknown>): Promise<{ status
 }
 
 async function dbIsLocal(id: string): Promise<number | null> {
-  const row = await env.DB.prepare('SELECT is_local FROM sponsors WHERE id = ?')
+  const row = await env.DB.prepare(
+    'SELECT locality_band AS is_local FROM sponsor_placement WHERE sponsor_business_id = ?'
+  )
     .bind(id)
     .first<{ is_local: number }>();
   return row?.is_local ?? null;
 }
-
-const UNIFORM = { posterTop: true, tvTop: true, tvSide: true, mobileBanner: true };
 
 async function listSponsors(): Promise<Array<{ id: string; placement_formats: string }>> {
   const res = await SELF.fetch(
@@ -105,12 +107,13 @@ describe('OSE-670 — server wall: placement is uniform + non-purchasable', () =
     });
     expect(res.status).toBe(201);
 
-    const mine = (await listSponsors()).find((s) => s.id && s.placement_formats);
-    const buyer = (await listSponsors()).find((s) => JSON.parse(s.placement_formats));
+    const buyer = (await listSponsors()).find((s) => s.id);
     expect(buyer).toBeDefined();
-    // The narrow slot selection was OVERRIDDEN to the uniform value.
-    expect(JSON.parse(buyer!.placement_formats)).toEqual(UNIFORM);
-    expect(mine).toBeDefined();
+    // OSE-799 A2 (#25): the split model has NO placement_formats slot column at
+    // all — a named-slot purchase is structurally impossible, not merely
+    // overridden. The reconstructed value is the uniform-by-absence marker '[]',
+    // never the client's narrow selection.
+    expect(JSON.parse(buyer!.placement_formats)).toEqual([]);
   });
 
   test('UPDATE cannot write a named slot → placement stays uniform', async () => {
@@ -129,7 +132,9 @@ describe('OSE-670 — server wall: placement is uniform + non-purchasable', () =
     expect([200, 204]).toContain(upd.status);
 
     const after = (await listSponsors()).find((s) => s.id === created.id)!;
-    expect(JSON.parse(after.placement_formats)).toEqual(UNIFORM);
+    // OSE-799 A2 (#25): still uniform-by-absence — the client's named slot on
+    // UPDATE is ignored; there is no slot column to write.
+    expect(JSON.parse(after.placement_formats)).toEqual([]);
   });
 });
 
@@ -157,7 +162,9 @@ describe('OSE-670 — admin form exposes no slot toggles', () => {
 
   test('the form no longer builds placement_formats from checkboxes', async () => {
     const html = await adminHtml();
-    expect(html).not.toContain("posterTop: document.getElementById('spon-placement-poster').checked");
+    expect(html).not.toContain(
+      "posterTop: document.getElementById('spon-placement-poster').checked"
+    );
   });
 });
 

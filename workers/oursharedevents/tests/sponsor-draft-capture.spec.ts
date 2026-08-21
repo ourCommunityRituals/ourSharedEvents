@@ -196,12 +196,14 @@ describe('OSE-732 — cross-tenant + resolver-invisibility', () => {
   });
 
   test('draft capture writes ONLY to sponsor_business_draft, never sponsors (#25)', async () => {
-    const before = await env.DB.prepare('SELECT COUNT(*) AS c FROM sponsors').first<{
+    const before = await env.DB.prepare('SELECT COUNT(*) AS c FROM sponsor_business').first<{
       c: number;
     }>();
     const token = await mint('brand_isolation');
     await handleCreateSponsorDraft(req(token, { name: 'Iso', category_selections: [] }), denv());
-    const after = await env.DB.prepare('SELECT COUNT(*) AS c FROM sponsors').first<{ c: number }>();
+    const after = await env.DB.prepare('SELECT COUNT(*) AS c FROM sponsor_business').first<{
+      c: number;
+    }>();
     expect(after?.c).toBe(before?.c);
   });
 

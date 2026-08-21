@@ -1,12 +1,18 @@
 /**
- * OSE-726 — migration 0055: sponsors four-format asset columns (#3).
+ * OSE-726 / OSE-799 A2 — four-format sponsor creative.
  *
- * Verifies the 12 nullable asset columns land on `sponsors`, that NO index was
- * created on them (idx total stays gated at 61 by constraints.spec.ts), and
- * that the four-format set is single-source: every {format}_url column on
- * sponsors corresponds to exactly the format the sponsor_asset_draft CHECK (0054)
- * allows. A drift between the two would let an asset draft carry a format the
- * production table can never store (or vice-versa).
+ * Pre-split (migration 0055) the four formats were nullable `{format}_url` /
+ * `{format}_content_type` / `{format}_validated_at` columns on the `sponsors`
+ * table. OSE-799 A2 retired that table; creative now lives ONE ROW PER FORMAT in
+ * `sponsor_asset` (migration 0066) with a `format` CHECK and nullable value
+ * columns (url, content_type, validated_at).
+ *
+ * This verifies the split-model contract preserves the OSE-726 guarantees: the
+ * four formats (plus 'logo', the COALESCE fallback) are all valid
+ * `sponsor_asset.format` values, the value columns stay nullable (no-backfill
+ * safe), no index targets a format value, and the format set stays single-source
+ * with the `sponsor_asset_draft` CHECK (migration 0054) — a drift would let a
+ * draft carry a format the promoted table can never store (or vice-versa).
  */
 
 import { env } from 'cloudflare:test';
@@ -19,7 +25,7 @@ interface TestEnv {
 const tenv = () => env as unknown as TestEnv;
 
 // The frozen four-format constant — the single source the whole pipeline shares
-// (0054 CHECK, 0055 *_url columns, order-10 R2 path, order-12 route enum).
+// (0054 draft CHECK, 0066 sponsor_asset CHECK, order-10 R2 path, route enum).
 const FORMATS = ['poster', 'banner', 'vertical', 'square'] as const;
 
 async function applyMigrations(): Promise<void> {
@@ -36,55 +42,64 @@ async function applyMigrations(): Promise<void> {
   }
 }
 
-let sponsorCols: { name: string; notnull: number }[];
+let assetSql: string;
+let assetCols: { name: string; notnull: number }[];
 
 beforeAll(async () => {
   await applyMigrations();
-  const info = await env.DB.prepare('PRAGMA table_info(sponsors)').all<{
+  const table = await env.DB.prepare(
+    "SELECT sql FROM sqlite_master WHERE type='table' AND name='sponsor_asset'"
+  ).first<{ sql: string }>();
+  assetSql = table?.sql ?? '';
+  const info = await env.DB.prepare('PRAGMA table_info(sponsor_asset)').all<{
     name: string;
     notnull: number;
   }>();
-  sponsorCols = (info.results ?? []).map((r) => ({ name: r.name, notnull: r.notnull }));
+  assetCols = (info.results ?? []).map((r) => ({ name: r.name, notnull: r.notnull }));
 });
 
-describe('OSE-726 — sponsors four-format asset columns', () => {
-  test('all 12 asset columns exist and are nullable (no-backfill safe)', () => {
+describe('OSE-726 / OSE-799 A2 — four-format sponsor creative (sponsor_asset)', () => {
+  test('the four formats are all valid sponsor_asset.format values', () => {
+    expect(assetSql, 'sponsor_asset table must exist').not.toBe('');
     for (const fmt of FORMATS) {
-      for (const suffix of ['url', 'content_type', 'validated_at']) {
-        const col = sponsorCols.find((c) => c.name === `${fmt}_${suffix}`);
-        expect(col, `sponsors.${fmt}_${suffix} must exist`).toBeDefined();
-        expect(col!.notnull, `sponsors.${fmt}_${suffix} must be nullable`).toBe(0);
-      }
+      expect(assetSql, `sponsor_asset CHECK must allow '${fmt}'`).toMatch(new RegExp(`'${fmt}'`));
     }
   });
 
-  test('logo_url remains (the COALESCE fallback source is preserved)', () => {
-    expect(sponsorCols.map((c) => c.name)).toContain('logo_url');
+  test('creative value columns (url, content_type, validated_at) exist and are nullable (no-backfill safe)', () => {
+    for (const col of ['url', 'content_type', 'validated_at']) {
+      const c = assetCols.find((x) => x.name === col);
+      expect(c, `sponsor_asset.${col} must exist`).toBeDefined();
+      expect(c!.notnull, `sponsor_asset.${col} must be nullable`).toBe(0);
+    }
   });
 
-  test('no index was created on any *_url column (idx total stays stable)', async () => {
-    const idx = await env.DB.prepare("SELECT name, sql FROM sqlite_master WHERE type='index'").all<{
-      name: string;
-      sql: string | null;
-    }>();
+  test("'logo' is a valid format (the COALESCE fallback source is preserved)", () => {
+    expect(assetSql).toMatch(/'logo'/);
+  });
+
+  test('no index targets a format value (only the business FK is indexed)', async () => {
+    const idx = await env.DB.prepare(
+      "SELECT name, sql FROM sqlite_master WHERE type='index' AND sql LIKE '%sponsor_asset%'"
+    ).all<{ name: string; sql: string | null }>();
     for (const row of idx.results ?? []) {
       for (const fmt of FORMATS) {
-        expect(row.sql ?? '', `index ${row.name} must not target ${fmt}_url`).not.toMatch(
-          new RegExp(`${fmt}_url`)
+        expect(row.sql ?? '', `index ${row.name} must not target '${fmt}'`).not.toMatch(
+          new RegExp(`'${fmt}'`)
         );
       }
     }
   });
 
-  test('four-format set is single-source: sponsor_asset_draft CHECK == sponsors *_url set', async () => {
+  test('four-format set is single-source: sponsor_asset_draft CHECK == sponsor_asset CHECK', async () => {
     const draftSql = await env.DB.prepare(
       "SELECT sql FROM sqlite_master WHERE type='table' AND name='sponsor_asset_draft'"
     ).first<{ sql: string }>();
     for (const fmt of FORMATS) {
-      // Present in the 0054 CHECK...
-      expect(draftSql?.sql).toMatch(new RegExp(`'${fmt}'`));
-      // ...and as a 0055 production column.
-      expect(sponsorCols.map((c) => c.name)).toContain(`${fmt}_url`);
+      // Present in the 0054 draft CHECK...
+      expect(draftSql?.sql, `draft CHECK must allow '${fmt}'`).toMatch(new RegExp(`'${fmt}'`));
+      // ...and in the 0066 sponsor_asset CHECK.
+      expect(assetSql, `sponsor_asset CHECK must allow '${fmt}'`).toMatch(new RegExp(`'${fmt}'`));
     }
   });
 });

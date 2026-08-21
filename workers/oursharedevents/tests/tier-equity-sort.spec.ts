@@ -26,6 +26,7 @@
 
 import { describe, test, expect, beforeAll } from 'vitest';
 import { env, SELF } from 'cloudflare:test';
+import { seedSplitSponsor } from './helpers/seed-sponsor';
 
 interface TestEnv {
   DB: D1Database;
@@ -59,21 +60,15 @@ async function seedSponsor(opts: {
   tier: string;
   is_local: 0 | 1;
 }): Promise<void> {
-  await tenv()
-    .DB.prepare(
-      `INSERT INTO sponsors (id, event_id, name, tier, is_local, placement_formats, is_active, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, 1, datetime('now'), datetime('now'))
-       ON CONFLICT(id) DO UPDATE SET tier=excluded.tier, is_local=excluded.is_local`
-    )
-    .bind(
-      opts.id,
-      opts.eventId,
-      opts.name,
-      opts.tier,
-      opts.is_local,
-      JSON.stringify({ posterTop: true, tvTop: true, tvSide: true, mobileBanner: true })
-    )
-    .run();
+  // OSE-799 A2: split model. tier + is_local(→locality_band) live on the
+  // placement; placement_formats is retired (#25). Helper is idempotent by id.
+  await seedSplitSponsor(tenv().DB, {
+    id: opts.id,
+    eventId: opts.eventId,
+    name: opts.name,
+    tier: opts.tier,
+    isLocal: opts.is_local,
+  });
 }
 
 async function seedEvent(eventId: string): Promise<void> {
@@ -179,32 +174,30 @@ describe('OSE-661 — covenant share rotation (Invariant #25)', () => {
     // relaxes NOT NULL would fail this test, alerting the author that the
     // resolver's defensive code becomes load-bearing rather than
     // belt-and-suspenders.
+    // OSE-799 A2: the locality class is now sponsor_placement.locality_band
+    // (NOT NULL DEFAULT 0, migration 0067) — it replaced sponsors.is_local. An
+    // explicit NULL must still be rejected so the resolver's defensive coercion
+    // stays belt-and-suspenders, never load-bearing.
     const eventId = `ose330-evt-cov-7`;
     await seedEvent(eventId);
     let rejected = false;
     try {
       await tenv()
         .DB.prepare(
-          `INSERT INTO sponsors (id, event_id, name, tier, is_local, placement_formats, is_active, created_at, updated_at)
-           VALUES (?, ?, ?, ?, NULL, ?, 1, datetime('now'), datetime('now'))`
+          `INSERT INTO sponsor_placement (id, sponsor_business_id, event_id, tier, locality_band, is_active, created_at, updated_at)
+           VALUES (?, ?, ?, ?, NULL, 1, datetime('now'), datetime('now'))`
         )
-        .bind(
-          'ose330-null-islocal-attempt',
-          eventId,
-          'Platinum NULL is_local attempt',
-          'platinum',
-          JSON.stringify({ posterTop: true, tvTop: true, tvSide: true, mobileBanner: true })
-        )
+        .bind('ose330-null-islocal-attempt', 'sb-null-islocal', eventId, 'platinum')
         .run();
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      // Expected: SQLITE_CONSTRAINT_NOTNULL on sponsors.is_local
-      expect(msg).toMatch(/NOT NULL constraint failed.*sponsors\.is_local/i);
+      // Expected: SQLITE_CONSTRAINT_NOTNULL on sponsor_placement.locality_band
+      expect(msg).toMatch(/NOT NULL constraint failed.*sponsor_placement\.locality_band/i);
       rejected = true;
     }
     expect(
       rejected,
-      'SCHEMA GUARD: migration 0036 must keep is_local NOT NULL — a relaxed constraint would let NULL sneak in and make tierSort defensive coercion load-bearing'
+      'SCHEMA GUARD: migration 0067 must keep locality_band NOT NULL — a relaxed constraint would let NULL sneak in and make tierSort defensive coercion load-bearing'
     ).toBe(true);
   });
 });

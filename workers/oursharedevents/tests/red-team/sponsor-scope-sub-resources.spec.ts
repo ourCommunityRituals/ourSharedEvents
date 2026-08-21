@@ -27,6 +27,7 @@ import {
   handleGetSponsorAreas,
   type SponsorsEnv,
 } from '../../src/handlers/sponsors';
+import { seedSplitSponsor } from '../helpers/seed-sponsor';
 
 interface TestEnv {
   DB: D1Database;
@@ -83,12 +84,14 @@ beforeAll(async () => {
   await env.DB.prepare(
     "INSERT INTO events (id, brand_id, title, slug, status) VALUES ('evt-B1','brand-B','B','slug-b','active')"
   ).run();
-  await env.DB.prepare(
-    "INSERT INTO sponsors (id, event_id, name, tier, placement_formats, is_active) VALUES ('sp-A1','evt-A1','Acme A','gold','{}',1)"
-  ).run();
-  await env.DB.prepare(
-    "INSERT INTO sponsors (id, event_id, name, tier, placement_formats, is_active) VALUES ('sp-B1','evt-B1','Competitor B','gold','{}',1)"
-  ).run();
+  // OSE-799 A2: split model; each business inherits its event's brand (the #9 key).
+  await seedSplitSponsor(env.DB, { id: 'sp-A1', eventId: 'evt-A1', name: 'Acme A', tier: 'gold' });
+  await seedSplitSponsor(env.DB, {
+    id: 'sp-B1',
+    eventId: 'evt-B1',
+    name: 'Competitor B',
+    tier: 'gold',
+  });
   // Brand-B sponsor already has one event-type + one area — the cross-tenant
   // caller must not be able to see or clobber them.
   await env.DB.prepare(

@@ -86,8 +86,13 @@ describe('OSE-736 — happy path crosses the #25 wall exactly once', () => {
     expect(res.ok).toBe(true);
     if (!res.ok) return;
 
+    // OSE-799 A2: promotion writes the split model — name on sponsor_business,
+    // tier/is_active/event_id on the sponsor_placement it created.
     const sp = await env.DB.prepare(
-      'SELECT tier, is_active, event_id, name FROM sponsors WHERE id = ?'
+      `SELECT sp.tier AS tier, sp.is_active AS is_active, sp.event_id AS event_id, sb.name AS name
+         FROM sponsor_business sb
+         JOIN sponsor_placement sp ON sp.sponsor_business_id = sb.id
+        WHERE sb.id = ?`
     )
       .bind(res.sponsor_id)
       .first<{ tier: string; is_active: number; event_id: string; name: string }>();
@@ -118,13 +123,15 @@ describe('OSE-736 — happy path crosses the #25 wall exactly once', () => {
 describe('OSE-736 — gates refuse before any write', () => {
   test('missing covenant → 412, no sponsor minted', async () => {
     await seedDraft('d_nocov', 'brand-P', 'evt-P', { covenant: false });
-    const before = await env.DB.prepare('SELECT COUNT(*) AS c FROM sponsors').first<{
+    const before = await env.DB.prepare('SELECT COUNT(*) AS c FROM sponsor_business').first<{
       c: number;
     }>();
     const res = await promoteSponsorDraft(penv(), 'd_nocov');
     expect(res.ok).toBe(false);
     if (!res.ok) expect(res.status).toBe(412);
-    const after = await env.DB.prepare('SELECT COUNT(*) AS c FROM sponsors').first<{ c: number }>();
+    const after = await env.DB.prepare('SELECT COUNT(*) AS c FROM sponsor_business').first<{
+      c: number;
+    }>();
     expect(after?.c).toBe(before?.c);
   });
 
@@ -140,13 +147,15 @@ describe('OSE-736 — gates refuse before any write', () => {
       `INSERT INTO sponsor_business_draft (draft_token, brand_id, event_id, name, category_selections, covenant_acknowledged_at, status, free_tier_eligible, eligibility_source)
        VALUES ('d_badjson','brand-P','evt-P','Bad JSON Co','{not valid json','2026-08-12T00:00:00Z','draft', 1, 'community_benefit')`
     ).run();
-    const before = await env.DB.prepare('SELECT COUNT(*) AS c FROM sponsors').first<{
+    const before = await env.DB.prepare('SELECT COUNT(*) AS c FROM sponsor_business').first<{
       c: number;
     }>();
     const res = await promoteSponsorDraft(penv(), 'd_badjson');
     expect(res.ok).toBe(false);
     if (!res.ok) expect(res.status).toBe(400);
-    const after = await env.DB.prepare('SELECT COUNT(*) AS c FROM sponsors').first<{ c: number }>();
+    const after = await env.DB.prepare('SELECT COUNT(*) AS c FROM sponsor_business').first<{
+      c: number;
+    }>();
     expect(after?.c).toBe(before?.c);
   });
 });
@@ -161,7 +170,7 @@ describe('OSE-736 — double-promote + JSON-subset', () => {
     if (!second.ok) expect(second.status).toBe(409);
 
     const cnt = await env.DB.prepare(
-      "SELECT COUNT(*) AS c FROM sponsors WHERE name = 'Co d_dbl'"
+      "SELECT COUNT(*) AS c FROM sponsor_business WHERE name = 'Co d_dbl'"
     ).first<{ c: number }>();
     expect(cnt?.c).toBe(1);
   });
@@ -196,15 +205,17 @@ describe('OSE-736 — double-promote + JSON-subset', () => {
 });
 
 describe('OSE-736 — is_active writer enumeration (truthful, not "sole writer")', () => {
-  test('every source that writes sponsors.is_active is a known covenant/admin-gated path', () => {
+  test('every source that writes sponsor_placement.is_active is a known covenant/admin-gated path', () => {
     const sources: Record<string, string> = JSON.parse(e().TEST_SOURCE_FILES_JSON);
     const writers = Object.entries(sources)
       .filter(([p]) => p.replace(/\\/g, '/').includes('/src/'))
       .filter(
         ([, c]) =>
-          // an INSERT into sponsors (create/promotion) or an UPDATE of is_active on sponsors
-          /INSERT\s+INTO\s+sponsors\b/i.test(c) ||
-          /UPDATE\s+sponsors\s+SET[\s\S]*is_active/i.test(c)
+          // OSE-799 A2: is_active moved to sponsor_placement. A writer is an INSERT
+          // of a placement (create/promotion, is_active=1) or an UPDATE of
+          // sponsor_placement.is_active (admin soft-delete).
+          /INSERT\s+INTO\s+sponsor_placement\b/i.test(c) ||
+          /UPDATE\s+sponsor_placement\s+SET[\s\S]*is_active/i.test(c)
       )
       .map(([p]) => p.replace(/\\/g, '/').replace(/^.*\/src\//, 'src/'))
       .sort();

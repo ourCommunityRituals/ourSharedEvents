@@ -75,13 +75,6 @@ const MAX_BODY = 16 * 1024;
 const VALID_TIERS = ['title', 'platinum', 'gold', 'silver', 'bronze', 'primary'] as const;
 const VALID_SURFACES: Surface[] = ['poster', 'display', 'public', 'sharedReport'];
 
-// OSE-670 (#25): the uniform, non-purchasable placement value. Every sponsor is
-// eligible for every surface — only rotation frequency (share) is purchasable.
-// The resolver ignores placement_formats entirely (buildShareRotation); this is
-// stored only so legacy readers see "eligible everywhere", never a named slot.
-const UNIFORM_PLACEMENT_FORMATS =
-  '{"posterTop":true,"tvTop":true,"tvSide":true,"mobileBanner":true}';
-
 function isValidContentType(request: Request): boolean {
   const ct = request.headers.get('content-type') || '';
   return ct.includes('application/json');
@@ -147,30 +140,41 @@ export async function handleAdminListSponsors(
     return errorResponse('BRAND_FORBIDDEN', `Not entitled to brand_id "${brandId}"`, 403, rid);
   }
 
-  const cols = `id, event_id, name, logo_url, website_url, tier, placement_formats,
-                click_token, display_token, is_active, created_at, updated_at`;
+  // OSE-799 A2: a "sponsor" row is the split model reconstructed — identity from
+  // sponsor_business, logo from sponsor_asset(format='logo'), per-event economics
+  // from sponsor_placement. `id` is the durable sponsor_business id (the caller's
+  // handle for GET/PUT/DELETE); one row per placement (per sponsor × event).
+  const cols = `sb.id AS id, sp.event_id AS event_id, sb.name AS name,
+                la.url AS logo_url, sb.website_url AS website_url, sp.tier AS tier,
+                '[]' AS placement_formats, sp.click_token AS click_token,
+                sp.display_token AS display_token, sp.is_active AS is_active,
+                sp.created_at AS created_at, sp.updated_at AS updated_at`;
+  const from = `sponsor_placement sp
+                JOIN sponsor_business sb ON sb.id = sp.sponsor_business_id
+                LEFT JOIN sponsor_asset la ON la.sponsor_business_id = sb.id AND la.format = 'logo'`;
   const where: string[] = [];
   const binds: string[] = [];
   if (eventId) {
-    where.push('event_id = ?');
+    where.push('sp.event_id = ?');
     binds.push(eventId);
   }
   if (brandId) {
-    where.push('event_id IN (SELECT id FROM events WHERE brand_id = ?)');
+    // Direct brand scope — the business carries its own tenant column now.
+    where.push('sb.brand_id = ?');
     binds.push(brandId);
   }
   // Server-derived scope cap (intersection): scoped callers only ever reach
-  // sponsors whose event belongs to a brand they are a member of. 'all' (CI/
+  // sponsors whose business belongs to a brand they are a member of. 'all' (CI/
   // automation opt-in) applies no cap.
   if (scope.mode === 'scoped') {
-    const ph = scope.brandIds.map(() => '?').join(', ');
-    where.push(`event_id IN (SELECT id FROM events WHERE brand_id IN (${ph}))`);
-    binds.push(...scope.brandIds);
+    const clause = brandScopeClause(scope.brandIds, 'sb.brand_id');
+    where.push(clause.sql.replace(/^ AND /, ''));
+    binds.push(...clause.params);
   }
   const sql =
-    `SELECT ${cols} FROM sponsors` +
+    `SELECT ${cols} FROM ${from}` +
     (where.length ? ` WHERE ${where.join(' AND ')}` : '') +
-    ` ORDER BY updated_at DESC`;
+    ` ORDER BY sp.updated_at DESC`;
 
   try {
     const result = await env.DB.prepare(sql)
@@ -206,22 +210,36 @@ export async function handleAdminListSponsors(
 //   - mode 'deny'  (anon / unmapped / unscopable): { reachable: false } → the
 //                  caller reaches nothing; handlers return 404 (indistinguishable
 //                  from "does not exist" — a forged id is never confirmed).
-//   - mode 'all'   (CI/automation opt-in): no predicate — the id alone.
-//   - mode 'scoped': `event_id IN (SELECT id FROM events WHERE brand_id IN (?..))`
-//                  bound-parameterised, never a client-side filter.
-type PerIdScope = { reachable: false } | { reachable: true; sql: string; params: string[] };
+//   - mode 'all'   (CI/automation opt-in): brandIds = null → no predicate.
+//   - mode 'scoped': brandIds = the caller's authorized set → each site builds
+//                  `AND <col> IN (?..)` against sponsor_business.brand_id.
+//
+// OSE-799 A2: the scope now keys directly on `sponsor_business.brand_id` (the
+// durable identity carries its own tenant column) instead of the old
+// `event_id IN (SELECT id FROM events WHERE brand_id …)` join through the retired
+// `sponsors.event_id`. Simpler and stronger — brand membership is one hop, not a
+// subquery through the event table. The helper returns the brand set; each call
+// site builds the predicate with brandScopeClause() so it can target the right
+// column/alias (`brand_id`, `sb.brand_id`, …).
+type PerIdScope = { reachable: false } | { reachable: true; brandIds: string[] | null };
 
 async function resolvePerIdSponsorScope(request: Request, env: SponsorsEnv): Promise<PerIdScope> {
   const scope = await resolveAdminBrandScopeAsync(extractAdminActor(request, env), env);
   if (scope.mode === 'deny') return { reachable: false };
-  if (scope.mode === 'all') return { reachable: true, sql: '', params: [] };
-  // scoped
-  const ph = scope.brandIds.map(() => '?').join(', ');
-  return {
-    reachable: true,
-    sql: ` AND event_id IN (SELECT id FROM events WHERE brand_id IN (${ph}))`,
-    params: scope.brandIds,
-  };
+  if (scope.mode === 'all') return { reachable: true, brandIds: null };
+  return { reachable: true, brandIds: scope.brandIds };
+}
+
+// Build a bound `AND <col> IN (?..)` fragment from a resolved brand set. `null`
+// (mode 'all') yields no predicate. Never a client-side filter — the caps live in
+// the SQL WHERE with bound params so no id/query string can widen scope.
+function brandScopeClause(
+  brandIds: string[] | null,
+  col: string
+): { sql: string; params: string[] } {
+  if (!brandIds) return { sql: '', params: [] };
+  const ph = brandIds.map(() => '?').join(', ');
+  return { sql: ` AND ${col} IN (${ph})`, params: brandIds };
 }
 
 /**
@@ -241,8 +259,10 @@ async function isSponsorReachable(
   if (!env.DB) return false;
   const scope = await resolvePerIdSponsorScope(request, env);
   if (!scope.reachable) return false;
-  const row = await env.DB.prepare(`SELECT id FROM sponsors WHERE id = ?${scope.sql}`)
-    .bind(sponsorId, ...scope.params)
+  // OSE-799 A2: the sponsor id is the sponsor_business id; scope on its brand_id.
+  const clause = brandScopeClause(scope.brandIds, 'brand_id');
+  const row = await env.DB.prepare(`SELECT id FROM sponsor_business WHERE id = ?${clause.sql}`)
+    .bind(sponsorId, ...clause.params)
     .first();
   return !!row;
 }
@@ -262,9 +282,25 @@ export async function handleAdminGetSponsor(
   const scope = await resolvePerIdSponsorScope(request, env);
   if (!scope.reachable) return errorResponse('NOT_FOUND', `Sponsor not found: ${id}`, 404, rid);
 
+  // OSE-799 A2: reconstruct the sponsor from the split model; scope on brand_id.
+  const clause = brandScopeClause(scope.brandIds, 'sb.brand_id');
   try {
-    const row = await env.DB.prepare(`SELECT * FROM sponsors WHERE id = ?${scope.sql}`)
-      .bind(id, ...scope.params)
+    const row = await env.DB.prepare(
+      `SELECT sb.id AS id, sp.event_id AS event_id, sb.name AS name,
+              la.url AS logo_url, sb.website_url AS website_url, sp.tier AS tier,
+              '[]' AS placement_formats, sp.click_token AS click_token,
+              sp.display_token AS display_token, sp.is_active AS is_active,
+              COALESCE(sp.locality_band, 0) AS is_local,
+              sb.lat AS lat, sb.lon AS lon, sb.h3_res9 AS h3_res9, sb.h3_res7 AS h3_res7,
+              sp.created_at AS created_at, sp.updated_at AS updated_at
+         FROM sponsor_business sb
+         LEFT JOIN sponsor_placement sp ON sp.sponsor_business_id = sb.id
+         LEFT JOIN sponsor_asset la ON la.sponsor_business_id = sb.id AND la.format = 'logo'
+        WHERE sb.id = ?${clause.sql}
+        ORDER BY sp.created_at ASC
+        LIMIT 1`
+    )
+      .bind(id, ...clause.params)
       .first();
     if (!row) return errorResponse('NOT_FOUND', `Sponsor not found: ${id}`, 404, rid);
 
@@ -456,64 +492,89 @@ export async function handleAdminUpdateSponsor(
   const rid = requestId();
   if (!env.DB) return errorResponse('DB_NOT_CONFIGURED', 'Database not available', 503, rid);
 
-  // OSE-710 (#9): resolve the caller's authorized brand scope up front. A
-  // cross-tenant (or anon/unmapped) caller must not be able to mutate a sponsor
-  // they cannot see — the scope predicate is appended to the UPDATE's WHERE so a
-  // forged id lands zero changes → the same NOT_FOUND as a non-existent id.
+  // OSE-799 A2 (#9): resolve the caller's brand scope, then verify the sponsor
+  // business is inside it BEFORE any write. A forged/cross-tenant (or anon/
+  // unmapped) id is unreachable → 404, indistinguishable from non-existent. The
+  // fan-out updates below run only after this gate, keyed by the business id.
   const scope = await resolvePerIdSponsorScope(request, env);
   if (!scope.reachable)
     return errorResponse('NOT_FOUND', `Sponsor not found: ${sponsorId}`, 404, rid);
+  const scopeClause = brandScopeClause(scope.brandIds, 'brand_id');
+  const business = await env.DB.prepare(
+    `SELECT id FROM sponsor_business WHERE id = ?${scopeClause.sql}`
+  )
+    .bind(sponsorId, ...scopeClause.params)
+    .first<{ id: string }>();
+  if (!business) return errorResponse('NOT_FOUND', `Sponsor not found: ${sponsorId}`, 404, rid);
 
   const bodyOrErr = await parseBody(request, rid);
   if (bodyOrErr instanceof Response) return bodyOrErr;
   const body = bodyOrErr;
 
-  const allowedFields: Record<string, { max: number }> = {
-    name: { max: 200 },
-    logo_url: { max: 500 },
-    website_url: { max: 500 },
-    tier: { max: 20 },
-    // OSE-670 (#25): placement_formats is uniform + non-purchasable — deliberately
-    // NOT an updatable field, so no client can write a named slot on update.
-    click_token: { max: 256 },
-    display_token: { max: 256 },
-  };
+  // Route each editable field to its table in the split model:
+  //   identity  → sponsor_business  (name, website_url, geo)
+  //   creative  → sponsor_asset     (logo_url, upsert format='logo')
+  //   placement → sponsor_placement (tier, tokens, locality_band)
+  // OSE-670 (#25): placement_formats stays non-updatable — no client writes a slot.
+  const fieldSpecs: Record<string, { max: number; table: 'business' | 'placement'; col: string }> =
+    {
+      name: { max: 200, table: 'business', col: 'name' },
+      website_url: { max: 500, table: 'business', col: 'website_url' },
+      tier: { max: 20, table: 'placement', col: 'tier' },
+      click_token: { max: 256, table: 'placement', col: 'click_token' },
+      display_token: { max: 256, table: 'placement', col: 'display_token' },
+    };
 
-  const sets: string[] = [];
-  const values: (string | number | null)[] = [];
+  const businessSets: string[] = [];
+  const businessVals: (string | number | null)[] = [];
+  const placementSets: string[] = [];
+  const placementVals: (string | number | null)[] = [];
 
-  for (const [field, { max }] of Object.entries(allowedFields)) {
-    if (field in body) {
-      const val = body[field];
-      if (val === null) {
-        sets.push(`${field} = ?`);
-        values.push(null);
-      } else if (typeof val === 'string') {
-        if (field === 'tier' && !(VALID_TIERS as readonly string[]).includes(val)) {
-          return errorResponse(
-            'INVALID_TIER',
-            `tier must be one of: ${VALID_TIERS.join(', ')}`,
-            400,
-            rid
-          );
-        }
-        if (field === 'logo_url') {
-          const logoValidation = validateLogoUrl(val);
-          if (!logoValidation.valid) {
-            return errorResponse(
-              'INVALID_LOGO_URL',
-              'logo_url must be a valid http:// or https:// URL (max 500 chars)',
-              400,
-              rid
-            );
-          }
-          sets.push('logo_url = ?');
-          values.push(logoValidation.url);
-          continue;
-        }
-        sets.push(`${field} = ?`);
-        values.push(val.slice(0, max));
+  for (const [field, spec] of Object.entries(fieldSpecs)) {
+    if (!(field in body)) continue;
+    const val = body[field];
+    let stored: string | null;
+    if (val === null) {
+      stored = null;
+    } else if (typeof val === 'string') {
+      if (field === 'tier' && !(VALID_TIERS as readonly string[]).includes(val)) {
+        return errorResponse(
+          'INVALID_TIER',
+          `tier must be one of: ${VALID_TIERS.join(', ')}`,
+          400,
+          rid
+        );
       }
+      stored = val.slice(0, spec.max);
+    } else {
+      continue; // ignore non-string, non-null values
+    }
+    if (spec.table === 'business') {
+      businessSets.push(`${spec.col} = ?`);
+      businessVals.push(stored);
+    } else {
+      placementSets.push(`${spec.col} = ?`);
+      placementVals.push(stored);
+    }
+  }
+
+  // logo_url → sponsor_asset (upsert / clear); validated like the create path.
+  let logoUpdate: { set: boolean; url: string | null } = { set: false, url: null };
+  if ('logo_url' in body) {
+    const val = body.logo_url;
+    if (val === null) {
+      logoUpdate = { set: true, url: null };
+    } else if (typeof val === 'string') {
+      const logoValidation = validateLogoUrl(val);
+      if (!logoValidation.valid) {
+        return errorResponse(
+          'INVALID_LOGO_URL',
+          'logo_url must be a valid http:// or https:// URL (max 500 chars)',
+          400,
+          rid
+        );
+      }
+      logoUpdate = { set: true, url: logoValidation.url ?? null };
     }
   }
 
@@ -536,65 +597,77 @@ export async function handleAdminUpdateSponsor(
   }
 
   let updateH3Res7: string | null = null;
-  let updateEventId: string | null = null;
 
   if (hasCoords) {
     const updateLat = rawLat as number;
     const updateLon = rawLon as number;
     const h3Tags = maybeTag(updateLat, updateLon);
-    sets.push('lat = ?', 'lon = ?', 'h3_res9 = ?', 'h3_res7 = ?');
-    values.push(updateLat, updateLon, h3Tags?.h3_res9 ?? null, h3Tags?.h3_res7 ?? null);
+    businessSets.push('lat = ?', 'lon = ?', 'h3_res9 = ?', 'h3_res7 = ?');
+    businessVals.push(updateLat, updateLon, h3Tags?.h3_res9 ?? null, h3Tags?.h3_res7 ?? null);
     updateH3Res7 = h3Tags?.h3_res7 ?? null;
-
-    // Look up event_id (for is_local re-derivation + the advisory response).
-    try {
-      const sp = await env.DB.prepare('SELECT event_id FROM sponsors WHERE id = ?')
-        .bind(sponsorId)
-        .first<{ event_id: string }>();
-      updateEventId = sp?.event_id ?? null;
-    } catch {
-      // advisory — not fatal
-    }
-
-    // OSE-661/#25: is_local is GEO-DERIVED — re-derive it whenever coords change,
-    // from the sponsor↔event corridor-cell (h3_res7) match. Server-side only.
-    let eventH3Res7: string | null = null;
-    if (updateEventId) {
-      try {
-        const ev = await env.DB.prepare('SELECT h3_res7 FROM events WHERE id = ?')
-          .bind(updateEventId)
-          .first<{ h3_res7: string | null }>();
-        eventH3Res7 = ev?.h3_res7 ?? null;
-      } catch {
-        // non-fatal — treat as non-local if the event cell can't be read
-      }
-    }
-    const isLocal =
-      updateH3Res7 !== null && eventH3Res7 !== null && updateH3Res7 === eventH3Res7 ? 1 : 0;
-    sets.push('is_local = ?');
-    values.push(isLocal);
   }
 
-  if (sets.length === 0) {
+  if (businessSets.length === 0 && placementSets.length === 0 && !logoUpdate.set) {
     return errorResponse('NO_FIELDS', 'No valid fields to update', 400, rid);
   }
 
-  sets.push('updated_at = ?');
-  values.push(new Date().toISOString());
-  values.push(sponsorId);
-  // OSE-710 (#9): scope the write to the caller's brands. 'all' adds no predicate.
-  values.push(...scope.params);
+  const now = new Date().toISOString();
+  const stmts: D1PreparedStatement[] = [];
+
+  if (businessSets.length > 0) {
+    businessSets.push('updated_at = ?');
+    businessVals.push(now);
+    stmts.push(
+      env.DB.prepare(`UPDATE sponsor_business SET ${businessSets.join(', ')} WHERE id = ?`).bind(
+        ...businessVals,
+        sponsorId
+      )
+    );
+  }
+
+  // Placement update: scalar sets + per-event locality_band re-derivation. When
+  // coords change, is_local is re-derived server-side per placement from the new
+  // corridor cell vs each placement's event cell (#25 — never client-set). One
+  // UPDATE covers every placement the business holds.
+  const placementSetParts = [...placementSets];
+  const placementBind = [...placementVals];
+  if (hasCoords) {
+    placementSetParts.push(
+      `locality_band = CASE WHEN ? IS NOT NULL AND ? = (SELECT h3_res7 FROM events WHERE id = sponsor_placement.event_id) THEN 1 ELSE 0 END`
+    );
+    placementBind.push(updateH3Res7, updateH3Res7);
+  }
+  if (placementSetParts.length > 0) {
+    placementSetParts.push('updated_at = ?');
+    placementBind.push(now);
+    stmts.push(
+      env.DB.prepare(
+        `UPDATE sponsor_placement SET ${placementSetParts.join(', ')} WHERE sponsor_business_id = ?`
+      ).bind(...placementBind, sponsorId)
+    );
+  }
+
+  if (logoUpdate.set) {
+    if (logoUpdate.url === null) {
+      stmts.push(
+        env.DB.prepare(
+          `DELETE FROM sponsor_asset WHERE sponsor_business_id = ? AND format = 'logo'`
+        ).bind(sponsorId)
+      );
+    } else {
+      stmts.push(
+        env.DB.prepare(
+          `INSERT INTO sponsor_asset (id, sponsor_business_id, format, url, created_at, updated_at)
+           VALUES (?, ?, 'logo', ?, ?, ?)
+           ON CONFLICT(sponsor_business_id, format)
+             DO UPDATE SET url = excluded.url, updated_at = excluded.updated_at`
+        ).bind(generateId('sa'), sponsorId, logoUpdate.url, now, now)
+      );
+    }
+  }
 
   try {
-    const result = await env.DB.prepare(
-      `UPDATE sponsors SET ${sets.join(', ')} WHERE id = ?${scope.sql}`
-    )
-      .bind(...values)
-      .run();
-
-    if ((result.meta?.changes ?? 0) === 0) {
-      return errorResponse('NOT_FOUND', `Sponsor not found: ${sponsorId}`, 404, rid);
-    }
+    if (stmts.length > 0) await env.DB.batch(stmts);
   } catch (err) {
     console.error(
       JSON.stringify({
@@ -607,12 +680,18 @@ export async function handleAdminUpdateSponsor(
   }
 
   // ── is_local_suggested (advisory, only when H3 was updated) ──────────────
+  // Advisory only — reported against the business's first placement's event.
   const updateResponseBody: Record<string, unknown> = { ok: true, status: 200, id: sponsorId };
 
-  if (updateH3Res7 !== null && updateEventId !== null) {
+  if (updateH3Res7 !== null) {
     try {
-      const eventRow = await env.DB.prepare('SELECT h3_res7 FROM events WHERE id = ?')
-        .bind(updateEventId)
+      const eventRow = await env.DB.prepare(
+        `SELECT e.h3_res7 AS h3_res7
+           FROM sponsor_placement sp JOIN events e ON e.id = sp.event_id
+          WHERE sp.sponsor_business_id = ?
+          ORDER BY sp.created_at ASC LIMIT 1`
+      )
+        .bind(sponsorId)
         .first<{ h3_res7: string | null }>();
       if (eventRow?.h3_res7) {
         updateResponseBody.is_local_suggested = updateH3Res7 === eventRow.h3_res7;
@@ -637,23 +716,29 @@ export async function handleAdminDeleteSponsor(
   const rid = requestId();
   if (!env.DB) return errorResponse('DB_NOT_CONFIGURED', 'Database not available', 503, rid);
 
-  // OSE-710 (#9): scope the soft-delete to the caller's authorized brands. A
-  // forged/cross-tenant (or anon/unmapped) id lands zero changes → NOT_FOUND,
-  // indistinguishable from a non-existent id. Mirrors the list endpoint.
+  // OSE-799 A2 (#9): verify the business is inside the caller's brand scope, then
+  // soft-delete by DEACTIVATING its placement(s) — the durable identity stays
+  // (rule 7: a sponsor is borrowed, not owned by one event; other events may still
+  // reference the same business). A forged/cross-tenant (or anon/unmapped) id is
+  // unreachable → NOT_FOUND, indistinguishable from a non-existent id.
   const scope = await resolvePerIdSponsorScope(request, env);
   if (!scope.reachable)
     return errorResponse('NOT_FOUND', `Sponsor not found: ${sponsorId}`, 404, rid);
+  const scopeClause = brandScopeClause(scope.brandIds, 'brand_id');
 
   try {
-    const result = await env.DB.prepare(
-      `UPDATE sponsors SET is_active = 0, updated_at = ? WHERE id = ?${scope.sql}`
+    const business = await env.DB.prepare(
+      `SELECT id FROM sponsor_business WHERE id = ?${scopeClause.sql}`
     )
-      .bind(new Date().toISOString(), sponsorId, ...scope.params)
-      .run();
+      .bind(sponsorId, ...scopeClause.params)
+      .first<{ id: string }>();
+    if (!business) return errorResponse('NOT_FOUND', `Sponsor not found: ${sponsorId}`, 404, rid);
 
-    if ((result.meta?.changes ?? 0) === 0) {
-      return errorResponse('NOT_FOUND', `Sponsor not found: ${sponsorId}`, 404, rid);
-    }
+    await env.DB.prepare(
+      `UPDATE sponsor_placement SET is_active = 0, updated_at = ? WHERE sponsor_business_id = ?`
+    )
+      .bind(new Date().toISOString(), sponsorId)
+      .run();
   } catch (err) {
     console.error(
       JSON.stringify({
@@ -1066,7 +1151,19 @@ export async function handleSponsorLogo(
 
   let row: Record<string, unknown> | null;
   try {
-    row = await env.DB.prepare('SELECT logo_url FROM sponsors WHERE id = ? AND is_active = 1')
+    // OSE-799 A2: the logo lives in sponsor_asset(format='logo') on the durable
+    // business; "active" is a placement fact — serve the logo iff the business
+    // holds at least one active placement (mirrors the old is_active=1 gate).
+    row = await env.DB.prepare(
+      `SELECT la.url AS logo_url
+         FROM sponsor_business sb
+         JOIN sponsor_asset la ON la.sponsor_business_id = sb.id AND la.format = 'logo'
+        WHERE sb.id = ?
+          AND EXISTS (
+            SELECT 1 FROM sponsor_placement sp
+             WHERE sp.sponsor_business_id = sb.id AND sp.is_active = 1
+          )`
+    )
       .bind(sponsorId)
       .first<Record<string, unknown>>();
   } catch {

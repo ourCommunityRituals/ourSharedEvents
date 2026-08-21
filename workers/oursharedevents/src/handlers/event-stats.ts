@@ -68,9 +68,10 @@ export async function handleAdminEventStats(
   );
 
   // Active sponsors present — public businesses, exact (not impressions).
+  // OSE-799 A2: a sponsor's presence at an event is its active sponsor_placement.
   const appearances = await countExact(
     env.DB,
-    'SELECT COUNT(*) AS cnt FROM sponsors WHERE event_id = ? AND is_active = 1',
+    'SELECT COUNT(*) AS cnt FROM sponsor_placement WHERE event_id = ? AND is_active = 1',
     eventId
   );
 

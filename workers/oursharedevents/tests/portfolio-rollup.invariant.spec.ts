@@ -18,6 +18,7 @@
  */
 
 import { env, SELF } from 'cloudflare:test';
+import { seedSplitSponsor } from './helpers/seed-sponsor';
 import { describe, test, expect, beforeAll } from 'vitest';
 import { handlePortfolioRollup, type PortfolioRollupEnv } from '../src/handlers/portfolio-rollup';
 
@@ -35,7 +36,12 @@ async function applyMigrations(): Promise<void> {
       await tenv.DB.prepare(stmt).run();
     } catch (e: unknown) {
       const m = e instanceof Error ? e.message : String(e);
-      if (m.includes('duplicate column name') || m.includes('already exists') || m.includes('no such column')) continue;
+      if (
+        m.includes('duplicate column name') ||
+        m.includes('already exists') ||
+        m.includes('no such column')
+      )
+        continue;
       throw e;
     }
   }
@@ -62,12 +68,13 @@ async function seedEvent(id: string, brandId: string): Promise<void> {
 async function seedSponsors(eventId: string, n: number): Promise<void> {
   const tenv = env as unknown as TestEnv;
   for (let i = 0; i < n; i++) {
-    await tenv.DB.prepare(
-      `INSERT INTO sponsors (id, event_id, name, tier, placement_formats, is_active)
-       VALUES (?, ?, ?, 'gold', '{}', 1)`
-    )
-      .bind(`sp-${eventId}-${i}`, eventId, `Sponsor ${eventId}-${i}`)
-      .run();
+    // OSE-799 A2: rollup counts active sponsor_placement rows per event.
+    await seedSplitSponsor(tenv.DB, {
+      id: `sp-${eventId}-${i}`,
+      eventId,
+      name: `Sponsor ${eventId}-${i}`,
+      tier: 'gold',
+    });
   }
 }
 

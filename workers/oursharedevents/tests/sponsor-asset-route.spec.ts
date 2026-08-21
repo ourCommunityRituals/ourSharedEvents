@@ -12,6 +12,7 @@
 import { env } from 'cloudflare:test';
 import { describe, test, expect, beforeAll } from 'vitest';
 import { handleSponsorAsset, generateMonogramSvg } from '../src/handlers/sponsor-asset-route';
+import { seedSplitSponsor } from './helpers/seed-sponsor';
 
 interface RawEnv {
   DB: D1Database;
@@ -42,17 +43,18 @@ beforeAll(async () => {
     "INSERT OR IGNORE INTO events (id, brand_id, title, slug) VALUES ('evt_asset', 'b', 'E', 'evt-asset')"
   ).run();
   // A 1-format sponsor: only 'poster' set (points at an R2 key), no logo_url.
-  await env.DB.prepare(
-    `INSERT OR IGNORE INTO sponsors (id, event_id, name, is_active, poster_url)
-     VALUES ('spn_1fmt', 'evt_asset', 'One Format Co', 1, 'sponsors/spn_1fmt/poster')`
-  ).run();
+  // OSE-799 A2: per-format creative is a sponsor_asset row (format='poster').
+  await seedSplitSponsor(env.DB, {
+    id: 'spn_1fmt',
+    eventId: 'evt_asset',
+    name: 'One Format Co',
+    posterUrl: 'sponsors/spn_1fmt/poster',
+  });
   await e().UPLOADS_BUCKET.put('sponsors/spn_1fmt/poster', PNG, {
     httpMetadata: { contentType: 'image/png' },
   });
   // A no-asset sponsor: nothing uploaded, no logo → pure monogram.
-  await env.DB.prepare(
-    "INSERT OR IGNORE INTO sponsors (id, event_id, name, is_active) VALUES ('spn_bare', 'evt_asset', 'Bare Co', 1)"
-  ).run();
+  await seedSplitSponsor(env.DB, { id: 'spn_bare', eventId: 'evt_asset', name: 'Bare Co' });
 });
 
 describe('OSE-735 — always-200 across all four formats (headline #25)', () => {

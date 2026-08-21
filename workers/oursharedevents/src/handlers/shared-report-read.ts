@@ -110,9 +110,7 @@ export async function handleGetSharedReport(
   let scopedImpressions = result.report.sponsor_impressions;
   if (resolved.sponsorScope) {
     // Scoped sponsor token: filter to own rows only
-    scopedImpressions = scopedImpressions.filter(
-      (r) => r.sponsor_id === resolved.sponsorScope
-    );
+    scopedImpressions = scopedImpressions.filter((r) => r.sponsor_id === resolved.sponsorScope);
   } else if (resolved.sponsorScopeRequired) {
     // Sponsor role but no sponsor_id on token — block all rows (OSE-595)
     scopedImpressions = [];
@@ -124,18 +122,24 @@ export async function handleGetSharedReport(
   // impression counts into the scoped response.
   let scopedCampaignSummary = result.report.campaign_summary;
   if (resolved.sponsorScope || resolved.sponsorScopeRequired) {
-    const campaignMap = new Map<string, {
-      campaign_id: string; campaign_title: string;
-      total_impressions: number; sponsor_count: number;
-      impressions_by_surface: Record<string, number>;
-    }>();
+    const campaignMap = new Map<
+      string,
+      {
+        campaign_id: string;
+        campaign_title: string;
+        total_impressions: number;
+        sponsor_count: number;
+        impressions_by_surface: Record<string, number>;
+      }
+    >();
     for (const row of scopedImpressions) {
       if (!row.campaign_id) continue;
       const ex = campaignMap.get(row.campaign_id);
       if (ex) {
         ex.total_impressions += row.count;
         ex.sponsor_count += 1;
-        ex.impressions_by_surface[row.surface] = (ex.impressions_by_surface[row.surface] ?? 0) + row.count;
+        ex.impressions_by_surface[row.surface] =
+          (ex.impressions_by_surface[row.surface] ?? 0) + row.count;
       } else {
         campaignMap.set(row.campaign_id, {
           campaign_id: row.campaign_id,
@@ -146,12 +150,17 @@ export async function handleGetSharedReport(
         });
       }
     }
-    scopedCampaignSummary = campaignMap.size > 0
-      ? [...campaignMap.values()].sort((a, b) => b.total_impressions - a.total_impressions)
-      : null;
+    scopedCampaignSummary =
+      campaignMap.size > 0
+        ? [...campaignMap.values()].sort((a, b) => b.total_impressions - a.total_impressions)
+        : null;
   }
 
-  const report = { ...result.report, sponsor_impressions: scopedImpressions, campaign_summary: scopedCampaignSummary };
+  const report = {
+    ...result.report,
+    sponsor_impressions: scopedImpressions,
+    campaign_summary: scopedCampaignSummary,
+  };
 
   // Q7: in-flight events cache at 5 min so impression counts update visibly between
   // sponsor visits mid-event. Closed events cache at 1 hour (numbers are stable).
@@ -177,10 +186,16 @@ export async function handleBatchSharedReports(
   if (env.RATE_LIMIT_KV) {
     const batchIp = request.headers.get('CF-Connecting-IP') ?? 'unknown';
     const batchKey = `batch-sr:${batchIp}`;
-    if (await checkRateLimit(batchKey, env.RATE_LIMIT_KV, RATE_LIMIT_BATCH_MAX, RATE_LIMIT_WINDOW_MS)) {
-      return jsonResponse({ ok: false, code: 'RATE_LIMITED', error: 'too many batch requests' }, 429, {
-        'Retry-After': '60',
-      });
+    if (
+      await checkRateLimit(batchKey, env.RATE_LIMIT_KV, RATE_LIMIT_BATCH_MAX, RATE_LIMIT_WINDOW_MS)
+    ) {
+      return jsonResponse(
+        { ok: false, code: 'RATE_LIMITED', error: 'too many batch requests' },
+        429,
+        {
+          'Retry-After': '60',
+        }
+      );
     }
   }
 
@@ -356,8 +371,10 @@ export async function handleAdminMintSharedReportLink(
   // OSE-577: verify sponsor_id exists for this event before embedding in token.
   // Prevents minting tokens scoped to a sponsor that doesn't belong to the event.
   if (role === 'sponsor' && typeof sponsorId === 'string') {
+    // OSE-799 A2: "belongs to this event" = the sponsor_business has a placement
+    // on it. sponsorId is the durable business id embedded in the token.
     const sponsorRow = await env.DB.prepare(
-      'SELECT id FROM sponsors WHERE id = ? AND event_id = ? LIMIT 1'
+      'SELECT id FROM sponsor_placement WHERE sponsor_business_id = ? AND event_id = ? LIMIT 1'
     )
       .bind(sponsorId, eventId)
       .first();
