@@ -21,6 +21,7 @@
 
 import { describe, test, expect, beforeAll, beforeEach } from 'vitest';
 import { env, SELF } from 'cloudflare:test';
+import { seedSplitSponsor } from '../helpers/seed-sponsor';
 import {
   clientIp,
   isRateLimited,
@@ -46,8 +47,9 @@ const tenv = () => env as unknown as TestEnv;
 beforeAll(async () => {
   const mainStmts: string[] = JSON.parse(tenv().TEST_MIGRATION_STATEMENTS);
   for (const stmt of mainStmts) {
-    try { await tenv().DB.prepare(stmt).run(); }
-    catch (e) {
+    try {
+      await tenv().DB.prepare(stmt).run();
+    } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       if (msg.includes('duplicate column name') || msg.includes('already exists')) continue;
       throw e;
@@ -55,8 +57,9 @@ beforeAll(async () => {
   }
   const formsStmts: string[] = JSON.parse(tenv().TEST_FORMS_MIGRATION_STATEMENTS);
   for (const stmt of formsStmts) {
-    try { await tenv().FORMS_DB.prepare(stmt).run(); }
-    catch (e) {
+    try {
+      await tenv().FORMS_DB.prepare(stmt).run();
+    } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       if (msg.includes('duplicate column name') || msg.includes('already exists')) continue;
       throw e;
@@ -65,11 +68,15 @@ beforeAll(async () => {
 
   // Seed one ACTIVE event so form endpoint rate-limit tests can reach the RL layer
   try {
-    await tenv().DB.prepare(
-      `INSERT INTO events (id, brand_id, title, status, start_date, end_date)
+    await tenv()
+      .DB.prepare(
+        `INSERT INTO events (id, brand_id, title, status, start_date, end_date)
        VALUES ('evt_rl_test', 'brand_rl', 'Rate Limit Test Event', 'active', '2026-01-01', '2026-12-31')`
-    ).run();
-  } catch { /* already exists */ }
+      )
+      .run();
+  } catch {
+    /* already exists */
+  }
 });
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -79,18 +86,15 @@ function makeFormRequest(
   formType: string,
   headers: Record<string, string> = {}
 ): Request {
-  return new Request(
-    `http://localhost/api/v2/events/${eventId}/forms/${formType}`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...headers },
-      body: JSON.stringify({
-        name: 'Test User',
-        email: 'test@example.com',
-        event_id: eventId,
-      }),
-    }
-  );
+  return new Request(`http://localhost/api/v2/events/${eventId}/forms/${formType}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...headers },
+    body: JSON.stringify({
+      name: 'Test User',
+      email: 'test@example.com',
+      event_id: eventId,
+    }),
+  });
 }
 
 async function drainRateLimit(ip: string, kv: KVNamespace): Promise<number> {
@@ -109,7 +113,6 @@ async function drainRateLimit(ip: string, kv: KVNamespace): Promise<number> {
 // ════════════════════════════════════════════════════════════════════════════
 
 describe('RL-001: CF-Connecting-IP trust model', () => {
-
   test('clientIp() prefers CF-Connecting-IP over X-Forwarded-For', () => {
     const req = new Request('http://localhost/', {
       headers: {
@@ -142,7 +145,9 @@ describe('RL-001: CF-Connecting-IP trust model', () => {
     });
     // This shows that in Miniflare, "spoofing" CF-Connecting-IP is trivial
     expect(clientIp(spoofedReq)).toBe('127.0.0.1');
-    console.log('[RL-001] Miniflare: CF-Connecting-IP is caller-controlled — production CF edge prevents this');
+    console.log(
+      '[RL-001] Miniflare: CF-Connecting-IP is caller-controlled — production CF edge prevents this'
+    );
   });
 
   test('X-Forwarded-For injection: attacker can control rate-limit bucket when CF-Connecting-IP absent', () => {
@@ -156,7 +161,9 @@ describe('RL-001: CF-Connecting-IP trust model', () => {
       // Each request gets a different rate-limit key
       expect(clientIp(req)).toBe(ip);
     }
-    console.log('[RL-001] X-Forwarded-For injection: each IP gets separate 60-req bucket (RL-001 confirmed)');
+    console.log(
+      '[RL-001] X-Forwarded-For injection: each IP gets separate 60-req bucket (RL-001 confirmed)'
+    );
   });
 });
 
@@ -165,7 +172,6 @@ describe('RL-001: CF-Connecting-IP trust model', () => {
 // ════════════════════════════════════════════════════════════════════════════
 
 describe('RL-002: "unknown" IP collision — shared anonymous rate-limit bucket (HIGH)', () => {
-
   beforeEach(async () => {
     // Clear the 'unknown' bucket before each test
     await _deleteRateLimitKey('unknown', tenv().RATE_LIMIT_KV);
@@ -197,7 +203,9 @@ describe('RL-002: "unknown" IP collision — shared anonymous rate-limit bucket 
     // Drain the bucket completely
     const used = await drainRateLimit('unknown', kv);
     expect(used).toBe(RATE_LIMIT_MAX);
-    console.log(`[RL-002] Bucket exhausted after ${used} requests — ALL headerless clients now blocked`);
+    console.log(
+      `[RL-002] Bucket exhausted after ${used} requests — ALL headerless clients now blocked`
+    );
 
     // Next headerless request is blocked
     const blocked = await isRateLimited('unknown', kv);
@@ -209,15 +217,12 @@ describe('RL-002: "unknown" IP collision — shared anonymous rate-limit bucket 
     await _deleteRateLimitKey('unknown', tenv().RATE_LIMIT_KV);
 
     // One request with no IP headers should not be rate-limited yet
-    const res = await SELF.fetch(
-      'http://localhost/api/v2/events/evt_rl_test/forms/checkin',
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        // Deliberately no CF-Connecting-IP or X-Forwarded-For
-        body: JSON.stringify({ event_id: 'evt_rl_test' }),
-      }
-    );
+    const res = await SELF.fetch('http://localhost/api/v2/events/evt_rl_test/forms/checkin', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      // Deliberately no CF-Connecting-IP or X-Forwarded-For
+      body: JSON.stringify({ event_id: 'evt_rl_test' }),
+    });
     // Should not be 429 (first request)
     expect(res.status).not.toBe(429);
     console.log(`[RL-002] First headerless request status: ${res.status} (not 429 yet)`);
@@ -229,7 +234,6 @@ describe('RL-002: "unknown" IP collision — shared anonymous rate-limit bucket 
 // ════════════════════════════════════════════════════════════════════════════
 
 describe('RL-003: KV read-then-write race condition (HIGH)', () => {
-
   const RACE_IP = 'race-test-192.168.100.1';
 
   beforeEach(async () => {
@@ -252,11 +256,9 @@ describe('RL-003: KV read-then-write race condition (HIGH)', () => {
     const kv = tenv().RATE_LIMIT_KV;
     // Set count to RATE_LIMIT_MAX - 1 manually so we're one below the threshold
     const resetAt = Date.now() + RATE_LIMIT_WINDOW_MS;
-    await kv.put(
-      `ratelimit:${RACE_IP}`,
-      JSON.stringify({ count: RATE_LIMIT_MAX - 1, resetAt }),
-      { expirationTtl: 60 }
-    );
+    await kv.put(`ratelimit:${RACE_IP}`, JSON.stringify({ count: RATE_LIMIT_MAX - 1, resetAt }), {
+      expirationTtl: 60,
+    });
 
     // Fire CONCURRENCY requests simultaneously — in a true race, multiple reads
     // all see count=59, all compute newCount=60 (allowed), all write count=60.
@@ -266,11 +268,15 @@ describe('RL-003: KV read-then-write race condition (HIGH)', () => {
       Array.from({ length: CONCURRENCY }, () => isRateLimited(RACE_IP, kv))
     );
 
-    const passed = results.filter(r => !r).length;
-    const blocked = results.filter(r => r).length;
+    const passed = results.filter((r) => !r).length;
+    const blocked = results.filter((r) => r).length;
 
-    console.log(`[RL-003] Race window: ${passed} passed, ${blocked} blocked out of ${CONCURRENCY} concurrent requests`);
-    console.log('[RL-003] Expected in race: up to all 5 pass (double-spend). Correct: at most 1 passes.');
+    console.log(
+      `[RL-003] Race window: ${passed} passed, ${blocked} blocked out of ${CONCURRENCY} concurrent requests`
+    );
+    console.log(
+      '[RL-003] Expected in race: up to all 5 pass (double-spend). Correct: at most 1 passes.'
+    );
 
     // Document the vulnerability: in a race, multiple requests can pass
     // the limit when only 1 should be allowed.
@@ -279,7 +285,9 @@ describe('RL-003: KV read-then-write race condition (HIGH)', () => {
     if (passed > 1) {
       console.log('[RL-003] Race condition confirmed: multiple concurrent requests bypassed limit');
     } else {
-      console.log('[RL-003] Race not reproduced in Miniflare (single-process KV). Still a real distributed risk.');
+      console.log(
+        '[RL-003] Race not reproduced in Miniflare (single-process KV). Still a real distributed risk.'
+      );
     }
     // Either outcome is expected — we document the risk, not fail on it
     expect(passed + blocked).toBe(CONCURRENCY);
@@ -310,7 +318,6 @@ describe('RL-003: KV read-then-write race condition (HIGH)', () => {
 // ════════════════════════════════════════════════════════════════════════════
 
 describe('RL-005: Rate limiting scope gap — non-forms endpoints unprotected (HIGH)', () => {
-
   test('GET /api/v2/events is unmetered — no rate limit applied', async () => {
     // Drain a fake IP on forms to show RL is working there
     const formIp = 'rl-scope-test-1.2.3.4';
@@ -355,36 +362,40 @@ describe('RL-005: Rate limiting scope gap — non-forms endpoints unprotected (H
   });
 
   test('POST sponsor impression endpoint has no rate limit — can be flooded', async () => {
-    // Seed a sponsor if possible
+    // Seed a sponsor if possible (best-effort). OSE-799 A2: split model.
     try {
-      await tenv().DB.prepare(
-        `INSERT INTO sponsors (id, brand_id, name, active) VALUES ('spon_rl_test', 'brand_rl', 'Test Sponsor', 1)`
-      ).run();
-    } catch { /* already exists or table structure differs */ }
+      await seedSplitSponsor(tenv().DB, {
+        id: 'spon_rl_test',
+        eventId: 'evt_rl_test',
+        brandId: 'brand_rl',
+        name: 'Test Sponsor',
+      });
+    } catch {
+      /* already exists or table structure differs */
+    }
 
     const ip = 'impression-flood-10.0.0.1';
     // Send many impression requests — these have no rate limit
     const impressionResults = await Promise.all(
       Array.from({ length: 20 }, () =>
-        SELF.fetch(
-          'http://localhost/api/v2/events/evt_rl_test/sponsors/spon_rl_test/impression',
-          {
-            method: 'POST',
-            headers: {
-              'CF-Connecting-IP': ip,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({}),
-          }
-        )
+        SELF.fetch('http://localhost/api/v2/events/evt_rl_test/sponsors/spon_rl_test/impression', {
+          method: 'POST',
+          headers: {
+            'CF-Connecting-IP': ip,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({}),
+        })
       )
     );
     // None should be 429 — confirms no rate limiting on this endpoint
-    const statusCodes = impressionResults.map(r => r.status);
+    const statusCodes = impressionResults.map((r) => r.status);
     const has429 = statusCodes.includes(429);
     console.log(`[RL-005] Impression endpoint: ${statusCodes.join(', ')}`);
     expect(has429).toBe(false);
-    console.log('[RL-005] Impression flooding confirmed: no rate limit on POST /sponsors/:id/impression');
+    console.log(
+      '[RL-005] Impression flooding confirmed: no rate limit on POST /sponsors/:id/impression'
+    );
   });
 });
 
@@ -393,13 +404,15 @@ describe('RL-005: Rate limiting scope gap — non-forms endpoints unprotected (H
 // ════════════════════════════════════════════════════════════════════════════
 
 describe('PII-03: Distributed bypass — per-IP rate limit does not prevent form flooding (HIGH)', () => {
-
   test('60 different IPs can each submit 60 forms before any is blocked', async () => {
     const kv = tenv().RATE_LIMIT_KV;
-    const ATTACKER_IPS = Array.from({ length: 60 }, (_, i) => `10.0.${Math.floor(i / 255)}.${i % 255}`);
+    const ATTACKER_IPS = Array.from(
+      { length: 60 },
+      (_, i) => `10.0.${Math.floor(i / 255)}.${i % 255}`
+    );
 
     // Clear all attacker IP buckets
-    await Promise.all(ATTACKER_IPS.map(ip => _deleteRateLimitKey(ip, kv)));
+    await Promise.all(ATTACKER_IPS.map((ip) => _deleteRateLimitKey(ip, kv)));
 
     // Each IP sends exactly RATE_LIMIT_MAX requests — none should be blocked
     let totalPassed = 0;
@@ -411,8 +424,12 @@ describe('PII-03: Distributed bypass — per-IP rate limit does not prevent form
     }
 
     const totalCapacity = ATTACKER_IPS.length * RATE_LIMIT_MAX;
-    console.log(`[PII-03] ${ATTACKER_IPS.length} IPs × ${RATE_LIMIT_MAX} requests = ${totalCapacity} total requests passed`);
-    console.log(`[PII-03] Actually passed: ${totalPassed} — all passed = distributed bypass confirmed`);
+    console.log(
+      `[PII-03] ${ATTACKER_IPS.length} IPs × ${RATE_LIMIT_MAX} requests = ${totalCapacity} total requests passed`
+    );
+    console.log(
+      `[PII-03] Actually passed: ${totalPassed} — all passed = distributed bypass confirmed`
+    );
 
     // Every request passed — the rate limiter is completely ineffective
     // against a distributed attack even with 60 IPs
@@ -466,7 +483,6 @@ describe('PII-03: Distributed bypass — per-IP rate limit does not prevent form
 // ════════════════════════════════════════════════════════════════════════════
 
 describe('AUTH-004: X-Forwarded-For injection bypasses rate limit (HIGH)', () => {
-
   test('attacker with no CF-Connecting-IP can rotate XFF headers to avoid rate limiting', async () => {
     const kv = tenv().RATE_LIMIT_KV;
     // Simulate 5 different "clients" that are really the same attacker rotating XFF
@@ -497,9 +513,13 @@ describe('AUTH-004: X-Forwarded-For injection bypasses rate limit (HIGH)', () =>
       }
     }
 
-    console.log(`[AUTH-004] XFF rotation: ${totalAllowed} requests through ${attackerXffs.length} fake IPs`);
+    console.log(
+      `[AUTH-004] XFF rotation: ${totalAllowed} requests through ${attackerXffs.length} fake IPs`
+    );
     expect(totalAllowed).toBe(attackerXffs.length * RATE_LIMIT_MAX);
-    console.log('[AUTH-004] Confirmed: X-Forwarded-For rotation completely bypasses per-IP rate limiting');
+    console.log(
+      '[AUTH-004] Confirmed: X-Forwarded-For rotation completely bypasses per-IP rate limiting'
+    );
   });
 
   test('XFF with spaces and multiple proxies: first segment extraction is correct', () => {

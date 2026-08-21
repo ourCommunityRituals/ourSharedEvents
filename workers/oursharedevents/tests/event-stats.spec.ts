@@ -13,6 +13,7 @@
  */
 
 import { env, SELF } from 'cloudflare:test';
+import { seedSplitSponsor } from './helpers/seed-sponsor';
 import { describe, test, expect, beforeAll } from 'vitest';
 
 const ADMIN = { Authorization: 'Bearer test-admin-key-e2e-2026' };
@@ -66,9 +67,13 @@ async function seedScan(eventId: string): Promise<void> {
 }
 
 async function seedSponsor(eventId: string, active: number): Promise<void> {
-  await env.DB.prepare('INSERT INTO sponsors (id, event_id, name, is_active) VALUES (?, ?, ?, ?)')
-    .bind(crypto.randomUUID(), eventId, 'Acme', active)
-    .run();
+  // OSE-799 A2: is_active is now a sponsor_placement fact (appearances counts it).
+  await seedSplitSponsor(env.DB, {
+    id: crypto.randomUUID(),
+    eventId,
+    name: 'Acme',
+    isActive: active,
+  });
 }
 
 async function seedRegistration(eventId: string): Promise<void> {

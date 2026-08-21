@@ -116,7 +116,13 @@ export async function handlePortfolioRollup(
   // #9: a forged brand_id the caller is not a member of cannot widen scope.
   if (scope.mode === 'scoped' && brandId && !scope.brandIds.includes(brandId)) {
     return Response.json(
-      { ok: false, status: 403, code: 'BRAND_FORBIDDEN', error: `Not entitled to brand_id "${brandId}"`, requestId: reqId },
+      {
+        ok: false,
+        status: 403,
+        code: 'BRAND_FORBIDDEN',
+        error: `Not entitled to brand_id "${brandId}"`,
+        requestId: reqId,
+      },
       { status: 403, headers: { ...corsHeaders(request), 'X-Request-Id': reqId } }
     );
   }
@@ -156,7 +162,7 @@ export async function handlePortfolioRollup(
   let activeSponsors = 0;
   try {
     const sp = await env.DB.prepare(
-      `SELECT COUNT(*) AS cnt FROM sponsors WHERE is_active = 1 AND event_id IN (${ph})`
+      `SELECT COUNT(*) AS cnt FROM sponsor_placement WHERE is_active = 1 AND event_id IN (${ph})`
     )
       .bind(...eventIds)
       .first<{ cnt: number }>();

@@ -27,6 +27,7 @@
 
 import { describe, test, expect, beforeAll, beforeEach } from 'vitest';
 import { env } from 'cloudflare:test';
+import { seedSplitSponsor } from './helpers/seed-sponsor';
 import { buildSharedReport } from '../src/lib/shared-report-builder';
 import { CORRIDOR_MAP_MIN_COUNT } from '../src/lib/shared-report';
 
@@ -76,9 +77,16 @@ async function clearTables(): Promise<void> {
   const db = tenv().DB;
   await db.prepare(`DELETE FROM scan_aggregates`).run();
   await db.prepare(`DELETE FROM anon_id_returns`).run();
-  // Child rows first (FK order): sponsor_impressions → sponsors → campaigns.
+  // Child rows first (FK order). OSE-799 A2: the split added sponsor_placement +
+  // sponsor_asset (both children of sponsor_business; placement also references
+  // campaigns). Delete them BEFORE sponsor_business/campaigns or the campaign
+  // delete trips the placement→campaign FK.
   await db.prepare(`DELETE FROM sponsor_impressions WHERE id LIKE 'si-kanon-%'`).run();
-  await db.prepare(`DELETE FROM sponsors WHERE id LIKE 'sp-kanon-%'`).run();
+  await db.prepare(`DELETE FROM sponsor_asset WHERE sponsor_business_id LIKE 'sp-kanon-%'`).run();
+  await db
+    .prepare(`DELETE FROM sponsor_placement WHERE sponsor_business_id LIKE 'sp-kanon-%'`)
+    .run();
+  await db.prepare(`DELETE FROM sponsor_business WHERE id LIKE 'sp-kanon-%'`).run();
   await db.prepare(`DELETE FROM campaigns WHERE id LIKE 'camp-kanon-%'`).run();
   await db.prepare(`UPDATE events SET series_id = NULL`).run();
   await db.prepare(`DELETE FROM event_series`).run();
@@ -105,20 +113,16 @@ async function seedSponsor(opts: {
   is_local?: number;
   campaign_id?: string | null;
 }): Promise<void> {
-  await tenv()
-    .DB.prepare(
-      `INSERT INTO sponsors (id, event_id, name, tier, is_local, campaign_id, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`
-    )
-    .bind(
-      opts.id,
-      opts.event_id,
-      opts.name ?? `Sponsor ${opts.id}`,
-      opts.tier ?? 'primary',
-      opts.is_local ?? 0,
-      opts.campaign_id ?? null
-    )
-    .run();
+  // OSE-799 A2: split model. is_local → placement.locality_band, campaign_id →
+  // placement.campaign_id (the SharedReport impressions JOIN reads them there).
+  await seedSplitSponsor(tenv().DB, {
+    id: opts.id,
+    eventId: opts.event_id,
+    name: opts.name ?? `Sponsor ${opts.id}`,
+    tier: opts.tier ?? 'primary',
+    isLocal: opts.is_local ?? 0,
+    campaignId: opts.campaign_id ?? null,
+  });
 }
 
 /**

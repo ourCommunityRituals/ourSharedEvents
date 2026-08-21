@@ -15,6 +15,7 @@
 
 import { describe, test, expect, beforeAll } from 'vitest';
 import { env, SELF } from 'cloudflare:test';
+import { seedSplitSponsor } from './helpers/seed-sponsor';
 
 const BRAND = 'ose657-test';
 const MAX_SUGGESTIONS = 3; // mirrors MAX_POST_EVENT_SUGGESTIONS in pages.ts
@@ -179,13 +180,14 @@ describe('OSE-657: recap-first is a hard layout invariant', () => {
     });
     const tenv = env as unknown as TestEnv;
     // Seed an active sponsor with a tier that MUST NOT surface publicly.
-    await tenv.DB.prepare('DELETE FROM sponsors WHERE event_id = ?').bind(eventId).run();
-    await tenv.DB.prepare(
-      `INSERT INTO sponsors (id, event_id, name, website_url, tier, is_active, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, 1, datetime('now'), datetime('now'))`
-    )
-      .bind('spn_ose657', eventId, 'Corner Cafe', 'https://cornercafe.example', 'platinum')
-      .run();
+    // OSE-799 A2: split model (idempotent helper clears prior rows for this id).
+    await seedSplitSponsor(tenv.DB, {
+      id: 'spn_ose657',
+      eventId,
+      name: 'Corner Cafe',
+      websiteUrl: 'https://cornercafe.example',
+      tier: 'platinum',
+    });
 
     const res = await SELF.fetch(`https://t.test/events/${eventId}`);
     const html = await res.text();

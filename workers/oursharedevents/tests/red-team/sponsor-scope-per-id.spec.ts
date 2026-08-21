@@ -30,6 +30,7 @@ import {
   handleAdminDeleteSponsor,
   type SponsorsEnv,
 } from '../../src/handlers/sponsors';
+import { seedSplitSponsor } from '../helpers/seed-sponsor';
 
 interface TestEnv {
   DB: D1Database;
@@ -60,12 +61,8 @@ async function seedEvent(id: string, brandId: string, title: string): Promise<vo
 }
 
 async function seedSponsor(id: string, eventId: string, name: string): Promise<void> {
-  await env.DB.prepare(
-    `INSERT INTO sponsors (id, event_id, name, tier, placement_formats, is_active)
-     VALUES (?, ?, ?, 'gold', '{}', 1)`
-  )
-    .bind(id, eventId, name)
-    .run();
+  // OSE-799 A2: split model; sponsor_business.brand_id is inherited from the event.
+  await seedSplitSponsor(env.DB, { id, eventId, name, tier: 'gold' });
 }
 
 /** base64url-encode a JSON object (no padding), for a decode-only fake JWT. */
@@ -106,12 +103,16 @@ const sponsorsEnv = env as unknown as SponsorsEnv;
 
 beforeAll(async () => {
   await applyMigrations();
-  // Two brands. Brand A has an operator; brand B does NOT — so any brand-A reach
-  // into a brand-B sponsor is provably a cross-tenant breach, not a shared row.
+  // OSE-799 A2: THREE brands. Brand A has an operator; B and C do NOT — so any
+  // brand-A reach into a B or C sponsor is provably a cross-tenant breach. The
+  // third tenant (C) guards against a two-brand scope bug that only a wholly
+  // unrelated bystander surfaces. Each business inherits its event's brand.
   await seedEvent('evt-A1', 'brand-A', 'Brand A Launch');
   await seedEvent('evt-B1', 'brand-B', 'Brand B Gala');
+  await seedEvent('evt-C1', 'brand-C', 'Brand C Fair');
   await seedSponsor('sp-A1', 'evt-A1', 'Acme (A1)');
   await seedSponsor('sp-B1', 'evt-B1', 'Competitor (B1)');
+  await seedSponsor('sp-C1', 'evt-C1', 'Bystander (C1)');
 
   // Server-verified actor → brand-A only. Email actors ignore ADMIN_SCOPE_ALL,
   // so the global CI opt-in cannot mask these assertions.
@@ -130,6 +131,15 @@ describe('OSE-710 / INVARIANT #9 — per-ID sponsor GET is brand-scoped', () => 
   test('brand-A operator CANNOT read a brand-B sponsor (forged id → 404/not-found)', async () => {
     const res = await handleAdminGetSponsor(reqAsEmail('a@brand-a.test'), sponsorsEnv, 'sp-B1');
     // 404, indistinguishable from "does not exist" — the id is never confirmed.
+    expect(res.status).toBe(404);
+    const body = (await res.json()) as { ok: boolean; item?: unknown };
+    expect(body.ok).toBe(false);
+    expect(body.item).toBeUndefined();
+  });
+
+  test('brand-A operator CANNOT read a third-tenant (brand-C) sponsor either (404)', async () => {
+    // OSE-799 A2: the bystander tenant — no shared event, no shared operator.
+    const res = await handleAdminGetSponsor(reqAsEmail('a@brand-a.test'), sponsorsEnv, 'sp-C1');
     expect(res.status).toBe(404);
     const body = (await res.json()) as { ok: boolean; item?: unknown };
     expect(body.ok).toBe(false);
@@ -160,7 +170,7 @@ describe('OSE-710 / INVARIANT #9 — per-ID sponsor UPDATE is brand-scoped (cros
     );
     expect(res.status).toBe(404);
     // The brand-B row must be untouched — the mutation never landed.
-    const row = await env.DB.prepare('SELECT name FROM sponsors WHERE id = ?')
+    const row = await env.DB.prepare('SELECT name FROM sponsor_business WHERE id = ?')
       .bind('sp-B1')
       .first<{ name: string }>();
     expect(row?.name).toBe('Competitor (B1)');
@@ -173,7 +183,7 @@ describe('OSE-710 / INVARIANT #9 — per-ID sponsor UPDATE is brand-scoped (cros
       'sp-A1'
     );
     expect(res.status).toBe(404);
-    const row = await env.DB.prepare('SELECT name FROM sponsors WHERE id = ?')
+    const row = await env.DB.prepare('SELECT name FROM sponsor_business WHERE id = ?')
       .bind('sp-A1')
       .first<{ name: string }>();
     expect(row?.name).toBe('Acme (A1)');
@@ -186,7 +196,7 @@ describe('OSE-710 / INVARIANT #9 — per-ID sponsor UPDATE is brand-scoped (cros
       'sp-A1'
     );
     expect(res.status).toBe(200);
-    const row = await env.DB.prepare('SELECT name FROM sponsors WHERE id = ?')
+    const row = await env.DB.prepare('SELECT name FROM sponsor_business WHERE id = ?')
       .bind('sp-A1')
       .first<{ name: string }>();
     expect(row?.name).toBe('Acme Renamed');
@@ -201,7 +211,9 @@ describe('OSE-710 / INVARIANT #9 — per-ID sponsor DELETE is brand-scoped (cros
       'sp-B1'
     );
     expect(res.status).toBe(404);
-    const row = await env.DB.prepare('SELECT is_active FROM sponsors WHERE id = ?')
+    const row = await env.DB.prepare(
+      'SELECT is_active FROM sponsor_placement WHERE sponsor_business_id = ?'
+    )
       .bind('sp-B1')
       .first<{ is_active: number }>();
     expect(row?.is_active).toBe(1);
@@ -210,7 +222,9 @@ describe('OSE-710 / INVARIANT #9 — per-ID sponsor DELETE is brand-scoped (cros
   test('unauthenticated caller CANNOT delete any sponsor (fail-closed, row stays active)', async () => {
     const res = await handleAdminDeleteSponsor(reqAnon('DELETE'), sponsorsEnv, 'sp-A1');
     expect(res.status).toBe(404);
-    const row = await env.DB.prepare('SELECT is_active FROM sponsors WHERE id = ?')
+    const row = await env.DB.prepare(
+      'SELECT is_active FROM sponsor_placement WHERE sponsor_business_id = ?'
+    )
       .bind('sp-A1')
       .first<{ is_active: number }>();
     expect(row?.is_active).toBe(1);
@@ -223,7 +237,9 @@ describe('OSE-710 / INVARIANT #9 — per-ID sponsor DELETE is brand-scoped (cros
       'sp-A1'
     );
     expect(res.status).toBe(200);
-    const row = await env.DB.prepare('SELECT is_active FROM sponsors WHERE id = ?')
+    const row = await env.DB.prepare(
+      'SELECT is_active FROM sponsor_placement WHERE sponsor_business_id = ?'
+    )
       .bind('sp-A1')
       .first<{ is_active: number }>();
     expect(row?.is_active).toBe(0);

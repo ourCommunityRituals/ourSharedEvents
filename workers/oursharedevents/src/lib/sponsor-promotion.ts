@@ -42,11 +42,6 @@ export interface PromotionEnv extends ClearanceEnv, SponsorInviteEnv {
  */
 export const COVENANT_BASE_TIER = 'primary';
 
-// Uniform, non-purchasable placement marker (mirrors handlers/sponsors.ts). The
-// resolver ignores it; stored only so legacy readers see "eligible everywhere".
-const UNIFORM_PLACEMENT_FORMATS =
-  '{"posterTop":true,"tvTop":true,"tvSide":true,"mobileBanner":true}';
-
 export type PromotionResult =
   | {
       ok: true;
@@ -237,44 +232,71 @@ export async function promoteSponsorDraft(
   const now = new Date().toISOString();
 
   // FIX 1 (tier forced) + FIX 2 (guarded UPDATE) + FIX 3 (is_active gated here).
-  // One atomic batch: INSERT sponsor, INSERT its event-types, flip the draft.
+  // OSE-799 A2: promotion writes the SPLIT model in one atomic batch —
+  //   identity  → sponsor_business  (brand_id from the draft = the event's brand)
+  //   attachment→ sponsor_placement (tier server-forced; is_active=1 gated here;
+  //               locality_band replaces is_local; source=corridor_covenant since
+  //               this is the covenant-gated self-onboarding crossing, not an
+  //               organizer manual attach)
+  //   creative  → sponsor_asset     (logo + each promoted format, one row per fmt)
+  // then INSERT its event-types (now FK → sponsor_business) and flip the draft.
+  const placementId = genId('spl');
   const statements: D1PreparedStatement[] = [];
   statements.push(
     env.DB.prepare(
-      `INSERT INTO sponsors (
-         id, event_id, name, logo_url, website_url, tier, placement_formats,
-         click_token, display_token, is_active, is_local, lat, lon, h3_res9, h3_res7,
-         poster_url, poster_content_type, banner_url, banner_content_type,
-         vertical_url, vertical_content_type, square_url, square_content_type,
-         created_at, updated_at
-       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO sponsor_business
+         (id, brand_id, name, website_url, lat, lon, h3_res9, h3_res7, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).bind(
       sponsorId,
-      draft.event_id,
+      draft.brand_id,
       draft.name,
-      draft.logo_url,
       draft.website_url,
-      COVENANT_BASE_TIER, // server-forced, never from draft/client
-      UNIFORM_PLACEMENT_FORMATS,
-      null,
-      null,
-      isLocal,
       draft.lat,
       draft.lon,
       draft.h3_res9,
       draft.h3_res7,
-      formatUrl.poster ?? null,
-      formatCt.poster ?? null,
-      formatUrl.banner ?? null,
-      formatCt.banner ?? null,
-      formatUrl.vertical ?? null,
-      formatCt.vertical ?? null,
-      formatUrl.square ?? null,
-      formatCt.square ?? null,
       now,
       now
     )
   );
+  statements.push(
+    env.DB.prepare(
+      `INSERT INTO sponsor_placement
+         (id, sponsor_business_id, event_id, tier, campaign_id, source, polarity,
+          locality_band, click_token, display_token, is_active, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, 'corridor_covenant', 1, ?, NULL, NULL, 1, ?, ?)`
+    ).bind(
+      placementId,
+      sponsorId,
+      draft.event_id,
+      COVENANT_BASE_TIER, // server-forced, never from draft/client
+      draft.campaign_id,
+      isLocal, // → locality_band (geo-derived above)
+      now,
+      now
+    )
+  );
+  // Creative: logo (from the draft) + each per-format asset copied above. One row
+  // per format; #25 — assets are uniform creative, NEVER a purchasable slot.
+  if (draft.logo_url) {
+    statements.push(
+      env.DB.prepare(
+        `INSERT INTO sponsor_asset (id, sponsor_business_id, format, url, created_at, updated_at)
+         VALUES (?, ?, 'logo', ?, ?, ?)`
+      ).bind(genId('sa'), sponsorId, draft.logo_url, now, now)
+    );
+  }
+  for (const fmt of ASSET_FORMATS) {
+    if (!formatUrl[fmt]) continue;
+    statements.push(
+      env.DB.prepare(
+        `INSERT INTO sponsor_asset
+           (id, sponsor_business_id, format, url, content_type, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`
+      ).bind(genId('sa'), sponsorId, fmt, formatUrl[fmt], formatCt[fmt] ?? null, now, now)
+    );
+  }
   for (const tid of templateIds) {
     statements.push(
       env.DB.prepare(

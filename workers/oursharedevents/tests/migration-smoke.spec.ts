@@ -65,12 +65,14 @@ const DB_TABLES = [
   'security_alerts', // 0042 (OSE-558 security observability)
   'security_metrics', // 0042 (OSE-558 security observability)
   'shortlinks', // 0030 (OSE-240)
-  'sponsor_areas', // 0020
+  'sponsor_areas', // 0020 (0067: FK repointed to sponsor_business)
+  'sponsor_asset', // 0066 (OSE-799 A2 — durable creative, one row per format)
   'sponsor_asset_draft', // 0054 (OSE-725 Sponsor Onboarding — per-format render inputs)
+  'sponsor_business', // 0065 (OSE-799 A2 — durable sponsor identity)
   'sponsor_business_draft', // 0053 (OSE-724 Sponsor Onboarding — resolver-invisible draft)
-  'sponsor_event_types', // 0019
-  'sponsor_impressions', // 0022
-  'sponsors', // 0002
+  'sponsor_event_types', // 0019 (0067: FK repointed to sponsor_business)
+  'sponsor_impressions', // 0022 (0067: FK repointed to sponsor_business)
+  'sponsor_placement', // 0067 (OSE-799 A2 — per-event attachment; replaces sponsors)
   'subscribers', // 0008
   'template_event_types', // 0056 (OSE-727 Sponsor Onboarding — template×registry clearance join)
 ] as const;

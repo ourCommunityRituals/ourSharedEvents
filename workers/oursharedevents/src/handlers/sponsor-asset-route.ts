@@ -100,8 +100,20 @@ export async function handleSponsorAsset(
   if (!isAssetFormat(format)) return jsonErr('BAD_FORMAT', 400);
   const fmt: AssetFormat = format;
 
+  // OSE-799 A2: creative now lives one-row-per-format in sponsor_asset. Pivot the
+  // rows back into the flat {logo,poster,banner,vertical,square}_url shape the pure
+  // resolveAssetSource() core reads — identity (id, name) from sponsor_business.
   const sponsor = await env.DB.prepare(
-    'SELECT id, name, logo_url, poster_url, banner_url, vertical_url, square_url FROM sponsors WHERE id = ?'
+    `SELECT sb.id AS id, sb.name AS name,
+            MAX(CASE WHEN la.format = 'logo' THEN la.url END)     AS logo_url,
+            MAX(CASE WHEN la.format = 'poster' THEN la.url END)   AS poster_url,
+            MAX(CASE WHEN la.format = 'banner' THEN la.url END)   AS banner_url,
+            MAX(CASE WHEN la.format = 'vertical' THEN la.url END) AS vertical_url,
+            MAX(CASE WHEN la.format = 'square' THEN la.url END)   AS square_url
+       FROM sponsor_business sb
+       LEFT JOIN sponsor_asset la ON la.sponsor_business_id = sb.id
+      WHERE sb.id = ?
+      GROUP BY sb.id, sb.name`
   )
     .bind(sponsorId)
     .first<SponsorAssetRow>();

@@ -30,6 +30,7 @@
  */
 
 import { describe, test, expect, beforeAll } from 'vitest';
+import { seedSplitSponsor } from './helpers/seed-sponsor';
 import { env, SELF } from 'cloudflare:test';
 
 const BRAND = 'ose-ssp1-test';
@@ -105,14 +106,15 @@ async function seedSponsor(
   opts: { name: string; websiteUrl?: string | null; isActive?: number }
 ): Promise<void> {
   const id = `spon_${eventId}_${opts.name.replace(/\s+/g, '_').toLowerCase()}`;
-  await tenv().DB.prepare(`DELETE FROM sponsors WHERE id = ?`).bind(id).run();
-  await tenv()
-    .DB.prepare(
-      `INSERT INTO sponsors (id, event_id, name, tier, website_url, is_active, created_at, updated_at)
-       VALUES (?, ?, ?, 'gold', ?, ?, datetime('now'), datetime('now'))`
-    )
-    .bind(id, eventId, opts.name, opts.websiteUrl ?? null, opts.isActive ?? 1)
-    .run();
+  // OSE-799 A2: split model (helper is idempotent — clears prior rows for this id).
+  await seedSplitSponsor(tenv().DB, {
+    id,
+    eventId,
+    name: opts.name,
+    tier: 'gold',
+    websiteUrl: opts.websiteUrl ?? null,
+    isActive: opts.isActive ?? 1,
+  });
 }
 
 async function seedRegistration(

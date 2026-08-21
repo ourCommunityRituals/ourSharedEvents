@@ -103,14 +103,16 @@ describe('OSE-744 — gate at the promotion seam', () => {
   // @born-red TL-062 | method: design-time-negative-assertion | date: 2026-08-13
   test('ineligible draft → 402 PAYMENT_REQUIRED, no sponsor, draft.status untouched', async () => {
     await seedDraft('elig_no', { eligible: false });
-    const before = await env.DB.prepare('SELECT COUNT(*) AS c FROM sponsors').first<{
+    const before = await env.DB.prepare('SELECT COUNT(*) AS c FROM sponsor_business').first<{
       c: number;
     }>();
     const res = await promoteSponsorDraft(e() as never, 'elig_no');
     expect(res.ok).toBe(false);
     if (!res.ok) expect(res.status).toBe(402);
     if (!res.ok) expect(res.code).toBe('PAYMENT_REQUIRED');
-    const after = await env.DB.prepare('SELECT COUNT(*) AS c FROM sponsors').first<{ c: number }>();
+    const after = await env.DB.prepare('SELECT COUNT(*) AS c FROM sponsor_business').first<{
+      c: number;
+    }>();
     expect(after?.c).toBe(before?.c); // no sponsor minted
     const draft = await env.DB.prepare(
       "SELECT status, promoted_sponsor_id FROM sponsor_business_draft WHERE draft_token='elig_no'"
@@ -185,10 +187,14 @@ describe('OSE-744 — #25 allocation invariant to payment/eligibility', () => {
     const r2 = await promoteSponsorDraft(e() as never, 'tier_comp', { compClaimValid: true });
     expect(r1.ok && r2.ok).toBe(true);
     if (r1.ok && r2.ok) {
-      const t1 = await env.DB.prepare('SELECT tier FROM sponsors WHERE id = ?')
+      const t1 = await env.DB.prepare(
+        'SELECT tier FROM sponsor_placement WHERE sponsor_business_id = ?'
+      )
         .bind(r1.sponsor_id)
         .first<{ tier: string }>();
-      const t2 = await env.DB.prepare('SELECT tier FROM sponsors WHERE id = ?')
+      const t2 = await env.DB.prepare(
+        'SELECT tier FROM sponsor_placement WHERE sponsor_business_id = ?'
+      )
         .bind(r2.sponsor_id)
         .first<{ tier: string }>();
       expect(t1?.tier).toBe(COVENANT_BASE_TIER);

@@ -11,6 +11,7 @@
  */
 
 import { env } from 'cloudflare:test';
+import { seedSplitSponsor } from './helpers/seed-sponsor';
 import { describe, test, expect, beforeAll } from 'vitest';
 import {
   resolveSponsorsForEvent,
@@ -64,18 +65,14 @@ async function seedSponsor(
   eventId: string,
   opts: { tier?: string; placements?: Record<string, boolean> } = {}
 ): Promise<void> {
-  await env.DB.prepare(
-    `INSERT INTO sponsors (id, event_id, name, tier, placement_formats, is_active)
-     VALUES (?, ?, ?, ?, ?, 1)`
-  )
-    .bind(
-      id,
-      eventId,
-      `Sponsor ${id}`,
-      opts.tier ?? 'primary',
-      JSON.stringify(opts.placements ?? {})
-    )
-    .run();
+  // OSE-799 A2: split model. `placements` is retired (#25 — placement is uniform,
+  // never a purchasable slot), so it's ignored; only tier carries through.
+  await seedSplitSponsor(env.DB, {
+    id,
+    eventId,
+    name: `Sponsor ${id}`,
+    tier: opts.tier ?? 'primary',
+  });
 }
 
 async function seedSponsorEventType(sponsorId: string, templateId: string): Promise<void> {

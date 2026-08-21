@@ -84,7 +84,9 @@ describe('QA-1: Migration idempotency', () => {
     // + 1 (business_type_category_map — migration 0059, OSE-730) = 32.
     // + net 1 (migration 0062, OSE-798: DROP scans, ADD scan_placement_events
     //   + scan_node_returns → −1 +2) = 33.
-    expect(names).toHaveLength(33);
+    // + net 2 (migrations 0065–0067, OSE-799 A2: DROP sponsors, ADD
+    //   sponsor_business + sponsor_asset + sponsor_placement → −1 +3) = 35.
+    expect(names).toHaveLength(35);
   });
 
   test('indexes remain at exactly 65 after idempotent re-run', async () => {
@@ -112,10 +114,14 @@ describe('QA-1: Migration idempotency', () => {
     //   idx_snr_event_bucket (functional equivalents on the split tables). The
     //   anon-correlation index is DELIBERATELY not re-added (doctrine rule 6 —
     //   no cheap placement↔session seek). Net −1 → 63.
+    // + net 3 (migrations 0065–0067, OSE-799 A2): DROP sponsors removes its
+    //   three indexes (idx_sponsors_event_id / _is_local / _campaign_id, −3);
+    //   ADD idx_sponsor_business_brand/_h3_res7 (+2), idx_sponsor_asset_business
+    //   (+1), idx_sponsor_placement_event/_business/_locality (+3) = +6 → 66.
     const indexes = await env.DB.prepare(
       "SELECT name FROM sqlite_master WHERE type='index' AND name LIKE 'idx_%'"
     ).all();
-    expect(indexes.results).toHaveLength(63);
+    expect(indexes.results).toHaveLength(66);
   });
 });
 
@@ -155,13 +161,14 @@ describe('QA-2: Foreign key constraints', () => {
     }
   });
 
-  test('INSERT into sponsors with invalid event_id fails with FK error', async () => {
+  test('INSERT into sponsor_placement with invalid event_id fails with FK error', async () => {
+    // OSE-799 A2: the sponsor→event FK now lives on sponsor_placement.event_id.
     await env.DB.prepare('PRAGMA foreign_keys = ON').run();
 
     try {
       await env.DB.prepare(
-        `INSERT INTO sponsors (id, event_id, name)
-         VALUES ('spn_bad_fk', 'nonexistent_event', 'Bad Sponsor')`
+        `INSERT INTO sponsor_placement (id, sponsor_business_id, event_id)
+         VALUES ('spl_bad_fk', 'sb_bad_fk', 'nonexistent_event')`
       ).run();
       expect.fail('INSERT with invalid event_id should have thrown FK constraint error');
     } catch (e: unknown) {
@@ -239,21 +246,27 @@ describe('QA-3: UNIQUE constraints', () => {
     }
   });
 
-  test('sponsors.click_token UNIQUE — duplicate click_token insert fails', async () => {
+  test('sponsor_placement.click_token UNIQUE — duplicate click_token insert fails', async () => {
+    // OSE-799 A2: click_token / display_token moved to sponsor_placement.
     await env.DB.prepare(
       `INSERT OR IGNORE INTO events (id, brand_id, title, slug)
        VALUES ('evt_spn_uniq', 'brand_1', 'Sponsor Uniq Event', 'sponsor-unique-test')`
     ).run();
 
+    // Businesses the placements reference (a prior test may have enabled FK).
     await env.DB.prepare(
-      `INSERT INTO sponsors (id, event_id, name, click_token)
-       VALUES ('spn_uniq_1', 'evt_spn_uniq', 'Sponsor A', 'click_token_dup')`
+      `INSERT OR IGNORE INTO sponsor_business (id, brand_id, name)
+       VALUES ('sb_uniq_1', 'brand_1', 'Sponsor A'), ('sb_uniq_2', 'brand_1', 'Sponsor B')`
+    ).run();
+    await env.DB.prepare(
+      `INSERT INTO sponsor_placement (id, sponsor_business_id, event_id, click_token)
+       VALUES ('spl_uniq_1', 'sb_uniq_1', 'evt_spn_uniq', 'click_token_dup')`
     ).run();
 
     try {
       await env.DB.prepare(
-        `INSERT INTO sponsors (id, event_id, name, click_token)
-         VALUES ('spn_uniq_2', 'evt_spn_uniq', 'Sponsor B', 'click_token_dup')`
+        `INSERT INTO sponsor_placement (id, sponsor_business_id, event_id, click_token)
+         VALUES ('spl_uniq_2', 'sb_uniq_2', 'evt_spn_uniq', 'click_token_dup')`
       ).run();
       expect.fail('Duplicate click_token INSERT should have thrown UNIQUE constraint error');
     } catch (e: unknown) {
@@ -262,21 +275,25 @@ describe('QA-3: UNIQUE constraints', () => {
     }
   });
 
-  test('sponsors.display_token UNIQUE — duplicate display_token insert fails', async () => {
+  test('sponsor_placement.display_token UNIQUE — duplicate display_token insert fails', async () => {
     await env.DB.prepare(
       `INSERT OR IGNORE INTO events (id, brand_id, title, slug)
        VALUES ('evt_imp_uniq', 'brand_1', 'Impression Uniq Event', 'impression-unique-test')`
     ).run();
 
     await env.DB.prepare(
-      `INSERT INTO sponsors (id, event_id, name, display_token)
-       VALUES ('spn_uniq_3', 'evt_imp_uniq', 'Sponsor C', 'imp_token_dup')`
+      `INSERT OR IGNORE INTO sponsor_business (id, brand_id, name)
+       VALUES ('sb_uniq_3', 'brand_1', 'Sponsor C'), ('sb_uniq_4', 'brand_1', 'Sponsor D')`
+    ).run();
+    await env.DB.prepare(
+      `INSERT INTO sponsor_placement (id, sponsor_business_id, event_id, display_token)
+       VALUES ('spl_uniq_3', 'sb_uniq_3', 'evt_imp_uniq', 'imp_token_dup')`
     ).run();
 
     try {
       await env.DB.prepare(
-        `INSERT INTO sponsors (id, event_id, name, display_token)
-         VALUES ('spn_uniq_4', 'evt_imp_uniq', 'Sponsor D', 'imp_token_dup')`
+        `INSERT INTO sponsor_placement (id, sponsor_business_id, event_id, display_token)
+         VALUES ('spl_uniq_4', 'sb_uniq_4', 'evt_imp_uniq', 'imp_token_dup')`
       ).run();
       expect.fail('Duplicate display_token INSERT should have thrown UNIQUE constraint error');
     } catch (e: unknown) {

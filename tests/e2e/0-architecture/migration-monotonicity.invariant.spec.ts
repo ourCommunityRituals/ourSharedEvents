@@ -58,7 +58,12 @@ const MIGRATIONS_DIR = join(REPO_ROOT, 'workers', 'oursharedevents', 'migrations
  */
 const LOAD_BEARING_TABLES = [
   'events',
-  'sponsors',
+  // OSE-799 A2: `sponsors` was intentionally RETIRED — migration 0067 drops it and
+  // splits it into sponsor_business (identity) + sponsor_asset (creative) +
+  // sponsor_placement (per-event attachment). The table held 0 rows in every
+  // environment at retirement, so no data is wiped. Removed from this list per the
+  // documented intentional-retirement path (mirrors `scans` under OSE-798). A brain
+  // enrichment_history entry recording the decision is a reconciliation follow-up.
   'campaigns',
   'scan_aggregates',
   'anon_id_returns',

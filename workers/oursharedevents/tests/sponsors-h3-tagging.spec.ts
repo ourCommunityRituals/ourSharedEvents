@@ -97,8 +97,9 @@ async function updateSponsor(id: string, body: Record<string, unknown>): Promise
 }
 
 async function getSponsorRow(id: string): Promise<Record<string, unknown> | null> {
+  // OSE-799 A2: lat/lon/h3_res9/h3_res7 live on the durable sponsor_business now.
   const tenv = env as unknown as TestEnv;
-  return tenv.DB.prepare('SELECT * FROM sponsors WHERE id = ?')
+  return tenv.DB.prepare('SELECT * FROM sponsor_business WHERE id = ?')
     .bind(id)
     .first<Record<string, unknown>>();
 }
@@ -110,7 +111,7 @@ beforeAll(async () => {
   // Clean slate
   const tenv = env as unknown as TestEnv;
   await tenv.DB.prepare("DELETE FROM events WHERE brand_id = 'h3-sp-test'").run();
-  await tenv.DB.prepare("DELETE FROM sponsors WHERE name LIKE 'H3Test%'").run();
+  await tenv.DB.prepare("DELETE FROM sponsor_business WHERE name LIKE 'H3Test%'").run();
 
   // Seed two events:
   //   evt-eagles: has Eagles Hall h3_res7 (same corridor as EAGLES sponsor)

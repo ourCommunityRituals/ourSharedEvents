@@ -27,6 +27,7 @@
  */
 
 import { env } from 'cloudflare:test';
+import { seedSplitSponsor } from './helpers/seed-sponsor';
 import { describe, test, expect, beforeAll } from 'vitest';
 import { resolveSponsorsForEvent } from '../src/lib/sponsor-resolver';
 
@@ -74,12 +75,12 @@ beforeAll(async () => {
     .run();
 
   // 3. Positive control — a real, active, promoted sponsor for the SAME event.
-  await env.DB.prepare(
-    `INSERT INTO sponsors (id, event_id, name, is_active)
-     VALUES ('spn_invis_live', ?, 'Liveco (should render)', 1)`
-  )
-    .bind(EVENT_ID)
-    .run();
+  //    OSE-799 A2: split model (business + active placement + logo asset).
+  await seedSplitSponsor(env.DB, {
+    id: 'spn_invis_live',
+    eventId: EVENT_ID,
+    name: 'Liveco (should render)',
+  });
 
   // 4. Asset-draft row (0054) hanging off the business draft — also invisible.
   await env.DB.prepare(
@@ -113,13 +114,19 @@ describe('Invariant 25: draft resolver-invisibility (runtime reachability)', () 
     expect(names.filter((n) => /sponsor/i.test(n))).toHaveLength(0);
   });
 
-  test('sponsors table has no draft/status column the resolver could filter on', async () => {
-    const cols = await env.DB.prepare('PRAGMA table_info(sponsors)').all<{ name: string }>();
-    const colNames = (cols.results ?? []).map((r) => String(r.name).toLowerCase());
-    expect(colNames).not.toContain('status');
-    expect(colNames).not.toContain('draft');
-    expect(colNames).not.toContain('is_draft');
-    expect(colNames).not.toContain('draft_token');
+  test('the split sponsor tables have no draft/status column the resolver could filter on', async () => {
+    // OSE-799 A2: the retired `sponsors` table split into sponsor_business (identity)
+    // + sponsor_placement (per-event visibility). Neither may carry a draft/status
+    // discriminator the resolver could accidentally surface a draft through.
+    for (const table of ['sponsor_business', 'sponsor_placement']) {
+      const cols = await env.DB.prepare(`PRAGMA table_info(${table})`).all<{ name: string }>();
+      const colNames = (cols.results ?? []).map((r) => String(r.name).toLowerCase());
+      expect(colNames.length).toBeGreaterThan(0); // table exists (not silently gone)
+      expect(colNames).not.toContain('status');
+      expect(colNames).not.toContain('draft');
+      expect(colNames).not.toContain('is_draft');
+      expect(colNames).not.toContain('draft_token');
+    }
   });
 
   test('sponsor_asset_draft carries NO share-weighting column (#25 render-inputs wall)', async () => {
