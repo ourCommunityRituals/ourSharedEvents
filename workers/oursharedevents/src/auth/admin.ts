@@ -231,28 +231,21 @@ export async function requireAdmin(
     }
 
     const { valid, email } = extractCfAccessPayload(cfJwt);
-    if (valid) {
-      // If a CF Access JWT is present, the email claim must pass the allowlist.
-      // No email claim in the JWT → treated as unauthorised (fail-safe).
-      if (!email) {
-        return new Response(
-          JSON.stringify({
-            ok: false,
-            status: 403,
-            code: 'ADMIN_NOT_ALLOWED',
-            error: 'CF Access JWT contains no email claim.',
-            requestId,
-          }),
-          {
-            status: 403,
-            headers: { 'Content-Type': 'application/json', 'X-Request-Id': requestId },
-          }
-        );
-      }
+    if (valid && email) {
+      // A CF Access JWT carrying a HUMAN email must pass the admin allowlist.
       const allowlistDeny = assertAdminEmailAllowed(email, env, requestId);
       if (allowlistDeny) return allowlistDeny;
       return null;
     }
+    // OSE-889: a VALID CF Access JWT with NO email is a **service token**
+    // (non-human identity — CF Access injects these when a service token
+    // authenticates at the edge). The email allowlist does not apply to it, so we
+    // must NOT 403 here: doing so short-circuited before Methods 2/3 and made it
+    // impossible for CI to authenticate once CF Access was enforced on the admin
+    // path (the recurring OSE-349/OSE-889 failure). Fall through to Method 2
+    // (X-OCR-Internal) / Method 3 (ADMIN_KEY) — each of which requires its own
+    // secret, so this fall-through never grants access on the JWT alone.
+    // (An invalid JWT also falls through and is rejected by the final 401.)
   }
 
   // Method 2: X-OCR-Internal header (CI/CD automation)
