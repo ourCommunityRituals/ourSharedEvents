@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS sponsor_placement (
   id                   TEXT PRIMARY KEY,
   sponsor_business_id  TEXT NOT NULL,
   event_id             TEXT NOT NULL,
-  tier                 TEXT NOT NULL DEFAULT 'standard',  -- per-event; #25: does not buy size/slot
+  tier                 TEXT NOT NULL DEFAULT 'standard',  -- per-event, #25 does not buy size/slot
   campaign_id          TEXT,
   source               TEXT NOT NULL DEFAULT 'organizer', -- 'organizer' | 'corridor_covenant' | 'platform_seed'
   polarity             INTEGER NOT NULL DEFAULT 1,        -- engagement tone (reserved)
@@ -73,27 +73,32 @@ CREATE TABLE sponsor_areas (
 CREATE INDEX IF NOT EXISTS idx_sponsor_areas_sponsor ON sponsor_areas(sponsor_id);
 CREATE INDEX IF NOT EXISTS idx_sponsor_areas_zip ON sponsor_areas(zip_code);
 
--- sponsor_impressions: tracking is per business × event; repoint sponsor_id to business.
+-- sponsor_impressions: repoint sponsor_id off `sponsors` onto sponsor_business.
+-- FK-REPOINT ONLY — this recreation preserves the EXACT original shape (0022 + 0048:
+-- id, sponsor_id, event_id, surface, placement, event_type, created_at, h3_res7 = 8 cols,
+-- same 3 indexes). It changes nothing but the FK target, so the OSE-931 lexicon exemption
+-- (rename sponsor_impressions → sponsor_displays end to end) stays a single future ticket.
 DROP INDEX IF EXISTS idx_sponsor_impressions_sponsor;
 DROP INDEX IF EXISTS idx_sponsor_impressions_event;
 DROP INDEX IF EXISTS idx_sponsor_impressions_h3_res7;
 DROP TABLE IF EXISTS sponsor_impressions;
 CREATE TABLE sponsor_impressions (
-  id               TEXT PRIMARY KEY,
-  event_id         TEXT NOT NULL,
-  sponsor_id       TEXT NOT NULL,   -- FK → sponsor_business(id) (was sponsors)
-  surface          TEXT,
-  impression_token TEXT,
-  h3_res9          TEXT,
-  h3_res7          TEXT,
-  created_at       TEXT NOT NULL DEFAULT (datetime('now')),
-  updated_at       TEXT NOT NULL DEFAULT (datetime('now')),
-  FOREIGN KEY (event_id) REFERENCES events(id),
-  FOREIGN KEY (sponsor_id) REFERENCES sponsor_business(id)
+  id         TEXT PRIMARY KEY,
+  sponsor_id TEXT NOT NULL,   -- FK → sponsor_business(id) (was sponsors)
+  event_id   TEXT NOT NULL,
+  surface    TEXT NOT NULL,
+  placement  TEXT NOT NULL,
+  event_type TEXT NOT NULL DEFAULT 'impression',
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  h3_res7    TEXT,
+  FOREIGN KEY (sponsor_id) REFERENCES sponsor_business(id),
+  FOREIGN KEY (event_id) REFERENCES events(id)
 );
-CREATE INDEX IF NOT EXISTS idx_sponsor_impressions_sponsor ON sponsor_impressions(sponsor_id);
+CREATE INDEX IF NOT EXISTS idx_sponsor_impressions_sponsor ON sponsor_impressions(sponsor_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_sponsor_impressions_event ON sponsor_impressions(event_id);
-CREATE INDEX IF NOT EXISTS idx_sponsor_impressions_h3_res7 ON sponsor_impressions(h3_res7);
+CREATE INDEX IF NOT EXISTS idx_sponsor_impressions_h3_res7
+  ON sponsor_impressions(h3_res7)
+  WHERE h3_res7 IS NOT NULL;
 
 -- Retire the combined `sponsors` table (identity + attachment coupled to one event).
 DROP INDEX IF EXISTS idx_sponsors_event_id;
