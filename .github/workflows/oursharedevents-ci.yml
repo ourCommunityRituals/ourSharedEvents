@@ -121,8 +121,14 @@ on:
         default: false
 
 concurrency:
-  group: ose-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  # OSE-937: key the group by EVENT so a nightly `schedule` run and a `push`-to-main
+  # run never share a group. Previously both resolved to `ose-refs/heads/main`, so a
+  # scheduled run firing minutes after a merge cancelled the merge's T1 Deploy run
+  # (and `schedule` skips T1/T4, so nothing deployed). cancel-in-progress is scoped to
+  # pull_request only — PR pushes still supersede their own stale runs for fast
+  # feedback, but a merge's deploy run is never cancelled out from under it.
+  group: ose-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   STG_BASE_URL: 'https://stg.oursharedevents.com'
