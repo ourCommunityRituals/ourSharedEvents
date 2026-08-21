@@ -28,7 +28,7 @@ function row(
     tier,
     placement_formats: '{}',
     click_token: null,
-    impression_token: null,
+    display_token: null,
     is_active: opts.active === false ? 0 : 1,
     is_local: opts.local ? 1 : 0,
     created_at: '2026-01-01',

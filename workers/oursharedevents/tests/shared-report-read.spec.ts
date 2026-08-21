@@ -128,7 +128,7 @@ async function seedScanAggregate(eventId: string, uniqueAgents: number): Promise
   await tenv()
     .DB.prepare(
       `INSERT INTO scan_aggregates
-         (id, event_id, bucket_date, bucket_hour, total_scans, unique_agents, computed_at)
+         (id, event_id, bucket_date, bucket_hour, total_scans, distinct_agent_hashes, computed_at)
        VALUES (?, ?, ?, NULL, ?, ?, datetime('now'))`
     )
     .bind(`sa-${eventId}`, eventId, '2026-05-07', uniqueAgents * 3, uniqueAgents)
@@ -706,7 +706,7 @@ describe('H3 corridor map + open-question resolutions', () => {
     // Seed scan_aggregates with an h3_res9 cell (Eagles Hall res9)
     await tenv()
       .DB.prepare(
-        `INSERT INTO scan_aggregates (id, event_id, bucket_date, total_scans, unique_agents, h3_res9, computed_at)
+        `INSERT INTO scan_aggregates (id, event_id, bucket_date, total_scans, distinct_agent_hashes, h3_res9, computed_at)
        VALUES ('sa-q8-live', 'test-evt-read-q8-live', '2026-05-07', 30, 10, '89266454447ffff', datetime('now'))`
       )
       .run();
@@ -784,13 +784,13 @@ describe('H3 corridor map + open-question resolutions', () => {
     // Seed two h3_res9 cells — one with enough scans, one below floor (suppressed)
     await tenv()
       .DB.prepare(
-        `INSERT INTO scan_aggregates (id, event_id, bucket_date, total_scans, unique_agents, h3_res9, computed_at)
+        `INSERT INTO scan_aggregates (id, event_id, bucket_date, total_scans, distinct_agent_hashes, h3_res9, computed_at)
        VALUES ('sa-cellleak-1', 'test-evt-read-cellleak', '2026-05-07', 30, 10, '89266454447ffff', datetime('now'))`
       )
       .run();
     await tenv()
       .DB.prepare(
-        `INSERT INTO scan_aggregates (id, event_id, bucket_date, total_scans, unique_agents, h3_res9, computed_at)
+        `INSERT INTO scan_aggregates (id, event_id, bucket_date, total_scans, distinct_agent_hashes, h3_res9, computed_at)
        VALUES ('sa-cellleak-2', 'test-evt-read-cellleak', '2026-05-07', 6, 2, '892664544b7ffff', datetime('now'))`
       )
       .run();

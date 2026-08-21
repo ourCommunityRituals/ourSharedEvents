@@ -84,7 +84,7 @@ describe('SR-25 | Sponsor Competitive View gate', () => {
     expect(condSection).toContain('signed-link-sponsor-class-breakdown');
   });
 
-  test('TL-040: individual sponsor impression_token or click_token is not rendered in competitive view', () => {
+  test('TL-040: individual sponsor display_token or click_token is not rendered in competitive view', () => {
     const src = getSharedReportHtml();
     // Competitive view must only show class-level aggregates — no individual token fields
     // Find the competitive view section and ensure it doesn't expose individual sponsor tokens
@@ -92,7 +92,7 @@ describe('SR-25 | Sponsor Competitive View gate', () => {
     const sectionEnd = src.indexOf('signed-link-poster-section');
     if (sectionStart === -1 || sectionEnd === -1) return; // gate would fail via earlier tests
     const sectionContent = src.slice(sectionStart, sectionEnd);
-    expect(sectionContent).not.toContain('impression_token');
+    expect(sectionContent).not.toContain('display_token');
     expect(sectionContent).not.toContain('click_token');
     expect(sectionContent).not.toContain('sponsor_name');
   });

@@ -162,7 +162,7 @@ The sponsors table connects brands to events with placement tracking:
 | **tier**              | Sponsor tier within the event (standard, premium, title)     |
 | **placement_formats** | JSON: where/how the sponsor appears (poster, table, digital) |
 | **click_token**       | Unique click tracking token                                  |
-| **impression_token**  | Unique impression tracking token                             |
+| **display_token**     | Unique impression tracking token                             |
 
 ---
 

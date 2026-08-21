@@ -44,7 +44,7 @@ _confirmed recurring series_ issues **one D1 read per series instance**, in a
 sequential loop:
 
 - `shared-report-builder.ts:659` — `for (const r of inst.results ?? [])`
-- `shared-report-builder.ts:663` — `SELECT unique_agents ... FROM scan_aggregates WHERE event_id = ?`, executed once per instance.
+- `shared-report-builder.ts:663` — `SELECT distinct_agent_hashes ... FROM scan_aggregates WHERE event_id = ?`, executed once per instance.
 
 Instance count grows with the **calendar length** of the series, not with
 attendee volume: a weekly event running for two years is ~104 instances → ~104
@@ -83,7 +83,7 @@ real ones from baseline once production traffic exists; do not gold-plate before
 then.)
 
 **Mitigation when triggered (do not apply now).** Collapse the per-instance
-loop into a single set query — `SELECT event_id, unique_agents FROM
+loop into a single set query — `SELECT event_id, distinct_agent_hashes FROM
 scan_aggregates WHERE event_id IN (...)` over all instance IDs — then bucket in
 memory. This turns `N` sequential reads into 1. The batch endpoint's 50-ID cap
 already bounds the outer multiplier; no change needed there.

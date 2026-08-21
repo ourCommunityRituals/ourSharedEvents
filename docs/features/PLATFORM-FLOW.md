@@ -254,13 +254,13 @@ The router checks `isFeatureEnabled()` before accepting any form submission. Dis
 │  form_surveys                   │    │                                 │
 │    responses_json, pii_scrubbed │    │  scan_aggregates                │
 │                                 │    │    bucket_date, bucket_hour     │
-│  email_signups                  │    │    total_scans, unique_agents   │
+│  email_signups                  │    │    total_scans, distinct_agent_hashes   │
 │    email_hash, encrypted_email  │    │                                 │
 │    retention_expires_at         │    │  poster_deployments             │
 │                                 │    │    qr_token, latitude, longitude│
 │  checkin_counts                 │    │                                 │
 │    count (aggregate)            │    │  sponsors                       │
-│                                 │    │    click_token, impression_token│
+│                                 │    │    click_token, display_token│
 │  feature_flags                  │    │                                 │
 │    key, enabled, tier           │    │  events (core entity)           │
 │                                 │    │    id, brand_id, data_json      │

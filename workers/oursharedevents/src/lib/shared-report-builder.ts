@@ -6,7 +6,7 @@
  *   docs/features/SHARED-REPORT-READ-API.md
  *
  * Six fields per Session 1 ratified contract:
- *   1. unique_gatherings        — from scan_aggregates.unique_agents (summed)
+ *   1. unique_gatherings        — from scan_aggregates.distinct_agent_hashes (summed)
  *   2. return_rate              — % of distinct anons seen at prior events
  *      (per-venue + per-corridor variants)
  *   3. corridor_density         — this event's anon count vs rolling baseline
@@ -211,9 +211,9 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
 
   const suppression: SuppressionReason[] = [];
 
-  // 2. unique_gatherings — sum scan_aggregates.unique_agents over all buckets
+  // 2. unique_gatherings — sum scan_aggregates.distinct_agent_hashes over all buckets
   //    for this event. OSE-683: each bucket is a contributing bucket — apply the
-  //    per-bucket K-anon floor BEFORE summation (a bucket with unique_agents < K
+  //    per-bucket K-anon floor BEFORE summation (a bucket with distinct_agent_hashes < K
   //    is dropped, not summed raw). NULL if no scan_aggregates rows exist at all
   //    (materialization pending); a suppressed sum (all buckets sub-K, or the
   //    survivors' sum somehow below K) is nulled too so a sub-K value never ships.
@@ -226,7 +226,7 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
     .first<{ bucket_count: number; computed_at: string | null }>();
   const saBuckets = await db
     .prepare(
-      `SELECT unique_agents AS count
+      `SELECT distinct_agent_hashes AS count
        FROM scan_aggregates WHERE event_id = ?`
     )
     .bind(eventId)
@@ -584,7 +584,7 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
 
   const cellRows = await db
     .prepare(
-      `SELECT h3_res9 AS cell, SUM(unique_agents) AS count
+      `SELECT h3_res9 AS cell, SUM(distinct_agent_hashes) AS count
          FROM scan_aggregates
          WHERE event_id = ? AND h3_res9 IS NOT NULL
          GROUP BY h3_res9`
@@ -635,7 +635,7 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
       trendSeriesName = series.series_name;
       // OSE-683: each scan_aggregates bucket is a contributing bucket to a trend
       // instance's headcount — the SAME grain as the top-level unique_gatherings.
-      // The previous `SELECT SUM(unique_agents) ...` subquery summed buckets RAW
+      // The previous `SELECT SUM(distinct_agent_hashes) ...` subquery summed buckets RAW
       // per instance, so a per-instance trend point could publish a sub-K sum
       // (or launder a sub-K bucket into it) — exactly the leak the ratified
       // per-bucket rule forbids. Fetch the events in the series and their raw
@@ -656,7 +656,7 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
       for (const r of inst.results ?? []) {
         const instBuckets = await db
           .prepare(
-            `SELECT unique_agents AS count
+            `SELECT distinct_agent_hashes AS count
                FROM scan_aggregates WHERE event_id = ?`
           )
           .bind(r.event_id)

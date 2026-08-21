@@ -101,8 +101,15 @@ beforeAll(async () => {
 
 describe('INVARIANT #2 — Sponsor card server-side event scoping (now actor-gated, OSE-674)', () => {
   test('?eventId=E returns only that event’s sponsors, and echoes scopedTo', async () => {
-    const res = await handleAdminListSponsors(reqAsEmail('a@brand-a.test', '?eventId=evt-A1'), sponsorsEnv);
-    const body = (await res.json()) as { ok: boolean; items: Array<{ event_id: string }>; scopedTo: string };
+    const res = await handleAdminListSponsors(
+      reqAsEmail('a@brand-a.test', '?eventId=evt-A1'),
+      sponsorsEnv
+    );
+    const body = (await res.json()) as {
+      ok: boolean;
+      items: Array<{ event_id: string }>;
+      scopedTo: string;
+    };
     expect(body.ok).toBe(true);
     expect(body.scopedTo).toBe('evt-A1');
     expect(body.items.length).toBe(1);
@@ -110,13 +117,19 @@ describe('INVARIANT #2 — Sponsor card server-side event scoping (now actor-gat
   });
 
   test('cross-organizer isolation: scoping to a brand-A event never returns a brand-B sponsor', async () => {
-    const res = await handleAdminListSponsors(reqAsEmail('a@brand-a.test', '?eventId=evt-A1'), sponsorsEnv);
+    const res = await handleAdminListSponsors(
+      reqAsEmail('a@brand-a.test', '?eventId=evt-A1'),
+      sponsorsEnv
+    );
     const body = (await res.json()) as { items: Array<{ event_id: string }> };
     expect(body.items.some((s) => s.event_id === 'evt-B1')).toBe(false);
   });
 
   test('brand_id scope returns only that brand’s sponsors', async () => {
-    const res = await handleAdminListSponsors(reqAsEmail('a@brand-a.test', '?brand_id=brand-A'), sponsorsEnv);
+    const res = await handleAdminListSponsors(
+      reqAsEmail('a@brand-a.test', '?brand_id=brand-A'),
+      sponsorsEnv
+    );
     const body = (await res.json()) as { items: Array<{ event_id: string }> };
     // brand-A owns evt-A1 + evt-A2 → sp-A1, sp-A2; never sp-B1
     expect(body.items.map((s) => s.event_id).sort()).toEqual(['evt-A1', 'evt-A2']);
@@ -136,7 +149,10 @@ describe('INVARIANT #2 — Sponsor card server-side event scoping (now actor-gat
 
 describe('INVARIANT #9 — cross-event sponsor tenant isolation (OSE-674, the sharpest #9 trap)', () => {
   test('forged ?brand_id= to another tenant → 403 (cannot widen scope)', async () => {
-    const res = await handleAdminListSponsors(reqAsEmail('a@brand-a.test', '?brand_id=brand-B'), sponsorsEnv);
+    const res = await handleAdminListSponsors(
+      reqAsEmail('a@brand-a.test', '?brand_id=brand-B'),
+      sponsorsEnv
+    );
     expect(res.status).toBe(403);
     const body = (await res.json()) as { ok: boolean; code: string };
     expect(body.ok).toBe(false);
@@ -144,7 +160,10 @@ describe('INVARIANT #9 — cross-event sponsor tenant isolation (OSE-674, the sh
   });
 
   test('forged ?eventId= from another tenant → empty (server scope caps it)', async () => {
-    const res = await handleAdminListSponsors(reqAsEmail('a@brand-a.test', '?eventId=evt-B1'), sponsorsEnv);
+    const res = await handleAdminListSponsors(
+      reqAsEmail('a@brand-a.test', '?eventId=evt-B1'),
+      sponsorsEnv
+    );
     const body = (await res.json()) as { items: unknown[] };
     expect(body.items).toEqual([]);
   });
@@ -177,7 +196,7 @@ describe('INVARIANT #2 — resolution engine stays inert (management-list change
       tier,
       placement_formats: JSON.stringify(placements),
       click_token: null,
-      impression_token: null,
+      display_token: null,
       is_active: 1,
       is_local: 0,
       created_at: '2026-01-01',

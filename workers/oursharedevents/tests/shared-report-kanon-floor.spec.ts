@@ -8,10 +8,10 @@
  *
  * Four aggregates in the builder were previously unfloored and could publish
  * sub-K contributions:
- *   1. unique_gatherings        — SUM(scan_aggregates.unique_agents) across buckets
+ *   1. unique_gatherings        — SUM(scan_aggregates.distinct_agent_hashes) across buckets
  *   2. campaign_summary         — per-campaign SUM over sponsor_impressions rows
  *   3. sponsor_class_breakdown  — per-class SUM over sponsor_impressions rows
- *   4. headcount_trend[]        — per-instance SUM(unique_agents) across buckets
+ *   4. headcount_trend[]        — per-instance SUM(distinct_agent_hashes) across buckets
  *
  * HARNESS NOTE (OSE-683 completion): earlier iterations claimed sponsor_impressions
  * "carries a trigger referencing sponsors_old" and fell back to static analysis for
@@ -184,7 +184,7 @@ async function seedBucket(eventId: string, suffix: string, uniqueAgents: number)
   await tenv()
     .DB.prepare(
       `INSERT INTO scan_aggregates
-         (id, event_id, bucket_date, bucket_hour, total_scans, unique_agents, computed_at)
+         (id, event_id, bucket_date, bucket_hour, total_scans, distinct_agent_hashes, computed_at)
        VALUES (?, ?, '2026-05-07', ?, ?, ?, datetime('now'))`
     )
     .bind(`sa-${eventId}-${suffix}`, eventId, suffix, uniqueAgents * 3, uniqueAgents)

@@ -75,12 +75,8 @@ Two endpoints land:
 ```json
 {
   "reports": {
-    "evt_abc": {
-      /* SharedReport object */
-    },
-    "evt_def": {
-      /* SharedReport object */
-    }
+    "evt_abc": {/* SharedReport object */},
+    "evt_def": {/* SharedReport object */}
   },
   "errors": {
     "evt_xyz": { "code": "NOT_FOUND", "message": "event does not exist" }
@@ -107,7 +103,7 @@ interface SharedReport {
   event_start_date: string; // ISO
   event_end_date: string | null; // ISO
 
-  // 1. Unique gatherings — from scan_aggregates.unique_agents
+  // 1. Unique gatherings — from scan_aggregates.distinct_agent_hashes
   unique_gatherings: number | null;
 
   // 2. Return rate — % of distinct anon_id_hashes seen at prior events at same venue/corridor
