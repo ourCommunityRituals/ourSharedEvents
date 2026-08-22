@@ -493,6 +493,14 @@ jobs:
         if: matrix.shard == 'lint'
         run: npm run test:guard-no-gas
 
+      # OSE-696: self-tests for the workerd-pool retry wrapper. Locks the
+      # load-bearing property that it passes ONLY on a clean exit-0 run — a
+      # teardown crash (which drops a whole spec file) or a real assertion
+      # failure can never be masked into a green gate.
+      - name: 'Quality: vitest-retry wrapper self-tests'
+        if: matrix.shard == 'lint'
+        run: npm run test:vitest-retry
+
       - name: 'Security: Deprecation lock (no-GAS guard)'
         if: matrix.shard == 'lint'
         run: npm run guard:no-gas
