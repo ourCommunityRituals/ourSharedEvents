@@ -673,9 +673,16 @@ jobs:
     name: 'T1 Deploy → Staging'
     runs-on: self-hosted
     needs: [security, gate]
+    # Opt-in full-pipeline-on-PR: a PR whose HEAD branch is named `full-pipeline/*`
+    # runs T1 Deploy→Staging (and therefore the whole T2 Contract → T3 E2E Smoke
+    # → T4 Functional fail-fast chain, which cascade on deploy-staging success).
+    # Lets you watch the staged pipeline end-to-end on a PR without merging.
+    # Normal PRs still skip T1–T4. NOTE: this DEPLOYS the PR branch to the shared
+    # staging worker for the duration of the run (same-repo PR → secrets present).
     if: |
       (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
-      (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_staging == 'true')
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_staging == 'true') ||
+      (github.event_name == 'pull_request' && startsWith(github.head_ref, 'full-pipeline/'))
     environment:
       name: staging
       url: ${{ env.STG_BASE_URL }}
