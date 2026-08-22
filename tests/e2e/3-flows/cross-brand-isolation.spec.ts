@@ -109,8 +109,11 @@ async function seedEvent(request: any, brand: string, suffix: string): Promise<s
     status: 'active',
     description: 'Temporary test event — cross-brand-isolation.spec.ts. Auto-deleted.',
     location: 'Test Location',
-    start_date: '2099-01-01T00:00:00Z',
-    end_date: '2099-01-01T02:00:00Z',
+    // POST /api/v2/admin/events validates dates as YYYY-MM-DD (isValidIsoDate,
+    // events.ts) — it appends 'T00:00:00Z' itself. A full ISO datetime here is
+    // rejected 400 INVALID_DATE (OSE-554: this E2E never hit the live endpoint).
+    start_date: '2099-01-01',
+    end_date: '2099-01-02',
     timezone: 'America/New_York',
   };
   const resp = await adminFetch(request, 'POST', '/api/v2/admin/events', body);
