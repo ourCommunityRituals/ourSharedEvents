@@ -344,15 +344,26 @@ export default defineConfig({
     include: ['tests/**/*.spec.ts'],
     exclude: ['tests/a11y-axe.spec.ts'],
     pool: cloudflarePool(),
-    // Cap concurrent miniflare runtimes to prevent resource exhaustion on
-    // self-hosted Windows runners. Without a cap, all 100+ test files spawn
-    // independent workerd processes simultaneously, saturating CPU/memory
-    // and causing the runner's Azure relay token renewal to fail
-    // (VssUnauthorizedException), which cancels the entire job.
-    // Set to 2 (conservative) while runner pool is at 2 healthy runners and
-    // test suite optimisation is pending (see Linear OSE-TRE epic).
-    // Tune upward after proper benchmarking — see stories for the full plan.
-    maxWorkers: 2,
+    // Serialize test-file execution: ONE miniflare/workerd runtime at a time.
+    //
+    // Why 1 (OSE-696, 2026-08-21): under maxWorkers:2 on the RAM-bound self-
+    // hosted Windows box, the pool intermittently crashes at TEARDOWN
+    // ("[vitest-pool]: Worker cloudflare-pool emitted error / Worker exited
+    // unexpectedly", miniflare control-socket close). Critically, that crash
+    // does not just noise the log — it DROPS the crashing worker's whole spec
+    // file from the run (its tests never execute) while vitest still prints the
+    // survivors as "N passed (N)". Proven on run 32533213749: attempt 1 lost
+    // poster-qr.spec.ts (21 tests), attempt 2 lost regulatory-label-
+    // unavailable.spec.ts (2 tests); full suite = 2879 tests / 197 files, and
+    // 2879-21=2858, 2879-2=2877 matched the two attempts exactly. A single
+    // runtime removes the concurrent-teardown race so a complete 197-file run
+    // becomes the norm. This also REDUCES (not raises) the Azure-relay-token
+    // exhaustion risk the previous comment worried about — that was a *high*-
+    // concurrency failure mode. The vitest-retry wrapper still covers any
+    // residual crash, and only ever passes a clean, complete (exit-0) run.
+    // Tune upward again only after the pool-teardown flake is fixed upstream
+    // (see Linear OSE-696 / OSE-TRE epic).
+    maxWorkers: 1,
     // 60s — D1 migration apply (~80 stmts) under 2-worker concurrency
     // can still exceed the 30s that was comfortable at lower file counts.
     // shared-report-read.spec.ts and qa-flag-gating.spec.ts hit hookTimeout

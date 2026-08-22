@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // scripts/vitest-retry.mjs
 //
-// OSE-696: workerd pool retry-once wrapper.
+// OSE-696: workerd pool retry wrapper (up to 3 attempts).
 //
 // The @cloudflare/vitest-pool-workers test step intermittently crashes in two
 // observed, non-deterministic ways — both host-level, neither a real test
@@ -10,13 +10,20 @@
 //   1. workerd segfault:
 //        Check failed: std::numeric_limits<int>::max() >= length_
 //
-//   2. pool worker dies mid-run (the workerd child exits / its control socket
-//      resets), surfacing as one of:
+//   2. pool worker dies at teardown (the workerd child exits / its control
+//      socket resets), surfacing as one of:
 //        [vitest-pool]: Worker cloudflare-pool emitted error.
 //        Caused by: Error: Worker exited unexpectedly
 //        Failed to start cloudflare-pool worker for test files ...
 //      (root cause seen as `read ECONNRESET` on the miniflare control socket).
-//      Signature: "191 passed (192)" + "1 error", zero assertion failures.
+//      Signature: "196 passed (197)" + "1 error", zero assertion failures.
+//      IMPORTANT: this crash DROPS the crashing worker's whole spec file from
+//      the run — those tests never execute — yet vitest still prints the
+//      survivors as "N passed (N)". So a crashed run is INCOMPLETE, not just
+//      noisy: it must never be treated as a pass. (This is exactly why the
+//      wrapper keys "pass" strictly on exit 0 — a clean, COMPLETE run — and
+//      never on a "green-looking" summary. See maxWorkers:1 in vitest.config.mts,
+//      which removes the concurrent-teardown race so complete runs are the norm.)
 //
 // Both need a human to click "re-run" today. This wrapper makes that retry
 // automatic — and ONLY for these infrastructure crash signatures, so a genuine
@@ -28,12 +35,14 @@
 //   1. Runs the given command (argv after this script) exactly as passed.
 //   2. Streams the command's stdout/stderr to this process (so CI logs are
 //      intact) AND captures them so we can inspect for the crash signature.
-//   3. If attempt 1 exits non-zero AND its combined output contains one of the
-//      crash signatures, re-run the command ONCE.
-//        - Attempt 2's real exit code is preserved (a genuine failure on the
-//          retry fails the step).
-//   4. Otherwise (exit 0, or non-zero WITHOUT the signature) pass through
-//      attempt 1's exit code immediately — NO retry.
+//   3. If an attempt exits non-zero AND its combined output contains one of the
+//      crash signatures (or it hard-crashed by exit code/signal), re-run the
+//      command — up to MAX_ATTEMPTS total.
+//        - The last attempt's real exit code is preserved (a persistent crash,
+//          or any genuine failure on a retry, still fails the step).
+//   4. A non-zero exit WITHOUT a crash signature (a real assertion failure) is
+//      returned immediately — NO retry.
+//   5. Only exit 0 — a clean, COMPLETE run — is ever treated as a pass.
 //
 // Deterministic: signature-driven, no clock, no randomness, no sleep.
 //
@@ -158,44 +167,68 @@ async function main() {
     .map((p) => (/\s/.test(p) ? JSON.stringify(p) : p))
     .join(' ');
 
-  // ── Attempt 1 ──────────────────────────────────────────────────────────────
-  const first = await runOnce(commandLine);
+  // Retry up to MAX_ATTEMPTS times, but ONLY for workerd/pool crash signatures.
+  //
+  // A run "passes" solely by exiting 0 — which, for the vitest-pool-workers run,
+  // happens only on a clean, COMPLETE run (every one of the 197 spec files
+  // executed). A crash never yields exit 0, and — critically — a teardown crash
+  // that drops a whole spec file leaves the step non-zero (Errors > 0). So this
+  // wrapper can NEVER pass an incomplete or dropped-file run: it just keeps
+  // re-running until one attempt is genuinely clean, or the attempts run out.
+  //
+  // Bumped 1 → 3 (OSE-696, 2026-08-21): the teardown flake became frequent
+  // enough on the RAM-bound box to hit BOTH of a retry-once's attempts (each
+  // dropping a different file). More attempts converge on a clean run without
+  // ever masking a real failure. A genuine assertion failure exits non-zero
+  // WITHOUT a crash signature, so it stops immediately — no retry.
+  const MAX_ATTEMPTS = 3;
+  let attempt = 0;
+  let last = { code: 1, signal: null, output: '' };
 
-  if (first.code === 0) {
-    process.exit(0);
-    return;
+  while (attempt < MAX_ATTEMPTS) {
+    attempt += 1;
+    last = await runOnce(commandLine);
+
+    if (last.code === 0) {
+      if (attempt > 1) {
+        process.stderr.write(`[vitest-retry] attempt ${attempt} succeeded (clean run).\n`);
+      }
+      process.exit(0);
+      return;
+    }
+
+    const matchedSignature = hasCrashSignature(last.output);
+    const matchedCrashExit = isCrashExit(last.code, last.signal);
+
+    if (!matchedSignature && !matchedCrashExit) {
+      // Genuine failure (a failed assertion exits non-zero WITHOUT killing the
+      // worker) — do NOT retry; fail immediately with the real exit code.
+      process.stderr.write(
+        `[vitest-retry] attempt ${attempt} failed without a workerd crash signature — not retrying.\n`
+      );
+      process.exit(last.code);
+      return;
+    }
+
+    const reason = matchedSignature
+      ? `crash signature (one of: ${CRASH_SIGNATURES.join(', ')})`
+      : `hard-crash exit (code ${last.code}${last.signal ? `, signal ${last.signal}` : ''})`;
+
+    if (attempt < MAX_ATTEMPTS) {
+      process.stderr.write(
+        `[vitest-retry] attempt ${attempt}/${MAX_ATTEMPTS} hit a workerd ${reason} — retrying.\n`
+      );
+    } else {
+      process.stderr.write(
+        `[vitest-retry] attempt ${attempt}/${MAX_ATTEMPTS} hit a workerd ${reason} — ` +
+          `retries exhausted, failing the step.\n`
+      );
+    }
   }
 
-  const matchedSignature = hasCrashSignature(first.output);
-  const matchedCrashExit = isCrashExit(first.code, first.signal);
-
-  if (!matchedSignature && !matchedCrashExit) {
-    // Genuine failure (or any non-crash failure) — do NOT retry.
-    process.stderr.write(
-      '[vitest-retry] attempt 1 failed without a workerd crash signature — not retrying.\n'
-    );
-    process.exit(first.code);
-    return;
-  }
-
-  // ── Attempt 2 (retry once, crash detected) ──────────────────────────────────
-  const reason = matchedSignature
-    ? `crash signature (one of: ${CRASH_SIGNATURES.join(', ')})`
-    : `hard-crash exit (code ${first.code}${first.signal ? `, signal ${first.signal}` : ''})`;
-  process.stderr.write(`[vitest-retry] attempt 1 hit a workerd ${reason} — retrying once.\n`);
-
-  const second = await runOnce(commandLine);
-
-  if (second.code === 0) {
-    process.stderr.write('[vitest-retry] retry succeeded.\n');
-  } else {
-    process.stderr.write(
-      `[vitest-retry] retry also failed (exit ${second.code}) — failing the step.\n`
-    );
-  }
-
-  // Preserve the retry's real exit code — a genuine failure on attempt 2 fails.
-  process.exit(second.code);
+  // Exhausted every attempt on crash signatures — preserve the last real exit
+  // code so the gate fails (a persistent crash is a real signal worth surfacing).
+  process.exit(last.code);
 }
 
 main().catch((err) => {
