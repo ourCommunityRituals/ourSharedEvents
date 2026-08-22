@@ -19,6 +19,7 @@ describe('OSE-660 | maps != H3 — coordinates only, never an H3 cell', () => {
     expect(a).toContain('The%20Bar'); // venue label, url-encoded
   });
 
+  // @born-red TL-069 | method: design-time-negative-assertion | date: 2026-08-22
   it('the produced link NEVER contains an H3 cell / precision token', () => {
     const a = renderGeoLink(40.7128, -74.006, '89283082e73ffff', 'cell 89283082e73ffff', 'Go');
     // even if garbage is passed as a name, the href geo coords are lat/lon only
@@ -48,6 +49,8 @@ describe('OSE-660 | maps != H3 — coordinates only, never an H3 cell', () => {
   });
 
   it('carries the given data-testid (design = test contract)', () => {
-    expect(renderGeoLink(1, 2, 'V', 'A', 'Go', 'geo-link-pre')).toContain('data-testid="geo-link-pre"');
+    expect(renderGeoLink(1, 2, 'V', 'A', 'Go', 'geo-link-pre')).toContain(
+      'data-testid="geo-link-pre"'
+    );
   });
 });
