@@ -58,6 +58,16 @@ describe('OSE-459: report-depth — resolveDepth (roles + legacy + fail-closed)'
     expect(r.depth).toBe('mid');
     expect(r.sponsorScope).toBe('sp_A');
   });
+
+  it('OSE-577: internal service role resolves to premium (full payload, no sponsor scope)', () => {
+    // Depth is keyed on role, not endpoint. The internal in-fleet batch consumer
+    // gets full depth here; the cross-product WKRP token never reaches resolveDepth
+    // (it fails closed at the handler auth boundary).
+    const r = resolveDepth({ role: 'internal' });
+    expect(r.depth).toBe('premium');
+    expect(r.sponsorScope).toBeNull();
+    expect(r.sponsorScopeRequired).toBe(false);
+  });
 });
 
 describe('OSE-459: report-depth — filterReportByDepth (additive ladder + equity-by-construction)', () => {

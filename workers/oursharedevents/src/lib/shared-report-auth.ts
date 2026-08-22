@@ -32,9 +32,36 @@ export interface SharedReportAuthEnv {
   /**
    * WKRP service-account bearer token for the batch endpoint.
    * If unset, the batch endpoint rejects all callers.
+   *
+   * OSE-577: WKRP is the NON-ANONYMOUS cross-product platform (invariant #14
+   * `explicit_identity`, the deliberate "#1-mirror"). Holding a name-bearing
+   * roster on one side and full-depth corridor/venue/time aggregates on the
+   * other is an unevaluated JOIN risk, and every control that would catch it
+   * (OCR-61/OCR-62 identity invariant + spec, OW-112 boundary firewall) is
+   * still Backlog. This is where the choice network gets enforced: consent is
+   * not auto-extended to the named-identity side. So this token is classified
+   * `cross_product` and FAILS CLOSED on the batch endpoint until those
+   * controls land (ADR-0001).
    */
   WKRP_SERVICE_TOKEN?: string;
+  /**
+   * Internal-fleet batch consumer token (OSE-577). Distinct token CLASS from
+   * WKRP: an internal, anonymity-respecting consumer that may receive the full
+   * SharedReport. Split out so "service" is not one undifferentiated role —
+   * keying depth on the endpoint (SR-25's mistake) let ANY service token,
+   * including the cross-product one, receive every field. If unset, no caller
+   * is granted internal-class access.
+   */
+  OSE_INTERNAL_BATCH_TOKEN?: string;
 }
+
+/**
+ * Service-token classes for the batch endpoint (OSE-577).
+ *   - 'internal'      → in-fleet, anonymity-respecting consumer; full payload.
+ *   - 'cross_product' → WKRP (named-identity platform); fails closed until the
+ *                       join-risk controls (OCR-61/62, OW-112) ship.
+ */
+export type ServiceTokenClass = 'internal' | 'cross_product';
 
 export type SignedLinkRole = 'bar_owner' | 'sponsor' | 'admin';
 
@@ -208,6 +235,36 @@ export function verifyServiceToken(
   const expected = env.WKRP_SERVICE_TOKEN?.trim();
   if (!expected) return false;
   return constantTimeEqual(token, expected);
+}
+
+/**
+ * Classify a service-account bearer token into its CLASS (OSE-577).
+ *
+ * The batch endpoint no longer keys full-payload access on "is this the batch
+ * endpoint" (SR-25's defect — that handed EVERY service token, including the
+ * cross-product one, all fields). It keys on WHO holds the token:
+ *
+ *   - matches `OSE_INTERNAL_BATCH_TOKEN` → 'internal'      (full payload)
+ *   - matches `WKRP_SERVICE_TOKEN`       → 'cross_product' (fail closed)
+ *   - anything else / no env / no token  → null            (401 unauthorized)
+ *
+ * Internal is checked FIRST so that if the two secrets were ever mis-set to the
+ * same value, the safer classification does not silently grant cross-product
+ * full depth via the internal branch — but they must never share a value in
+ * practice (distinct Doppler secrets). Both compares are constant-time.
+ *
+ * Pure — no D1, no fetch. The grant/deny decision lives in the handler.
+ */
+export function classifyServiceToken(
+  env: SharedReportAuthEnv,
+  token: string | null | undefined
+): ServiceTokenClass | null {
+  if (!token) return null;
+  const internal = env.OSE_INTERNAL_BATCH_TOKEN?.trim();
+  if (internal && constantTimeEqual(token, internal)) return 'internal';
+  const wkrp = env.WKRP_SERVICE_TOKEN?.trim();
+  if (wkrp && constantTimeEqual(token, wkrp)) return 'cross_product';
+  return null;
 }
 
 /**

@@ -37,8 +37,8 @@ interface TestEnv {
 const tenv = () => env as unknown as TestEnv;
 
 const REPORT_SECRET = 'test-shared-report-signing-secret-do-not-use';
-const WKRP_TOKEN    = 'test-wkrp-service-token-do-not-use';
-const ADMIN_KEY     = 'test-admin-key-e2e-2026';
+const WKRP_TOKEN = 'test-wkrp-service-token-do-not-use';
+const ADMIN_KEY = 'test-admin-key-e2e-2026';
 
 const reportEnv: SharedReportAuthEnv = {
   SHARED_REPORT_SIGNING_SECRET: REPORT_SECRET,
@@ -50,8 +50,9 @@ const reportEnv: SharedReportAuthEnv = {
 beforeAll(async () => {
   const mainStmts: string[] = JSON.parse(tenv().TEST_MIGRATION_STATEMENTS);
   for (const stmt of mainStmts) {
-    try { await tenv().DB.prepare(stmt).run(); }
-    catch (e) {
+    try {
+      await tenv().DB.prepare(stmt).run();
+    } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       if (msg.includes('duplicate column name') || msg.includes('already exists')) continue;
       throw e;
@@ -59,8 +60,9 @@ beforeAll(async () => {
   }
   const formsStmts: string[] = JSON.parse(tenv().TEST_FORMS_MIGRATION_STATEMENTS);
   for (const stmt of formsStmts) {
-    try { await tenv().FORMS_DB.prepare(stmt).run(); }
-    catch (e) {
+    try {
+      await tenv().FORMS_DB.prepare(stmt).run();
+    } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       if (msg.includes('duplicate column name') || msg.includes('already exists')) continue;
       throw e;
@@ -69,21 +71,26 @@ beforeAll(async () => {
 
   // Seed events used in these tests
   const events = [
-    ['evt_sr_target',  'brand_sr',  'SharedReport Target',  'active'],
-    ['evt_sr_decoy',   'brand_sr',  'SharedReport Decoy',   'active'],
-    ['evt_sr_owner',   'brand_sr',  'Bar Owner Event',      'active'],
-    ['evt_sr_sponsor', 'brand_sr',  'Sponsor Event',        'active'],
-    ['evt_sr_wkrp_1',  'brand_wkrp', 'WKRP Event 1',       'active'],
-    ['evt_sr_wkrp_2',  'brand_wkrp', 'WKRP Event 2',       'active'],
-    ['evt_sr_wkrp_3',  'brand_wkrp', 'WKRP Event 3',       'archived'],
+    ['evt_sr_target', 'brand_sr', 'SharedReport Target', 'active'],
+    ['evt_sr_decoy', 'brand_sr', 'SharedReport Decoy', 'active'],
+    ['evt_sr_owner', 'brand_sr', 'Bar Owner Event', 'active'],
+    ['evt_sr_sponsor', 'brand_sr', 'Sponsor Event', 'active'],
+    ['evt_sr_wkrp_1', 'brand_wkrp', 'WKRP Event 1', 'active'],
+    ['evt_sr_wkrp_2', 'brand_wkrp', 'WKRP Event 2', 'active'],
+    ['evt_sr_wkrp_3', 'brand_wkrp', 'WKRP Event 3', 'archived'],
   ];
   for (const [id, brand, title, status] of events) {
     try {
-      await tenv().DB.prepare(
-        `INSERT INTO events (id, brand_id, title, status, start_date, end_date)
+      await tenv()
+        .DB.prepare(
+          `INSERT INTO events (id, brand_id, title, status, start_date, end_date)
          VALUES (?, ?, ?, ?, '2026-01-01', '2026-12-31')`
-      ).bind(id, brand, title, status).run();
-    } catch { /* already exists */ }
+        )
+        .bind(id, brand, title, status)
+        .run();
+    } catch {
+      /* already exists */
+    }
   }
 });
 
@@ -93,9 +100,7 @@ beforeAll(async () => {
  * Manually forge a signed-link token with a controlled payload.
  * Signs with the real REPORT_SECRET but injects arbitrary claim fields.
  */
-async function forgeSignedLinkToken(
-  payload: Record<string, unknown>
-): Promise<string> {
+async function forgeSignedLinkToken(payload: Record<string, unknown>): Promise<string> {
   function base64UrlEncode(bytes: Uint8Array): string {
     let str = '';
     for (let i = 0; i < bytes.length; i++) str += String.fromCharCode(bytes[i]);
@@ -104,11 +109,16 @@ async function forgeSignedLinkToken(
   const payloadStr = JSON.stringify(payload);
   const payloadB64 = base64UrlEncode(new TextEncoder().encode(payloadStr));
   const key = await crypto.subtle.importKey(
-    'raw', new TextEncoder().encode(REPORT_SECRET),
-    { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
+    'raw',
+    new TextEncoder().encode(REPORT_SECRET),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
   );
   const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(payloadB64));
-  const sigHex = Array.from(new Uint8Array(sig)).map(b => b.toString(16).padStart(2, '0')).join('');
+  const sigHex = Array.from(new Uint8Array(sig))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
   return `${payloadB64}.${sigHex}`;
 }
 
@@ -117,7 +127,6 @@ async function forgeSignedLinkToken(
 // ════════════════════════════════════════════════════════════════════════════
 
 describe('AUTH-006: Token reuse rate limiting — tokens are unconditionally reusable (HIGH)', () => {
-
   test('same signed-link token accepted on 100 consecutive requests', async () => {
     const token = await mintSignedLinkToken(reportEnv, 'evt_sr_target', 'bar_owner', 3600);
     expect(token).not.toBeNull();
@@ -132,7 +141,7 @@ describe('AUTH-006: Token reuse rate limiting — tokens are unconditionally reu
 
     console.log(`[AUTH-006] 10 reuses — statuses: ${results.join(', ')}`);
     // None should be 401 from a "used token" check — there is no such check
-    const unauthorizedCount = results.filter(s => s === 401).length;
+    const unauthorizedCount = results.filter((s) => s === 401).length;
     expect(unauthorizedCount).toBe(0);
     console.log('[AUTH-006] CONFIRMED: no per-token use counting — unlimited reuse');
   });
@@ -190,7 +199,6 @@ describe('AUTH-006: Token reuse rate limiting — tokens are unconditionally reu
 // ════════════════════════════════════════════════════════════════════════════
 
 describe('Role escalation via payload modification', () => {
-
   test('tampered payload (admin role) with original sig is rejected', async () => {
     // Mint a legitimate bar_owner token
     const legit = await mintSignedLinkToken(reportEnv, 'evt_sr_owner', 'bar_owner', 3600);
@@ -225,7 +233,9 @@ describe('Role escalation via payload modification', () => {
     // The forged token IS valid because we used the real secret
     expect(claim).not.toBeNull();
     expect(claim!.role).toBe('admin');
-    console.log('[ESCALATION] Key compromise scenario: attacker with REPORT_SECRET can mint admin tokens');
+    console.log(
+      '[ESCALATION] Key compromise scenario: attacker with REPORT_SECRET can mint admin tokens'
+    );
   });
 
   test('sponsor role cannot be escalated to bar_owner by payload edit', async () => {
@@ -239,7 +249,10 @@ describe('Role escalation via payload modification', () => {
       role: 'bar_owner',
       exp: Math.floor(Date.now() / 1000) + 3600,
     });
-    const fakeB64 = btoa(escalatedPayload).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    const fakeB64 = btoa(escalatedPayload)
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=+$/, '');
     const escalated = `${fakeB64}.${sig}`;
 
     const claim = await verifySignedLinkToken(reportEnv, escalated);
@@ -250,7 +263,7 @@ describe('Role escalation via payload modification', () => {
     // Forge a token with an invalid role — should be rejected even with valid sig
     const invalidRoleToken = await forgeSignedLinkToken({
       eventId: 'evt_sr_owner',
-      role: 'super_admin',  // not a valid SignedLinkRole
+      role: 'super_admin', // not a valid SignedLinkRole
       exp: Math.floor(Date.now() / 1000) + 3600,
     });
 
@@ -265,7 +278,6 @@ describe('Role escalation via payload modification', () => {
 // ════════════════════════════════════════════════════════════════════════════
 
 describe('Event ID mismatch — cross-event token theft', () => {
-
   test('token for evt_sr_target cannot access evt_sr_decoy', async () => {
     const token = await mintSignedLinkToken(reportEnv, 'evt_sr_target', 'admin', 3600);
     expect(token).not.toBeNull();
@@ -280,7 +292,7 @@ describe('Event ID mismatch — cross-event token theft', () => {
   test('token claims mismatch: eventId in token differs from URL event ID', async () => {
     // Forge a token correctly signed but claiming a different eventId
     const mismatchToken = await forgeSignedLinkToken({
-      eventId: 'evt_sr_wkrp_1',  // different event
+      eventId: 'evt_sr_wkrp_1', // different event
       role: 'bar_owner',
       exp: Math.floor(Date.now() / 1000) + 3600,
     });
@@ -310,12 +322,11 @@ describe('Event ID mismatch — cross-event token theft', () => {
 // ════════════════════════════════════════════════════════════════════════════
 
 describe('Depth escalation — bar_owner claiming admin-depth access', () => {
-
   test('bar_owner token with depth=premium cannot be self-escalated to admin depth', async () => {
     // Mint a legitimate bar_owner token with depth=premium
-    const legit = await mintSignedLinkToken(
-      reportEnv, 'evt_sr_owner', 'bar_owner', 3600, { depth: 'premium' }
-    );
+    const legit = await mintSignedLinkToken(reportEnv, 'evt_sr_owner', 'bar_owner', 3600, {
+      depth: 'premium',
+    });
     expect(legit).not.toBeNull();
     const claim = await verifySignedLinkToken(reportEnv, legit);
     expect(claim?.depth).toBe('premium');
@@ -326,10 +337,13 @@ describe('Depth escalation — bar_owner claiming admin-depth access', () => {
     const escalatedPayload = JSON.stringify({
       eventId: 'evt_sr_owner',
       role: 'bar_owner',
-      depth: 'admin',  // escalated
+      depth: 'admin', // escalated
       exp: Math.floor(Date.now() / 1000) + 3600,
     });
-    const fakeB64 = btoa(escalatedPayload).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    const fakeB64 = btoa(escalatedPayload)
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=+$/, '');
     const escalated = `${fakeB64}.${sig}`;
     const escapedClaim = await verifySignedLinkToken(reportEnv, escalated);
     expect(escapedClaim).toBeNull();
@@ -348,14 +362,16 @@ describe('Depth escalation — bar_owner claiming admin-depth access', () => {
     // With the real secret, even forged claims pass signature validation
     expect(claim?.depth).toBe('admin');
     console.log('[DEPTH] Key compromise: attacker can self-issue admin-depth bar_owner tokens');
-    console.log('[DEPTH] Fix: depth must be validated server-side against the event\'s tier, not trusted from token');
+    console.log(
+      "[DEPTH] Fix: depth must be validated server-side against the event's tier, not trusted from token"
+    );
   });
 
   test('sponsor_id scope claim cannot be self-escalated to show all sponsors', async () => {
     // Sponsor tokens include sponsor_id to restrict cross-contamination
-    const narrowToken = await mintSignedLinkToken(
-      reportEnv, 'evt_sr_sponsor', 'sponsor', 3600, { sponsor_id: 'spon_abc' }
-    );
+    const narrowToken = await mintSignedLinkToken(reportEnv, 'evt_sr_sponsor', 'sponsor', 3600, {
+      sponsor_id: 'spon_abc',
+    });
     const claim = await verifySignedLinkToken(reportEnv, narrowToken);
     expect(claim?.sponsor_id).toBe('spon_abc');
 
@@ -380,7 +396,6 @@ describe('Depth escalation — bar_owner claiming admin-depth access', () => {
 // ════════════════════════════════════════════════════════════════════════════
 
 describe('Service token scope — WKRP token misuse', () => {
-
   test('WKRP service token rejected on single-event SharedReport GET', async () => {
     const res = await SELF.fetch('http://localhost/api/v2/events/evt_sr_wkrp_1/shared-report', {
       headers: { Authorization: `Bearer ${WKRP_TOKEN}` },
@@ -417,9 +432,7 @@ describe('Service token scope — WKRP token misuse', () => {
 
   test('verifyServiceToken: rejects signed-link tokens', async () => {
     // A signed-link token (payload.sig format) must not match the WKRP token
-    const signedLinkToken = await mintSignedLinkToken(
-      reportEnv, 'evt_sr_wkrp_1', 'admin', 3600
-    );
+    const signedLinkToken = await mintSignedLinkToken(reportEnv, 'evt_sr_wkrp_1', 'admin', 3600);
     expect(signedLinkToken).not.toBeNull();
     // signed-link tokens contain a '.' delimiter — WKRP token is a simple bearer string
     const result = verifyServiceToken(reportEnv, signedLinkToken);
@@ -433,18 +446,27 @@ describe('Service token scope — WKRP token misuse', () => {
     expect(verifyServiceToken({}, WKRP_TOKEN)).toBe(false);
   });
 
-  test('WKRP token works on batch endpoint — its intended scope', async () => {
+  test('WKRP (cross-product) token FAILS CLOSED on batch endpoint (OSE-577)', async () => {
+    // Reframed by OSE-577 / ADR-0001. WKRP is the non-anonymous cross-product
+    // platform (invariant #14 explicit_identity). It used to receive the full
+    // report on this endpoint (SR-25 keyed depth on the endpoint, not the token
+    // class). It now fails closed: full-depth aggregates joined against a
+    // name-bearing roster is an unevaluated join risk, and the controls that
+    // would catch it (OCR-61/62, OW-112) are not in place. It is recognized (not
+    // 401) but denied (403) — the choice network refusing to auto-extend consent.
     const res = await SELF.fetch('http://localhost/api/v2/events/shared-reports/batch', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${WKRP_TOKEN}`,
       },
-      body: JSON.stringify({ eventIds: ['evt_sr_wkrp_1', 'evt_sr_wkrp_2'] }),
+      body: JSON.stringify({ ids: ['evt_sr_wkrp_1', 'evt_sr_wkrp_2'] }),
     });
-    console.log(`[SCOPE] WKRP token on batch (intended scope): ${res.status}`);
-    // Should succeed or return a non-401 status
-    expect(res.status).not.toBe(401);
+    console.log(`[SCOPE] WKRP token on batch (now fails closed): ${res.status}`);
+    expect(res.status).toBe(403);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body.code).toBe('CROSS_PRODUCT_ACCESS_PENDING');
+    expect(body).not.toHaveProperty('reports');
   });
 });
 
@@ -453,7 +475,6 @@ describe('Service token scope — WKRP token misuse', () => {
 // ════════════════════════════════════════════════════════════════════════════
 
 describe('Token manipulation: structural attacks on signed-link format', () => {
-
   test('empty token string returns 401', async () => {
     const res = await SELF.fetch('http://localhost/api/v2/events/evt_sr_target/shared-report', {
       headers: { Authorization: 'Bearer ' },
@@ -509,7 +530,9 @@ describe('Token manipulation: structural attacks on signed-link format', () => {
     expect(parts).toHaveLength(2);
     // First part is base64url(JSON payload) — not a JWT header
     const pad = '='.repeat((4 - (parts[0].length % 4)) % 4);
-    const decoded = JSON.parse(atob(parts[0].replace(/-/g, '+').replace(/_/g, '/') + pad)) as Record<string, unknown>;
+    const decoded = JSON.parse(
+      atob(parts[0].replace(/-/g, '+').replace(/_/g, '/') + pad)
+    ) as Record<string, unknown>;
     // No alg, no typ — not a JWT
     expect(decoded.alg).toBeUndefined();
     expect(decoded.typ).toBeUndefined();
@@ -522,7 +545,6 @@ describe('Token manipulation: structural attacks on signed-link format', () => {
 // ════════════════════════════════════════════════════════════════════════════
 
 describe('Concurrent token use — parallel access patterns', () => {
-
   test('same token used concurrently in 10 parallel requests — all succeed (no locking)', async () => {
     const token = await mintSignedLinkToken(reportEnv, 'evt_sr_target', 'bar_owner', 3600);
     expect(token).not.toBeNull();
@@ -535,33 +557,31 @@ describe('Concurrent token use — parallel access patterns', () => {
       )
     );
 
-    const statuses = responses.map(r => r.status);
+    const statuses = responses.map((r) => r.status);
     console.log(`[CONCURRENT] 10 parallel same-token requests: ${statuses.join(', ')}`);
 
     // None should be 401 — there's no per-token use counter
-    const rejected = statuses.filter(s => s === 401).length;
+    const rejected = statuses.filter((s) => s === 401).length;
     expect(rejected).toBe(0);
     console.log('[CONCURRENT] CONFIRMED: stateless verification — no concurrent use protection');
   });
 
   test('multiple different valid tokens for same event are all accepted simultaneously', async () => {
     const tokens = await Promise.all(
-      ['bar_owner', 'sponsor', 'admin'].map(role =>
-        mintSignedLinkToken(
-          reportEnv, 'evt_sr_target', role as SignedLinkRole, 3600
-        )
+      ['bar_owner', 'sponsor', 'admin'].map((role) =>
+        mintSignedLinkToken(reportEnv, 'evt_sr_target', role as SignedLinkRole, 3600)
       )
     );
 
     const responses = await Promise.all(
-      tokens.map(token =>
+      tokens.map((token) =>
         SELF.fetch('http://localhost/api/v2/events/evt_sr_target/shared-report', {
           headers: { Authorization: `Bearer ${token}` },
         })
       )
     );
 
-    const statuses = responses.map(r => r.status);
+    const statuses = responses.map((r) => r.status);
     console.log(`[CONCURRENT] Multi-role parallel access: ${statuses.join(', ')}`);
     // All should be accepted (or 404/200 depending on data — never 401)
     for (const status of statuses) {

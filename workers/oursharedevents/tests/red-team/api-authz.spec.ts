@@ -37,9 +37,9 @@ interface TestEnv {
 const tenv = () => env as unknown as TestEnv;
 
 // Known test credentials from vitest.config.mts bindings
-const ADMIN_KEY     = 'test-admin-key-e2e-2026';
-const OCR_INTERNAL  = 'test-ocr-internal-secret-2026';
-const WKRP_TOKEN    = 'test-wkrp-service-token-do-not-use';
+const ADMIN_KEY = 'test-admin-key-e2e-2026';
+const OCR_INTERNAL = 'test-ocr-internal-secret-2026';
+const WKRP_TOKEN = 'test-wkrp-service-token-do-not-use';
 const REPORT_SECRET = 'test-shared-report-signing-secret-do-not-use';
 
 // ─── Setup ────────────────────────────────────────────────────────────────────
@@ -47,8 +47,9 @@ const REPORT_SECRET = 'test-shared-report-signing-secret-do-not-use';
 beforeAll(async () => {
   const mainStmts: string[] = JSON.parse(tenv().TEST_MIGRATION_STATEMENTS);
   for (const stmt of mainStmts) {
-    try { await tenv().DB.prepare(stmt).run(); }
-    catch (e) {
+    try {
+      await tenv().DB.prepare(stmt).run();
+    } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       if (msg.includes('duplicate column name') || msg.includes('already exists')) continue;
       throw e;
@@ -56,8 +57,9 @@ beforeAll(async () => {
   }
   const formsStmts: string[] = JSON.parse(tenv().TEST_FORMS_MIGRATION_STATEMENTS);
   for (const stmt of formsStmts) {
-    try { await tenv().FORMS_DB.prepare(stmt).run(); }
-    catch (e) {
+    try {
+      await tenv().FORMS_DB.prepare(stmt).run();
+    } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       if (msg.includes('duplicate column name') || msg.includes('already exists')) continue;
       throw e;
@@ -68,17 +70,22 @@ beforeAll(async () => {
   const seeds = [
     ['evt_brand_a_1', 'brand_alpha', 'Brand Alpha Event 1', 'active'],
     ['evt_brand_a_2', 'brand_alpha', 'Brand Alpha Event 2', 'active'],
-    ['evt_brand_b_1', 'brand_beta',  'Brand Beta Event 1',  'active'],
-    ['evt_brand_b_2', 'brand_beta',  'Brand Beta Event 2',  'archived'],
-    ['evt_authz_test', 'brand_test', 'AuthZ Test Event',    'active'],
+    ['evt_brand_b_1', 'brand_beta', 'Brand Beta Event 1', 'active'],
+    ['evt_brand_b_2', 'brand_beta', 'Brand Beta Event 2', 'archived'],
+    ['evt_authz_test', 'brand_test', 'AuthZ Test Event', 'active'],
   ];
   for (const [id, brand, title, status] of seeds) {
     try {
-      await tenv().DB.prepare(
-        `INSERT INTO events (id, brand_id, title, status, start_date, end_date)
+      await tenv()
+        .DB.prepare(
+          `INSERT INTO events (id, brand_id, title, status, start_date, end_date)
          VALUES (?, ?, ?, ?, '2026-01-01', '2026-12-31')`
-      ).bind(id, brand, title, status).run();
-    } catch { /* already exists */ }
+        )
+        .bind(id, brand, title, status)
+        .run();
+    } catch {
+      /* already exists */
+    }
   }
 });
 
@@ -91,9 +98,13 @@ function adminHeaders(method: 'key' | 'ocr' = 'key'): Record<string, string> {
 
 function forgeCfAccessJwt(payload: Record<string, unknown>): string {
   const header = btoa(JSON.stringify({ alg: 'RS256', typ: 'JWT' }))
-    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
   const body = btoa(JSON.stringify(payload))
-    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
   return `${header}.${body}.FAAAAAAAAKESIGNATUREDONTVERIFY`;
 }
 
@@ -102,7 +113,6 @@ function forgeCfAccessJwt(payload: Record<string, unknown>): string {
 // ════════════════════════════════════════════════════════════════════════════
 
 describe('SEC-001: CF Access JWT unverified — all admin endpoints accept forged tokens (CRITICAL)', () => {
-
   const adminEndpoints = [
     'GET  /api/v2/admin/events',
     'GET  /api/v2/admin/flags',
@@ -113,7 +123,8 @@ describe('SEC-001: CF Access JWT unverified — all admin endpoints accept forge
   test('forged JWT with allowlisted email grants access to admin events list', async () => {
     const now = Math.floor(Date.now() / 1000);
     const forgedJwt = forgeCfAccessJwt({
-      iat: now - 10, exp: now + 3600,
+      iat: now - 10,
+      exp: now + 3600,
       email: 'test-admin@example.com', // on the allowlist
     });
     const res = await SELF.fetch('http://localhost/api/v2/admin/events', {
@@ -123,14 +134,17 @@ describe('SEC-001: CF Access JWT unverified — all admin endpoints accept forge
     // Bug live: 200. Bug fixed: 401.
     // We document the current status without hard-failing so CI shows the vulnerability
     if (res.status === 200) {
-      console.log('[SEC-001] SECURITY BUG CONFIRMED: forged CF Access JWT accepted for admin access');
+      console.log(
+        '[SEC-001] SECURITY BUG CONFIRMED: forged CF Access JWT accepted for admin access'
+      );
     }
   });
 
   test('forged JWT for non-allowlisted email is denied with 403', async () => {
     const now = Math.floor(Date.now() / 1000);
     const forgedJwt = forgeCfAccessJwt({
-      iat: now - 10, exp: now + 3600,
+      iat: now - 10,
+      exp: now + 3600,
       email: 'outsider@attacker.com',
     });
     const res = await SELF.fetch('http://localhost/api/v2/admin/events', {
@@ -158,7 +172,6 @@ describe('SEC-001: CF Access JWT unverified — all admin endpoints accept forge
 // ════════════════════════════════════════════════════════════════════════════
 
 describe('SEC-002: Method 2/3 bypass CF Access email allowlist (HIGH)', () => {
-
   test('X-OCR-Internal (Method 2) gains admin access with no email identity', async () => {
     const res = await SELF.fetch('http://localhost/api/v2/admin/events', {
       headers: { 'X-OCR-Internal': OCR_INTERNAL },
@@ -205,7 +218,6 @@ describe('SEC-002: Method 2/3 bypass CF Access email allowlist (HIGH)', () => {
 // ════════════════════════════════════════════════════════════════════════════
 
 describe('SEC-003: Method confusion on event and admin routes (HIGH)', () => {
-
   const nonGetMethods = ['POST', 'PUT', 'DELETE', 'PATCH'];
 
   for (const method of nonGetMethods) {
@@ -219,7 +231,9 @@ describe('SEC-003: Method confusion on event and admin routes (HIGH)', () => {
       // The route only intends GET — other methods should be rejected
       // Current bug: eventMatch fires for ALL methods because there's no method guard
       if (res.status === 200) {
-        console.log('[SEC-003] BUG CONFIRMED: method confusion — non-GET accepted on /api/v2/events/:id');
+        console.log(
+          '[SEC-003] BUG CONFIRMED: method confusion — non-GET accepted on /api/v2/events/:id'
+        );
       }
       // Document current state
       expect([200, 404, 405, 400]).toContain(res.status);
@@ -237,9 +251,8 @@ describe('SEC-003: Method confusion on event and admin routes (HIGH)', () => {
     for (const [path, content] of Object.entries(sources)) {
       if (path.replace(/\\/g, '/').includes('/src/router.ts')) {
         // Find the eventMatch block
-        const eventMatchBlock = content.match(
-          /const eventMatch = pathname\.match[\s\S]{0,300}/
-        )?.[0] ?? '';
+        const eventMatchBlock =
+          content.match(/const eventMatch = pathname\.match[\s\S]{0,300}/)?.[0] ?? '';
         const hasMethodGuard = /eventMatch\s*&&\s*method\s*===\s*['"]GET['"]/.test(content);
         console.log(`[SEC-003] /api/v2/events/:id has method guard: ${hasMethodGuard}`);
         if (!hasMethodGuard) {
@@ -257,7 +270,6 @@ describe('SEC-003: Method confusion on event and admin routes (HIGH)', () => {
 // ════════════════════════════════════════════════════════════════════════════
 
 describe('ID enumeration: 404 vs 403 information leakage', () => {
-
   test('GET /api/v2/events/:id with unknown ID returns 404', async () => {
     const res = await SELF.fetch('http://localhost/api/v2/events/definitely_does_not_exist_xyz');
     console.log(`[ENUM] Unknown public event ID → ${res.status}`);
@@ -286,7 +298,9 @@ describe('ID enumeration: 404 vs 403 information leakage', () => {
       { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }
     );
     // Both should be 401 (auth required before checking existence)
-    console.log(`[ENUM] Mint known event (no auth): ${resKnown.status}, unknown: ${resUnknown.status}`);
+    console.log(
+      `[ENUM] Mint known event (no auth): ${resKnown.status}, unknown: ${resUnknown.status}`
+    );
     expect(resKnown.status).toBe(401);
     expect(resUnknown.status).toBe(401);
   });
@@ -297,16 +311,15 @@ describe('ID enumeration: 404 vs 403 information leakage', () => {
 // ════════════════════════════════════════════════════════════════════════════
 
 describe('Multi-tenant cross-brand isolation', () => {
-
   test('public events API: events from different brands are returned in same response', async () => {
     // This documents the current behavior — without a brand filter, all active
     // events are returned. Isolation enforcement would require a brand ID param.
     const res = await SELF.fetch('http://localhost/api/v2/events');
     expect(res.status).toBe(200);
-    const body = await res.json() as { ok: boolean; items: Array<{ brand_id: string }> };
+    const body = (await res.json()) as { ok: boolean; items: Array<{ brand_id: string }> };
     expect(body.ok).toBe(true);
 
-    const brands = new Set(body.items.map(e => e.brand_id));
+    const brands = new Set(body.items.map((e) => e.brand_id));
     console.log(`[ISOLATION] Public events list includes brands: ${[...brands].join(', ')}`);
     // If multiple brands appear without any brand scoping, note the risk
     if (brands.size > 1) {
@@ -319,10 +332,10 @@ describe('Multi-tenant cross-brand isolation', () => {
       headers: adminHeaders(),
     });
     expect(res.status).toBe(200);
-    const body = await res.json() as { ok: boolean; items: Array<{ brand_id: string }> };
+    const body = (await res.json()) as { ok: boolean; items: Array<{ brand_id: string }> };
     expect(body.ok).toBe(true);
 
-    const brands = new Set(body.items.map(e => e.brand_id));
+    const brands = new Set(body.items.map((e) => e.brand_id));
     console.log(`[ISOLATION] Admin events list brands: ${[...brands].join(', ')}`);
     // Document: single ADMIN_KEY sees all brands — this is a cross-tenant risk
     // if different brands should be isolated by their own keys
@@ -333,9 +346,8 @@ describe('Multi-tenant cross-brand isolation', () => {
     for (const [path, content] of Object.entries(sources)) {
       if (path.replace(/\\/g, '/').includes('handlers/events.ts')) {
         // Check for template literal SQL with ${...} — this is dangerous
-        const dangerousPatterns = content.match(
-          /\.prepare\s*\(\s*`[^`]*\$\{[^}]+\}[^`]*`\s*\)/g
-        ) ?? [];
+        const dangerousPatterns =
+          content.match(/\.prepare\s*\(\s*`[^`]*\$\{[^}]+\}[^`]*`\s*\)/g) ?? [];
         if (dangerousPatterns.length > 0) {
           console.log('[D1-PARAM] Potential SQL injection in events.ts:', dangerousPatterns);
         }
@@ -348,9 +360,8 @@ describe('Multi-tenant cross-brand isolation', () => {
     const sources = JSON.parse(tenv().TEST_SOURCE_FILES_JSON) as Record<string, string>;
     for (const [path, content] of Object.entries(sources)) {
       if (path.replace(/\\/g, '/').includes('handlers/forms.ts')) {
-        const templateLiteralSql = content.match(
-          /\.prepare\s*\(\s*`[^`]*\$\{[^}]+\}[^`]*`\s*\)/g
-        ) ?? [];
+        const templateLiteralSql =
+          content.match(/\.prepare\s*\(\s*`[^`]*\$\{[^}]+\}[^`]*`\s*\)/g) ?? [];
         expect(templateLiteralSql, 'SQL injection risk in forms.ts').toHaveLength(0);
       }
     }
@@ -364,7 +375,9 @@ describe('Multi-tenant cross-brand isolation', () => {
         const inlineSql = content.match(/\.prepare\s*\(`[^`]+`\)/g) ?? [];
         for (const sql of inlineSql) {
           const hasInterpolation = /\$\{/.test(sql);
-          expect(hasInterpolation, `SQL interpolation in router.ts: ${sql.slice(0, 80)}`).toBe(false);
+          expect(hasInterpolation, `SQL interpolation in router.ts: ${sql.slice(0, 80)}`).toBe(
+            false
+          );
         }
       }
     }
@@ -376,7 +389,6 @@ describe('Multi-tenant cross-brand isolation', () => {
 // ════════════════════════════════════════════════════════════════════════════
 
 describe('Signed-link event ID mismatch — token for A used on B', () => {
-
   test('token minted for evt_brand_a_1 rejected on evt_brand_b_1 endpoint', async () => {
     const token = await mintSignedLinkToken(
       { SHARED_REPORT_SIGNING_SECRET: REPORT_SECRET },
@@ -431,13 +443,16 @@ describe('Signed-link event ID mismatch — token for A used on B', () => {
 // ════════════════════════════════════════════════════════════════════════════
 
 describe('SEC-005: Batch SharedReport allows event ID enumeration (HIGH)', () => {
-
-  test('batch endpoint with valid WKRP token can probe multiple event IDs', async () => {
+  test('SEC-005 closed by OSE-577: WKRP token can no longer enumerate via batch', async () => {
+    // Previously the WKRP token could probe existence of arbitrary event IDs via
+    // the batch endpoint (SEC-005). OSE-577 classifies WKRP as cross_product and
+    // fails it closed (403) before any id is read, so no existing-vs-missing
+    // signal leaks. Enumeration via this token class is structurally impossible.
     const probeIds = [
-      'evt_brand_a_1',    // exists
-      'evt_brand_b_1',    // exists
+      'evt_brand_a_1', // exists
+      'evt_brand_b_1', // exists
       'definitely_not_there', // does not exist
-      'evt_authz_test',   // exists
+      'evt_authz_test', // exists
     ];
 
     const res = await SELF.fetch('http://localhost/api/v2/events/shared-reports/batch', {
@@ -446,18 +461,16 @@ describe('SEC-005: Batch SharedReport allows event ID enumeration (HIGH)', () =>
         'Content-Type': 'application/json',
         Authorization: `Bearer ${WKRP_TOKEN}`,
       },
-      body: JSON.stringify({ eventIds: probeIds }),
+      body: JSON.stringify({ ids: probeIds }),
     });
 
-    console.log(`[SEC-005] Batch probe status: ${res.status}`);
-
-    if (res.status === 200) {
-      const body = await res.json() as { ok: boolean; items?: unknown[] };
-      // If we can distinguish existing from non-existing IDs, that's enumeration
-      console.log('[SEC-005] Batch response ok:', body.ok);
-      console.log('[SEC-005] Batch items count:', Array.isArray(body.items) ? body.items.length : 'N/A');
-      console.log('[SEC-005] CONFIRMED: WKRP token can enumerate event IDs via batch endpoint');
-    }
+    console.log(`[SEC-005] Batch probe status (now fails closed): ${res.status}`);
+    expect(res.status).toBe(403);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body.code).toBe('CROSS_PRODUCT_ACCESS_PENDING');
+    // No enumeration surface: neither reports nor errors are returned.
+    expect(body).not.toHaveProperty('reports');
+    expect(body).not.toHaveProperty('errors');
   });
 
   test('batch endpoint without auth returns 401', async () => {
@@ -522,15 +535,14 @@ describe('SEC-005: Batch SharedReport allows event ID enumeration (HIGH)', () =>
 // ════════════════════════════════════════════════════════════════════════════
 
 describe('All admin endpoints require authentication', () => {
-
   const adminRoutes: Array<[string, string]> = [
-    ['GET',    '/api/v2/admin/events'],
-    ['GET',    '/api/v2/admin/flags'],
-    ['GET',    '/api/v2/admin/flags/tiers'],
-    ['GET',    '/api/v2/admin/flags/current-tier'],
-    ['GET',    '/api/v2/admin/audit-log'],
-    ['POST',   '/api/v2/admin/events/evt_authz_test/shared-report/mint-link'],
-    ['POST',   '/api/v2/admin/data-subject/erase'],
+    ['GET', '/api/v2/admin/events'],
+    ['GET', '/api/v2/admin/flags'],
+    ['GET', '/api/v2/admin/flags/tiers'],
+    ['GET', '/api/v2/admin/flags/current-tier'],
+    ['GET', '/api/v2/admin/audit-log'],
+    ['POST', '/api/v2/admin/events/evt_authz_test/shared-report/mint-link'],
+    ['POST', '/api/v2/admin/data-subject/erase'],
   ];
 
   for (const [method, path] of adminRoutes) {

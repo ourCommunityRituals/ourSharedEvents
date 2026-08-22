@@ -165,7 +165,8 @@ GCP_REGION         = "us-central1"
 #   ANON_ID_HASH_PEPPER      (pepper for anonymous ID hashing — min 32 chars)
 #   IP_HASH_PEPPER           (pepper for IP hashing — min 32 chars)
 #   SHARED_REPORT_SIGNING_SECRET  (HMAC key for signed link tokens — min 32 chars)
-#   WKRP_SERVICE_TOKEN       (bearer token for WKRP batch endpoint)
+#   WKRP_SERVICE_TOKEN       (bearer token for WKRP batch endpoint — OSE-577: cross_product class, fails closed)
+#   OSE_INTERNAL_BATCH_TOKEN (bearer token for the internal-fleet batch consumer — OSE-577: internal class, full payload)
 #   GOOGLE_MAPS_API_KEY      (Google Maps for SharedReports venue maps)
 #   — OSE-215 (BE-19): Workload Identity Federation (keyless GCP auth) —
 #   WIF_PRIVATE_KEY_PEM      (RSA private key for WIF JWT signing — SECRET, not a GCP SA key)
@@ -245,7 +246,8 @@ GCP_REGION         = "us-central1"
 #   ANON_ID_HASH_PEPPER      (pepper for anonymous ID hashing — min 32 chars)
 #   IP_HASH_PEPPER           (pepper for IP hashing — min 32 chars)
 #   SHARED_REPORT_SIGNING_SECRET  (HMAC key for signed link tokens — min 32 chars)
-#   WKRP_SERVICE_TOKEN       (bearer token for WKRP batch endpoint)
+#   WKRP_SERVICE_TOKEN       (bearer token for WKRP batch endpoint — OSE-577: cross_product class, fails closed)
+#   OSE_INTERNAL_BATCH_TOKEN (bearer token for the internal-fleet batch consumer — OSE-577: internal class, full payload)
 #   GOOGLE_MAPS_API_KEY      (Google Maps for SharedReports venue maps)
 #   — OSE-215 (BE-19): Workload Identity Federation (keyless GCP auth) —
 #   WIF_PRIVATE_KEY_PEM      (RSA private key for WIF JWT signing — SECRET, not a GCP SA key)
