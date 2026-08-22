@@ -35,16 +35,22 @@
 #       - Deploy                       → wrangler deploy
 #       - Health check                 → curl /health (HTTP 200)
 #
-#   T2: Smoke — XSS, auth boundaries, fail-fast gates, form endpoints
+# Fail-fast test chain after T1 deploy: T2 Contract → T3 E2E Smoke → T4
+# Functional. Each stage `needs:` the prior and gates on its success, so a red
+# stage SKIPS everything downstream — fix one layer at a time. Newman-first:
+# nail the API contract, then perpetuate into the FE.
+#
+#   T2: Contract (Newman) — API + Pages spec compliance [runs first]
+#       - Newman API collection        → newman run postman/collections/ose-api.json
+#       - Newman Pages collection      → newman run postman/collections/ose-pages.json
+#
+#   T3: E2E Smoke (Playwright) — XSS, auth boundaries, fail-fast gates, forms
+#       [runs only if T2 Contract passed]
 #       - Security smoke               → playwright tests/e2e/1-smoke/security-smoke.spec.js
 #       - IAC health + fail-fast       → playwright tests/api/smoke/{api-health,fail-fast-gates}.spec.ts
 #       - Form endpoint smoke          → playwright tests/api/smoke/form-endpoints.spec.ts
 #
-#   T3: Contract — API + Pages spec compliance
-#       - Newman API collection        → newman run postman/collections/ose-api.json
-#       - Newman Pages collection      → newman run postman/collections/ose-pages.json
-#
-#   T4: Functional — End-to-end journeys (dispatch only)
+#   T4: Functional — End-to-end journeys [runs only if T3 E2E Smoke passed]
 #       - Architecture invariants      → playwright tests/e2e/0-architecture/
 #       - Core journeys                → playwright tests/e2e/3-flows/sponsor-journey.spec.ts
 #       - Form E2E (4 types + flows)   → playwright tests/e2e/2-pages/form-*.spec.ts + 3-flows + 4-negative
@@ -881,13 +887,17 @@ jobs:
   # TIER 2: SMOKE — Post-deploy + nightly + dispatch
   # ============================================================================
   smoke-staging:
-    name: 'T2 Smoke → Staging'
+    name: 'T3 E2E Smoke → Staging (Playwright)'
     runs-on: self-hosted
-    needs: [security, gate, deploy-staging]
+    # Fail-fast chain, stage 2 of 3: FE E2E smoke runs ONLY after the Newman
+    # contract (T2) is green. A red here SKIPS functional (T4). Depends on
+    # contract-staging so the API contract is proven before the FE E2E layer.
+    needs: [security, gate, deploy-staging, contract-staging]
     if: |
       always() &&
       needs.security.result == 'success' &&
       needs.gate.result == 'success' &&
+      needs.contract-staging.result == 'success' &&
       (needs.deploy-staging.result == 'success' || github.event_name == 'schedule')
     steps:
       - uses: actions/checkout@v7
@@ -961,6 +971,30 @@ jobs:
             test-results/
           retention-days: 14
 
+      # Surface per-test Playwright smoke results as a GitHub Check (visible in
+      # the PR/Checks tab), matching the T4 functional reporter.
+      - name: Report results (E2E smoke)
+        if: always()
+        uses: dorny/test-reporter@v3
+        continue-on-error: true
+        with:
+          name: 'T3 E2E Smoke Results (Playwright)'
+          path: '.test-results/*junit.xml'
+          reporter: jest-junit
+          fail-on-error: false
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "## T3 E2E Smoke → Staging (Playwright)" >> $GITHUB_STEP_SUMMARY
+          echo "Stage 2 of the fail-fast chain — runs only after T2 contract is green; a red here skips T4 functional." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Step | Result |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Security smoke (XSS + auth) | \`${{ steps.security-smoke.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| IAC health + fail-fast | \`${{ steps.iac-smoke.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Form endpoints | \`${{ steps.forms-smoke.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
+
       - name: Fail check
         if: steps.security-smoke.outcome == 'failure' || steps.iac-smoke.outcome == 'failure' || steps.forms-smoke.outcome == 'failure'
         run: |
@@ -971,8 +1005,12 @@ jobs:
   # TIER 3: CONTRACT — Newman API + Pages (post-deploy + nightly)
   # ============================================================================
   contract-staging:
-    name: 'T3 Contract → Staging'
+    name: 'T2 Contract → Staging (Newman)'
     runs-on: self-hosted
+    # Fail-fast chain, stage 1 of 3 (after T1 deploy): Newman API + Pages
+    # contract. Newman-first — nail the API contract, THEN perpetuate into the
+    # FE. A red here SKIPS the downstream FE E2E smoke (T3) and functional (T4),
+    # so a broken API contract is fixed before any FE layer runs.
     needs: [security, gate, deploy-staging]
     if: |
       always() &&
@@ -1151,6 +1189,30 @@ jobs:
           name: contract-staging-${{ github.run_number }}
           path: .test-results/
           retention-days: 14
+
+      # Surface per-assertion Newman results as a GitHub Check (visible in the
+      # PR/Checks tab), so a contract failure shows the failing request + message
+      # by name instead of being buried in the CLI log.
+      - name: Report results (Newman contract)
+        if: always()
+        uses: dorny/test-reporter@v3
+        continue-on-error: true
+        with:
+          name: 'T2 Contract Results (Newman)'
+          path: '.test-results/newman-*-junit.xml'
+          reporter: java-junit
+          fail-on-error: false
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "## T2 Contract → Staging (Newman)" >> $GITHUB_STEP_SUMMARY
+          echo "Stage 1 of the fail-fast chain — a red here skips T3 E2E smoke + T4 functional." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Collection | Result |" >> $GITHUB_STEP_SUMMARY
+          echo "|------------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| API (ose-api.json) | \`${{ steps.newman-api.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Pages (ose-pages.json) | \`${{ steps.newman-pages.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
 
       - name: Fail check
         if: steps.newman-api.outcome == 'failure' || steps.newman-pages.outcome == 'failure'
@@ -1756,8 +1818,8 @@ jobs:
           echo "| S0 Security | security | \`${{ needs.security.result }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| T0 Gate | gate | \`${{ needs.gate.result }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| T1 Deploy STG | deploy-staging | \`${{ needs.deploy-staging.result }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| T2 Smoke STG | smoke-staging | \`${{ needs.smoke-staging.result }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| T3 Contract STG | contract-staging | \`${{ needs.contract-staging.result }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| T2 Contract STG (Newman) | contract-staging | \`${{ needs.contract-staging.result }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| T3 E2E Smoke STG (Playwright) | smoke-staging | \`${{ needs.smoke-staging.result }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| T4 Functional STG | functional-staging | \`${{ needs.functional-staging.result }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| T1 Deploy PROD | deploy-production | \`${{ needs.deploy-production.result }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| T2 Smoke PROD | smoke-production | \`${{ needs.smoke-production.result }}\` |" >> $GITHUB_STEP_SUMMARY
