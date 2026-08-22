@@ -116,11 +116,17 @@ async function seedEvent(request: any, brand: string, suffix: string): Promise<s
     end_date: '2099-01-02',
     timezone: 'America/New_York',
   };
+  // Idempotent seed (OSE-554): these ids are FIXED, and the afterEach cleanup is
+  // best-effort — a prior run whose delete was swallowed (or that was cancelled
+  // between seed and cleanup) orphans the id, so the next run's create returns
+  // 409 Conflict. Delete-before-create makes seeding self-healing.
+  await deleteEvent(request, body.id);
   const resp = await adminFetch(request, 'POST', '/api/v2/admin/events', body);
   expect(
     resp.status(),
     `Failed to seed test event for brand '${brand}' (HTTP ${resp.status()}). ` +
-      'Check ADMIN_KEY and X_OCR_INTERNAL — admin seeding is a prerequisite for this test.'
+      'Expected 201. A 409 means a prior run orphaned this fixed id despite the ' +
+      'pre-delete; 401/403 means ADMIN_KEY / X_OCR_INTERNAL / CF Access rejected.'
   ).toBe(201);
   const json = await resp.json();
   return json.item?.id ?? body.id;
