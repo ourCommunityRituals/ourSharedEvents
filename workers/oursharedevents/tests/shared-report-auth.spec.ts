@@ -10,6 +10,7 @@ import {
   extractBearerToken,
   mintSignedLinkToken,
   verifyServiceToken,
+  classifyServiceToken,
   verifySignedLinkToken,
   type SharedReportAuthEnv,
 } from '../src/lib/shared-report-auth';
@@ -163,5 +164,58 @@ describe('OSE-272 Session 5 — service-token verifier', () => {
     const env = { WKRP_SERVICE_TOKEN: 'real-token' };
     expect(verifyServiceToken(env, 'real-toke')).toBe(false);
     expect(verifyServiceToken(env, 'real-tokenX')).toBe(false);
+  });
+});
+
+describe('OSE-577 — classifyServiceToken (token class split)', () => {
+  const bothEnv: SharedReportAuthEnv = {
+    OSE_INTERNAL_BATCH_TOKEN: 'internal-token',
+    WKRP_SERVICE_TOKEN: 'wkrp-token',
+  };
+
+  test('internal token → "internal"', () => {
+    expect(classifyServiceToken(bothEnv, 'internal-token')).toBe('internal');
+  });
+
+  test('WKRP token → "cross_product" (recognized but will fail closed at handler)', () => {
+    expect(classifyServiceToken(bothEnv, 'wkrp-token')).toBe('cross_product');
+  });
+
+  test('unknown / empty / null token → null', () => {
+    expect(classifyServiceToken(bothEnv, 'some-other-token')).toBeNull();
+    expect(classifyServiceToken(bothEnv, '')).toBeNull();
+    expect(classifyServiceToken(bothEnv, null)).toBeNull();
+    expect(classifyServiceToken(bothEnv, undefined)).toBeNull();
+  });
+
+  test('WKRP recognized as cross_product even when internal token is unset', () => {
+    expect(classifyServiceToken({ WKRP_SERVICE_TOKEN: 'wkrp-token' }, 'wkrp-token')).toBe(
+      'cross_product'
+    );
+  });
+
+  test('internal token unrecognized when its env var is unset (fail closed to null)', () => {
+    expect(classifyServiceToken({ WKRP_SERVICE_TOKEN: 'wkrp-token' }, 'internal-token')).toBeNull();
+  });
+
+  test('empty env → null (no class granted)', () => {
+    expect(classifyServiceToken({}, 'internal-token')).toBeNull();
+    expect(classifyServiceToken({}, 'wkrp-token')).toBeNull();
+  });
+
+  test('constant-time semantics: near-miss tokens do not classify', () => {
+    expect(classifyServiceToken(bothEnv, 'internal-toke')).toBeNull();
+    expect(classifyServiceToken(bothEnv, 'wkrp-tokenX')).toBeNull();
+  });
+
+  test('internal is checked first: a shared value classifies as internal (safer branch)', () => {
+    // Defence-in-depth: the two secrets must never share a value in practice,
+    // but if mis-set identically the classification must not hand the
+    // cross-product branch full access. Internal-first means the safe class wins.
+    const shared: SharedReportAuthEnv = {
+      OSE_INTERNAL_BATCH_TOKEN: 'same',
+      WKRP_SERVICE_TOKEN: 'same',
+    };
+    expect(classifyServiceToken(shared, 'same')).toBe('internal');
   });
 });

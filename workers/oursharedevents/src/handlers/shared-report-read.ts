@@ -22,7 +22,7 @@
 import {
   extractBearerToken,
   mintSignedLinkToken,
-  verifyServiceToken,
+  classifyServiceToken,
   verifySignedLinkToken,
   type SharedReportAuthEnv,
   type SignedLinkRole,
@@ -199,12 +199,39 @@ export async function handleBatchSharedReports(
     }
   }
 
+  // OSE-577 / ADR-0001: access is decided by token CLASS (who holds it), not by
+  // "this is the batch endpoint" (SR-25's defect, which handed EVERY service
+  // token — including the cross-product one — the full report).
   const token = extractBearerToken(request.headers.get('Authorization'));
-  if (!token || !verifyServiceToken(env, token)) {
+  const tokenClass = classifyServiceToken(env, token);
+  if (tokenClass === null) {
     return jsonResponse({ ok: false, code: 'UNAUTHORIZED', error: 'invalid service token' }, 401, {
       'WWW-Authenticate': 'Bearer realm="OurSharedEvents SharedReport batch"',
     });
   }
+  if (tokenClass === 'cross_product') {
+    // The cross-product (WKRP, named-identity) consumer FAILS CLOSED. Full-depth
+    // corridor/venue/time aggregates joined against a name-bearing roster is an
+    // unevaluated join risk, and the controls that would catch it (OCR-61/OCR-62
+    // identity invariant + spec, OW-112 boundary firewall) are not in place.
+    // This is where the choice network is enforced: consent is not auto-extended
+    // across the identity boundary. Grant is unblocked only when those ship.
+    ctx.waitUntil(logReportAccess(env, 'batch', 'service', 'denied'));
+    return jsonResponse(
+      {
+        ok: false,
+        code: 'CROSS_PRODUCT_ACCESS_PENDING',
+        error:
+          'cross-product SharedReport access is not enabled; named-identity join-risk controls (OCR-61/OCR-62, OW-112) must ship first',
+      },
+      403,
+      { 'WWW-Authenticate': 'Bearer realm="OurSharedEvents SharedReport batch"' }
+    );
+  }
+  // tokenClass === 'internal' — the in-fleet, anonymity-respecting consumer.
+  // Depth resolves by role, not endpoint: resolveDepth({ role: 'internal' }) →
+  // 'premium' (full payload). A future depth filter (OSE-816) keys off that
+  // role, so the full-payload decision below is role-driven, not endpoint-driven.
 
   let body: unknown;
   try {
@@ -241,9 +268,10 @@ export async function handleBatchSharedReports(
     );
   }
 
-  // SR-25: depth parameter removed from batch endpoint — service tokens receive
-  // the full report. sponsor_class_breakdown delivers competitive intelligence
-  // at the class level without individual cross-sponsor attribution.
+  // The internal service class receives the full report (SR-25: no field
+  // stripping on this path; OSE-577: granted by role, not endpoint).
+  // sponsor_class_breakdown delivers competitive intelligence at the class level
+  // without individual cross-sponsor attribution.
 
   // Deduplicate (consumer might pass the same id twice).
   const uniqueIds = Array.from(new Set(ids as string[]));
@@ -260,7 +288,7 @@ export async function handleBatchSharedReports(
   const errors: Record<string, { code: string; message: string }> = {};
   for (const { id, result } of settled) {
     if (result.ok) {
-      // SR-25: pass the full report — competitive intelligence is in
+      // Internal class → full report. Competitive intelligence is in
       // sponsor_class_breakdown (aggregate class labels), not field-stripping.
       reports[id] = result.report;
     } else if (result.error === 'NOT_FOUND') {

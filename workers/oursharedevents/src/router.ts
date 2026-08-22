@@ -254,8 +254,13 @@ export type RouterEnv = PagesEnv &
     // are rejected (fail-safe).
     SHARED_REPORT_SIGNING_SECRET?: string;
     // OSE-272 Session 5: WKRP service-account bearer token for the batch
-    // SharedReport endpoint. Unset → batch endpoint rejects all callers.
+    // SharedReport endpoint. OSE-577: classified `cross_product` → fails closed
+    // on the batch endpoint until join-risk controls (OCR-61/62, OW-112) ship.
     WKRP_SERVICE_TOKEN?: string;
+    // OSE-577: internal-fleet batch consumer token (distinct CLASS from WKRP).
+    // Anonymity-respecting in-fleet consumer → receives the full SharedReport.
+    // Unset → no caller is granted internal-class access.
+    OSE_INTERNAL_BATCH_TOKEN?: string;
     // Security cron — Linear integration (OSE-SEC-1)
     LINEAR_API_KEY?: string;
     LINEAR_TEAM_ID?: string;

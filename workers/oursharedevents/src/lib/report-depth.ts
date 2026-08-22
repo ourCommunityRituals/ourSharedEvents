@@ -81,8 +81,18 @@ export const DEPTH_SECTIONS: Record<ReportDepth, readonly string[]> = {
 
 const DEPTH_ORDER: ReportDepth[] = ['local', 'mid', 'premium'];
 
+/**
+ * Depth is resolved by ROLE, never by endpoint (OSE-577). Beyond the three
+ * signed-link viewer roles, the in-fleet batch consumer resolves here too, as
+ * the `internal` service role — so a future depth filter (OSE-816) keys off the
+ * caller's class, not off "is this the batch handler". The cross-product WKRP
+ * token is NOT a role here: it fails closed at the handler auth boundary and
+ * never reaches depth resolution.
+ */
+export type DepthRole = SignedLinkRole | 'internal';
+
 export interface DepthClaimInput {
-  role: SignedLinkRole;
+  role: DepthRole;
   depth?: unknown; // untrusted claim field
   sponsor_id?: unknown; // untrusted claim field
 }
@@ -108,9 +118,12 @@ export function resolveDepth(claim: DepthClaimInput): ResolvedDepth {
       ? (claim.depth as ReportDepth)
       : null;
 
-  if (claim.role === 'admin' || claim.role === 'bar_owner') {
-    // Organizer/admin links always see everything; a depth claim on these
-    // roles is ignored rather than trusted downward (least surprise).
+  if (claim.role === 'admin' || claim.role === 'bar_owner' || claim.role === 'internal') {
+    // Organizer/admin links and the internal in-fleet batch consumer always see
+    // everything; a depth claim on these roles is ignored rather than trusted
+    // downward (least surprise). 'internal' is the anonymity-respecting service
+    // class (OSE-577) — the cross-product WKRP token never reaches here (it
+    // fails closed at the handler), so full depth by role is safe.
     return { depth: 'premium', sponsorScope: null, sponsorScopeRequired: false };
   }
   // role === 'sponsor' — scope is required; null scope blocks all impressions.

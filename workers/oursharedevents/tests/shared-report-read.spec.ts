@@ -29,6 +29,9 @@ const tenv = () => env as unknown as TestEnv;
 
 const SIGNING_SECRET = 'test-shared-report-signing-secret-do-not-use';
 const WKRP_TOKEN = 'test-wkrp-service-token-do-not-use';
+// OSE-577: distinct internal-fleet batch token class (full payload). WKRP is now
+// the cross_product class and fails closed — see the OSE-577 describe block.
+const INTERNAL_TOKEN = 'test-internal-batch-token-do-not-use';
 const ADMIN_KEY = 'test-admin-key-e2e-2026';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -423,7 +426,7 @@ describe('OSE-272 Session 5 — POST /api/v2/events/shared-reports/batch', () =>
     const res = await SELF.fetch(`https://test.local/api/v2/events/shared-reports/batch`, {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${WKRP_TOKEN}`,
+        Authorization: `Bearer ${INTERNAL_TOKEN}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({}),
@@ -435,7 +438,7 @@ describe('OSE-272 Session 5 — POST /api/v2/events/shared-reports/batch', () =>
     const res = await SELF.fetch(`https://test.local/api/v2/events/shared-reports/batch`, {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${WKRP_TOKEN}`,
+        Authorization: `Bearer ${INTERNAL_TOKEN}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ ids: [] }),
@@ -448,7 +451,7 @@ describe('OSE-272 Session 5 — POST /api/v2/events/shared-reports/batch', () =>
     const res = await SELF.fetch(`https://test.local/api/v2/events/shared-reports/batch`, {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${WKRP_TOKEN}`,
+        Authorization: `Bearer ${INTERNAL_TOKEN}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ ids }),
@@ -465,7 +468,7 @@ describe('OSE-272 Session 5 — POST /api/v2/events/shared-reports/batch', () =>
     const res = await SELF.fetch(`https://test.local/api/v2/events/shared-reports/batch`, {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${WKRP_TOKEN}`,
+        Authorization: `Bearer ${INTERNAL_TOKEN}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -490,12 +493,100 @@ describe('OSE-272 Session 5 — POST /api/v2/events/shared-reports/batch', () =>
     const res = await SELF.fetch(`https://test.local/api/v2/events/shared-reports/batch`, {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${WKRP_TOKEN}`,
+        Authorization: `Bearer ${INTERNAL_TOKEN}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ ids: ['test-evt-read-batch-cache'] }),
     });
     expect(res.headers.get('Cache-Control')).toBe('no-store');
+  });
+});
+
+// ── OSE-577: service-token CLASS split — cross-product fails closed ──────────
+// ADR-0001 + the "who holds the token matters" addendum. The batch endpoint no
+// longer keys full-payload access on the endpoint (SR-25's defect, which handed
+// EVERY service token — including the cross-product one — every field). It keys
+// on token CLASS: the internal in-fleet consumer gets the full report; the
+// cross-product WKRP token (named-identity platform, invariant #14) FAILS CLOSED
+// until the join-risk controls (OCR-61/62, OW-112) ship. This is the seam where
+// the choice network is enforced: consent is not auto-extended across identities.
+describe('OSE-577 — batch service-token class split (cross-product fails closed)', () => {
+  beforeEach(resetForTest);
+
+  test('cross-product (WKRP) token → 403 CROSS_PRODUCT_ACCESS_PENDING, no data', async () => {
+    await seedEvent({ id: 'test-evt-read-577-wkrp' });
+    await seedScanAggregate('test-evt-read-577-wkrp', 11);
+
+    const res = await SELF.fetch(`https://test.local/api/v2/events/shared-reports/batch`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${WKRP_TOKEN}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ ids: ['test-evt-read-577-wkrp'] }),
+    });
+    expect(res.status).toBe(403);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body.ok).toBe(false);
+    expect(body.code).toBe('CROSS_PRODUCT_ACCESS_PENDING');
+    // Fail closed — not a single report field crosses the boundary.
+    expect(body).not.toHaveProperty('reports');
+  });
+
+  test('cross-product token fails closed BEFORE body validation (auth precedes parsing)', async () => {
+    // A malformed body would 400 for an internal caller; WKRP must 403 first —
+    // the identity boundary is checked before anything else.
+    const res = await SELF.fetch(`https://test.local/api/v2/events/shared-reports/batch`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${WKRP_TOKEN}`,
+        'Content-Type': 'application/json',
+      },
+      body: 'not json',
+    });
+    expect(res.status).toBe(403);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body.code).toBe('CROSS_PRODUCT_ACCESS_PENDING');
+  });
+
+  test('internal-fleet token → 200 with the full report (premium fields present)', async () => {
+    await seedEvent({
+      id: 'test-evt-read-577-internal',
+      start_date: '2026-05-07T19:00:00Z',
+    });
+    await seedScanAggregate('test-evt-read-577-internal', 25);
+
+    const res = await SELF.fetch(`https://test.local/api/v2/events/shared-reports/batch`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${INTERNAL_TOKEN}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ ids: ['test-evt-read-577-internal'] }),
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      ok: boolean;
+      reports: Record<string, Record<string, unknown>>;
+    };
+    expect(body.ok).toBe(true);
+    const report = body.reports['test-evt-read-577-internal'];
+    expect(report).toBeDefined();
+    expect(report).toHaveProperty('unique_gatherings');
+    expect(report).toHaveProperty('headcount_trend'); // premium-only field
+    expect(report).toHaveProperty('sponsor_class_breakdown');
+  });
+
+  test('unknown bearer token → 401 (neither class)', async () => {
+    const res = await SELF.fetch(`https://test.local/api/v2/events/shared-reports/batch`, {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer some-unrecognized-token',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ ids: ['x'] }),
+    });
+    expect(res.status).toBe(401);
   });
 });
 
@@ -516,7 +607,7 @@ describe('SR-25 — SharedReport competitive intelligence reframe', () => {
     const res = await SELF.fetch(`https://test.local/api/v2/events/shared-reports/batch`, {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${WKRP_TOKEN}`,
+        Authorization: `Bearer ${INTERNAL_TOKEN}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ ids: ['test-evt-sr25-nodepth'] }),
@@ -538,7 +629,7 @@ describe('SR-25 — SharedReport competitive intelligence reframe', () => {
     const res = await SELF.fetch(`https://test.local/api/v2/events/shared-reports/batch`, {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${WKRP_TOKEN}`,
+        Authorization: `Bearer ${INTERNAL_TOKEN}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ ids: ['test-evt-sr25-fullfields'] }),
@@ -566,7 +657,7 @@ describe('SR-25 — SharedReport competitive intelligence reframe', () => {
     const res = await SELF.fetch(`https://test.local/api/v2/events/shared-reports/batch`, {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${WKRP_TOKEN}`,
+        Authorization: `Bearer ${INTERNAL_TOKEN}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ ids: ['test-evt-sr25-breakdown'] }),

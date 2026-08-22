@@ -1135,20 +1135,20 @@ const GAP_CLOSURE: ThreatEntry[] = [
     id: 'TL-054',
     layer: 'pipeline',
     threat:
-      'Batch SharedReport no depth gate: handleBatchSharedReports() returned result.report directly without applying a depth gate — any WKRP_SERVICE_TOKEN bearer received all fields regardless of the requested depth.',
+      'Batch SharedReport no depth gate: handleBatchSharedReports() returned result.report directly without applying a depth gate — any WKRP_SERVICE_TOKEN bearer received all fields regardless of the requested depth. OSE-577: the deeper defect was keying access on the ENDPOINT, not the token class — so the cross-product (named-identity) WKRP token received full-depth aggregates joinable against a name-bearing roster.',
     severity: 'CRITICAL',
     target_invariant: { number: 5, name: 'tier_equity' },
-    mitigation_story: 'SR-25',
+    mitigation_story: 'OSE-577',
     test_ref:
-      'tests/shared-report-read.spec.ts > SR-25 — SharedReport competitive intelligence reframe',
+      'tests/shared-report-read.spec.ts > OSE-577 — batch service-token class split (cross-product fails closed)',
     status: 'mitigated',
     red_birth: {
       date: '2026-08-03',
       method: 'deliberate-fixture-break',
       notes:
-        'Fleet sweep layer 5 (pipeline): batch endpoint returned raw report with no depth gate. OSE-593 applied field-stripping per depth; SR-25 superseded that by removing field-stripping entirely and replacing it with sponsor_class_breakdown (class-level aggregate competitive intelligence). Depth-based access gating is no longer the model.',
+        'Fleet sweep layer 5 (pipeline): batch endpoint returned raw report with no depth gate. OSE-593 applied field-stripping per depth; SR-25 superseded that by removing field-stripping entirely (sponsor_class_breakdown = class-level aggregate intelligence). OSE-577 (ADR-0001) then split the "service" role into token CLASSES: the internal in-fleet consumer receives the full report; the cross-product WKRP token FAILS CLOSED (403 CROSS_PRODUCT_ACCESS_PENDING) until the join-risk controls (OCR-61/62, OW-112) ship. Access is now keyed on who holds the token, not on the endpoint.',
     },
-    last_run_green: '2026-08-04',
+    last_run_green: '2026-08-22',
   },
   {
     id: 'TL-055',

@@ -332,6 +332,8 @@ export default defineConfig({
           // OSE-732: HMAC secret for sponsor onboarding invite tokens (T6a).
           SPONSOR_INVITE_SIGNING_SECRET: 'test-sponsor-invite-signing-secret-do-not-use',
           WKRP_SERVICE_TOKEN: 'test-wkrp-service-token-do-not-use',
+          // OSE-577: internal-fleet batch consumer token (distinct class from WKRP).
+          OSE_INTERNAL_BATCH_TOKEN: 'test-internal-batch-token-do-not-use',
           // OSE-598: HMAC-SHA256 pepper for email hashing (rank-9 finding).
           // Must be set in production via Wrangler secret; test value here
           // ensures peppered path exercises correctly in CI.
