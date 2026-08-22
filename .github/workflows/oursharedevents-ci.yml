@@ -338,6 +338,17 @@ jobs:
     runs-on: self-hosted
     strategy:
       fail-fast: false
+      # OSE-696: run the gate shards ONE AT A TIME. `tests`, `a11y`, and
+      # `invariants` all spin up the @cloudflare/vitest-pool-workers (workerd)
+      # runtime; running two of them concurrently on the single RAM-bound
+      # self-hosted box corrupts the workerd isolate (ECONNRESET / "Worker
+      # exited unexpectedly" / "Reflect.get called on non-object"), which
+      # NON-deterministically fails a different test each run. Serializing the
+      # matrix means each workerd shard runs alone — the same condition under
+      # which the suite is reliably green locally. Costs a few minutes of gate
+      # wall-clock; buys a deterministic gate. Raise this only with real
+      # capacity (a second box / more RAM), never more agents on this box.
+      max-parallel: 1
       matrix:
         # `invariants` shard (OSE-350) runs the structural 0-architecture
         # invariant tests on EVERY PR + push — see the "Architecture:
