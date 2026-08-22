@@ -8,6 +8,7 @@
 import { describe, test, expect } from 'vitest';
 import { env, SELF } from 'cloudflare:test';
 import { isAdminEmailAllowed, assertAdminEmailAllowed } from '../src/lib/admin-allowlist';
+import { verifyCfAccessJWT } from '../src/auth/admin';
 
 // ── L1: isAdminEmailAllowed ───────────────────────────────────────────────────
 
@@ -186,13 +187,16 @@ describe('OSE-590 — CF Access JWT signature verification (TL-018)', () => {
     // Structurally valid CF Access JWT with a random (invalid) RSA signature.
     // Parts: base64url(header).base64url(payload).base64url(random_bytes)
     const header = btoa(JSON.stringify({ alg: 'RS256', typ: 'JWT' }))
-      .replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
+      .replace(/=/g, '')
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_');
     const now = Math.floor(Date.now() / 1000);
     const payload = btoa(JSON.stringify({ exp: now + 3600, iat: now, email }))
-      .replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
+      .replace(/=/g, '')
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_');
     // 256 bytes of deterministic fake signature (not a real RSA sig)
-    const fakeSig = btoa('A'.repeat(256))
-      .replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
+    const fakeSig = btoa('A'.repeat(256)).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
     return `${header}.${payload}.${fakeSig}`;
   }
 
@@ -233,5 +237,43 @@ describe('OSE-590 — CF Access JWT signature verification (TL-018)', () => {
       res.status,
       'a JWT with email not in allowlist must return 403 ADMIN_NOT_ALLOWED, not 200 or 401'
     ).toBe(403);
+  });
+});
+
+// ── OSE-573: verifyCfAccessJWT functional unit tests (fail-closed, offline) ───
+// DoD item: "token with expired exp → 401". The exp + structural guards in
+// verifyCfAccessJWT run BEFORE the JWKS network fetch, so these exercise the
+// REAL exported function (not a static source check) without a deployed worker
+// or a live JWKS endpoint — the rejection is proven functionally, fail-closed.
+
+describe('OSE-573 — verifyCfAccessJWT fail-closed (unit)', () => {
+  const b64url = (o: unknown) =>
+    btoa(JSON.stringify(o)).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
+  const fakeSig = btoa('A'.repeat(256)).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
+  const makeJwt = (payload: Record<string, unknown>) =>
+    `${b64url({ alg: 'RS256', typ: 'JWT' })}.${b64url(payload)}.${fakeSig}`;
+  const TEAM = 'unit-test.cloudflareaccess.com';
+
+  test('expired exp → { valid: false } (rejected before JWKS fetch)', async () => {
+    const now = Math.floor(Date.now() / 1000);
+    const jwt = makeJwt({ exp: now - 60, iat: now - 3600, email: 'admin@example.com' });
+    const result = await verifyCfAccessJWT(jwt, TEAM);
+    expect(result.valid).toBe(false);
+  });
+
+  test('missing exp claim → { valid: false }', async () => {
+    const jwt = makeJwt({ iat: Math.floor(Date.now() / 1000), email: 'admin@example.com' });
+    const result = await verifyCfAccessJWT(jwt, TEAM);
+    expect(result.valid).toBe(false);
+  });
+
+  test('malformed token (not three parts) → { valid: false }', async () => {
+    const result = await verifyCfAccessJWT('not.a-jwt', TEAM);
+    expect(result.valid).toBe(false);
+  });
+
+  test('undecodable payload → { valid: false } (never throws)', async () => {
+    const result = await verifyCfAccessJWT('aaa.bbb.ccc', TEAM);
+    expect(result.valid).toBe(false);
   });
 });
