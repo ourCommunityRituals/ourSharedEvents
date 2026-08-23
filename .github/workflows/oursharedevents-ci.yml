@@ -335,19 +335,34 @@ jobs:
   gate:
     name: 'T0 Gate (${{ matrix.shard }})'
     needs: [security]
-    runs-on: self-hosted
+    # OSE-977 (F2 incremental slice): the `tests` shard — the heavy
+    # ~2879-case @cloudflare/vitest-pool-workers suite and the chronic OSE-696
+    # workerd-corruption flake source — runs on an ephemeral GitHub-hosted
+    # ubuntu-latest VM instead of the shared self-hosted box. A fresh dedicated
+    # Linux VM gives the workerd pool the "runs alone on clean hardware"
+    # condition it is reliably green under locally, so the isolate corruption
+    # (ECONNRESET / "Failed to start cloudflare-pool worker" / "Reflect.get on
+    # non-object") that repeatedly forced reruns on the RAM-bound box can no
+    # longer occur. The required branch-protection check name is derived from
+    # `matrix.shard`, so it stays exactly "T0 Gate (tests)" — no protection
+    # change needed. All other shards stay self-hosted for now (this is the
+    # de-risking half-day slice, not the full 35-job cutover; see OSE-977 AC).
+    runs-on: ${{ matrix.shard == 'tests' && 'ubuntu-latest' || 'self-hosted' }}
     strategy:
       fail-fast: false
-      # OSE-696: run the gate shards ONE AT A TIME. `tests`, `a11y`, and
-      # `invariants` all spin up the @cloudflare/vitest-pool-workers (workerd)
-      # runtime; running two of them concurrently on the single RAM-bound
-      # self-hosted box corrupts the workerd isolate (ECONNRESET / "Worker
-      # exited unexpectedly" / "Reflect.get called on non-object"), which
-      # NON-deterministically fails a different test each run. Serializing the
-      # matrix means each workerd shard runs alone — the same condition under
-      # which the suite is reliably green locally. Costs a few minutes of gate
-      # wall-clock; buys a deterministic gate. Raise this only with real
-      # capacity (a second box / more RAM), never more agents on this box.
+      # OSE-696: run the gate shards ONE AT A TIME. `a11y` and `invariants`
+      # still spin up the @cloudflare/vitest-pool-workers (workerd) runtime on
+      # the single RAM-bound self-hosted box; running two of them concurrently
+      # corrupts the workerd isolate (ECONNRESET / "Worker exited unexpectedly"
+      # / "Reflect.get called on non-object"), which NON-deterministically fails
+      # a different test each run. Serializing the matrix means each self-hosted
+      # workerd shard runs alone — the same condition under which the suite is
+      # reliably green locally. NOTE: since OSE-977 moved the `tests` shard to a
+      # separate ephemeral ubuntu-latest VM, it no longer contends for the box,
+      # but max-parallel:1 still serializes it into the chain (no speed win yet
+      # — that comes when `tests` is split into its own always-parallel job, a
+      # follow-up). Raise this for the remaining self-hosted shards only with
+      # real capacity (a second box / more RAM), never more agents on this box.
       max-parallel: 1
       matrix:
         # `invariants` shard (OSE-350) runs the structural 0-architecture
