@@ -392,29 +392,57 @@ describe('P5: Cross-database join structurally impossible (static code gate)', (
     }
   });
 
-  test('no single source file joins main-DB scan tables with FORMS_DB tables', () => {
+  // OSE-977 reconcile: D1 cannot SQL-JOIN two separate bindings, so a literal
+  // cross-DB join is structurally impossible. The real threat (TL-001) is a file
+  // that CORRELATES who-with-scan — reading a FORMS_DB *identity* column while
+  // also touching the main scan surface. The prior check flagged any file that
+  // merely *mentioned* both DBs' table names (even in comments), which false-
+  // positived on legitimate aggregate-count reporting (event-stats, portfolio-
+  // rollup, the pages recap). This now strips comments and flags only the actual
+  // correlation seam: a FORMS_DB identity column selected in a file that also
+  // reads a main-DB scan table. Aggregate reads (COUNT(*), total_count) pass.
+  test('no source file correlates a FORMS_DB identity column with the main scan surface', () => {
     const sources: Record<string, string> = JSON.parse(tenv().TEST_SOURCE_FILES_JSON);
     const violations: string[] = [];
+    const IDENTITY_COL =
+      /\b(email|phone|first_name|last_name|full_name|anonymous_id|ip_hash|ip_address|user_agent)\b/i;
+    const stripComments = (s: string) =>
+      s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
 
-    for (const [path, content] of Object.entries(sources)) {
-      if (!path.includes('/handlers/') && !path.includes('/lib/')) continue;
-      const hasFormsTable = FORMS_DB_TABLES.some((t) => content.includes(t));
-      const hasMainTable = MAIN_DB_TABLES.some((t) => content.includes(t));
+    for (const [path, raw] of Object.entries(sources)) {
+      const norm = path.replace(/\\/g, '/');
+      if (!norm.includes('/handlers/') && !norm.includes('/lib/')) continue;
+      // Allowed: router.ts (the dispatcher routes to both), test files
+      if (norm.endsWith('router.ts') || norm.includes('/tests/')) continue;
 
-      // Allowed: router.ts routes requests to both (it's the dispatcher)
-      // Allowed: architecture.spec.ts (test file)
-      const isRouter = path.replace(/\\/g, '/').endsWith('router.ts');
-      const isTest = path.includes('/tests/');
-      if (isRouter || isTest) continue;
+      const content = stripComments(raw);
+      // Does this file read a main-DB scan table in SQL context?
+      const touchesMainScan = MAIN_DB_TABLES.some((t) =>
+        new RegExp(`\\b(FROM|JOIN)\\s+(\\w+\\s+)?${t}\\b`, 'i').test(content)
+      );
+      if (!touchesMainScan) continue;
 
-      if (hasFormsTable && hasMainTable) {
-        violations.push(path.replace(/\\/g, '/').split('/src/').pop() ?? path);
+      // In such a file, every FORMS_DB read must be aggregate-only. Selecting a
+      // FORMS_DB identity column here is the never-who correlation violation. The
+      // column capture stops at the first FROM (negative lookahead) so it never
+      // spans past a statement; the table is then membership-checked.
+      const selectRe = /SELECT\s+((?:(?!\bFROM\b)[\s\S])*?)\s+FROM\s+(\w+)/gi;
+      // A bare `*` / `alias.*` selector (NOT COUNT(*)) pulls whole rows incl. PII.
+      const STAR_SELECT = /(^|,)\s*(\w+\.)?\*\s*(,|$)/;
+      let m: RegExpExecArray | null;
+      while ((m = selectRe.exec(content)) !== null) {
+        if (!FORMS_DB_TABLES.includes(m[2])) continue;
+        if (STAR_SELECT.test(m[1]) || IDENTITY_COL.test(m[1])) {
+          violations.push(
+            `${norm.split('/src/').pop() ?? norm}: SELECT ${m[1].trim()} FROM ${m[2]}`
+          );
+        }
       }
     }
 
     expect(
       violations,
-      `These files reference tables from both databases — potential cross-DB join attack surface: ${violations.join(', ')}`
+      `These files correlate a FORMS_DB identity column with the main scan surface — never-who cross-DB violation:\n${violations.join('\n')}`
     ).toEqual([]);
   });
 });

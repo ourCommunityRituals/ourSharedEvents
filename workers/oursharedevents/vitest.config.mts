@@ -36,6 +36,20 @@ const formsMigrationSQL = existsSync(formsMigrationsDir)
   : '';
 
 // ── Read source files for static analysis gates ──────────────────────────────
+// OSE-977: normalize path-map KEYS to forward slashes on every platform.
+// `join()` emits OS-native separators, so on the self-hosted Windows runner the
+// keys were `src\handlers\pages.ts`. The static security gates filter with
+// forward-slash substrings (e.g. `path.includes('handlers/pages')`,
+// `path.includes('/handlers/')`), which NEVER match a backslash key — so on
+// Windows those gates iterated zero files and passed VACUOUSLY (S1/S2 cross-DB
+// isolation, P5 cross-DB join, the anti-logging IP sweep). They only enforced on
+// a forward-slash (Linux) filesystem. Normalizing the key here makes every gate
+// enforce identically on self-hosted Windows and hosted ubuntu-latest. This is a
+// no-op on Linux (join already uses `/`) and corrective on Windows.
+function normalizeKey(p: string): string {
+  return p.replace(/\\/g, '/');
+}
+
 function collectTsFiles(dir: string): Record<string, string> {
   const result: Record<string, string> = {};
   try {
@@ -44,7 +58,7 @@ function collectTsFiles(dir: string): Record<string, string> {
       if (entry.isDirectory()) {
         Object.assign(result, collectTsFiles(full));
       } else if (entry.name.endsWith('.ts') && !entry.name.endsWith('.spec.ts')) {
-        result[full] = readFileSync(full, 'utf8');
+        result[normalizeKey(full)] = readFileSync(full, 'utf8');
       }
     }
   } catch {
@@ -63,7 +77,7 @@ function collectSpecFiles(dir: string): Record<string, string> {
       if (entry.isDirectory()) {
         Object.assign(result, collectSpecFiles(full));
       } else if (entry.name.endsWith('.spec.ts')) {
-        result[full] = readFileSync(full, 'utf8');
+        result[normalizeKey(full)] = readFileSync(full, 'utf8');
       }
     }
   } catch {
@@ -80,7 +94,7 @@ function collectHtmlFiles(dir: string): Record<string, string> {
       if (entry.isDirectory()) {
         Object.assign(result, collectHtmlFiles(full));
       } else if (entry.name.endsWith('.html')) {
-        result[full] = readFileSync(full, 'utf8');
+        result[normalizeKey(full)] = readFileSync(full, 'utf8');
       }
     }
   } catch {
@@ -101,7 +115,7 @@ function collectSqlFiles(dir: string): Record<string, string> {
       if (entry.isDirectory()) {
         Object.assign(result, collectSqlFiles(full));
       } else if (entry.name.endsWith('.sql')) {
-        result[full] = readFileSync(full, 'utf8');
+        result[normalizeKey(full)] = readFileSync(full, 'utf8');
       }
     }
   } catch {
@@ -116,7 +130,7 @@ function collectYmlFiles(dir: string): Record<string, string> {
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
       const full = join(dir, entry.name);
       if (entry.isFile() && (entry.name.endsWith('.yml') || entry.name.endsWith('.yaml'))) {
-        result[full] = readFileSync(full, 'utf8');
+        result[normalizeKey(full)] = readFileSync(full, 'utf8');
       }
     }
   } catch {

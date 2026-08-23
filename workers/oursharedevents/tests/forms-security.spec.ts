@@ -83,20 +83,57 @@ describe('S1: Form handlers NEVER reference main DB', () => {
 
 describe('S2: Scan/event handlers NEVER reference FORMS_DB', () => {
   // @born-red TL-002 | method: design-time-negative-assertion | date: 2026-08-03
-  test('events.ts, health.ts, pages.ts have zero references to FORMS_DB', () => {
+  //
+  // OSE-977 reconcile: events.ts + health.ts must stay FULLY isolated from
+  // FORMS_DB. pages.ts renders the public recap and legitimately reads AGGREGATE
+  // counts from FORMS_DB — the authoritative two-DB gate (architecture.spec.ts)
+  // permits this and does not list pages.ts. The real boundary is never-who:
+  // pages.ts may read COUNTs but must NEVER select an identity/PII column from a
+  // FORMS_DB table. This enforces that precise boundary instead of a blanket ban
+  // that drifted out of date once pages.ts gained the recap stats.
+  test('events.ts + health.ts have zero references to FORMS_DB', () => {
     const sources: Record<string, string> = JSON.parse(tenv().TEST_SOURCE_FILES_JSON);
     for (const [path, content] of Object.entries(sources)) {
-      if (
-        path.includes('handlers/events') ||
-        path.includes('handlers/health') ||
-        path.includes('handlers/pages')
-      ) {
+      if (path.includes('handlers/events') || path.includes('handlers/health')) {
         expect(content).not.toMatch(/FORMS_DB/);
         expect(content).not.toMatch(/forms-db/);
         expect(content).not.toMatch(/form_registrations/);
         expect(content).not.toMatch(/checkin_counts/);
         expect(content).not.toMatch(/form_surveys/);
         expect(content).not.toMatch(/email_signups/);
+      }
+    }
+  });
+
+  test('pages.ts reads only AGGREGATE counts from FORMS_DB — never an identity column (never-who)', () => {
+    const sources: Record<string, string> = JSON.parse(tenv().TEST_SOURCE_FILES_JSON);
+    const IDENTITY_COL =
+      /\b(email|phone|first_name|last_name|full_name|anonymous_id|ip_hash|ip_address|user_agent)\b/i;
+    for (const [path, content] of Object.entries(sources)) {
+      if (!path.includes('handlers/pages')) continue;
+      // Every `SELECT <cols> FROM <forms_db_table>` must select aggregate columns
+      // only. `SELECT COUNT(*) ...` / `SELECT total_count ...` pass;
+      // `SELECT email FROM email_signups` fails. The column capture stops at the
+      // first FROM (negative lookahead) so it never spans past a statement into
+      // an unrelated query; the table is then membership-checked against FORMS_DB.
+      const FORMS_TABLES = [
+        'form_registrations',
+        'checkin_counts',
+        'form_surveys',
+        'email_signups',
+      ];
+      const selectRe = /SELECT\s+((?:(?!\bFROM\b)[\s\S])*?)\s+FROM\s+(\w+)/gi;
+      // A bare `*` or `alias.*` selector (NOT COUNT(*)) pulls whole rows incl.
+      // PII, so it can't be proven aggregate-only either.
+      const STAR_SELECT = /(^|,)\s*(\w+\.)?\*\s*(,|$)/;
+      let m: RegExpExecArray | null;
+      while ((m = selectRe.exec(content)) !== null) {
+        if (!FORMS_TABLES.includes(m[2])) continue;
+        const cols = m[1];
+        expect(
+          STAR_SELECT.test(cols) || IDENTITY_COL.test(cols),
+          `pages.ts reads FORMS_DB table ${m[2]} with columns "${cols.trim()}" — must be aggregate-only (COUNT/total_count); a bare * or an identity column is a never-who violation`
+        ).toBe(false);
       }
     }
   });
