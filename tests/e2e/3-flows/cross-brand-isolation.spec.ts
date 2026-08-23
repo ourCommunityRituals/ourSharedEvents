@@ -63,6 +63,14 @@ const TIMEOUT = 30_000;
 const BRAND_A = 'isoltest-a';
 const BRAND_B = 'isoltest-b';
 
+// Per-run token that makes each seeded slug unique across runs. POST
+// /api/v2/admin/events mints its own event id and enforces UNIQUE(slug), so a
+// unique SLUG (not a fixed id + delete-before-create) is what keeps re-runs on
+// shared staging from colliding with 409 SLUG_TAKEN. There is no
+// DELETE /api/v2/admin/events/:id endpoint yet (OSE-982), so cleanup cannot free
+// a fixed slug — uniqueness per run is the only self-healing option today.
+const RUN_ID = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+
 function adminHeaders(): Record<string, string> {
   const h: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -99,15 +107,21 @@ async function adminFetch(
   return resp;
 }
 
-/** Seed a minimal test event under a given brand. Returns the event ID. */
+/** Seed a minimal test event under a given brand. Returns the server-minted event ID. */
 async function seedEvent(request: any, brand: string, suffix: string): Promise<string> {
+  // NOTE (OSE-554): POST /api/v2/admin/events IGNORES any client-supplied `id`
+  // and mints its own `evt_<uuid>` (handleCreateEvent, events.ts). The UNIQUE
+  // constraint is on `slug`, so idempotency across runs comes from a per-run
+  // unique slug — NOT from a fixed id + delete-before-create. The prior fix
+  // (delete-before-create by fixed id) could never match: the server never used
+  // that id, and there is no DELETE /api/v2/admin/events/:id endpoint (OSE-982).
   const body = {
-    id: `cross-brand-isolation-${suffix}`,
     brand_id: brand,
-    title: `Cross-Brand Isolation Test (${suffix})`,
-    slug: `isolation-test-${suffix}`,
+    title: `Cross-Brand Isolation Test (${suffix} ${RUN_ID})`,
+    slug: `isolation-test-${suffix}-${RUN_ID}`,
     status: 'active',
-    description: 'Temporary test event — cross-brand-isolation.spec.ts. Auto-deleted.',
+    description:
+      'Temporary test event — cross-brand-isolation.spec.ts. Safe to delete (start_date 2099).',
     location: 'Test Location',
     // POST /api/v2/admin/events validates dates as YYYY-MM-DD (isValidIsoDate,
     // events.ts) — it appends 'T00:00:00Z' itself. A full ISO datetime here is
@@ -116,23 +130,29 @@ async function seedEvent(request: any, brand: string, suffix: string): Promise<s
     end_date: '2099-01-02',
     timezone: 'America/New_York',
   };
-  // Idempotent seed (OSE-554): these ids are FIXED, and the afterEach cleanup is
-  // best-effort — a prior run whose delete was swallowed (or that was cancelled
-  // between seed and cleanup) orphans the id, so the next run's create returns
-  // 409 Conflict. Delete-before-create makes seeding self-healing.
-  await deleteEvent(request, body.id);
   const resp = await adminFetch(request, 'POST', '/api/v2/admin/events', body);
   expect(
     resp.status(),
     `Failed to seed test event for brand '${brand}' (HTTP ${resp.status()}). ` +
-      'Expected 201. A 409 means a prior run orphaned this fixed id despite the ' +
-      'pre-delete; 401/403 means ADMIN_KEY / X_OCR_INTERNAL / CF Access rejected.'
+      'Expected 201. 401/403 means ADMIN_KEY / X_OCR_INTERNAL / CF Access rejected; ' +
+      '409 SLUG_TAKEN should be impossible now that the slug carries a per-run id.'
   ).toBe(201);
   const json = await resp.json();
-  return json.item?.id ?? body.id;
+  // handleCreateEvent returns { ok, status, id, slug, ... } — `id` is top-level and
+  // server-generated (evt_<uuid>). The old `json.item?.id ?? body.id` fell back to
+  // the (ignored) fixed body.id, so the "own event present" assertion below could
+  // never match the real row (OSE-554).
+  return json.id;
 }
 
-/** Delete a test event by ID. Non-fatal if already absent (idempotent cleanup). */
+/**
+ * Best-effort cleanup by event ID. Currently a NO-OP: there is no
+ * DELETE /api/v2/admin/events/:id endpoint yet (OSE-982), so this call matches no
+ * route and is swallowed. It is kept forward-compatible — the moment that
+ * endpoint lands, cleanup starts working with zero test changes. Until then,
+ * re-run safety comes entirely from the per-run-unique slug (see RUN_ID); orphan
+ * test events are harmless (brand isoltest-*, start_date 2099 → never rendered).
+ */
 async function deleteEvent(request: any, id: string): Promise<void> {
   try {
     await adminFetch(request, 'DELETE', `/api/v2/admin/events/${id}`);
