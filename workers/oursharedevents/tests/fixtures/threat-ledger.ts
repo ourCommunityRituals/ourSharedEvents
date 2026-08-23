@@ -1388,6 +1388,92 @@ const SPONSOR_ELIGIBILITY_GATE: ThreatEntry[] = [
   },
 ];
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// Layer: impression-privacy red-team (OSE-662 — public-URL impression surface)
+// Born-red adversarial coverage for anonymous sponsor impressions. TL-066..069
+// (TL-061..065 = the sponsor-eligibility group above). Attack 8 (maps H3 leak)
+// is TL-069, tagging the pre-existing geo-link-maps-not-h3 spec.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const IMPRESSION_PRIVACY_REDTEAM: ThreatEntry[] = [
+  {
+    id: 'TL-066',
+    layer: 'worker_surface',
+    threat:
+      'Impression de-anonymization: recover WHO from device-minute impressions via session/timing/cross-state joins. Refused — sponsor_impressions carries zero attendee-identifying columns (no ip/ua/anon_id/session/device/user_id/email/lat/lon), so there is nothing to correlate to an individual.',
+    severity: 'HIGH',
+    target_invariant: { number: 7, name: 'aggregate_only_reporting' },
+    mitigation_story: 'OSE-661',
+    test_ref:
+      'tests/red-team/impression-privacy.spec.ts > OSE-662 attack 2 — impression de-anonymization (no identity columns) > sponsor_impressions schema carries zero attendee-identifying columns',
+    status: 'tested',
+    red_birth: {
+      date: '2026-08-22',
+      method: 'design-time-negative-assertion',
+      notes:
+        'PRAGMA table_info(sponsor_impressions) asserted against a forbidden identity-column set. Goes red the moment an ip/anon_id/session/device/lat/lon column is added to the impression table.',
+    },
+    last_run_green: '2026-08-22',
+  },
+  {
+    id: 'TL-067',
+    layer: 'worker_surface',
+    threat:
+      'Floor probe on impression metrics: request sponsor impression metrics for a tiny cohort to read a sub-K count. Suppressed — impression-derived aggregates route through applyCountFloor (OSE-683 drop-before-sum), so no impression metric renders below the K floor.',
+    severity: 'HIGH',
+    target_invariant: { number: 7, name: 'aggregate_only_reporting' },
+    mitigation_story: 'OSE-683',
+    test_ref:
+      'tests/red-team/impression-privacy.spec.ts > OSE-662 attack 3 — floor probe on impression metrics (sub-K suppressed) > impression-derived aggregates route through applyCountFloor (OSE-683)',
+    status: 'tested',
+    red_birth: {
+      date: '2026-08-22',
+      method: 'design-time-negative-assertion',
+      notes:
+        'Static gate: shared-report-builder must import/apply applyCountFloor and expose the floored sponsor_class_breakdown surface. Goes red if the floor is removed from the impression aggregation path.',
+    },
+    last_run_green: '2026-08-22',
+  },
+  {
+    id: 'TL-068',
+    layer: 'worker_surface',
+    threat:
+      'Channel-cap on impressions: read in-event device impressions at a finer geo grain than presence allows. Refused — impressions are captured at h3_res7 (~5 km² corridor cell) ONLY; no finer res8/res9 column exists on sponsor_impressions and the INSERT binds only res7 (OSE-635 res7-cap).',
+    severity: 'HIGH',
+    target_invariant: { number: 2, name: 'hyperlocal_geo_resolution' },
+    mitigation_story: 'OSE-635',
+    test_ref:
+      'tests/red-team/impression-privacy.spec.ts > OSE-662 attack 9 — channel-cap on impressions (finest grain = res7) > sponsor_impressions carries h3_res7 but NO finer h3_res8/res9 grain',
+    status: 'tested',
+    red_birth: {
+      date: '2026-08-22',
+      method: 'design-time-negative-assertion',
+      notes:
+        'Schema + static gate: sponsor_impressions has h3_res7 and neither h3_res8 nor h3_res9; the impression INSERT column list carries only h3_res7. Goes red if a finer cell column/write is introduced.',
+    },
+    last_run_green: '2026-08-22',
+  },
+  {
+    id: 'TL-069',
+    layer: 'worker_surface',
+    threat:
+      'Maps link H3 leak: the human maps link carries an H3 cell instead of real coordinates, or a third-party embed logs the viewer. Refused — renderGeoLink emits coordinates only (never an H3 token) and is link-out only (anchor, no embed, no referrer).',
+    severity: 'MEDIUM',
+    target_invariant: { number: 2, name: 'hyperlocal_geo_resolution' },
+    mitigation_story: 'OSE-660',
+    test_ref:
+      'tests/geo-link-maps-not-h3.spec.ts > OSE-660 | maps != H3 — coordinates only, never an H3 cell > the produced link NEVER contains an H3 cell / precision token',
+    status: 'tested',
+    red_birth: {
+      date: '2026-08-22',
+      method: 'design-time-negative-assertion',
+      notes:
+        'Existing OSE-660 spec ledger-tagged by OSE-662: asserts the geo link contains lat/lon and never the supplied H3 cell, and is an anchor (no embed/referrer). Goes red if an H3 token leaks into the link or an embed is introduced.',
+    },
+    last_run_green: '2026-08-22',
+  },
+];
+
 export const THREAT_LEDGER: ThreatEntry[] = [
   ...D1_BOUNDARY,
   ...WORKER_SURFACE,
@@ -1403,6 +1489,7 @@ export const THREAT_LEDGER: ThreatEntry[] = [
   ...GAP_CLOSURE,
   ...PAYMENT_OPS,
   ...SPONSOR_ELIGIBILITY_GATE,
+  ...IMPRESSION_PRIVACY_REDTEAM,
 ];
 
 export const THREAT_LEDGER_META = {
