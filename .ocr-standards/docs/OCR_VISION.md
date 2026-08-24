@@ -135,6 +135,8 @@ A new entity instance (a Hospital partner, a faith kitchen, a DJ profile) is hyd
 
 OA serves at every scale: corridor, venue, partner, individual creator. Every DJ profile is effectively a single-person OA deployment.
 
+**Provisioning identity + a premium solution-architecting service.** The flywheel does not just spin up default instances — it is a **solution-architecting tool**. OSM provisions the **anonymous** class (the OSE-class back: Postman API + FE **elements**); OA provisions the **named** class (the OW-class front). Pairing OSM's API + elements with **specs** stands up **custom front ends fast, for a premium** — OCR can build bespoke client sites for a fee on top of the core platform. Example (OA / named class): a DJ stands up a site in the infra, captures per-song QR scans during a set, and the SharedReport — promotion, shown interest, captured setlist traffic — is both the value proof and the upsell path from small venues to larger ones. Generalizes to any arts exploration: art walks, farmers markets, and beyond.
+
 ### 6.5 Platform symmetry — OSE and OW
 
 OSE and OW are **parallel platforms with opposite identity invariants**, sharing architecture and brand but not databases.
@@ -147,6 +149,20 @@ OSE and OW are **parallel platforms with opposite identity invariants**, sharing
 | Posture | Operational platform for events | Cultural statement, music first, all arts capable |
 
 "OSE + OW converge under the OCR moniker" means **shared architecture and brand**, not merged data. Cross-platform features (e.g., OW QR codes routing to anonymous OR named SharedReports) are per-record decisions, not database merges.
+
+### 6.5.1 The three identity implementations
+
+OSE-anonymous and OW-named are the two poles. The platform provides a third — **hybrid** — and the long-run goal is to offer **all three** implementations.
+
+| Implementation | Identity model | Spokes |
+|---|---|---|
+| **Anonymous** | Zero-PII, aggregates-only (Invariant 1) | **OSE** (canonical); **OSM** provisions this class |
+| **Non-anonymous / named** | Named identity, voluntary attribution (OW-class) | **OW**; **OA** provisions this class |
+| **Hybrid** | Anonymous participation/voting/aggregates **+** named public personalities | **OW, OSG, OSR** (and OSE × OW) |
+
+- **OSG and OSR inherit OSE's anonymous architecture** ("the setup to be OSE"). OW, OSG, and OSR are **hybrid-capable**.
+- **Hybrid = anonymous aggregates + named personalities** — the named public faces of a vertical (DJs, Players, Curators, Artists, Presenters) ride on top of anonymous participation.
+- **Hybrid is safe by construction, not by policy.** The named roster and the anonymous aggregates must be a **structurally impossible join** — the auth token is the choice boundary (the Fist-of-Five choice-token model). A named identity can never be recovered from an anonymous aggregate. This is what lets a single product carry both models without collapsing the anonymity guarantee (Invariant 1) into the named layer.
 
 ### 6.6 Data flow — OER as the BigQuery RAG
 
@@ -172,12 +188,12 @@ OER is the **BigQuery RAG layer**, set up at the org level. Every product databa
 | **OCR** | OurCommunityRituals LLC | Holding company. Org brain. Governance. | Governance |
 | **OSE** | OurSharedEvents | The platform. Six surfaces. Sponsor model. Triangle canonical instantiation. | Anonymous ID |
 | **OER** | OurEventRings | BigQuery RAG. Cross-product intelligence. | BigQuery / RAG |
-| **OSM** | OurSharedMagnets | Back of the flywheel. API + skills + CI. | Developer-facing |
+| **OSM** | OurSharedMagnets | Back of the flywheel. API + skills + CI. | Developer-facing · provisions anonymous class |
 | **OSP** | OurSharedPulse | Pre-platform consulting. Human-delivered. | No anonymous ID |
-| **OSG** | OurSharedGames | Founding activation format. Anchor game nights. | Inherits OSE |
-| **OSR** | OurSharedRecords | Music, story, archive. Oral history. | Archive |
-| **OW** | OurWKRP | Community music curation. Named identity. Free. | Named identity |
-| **OA** | OurAirwaves | Front of the flywheel. Deployment + white label. | Deployment |
+| **OSG** | OurSharedGames | Founding activation format. Anchor game nights. | Inherits OSE (anonymous) · hybrid-capable |
+| **OSR** | OurSharedRecords | Music, story, archive. Oral history. | Archive · OSE-class anonymous · hybrid-capable |
+| **OW** | OurWKRP | Community music curation. Named identity. Free. | Named identity · hybrid-capable |
+| **OA** | OurAirwaves | Front of the flywheel. Deployment + white label. | Deployment · provisions named class |
 
 ### Per-product detail (only where it adds beyond the table)
 
