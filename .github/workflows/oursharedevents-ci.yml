@@ -224,7 +224,15 @@ jobs:
 
       - name: Semgrep SAST
         run: |
-          python -m pip install semgrep --quiet
+          # OSE-919: repair a drifted runner pip BEFORE installing semgrep. A cached
+          # tool-Python whose pip regressed (26.0.x/26.1.x resolvelib bug) crashes
+          # INSIDE pip on `pip install semgrep` — that is infra, NOT a finding. Upgrade
+          # pip to a resolver-working floor first; an install failure is flagged as
+          # infra (::error + exit 1) so it is never read as a clean pass or a finding.
+          python -m pip install --upgrade "pip>=26.2.1" --quiet \
+            || { echo "::error::pip self-upgrade failed (OSE-919 runner tool-Python corruption) — infra, not a security finding"; exit 1; }
+          python -m pip install semgrep --quiet \
+            || { echo "::error::semgrep install failed (infra: runner pip/tool-Python, see OSE-919) — not a security finding"; exit 1; }
           # setup-python installs the semgrep console binary into
           # <pythonLocation>/Scripts and exports pythonLocation. Put that dir on PATH
           # (APPENDED, so Git Bash stays first — respects #11) via cygpath so the
@@ -1832,7 +1840,12 @@ jobs:
           # Normalized to `python` (was python3) so install-site == run-site.
           # Scripts-on-PATH via cygpath — mirrors S0 (do NOT use `python -m semgrep`:
           # deprecated, exits 2). See the S0 note for the #11 rationale.
-          python -m pip install semgrep --quiet
+          # OSE-919: repair a drifted runner pip BEFORE installing semgrep (see S0) so a
+          # regressed tool-Python pip can't crash the required S2 gate as fake "failure".
+          python -m pip install --upgrade "pip>=26.2.1" --quiet \
+            || { echo "::error::pip self-upgrade failed (OSE-919 runner tool-Python corruption) — infra, not a security finding"; exit 1; }
+          python -m pip install semgrep --quiet \
+            || { echo "::error::semgrep install failed (infra: runner pip/tool-Python, see OSE-919) — not a security finding"; exit 1; }
           if [ -n "${pythonLocation:-}" ]; then export PATH="$PATH:$(cygpath -u "$pythonLocation")/Scripts"; fi
           semgrep --version || { echo "::error::semgrep unavailable on runner"; exit 1; }
           semgrep scan \
