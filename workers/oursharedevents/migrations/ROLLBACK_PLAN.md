@@ -7,8 +7,18 @@
 This document covers all migrations applied to both D1 databases bound to
 the OSE Worker:
 
-- `DB` — main / anonymous public surface (highest migration: 0053; append-only 0001–0053)
-- `FORMS_DB` — identified-user surface (12 migrations: 0001–0012)
+- `DB` — main / anonymous public surface (highest migration: 0067; append-only 0001–0067)
+- `FORMS_DB` — identified-user surface (13 migrations: 0001–0013)
+
+> **Three structural restructures land in the 0062–0067 window — read their reverse
+> notes before any production rollback:** `0062` split `scans` → `scan_placement_events`
+> (WHERE) + `scan_node_returns` (WHO) and **dropped `scans`**; `0064` renamed two
+> banned-lexicon columns (`unique_agents`→`distinct_agent_hashes`,
+> `impression_token`→`display_token`); `0065–0067` retired the combined `sponsors`
+> table into `sponsor_business` (identity) + `sponsor_asset` (creative) +
+> `sponsor_placement` (per-event join) and **dropped `sponsors`**. All affected tables
+> were 0 rows in every environment at authoring time, so each destructive step's
+> mandated posture is **rollback-forward**, not a data-preserving reverse.
 
 > **Rollback posture:** rollback-forward is the primary production recovery
 > path. The reverse SQL below is the canonical surgical rollback for DevOps /
@@ -97,6 +107,63 @@ the relevant sections from the bottom up.
 #### B.1 — `DB` (main database)
 
 ```sql
+-- 0067: sponsor_placement (per-event attachment) + FK-repoint of the child tables
+-- off the retired `sponsors` onto sponsor_business (OSE-799 A2). DESTRUCTIVE and
+-- non-trivially reversible: 0067 DROPPED `sponsors` and recreated
+-- sponsor_event_types / sponsor_areas / sponsor_impressions with FKs pointing at
+-- sponsor_business (0065). A true reverse must recreate the pre-0065 `sponsors`
+-- table (see 0002 + its later ALTERs) and repoint those three children back at it.
+-- sponsors + all children = 0 rows in every environment, so the MANDATED posture is
+-- ROLLBACK-FORWARD (a corrective migration), never this reverse. Surgical drop of the
+-- 0067-introduced attachment object only:
+DROP INDEX IF EXISTS idx_sponsor_placement_locality;
+DROP INDEX IF EXISTS idx_sponsor_placement_business;
+DROP INDEX IF EXISTS idx_sponsor_placement_event;
+DROP TABLE IF EXISTS sponsor_placement;
+
+-- 0066: sponsor_asset (durable creative — one row per canonical format, OSE-799 A2)
+DROP INDEX IF EXISTS idx_sponsor_asset_business;
+DROP TABLE IF EXISTS sponsor_asset;
+
+-- 0065: sponsor_business (durable sponsor identity, OSE-799 A2). sponsor_asset (0066)
+-- and the 0067-repointed children FK-reference this table — drop 0066/0067 first
+-- (above); a full restore of the pre-0065 `sponsors` FK target is rollback-forward.
+DROP INDEX IF EXISTS idx_sponsor_business_h3_res7;
+DROP INDEX IF EXISTS idx_sponsor_business_brand;
+DROP TABLE IF EXISTS sponsor_business;
+
+-- 0064: honesty-lexicon column RENAMEs (OSE-801). Reversible — RENAME COLUMN back
+-- (both tables 0 rows). Applies to the schema state BEFORE 0065–0067 (while `sponsors`
+-- still exists). In a full 0067→0062 rollback the `sponsors` recreate (rollback-forward)
+-- restores the pre-rename identifiers, so this line becomes a no-op there.
+ALTER TABLE sponsors        RENAME COLUMN display_token TO impression_token;
+ALTER TABLE scan_aggregates RENAME COLUMN distinct_agent_hashes TO unique_agents;
+
+-- 0063: SEED community_gathering template + its type mappings + max_clearance_tier
+-- recompute (OSE-800 / A3) — DATA-ONLY, no new table/index. Removes only what 0063
+-- added (the community_gathering template + its mappings). The 5 forms 0063 also mapped
+-- to EXISTING templates (bar_night / music_event / rec_league) used INSERT OR IGNORE, so
+-- some may have pre-existed via 0057 — leave them (rollback-forward for an exact pre-0063
+-- state). The recompute is the same reusable statement 0057/0063 use.
+DELETE FROM template_event_types WHERE template_id = 'community_gathering';
+DELETE FROM event_templates WHERE id = 'community_gathering';
+UPDATE event_templates SET max_clearance_tier = (
+  SELECT MAX(r.legal_clearance_tier)
+  FROM template_event_types t
+  JOIN event_type_registry r ON t.uec_code = r.uec_code
+  WHERE t.template_id = event_templates.id
+);
+
+-- 0062: split scan path → scan_placement_events (WHERE) + scan_node_returns (WHO);
+-- DROPPED `scans` + idx_scans_anonymous (doctrine rule 6 — the recombined table is
+-- deliberately retired). scans = 0 rows at authoring, so restoring the pre-split `scans`
+-- (from 0004 + 0016's anonymous_id ALTER) is ROLLBACK-FORWARD. Surgical drop of the
+-- 0062-introduced split tables:
+DROP INDEX IF EXISTS idx_snr_event_bucket;
+DROP TABLE IF EXISTS scan_node_returns;
+DROP INDEX IF EXISTS idx_spe_event_poster;
+DROP TABLE IF EXISTS scan_placement_events;
+
 -- 0061: sponsor eligibility columns on sponsor_business_draft (OSE-744 / P1)
 -- Metadata-only ADD COLUMN (nullable/defaulted), no count-gate change. SQLite
 -- DROP COLUMN unreliable -> rollback-forward (a corrective migration), never a
@@ -275,6 +342,11 @@ DROP TABLE IF EXISTS events;
 #### B.2 — `FORMS_DB` (identified-user database)
 
 ```sql
+-- 0013: seed mock/demo mode operational flags (OSE-190 / MOCK-1b-ii) — DATA-ONLY,
+-- two feature_flags rows, no new table/index. Both default OFF; production is guarded
+-- separately (WORKER_ENV=production). Reverse deletes exactly the seeded rows by id.
+DELETE FROM feature_flags WHERE id IN ('seed-config-mock-mode', 'seed-config-mock-sponsor-count');
+
 -- 0012: add consent_type
 ALTER TABLE form_registrations DROP COLUMN consent_type;
 ALTER TABLE email_signups      DROP COLUMN consent_type;
@@ -365,13 +437,19 @@ name fails CI; the right fix is to use a peppered hash like
 The authoritative gate is `tests/migration-smoke.spec.ts`, run on every PR
 as part of T0 Gate. It asserts:
 
-| What                          | Expected (as of 0028 / forms 0012)                                                                                                       |
-| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `DB` tables                   | exactly 15, names match canonical set                                                                                                    |
-| `FORMS_DB` tables             | exactly 6, names match canonical set                                                                                                     |
-| `DB` triggers                 | 0 (state-machine moved to app layer per 0025)                                                                                            |
-| `FORMS_DB` triggers           | 0                                                                                                                                        |
-| Critical `DB` indexes present | `idx_events_brand_status`, `idx_events_slug`, `idx_poster_deployments_qr_token`, `idx_scans_anonymous`, `idx_admin_audit_log_created_at` |
+| What                          | Expected (as of 0067 / forms 0013)                                                                                                        |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `DB` tables                   | exactly 35, names match canonical set                                                                                                     |
+| `FORMS_DB` tables             | exactly 6, names match canonical set                                                                                                      |
+| `DB` triggers                 | 0 (state-machine moved to app layer per 0025)                                                                                             |
+| `FORMS_DB` triggers           | 0                                                                                                                                         |
+| Critical `DB` indexes present | `idx_events_brand_status`, `idx_events_slug`, `idx_poster_deployments_qr_token`, `idx_spe_event_poster`, `idx_admin_audit_log_created_at` |
+
+> The table/trigger counts and the critical-index-presence list above are asserted
+> authoritatively by `tests/migration-smoke.spec.ts` on every PR — that test, not this
+> table, is the source of truth. `idx_spe_event_poster` replaced `idx_scans_anonymous`
+> when 0062 split the scan path. Total index counts (below) are observability only, not
+> gated.
 
 For manual verification against a live D1:
 
@@ -400,7 +478,7 @@ wrangler d1 execute FORMS_DB  --env <env> --remote --command \
 The CI smoke test emits a JSON observability line per run:
 
 ```
-{"type":"OSE_209_MIGRATION_SMOKE","db":{"tables":15,"indexes":33,"triggers":0},"forms_db":{"tables":6,"indexes":12,"triggers":0},"timestamp":"..."}
+{"type":"OSE_209_MIGRATION_SMOKE","db":{"tables":35,"indexes":66,"triggers":0},"forms_db":{"tables":6,"indexes":12,"triggers":0},"timestamp":"..."}
 ```
 
 Grep CI logs for `OSE_209_MIGRATION_SMOKE` to confirm the run executed
