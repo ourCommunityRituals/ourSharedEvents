@@ -141,6 +141,13 @@ WORKER_BUILD_VERSION = "stg-2026.03.22"
 ALLOW_ADMIN_KEY_FALLBACK = "true"
 # Allow X-OCR-Internal header for CI/CD automation
 ALLOW_OCR_INTERNAL = "true"
+# Automation/CI escape hatch (admin-brand-scope.ts): a `key:` actor (X-OCR-Internal /
+# ADMIN_KEY) runs UNSCOPED — sees every brand's rows — only when this is exactly "true".
+# Required for the T4 admin-path E2E (sponsor-journey) to see the sponsors it creates;
+# without it the CI actor resolves to mode:'deny' and every admin list is empty (OSE-865).
+# STAGING ONLY — deliberately absent from [env.production.vars]; unscoped automation
+# access to real tenant data on prod is a security boundary that must never open.
+ADMIN_SCOPE_ALL = "true"
 # Admin email allowlist — plaintext vars take priority over secrets; set actual values here
 ALLOWED_ADMIN_EMAILS = "mzdano@gmail.com"
 ALLOWED_ADMIN_DOMAINS = "oursharedevents.com"
