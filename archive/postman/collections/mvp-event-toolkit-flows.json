@@ -41,8 +41,8 @@
               "raw": "{{baseUrl}}?p=status&brand={{brandId}}",
               "host": ["{{baseUrl}}"],
               "query": [
-                {"key": "p", "value": "status"},
-                {"key": "brand", "value": "{{brandId}}"}
+                { "key": "p", "value": "status" },
+                { "key": "brand", "value": "{{brandId}}" }
               ]
             }
           }
@@ -100,7 +100,7 @@
           ],
           "request": {
             "method": "POST",
-            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"brandId\": \"{{brandId}}\",\n  \"scope\": \"events\",\n  \"templateId\": \"event\",\n  \"adminKey\": \"{{adminKey}}\",\n  \"data\": {\n    \"name\": \"Flow Test Event {{eventTimestamp}}\",\n    \"dateISO\": \"{{eventDate}}\",\n    \"location\": \"Test Venue - Newman Flow\",\n    \"summary\": \"Automated flow test event for Forms integration\"\n  }\n}"
@@ -108,7 +108,7 @@
             "url": {
               "raw": "{{baseUrl}}?action=create",
               "host": ["{{baseUrl}}"],
-              "query": [{"key": "action", "value": "create"}]
+              "query": [{ "key": "action", "value": "create" }]
             }
           }
         },
@@ -139,11 +139,11 @@
               "raw": "{{baseUrl}}?p=api&action=get&brandId={{brandId}}&scope=events&id={{flowEventId}}",
               "host": ["{{baseUrl}}"],
               "query": [
-                {"key": "p", "value": "api"},
-                {"key": "action", "value": "get"},
-                {"key": "brandId", "value": "{{brandId}}"},
-                {"key": "scope", "value": "events"},
-                {"key": "id", "value": "{{flowEventId}}"}
+                { "key": "p", "value": "api" },
+                { "key": "action", "value": "get" },
+                { "key": "brandId", "value": "{{brandId}}" },
+                { "key": "scope", "value": "events" },
+                { "key": "id", "value": "{{flowEventId}}" }
               ]
             }
           }
@@ -178,7 +178,7 @@
           ],
           "request": {
             "method": "POST",
-            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": {
               "mode": "raw",
               "raw": "{}"
@@ -186,7 +186,7 @@
             "url": {
               "raw": "{{baseUrl}}?action=listFormTemplates",
               "host": ["{{baseUrl}}"],
-              "query": [{"key": "action", "value": "listFormTemplates"}]
+              "query": [{ "key": "action", "value": "listFormTemplates" }]
             }
           }
         },
@@ -221,7 +221,7 @@
           ],
           "request": {
             "method": "POST",
-            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"brandId\": \"{{brandId}}\",\n  \"adminKey\": \"{{adminKey}}\",\n  \"templateType\": \"check-in\",\n  \"eventName\": \"{{flowEventName}}\",\n  \"eventId\": \"{{flowEventId}}\"\n}"
@@ -229,7 +229,7 @@
             "url": {
               "raw": "{{baseUrl}}?action=createFormFromTemplate",
               "host": ["{{baseUrl}}"],
-              "query": [{"key": "action", "value": "createFormFromTemplate"}]
+              "query": [{ "key": "action", "value": "createFormFromTemplate" }]
             }
           }
         },
@@ -259,7 +259,7 @@
           ],
           "request": {
             "method": "POST",
-            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"brandId\": \"{{brandId}}\",\n  \"adminKey\": \"{{adminKey}}\",\n  \"templateType\": \"walk-in\",\n  \"eventName\": \"{{flowEventName}}\",\n  \"eventId\": \"{{flowEventId}}\"\n}"
@@ -267,7 +267,7 @@
             "url": {
               "raw": "{{baseUrl}}?action=createFormFromTemplate",
               "host": ["{{baseUrl}}"],
-              "query": [{"key": "action", "value": "createFormFromTemplate"}]
+              "query": [{ "key": "action", "value": "createFormFromTemplate" }]
             }
           }
         },
@@ -297,7 +297,7 @@
           ],
           "request": {
             "method": "POST",
-            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"brandId\": \"{{brandId}}\",\n  \"adminKey\": \"{{adminKey}}\",\n  \"templateType\": \"survey\",\n  \"eventName\": \"{{flowEventName}}\",\n  \"eventId\": \"{{flowEventId}}\"\n}"
@@ -305,7 +305,7 @@
             "url": {
               "raw": "{{baseUrl}}?action=createFormFromTemplate",
               "host": ["{{baseUrl}}"],
-              "query": [{"key": "action", "value": "createFormFromTemplate"}]
+              "query": [{ "key": "action", "value": "createFormFromTemplate" }]
             }
           }
         },
@@ -337,7 +337,7 @@
           ],
           "request": {
             "method": "POST",
-            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"brandId\": \"{{brandId}}\",\n  \"adminKey\": \"{{adminKey}}\",\n  \"formUrl\": \"{{checkinFormUrl}}\",\n  \"formType\": \"check-in\",\n  \"eventId\": \"{{flowEventId}}\"\n}"
@@ -345,7 +345,7 @@
             "url": {
               "raw": "{{baseUrl}}?action=generateFormShortlink",
               "host": ["{{baseUrl}}"],
-              "query": [{"key": "action", "value": "generateFormShortlink"}]
+              "query": [{ "key": "action", "value": "generateFormShortlink" }]
             }
           }
         },
@@ -374,7 +374,7 @@
           ],
           "request": {
             "method": "POST",
-            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"brandId\": \"{{brandId}}\",\n  \"adminKey\": \"{{adminKey}}\",\n  \"formUrl\": \"{{walkinFormUrl}}\",\n  \"formType\": \"walk-in\",\n  \"eventId\": \"{{flowEventId}}\"\n}"
@@ -382,7 +382,7 @@
             "url": {
               "raw": "{{baseUrl}}?action=generateFormShortlink",
               "host": ["{{baseUrl}}"],
-              "query": [{"key": "action", "value": "generateFormShortlink"}]
+              "query": [{ "key": "action", "value": "generateFormShortlink" }]
             }
           }
         },
@@ -411,7 +411,7 @@
           ],
           "request": {
             "method": "POST",
-            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"brandId\": \"{{brandId}}\",\n  \"adminKey\": \"{{adminKey}}\",\n  \"formUrl\": \"{{surveyFormUrl}}\",\n  \"formType\": \"survey\",\n  \"eventId\": \"{{flowEventId}}\"\n}"
@@ -419,7 +419,7 @@
             "url": {
               "raw": "{{baseUrl}}?action=generateFormShortlink",
               "host": ["{{baseUrl}}"],
-              "query": [{"key": "action", "value": "generateFormShortlink"}]
+              "query": [{ "key": "action", "value": "generateFormShortlink" }]
             }
           }
         },
@@ -448,8 +448,8 @@
               "raw": "{{baseUrl}}?p=r&t={{checkinToken}}",
               "host": ["{{baseUrl}}"],
               "query": [
-                {"key": "p", "value": "r"},
-                {"key": "t", "value": "{{checkinToken}}"}
+                { "key": "p", "value": "r" },
+                { "key": "t", "value": "{{checkinToken}}" }
               ]
             }
           }
@@ -475,7 +475,7 @@
           ],
           "request": {
             "method": "POST",
-            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"items\": [\n    {\n      \"type\": \"impression\",\n      \"eventId\": \"{{flowEventId}}\",\n      \"surface\": \"form-check-in\",\n      \"timestamp\": \"{{$timestamp}}\"\n    }\n  ]\n}"
@@ -483,7 +483,7 @@
             "url": {
               "raw": "{{baseUrl}}?action=logEvents",
               "host": ["{{baseUrl}}"],
-              "query": [{"key": "action", "value": "logEvents"}]
+              "query": [{ "key": "action", "value": "logEvents" }]
             }
           }
         },
@@ -525,7 +525,7 @@
           ],
           "request": {
             "method": "POST",
-            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"brandId\": \"{{brandId}}\",\n  \"adminKey\": \"{{adminKey}}\",\n  \"eventId\": \"{{flowEventId}}\",\n  \"startDate\": \"{{reportStartDate}}\",\n  \"endDate\": \"{{reportEndDate}}\"\n}"
@@ -533,7 +533,7 @@
             "url": {
               "raw": "{{baseUrl}}?action=getReport",
               "host": ["{{baseUrl}}"],
-              "query": [{"key": "action", "value": "getReport"}]
+              "query": [{ "key": "action", "value": "getReport" }]
             }
           }
         },
@@ -585,8 +585,8 @@
               "raw": "{{baseUrl}}?p=status&brand={{brandId}}",
               "host": ["{{baseUrl}}"],
               "query": [
-                {"key": "p", "value": "status"},
-                {"key": "brand", "value": "{{brandId}}"}
+                { "key": "p", "value": "status" },
+                { "key": "brand", "value": "{{brandId}}" }
               ]
             }
           }
