@@ -182,13 +182,17 @@ test.describe('Sponsor Journey — Full Lifecycle', () => {
     test.skip(!sponsorId || !eventId, 'Missing sponsor or event');
     await page.goto('/display', { waitUntil: 'domcontentloaded', timeout: TIMEOUT });
 
-    const res = await publicFetch(page, `/api/v2/events/${encodeURIComponent(eventId)}/sponsors`);
-    expect(res.status).toBe(200);
-    expect(res.body.ok).toBe(true);
-
-    const found = res.body.items.find((s: any) => s.id === sponsorId);
-    expect(found).toBeTruthy();
-    expect(found.name).toBe(SPONSOR_NAME);
+    // OSE-944: the public sponsors read is cache-fronted (SWR); the sponsor created
+    // in Step 1 may not appear on the immediate read. Poll until it propagates
+    // instead of asserting once (the flywheel's screen N+1 sees screen N contract).
+    await expect(async () => {
+      const res = await publicFetch(page, `/api/v2/events/${encodeURIComponent(eventId)}/sponsors`);
+      expect(res.status).toBe(200);
+      expect(res.body.ok).toBe(true);
+      const found = res.body.items.find((s: any) => s.id === sponsorId);
+      expect(found, 'sponsor present in public list after write→read propagation').toBeTruthy();
+      expect(found.name).toBe(SPONSOR_NAME);
+    }).toPass({ timeout: 20000, intervals: [500, 1000, 2000, 3000, 5000] });
   });
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -199,29 +203,32 @@ test.describe('Sponsor Journey — Full Lifecycle', () => {
     test.skip(!sponsorId || !eventId, 'Missing sponsor or event');
     await page.goto('/display', { waitUntil: 'domcontentloaded', timeout: TIMEOUT });
 
-    const res = await publicFetch(
-      page,
-      `/api/v2/events/${encodeURIComponent(eventId)}/sponsor-bundle?surface=display`
-    );
-    expect(res.status).toBe(200);
-    expect(res.body.ok).toBe(true);
+    // OSE-944: cache-fronted bundle read — poll until the new sponsor propagates.
+    await expect(async () => {
+      const res = await publicFetch(
+        page,
+        `/api/v2/events/${encodeURIComponent(eventId)}/sponsor-bundle?surface=display`
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.ok).toBe(true);
 
-    const bundle = res.body.bundle;
-    expect(bundle).toBeTruthy();
+      const bundle = res.body.bundle;
+      expect(bundle).toBeTruthy();
 
-    // OSE-891/#25: placement is UNIFORM — every active sponsor is eligible for
-    // EVERY surface bucket (the retired placement_formats named-slot selection is
-    // gone; buildSponsorBundle gives all four buckets the same covenant rotation).
-    // So assert presence on all four surfaces, not just the two a legacy
-    // placement_formats would have picked.
-    for (const surface of ['posterTop', 'tvTop', 'tvSide', 'mobileBanner']) {
-      const inSurface = bundle.surface_sponsors[surface].find((s: any) => s.id === sponsorId);
-      expect(inSurface, `sponsor must appear on ${surface} (uniform eligibility)`).toBeTruthy();
-    }
+      // OSE-891/#25: placement is UNIFORM — every active sponsor is eligible for
+      // EVERY surface bucket (the retired placement_formats named-slot selection is
+      // gone; buildSponsorBundle gives all four buckets the same covenant rotation).
+      // So assert presence on all four surfaces, not just the two a legacy
+      // placement_formats would have picked.
+      for (const surface of ['posterTop', 'tvTop', 'tvSide', 'mobileBanner']) {
+        const inSurface = bundle.surface_sponsors[surface].find((s: any) => s.id === sponsorId);
+        expect(inSurface, `sponsor must appear on ${surface} (uniform eligibility)`).toBeTruthy();
+      }
 
-    // Rotation config should be valid
-    expect(bundle.rotation_config.rotationMs).toBeGreaterThanOrEqual(3000);
-    expect(bundle.rotation_config.rotationMs).toBeLessThanOrEqual(15000);
+      // Rotation config should be valid
+      expect(bundle.rotation_config.rotationMs).toBeGreaterThanOrEqual(3000);
+      expect(bundle.rotation_config.rotationMs).toBeLessThanOrEqual(15000);
+    }).toPass({ timeout: 20000, intervals: [500, 1000, 2000, 3000, 5000] });
   });
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -393,7 +400,7 @@ test.describe('Sponsor Journey — Full Lifecycle', () => {
     await page.goto('/display', { waitUntil: 'domcontentloaded', timeout: TIMEOUT });
 
     const res = await adminFetch(
-      page,
+      request,
       'DELETE',
       `/api/v2/admin/sponsors/${encodeURIComponent(sponsorId)}`
     );
@@ -410,12 +417,15 @@ test.describe('Sponsor Journey — Full Lifecycle', () => {
     test.skip(!sponsorId || !eventId, 'Missing sponsor or event');
     await page.goto('/display', { waitUntil: 'domcontentloaded', timeout: TIMEOUT });
 
-    const res = await publicFetch(page, `/api/v2/events/${encodeURIComponent(eventId)}/sponsors`);
-    expect(res.status).toBe(200);
-    expect(res.body.ok).toBe(true);
-
-    const found = res.body.items.find((s: any) => s.id === sponsorId);
-    expect(found).toBeUndefined();
+    // OSE-944: the delete must also propagate through the SWR cache before the
+    // public read reflects the absence — poll until it's gone.
+    await expect(async () => {
+      const res = await publicFetch(page, `/api/v2/events/${encodeURIComponent(eventId)}/sponsors`);
+      expect(res.status).toBe(200);
+      expect(res.body.ok).toBe(true);
+      const found = res.body.items.find((s: any) => s.id === sponsorId);
+      expect(found, 'deleted sponsor absent from public list after propagation').toBeUndefined();
+    }).toPass({ timeout: 20000, intervals: [500, 1000, 2000, 3000, 5000] });
   });
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -499,7 +509,7 @@ test.describe('Sponsor Journey — Tier Upgrade', () => {
     await page.goto('/display', { waitUntil: 'domcontentloaded', timeout: TIMEOUT });
 
     const res = await adminFetch(
-      page,
+      request,
       'PUT',
       `/api/v2/admin/sponsors/${encodeURIComponent(sponsorId)}`,
       { tier: 'platinum' }
@@ -586,44 +596,56 @@ test.describe('Sponsor Journey — Cross-Surface Rendering', () => {
     test.skip(!sponsorId || !eventId, 'No sponsor/event');
     await page.goto('/display', { waitUntil: 'domcontentloaded', timeout: TIMEOUT });
 
-    const res = await publicFetch(
-      page,
-      `/api/v2/events/${encodeURIComponent(eventId)}/sponsor-bundle?surface=display`
-    );
-    const tvTop = res.body.bundle?.surface_sponsors?.tvTop || [];
-    expect(tvTop.find((s: any) => s.id === sponsorId)).toBeTruthy();
+    // OSE-944: cache-fronted bundle read — poll until the sponsor propagates.
+    await expect(async () => {
+      const res = await publicFetch(
+        page,
+        `/api/v2/events/${encodeURIComponent(eventId)}/sponsor-bundle?surface=display`
+      );
+      const tvTop = res.body.bundle?.surface_sponsors?.tvTop || [];
+      expect(tvTop.find((s: any) => s.id === sponsorId)).toBeTruthy();
+    }).toPass({ timeout: 20000, intervals: [500, 1000, 2000, 3000, 5000] });
   });
 
   test('Poster surface: sponsor in bundle', async ({ page, request }) => {
     test.skip(!sponsorId || !eventId, 'No sponsor/event');
     await page.goto('/poster', { waitUntil: 'domcontentloaded', timeout: TIMEOUT });
 
-    const res = await publicFetch(
-      page,
-      `/api/v2/events/${encodeURIComponent(eventId)}/sponsor-bundle?surface=poster`
-    );
-    const posterTop = res.body.bundle?.surface_sponsors?.posterTop || [];
-    expect(posterTop.find((s: any) => s.id === sponsorId)).toBeTruthy();
+    // OSE-944: cache-fronted bundle read — poll until the sponsor propagates.
+    await expect(async () => {
+      const res = await publicFetch(
+        page,
+        `/api/v2/events/${encodeURIComponent(eventId)}/sponsor-bundle?surface=poster`
+      );
+      const posterTop = res.body.bundle?.surface_sponsors?.posterTop || [];
+      expect(posterTop.find((s: any) => s.id === sponsorId)).toBeTruthy();
+    }).toPass({ timeout: 20000, intervals: [500, 1000, 2000, 3000, 5000] });
   });
 
   test('Public surface: sponsor in bundle', async ({ page, request }) => {
     test.skip(!sponsorId || !eventId, 'No sponsor/event');
     await page.goto('/public', { waitUntil: 'domcontentloaded', timeout: TIMEOUT });
 
-    const res = await publicFetch(
-      page,
-      `/api/v2/events/${encodeURIComponent(eventId)}/sponsor-bundle?surface=public`
-    );
-    const mobileBanner = res.body.bundle?.surface_sponsors?.mobileBanner || [];
-    expect(mobileBanner.find((s: any) => s.id === sponsorId)).toBeTruthy();
+    // OSE-944: cache-fronted bundle read — poll until the sponsor propagates.
+    await expect(async () => {
+      const res = await publicFetch(
+        page,
+        `/api/v2/events/${encodeURIComponent(eventId)}/sponsor-bundle?surface=public`
+      );
+      const mobileBanner = res.body.bundle?.surface_sponsors?.mobileBanner || [];
+      expect(mobileBanner.find((s: any) => s.id === sponsorId)).toBeTruthy();
+    }).toPass({ timeout: 20000, intervals: [500, 1000, 2000, 3000, 5000] });
   });
 
   test('SharedReport surface: sponsor in unfiltered list', async ({ page, request }) => {
     test.skip(!sponsorId || !eventId, 'No sponsor/event');
     await page.goto('/sharedReport', { waitUntil: 'domcontentloaded', timeout: TIMEOUT });
 
-    const res = await publicFetch(page, `/api/v2/events/${encodeURIComponent(eventId)}/sponsors`);
-    expect(res.body.items.find((s: any) => s.id === sponsorId)).toBeTruthy();
+    // OSE-944: cache-fronted read — poll until the sponsor propagates.
+    await expect(async () => {
+      const res = await publicFetch(page, `/api/v2/events/${encodeURIComponent(eventId)}/sponsors`);
+      expect(res.body.items.find((s: any) => s.id === sponsorId)).toBeTruthy();
+    }).toPass({ timeout: 20000, intervals: [500, 1000, 2000, 3000, 5000] });
   });
 
   test('Cleanup: Delete sponsor', async ({ page, request }) => {
