@@ -842,13 +842,20 @@ export function getRiphCampaigns(): MockCampaign[] {
 // ── Sponsors (Premium 2 · Mid 3 · Local 5), each carrying a campaign ──────────
 
 export function getRiphSponsors(): MockSeasonSponsor[] {
+  // is_local is a GEO-derived value (in-corridor?), independent of the paid `tier`
+  // and shown read-only (#25 / OSE-670): money buys frequency-share/tier, NEVER
+  // local status. Passed explicitly (not `tier === 'local'`) so the dataset
+  // DEMONSTRATES the two axes are orthogonal — premium & mid each occur at both
+  // is_local=true and is_local=false. (Business↔geo mapping is illustrative
+  // pending the real Blue Island roster; see OSE-995.)
   const s = (
     id: string,
     campaign_id: string,
     name: string,
     tier: MockSeasonSponsor['tier'],
     area: string,
-    event_type: string
+    event_type: string,
+    is_local: boolean
   ): MockSeasonSponsor => ({
     id,
     brand_id: RIPH_BRAND_ID,
@@ -857,23 +864,72 @@ export function getRiphSponsors(): MockSeasonSponsor[] {
     tier,
     area,
     event_type,
-    is_local: tier === 'local',
+    is_local,
     data_class: 'demo',
   });
   return [
-    // Premium (2)
-    s('sp_riph_prem_1', 'camp_premium_1', 'Beverly Arts Center', 'premium', 'beverly', 'arts'),
-    s('sp_riph_prem_2', 'camp_premium_2', 'Ridge Home + Garden', 'premium', 'beverly', 'home'),
-    // Mid (3)
-    s('sp_riph_mid_1', 'camp_mid_1', 'Prairie Hills Brewing', 'mid', 'prairie-hills', 'drinks'),
-    s('sp_riph_mid_2', 'camp_mid_2', 'South Side Realty Group', 'mid', 'beverly', 'real-estate'),
-    s('sp_riph_mid_3', 'camp_mid_3', 'Beverly Taqueria', 'mid', 'beverly', 'food'),
-    // Local (5)
-    s('sp_riph_loc_1', 'camp_local_1', 'Beverly Bakehouse', 'local', 'beverly', 'food'),
-    s('sp_riph_loc_2', 'camp_local_1', 'Ridge Dry Cleaners', 'local', 'beverly', 'retail'),
-    s('sp_riph_loc_3', 'camp_local_1', "Kelly's Corner Pub", 'local', 'beverly', 'food'),
-    s('sp_riph_loc_4', 'camp_local_1', 'Prairie Paws Vet Clinic', 'local', 'prairie-hills', 'pets'),
-    s('sp_riph_loc_5', 'camp_local_1', 'Greenwood Locksmith', 'local', 'mt-greenwood', 'services'),
+    // Premium (2) — one in-corridor local, one out-of-corridor regional brand:
+    // premium status is NOT gated on geography.
+    s(
+      'sp_riph_prem_1',
+      'camp_premium_1',
+      'Beverly Arts Center',
+      'premium',
+      'beverly',
+      'arts',
+      true
+    ),
+    s(
+      'sp_riph_prem_2',
+      'camp_premium_2',
+      'Ridge Home + Garden',
+      'premium',
+      'beverly',
+      'home',
+      false
+    ),
+    // Mid (3) — spans both localities: mid occurs at is_local=true AND is_local=false.
+    s(
+      'sp_riph_mid_1',
+      'camp_mid_1',
+      'Prairie Hills Brewing',
+      'mid',
+      'prairie-hills',
+      'drinks',
+      true
+    ),
+    s(
+      'sp_riph_mid_2',
+      'camp_mid_2',
+      'South Side Realty Group',
+      'mid',
+      'beverly',
+      'real-estate',
+      false
+    ),
+    s('sp_riph_mid_3', 'camp_mid_3', 'Beverly Taqueria', 'mid', 'beverly', 'food', true),
+    // Local (5) — the covenant floor: neighborhood businesses, all in-corridor.
+    s('sp_riph_loc_1', 'camp_local_1', 'Beverly Bakehouse', 'local', 'beverly', 'food', true),
+    s('sp_riph_loc_2', 'camp_local_1', 'Ridge Dry Cleaners', 'local', 'beverly', 'retail', true),
+    s('sp_riph_loc_3', 'camp_local_1', "Kelly's Corner Pub", 'local', 'beverly', 'food', true),
+    s(
+      'sp_riph_loc_4',
+      'camp_local_1',
+      'Prairie Paws Vet Clinic',
+      'local',
+      'prairie-hills',
+      'pets',
+      true
+    ),
+    s(
+      'sp_riph_loc_5',
+      'camp_local_1',
+      'Greenwood Locksmith',
+      'local',
+      'mt-greenwood',
+      'services',
+      true
+    ),
   ];
 }
 

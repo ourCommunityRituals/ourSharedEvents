@@ -90,6 +90,24 @@ describe('OSE-608: honesty feature — a visible ladder fallback with its label'
   });
 });
 
+describe('OSE-995: is_local (geo) is independent of tier (paid) — #25 / OSE-670', () => {
+  const sponsors = getRiphSponsors();
+  const localityOf = (t: string) =>
+    new Set(sponsors.filter((s) => s.tier === t).map((s) => s.is_local));
+
+  it('is_local=true spans more than one tier (local status is not cheap-only)', () => {
+    const tiersWithLocal = new Set(sponsors.filter((s) => s.is_local).map((s) => s.tier));
+    expect(tiersWithLocal.size).toBeGreaterThan(1);
+  });
+  it('a non-local tier occurs at BOTH is_local=true and is_local=false (money never buys local status)', () => {
+    // mid is the class we spread across both localities in the roster
+    expect(localityOf('mid')).toEqual(new Set([true, false]));
+  });
+  it('premium is not gated on geography (occurs out-of-corridor too)', () => {
+    expect(localityOf('premium')).toContain(false);
+  });
+});
+
 describe('OSE-608: data_class + regenerability', () => {
   it('every event and sponsor is data_class="demo"', () => {
     expect(getRiphSeasonEvents().every((e) => e.data_class === 'demo')).toBe(true);
