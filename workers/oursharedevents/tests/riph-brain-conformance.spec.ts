@@ -23,7 +23,9 @@ import { cellToLatLng } from 'h3-js';
 import {
   RIPH_VENUE_NAME,
   RIPH_BRAND_ID,
+  MOCK_BRAND_ID,
   getRiphSeasonEvents,
+  getEventFixture,
 } from '../src/lib/mock-data';
 
 // ── Brain-declared truth (pulled from ocr-docs-brain/corridor-definitions.yaml) ──
@@ -93,5 +95,44 @@ describe('OSE-995: RIPH geo is realizable inside its brain corridor (Blue Island
         `${e.id}: stored lat/lon [${e.lat},${e.lon}] disagrees with h3_res7 center [${cellLat.toFixed(3)},${cellLon.toFixed(3)}]`
       ).toBeLessThan(0.5);
     }
+  });
+});
+
+// The portfolio fixture (getEventFixture / SPONSOR_POOL) is a SEPARATE dataset
+// from the season constants above. Stage 1 reconciled the season constants but
+// left this one carrying the Colorado H3 cell + 'riph-beverly' brand — and the
+// checks above never looked at it, so the drift stayed green. This block closes
+// that signal-integrity gap (OSE-995 / OCR-96): the portfolio fixture must ALSO
+// resolve inside the Blue Island corridor and carry the Blue Island brand.
+describe('OSE-995: portfolio fixture (getEventFixture) also conforms to the brain', () => {
+  const fx = getEventFixture();
+
+  it('MOCK_BRAND_ID reflects Blue Island, not Beverly', () => {
+    expect(MOCK_BRAND_ID.toLowerCase()).not.toContain('beverly');
+    expect(MOCK_BRAND_ID.toLowerCase()).toContain('blue-island');
+  });
+
+  it('fixture h3_res7 resolves inside the Blue Island corridor (catches the Colorado cell)', () => {
+    const [lat, lon] = cellToLatLng(fx.h3_res7);
+    expect(
+      inCorridor(lat, lon),
+      `getEventFixture h3_res7 ${fx.h3_res7} → [${lat.toFixed(3)}, ${lon.toFixed(3)}] is outside the Blue Island corridor`
+    ).toBe(true);
+  });
+
+  it('fixture h3_res9 resolves inside the Blue Island corridor', () => {
+    const [lat, lon] = cellToLatLng(fx.h3_res9);
+    expect(inCorridor(lat, lon)).toBe(true);
+  });
+
+  it('stored lat/lon agrees with the stored H3 cell (internal geo consistency)', () => {
+    const [cellLat, cellLon] = cellToLatLng(fx.h3_res7);
+    expect(Math.hypot(fx.lat - cellLat, fx.lon - cellLon)).toBeLessThan(0.5);
+  });
+
+  it('does NOT carry the drifted "Ridge-Irish-Prairie Hills" / Beverly identity', () => {
+    expect(fx.title).not.toContain(BRAIN_FORBIDDEN_NAME);
+    expect(fx.who_host).not.toContain(BRAIN_FORBIDDEN_NAME);
+    expect(fx.corridor_id).not.toContain('beverly');
   });
 });
