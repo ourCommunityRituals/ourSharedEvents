@@ -1448,7 +1448,14 @@ jobs:
           SMOKE_EVENT_PRE: evt_smoke_pre
           SMOKE_EVENT_LIVE: evt_smoke_live
           SMOKE_EVENT_POST: evt_smoke_post
-        run: SMOKE_APP=ose SMOKE_ADMIN_READY=1 npx playwright test tests/ui/smoke/tier1.spec.ts
+        # T4d fixes (OSE-554): (1) add the missing --config — tier1.spec.ts lives
+        # in tests/ui/smoke, covered ONLY by playwright.ui-smoke.config.ts; with
+        # no --config it fell to the default config (testDir tests/playwright) →
+        # "No tests found". (2) --grep-invert 3 routes that need infra this step
+        # lacks: /admin ×2 (blocked at the CF Access edge — needs the CF Access
+        # service token) + /sharedReport (needs a signed link token). Those are
+        # tracked in OSE-1010; the other 16 tier-1 page-smokes gate as BLOCKING.
+        run: SMOKE_APP=ose SMOKE_ADMIN_READY=1 npx playwright test --config=playwright.ui-smoke.config.ts --grep-invert "admin dashboard|admin sign-in|shared report shell" tests/ui/smoke/tier1.spec.ts
         timeout-minutes: 10
 
       # T4e: Attendee arc — poster → pre / event / post phases (OSE-456).
