@@ -641,11 +641,12 @@ export function getMockSnapshot(sponsorCount: number = 15): MockSnapshot {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// RIPH multi-league demo dataset (OSE-608)
+// RIPH multi-league demo dataset (OSE-608 / OSE-995)
 //
-// The shared dataset all three demo sites render: RIPH (Ridge-Irish-Prairie Hills)
-// as a multi-league sponsor property — one venue, three recurring containers
-// (bocce / trivia / record night), campaign-grouped sponsors distributed across
+// The shared dataset all three demo sites render: RIPH (Rock Island Public House,
+// Blue Island) as a multi-container sponsor property — one venue, four recurring
+// containers (trivia / bocce / pinball / cigar social club), campaign-grouped
+// sponsors distributed across
 // Local / Mid / Premium, a mock season with realistic scan distributions, real
 // H3 cells for the corridor map, and — deliberately — at least one visible ladder
 // fallback bucket (the "too small alone" honesty feature on display).
@@ -749,17 +750,12 @@ const RIPH_H3_RES9_B = '8926645447bffff'; // an adjacent cell so the corridor ma
 
 const K_ANON_FLOOR = 5;
 
-// ── Leagues (3 recurring containers) ──────────────────────────────────────────
+// ── Leagues (4 recurring containers — the flagship consolidation story) ────────
+// Rock Island Public House runs four recurring social containers on one platform;
+// OCR/OSE consolidates a sponsor's reach ACROSS them (riph-flagship-consolidation).
 
 export function getRiphLeagues(): MockLeague[] {
   return [
-    {
-      id: 'league_bocce',
-      brand_id: RIPH_BRAND_ID,
-      name: 'RIPH Bocce League',
-      event_type: 'bocce',
-      slug: 'riph-bocce',
-    },
     {
       id: 'league_trivia',
       brand_id: RIPH_BRAND_ID,
@@ -768,11 +764,25 @@ export function getRiphLeagues(): MockLeague[] {
       slug: 'riph-trivia',
     },
     {
-      id: 'league_record',
+      id: 'league_bocce',
       brand_id: RIPH_BRAND_ID,
-      name: 'RIPH Record Night',
-      event_type: 'record-night',
-      slug: 'riph-record-night',
+      name: 'RIPH Bocce League',
+      event_type: 'bocce',
+      slug: 'riph-bocce',
+    },
+    {
+      id: 'league_pinball',
+      brand_id: RIPH_BRAND_ID,
+      name: 'RIPH Pinball League',
+      event_type: 'pinball',
+      slug: 'riph-pinball',
+    },
+    {
+      id: 'league_cigar',
+      brand_id: RIPH_BRAND_ID,
+      name: 'RIPH Cigar Social Club',
+      event_type: 'cigar-social-club',
+      slug: 'riph-cigar',
     },
   ];
 }
@@ -878,14 +888,6 @@ const SEASON_PLAN: {
   cell: string;
 }[] = [
   {
-    league_id: 'league_bocce',
-    event_type: 'bocce',
-    name: 'RIPH Bocce',
-    dates: ['2026-06-06', '2026-07-11', '2026-08-01'],
-    headcounts: [42, 58, 71], // climbing across the season
-    cell: RIPH_H3_RES9,
-  },
-  {
     league_id: 'league_trivia',
     event_type: 'trivia',
     name: 'RIPH Trivia',
@@ -894,11 +896,27 @@ const SEASON_PLAN: {
     cell: RIPH_H3_RES9,
   },
   {
-    league_id: 'league_record',
-    event_type: 'record-night',
-    name: 'RIPH Record Night',
+    league_id: 'league_bocce',
+    event_type: 'bocce',
+    name: 'RIPH Bocce',
+    dates: ['2026-06-06', '2026-07-11', '2026-08-01'],
+    headcounts: [42, 58, 71], // climbing across the season
+    cell: RIPH_H3_RES9,
+  },
+  {
+    league_id: 'league_pinball',
+    event_type: 'pinball',
+    name: 'RIPH Pinball',
+    dates: ['2026-06-13', '2026-07-18', '2026-08-15'],
+    headcounts: [22, 28, 33],
+    cell: RIPH_H3_RES9_B,
+  },
+  {
+    league_id: 'league_cigar',
+    event_type: 'cigar-social-club',
+    name: 'RIPH Cigar Social Club',
     dates: ['2026-06-27', '2026-07-25', '2026-08-08'],
-    headcounts: [18, 12, 27], // a small night in the middle — realistic
+    headcounts: [18, 11, 27], // a small, intimate night in the middle — realistic
     cell: RIPH_H3_RES9_B,
   },
 ];
@@ -980,7 +998,7 @@ export function getRiphSponsorImpressions(): MockSponsorImpression[] {
 export function getRiphLadderBuckets(): MockLadderBucket[] {
   return [
     {
-      event_id: 'evt_riph_record_2', // the small record night (headcount 12)
+      event_id: 'evt_riph_cigar_2', // the small cigar social night (headcount 11)
       h3_res9: RIPH_H3_RES9_B,
       hour_bucket: '2026-07-25T19:00:00Z',
       count: 3, // below K≥5
@@ -988,7 +1006,7 @@ export function getRiphLadderBuckets(): MockLadderBucket[] {
       label: 'By the hour — too small alone (K≥5)',
     },
     {
-      event_id: 'evt_riph_record_2',
+      event_id: 'evt_riph_cigar_2',
       h3_res9: RIPH_H3_RES9_B,
       hour_bucket: '2026-07-25T20:00:00Z',
       count: 9, // clears the floor — shown

@@ -56,8 +56,8 @@ describe('demo site — three depths, same data', () => {
 
   it('renders the RIPH multi-league dataset (OSE-608): season, campaign roster, honesty feature', async () => {
     const html = await text(handleDemoSite('mid'));
-    // three leagues across a season
-    expect(html).toContain('The RIPH season — three leagues');
+    // four recurring containers across a season
+    expect(html).toContain('The RIPH season — four recurring containers');
     expect(html).toContain('RIPH Bocce League');
     // sponsors by campaign, grouped by tier — Premium as a class of 2
     expect(html).toContain('by campaign, grouped by tier');

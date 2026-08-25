@@ -59,9 +59,9 @@ describe('OSE-608: multi-league season with depth', () => {
   const leagues = getRiphLeagues();
   const events = getRiphSeasonEvents();
 
-  it('has 2-3 recurring leagues', () => {
+  it('has 2-4 recurring containers (RIPH runs four: trivia/bocce/pinball/cigar)', () => {
     expect(leagues.length).toBeGreaterThanOrEqual(2);
-    expect(leagues.length).toBeLessThanOrEqual(3);
+    expect(leagues.length).toBeLessThanOrEqual(4);
   });
   it('each league is a SERIES (≥2 instances across the season)', () => {
     for (const lg of leagues) {

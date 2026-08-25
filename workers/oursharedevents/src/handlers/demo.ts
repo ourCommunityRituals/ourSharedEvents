@@ -547,7 +547,7 @@ function sponsorRoster(): string {
   </section>`;
 }
 
-// The RIPH season — three leagues across a mock season, with the honesty feature visible.
+// The RIPH season — four recurring containers across a mock season, with the honesty feature visible.
 function seasonSection(): string {
   const { leagues, events, ladderBuckets } = getRiphDataset();
   const leagueBlocks = leagues
@@ -576,9 +576,10 @@ function seasonSection(): string {
     : '';
 
   return `<section class="demo-section" aria-labelledby="season-h">
-    <h3 id="season-h">The RIPH season — three leagues</h3>
-    <p class="demo-note">One venue, three recurring containers (bocce · trivia · record night) across a
-    mock season. Headcounts vary and climb, so the ladder shows real states — not a flat demo.</p>
+    <h3 id="season-h">The RIPH season — four recurring containers</h3>
+    <p class="demo-note">One venue, four recurring containers (trivia · bocce · pinball · cigar social club)
+    across a mock season — consolidated so a sponsor's reach rolls up ACROSS them. Headcounts vary and
+    climb, so the ladder shows real states — not a flat demo.</p>
     <div class="demo-grid">${leagueBlocks}</div>
     ${fbNote}
   </section>`;
@@ -598,7 +599,7 @@ export function handleDemoSite(tier: string): Response {
   <section class="demo-hero">
     <h2>Demo — ${esc(cfg.label)}</h2>
     <p class="demo-lede">${esc(cfg.tagline)}</p>
-    <p class="demo-note">Venue: ${esc(RIPH_VENUE_NAME)} · one property, three leagues</p>
+    <p class="demo-note">Venue: ${esc(RIPH_VENUE_NAME)} · one property, four recurring containers</p>
   </section>
   ${tierTabs(cfg.slug)}
   ${fourFlowLoop(cfg.slug)}
