@@ -735,13 +735,17 @@ export interface MockLadderBucket {
   label: string;
 }
 
-export const RIPH_BRAND_ID = 'riph-beverly';
-export const RIPH_VENUE_NAME = 'Ridge-Irish-Prairie Hills (RIPH) — Beverly';
-const RIPH_CORRIDOR = 'beverly-morgan-park';
-// Real H3 cells around the RIPH venue coordinates (Beverly, Chicago).
-const RIPH_H3_RES9 = '892698a6d0bffff';
-const RIPH_H3_RES7 = '872698a6dffffff';
-const RIPH_H3_RES9_B = '892698a6d0fffff'; // an adjacent cell so the corridor map has spread
+export const RIPH_BRAND_ID = 'riph-blue-island';
+export const RIPH_VENUE_NAME = 'Rock Island Public House (RIPH) — Blue Island';
+const RIPH_CORRIDOR = 'blue-island';
+// Rock Island Public House, Blue Island, IL (~41.6572, -87.6800) — the brain's
+// primary activation anchor (OCR_VISION.md, corridor-definitions.yaml). All three
+// cells resolve inside the Blue Island / south-Chicagoland corridor (OSE-995).
+const RIPH_LAT = 41.6572;
+const RIPH_LON = -87.68;
+const RIPH_H3_RES9 = '89266454447ffff';
+const RIPH_H3_RES7 = '872664544ffffff';
+const RIPH_H3_RES9_B = '8926645447bffff'; // an adjacent cell so the corridor map has spread
 
 const K_ANON_FLOOR = 5;
 
@@ -916,8 +920,8 @@ export function getRiphSeasonEvents(): MockSeasonEvent[] {
         start_date: date,
         end_date: date,
         timezone: 'America/Chicago',
-        lat: BEVERLY_LAT,
-        lon: BEVERLY_LON,
+        lat: RIPH_LAT,
+        lon: RIPH_LON,
         h3_res9: plan.cell,
         h3_res7: RIPH_H3_RES7,
         corridor_id: RIPH_CORRIDOR,
