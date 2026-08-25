@@ -475,7 +475,7 @@ jobs:
             }
           }
           GQLEOF
-)
+          )
             VARIABLES=$(jq -n \
               --arg teamId "$LINEAR_TEAM_ID" \
               --arg title "$title" \
