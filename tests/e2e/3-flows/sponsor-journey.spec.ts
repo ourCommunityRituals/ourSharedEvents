@@ -91,6 +91,22 @@ async function publicFetch(page: any, path: string) {
 const timestamp = Date.now();
 const SPONSOR_NAME = `Journey Sponsor ${timestamp}`;
 
+// Find the Display sponsor tile whose name matches EXACTLY (not a substring), so a
+// leftover sponsor from a prior run on the shared event can never be mistaken for
+// this run's. Returns the item locator, or null when it is not currently rendered.
+async function findDisplaySponsorByName(
+  page: import('@playwright/test').Page,
+  sponsorName: string
+): Promise<import('@playwright/test').Locator | null> {
+  const items = page.locator('[data-testid="display-sponsor-item"]');
+  const count = await items.count();
+  for (let i = 0; i < count; i++) {
+    const name = await items.nth(i).locator('.name').textContent();
+    if (name === sponsorName) return items.nth(i);
+  }
+  return null;
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // SPONSOR JOURNEY: Full lifecycle
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -245,23 +261,10 @@ test.describe('Sponsor Journey — Full Lifecycle', () => {
     // Wait for sponsor loading to complete
     await page.waitForTimeout(3000);
 
-    // Banner (tvTop): sponsor should appear with data-tier="gold"
-    const bannerItems = page.locator('[data-testid="display-sponsor-item"]');
-    const bannerCount = await bannerItems.count();
-    expect(bannerCount).toBeGreaterThan(0);
-
-    // Find our specific sponsor in the banner
-    let foundInBanner = false;
-    for (let i = 0; i < bannerCount; i++) {
-      const name = await bannerItems.nth(i).locator('.name').textContent();
-      if (name?.includes('Journey Sponsor')) {
-        foundInBanner = true;
-        const tier = await bannerItems.nth(i).getAttribute('data-tier');
-        expect(tier).toBe('gold');
-        break;
-      }
-    }
-    expect(foundInBanner).toBe(true);
+    // Banner (tvTop): our exact sponsor should appear with data-tier="gold"
+    const bannerItem = await findDisplaySponsorByName(page, SPONSOR_NAME);
+    expect(bannerItem, "this run's Journey Sponsor is rendered in the banner").not.toBeNull();
+    expect(await bannerItem!.getAttribute('data-tier')).toBe('gold');
 
     // Sidebar (tvSide): sponsor should rotate through
     const sidebarItem = page.locator('[data-testid="display-sponsor-rotate"]');
@@ -438,14 +441,9 @@ test.describe('Sponsor Journey — Full Lifecycle', () => {
     await page.goto('/display', { waitUntil: 'networkidle', timeout: TIMEOUT });
     await page.waitForTimeout(3000);
 
-    // Banner should not contain our sponsor
-    const bannerItems = page.locator('[data-testid="display-sponsor-item"]');
-    const count = await bannerItems.count();
-
-    for (let i = 0; i < count; i++) {
-      const name = await bannerItems.nth(i).locator('.name').textContent();
-      expect(name).not.toContain('Journey Sponsor');
-    }
+    // This run's exact sponsor must no longer render (a leftover "Journey Sponsor …"
+    // from another run must not fail this — match this run's name precisely).
+    expect(await findDisplaySponsorByName(page, SPONSOR_NAME)).toBeNull();
   });
 });
 
@@ -491,17 +489,9 @@ test.describe('Sponsor Journey — Tier Upgrade', () => {
     await page.goto('/display', { waitUntil: 'networkidle', timeout: TIMEOUT });
     await page.waitForTimeout(3000);
 
-    const items = page.locator('[data-testid="display-sponsor-item"]');
-    const count = await items.count();
-
-    for (let i = 0; i < count; i++) {
-      const name = await items.nth(i).locator('.name').textContent();
-      if (name?.includes('Tier Upgrade')) {
-        const tier = await items.nth(i).getAttribute('data-tier');
-        expect(tier).toBe('bronze');
-        break;
-      }
-    }
+    const item = await findDisplaySponsorByName(page, `Tier Upgrade ${timestamp}`);
+    expect(item, "this run's Tier Upgrade sponsor is rendered on the display").not.toBeNull();
+    expect(await item!.getAttribute('data-tier')).toBe('bronze');
   });
 
   test('Step 3: Upgrade to platinum tier', async ({ page, request }) => {
@@ -527,25 +517,14 @@ test.describe('Sponsor Journey — Tier Upgrade', () => {
     await page.goto('/display', { waitUntil: 'networkidle', timeout: TIMEOUT });
     await page.waitForTimeout(3000);
 
-    const items = page.locator('[data-testid="display-sponsor-item"]');
-    const count = await items.count();
-
-    for (let i = 0; i < count; i++) {
-      const name = await items.nth(i).locator('.name').textContent();
-      if (name?.includes('Tier Upgrade')) {
-        // data-tier is retained for rotation/frequency identity…
-        const tier = await items.nth(i).getAttribute('data-tier');
-        expect(tier).toBe('platinum');
-
-        // …but #25/OSE-878: it drives NO visual accent — the platinum item carries the
-        // same default border as every other sponsor (the retired gold accent is gone).
-        const borderColor = await items
-          .nth(i)
-          .evaluate((el) => window.getComputedStyle(el).borderColor);
-        expect(borderColor).toContain('0.06');
-        break;
-      }
-    }
+    const item = await findDisplaySponsorByName(page, `Tier Upgrade ${timestamp}`);
+    expect(item, "this run's Tier Upgrade sponsor is rendered on the display").not.toBeNull();
+    // data-tier is retained for rotation/frequency identity…
+    expect(await item!.getAttribute('data-tier')).toBe('platinum');
+    // …but #25/OSE-878: it drives NO visual accent — the platinum item carries the same
+    // default border as every other sponsor (the retired gold accent is gone).
+    const borderColor = await item!.evaluate((el) => window.getComputedStyle(el).borderColor);
+    expect(borderColor).toContain('0.06');
   });
 
   test('Cleanup: Delete sponsor', async ({ page, request }) => {
