@@ -139,12 +139,16 @@ export interface MockFeatureFlags {
 // ── Core constants ─────────────────────────────────────────────────────────────
 
 export const MOCK_EVENT_ID = 'evt_00000000-0000-0000-0000-riph-bocce-001';
-export const MOCK_BRAND_ID = 'riph-beverly';
+export const MOCK_BRAND_ID = 'riph-blue-island';
 export const MOCK_BASE_DATE = '2026-08-02'; // frozen "today" for mock data
 
-// Beverly, Chicago
-const BEVERLY_LAT = 41.7197;
-const BEVERLY_LON = -87.672;
+// Rock Island Public House, 13328 Olde Western Ave, Blue Island, IL 60406 —
+// the brain's primary activation anchor (OCR_VISION.md, corridor-definitions.yaml).
+// The Western Ave corridor spine funnels the south-Chicagoland community between
+// nodes (Blue Island ↔ Morgan Park ↔ Beverly). Previously drifted to Beverly +
+// a Colorado H3 cell — reconciled to the real anchor (OSE-995).
+const BLUE_ISLAND_LAT = 41.6572;
+const BLUE_ISLAND_LON = -87.68;
 
 // ── 1. Event fixture ───────────────────────────────────────────────────────────
 
@@ -152,39 +156,39 @@ export function getEventFixture(): MockEvent {
   return {
     id: MOCK_EVENT_ID,
     brand_id: MOCK_BRAND_ID,
-    title: 'RIPH Bocce Tournament — Beverly Summer Classic',
-    slug: 'riph-bocce-beverly-summer-classic',
+    title: 'RIPH Bocce League — Blue Island Summer Classic',
+    slug: 'riph-bocce-blue-island-summer-classic',
     status: 'active',
     phase: 'active',
     description:
-      'The Ridge-Irish-Prairie Hills summer bocce league championship. ' +
+      'The Rock Island Public House summer bocce league championship. ' +
       'All skill levels welcome. Food and drinks available.',
-    location: 'Ridge Country Club, 10220 S Central Park Ave, Beverly, Chicago, IL 60655',
+    location: 'Rock Island Public House, 13328 Olde Western Ave, Blue Island, IL 60406',
     cover_image_url: null,
     timezone: 'America/Chicago',
     template_id: null,
 
-    what_short: 'Summer bocce championship for the Beverly/RIPH corridor.',
-    who_host: 'Ridge-Irish-Prairie Hills (RIPH) Community League',
+    what_short: 'Summer bocce championship for the Blue Island / Western Ave corridor.',
+    who_host: 'Rock Island Public House (RIPH)',
     why_purpose:
-      'Annual community gathering that brings together Beverly, ' +
-      'Morgan Park, and Mt. Greenwood neighbors. Proceeds support ' +
-      'neighborhood beautification.',
+      'Recurring community gathering that funnels the Western Ave corridor — ' +
+      'Blue Island, Morgan Park, and Beverly neighbors — between its venues. ' +
+      'Proceeds support neighborhood businesses.',
     how_details:
       'Round-robin pool play followed by single-elimination bracket. ' +
-      'Teams of 2. Check in at the north shelter.',
-    where_address: '10220 S Central Park Ave, Beverly, Chicago, IL 60655',
+      'Teams of 2. Check in at the bar.',
+    where_address: '13328 Olde Western Ave, Blue Island, IL 60406',
 
     start_date: '2026-08-02',
     end_date: '2026-08-02',
     created_at: '2026-07-01T10:00:00Z',
     updated_at: '2026-08-01T08:00:00Z',
 
-    lat: BEVERLY_LAT,
-    lon: BEVERLY_LON,
-    h3_res9: '892698a6d0bffff',
-    h3_res7: '872698a6dffffff',
-    corridor_id: 'beverly-morgan-park',
+    lat: BLUE_ISLAND_LAT,
+    lon: BLUE_ISLAND_LON,
+    h3_res9: '89266454447ffff',
+    h3_res7: '872664544ffffff',
+    corridor_id: 'blue-island',
 
     legal_clearance_tier: 'tier-1',
   };
@@ -192,54 +196,50 @@ export function getEventFixture(): MockEvent {
 
 // ── 2. Sponsor fixtures ────────────────────────────────────────────────────────
 
+// Real S. Western Ave corridor businesses (verified addresses). The premium/mid
+// tiers are the up-corridor Beverly / Morgan Park regional draws the community
+// funnels between; the local floor is Blue Island's own Uptown (Olde Western /
+// Vermont St), immediately around RIPH. `is_local` (geo) is NOT modeled here —
+// MockSponsor is the portfolio fixture; the season roster (getRiphSponsors)
+// carries the is_local⟂tier orthogonality (OSE-995 / #25 / OSE-670).
 const SPONSOR_POOL: Omit<MockSponsor, 'id' | 'event_id' | 'display_order'>[] = [
-  // Premium tier (3)
+  // Premium tier (3) — well-known regional institutions on the Western Ave spine
   {
     brand_id: MOCK_BRAND_ID,
-    name: 'Beverly Arts Center',
+    name: 'Beverly Records', // 11612 S Western Ave — vinyl institution since 1967
     tier: 'premium',
-    area: 'beverly',
-    event_type: 'bocce',
+    area: 'beverly-western',
+    event_type: 'music',
     logo_url: null,
     website_url: null,
     active: true,
   },
   {
     brand_id: MOCK_BRAND_ID,
-    name: 'Ridge Home + Garden',
+    name: 'Beverly Arts Center', // 2407 W 111th St — regional arts anchor since 1968
     tier: 'premium',
     area: 'beverly',
-    event_type: 'bocce',
+    event_type: 'arts',
     logo_url: null,
     website_url: null,
     active: true,
   },
   {
     brand_id: MOCK_BRAND_ID,
-    name: 'Irish American Heritage',
+    name: 'Beggars Pizza', // 12660 Western Ave, Blue Island — founded here 1976
     tier: 'premium',
-    area: 'beverly',
-    event_type: 'sports',
-    logo_url: null,
-    website_url: null,
-    active: true,
-  },
-  // Mid tier (6)
-  {
-    brand_id: MOCK_BRAND_ID,
-    name: 'Beverly Taqueria',
-    tier: 'mid',
-    area: 'beverly',
+    area: 'blue-island',
     event_type: 'food',
     logo_url: null,
     website_url: null,
     active: true,
   },
+  // Mid tier (6) — corridor corner placements, regionally known
   {
     brand_id: MOCK_BRAND_ID,
-    name: 'Prairie Hills Brewing',
+    name: 'Horse Thief Hollow', // 10827 S Western Ave — Beverly brewpub
     tier: 'mid',
-    area: 'prairie-hills',
+    area: 'beverly-western',
     event_type: 'drinks',
     logo_url: null,
     website_url: null,
@@ -247,9 +247,70 @@ const SPONSOR_POOL: Omit<MockSponsor, 'id' | 'event_id' | 'display_order'>[] = [
   },
   {
     brand_id: MOCK_BRAND_ID,
-    name: 'Morgan Park Auto Care',
+    name: 'Open Outcry Brewing', // 10934 S Western Ave — Morgan Park rooftop brewery
+    tier: 'mid',
+    area: 'morgan-park-western',
+    event_type: 'drinks',
+    logo_url: null,
+    website_url: null,
+    active: true,
+  },
+  {
+    brand_id: MOCK_BRAND_ID,
+    name: 'Natural Law Cocktail Club', // 13404 Olde Western Ave, Blue Island
+    tier: 'mid',
+    area: 'blue-island-uptown',
+    event_type: 'drinks',
+    logo_url: null,
+    website_url: null,
+    active: true,
+  },
+  {
+    brand_id: MOCK_BRAND_ID,
+    name: 'Cork & Kerry', // S Western Ave — Beverly Irish pub
+    tier: 'mid',
+    area: 'beverly-western',
+    event_type: 'drinks',
+    logo_url: null,
+    website_url: null,
+    active: true,
+  },
+  {
+    brand_id: MOCK_BRAND_ID,
+    name: 'Studious Coffee', // 2421 Grove St, Blue Island — Uptown cafe
+    tier: 'mid',
+    area: 'blue-island-uptown',
+    event_type: 'food',
+    logo_url: null,
+    website_url: null,
+    active: true,
+  },
+  {
+    brand_id: MOCK_BRAND_ID,
+    name: 'Beverly Phono Mart', // 1808 W 103rd St — Morgan Park record store
     tier: 'mid',
     area: 'morgan-park',
+    event_type: 'music',
+    logo_url: null,
+    website_url: null,
+    active: true,
+  },
+  // Local tier (6) — Blue Island's own Uptown floor, immediately around RIPH
+  {
+    brand_id: MOCK_BRAND_ID,
+    name: 'Elsewhere Comics & Collectibles', // 2361 Vermont St — comics + game store
+    tier: 'local',
+    area: 'blue-island-uptown',
+    event_type: 'games',
+    logo_url: null,
+    website_url: null,
+    active: true,
+  },
+  {
+    brand_id: MOCK_BRAND_ID,
+    name: 'International Fades & Beauty', // 13319 Old Western Ave — next to RIPH
+    tier: 'local',
+    area: 'blue-island-uptown',
     event_type: 'services',
     logo_url: null,
     website_url: null,
@@ -257,40 +318,29 @@ const SPONSOR_POOL: Omit<MockSponsor, 'id' | 'event_id' | 'display_order'>[] = [
   },
   {
     brand_id: MOCK_BRAND_ID,
-    name: 'Western Ave Fitness',
-    tier: 'mid',
-    area: 'beverly',
-    event_type: 'fitness',
-    logo_url: null,
-    website_url: null,
-    active: true,
-  },
-  {
-    brand_id: MOCK_BRAND_ID,
-    name: 'South Side Realty Group',
-    tier: 'mid',
-    area: 'beverly',
-    event_type: 'real-estate',
-    logo_url: null,
-    website_url: null,
-    active: true,
-  },
-  {
-    brand_id: MOCK_BRAND_ID,
-    name: 'Mt. Greenwood Dental',
-    tier: 'mid',
-    area: 'mt-greenwood',
-    event_type: 'health',
-    logo_url: null,
-    website_url: null,
-    active: true,
-  },
-  // Local tier (6)
-  {
-    brand_id: MOCK_BRAND_ID,
-    name: 'Ridge Dry Cleaners',
+    name: 'Blue Island-Robbins Neighborhood Network', // 13315 Olde Western Ave
     tier: 'local',
-    area: 'beverly',
+    area: 'blue-island-uptown',
+    event_type: 'community',
+    logo_url: null,
+    website_url: null,
+    active: true,
+  },
+  {
+    brand_id: MOCK_BRAND_ID,
+    name: 'OldTown Barbershop', // 12352 Western Ave, Blue Island
+    tier: 'local',
+    area: 'blue-island',
+    event_type: 'services',
+    logo_url: null,
+    website_url: null,
+    active: true,
+  },
+  {
+    brand_id: MOCK_BRAND_ID,
+    name: 'Blue Island Smoke Shop', // 11923 Western Ave
+    tier: 'local',
+    area: 'blue-island',
     event_type: 'retail',
     logo_url: null,
     website_url: null,
@@ -298,50 +348,10 @@ const SPONSOR_POOL: Omit<MockSponsor, 'id' | 'event_id' | 'display_order'>[] = [
   },
   {
     brand_id: MOCK_BRAND_ID,
-    name: 'Beverly Bakehouse',
+    name: "Iversen's Bakery", // Blue Island neighborhood bakery
     tier: 'local',
-    area: 'beverly',
+    area: 'blue-island',
     event_type: 'food',
-    logo_url: null,
-    website_url: null,
-    active: true,
-  },
-  {
-    brand_id: MOCK_BRAND_ID,
-    name: 'Shamrock Tax Services',
-    tier: 'local',
-    area: 'beverly',
-    event_type: 'finance',
-    logo_url: null,
-    website_url: null,
-    active: true,
-  },
-  {
-    brand_id: MOCK_BRAND_ID,
-    name: 'Prairie Paws Vet Clinic',
-    tier: 'local',
-    area: 'prairie-hills',
-    event_type: 'pets',
-    logo_url: null,
-    website_url: null,
-    active: true,
-  },
-  {
-    brand_id: MOCK_BRAND_ID,
-    name: "Kelly's Corner Pub",
-    tier: 'local',
-    area: 'beverly',
-    event_type: 'food',
-    logo_url: null,
-    website_url: null,
-    active: true,
-  },
-  {
-    brand_id: MOCK_BRAND_ID,
-    name: 'Greenwood Locksmith',
-    tier: 'local',
-    area: 'mt-greenwood',
-    event_type: 'services',
     logo_url: null,
     website_url: null,
     active: true,
@@ -370,9 +380,9 @@ export function getPosterDeployments(): MockPosterDeployment[] {
       id: 'pd_mock_001',
       event_id: MOCK_EVENT_ID,
       brand_id: MOCK_BRAND_ID,
-      lat: BEVERLY_LAT,
-      lon: BEVERLY_LON,
-      label: 'Beverly — Ridge Country Club (main entrance)',
+      lat: BLUE_ISLAND_LAT,
+      lon: BLUE_ISLAND_LON,
+      label: 'Blue Island — Rock Island Public House (RIPH, main entrance)',
       deployed_at: '2026-07-28T09:00:00Z',
     },
     {
@@ -426,8 +436,8 @@ export function getScanRecords(): MockScanRecord[] {
         anon_id: `anon_00000000-0000-0000-0000-mock${anonSuffix}`,
         uec_code: uec,
         scanned_at: hour,
-        lat: BEVERLY_LAT + (idx % 5) * 0.0001,
-        lon: BEVERLY_LON - (idx % 3) * 0.0001,
+        lat: BLUE_ISLAND_LAT + (idx % 5) * 0.0001,
+        lon: BLUE_ISLAND_LON - (idx % 3) * 0.0001,
       });
       idx++;
     }
@@ -795,14 +805,14 @@ export function getRiphCampaigns(): MockCampaign[] {
     {
       id: 'camp_premium_1',
       brand_id: RIPH_BRAND_ID,
-      title: 'Beverly Arts Center — Season Presenting',
+      title: 'Beggars Pizza — Season Presenting',
       tier: 'premium',
       status: 'active',
     },
     {
       id: 'camp_premium_2',
       brand_id: RIPH_BRAND_ID,
-      title: 'Ridge Home + Garden — Season Presenting',
+      title: 'Beverly Records — Season Presenting',
       tier: 'premium',
       status: 'active',
     },
@@ -810,21 +820,21 @@ export function getRiphCampaigns(): MockCampaign[] {
     {
       id: 'camp_mid_1',
       brand_id: RIPH_BRAND_ID,
-      title: 'Prairie Hills Brewing — League Nights',
+      title: 'Natural Law Cocktail Club — League Nights',
       tier: 'mid',
       status: 'active',
     },
     {
       id: 'camp_mid_2',
       brand_id: RIPH_BRAND_ID,
-      title: 'South Side Realty — Community Series',
+      title: 'Horse Thief Hollow — Corridor Series',
       tier: 'mid',
       status: 'active',
     },
     {
       id: 'camp_mid_3',
       brand_id: RIPH_BRAND_ID,
-      title: 'Beverly Taqueria — Taco Nights',
+      title: 'Studious Coffee — Trivia Nights',
       tier: 'mid',
       status: 'active',
     },
@@ -868,66 +878,84 @@ export function getRiphSponsors(): MockSeasonSponsor[] {
     data_class: 'demo',
   });
   return [
-    // Premium (2) — one in-corridor local, one out-of-corridor regional brand:
-    // premium status is NOT gated on geography.
-    s(
-      'sp_riph_prem_1',
-      'camp_premium_1',
-      'Beverly Arts Center',
-      'premium',
-      'beverly',
-      'arts',
-      true
-    ),
+    // Premium (2) — one in-corridor local brand, one up-corridor regional draw:
+    // premium status is NOT gated on geography. Beggars Pizza was founded in Blue
+    // Island (is_local); Beverly Records is a worldwide vinyl institution up the
+    // Western Ave spine in Beverly (is_local=false) — money buys tier, not local.
+    s('sp_riph_prem_1', 'camp_premium_1', 'Beggars Pizza', 'premium', 'blue-island', 'bocce', true),
     s(
       'sp_riph_prem_2',
       'camp_premium_2',
-      'Ridge Home + Garden',
+      'Beverly Records',
       'premium',
-      'beverly',
-      'home',
+      'beverly-western',
+      'cigar-social-club',
       false
     ),
     // Mid (3) — spans both localities: mid occurs at is_local=true AND is_local=false.
     s(
       'sp_riph_mid_1',
       'camp_mid_1',
-      'Prairie Hills Brewing',
+      'Natural Law Cocktail Club',
       'mid',
-      'prairie-hills',
-      'drinks',
+      'blue-island-uptown',
+      'cigar-social-club',
       true
     ),
     s(
       'sp_riph_mid_2',
       'camp_mid_2',
-      'South Side Realty Group',
+      'Horse Thief Hollow',
       'mid',
-      'beverly',
-      'real-estate',
+      'beverly-western',
+      'trivia',
       false
     ),
-    s('sp_riph_mid_3', 'camp_mid_3', 'Beverly Taqueria', 'mid', 'beverly', 'food', true),
-    // Local (5) — the covenant floor: neighborhood businesses, all in-corridor.
-    s('sp_riph_loc_1', 'camp_local_1', 'Beverly Bakehouse', 'local', 'beverly', 'food', true),
-    s('sp_riph_loc_2', 'camp_local_1', 'Ridge Dry Cleaners', 'local', 'beverly', 'retail', true),
-    s('sp_riph_loc_3', 'camp_local_1', "Kelly's Corner Pub", 'local', 'beverly', 'food', true),
     s(
-      'sp_riph_loc_4',
+      'sp_riph_mid_3',
+      'camp_mid_3',
+      'Studious Coffee',
+      'mid',
+      'blue-island-uptown',
+      'trivia',
+      true
+    ),
+    // Local (5) — the covenant floor: Blue Island's own Uptown, all in-corridor.
+    s(
+      'sp_riph_loc_1',
       'camp_local_1',
-      'Prairie Paws Vet Clinic',
+      'Elsewhere Comics & Collectibles',
       'local',
-      'prairie-hills',
-      'pets',
+      'blue-island-uptown',
+      'pinball',
       true
     ),
     s(
+      'sp_riph_loc_2',
+      'camp_local_1',
+      'International Fades & Beauty',
+      'local',
+      'blue-island-uptown',
+      'cigar-social-club',
+      true
+    ),
+    s(
+      'sp_riph_loc_3',
+      'camp_local_1',
+      'Blue Island-Robbins Neighborhood Network',
+      'local',
+      'blue-island-uptown',
+      'pinball',
+      true
+    ),
+    s('sp_riph_loc_4', 'camp_local_1', 'OldTown Barbershop', 'local', 'blue-island', 'bocce', true),
+    s(
       'sp_riph_loc_5',
       'camp_local_1',
-      'Greenwood Locksmith',
+      'Blue Island Smoke Shop',
       'local',
-      'mt-greenwood',
-      'services',
+      'blue-island',
+      'cigar-social-club',
       true
     ),
   ];
