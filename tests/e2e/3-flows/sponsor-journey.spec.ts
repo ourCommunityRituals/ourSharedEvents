@@ -519,31 +519,14 @@ test.describe('Sponsor Journey — Tier Upgrade', () => {
 
     const item = await findDisplaySponsorByName(page, `Tier Upgrade ${timestamp}`);
     expect(item, "this run's Tier Upgrade sponsor is rendered on the display").not.toBeNull();
-    // data-tier is retained for rotation/frequency identity…
+    // The journey verifies the upgraded sponsor RENDERS as platinum (data-tier is
+    // retained for rotation/frequency identity). The #25/OSE-878 "uniform treatment —
+    // no tier accent" invariant is asserted where the fixtures are controlled — both a
+    // platinum AND a base sponsor present, so borders can be compared:
+    //   tests/e2e/2-pages/display-sponsor-overlay.spec.ts §"Uniform Rendering (#25/OSE-878)".
+    // It does NOT belong here — a journey step can't guarantee a sibling tile on a
+    // shared event, and asserting a hardcoded border value drifts with the design.
     expect(await item!.getAttribute('data-tier')).toBe('platinum');
-    // …but #25/OSE-878: platinum drives NO visual accent. Assert the INVARIANT —
-    // its border is identical to a non-platinum sibling's (uniform treatment) —
-    // rather than a hardcoded token value that drifts when the design changes.
-    const allItems = page.locator('[data-testid="display-sponsor-item"]');
-    const total = await allItems.count();
-    const platinumBorder = await item!.evaluate((el) => window.getComputedStyle(el).borderColor);
-    let siblingBorder: string | null = null;
-    for (let i = 0; i < total; i++) {
-      const name = await allItems.nth(i).locator('.name').textContent();
-      if (name !== `Tier Upgrade ${timestamp}`) {
-        siblingBorder = await allItems
-          .nth(i)
-          .evaluate((el) => window.getComputedStyle(el).borderColor);
-        break;
-      }
-    }
-    expect(
-      siblingBorder,
-      'a non-platinum sibling sponsor is present to compare against'
-    ).not.toBeNull();
-    expect(platinumBorder, 'platinum border is uniform with other sponsors (#25)').toBe(
-      siblingBorder
-    );
   });
 
   test('Cleanup: Delete sponsor', async ({ page, request }) => {
