@@ -31,7 +31,11 @@ import {
   type Surface,
 } from '../lib/sponsor-resolver';
 import { validateLogoUrl, fetchAndProxyLogo } from '../lib/sponsor-logo';
-import { getDataProvider, type DataProviderEnv } from '../lib/data-provider.js';
+import {
+  getDataProvider,
+  invalidateSponsorsCache,
+  type DataProviderEnv,
+} from '../lib/data-provider.js';
 import type { DataProviderCtx } from '@ocr/data-provider';
 import { extractAdminActor, type AdminEnv } from '../auth/admin';
 import { resolveAdminBrandScopeAsync, type AdminBrandScopeEnv } from '../lib/admin-brand-scope';
@@ -464,6 +468,10 @@ export async function handleAdminCreateSponsor(
     return errorResponse('DB_ERROR', 'Failed to create sponsor', 503, rid);
   }
 
+  // OSE-1000: bust the cache-fronted public sponsors list so the just-created
+  // sponsor is visible on the next read instead of racing the 30s TTL.
+  await invalidateSponsorsCache(eventId);
+
   // is_local is now authoritative (geo-derived). is_local_suggested is retained
   // for back-compat and equals is_local.
   const responseBody: Record<string, unknown> = {
@@ -483,6 +491,28 @@ export async function handleAdminCreateSponsor(
     status: 201,
     headers: { ...corsHeaders(request), 'X-Request-Id': rid },
   });
+}
+
+/**
+ * OSE-1000: invalidate the cache-fronted public sponsor list for every event a
+ * sponsor is placed on. Update/delete key off sponsorId (not eventId), and a
+ * business may be placed on several events, so bust each one's cache — otherwise
+ * the mutation is invisible on the public read until the 30s TTL. Best-effort.
+ */
+async function invalidateSponsorEventCaches(env: SponsorsEnv, sponsorId: string): Promise<void> {
+  if (!env.DB) return;
+  try {
+    const rows = await env.DB.prepare(
+      'SELECT DISTINCT event_id FROM sponsor_placement WHERE sponsor_business_id = ?'
+    )
+      .bind(sponsorId)
+      .all<{ event_id: string }>();
+    for (const row of rows.results ?? []) {
+      await invalidateSponsorsCache(row.event_id);
+    }
+  } catch {
+    // Non-fatal — a stale entry self-heals at TTL.
+  }
 }
 
 // ─── Admin: Update Sponsor ──────────────────────────────────────────────────────
@@ -682,6 +712,10 @@ export async function handleAdminUpdateSponsor(
     return errorResponse('DB_ERROR', 'Failed to update sponsor', 503, rid);
   }
 
+  // OSE-1000: bust the public sponsors cache so name/logo/tier edits are visible
+  // on the next read instead of racing the 30s TTL.
+  await invalidateSponsorEventCaches(env, sponsorId);
+
   // ── is_local_suggested (advisory, only when H3 was updated) ──────────────
   // Advisory only — reported against the business's first placement's event.
   const updateResponseBody: Record<string, unknown> = { ok: true, status: 200, id: sponsorId };
@@ -742,6 +776,10 @@ export async function handleAdminDeleteSponsor(
     )
       .bind(new Date().toISOString(), sponsorId)
       .run();
+
+    // OSE-1000: bust the public sponsors cache so the removed sponsor disappears
+    // from the read immediately instead of lingering until the 30s TTL.
+    await invalidateSponsorEventCaches(env, sponsorId);
   } catch (err) {
     console.error(
       JSON.stringify({

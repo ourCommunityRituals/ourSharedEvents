@@ -127,3 +127,20 @@ export async function writeCfCache<T>(key: Request, data: T, ttl: CacheTtlConfig
     // Silently ignore — cache write failures are non-fatal.
   }
 }
+
+/**
+ * Delete a cached entry so the next read misses and re-fetches live.
+ * Write-through invalidation: call after a mutation (e.g. a sponsor create/
+ * update/delete) so the change is visible on the cache-fronted read immediately
+ * instead of serving a stale snapshot until the TTL expires. No-op when the
+ * cache is unavailable (Node.js / tests); failures are non-fatal.
+ */
+export async function deleteCfCache(key: Request): Promise<void> {
+  const cache = await getCfCache();
+  if (!cache) return;
+  try {
+    await cache.delete(key);
+  } catch {
+    // Silently ignore — cache delete failures are non-fatal.
+  }
+}
