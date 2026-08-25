@@ -58,8 +58,12 @@ test.describe('Check-in Form - Page Structure', () => {
   });
 
   test('count display is present', async ({ page }) => {
+    // The count element is present but intentionally HIDDEN until a check-in populates it
+    // (there is no GET-count endpoint — GET returns 404; the count appears after the POST).
+    // Assert PRESENCE, not visibility. The populated/visible state is covered by
+    // 'tap button updates count display' below.
     const count = page.locator('[data-testid="checkin-count"]');
-    await expect(count).toBeVisible();
+    await expect(count).toBeAttached();
   });
 });
 
