@@ -521,10 +521,29 @@ test.describe('Sponsor Journey — Tier Upgrade', () => {
     expect(item, "this run's Tier Upgrade sponsor is rendered on the display").not.toBeNull();
     // data-tier is retained for rotation/frequency identity…
     expect(await item!.getAttribute('data-tier')).toBe('platinum');
-    // …but #25/OSE-878: it drives NO visual accent — the platinum item carries the same
-    // default border as every other sponsor (the retired gold accent is gone).
-    const borderColor = await item!.evaluate((el) => window.getComputedStyle(el).borderColor);
-    expect(borderColor).toContain('0.06');
+    // …but #25/OSE-878: platinum drives NO visual accent. Assert the INVARIANT —
+    // its border is identical to a non-platinum sibling's (uniform treatment) —
+    // rather than a hardcoded token value that drifts when the design changes.
+    const allItems = page.locator('[data-testid="display-sponsor-item"]');
+    const total = await allItems.count();
+    const platinumBorder = await item!.evaluate((el) => window.getComputedStyle(el).borderColor);
+    let siblingBorder: string | null = null;
+    for (let i = 0; i < total; i++) {
+      const name = await allItems.nth(i).locator('.name').textContent();
+      if (name !== `Tier Upgrade ${timestamp}`) {
+        siblingBorder = await allItems
+          .nth(i)
+          .evaluate((el) => window.getComputedStyle(el).borderColor);
+        break;
+      }
+    }
+    expect(
+      siblingBorder,
+      'a non-platinum sibling sponsor is present to compare against'
+    ).not.toBeNull();
+    expect(platinumBorder, 'platinum border is uniform with other sponsors (#25)').toBe(
+      siblingBorder
+    );
   });
 
   test('Cleanup: Delete sponsor', async ({ page, request }) => {
