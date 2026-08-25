@@ -41,6 +41,26 @@ async function publicFetch(page: any, path: string) {
   }, path);
 }
 
+// Prefer the durably-seeded sponsored event (tests/ui/smoke/fixtures/
+// sponsored-event.sql) for write-path tests: its sponsor is a real, FK-valid
+// sponsor_business row, so impression/click writes return 201 instead of the
+// mock-fallback FK 503 (the read path can surface a sponsor with no backing row).
+const SPONSORED_EVENT = process.env.SMOKE_EVENT_SPONSORED || '';
+
+async function resolveSponsorTarget(page: any): Promise<{ eventId: string; sponsorId: string }> {
+  return page.evaluate(async (pref: string) => {
+    const evRes = await fetch('/api/v2/events');
+    const evJson = await evRes.json();
+    const items = (evJson && evJson.items) || [];
+    const eventId = pref || (items[0] ? items[0].id : '');
+    if (!eventId) return { eventId: '', sponsorId: '' };
+    const spRes = await fetch(`/api/v2/events/${encodeURIComponent(eventId)}/sponsors`);
+    const spJson = await spRes.json();
+    const sid = spJson && spJson.items && spJson.items[0] ? spJson.items[0].id : '';
+    return { eventId, sponsorId: sid };
+  }, SPONSORED_EVENT);
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // 1. SPONSOR IMPRESSION PIPELINE
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -49,17 +69,15 @@ test.describe('Invariant: NCR — Impression Data Pipeline', () => {
   test('impression POST captures surface and placement', async ({ page }) => {
     await page.goto('/display', { waitUntil: 'domcontentloaded', timeout: TIMEOUT });
 
-    const eventsRes = await publicFetch(page, '/api/v2/events');
-    test.skip(!eventsRes.body.ok || !eventsRes.body.items?.length, 'No events');
-
-    const eventId = eventsRes.body.items[0].id;
-    const sponsorsRes = await publicFetch(
-      page,
-      `/api/v2/events/${encodeURIComponent(eventId)}/sponsors`
-    );
-    test.skip(!sponsorsRes.body.items?.length, 'No sponsors');
-
-    const sponsorId = sponsorsRes.body.items[0].id;
+    const { eventId, sponsorId } = await resolveSponsorTarget(page);
+    if (SPONSORED_EVENT) {
+      expect(
+        sponsorId,
+        'SMOKE_EVENT_SPONSORED must expose an active FK-valid sponsor'
+      ).toBeTruthy();
+    } else {
+      test.skip(!eventId || !sponsorId, 'No events/sponsors');
+    }
 
     // Log impression with surface and placement — these are the NCR data atoms
     const res = await page.evaluate(
@@ -84,15 +102,15 @@ test.describe('Invariant: NCR — Impression Data Pipeline', () => {
   test('click POST captures surface and placement', async ({ page }) => {
     await page.goto('/display', { waitUntil: 'domcontentloaded', timeout: TIMEOUT });
 
-    const eventsRes = await publicFetch(page, '/api/v2/events');
-    test.skip(!eventsRes.body.ok || !eventsRes.body.items?.length, 'No events');
-
-    const eventId = eventsRes.body.items[0].id;
-    const sponsorsRes = await publicFetch(
-      page,
-      `/api/v2/events/${encodeURIComponent(eventId)}/sponsors`
-    );
-    test.skip(!sponsorsRes.body.items?.length, 'No sponsors');
+    const { eventId, sponsorId } = await resolveSponsorTarget(page);
+    if (SPONSORED_EVENT) {
+      expect(
+        sponsorId,
+        'SMOKE_EVENT_SPONSORED must expose an active FK-valid sponsor'
+      ).toBeTruthy();
+    } else {
+      test.skip(!eventId || !sponsorId, 'No events/sponsors');
+    }
 
     const res = await page.evaluate(
       async ({ eid, sid }: { eid: string; sid: string }) => {
@@ -106,7 +124,7 @@ test.describe('Invariant: NCR — Impression Data Pipeline', () => {
         );
         return { status: r.status, body: await r.json() };
       },
-      { eid: eventId, sid: sponsorsRes.body.items[0].id }
+      { eid: eventId, sid: sponsorId }
     );
 
     expect(res.status).toBe(201);
@@ -116,15 +134,15 @@ test.describe('Invariant: NCR — Impression Data Pipeline', () => {
   test('impression surface values are constrained to known surfaces', async ({ page }) => {
     await page.goto('/display', { waitUntil: 'domcontentloaded', timeout: TIMEOUT });
 
-    const eventsRes = await publicFetch(page, '/api/v2/events');
-    test.skip(!eventsRes.body.ok || !eventsRes.body.items?.length, 'No events');
-
-    const eventId = eventsRes.body.items[0].id;
-    const sponsorsRes = await publicFetch(
-      page,
-      `/api/v2/events/${encodeURIComponent(eventId)}/sponsors`
-    );
-    test.skip(!sponsorsRes.body.items?.length, 'No sponsors');
+    const { eventId, sponsorId } = await resolveSponsorTarget(page);
+    if (SPONSORED_EVENT) {
+      expect(
+        sponsorId,
+        'SMOKE_EVENT_SPONSORED must expose an active FK-valid sponsor'
+      ).toBeTruthy();
+    } else {
+      test.skip(!eventId || !sponsorId, 'No events/sponsors');
+    }
 
     // Even with an unknown surface value, the API should accept it
     // (the schema truncates to 50 chars — it doesn't reject unknown surfaces)
@@ -140,7 +158,7 @@ test.describe('Invariant: NCR — Impression Data Pipeline', () => {
         );
         return { status: r.status };
       },
-      { eid: eventId, sid: sponsorsRes.body.items[0].id }
+      { eid: eventId, sid: sponsorId }
     );
 
     // System accepts unknown surfaces (logs them) — doesn't crash
