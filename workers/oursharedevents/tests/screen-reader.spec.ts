@@ -14,7 +14,7 @@ import { handleSharedReportPage } from '../src/handlers/pages';
 import { handleFormPage } from '../src/handlers/form-pages';
 
 function reportHtml(): Promise<string> {
-  return handleSharedReportPage({} as never).text();
+  return handleSharedReportPage({} as never).then((r) => r.text());
 }
 async function formHtml(type: string): Promise<string> {
   const req = new Request(`https://t.test/forms/evt1?type=${type}&event=Test`);

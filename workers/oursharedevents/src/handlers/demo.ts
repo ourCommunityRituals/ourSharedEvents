@@ -37,6 +37,7 @@ import {
   RIPH_VENUE_NAME,
   type Tier as FlagTier,
 } from '../lib/mock-data.js';
+import { demoBannerMarkup } from '../lib/demo-banner.js';
 import { DEPTH_SECTIONS, type ReportDepth } from '../lib/report-depth.js';
 import { DEMO_LINKS, DEMO_REGISTRY_VERSION, demoTierLinks } from '../lib/demo-registry.js';
 
@@ -198,6 +199,7 @@ function demoHtml(body: string, status = 200): Response {
 ${DEMO_STYLE}
 </head>
 <body>
+${demoBannerMarkup()}
 <main id="main-content" class="demo-wrap">${body}</main>
 </body>
 </html>`;

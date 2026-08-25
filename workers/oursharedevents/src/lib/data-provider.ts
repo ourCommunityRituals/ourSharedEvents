@@ -130,6 +130,17 @@ export class DataProvider {
     return this.mockMode || this.db === null;
   }
 
+  /**
+   * INTENTIONAL demo/mock mode — the operator deliberately put this worker in
+   * mock mode (env MOCK_MODE in non-prod, or the explicit prod DB flag). Unlike
+   * `isMockActive` this EXCLUDES the `db === null` outage fallback: a missing DB
+   * binding is a degradation, not a demo. Used by the demo-provenance banner
+   * (OSE-1012) so "this is a demo" is asserted only when it truly is one.
+   */
+  get isIntentionalMock(): boolean {
+    return this.mockMode;
+  }
+
   get preferredSource(): DataSource {
     return this.isMockActive ? 'mock' : 'live';
   }

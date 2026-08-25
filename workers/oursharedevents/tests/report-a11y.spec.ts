@@ -15,7 +15,7 @@ import { handleSharedReportPage } from '../src/handlers/pages';
 
 describe('A11Y-3 L1 Static: section headings (h2 + id)', () => {
   async function html(): Promise<string> {
-    return handleSharedReportPage({} as never).text();
+    return handleSharedReportPage({} as never).then((r) => r.text());
   }
 
   test('Events Overview is h2 with id=section-stats', async () => {
@@ -36,7 +36,7 @@ describe('A11Y-3 L1 Static: section headings (h2 + id)', () => {
 
 describe('A11Y-3 L1 Static: sections have aria-labelledby', () => {
   async function html(): Promise<string> {
-    return handleSharedReportPage({} as never).text();
+    return handleSharedReportPage({} as never).then((r) => r.text());
   }
 
   test('stats section has aria-labelledby="section-stats"', async () => {
@@ -54,7 +54,7 @@ describe('A11Y-3 L1 Static: sections have aria-labelledby', () => {
 
 describe('A11Y-3 L1 Static: stat cards use dl/dt/dd', () => {
   async function html(): Promise<string> {
-    return handleSharedReportPage({} as never).text();
+    return handleSharedReportPage({} as never).then((r) => r.text());
   }
 
   test('stat-total card contains dl.stat-dl', async () => {
@@ -82,7 +82,7 @@ describe('A11Y-3 L1 Static: stat cards use dl/dt/dd', () => {
 
 describe('A11Y-3 L1 Static: events table has scope=col headers', () => {
   async function html(): Promise<string> {
-    return handleSharedReportPage({} as never).text();
+    return handleSharedReportPage({} as never).then((r) => r.text());
   }
 
   test('report-table class present in JS template', async () => {

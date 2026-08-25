@@ -14,7 +14,7 @@ function adminHtml(): Promise<string> {
   return handleAdminPage({} as never).text();
 }
 function displayHtml(): Promise<string> {
-  return handleDisplayPage({} as never).text();
+  return handleDisplayPage({} as never).then((r) => r.text());
 }
 async function publicHtml(): Promise<string> {
   const req = new Request('https://t.test/');
@@ -29,7 +29,7 @@ async function publicHtml(): Promise<string> {
 // Use the pages module directly for PUBLIC_HTML
 import { handlePublicPage } from '../src/handlers/pages';
 function pubHtml(): Promise<string> {
-  return handlePublicPage({} as never).text();
+  return handlePublicPage({} as never).then((r) => r.text());
 }
 
 // ─── AS-3: Display data-testid coverage ──────────────────────────────────────

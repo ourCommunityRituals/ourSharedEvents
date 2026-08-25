@@ -46,15 +46,21 @@ describe('A11Y-7: axe-core WCAG 2.0 AA — zero critical/serious violations', ()
   });
 
   test('shared report page', async () => {
-    await scanPage('Shared report page', await handleSharedReportPage({} as never).text());
+    await scanPage(
+      'Shared report page',
+      await handleSharedReportPage({} as never).then((r) => r.text())
+    );
   });
 
   test('poster page', async () => {
-    await scanPage('Poster page', await handlePosterPage({} as never).text());
+    await scanPage('Poster page', await handlePosterPage({} as never).then((r) => r.text()));
   });
 
   test('public listing page', async () => {
-    await scanPage('Public listing page', await handlePublicPage({} as never).text());
+    await scanPage(
+      'Public listing page',
+      await handlePublicPage({} as never).then((r) => r.text())
+    );
   });
 
   test('landing page', async () => {

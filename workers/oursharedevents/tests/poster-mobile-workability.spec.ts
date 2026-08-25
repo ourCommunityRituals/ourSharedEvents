@@ -29,7 +29,7 @@ import { describe, test, expect } from 'vitest';
 import { handlePosterPage } from '../src/handlers/pages';
 
 async function fetchPosterHtml(): Promise<string> {
-  return handlePosterPage({} as never).text();
+  return handlePosterPage({} as never).then((r) => r.text());
 }
 
 describe('OSE-300 poster preview mobile workability — API layer', () => {
