@@ -59,9 +59,9 @@ describe('OSE-608: multi-league season with depth', () => {
   const leagues = getRiphLeagues();
   const events = getRiphSeasonEvents();
 
-  it('has 2-3 recurring leagues', () => {
+  it('has 2-4 recurring containers (RIPH runs four: trivia/bocce/pinball/cigar)', () => {
     expect(leagues.length).toBeGreaterThanOrEqual(2);
-    expect(leagues.length).toBeLessThanOrEqual(3);
+    expect(leagues.length).toBeLessThanOrEqual(4);
   });
   it('each league is a SERIES (≥2 instances across the season)', () => {
     for (const lg of leagues) {
@@ -87,6 +87,24 @@ describe('OSE-608: honesty feature — a visible ladder fallback with its label'
     const suppressedEvent = buckets.find((b) => b.suppressed)!.event_id;
     const cleared = buckets.filter((b) => b.event_id === suppressedEvent && !b.suppressed);
     expect(cleared.length).toBeGreaterThanOrEqual(1);
+  });
+});
+
+describe('OSE-995: is_local (geo) is independent of tier (paid) — #25 / OSE-670', () => {
+  const sponsors = getRiphSponsors();
+  const localityOf = (t: string) =>
+    new Set(sponsors.filter((s) => s.tier === t).map((s) => s.is_local));
+
+  it('is_local=true spans more than one tier (local status is not cheap-only)', () => {
+    const tiersWithLocal = new Set(sponsors.filter((s) => s.is_local).map((s) => s.tier));
+    expect(tiersWithLocal.size).toBeGreaterThan(1);
+  });
+  it('a non-local tier occurs at BOTH is_local=true and is_local=false (money never buys local status)', () => {
+    // mid is the class we spread across both localities in the roster
+    expect(localityOf('mid')).toEqual(new Set([true, false]));
+  });
+  it('premium is not gated on geography (occurs out-of-corridor too)', () => {
+    expect(localityOf('premium')).toContain(false);
   });
 });
 

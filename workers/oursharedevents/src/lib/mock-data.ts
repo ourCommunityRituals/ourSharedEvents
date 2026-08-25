@@ -641,11 +641,12 @@ export function getMockSnapshot(sponsorCount: number = 15): MockSnapshot {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// RIPH multi-league demo dataset (OSE-608)
+// RIPH multi-league demo dataset (OSE-608 / OSE-995)
 //
-// The shared dataset all three demo sites render: RIPH (Ridge-Irish-Prairie Hills)
-// as a multi-league sponsor property — one venue, three recurring containers
-// (bocce / trivia / record night), campaign-grouped sponsors distributed across
+// The shared dataset all three demo sites render: RIPH (Rock Island Public House,
+// Blue Island) as a multi-container sponsor property — one venue, four recurring
+// containers (trivia / bocce / pinball / cigar social club), campaign-grouped
+// sponsors distributed across
 // Local / Mid / Premium, a mock season with realistic scan distributions, real
 // H3 cells for the corridor map, and — deliberately — at least one visible ladder
 // fallback bucket (the "too small alone" honesty feature on display).
@@ -735,27 +736,26 @@ export interface MockLadderBucket {
   label: string;
 }
 
-export const RIPH_BRAND_ID = 'riph-beverly';
-export const RIPH_VENUE_NAME = 'Ridge-Irish-Prairie Hills (RIPH) — Beverly';
-const RIPH_CORRIDOR = 'beverly-morgan-park';
-// Real H3 cells around the RIPH venue coordinates (Beverly, Chicago).
-const RIPH_H3_RES9 = '892698a6d0bffff';
-const RIPH_H3_RES7 = '872698a6dffffff';
-const RIPH_H3_RES9_B = '892698a6d0fffff'; // an adjacent cell so the corridor map has spread
+export const RIPH_BRAND_ID = 'riph-blue-island';
+export const RIPH_VENUE_NAME = 'Rock Island Public House (RIPH) — Blue Island';
+const RIPH_CORRIDOR = 'blue-island';
+// Rock Island Public House, Blue Island, IL (~41.6572, -87.6800) — the brain's
+// primary activation anchor (OCR_VISION.md, corridor-definitions.yaml). All three
+// cells resolve inside the Blue Island / south-Chicagoland corridor (OSE-995).
+const RIPH_LAT = 41.6572;
+const RIPH_LON = -87.68;
+const RIPH_H3_RES9 = '89266454447ffff';
+const RIPH_H3_RES7 = '872664544ffffff';
+const RIPH_H3_RES9_B = '8926645447bffff'; // an adjacent cell so the corridor map has spread
 
 const K_ANON_FLOOR = 5;
 
-// ── Leagues (3 recurring containers) ──────────────────────────────────────────
+// ── Leagues (4 recurring containers — the flagship consolidation story) ────────
+// Rock Island Public House runs four recurring social containers on one platform;
+// OCR/OSE consolidates a sponsor's reach ACROSS them (riph-flagship-consolidation).
 
 export function getRiphLeagues(): MockLeague[] {
   return [
-    {
-      id: 'league_bocce',
-      brand_id: RIPH_BRAND_ID,
-      name: 'RIPH Bocce League',
-      event_type: 'bocce',
-      slug: 'riph-bocce',
-    },
     {
       id: 'league_trivia',
       brand_id: RIPH_BRAND_ID,
@@ -764,11 +764,25 @@ export function getRiphLeagues(): MockLeague[] {
       slug: 'riph-trivia',
     },
     {
-      id: 'league_record',
+      id: 'league_bocce',
       brand_id: RIPH_BRAND_ID,
-      name: 'RIPH Record Night',
-      event_type: 'record-night',
-      slug: 'riph-record-night',
+      name: 'RIPH Bocce League',
+      event_type: 'bocce',
+      slug: 'riph-bocce',
+    },
+    {
+      id: 'league_pinball',
+      brand_id: RIPH_BRAND_ID,
+      name: 'RIPH Pinball League',
+      event_type: 'pinball',
+      slug: 'riph-pinball',
+    },
+    {
+      id: 'league_cigar',
+      brand_id: RIPH_BRAND_ID,
+      name: 'RIPH Cigar Social Club',
+      event_type: 'cigar-social-club',
+      slug: 'riph-cigar',
     },
   ];
 }
@@ -828,13 +842,20 @@ export function getRiphCampaigns(): MockCampaign[] {
 // ── Sponsors (Premium 2 · Mid 3 · Local 5), each carrying a campaign ──────────
 
 export function getRiphSponsors(): MockSeasonSponsor[] {
+  // is_local is a GEO-derived value (in-corridor?), independent of the paid `tier`
+  // and shown read-only (#25 / OSE-670): money buys frequency-share/tier, NEVER
+  // local status. Passed explicitly (not `tier === 'local'`) so the dataset
+  // DEMONSTRATES the two axes are orthogonal — premium & mid each occur at both
+  // is_local=true and is_local=false. (Business↔geo mapping is illustrative
+  // pending the real Blue Island roster; see OSE-995.)
   const s = (
     id: string,
     campaign_id: string,
     name: string,
     tier: MockSeasonSponsor['tier'],
     area: string,
-    event_type: string
+    event_type: string,
+    is_local: boolean
   ): MockSeasonSponsor => ({
     id,
     brand_id: RIPH_BRAND_ID,
@@ -843,23 +864,72 @@ export function getRiphSponsors(): MockSeasonSponsor[] {
     tier,
     area,
     event_type,
-    is_local: tier === 'local',
+    is_local,
     data_class: 'demo',
   });
   return [
-    // Premium (2)
-    s('sp_riph_prem_1', 'camp_premium_1', 'Beverly Arts Center', 'premium', 'beverly', 'arts'),
-    s('sp_riph_prem_2', 'camp_premium_2', 'Ridge Home + Garden', 'premium', 'beverly', 'home'),
-    // Mid (3)
-    s('sp_riph_mid_1', 'camp_mid_1', 'Prairie Hills Brewing', 'mid', 'prairie-hills', 'drinks'),
-    s('sp_riph_mid_2', 'camp_mid_2', 'South Side Realty Group', 'mid', 'beverly', 'real-estate'),
-    s('sp_riph_mid_3', 'camp_mid_3', 'Beverly Taqueria', 'mid', 'beverly', 'food'),
-    // Local (5)
-    s('sp_riph_loc_1', 'camp_local_1', 'Beverly Bakehouse', 'local', 'beverly', 'food'),
-    s('sp_riph_loc_2', 'camp_local_1', 'Ridge Dry Cleaners', 'local', 'beverly', 'retail'),
-    s('sp_riph_loc_3', 'camp_local_1', "Kelly's Corner Pub", 'local', 'beverly', 'food'),
-    s('sp_riph_loc_4', 'camp_local_1', 'Prairie Paws Vet Clinic', 'local', 'prairie-hills', 'pets'),
-    s('sp_riph_loc_5', 'camp_local_1', 'Greenwood Locksmith', 'local', 'mt-greenwood', 'services'),
+    // Premium (2) — one in-corridor local, one out-of-corridor regional brand:
+    // premium status is NOT gated on geography.
+    s(
+      'sp_riph_prem_1',
+      'camp_premium_1',
+      'Beverly Arts Center',
+      'premium',
+      'beverly',
+      'arts',
+      true
+    ),
+    s(
+      'sp_riph_prem_2',
+      'camp_premium_2',
+      'Ridge Home + Garden',
+      'premium',
+      'beverly',
+      'home',
+      false
+    ),
+    // Mid (3) — spans both localities: mid occurs at is_local=true AND is_local=false.
+    s(
+      'sp_riph_mid_1',
+      'camp_mid_1',
+      'Prairie Hills Brewing',
+      'mid',
+      'prairie-hills',
+      'drinks',
+      true
+    ),
+    s(
+      'sp_riph_mid_2',
+      'camp_mid_2',
+      'South Side Realty Group',
+      'mid',
+      'beverly',
+      'real-estate',
+      false
+    ),
+    s('sp_riph_mid_3', 'camp_mid_3', 'Beverly Taqueria', 'mid', 'beverly', 'food', true),
+    // Local (5) — the covenant floor: neighborhood businesses, all in-corridor.
+    s('sp_riph_loc_1', 'camp_local_1', 'Beverly Bakehouse', 'local', 'beverly', 'food', true),
+    s('sp_riph_loc_2', 'camp_local_1', 'Ridge Dry Cleaners', 'local', 'beverly', 'retail', true),
+    s('sp_riph_loc_3', 'camp_local_1', "Kelly's Corner Pub", 'local', 'beverly', 'food', true),
+    s(
+      'sp_riph_loc_4',
+      'camp_local_1',
+      'Prairie Paws Vet Clinic',
+      'local',
+      'prairie-hills',
+      'pets',
+      true
+    ),
+    s(
+      'sp_riph_loc_5',
+      'camp_local_1',
+      'Greenwood Locksmith',
+      'local',
+      'mt-greenwood',
+      'services',
+      true
+    ),
   ];
 }
 
@@ -874,14 +944,6 @@ const SEASON_PLAN: {
   cell: string;
 }[] = [
   {
-    league_id: 'league_bocce',
-    event_type: 'bocce',
-    name: 'RIPH Bocce',
-    dates: ['2026-06-06', '2026-07-11', '2026-08-01'],
-    headcounts: [42, 58, 71], // climbing across the season
-    cell: RIPH_H3_RES9,
-  },
-  {
     league_id: 'league_trivia',
     event_type: 'trivia',
     name: 'RIPH Trivia',
@@ -890,11 +952,27 @@ const SEASON_PLAN: {
     cell: RIPH_H3_RES9,
   },
   {
-    league_id: 'league_record',
-    event_type: 'record-night',
-    name: 'RIPH Record Night',
+    league_id: 'league_bocce',
+    event_type: 'bocce',
+    name: 'RIPH Bocce',
+    dates: ['2026-06-06', '2026-07-11', '2026-08-01'],
+    headcounts: [42, 58, 71], // climbing across the season
+    cell: RIPH_H3_RES9,
+  },
+  {
+    league_id: 'league_pinball',
+    event_type: 'pinball',
+    name: 'RIPH Pinball',
+    dates: ['2026-06-13', '2026-07-18', '2026-08-15'],
+    headcounts: [22, 28, 33],
+    cell: RIPH_H3_RES9_B,
+  },
+  {
+    league_id: 'league_cigar',
+    event_type: 'cigar-social-club',
+    name: 'RIPH Cigar Social Club',
     dates: ['2026-06-27', '2026-07-25', '2026-08-08'],
-    headcounts: [18, 12, 27], // a small night in the middle — realistic
+    headcounts: [18, 11, 27], // a small, intimate night in the middle — realistic
     cell: RIPH_H3_RES9_B,
   },
 ];
@@ -916,8 +994,8 @@ export function getRiphSeasonEvents(): MockSeasonEvent[] {
         start_date: date,
         end_date: date,
         timezone: 'America/Chicago',
-        lat: BEVERLY_LAT,
-        lon: BEVERLY_LON,
+        lat: RIPH_LAT,
+        lon: RIPH_LON,
         h3_res9: plan.cell,
         h3_res7: RIPH_H3_RES7,
         corridor_id: RIPH_CORRIDOR,
@@ -976,7 +1054,7 @@ export function getRiphSponsorImpressions(): MockSponsorImpression[] {
 export function getRiphLadderBuckets(): MockLadderBucket[] {
   return [
     {
-      event_id: 'evt_riph_record_2', // the small record night (headcount 12)
+      event_id: 'evt_riph_cigar_2', // the small cigar social night (headcount 11)
       h3_res9: RIPH_H3_RES9_B,
       hour_bucket: '2026-07-25T19:00:00Z',
       count: 3, // below K≥5
@@ -984,7 +1062,7 @@ export function getRiphLadderBuckets(): MockLadderBucket[] {
       label: 'By the hour — too small alone (K≥5)',
     },
     {
-      event_id: 'evt_riph_record_2',
+      event_id: 'evt_riph_cigar_2',
       h3_res9: RIPH_H3_RES9_B,
       hour_bucket: '2026-07-25T20:00:00Z',
       count: 9, // clears the floor — shown
