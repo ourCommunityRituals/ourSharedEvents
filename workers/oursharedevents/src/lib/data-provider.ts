@@ -30,6 +30,7 @@ import {
   makeCacheKey,
   readCfCache,
   writeCfCache,
+  deleteCfCache,
   DataProviderError,
   type DataSource,
   type DataResult,
@@ -80,6 +81,29 @@ const TTL: Record<string, CacheTtlConfig> = {
   poster: { ttlSeconds: 120, swrSeconds: 600 },
   scan: { ttlSeconds: 60, swrSeconds: 300 },
 };
+
+// ── Sponsor cache invalidation (OSE-1000) ───────────────────────────────────────
+//
+// The public sponsors read is cache-fronted (TTL.sponsor = 30s, no revalidate
+// while fresh). A sponsor mutation must bust this key or the just-written change
+// is invisible on the cache-fronted read for up to the TTL — a write→read race.
+// This helper is the single source of the sponsors cache key, shared by the read
+// (getSponsors) and every mutation handler, so read and invalidation can't drift.
+
+/** Cache key path for an event's resolved public sponsor list. */
+export function sponsorsCacheKeyPath(eventId: string): string {
+  return `sponsors/${eventId}`;
+}
+
+/**
+ * Invalidate the cached public sponsor list for an event. Call after any sponsor
+ * create/update/delete so the next public read re-fetches live instead of
+ * serving a stale pre-write snapshot (OSE-1000). No-op when the cache is
+ * unavailable; failures are swallowed inside deleteCfCache.
+ */
+export async function invalidateSponsorsCache(eventId: string): Promise<void> {
+  await deleteCfCache(makeCacheKey(sponsorsCacheKeyPath(eventId)));
+}
 
 // ── DataProvider ───────────────────────────────────────────────────────────────
 
@@ -230,7 +254,7 @@ export class DataProvider {
     opts: { count?: number } = {}
   ): Promise<DataResult<SponsorRow[]>> {
     if (!this.isMockActive) {
-      const keyPath = `sponsors/${eventId}`;
+      const keyPath = sponsorsCacheKeyPath(eventId);
       const ttl = TTL.sponsor;
 
       const cached = await this.fromCache<SponsorRow[]>(keyPath, ttl, () =>

@@ -27,6 +27,28 @@ import { test, expect } from '@playwright/test';
 
 const TIMEOUT = 30_000;
 
+// Prefer the durably-seeded sponsored event (tests/ui/smoke/fixtures/
+// sponsored-event.sql) for write-path tests: its sponsor is a real, FK-valid
+// sponsor_business row, so impression/click writes return 201 instead of the
+// mock-fallback FK 503 (the read path can surface a sponsor with no backing row).
+const SPONSORED_EVENT = process.env.SMOKE_EVENT_SPONSORED || '';
+
+async function resolveSponsorTarget(
+  page: import('@playwright/test').Page
+): Promise<{ eventId: string; sponsorId: string }> {
+  return page.evaluate(async (pref: string) => {
+    const evRes = await fetch('/api/v2/events');
+    const evJson = await evRes.json();
+    const items = (evJson && evJson.items) || [];
+    const eventId = pref || (items[0] ? items[0].id : '');
+    if (!eventId) return { eventId: '', sponsorId: '' };
+    const spRes = await fetch(`/api/v2/events/${encodeURIComponent(eventId)}/sponsors`);
+    const spJson = await spRes.json();
+    const sid = spJson && spJson.items && spJson.items[0] ? spJson.items[0].id : '';
+    return { eventId, sponsorId: sid };
+  }, SPONSORED_EVENT);
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // 1. COOKIE CONTRACT
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -102,23 +124,15 @@ test.describe('Invariant: Anonymous ID — Scan System Zero PII', () => {
   test('impression endpoint does not accept PII fields', async ({ page }) => {
     await page.goto('/display', { waitUntil: 'domcontentloaded', timeout: TIMEOUT });
 
-    const eventsRes = await page.evaluate(async () => {
-      const res = await fetch('/api/v2/events');
-      return res.json();
-    });
-    const items = eventsRes?.items || [];
-    test.skip(items.length === 0, 'No events');
-
-    const eventId = items[0].id;
-
-    // Get a sponsor to test with
-    const sponsorsRes = await page.evaluate(async (eid: string) => {
-      const res = await fetch(`/api/v2/events/${encodeURIComponent(eid)}/sponsors`);
-      return res.json();
-    }, eventId);
-
-    const sponsors = sponsorsRes?.items || [];
-    test.skip(sponsors.length === 0, 'No sponsors');
+    const { eventId, sponsorId } = await resolveSponsorTarget(page);
+    if (SPONSORED_EVENT) {
+      expect(
+        sponsorId,
+        'SMOKE_EVENT_SPONSORED must expose an active FK-valid sponsor'
+      ).toBeTruthy();
+    } else {
+      test.skip(!eventId || !sponsorId, 'No events/sponsors');
+    }
 
     // POST impression with PII — the system should NOT store it
     // (the API accepts surface/placement only — no PII fields in the schema)
@@ -141,7 +155,7 @@ test.describe('Invariant: Anonymous ID — Scan System Zero PII', () => {
         );
         return { status: r.status, body: await r.json() };
       },
-      { eid: eventId, sid: sponsors[0].id }
+      { eid: eventId, sid: sponsorId }
     );
 
     // The impression is accepted (201) — the extra fields are silently dropped
@@ -152,20 +166,15 @@ test.describe('Invariant: Anonymous ID — Scan System Zero PII', () => {
   test('click endpoint does not accept PII fields', async ({ page }) => {
     await page.goto('/display', { waitUntil: 'domcontentloaded', timeout: TIMEOUT });
 
-    const eventsRes = await page.evaluate(async () => {
-      const res = await fetch('/api/v2/events');
-      return res.json();
-    });
-    const items = eventsRes?.items || [];
-    test.skip(items.length === 0, 'No events');
-
-    const eventId = items[0].id;
-    const sponsorsRes = await page.evaluate(async (eid: string) => {
-      const res = await fetch(`/api/v2/events/${encodeURIComponent(eid)}/sponsors`);
-      return res.json();
-    }, eventId);
-    const sponsors = sponsorsRes?.items || [];
-    test.skip(sponsors.length === 0, 'No sponsors');
+    const { eventId, sponsorId } = await resolveSponsorTarget(page);
+    if (SPONSORED_EVENT) {
+      expect(
+        sponsorId,
+        'SMOKE_EVENT_SPONSORED must expose an active FK-valid sponsor'
+      ).toBeTruthy();
+    } else {
+      test.skip(!eventId || !sponsorId, 'No events/sponsors');
+    }
 
     const res = await page.evaluate(
       async ({ eid, sid }: { eid: string; sid: string }) => {
@@ -183,7 +192,7 @@ test.describe('Invariant: Anonymous ID — Scan System Zero PII', () => {
         );
         return { status: r.status, body: await r.json() };
       },
-      { eid: eventId, sid: sponsors[0].id }
+      { eid: eventId, sid: sponsorId }
     );
 
     expect(res.status).toBe(201);
