@@ -20,7 +20,7 @@ import { describe, test, expect } from 'vitest';
 import { handlePosterPage } from '../src/handlers/pages';
 
 function posterHtml(): Promise<string> {
-  return handlePosterPage({} as never).text();
+  return handlePosterPage({} as never).then((r) => r.text());
 }
 
 describe('OSE-864 / #25: Poster CSS — uniform sponsor treatment (no tier geometry)', () => {

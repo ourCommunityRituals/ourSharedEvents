@@ -9,7 +9,7 @@ import { describe, test, expect } from 'vitest';
 import { handlePosterPage } from '../src/handlers/pages';
 
 function posterHtml(): Promise<string> {
-  return handlePosterPage({} as never).text();
+  return handlePosterPage({} as never).then((r) => r.text());
 }
 
 // ─── AS-2: Poster data-testid coverage ───────────────────────────────────────

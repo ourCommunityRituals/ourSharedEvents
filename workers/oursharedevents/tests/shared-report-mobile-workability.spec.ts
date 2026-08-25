@@ -31,7 +31,7 @@ import { describe, test, expect } from 'vitest';
 import { handleSharedReportPage } from '../src/handlers/pages';
 
 async function fetchSharedReportHtml(): Promise<string> {
-  return handleSharedReportPage({} as never).text();
+  return handleSharedReportPage({} as never).then((r) => r.text());
 }
 
 describe('OSE-295 shared-report mobile workability — API layer', () => {

@@ -24,6 +24,11 @@ import ADMIN_SIGNIN_HTML from '../templates/admin-signin.html';
 import DISPLAY_HTML from '../templates/display.html';
 import POSTER_HTML from '../templates/poster.html';
 import SHARED_REPORT_HTML from '../templates/shared-report.html';
+import {
+  withProvenanceBanner,
+  injectProvenanceBanner,
+  resolveAndSignalProvenance,
+} from '../lib/demo-banner.js';
 
 export interface PagesEnv {
   WORKER_ENV?: string;
@@ -201,8 +206,8 @@ export function renderErrorPage(
   return html(content, status);
 }
 
-export function handlePublicPage(_env: PagesEnv): Response {
-  return html(PUBLIC_HTML);
+export async function handlePublicPage(env: PagesEnv): Promise<Response> {
+  return html(await withProvenanceBanner(PUBLIC_HTML, env, 'public'));
 }
 
 // ─── Public event page — OSE-243a / BE-27 ─────────────────────────────────────
@@ -1191,6 +1196,11 @@ export async function handlePublicEventPage(
     body = renderPostEventHtml(row, shareUrl, nextEvents, social, { nonce, lang });
   }
 
+  // OSE-1012/1013: the /events/:id page is where the demo event actually renders
+  // (poster QR encodes the mock event). Declare provenance for the served data —
+  // 'demo' showcase banner, 'degraded' fallback indicator, or nothing when live.
+  body = injectProvenanceBanner(body, await resolveAndSignalProvenance(env, 'public-event'));
+
   // OSE-658 cache-coherence: private (never shared-edge — the body may carry a
   // sub-floor count, #7) and hard-expiring by the next phase pivot so no stale
   // pre/in/post state is ever served past the start/end boundary.
@@ -1394,11 +1404,11 @@ export function handleLandingPage(_env: PagesEnv): Response {
 
 // ─── Shared report page ─────────────────────────────────────────────────────────
 
-export function handleDisplayPage(_env: PagesEnv): Response {
-  return html(DISPLAY_HTML);
+export async function handleDisplayPage(env: PagesEnv): Promise<Response> {
+  return html(await withProvenanceBanner(DISPLAY_HTML, env, 'display'));
 }
 
-export function handlePosterPage(_env: PagesEnv, request?: Request): Response {
+export async function handlePosterPage(env: PagesEnv, request?: Request): Promise<Response> {
   // OSE-310 Phase 1: format-aware rendering for the Poster Family.
   // Look up the format from the request pathname (path-aliased
   // registry) and attach data-poster-format to the body so future
@@ -1415,15 +1425,17 @@ export function handlePosterPage(_env: PagesEnv, request?: Request): Response {
     }
   }
   const content = POSTER_HTML.replace('<body>', `<body data-poster-format="${posterCode}">`);
-  return html(content);
+  return html(injectProvenanceBanner(content, await resolveAndSignalProvenance(env, 'poster')));
 }
 
-export function handleSharedReportPage(env: PagesEnv): Response {
+export async function handleSharedReportPage(env: PagesEnv): Promise<Response> {
   // Inject data-maps-configured so client-side JS knows whether to render
   // map thumbnails via the /api/v2/maps/venue-image proxy endpoint.
   const mapsAttr = isGoogleMapsConfigured(env) ? ' data-maps-configured="1"' : '';
   const content = SHARED_REPORT_HTML.replace('<body>', `<body${mapsAttr}>`);
-  return html(content);
+  return html(
+    injectProvenanceBanner(content, await resolveAndSignalProvenance(env, 'sharedReport'))
+  );
 }
 
 // ─── /ui-preview — component showcase for Claude Design ───────────────────────

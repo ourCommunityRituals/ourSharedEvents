@@ -10,7 +10,7 @@ function adminHtml(): Promise<string> {
   return handleAdminPage({} as never).text();
 }
 function pubHtml(): Promise<string> {
-  return handlePublicPage({} as never).text();
+  return handlePublicPage({} as never).then((r) => r.text());
 }
 
 // ─── AS-11: Admin keyboard navigation ────────────────────────────────────────

@@ -10,7 +10,7 @@ import { describe, test, expect } from 'vitest';
 import { handleSharedReportPage } from '../src/handlers/pages';
 
 function reportHtml(): Promise<string> {
-  return handleSharedReportPage({} as never).text();
+  return handleSharedReportPage({} as never).then((r) => r.text());
 }
 
 // ─── Button presence ──────────────────────────────────────────────────────────

@@ -16,11 +16,11 @@ import { TIER_PRESETS } from '../src/lib/feature-flags';
 
 describe('SR-13 L1 Static: export-json-btn in SharedReport template', () => {
   async function getHtml(): Promise<string> {
-    return handleSharedReportPage({} as never).text();
+    return handleSharedReportPage({} as never).then((r) => r.text());
   }
 
-  test('returns text/html response', () => {
-    const res = handleSharedReportPage({} as never);
+  test('returns text/html response', async () => {
+    const res = await handleSharedReportPage({} as never);
     expect(res.headers.get('Content-Type')).toContain('text/html');
   });
 

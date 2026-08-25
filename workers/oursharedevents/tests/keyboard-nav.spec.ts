@@ -23,13 +23,13 @@ function adminHtml(): Promise<string> {
   return handleAdminPage({} as never).text();
 }
 function displayHtml(): Promise<string> {
-  return handleDisplayPage({} as never).text();
+  return handleDisplayPage({} as never).then((r) => r.text());
 }
 function reportHtml(): Promise<string> {
-  return handleSharedReportPage({} as never).text();
+  return handleSharedReportPage({} as never).then((r) => r.text());
 }
 function posterHtml(): Promise<string> {
-  return handlePosterPage({} as never).text();
+  return handlePosterPage({} as never).then((r) => r.text());
 }
 async function formHtml(type: string): Promise<string> {
   const req = new Request(`https://t.test/forms/evt1?type=${type}&event=Test`);
