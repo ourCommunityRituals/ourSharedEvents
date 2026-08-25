@@ -161,7 +161,7 @@ Stories are ordered by the sequence you work through them. Each row unlocks the 
 | DAC-4                                              | —        | ✅ DONE        | Batch rename — Deploy + Monitor + QA docs (16 files, ~161 refs)       | P1-8             |
 | DAC-5                                              | —        | ✅ DONE        | Final verification — zero active eventangle references                | DAC-1,2,3,4      |
 | **Epic TP — Test Pyramid Enforcement**             |          |                |                                                                       |                  |
-| TP-1                                               | —        | 📋 BACKLOG     | Wire 78 E2E Playwright files into CI pipeline (post-smoke gate)       | P1-8             |
+| TP-1                                               | —        | ✅ DONE        | Wire 78 E2E Playwright files into CI pipeline (post-smoke gate)       | P1-8             |
 | TP-2                                               | —        | 📋 BACKLOG     | Cross-surface E2E: poster → pre-event → event → post-event flow       | TP-1             |
 | TP-3                                               | —        | 📋 BACKLOG     | Newman collection audit — verify all 6 surfaces covered               | P1-8             |
 | TP-4                                               | —        | 📋 BACKLOG     | Wire k6 load tests into staging CI gate                               | TP-1             |
@@ -685,11 +685,12 @@ _Stories sourced from CCR audit (docs/CCR_SHARED_REPORT_AUDIT.md). SR-1 through 
 **Effort:** M
 
 **Why this story exists:**
-The SharedReport's core value proposition to a paying sponsor is the local-vs-paid comparison: *Are local grassroots advertisers out-clicking your investment, or is your spend doing real work against them?* That comparison IS the proof of ROI — the data that drives renewal decisions.
+The SharedReport's core value proposition to a paying sponsor is the local-vs-paid comparison: _Are local grassroots advertisers out-clicking your investment, or is your spend doing real work against them?_ That comparison IS the proof of ROI — the data that drives renewal decisions.
 
 The current `filterReportByDepth` implementation treats `local`/`mid`/`premium` as access gates, stripping report fields from sponsor readers. This is architecturally backwards: those labels are sponsor classification metadata that belong **in** the report as competitive intelligence, not on the read path as a filter.
 
 **The correct model:**
+
 - `local`/`mid`/`premium` are sponsor class labels — they describe what class of competitor is at the event
 - The SharedReport shows the full competitive picture: all sponsor classes, all impression counts, the local-vs-paid breakdown by class
 - Authorization controls WHO reads the report (signed-link token, service token) — TL-040 boundary stays (sponsor tokens can't read another individual sponsor's raw attribution)
@@ -713,6 +714,7 @@ The current `filterReportByDepth` implementation treats `local`/`mid`/`premium` 
 - `filterReportByDepth` removed from both paths; `resolveDepth` retained only for TL-040 individual-attribution scoping
 
 **Data shape (new `sponsor_class_breakdown` field):**
+
 ```json
 "sponsor_class_breakdown": {
   "local":   { "sponsor_count": 3, "total_impressions": 142 },
@@ -1046,7 +1048,7 @@ _Source: PO directive 2026-04-09. Standard protocol._
 
 ### TP-1: Wire 78 E2E Playwright files into CI pipeline
 
-**Status:** 📋 BACKLOG
+**Status:** ✅ DONE (2026-08-25, OSE-554) — T4b/T4c/T4d wired into the post-deploy chain as blocking and validated green on staging (run 32875459164). T4c: register/checkin + validation blocking; survey/email submission continue-on-error (Phase-2 gate → OSE-1004/OSE-1007). T4d: 16 tier-1 page-smokes blocking; 3 auth/token routes (admin ×2 + sharedReport) deferred → OSE-1010. T4e/T4f continue-on-error. Reporter→dashboard AC split → OSE-1009.
 **Prerequisite:** P1-8 ✅ (staging must be live for E2E to run against)
 **Effort:** L
 **Description:** Add a new CI job (Stage 04: E2E Gate) that runs the full 78-file Playwright E2E suite against staging after the Functional Smoke stage passes. This is the missing top of the pyramid. The tests exist — they just aren't gated.

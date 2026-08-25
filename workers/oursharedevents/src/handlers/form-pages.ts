@@ -40,8 +40,7 @@ function generateNonce(): string {
 // are not directives accepted by all browsers but are included for defence depth.
 function buildSecurityHeaders(nonce: string): Record<string, string> {
   return {
-    'Content-Security-Policy':
-      `default-src 'self'; script-src 'self' 'nonce-${nonce}'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; font-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'`,
+    'Content-Security-Policy': `default-src 'self'; script-src 'self' 'nonce-${nonce}'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; font-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'`,
     'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
     'X-Content-Type-Options': 'nosniff',
     'X-Frame-Options': 'DENY',
@@ -290,7 +289,7 @@ const FORM_JS_SUBMIT = `
       var items = cache.slice(0, 3).map(function(s) {
         var name = escAttr(s.name);
         var logo = s.logo_url && s.id
-          ? '<img src="/api/v2/sponsors/' + encodeURIComponent(s.id) + '/logo" alt="' + name + '" referrerpolicy="no-referrer" loading="lazy" onerror="this.style.display=\'none\'" />'
+          ? '<img src="/api/v2/sponsors/' + encodeURIComponent(s.id) + '/logo" alt="' + name + '" referrerpolicy="no-referrer" loading="lazy" onerror="this.style.display=&#39;none&#39;" />'
           : '';
         return '<span class="sponsor-item">' + logo + '<span class="sponsor-name">' + name + '</span></span>';
       }).join('');
@@ -334,7 +333,7 @@ const FORM_JS_SPONSOR = `
         var items = banner.slice(0, 3).map(function(s) {
           var name = escAttr(s.name);
           var logo = s.logo_url && s.id
-            ? '<img src="/api/v2/sponsors/' + encodeURIComponent(s.id) + '/logo" alt="' + name + '" referrerpolicy="no-referrer" loading="lazy" onerror="this.style.display=\'none\'" />'
+            ? '<img src="/api/v2/sponsors/' + encodeURIComponent(s.id) + '/logo" alt="' + name + '" referrerpolicy="no-referrer" loading="lazy" onerror="this.style.display=&#39;none&#39;" />'
             : '';
           return '<span class="sponsor-item">' + logo + '<span class="sponsor-name">' + name + '</span></span>';
         }).join('');
@@ -347,7 +346,12 @@ const FORM_JS_SPONSOR = `
 
 // ── Registration form ────────────────────────────────────────────────────────
 
-function registrationForm(eventId: string, legalTier = 1, deploymentId?: string, nonce = ''): string {
+function registrationForm(
+  eventId: string,
+  legalTier = 1,
+  deploymentId?: string,
+  nonce = ''
+): string {
   const hiddenDeployment = deploymentId
     ? `<input type="hidden" name="deploymentId" data-testid="form-deployment-id" value="${escapeHtml(deploymentId)}" />`
     : '';
@@ -472,7 +476,12 @@ function surveyForm(eventId: string, legalTier = 1, deploymentId?: string, nonce
 
 // ── Email signup form ────────────────────────────────────────────────────────
 
-function emailSignupForm(eventId: string, legalTier = 1, deploymentId?: string, nonce = ''): string {
+function emailSignupForm(
+  eventId: string,
+  legalTier = 1,
+  deploymentId?: string,
+  nonce = ''
+): string {
   const hiddenDeployment = deploymentId
     ? `<input type="hidden" name="deploymentId" data-testid="form-deployment-id" value="${escapeHtml(deploymentId)}" />`
     : '';
@@ -505,7 +514,14 @@ function emailSignupForm(eventId: string, legalTier = 1, deploymentId?: string, 
 
 // ── Page shell ───────────────────────────────────────────────────────────────
 
-function formPage(eventId: string, eventName: string, formType: string, legalTier = 1, deploymentId?: string, nonce = ''): string {
+function formPage(
+  eventId: string,
+  eventName: string,
+  formType: string,
+  legalTier = 1,
+  deploymentId?: string,
+  nonce = ''
+): string {
   let formHtml: string;
   switch (formType) {
     case 'checkin':

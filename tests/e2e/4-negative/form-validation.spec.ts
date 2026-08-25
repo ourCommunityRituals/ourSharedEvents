@@ -14,11 +14,7 @@ test.describe('Form Validation', () => {
       await submitButton.click();
 
       // Form should not navigate away or show success — required field blocks submission
-      await expect(
-        page.locator(
-          '[data-testid="success-message"], [class*="success"], text=success, text=thank'
-        )
-      ).not.toBeVisible({ timeout: 3000 });
+      await expect(page.locator('[data-testid="form-success"]')).not.toBeVisible({ timeout: 3000 });
     });
 
     test('should keep the form visible after attempting empty submission', async ({ page }) => {
@@ -38,7 +34,7 @@ test.describe('Form Validation', () => {
       await page.goto(`/forms/${TEST_EVENT_ID}?type=register`);
       await expect(page.locator('form')).toBeVisible({ timeout: 10000 });
 
-      const nameInput = page.locator('input[name="name"], input[placeholder*="name" i]').first();
+      const nameInput = page.locator('[data-testid="register-name-input"]').first();
       const maxlength = await nameInput.getAttribute('maxlength');
       expect(maxlength).toBe('200');
     });
@@ -47,7 +43,7 @@ test.describe('Form Validation', () => {
       await page.goto(`/forms/${TEST_EVENT_ID}?type=register`);
       await expect(page.locator('form')).toBeVisible({ timeout: 10000 });
 
-      const nameInput = page.locator('input[name="name"], input[placeholder*="name" i]').first();
+      const nameInput = page.locator('[data-testid="register-name-input"]').first();
       const required = await nameInput.getAttribute('required');
       // required attribute can be "" (empty string) or "required" when present
       expect(required).not.toBeNull();
@@ -64,11 +60,7 @@ test.describe('Form Validation', () => {
         .first();
       await submitButton.click();
 
-      await expect(
-        page.locator(
-          '[data-testid="success-message"], [class*="success"], text=success, text=thank'
-        )
-      ).not.toBeVisible({ timeout: 3000 });
+      await expect(page.locator('[data-testid="form-success"]')).not.toBeVisible({ timeout: 3000 });
     });
 
     test('should have type="email" on email input for browser validation', async ({ page }) => {
@@ -110,11 +102,7 @@ test.describe('Form Validation', () => {
 
       // Form should still be visible — browser validation blocks
       await expect(page.locator('form')).toBeVisible();
-      await expect(
-        page.locator(
-          '[data-testid="success-message"], [class*="success"], text=success, text=thank'
-        )
-      ).not.toBeVisible({ timeout: 3000 });
+      await expect(page.locator('[data-testid="form-success"]')).not.toBeVisible({ timeout: 3000 });
     });
   });
 
@@ -123,11 +111,7 @@ test.describe('Form Validation', () => {
       await page.goto(`/forms/${TEST_EVENT_ID}?type=survey`);
       await expect(page.locator('form')).toBeVisible({ timeout: 10000 });
 
-      const commentField = page
-        .locator(
-          'textarea[name="comment"], textarea[name="comments"], textarea[placeholder*="comment" i], [data-testid="survey-comment"]'
-        )
-        .first();
+      const commentField = page.locator('[data-testid="survey-comments-input"]').first();
 
       if (await commentField.isVisible()) {
         const maxlength = await commentField.getAttribute('maxlength');
@@ -140,9 +124,7 @@ test.describe('Form Validation', () => {
       await expect(page.locator('form')).toBeVisible({ timeout: 10000 });
 
       // At least one rating option should exist
-      const ratingElements = page.locator(
-        '[data-testid^="rating-"], input[name="rating"], [class*="rating"], [class*="star"]'
-      );
+      const ratingElements = page.locator('[data-testid^="survey-rating-"]');
       const count = await ratingElements.count();
       expect(count).toBeGreaterThan(0);
     });
@@ -152,11 +134,7 @@ test.describe('Form Validation', () => {
     test('should have a large tap target button (at least 100px)', async ({ page }) => {
       await page.goto(`/forms/${TEST_EVENT_ID}?type=checkin`);
 
-      const tapButton = page
-        .locator(
-          '[data-testid="tap-button"], [data-testid="checkin-button"], button:has-text("tap"), button:has-text("check")'
-        )
-        .first();
+      const tapButton = page.locator('[data-testid="checkin-submit"]').first();
       await expect(tapButton).toBeVisible({ timeout: 10000 });
 
       const box = await tapButton.boundingBox();
@@ -181,7 +159,7 @@ test.describe('Form Validation', () => {
       // If a form renders, try to submit and expect an error
       const form = page.locator('form');
       if (await form.isVisible({ timeout: 5000 }).catch(() => false)) {
-        const nameInput = page.locator('input[name="name"], input[placeholder*="name" i]').first();
+        const nameInput = page.locator('[data-testid="register-name-input"]').first();
         if (await nameInput.isVisible()) {
           await nameInput.fill('Bogus Test');
         }
@@ -189,13 +167,13 @@ test.describe('Form Validation', () => {
 
         // Should show some kind of error, not a success
         const successVisible = await page
-          .locator('[data-testid="success-message"], text=success, text=thank')
+          .locator('[data-testid="form-success"]')
           .isVisible({ timeout: 5000 })
           .catch(() => false);
 
         // Either success is not shown, or an error message appears
         const errorVisible = await page
-          .locator('[data-testid="error-message"], [class*="error"], text=error, text=not found')
+          .locator('[data-testid="form-error"]')
           .isVisible({ timeout: 3000 })
           .catch(() => false);
 
@@ -228,19 +206,19 @@ test.describe('Form Validation', () => {
       await page.goto(`/forms/${TEST_EVENT_ID}?type=register`);
       await expect(page.locator('form')).toBeVisible({ timeout: 10000 });
 
-      const nameInput = page.locator('input[name="name"], input[placeholder*="name" i]').first();
+      const nameInput = page.locator('[data-testid="register-name-input"]').first();
       await nameInput.fill('Disabled Form Test');
 
       await page.locator('button[type="submit"], [data-testid="submit-button"]').first().click();
 
       // Should show an error state, not success
-      await expect(page.locator('[data-testid="success-message"], text=thank')).not.toBeVisible({
+      await expect(page.locator('[data-testid="form-success"]')).not.toBeVisible({
         timeout: 5000,
       });
 
       // Should show some error indication
       const errorVisible = await page
-        .locator('[data-testid="error-message"], [class*="error"], text=disabled, text=error')
+        .locator('[data-testid="form-error"]')
         .isVisible({ timeout: 5000 })
         .catch(() => false);
 

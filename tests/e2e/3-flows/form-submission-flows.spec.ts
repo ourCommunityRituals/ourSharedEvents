@@ -14,16 +14,12 @@ test.describe('Form Submission Flows', () => {
       await page.goto(`/forms/${TEST_EVENT_ID}?type=register`);
       await expect(page.locator('form')).toBeVisible({ timeout: 10000 });
 
-      const nameInput = page.locator('input[name="name"], input[placeholder*="name" i]').first();
+      const nameInput = page.locator('[data-testid="register-name-input"]').first();
       await nameInput.fill('E2E Test User');
       await page.locator('button[type="submit"], [data-testid="submit-button"]').first().click();
 
       // Wait for success indicator
-      await expect(
-        page.locator(
-          '[data-testid="success-message"], [class*="success"], text=success, text=thank'
-        )
-      ).toBeVisible({ timeout: 10000 });
+      await expect(page.locator('[data-testid="form-success"]')).toBeVisible({ timeout: 10000 });
     });
 
     test('should show success state after registration submission', async ({ page }) => {
@@ -31,15 +27,11 @@ test.describe('Form Submission Flows', () => {
       await page.goto(`/forms/${TEST_EVENT_ID}?type=register`);
       await expect(page.locator('form')).toBeVisible({ timeout: 10000 });
 
-      const nameInput = page.locator('input[name="name"], input[placeholder*="name" i]').first();
+      const nameInput = page.locator('[data-testid="register-name-input"]').first();
       await nameInput.fill(`E2E User ${timestamp}`);
       await page.locator('button[type="submit"], [data-testid="submit-button"]').first().click();
 
-      await expect(
-        page.locator(
-          '[data-testid="success-message"], [class*="success"], text=success, text=thank'
-        )
-      ).toBeVisible({ timeout: 10000 });
+      await expect(page.locator('[data-testid="form-success"]')).toBeVisible({ timeout: 10000 });
     });
   });
 
@@ -105,63 +97,39 @@ test.describe('Form Submission Flows', () => {
       await expect(page.locator('form')).toBeVisible({ timeout: 10000 });
 
       // Click rating 5 (could be stars, radio buttons, or numbered buttons)
-      const rating5 = page
-        .locator(
-          '[data-testid="rating-5"], [data-value="5"], input[value="5"], button:has-text("5")'
-        )
-        .first();
+      const rating5 = page.locator('[data-testid="survey-rating-5"]').first();
       if (await rating5.isVisible()) {
         await rating5.click();
       }
 
       // Fill comment
-      const commentField = page
-        .locator(
-          'textarea[name="comment"], textarea[name="comments"], textarea[placeholder*="comment" i], [data-testid="survey-comment"]'
-        )
-        .first();
+      const commentField = page.locator('[data-testid="survey-comments-input"]').first();
       if (await commentField.isVisible()) {
         await commentField.fill('Great event');
       }
 
       await page.locator('button[type="submit"], [data-testid="submit-button"]').first().click();
 
-      await expect(
-        page.locator(
-          '[data-testid="success-message"], [class*="success"], text=success, text=thank'
-        )
-      ).toBeVisible({ timeout: 10000 });
+      await expect(page.locator('[data-testid="form-success"]')).toBeVisible({ timeout: 10000 });
     });
 
     test('should show success after survey submission', async ({ page }) => {
       await page.goto(`/forms/${TEST_EVENT_ID}?type=survey`);
       await expect(page.locator('form')).toBeVisible({ timeout: 10000 });
 
-      const rating5 = page
-        .locator(
-          '[data-testid="rating-5"], [data-value="5"], input[value="5"], button:has-text("5")'
-        )
-        .first();
+      const rating5 = page.locator('[data-testid="survey-rating-5"]').first();
       if (await rating5.isVisible()) {
         await rating5.click();
       }
 
-      const commentField = page
-        .locator(
-          'textarea[name="comment"], textarea[name="comments"], textarea[placeholder*="comment" i]'
-        )
-        .first();
+      const commentField = page.locator('[data-testid="survey-comments-input"]').first();
       if (await commentField.isVisible()) {
         await commentField.fill(`E2E survey comment ${Date.now()}`);
       }
 
       await page.locator('button[type="submit"], [data-testid="submit-button"]').first().click();
 
-      await expect(
-        page.locator(
-          '[data-testid="success-message"], [class*="success"], text=success, text=thank'
-        )
-      ).toBeVisible({ timeout: 10000 });
+      await expect(page.locator('[data-testid="form-success"]')).toBeVisible({ timeout: 10000 });
     });
   });
 
@@ -183,11 +151,7 @@ test.describe('Form Submission Flows', () => {
 
       await page.locator('button[type="submit"], [data-testid="submit-button"]').first().click();
 
-      await expect(
-        page.locator(
-          '[data-testid="success-message"], [class*="success"], text=success, text=thank'
-        )
-      ).toBeVisible({ timeout: 10000 });
+      await expect(page.locator('[data-testid="form-success"]')).toBeVisible({ timeout: 10000 });
     });
 
     test('should show success state after email signup', async ({ page }) => {
@@ -202,11 +166,7 @@ test.describe('Form Submission Flows', () => {
 
       await page.locator('button[type="submit"], [data-testid="submit-button"]').first().click();
 
-      await expect(
-        page.locator(
-          '[data-testid="success-message"], [class*="success"], text=success, text=thank'
-        )
-      ).toBeVisible({ timeout: 10000 });
+      await expect(page.locator('[data-testid="form-success"]')).toBeVisible({ timeout: 10000 });
     });
   });
 });
