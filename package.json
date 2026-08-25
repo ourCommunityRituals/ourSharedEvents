@@ -9,6 +9,7 @@
     "test:coverage": "vitest run --coverage",
     "test:unit": "vitest run --dir tests/unit",
     "lint:embedded-js": "node scripts/lint-embedded-js.js",
+    "lint:testids": "node scripts/lint-testids.js",
     "test:infra": "vitest run tests/integration/infra-consistency.test.js",
     "test:services": "node scripts/test-services.js",
     "test:sdk": "node scripts/test-sdk.js",
