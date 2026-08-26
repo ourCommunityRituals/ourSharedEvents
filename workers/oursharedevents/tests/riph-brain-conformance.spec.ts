@@ -16,6 +16,7 @@
  * against the current code and goes green only once mock-data is reconciled.
  *
  * @born-red OSE-995 | method: brain-conformance + geo-realizability | date: 2026-08-24
+ * @brain-conformance 2 | invariant: hyperlocal_geo_resolution (demo geo-realizability facet, OSE-997)
  */
 
 import { describe, it, expect } from 'vitest';
@@ -28,12 +29,18 @@ import {
   getEventFixture,
 } from '../src/lib/mock-data';
 
-// ── Brain-declared truth (pulled from ocr-docs-brain/corridor-definitions.yaml) ──
+// ── Brain-declared truth ──
+// The AUTHORITATIVE source is the brain: ocr-docs-brain/corridor-definitions.yaml
+// → founding_corridors → blue_island (venue `riph`, geo.anchor_h3_res7, geo.bbox).
+// These constants MIRROR that declaration for a fast in-repo guard; the brain
+// owns them. Cross-repo, check_brain_contract.py:check_demo_geo_in_corridor
+// asserts the repo's RIPH_H3_RES7 equals the brain anchor (drift → red on a real
+// PR), so the values here can never silently diverge from the brain unnoticed.
 const BRAIN_VENUE_NAME = 'Rock Island Public House';
 const BRAIN_FORBIDDEN_NAME = 'Ridge-Irish-Prairie Hills';
-// Blue Island / Southwest-Chicago south corridor bounding box. Blue Island
-// (41.657,-87.680) and its adjacency (Beverly/EP/Oak Lawn) fall inside; anything
-// outside Chicagoland fails. The Colorado cell (37.85,-107.69) is ~1,500 km out.
+// Mirrors blue_island.geo.bbox. Blue Island (41.657,-87.680) and its adjacency
+// (Beverly/EP/Oak Lawn) fall inside; anything outside Chicagoland fails. The
+// Colorado cell (37.85,-107.69) is ~1,500 km out.
 const CORRIDOR_BBOX = { latMin: 41.4, latMax: 41.85, lonMin: -88.05, lonMax: -87.45 };
 
 function inCorridor(lat: number, lon: number): boolean {
