@@ -1054,35 +1054,14 @@
       .deact-confirm-lbl {
         font-size: 0.8rem;
       }
-      /* OSE-669 portfolio rollup strip. Role tokens (from @ocr/ui) with hex
-         fallbacks so it swaps with a brand and never hardcodes a palette. */
+      /* OSE-669 portfolio rollup strip. Design-system adoption (OSE-897 / Claude
+         Design port): the visual language now comes from the shared @ocr/ui
+         component vocabulary served at /ui.css — `.stats-row` (the scroll row),
+         `.stat-card` (each tile), `.stat-value` + `.stat-label`. No bespoke
+         palette or box CSS here anymore; test-ids + the set() JS are unchanged.
+         Only the top margin (not part of the shared component) is kept local. */
       .portfolio-rollup {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 1rem 1.75rem;
         margin: 0 0 1rem;
-        padding: 1rem 1.25rem;
-        background: var(--surface, #fff);
-        border: 1px solid var(--border, #e5e7eb);
-        border-radius: 8px;
-      }
-      .rollup-stat {
-        display: flex;
-        flex-direction: column;
-        min-width: 92px;
-      }
-      .rollup-num {
-        font-size: 1.5rem;
-        font-weight: 700;
-        line-height: 1.1;
-        color: var(--text, #1f2937);
-      }
-      .rollup-label {
-        font-size: 0.72rem;
-        font-weight: 600;
-        letter-spacing: 0.04em;
-        text-transform: uppercase;
-        color: var(--text-muted, #6b7280);
       }
 
       /* ── OSE-886: Event Dashboard card ───────────────────────────────────────
@@ -1782,26 +1761,26 @@
          K≥5 per contributing bucket; a sub-5 event never joins the sum. -->
       <section
         id="portfolio-rollup"
-        class="portfolio-rollup"
+        class="portfolio-rollup stats-row"
         data-testid="portfolio-rollup"
         aria-label="Portfolio totals across your brand's events"
         hidden
       >
-        <div class="rollup-stat" data-testid="rollup-events">
-          <span class="rollup-num" data-testid="rollup-events-num">—</span>
-          <span class="rollup-label">Events</span>
+        <div class="rollup-stat stat-card" data-testid="rollup-events">
+          <span class="rollup-num stat-value" data-testid="rollup-events-num">—</span>
+          <span class="rollup-label stat-label">Events</span>
         </div>
-        <div class="rollup-stat" data-testid="rollup-registrations">
-          <span class="rollup-num" data-testid="rollup-registrations-num">—</span>
-          <span class="rollup-label">Registered</span>
+        <div class="rollup-stat stat-card" data-testid="rollup-registrations">
+          <span class="rollup-num stat-value" data-testid="rollup-registrations-num">—</span>
+          <span class="rollup-label stat-label">Registered</span>
         </div>
-        <div class="rollup-stat" data-testid="rollup-checkins">
-          <span class="rollup-num" data-testid="rollup-checkins-num">—</span>
-          <span class="rollup-label">Checked in</span>
+        <div class="rollup-stat stat-card" data-testid="rollup-checkins">
+          <span class="rollup-num stat-value" data-testid="rollup-checkins-num">—</span>
+          <span class="rollup-label stat-label">Checked in</span>
         </div>
-        <div class="rollup-stat" data-testid="rollup-sponsors">
-          <span class="rollup-num" data-testid="rollup-sponsors-num">—</span>
-          <span class="rollup-label">Active sponsors</span>
+        <div class="rollup-stat stat-card" data-testid="rollup-sponsors">
+          <span class="rollup-num stat-value" data-testid="rollup-sponsors-num">—</span>
+          <span class="rollup-label stat-label">Active sponsors</span>
         </div>
       </section>
 
