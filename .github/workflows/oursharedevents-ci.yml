@@ -151,7 +151,7 @@ jobs:
   # ============================================================================
   security:
     name: 'S0 Security'
-    runs-on: self-hosted
+    runs-on: ubuntu-latest   # OSE-1017: managed runner (self-hosted Smart App Control blocks unsigned semgrep.exe)
     permissions:
       security-events: write
       contents: read
@@ -224,23 +224,14 @@ jobs:
 
       - name: Semgrep SAST
         run: |
-          # OSE-919: repair a drifted runner pip BEFORE installing semgrep. A cached
-          # tool-Python whose pip regressed (26.0.x/26.1.x resolvelib bug) crashes
-          # INSIDE pip on `pip install semgrep` — that is infra, NOT a finding. Upgrade
-          # pip to a resolver-working floor first; an install failure is flagged as
-          # infra (::error + exit 1) so it is never read as a clean pass or a finding.
-          python -m pip install --upgrade "pip>=26.2.1" --quiet \
-            || { echo "::error::pip self-upgrade failed (OSE-919 runner tool-Python corruption) — infra, not a security finding"; exit 1; }
-          python -m pip install semgrep --quiet \
-            || { echo "::error::semgrep install failed (infra: runner pip/tool-Python, see OSE-919) — not a security finding"; exit 1; }
-          # setup-python installs the semgrep console binary into
-          # <pythonLocation>/Scripts and exports pythonLocation. Put that dir on PATH
-          # (APPENDED, so Git Bash stays first — respects #11) via cygpath so the
-          # binary resolves even when the runner's canonical Git-Bash-first .env omits
-          # it (the bare-`semgrep` exit-127 on BLOODRAVEN-2). NOT `python -m semgrep`:
-          # deprecated since 1.38.0, exits 2 without scanning. Loud pre-flight =>
-          # tool-unavailability fails traceably (#24), never swallowed green.
-          if [ -n "${pythonLocation:-}" ]; then export PATH="$PATH:$(cygpath -u "$pythonLocation")/Scripts"; fi
+          # OSE-1017: managed ubuntu runner. Fresh setup-python + pip, semgrep lands
+          # on PATH directly — no cygpath/Scripts dance and no OSE-919 pip-repair
+          # (those were self-hosted tool-Python drift workarounds, moot on ephemeral
+          # runners). Pin per OSE-1016 so a bad upstream release can't crash the gate
+          # (exit 2 TypeError). An install failure is flagged infra (::error + exit 1),
+          # never read as a clean pass or a finding.
+          python -m pip install "semgrep==1.163.0" --quiet \
+            || { echo "::error::semgrep install failed (infra) — not a security finding"; exit 1; }
           semgrep --version || { echo "::error::semgrep unavailable on runner"; exit 1; }
           semgrep scan \
             --config=p/nodejs \
@@ -1887,6 +1878,26 @@ jobs:
           npm ci --ignore-scripts --prefer-offline || npm ci --ignore-scripts
           echo "- **npm ci --ignore-scripts:** succeeded" >> $GITHUB_STEP_SUMMARY
 
+  # ─────────────────────────────────────────────────────────────────────────
+  # S2b: Post-execution SAST re-scan on a MANAGED runner (OSE-1017).
+  # The self-hosted `security-post` job above has already proven (git integrity
+  # checks) that no tracked source was mutated and no file injected during the
+  # execution phase. This job therefore checks out the same immutable SHA on
+  # ubuntu — byte-identical to the legitimate committed source — and runs the
+  # semgrep + detect-secrets re-scan there, where Smart App Control can't block
+  # the unsigned semgrep binary. The workspace-coupled integrity asserts stay on
+  # self-hosted; only the scanners (which need no persistent workspace) move.
+  # NOTE: add this job to branch protection to make it a required gate.
+  # ─────────────────────────────────────────────────────────────────────────
+  security-post-scan:
+    name: 'S2 Post-Execution SAST (managed)'
+    runs-on: ubuntu-latest
+    needs: [security-post]
+    if: needs.security-post.result == 'success'
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
         with:
           python-version: '3.11'
@@ -1894,16 +1905,9 @@ jobs:
       - name: 'Semgrep re-scan (post-execution)'
         shell: bash
         run: |
-          # Normalized to `python` (was python3) so install-site == run-site.
-          # Scripts-on-PATH via cygpath — mirrors S0 (do NOT use `python -m semgrep`:
-          # deprecated, exits 2). See the S0 note for the #11 rationale.
-          # OSE-919: repair a drifted runner pip BEFORE installing semgrep (see S0) so a
-          # regressed tool-Python pip can't crash the required S2 gate as fake "failure".
-          python -m pip install --upgrade "pip>=26.2.1" --quiet \
-            || { echo "::error::pip self-upgrade failed (OSE-919 runner tool-Python corruption) — infra, not a security finding"; exit 1; }
-          python -m pip install semgrep --quiet \
-            || { echo "::error::semgrep install failed (infra: runner pip/tool-Python, see OSE-919) — not a security finding"; exit 1; }
-          if [ -n "${pythonLocation:-}" ]; then export PATH="$PATH:$(cygpath -u "$pythonLocation")/Scripts"; fi
+          # Pin per OSE-1016; clean managed-runner install (no cygpath / pip-repair).
+          python -m pip install "semgrep==1.163.0" --quiet \
+            || { echo "::error::semgrep install failed (infra) — not a security finding"; exit 1; }
           semgrep --version || { echo "::error::semgrep unavailable on runner"; exit 1; }
           semgrep scan \
             --config=p/nodejs \
@@ -1920,11 +1924,8 @@ jobs:
           echo "- **Semgrep (post-execution):** $FINDING_COUNT findings" >> $GITHUB_STEP_SUMMARY
           exit ${SEMGREP_EXIT:-0}
 
-      # Post-execution committed-secret re-scan (OSE-911). Replaces the gitleaks
-      # re-scan (its go-re2/wazero WASM-JIT panicked on the Windows runners). Same
-      # enforcing detect-secrets gate as S0: fails only on a secret not present in
-      # the committed .secrets.baseline — catching anything a build/test step may
-      # have written into the tree.
+      # Post-execution committed-secret re-scan (OSE-911). Enforcing detect-secrets
+      # gate: fails only on a secret not present in the committed .secrets.baseline.
       - name: 'detect-secrets re-scan (post-execution)'
         shell: bash
         run: |
@@ -1934,7 +1935,7 @@ jobs:
   summary:
     name: 'Pipeline Summary'
     runs-on: self-hosted
-    needs: [security, gate, deploy-staging, smoke-staging, contract-staging, functional-staging, deploy-production, smoke-production, security-post]
+    needs: [security, gate, deploy-staging, smoke-staging, contract-staging, functional-staging, deploy-production, smoke-production, security-post, security-post-scan]
     if: always()
     steps:
       - name: Summary
