@@ -231,7 +231,7 @@ jobs:
           # infra (::error + exit 1) so it is never read as a clean pass or a finding.
           python -m pip install --upgrade "pip>=26.2.1" --quiet \
             || { echo "::error::pip self-upgrade failed (OSE-919 runner tool-Python corruption) — infra, not a security finding"; exit 1; }
-          python -m pip install semgrep --quiet \
+          python -m pip install "semgrep==1.163.0" --quiet \
             || { echo "::error::semgrep install failed (infra: runner pip/tool-Python, see OSE-919) — not a security finding"; exit 1; }
           # setup-python installs the semgrep console binary into
           # <pythonLocation>/Scripts and exports pythonLocation. Put that dir on PATH
@@ -1901,7 +1901,7 @@ jobs:
           # regressed tool-Python pip can't crash the required S2 gate as fake "failure".
           python -m pip install --upgrade "pip>=26.2.1" --quiet \
             || { echo "::error::pip self-upgrade failed (OSE-919 runner tool-Python corruption) — infra, not a security finding"; exit 1; }
-          python -m pip install semgrep --quiet \
+          python -m pip install "semgrep==1.163.0" --quiet \
             || { echo "::error::semgrep install failed (infra: runner pip/tool-Python, see OSE-919) — not a security finding"; exit 1; }
           if [ -n "${pythonLocation:-}" ]; then export PATH="$PATH:$(cygpath -u "$pythonLocation")/Scripts"; fi
           semgrep --version || { echo "::error::semgrep unavailable on runner"; exit 1; }
