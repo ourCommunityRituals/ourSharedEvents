@@ -305,8 +305,9 @@
   ],
   "author": "Zeventbooks",
   "license": "MIT",
+  "_ocrFlagsConsumption": "OSE-1030: @ocr/flags is an npm ALIAS for @ourcommunityrituals/flags on GitHub Packages (see .npmrc), NOT a file: link. Why the two names: GitHub Packages requires scope==org login, so it publishes as @ourcommunityrituals/flags; the alias preserves the @ocr/flags import name (Invariant #22) and ships byte-identical source (published from the same packages/flags tree). ONLY flags is migrated — it is the sole SBOM `npm ls` ELSPROBLEMS breaker on ephemeral ubuntu. @ocr/ui + @ocr/data-provider intentionally REMAIN file: (react/ui is not the breaker; migrating them is a separate follow-up). Do not re-litigate.",
   "dependencies": {
-    "@ocr/flags": "file:../packages/flags"
+    "@ocr/flags": "npm:@ourcommunityrituals/flags@0.1.0"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260702.1",

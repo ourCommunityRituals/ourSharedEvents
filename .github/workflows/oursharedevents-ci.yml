@@ -140,6 +140,12 @@ env:
   STG_BASE_URL: 'https://stg.oursharedevents.com'
   PROD_BASE_URL: 'https://oursharedevents.com'
   WORKER_DIR: 'workers/oursharedevents'
+  # OSE-1030: every job's `npm ci` now resolves @ocr/flags from GitHub Packages
+  # (npm alias → @ourcommunityrituals/flags; see repo-root .npmrc). Set the auth
+  # token once here so all install steps inherit it. The GITHUB_TOKEN default is
+  # `read` (includes packages:read); jobs with a restrictive permissions block
+  # add `packages: read` explicitly.
+  NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
 defaults:
   run:
@@ -156,6 +162,7 @@ jobs:
       security-events: write
       contents: read
       actions: read
+      packages: read   # OSE-1030: resolve @ocr/flags from GitHub Packages via NODE_AUTH_TOKEN
     steps:
       - uses: actions/checkout@v7
         with:
@@ -164,7 +171,10 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Stage adjacent @ocr/flags package
+      # OSE-1030: this stages @ocr/UI only now (still file:). @ocr/flags moved to
+      # GitHub Packages (see repo-root .npmrc) so it no longer needs staging; the
+      # step is retained until ui/data-provider migrate too (follow-up).
+      - name: Stage adjacent @ocr/ui package
         shell: bash
         continue-on-error: true
         timeout-minutes: 2
@@ -174,34 +184,16 @@ jobs:
 
       - name: Install dependencies
         run: |
+          # OSE-1030: the old flags-devDeps self-heal is gone — @ocr/flags is now a
+          # normal registry package (not a file: link mutated by a later SBOM strip),
+          # so node_modules is never mutated mid-job and `npm ls`/`npm audit` see a
+          # clean tree. Ephemeral ubuntu never persists node_modules, so the stamp is
+          # a no-op here; it's kept for parity with the self-hosted shards below.
           HASH="$(node --version)-$(git hash-object package-lock.json)"
           STAMP=node_modules/.install-stamp
-          FLAGS_NM=node_modules/@ocr/flags/package.json
-          # The install-stamp lets us skip `npm ci` when package-lock.json is
-          # unchanged. But the "Fix @ocr/flags for SBOM resolution" step later
-          # in THIS job destructively strips devDependencies from @ocr/flags
-          # IN PLACE, and self-hosted runners persist node_modules between
-          # runs. The lockfile hash doesn't change when only @ocr/flags is
-          # mutated, so a naive stamp-skip would let `npm audit` run against
-          # the mutated tree — the npm registry then rejects the submitted
-          # tree with `400 Bad Request — Invalid package tree`.
-          #
-          # SELF-HEALING GUARD: the stamp is only trustworthy if @ocr/flags
-          # in node_modules still carries its devDependencies. If they're gone
-          # (SBOM step already ran on this runner) or the file is unparseable,
-          # node_modules is mutated → force a fresh `npm ci`. This recovers on
-          # the very next run with no force_clean dispatch needed, and catches
-          # corruption from ANY source, not just the known SBOM step.
-          flags_mutated=false
-          if [ -f "$FLAGS_NM" ]; then
-            node -e "const p=JSON.parse(require('fs').readFileSync('$FLAGS_NM','utf8'));process.exit(p.devDependencies?0:1)" 2>/dev/null || flags_mutated=true
-          fi
-          if [ '${{ inputs.force_clean }}' != 'true' ] && [ "$flags_mutated" = 'false' ] && [ -f "$STAMP" ] && [ "$(cat $STAMP)" = "$HASH" ] && [ -f "node_modules/.package-lock.json" ]; then
+          if [ '${{ inputs.force_clean }}' != 'true' ] && [ -f "$STAMP" ] && [ "$(cat $STAMP)" = "$HASH" ] && [ -f "node_modules/.package-lock.json" ]; then
             echo "node_modules up-to-date, skipping npm ci"
           else
-            if [ "$flags_mutated" = 'true' ]; then
-              echo "node_modules/@ocr/flags is mutated (devDependencies stripped by a prior SBOM run) — forcing fresh npm ci"
-            fi
             npm ci --prefer-offline || npm ci
             echo "$HASH" > "$STAMP"
           fi
@@ -265,36 +257,12 @@ jobs:
       - name: npm audit
         run: npm audit --omit=dev --audit-level=moderate
 
-      # file:-linked @ocr/flags exposes its devDependencies to npm ls --all,
-      # causing CycloneDX to fail. Strip them from the installed copy so SBOM
-      # only inventories production dependencies.
-      #
-      # IMPORTANT — this step destructively mutates node_modules. Two guards
-      # keep `npm audit` from later submitting the mutated tree to the npm
-      # registry (which rejects it with `400 — Invalid package tree`):
-      #   1. PRIMARY (self-healing): the Install Dependencies step above
-      #      detects a stripped @ocr/flags and forces a fresh `npm ci`
-      #      regardless of the install-stamp. See its comment block.
-      #   2. BELT-AND-SUSPENDERS (this step): invalidate the install-stamp
-      #      here so the stamp-hash path ALSO reinstalls next run, even if
-      #      the primary detection is ever broken.
-      # Diagnosed via workflow_dispatch force_clean=true (run 26111985672 =
-      # success vs run 26110784159 same SHA = failure).
-      - name: Fix @ocr/flags for SBOM resolution
-        run: |
-          FLAGS_PKG="node_modules/@ocr/flags/package.json"
-          if [ -f "$FLAGS_PKG" ]; then
-            node -e "
-              const fs = require('fs');
-              const pkg = JSON.parse(fs.readFileSync('$FLAGS_PKG'));
-              delete pkg.devDependencies;
-              fs.writeFileSync('$FLAGS_PKG', JSON.stringify(pkg, null, 2));
-            "
-          fi
-          # Belt-and-suspenders — invalidate install stamp; node_modules is no
-          # longer pristine after the @ocr/flags mutation above.
-          rm -f node_modules/.install-stamp
-
+      # OSE-1030: the "Fix @ocr/flags for SBOM resolution" step was DELETED here.
+      # It existed only because @ocr/flags was a file: link whose devDependencies
+      # tripped `npm ls --all` (ELSPROBLEMS) — it destructively stripped them in
+      # place, which then required the install-stamp self-heal above. @ocr/flags is
+      # now a normal GitHub Packages dependency with a clean dep tree, so CycloneDX
+      # walks it without help and nothing mutates node_modules. Do not reintroduce.
       - name: Generate SBOM
         run: |
           npx @cyclonedx/cyclonedx-npm --omit dev --output-file sbom.json --output-format JSON --spec-version 1.5
@@ -1283,6 +1251,7 @@ jobs:
     permissions:
       contents: read
       checks: write
+      packages: read   # OSE-1030: resolve @ocr/flags from GitHub Packages
 
     steps:
       - uses: actions/checkout@v7
@@ -1832,6 +1801,7 @@ jobs:
     permissions:
       contents: read
       actions: read
+      packages: read   # OSE-1030: resolve @ocr/flags from GitHub Packages
     steps:
       - uses: actions/checkout@v7
         with:

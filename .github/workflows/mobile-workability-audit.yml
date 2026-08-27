@@ -48,6 +48,11 @@ permissions:
   contents: read
   pull-requests: write
   issues: write
+  packages: read   # OSE-1030: @ocr/flags now resolves from GitHub Packages
+
+env:
+  # OSE-1030: npm ci resolves @ocr/flags from GitHub Packages (see repo-root .npmrc).
+  NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
 defaults:
   run:

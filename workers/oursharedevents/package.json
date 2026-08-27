@@ -16,9 +16,10 @@
     "test:all": "vitest run",
     "test:a11y": "vitest run --config vitest.config.a11y.mts"
   },
+  "_ocrFlagsConsumption": "OSE-1030: @ocr/flags is an npm alias for @ourcommunityrituals/flags (GitHub Packages), NOT a file: link — see repo-root package.json _ocrFlagsConsumption + .npmrc for the full rationale. @ocr/ui + @ocr/data-provider intentionally stay file:.",
   "dependencies": {
     "@ocr/data-provider": "file:../../packages/data-provider",
-    "@ocr/flags": "file:../../packages/flags",
+    "@ocr/flags": "npm:@ourcommunityrituals/flags@0.1.0",
     "@ocr/ui": "file:../../packages/ui",
     "h3-js": "^4.5.0"
   },
