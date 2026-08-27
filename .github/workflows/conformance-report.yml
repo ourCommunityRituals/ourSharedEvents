@@ -45,13 +45,27 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'   # generator runs via `node --experimental-strip-types` (needs >=22.6); Node 20 errors `bad option` — OSE-1031
           cache: 'npm'
           cache-dependency-path: workers/oursharedevents/package-lock.json
 
       - name: Install dependencies
         working-directory: workers/oursharedevents
         run: npm ci
+
+      # Checkout the brain AFTER npm ci — the OCR_PROPAGATE_TOKEN has org-write scope, so it
+      # must never be present in git config while untrusted dependency postinstall scripts run
+      # (supply-chain exfil surface). persist-credentials:false so it isn't left behind either.
+      # OSE-1031 — this checkout was missing entirely; the generator was silently falling back
+      # to a stale 24-entry inline registry, so the report could never report the canonical 25.
+      - name: Checkout OCR-docs brain (read-only)
+        uses: actions/checkout@v4
+        with:
+          repository: ourCommunityRituals/OCR-docs
+          path: OCR-docs
+          ref: main
+          token: ${{ secrets.OCR_PROPAGATE_TOKEN }}
+          persist-credentials: false
 
       - name: Generate conformance report
         working-directory: workers/oursharedevents
@@ -61,6 +75,10 @@ jobs:
           GITHUB_REPOSITORY: ${{ github.repository }}
           GITHUB_RUN_ID: ${{ github.run_id }}
         run: |
+          # Fail loud if the brain isn't present — never silently regenerate from the inline
+          # fallback registry (that silent fallback is exactly how the count drifted to 24). OSE-1031.
+          test -f ../../OCR-docs/ocr-docs-brain/architectural-invariants.yaml \
+            || { echo "::error::OCR-docs brain not checked out — refusing to generate from the stale inline fallback"; exit 1; }
           node --experimental-strip-types scripts/generate-conformance-report.ts \
             --invariants-yaml "../../OCR-docs/ocr-docs-brain/architectural-invariants.yaml" \
             --test-dir tests \
