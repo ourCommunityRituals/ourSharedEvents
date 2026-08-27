@@ -1013,6 +1013,9 @@ async function fetchEventPageSocialData(
                FROM sponsor_placement sp
                JOIN sponsor_business sb ON sb.id = sp.sponsor_business_id
               WHERE sp.event_id = ? AND sp.is_active = 1
+                AND sb.is_active = 1
+                AND COALESCE(sp.organizer_accepted, 1) = 1
+                AND COALESCE(sp.sponsor_accepted, 1) = 1
               ORDER BY sb.id ASC`
           )
             .bind(eventId)

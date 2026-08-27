@@ -151,7 +151,9 @@ export async function handleAdminListSponsors(
   const cols = `sb.id AS id, sp.event_id AS event_id, sb.name AS name,
                 la.url AS logo_url, sb.website_url AS website_url, sp.tier AS tier,
                 '[]' AS placement_formats, sp.click_token AS click_token,
-                sp.display_token AS display_token, sp.is_active AS is_active,
+                sp.display_token AS display_token, sb.is_active AS is_active,
+                sp.organizer_accepted AS organizer_accepted,
+                sp.sponsor_accepted AS sponsor_accepted,
                 sp.created_at AS created_at, sp.updated_at AS updated_at`;
   const from = `sponsor_placement sp
                 JOIN sponsor_business sb ON sb.id = sp.sponsor_business_id
@@ -771,9 +773,14 @@ export async function handleAdminDeleteSponsor(
       .first<{ id: string }>();
     if (!business) return errorResponse('NOT_FOUND', `Sponsor not found: ${sponsorId}`, 404, rid);
 
-    await env.DB.prepare(
-      `UPDATE sponsor_placement SET is_active = 0, updated_at = ? WHERE sponsor_business_id = ?`
-    )
+    // OSE-0068: soft-delete the BUSINESS, not its placements. The previous
+    // cascade (`UPDATE sponsor_placement SET is_active = 0 WHERE
+    // sponsor_business_id = ?`) left sponsor_business untouched, so Path 2
+    // (template+geo) kept re-surfacing the deleted business on every matching
+    // event — it joins sponsor_business and had no business-level flag to
+    // check — and any new placement resurrected it on Path 1. One flag on one
+    // row, read at join time by both resolver paths.
+    await env.DB.prepare(`UPDATE sponsor_business SET is_active = 0, updated_at = ? WHERE id = ?`)
       .bind(new Date().toISOString(), sponsorId)
       .run();
 
