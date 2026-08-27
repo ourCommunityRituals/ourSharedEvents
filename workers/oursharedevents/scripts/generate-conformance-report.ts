@@ -29,7 +29,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as process from 'node:process';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { THREAT_LEDGER } from '../tests/fixtures/threat-ledger.ts';
 import type { ThreatEntry } from '../tests/fixtures/threat-ledger.ts';
 
@@ -63,8 +63,15 @@ interface InvariantEntry {
   test_file?: string;
 }
 
-/** Inline fallback registry — overridden field-by-field when YAML is parsed. */
-const INLINE_INVARIANTS: InvariantEntry[] = [
+/**
+ * Inline fallback registry — the bootstrap base. When the brain YAML is provided,
+ * `buildInvariantRegistry` enriches these field-by-field AND adds any higher ids
+ * (e.g. #25) the brain declares. Exported for OSE-1031 unit tests. NOTE: this is a
+ * BOOTSTRAP base, not the source of truth — it deliberately stops at #24; the brain
+ * owns the canonical count. A CI run that falls back to this alone (no brain) is a
+ * defect the workflow now fails loud on.
+ */
+export const INLINE_INVARIANTS: InvariantEntry[] = [
   {
     id: 1,
     name: 'anonymous_id',
@@ -238,7 +245,7 @@ const INLINE_INVARIANTS: InvariantEntry[] = [
 // ─── Simple line-by-line YAML parser for architectural-invariants.yaml ────────
 // Not a general parser — handles the specific schema_version 1.2.0 format.
 
-function parseInvariantsYaml(yamlContent: string): InvariantEntry[] {
+export function parseInvariantsYaml(yamlContent: string): InvariantEntry[] {
   const entries: InvariantEntry[] = [];
   const lines = yamlContent.split('\n');
   let inInvariantsBlock = false;
@@ -370,7 +377,7 @@ function parseInvariantsYaml(yamlContent: string): InvariantEntry[] {
 }
 
 /** Merge YAML entries into the inline registry, enriching where available. */
-function buildInvariantRegistry(yamlEntries: InvariantEntry[]): Map<number, InvariantEntry> {
+export function buildInvariantRegistry(yamlEntries: InvariantEntry[]): Map<number, InvariantEntry> {
   const registry = new Map<number, InvariantEntry>();
   for (const inv of INLINE_INVARIANTS) registry.set(inv.id, { ...inv });
   for (const yamlEntry of yamlEntries) {
@@ -789,7 +796,12 @@ async function main() {
   );
 }
 
-main().catch((err) => {
-  console.error('Fatal:', err);
-  process.exit(1);
-});
+// Main-guard: run the report only when invoked directly as a script, NOT when this
+// module is imported by a unit test (which would otherwise trigger the full file-writing
+// run). This is what makes the pure functions above importable + testable. OSE-1031.
+if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
+  main().catch((err) => {
+    console.error('Fatal:', err);
+    process.exit(1);
+  });
+}
