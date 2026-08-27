@@ -57,6 +57,7 @@ const EXPECTED_INDEXES = [
   // Split sponsor identity (migration 0065-0067 — OSE-799 A2): idx_sponsors_* retired
   'idx_sponsor_business_brand',
   'idx_sponsor_business_h3_res7',
+  'idx_sponsor_business_active', // 0068
   'idx_sponsor_asset_business',
   'idx_sponsor_placement_event',
   'idx_sponsor_placement_business',
@@ -129,14 +130,14 @@ const EXPECTED_COLUMN_COUNTS: Record<string, number> = {
   // OSE-799 A2 (0065-0067): `sponsors` (32) retired → split into three tables.
   // sponsor_business: id, brand_id, name, website_url, business_type, lat, lon,
   //   h3_res9, h3_res7, created_at, updated_at = 11.
-  sponsor_business: 11,
+  sponsor_business: 12, // +is_active (0068 — lifecycle lives on the business)
   // sponsor_asset: id, sponsor_business_id, format, url, content_type, focal_x,
   //   focal_y, crop_rect, validated_at, created_at, updated_at = 11.
   sponsor_asset: 11,
   // sponsor_placement: id, sponsor_business_id, event_id, tier, campaign_id, source,
   //   polarity, locality_band, click_token, display_token, is_active, created_at,
   //   updated_at = 13.
-  sponsor_placement: 13,
+  sponsor_placement: 15, // +organizer_accepted, +sponsor_accepted (0068 — two-sided acceptance)
   // poster_deployments: 10 (pre-0047) + 2 (migration 0047: h3_res9, h3_res7,
   // OSE poster geo-tagging — res9 Node precision for physical placement attribution) = 12.
   poster_deployments: 12,
@@ -323,7 +324,7 @@ describe('Gate 5: Index verification', () => {
     ).all();
 
     const names = indexes.results.map((r: Record<string, unknown>) => r.name);
-    expect(names.length).toBe(66);
+    expect(names.length).toBe(67); // 0068 adds idx_sponsor_business_active
     EXPECTED_INDEXES.forEach((idx) => expect(names).toContain(idx));
   });
 });

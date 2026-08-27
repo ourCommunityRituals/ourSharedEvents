@@ -31,7 +31,9 @@
 -- Invariant compliance:
 --   #19 migration_monotonicity: > 0067, matches /^\d{4}_.*\.sql$/, append-only,
 --       no destructive drop. Metadata-only ADD COLUMN (defaulted / nullable),
---       zero backfill, zero row rewrite. NOT count-gated (no new table/index).
+--       zero backfill, zero row rewrite. COUNT-GATED: adds one index
+--       (idx_sponsor_business_active) and three columns; schema.spec.ts gates
+--       bumped in the same change (66->67 indexes, 11->12 / 13->15 columns).
 --   #9  tenant_isolation: sponsor_business.is_active is read alongside the
 --       existing brand_id scoping, never in place of it.
 --   #25 sponsor_share_covenant: acceptance is an admit/deny boolean only. No
