@@ -756,10 +756,11 @@ export async function handleAdminDeleteSponsor(
   if (!env.DB) return errorResponse('DB_NOT_CONFIGURED', 'Database not available', 503, rid);
 
   // OSE-799 A2 (#9): verify the business is inside the caller's brand scope, then
-  // soft-delete by DEACTIVATING its placement(s) — the durable identity stays
-  // (rule 7: a sponsor is borrowed, not owned by one event; other events may still
-  // reference the same business). A forged/cross-tenant (or anon/unmapped) id is
-  // unreachable → NOT_FOUND, indistinguishable from a non-existent id.
+  // OSE-0068: soft-delete by DEACTIVATING the sponsor_business row itself — the
+  // durable identity stays (rule 7: a sponsor is borrowed, not owned by one event;
+  // other events may still reference the same business), but the one business-level
+  // flag is what both resolver paths read at join time. A forged/cross-tenant (or
+  // anon/unmapped) id is unreachable → NOT_FOUND, indistinguishable from non-existent.
   const scope = await resolvePerIdSponsorScope(request, env);
   if (!scope.reachable)
     return errorResponse('NOT_FOUND', `Sponsor not found: ${sponsorId}`, 404, rid);
