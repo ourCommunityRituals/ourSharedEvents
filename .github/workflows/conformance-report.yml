@@ -34,7 +34,9 @@ jobs:
     name: Generate conformance report
     runs-on: ubuntu-latest
     permissions:
-      contents: write    # to commit CONFORMANCE.md back to main
+      contents: read     # OSE-1031: report writes flow through a PR opened with
+                         # OCR_PROPAGATE_TOKEN (a PAT), never a direct push to protected main —
+                         # the default GITHUB_TOKEN needs no write scope here.
 
     steps:
       - name: Checkout
@@ -95,18 +97,39 @@ jobs:
           fi
           echo "Gap count: $(grep -c '❌ Gap' docs/security/CONFORMANCE.md || echo 0)"
 
-      - name: Commit report
+      - name: Open/update the conformance-refresh PR
+        # OSE-1031 layer 3: the report cannot be pushed directly to protected `main`
+        # (branch protection rejects the bot push — GH006). Instead open a PR from a stable
+        # branch so the refresh flows through the required checks like any change. Opened with
+        # OCR_PROPAGATE_TOKEN (a PAT) — a PR opened by the default GITHUB_TOKEN triggers NO
+        # checks and could therefore never merge. Human/CODEOWNERS merges it; the bot does not
+        # self-approve. The token is used only here (well after `npm ci`) and inline in the
+        # push URL, never persisted to git config.
         if: ${{ github.event.inputs.dry_run != 'true' && github.ref == 'refs/heads/main' }}
+        env:
+          GH_TOKEN: ${{ secrets.OCR_PROPAGATE_TOKEN }}
         run: |
+          set -euo pipefail
+          RPT=workers/oursharedevents/docs/security
+          if git diff --quiet -- "$RPT/CONFORMANCE.md" "$RPT/conformance.json"; then
+            echo "Conformance report unchanged — no refresh PR needed."
+            exit 0
+          fi
+          BRANCH=chore/conformance-refresh
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add workers/oursharedevents/docs/security/CONFORMANCE.md
-          git add workers/oursharedevents/docs/security/conformance.json
-          if git diff --cached --quiet; then
-            echo "No changes to conformance report."
+          # Create-or-update: reset the stable branch to this main commit + the fresh report,
+          # so scheduled runs update ONE PR instead of spawning a new one every week.
+          git checkout -B "$BRANCH"
+          git add "$RPT/CONFORMANCE.md" "$RPT/conformance.json"
+          git commit -m "chore: regenerate conformance report (OSE-560)"
+          git push --force "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "$BRANCH"
+          if [ -z "$(gh pr list --head "$BRANCH" --state open --json number --jq '.[0].number' 2>/dev/null)" ]; then
+            gh pr create --base main --head "$BRANCH" \
+              --title "chore: regenerate conformance report (OSE-560)" \
+              --body "Automated conformance-meter refresh — generated, never hand-written. Review the coverage diff and merge; this is how the meter stays current without a direct push to protected \`main\` (OSE-1031). Human/CODEOWNERS merge — the bot does not self-approve."
           else
-            git commit -m "chore: regenerate conformance report [skip ci]"
-            git push
+            echo "Refresh PR already open for $BRANCH — updated in place by the force-push."
           fi
 
       - name: Upload report as artifact
