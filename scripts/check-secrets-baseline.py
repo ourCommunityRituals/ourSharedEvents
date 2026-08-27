@@ -21,7 +21,8 @@ To accept a genuinely-new-but-false-positive detection, re-baseline:
     python -m detect_secrets scan \
       --exclude-files 'package-lock\\.json' --exclude-files '\\.gitleaks\\.toml' \
       --exclude-files '.*\\.spec\\.ts' --exclude-files 'vitest\\.config.*' \
-      --exclude-files '\\.secrets\\.baseline' > .secrets.baseline
+      --exclude-files '\\.secrets\\.baseline' --exclude-files '^archive[\\\\/]' \
+      > .secrets.baseline
 
 and commit the updated .secrets.baseline (review the diff first).
 """
@@ -33,12 +34,18 @@ import sys
 BASELINE = os.environ.get("SECRETS_BASELINE", ".secrets.baseline")
 
 # Kept in lockstep with the re-baseline command in this module's docstring.
+# archive/ holds retired legacy code + analysis reports (GAS, v2 docs, legacy
+# tests full of mock/fake keys) — not a deployed credential-leak surface, so it
+# is excluded from the secret gate (OSE-1018). The pattern matches both path
+# separators so it excludes on Linux CI (archive/) and a Windows re-baseline
+# (archive\) alike.
 EXCLUDES = [
     r"package-lock\.json",
     r"\.gitleaks\.toml",
     r".*\.spec\.ts",
     r"vitest\.config.*",
     r"\.secrets\.baseline",
+    r"^archive[\\/]",
 ]
 
 
