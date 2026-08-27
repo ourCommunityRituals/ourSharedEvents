@@ -211,9 +211,10 @@ describe('OSE-710 / INVARIANT #9 — per-ID sponsor DELETE is brand-scoped (cros
       'sp-B1'
     );
     expect(res.status).toBe(404);
-    const row = await env.DB.prepare(
-      'SELECT is_active FROM sponsor_placement WHERE sponsor_business_id = ?'
-    )
+    // OSE-0068: deletion now soft-deletes the BUSINESS row, not its placements
+    // (sponsor_placement.is_active is legacy). A cross-tenant reject leaves the
+    // brand-B business active.
+    const row = await env.DB.prepare('SELECT is_active FROM sponsor_business WHERE id = ?')
       .bind('sp-B1')
       .first<{ is_active: number }>();
     expect(row?.is_active).toBe(1);
@@ -222,9 +223,9 @@ describe('OSE-710 / INVARIANT #9 — per-ID sponsor DELETE is brand-scoped (cros
   test('unauthenticated caller CANNOT delete any sponsor (fail-closed, row stays active)', async () => {
     const res = await handleAdminDeleteSponsor(reqAnon('DELETE'), sponsorsEnv, 'sp-A1');
     expect(res.status).toBe(404);
-    const row = await env.DB.prepare(
-      'SELECT is_active FROM sponsor_placement WHERE sponsor_business_id = ?'
-    )
+    // OSE-0068: business-level flag stays active — the fail-closed path never
+    // reached the UPDATE on sponsor_business.
+    const row = await env.DB.prepare('SELECT is_active FROM sponsor_business WHERE id = ?')
       .bind('sp-A1')
       .first<{ is_active: number }>();
     expect(row?.is_active).toBe(1);
@@ -237,9 +238,9 @@ describe('OSE-710 / INVARIANT #9 — per-ID sponsor DELETE is brand-scoped (cros
       'sp-A1'
     );
     expect(res.status).toBe(200);
-    const row = await env.DB.prepare(
-      'SELECT is_active FROM sponsor_placement WHERE sponsor_business_id = ?'
-    )
+    // OSE-0068: the delete deactivates the sponsor_business row (one flag, read
+    // at join time by both resolver paths), not the placement.
+    const row = await env.DB.prepare('SELECT is_active FROM sponsor_business WHERE id = ?')
       .bind('sp-A1')
       .first<{ is_active: number }>();
     expect(row?.is_active).toBe(0);

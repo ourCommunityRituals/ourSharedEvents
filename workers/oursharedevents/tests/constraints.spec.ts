@@ -118,10 +118,12 @@ describe('QA-1: Migration idempotency', () => {
     //   three indexes (idx_sponsors_event_id / _is_local / _campaign_id, −3);
     //   ADD idx_sponsor_business_brand/_h3_res7 (+2), idx_sponsor_asset_business
     //   (+1), idx_sponsor_placement_event/_business/_locality (+3) = +6 → 66.
+    // + 1 (migration 0068, OSE-0068): ADD idx_sponsor_business_active
+    //   (brand_id, is_active) for the business-level soft-delete flag → 67.
     const indexes = await env.DB.prepare(
       "SELECT name FROM sqlite_master WHERE type='index' AND name LIKE 'idx_%'"
     ).all();
-    expect(indexes.results).toHaveLength(66);
+    expect(indexes.results).toHaveLength(67);
   });
 });
 

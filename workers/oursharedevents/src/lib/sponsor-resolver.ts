@@ -10,6 +10,26 @@
  * Every ACTIVE sponsor is eligible for every surface UNIFORMLY (no named-slot
  * filtering) and all qualifying sponsors accumulate (rotation, never replacement).
  *
+ * ─── Two-sided acceptance (0068) ────────────────────────────────────────────────
+ * A placement is a relationship, so either party may start it and either party may
+ * reject it. Path 1 is organizer-initiated; Path 2 is sponsor-initiated (they
+ * subscribed to the template). Neither used to give the other party a say.
+ *
+ *   A placement is hidden only when a side has REJECTED it (accepted = 0).
+ *   NULL means not answered yet and does NOT hide — so rejection is the
+ *   operative action, and existing placements keep working with no backfill.
+ *
+ * A rejection is durable: Path 2 skips any business the organizer already
+ * rejected for THIS event, so a declined match is not re-proposed on every
+ * resolve. That is what lets Path 2 match generously — an unwanted sponsor costs
+ * one tap, once.
+ *
+ * ─── Business lifecycle (0068) ──────────────────────────────────────────────────
+ * BOTH paths require sb.is_active = 1. Deleting a sponsor soft-deletes the
+ * BUSINESS; it used to cascade is_active = 0 onto placements while leaving
+ * sponsor_business untouched, which meant Path 2 re-surfaced deleted businesses
+ * forever and any new placement resurrected them on Path 1.
+ *
  * ─── Covenant model (OSE-661 / Invariant #25) — the locals-first SORT is RETIRED ─
  * The old OSE-330 two-level "locals-first, then tier priority" DISPLAY SORT no
  * longer exists. Under #25 the Local Sponsor Covenant is a rotation-frequency
@@ -167,6 +187,9 @@ export async function resolveSponsorsForEvent(
        JOIN sponsor_business sb ON sb.id = sp.sponsor_business_id
        LEFT JOIN sponsor_asset la ON la.sponsor_business_id = sb.id AND la.format = 'logo'
        WHERE sp.event_id = ? AND sp.is_active = 1
+         AND sb.is_active = 1
+         AND COALESCE(sp.organizer_accepted, 1) = 1
+         AND COALESCE(sp.sponsor_accepted, 1) = 1
        ORDER BY sb.id`
     )
     .bind(eventId)
@@ -198,9 +221,16 @@ export async function resolveSponsorsForEvent(
          JOIN sponsor_event_types st ON st.sponsor_id = sb.id
          LEFT JOIN sponsor_asset la ON la.sponsor_business_id = sb.id AND la.format = 'logo'
          WHERE st.template_id = ? AND st.is_active = 1
+           AND sb.is_active = 1
+           AND NOT EXISTS (
+             SELECT 1 FROM sponsor_placement spx
+              WHERE spx.sponsor_business_id = sb.id
+                AND spx.event_id = ?
+                AND (spx.organizer_accepted = 0 OR spx.sponsor_accepted = 0)
+           )
          ORDER BY sb.id`
       )
-      .bind(event.template_id)
+      .bind(event.template_id, eventId)
       .all<{
         id: string;
         name: string;
