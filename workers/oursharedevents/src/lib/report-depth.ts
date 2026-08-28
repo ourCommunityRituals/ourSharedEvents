@@ -40,6 +40,11 @@ export const DEPTH_SECTIONS: Record<ReportDepth, readonly string[]> = {
     'event_end_date',
     'unique_gatherings',
     'sponsor_impressions',
+    // sponsor_class_breakdown is CLASS-level aggregate (never per-competitor) —
+    // the tier-neutral competitive-intel delivery SR-25 chose over field-stripping.
+    // Present at every depth (OSE-719 decision, 2026-08-28): the depth gate strips
+    // only the genuinely paid sections, never this aggregate.
+    'sponsor_class_breakdown',
     '_meta',
   ],
   // Mid buys the MAP + optimization: the visible corridor map (its own corridor),
@@ -58,6 +63,7 @@ export const DEPTH_SECTIONS: Record<ReportDepth, readonly string[]> = {
     'return_rate',
     'corridor_density',
     'corridor_map',
+    'sponsor_class_breakdown',
     '_meta',
   ],
   // Premium buys deeper intelligence: everything Mid has PLUS cross-event
@@ -75,6 +81,7 @@ export const DEPTH_SECTIONS: Record<ReportDepth, readonly string[]> = {
     'corridor_density',
     'corridor_map',
     'headcount_trend',
+    'sponsor_class_breakdown',
     '_meta',
   ],
 } as const;
