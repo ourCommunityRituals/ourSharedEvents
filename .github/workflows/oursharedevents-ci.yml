@@ -1917,13 +1917,34 @@ jobs:
   # semgrep + detect-secrets re-scan there, where Smart App Control can't block
   # the unsigned semgrep binary. The workspace-coupled integrity asserts stay on
   # self-hosted; only the scanners (which need no persistent workspace) move.
-  # NOTE: add this job to branch protection to make it a required gate.
+  #
+  # continue-on-error (OSE-1056): this job is NON-REQUIRED and REDUNDANT — the S0
+  # `security` job (a REQUIRED check) already runs the identical semgrep configs
+  # (p/nodejs + p/owasp-top-ten + p/r2c-security-audit) and the same detect-secrets
+  # gate over the same SHA, and the self-hosted `security-post` job (also required)
+  # proves via git-integrity that nothing was mutated/injected between S0 and here.
+  # So this managed re-scan adds no coverage a red S0/security-post wouldn't already
+  # catch. It scheduled LAST (needs the late self-hosted `security-post`), so on a
+  # private repo it is the job that trips the moment GitHub-hosted Actions minutes
+  # are exhausted mid-run: a 0-step / no-runner / ~2s allocation failure that is
+  # deterministic on rerun (the allotment is still spent) and reddened the whole
+  # otherwise-green run. Root cause is the account minutes/spending-limit (a founder
+  # action after the OSE-954 migration raised hosted-minute consumption), NOT a
+  # finding. Until minutes are provisioned and this job schedules reliably, an
+  # infra allocation failure here must not fail the pipeline. A genuine semgrep /
+  # detect-secrets finding still fails the STEP and shows red in the summary; it
+  # just no longer gates the run — which is honest, since S0 already gates it.
+  # NEXT: once minutes/limit are resolved, drop continue-on-error and promote this
+  # to a required branch-protection check (the intended end state; OSE-1017).
   # ─────────────────────────────────────────────────────────────────────────
   security-post-scan:
     name: 'S2 Post-Execution SAST (managed)'
     runs-on: ubuntu-latest
     needs: [security-post]
     if: needs.security-post.result == 'success'
+    # Advisory until reliable (OSE-1056): allocation failure on this redundant,
+    # non-required re-scan does not fail the run. Required gates = S0 + security-post.
+    continue-on-error: true
     permissions:
       contents: read
     steps:
