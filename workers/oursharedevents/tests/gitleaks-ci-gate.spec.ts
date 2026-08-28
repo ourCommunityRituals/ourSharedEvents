@@ -22,7 +22,12 @@
  *
  * Properties asserted:
  *   1. CI workflow invokes the gate script (scripts/check-secrets-baseline.py)
- *   2. the gate runs in BOTH S0 (pre-exec) and S2 (post-exec) — ≥2 invocations
+ *   2. pre-exec coverage in S0 + a non-vacuous post-exec tamper tripwire in the
+ *      execution-job tail (OSE-1056/1057). The old S2 detect-secrets re-scan was
+ *      VACUOUS — its job re-ran `actions/checkout` (git checkout --force), resetting
+ *      the tree to the committed SHA and ERASING any execution-phase injection
+ *      before it scanned; post-exec coverage is now scripts/check-post-execution-
+ *      integrity.sh, run against the PRESERVED workspace (no re-checkout).
  *   3. detect-secrets is version-pinned (baseline can't be silently reclassified)
  *   4. the committed .secrets.baseline exists and is valid (accepted-detection set)
  *   5. the gate script is ENFORCING — fails (exit non-zero) on a NEW secret
@@ -56,14 +61,27 @@ describe('TL-016 | Committed-secret CI gate — prevent silent removal', () => {
     expect(ci).toContain('scripts/check-secrets-baseline.py');
   });
 
-  test('the gate runs in both S0 (pre-exec) and S2 (post-exec)', () => {
+  test('pre-exec secret gate in S0 + non-vacuous post-exec integrity tripwire (OSE-1056/1057)', () => {
     const ci = getSourceFile('.github/workflows/oursharedevents-ci.yml') ?? '';
-    // At least two invocations — the pre-execution S0 gate and the
-    // post-execution S2 re-scan. Dropping either weakens the coverage.
+    // Pre-execution: the committed-secret gate scans the tree BEFORE any untrusted
+    // code runs (S0). This catches the ADMIN_KEY-class threat at its source.
     expect(
       countOccurrences(ci, 'scripts/check-secrets-baseline.py'),
-      'the secret gate must run in both S0 and S2 (≥2 invocations)'
-    ).toBeGreaterThanOrEqual(2);
+      'the committed-secret gate must run pre-execution in S0'
+    ).toBeGreaterThanOrEqual(1);
+    // Post-execution: the OLD S2 detect-secrets re-scan was a vacuous seam — its
+    // job re-ran `actions/checkout` (git checkout --force), which reset the tree to
+    // the committed SHA and ERASED any execution-phase injection before the scan.
+    // OSE-1056/1057 replaced it with an integrity tripwire at the TAIL of the
+    // execution job, run against the PRESERVED workspace (no re-checkout): it fails
+    // on ANY tracked-file mutation, src/migrations injection, or lockfile tamper
+    // during execution — which SUBSUMES a secret written into the tree, and does so
+    // non-vacuously. Non-vacuousness is regression-locked by
+    // tests/unit/security/post-execution-integrity.test.js.
+    expect(
+      countOccurrences(ci, 'scripts/check-post-execution-integrity.sh'),
+      'post-execution tamper coverage must be wired as an integrity tripwire in the execution-job tail'
+    ).toBeGreaterThanOrEqual(1);
   });
 
   test('detect-secrets is version-pinned (baseline cannot be silently reclassified)', () => {

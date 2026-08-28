@@ -1547,6 +1547,22 @@ jobs:
           echo "| T4e Attendee Arc Journey | \`${{ steps.attendee-arc-tests.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| T4f SharedReport Depth Gate | \`${{ steps.sharedreport-depth-tests.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
 
+      # ── S2 Post-execution integrity — the tamper tripwire, IN THE SAME VM that ran
+      # the untrusted T4 execution (OSE-1056/1057). This is the migration-correct home
+      # for the check the retired self-hosted `security-post` job used to attempt:
+      # this job checked out the committed SHA at its START (the baseline), ran the
+      # tests, and now asserts the tree is byte-identical — so a backdoor or lockfile
+      # tamper injected DURING execution goes red here. Because the check lives at the
+      # TAIL of the execution job (not a separate downstream job), it needs no cross-
+      # job workspace persistence and rides the OSE-954 move to ephemeral GitHub-hosted
+      # runners unchanged. The `git checkout --force` erasure that made the old design
+      # vacuous cannot bite here — the checkout is the pre-execution baseline, not a
+      # post-execution reset (regression-locked by post-execution-integrity.test.js).
+      - name: 'S2 Integrity — no injection during execution phase'
+        if: always()
+        shell: bash
+        run: bash scripts/check-post-execution-integrity.sh
+
   # ============================================================================
   # TIER 1P: DEPLOY → Production (tag vX.Y.Z only)
   # ============================================================================
@@ -1832,140 +1848,37 @@ jobs:
           exit 1
 
   # ============================================================================
-  # SUMMARY
-  # ============================================================================
-  # ============================================================================
   # GATE 4: POST-EXECUTION SECURITY — the closing bookend
   #
-  # PO design (ratified 2026-08-09): security bookends the execution phase.
-  # Gate 1 (S0 Security) proves the committed input was clean; this gate runs
-  # AFTER the Gate-3 execution phase (T2 smoke / T3 Postman contract / T4
-  # Playwright functional) to confirm nothing — a test, a package lifecycle
-  # script, or any CI/CD execution — mutated the source or injected files
-  # DURING execution. A single up-front scan cannot detect injection introduced
-  # BY running the suite; this closes that gap.
+  # PO design (ratified 2026-08-09): security bookends the execution phase. Gate 1
+  # (S0 Security) proves the committed input was clean; a closing gate confirms
+  # nothing — a test, a package lifecycle script, any CI/CD execution — mutated the
+  # source or injected files DURING execution, which a single up-front scan cannot
+  # detect.
   #
-  # always()+result-guards (mirroring smoke/contract) so it still re-scans when
-  # the execution jobs are skipped (e.g. on PRs), and is suppressed only when
-  # Gate 2 failed or an execution job actually FAILED.
+  # RE-HOMED (OSE-1056/1057, Dr.-of-Security). This used to be TWO separate self-
+  # hosted jobs:
+  #   • `security-post`      — git-integrity tamper check. It re-checked-out the SHA,
+  #                            and `git checkout --force` ERASED tracked-file/lockfile
+  #                            injection before the diff → 2/3 checks vacuously green.
+  #   • `security-post-scan` — a managed semgrep/detect-secrets re-scan on a CLEAN
+  #                            checkout. Its only reason to exist (run semgrep where
+  #                            self-hosted Smart App Control blocked it) is MOOT: S0
+  #                            now runs on ubuntu with the identical configs over the
+  #                            same SHA. It added zero coverage and burned hosted
+  #                            minutes (its no-runner scheduling flake was the original
+  #                            OSE-1056 symptom).
+  # Both are RETIRED. The real post-execution value — "did untrusted execution tamper
+  # the tree" — now runs as the TAIL STEP of `functional-staging`, in the same VM that
+  # ran the tests (see that job). That placement needs no cross-job workspace
+  # persistence, so it is correct on self-hosted today and rides the OSE-954 migration
+  # to ephemeral GitHub-hosted runners unchanged. The retired-job invariant is
+  # regression-locked by tests/unit/security/post-execution-integrity.test.js.
   # ============================================================================
-  security-post:
-    name: 'S2 Post-Execution Security'
-    runs-on: self-hosted
-    needs: [gate, smoke-staging, contract-staging, functional-staging]
-    if: |
-      always() &&
-      needs.gate.result == 'success' &&
-      needs.smoke-staging.result != 'failure' &&
-      needs.contract-staging.result != 'failure' &&
-      needs.functional-staging.result != 'failure'
-    permissions:
-      contents: read
-      actions: read
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          clean: false          # preserve what the execution phase left behind, so we can detect it
-          fetch-depth: 50
-
-      - name: 'Integrity — no tracked source mutated during execution'
-        shell: bash
-        run: |
-          echo "## S2 Post-Execution Security" >> $GITHUB_STEP_SUMMARY
-          if ! git diff --exit-code --stat; then
-            echo "::error::Tracked source files were modified during the execution phase (Gates 2-3). Possible injection."
-            exit 1
-          fi
-          echo "- **Tracked-source integrity:** clean (no post-execution mutation)" >> $GITHUB_STEP_SUMMARY
-
-      - name: 'Integrity — no files injected into src/ or migrations/'
-        shell: bash
-        run: |
-          INJECTED=$(git ls-files --others --exclude-standard -- \
-            workers/oursharedevents/src workers/oursharedevents/migrations || true)
-          if [ -n "$INJECTED" ]; then
-            echo "::error::Untracked files appeared under src/ or migrations/ during execution. Possible injection:"
-            echo "$INJECTED"
-            exit 1
-          fi
-          echo "- **No injected source/migration files:** confirmed" >> $GITHUB_STEP_SUMMARY
-
-      - name: 'Integrity — lockfile unchanged'
-        shell: bash
-        run: |
-          if ! git diff --exit-code -- package-lock.json workers/oursharedevents/package-lock.json; then
-            echo "::error::package-lock.json changed during the run — dependency drift / possible supply-chain injection."
-            exit 1
-          fi
-          echo "- **Lockfile integrity:** unchanged" >> $GITHUB_STEP_SUMMARY
-
-      - name: 'Deps install without lifecycle scripts'
-        shell: bash
-        run: |
-          # Production deps must install with NO lifecycle scripts. A dependency
-          # that needs a postinstall to function is a supply-chain red flag,
-          # surfaced here rather than trusted silently.
-          npm ci --ignore-scripts --prefer-offline || npm ci --ignore-scripts
-          echo "- **npm ci --ignore-scripts:** succeeded" >> $GITHUB_STEP_SUMMARY
-
-  # ─────────────────────────────────────────────────────────────────────────
-  # S2b: Post-execution SAST re-scan on a MANAGED runner (OSE-1017).
-  # The self-hosted `security-post` job above has already proven (git integrity
-  # checks) that no tracked source was mutated and no file injected during the
-  # execution phase. This job therefore checks out the same immutable SHA on
-  # ubuntu — byte-identical to the legitimate committed source — and runs the
-  # semgrep + detect-secrets re-scan there, where Smart App Control can't block
-  # the unsigned semgrep binary. The workspace-coupled integrity asserts stay on
-  # self-hosted; only the scanners (which need no persistent workspace) move.
-  # NOTE: add this job to branch protection to make it a required gate.
-  # ─────────────────────────────────────────────────────────────────────────
-  security-post-scan:
-    name: 'S2 Post-Execution SAST (managed)'
-    runs-on: ubuntu-latest
-    needs: [security-post]
-    if: needs.security-post.result == 'success'
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-python@v7
-        with:
-          python-version: '3.11'
-
-      - name: 'Semgrep re-scan (post-execution)'
-        shell: bash
-        run: |
-          # Pin per OSE-1016; clean managed-runner install (no cygpath / pip-repair).
-          python -m pip install "semgrep==1.163.0" --quiet \
-            || { echo "::error::semgrep install failed (infra) — not a security finding"; exit 1; }
-          semgrep --version || { echo "::error::semgrep unavailable on runner"; exit 1; }
-          semgrep scan \
-            --config=p/nodejs \
-            --config=p/owasp-top-ten \
-            --config=p/r2c-security-audit \
-            --error \
-            --exclude=node_modules \
-            --exclude=.wrangler \
-            --exclude=coverage \
-            --exclude=dist \
-            --exclude=.claude \
-            --json-output=semgrep-post.json || SEMGREP_EXIT=$?
-          FINDING_COUNT=$(jq '.results | length' semgrep-post.json 2>/dev/null || echo 0)
-          echo "- **Semgrep (post-execution):** $FINDING_COUNT findings" >> $GITHUB_STEP_SUMMARY
-          exit ${SEMGREP_EXIT:-0}
-
-      # Post-execution committed-secret re-scan (OSE-911). Enforcing detect-secrets
-      # gate: fails only on a secret not present in the committed .secrets.baseline.
-      - name: 'detect-secrets re-scan (post-execution)'
-        shell: bash
-        run: |
-          python -m pip install 'detect-secrets==1.5.0' --quiet
-          python scripts/check-secrets-baseline.py
-
   summary:
     name: 'Pipeline Summary'
     runs-on: self-hosted
-    needs: [security, gate, deploy-staging, smoke-staging, contract-staging, functional-staging, deploy-production, smoke-production, security-post, security-post-scan]
+    needs: [security, gate, deploy-staging, smoke-staging, contract-staging, functional-staging, deploy-production, smoke-production]
     if: always()
     steps:
       - name: Summary
