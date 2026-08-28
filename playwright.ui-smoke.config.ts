@@ -117,16 +117,34 @@ export default defineConfig({
     extraHTTPHeaders: adminExtraHeaders(),
   },
 
-  // Browser projects for UI smoke tests
+  // Browser/device projects for UI smoke tests.
+  //
+  // Mobile is the primary attendee surface (public page + /q/ QR scans), so the
+  // smoke pack verifies the real device classes an attendee actually uses, not a
+  // single generic viewport. Two engines cover all four: WebKit (iPhone, iPad —
+  // Mobile Safari) + Chromium (Android Chrome + desktop). The T4 install step
+  // therefore fetches `chromium webkit` (OSE-1058); Firefox is intentionally not
+  // exercised — no attendee-relevant device uses Gecko.
   projects: [
     {
+      // Desktop baseline (organizer/admin surfaces render here).
       name: 'ui-smoke-chromium',
       use: { ...devices['Desktop Chrome'] },
     },
-    // Mobile viewport for responsive testing
     {
-      name: 'ui-smoke-mobile',
+      // iPhone — WebKit / Mobile Safari (dominant attendee handset).
+      name: 'ui-smoke-iphone',
       use: { ...devices['iPhone 14'] },
+    },
+    {
+      // Android — Chromium / Chrome for Android.
+      name: 'ui-smoke-android',
+      use: { ...devices['Pixel 7'] },
+    },
+    {
+      // iPad — WebKit / Mobile Safari (tablet viewport, larger breakpoint).
+      name: 'ui-smoke-ipad',
+      use: { ...devices['iPad (gen 7)'] },
     },
   ],
 

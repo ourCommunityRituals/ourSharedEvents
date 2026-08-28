@@ -1346,9 +1346,13 @@ jobs:
           fi
 
       - name: Install Playwright browsers
-        # --with-deps installs the system libraries chromium needs on a fresh
+        # --with-deps installs the system libraries the browsers need on a fresh
         # ubuntu-latest VM (OSE-954; matches the T0 gate + T3 smoke slices).
-        run: npx playwright install --with-deps chromium
+        # chromium AND webkit: the ui-smoke pack exercises four device projects —
+        # Desktop Chrome + Android/Pixel (chromium) and iPhone + iPad (webkit).
+        # The self-hosted box had webkit globally cached, which masked the need;
+        # ephemeral runners must fetch it explicitly (OSE-1058).
+        run: npx playwright install --with-deps chromium webkit
 
       - name: Reset synthetic sponsor fixtures (OSE-944 — journey runs on a clean event)
         id: reset-journey-sponsors
