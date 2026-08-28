@@ -19,6 +19,8 @@
  * for stable Playwright automation. These IDs survive CSS/layout changes.
  */
 
+import { isStaleForPublicLanding, staleEventForward } from '../lib/event-staleness';
+
 export interface FormPagesEnv {
   // OSE-R-007 (2026-05-15): event title must come from the canonical
   // event row in D1, not from the URL query param. Optional so the
@@ -594,11 +596,23 @@ export async function handleFormPage(
   let canonicalTitle: string | null = null;
   if (env.DB) {
     try {
-      const row = await env.DB.prepare('SELECT title FROM events WHERE id = ?')
+      const row = await env.DB.prepare('SELECT title, status FROM events WHERE id = ?')
         .bind(eventId)
-        .first<{ title: string | null }>();
-      if (row && typeof row.title === 'string' && row.title.length > 0) {
-        canonicalTitle = row.title;
+        .first<{ title: string | null; status: string | null }>();
+      if (row) {
+        // OSE-291 (EPIC OSE-284) — "a poster must never rot." The event this QR
+        // points at may have been archived (or wound back to draft/ready) since
+        // the poster was printed. A non-active event must NOT hand the scanner a
+        // live registration form; forward them to the /events discovery listing
+        // instead — the same graceful behavior /events/:id already gives, so
+        // every public link stays consistent. Only applies to a KNOWN event:
+        // unknown/un-seeded ids keep the permissive fallback below (OSE-R-007).
+        if (isStaleForPublicLanding(row.status)) {
+          return staleEventForward(url.origin, eventId, row.status, 'form');
+        }
+        if (typeof row.title === 'string' && row.title.length > 0) {
+          canonicalTitle = row.title;
+        }
       }
     } catch {
       // DB throw → keep the safe fallback. The form should still render so
