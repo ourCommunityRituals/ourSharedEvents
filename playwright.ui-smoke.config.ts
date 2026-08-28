@@ -24,8 +24,41 @@ import { defineConfig, devices } from '@playwright/test';
 // Single source of truth for BASE_URL resolution
 const { getBaseUrl } = require('./config/environments');
 
+/**
+ * Admin credential path (OSE-865 / OSE-1010) — the credential X-1 supplied but
+ * nothing consumed. Built from env, never a literal in the repo:
+ *   • CF-Access-Client-Id / -Secret  → clears the Cloudflare Access EDGE so the
+ *     worker actually runs (without these, GET /admin 302s to the CF Access
+ *     login and the worker never sees the request — see OSE-1010 / OSE-349).
+ *   • Authorization: Bearer <ADMIN_KEY> → the worker-level admin guard.
+ * Absent env → empty headers (clean no-op); the admin routes stay gated/ skipped
+ * exactly as before. SRE owns rotation of these secrets (OSE-865 DevOps AC).
+ *
+ * NOTE: wiring the headers does not by itself re-enable the admin routes in the
+ * blocking gate — the T4d `--grep-invert` stays until a staging run with a live
+ * CF Access service token confirms the edge clears (OSE-1010 DoD).
+ */
+function adminExtraHeaders(): Record<string, string> {
+  const h: Record<string, string> = {};
+  const { CF_ACCESS_CLIENT_ID, CF_ACCESS_CLIENT_SECRET, ADMIN_KEY } = process.env;
+  if (CF_ACCESS_CLIENT_ID && CF_ACCESS_CLIENT_SECRET) {
+    h['CF-Access-Client-Id'] = CF_ACCESS_CLIENT_ID;
+    h['CF-Access-Client-Secret'] = CF_ACCESS_CLIENT_SECRET;
+  }
+  if (ADMIN_KEY) h['Authorization'] = `Bearer ${ADMIN_KEY}`;
+  return h;
+}
+
 export default defineConfig({
   testDir: './tests/ui/smoke',
+
+  // Archived smoke specs (tests/ui/smoke/archive/**) are retired and some no
+  // longer compile — never run them. Without this, a bare `playwright test`
+  // (no file filter) fails to compile one archived spec and aborts discovery to
+  // "0 tests in 0 files", masking the live tier-1 smoke. CI already dodges this
+  // by passing an explicit tier1.spec.ts filter (ci.yml T4d); this makes the
+  // config honest for local runs too, so the count can never go vacuously green.
+  testIgnore: '**/archive/**',
 
   // UI smoke tests run sequentially to avoid race conditions
   fullyParallel: false,
@@ -79,6 +112,9 @@ export default defineConfig({
 
     // Viewport for consistent rendering
     viewport: { width: 1280, height: 720 },
+
+    // Admin credential headers (OSE-865/OSE-1010) — env-driven, empty when unset.
+    extraHTTPHeaders: adminExtraHeaders(),
   },
 
   // Browser projects for UI smoke tests
