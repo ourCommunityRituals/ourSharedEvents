@@ -1108,3 +1108,106 @@ describe('H3 corridor map + open-question resolutions', () => {
     expect(builderSrc).toContain('h3-tagging');
   });
 });
+
+// ── OSE-816 — enforce report depth server-side (sponsor role only) ───────────
+// filterReportByDepth existed, was pure + fail-closed, and was NEVER called
+// (SR-25 removed it: "straight readout"). On the wire a mid sponsor token still
+// received headcount_trend — a Premium section the browser hid but curl did not.
+// This wires the ONE gate at read for sponsor tokens: admin/bar_owner/internal
+// resolve to premium (no-op, skipped). sponsor_class_breakdown stays at every
+// depth (OSE-719 — tier-neutral class-aggregate). The enforcement-state test
+// flips this file from "not wired" → "wired, sponsor role only".
+describe('OSE-816 — server-side report depth enforcement (sponsor role only)', () => {
+  beforeEach(resetForTest);
+
+  const mintDepth = (eventId: string, role: 'sponsor' | 'bar_owner', depth?: string) =>
+    mintSignedLinkToken(
+      { SHARED_REPORT_SIGNING_SECRET: SIGNING_SECRET },
+      eventId,
+      role,
+      undefined,
+      {
+        ...(depth !== undefined ? { depth } : {}),
+        ...(role === 'sponsor' ? { sponsor_id: 'sp-816' } : {}),
+      }
+    );
+
+  async function readReport(eventId: string, token: string) {
+    const res = await SELF.fetch(`https://test.local/api/v2/events/${eventId}/shared-report`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    expect(res.status).toBe(200);
+    return (await res.json()) as { ok: boolean; report: Record<string, unknown> };
+  }
+
+  test('OSE-816 | static | filterReportByDepth is WIRED in the single-read handler, sponsor-guarded', () => {
+    const files = JSON.parse(
+      (env as Record<string, unknown>).TEST_SOURCE_FILES_JSON as string
+    ) as Record<string, string>;
+    const key = Object.keys(files).find((k) =>
+      k.replace(/\\/g, '/').includes('handlers/shared-report-read')
+    );
+    expect(key).toBeDefined();
+    const src = files[key!]!;
+    // Enforcement-state: the filter is called (wired), and only for sponsors.
+    expect(src).toContain('filterReportByDepth(builtReport');
+    expect(src).toContain("claim.role === 'sponsor'");
+  });
+
+  test('OSE-816 | API | bar_owner (premium) | full report, NO upgrade field (filter skipped)', async () => {
+    await seedEvent({ id: 'evt-816-barowner', start_date: '2026-05-07T19:00:00Z' });
+    await seedScanAggregate('evt-816-barowner', 20);
+    const { report } = await readReport(
+      'evt-816-barowner',
+      await mintDepth('evt-816-barowner', 'bar_owner')
+    );
+    expect(report).toHaveProperty('headcount_trend'); // premium section retained
+    expect(report).toHaveProperty('sponsor_class_breakdown');
+    expect(report).not.toHaveProperty('upgrade'); // role skip → no filter, no hint
+  });
+
+  test('OSE-816 | API | sponsor @ mid | headcount_trend STRIPPED, class_breakdown kept, upgrade names it', async () => {
+    await seedEvent({ id: 'evt-816-mid', start_date: '2026-05-07T19:00:00Z' });
+    await seedScanAggregate('evt-816-mid', 20);
+    const { report } = await readReport(
+      'evt-816-mid',
+      await mintDepth('evt-816-mid', 'sponsor', 'mid')
+    );
+    expect(report).not.toHaveProperty('headcount_trend'); // premium-only, withheld
+    expect(report).toHaveProperty('sponsor_class_breakdown'); // OSE-719: tier-neutral
+    expect(report).toHaveProperty('sponsor_impressions');
+    expect(report).toHaveProperty('upgrade');
+    const upgrade = report.upgrade as { locked_sections: string[]; next_depth: string | null };
+    expect(upgrade.next_depth).toBe('premium');
+    expect(upgrade.locked_sections).toContain('headcount_trend');
+  });
+
+  test('OSE-816 | API | sponsor @ local | mid+premium sections stripped, class_breakdown kept, upgrade → mid', async () => {
+    await seedEvent({ id: 'evt-816-local', start_date: '2026-05-07T19:00:00Z' });
+    await seedScanAggregate('evt-816-local', 20);
+    const { report } = await readReport(
+      'evt-816-local',
+      await mintDepth('evt-816-local', 'sponsor', 'local')
+    );
+    expect(report).not.toHaveProperty('headcount_trend');
+    expect(report).not.toHaveProperty('corridor_map'); // mid section, withheld at local
+    expect(report).not.toHaveProperty('poster_attribution');
+    expect(report).toHaveProperty('sponsor_class_breakdown'); // OSE-719: survives even at local
+    expect(report).toHaveProperty('sponsor_impressions');
+    const upgrade = report.upgrade as { next_depth: string | null };
+    expect(upgrade.next_depth).toBe('mid');
+  });
+
+  test('OSE-816 | API | sponsor claiming premium | fail-closed to local (no premium/mid sections)', async () => {
+    await seedEvent({ id: 'evt-816-cap', start_date: '2026-05-07T19:00:00Z' });
+    await seedScanAggregate('evt-816-cap', 20);
+    // Sponsors cannot self-grant premium (resolveDepth caps at mid, fails to local).
+    const { report } = await readReport(
+      'evt-816-cap',
+      await mintDepth('evt-816-cap', 'sponsor', 'premium')
+    );
+    expect(report).not.toHaveProperty('headcount_trend');
+    expect(report).not.toHaveProperty('corridor_map');
+    expect(report).toHaveProperty('sponsor_class_breakdown');
+  });
+});

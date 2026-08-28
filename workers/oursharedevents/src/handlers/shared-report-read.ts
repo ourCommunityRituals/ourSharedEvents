@@ -28,7 +28,7 @@ import {
   type SignedLinkRole,
 } from '../lib/shared-report-auth';
 import { buildSharedReport, type SharedReport } from '../lib/shared-report-builder';
-import { resolveDepth } from '../lib/report-depth';
+import { resolveDepth, filterReportByDepth } from '../lib/report-depth';
 import { logReportAccess } from '../lib/audit-log';
 import { checkRateLimit, RATE_LIMIT_BATCH_MAX, RATE_LIMIT_WINDOW_MS } from '../lib/rate-limit';
 
@@ -156,11 +156,29 @@ export async function handleGetSharedReport(
         : null;
   }
 
-  const report = {
+  const builtReport = {
     ...result.report,
     sponsor_impressions: scopedImpressions,
     campaign_summary: scopedCampaignSummary,
   };
+
+  // OSE-816 — enforce report depth server-side, SPONSOR role ONLY. admin /
+  // bar_owner / internal resolve to premium via resolveDepth (OSE-577), so the
+  // filter is a no-op for them — skip it rather than run it pointlessly. This is
+  // the ONE gate, at read: never in corridor-map (that module renders, and
+  // rendering must not decide entitlement) and never in the client. Two gates
+  // drift silently. The filter strips any section above the sponsor's entitled
+  // depth and names the withheld-but-present sections in upgrade.locked_sections
+  // — a wire contract, not a browser-hidden paywall (doctrine rule 12: a refusal
+  // must be printed, not promised). sponsor_impressions scoping (TL-040) is
+  // already applied above; the filter's own scoping pass is idempotent over it.
+  // sponsor_class_breakdown is present at every depth (OSE-719) — class-level
+  // aggregate, the tier-neutral competitive-intel delivery, never stripped.
+  let report: Record<string, unknown> = builtReport;
+  if (claim.role === 'sponsor') {
+    const filtered = filterReportByDepth(builtReport, resolved);
+    report = filtered.upgrade ? { ...filtered.report, upgrade: filtered.upgrade } : filtered.report;
+  }
 
   // Q7: in-flight events cache at 5 min so impression counts update visibly between
   // sponsor visits mid-event. Closed events cache at 1 hour (numbers are stable).
