@@ -117,34 +117,23 @@ export default defineConfig({
     extraHTTPHeaders: adminExtraHeaders(),
   },
 
-  // Browser/device projects for UI smoke tests.
+  // Browser projects for UI smoke tests.
   //
-  // Mobile is the primary attendee surface (public page + /q/ QR scans), so the
-  // smoke pack verifies the real device classes an attendee actually uses, not a
-  // single generic viewport. Two engines cover all four: WebKit (iPhone, iPad —
-  // Mobile Safari) + Chromium (Android Chrome + desktop). The T4 install step
-  // therefore fetches `chromium webkit` (OSE-1058); Firefox is intentionally not
-  // exercised — no attendee-relevant device uses Gecko.
+  // Tiering (OSE-1058): the full device matrix (iPhone/iPad/Android/desktop) runs
+  // on the deep E2E journey suite; the remaining flows — this tier-1 page-smoke
+  // pack included — verify cross-browser on the two engines that matter: Safari
+  // (WebKit) and Chrome (Chromium). That catches engine-level rendering/JS
+  // divergence cheaply without quadrupling every smoke on emulated devices.
+  // The T4 install fetches `chromium webkit` so both engines are present
+  // (the retired self-hosted box had webkit globally cached, masking the need).
   projects: [
     {
-      // Desktop baseline (organizer/admin surfaces render here).
-      name: 'ui-smoke-chromium',
+      name: 'ui-smoke-chrome',
       use: { ...devices['Desktop Chrome'] },
     },
     {
-      // iPhone — WebKit / Mobile Safari (dominant attendee handset).
-      name: 'ui-smoke-iphone',
-      use: { ...devices['iPhone 14'] },
-    },
-    {
-      // Android — Chromium / Chrome for Android.
-      name: 'ui-smoke-android',
-      use: { ...devices['Pixel 7'] },
-    },
-    {
-      // iPad — WebKit / Mobile Safari (tablet viewport, larger breakpoint).
-      name: 'ui-smoke-ipad',
-      use: { ...devices['iPad (gen 7)'] },
+      name: 'ui-smoke-safari',
+      use: { ...devices['Desktop Safari'] },
     },
   ],
 
