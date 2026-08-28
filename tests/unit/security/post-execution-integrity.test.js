@@ -124,3 +124,42 @@ describe('S2 post-execution injection detector (born-red)', () => {
     expect(runDetector(dir).code).toBe(0); // ← vacuous green: proves the trap
   });
 });
+
+// ─── Placement guard (OSE-1056/1057) ─────────────────────────────────────────
+// The detector is only sound where it runs in the SAME VM that executed the
+// untrusted phase — i.e. as the TAIL of the execution job, whose own checkout is
+// the pre-execution BASELINE (not a post-execution reset). These assertions lock
+// that placement into the workflow so a future edit can't regress to a separate
+// cross-job / re-checkout design (which the TRAP case above proves is vacuous),
+// and so the check rides the OSE-954 move to ephemeral hosted runners unchanged.
+describe('S2 integrity placement is migration-correct (workflow structure)', () => {
+  const fs = require('node:fs');
+  const YAML = require('yaml');
+  const wf = YAML.parse(
+    fs.readFileSync(
+      path.resolve(__dirname, '../../../.github/workflows/oursharedevents-ci.yml'),
+      'utf8'
+    )
+  );
+
+  test('the separate self-hosted security-post / security-post-scan jobs are retired', () => {
+    expect(wf.jobs['security-post']).toBeUndefined();
+    expect(wf.jobs['security-post-scan']).toBeUndefined();
+  });
+
+  test('the integrity check is the TAIL step of the execution job (functional-staging)', () => {
+    const steps = wf.jobs['functional-staging'].steps;
+    const last = steps[steps.length - 1];
+    expect(last.run).toContain('scripts/check-post-execution-integrity.sh');
+    expect(last.if).toBe('always()'); // runs even if a test failed — tamper is orthogonal
+  });
+
+  test('exactly one job runs the check, and it is functional-staging (no re-homed copy)', () => {
+    const runners = Object.entries(wf.jobs)
+      .filter(([, j]) =>
+        (j.steps || []).some((s) => (s.run || '').includes('check-post-execution-integrity.sh'))
+      )
+      .map(([name]) => name);
+    expect(runners).toEqual(['functional-staging']);
+  });
+});
