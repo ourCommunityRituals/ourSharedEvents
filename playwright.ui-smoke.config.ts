@@ -117,16 +117,23 @@ export default defineConfig({
     extraHTTPHeaders: adminExtraHeaders(),
   },
 
-  // Browser projects for UI smoke tests
+  // Browser projects for UI smoke tests.
+  //
+  // Tiering (OSE-1058): the full device matrix (iPhone/iPad/Android/desktop) runs
+  // on the deep E2E journey suite; the remaining flows — this tier-1 page-smoke
+  // pack included — verify cross-browser on the two engines that matter: Safari
+  // (WebKit) and Chrome (Chromium). That catches engine-level rendering/JS
+  // divergence cheaply without quadrupling every smoke on emulated devices.
+  // The T4 install fetches `chromium webkit` so both engines are present
+  // (the retired self-hosted box had webkit globally cached, masking the need).
   projects: [
     {
-      name: 'ui-smoke-chromium',
+      name: 'ui-smoke-chrome',
       use: { ...devices['Desktop Chrome'] },
     },
-    // Mobile viewport for responsive testing
     {
-      name: 'ui-smoke-mobile',
-      use: { ...devices['iPhone 14'] },
+      name: 'ui-smoke-safari',
+      use: { ...devices['Desktop Safari'] },
     },
   ],
 
