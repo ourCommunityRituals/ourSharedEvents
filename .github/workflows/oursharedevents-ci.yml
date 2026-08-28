@@ -934,7 +934,12 @@ jobs:
   # ============================================================================
   smoke-staging:
     name: 'T3 E2E Smoke → Staging (Playwright)'
-    runs-on: self-hosted
+    # OSE-954: runs on ephemeral ubuntu-latest. This job only READS live staging
+    # (Playwright smoke) — it does not deploy. Staging auth is header-based CF
+    # Access service token (CF_ACCESS_CLIENT_ID/SECRET + Bearer ADMIN_KEY, all
+    # repo secrets) which is IP-independent, so an ephemeral runner authenticates
+    # exactly as the box did — there is no source-IP allow-list to lose.
+    runs-on: ubuntu-latest
     # Fail-fast chain, stage 2 of 3: FE E2E smoke runs ONLY after the Newman
     # contract (T2) is green. A red here SKIPS functional (T4). Depends on
     # contract-staging so the API contract is proven before the FE E2E layer.
@@ -973,7 +978,8 @@ jobs:
           fi
 
       - name: Install Playwright browsers
-        run: npx playwright install chromium
+        # OSE-954: --with-deps pulls chromium system libs on the fresh ubuntu VM.
+        run: npx playwright install --with-deps chromium
 
       - name: 'Security smoke: XSS + auth boundaries'
         id: security-smoke
@@ -1052,7 +1058,12 @@ jobs:
   # ============================================================================
   contract-staging:
     name: 'T2 Contract → Staging (Newman)'
-    runs-on: self-hosted
+    # OSE-954: runs on ephemeral ubuntu-latest. Newman + wrangler-d1 seed only;
+    # no deploy. Staging auth is the header-based CF Access service token
+    # (CF_ACCESS_CLIENT_ID/SECRET + Bearer ADMIN_KEY) and the D1 seed uses
+    # CLOUDFLARE_API_TOKEN — all repo secrets, all IP-independent, so the
+    # ephemeral runner reaches staging exactly as the self-hosted box did.
+    runs-on: ubuntu-latest
     # Fail-fast chain, stage 1 of 3 (after T1 deploy): Newman API + Pages
     # contract. Newman-first — nail the API contract, THEN perpetuate into the
     # FE. A red here SKIPS the downstream FE E2E smoke (T3) and functional (T4),
