@@ -23,6 +23,21 @@
  * The single source of truth for "may this state render on a public surface" is
  * the event state machine (domain/event-state). We reuse `canRender(state,
  * 'public')` rather than re-deriving a parallel notion of staleness.
+ *
+ * ── The funnel model (share a code on ANY external platform → resolve to OSE) ──
+ * A shareable code has two layers:
+ *   1. EMITTER / CONTRACT layer — UEC (lib/uec, the semantic-category contract
+ *      for "any URL the platform emits"), shortlinks (/s/:code), QR tokens
+ *      (/q/:token). This layer decides what a code MEANS and which OSE URL it
+ *      encodes (UEC encodes `${origin}${url_path}` so a code is portable across
+ *      external platforms and across staging/prod). OSE owns resolution.
+ *   2. ENFORCEMENT layer — the terminal public renderers (/events/:id,
+ *      /forms/:id) where every event-bearing URL converges. Staleness is
+ *      enforced HERE, so it holds no matter which emitter produced the link.
+ * UEC today resolves semantic categories (/enter, /live, /archive…), not event
+ * instances, so it has no event-lifecycle to check. WHEN a future UEC/shortlink
+ * surface carries event context, it funnels through the same renderers — or
+ * calls the two helpers below directly — and inherits "never rot" for free.
  */
 
 import { parseEventState, canRender } from '../domain/event-state';
