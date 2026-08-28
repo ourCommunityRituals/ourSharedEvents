@@ -343,35 +343,35 @@ jobs:
   gate:
     name: 'T0 Gate (${{ matrix.shard }})'
     needs: [security]
-    # OSE-977 (F2 incremental slice): the `tests` shard — the heavy
-    # ~2879-case @cloudflare/vitest-pool-workers suite and the chronic OSE-696
-    # workerd-corruption flake source — runs on an ephemeral GitHub-hosted
-    # ubuntu-latest VM instead of the shared self-hosted box. A fresh dedicated
-    # Linux VM gives the workerd pool the "runs alone on clean hardware"
-    # condition it is reliably green under locally, so the isolate corruption
-    # (ECONNRESET / "Failed to start cloudflare-pool worker" / "Reflect.get on
-    # non-object") that repeatedly forced reruns on the RAM-bound box can no
-    # longer occur. The required branch-protection check name is derived from
-    # `matrix.shard`, so it stays exactly "T0 Gate (tests)" — no protection
-    # change needed. All other shards stay self-hosted for now (this is the
-    # de-risking half-day slice, not the full 35-job cutover; see OSE-977 AC).
-    runs-on: ${{ matrix.shard == 'tests' && 'ubuntu-latest' || 'self-hosted' }}
+    # OSE-954 (F2 slice, completes OSE-977): the ENTIRE T0 gate now runs on
+    # ephemeral GitHub-hosted ubuntu-latest VMs. OSE-977 moved only the heavy
+    # `tests` shard (the ~2879-case @cloudflare/vitest-pool-workers suite +
+    # chronic OSE-696 workerd-corruption flake source); this slice moves the
+    # remaining four — lint, typecheck, a11y, invariants — off the shared
+    # self-hosted box as well. Rationale per shard:
+    #   • lint / typecheck — pure Node (eslint, tsc, static guards), no workerd,
+    #     no browser; zero-risk move.
+    #   • a11y / invariants — a11y drives the workerd vitest pool and invariants
+    #     drives Playwright/chromium; both are PROVEN green on ubuntu by the
+    #     already-migrated `tests` shard, and a fresh per-shard VM gives workerd
+    #     the "runs alone on clean hardware" condition that ended the OSE-696
+    #     isolate corruption (ECONNRESET / "Failed to start cloudflare-pool
+    #     worker" / "Reflect.get on non-object") on the RAM-bound box.
+    # The required branch-protection check names derive from `matrix.shard`, so
+    # they stay exactly "T0 Gate (<shard>)" — no protection change needed. The
+    # Windows-only workerd-lock pre-install step self-skips (`runner.os ==
+    # 'Windows'`). Moving the fs-reading structural gates to Linux also removes
+    # the Windows path-sep vacuous-green class (OSE-980/981).
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
-      # OSE-696: run the gate shards ONE AT A TIME. `a11y` and `invariants`
-      # still spin up the @cloudflare/vitest-pool-workers (workerd) runtime on
-      # the single RAM-bound self-hosted box; running two of them concurrently
-      # corrupts the workerd isolate (ECONNRESET / "Worker exited unexpectedly"
-      # / "Reflect.get called on non-object"), which NON-deterministically fails
-      # a different test each run. Serializing the matrix means each self-hosted
-      # workerd shard runs alone — the same condition under which the suite is
-      # reliably green locally. NOTE: since OSE-977 moved the `tests` shard to a
-      # separate ephemeral ubuntu-latest VM, it no longer contends for the box,
-      # but max-parallel:1 still serializes it into the chain (no speed win yet
-      # — that comes when `tests` is split into its own always-parallel job, a
-      # follow-up). Raise this for the remaining self-hosted shards only with
-      # real capacity (a second box / more RAM), never more agents on this box.
-      max-parallel: 1
+      # OSE-954: `max-parallel: 1` is REMOVED. Its entire justification was the
+      # single RAM-bound self-hosted box — concurrent workerd shards there
+      # corrupted the shared isolate (ECONNRESET / "Worker exited unexpectedly"
+      # / "Reflect.get called on non-object"). Now that every shard runs on its
+      # own ephemeral ubuntu-latest VM there is zero cross-shard contention, so
+      # the five shards run fully in parallel (wall-clock win: the gate is now
+      # bounded by the slowest single shard, not their serial sum).
       matrix:
         # `invariants` shard (OSE-350) runs the structural 0-architecture
         # invariant tests on EVERY PR + push — see the "Architecture:
@@ -656,7 +656,11 @@ jobs:
       - name: 'Architecture: structural invariants'
         if: matrix.shard == 'invariants'
         run: |
-          npx playwright install chromium
+          # OSE-954: --with-deps pulls the chromium system libraries on the
+          # ephemeral ubuntu VM (passwordless sudo on GitHub-hosted runners);
+          # harmless on other platforms. Prevents a missing-shared-lib failure
+          # now that this shard no longer runs on the pre-provisioned box.
+          npx playwright install --with-deps chromium
           npx playwright test --config=playwright.e2e-smoke.config.ts \
             tests/e2e/0-architecture/aggregate-only.invariant.spec.ts \
             tests/e2e/0-architecture/api-response-schema.invariant.spec.ts \
