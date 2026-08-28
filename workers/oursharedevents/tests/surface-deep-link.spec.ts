@@ -181,9 +181,70 @@ describe('OSE-1081 — shared-report.html accepts `event` WITHOUT dropping legac
   });
 });
 
+// ── Security: the attacker-controllable `event` param must stay inert ─────────
+
+describe('OSE-1081 — the event deep-link param is never reflected (XSS-inert)', () => {
+  // `event` is attacker-controllable (it rides in on location.search). OSE-1081
+  // must keep it a pure SELECTOR — a value compared against server-provided event
+  // ids to pick an index, or fed through encodeURIComponent() into a fetch URL —
+  // and never let it reach an HTML/inline-script sink. The repo's known failure
+  // mode (OSE-R-015) is one unescaped char breaking out of a string context, so
+  // these assertions pin that the raw param can never land in innerHTML.
+  //
+  // Born-red proof (2026-08-28): inserting `el.innerHTML = wanted;` into
+  // poster.html (or echoing the query into the served bytes) turns the matching
+  // assertion below red; the shipped templates keep them green.
+
+  // A raw-param identifier sitting on the same statement as an innerHTML write is
+  // the reflection sink this suite forbids.
+  const reflectsIntoMarkup = (src: string, paramVar: string): boolean =>
+    new RegExp(`innerHTML[^\\n;]*\\b${paramVar}\\b|\\b${paramVar}\\b[^\\n;]*innerHTML`).test(src);
+
+  test('poster.html uses the `event` param only as an id-match selector, never in innerHTML', () => {
+    const poster = sourceFile('templates/poster.html');
+    // The param is read and compared to a fetched id — the selector contract.
+    expect(poster).toContain(CANONICAL_READ);
+    expect(poster).toMatch(/items\[i\]\.id === wanted/);
+    // …and the raw param value never reaches a markup sink.
+    expect(reflectsIntoMarkup(poster, 'wanted'), 'raw event param reaches innerHTML').toBe(false);
+  });
+
+  test('display.html uses the `event` param only as an id-match selector, never in innerHTML', () => {
+    const display = sourceFile('templates/display.html');
+    expect(display).toContain(CANONICAL_READ);
+    expect(display).toMatch(/items\[i\]\.id === wanted/);
+    expect(reflectsIntoMarkup(display, 'wanted'), 'raw event param reaches innerHTML').toBe(false);
+  });
+
+  test('shared-report.html routes the resolved event id through encodeURIComponent, never innerHTML', () => {
+    const report = sourceFile('templates/shared-report.html');
+    // The only network use of the id is an encoded path segment.
+    expect(report).toContain('encodeURIComponent(eventId)');
+    // The resolved id never reaches a markup sink (the download filename is a
+    // property assignment on a never-inserted <a>, not innerHTML).
+    expect(reflectsIntoMarkup(report, 'eventId'), 'resolved event id reaches innerHTML').toBe(
+      false
+    );
+  });
+
+  test('the SERVED poster page does not reflect an `event` payload into its HTML', async () => {
+    const payload = '"></script><script>alert(document.domain)</script>';
+    const res = await handlePosterPage(
+      pagesEnv(),
+      new Request('https://t.test/poster?event=' + encodeURIComponent(payload))
+    );
+    const body = await res.text();
+    // The surface is a static template; the param is resolved client-side, so the
+    // attacker string must never appear in the bytes the worker serves.
+    expect(body).not.toContain('<script>alert(document.domain)</script>');
+    expect(body).not.toContain(payload);
+  });
+});
+
 // ── The inline scripts must still be intact + noncable ───────────────────────
 
 describe('OSE-1081 — the inline scripts survive the edit', () => {
+  // The repo's hard-won lesson (OSE-R-015): one unescaped quote inside these
   // The repo's hard-won lesson (OSE-R-015): one unescaped quote inside these
   // string-concatenated templates kills the ENTIRE inline script — no picker, no
   // QR, no sponsors — and the page still returns 200, so only a parse check
