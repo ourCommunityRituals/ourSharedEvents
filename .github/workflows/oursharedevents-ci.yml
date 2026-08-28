@@ -1863,41 +1863,32 @@ jobs:
       contents: read
       actions: read
     steps:
-      - uses: actions/checkout@v7
-        with:
-          clean: false          # preserve what the execution phase left behind, so we can detect it
-          fetch-depth: 50
-
-      - name: 'Integrity — no tracked source mutated during execution'
+      # NO `actions/checkout` here — ON PURPOSE (OSE-1056, Dr.-of-Security P0).
+      # `actions/checkout@v7` runs `git checkout --force <sha>`, which RESETS tracked
+      # files and lockfiles to the committed SHA — ERASING any tracked-file mutation
+      # or lockfile tamper the execution phase injected, BEFORE the `git diff` below
+      # could see it. That made 2 of the 3 integrity checks vacuously green (proven:
+      # tests/unit/security/post-execution-integrity.test.js, the "TRAP" case). We
+      # therefore inspect the workspace the execution phase left behind on THIS
+      # self-hosted runner directly, without re-checking-out.
+      - name: 'Guard — verify this is the executed workspace (fail-closed)'
         shell: bash
         run: |
-          echo "## S2 Post-Execution Security" >> $GITHUB_STEP_SUMMARY
-          if ! git diff --exit-code --stat; then
-            echo "::error::Tracked source files were modified during the execution phase (Gates 2-3). Possible injection."
+          if [ ! -e .git ]; then
+            echo "::error::No preserved workspace on this runner — cannot verify post-execution integrity (fail-closed)."
             exit 1
           fi
-          echo "- **Tracked-source integrity:** clean (no post-execution mutation)" >> $GITHUB_STEP_SUMMARY
+          HEAD=$(git rev-parse HEAD)
+          if [ "$HEAD" != "${{ github.sha }}" ]; then
+            echo "::error::Workspace HEAD ($HEAD) != run SHA (${{ github.sha }}) — this is not the tree that executed Gates 2-3; refusing to pass (fail-closed)."
+            exit 1
+          fi
 
-      - name: 'Integrity — no files injected into src/ or migrations/'
+      # Single source of truth — the SAME script the born-red test drives, so the
+      # gate and its proof can never silently diverge (reconciliation-grade).
+      - name: 'Integrity — no injection during execution phase'
         shell: bash
-        run: |
-          INJECTED=$(git ls-files --others --exclude-standard -- \
-            workers/oursharedevents/src workers/oursharedevents/migrations || true)
-          if [ -n "$INJECTED" ]; then
-            echo "::error::Untracked files appeared under src/ or migrations/ during execution. Possible injection:"
-            echo "$INJECTED"
-            exit 1
-          fi
-          echo "- **No injected source/migration files:** confirmed" >> $GITHUB_STEP_SUMMARY
-
-      - name: 'Integrity — lockfile unchanged'
-        shell: bash
-        run: |
-          if ! git diff --exit-code -- package-lock.json workers/oursharedevents/package-lock.json; then
-            echo "::error::package-lock.json changed during the run — dependency drift / possible supply-chain injection."
-            exit 1
-          fi
-          echo "- **Lockfile integrity:** unchanged" >> $GITHUB_STEP_SUMMARY
+        run: bash scripts/check-post-execution-integrity.sh
 
       - name: 'Deps install without lifecycle scripts'
         shell: bash
