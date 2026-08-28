@@ -1442,6 +1442,12 @@ jobs:
           BASE_URL: ${{ env.STG_BASE_URL }}
           ADMIN_KEY: ${{ secrets.ADMIN_KEY }}
           X_OCR_INTERNAL: ${{ secrets.X_OCR_INTERNAL }}
+          # CF Access service token — clears the edge so the admin routes reach
+          # the worker; consumed as extraHTTPHeaders in playwright.ui-smoke.config.ts
+          # (OSE-1010 / OSE-865). Present but the admin routes stay grep-inverted
+          # below until a staging run confirms the edge clears (OSE-1010 DoD).
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
           SMOKE_ADMIN_READY: '1'
           # Fixture IDs seeded via tests/ui/smoke/fixtures/smoke-events.sql (OSE-455).
           # Routes skip cleanly when absent; set to known IDs when staging has been seeded.
