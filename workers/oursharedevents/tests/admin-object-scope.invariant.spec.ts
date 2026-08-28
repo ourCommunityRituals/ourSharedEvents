@@ -360,3 +360,58 @@ describe('OSE-1080 / INVARIANT #9 — fail-closed defaults and untouched paths',
     expect(rollup.status).toBe(200);
   });
 });
+
+// ── Path-normalization bypass class ───────────────────────────────────────────
+//
+// The wall's soundness rests on ONE property: the guard's matcher is a SUPERSET
+// of every router matcher that dispatches to an event/deployment handler, and
+// both read the identical `url.pathname`. If that ever drifts — e.g. the guard
+// regex loses its `(?:\/.*)?` subtree tail while the router keeps dispatching
+// sub-resources — a normalized path (trailing slash, doubled slash, %2F, case,
+// query string) could reach a mutating handler the guard no longer recognizes.
+// These lock that class shut so the drift is caught here, not in production.
+//
+// Born-red proof (2026-08-28): narrowing ADMIN_EVENT_OBJECT_PATH to
+// `…events\/([^/]+)$` (dropping the subtree tail) turns the sub-resource probes
+// below red — the shipped superset regex keeps them green.
+describe('OSE-1080 / INVARIANT #9 — normalization cannot smuggle a cross-tenant object past the guard', () => {
+  // Every variant addresses brand-B's event or deployment; a brand-A operator
+  // must be answered 404 (or a route 404), never 200, and brand-B must be left
+  // byte-identical.
+  const crossTenantVariants: ReadonlyArray<readonly [string, string]> = [
+    ['PUT', '/api/v2/admin/events/evt-obj-B1'], // baseline
+    ['PUT', '/api/v2/admin/events/evt-obj-B1/'], // trailing slash
+    ['GET', '/api/v2/admin/events/evt-obj-B1/stats'], // baseline sub-resource
+    ['GET', '/api/v2/admin/events/evt-obj-B1/stats/'], // trailing slash on sub-resource
+    ['GET', '/api/v2/admin/events/evt-obj-B1//stats'], // doubled slash before sub-resource
+    ['GET', '/api/v2/admin/events/evt-obj-B1%2Fstats'], // percent-encoded slash
+    ['GET', '/api/v2/admin/events/evt-obj-B1/STATS'], // upper-case sub-resource
+    ['PUT', '/api/v2/admin/events/evt-obj-B1?impersonate=brand-obj-A'], // query string
+    ['GET', '/api/v2/admin/poster-deployments/pd-obj-B1/'], // deployment, trailing slash
+  ];
+
+  for (const [method, path] of crossTenantVariants) {
+    test(`${method} ${path} never reaches a handler as 200 and never mutates brand B`, async () => {
+      const before = await titleOf('evt-obj-B1');
+      const res = await call(
+        method,
+        path,
+        headersAsEmail(SCOPED),
+        method === 'GET' ? undefined : { title: 'PWNED VIA NORMALIZATION' }
+      );
+      expect(res.status, `${method} ${path} returned ${res.status}`).not.toBe(200);
+      // The wall is only real if no normalized spelling let the write through.
+      expect(await titleOf('evt-obj-B1'), `${method} ${path} mutated brand B`).toBe(before);
+    });
+  }
+
+  test('the matcher recognizes trailing-slash + sub-resource spellings as the SAME event target (superset property)', () => {
+    for (const path of [
+      '/api/v2/admin/events/evt-1/',
+      '/api/v2/admin/events/evt-1/stats/',
+      '/api/v2/admin/events/evt-1//stats',
+    ]) {
+      expect(matchAdminObjectTarget(path), path).toEqual({ kind: 'event', id: 'evt-1' });
+    }
+  });
+});
