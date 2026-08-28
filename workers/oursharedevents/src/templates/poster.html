@@ -577,6 +577,22 @@
         '</div>';
       }
 
+      // OSE-1081: `event` is the CANONICAL surface deep-link param. admin.html's
+      // scopedSurfaceUrl() emits /poster?event=<id>, but this page used to ignore
+      // location.search entirely and always render items[0] — so every scoped
+      // poster link an organizer copied out of the dashboard showed some OTHER
+      // event. Returns the index of the requested event, or -1 when the param is
+      // absent or names an event this page did not fetch (then the historical
+      // first-event behaviour stands).
+      function requestedEventIndex(items) {
+        const wanted = new URLSearchParams(location.search).get('event');
+        if (!wanted) return -1;
+        for (let i = 0; i < items.length; i++) {
+          if (items[i] && items[i].id === wanted) return i;
+        }
+        return -1;
+      }
+
       async function init() {
         const picker = document.getElementById('event-picker');
         const area = document.getElementById('poster-area');
@@ -595,9 +611,15 @@
             // banned Untitled-Event literal that made every option identical.
             '<option value="' + i + '">' + esc(e.name || e.id || '') + '</option>'
           ).join('');
-          area.innerHTML = renderPoster(items[0]);
-          loadPosterSponsors(items[0].id);
-          loadPosterQR(items[0].id);
+          // OSE-1081: honour ?event=<id>. The <select> is the page's source of
+          // truth for "which event is showing", so it is moved in step with the
+          // rendered poster — otherwise the picker would read event #1 while the
+          // deep-linked poster below it showed another.
+          const startIdx = Math.max(requestedEventIndex(items), 0);
+          picker.value = String(startIdx);
+          area.innerHTML = renderPoster(items[startIdx]);
+          loadPosterSponsors(items[startIdx].id);
+          loadPosterQR(items[startIdx].id);
           picker.addEventListener('change', () => {
             const idx = parseInt(picker.value, 10);
             if (!isNaN(idx) && items[idx]) {
