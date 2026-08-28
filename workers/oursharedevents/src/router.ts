@@ -121,6 +121,7 @@ import {
 import { handleBriefingPage } from './handlers/briefing';
 import { handleDemoIndex, handleDemoSite } from './handlers/demo';
 import { requireAdmin, extractAdminActor, verifyCfAccessJWT, type AdminEnv } from './auth/admin';
+import { guardAdminObjectScope, type AdminObjectScopeEnv } from './lib/admin-object-scope';
 import {
   logAdminAction,
   logReportAccess,
@@ -241,6 +242,7 @@ export type RouterEnv = PagesEnv &
   DataSubjectEnv &
   SharedReportReadEnv &
   ShortlinkResolveEnv &
+  AdminObjectScopeEnv &
   RateLimitEnv & {
     WORKER_ENV?: string;
     WORKER_BUILD_VERSION?: string;
@@ -454,6 +456,25 @@ export async function route(
       return rateLimitResponse();
     }
   }
+
+  // ── Admin OBJECT-level brand scope (OSE-1080, #9 tenant_isolation) ─────────
+  //
+  // Brand scoping used to stop at the LIST endpoints: every admin path that
+  // addresses ONE object by id (PUT /admin/events/:id, /stats, /verify-qr,
+  // /backup, /uploads, /poster-deployments, /flags/:key, /forms/*,
+  // /shared-report/mint-link, /admin/poster-deployments/:id) took the id
+  // straight to SQL, so a brand-A operator who knew a brand-B id could read AND
+  // mutate it. One guard here — the single dispatch point — proves the target
+  // object's brand_id is inside the caller's server-derived scope before ANY of
+  // those handlers runs, and covers sub-routes added later for free.
+  //
+  // Placed after the CF Access JWT signature pre-flight (a forged token is
+  // rejected before its claims are read) and before the first admin route, but
+  // it stays silent for a caller with no verified admin identity so each route's
+  // own requireAdmin still owns the 401 + audit-denied path. Scoped miss = 404,
+  // never 403 — a 403 would confirm the id exists. See lib/admin-object-scope.ts.
+  const objectScopeDeny = await guardAdminObjectScope(request, env, pathname);
+  if (objectScopeDeny) return objectScopeDeny;
 
   // ── Admin routes (auth-gated) ──────────────────────────────────────────────
   //
