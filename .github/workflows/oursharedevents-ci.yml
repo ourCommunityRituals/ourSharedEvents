@@ -1390,7 +1390,10 @@ jobs:
           ADMIN_KEY: ${{ secrets.ADMIN_KEY }}
           X_OCR_INTERNAL: ${{ secrets.X_OCR_INTERNAL }}
           SMOKE_EVENT_SPONSORED: evt_smoke_sponsored
-        run: npx playwright test --config=playwright.e2e-smoke.config.ts tests/e2e/0-architecture/
+        run: |
+          PW_LABEL='T4a: Architecture Invariants' scripts/pw-guarded.sh \
+            --config=playwright.e2e-smoke.config.ts \
+            tests/e2e/0-architecture/
         timeout-minutes: 3
 
       - name: 'T4b: Core Journeys'
@@ -1493,7 +1496,12 @@ jobs:
         # lacks: /admin ×2 (blocked at the CF Access edge — needs the CF Access
         # service token) + /sharedReport (needs a signed link token). Those are
         # tracked in OSE-1010; the other 16 tier-1 page-smokes gate as BLOCKING.
-        run: SMOKE_APP=ose SMOKE_ADMIN_READY=1 npx playwright test --config=playwright.ui-smoke.config.ts --grep-invert "admin dashboard|admin sign-in|shared report shell" tests/ui/smoke/tier1.spec.ts
+        run: |
+          SMOKE_APP=ose SMOKE_ADMIN_READY=1 \
+          PW_LABEL='T4d: Tier-1 UI Smoke' scripts/pw-guarded.sh \
+            --config=playwright.ui-smoke.config.ts \
+            --grep-invert "admin dashboard|admin sign-in|shared report shell" \
+            tests/ui/smoke/tier1.spec.ts
         timeout-minutes: 10
 
       # T4e: Attendee arc — poster → pre / event / post phases (OSE-456).
@@ -1503,13 +1511,20 @@ jobs:
       # when staging has not been manually seeded for the run.
       - name: 'T4e: Attendee Arc Journey'
         id: attendee-arc-tests
-        continue-on-error: true
+        # continue-on-error REMOVED (OSE-852 / MINE-0). This step was insulated from
+        # going red three separate ways: its positional path lay outside the config's
+        # testDir so discovery returned zero, a zero-discovery run exits green, and
+        # continue-on-error swallowed anything left. Fixing discovery alone would have
+        # been cosmetic while this line remained.
         env:
           BASE_URL: ${{ env.STG_BASE_URL }}
           SMOKE_EVENT_PRE: evt_smoke_pre
           SMOKE_EVENT_LIVE: evt_smoke_live
           SMOKE_EVENT_POST: evt_smoke_post
-        run: npx playwright test --config=playwright.e2e-smoke.config.ts tests/ui/smoke/journey-attendee-arc.smoke.spec.ts
+        run: |
+          PW_LABEL='T4e: Attendee Arc Journey' scripts/pw-guarded.sh \
+            --config=playwright.ui-smoke.config.ts \
+            tests/ui/smoke/journey-attendee-arc.smoke.spec.ts
         timeout-minutes: 5
 
       # T4f: SharedReport depth gate — E2E contract tests (S-3.3.2 / Invariant #5).
@@ -1525,7 +1540,10 @@ jobs:
           SMOKE_RPT_LOCAL_TOKEN: ${{ secrets.SMOKE_RPT_LOCAL_TOKEN }}
           SMOKE_RPT_MID_TOKEN: ${{ secrets.SMOKE_RPT_MID_TOKEN }}
           SMOKE_RPT_OTHER_EVENT_TOKEN: ${{ secrets.SMOKE_RPT_OTHER_EVENT_TOKEN }}
-        run: npx playwright test --config=playwright.e2e-smoke.config.ts tests/e2e/3-flows/sharedreport-depth.spec.ts
+        run: |
+          PW_LABEL='T4f: SharedReport Depth Gate' scripts/pw-guarded.sh \
+            --config=playwright.e2e-smoke.config.ts \
+            tests/e2e/3-flows/sharedreport-depth.spec.ts
         timeout-minutes: 5
 
       - name: Upload artifacts
