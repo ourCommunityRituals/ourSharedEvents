@@ -74,7 +74,7 @@ Public:
   GET /api/v2/events/:id     → { ok, item }
   GET /                      → 200 HTML (public page)
 
-Admin (Bearer token):
+Admin (CF Access JWT; X-OCR-Internal / Bearer fallbacks are env-gated):
   GET /admin                 → 200 HTML (dashboard)
   GET /api/v2/admin/events   → { ok, items[] } (includes archived)
 ```
@@ -84,7 +84,7 @@ Admin (Bearer token):
 ```
 workers/oursharedevents/src/
 ├── index.ts              # Entry point + scheduled PII lifecycle job
-├── router.ts             # Route table (30+ endpoints)
+├── router.ts             # Route table (~80 method+path pairs)
 ├── auth/admin.ts         # Admin auth guard (CF Access JWT + Bearer fallback)
 ├── handlers/
 │   ├── health.ts         # Health check
@@ -129,14 +129,14 @@ Every story is implemented from all six POVs simultaneously. CC reads all six an
 - Prioritizes backlog
 - Reviews sprint progress in Linear
 - Accepts/rejects completed stories
-- **Current state**: Phase 1 Build complete, Phase 1 Ops blocked on infra (INFRA-1,2,3). Phase 2 (D1 database) complete — data layer is D1-native, no Sheets code remains. 3-tier feature flags implemented. Forms system implemented (4 types). A11Y-1 done. 65 stories across 8 epics tracked. MVP readiness 6.5/10 — staging ready, production blocked.
+- **Current state**: Phase 1 Build complete. INFRA-1 (D1) and INFRA-2 (CF zone + DNS) ✅ DONE; remaining infra: INFRA-3 (GCP SA) and INFRA-4 (FORMS_ENCRYPTION_KEY rotation doc). P1-7 (secrets + first staging deploy) 🔄 IN PROGRESS; P1-8/9/10 backlog. Phase 2 (D1 database) complete — data layer is D1-native, no Sheets code remains. 3-tier feature flags implemented. Forms system implemented (4 types). A11Y-1 done. Production gate: OSE-540 CCR promotion criteria (staging green + live T4 run + score ≥85%).
 
 ### Lead Backend Architect (BE)
 
 - Writes Worker route handlers
 - Implements D1 queries (Phase 2)
 - Owns DB design, API contracts, auth, feature flags, testing pyramid
-- **Current state**: 30 routes implemented, 13 D1 migrations (main DB) + forms DB migrations, 3-tier feature flags working, forms handler with PII encryption/scrubbing. Phase 2 D1 swap complete — all handlers query D1 directly, no Sheets dependency. Gaps: anonymous ID (BE-1), rate limiting (BE-2), PII audit log (BE-3), 5 admin endpoints unimplemented.
+- **Current state**: ~80 routes implemented, 68 D1 migrations (main DB) + 13 forms DB migrations, 3-tier feature flags working (extracted to `@ocr/flags`), forms handler with PII encryption/scrubbing. Phase 2 D1 swap complete — all handlers query D1 directly, no Sheets dependency. Formerly-listed gaps now ✅ DONE: anonymous ID (`lib/anonymous-id.ts`, ADMIN-6), rate limiting (KV-backed + in-isolate, `lib/rate-limit.ts`), PII audit log (`pii_audit_log`, migrations-forms/0009). Known gap: brand scoping is list-level only — `getEvent`/`handleUpdateEvent` are id-only (object-level scoping tracked in OSE-1080).
 
 ### Lead FE Integration (FD)
 
@@ -163,16 +163,16 @@ Every story is implemented from all six POVs simultaneously. CC reads all six an
 ### DevOps
 
 - DB provisioning, service config, CI/CD pipeline, secrets management
-- **Current state**: CI pipeline mature (5-stage, staging+prod). Secrets documented in `.github-secrets-required.json` + `CLOUDFLARE_SECRETS.md`. Environment parity verified. Gaps: D1 not provisioned (placeholder IDs), CF zone not active, GCP not set up, FORMS_ENCRYPTION_KEY undocumented, no gitleaks scanning.
+- **Current state**: CI pipeline mature (security → gate → deploy-staging → smoke/contract/functional-staging → deploy-production → smoke-production). Secrets documented in `.github-secrets-required.json` + `CLOUDFLARE_SECRETS.md`. Environment parity verified. D1 provisioned with real IDs for staging + production (both DBs), KV provisioned 2026-08-18 (OSE-813), R2 buckets bound, CF zone active with routes on `stg.oursharedevents.com` and `oursharedevents.com`; `scripts/check-binding-placeholders.mjs` gates CI against placeholder IDs. Gitleaks config present (`.gitleaks.toml`). Remaining gaps: GCP SA (INFRA-3), FORMS_ENCRYPTION_KEY rotation doc (INFRA-4), first staging deploy sign-off (P1-7/P1-8).
 
 ---
 
 ## 4. Known Constraints
 
-- **Single admin token**: Shared Bearer token (Phase 1 limitation, fixed in Phase 3)
-- **HTML in Worker bundle**: ~200KB embedded templates (Phase 1, moved to CDN in Phase 3)
-- **No live infrastructure yet**: CF zone, D1, Firebase not provisioned — code-first approach
-- **Multi-brand isolation**: Dual-key pattern (id + brandId) already in schema
+- **Admin auth**: CF Access JWT (JWKS-verified) + email allowlist; `X-OCR-Internal` and Bearer `ADMIN_KEY` fallbacks are env-flag-gated (staging). Phase 3 brings end-user auth.
+- **HTML in Worker bundle**: ~253KB embedded templates across 7 files, served whole with per-request CSP nonces (Phase 1, moved to CDN in Phase 3). Three parallel frontend copies exist (`src/templates/`, `web/`, `src/frontend/`) — `src/templates/` is what actually serves.
+- **Infrastructure**: D1/KV/R2/zone provisioned (staging + production, real IDs in wrangler.toml); Firebase (Phase 3) not started. First staging deploy in flight (P1-7).
+- **Multi-brand isolation**: `brand_id` in schema on core tables, but enforcement is list-level only today — object-level (get/update) scoping is a known gap tracked in OSE-1080.
 
 ---
 
@@ -330,3 +330,7 @@ Each story should include:
 - Escalation paths, time-boxing, peer review of worksheets
 - Threshold advancement framework — path from 95% to 99% gated by infrastructure economics
 - Transparency notes — honest framing of statistical claims and weight calibration
+
+---
+
+*Doc status: role current-states last fully verified 2026-08-03 (STORIES.md); corrected for known drift 2026-08-28 (OCR-111 — routes, migrations, infra provisioning, closed BE gaps). The canonical route list is the header comment in `src/router.ts`; the canonical schema is `migrations/` + `migrations-forms/`.*
