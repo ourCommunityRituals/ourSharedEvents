@@ -1,0 +1,7 @@
+{
+  "_comment": "OSE-852 (MINE-0) skip-guard ratchet baseline. These are CEILINGS, not targets. Regenerate ONLY downward: node scripts/skip-census.mjs. Raising a number here to make CI green re-buries the silence this exists to surface.",
+  "_generated": "2026-08-29",
+  "ifReturn": 97,
+  "unannotated": 0,
+  "bare": 68
+}

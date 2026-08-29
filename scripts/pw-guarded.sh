@@ -55,3 +55,41 @@ echo "${LABEL}: discovered tests: ${COUNT}"
 echo "- **${LABEL}** — discovered tests: **${COUNT}**" >> "${GITHUB_STEP_SUMMARY:-/dev/null}"
 
 npx playwright test "$@"
+RUN_RC=$?
+
+# ── Publish the OUTCOME split, not just discovery (OSE-852 fix #3) ────────────
+# Discovery proves the step had work. It does NOT prove the work ran: a suite can
+# discover 40 tests, skip 40, and report green. PW_RESULTS_JSON names the file the
+# config's json reporter writes; when present, publish passed/skipped/failed so a
+# step that quietly stops asserting is visible instead of inferred. Never allowed
+# to change the verdict — the run's exit code is preserved verbatim.
+if [ -n "${PW_RESULTS_JSON:-}" ] && [ -f "${PW_RESULTS_JSON}" ]; then
+  SPLIT="$(node -e '
+    const fs = require("fs");
+    try {
+      const j = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+      const n = { expected: 0, skipped: 0, unexpected: 0, flaky: 0 };
+      (function walk(suites) {
+        for (const s of suites || []) {
+          for (const sp of s.specs || [])
+            for (const t of sp.tests || []) if (t.status in n) n[t.status]++;
+          walk(s.suites);
+        }
+      })(j.suites);
+      const ran = n.expected + n.unexpected + n.flaky;
+      const pct = ran + n.skipped ? Math.round((n.skipped * 100) / (ran + n.skipped)) : 0;
+      console.log(`${n.expected}|${n.skipped}|${n.unexpected}|${n.flaky}|${pct}`);
+    } catch { console.log(""); }
+  ' "${PW_RESULTS_JSON}")"
+  if [ -n "$SPLIT" ]; then
+    IFS='|' read -r P S U F PCT <<< "$SPLIT"
+    echo "${LABEL}: passed=${P} skipped=${S} failed=${U} flaky=${F} (${PCT}% skipped)"
+    echo "  - ${LABEL}: passed **${P}** · skipped **${S}** (${PCT}%) · failed **${U}** · flaky **${F}**" \
+      >> "${GITHUB_STEP_SUMMARY:-/dev/null}"
+    if [ "${S}" -gt 0 ] && [ "${P}" -eq 0 ]; then
+      echo "::warning::${LABEL}: every discovered test skipped — this step asserted nothing despite reporting success."
+    fi
+  fi
+fi
+
+exit $RUN_RC

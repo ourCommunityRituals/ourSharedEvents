@@ -1391,6 +1391,7 @@ jobs:
           X_OCR_INTERNAL: ${{ secrets.X_OCR_INTERNAL }}
           SMOKE_EVENT_SPONSORED: evt_smoke_sponsored
         run: |
+          PW_RESULTS_JSON=.test-results/e2e-smoke-results.json \
           PW_LABEL='T4a: Architecture Invariants' scripts/pw-guarded.sh \
             --config=playwright.e2e-smoke.config.ts \
             tests/e2e/0-architecture/
@@ -1498,6 +1499,7 @@ jobs:
         # tracked in OSE-1010; the other 16 tier-1 page-smokes gate as BLOCKING.
         run: |
           SMOKE_APP=ose SMOKE_ADMIN_READY=1 \
+          PW_RESULTS_JSON=.test-results/ui-smoke-results.json \
           PW_LABEL='T4d: Tier-1 UI Smoke' scripts/pw-guarded.sh \
             --config=playwright.ui-smoke.config.ts \
             --grep-invert "admin dashboard|admin sign-in|shared report shell" \
@@ -1522,6 +1524,7 @@ jobs:
           SMOKE_EVENT_LIVE: evt_smoke_live
           SMOKE_EVENT_POST: evt_smoke_post
         run: |
+          PW_RESULTS_JSON=.test-results/ui-smoke-results.json \
           PW_LABEL='T4e: Attendee Arc Journey' scripts/pw-guarded.sh \
             --config=playwright.ui-smoke.config.ts \
             tests/ui/smoke/journey-attendee-arc.smoke.spec.ts
@@ -1541,6 +1544,7 @@ jobs:
           SMOKE_RPT_MID_TOKEN: ${{ secrets.SMOKE_RPT_MID_TOKEN }}
           SMOKE_RPT_OTHER_EVENT_TOKEN: ${{ secrets.SMOKE_RPT_OTHER_EVENT_TOKEN }}
         run: |
+          PW_RESULTS_JSON=.test-results/e2e-smoke-results.json \
           PW_LABEL='T4f: SharedReport Depth Gate' scripts/pw-guarded.sh \
             --config=playwright.e2e-smoke.config.ts \
             tests/e2e/3-flows/sharedreport-depth.spec.ts
