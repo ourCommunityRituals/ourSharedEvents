@@ -180,6 +180,24 @@
       footer a:hover {
         text-decoration: underline;
       }
+      .ose-anonymity {
+        margin-top: 2rem;
+        padding: 1rem 1.25rem;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-left: 3px solid var(--accent);
+        border-radius: var(--radius-sm);
+        font-size: 0.9rem;
+        color: var(--text-muted);
+      }
+      .ose-anonymity h2 {
+        margin: 0 0 0.5rem;
+        font-size: 1rem;
+        color: var(--text);
+      }
+      .ose-anonymity p {
+        margin: 0;
+      }
     </style>
   </head>
   <body>
@@ -202,6 +220,15 @@
         <div id="events" data-testid="public-events" aria-live="polite" aria-atomic="false">
           <p class="loading" data-testid="public-loading" role="status">Loading events&hellip;</p>
         </div>
+      </section>
+      <section class="ose-anonymity" data-testid="anonymity-affordance" aria-labelledby="anon-heading">
+        <h2 id="anon-heading">How this works</h2>
+        <p>
+          You're part of the group, anonymously. OurSharedEvents tracks when
+          groups gather &mdash; never who you are. Event hosts and sponsors see
+          corridors and venues, not people. Nothing about your device, location,
+          or identity was collected to display this page.
+        </p>
       </section>
     </main>
     <footer data-testid="public-footer">

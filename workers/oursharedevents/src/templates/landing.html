@@ -420,6 +420,25 @@
           padding: 2rem 1rem 3rem;
         }
       }
+      .ose-anonymity {
+        max-width: 720px;
+        margin: 2rem auto 0;
+        padding: 1rem 1.25rem;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-left: 3px solid var(--accent);
+        border-radius: 4px;
+        font-size: 0.9rem;
+        color: var(--text-muted);
+      }
+      .ose-anonymity h2 {
+        margin: 0 0 0.5rem;
+        font-size: 1rem;
+        color: var(--text);
+      }
+      .ose-anonymity p {
+        margin: 0;
+      }
     </style>
     <link rel="stylesheet" href="/ui.css" />
     <style>
@@ -569,7 +588,7 @@
       </section>
       <section class="ring-section" aria-label="Focus neighborhoods" data-testid="ring-section">
         <h2 data-testid="ring-title">Our Neighborhood Ring</h2>
-        <p class="ring-subtitle">Six Southside communities. One connected flywheel.</p>
+        <p class="ring-subtitle">Six Southside communities. One connected event cycle.</p>
         <div class="ring-container" data-testid="ring-layout">
           <div class="ring-path" aria-hidden="true" data-testid="ring-path"></div>
           <div
@@ -628,6 +647,15 @@
             matter.
           </p>
         </div>
+      </section>
+      <section class="ose-anonymity" data-testid="anonymity-affordance" aria-labelledby="anon-heading">
+        <h2 id="anon-heading">How this works</h2>
+        <p>
+          You're part of the group, anonymously. OurSharedEvents tracks when
+          groups gather &mdash; never who you are. Event hosts and sponsors see
+          corridors and venues, not people. Nothing about your device, location,
+          or identity was collected to display this page.
+        </p>
       </section>
     </main>
     <footer data-testid="landing-footer">
