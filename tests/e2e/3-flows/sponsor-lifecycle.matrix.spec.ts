@@ -49,12 +49,20 @@ function mockEventsApi(page: Page, items: Record<string, unknown>[]) {
 }
 
 for (const { scenario, tier } of matrixCells()) {
+  // Cost tiering (Coverage Economics, plan §1): engine-specific bugs live in
+  // the render/input layer, not in business scenarios — the 3-engine sweep of
+  // 45 green cells showed ZERO engine divergence. So the flagship cell
+  // (wizard × local) carries the @webkit-critical tag: one WebKit pass per
+  // SCREEN retires ~all engine risk; the other cells re-run engine-free logic.
+  // PR gate = chromium full + webkit @webkit-critical; nightly = all engines.
+  const wk = scenario === 'wizard' && tier.tier === 'local' ? ' @webkit-critical' : '';
+
   test.describe(`matrix: ${scenario} × ${tier.tier}`, () => {
     // ── Admin creation path ──────────────────────────────────────────────────
     // wizard: BORN-RED until Phase B ships the guided surface.
     // advanced: asserts today's dashboard is reachable as the explicit
     // power-user path (entry testid lands in Phase B alongside the wizard).
-    test(`admin offers the ${scenario} path`, async ({ page }) => {
+    test(`admin offers the ${scenario} path${wk}`, async ({ page }) => {
       await page.goto('/admin', { waitUntil: 'domcontentloaded', timeout: TIMEOUT });
       const pathEntry = page.locator(`[data-testid="admin-path-${scenario}"]`);
       await expect(pathEntry).toBeVisible({ timeout: 10_000 });
@@ -67,7 +75,7 @@ for (const { scenario, tier } of matrixCells()) {
     });
 
     // ── Public page — sponsor truth at this tier ─────────────────────────────
-    test(`public page renders the ${tier.tier} event + sponsor truth`, async ({ page }) => {
+    test(`public page renders the ${tier.tier} event + sponsor truth${wk}`, async ({ page }) => {
       const event = eventFixture(tier);
       await mockEventsApi(page, [event]);
       await page.goto('/events', { waitUntil: 'networkidle', timeout: TIMEOUT });
@@ -84,7 +92,9 @@ for (const { scenario, tier } of matrixCells()) {
 
     // ── Sponsor card — tier label + independent is_local badge ───────────────
     // BORN-RED: the canonical sponsor-card testids land with Phase B/C.
-    test(`sponsor card shows "${tier.friendlyLabel}" and the local badge`, async ({ page }) => {
+    test(`sponsor card shows "${tier.friendlyLabel}" and the local badge${wk}`, async ({
+      page,
+    }) => {
       const sponsor = sponsorFixture(tier);
       const event = eventFixture(tier);
       await mockEventsApi(page, [event]);
@@ -112,7 +122,7 @@ for (const { scenario, tier } of matrixCells()) {
     });
 
     // ── Display page — ambient surface carries the same truth ────────────────
-    test(`display surface loads for the ${tier.tier} cell`, async ({ page }) => {
+    test(`display surface loads for the ${tier.tier} cell${wk}`, async ({ page }) => {
       const event = eventFixture(tier);
       await mockEventsApi(page, [event]);
       await page.goto('/display', { waitUntil: 'domcontentloaded', timeout: TIMEOUT });

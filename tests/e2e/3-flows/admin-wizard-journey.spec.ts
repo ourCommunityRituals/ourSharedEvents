@@ -54,7 +54,11 @@ async function mockWizardApis(page: Page) {
 }
 
 test.describe('guided wizard journey (two paths, one admin)', () => {
-  test('organizer creates and launches an event through all five steps', async ({ page }) => {
+  // @webkit-critical: the wizard's deepest interaction path (form inputs,
+  // hidden-toggling, QR <img> rendering) — the layer where engines diverge.
+  test('organizer creates and launches an event through all five steps @webkit-critical', async ({
+    page,
+  }) => {
     await mockWizardApis(page);
     await page.goto('/admin', { waitUntil: 'domcontentloaded', timeout: TIMEOUT });
 

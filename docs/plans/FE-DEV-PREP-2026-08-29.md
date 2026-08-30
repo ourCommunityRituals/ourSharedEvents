@@ -66,6 +66,20 @@ Firefox excluded by Coverage Economics doctrine. Verified: journey 9/9,
 matrix 45/60 — the 15 reds are the 5 Phase C sponsor-card cells × 3 engines,
 observed-red by design; zero engine-specific divergence on green cells.
 
+**Cost tiering (ratified 2026-08-29, Coverage Economics):** engine bugs live in
+the render/input layer and don't multiply per business scenario (the 45-green
+sweep showed zero engine divergence), so:
+
+- **PR gate** = chromium full + `--grep @webkit-critical` on `e2e-mobile-safari`
+  (flagship wizard×local cell, one pass per screen + the 5-step journey).
+- **Nightly** = all 3 engines, `PW_WORKERS=3` (safe: these specs mock at the
+  network edge, no shared state; config default stays 1 for staging-mutating specs).
+
+Observed timings (local worker, 2026-08-29): chromium full **2.4m** + webkit
+slice **23s** ≈ 2.8m PR gate (was 7m 3-engine serial); nightly 69 tests at 3
+workers **2.5m** (was 6.2m serial). Reds in every run = the same Phase C
+sponsor-card contract, nothing engine-specific.
+
 Each journey: reset via demo harness → create through the chosen path → assert the
 SAME sponsor truth on card → public → display (reconciled-pyramid: layers corroborate
 one truth; never mask a cross-layer disagreement to go green).

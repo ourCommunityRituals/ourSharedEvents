@@ -26,7 +26,14 @@ export default defineConfig({
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
-  workers: 1,
+  // Cost lever (Coverage Economics): CI cost = wall-clock minutes, so serial
+  // 3-engine runs pay 3× for nothing when specs mock at the network edge
+  // (page.route) and share no state. Default stays 1 because SOME e2e specs
+  // mutate staging (demo-harness resets) and fullyParallel:false only
+  // serializes within a file, not across files. Opt in per run:
+  //   PW_WORKERS=3 npx playwright test admin-wizard-journey sponsor-lifecycle.matrix ...
+  // → one worker per engine project; safe for the mocked matrix/journey specs.
+  workers: process.env.PW_WORKERS ? Number(process.env.PW_WORKERS) : 1,
 
   timeout: 60_000,
   expect: { timeout: 15_000 },
