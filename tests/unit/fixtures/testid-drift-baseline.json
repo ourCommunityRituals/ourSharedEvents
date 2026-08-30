@@ -31,7 +31,6 @@
   "gmaps-link",
   "gmaps-link-live",
   "happy-path-checklist",
-  "launch-wizard",
   "lifecycle-indicator",
   "loading-state",
   "loading-view",
@@ -50,19 +49,5 @@
   "sponsor-tier-label",
   "state-message",
   "submit-button",
-  "tap-button",
-  "wizard-event-date",
-  "wizard-event-name",
-  "wizard-event-venue",
-  "wizard-finish-btn",
-  "wizard-link-display",
-  "wizard-link-poster",
-  "wizard-link-public",
-  "wizard-link-report",
-  "wizard-next-btn",
-  "wizard-step-1",
-  "wizard-step-2",
-  "wizard-step-3",
-  "wizard-step-4",
-  "wizard-step-5"
+  "tap-button"
 ]
