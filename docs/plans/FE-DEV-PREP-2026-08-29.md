@@ -80,12 +80,32 @@ one truth; never mask a cross-layer disagreement to go green).
 
 - **Phase A — Consolidation harness** _(this branch)_: scenario×tier fixture +
   parameterized matrix spec, **born-red observed** for wizard cells.
-- **Phase B — Wizard surface**: guided native-JS admin path + `@ocr/ui` wizard-step
-  partial; dashboard stays as "advanced". Turns wizard cells green.
-  **Adopt the archived wizard's existing testid contract** already in the drift
+- **Phase B — Wizard surface** _(SHIPPED 2026-08-29)_: guided native-JS admin path
+  in `admin.html`; dashboard stays as "advanced". Wizard + advanced admin-path
+  cells green on chromium AND mobile (15/20 matrix; the 5 remaining reds are the
+  Phase C sponsor-card testids, observed-red by design).
+  **Adopted the archived wizard's existing testid contract** already in the drift
   baseline (`launch-wizard`, `wizard-step-1..5`, `wizard-event-name/date/venue`,
   `wizard-next-btn`, `wizard-finish-btn`, `wizard-link-*`) — the contract predates
-  this plan; do not mint parallel names (one vocabulary per axis).
+  this plan; no parallel names (one vocabulary per axis). Baseline pruned 66→51
+  (those 15 are now emitted for real).
+  Phase B build notes:
+  - Uses ONLY existing APIs: `POST /api/v2/admin/events` (same endpoint as the
+    dashboard form) + `GET /api/v2/events/:id/poster-bundle` (QR data URIs).
+    Template step = deterministic prefill of the existing 5W fields; sign-ups
+    step offers only what truly exists (built-in form page | none) — no
+    pretend-saved external URLs (honesty/provenance doctrine).
+  - The S08 GAS-era contract (`admin-wizard-flow.spec.js`) never ran (`.js` not
+    matched by `playwright.e2e.config.ts`); its essentials are ported to a LIVE
+    spec: `tests/e2e/3-flows/admin-wizard-journey.spec.ts` (5-step journey,
+    validation gate, back-nav preserves input, skip path, links+QR render).
+  - **Deviation:** `@ocr/ui` wizard-step partial extraction deferred to Phase C
+    (templates are static HTML today; extraction belongs with tokenization).
+  - **Finding (ticket-worthy):** the admin page's nonce CSP (`pages.ts`) blocks
+    inline `onclick=` attributes — the wizard uses `addEventListener` only, but
+    admin.html has MANY pre-existing inline `onclick=` handlers (ecb-nav,
+    forms retry, mint-link, sponsors) that are silently dead on the served
+    page. Needs its own story; not fixed here to keep the diff scoped.
 - **Phase C — Tokenize + test-id parity**: strip inline styles; raise thin-surface
   test-id coverage.
 - **Phase D — First-read clarity pass**: plain-language copy across the four screens.

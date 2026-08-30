@@ -1311,6 +1311,290 @@
       .modal-overlay {
         background: rgba(0, 0, 0, 0.7);
       }
+
+      /* ── Two paths, one admin (FE dev-prep Phase B, 2026-08-29) ─────────────
+         The guided wizard serves the first-time organizer (a bar owner setting
+         up their first night); the dashboard below stays the "advanced" path
+         for power users. One admin, two doors — plan:
+         docs/plans/FE-DEV-PREP-2026-08-29.md. Styles adapted from the archived
+         prototype (archive/experimental-frontends/AdminWizard.html), re-themed
+         to today's admin palette. Inline-style cleanup + tokens = Phase C. */
+      .path-chooser {
+        background: #fff;
+        border-radius: 8px;
+        padding: 1.25rem 1.5rem;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+        margin-bottom: 2rem;
+        border-left: 3px solid #4361ee;
+      }
+      .path-chooser h2 {
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: #495057;
+        margin-bottom: 0.25rem;
+      }
+      .path-chooser-sub {
+        font-size: 0.85rem;
+        color: #64748b;
+        margin-bottom: 1rem;
+      }
+      .path-chooser-options {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0.75rem;
+      }
+      .path-option {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+        text-align: left;
+        padding: 1rem;
+        background: #f8f9fa;
+        border: 2px solid #dee2e6;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: border-color 0.15s, background 0.15s;
+      }
+      .path-option:hover,
+      .path-option:focus-visible {
+        border-color: #4361ee;
+        background: #fff;
+        outline: none;
+      }
+      .path-option-title {
+        font-size: 0.95rem;
+        font-weight: 600;
+        color: #1e293b;
+      }
+      .path-option-desc {
+        font-size: 0.8rem;
+        color: #64748b;
+      }
+      .launch-wizard {
+        background: #fff;
+        border-radius: 8px;
+        padding: 1.25rem 1.5rem;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+        margin-bottom: 2rem;
+        border-left: 3px solid #16a34a;
+      }
+      .launch-wizard h2 {
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: #495057;
+        margin-bottom: 1rem;
+      }
+      .wizard-progress {
+        display: flex;
+        justify-content: space-between;
+        position: relative;
+        margin-bottom: 1.5rem;
+      }
+      .wizard-progress::before {
+        content: '';
+        position: absolute;
+        top: 14px;
+        left: 10%;
+        right: 10%;
+        height: 2px;
+        background: #dee2e6;
+      }
+      .wizard-progress-step {
+        position: relative;
+        z-index: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.3rem;
+        flex: 1;
+        background: none;
+        border: none;
+        padding: 0;
+        cursor: default;
+      }
+      .wizard-progress-step .step-number {
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        background: #f8f9fa;
+        border: 2px solid #dee2e6;
+        color: #64748b;
+        font-size: 0.8rem;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .wizard-progress-step .step-label {
+        font-size: 0.7rem;
+        color: #64748b;
+      }
+      .wizard-progress-step.active .step-number {
+        background: #4361ee;
+        border-color: #4361ee;
+        color: #fff;
+      }
+      .wizard-progress-step.active .step-label {
+        color: #1e293b;
+        font-weight: 600;
+      }
+      .wizard-progress-step.completed {
+        cursor: pointer;
+      }
+      .wizard-progress-step.completed .step-number {
+        background: #16a34a;
+        border-color: #16a34a;
+        color: #fff;
+      }
+      .wizard-step {
+        display: none;
+      }
+      .wizard-step.active {
+        display: block;
+      }
+      .wizard-step-help {
+        font-size: 0.85rem;
+        color: #64748b;
+        margin-bottom: 1rem;
+      }
+      .wizard-template-grid,
+      .wizard-signup-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+        gap: 0.75rem;
+        margin-bottom: 1rem;
+      }
+      .wizard-template-card,
+      .wizard-signup-option {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+        text-align: left;
+        padding: 0.9rem;
+        background: #f8f9fa;
+        border: 2px solid #dee2e6;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: border-color 0.15s;
+      }
+      .wizard-template-card:hover,
+      .wizard-signup-option:hover,
+      .wizard-template-card:focus-visible,
+      .wizard-signup-option:focus-visible {
+        border-color: #4361ee;
+        outline: none;
+      }
+      .wizard-template-card.selected,
+      .wizard-signup-option.selected {
+        border-color: #16a34a;
+        background: #f0fdf4;
+      }
+      .wizard-card-title {
+        font-size: 0.9rem;
+        font-weight: 600;
+        color: #1e293b;
+      }
+      .wizard-card-desc {
+        font-size: 0.78rem;
+        color: #64748b;
+      }
+      .wizard-nav {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 0.75rem;
+        margin-top: 1rem;
+      }
+      .wizard-back-btn,
+      .wizard-skip-btn {
+        padding: 0.6rem 1.25rem;
+        background: #fff;
+        border: 1px solid #dee2e6;
+        border-radius: 6px;
+        font-size: 0.9rem;
+        color: #495057;
+        cursor: pointer;
+      }
+      .wizard-back-btn:hover,
+      .wizard-skip-btn:hover {
+        background: #f8f9fa;
+      }
+      .wizard-links-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0.75rem;
+        margin-bottom: 1rem;
+      }
+      .wizard-link-card {
+        background: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        padding: 0.9rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.4rem;
+      }
+      /* display:flex beats the UA's [hidden]{display:none} — restore it so the
+         sign-up card genuinely disappears when the organizer skips sign-ups. */
+      .wizard-link-card[hidden] {
+        display: none;
+      }
+      .wizard-link-card .wizard-card-url {
+        font-size: 0.75rem;
+        color: #4361ee;
+        word-break: break-all;
+      }
+      .wizard-link-card img {
+        width: 110px;
+        height: 110px;
+        background: #fff;
+        border-radius: 6px;
+        align-self: flex-start;
+      }
+      .wizard-copy-btn {
+        align-self: flex-start;
+        padding: 0.35rem 0.9rem;
+        background: #fff;
+        border: 1px solid #dee2e6;
+        border-radius: 6px;
+        font-size: 0.78rem;
+        color: #495057;
+        cursor: pointer;
+      }
+      .wizard-copy-btn:hover {
+        background: #f0fdf4;
+        border-color: #16a34a;
+      }
+      .wizard-checklist {
+        list-style: none;
+        padding: 0;
+        margin: 0 0 1rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+      }
+      .wizard-checklist li {
+        font-size: 0.9rem;
+        color: #1e293b;
+      }
+      .wizard-summary {
+        background: #f0fdf4;
+        border: 1px solid #16a34a;
+        border-radius: 8px;
+        padding: 0.9rem;
+        font-size: 0.95rem;
+        color: #1e293b;
+        margin-bottom: 1rem;
+      }
+      @media (max-width: 480px) {
+        .path-chooser-options,
+        .wizard-links-grid {
+          grid-template-columns: 1fr;
+        }
+        .wizard-progress-step .step-label {
+          display: none;
+        }
+      }
     </style>
   </head>
   <body>
@@ -1393,6 +1677,531 @@
           if (cap) cap.textContent = d.name || d.id || '';
           bar.hidden = false;
         });
+      </script>
+
+      <!-- ── Two paths, one admin (FE dev-prep Phase B, 2026-08-29) ───────────
+           WHO this serves: a first-time organizer (the bar owner running their
+           first trivia night) gets a short guided path; the returning power
+           user keeps the full dashboard. Same backend, same event — only the
+           door differs. Plan: docs/plans/FE-DEV-PREP-2026-08-29.md.
+           Testid contract: adopted from the pre-existing drift-baseline family
+           (launch-wizard, wizard-step-1..5, wizard-event-name/date/venue,
+           wizard-next-btn, wizard-finish-btn, wizard-link-*) — one vocabulary,
+           no parallel names. Uses ONLY existing APIs:
+             POST /api/v2/admin/events            (create — same as the card below)
+             GET  /api/v2/events/:id/poster-bundle (QR data URIs + form links)
+           CSP note: the admin page ships a nonce-based script-src (pages.ts),
+           which blocks inline onclick= attributes — all wizard wiring is
+           addEventListener inside the nonce'd script block below. -->
+      <div class="path-chooser" id="admin-path-chooser" data-testid="admin-path-chooser">
+        <h2>Set up your event</h2>
+        <p class="path-chooser-sub">Pick whichever feels right — both end in the same place.</p>
+        <div class="path-chooser-options">
+          <button
+            type="button"
+            class="path-option"
+            id="admin-path-wizard"
+            data-testid="admin-path-wizard"
+          >
+            <span class="path-option-title">Walk me through it</span>
+            <span class="path-option-desc">A few short steps. Great for your first event.</span>
+          </button>
+          <button
+            type="button"
+            class="path-option"
+            id="admin-path-advanced"
+            data-testid="admin-path-advanced"
+          >
+            <span class="path-option-title">Show me everything</span>
+            <span class="path-option-desc">The full dashboard, with every setting on one page.</span>
+          </button>
+        </div>
+      </div>
+
+      <section
+        class="launch-wizard"
+        id="launch-wizard"
+        data-testid="launch-wizard"
+        aria-label="Create and launch your event, step by step"
+        hidden
+      >
+        <h2>Create &amp; Launch</h2>
+
+        <!-- Progress rail — completed steps are clickable to go back (only
+             before the event is created; afterwards steps 1–3 are history). -->
+        <div class="wizard-progress" role="list" aria-label="Setup steps">
+          <button type="button" class="wizard-progress-step active" data-step="1">
+            <span class="step-number">1</span><span class="step-label">Basic Info</span>
+          </button>
+          <button type="button" class="wizard-progress-step" data-step="2">
+            <span class="step-number">2</span><span class="step-label">Template</span>
+          </button>
+          <button type="button" class="wizard-progress-step" data-step="3">
+            <span class="step-number">3</span><span class="step-label">Sign-Ups</span>
+          </button>
+          <button type="button" class="wizard-progress-step" data-step="4">
+            <span class="step-number">4</span><span class="step-label">Your Links</span>
+          </button>
+          <button type="button" class="wizard-progress-step" data-step="5">
+            <span class="step-number">5</span><span class="step-label">Launch</span>
+          </button>
+        </div>
+
+        <!-- Step 1 — the only must-answer questions. Date pre-fills to today. -->
+        <div class="wizard-step active" id="wizard-step-1" data-testid="wizard-step-1">
+          <p class="wizard-step-help">Tell us about your event. You can change any of this later.</p>
+          <div class="create-form">
+            <div class="full-width">
+              <label for="wizard-event-name">What's it called? <span class="required-star">*</span></label>
+              <input
+                type="text"
+                id="wizard-event-name"
+                data-testid="wizard-event-name"
+                placeholder="Thursday Trivia Night"
+                maxlength="200"
+                required
+              />
+            </div>
+            <div>
+              <label for="wizard-event-date">When is it?</label>
+              <input type="date" id="wizard-event-date" data-testid="wizard-event-date" />
+            </div>
+            <div>
+              <label for="wizard-event-venue">Where is it? <span class="required-star">*</span></label>
+              <input
+                type="text"
+                id="wizard-event-venue"
+                data-testid="wizard-event-venue"
+                placeholder="Rock Island Public House"
+                maxlength="500"
+                required
+              />
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 2 — template = a plain-language starting description. It
+             pre-fills the same optional "what/why" fields the dashboard form
+             sends; nothing tier-gated, nothing saved until step 3's create. -->
+        <div class="wizard-step" id="wizard-step-2" data-testid="wizard-step-2">
+          <p class="wizard-step-help">What kind of event is this? We'll start the description for you.</p>
+          <div class="wizard-template-grid" id="wizardTemplatePicker">
+            <button type="button" class="wizard-template-card" data-template="trivia">
+              <span class="wizard-card-title">Trivia Night</span>
+              <span class="wizard-card-desc">Teams, questions, bragging rights.</span>
+            </button>
+            <button type="button" class="wizard-template-card" data-template="games">
+              <span class="wizard-card-title">Game Night</span>
+              <span class="wizard-card-desc">Bocce, pinball, cards — friendly competition.</span>
+            </button>
+            <button type="button" class="wizard-template-card" data-template="music">
+              <span class="wizard-card-title">Live Music</span>
+              <span class="wizard-card-desc">A night built around the music.</span>
+            </button>
+            <button type="button" class="wizard-template-card selected" data-template="other">
+              <span class="wizard-card-title">Something Else</span>
+              <span class="wizard-card-desc">Start blank — describe it your way.</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Step 3 — sign-ups. Honest options only: the built-in sign-up page
+             already exists for every event (served at /forms/:eventId), so
+             "yes" simply surfaces its link in step 4. No pretend-saved
+             external URLs (provenance/honesty doctrine). -->
+        <div class="wizard-step" id="wizard-step-3" data-testid="wizard-step-3">
+          <p class="wizard-step-help">Want people to sign up ahead of time?</p>
+          <div class="wizard-signup-grid">
+            <button type="button" class="wizard-signup-option selected" data-option="create">
+              <span class="wizard-card-title">Yes — use the built-in sign-up page</span>
+              <span class="wizard-card-desc">We make it for you. You'll get the link in the next step.</span>
+            </button>
+            <button type="button" class="wizard-signup-option" data-option="none">
+              <span class="wizard-card-title">No sign-ups needed</span>
+              <span class="wizard-card-desc">People can just show up. You can add this later.</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Step 4 — every link the organizer needs, with a scannable code for
+             the pages attendees reach by phone (mobile = the attendee surface).
+             QR images come from the existing poster-bundle endpoint. -->
+        <div class="wizard-step" id="wizard-step-4" data-testid="wizard-step-4">
+          <p class="wizard-step-help">Your event is live. Here's everything to share and post.</p>
+          <div class="wizard-links-grid">
+            <div class="wizard-link-card" id="wizard-link-public" data-testid="wizard-link-public">
+              <span class="wizard-card-title">Event page</span>
+              <span class="wizard-card-desc">Share this link — it's what your guests see on their phones.</span>
+              <span class="wizard-card-url" data-role="url"></span>
+              <span id="wizardQrPublic"></span>
+              <button type="button" class="wizard-copy-btn">Copy link</button>
+            </div>
+            <div class="wizard-link-card" id="wizard-link-signup" data-testid="wizard-link-signup" hidden>
+              <span class="wizard-card-title">Sign-up page</span>
+              <span class="wizard-card-desc">Put this code on flyers — a phone scan opens the sign-up.</span>
+              <span class="wizard-card-url" data-role="url"></span>
+              <span id="wizardQrSignup"></span>
+              <button type="button" class="wizard-copy-btn">Copy link</button>
+            </div>
+            <div class="wizard-link-card" id="wizard-link-poster" data-testid="wizard-link-poster">
+              <span class="wizard-card-title">Printable poster</span>
+              <span class="wizard-card-desc">Open, print, and hang it up — codes included.</span>
+              <span class="wizard-card-url" data-role="url"></span>
+              <button type="button" class="wizard-copy-btn">Copy link</button>
+            </div>
+            <div class="wizard-link-card" id="wizard-link-display" data-testid="wizard-link-display">
+              <span class="wizard-card-title">Big-screen display</span>
+              <span class="wizard-card-desc">Open this on a TV at the venue for a live view.</span>
+              <span class="wizard-card-url" data-role="url"></span>
+              <button type="button" class="wizard-copy-btn">Copy link</button>
+            </div>
+            <div class="wizard-link-card" id="wizard-link-report" data-testid="wizard-link-report">
+              <span class="wizard-card-title">Results report</span>
+              <span class="wizard-card-desc">After the event, make a share link from the dashboard's report tool.</span>
+              <span class="wizard-card-url" data-role="url"></span>
+              <button type="button" class="wizard-copy-btn">Copy link</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 5 — launch checklist + summary, then back to the dashboard. -->
+        <div class="wizard-step" id="wizard-step-5" data-testid="wizard-step-5">
+          <div class="wizard-summary" id="wizardEventSummary"></div>
+          <p class="wizard-step-help">Quick check before the big night:</p>
+          <ul class="wizard-checklist">
+            <li id="wizardCheckPublic">📱 Share the event page link with your regulars</li>
+            <li id="wizardCheckPoster">📄 Print the poster and hang it where people will see it</li>
+            <li id="wizardCheckDisplay">📺 Open the big-screen display at the venue</li>
+            <li id="wizardCheckReport">📊 After the event, share the results report</li>
+          </ul>
+        </div>
+
+        <div class="create-msg" id="wizard-msg" data-testid="wizard-msg" role="status"></div>
+
+        <div class="wizard-nav">
+          <button type="button" class="wizard-back-btn" id="wizardBackBtn" hidden>Back</button>
+          <button type="button" class="wizard-skip-btn" id="wizardSkipBtn" hidden>
+            Skip this step
+          </button>
+          <button
+            type="button"
+            class="create-btn"
+            id="wizard-next-btn"
+            data-testid="wizard-next-btn"
+            disabled
+          >
+            Next
+          </button>
+          <button
+            type="button"
+            class="create-btn"
+            id="wizard-finish-btn"
+            data-testid="wizard-finish-btn"
+            hidden
+          >
+            Done
+          </button>
+        </div>
+      </section>
+
+      <script>
+        // ── Guided wizard logic (FE dev-prep Phase B) ─────────────────────────
+        // Deterministic, uses only existing endpoints. State lives here; the
+        // step panels keep their own input values, so Back never loses work.
+        // All wiring is addEventListener — the page's nonce CSP blocks inline
+        // onclick= attributes (script-src 'self' 'nonce-…', pages.ts).
+        (function () {
+          var wiz = {
+            step: 1,
+            createdId: null, // set once POST /api/v2/admin/events succeeds
+            template: 'other',
+            signup: 'create',
+          };
+
+          // Template → plain-language starting description. These feed the SAME
+          // optional 5W fields the dashboard form sends (what_short/why_purpose)
+          // — the wizard is a door, not a second data model.
+          var TEMPLATE_PREFILL = {
+            trivia: {
+              what_short: 'Team trivia night — bring your crew and your best guesses.',
+              why_purpose: 'A regular night of friendly competition for the neighborhood.',
+            },
+            games: {
+              what_short: 'Game night — bocce, pinball, cards, and friendly competition.',
+              why_purpose: 'Bringing neighbors together over games.',
+            },
+            music: {
+              what_short: 'Live music night — come for the sound, stay for the crowd.',
+              why_purpose: 'A night built around local music.',
+            },
+            other: {},
+          };
+
+          function setMsg(text, kind) {
+            var el = document.getElementById('wizard-msg');
+            if (!el) return;
+            el.textContent = text || ''; // textContent — never innerHTML (#1)
+            el.className = 'create-msg' + (kind ? ' ' + kind : '');
+          }
+
+          // Single render pass: panels, progress rail, nav buttons.
+          function updateUI() {
+            for (var i = 1; i <= 5; i++) {
+              var panel = document.getElementById('wizard-step-' + i);
+              if (panel) panel.classList.toggle('active', i === wiz.step);
+            }
+            document.querySelectorAll('.wizard-progress-step').forEach(function (el) {
+              var n = Number(el.getAttribute('data-step'));
+              el.classList.toggle('active', n === wiz.step);
+              // Completed = behind us AND still revisitable (pre-create only).
+              el.classList.toggle('completed', n < wiz.step && !wiz.createdId);
+            });
+            var back = document.getElementById('wizardBackBtn');
+            var skip = document.getElementById('wizardSkipBtn');
+            var next = document.getElementById('wizard-next-btn');
+            var finish = document.getElementById('wizard-finish-btn');
+            // Back only while nothing is saved yet — you can't un-create.
+            back.hidden = !(wiz.step > 1 && wiz.step <= 3);
+            skip.hidden = wiz.step !== 3;
+            next.hidden = wiz.step === 5;
+            finish.hidden = wiz.step !== 5;
+            next.textContent = wiz.step === 3 ? 'Create Event' : 'Next';
+            validate();
+          }
+
+          // Step 1 gate: name + venue are the two real requirements. Everything
+          // else in the wizard is optional by design (first-read simplicity).
+          function validate() {
+            var next = document.getElementById('wizard-next-btn');
+            if (wiz.step === 1) {
+              var name = document.getElementById('wizard-event-name').value.trim();
+              var venue = document.getElementById('wizard-event-venue').value.trim();
+              next.disabled = !(name && venue);
+            } else {
+              next.disabled = false;
+            }
+          }
+
+          function setCardUrl(cardId, url) {
+            var card = document.getElementById(cardId);
+            if (!card) return;
+            var slot = card.querySelector('[data-role="url"]');
+            if (slot) slot.textContent = url; // textContent — never innerHTML (#1)
+          }
+
+          // QR data URIs come from the existing poster-bundle endpoint:
+          // uecQr = SVG for the event public page, qr.register = PNG for the
+          // built-in sign-up form. Non-critical — links work without them.
+          async function loadLinks() {
+            var origin = window.location.origin;
+            var id = encodeURIComponent(wiz.createdId);
+            setCardUrl('wizard-link-public', origin + '/events/' + id);
+            setCardUrl('wizard-link-poster', origin + '/poster');
+            setCardUrl('wizard-link-display', origin + '/display');
+            setCardUrl('wizard-link-report', origin + '/admin');
+            var signupCard = document.getElementById('wizard-link-signup');
+            if (signupCard) signupCard.hidden = wiz.signup !== 'create';
+            try {
+              var res = await fetch('/api/v2/events/' + id + '/poster-bundle');
+              var data = await res.json();
+              if (!data.ok) return;
+              if (data.uecQr) {
+                var img = document.createElement('img');
+                img.src = 'data:image/svg+xml;utf8,' + encodeURIComponent(data.uecQr);
+                img.alt = 'Event page code — a phone scan opens your event page';
+                img.width = 110;
+                img.height = 110;
+                var slot = document.getElementById('wizardQrPublic');
+                if (slot) slot.replaceChildren(img);
+              }
+              if (wiz.signup === 'create' && data.qr && data.qr.register) {
+                var img2 = document.createElement('img');
+                img2.src = data.qr.register; // PNG data URI from the worker
+                img2.alt = 'Sign-up code — a phone scan opens the sign-up page';
+                img2.width = 110;
+                img2.height = 110;
+                var slot2 = document.getElementById('wizardQrSignup');
+                if (slot2) slot2.replaceChildren(img2);
+                if (data.links && data.links.register) {
+                  setCardUrl('wizard-link-signup', data.links.register);
+                }
+              }
+            } catch (e) {
+              /* QR loading is non-critical — the links above still work */
+            }
+          }
+
+          // Step 3 → 4 is the moment of truth: one POST to the same endpoint
+          // the dashboard form uses. Template prefills ride along as the
+          // optional what/why fields.
+          async function createEvent() {
+            var next = document.getElementById('wizard-next-btn');
+            var body = { title: document.getElementById('wizard-event-name').value.trim() };
+            var dateVal = document.getElementById('wizard-event-date').value;
+            if (dateVal) body.start_date = dateVal;
+            var venueVal = document.getElementById('wizard-event-venue').value.trim();
+            if (venueVal) body.location = venueVal;
+            var prefill = TEMPLATE_PREFILL[wiz.template] || {};
+            for (var k in prefill) body[k] = prefill[k];
+
+            next.disabled = true;
+            next.textContent = 'Creating…';
+            setMsg('');
+            try {
+              var res = await fetch('/api/v2/admin/events', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body),
+              });
+              var data = await res.json();
+              if (res.ok && data.ok) {
+                wiz.createdId = String(data.id);
+                // Remember the new event so leaving the wizard re-selects it
+                // (id-only, #1) — same convention as the dashboard form.
+                try { sessionStorage.setItem(window.SELECTED_EVENT_KEY, wiz.createdId); } catch (e) {}
+                var summary = document.getElementById('wizardEventSummary');
+                if (summary) {
+                  summary.textContent =
+                    '🎉 "' + body.title + '" is ready to go' +
+                    (venueVal ? ' at ' + venueVal : '') + '!';
+                }
+                wiz.step = 4;
+                updateUI();
+                loadLinks();
+              } else {
+                setMsg(data.error || 'Something went wrong — please try again.', 'error');
+              }
+            } catch (err) {
+              setMsg('Connection trouble — please try again.', 'error');
+            } finally {
+              next.disabled = false;
+              updateUI();
+            }
+          }
+
+          function startWizard() {
+            document.getElementById('admin-path-chooser').hidden = true;
+            var w = document.getElementById('launch-wizard');
+            w.hidden = false;
+            // Date pre-fills to today — most events are set up for "soon".
+            var dateEl = document.getElementById('wizard-event-date');
+            if (dateEl && !dateEl.value) {
+              var now = new Date();
+              dateEl.value =
+                now.getFullYear() +
+                '-' +
+                String(now.getMonth() + 1).padStart(2, '0') +
+                '-' +
+                String(now.getDate()).padStart(2, '0');
+            }
+            updateUI();
+            w.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            var name = document.getElementById('wizard-event-name');
+            if (name) name.focus();
+          }
+
+          function chooseAdvanced() {
+            // The dashboard is already on the page — just clear the doorway.
+            document.getElementById('admin-path-chooser').hidden = true;
+            document.getElementById('launch-wizard').hidden = true;
+            var card = document.querySelector('[data-testid="create-event-card"]');
+            if (card) card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }
+
+          function goNext() {
+            if (wiz.step === 3) {
+              createEvent();
+              return;
+            }
+            if (wiz.step < 5) {
+              wiz.step += 1;
+              updateUI();
+            }
+          }
+
+          function goBack() {
+            if (wiz.step > 1 && !wiz.createdId) {
+              wiz.step -= 1;
+              updateUI();
+            }
+          }
+
+          function skipSignup() {
+            // Skipping = "no sign-ups" + straight to create. Still one POST.
+            wiz.signup = 'none';
+            document.querySelectorAll('.wizard-signup-option').forEach(function (c) {
+              c.classList.toggle('selected', c.getAttribute('data-option') === 'none');
+            });
+            createEvent();
+          }
+
+          function copyLink(btn) {
+            var card = btn.closest('.wizard-link-card');
+            var slot = card && card.querySelector('[data-role="url"]');
+            var url = slot ? slot.textContent : '';
+            if (!url) return;
+            navigator.clipboard.writeText(url).then(
+              function () {
+                btn.textContent = 'Copied!';
+                setTimeout(function () {
+                  btn.textContent = 'Copy link';
+                }, 1500);
+              },
+              function () {
+                window._adminAnnounce('Could not copy — long-press the link to copy it.', 'error');
+              }
+            );
+          }
+
+          // ── wiring (CSP-safe: no inline handlers) ───────────────────────────
+          document.getElementById('admin-path-wizard').addEventListener('click', startWizard);
+          document.getElementById('admin-path-advanced').addEventListener('click', chooseAdvanced);
+          document.getElementById('wizard-next-btn').addEventListener('click', goNext);
+          document.getElementById('wizardBackBtn').addEventListener('click', goBack);
+          document.getElementById('wizardSkipBtn').addEventListener('click', skipSignup);
+          document.getElementById('wizard-finish-btn').addEventListener('click', function () {
+            // Reload = the same convention as the dashboard's create flow;
+            // SELECTED_EVENT_KEY re-selects the new event on the dashboard.
+            location.reload();
+          });
+          // Progress-rail click: revisit a completed step (pre-create only).
+          document.querySelectorAll('.wizard-progress-step').forEach(function (el) {
+            el.addEventListener('click', function () {
+              if (wiz.createdId) return; // steps 1–3 are history once saved
+              var n = Number(el.getAttribute('data-step'));
+              if (n < wiz.step) {
+                wiz.step = n;
+                updateUI();
+              }
+            });
+          });
+          document.querySelectorAll('.wizard-template-card').forEach(function (el) {
+            el.addEventListener('click', function () {
+              wiz.template = el.getAttribute('data-template') || 'other';
+              document.querySelectorAll('.wizard-template-card').forEach(function (c) {
+                c.classList.toggle('selected', c === el);
+              });
+            });
+          });
+          document.querySelectorAll('.wizard-signup-option').forEach(function (el) {
+            el.addEventListener('click', function () {
+              wiz.signup = el.getAttribute('data-option') || 'create';
+              document.querySelectorAll('.wizard-signup-option').forEach(function (c) {
+                c.classList.toggle('selected', c === el);
+              });
+            });
+          });
+          document.querySelectorAll('.wizard-copy-btn').forEach(function (el) {
+            el.addEventListener('click', function () {
+              copyLink(el);
+            });
+          });
+          // Live-validate step 1 as the organizer types.
+          ['wizard-event-name', 'wizard-event-venue'].forEach(function (id) {
+            var el = document.getElementById(id);
+            if (el) el.addEventListener('input', validate);
+          });
+        })();
       </script>
 
       <!-- Create Event Card -->
