@@ -57,6 +57,15 @@ journey — not 4×2×3 hand-written specs.
 **Spec home:** `tests/e2e/3-flows/sponsor-lifecycle.matrix.spec.ts`
 **Fixture home:** `tests/e2e/fixtures/scenario-tier-matrix.ts` (mirrors `demo.ts` mapping).
 
+**Engine/device tiering (ratified 2026-08-29):** every E2E page runs on BOTH
+shipping engines — WebKit (Safari) and Chromium (Chrome) — with mobile on both,
+since mobile is the attendee's primary surface. Projects in
+`playwright.e2e.config.ts`: `e2e-chromium` (Desktop Chrome) ·
+`e2e-mobile-safari` (iPhone 14 → real WebKit) · `e2e-mobile-chrome` (Pixel 7).
+Firefox excluded by Coverage Economics doctrine. Verified: journey 9/9,
+matrix 45/60 — the 15 reds are the 5 Phase C sponsor-card cells × 3 engines,
+observed-red by design; zero engine-specific divergence on green cells.
+
 Each journey: reset via demo harness → create through the chosen path → assert the
 SAME sponsor truth on card → public → display (reconciled-pyramid: layers corroborate
 one truth; never mask a cross-layer disagreement to go green).

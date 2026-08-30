@@ -58,14 +58,31 @@ export default defineConfig({
     },
   },
 
+  /**
+   * Engine/device tiering (Coverage Economics doctrine): every page is
+   * exercised on BOTH shipping engines — WebKit (Safari) and Chromium
+   * (Chrome) — and mobile is the attendee's primary surface, so the mobile
+   * matrix covers both engines too. Firefox is excluded by doctrine
+   * (no meaningful attendee share). Project names carry the engine so a
+   * red run says WHICH engine broke on first read.
+   *
+   * - e2e-chromium      → Desktop Chrome (organizer surfaces: admin/report)
+   * - e2e-mobile-safari → iPhone 14 (defaultBrowserType: webkit — the real
+   *                       Safari engine; iOS attendees scanning /q/<token>)
+   * - e2e-mobile-chrome → Pixel 7 (chromium; Android attendees)
+   */
   projects: [
     {
       name: 'e2e-chromium',
       use: { ...devices['Desktop Chrome'] },
     },
     {
-      name: 'e2e-mobile',
+      name: 'e2e-mobile-safari',
       use: { ...devices['iPhone 14'] },
+    },
+    {
+      name: 'e2e-mobile-chrome',
+      use: { ...devices['Pixel 7'] },
     },
   ],
 });
