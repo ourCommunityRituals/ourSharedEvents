@@ -821,11 +821,16 @@
         const fmtRatio = (n) => (n == null ? '—' : (Math.round(n * 100) / 100).toFixed(2) + '×');
 
         const params = new URLSearchParams(location.search);
-        // Support both ?eventId=... and the legacy ?id=... shape so older
-        // links keep working. Path form /sharedReport/:eventId is also honored
-        // when the worker proxies it through (router treats the suffix as part
-        // of the pathname; we read it defensively here).
-        let eventId = params.get('eventId') || params.get('id') || '';
+        // OSE-1081: `event` is the CANONICAL surface deep-link param — it is what
+        // admin.html's scopedSurfaceUrl() has always emitted for /sharedReport,
+        // and this page never read it, so a report link copied from the dashboard
+        // fell through to the admin dashboard instead of the event's report.
+        // ?eventId= and the legacy ?id= are still accepted (additive, never a
+        // rename) so links already in the wild keep working. Path form
+        // /sharedReport/:eventId is also honored when the worker proxies it
+        // through (router treats the suffix as part of the pathname; we read it
+        // defensively here).
+        let eventId = params.get('event') || params.get('eventId') || params.get('id') || '';
         if (!eventId) {
           const pathMatch = location.pathname.match(/^\/sharedReport\/([^/?#]+)/);
           if (pathMatch) eventId = pathMatch[1];
@@ -1354,7 +1359,10 @@
       document.getElementById('export-json-btn').addEventListener('click', function () {
         const bundle = window.__reportBundle || {};
         const params = new URLSearchParams(location.search);
-        const eventId = params.get('id') || 'all';
+        // OSE-1081: same canonical-first, legacy-still-accepted order as the
+        // signed-link reader above, so the exported filename names the event the
+        // reader is actually looking at instead of falling back to 'all'.
+        const eventId = params.get('event') || params.get('eventId') || params.get('id') || 'all';
         const payload = JSON.stringify(
           {
             generatedAt: bundle.generatedAt || new Date().toISOString(),

@@ -362,6 +362,21 @@
       updateClock();
       setInterval(updateClock, 30_000);
 
+      // OSE-1081: `event` is the CANONICAL surface deep-link param. admin.html's
+      // scopedSurfaceUrl() emits /display?event=<id>, but this page used to ignore
+      // location.search entirely and always feature items[0] — so a kiosk pointed
+      // at a scoped display link showed whichever event happened to sort first.
+      // Returns the index of the requested event, or -1 when the param is absent
+      // or names an event this page did not fetch (then items[0] still leads).
+      function requestedEventIndex(items) {
+        const wanted = new URLSearchParams(location.search).get('event');
+        if (!wanted) return -1;
+        for (let i = 0; i < items.length; i++) {
+          if (items[i] && items[i].id === wanted) return i;
+        }
+        return -1;
+      }
+
       // Events
       async function loadEvents() {
         const main = document.getElementById('main-content');
@@ -375,7 +390,12 @@
           }
           const esc = s => { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; };
           const fmt = iso => iso ? new Date(iso).toLocaleDateString('en-US', { weekday:'long', month:'long', day:'numeric' }) : '';
-          const [featured, ...rest] = items;
+          // OSE-1081: the deep-linked event takes the featured slot; the rest of
+          // the board is unchanged (still every other event, original order), so
+          // a scoped link narrows the focus without hiding what else is coming up.
+          const featuredIdx = Math.max(requestedEventIndex(items), 0);
+          const featured = items[featuredIdx];
+          const rest = items.filter((_, i) => i !== featuredIdx);
           let html = '<div class="event-card" data-testid="display-featured-card">' +
             '<div class="label" data-testid="display-featured-label">Upcoming Event</div>' +
             '<h2 data-testid="display-featured-title">' + esc(featured.name || '') + '</h2>' +
@@ -409,8 +429,13 @@
           const evRes = await fetch('/api/v2/events');
           const evData = await evRes.json();
           const items = (evData.ok && evData.items) ? evData.items : [];
-          if (!items.length || !items[0].id) return;
-          const eventId = items[0].id;
+          if (!items.length) return;
+          // OSE-1081: sponsors follow the FEATURED event, so a ?event=<id> kiosk
+          // shows that event's sponsors rather than items[0]'s. Same resolution as
+          // loadEvents(), so the two halves of the screen can never disagree.
+          const featuredIdx = Math.max(requestedEventIndex(items), 0);
+          const eventId = items[featuredIdx] && items[featuredIdx].id;
+          if (!eventId) return;
           const res = await fetch('/api/v2/events/' + encodeURIComponent(eventId) + '/sponsor-bundle?surface=display');
           const data = await res.json();
           if (!data.ok) return;
