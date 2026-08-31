@@ -52,11 +52,25 @@ one mutating call.
 
 **Mutation:** `POST /api/v2/admin/events` (admin auth: CF Access JWT or Bearer)
 
+### The draft mechanism is a state, not a table
+
+`handleCreateEvent` defaults `status` to **`'draft'`**. The lifecycle is a real state
+machine (`domain/event-state.ts`):
+
+```
+draft ──> ready ──> active ──> archived
+  ^         |         |           |
+  +---------+---------+-----------+     (archived -> active | draft)
+```
+
+**INVARIANT: only `active` events render on public / display / poster.** `admin` sees
+every state. This is what makes the wizard safe — see §8.1.
+
 **Assert — `events` row exists with the authored columns:**
 
 | Group | Columns |
 |---|---|
-| identity | `id`, `brand_id`, `slug`, `status` |
+| identity | `id` (`evt_<uuid>`), `brand_id`, `slug`, `status` |
 | when | `start_date`, `end_date`, `timezone` |
 | 5W | `what_short`, `who_host`, `why_purpose`, `how_details`, `where_address` |
 | how much | `price_cents`, `price_model` ∈ `free·fixed·sliding·donation·varies`, `price_note` |
@@ -64,14 +78,31 @@ one mutating call.
 | geo | `lat`, `lon`, `corridor_id`, `h3_res9`, `h3_res7` |
 | clearance | `legal_clearance_tier` |
 
-**Assert — derived, not supplied:** `h3_res9` / `h3_res7` are server-derived from the
-geocoded address. A request body that supplies them directly must not be honored.
+**Assert — blank vs never-set is preserved.** `trimOrNull()` persists an
+empty-after-trim string as `NULL`, so consumers can distinguish "intentionally blank"
+from "never populated". A test that treats `''` and `NULL` as equivalent hides a real
+authoring bug.
+
+**Assert — derived, not supplied.** `h3_res9` / `h3_res7` come from `maybeTag(lat, lon)`
+server-side. A body supplying them directly must not be honored.
+
+**Assert — media URLs are scheme-validated at write.** `who_image_url` and
+`what_video_url` go through `validateLogoUrl` — a `javascript:` or `data:` payload is
+rejected with `INVALID_URL` and never reaches D1. Born-red: assert the rejection.
+
+**Assert — the shortlink is minted here, unconditionally.** `createShortlink(env, id)`
+runs on every create, including drafts. Failure is **non-fatal**: it logs
+`SHORTLINK_CREATE_FAILED` and returns a `warnings[]` entry rather than failing the
+event. Assert both paths — success populates `shortlinks`, and a forced failure still
+returns `201` with the warning. `warnings` is always present (empty array on success)
+so consumers need no null check.
+
+Minting the code at creation is deliberate: the code is stable from the moment the
+event exists, so a poster printed weeks early never points at a code that changes.
 
 **Assert — computed on read:** `GET /api/v2/events/:id` returns `phase`, `name`,
-`startDateISO`, `venue` on top of the projected columns (`public-events.snapshot.json`
-v1.1.0). A missing computed field is a contract break, not a rendering bug.
-
----
+`startDateISO`, `venue` on top of the projected columns
+(`public-events.snapshot.json` v1.1.0).
 
 ## 3. Stage 1 — Poster creation and deployment (3–4 weeks out)
 
@@ -151,25 +182,63 @@ sponsors.
 
 ### Reach and sharing — what is actually measurable
 
-**GAP.** The intended signal is "a forwarded link shows corridor activity and reach."
-Today the `shortlinks` table stores a click counter and nothing else — its schema
-comment is explicit: *"Anonymous: the count is the only datum collected. No IP, no
-anon_id, no session."* So `/s/<code>` resolution yields a count, not an `h3_res7`.
+**GAP-1 (see §9).** The intended signal is "a forwarded link shows corridor activity
+and reach." Read at the implementation level, the shortlink path cannot produce
+either today, and the reasons are different for each.
 
-What **is** measurable today, and what the flow should assert instead:
+**What the path actually does** (`lib/shortlinks.ts`, `handlers/shortlink-resolve.ts`):
 
-- **Corridor activity** — from `scan_placement_events` joined to
-  `poster_deployments.h3_res7`. Real, per-corridor, per-placement.
-- **Return / reach behavior** — from `scan_node_returns` distinct `anonymous_id`,
-  which is what `return_rate` in the SharedReport is built from.
-- **Off-poster arrival** — `referrer_domain` on the legacy `scans` path.
+1. `createShortlink()` mints a 6-char base62 code at event creation. Same code path
+   as the `events` row, so both commit or neither does.
+2. `GET /s/:code` → `isValidCodeShape()` rejects malformed codes **before touching
+   D1**, so probing costs nothing.
+3. Unknown and malformed codes return the **identical 404 shape**, so probing reveals
+   nothing about which codes exist.
+4. `incrementClick()` performs the only mutation: `clicks = clicks + 1` and
+   `last_clicked_at`. It swallows D1 errors — the redirect is the user contract, the
+   counter is not.
+5. `302 → /events/:id`, `Cache-Control: no-store`.
 
-Attributing an `h3_res7` to a shortlink resolution would require a back-end change,
-and it is not a free one: the current design collects nothing per-resolution on
-purpose. Adding a coarse geo to that path is a deliberate anonymity trade, not an
-oversight to patch. **Raised, not assumed** — see §9.
+The whole table is five columns: `code`, `event_id`, `created_at`, `clicks`,
+`last_clicked_at`.
 
----
+**Corridor activity — blocked by an enforced gate, not by an omission.**
+`handleShortlinkResolve` is registered in `tests/anonymity-gate.spec.ts` as a gated
+public handler. The test greps the function body and fails on any of seven reads:
+
+```
+Cf-Connecting-Ip · X-Forwarded-For · headers.get('Cookie')
+getOrCreateAnonId · setAnonCookie · headers.get('Referer') · headers.get('User-Agent')
+```
+
+So this is not "nobody built it yet." Adding geo here means amending a named
+anonymity gate backed by ADR-001. **One path would not trip the gate today:**
+`request.cf` (Cloudflare's IP-derived `latitude`/`longitude`) is neither used nor
+listed in `FORBIDDEN_READS`, so `request.cf → maybeTag() → h3_res7` is technically
+available. Whether that honors the doctrine or merely evades its literal wording is a
+**product and doctrine decision, not an engineering one** — the module comment states
+the counter is "the ONLY mutation the resolve flow performs," which reads as intent,
+not just description. Flagged for a decision; not implemented.
+
+**Reach is a deeper problem than geo.** Even with a corridor tag, `shortlinks` has no
+distinct-person column and cannot get one without the cookie the gate forbids. So the
+path yields **clicks, not reach** — 40 clicks could be 40 neighbors or one person
+opening a link 40 times. "Friends and family sharing" is a distinct-person question,
+and the shortlink path is structurally incapable of answering it.
+
+**What the flow asserts instead, from real data:**
+
+| Question | Source | Real today |
+|---|---|---|
+| Which placement drove scans | `scan_placement_events` → `poster_deployments.h3_res9` | ✅ per-corner |
+| Which corridor is active | same → `poster_deployments.h3_res7` | ✅ per-corridor |
+| Distinct people / returns | `scan_node_returns` distinct `anonymous_id` → `return_rate` | ✅ |
+| A forwarded link's corridor | — | ❌ gate-blocked |
+| A forwarded link's reach | — | ❌ structurally absent |
+
+Note the asymmetry the split write creates: the `/q/` poster path *does* carry both a
+placement and an anon id — in two un-joinable tables. The `/s/` path carries neither.
+A shortlink is deliberately the thinnest touchpoint in the system.
 
 ## 5. Stage 3 — Event live
 
@@ -277,24 +346,71 @@ never recomputed in the browser.
 
 ---
 
+## 7b. Surface deep-link addressing
+
+Every event-scoped surface link an organizer copies out of the dashboard must address
+*that* event. `?event=<id>` is the canonical param on both sides as of OSE-1081:
+
+| Surface | Reads | Behavior |
+|---|---|---|
+| poster | `?event=` | resolves against the fetched list, **and moves the `<select>` to the same index** — the picker is the page's source of truth for "which event is showing" |
+| display | `?event=` | requested event takes the featured slot; the rest of the board keeps its original order, so a scoped link narrows focus without hiding what else is coming |
+| sharedReport | `?event=`, falling back to `?eventId=`, `?id=` | back-compat retained |
+
+**Assert — the producer/consumer agreement.** `admin.html`'s `scopedSurfaceUrl()` emits
+the param and each surface reads it. Before OSE-1081 the producer emitted `?event=` and
+no consumer read it, so every scoped link silently showed *some other* event. That is a
+handoff bug invisible to any per-surface test — it only appears when you follow the link
+the dashboard actually produces. Assert by generating the link from admin and following
+it, never by constructing the URL in the test.
+
+**Assert — a scoped link works standing alone** (§4): opened cold, in a new session,
+with no referrer.
+
 ## 8. Mutation matrices
 
 ### 8.1 Event manager — wizard and deep dive
 
-**The invariant, stated once:** the wizard performs **exactly one mutating network
-call, at publish.** There is no event draft table — `sponsor_business_draft` and
-`sponsor_asset_draft` exist, the event side has nothing — so any step-transition
-write would be an unrecoverable commit. Draft state lives in `sessionStorage` under
-`ose:v1:manager:*` per the storage contract.
+**The invariant, stated once — corrected against the code.** An earlier draft of this
+doc claimed the wizard must make exactly one mutating call at publish "because there is
+no event draft table." That premise was wrong, and the rule it produced was over-strict.
 
-This makes the fat-finger requirement mechanically testable: **count the mutations.**
+There **is** a draft mechanism: `events.status`, defaulted to `'draft'` by
+`handleCreateEvent`, governed by the state machine in §2. Every public render path
+gates on it:
+
+| Path | Draft / ready behavior | Source |
+|---|---|---|
+| `/events/:id` | **404**, not 403 — "so an attacker can't probe to discover unpublished events" | `pages.ts` |
+| `/forms/:id` | forwarded to `/events` discovery — "a poster must never rot" (OSE-291) | `form-pages.ts` |
+| `/s/:code` | resolves, then 404s at the redirect target | `shortlink-resolve.ts` |
+
+So the wizard **may** save server-side freely as `status='draft'`, which buys
+resume-across-devices for free. The real rule is narrower and stronger:
+
+> **No transition to `active` until publish**, and no artifact whose effects outlive a
+> discarded draft.
+
+**Two things are NOT state-gated, and the flow must assert them deliberately:**
+
+1. **`createShortlink` fires on every create, including drafts.** Safe — the code
+   resolves to a 404 while draft — and deliberate: the code is stable from creation so
+   an early-printed poster never goes stale.
+2. **Poster deployments are not gated on event status.**
+   `handleAdminCreatePosterDeployment` never reads `events.status`, so a draft event can
+   mint a `qr_token` with `is_active = 1`. `/q/<token>` checks only the *deployment's*
+   `is_active` — so **a scan of a draft event's QR still writes both split rows** before
+   the destination forwards. Render is gated; the write path is not.
+
+Whether (2) is correct is a product question — counting pre-launch scans may be wanted —
+but it must be an assertion either way, not an accident. **Raised in §9 as GAP-2.**
 
 | # | Scenario | Assert |
 |---|---|---|
 | M1 | Create through **wizard**, accepting every default | One `POST`. `events` row matches §2. Every default that was accepted is traceable to a stated rule. |
 | M2 | Create through **deep dive**, overriding every panel | One `POST`. Same row shape as M1. Wizard and deep dive produce structurally identical rows. |
 | M3 | Advance three steps, go **back two**, change an answer, go forward | Zero mutations before publish. The changed answer wins. No orphaned draft server-side. |
-| M4 | Enter a wrong value, advance, realize it, navigate back, fix it | Zero mutations. **No QR token minted, no poster deployment created, no shortlink generated, no sponsor resolution run.** |
+| M4 | Enter a wrong value, advance, realize it, navigate back, fix it | Status never leaves `draft`. **No poster deployment created, no sponsor resolution run.** Every public path still 404s or forwards. |
 | M5 | Add three items to a repeating card, remove the middle one, add two more | Order stable and predictable. Removal targets the intended row — never index drift. |
 | M6 | Abandon mid-flow, close the tab, return | Draft restores from `sessionStorage`. Nothing was committed. |
 | M7 | Abandon mid-flow with storage **disabled** (private browsing) | The flow still completes. Storage is an optimization, never a requirement. |
@@ -331,16 +447,25 @@ a de-facto slot advantage.
 
 ## 9. Gaps and open questions
 
-**GAP-1 · Shortlink reach has no geo.** `shortlinks` records a click counter only, by
-explicit design. "Resolve to r7 to show activity and reach" is not measurable on that
-path today. Corridor activity is available via `scan_placement_events` →
-`poster_deployments.h3_res7`. Adding coarse geo to shortlink resolution is a
-deliberate anonymity trade requiring a back-end decision — **not** a front-end change.
+**GAP-1 · Shortlink yields clicks only — and it is defended, not merely absent.**
+Two separate blockers, verified in code. (a) *Corridor:* `handleShortlinkResolve` is a
+gated handler in `tests/anonymity-gate.spec.ts`; adding geo means amending an
+anonymity gate backed by ADR-001. The one non-tripping path is `request.cf`
+(IP-derived lat/lon, neither used nor listed in `FORBIDDEN_READS`) — available, but
+whether it honors the doctrine or evades its wording is a decision to make
+deliberately. (b) *Reach:* the table has no distinct-person column and cannot get one
+without the forbidden cookie, so clicks ≠ reach regardless of geo. Corridor activity
+and distinct returns are both available from the `/q/` poster path instead. **Needs a
+product decision before any code.**
 
-**GAP-2 · No event draft table.** Fine, and arguably correct — it forces the
-one-mutation-at-publish rule. Flagged so it is a decision on record rather than an
-accident. If server-side resume across devices is ever wanted, that needs an
-`event_draft` table mirroring the sponsor draft pattern.
+**GAP-2 · The QR write path is not state-gated.** Render paths all gate on
+`events.status` (404 on `/events/:id`, stale-forward on `/forms/:id`). Poster-deployment
+creation does not: `handleAdminCreatePosterDeployment` never reads `events.status`, so a
+draft event can mint a live `qr_token`, and `/q/<token>` — which checks only the
+deployment's own `is_active` — writes `scan_placement_events` + `scan_node_returns`
+before the destination forwards the scanner away. Result: scan rows accrue for an event
+no surface will render. Possibly desirable (pre-launch interest), possibly a leak into
+SharedReport aggregates. **Needs a decision; assert it either way.**
 
 **GAP-3 · Heat map and reach cannot be joined.** By design (OSE-798, doctrine rule 6).
 Any report or test phrased as "which poster brought back returning visitors" is
