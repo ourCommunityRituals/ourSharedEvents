@@ -41,13 +41,20 @@ const EC_CODEWORDS_PER_BLOCK: number[][] = [
   [20, 18, 18, 26],
 ];
 
+/**
+ * Blocks per version/EC level. v5-Q was 2 and must be 4: with 2 blocks the data
+ * budget works out to 98 codewords, but VERSION_CAPACITY says 60 bytes, which
+ * needs 62. The two tables contradicted each other and v5-Q was the only cell
+ * where they did. Cross-checked: for every version and level,
+ * total - ec*blocks == capacity + 2 (the 12-bit byte-mode header). OSE-1128.
+ */
 const NUM_EC_BLOCKS: number[][] = [
   [0, 0, 0, 0],
   [1, 1, 1, 1],
   [1, 1, 1, 1],
   [1, 1, 2, 2],
   [1, 2, 2, 4],
-  [1, 2, 2, 4],
+  [1, 2, 4, 4],
   [2, 4, 4, 4],
   [2, 4, 6, 5],
 ];
@@ -121,6 +128,30 @@ function drawFinder(m: QrMatrix, res: QrReserved, r: number, c: number): void {
   }
 }
 
+
+/**
+ * Alignment-pattern centres for a version. Returns [] for v1 (none).
+ *
+ * Coordinates come from the spec's per-version list; a pattern is omitted where it
+ * would overlap a finder, i.e. the three corners (first,first), (first,last) and
+ * (last,first).
+ */
+function alignmentCentres(version: number, sz: number): Array<[number, number]> {
+  if (version < 2) return [];
+  const coords = version < 7 ? [6, sz - 7] : [6, 22, sz - 7];
+  const out: Array<[number, number]> = [];
+  for (let i = 0; i < coords.length; i++) {
+    for (let j = 0; j < coords.length; j++) {
+      const isTopLeft = i === 0 && j === 0;
+      const isTopRight = i === 0 && j === coords.length - 1;
+      const isBottomLeft = i === coords.length - 1 && j === 0;
+      if (isTopLeft || isTopRight || isBottomLeft) continue;
+      out.push([coords[i], coords[j]]);
+    }
+  }
+  return out;
+}
+
 function drawAlignment(m: QrMatrix, res: QrReserved, r: number, c: number): void {
   for (let dr = -2; dr <= 2; dr++) {
     for (let dc = -2; dc <= 2; dc++) {
@@ -130,6 +161,38 @@ function drawAlignment(m: QrMatrix, res: QrReserved, r: number, c: number): void
       m[rr][cc] = Math.max(Math.abs(dr), Math.abs(dc)) !== 1;
       res[rr][cc] = true;
     }
+  }
+}
+
+
+/**
+ * Version information — required for version 7 and above, absent entirely before.
+ *
+ * 18 bits: the 6-bit version number plus 12 BCH check bits (generator 0x1F25),
+ * written TWICE — a 3x6 block above the bottom-left finder and its transpose left
+ * of the top-right finder. Versions 1-6 carry none.
+ *
+ * This was never emitted, so every v7 symbol was missing a function pattern the
+ * decoder needs, and those modules were also unreserved — meaning placeBits wrote
+ * data into them. Both halves of the same omission. OSE-1128.
+ */
+function versionBits(version: number): number {
+  let rem = version;
+  for (let i = 0; i < 12; i++) rem = (rem << 1) ^ ((rem >>> 11) * 0x1f25);
+  return (version << 12) | rem;
+}
+
+function drawVersion(m: QrMatrix, res: QrReserved, sz: number, version: number): void {
+  if (version < 7) return;
+  const bits = versionBits(version);
+  for (let i = 0; i < 18; i++) {
+    const bit = ((bits >>> i) & 1) === 1;
+    const a = sz - 11 + (i % 3);
+    const b = Math.floor(i / 3);
+    m[a][b] = bit;
+    res[a][b] = true;
+    m[b][a] = bit;
+    res[b][a] = true;
   }
 }
 
@@ -147,6 +210,13 @@ function reserveFormat(res: QrReserved, sz: number): void {
   }
   for (let i = sz - 8; i < sz; i++) res[8][i] = true;
   for (let i = sz - 7; i < sz; i++) res[i][8] = true;
+  // The dark module at (sz-8, 8) is a FUNCTION module — always set, never data.
+  // The loop above starts at sz-7, one row below it, so it was left unreserved:
+  // placeBits wrote a data bit there and drawFormat then overwrote it, silently
+  // corrupting one codeword in EVERY symbol at every version. Strong EC levels
+  // corrected it away, which is why L (fewest ECC codewords) failed everywhere
+  // while M/Q/H appeared to work. OSE-1128.
+  res[sz - 8][8] = true;
 }
 
 /**
@@ -330,9 +400,14 @@ function buildMatrix(data: string, ecLevel: number): QrMatrix {
   drawFinder(m, res, 0, 0);
   drawFinder(m, res, sz - 7, 0);
   drawFinder(m, res, 0, sz - 7);
-  if (version >= 2) drawAlignment(m, res, sz - 7, sz - 7);
+  // Alignment patterns. v2-v6 have a single centre at (sz-7, sz-7); v7 adds a
+  // row/column set at coordinates 6, 22, 38 with the three that collide with the
+  // finder patterns omitted. Only the single v2-v6 case was drawn before, so every
+  // v7 symbol was missing five alignment patterns. OSE-1128.
+  for (const [ar, ac] of alignmentCentres(version, sz)) drawAlignment(m, res, ar, ac);
   drawTiming(m, res, sz);
   reserveFormat(res, sz);
+  drawVersion(m, res, sz, version);
 
   const dataCW = encodeData(bytes, version, ecLevel);
   const allCW = addEcc(dataCW, version, ecLevel);

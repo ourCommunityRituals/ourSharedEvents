@@ -233,32 +233,26 @@ describe('QR round-trip — poster bundle is scannable', () => {
   });
 
   /**
-   * Version sweep — locks the range the OSE-1127 fixes actually repaired.
+   * Version sweep — every symbol version, every EC level.
    *
-   * The bundle test above exercises exactly one payload length, so a capacity or
-   * alignment change at a version it never reaches goes unnoticed (proved: two
-   * encoder mutants survived it). This sweep walks payload sizes across symbol
-   * versions and decodes each one.
+   * Previously scoped to the narrow range that worked while OSE-1128 was open
+   * (M through v5, Q/H at low versions). That ticket is fixed, so the sweep now
+   * covers the whole matrix: L/M/Q/H across payloads spanning versions 1-7.
    *
-   * SCOPE IS DELIBERATE AND NARROWER THAN "ALL QR CODES". Level M is asserted
-   * through v5 and Q/H through v3, because that is what currently works and what
-   * the product actually emits — the poster paths use M with 40-60 byte scan URLs,
-   * landing at v3-v4. Level L is broken at EVERY version and the higher versions
-   * are broken above the bounds below; both are tracked as follow-up work, NOT
-   * silently omitted. Asserting a range that does not work would put the suite
-   * back to red; asserting nothing would let the repaired range rot.
+   * Four further defects were found getting here, each invisible to inspection
+   * and each caught by decoding real output:
+   *   - the dark module at (sz-8, 8) was never reserved, so a data bit was written
+   *     there and then overwritten — one corrupted codeword in EVERY symbol
+   *   - v5-Q claimed 2 blocks where the capacity table requires 4
+   *   - v7 drew one alignment pattern instead of six
+   *   - the version-information block, mandatory from v7, was never emitted
    */
   test.each([
-    ['M', 15],
-    ['M', 30],
-    ['M', 45],
-    ['M', 60],
-    ['M', 75],
-    ['Q', 15],
-    ['Q', 30],
-    ['H', 15],
-    ['H', 30],
-  ] as Array<['M' | 'Q' | 'H', number]>)(
+    ['L', 13], ['L', 30], ['L', 50], ['L', 90], ['L', 130], ['L', 150],
+    ['M', 13], ['M', 30], ['M', 50], ['M', 70], ['M', 90], ['M', 110],
+    ['Q', 13], ['Q', 30], ['Q', 50], ['Q', 60], ['Q', 70],
+    ['H', 13], ['H', 30], ['H', 40], ['H', 55],
+  ] as Array<['L' | 'M' | 'Q' | 'H', number]>)(
     'level %s at %i bytes round-trips',
     (level, len) => {
       const url = 'https://x.co/' + 'a'.repeat(Math.max(0, len - 13));
