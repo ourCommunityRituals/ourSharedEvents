@@ -292,14 +292,34 @@ async function runSubscribersRetentionLifecycle(env: RouterEnv): Promise<void> {
   const days = raw != null ? parseInt(String(raw), 10) : NaN;
 
   if (!Number.isFinite(days) || days <= 0) {
-    console.log(
+    // OSE-1123. Off-by-default is deliberate — subscribers is a marketing list and
+    // silent automatic deletion would break product expectations. That decision
+    // stands. What was wrong is the VISIBILITY: this state means PII is retained
+    // without bound, which contradicts Invariant #8 ("No PII has unbounded
+    // retention"), and it was reported at console.log level — indistinguishable
+    // from the routine LIFECYCLE_COMPLETE line in the same run.
+    //
+    // A refusal to act that nobody can see is a bug however correct the refusal is.
+    // Escalated to console.error so it surfaces in alerting rather than blending
+    // into normal output, and the payload now names the invariant it is out of
+    // compliance with, so whoever reads it knows this is not informational.
+    console.error(
       JSON.stringify({
-        type: 'SUBSCRIBERS_RETENTION_NOOP',
-        reason: 'SUBSCRIBERS_RETENTION_DAYS unset or non-positive; retention is uncapped',
+        type: 'SUBSCRIBERS_RETENTION_UNCAPPED',
+        severity: 'compliance',
+        invariant: '#8 bounded_pii_retention',
+        reason: 'SUBSCRIBERS_RETENTION_DAYS unset or non-positive',
+        consequence: 'DB.subscribers PII is retained without bound',
+        remedy: 'Set SUBSCRIBERS_RETENTION_DAYS to a positive integer, or retire /subscribe',
+        tracking: 'OSE-1123',
         timestamp: now,
       })
     );
-    await logSubscribersRetentionAudit(env, 'noop', 0, 0, { reason: 'unset' });
+    await logSubscribersRetentionAudit(env, 'noop', 0, 0, {
+      reason: 'unset',
+      uncapped: true,
+      invariant: '#8 bounded_pii_retention',
+    });
     return;
   }
 
