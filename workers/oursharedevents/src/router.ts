@@ -15,6 +15,8 @@
  *   POST /api/v2/events/shared-reports/batch → SharedReport batch (WKRP service token, OSE-272 S5)
  *   POST /api/v2/admin/events/:id/shared-report/mint-link → mint signed token (admin, S-3.5.1)
  *   GET /api/v2/admin/events     → admin event list (auth required)
+ *   PUT    /api/v2/admin/events/:id → update event (auth required)
+ *   DELETE /api/v2/admin/events/:id → hard-delete event, scan-guarded (auth, OSE-982)
  *
  *   POST /api/v2/events/:id/forms/register      → submit registration (public)
  *   POST /api/v2/events/:id/forms/checkin        → increment check-in (public)
@@ -101,6 +103,7 @@ import {
   handleAdminListEvents,
   handleCreateEvent,
   handleUpdateEvent,
+  handleDeleteEvent,
   handleBackfillH3Cells,
   type EventsEnv,
 } from './handlers/events';
@@ -546,14 +549,33 @@ export async function route(
     return handlePortfolioRollup(request, env);
   }
 
-  // PUT /api/v2/admin/events/:id — update event
+  // PUT/DELETE /api/v2/admin/events/:id — update, or hard-delete (OSE-982) one event
   const adminEventMatch = pathname.match(/^\/api\/v2\/admin\/events\/([^/]+)$/);
-  if (adminEventMatch && method === 'PUT') {
+  if (adminEventMatch && (method === 'PUT' || method === 'DELETE')) {
     const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
     const deny = await requireAdmin(request, env, reqId);
     if (deny) {
-      _audit(reqId, 'UPDATE_EVENT', 'denied', 'event', adminEventMatch[1]);
+      _audit(
+        reqId,
+        method === 'DELETE' ? 'DELETE_EVENT' : 'UPDATE_EVENT',
+        'denied',
+        'event',
+        adminEventMatch[1]
+      );
       return deny;
+    }
+    if (method === 'DELETE') {
+      // Status-derived outcome: the handler refuses (409) events that already
+      // have scans, so the audit row must distinguish that from a real delete.
+      const response = await handleDeleteEvent(request, env, adminEventMatch[1]);
+      _audit(
+        reqId,
+        'DELETE_EVENT',
+        response.status < 400 ? 'success' : 'denied',
+        'event',
+        adminEventMatch[1]
+      );
+      return response;
     }
     const response = await handleUpdateEvent(request, env, adminEventMatch[1]);
     _audit(reqId, 'UPDATE_EVENT', 'success', 'event', adminEventMatch[1]);

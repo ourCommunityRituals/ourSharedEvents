@@ -6,6 +6,7 @@
  * GET  /api/v2/admin/events        – admin list (includes archived)
  * POST /api/v2/admin/events        – create event (admin)
  * PUT  /api/v2/admin/events/:id    – update event (admin)
+ * DELETE /api/v2/admin/events/:id  – hard-delete event, scan-guarded (admin, OSE-982)
  *
  * Data source: D1 database (DB binding)
  */
@@ -738,6 +739,131 @@ export async function handleUpdateEvent(
 
   return Response.json(
     { ok: true, status: 200, id: eventId },
+    { headers: { ...corsHeaders(request), 'X-Request-Id': rid } }
+  );
+}
+
+/**
+ * DELETE /api/v2/admin/events/:id — hard-delete one event (admin, auth-gated).
+ *
+ * WHY THIS EXISTS (OSE-982): the router had no DELETE for events — only
+ * `PUT status='archived'`. Two concrete gaps this closes:
+ *   1. FE fat-finger. An admin creates an event by mistake and needs it GONE,
+ *      not archived-and-lingering in the admin list.
+ *   2. DB hygiene. The T4 cross-brand-isolation E2E seeds throwaway `isoltest-*`
+ *      events every deploy; with no delete route its afterEach cleanup matched
+ *      no route and was silently swallowed — a permanent no-op — so staging
+ *      accumulated orphan rows forever. A real endpoint lets that cleanup work.
+ *
+ * WHY HARD, not soft: the sponsor soft-delete (`is_active=0`) exists because a
+ * sponsor is a BORROWED, shared identity referenced by many events (rule 7) —
+ * there, hiding beats deleting. An event is a singular ROOT entity owned by one
+ * brand; a soft flag would leave the isoltest-* rows accumulating (just
+ * invisible), which is exactly what "take care of the db rows" asks us NOT to
+ * do. So we remove the row. `archived` (via PUT) stays the path for real,
+ * intentionally-kept events.
+ *
+ * SAFETY GUARD: D1 DOES enforce the events FK children here, so two things are
+ * true. (1) We refuse (409 EVENT_HAS_ACTIVITY) if the event has any recorded
+ * scans or sponsor impressions — the "met reality" signals; a real event that
+ * has been scanned/seen must be archived, never nuked. (2) Even a clean event
+ * has children: OSE-240 auto-creates a `shortlinks` row for every event, and an
+ * admin may have attached poster deployments or sponsor placements. A bare
+ * `DELETE FROM events` would FK-fail on those, so we cascade the event's owned
+ * (derived/config) rows children-first in one atomic batch, then the row. The
+ * activity guard guarantees the value-bearing tables are already empty, so the
+ * cascade only ever clears derived rows. Fat-finger events and isoltest-*
+ * orphans have zero activity and delete cleanly.
+ *
+ * Not handled (rare, deliberately): an event acting as a `venue_id` for an
+ * event_series / anon_id_returns row will FK-block the final DELETE (503) —
+ * you should not silently destroy a venue other rows point at; archive it.
+ *
+ * Scope note: like the sibling PUT, this is id-only (no brand-scope clause in
+ * the mutation). Object-level owner/brand scoping on admin mutate paths is the
+ * separate workstream tracked in OSE-1080 — kept in lockstep with PUT here on
+ * purpose rather than diverging one destructive route ahead of it.
+ */
+export async function handleDeleteEvent(
+  request: Request,
+  env: EventsEnv,
+  eventId: string
+): Promise<Response> {
+  const rid = requestId();
+
+  if (!env.DB) {
+    return errorResponse('DB_NOT_CONFIGURED', 'Database not available', 503, rid);
+  }
+
+  try {
+    // Existence check first, so a missing id is an honest 404 rather than a
+    // silent 0-row DELETE that would report success and mask a bad id.
+    const existing = await env.DB.prepare('SELECT id FROM events WHERE id = ?')
+      .bind(eventId)
+      .first<{ id: string }>();
+    if (!existing) {
+      return errorResponse('NOT_FOUND', `Event not found: ${eventId}`, 404, rid);
+    }
+
+    // Guard: never hard-delete an event that has already met reality. `scans`
+    // was split (OSE-798) into a placement side and a session/return side;
+    // `sponsor_impressions` is the sponsor-visibility ledger. Any of them being
+    // non-empty means real, value-bearing rows hang off this event — refuse and
+    // let the operator archive (PUT status=archived) instead of destroying data.
+    const dep = await env.DB.prepare(
+      `SELECT
+         (SELECT COUNT(*) FROM scan_node_returns     WHERE event_id = ?) +
+         (SELECT COUNT(*) FROM scan_placement_events WHERE event_id = ?) +
+         (SELECT COUNT(*) FROM sponsor_impressions   WHERE event_id = ?) AS n`
+    )
+      .bind(eventId, eventId, eventId)
+      .first<{ n: number }>();
+    if ((dep?.n ?? 0) > 0) {
+      return errorResponse(
+        'EVENT_HAS_ACTIVITY',
+        'Event has recorded scans or sponsor impressions; archive it (PUT status=archived) instead of deleting',
+        409,
+        rid
+      );
+    }
+
+    // FK-safe cascade. D1 enforces the foreign keys on the child tables, so the
+    // event row cannot be removed while any child references it. Delete the
+    // event's owned rows children-first, in one atomic batch, then the row. The
+    // guard above guarantees scan_*/sponsor_impressions are empty, so in
+    // practice this clears only derived/config rows (the OSE-240 shortlink, and
+    // any poster deployments / sponsor placements an admin attached).
+    // The current child tables carrying an event_id FK into events(id), ordered
+    // children-first so each delete satisfies the FK on the next. (The scan_* and
+    // sponsor_impressions rows are already empty per the guard above; they stay
+    // in the list so the cascade is FK-complete on its own terms and survives a
+    // future guard change. scan_placement_events precedes poster_deployments
+    // because it also FKs poster_deployments.)
+    const delChild = (sql: string) => env.DB!.prepare(sql).bind(eventId);
+    await env.DB.batch([
+      delChild('DELETE FROM scan_placement_events WHERE event_id = ?'),
+      delChild('DELETE FROM scan_node_returns     WHERE event_id = ?'),
+      delChild('DELETE FROM scan_aggregates       WHERE event_id = ?'),
+      delChild('DELETE FROM sponsor_impressions   WHERE event_id = ?'),
+      delChild('DELETE FROM sponsor_placement     WHERE event_id = ?'),
+      delChild('DELETE FROM poster_deployments    WHERE event_id = ?'),
+      delChild('DELETE FROM shortlinks            WHERE event_id = ?'),
+      env.DB.prepare('DELETE FROM events WHERE id = ?').bind(eventId),
+    ]);
+  } catch (err) {
+    console.error(
+      JSON.stringify({
+        type: 'DB_ERROR',
+        handler: 'handleDeleteEvent',
+        error: err instanceof Error ? err.message : String(err),
+        timestamp: new Date().toISOString(),
+      })
+    );
+    return errorResponse('DB_ERROR', 'Failed to delete event', 503, rid);
+  }
+
+  return Response.json(
+    { ok: true, status: 200, id: eventId, deleted: true },
     { headers: { ...corsHeaders(request), 'X-Request-Id': rid } }
   );
 }
