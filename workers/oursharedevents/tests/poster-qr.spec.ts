@@ -127,13 +127,13 @@ describe('DESIGN-9 L1: static source file checks', () => {
     expect(router).toContain('handleGetPosterBundle');
   });
 
-  test('poster-bundle handler imports generateQrCode and generateSvgQrCode from lib/qr', () => {
-    const handler = sourceFile('handlers/poster-bundle.ts');
-    expect(handler).toContain('generateQrCode');
-    expect(handler).toContain('generateSvgQrCode');
-    expect(handler, 'missing import from lib/qr').toContain('../lib/qr');
-  });
-
+  // REMOVED (OSE-1127): a test asserting the handler SOURCE FILE contained the
+  // strings 'generateQrCode', 'generateSvgQrCode' and '../lib/qr'. That checks an
+  // import statement, not a QR code — it passed just as happily over an encoder
+  // emitting undecodable output, which is what was actually happening. A test that
+  // costs maintenance and buys no assurance is worse than none, because it reads as
+  // coverage. Replaced by a behavioural check in the L2 block below, and by the
+  // full decode round-trip in qr-roundtrip.spec.ts.
   test('poster-bundle handler covers all 4 form types', () => {
     const handler = sourceFile('handlers/poster-bundle.ts');
     for (const type of ['register', 'checkin', 'survey', 'email-signup']) {
@@ -181,6 +181,35 @@ describe('DESIGN-9 L1: static source file checks', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('DESIGN-9 L2: poster-bundle endpoint integration', () => {
+  /**
+   * Replaces the removed source-string check from the L1 block. Asserts the
+   * emitted artifact is a real PNG — cheap, no decode, and it fails if the QR
+   * pipeline stops producing an image at all. Whether that image is SCANNABLE is
+   * the stronger claim, tested in qr-roundtrip.spec.ts, which decodes it the way
+   * a phone camera would.
+   */
+  test('poster-bundle emits QR codes that are actually PNG images', async () => {
+    const eventId = await createEvent('QR PNG Shape Check');
+    const res = await SELF.fetch(`https://t.test/api/v2/events/${eventId}/poster-bundle`);
+    expect(res.status).toBe(200);
+
+    const body = (await res.json()) as { qr?: Record<string, string> };
+    const qr = body.qr ?? {};
+    expect(Object.keys(qr).length, 'poster bundle emitted no QR codes at all').toBeGreaterThan(0);
+
+    const PNG_SIGNATURE = [137, 80, 78, 71, 13, 10, 26, 10];
+    const PREFIX = 'data:image/png;base64,';
+
+    for (const [type, uri] of Object.entries(qr)) {
+      expect(uri, `QR for "${type}" is not a PNG data URI`).toMatch(/^data:image\/png;base64,/);
+      // Check the magic bytes too: the prefix alone would pass on an empty or
+      // truncated payload.
+      const head = atob(uri.slice(PREFIX.length, PREFIX.length + 16));
+      const sig = [...head].slice(0, 8).map((c) => c.charCodeAt(0));
+      expect(sig, `QR for "${type}" has no PNG signature`).toEqual(PNG_SIGNATURE);
+    }
+  });
+
   test('unknown event → 404 with ok:false', async () => {
     const res = await SELF.fetch('https://t.test/api/v2/events/does-not-exist/poster-bundle');
     expect(res.status).toBe(404);

@@ -41,13 +41,20 @@ const EC_CODEWORDS_PER_BLOCK: number[][] = [
   [20, 18, 18, 26],
 ];
 
+/**
+ * Blocks per version/EC level. v5-Q was 2 and must be 4: with 2 blocks the data
+ * budget works out to 98 codewords, but VERSION_CAPACITY says 60 bytes, which
+ * needs 62. The two tables contradicted each other and v5-Q was the only cell
+ * where they did. Cross-checked: for every version and level,
+ * total - ec*blocks == capacity + 2 (the 12-bit byte-mode header). OSE-1128.
+ */
 const NUM_EC_BLOCKS: number[][] = [
   [0, 0, 0, 0],
   [1, 1, 1, 1],
   [1, 1, 1, 1],
   [1, 1, 2, 2],
   [1, 2, 2, 4],
-  [1, 2, 2, 4],
+  [1, 2, 4, 4],
   [2, 4, 4, 4],
   [2, 4, 6, 5],
 ];
@@ -121,6 +128,30 @@ function drawFinder(m: QrMatrix, res: QrReserved, r: number, c: number): void {
   }
 }
 
+
+/**
+ * Alignment-pattern centres for a version. Returns [] for v1 (none).
+ *
+ * Coordinates come from the spec's per-version list; a pattern is omitted where it
+ * would overlap a finder, i.e. the three corners (first,first), (first,last) and
+ * (last,first).
+ */
+function alignmentCentres(version: number, sz: number): Array<[number, number]> {
+  if (version < 2) return [];
+  const coords = version < 7 ? [6, sz - 7] : [6, 22, sz - 7];
+  const out: Array<[number, number]> = [];
+  for (let i = 0; i < coords.length; i++) {
+    for (let j = 0; j < coords.length; j++) {
+      const isTopLeft = i === 0 && j === 0;
+      const isTopRight = i === 0 && j === coords.length - 1;
+      const isBottomLeft = i === coords.length - 1 && j === 0;
+      if (isTopLeft || isTopRight || isBottomLeft) continue;
+      out.push([coords[i], coords[j]]);
+    }
+  }
+  return out;
+}
+
 function drawAlignment(m: QrMatrix, res: QrReserved, r: number, c: number): void {
   for (let dr = -2; dr <= 2; dr++) {
     for (let dc = -2; dc <= 2; dc++) {
@@ -130,6 +161,38 @@ function drawAlignment(m: QrMatrix, res: QrReserved, r: number, c: number): void
       m[rr][cc] = Math.max(Math.abs(dr), Math.abs(dc)) !== 1;
       res[rr][cc] = true;
     }
+  }
+}
+
+
+/**
+ * Version information — required for version 7 and above, absent entirely before.
+ *
+ * 18 bits: the 6-bit version number plus 12 BCH check bits (generator 0x1F25),
+ * written TWICE — a 3x6 block above the bottom-left finder and its transpose left
+ * of the top-right finder. Versions 1-6 carry none.
+ *
+ * This was never emitted, so every v7 symbol was missing a function pattern the
+ * decoder needs, and those modules were also unreserved — meaning placeBits wrote
+ * data into them. Both halves of the same omission. OSE-1128.
+ */
+function versionBits(version: number): number {
+  let rem = version;
+  for (let i = 0; i < 12; i++) rem = (rem << 1) ^ ((rem >>> 11) * 0x1f25);
+  return (version << 12) | rem;
+}
+
+function drawVersion(m: QrMatrix, res: QrReserved, sz: number, version: number): void {
+  if (version < 7) return;
+  const bits = versionBits(version);
+  for (let i = 0; i < 18; i++) {
+    const bit = ((bits >>> i) & 1) === 1;
+    const a = sz - 11 + (i % 3);
+    const b = Math.floor(i / 3);
+    m[a][b] = bit;
+    res[a][b] = true;
+    m[b][a] = bit;
+    res[b][a] = true;
   }
 }
 
@@ -147,13 +210,35 @@ function reserveFormat(res: QrReserved, sz: number): void {
   }
   for (let i = sz - 8; i < sz; i++) res[8][i] = true;
   for (let i = sz - 7; i < sz; i++) res[i][8] = true;
+  // The dark module at (sz-8, 8) is a FUNCTION module — always set, never data.
+  // The loop above starts at sz-7, one row below it, so it was left unreserved:
+  // placeBits wrote a data bit there and drawFormat then overwrote it, silently
+  // corrupting one codeword in EVERY symbol at every version. Strong EC levels
+  // corrected it away, which is why L (fewest ECC codewords) failed everywhere
+  // while M/Q/H appeared to work. OSE-1128.
+  res[sz - 8][8] = true;
 }
 
+/**
+ * Total codewords per version, from the QR specification (ISO/IEC 18004 Table 1).
+ *
+ * This was previously derived geometrically — subtracting finder, timing, format
+ * and alignment modules from sz*sz — and the accounting was wrong for EVERY
+ * version: 6 short at v1, 5 short at v2-v6, and 13 OVER at v7, where the
+ * alignment-pattern term stops being a constant.
+ *
+ * That is the capacity the whole data/ECC split is computed from, so every symbol
+ * was built against the wrong budget. It is OSE-1127 root cause C, and it sat
+ * beneath the other two: fixing the format bits and the block interleaving could
+ * never have produced a readable code while this was wrong.
+ *
+ * A table cannot drift the way a hand-derived formula can, and these are fixed
+ * constants in the standard. Indexed by version; index 0 unused.
+ */
+const TOTAL_CODEWORDS: readonly number[] = [0, 26, 44, 70, 100, 134, 172, 196];
+
 function totalCodewords(version: number): number {
-  const sz = qrSize(version);
-  let mods = sz * sz - 3 * 64 - 3 * 15 - 2 * (sz - 16) - 31;
-  if (version >= 2) mods -= 25;
-  return Math.floor(mods / 8);
+  return TOTAL_CODEWORDS[version];
 }
 
 function encodeData(bytes: Uint8Array, version: number, ecLevel: number): Uint8Array {
@@ -184,19 +269,65 @@ function encodeData(bytes: Uint8Array, version: number, ecLevel: number): Uint8A
   return out;
 }
 
+/**
+ * Split into blocks, compute Reed-Solomon ECC per block, and INTERLEAVE.
+ *
+ * Two bugs lived here (OSE-1127 root cause B), both invisible whenever the
+ * symbol happened to be single-block — which is why short payloads decoded and
+ * the product's real 40-60 byte scan URLs did not:
+ *
+ *   1. NO INTERLEAVING. The old code emitted block0 + its ECC, then block1 + its
+ *      ECC, and so on. The spec requires the i-th data codeword of every block in
+ *      turn, then the i-th ECC codeword of every block in turn. With one block the
+ *      two are identical, so the bug hid completely below the multi-block
+ *      threshold.
+ *
+ *   2. EQUAL-SIZE BLOCK ASSUMPTION. `Math.floor(data.length / nBlocks)` assumes
+ *      every block is the same length. The spec uses SHORT and LONG blocks
+ *      differing by exactly one data codeword; when the division had a remainder
+ *      those extra codewords were silently dropped before ever being encoded.
+ *
+ * Block geometry per the spec: `numLong = totalData % nBlocks` blocks carry
+ * `shortLen + 1` data codewords; the rest carry `shortLen`. Every block gets the
+ * same ECC length. Long blocks sort last, so during data interleaving the short
+ * blocks simply have nothing to contribute on the final pass.
+ */
 function addEcc(data: Uint8Array, version: number, ecLevel: number): Uint8Array {
   const ecPerBlock = EC_CODEWORDS_PER_BLOCK[version][ecLevel];
   const nBlocks = NUM_EC_BLOCKS[version][ecLevel];
-  const blockSz = Math.floor(data.length / nBlocks);
   const div = rsDivisor(ecPerBlock);
-  const all: number[] = [];
+
+  const shortLen = Math.floor(data.length / nBlocks);
+  const numLong = data.length % nBlocks;
+
+  const blocks: Uint8Array[] = [];
+  const eccs: Uint8Array[] = [];
+  let offset = 0;
   for (let i = 0; i < nBlocks; i++) {
-    const block = data.slice(i * blockSz, i * blockSz + blockSz);
-    const ec = rsRemainder(block, div);
-    for (const b of block) all.push(b);
-    for (const b of ec) all.push(b);
+    const len = shortLen + (i >= nBlocks - numLong ? 1 : 0);
+    const block = data.slice(offset, offset + len);
+    offset += len;
+    blocks.push(block);
+    eccs.push(rsRemainder(block, div));
   }
-  return new Uint8Array(all);
+
+  const out: number[] = [];
+
+  // Data codewords, interleaved. Short blocks contribute nothing on the last
+  // pass, which is why long blocks are placed at the end.
+  const maxLen = shortLen + (numLong > 0 ? 1 : 0);
+  for (let i = 0; i < maxLen; i++) {
+    for (const block of blocks) {
+      if (i < block.length) out.push(block[i]);
+    }
+  }
+
+  // ECC codewords, interleaved. Every block has exactly ecPerBlock of them.
+  for (let i = 0; i < ecPerBlock; i++) {
+    for (const ecc of eccs) out.push(ecc[i]);
+  }
+
+  return new Uint8Array(out);
 }
 
 function placeBits(m: QrMatrix, res: QrReserved, cw: Uint8Array, sz: number): void {
@@ -226,8 +357,22 @@ function applyMask(m: QrMatrix, res: QrReserved, sz: number): void {
   }
 }
 
+/**
+ * Format-information EC indicator.
+ *
+ * EC_LEVEL is the TABLE INDEX order (L=0 M=1 Q=2 H=3), correct for indexing
+ * VERSION_CAPACITY / EC_CODEWORDS_PER_BLOCK / NUM_EC_BLOCKS. The QR spec's
+ * format-info field uses a DIFFERENT encoding: L=01 M=00 Q=11 H=10.
+ *
+ * Feeding the table index straight into the format bits made every symbol
+ * declare the wrong EC level. A decoder reads format info FIRST, derives the
+ * wrong data/ECC split from it, and gives up — which is why the codes rendered
+ * perfectly and scanned as nothing. (OSE-1127 root cause A.)
+ */
+const EC_FORMAT_INDICATOR: readonly number[] = [1, 0, 3, 2];
+
 function formatBits(ecLevel: number): number {
-  const data = (ecLevel << 3) | 0; // mask 0
+  const data = (EC_FORMAT_INDICATOR[ecLevel] << 3) | 0; // mask 0
   let rem = data;
   for (let i = 0; i < 10; i++) rem = (rem << 1) ^ ((rem >> 9) * 0x537);
   return ((data << 10) | rem) ^ 0x5412;
@@ -255,9 +400,14 @@ function buildMatrix(data: string, ecLevel: number): QrMatrix {
   drawFinder(m, res, 0, 0);
   drawFinder(m, res, sz - 7, 0);
   drawFinder(m, res, 0, sz - 7);
-  if (version >= 2) drawAlignment(m, res, sz - 7, sz - 7);
+  // Alignment patterns. v2-v6 have a single centre at (sz-7, sz-7); v7 adds a
+  // row/column set at coordinates 6, 22, 38 with the three that collide with the
+  // finder patterns omitted. Only the single v2-v6 case was drawn before, so every
+  // v7 symbol was missing five alignment patterns. OSE-1128.
+  for (const [ar, ac] of alignmentCentres(version, sz)) drawAlignment(m, res, ar, ac);
   drawTiming(m, res, sz);
   reserveFormat(res, sz);
+  drawVersion(m, res, sz, version);
 
   const dataCW = encodeData(bytes, version, ecLevel);
   const allCW = addEcc(dataCW, version, ecLevel);
