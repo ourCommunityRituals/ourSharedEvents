@@ -66,9 +66,10 @@ const BRAND_B = 'isoltest-b';
 // Per-run token that makes each seeded slug unique across runs. POST
 // /api/v2/admin/events mints its own event id and enforces UNIQUE(slug), so a
 // unique SLUG (not a fixed id + delete-before-create) is what keeps re-runs on
-// shared staging from colliding with 409 SLUG_TAKEN. There is no
-// DELETE /api/v2/admin/events/:id endpoint yet (OSE-982), so cleanup cannot free
-// a fixed slug — uniqueness per run is the only self-healing option today.
+// shared staging from colliding with 409 SLUG_TAKEN. DELETE /api/v2/admin/events/:id
+// now exists (OSE-982) and afterEach removes the seeded rows, but we KEEP the
+// per-run-unique slug as belt-and-suspenders: if a run crashes before cleanup,
+// the next run still won't collide.
 const RUN_ID = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
 function adminHeaders(): Record<string, string> {
@@ -112,9 +113,9 @@ async function seedEvent(request: any, brand: string, suffix: string): Promise<s
   // NOTE (OSE-554): POST /api/v2/admin/events IGNORES any client-supplied `id`
   // and mints its own `evt_<uuid>` (handleCreateEvent, events.ts). The UNIQUE
   // constraint is on `slug`, so idempotency across runs comes from a per-run
-  // unique slug — NOT from a fixed id + delete-before-create. The prior fix
-  // (delete-before-create by fixed id) could never match: the server never used
-  // that id, and there is no DELETE /api/v2/admin/events/:id endpoint (OSE-982).
+  // unique slug — NOT from a fixed id + delete-before-create. Cleanup now uses
+  // the server-minted id against DELETE /api/v2/admin/events/:id (OSE-982); the
+  // unique slug remains the crash-safety net (see RUN_ID).
   const body = {
     brand_id: brand,
     title: `Cross-Brand Isolation Test (${suffix} ${RUN_ID})`,
@@ -146,12 +147,12 @@ async function seedEvent(request: any, brand: string, suffix: string): Promise<s
 }
 
 /**
- * Best-effort cleanup by event ID. Currently a NO-OP: there is no
- * DELETE /api/v2/admin/events/:id endpoint yet (OSE-982), so this call matches no
- * route and is swallowed. It is kept forward-compatible — the moment that
- * endpoint lands, cleanup starts working with zero test changes. Until then,
- * re-run safety comes entirely from the per-run-unique slug (see RUN_ID); orphan
- * test events are harmless (brand isoltest-*, start_date 2099 → never rendered).
+ * Best-effort cleanup by event ID against DELETE /api/v2/admin/events/:id
+ * (OSE-982). These seeded events have zero scans, so they clear the handler's
+ * scan-guard and are hard-deleted — this is what stops `isoltest-*` rows
+ * accumulating on staging every deploy. Still best-effort: a failed cleanup is
+ * swallowed because the events are harmless (brand isoltest-*, start_date 2099
+ * → never rendered) and the per-run-unique slug keeps the next run collision-free.
  */
 async function deleteEvent(request: any, id: string): Promise<void> {
   try {
