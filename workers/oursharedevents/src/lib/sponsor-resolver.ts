@@ -389,33 +389,129 @@ export function buildShareRotation(sponsors: SponsorRow[]): RotationEntry[] {
   );
 }
 
+// ─── Deterministic seeded shuffle (OSE-1138 · Invariant #25 · COST-101) ──────
+// The display ORDER must carry no tier/share meaning — a fixed first/top slot is
+// position-prominence, and #25 forbids buying size/slot/position. So sponsors are
+// SHUFFLED, never share-sorted, on the rendered surfaces. But the runtime is
+// deterministic by doctrine (COST-101 — no Math.random on any path): identical
+// (sponsors, seed) MUST yield an identical order so the covenant is reproducible
+// across the edge fleet and testable. We therefore shuffle with a PRNG SEEDED off
+// the event id — "randomly displayed," but a seeded, verifiable random.
+function xmur3(str: string): () => number {
+  let h = 1779033703 ^ str.length;
+  for (let i = 0; i < str.length; i++) {
+    h = Math.imul(h ^ str.charCodeAt(i), 3432918353);
+    h = (h << 13) | (h >>> 19);
+  }
+  return () => {
+    h = Math.imul(h ^ (h >>> 16), 2246822507);
+    h = Math.imul(h ^ (h >>> 13), 3266489909);
+    h ^= h >>> 16;
+    return h >>> 0;
+  };
+}
+function mulberry32(a: number): () => number {
+  return () => {
+    a |= 0;
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/** Deterministic Fisher–Yates shuffle keyed off `seed` (COST-101: no RNG). */
+export function seededShuffle<T>(items: readonly T[], seed: string): T[] {
+  const arr = items.slice();
+  const rand = mulberry32(xmur3(seed || 'ose-covenant')());
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1));
+    const t = arr[i]!;
+    arr[i] = arr[j]!;
+    arr[j] = t;
+  }
+  return arr;
+}
+
+// How many rotation slots the covenant shares are apportioned across on a temporal
+// surface. 20 lets premium(7)/mid(3)/base(1) land clean integer counts in the
+// common case while keeping the sidebar cycle a sane length.
+const ROTATION_GRANULARITY = 20;
+
+/**
+ * Frequency-weighted, randomly-ordered rotation sequence for a TEMPORAL surface
+ * (the TV sidebar cycles one slot at a time). This is where "the right to buy
+ * more visibility" becomes real: a sponsor's NUMBER OF SLOTS is proportional to
+ * its covenant share (allocateShares → sharePct: premium 7 / mid 3 / base 1,
+ * `is_local` floored at 30%, premium/mid capped), so a premium sponsor's logo
+ * comes up MORE OFTEN over time. Slots are apportioned by largest-remainder
+ * (Hamilton) so integer counts track the shares closely and the local floor
+ * survives rounding; every active sponsor gets ≥ 1 slot (min-presence — never
+ * zeroed). The sequence is then seeded-SHUFFLED so ORDER carries no meaning
+ * (#25: only frequency is purchasable, never position). Deterministic per seed.
+ */
+export function buildWeightedRotation(entries: RotationEntry[], seed: string): SponsorRow[] {
+  if (entries.length === 0) return [];
+  if (entries.length === 1) return [entries[0]!.sponsor];
+
+  const base = entries.map((e) => {
+    const exact = (e.sharePct / 100) * ROTATION_GRANULARITY;
+    const slots = Math.max(1, Math.floor(exact)); // min-presence floor: ≥ 1 each
+    return { sponsor: e.sponsor, slots, frac: exact - Math.floor(exact) };
+  });
+  let used = base.reduce((a, b) => a + b.slots, 0);
+  // At least GRANULARITY slots, but never fewer than one-per-sponsor.
+  const target = Math.max(ROTATION_GRANULARITY, base.length);
+  // Hand the leftover slots to the largest fractional remainders (Hamilton).
+  const byFrac = base.slice().sort((a, b) => b.frac - a.frac);
+  for (let k = 0; used < target; k++, used++) byFrac[k % byFrac.length]!.slots += 1;
+
+  const sequence: SponsorRow[] = [];
+  for (const b of base) for (let i = 0; i < b.slots; i++) sequence.push(b.sponsor);
+  return seededShuffle(sequence, seed);
+}
+
 /**
  * Build the full sponsor bundle for a surface.
  *
- * OSE-661 (#25): every active sponsor is eligible for every surface (uniform
- * placement); each surface bucket is the SAME covenant-share-ordered rotation.
- * Only rotation FREQUENCY (share) differs between sponsors — order carries no
- * size/slot/position meaning. Q3 rule: more sponsors = more rotation slots.
+ * OSE-661 / OSE-1138 (#25): every active sponsor is eligible for every surface
+ * (uniform size/slot). What differs is expressed on two orthogonal, non-positional
+ * axes only:
+ *   • FREQUENCY — the purchasable axis. On a temporal surface (TV sidebar), a
+ *     higher-share sponsor gets MORE rotation slots (buildWeightedRotation), so it
+ *     is seen more often over time. The `is_local` floor + premium/mid caps ride
+ *     in via allocateShares → sharePct.
+ *   • ORDER — carries NO meaning: every surface is seeded-SHUFFLED off the event
+ *     id, so no sponsor holds a fixed first/top position (#25: position is not
+ *     purchasable). "Randomly displayed," deterministically (COST-101).
+ * Snapshot surfaces (poster / TV banner / mobile — all sponsors visible at once)
+ * show each sponsor ONCE, shuffled; frequency can't apply to a simultaneous view,
+ * and duplicating there would be simultaneous repetition = prominence.
+ * The posterTop/tvTop/tvSide/mobileBanner keys remain for response-schema
+ * stability (Invariant #16); #2's named-slot filter and #5's tier sort stay RETIRED.
+ *
+ * `seed` is the event id — same event renders the same order everywhere; a bare
+ * call falls back to a stable covenant seed so the function is still pure.
  */
-export function buildSponsorBundle(sponsors: SponsorRow[]): SponsorBundle {
-  const rotation = buildShareRotation(sponsors).map((r) => r.sponsor);
+export function buildSponsorBundle(sponsors: SponsorRow[], seed = ''): SponsorBundle {
+  const entries = buildShareRotation(sponsors); // unique, sharePct, #25 walls enforced
+  const unique = entries.map((e) => e.sponsor);
 
-  const maxSlots = Math.max(rotation.length, 1);
+  // Snapshot surfaces: each sponsor once, order shuffled (position carries no meaning).
+  const snapshot = seededShuffle(unique, seed);
+  // Temporal surface (sidebar cycle): frequency-weighted + shuffled.
+  const temporal = buildWeightedRotation(entries, seed);
+
+  const maxSlots = Math.max(temporal.length, 1);
   const rotationMs = Math.min(15000, Math.max(3000, 5000 * Math.ceil(maxSlots / 3)));
 
   return {
-    sponsors: rotation,
-    // Uniform: identical eligibility on every surface. Frequency is the only
-    // differentiator (allocateShares), enforced by buildShareRotation.
-    // NOTE (X-7 / OSE-839): the posterTop/tvTop/tvSide/mobileBanner keys are
-    // retained ONLY for response-schema stability under Invariant #16 — they are
-    // NOT purchasable named slots. #2's old named-slot filter and #5's tier sort
-    // are RETIRED (superseded by #25); every key gets the SAME uniform rotation.
+    sponsors: snapshot,
     surface_sponsors: {
-      posterTop: rotation,
-      tvTop: rotation,
-      tvSide: rotation,
-      mobileBanner: rotation,
+      posterTop: snapshot,
+      tvTop: snapshot,
+      tvSide: temporal,
+      mobileBanner: snapshot,
     },
     rotation_config: {
       sponsorSlots: maxSlots,
