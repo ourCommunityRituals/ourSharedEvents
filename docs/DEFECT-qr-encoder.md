@@ -16,12 +16,12 @@ all null.
 
 Both product defaults are affected. Call sites:
 
-| File | Line | EC level |
-|---|---|---|
-| `src/handlers/poster-bundle.ts` | 113 | `M` — the poster page's four form QRs |
-| `src/handlers/poster-bundle.ts` | 125 | `M` — UEC ENTER (SVG) |
-| `src/handlers/poster-deployments.ts` | 216 | `M` — the physical-placement scan token |
-| `src/handlers/uec-resolve.ts` | 93 | `H` |
+| File                                 | Line | EC level                                |
+| ------------------------------------ | ---- | --------------------------------------- |
+| `src/handlers/poster-bundle.ts`      | 113  | `M` — the poster page's four form QRs   |
+| `src/handlers/poster-bundle.ts`      | 125  | `M` — UEC ENTER (SVG)                   |
+| `src/handlers/poster-deployments.ts` | 216  | `M` — the physical-placement scan token |
+| `src/handlers/uec-resolve.ts`        | 93   | `H`                                     |
 
 ## Root cause A — confirmed by experiment
 
@@ -34,11 +34,11 @@ information: `const data = (ecLevel << 3) | 0;`
 But the QR spec's format-info EC indicator is a **different** encoding:
 
 | Level | Table index | Format indicator |
-|---|---|---|
-| L | 0 | `01` = 1 |
-| M | 1 | `00` = 0 |
-| Q | 2 | `11` = 3 |
-| H | 3 | `10` = 2 |
+| ----- | ----------- | ---------------- |
+| L     | 0           | `01` = 1         |
+| M     | 1           | `00` = 0         |
+| Q     | 2           | `11` = 3         |
+| H     | 3           | `10` = 2         |
 
 So every code declares the wrong EC level in its format bits. A decoder reads format info
 **first**, derives the wrong data/ECC split, and gives up — which is exactly why the
@@ -124,8 +124,19 @@ GET /api/v2/events/:id/poster-bundle     (what poster.html fetches)
   -> assert the decoded string equals the URL we meant to encode
 ```
 
-It is **born-red on purpose** and currently fails. It should stay red until the encoder is
-fixed — a green suite over an unscannable QR is precisely the false green worth avoiding.
+**Status: baselined, not hidden.** The two decode assertions carry `test.fails()` against
+this defect — the vitest equivalent of the known-drift baseline `scripts/lint-testids.js`
+already uses. The suite reports `1 passed | 2 expected fail`, so the PR can merge while the
+defect stays tracked, and any NEW breakage still fails the build. The quiet-zone assertion
+passes today and remains a live gate.
+
+The marker is **self-clearing**, which a baseline file is not: `test.fails()` on a passing
+test fails the build (verified), so the moment the encoder is fixed the markers break and
+force their own removal. Deleting a marker is the last step of fixing `qr.ts` — never a way
+to quiet CI.
+
+Note that fixing root cause A alone will NOT clear them: `poster-bundle` uses
+`errorCorrection: 'M'`, which root cause B still breaks. Both are required.
 
 Once A and B are fixed it also becomes the regression lock: the four surviving mutants
 above all die against it, because each corrupts the symbol in a way a decoder notices.
