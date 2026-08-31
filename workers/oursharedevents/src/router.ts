@@ -15,6 +15,7 @@
  *   POST /api/v2/events/shared-reports/batch → SharedReport batch (WKRP service token, OSE-272 S5)
  *   POST /api/v2/admin/events/:id/shared-report/mint-link → mint signed token (admin, S-3.5.1)
  *   GET /api/v2/admin/events     → admin event list (auth required)
+ *   GET /api/v2/admin/event-templates → seeded event templates (auth, OSE-868)
  *   PUT    /api/v2/admin/events/:id → update event (auth required)
  *   DELETE /api/v2/admin/events/:id → hard-delete event, scan-guarded (auth, OSE-982)
  *
@@ -104,6 +105,7 @@ import {
   handleCreateEvent,
   handleUpdateEvent,
   handleDeleteEvent,
+  handleAdminListEventTemplates,
   handleBackfillH3Cells,
   type EventsEnv,
 } from './handlers/events';
@@ -519,6 +521,15 @@ export async function route(
     const deny = await requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
     if (deny) return deny;
     return handleAdminListEvents(request, env);
+  }
+
+  // GET /api/v2/admin/event-templates — OSE-868: expose the seeded event
+  // templates so the launch wizard's picker reads real D1 rows (default_sections
+  // and all) instead of a hardcoded list. Read-only, admin-gated, no audit.
+  if (pathname === '/api/v2/admin/event-templates' && method === 'GET') {
+    const deny = await requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
+    if (deny) return deny;
+    return handleAdminListEventTemplates(request, env);
   }
 
   if (pathname === '/api/v2/admin/events' && method === 'POST') {
