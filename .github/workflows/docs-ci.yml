@@ -23,7 +23,7 @@ defaults:
 jobs:
   lint-and-check:
     name: Markdown lint + DAC compliance
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
 
