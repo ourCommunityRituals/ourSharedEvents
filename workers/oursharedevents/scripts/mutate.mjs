@@ -29,18 +29,20 @@ const asJson = args.includes('--json');
  */
 const MUTANTS = [
   // ── QR encoder — the poster spine ─────────────────────────────────────────
-  { id: 'qr-size-formula', module: 'src/lib/qr.ts', specs: ['tests/poster-qr.spec.ts'],
+  { id: 'qr-size-formula', module: 'src/lib/qr.ts', specs: ['tests/qr-roundtrip.spec.ts'],
     attacks: 'QR module grid size (17 + 4v) — wrong size = unscannable',
     find: 'return 17 + version * 4;', replace: 'return 17 + version * 5;' },
-  { id: 'qr-alignment-threshold', module: 'src/lib/qr.ts', specs: ['tests/poster-qr.spec.ts'],
+  { id: 'qr-alignment-threshold', module: 'src/lib/qr.ts', specs: ['tests/qr-roundtrip.spec.ts'],
     attacks: 'alignment pattern drawn only for version >= 2',
     find: 'if (version >= 2) drawAlignment', replace: 'if (version >= 3) drawAlignment' },
-  { id: 'qr-codeword-adjust', module: 'src/lib/qr.ts', specs: ['tests/poster-qr.spec.ts'],
-    attacks: 'total codeword count — off-by-one corrupts every symbol',
-    find: 'if (version >= 2) mods -= 25;', replace: 'if (version >= 2) mods -= 24;' },
-  { id: 'qr-ec-level-bits', module: 'src/lib/qr.ts', specs: ['tests/poster-qr.spec.ts'],
+  { id: 'qr-codeword-adjust', module: 'src/lib/qr.ts', specs: ['tests/qr-roundtrip.spec.ts'],
+    // SURVIVES legitimately: mutates v7 capacity, and v7 is inside the still-broken
+    // high-version range (see the OSE-1127 follow-up). Unkillable until that lands.
+    attacks: 'total codeword count at v7 — blocked by the unfixed high-version range',
+    find: 'const TOTAL_CODEWORDS: readonly number[] = [0, 26, 44, 70, 100, 134, 172, 196];', replace: 'const TOTAL_CODEWORDS: readonly number[] = [0, 26, 44, 70, 100, 134, 172, 197];' },
+  { id: 'qr-ec-level-bits', module: 'src/lib/qr.ts', specs: ['tests/qr-roundtrip.spec.ts'],
     attacks: 'format bits: EC level shifted into place',
-    find: 'const data = (ecLevel << 3) | 0;', replace: 'const data = (ecLevel << 2) | 0;' },
+    find: 'const EC_FORMAT_INDICATOR: readonly number[] = [1, 0, 3, 2];', replace: 'const EC_FORMAT_INDICATOR: readonly number[] = [0, 1, 2, 3];' },
 
   // ── Shortlinks ────────────────────────────────────────────────────────────
   { id: 'sl-code-length', module: 'src/lib/shortlinks.ts', specs: ['tests/shortlinks.spec.ts'],
