@@ -1090,12 +1090,15 @@ export async function handleGetSponsorBundle(
     const url = new URL(request.url);
     const surface = url.searchParams.get('surface') as Surface | null;
 
+    // OSE-1138: eventId is the shuffle seed — the display order is randomized but
+    // deterministic per event (COST-101), so every kiosk/surface for one event
+    // agrees on the order while carrying no positional meaning (#25).
     let bundle;
     if (surface && VALID_SURFACES.includes(surface)) {
       const filtered = filterSponsorsForSurface(result.data, surface);
-      bundle = buildSponsorBundle(filtered);
+      bundle = buildSponsorBundle(filtered, eventId);
     } else {
-      bundle = buildSponsorBundle(result.data);
+      bundle = buildSponsorBundle(result.data, eventId);
     }
 
     return Response.json(
