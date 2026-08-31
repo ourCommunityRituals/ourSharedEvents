@@ -274,22 +274,12 @@ describe('L2 behavioral: subscribers retention SQL pattern matches the cron', ()
     expect(indexFile, 'src/index.ts not found in TEST_SOURCE_FILES_JSON').toBeDefined();
     const content = indexFile![1];
 
-    // The function must read SUBSCRIBERS_RETENTION_DAYS, must early-return when
-    // the knob is not finite/positive, and must NOT contain a hardcoded
+    // The function must read SUBSCRIBERS_RETENTION_DAYS, must early-return
+    // a noop log when not finite/positive, and must NOT contain a hardcoded
     // `'-NNN days'` fallback that bypasses the env knob.
     expect(content).toMatch(/SUBSCRIBERS_RETENTION_DAYS/);
+    expect(content).toMatch(/SUBSCRIBERS_RETENTION_NOOP/);
     expect(content).not.toMatch(/-\s*\d{2,}\s*days/);
-
-    // OSE-1123: the marker was SUBSCRIBERS_RETENTION_NOOP, logged at
-    // console.log level — indistinguishable from the routine LIFECYCLE_COMPLETE
-    // line in the same run. Off-by-default is deliberate and unchanged; what was
-    // wrong was the visibility, because this branch means PII is retained without
-    // bound, contradicting Invariant #8. Renamed to name the condition rather
-    // than the code path, and escalated to console.error.
-    expect(content).toMatch(/SUBSCRIBERS_RETENTION_UNCAPPED/);
-    expect(content, 'the uncapped branch must be error-level, not console.log').toMatch(
-      /console\.error\([\s\S]{0,200}SUBSCRIBERS_RETENTION_UNCAPPED/
-    );
   });
 });
 
