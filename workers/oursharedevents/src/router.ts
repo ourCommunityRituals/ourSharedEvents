@@ -555,13 +555,16 @@ export async function route(
     const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
     const deny = await requireAdmin(request, env, reqId);
     if (deny) {
-      _audit(
-        reqId,
-        method === 'DELETE' ? 'DELETE_EVENT' : 'UPDATE_EVENT',
-        'denied',
-        'event',
-        adminEventMatch[1]
-      );
+      // Literal action string per method (not a ternary) so the static
+      // audit-coverage gate can see the UPDATE_EVENT and DELETE_EVENT denied
+      // literals directly (OSE-562 / TL-041 matches them by regex). NB: keep the
+      // audit-call syntax out of this comment — the gate's regex spans newlines
+      // and will match a call pattern written in prose here too.
+      if (method === 'DELETE') {
+        _audit(reqId, 'DELETE_EVENT', 'denied', 'event', adminEventMatch[1]);
+      } else {
+        _audit(reqId, 'UPDATE_EVENT', 'denied', 'event', adminEventMatch[1]);
+      }
       return deny;
     }
     if (method === 'DELETE') {
