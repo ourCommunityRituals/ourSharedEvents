@@ -7,6 +7,7 @@
  * POST /api/v2/admin/events        – create event (admin)
  * PUT  /api/v2/admin/events/:id    – update event (admin)
  * DELETE /api/v2/admin/events/:id  – hard-delete event, scan-guarded (admin, OSE-982)
+ * GET  /api/v2/admin/event-templates – list seeded event templates (admin, OSE-868)
  *
  * Data source: D1 database (DB binding)
  */
@@ -866,6 +867,76 @@ export async function handleDeleteEvent(
     { ok: true, status: 200, id: eventId, deleted: true },
     { headers: { ...corsHeaders(request), 'X-Request-Id': rid } }
   );
+}
+
+/**
+ * GET /api/v2/admin/event-templates — list the seeded event templates (admin).
+ *
+ * OSE-868: migration 0015 seeds the event templates (incl. their `default_sections`
+ * payload) but no route ever exposed them, so the launch wizard's template picker
+ * had nothing to read and fell back to a hardcoded list. This is the read seam —
+ * the picker populates from here (the FE↔DB join), and a selection sets
+ * `events.template_id` through the existing create/update path. Slug is never
+ * touched by template selection (Invariant #18 slug_permanence).
+ *
+ * Templates are BREADTH, not access (ADR-010): they carry cosmetic/structural
+ * defaults and never gate features — the tier system does that independently — so
+ * we return every seeded row, ordered by category then display_order so the picker
+ * renders under category headings rather than one flat list. The three JSON columns
+ * (default_sections / default_ctas / default_ui_presets) are parsed to objects so
+ * the FE consumes structure, not strings; a single malformed row degrades to that
+ * column's default instead of 500-ing the whole list.
+ */
+export async function handleAdminListEventTemplates(
+  request: Request,
+  env: EventsEnv
+): Promise<Response> {
+  const rid = requestId();
+  if (!env.DB) {
+    return errorResponse('DB_NOT_CONFIGURED', 'Database not available', 503, rid);
+  }
+
+  const parseJson = <T>(raw: unknown, fallback: T): T => {
+    if (typeof raw !== 'string') return fallback;
+    try {
+      return JSON.parse(raw) as T;
+    } catch {
+      return fallback;
+    }
+  };
+
+  try {
+    const { results } = await env.DB.prepare(
+      `SELECT id, name, description, category, icon, display_order, stage,
+              default_sections, default_ctas, default_ui_presets, example_name,
+              max_clearance_tier
+         FROM event_templates
+        ORDER BY category ASC, display_order ASC, id ASC`
+    ).all<Record<string, unknown>>();
+
+    const items = (results ?? []).map((row) => ({
+      ...row,
+      // default_sections is the payload the picker + gates depend on — always an
+      // object in the response even if the row stored a malformed string.
+      default_sections: parseJson(row.default_sections, {} as Record<string, unknown>),
+      default_ctas: parseJson(row.default_ctas, [] as unknown[]),
+      default_ui_presets: parseJson(row.default_ui_presets, {} as Record<string, unknown>),
+    }));
+
+    return Response.json(
+      { ok: true, items },
+      { headers: { ...corsHeaders(request), 'X-Request-Id': rid } }
+    );
+  } catch (err) {
+    console.error(
+      JSON.stringify({
+        type: 'DB_ERROR',
+        handler: 'handleAdminListEventTemplates',
+        error: err instanceof Error ? err.message : String(err),
+      })
+    );
+    return errorResponse('DB_ERROR', 'Failed to list event templates', 503, rid);
+  }
 }
 
 /**
