@@ -174,6 +174,52 @@ const sourceFiles = {
   ...(secretsBaseline ? { [secretsBaselinePath]: secretsBaseline } : {}),
 };
 
+
+/**
+ * A missing brain artifact is a REFUSAL TO CHECK, and a refusal nobody sees is a
+ * bug however correct it is.
+ *
+ * Measured (OSE-1126): without the brain, three of four covenant mutants survive
+ * — local_floor_pct 30->29, premium_cap_pct 40->41, premium weight 7->1 — and the
+ * suite still reports "16 passed | 1 skipped". Every wall value in Invariant #25
+ * is pinned SOLELY by the byte-equivalence check against the brain, so when the
+ * brain is absent those numbers are unpinned and nothing goes red.
+ *
+ * Local devs stay unblocked, as originally intended — that part was a deliberate
+ * choice and it stands. Two things change:
+ *   1. CI HARD-FAILS instead of skipping. If the OCR-docs checkout step ever
+ *      breaks, CI must not quietly report success over unpinned covenant walls.
+ *   2. Locally the warning is a banner, not a line in the scroll, and it names
+ *      exactly what is unprotected rather than saying "will skip".
+ */
+function reportMissingBrainArtifact(what: string, path: string): void {
+  const inCi = process.env.CI === 'true' || process.env.CI === '1';
+  const msg =
+    `brain ${what} artifact not found at ${path}
+` +
+    `  UNPROTECTED WHILE ABSENT: every numeric wall in the sponsor covenant
+` +
+    `  (local floor, premium cap, mid cap, tier weights) is pinned only by the
+` +
+    `  byte-equivalence check against this file. Without it they are unpinned.
+` +
+    `  Fix: set BRAIN_DIR, or clone OCR-docs as a sibling directory.`;
+
+  if (inCi) {
+    throw new Error(
+      `[vitest config] ${msg}
+` +
+        `  Failing hard because CI=true. CI must never report green over a check
+` +
+        `  that did not run — see OSE-1126.`
+    );
+  }
+  // eslint-disable-next-line no-console
+  console.warn(
+    `\n${'='.repeat(78)}\n[vitest config] ${msg}\n${'='.repeat(78)}\n`
+  );
+}
+
 // ── Load brain UEC artifact for OSE-323 drift check ─────────────────────────
 // The drift check (tests/uec-drift-check.spec.ts) compares this artifact
 // against the OSE consumed copy at src/lib/uec/uec-codes.ts. Brain is
@@ -195,11 +241,7 @@ try {
   if (existsSync(brainUecPath)) {
     brainUecJson = JSON.stringify(yaml.load(readFileSync(brainUecPath, 'utf8')));
   } else {
-    // eslint-disable-next-line no-console
-    console.warn(
-      `[vitest config] brain UEC artifact not found at ${brainUecPath} — drift check will skip. ` +
-        `Set BRAIN_DIR env var or clone OCR-docs as sibling to enable drift detection locally.`
-    );
+    reportMissingBrainArtifact('UEC', brainUecPath);
   }
 } catch (e) {
   // eslint-disable-next-line no-console
@@ -222,11 +264,7 @@ try {
   if (existsSync(brainSponsorAllocPath)) {
     brainSponsorAllocJson = JSON.stringify(yaml.load(readFileSync(brainSponsorAllocPath, 'utf8')));
   } else {
-    // eslint-disable-next-line no-console
-    console.warn(
-      `[vitest config] brain sponsor-allocation artifact not found at ${brainSponsorAllocPath} — drift check will skip. ` +
-        `Set BRAIN_DIR env var or clone OCR-docs as sibling to enable drift detection locally.`
-    );
+    reportMissingBrainArtifact('sponsor-allocation', brainSponsorAllocPath);
   }
 } catch (e) {
   // eslint-disable-next-line no-console
@@ -305,6 +343,10 @@ export default defineConfig({
           // OSE-323 drift check input — brain canonical UEC artifact loaded
           // at config time. Empty string when brain not available (local dev
           // without OCR-docs checked out); CI always populates this.
+          // CI-ness must be INJECTED: tests run inside workerd, where
+          // process.env is not the Node environment, so process.env.CI reads
+          // undefined and any runIf(CI) guard silently never fires.
+          TEST_IS_CI: process.env.CI === 'true' || process.env.CI === '1' ? 'true' : '',
           TEST_BRAIN_UEC_JSON: brainUecJson,
           // OSE-336 drift check input — brain canonical sponsor-allocation
           // artifact (the Local Sponsor Covenant scaffolding from OSE-330
