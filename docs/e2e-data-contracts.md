@@ -194,26 +194,50 @@ because a numeric skeleton that snaps to "suppressed" is a wall trap.
 
 ## 7. Defects in the flow spec — these cannot pass as written
 
-### D-1 · E2E-01 sponsor slate rule contradicts the shipped covenant — **blocker**
+### D-1 · E2E-01 sponsor slate rule contradicts the covenant — **blocker, canonically**
 
 The prompt requires the UI to enforce "at least one local, one mid, and one premium" and
-to **block submission** when a tier is available but unselected. Three problems, all
-verified in code:
+to **block submission** when a tier is available but unselected. This is not a
+code-vs-spec disagreement — the brain contradicts it directly.
+
+**Invariant #5 — Local Sponsor Covenant** (`architectural-invariants.yaml`), on the
+mechanism, verbatim:
+
+> **(a) MECHANISM (OSE-661, 2026-08-08) — the locals-first tierSort is RETIRED.** The
+> local guarantee is now the local-FLOOR sub-property of #25: `is_local` drives a floored
+> share of rotation frequency (`allocateShares` / `buildShareRotation`), **NOT a priority
+> sort.** … the "local stays in" brand promise is unchanged — only its mechanism moved
+> from priority-sort to share-floor.
+
+**Invariant #25 — Sponsor Share Covenant** (status `live`):
+
+> Size, slot, and logo treatment are **uniform for all sponsors regardless of spend**.
+> Every `is_local` sponsor receives at least the guaranteed local floor share. `is_local`
+> is **geo-derived (corridor-cell match), never a purchasable or admin-toggle flag**.
+> Money buys frequency-share and report depth only — never size, slot, position, or
+> `is_local` status.
+
+So the requested control is wrong in three independent ways:
 
 1. **`local` is not a tier.** Tiers are `base | mid | premium` (`sovTierOf`, mapped from
-   the six DB pricing tiers). `is_local` is an orthogonal **geo-derived boolean** — the
-   sponsor↔event `h3_res7` corridor-cell match. `handleAdminUpdateSponsor` does not even
-   include it in `allowedFields`; a body supplying `is_local` is ignored.
-2. **Managers do not curate a slate.** Sponsors resolve automatically: direct placement
-   (organizer-initiated) _or_ template+geo subscription (sponsor-initiated). The resolver
-   header states the locals-first display sort is **retired** under Invariant #25.
-3. **A tier-gating control would violate §3.1's own rule** that no UI may imply a local
-   sponsor can be pushed off the floor. The covenant is a rotation-**frequency** floor
-   (locals collectively ≥30%), not a slate composition requirement.
+   the six DB pricing tiers). `is_local` is an orthogonal geo-derived boolean;
+   `handleAdminUpdateSponsor` does not include it in `allowedFields`, so a body supplying
+   it is ignored by design.
+2. **The local guarantee is automatic and structural, not a manager action.** #5 says
+   local sponsors are "guaranteed a place at every event, at every flag level." Making a
+   manager tick a box to satisfy it converts a structural guarantee into a manual step
+   that can be forgotten.
+3. **A blocking control implies a local can be omitted** — which is exactly what the
+   covenant forbids, and what §3.1 of the build spec independently forbids ("no UI
+   anywhere should imply a local sponsor can be pushed off the floor").
 
-**Cannot be built without contradicting Invariant #25.** Needs your ruling on what the
-manager's real job is: (a) accept/reject resolved placements — two-sided acceptance
-exists in the API; (b) a read-only resolved-slate view with the covenant explained; or
+Note #5's status is `partial` while #25 is `live`; #25 is the operative mechanism.
+
+**What the manager's real job appears to be**, from the resolver and the two-sided
+acceptance model — needs your ruling:
+(a) accept/reject **resolved** placements (the API supports this; rejection is the
+operative action, `accepted = NULL` means unanswered and does not hide);
+(b) a read-only resolved-slate view with the covenant explained;
 (c) something else.
 
 ### D-2 · "r7" is not a redirect hop — **spec error, resolved**
@@ -240,13 +264,42 @@ be 40 neighbors or one person opening a link 40 times.
 `anonymous_id`. Drop "reach via shortlink" until the doctrine question in GAP-1 is
 decided.
 
-### D-4 · Draft events mint live QR tokens — **needs a ruling**
+### D-4 · Draft events mint live QR tokens — **RULED: the event must be active first**
 
-`handleAdminCreatePosterDeployment` never reads `events.status`. A draft event can mint a
-`qr_token` with `is_active = 1`; `/q/<token>` checks only the **deployment's** flag, so a
-scan **writes both split rows** before the destination forwards the scanner away. Render
-paths are all gated (404 / stale-forward); the write path is not. Possibly wanted
-(pre-launch interest), possibly a leak into SharedReport aggregates.
+**Owner ruling:** an event must be moved from `draft` to `active` before its QR is live.
+
+**Current behavior, verified.** `handleAdminCreatePosterDeployment` never reads
+`events.status`, so a draft event can mint a `qr_token` with `is_active = 1`.
+`/q/<token>` checks only the **deployment's** own flag — so a scan writes both split rows
+(`scan_placement_events` + `scan_node_returns`) before the destination forwards the
+scanner away. Every render path is gated (404 on `/events/:id`, stale-forward on
+`/forms/:id`); the write path is not.
+
+**This is a back-end defect and I am not patching it.** Reported here per the flow spec's
+instruction. The gate belongs in one of two places:
+
+- `handleAdminCreatePosterDeployment` refuses to mint against a non-`active` event; or
+- `/q/<token>` resolves the event's status alongside the deployment's `is_active` and
+  forwards without writing when the event is not `active` — reusing the existing
+  `isStaleForPublicLanding` / `staleEventForward` pair from OSE-291.
+
+The second is stricter and closes the case where an event is wound back to `draft` after
+its posters are already printed and in windows — which is the same "a poster must never
+rot" scenario, on the write side rather than the render side.
+
+**Front-end consequences, which bind regardless of where the back-end gate lands:**
+
+1. The manager surface must not offer poster generation or QR download until the event is
+   `active`. The affordance is disabled with a stated reason, never hidden.
+2. **E2E-01 sequencing changes.** The flow reads "Poster is generated" as part of
+   creation, but creation yields `status='draft'`. The real order is
+   **create → activate → generate poster**, and the flow must assert that a poster
+   generated before activation either cannot be produced or produces no scan-capable
+   token.
+3. Add a scenario to §8.1: **`draft-qr-records-nothing`** — mint a deployment against a
+   draft event, scan it, assert **zero** rows in both `scan_placement_events` and
+   `scan_node_returns`. This is born-red today: it fails against current code, which is
+   the point.
 
 ### D-5 · Dead PII columns in the main DB — **hygiene, not blocking**
 
@@ -255,14 +308,35 @@ paths are all gated (404 / stale-forward); the write path is not. Possibly wante
 anywhere in `src/`. They should be dropped so the anonymity assertion cannot pass
 vacuously against a table nobody uses.
 
-### D-6 · "No email capture" contradicts the shipped Forms subsystem — **spec regression**
+### D-6 · "No email capture" contradicts Invariant #8 — **spec regression, canonically**
 
-The prompt states no email capture, no PII. That was corrected earlier: the flagged Forms
-subsystem is real, consented, and destroyed on a clock — `FORMS_DB` is a physically
-separate database, `EMAIL_RETENTION_MS` is 30 days, `REGISTRATION_TTL_MS` is 90 days, a
-daily cron at `0 3 * * *` runs in all three environments, and every phase writes
-`pii_audit_log`. The anonymity assertion should read **"no PII outside `FORMS_DB`, and
-nothing in `FORMS_DB` without consent and a destruction clock"** — not "no PII anywhere."
+The prompt states no email capture, no PII. The brain has a named, **live** invariant
+for exactly this, and it is _bounded retention_, not prohibition.
+
+**Invariant #8 — Bounded PII Retention** (status `live`), verbatim:
+
+> All opt-in PII has a finite TTL (`expires_at`, `retention_expires_at`). Daily lifecycle
+> cron deletes expired registrations (90d), scrubs survey PII, deletes expired email
+> signups (30d). **No PII has unbounded retention.**
+
+Its protective statement is the point:
+
+> OSE collects identity-bearing data on a covenant: you give it to participate in your
+> community event; we honor it briefly; we delete it. … The retention floor is a
+> load-bearing brand commitment; the cron is the load-bearing mechanism.
+
+Enforcement is five layers, two of them CI-gating on every PR: a structural code-shape
+lock (`pii-retention.invariant.spec.ts`, 9 cases) asserting `scheduled()` still invokes
+`runFormDataLifecycle`, that the DELETE phases stay keyed on the TTL columns (an unkeyed
+DELETE would wipe every row), that the scrub phase stays keyed on `pii_scrubbed`, that
+`logPiiAudit()` is called ≥6 times, and that ≥3 `try` blocks remain so one phase failing
+cannot abort the others — plus an in-process integration spec running `worker.scheduled()`
+against real D1.
+
+**The anonymity assertion must therefore read:** _no PII outside `FORMS_DB`, and nothing
+in `FORMS_DB` without consent and a finite TTL_ — never "no PII anywhere." The latter
+would assert against a promise the platform does not make, and would pass vacuously while
+missing the retention regression that #8 exists to catch.
 
 ---
 
@@ -282,8 +356,8 @@ nothing in `FORMS_DB` without consent and a destruction clock"** — not "no PII
 
 ## 9. What I need before step 2
 
+0. ~~**D-4**~~ — **ruled**: event must be active before its QR is live (§7 D-4).
 1. **D-1** — the manager's real sponsor job. Blocks E2E-01 and E2E-02.
 2. **D-3** — accept the rewrite, or rule on the GAP-1 doctrine question.
-3. **D-4** — should a draft event's QR record scans?
-4. The three performance numbers in §8.
-5. Confirmation of the one **[INFERRED]** item in §5.
+3. The three performance numbers in §8.
+4. Confirmation of the one **[INFERRED]** item in §5.

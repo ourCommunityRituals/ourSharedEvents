@@ -550,6 +550,14 @@ Any "follow this node" step in the flow has nothing to point at yet.
 **GAP-5 · No performance budget gate.** No CI check enforces the per-surface budgets.
 The long-run TV memory test and the JS-off poster test likewise have no home yet.
 
+**GAP-2 (updated) · Draft events mint live QR tokens — RULED.** The owner ruled that an
+event must move `draft` → `active` before its QR is live. Current code does not enforce
+it: `handleAdminCreatePosterDeployment` never reads `events.status`, and `/q/<token>`
+checks only the deployment's own `is_active`, so a scan of a draft event's QR writes both
+split rows before forwarding. Back-end defect, reported not patched. Preferred fix is at
+`/q/<token>`, reusing `isStaleForPublicLanding` / `staleEventForward` from OSE-291 — that
+also covers an event wound back to `draft` after its posters are already in windows.
+
 **GAP-6 · The brain drift check skips silently when the brain is absent.** Measured in
 §8.3: without `ocr-docs-brain/`, 3 of 4 covenant mutants survive and the suite still
 reports green (`16 passed | 1 skipped`). CI is safe — it checks out OCR-docs and sets

@@ -27,6 +27,7 @@
  */
 
 import { readFileSync, existsSync, readdirSync, statSync } from 'node:fs';
+import { execSync } from 'node:child_process';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -53,10 +54,40 @@ const read = (f) => { try { return readFileSync(f, 'utf8'); } catch { return '';
 const corpus = (dir) =>
   existsSync(join(root, dir)) ? walk(join(root, dir)).map(read).join('\n') : '';
 
-const SRC = corpus('src');
-const TESTS = corpus('tests');
-const MIGRATIONS = corpus('migrations');
+/**
+ * Corpus roots. A doc at the repo root cites files at the repo root — the
+ * 0-architecture invariant suite lives at <repo>/tests/e2e/0-architecture/, NOT
+ * inside the worker. Scanning only the worker dir produced a false "cited but not
+ * found" for pii-retention.invariant.spec.ts, which is exactly how a gate teaches
+ * people to ignore it. Both roots are scanned.
+ */
+const repoRoot = (() => {
+  try {
+    return execSync('git rev-parse --show-toplevel', { cwd: root, encoding: 'utf8' }).trim();
+  } catch { return root; }
+})();
+
+const ROOTS = [...new Set([root, repoRoot])];
+const corpusAll = (dir) =>
+  ROOTS.map((r) => (existsSync(join(r, dir)) ? walk(join(r, dir)).map(read).join('\n') : '')).join('\n');
+
+const SRC = corpusAll('src');
+const TESTS = corpusAll('tests');
+const MIGRATIONS = corpusAll('migrations');
 const ALL = SRC + TESTS + MIGRATIONS;
+
+/** Does a file with this basename exist under any scanned root? */
+const fileExists = (f) => {
+  const bare = f.split('/').pop();
+  for (const r of ROOTS) {
+    if (existsSync(join(r, f))) return true;
+    for (const dir of ['src', 'tests', 'migrations', 'scripts', 'docs']) {
+      const base = join(r, dir);
+      if (existsSync(base) && walk(base).some((pth) => pth.endsWith(bare))) return true;
+    }
+  }
+  return false;
+};
 
 /** Strip fenced code blocks — illustrative, not claims. */
 const stripFences = (md) => md.replace(/```[\s\S]*?```/g, '');
@@ -97,14 +128,8 @@ const CLAIMS = [
   },
   {
     kind: 'file',
-    find: (md) => [...md.matchAll(/`((?:src\/|tests\/|migrations\/)?[a-zA-Z0-9._/-]+\.(?:ts|html|sql|json))`/g)].map((m) => m[1]),
-    verify: (f) => {
-      const bare = f.split('/').pop();
-      return existsSync(join(root, f)) || existsSync(join(root, 'src', f)) ||
-        walk(join(root, 'src')).some((p) => p.endsWith(bare)) ||
-        (existsSync(join(root, 'tests')) && walk(join(root, 'tests')).some((p) => p.endsWith(bare))) ||
-        (existsSync(join(root, 'migrations')) && walk(join(root, 'migrations')).some((p) => p.endsWith(bare)));
-    },
+    find: (md) => [...md.matchAll(/`((?:src\/|tests\/|migrations\/)?[a-zA-Z0-9._/-]+\.(?:ts|html|sql|json|mjs))`/g)].map((m) => m[1]),
+    verify: fileExists,
   },
 ];
 
@@ -149,8 +174,6 @@ if (failures === 0) console.log('✓ every checkable claim still holds');
 // file has changed since the doc last did, is a paragraph to re-read. This prints a
 // worklist, never a failure — a false "go re-read that" costs a minute; a missed one
 // costs a rebuild of something that exists.
-
-import { execSync } from 'node:child_process';
 
 const gitEpoch = (f) => {
   try {
