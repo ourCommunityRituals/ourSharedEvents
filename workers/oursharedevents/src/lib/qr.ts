@@ -149,11 +149,26 @@ function reserveFormat(res: QrReserved, sz: number): void {
   for (let i = sz - 7; i < sz; i++) res[i][8] = true;
 }
 
+/**
+ * Total codewords per version, from the QR specification (ISO/IEC 18004 Table 1).
+ *
+ * This was previously derived geometrically — subtracting finder, timing, format
+ * and alignment modules from sz*sz — and the accounting was wrong for EVERY
+ * version: 6 short at v1, 5 short at v2-v6, and 13 OVER at v7, where the
+ * alignment-pattern term stops being a constant.
+ *
+ * That is the capacity the whole data/ECC split is computed from, so every symbol
+ * was built against the wrong budget. It is OSE-1127 root cause C, and it sat
+ * beneath the other two: fixing the format bits and the block interleaving could
+ * never have produced a readable code while this was wrong.
+ *
+ * A table cannot drift the way a hand-derived formula can, and these are fixed
+ * constants in the standard. Indexed by version; index 0 unused.
+ */
+const TOTAL_CODEWORDS: readonly number[] = [0, 26, 44, 70, 100, 134, 172, 196];
+
 function totalCodewords(version: number): number {
-  const sz = qrSize(version);
-  let mods = sz * sz - 3 * 64 - 3 * 15 - 2 * (sz - 16) - 31;
-  if (version >= 2) mods -= 25;
-  return Math.floor(mods / 8);
+  return TOTAL_CODEWORDS[version];
 }
 
 function encodeData(bytes: Uint8Array, version: number, ecLevel: number): Uint8Array {
@@ -184,19 +199,65 @@ function encodeData(bytes: Uint8Array, version: number, ecLevel: number): Uint8A
   return out;
 }
 
+/**
+ * Split into blocks, compute Reed-Solomon ECC per block, and INTERLEAVE.
+ *
+ * Two bugs lived here (OSE-1127 root cause B), both invisible whenever the
+ * symbol happened to be single-block — which is why short payloads decoded and
+ * the product's real 40-60 byte scan URLs did not:
+ *
+ *   1. NO INTERLEAVING. The old code emitted block0 + its ECC, then block1 + its
+ *      ECC, and so on. The spec requires the i-th data codeword of every block in
+ *      turn, then the i-th ECC codeword of every block in turn. With one block the
+ *      two are identical, so the bug hid completely below the multi-block
+ *      threshold.
+ *
+ *   2. EQUAL-SIZE BLOCK ASSUMPTION. `Math.floor(data.length / nBlocks)` assumes
+ *      every block is the same length. The spec uses SHORT and LONG blocks
+ *      differing by exactly one data codeword; when the division had a remainder
+ *      those extra codewords were silently dropped before ever being encoded.
+ *
+ * Block geometry per the spec: `numLong = totalData % nBlocks` blocks carry
+ * `shortLen + 1` data codewords; the rest carry `shortLen`. Every block gets the
+ * same ECC length. Long blocks sort last, so during data interleaving the short
+ * blocks simply have nothing to contribute on the final pass.
+ */
 function addEcc(data: Uint8Array, version: number, ecLevel: number): Uint8Array {
   const ecPerBlock = EC_CODEWORDS_PER_BLOCK[version][ecLevel];
   const nBlocks = NUM_EC_BLOCKS[version][ecLevel];
-  const blockSz = Math.floor(data.length / nBlocks);
   const div = rsDivisor(ecPerBlock);
-  const all: number[] = [];
+
+  const shortLen = Math.floor(data.length / nBlocks);
+  const numLong = data.length % nBlocks;
+
+  const blocks: Uint8Array[] = [];
+  const eccs: Uint8Array[] = [];
+  let offset = 0;
   for (let i = 0; i < nBlocks; i++) {
-    const block = data.slice(i * blockSz, i * blockSz + blockSz);
-    const ec = rsRemainder(block, div);
-    for (const b of block) all.push(b);
-    for (const b of ec) all.push(b);
+    const len = shortLen + (i >= nBlocks - numLong ? 1 : 0);
+    const block = data.slice(offset, offset + len);
+    offset += len;
+    blocks.push(block);
+    eccs.push(rsRemainder(block, div));
   }
-  return new Uint8Array(all);
+
+  const out: number[] = [];
+
+  // Data codewords, interleaved. Short blocks contribute nothing on the last
+  // pass, which is why long blocks are placed at the end.
+  const maxLen = shortLen + (numLong > 0 ? 1 : 0);
+  for (let i = 0; i < maxLen; i++) {
+    for (const block of blocks) {
+      if (i < block.length) out.push(block[i]);
+    }
+  }
+
+  // ECC codewords, interleaved. Every block has exactly ecPerBlock of them.
+  for (let i = 0; i < ecPerBlock; i++) {
+    for (const ecc of eccs) out.push(ecc[i]);
+  }
+
+  return new Uint8Array(out);
 }
 
 function placeBits(m: QrMatrix, res: QrReserved, cw: Uint8Array, sz: number): void {
@@ -226,8 +287,22 @@ function applyMask(m: QrMatrix, res: QrReserved, sz: number): void {
   }
 }
 
+/**
+ * Format-information EC indicator.
+ *
+ * EC_LEVEL is the TABLE INDEX order (L=0 M=1 Q=2 H=3), correct for indexing
+ * VERSION_CAPACITY / EC_CODEWORDS_PER_BLOCK / NUM_EC_BLOCKS. The QR spec's
+ * format-info field uses a DIFFERENT encoding: L=01 M=00 Q=11 H=10.
+ *
+ * Feeding the table index straight into the format bits made every symbol
+ * declare the wrong EC level. A decoder reads format info FIRST, derives the
+ * wrong data/ECC split from it, and gives up — which is why the codes rendered
+ * perfectly and scanned as nothing. (OSE-1127 root cause A.)
+ */
+const EC_FORMAT_INDICATOR: readonly number[] = [1, 0, 3, 2];
+
 function formatBits(ecLevel: number): number {
-  const data = (ecLevel << 3) | 0; // mask 0
+  const data = (EC_FORMAT_INDICATOR[ecLevel] << 3) | 0; // mask 0
   let rem = data;
   for (let i = 0; i < 10; i++) rem = (rem << 1) ^ ((rem >> 9) * 0x537);
   return ((data << 10) | rem) ^ 0x5412;

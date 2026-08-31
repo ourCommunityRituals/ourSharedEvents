@@ -37,6 +37,7 @@
 import { describe, test, expect, beforeAll } from 'vitest';
 import { env, SELF } from 'cloudflare:test';
 import jsQR from 'jsqr';
+import { generateQrCode } from '../src/lib/qr';
 
 interface TestEnv {
   DB: D1Database;
@@ -195,17 +196,7 @@ describe('QR round-trip — poster bundle is scannable', () => {
     bundle = (await res.json()) as Record<string, unknown>;
   });
 
-  /**
-   * BASELINED KNOWN FAILURE — OSE-1127. `test.fails()` asserts this test DOES
-   * fail, so the suite stays green over a defect that is tracked rather than
-   * hidden, and NEW breakage still breaks the build.
-   *
-   * It is self-clearing, which a baseline file is not: the moment the encoder is
-   * fixed this marker starts failing and forces its own removal, turning the
-   * test back into a real gate. Do not delete the marker to make CI quiet —
-   * deleting it is the last step of fixing qr.ts, not a way around it.
-   */
-  test.fails('every emitted QR decodes back to the exact URL it encodes', () => {
+  test('every emitted QR decodes back to the exact URL it encodes', () => {
     const qr = (bundle.qr ?? {}) as Record<string, string>;
     const links = (bundle.links ?? bundle.urls ?? {}) as Record<string, string>;
     const types = Object.keys(qr);
@@ -228,8 +219,7 @@ describe('QR round-trip — poster bundle is scannable', () => {
     }
   });
 
-  /** BASELINED KNOWN FAILURE — OSE-1127. See the note above; same self-clearing marker. */
-  test.fails('a decoded QR points at a route this Worker actually serves', async () => {
+  test('a decoded QR points at a route this Worker actually serves', async () => {
     const qr = (bundle.qr ?? {}) as Record<string, string>;
     const first = Object.keys(qr)[0];
     const decoded = decodeQr(qr[first]);
@@ -241,6 +231,41 @@ describe('QR round-trip — poster bundle is scannable', () => {
     const res = await SELF.fetch(`https://example.com${path}`, { redirect: 'manual' });
     expect([200, 302], `following the decoded QR returned ${res.status}`).toContain(res.status);
   });
+
+  /**
+   * Version sweep — locks the range the OSE-1127 fixes actually repaired.
+   *
+   * The bundle test above exercises exactly one payload length, so a capacity or
+   * alignment change at a version it never reaches goes unnoticed (proved: two
+   * encoder mutants survived it). This sweep walks payload sizes across symbol
+   * versions and decodes each one.
+   *
+   * SCOPE IS DELIBERATE AND NARROWER THAN "ALL QR CODES". Level M is asserted
+   * through v5 and Q/H through v3, because that is what currently works and what
+   * the product actually emits — the poster paths use M with 40-60 byte scan URLs,
+   * landing at v3-v4. Level L is broken at EVERY version and the higher versions
+   * are broken above the bounds below; both are tracked as follow-up work, NOT
+   * silently omitted. Asserting a range that does not work would put the suite
+   * back to red; asserting nothing would let the repaired range rot.
+   */
+  test.each([
+    ['M', 15],
+    ['M', 30],
+    ['M', 45],
+    ['M', 60],
+    ['M', 75],
+    ['Q', 15],
+    ['Q', 30],
+    ['H', 15],
+    ['H', 30],
+  ] as Array<['M' | 'Q' | 'H', number]>)(
+    'level %s at %i bytes round-trips',
+    (level, len) => {
+      const url = 'https://x.co/' + 'a'.repeat(Math.max(0, len - 13));
+      const uri = generateQrCode(url, { errorCorrection: level, margin: 4, scale: 6 });
+      expect(decodeQr(uri), `level ${level} at ${url.length} bytes did not decode`).toBe(url);
+    }
+  );
 
   test('the QR carries a quiet zone — the margin a scanner needs', () => {
     const qr = (bundle.qr ?? {}) as Record<string, string>;
