@@ -73,6 +73,26 @@ const MUTANTS = [
     attacks: 'the stale forward must not be cached',
     find: "'Cache-Control': 'no-store',", replace: "'Cache-Control': 'public, max-age=3600'," },
 
+  // ── SharedReport — scoping and the dual-view premise ─────────────────────
+  // The OPERATIVE sponsor filter is in the handler. report-depth.ts carries a
+  // parallel one; mutating that path alone proved nothing, which is itself worth
+  // knowing — two filters, one of them load-bearing.
+  // NOTE: this one SURVIVES, and correctly. Sponsor scoping is filtered twice —
+  // here and again in report-depth.ts. Removing either alone is a no-op because
+  // the other holds. That is defence in depth, not a test gap; disabling BOTH
+  // makes the dual-view spec fail by name with the leaked sponsor id. Kept in the
+  // catalog as documentation of the redundancy.
+  { id: 'sr-slice-filter-removed', module: 'src/handlers/shared-report-read.ts',
+    specs: ['tests/shared-report-dual-view.spec.ts'],
+    attacks: 'handler-side sponsor filter (report-depth.ts carries a second one)',
+    find: 'scopedImpressions = scopedImpressions.filter((r) => r.sponsor_id === resolved.sponsorScope);',
+    replace: 'scopedImpressions = scopedImpressions;' },
+  { id: 'sr-slice-filter-inverted', module: 'src/handlers/shared-report-read.ts',
+    specs: ['tests/shared-report-dual-view.spec.ts'],
+    attacks: 'the filter keeps the right side — invert it and a sponsor sees only OTHERS',
+    find: 'scopedImpressions.filter((r) => r.sponsor_id === resolved.sponsorScope)',
+    replace: 'scopedImpressions.filter((r) => r.sponsor_id !== resolved.sponsorScope)' },
+
   // ── Event state — the gate the whole wizard flow rests on ────────────────
   { id: 'state-draft-renderable', module: 'src/domain/event-state.ts', specs: ['tests/event-state.spec.ts'],
     attacks: 'ONLY active renders on public/display/poster',
