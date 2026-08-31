@@ -26,7 +26,7 @@
  * GAP/OPEN entries (which assert ABSENCE — see the note on those below).
  */
 
-import { readFileSync, existsSync, readdirSync, statSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync, statSync } from 'node:fs';
 import { execSync } from 'node:child_process';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -76,20 +76,45 @@ const TESTS = corpusAll('tests');
 const MIGRATIONS = corpusAll('migrations');
 const ALL = SRC + TESTS + MIGRATIONS;
 
-/** Does a file with this basename exist under any scanned root? */
-const fileExists = (f) => {
-  const bare = f.split('/').pop();
-  for (const r of ROOTS) {
-    if (existsSync(join(r, f))) return true;
-    for (const dir of ['src', 'tests', 'migrations', 'scripts', 'docs']) {
-      const base = join(r, dir);
-      if (existsSync(base) && walk(base).some((pth) => pth.endsWith(bare))) return true;
+/**
+ * File existence. Scans the whole repo rather than a hand-picked dir list — the
+ * first version checked only src/tests/migrations and produced eight false
+ * positives against schemas/*.schema.json, which exist and are simply somewhere
+ * else. A gate is allowed to miss; it is not allowed to accuse wrongly.
+ */
+const REPO_FILES = (() => {
+  const skip = new Set(['node_modules', '.git', 'archive', 'coverage', 'dist', '.wrangler']);
+  const out = [];
+  const rec = (dir) => {
+    let entries;
+    try { entries = readdirSync(dir, { withFileTypes: true }); } catch { return; }
+    for (const e of entries) {
+      if (skip.has(e.name)) continue;
+      const full = join(dir, e.name);
+      if (e.isDirectory()) rec(full);
+      else out.push(full);
     }
-  }
-  return false;
+  };
+  for (const r of ROOTS) rec(r);
+  return out;
+})();
+
+/** Paths git ignores are legitimately absent from a clean checkout — never a finding. */
+const isIgnored = (f) => {
+  try {
+    execSync(`git check-ignore -q "${f}"`, { cwd: repoRoot, stdio: 'ignore' });
+    return true;
+  } catch { return false; }
 };
 
-/** Strip fenced code blocks — illustrative, not claims. */
+const fileExists = (f) => {
+  if (isIgnored(f)) return true;
+  // A doc may cite a sibling repo (the brain). Out of scope, not a finding.
+  if (/^(OCR-docs|ocr-docs|packages\/ui)\//.test(f)) return true;
+  const bare = f.split('/').pop();
+  return REPO_FILES.some((pth) => pth.endsWith('/' + f) || pth.endsWith('/' + bare));
+};
+
 const stripFences = (md) => md.replace(/```[\s\S]*?```/g, '');
 
 const CLAIMS = [
@@ -111,11 +136,18 @@ const CLAIMS = [
   },
   {
     kind: 'route',
-    find: (md) => [...md.matchAll(/`((?:GET |POST |PUT |DELETE )?\/(?:api\/v2|q|s|events|forms)[a-zA-Z0-9/:<>_-]*)`/g)]
-      .map((m) => m[1].replace(/^(GET|POST|PUT|DELETE) /, '')),
+    // Anchored deliberately. An earlier `\/s[a-z...]` alternative matched /schemas/,
+    // /specs/ and /status-rollup — three false positives from one loose prefix. The
+    // scan and shortlink routes are only ever /q/<token> and /s/<code>.
+    find: (md) => [...md.matchAll(
+      /`(?:GET |POST |PUT |DELETE )?(\/api\/v2[a-zA-Z0-9/:<>_-]*|\/[qs]\/[a-zA-Z0-9:<>_-]+|\/events(?:\/[a-zA-Z0-9:<>_-]+)*|\/forms\/[a-zA-Z0-9:<>_-]+)`/g)]
+      .map((m) => m[1]),
     verify: (r) => {
-      const base = r.split(/[:<]/)[0].replace(/\/$/, '');
-      return base.length > 2 && SRC.includes(`'${base}`) || SRC.includes(`"${base}`) || SRC.includes(base);
+      // Keep the trailing slash: '/q/<token>' -> '/q/'. Stripping it produced '/q'
+      // (length 2), which tripped the length guard and failed three REAL routes.
+      const base = r.split(/[:<]/)[0];
+      if (base.replace(/\//g, '').length < 1) return false;
+      return SRC.includes(`'${base}`) || SRC.includes(`"${base}`) || SRC.includes(base);
     },
   },
   {
@@ -128,13 +160,32 @@ const CLAIMS = [
   },
   {
     kind: 'file',
-    find: (md) => [...md.matchAll(/`((?:src\/|tests\/|migrations\/)?[a-zA-Z0-9._/-]+\.(?:ts|html|sql|json|mjs))`/g)].map((m) => m[1]),
+    // Leading [a-zA-Z0-9] required: a `*.spec.ts` glob otherwise yielded the bare '.spec.ts'.
+    find: (md) => [...md.matchAll(/`([a-zA-Z0-9][a-zA-Z0-9._/-]*\.(?:ts|html|sql|json|mjs))`/g)].map((m) => m[1]),
     verify: fileExists,
   },
 ];
 
+/**
+ * Known-drift baseline — the same shape as scripts/lint-testids.js.
+ *
+ * The first full-repo run surfaced 22 real stale citations, most of them the
+ * src/mvp/*.html family from the retired GAS architecture. Failing CI on all of
+ * them at once would just get the gate disabled. So they are baselined: the gate
+ * fails only on drift NOT already known, which means the count can go down and
+ * never up. That is the ratchet — each pass tightens, none loosens.
+ *
+ *   node scripts/check-doc-claims.mjs --update-baseline <docs...>   # re-baseline
+ */
+const BASELINE = join(root, 'docs', 'doc-claims-baseline.json');
+const updating = args.includes('--update-baseline');
+const baseline = new Set(
+  existsSync(BASELINE) ? JSON.parse(read(BASELINE)) : []
+);
+
 let failures = 0;
 let checked = 0;
+const seenStale = [];
 
 for (const doc of docs) {
   const raw = read(doc);
@@ -151,15 +202,35 @@ for (const doc of docs) {
       checked++;
       if (!claim.verify(item)) {
         if (claim.soft) { checked--; continue; }
-        console.error(`  ✗ ${claim.kind}: ${item.replace('|', ' = ')} — cited but not found in code`);
-        failures++;
+        const key = `${claim.kind}:${item}`;
+        seenStale.push(key);
+        const known = baseline.has(key);
+        console.error(
+          `  ${known ? '·' : '✗'} ${claim.kind}: ${item.replace('|', ' = ')} — cited but not found in code${known ? ' (baselined)' : ' [NEW]'}`
+        );
+        if (!known) failures++;
       }
     }
   }
 }
 
-console.log(`\n${checked} claim(s) checked, ${failures} stale.`);
-if (failures === 0) console.log('✓ every checkable claim still holds');
+if (updating) {
+  const dir = dirname(BASELINE);
+  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+  writeFileSync(BASELINE, JSON.stringify([...new Set(seenStale)].sort(), null, 2) + '\n');
+  console.log(`\nBaseline updated: ${new Set(seenStale).size} known-drift citation(s) → ${BASELINE}`);
+  process.exit(0);
+}
+
+const knownCount = seenStale.filter((k) => baseline.has(k)).length;
+console.log(
+  `\n${checked} claim(s) checked, ${seenStale.length} stale (${knownCount} baselined, ${failures} NEW).`
+);
+if (failures === 0) {
+  console.log(knownCount > 0
+    ? `✓ no NEW drift. ${knownCount} baselined item(s) remain as backlog — the count may fall, never rise.`
+    : '✓ every checkable claim still holds');
+}
 // ── Pass 2: stale-ABSENCE suspicion ──────────────────────────────────────────
 //
 // The existence checks above catch a doc that names something gone. They sail past

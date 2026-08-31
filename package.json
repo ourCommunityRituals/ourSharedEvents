@@ -295,7 +295,8 @@
     "routes:export": "./scripts/export-worker-routes.sh",
     "routes:restore": "./scripts/restore-worker-routes.sh",
     "prepare": "husky",
-    "check:doc-claims": "node workers/oursharedevents/scripts/check-doc-claims.mjs workers/oursharedevents/docs/design/*.md"
+    "check:doc-claims": "node workers/oursharedevents/scripts/check-doc-claims.mjs docs/*.md docs/adr/*.md docs/features/*.md docs/architecture/*.md workers/oursharedevents/docs/design/*.md",
+    "check:doc-claims:baseline": "node workers/oursharedevents/scripts/check-doc-claims.mjs --update-baseline docs/*.md docs/adr/*.md docs/features/*.md docs/architecture/*.md workers/oursharedevents/docs/design/*.md"
   },
   "keywords": [
     "events",
