@@ -36,7 +36,7 @@ defaults:
 jobs:
   human-gate:
     name: "🛑 Security Human Gate"
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     steps:
       - name: Check for security scan failures
         id: check-scans
