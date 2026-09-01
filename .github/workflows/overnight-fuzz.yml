@@ -1,0 +1,67 @@
+# Overnight fat-finger fuzz — property tests at a case count no PR gate can afford.
+#
+# WHY A SEPARATE NIGHTLY JOB
+# The same specs run in T0 at FC_RUNS=200 (fast, deterministic enough to gate).
+# Here they run at 50,000 with a random seed, which takes minutes instead of
+# seconds and would make every PR wait. Idle hours are the right home for the
+# long tail: the counterexample nobody thought to write down.
+#
+# WHAT IT DOES NOT DO
+# It never merges and never pushes to a branch — rail R5, "merges stay
+# human-gated." A failure leaves an artifact and a red run for a human to read.
+# The counterexample is fully reproducible from the seed printed in the log.
+name: Overnight fat-finger fuzz
+
+on:
+  schedule:
+    # 07:00 UTC — after the 06:00 dashboard job, before the working day.
+    - cron: '0 7 * * *'
+  workflow_dispatch:
+    inputs:
+      runs:
+        description: 'fast-check cases per property'
+        required: false
+        default: '50000'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: overnight-fuzz
+  cancel-in-progress: false
+
+jobs:
+  fuzz:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: workers/oursharedevents
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: workers/oursharedevents/package-lock.json
+
+      - run: npm ci
+
+      - name: Fuzz the wizard's input edges
+        env:
+          # A fresh seed each night: the point is to explore inputs the
+          # gate's fixed-seed run never reaches.
+          FC_RUNS: ${{ github.event.inputs.runs || '50000' }}
+        run: npx vitest run tests/fat-finger.property.spec.ts --reporter=verbose
+
+      - name: Upload counterexamples
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fat-finger-counterexamples
+          path: |
+            workers/oursharedevents/*.log
+            workers/oursharedevents/test-results/**
+          retention-days: 30
+          if-no-files-found: ignore

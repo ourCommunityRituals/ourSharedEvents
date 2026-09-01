@@ -66,7 +66,16 @@ export function isValidEventId(id: string): boolean {
  * email-before-validation, etc.).
  */
 export function trimStr(value: unknown, max: number): string | undefined {
-  return typeof value === 'string' ? value.trim().slice(0, max) : undefined;
+  if (typeof value !== 'string') return undefined;
+  const out = value.trim().slice(0, max);
+  // slice() cuts by UTF-16 code unit, so a truncation boundary can land inside
+  // a surrogate pair and leave a lone high surrogate behind — a host
+  // fat-fingering an emoji into the event name gets a mangled record, and at
+  // compatibility_date >= 2026-02-24 (text_decoder_replace_surrogates) that
+  // orphan decodes to U+FFFD. Drop it rather than emit it.
+  // Found by tests/fat-finger.property.spec.ts (counterexample: "\u{10000}", 1).
+  const last = out.charCodeAt(out.length - 1);
+  return last >= 0xd800 && last <= 0xdbff ? out.slice(0, -1) : out;
 }
 
 // ─── Body parsing with discriminated result ───────────────────────────────────
@@ -156,8 +165,7 @@ export function errorResponse(
 // ─── Container ────────────────────────────────────────────────────────────────
 
 export type ValidateResult =
-  | { body: Record<string, unknown> | null; error: null }
-  | { body: null; error: Response };
+  { body: Record<string, unknown> | null; error: null } | { body: null; error: Response };
 
 /**
  * Pre-process every public form submission identically:
