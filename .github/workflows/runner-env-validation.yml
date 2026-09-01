@@ -36,6 +36,10 @@ concurrency:
 jobs:
   validate:
     name: Validate self-hosted runner env
+    # DELIBERATELY self-hosted. This job's entire purpose is to assert the
+    # self-hosted box is correctly provisioned, so running it on ubuntu-latest
+    # would make it vacuous -- it would validate a machine nobody deploys from.
+    # It stays here for as long as deploy-production does.
     runs-on: self-hosted
     timeout-minutes: 2
     steps:

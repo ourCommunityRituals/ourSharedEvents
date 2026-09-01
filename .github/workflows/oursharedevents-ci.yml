@@ -1582,6 +1582,12 @@ jobs:
   # ============================================================================
   deploy-production:
     name: 'T1 Deploy → Production'
+    # Still self-hosted, deliberately and temporarily. Every other job moved to
+    # ubuntu-latest to kill the shared-workspace and shared-interpreter faults,
+    # but the production deploy path touches live D1 and production secrets, so
+    # moving it is its own change with its own rehearsal -- not a ride-along on a
+    # runner port. Note the workspace-leak warning on smoke-production below: it
+    # is a symptom of this runner, and it goes away when this job moves too.
     runs-on: self-hosted
     needs: [security, gate]
     if: |
