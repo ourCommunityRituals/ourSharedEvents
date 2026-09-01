@@ -67,18 +67,25 @@ test.describe('Survey Form - Rating Interaction', () => {
     await expect(rating4).toHaveClass(/selected/);
   });
 
-  test('clicking different rating deselects previous', async ({ page }) => {
+  test('selecting a lower rating clears the higher ones (star fill)', async ({ page }) => {
+    // OSE-1168: the overall rating is a cumulative STAR FILL, not a radio group —
+    // form-pages.ts setRating(): `toggle('selected', i < val)` fills buttons 1..N and
+    // submits a single value. So clicking a HIGHER rating keeps the lower ones filled;
+    // deselection happens when you click a LOWER rating (it clears the ones above it).
     const rating3 = page.locator('[data-testid="survey-rating-3"]');
+    const rating4 = page.locator('[data-testid="survey-rating-4"]');
     const rating5 = page.locator('[data-testid="survey-rating-5"]');
 
-    // Select rating 3
-    await rating3.click();
-    await expect(rating3).toHaveClass(/selected/);
-
-    // Select rating 5 — rating 3 should no longer be selected
+    // Fill to 5 → buttons 1..5 all selected; rating 3 stays filled (3 <= 5).
     await rating5.click();
     await expect(rating5).toHaveClass(/selected/);
-    await expect(rating3).not.toHaveClass(/selected/);
+    await expect(rating3).toHaveClass(/selected/);
+
+    // Now pick a LOWER rating (3) → 4 and 5 clear; 1..3 remain.
+    await rating3.click();
+    await expect(rating3).toHaveClass(/selected/);
+    await expect(rating4).not.toHaveClass(/selected/);
+    await expect(rating5).not.toHaveClass(/selected/);
   });
 
   test('comments textarea accepts text input', async ({ page }) => {
