@@ -1,0 +1,73 @@
+# ---------------------------------------------------------------------------
+# main branch-protection drift detector (OSE-349 sibling; recon 2026-09-01).
+#
+# WHY
+#   `tools/ci/main-branch-protection.json` is the versioned source of truth for
+#   main's protection, and `scripts/apply-branch-protection.mjs --check` has
+#   always been able to verify it — tools/ci/README-branch-protection.md says
+#   plainly that `--check` "is safe to wire into CI as a drift detector so
+#   silent removal of protection fails a build." It was never wired. So the one
+#   failure that file exists to prevent — protection changing out-of-band while
+#   the JSON keeps claiming otherwise — had no object whose job was to go red.
+#
+#   It had already happened. On 2026-08-31, PR #430 reported 24 check runs, all
+#   success or skipped, with `S2 Post-Execution Security` absent — while the
+#   JSON still lists it as required. A green, mergeable PR without that context
+#   means live protection no longer requires it. The README's own emergency
+#   escape hatch (DELETE protection during a runner outage, re-apply after) is
+#   the most likely path in.
+#
+# EXPECT THIS TO BE RED ON ITS FIRST RUN. That red is the drift above, not a
+# broken workflow. Close it by either restoring a job that emits the
+# `S2 Post-Execution Security` context, or removing that entry from the JSON —
+# a policy call, deliberately not made here. Green after that means live
+# protection and the committed config agree.
+#
+# CONTRACT
+#   - FAIL-CLOSED: `--check` exits 1 on drift AND throws on an unreadable API,
+#     so a green run means "protection verified", never "the check was skipped".
+#   - READ-ONLY: `--check` never writes. `--apply` needs repo admin and stays a
+#     human command; this workflow must never gain write scope.
+#   - NOT a PR gate: a PR that intentionally edits the JSON would compare new
+#     config against not-yet-applied live state and deadlock. Drift is detected
+#     on a schedule and after the config actually lands on main.
+# ---------------------------------------------------------------------------
+name: Branch Protection Drift
+
+on:
+  schedule:
+    - cron: '0 7 * * *' # daily 07:00 UTC — off-peak vs the 03:17 nightly and 09:00 brain audit
+  workflow_dispatch: {}
+  push:
+    branches: [main]
+    paths:
+      - 'tools/ci/main-branch-protection.json'
+      - 'scripts/apply-branch-protection.mjs'
+      - '.github/workflows/branch-protection-drift.yml'
+
+permissions:
+  contents: read
+  administration: read # required to GET branches/main/protection
+
+concurrency:
+  group: branch-protection-drift
+  cancel-in-progress: false
+
+jobs:
+  drift:
+    name: 'main protection matches source of truth'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+
+      - name: Check live protection against tools/ci/main-branch-protection.json
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/apply-branch-protection.mjs --check
