@@ -10,7 +10,9 @@
 import { test, expect } from '@playwright/test';
 
 const BASE_URL = process.env.BASE_URL || 'https://stg.oursharedevents.com';
-const TEST_EVENT_ID = process.env.TEST_EVENT_ID || 'test-event-001';
+// OSE-1004: survey SUBMISSION is Phase-2 gated (legal_clearance_tier >= 2). Target the
+// synthetic Phase-2 fixture (evt_forms_phase2) so the code path is exercised, not 403'd.
+const TEST_EVENT_ID = process.env.PHASE2_EVENT_ID || 'evt_forms_phase2';
 const FORM_URL = `${BASE_URL}/forms/${TEST_EVENT_ID}?type=survey`;
 
 test.describe('Survey Form - Page Structure', () => {
