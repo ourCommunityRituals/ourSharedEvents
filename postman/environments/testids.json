@@ -112,6 +112,12 @@
       "enabled": true
     },
     {
+      "key": "testid_admin_skip_link",
+      "value": "admin-skip-link",
+      "type": "default",
+      "enabled": true
+    },
+    {
       "key": "testid_admin_stat_appearances",
       "value": "admin-stat-appearances",
       "type": "default",
@@ -898,6 +904,12 @@
       "enabled": true
     },
     {
+      "key": "testid_spon_edit_id",
+      "value": "spon-edit-id",
+      "type": "default",
+      "enabled": true
+    },
+    {
       "key": "testid_spon_event",
       "value": "spon-event",
       "type": "default",
@@ -1066,6 +1078,42 @@
       "enabled": true
     },
     {
+      "key": "testid_wizard_back_btn",
+      "value": "wizard-back-btn",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "testid_wizard_copy_display",
+      "value": "wizard-copy-display",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "testid_wizard_copy_poster",
+      "value": "wizard-copy-poster",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "testid_wizard_copy_public",
+      "value": "wizard-copy-public",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "testid_wizard_copy_report",
+      "value": "wizard-copy-report",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "testid_wizard_copy_signup",
+      "value": "wizard-copy-signup",
+      "type": "default",
+      "enabled": true
+    },
+    {
       "key": "testid_wizard_event_date",
       "value": "wizard-event-date",
       "type": "default",
@@ -1132,6 +1180,54 @@
       "enabled": true
     },
     {
+      "key": "testid_wizard_progress_1",
+      "value": "wizard-progress-1",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "testid_wizard_progress_2",
+      "value": "wizard-progress-2",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "testid_wizard_progress_3",
+      "value": "wizard-progress-3",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "testid_wizard_progress_4",
+      "value": "wizard-progress-4",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "testid_wizard_progress_5",
+      "value": "wizard-progress-5",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "testid_wizard_signup_create",
+      "value": "wizard-signup-create",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "testid_wizard_signup_none",
+      "value": "wizard-signup-none",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "testid_wizard_skip_btn",
+      "value": "wizard-skip-btn",
+      "type": "default",
+      "enabled": true
+    },
+    {
       "key": "testid_wizard_step_1",
       "value": "wizard-step-1",
       "type": "default",
@@ -1158,6 +1254,30 @@
     {
       "key": "testid_wizard_step_5",
       "value": "wizard-step-5",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "testid_wizard_template_games",
+      "value": "wizard-template-games",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "testid_wizard_template_music",
+      "value": "wizard-template-music",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "testid_wizard_template_other",
+      "value": "wizard-template-other",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "testid_wizard_template_trivia",
+      "value": "wizard-template-trivia",
       "type": "default",
       "enabled": true
     },
@@ -1678,6 +1798,12 @@
       "enabled": true
     },
     {
+      "key": "testid_poster_skip_link",
+      "value": "poster-skip-link",
+      "type": "default",
+      "enabled": true
+    },
+    {
       "key": "testid_poster_sponsor_item",
       "value": "poster-sponsor-item",
       "type": "default",
@@ -1980,6 +2106,12 @@
     {
       "key": "testid_report_suppression_note",
       "value": "report-suppression-note",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "testid_shared_report_skip_link",
+      "value": "shared-report-skip-link",
       "type": "default",
       "enabled": true
     },

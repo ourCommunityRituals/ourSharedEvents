@@ -1598,7 +1598,7 @@
     </style>
   </head>
   <body>
-    <a href="#main-content" class="skip-link">Skip to content</a>
+    <a href="#main-content" class="skip-link" data-testid="admin-skip-link">Skip to content</a>
     <header data-testid="admin-header" aria-label="OurSharedEvents Admin">
       <h1>
         OurSharedEvents<span class="tier-badge" id="tierBadge" data-testid="tier-badge"></span
@@ -1730,19 +1730,19 @@
         <!-- Progress rail — completed steps are clickable to go back (only
              before the event is created; afterwards steps 1–3 are history). -->
         <div class="wizard-progress" role="list" aria-label="Setup steps">
-          <button type="button" class="wizard-progress-step active" data-step="1">
+          <button type="button" class="wizard-progress-step active" data-step="1" data-testid="wizard-progress-1">
             <span class="step-number">1</span><span class="step-label">Basic Info</span>
           </button>
-          <button type="button" class="wizard-progress-step" data-step="2">
+          <button type="button" class="wizard-progress-step" data-step="2" data-testid="wizard-progress-2">
             <span class="step-number">2</span><span class="step-label">Template</span>
           </button>
-          <button type="button" class="wizard-progress-step" data-step="3">
+          <button type="button" class="wizard-progress-step" data-step="3" data-testid="wizard-progress-3">
             <span class="step-number">3</span><span class="step-label">Sign-Ups</span>
           </button>
-          <button type="button" class="wizard-progress-step" data-step="4">
+          <button type="button" class="wizard-progress-step" data-step="4" data-testid="wizard-progress-4">
             <span class="step-number">4</span><span class="step-label">Your Links</span>
           </button>
-          <button type="button" class="wizard-progress-step" data-step="5">
+          <button type="button" class="wizard-progress-step" data-step="5" data-testid="wizard-progress-5">
             <span class="step-number">5</span><span class="step-label">Launch</span>
           </button>
         </div>
@@ -1786,19 +1786,19 @@
         <div class="wizard-step" id="wizard-step-2" data-testid="wizard-step-2">
           <p class="wizard-step-help">What kind of event is this? We'll start the description for you.</p>
           <div class="wizard-template-grid" id="wizardTemplatePicker">
-            <button type="button" class="wizard-template-card" data-template="trivia">
+            <button type="button" class="wizard-template-card" data-template="trivia" data-testid="wizard-template-trivia">
               <span class="wizard-card-title">Trivia Night</span>
               <span class="wizard-card-desc">Teams, questions, bragging rights.</span>
             </button>
-            <button type="button" class="wizard-template-card" data-template="games">
+            <button type="button" class="wizard-template-card" data-template="games" data-testid="wizard-template-games">
               <span class="wizard-card-title">Game Night</span>
               <span class="wizard-card-desc">Bocce, pinball, cards — friendly competition.</span>
             </button>
-            <button type="button" class="wizard-template-card" data-template="music">
+            <button type="button" class="wizard-template-card" data-template="music" data-testid="wizard-template-music">
               <span class="wizard-card-title">Live Music</span>
               <span class="wizard-card-desc">A night built around the music.</span>
             </button>
-            <button type="button" class="wizard-template-card selected" data-template="other">
+            <button type="button" class="wizard-template-card selected" data-template="other" data-testid="wizard-template-other">
               <span class="wizard-card-title">Something Else</span>
               <span class="wizard-card-desc">Start blank — describe it your way.</span>
             </button>
@@ -1812,11 +1812,11 @@
         <div class="wizard-step" id="wizard-step-3" data-testid="wizard-step-3">
           <p class="wizard-step-help">Want people to sign up ahead of time?</p>
           <div class="wizard-signup-grid">
-            <button type="button" class="wizard-signup-option selected" data-option="create">
+            <button type="button" class="wizard-signup-option selected" data-option="create" data-testid="wizard-signup-create">
               <span class="wizard-card-title">Yes — use the built-in sign-up page</span>
               <span class="wizard-card-desc">We make it for you. You'll get the link in the next step.</span>
             </button>
-            <button type="button" class="wizard-signup-option" data-option="none">
+            <button type="button" class="wizard-signup-option" data-option="none" data-testid="wizard-signup-none">
               <span class="wizard-card-title">No sign-ups needed</span>
               <span class="wizard-card-desc">People can just show up. You can add this later.</span>
             </button>
@@ -1834,32 +1834,32 @@
               <span class="wizard-card-desc">Share this link — it's what your guests see on their phones.</span>
               <span class="wizard-card-url" data-role="url"></span>
               <span id="wizardQrPublic"></span>
-              <button type="button" class="wizard-copy-btn">Copy link</button>
+              <button type="button" class="wizard-copy-btn" data-testid="wizard-copy-public">Copy link</button>
             </div>
             <div class="wizard-link-card" id="wizard-link-signup" data-testid="wizard-link-signup" hidden>
               <span class="wizard-card-title">Sign-up page</span>
               <span class="wizard-card-desc">Put this code on flyers — a phone scan opens the sign-up.</span>
               <span class="wizard-card-url" data-role="url"></span>
               <span id="wizardQrSignup"></span>
-              <button type="button" class="wizard-copy-btn">Copy link</button>
+              <button type="button" class="wizard-copy-btn" data-testid="wizard-copy-signup">Copy link</button>
             </div>
             <div class="wizard-link-card" id="wizard-link-poster" data-testid="wizard-link-poster">
               <span class="wizard-card-title">Printable poster</span>
               <span class="wizard-card-desc">Open, print, and hang it up — codes included.</span>
               <span class="wizard-card-url" data-role="url"></span>
-              <button type="button" class="wizard-copy-btn">Copy link</button>
+              <button type="button" class="wizard-copy-btn" data-testid="wizard-copy-poster">Copy link</button>
             </div>
             <div class="wizard-link-card" id="wizard-link-display" data-testid="wizard-link-display">
               <span class="wizard-card-title">Big-screen display</span>
               <span class="wizard-card-desc">Open this on a TV at the venue for a live view.</span>
               <span class="wizard-card-url" data-role="url"></span>
-              <button type="button" class="wizard-copy-btn">Copy link</button>
+              <button type="button" class="wizard-copy-btn" data-testid="wizard-copy-display">Copy link</button>
             </div>
             <div class="wizard-link-card" id="wizard-link-report" data-testid="wizard-link-report">
               <span class="wizard-card-title">Results report</span>
               <span class="wizard-card-desc">After the event, make a share link from the dashboard's report tool.</span>
               <span class="wizard-card-url" data-role="url"></span>
-              <button type="button" class="wizard-copy-btn">Copy link</button>
+              <button type="button" class="wizard-copy-btn" data-testid="wizard-copy-report">Copy link</button>
             </div>
           </div>
         </div>
@@ -1879,8 +1879,8 @@
         <div class="create-msg" id="wizard-msg" data-testid="wizard-msg" role="status"></div>
 
         <div class="wizard-nav">
-          <button type="button" class="wizard-back-btn" id="wizardBackBtn" hidden>Back</button>
-          <button type="button" class="wizard-skip-btn" id="wizardSkipBtn" hidden>
+          <button type="button" class="wizard-back-btn" id="wizardBackBtn" data-testid="wizard-back-btn" hidden>Back</button>
+          <button type="button" class="wizard-skip-btn" id="wizardSkipBtn" data-testid="wizard-skip-btn" hidden>
             Skip this step
           </button>
           <button
@@ -3546,7 +3546,7 @@
 
       <div id="spon-form-wrap" class="spon-form-wrap" hidden data-testid="sponsor-form-wrap">
         <form id="spon-create-form" data-testid="sponsor-create-form" novalidate>
-          <input type="hidden" id="spon-edit-id" value="" />
+          <input type="hidden" id="spon-edit-id" data-testid="spon-edit-id" value="" />
           <div id="spon-edit-ctx" class="spon-edit-ctx" hidden data-testid="sponsor-edit-ctx"></div>
           <div class="create-form">
             <div>

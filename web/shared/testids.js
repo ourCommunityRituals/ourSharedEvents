@@ -35,7 +35,7 @@
  *   Derived from the templates, so it can never claim an id the app does not
  *   emit. Dynamically-built ids (`data-testid="row-' + id + '"`) are excluded
  *   on purpose: t() would accept one while nothing ever renders it.
- * Generated 2026-09-01 — 355 ids.
+ * Generated 2026-09-01 — 377 ids.
  */
 (function (root, factory) {
   const api = factory();
@@ -43,7 +43,7 @@
   root.OCR_TESTID = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
   const TESTID = Object.freeze({
-    // admin.html — 193 ids
+    // admin.html — 213 ids
     ADMIN: Object.freeze([
       'add-poster-deployment-toggle',
       'add-sponsor-toggle',
@@ -63,6 +63,7 @@
       'admin-phase-pre',
       'admin-phase-pre-badge',
       'admin-phase-pre-fill',
+      'admin-skip-link',
       'admin-stat-appearances',
       'admin-stat-appearances-num',
       'admin-stat-checkins',
@@ -194,6 +195,7 @@
       'skeleton-poster-deployments',
       'skeleton-sponsors',
       'spon-covenant-note',
+      'spon-edit-id',
       'spon-event',
       'spon-is-local-pill',
       'spon-logo',
@@ -222,6 +224,12 @@
       'sponsors-tbody',
       'surface-cards',
       'tier-badge',
+      'wizard-back-btn',
+      'wizard-copy-display',
+      'wizard-copy-poster',
+      'wizard-copy-public',
+      'wizard-copy-report',
+      'wizard-copy-signup',
       'wizard-event-date',
       'wizard-event-name',
       'wizard-event-venue',
@@ -233,11 +241,23 @@
       'wizard-link-signup',
       'wizard-msg',
       'wizard-next-btn',
+      'wizard-progress-1',
+      'wizard-progress-2',
+      'wizard-progress-3',
+      'wizard-progress-4',
+      'wizard-progress-5',
+      'wizard-signup-create',
+      'wizard-signup-none',
+      'wizard-skip-btn',
       'wizard-step-1',
       'wizard-step-2',
       'wizard-step-3',
       'wizard-step-4',
       'wizard-step-5',
+      'wizard-template-games',
+      'wizard-template-music',
+      'wizard-template-other',
+      'wizard-template-trivia',
     ]),
     // public.html — 31 ids
     PUBLIC: Object.freeze([
@@ -305,7 +325,7 @@
       'display-upcoming-heading',
       'display-upcoming-name',
     ]),
-    // poster.html — 33 ids
+    // poster.html — 34 ids
     POSTER: Object.freeze([
       'poster-area',
       'poster-body',
@@ -333,6 +353,7 @@
       'poster-qr-section',
       'poster-qr-survey',
       'poster-qr-survey-label',
+      'poster-skip-link',
       'poster-sponsor-item',
       'poster-sponsor-label',
       'poster-sponsor-logo',
@@ -341,7 +362,7 @@
       'poster-sponsors-loading',
       'poster-title',
     ]),
-    // shared-report.html — 69 ids
+    // shared-report.html — 70 ids
     SHARED_REPORT: Object.freeze([
       'advanced-metrics-content',
       'advanced-metrics-section',
@@ -387,6 +408,7 @@
       'report-sponsor-section',
       'report-stats',
       'report-suppression-note',
+      'shared-report-skip-link',
       'signed-link-content',
       'signed-link-corridor-density',
       'signed-link-corridor-map',
