@@ -17,7 +17,10 @@
 
 import { test, expect } from '@playwright/test';
 
-const PHASE1_EVENT_ID = process.env.TEST_EVENT_ID || 'test-event-001';
+// evt_forms_phase1 = synthetic tier-1 event WITH the per-event flag override ON,
+// so submission clears FORM_DISABLED and deterministically hits PHASE_REQUIRED —
+// proving the tier gate without depending on staging's global flag state.
+const PHASE1_EVENT_ID = process.env.PHASE1_EVENT_ID || 'evt_forms_phase1';
 const PHASE2_EVENT_ID = process.env.PHASE2_EVENT_ID || 'evt_forms_phase2';
 
 function bodyFor(formType: 'survey' | 'email-signup') {

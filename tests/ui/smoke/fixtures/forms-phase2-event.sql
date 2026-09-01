@@ -38,6 +38,16 @@
 -- NOTE: this does NOT touch test-event-001 or any real event, and does NOT
 -- change any existing event's legal_clearance_tier.
 
+-- Two synthetic events:
+--   evt_forms_phase2 — legal_clearance_tier 2 → survey/email SUBMISSION succeeds
+--                      (with the per-event flag override in forms-phase2-flags.sql).
+--   evt_forms_phase1 — legal_clearance_tier 1, flag ON → SUBMISSION hits the tier
+--                      gate and returns 403 PHASE_REQUIRED. This is the gate-exercise
+--                      proof: with the feature flag ON (so we clear FORM_DISABLED),
+--                      a sub-Phase-2 event still correctly refuses — the gate is
+--                      exercised, not bypassed, and it does NOT depend on staging's
+--                      (drifting) global flag state.
+-- Feature-flag overrides for BOTH events live in forms-phase2-flags.sql (FORMS_DB).
 INSERT OR IGNORE INTO events
   (id, brand_id, title, slug, status, location, where_address,
    what_short, who_host, why_purpose, start_date, end_date,
@@ -47,4 +57,9 @@ VALUES
    'Eagles Hall', '2427 Grove St',
    'Phase-2 form fixture', 'OSG', 'Exercise the survey/email clearance gate',
    datetime('now','-1 hour'), datetime('now','+3 hours'),
-   2, 'synthetic');
+   2, 'synthetic'),
+  ('evt_forms_phase1', 'ose', 'Synthetic Phase-1 Forms Event', 'forms-phase1', 'active',
+   'Eagles Hall', '2427 Grove St',
+   'Phase-1 gate-exercise fixture', 'OSG', 'Prove the tier gate still refuses sub-Phase-2',
+   datetime('now','-1 hour'), datetime('now','+3 hours'),
+   1, 'synthetic');
