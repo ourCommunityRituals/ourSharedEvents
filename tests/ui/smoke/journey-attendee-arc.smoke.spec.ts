@@ -93,6 +93,31 @@ test.describe('attendee arc — /events/:id across phases', () => {
     if (await link.count()) {
       await link.click();
       await expect(page).toHaveURL(/\/events\/.+/);
+      // The public /events/* surface sits behind Cloudflare bot mitigation
+      // (see docs/security/BOT_CONTROLS_BASELINE.md §6.1). An automated Chromium
+      // fingerprint can trip a Managed Challenge at the edge on this in-page
+      // navigation, so the worker never runs and a challenge interstitial — which
+      // has no <main> — is served instead of the event page. That is edge
+      // behaviour outside the app's control, NOT an app render bug: the same page
+      // renders on the WebKit/Safari engine, and the worker emits <main> on every
+      // path (including errors). Mirror the CF-edge-aware convention already used
+      // in the Newman page contracts (OSE-348 / OSE-891): stand down ONLY on a
+      // positively-detected genuine CF challenge; otherwise assert the render, so
+      // a real regression is still caught. Live-Chrome coverage is recovered by a
+      // CI-scoped WAF Managed-Challenge Skip on stg /events/* (founder/DevOps
+      // lane; mirrors OSE-939's /q/* rule) — OSE-1161 Half B.
+      const edgeBody = await page
+        .locator('body')
+        .innerText()
+        .catch(() => '');
+      const isCfChallenge =
+        /Performing security verification|Just a moment|__cf_chl|cf-error-details|Attention Required/i.test(
+          edgeBody
+        );
+      test.skip(
+        isCfChallenge,
+        'CF Managed Challenge intercepted /events/* at the edge (chrome-only) — worker never ran; live-Chrome coverage pending the WAF skip (OSE-1161 Half B)'
+      );
       await expect(page.locator('main').first()).toBeVisible();
     }
   });
