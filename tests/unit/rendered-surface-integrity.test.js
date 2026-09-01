@@ -13,9 +13,12 @@
  *     which reads the source directly) + E2E — NOT silently skipped.
  */
 
+const fs = require('fs');
+const path = require('path');
 const { findInlineScriptParseErrors } = require('../_shared/embedded-integrity.js');
 
 const FORM_TYPES = ['register', 'checkin', 'survey', 'email'];
+const TEMPLATE_DIR = path.join(__dirname, '../../workers/oursharedevents/src/templates');
 
 describe('rendered surfaces — inline <script> bodies are valid JS', () => {
   describe('forms (self-contained — must render + parse)', () => {
@@ -79,4 +82,29 @@ describe('rendered surfaces — inline <script> bodies are valid JS', () => {
       });
     }
   });
+});
+
+// ── Template SOURCE parse (OSE-1158) ─────────────────────────────────────────
+// The best-effort pages.ts block above SKIPS admin/pages surfaces under node
+// (pages.ts not importable), leaving admin.html's inline <script> bodies
+// UNPARSED — that vacuous skip is why a broken onclick concat (the embedded-JS
+// -parse-guard class, sibling of OSE-1003) shipped and only T4d caught it. This
+// block parses the TEMPLATE SOURCE files directly (fs read — no render/import
+// needed) so every surface's inline JS is proven to parse at the fast unit rung.
+// Born-red: on the broken admin.html this failed with "Unexpected string"
+// (script blocks 6 + 8, the sponsor + forms cards); green after the fix.
+describe('template source — inline <script> bodies are valid JS (OSE-1158)', () => {
+  const htmlFiles = fs.readdirSync(TEMPLATE_DIR).filter((f) => f.endsWith('.html'));
+
+  test('template dir has .html surfaces (guard is not vacuous)', () => {
+    expect(htmlFiles.length).toBeGreaterThan(0);
+  });
+
+  for (const file of htmlFiles) {
+    test(`${file}: every inline script parses`, () => {
+      const html = fs.readFileSync(path.join(TEMPLATE_DIR, file), 'utf8');
+      const errors = findInlineScriptParseErrors(html);
+      expect(errors, `${file} parse errors: ${JSON.stringify(errors)}`).toEqual([]);
+    });
+  }
 });
