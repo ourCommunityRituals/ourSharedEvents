@@ -16,7 +16,8 @@ permissions:
   pull-requests: write
   issues: write
 
-# Pin bash for self-hosted Windows runner (default would be PowerShell).
+# bash is the default shell on ubuntu-latest; kept explicit so every `run:`
+# step is unambiguous (and portable if this job is ever moved to a matrix).
 defaults:
   run:
     shell: bash
@@ -24,7 +25,15 @@ defaults:
 jobs:
   contract-check:
     name: Validate against OCR-docs brain
-    runs-on: self-hosted
+    # ubuntu-latest, not self-hosted: this job is pure Python + bash + github-script
+    # with no Windows/self-hosted dependency. On the shared self-hosted box the
+    # `python3 -m pip install` below intermittently landed in a different interpreter
+    # than the one run_all.py spawns levels under (`sys.executable`), so the sole
+    # `packaging`-importing level (Level 4) failed to import it and the check went
+    # red on unrelated PRs (green→red across #430/#431/#432 on identical brain
+    # content). Ephemeral ubuntu gives one interpreter and kills that flake class.
+    # See OSE-1155; consistent with OSE-1017 (S0/S2) and OSE-953/#104 (brain repo).
+    runs-on: ubuntu-latest
     timeout-minutes: 5
     if: github.actor != 'dependabot[bot]'
 
@@ -48,12 +57,11 @@ jobs:
           python-version: '3.11'
 
       - name: Install deps
-        # Install into the SAME interpreter the scripts run under (python3). On the
-        # self-hosted runners bare `pip` resolves to a different Python than
-        # `python3`, so ruamel.yaml landed where check_brain_contract.py couldn't
-        # import it -> "ERROR: ruamel.yaml is required" -> conformance-report.json
-        # never written -> the failure handler's open_drift_ticket.py then dies on
-        # a missing report. `python3 -m pip` pins the install to the right env.
+        # `python3 -m pip` pins the install to the same interpreter run_all.py spawns
+        # levels under (`sys.executable`). On ubuntu-latest that is unambiguous; the
+        # form is kept as belt-and-suspenders so a stray `python3` never diverges
+        # from the install target (the divergence that produced OSE-1155 / the older
+        # ruamel.yaml "ERROR: ruamel.yaml is required" failure on self-hosted).
         run: python3 -m pip install pyyaml packaging "ruamel.yaml>=0.18"
 
       - name: Run brain test pyramid
