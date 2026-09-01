@@ -29,9 +29,18 @@ test.describe('attendee arc — /events/:id across phases', () => {
     await expect(page.locator('[data-testid="event-main"], main').first()).toBeVisible();
     // 5W content present
     await expect(page.locator('[data-testid="venue-map"]')).toBeVisible();
-    await expect(page.locator('[data-testid="gmaps-link"]')).toHaveAttribute(
+    // Wayfinding = OSE-660 universal geo-link: privacy-first, opens the visitor's
+    // OWN maps app via a geo: URI (coordinates) or maps.apple.com (address
+    // fallback), link-out only with rel="noopener noreferrer" — NEVER a Google-
+    // specific embed/tracker on the anonymous surface. (The old gmaps-link
+    // assertion was drift — a contract the app never shipped, OSE-1106.)
+    await expect(page.locator('[data-testid="geo-link"]')).toHaveAttribute(
       'href',
-      /google\.com\/maps/
+      /^geo:|^https:\/\/maps\.apple\.com\//
+    );
+    await expect(page.locator('[data-testid="geo-link"]')).toHaveAttribute(
+      'rel',
+      'noopener noreferrer'
     );
     // Share path: OG tags rendered server-side
     expect(await page.locator('meta[property="og:title"]').count()).toBe(1);
@@ -43,9 +52,15 @@ test.describe('attendee arc — /events/:id across phases', () => {
     test.skip(!LIVE, 'SMOKE_EVENT_LIVE not seeded');
     await page.goto(`/events/${LIVE}`);
     await expect(page.locator('[data-testid="venue-map-live"]')).toBeVisible();
-    await expect(page.locator('[data-testid="gmaps-link-live"]')).toHaveAttribute(
+    // LIVE variant of the OSE-660 geo-link (same privacy-first contract, distinct
+    // testid emitted by renderEventLiveHtml) — OSE-1106.
+    await expect(page.locator('[data-testid="geo-link-live"]')).toHaveAttribute(
       'href',
-      /maps\/dir/
+      /^geo:|^https:\/\/maps\.apple\.com\//
+    );
+    await expect(page.locator('[data-testid="geo-link-live"]')).toHaveAttribute(
+      'rel',
+      'noopener noreferrer'
     );
     await expect(page.locator('[data-testid="anonymity-affordance"]')).toBeVisible();
   });
