@@ -569,6 +569,16 @@ jobs:
         if: matrix.shard == 'lint'
         run: OSE_TPL=workers/oursharedevents/src/templates npx tsx --test tests/ui/smoke/static-check.test.ts
 
+      # Test-id registry drift (2026-09-01). web/shared/testids.js is DERIVED from
+      # the surface templates, so a template that renames or adds a data-testid
+      # without regenerating leaves the registry — and the generated Postman
+      # environment Newman reads — silently wrong. Sits beside the manifest
+      # preflight above because it is the same class of check: template/artifact
+      # drift, caught statically in a second, with no browser and no network.
+      - name: 'Lint: test-id registry matches the templates'
+        if: matrix.shard == 'lint'
+        run: node scripts/gen-testids.mjs --check
+
       # ── Shard: typecheck ───────────────────────────────────────────────────
       # tsc --noEmit on the worker. Standalone shard so a type regression
       # surfaces as a single named check, not buried inside a multi-step job.
