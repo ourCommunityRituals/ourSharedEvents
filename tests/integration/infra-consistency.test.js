@@ -253,6 +253,55 @@ describe('npm audit resilience — @ocr/flags SBOM mutation guards', () => {
 // structural invariant spec that is NOT listed in the workflow fails here —
 // so the enforcement continuity cannot silently regress (the exact failure
 // mode PR #59's defects pointed at).
+// ─────────────────────────────────────────────────────────────────────────────
+// PACT TIER PLACEMENT GUARD (2026-09-01)
+//
+// The L8 pact tier runs because `tests/pact/**` is listed in vitest.config.ts's
+// `include`. That is a single line in a config file, and nothing else asserts
+// it. Remove it — deliberately or in a merge — and every pact stops running
+// while the suite still reports green, because a test file that is never
+// discovered cannot fail.
+//
+// That is the same false-green class as OSE-852 (Playwright steps discovering
+// zero tests) and the same one that left 55 FE specs unwired. This guard is
+// cheap insurance on the line that makes the tier real.
+describe('pact tier continuity — L8 pacts are discovered by vitest', () => {
+  const { existsSync, readdirSync } = require('fs');
+
+  test('vitest.config.ts includes tests/pact', () => {
+    const cfg = readFile('vitest.config.ts');
+    expect(
+      /tests\/pact\/\*\*/.test(cfg),
+      'vitest.config.ts must include tests/pact/** — without it the pact tier is never discovered and the suite reports green while running no pacts'
+    ).toBe(true);
+  });
+
+  test('the pact verifier exists', () => {
+    expect(existsSync(join(ROOT, 'tests/pact/pact-verify.test.ts'))).toBe(true);
+  });
+
+  test('at least one pact is defined (an empty pact dir must not pass)', () => {
+    const pacts = readdirSync(join(ROOT, 'tests/pact/pacts')).filter((f) =>
+      f.endsWith('.pact.json')
+    );
+    expect(
+      pacts.length,
+      'no .pact.json files — the verifier would have nothing to check and would still report green'
+    ).toBeGreaterThan(0);
+  });
+
+  test('every pact names a provider snapshot that exists', () => {
+    const dir = join(ROOT, 'tests/pact/pacts');
+    for (const f of readdirSync(dir).filter((x) => x.endsWith('.pact.json'))) {
+      const pact = JSON.parse(readFile(`tests/pact/pacts/${f}`));
+      expect(
+        existsSync(join(ROOT, pact.provider_snapshot)),
+        `${f} pacts against ${pact.provider_snapshot}, which does not exist`
+      ).toBe(true);
+    }
+  });
+});
+
 describe('invariant enforcement continuity — structural specs gate T0 (OSE-350)', () => {
   const yaml = require('js-yaml');
   const { readdirSync } = require('fs');
