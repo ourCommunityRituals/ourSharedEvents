@@ -1363,6 +1363,26 @@ jobs:
           npx wrangler d1 execute DB --env staging --remote \
             --file ../../tests/ui/smoke/fixtures/sponsored-event.sql
 
+      # OSE-1004: synthetic Phase-2 event fixture so the survey/email SUBMISSION
+      # E2E exercises the legal-clearance gate instead of 403-ing on a Phase-1
+      # event. evt_forms_phase2 = legal_clearance_tier 2, data_class 'synthetic'.
+      # Does NOT touch test-event-001 or any real event. A failed seed must
+      # surface (specs would 403 and, once blocking, fail — green != true holds).
+      - name: Seed forms Phase-2 fixture (OSE-1004)
+        timeout-minutes: 2
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        working-directory: ${{ env.WORKER_DIR }}
+        run: |
+          npx wrangler d1 execute DB --env staging --remote \
+            --file ../../tests/ui/smoke/fixtures/forms-phase2-event.sql
+          # Per-event flag overrides live in FORMS_DB (two-DB isolation). Enables
+          # forms.survey/email-signup for the synthetic events ONLY (scope='event'
+          # beats global) so submission clears FORM_DISABLED. No global flag changed.
+          npx wrangler d1 execute FORMS_DB --env staging --remote \
+            --file ../../tests/ui/smoke/fixtures/forms-phase2-flags.sql
+
       - name: 'T4a: Architecture Invariants'
         id: arch-tests
         env:
@@ -1430,11 +1450,18 @@ jobs:
           ADMIN_KEY: ${{ secrets.ADMIN_KEY }}
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+          # OSE-1004: survey/email specs target the synthetic Phase-2 fixture so
+          # submission is exercised (201) rather than 403 PHASE_REQUIRED.
+          PHASE2_EVENT_ID: evt_forms_phase2
+          # Synthetic tier-1 (flag ON) event — the gate-exercise proof asserts it
+          # still returns PHASE_REQUIRED, independent of staging's global flag state.
+          PHASE1_EVENT_ID: evt_forms_phase1
         run: |
           npx playwright test --config=playwright.e2e-smoke.config.ts \
             --grep "Survey Form|Email Signup" \
             tests/e2e/2-pages/form-email-signup.spec.ts \
             tests/e2e/2-pages/form-survey.spec.ts \
+            tests/e2e/2-pages/form-phase-gate.spec.ts \
             tests/e2e/3-flows/form-submission-flows.spec.ts \
             tests/e2e/4-negative/form-validation.spec.ts
         timeout-minutes: 10

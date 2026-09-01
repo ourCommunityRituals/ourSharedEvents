@@ -1,6 +1,9 @@
 import { test, expect } from '@playwright/test';
 
 const TEST_EVENT_ID = process.env.TEST_EVENT_ID || 'test-event-001';
+// OSE-1004: survey/email SUBMISSION is Phase-2 gated (legal_clearance_tier >= 2) → target
+// the synthetic Phase-2 fixture; register/checkin have no phase gate and stay on Phase-1.
+const PHASE2_EVENT_ID = process.env.PHASE2_EVENT_ID || 'evt_forms_phase2';
 
 test.describe('Form Submission Flows', () => {
   test.describe('Registration Form', () => {
@@ -88,12 +91,12 @@ test.describe('Form Submission Flows', () => {
 
   test.describe('Survey Form', () => {
     test('should load the survey form page', async ({ page }) => {
-      await page.goto(`/forms/${TEST_EVENT_ID}?type=survey`);
+      await page.goto(`/forms/${PHASE2_EVENT_ID}?type=survey`);
       await expect(page).not.toHaveURL(/error/);
     });
 
     test('should select rating 5 and fill comment then submit', async ({ page }) => {
-      await page.goto(`/forms/${TEST_EVENT_ID}?type=survey`);
+      await page.goto(`/forms/${PHASE2_EVENT_ID}?type=survey`);
       await expect(page.locator('form')).toBeVisible({ timeout: 10000 });
 
       // Click rating 5 (could be stars, radio buttons, or numbered buttons)
@@ -114,7 +117,7 @@ test.describe('Form Submission Flows', () => {
     });
 
     test('should show success after survey submission', async ({ page }) => {
-      await page.goto(`/forms/${TEST_EVENT_ID}?type=survey`);
+      await page.goto(`/forms/${PHASE2_EVENT_ID}?type=survey`);
       await expect(page.locator('form')).toBeVisible({ timeout: 10000 });
 
       const rating5 = page.locator('[data-testid="survey-rating-5"]').first();
@@ -135,13 +138,13 @@ test.describe('Form Submission Flows', () => {
 
   test.describe('Email Signup Form', () => {
     test('should load the email signup form page', async ({ page }) => {
-      await page.goto(`/forms/${TEST_EVENT_ID}?type=email`);
+      await page.goto(`/forms/${PHASE2_EVENT_ID}?type=email`);
       await expect(page).not.toHaveURL(/error/);
     });
 
     test('should fill email and submit successfully', async ({ page }) => {
       const timestamp = Date.now();
-      await page.goto(`/forms/${TEST_EVENT_ID}?type=email`);
+      await page.goto(`/forms/${PHASE2_EVENT_ID}?type=email`);
       await expect(page.locator('form')).toBeVisible({ timeout: 10000 });
 
       const emailInput = page
@@ -156,7 +159,7 @@ test.describe('Form Submission Flows', () => {
 
     test('should show success state after email signup', async ({ page }) => {
       const timestamp = Date.now();
-      await page.goto(`/forms/${TEST_EVENT_ID}?type=email`);
+      await page.goto(`/forms/${PHASE2_EVENT_ID}?type=email`);
       await expect(page.locator('form')).toBeVisible({ timeout: 10000 });
 
       const emailInput = page
