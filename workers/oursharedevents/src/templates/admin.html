@@ -3105,7 +3105,7 @@
             '<div id="mint-result" class="mint-result" data-testid="mint-result" style="margin-top:10px"></div>' +
           '</div>';
         } catch (err) {
-          panel.innerHTML = '<div class="card-error" data-testid="forms-error"><div class="error-icon">&#9888;</div><div class="error-msg">Could not load forms.</div><button class="retry-btn" data-testid="forms-retry" onclick="window.loadForms('' + eventId + '','' + eventName.replace(/'/g, "\\'") + '')">Retry</button></div>';
+          panel.innerHTML = '<div class="card-error" data-testid="forms-error"><div class="error-icon">&#9888;</div><div class="error-msg">Could not load forms.</div><button class="retry-btn" data-testid="forms-retry" onclick="window.loadForms(\'' + eventId + '\',\'' + eventName.replace(/'/g, "\\'") + '\')">Retry</button></div>';
         }
       };
 
@@ -3749,8 +3749,8 @@
                 ? '<span class="badge active" data-testid="spon-status-' + esc(s.id) + '">Active</span>'
                 : '<span class="badge archived" data-testid="spon-status-' + esc(s.id) + '">Inactive</span>';
               const actions = s.is_active
-                ? '<button class="spon-action-btn" data-testid="edit-' + esc(s.id) + '" onclick="window._editSponsor('' + esc(s.id) + '')">Edit</button> ' +
-                  '<button class="spon-action-btn deactivate" data-testid="deactivate-' + esc(s.id) + '" onclick="window._deactivateSponsor('' + esc(s.id) + '')">Deactivate</button>'
+                ? '<button class="spon-action-btn" data-testid="edit-' + esc(s.id) + '" onclick="window._editSponsor(\'' + esc(s.id) + '\')">Edit</button> ' +
+                  '<button class="spon-action-btn deactivate" data-testid="deactivate-' + esc(s.id) + '" onclick="window._deactivateSponsor(\'' + esc(s.id) + '\')">Deactivate</button>'
                 : '<span class="muted-sm">Deactivated</span>';
               const eventName = _eventNameById[String(s.event_id)] || s.event_id;
               return '<tr data-testid="sponsor-row-' + esc(s.id) + '"' + dimStyle + '>' +
@@ -3875,7 +3875,7 @@
           const cell = btn.parentElement;
           cell.innerHTML =
             '<span class="muted-sm deact-confirm-lbl">Deactivate?</span> ' +
-            '<button class="spon-action-btn deactivate" data-testid="confirm-deactivate-' + esc(id) + '" onclick="window._confirmDeactivate('' + esc(id) + '')" aria-label="Confirm deactivate sponsor">Yes</button>' +
+            '<button class="spon-action-btn deactivate" data-testid="confirm-deactivate-' + esc(id) + '" onclick="window._confirmDeactivate(\'' + esc(id) + '\')" aria-label="Confirm deactivate sponsor">Yes</button>' +
             ' <button class="spon-action-btn" data-testid="cancel-deactivate-' + esc(id) + '" onclick="window._loadSponsors()" aria-label="Cancel deactivate">No</button>';
           const yesBtn = cell.querySelector("[data-testid='confirm-deactivate-" + esc(id) + "']");
           if (yesBtn) yesBtn.focus();
