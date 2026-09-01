@@ -320,7 +320,10 @@
                 ? '<img src="' + esc(s.logo_url) + '" alt="' + esc(s.name) + '" referrerpolicy="no-referrer" onerror="this.style.display=\'none\'" data-testid="public-sponsor-logo">'
                 : '';
               const link = s.website_url
-                ? '<a href="' + esc(s.website_url) + '" target="_blank" rel="noopener" data-testid="public-sponsor-link"><span data-testid="public-sponsor-name">' + esc(s.name) + '</span></a>'
+                ? // OSE-1164: noreferrer (not just noopener) so clicking a sponsor sends NO
+                  // Referer header to the sponsor's site — the outbound click leaks neither
+                  // the attendee nor which OSE event page they came from.
+                  '<a href="' + esc(s.website_url) + '" target="_blank" rel="noopener noreferrer" data-testid="public-sponsor-link"><span data-testid="public-sponsor-name">' + esc(s.name) + '</span></a>'
                 : '<span data-testid="public-sponsor-fallback">' + esc(s.name) + '</span>';
               return '<div class="sponsor-card" data-testid="public-sponsor-card">' + logo + link + '</div>';
             })
@@ -335,6 +338,12 @@
                 '/impression',
               {
                 method: 'POST',
+                // OSE-1164: the sponsor-signal endpoints are aggregate-only (never-who).
+                // Omit credentials so the anonymous-scan cookie (ose_anon) is not even
+                // SENT to them — the "no link back to you" guarantee is then structural
+                // (the identity never reaches the server), not merely a handler that
+                // chooses not to read it. Locked by sponsor-signal-never-who.invariant.spec.ts.
+                credentials: 'omit',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ surface: 'public', placement: 'mobileBanner' }),
               }

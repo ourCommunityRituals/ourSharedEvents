@@ -703,6 +703,7 @@ jobs:
             tests/e2e/0-architecture/scan-path-split.invariant.spec.ts \
             tests/e2e/0-architecture/sponsor-identity-split.invariant.spec.ts \
             tests/e2e/0-architecture/edge-token-verification.invariant.spec.ts \
+            tests/e2e/0-architecture/sponsor-signal-never-who.invariant.spec.ts \
             tests/e2e/0-architecture/worker-claude-md.invariant.spec.ts
 
       # ── Shard: component ───────────────────────────────────────────────────
