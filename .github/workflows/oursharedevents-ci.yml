@@ -564,6 +564,12 @@ jobs:
         if: matrix.shard == 'lint'
         run: OSE_TPL=workers/oursharedevents/src/templates npx tsx --test tests/ui/smoke/static-check.test.ts
 
+      # L1: CF Access probe classifier (OSE-349). Pins the enum shared by the
+      # in-CI preflight step and the cf-access-canary tripwire — no network.
+      - name: 'Unit: CF Access probe classifier'
+        if: matrix.shard == 'lint'
+        run: bash tests/ci/cf-access-probe.test.sh
+
       # ── Shard: typecheck ───────────────────────────────────────────────────
       # tsc --noEmit on the worker. Standalone shard so a type regression
       # surfaces as a single named check, not buried inside a multi-step job.
@@ -1107,10 +1113,11 @@ jobs:
           fi
 
       # CF Access preflight probe (OSE-349) — diagnostic only, does not gate.
-      # Hits a read-only admin path with the same credentials Newman uses,
-      # classifies the response, and writes an actionable diagnosis to the
-      # step summary. Lets Newman remain the source of truth per the
-      # tests-surface-truth doctrine, but auto-classifies the next failure.
+      # Delegates to the shared classifier so the in-CI probe and the scheduled
+      # canary (.github/workflows/cf-access-canary.yml) can never drift into two
+      # copies of the anti-drift tool. Here it runs WITHOUT --gate: Newman stays
+      # the source of truth per the tests-surface-truth doctrine, and this step
+      # only auto-classifies the next failure into the step summary.
       - name: CF Access preflight probe
         id: preflight
         shell: bash
@@ -1119,74 +1126,8 @@ jobs:
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
         run: |
-          set +e
-          URL="https://stg.oursharedevents.com/api/v2/admin/sponsors"
-          BODY_FILE="$RUNNER_TEMP/preflight.body"
-          response=$(curl -sS -o "$BODY_FILE" -w '%{http_code}|%{content_type}|%{size_download}' \
-            -H "CF-Access-Client-Id: $CF_ACCESS_CLIENT_ID" \
-            -H "CF-Access-Client-Secret: $CF_ACCESS_CLIENT_SECRET" \
-            -H "Authorization: Bearer $ADMIN_KEY" \
-            "$URL")
-          curl_exit=$?
-          IFS='|' read -r status content_type size <<< "$response"
-
-          {
-            echo "## CF Access Preflight Probe"
-            echo ""
-            echo "| Field | Value |"
-            echo "| --- | --- |"
-            echo "| URL | \`$URL\` |"
-            echo "| HTTP status | \`$status\` |"
-            echo "| Content-Type | \`$content_type\` |"
-            echo "| Body size | \`$size\` bytes |"
-            echo ""
-          } >> "$GITHUB_STEP_SUMMARY"
-
-          classification=unknown
-          if [ "$curl_exit" -ne 0 ]; then
-            classification=network
-            echo "⚠ **Result:** \`curl\` exited $curl_exit before the response classified (network/DNS issue). Newman will retry." >> "$GITHUB_STEP_SUMMARY"
-            echo "::warning title=Preflight network error::curl exit=$curl_exit"
-          elif [ "$status" = "200" ] && echo "$content_type" | grep -q "application/json"; then
-            classification=ok
-            echo "✅ **Result:** Preflight OK — CF Access edge **and** worker \`ADMIN_KEY\` both accepting CI credentials." >> "$GITHUB_STEP_SUMMARY"
-          elif echo "$content_type" | grep -q "text/html"; then
-            classification=cf_access_shadow
-            {
-              echo "❌ **Result:** **CF Access service-token rejected.** Response is HTML (login challenge), not JSON."
-              echo ""
-              echo "**Almost certainly:** \`CF_ACCESS_CLIENT_ID\` / \`CF_ACCESS_CLIENT_SECRET\` repo secrets are stale (token rotated in Cloudflare). See [OSE-349](https://linear.app/oursharedevents/issue/OSE-349) for the full fix path."
-              echo ""
-              echo "**Newman API smoke will fail on the OSE-INV5 sponsor covenant seed.** Do not re-run blindly — fix the service token first."
-            } >> "$GITHUB_STEP_SUMMARY"
-            echo "::error title=CF Access preflight failed::Service token rejected (HTML response). See OSE-349. Likely cause: CF_ACCESS_CLIENT_ID/SECRET stale after Cloudflare rotation."
-          elif [ "$status" = "401" ] && echo "$content_type" | grep -q "application/json"; then
-            classification=worker_auth
-            {
-              echo "❌ **Result:** CF Access accepted the service token, but the worker rejected the \`ADMIN_KEY\` Bearer (401 JSON)."
-              echo ""
-              echo "Update the \`ADMIN_KEY\` repo secret. Different cause from OSE-349 — file a sibling ticket if persistent."
-            } >> "$GITHUB_STEP_SUMMARY"
-            echo "::error title=Worker auth preflight failed::ADMIN_KEY rejected by worker (401 JSON)."
-          else
-            classification=unexpected
-            body_preview=$(head -c 500 "$BODY_FILE" 2>/dev/null | tr -d '\r' | tr '\n' ' ')
-            {
-              echo "⚠ **Result:** Unexpected response shape — manual investigation needed."
-              echo ""
-              echo "**Body preview (first 500 chars):**"
-              echo ""
-              echo '```'
-              echo "$body_preview"
-              echo '```'
-            } >> "$GITHUB_STEP_SUMMARY"
-            echo "::warning title=Preflight unexpected::status=$status content_type=$content_type — see step summary"
-          fi
-
-          echo "preflight_status=$classification" >> "$GITHUB_OUTPUT"
-          echo "preflight_http_code=$status" >> "$GITHUB_OUTPUT"
-          echo "Preflight classification: $classification (HTTP $status, $content_type, $size bytes)"
-          exit 0
+          chmod +x scripts/ci/cf-access-probe.sh
+          scripts/ci/cf-access-probe.sh
 
       # OSE-891: geo-tag test-event-001 so the OSE-INV5 covenant can seed
       # genuinely-local sponsors. is_local is GEO-DERIVED server-side (sponsor

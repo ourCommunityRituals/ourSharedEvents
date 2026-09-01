@@ -1,0 +1,54 @@
+# ---------------------------------------------------------------------------
+# CF Access service-token canary (OSE-349) — proactive, fail-closed tripwire.
+#
+# WHY
+#   The in-CI preflight probe made the CF-Access-shadow failure FAST to diagnose,
+#   but detection was still REACTIVE: it only fired when a push-triggered CI run
+#   went red after a merge (occurrences OSE-349 → 889 → 940 → 1112). This canary
+#   makes it PROACTIVE — it runs the same classifier on a schedule and fails
+#   loud BEFORE a stale token can shadow a covenant merge.
+#
+# CONTRACT (Dr. of Security, OSE-349 CCR — Security-Critical tier)
+#   - FAIL-CLOSED: a green run means "CF Access edge + worker auth verified",
+#     never "the probe was skipped". Uses --gate → non-zero exit on any bad
+#     classification. A red canary = the token/policy needs attention.
+#   - LEAST-PRIVILEGE: contents:read only. No write-capable automation, no
+#     Linear/API token in the job (enum-only; GitHub's failed-run notification
+#     is the alert surface). Nothing here can be turned into an injection sink.
+#   - Secrets are the same Doppler-synced repo secrets the covenant seed uses,
+#     so the canary drifts if and only if the real path drifts.
+#
+# CADENCE
+#   Every 6h → a rotation/expiry is caught within 6h (~4 trivial runs/day).
+#   Also manually dispatchable for on-demand verification after a token refresh.
+# ---------------------------------------------------------------------------
+name: CF Access Canary
+
+on:
+  schedule:
+    - cron: '0 */6 * * *' # every 6 hours
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cf-access-canary
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    name: 'CF Access token — staging admin authz'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: CF Access preflight probe (fail-closed)
+        env:
+          ADMIN_KEY: ${{ secrets.ADMIN_KEY }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+        run: |
+          chmod +x scripts/ci/cf-access-probe.sh
+          scripts/ci/cf-access-probe.sh --gate
