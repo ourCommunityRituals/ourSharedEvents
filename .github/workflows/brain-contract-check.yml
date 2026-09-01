@@ -16,7 +16,8 @@ permissions:
   pull-requests: write
   issues: write
 
-# Pin bash for self-hosted Windows runner (default would be PowerShell).
+# bash is already the default on ubuntu-latest; kept explicit so a future
+# runner change cannot silently switch these steps to another shell.
 defaults:
   run:
     shell: bash
@@ -24,7 +25,7 @@ defaults:
 jobs:
   contract-check:
     name: Validate against OCR-docs brain
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     timeout-minutes: 5
     if: github.actor != 'dependabot[bot]'
 
@@ -48,13 +49,23 @@ jobs:
           python-version: '3.11'
 
       - name: Install deps
-        # Install into the SAME interpreter the scripts run under (python3). On the
-        # self-hosted runners bare `pip` resolves to a different Python than
-        # `python3`, so ruamel.yaml landed where check_brain_contract.py couldn't
-        # import it -> "ERROR: ruamel.yaml is required" -> conformance-report.json
-        # never written -> the failure handler's open_drift_ticket.py then dies on
-        # a missing report. `python3 -m pip` pins the install to the right env.
-        run: python3 -m pip install pyyaml packaging "ruamel.yaml>=0.18"
+        # `python3 -m pip` (not bare `pip`) installs into the SAME interpreter the
+        # scripts run under. On the self-hosted box those two resolved to different
+        # Pythons intermittently, so ruamel.yaml landed where invariant.py could not
+        # import it. That failed the pyramid BEFORE the conformance step ever wrote
+        # conformance-report.json, and the failure handler then reported the missing
+        # report -- naming the handler, not the fault. Observed 2026-09-01 on #431
+        # and #432; a re-run of #432 on the identical commit went green with no code
+        # change, which is what made it a runner-environment fault rather than drift.
+        #
+        # ubuntu-latest removes the cause: setup-python owns the only interpreter and
+        # every run starts from a clean VM. The verify step keeps the diagnosis honest
+        # if it ever regresses -- it fails HERE, where the install is, instead of
+        # three steps later as a missing file.
+        run: |
+          python3 -m pip install pyyaml packaging "ruamel.yaml>=0.18"
+          python3 -c 'import ruamel.yaml, yaml, packaging' \
+            || { echo "::error::brain deps missing from the python3 env"; exit 1; }
 
       - name: Run brain test pyramid
         id: brain-pyramid

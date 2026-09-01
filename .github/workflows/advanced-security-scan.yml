@@ -44,7 +44,7 @@ jobs:
   # ============================================================================
   sbom:
     name: "📦 SBOM Generation"
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -106,7 +106,7 @@ jobs:
   # ============================================================================
   license-check:
     name: "⚖️ License Compliance"
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -232,7 +232,7 @@ jobs:
   # ============================================================================
   dependency-review:
     name: "📋 Dependency Review"
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
     steps:
       - name: Checkout repository
@@ -258,7 +258,7 @@ jobs:
   # ============================================================================
   security-summary:
     name: "📊 Security Summary"
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     if: always()
     needs: [sbom, license-check, dependency-review]
     steps:
