@@ -74,6 +74,15 @@ jobs:
 
       - name: Stage adjacent @ocr/flags package
         shell: bash
+        continue-on-error: true
+        timeout-minutes: 2
+        env:
+          # No ambient git credentials on a GitHub-hosted runner, so the hub
+          # clone cannot prompt; fail fast instead of hanging. Staging is
+          # best-effort (OSE-341 is the real fix) and npm ci tolerates its
+          # absence -- same guard the already-ported jobs in
+          # oursharedevents-ci.yml use.
+          GIT_TERMINAL_PROMPT: '0'
         run: bash scripts/ci-stage-ocr-workspace.sh
 
       - name: Install root dependencies
