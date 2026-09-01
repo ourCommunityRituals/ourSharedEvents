@@ -12,6 +12,10 @@ export default defineConfig({
       'tests/unit/**/*.test.{js,ts}',
       'tests/contract/**/*.test.{js,ts}',
       'tests/integration/**/*.test.{js,ts}',
+      // L8 PACT — consumer-driven contracts. Offline (static join against the
+      // committed provider snapshots), so it gates in T0 without a deployed
+      // worker or the CF Access token that has blocked T2/T3 since 2026-05-19.
+      'tests/pact/**/*.test.{js,ts}',
     ],
 
     // Exclude Playwright tests and archive
@@ -27,12 +31,8 @@ export default defineConfig({
     ],
 
     // Reporters
-    reporters: process.env.CI
-      ? ['default', 'junit']
-      : ['default'],
+    reporters: process.env.CI ? ['default', 'junit'] : ['default'],
 
-    outputFile: process.env.CI
-      ? { junit: '.test-results/vitest-junit.xml' }
-      : undefined,
+    outputFile: process.env.CI ? { junit: '.test-results/vitest-junit.xml' } : undefined,
   },
 });

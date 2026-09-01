@@ -1,0 +1,47 @@
+{
+  "$comment": "CONSUMER-DRIVEN PACT — consumers of the SharedReport interface. `wkrp` is PROVIDER-DECLARED and UNRATIFIED: it records what ourSharedEvents believes it owes the batch consumer, written without reading ourWKRP (R3 — no session spans both repos). It is verified against the provider snapshot like any other pact; `ratified` flips to true only when ourWKRP confirms these fields from its own side, in its own session.",
+  "pact_version": "1.0.0",
+  "provider": "ourSharedEvents",
+  "provider_snapshot": "workers/oursharedevents/src/api-schema-snapshots/shared-report.snapshot.json",
+  "provider_snapshot_version": "1.0.0",
+  "consumers": [
+    {
+      "consumer": "shared-report.html",
+      "ratified": true,
+      "source": "workers/oursharedevents/src/templates/shared-report.html",
+      "endpoint": "SharedReport.top_level_fields",
+      "requires_fields": [
+        "event_id",
+        "event_title",
+        "event_start_date",
+        "unique_gatherings",
+        "sponsor_impressions",
+        "campaign_summary",
+        "_meta"
+      ]
+    },
+    {
+      "consumer": "sponsor-readout",
+      "ratified": true,
+      "source": "shared-report sponsor pane",
+      "endpoint": "SharedReport.sponsor_impressions_fields",
+      "requires_fields": [
+        "sponsor_id",
+        "sponsor_name",
+        "sponsor_tier",
+        "is_local",
+        "surface",
+        "count"
+      ],
+      "$note": "is_local is required INDEPENDENTLY of sponsor_tier — invariant #25, frequency-not-placement. A provider change that derived is_local from tier would still satisfy a field-presence check; the covenant specs are what assert independence. This pact pins presence only."
+    },
+    {
+      "consumer": "wkrp",
+      "ratified": false,
+      "source": "POST /api/v2/events/shared-reports/batch (service token) — provider side, router.ts:1098",
+      "endpoint": "SharedReport.top_level_fields",
+      "requires_fields": ["event_id", "event_title", "unique_gatherings", "campaign_summary"],
+      "$note": "UNRATIFIED. Declared from the provider side only. Do not treat green here as evidence ourWKRP is satisfied."
+    }
+  ]
+}

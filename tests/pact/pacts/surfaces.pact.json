@@ -1,0 +1,41 @@
+{
+  "$comment": "CONSUMER-DRIVEN PACT — the five MVP surfaces consuming the public events API. Each `requires` list was DERIVED from what the template actually reads, not from what the provider happens to emit. Regenerate by grepping the template for field access; do not add a field here until a consumer really reads it. A pact that over-claims turns every provider change into a false break.",
+  "pact_version": "1.0.0",
+  "provider": "ourSharedEvents",
+  "provider_snapshot": "workers/oursharedevents/src/api-schema-snapshots/public-events.snapshot.json",
+  "provider_snapshot_version": "1.1.0",
+  "consumers": [
+    {
+      "consumer": "public.html",
+      "ratified": true,
+      "source": "workers/oursharedevents/src/templates/public.html",
+      "endpoint": "GET /api/v2/events/:id",
+      "requires_envelope": ["ok", "item"],
+      "requires_fields": ["id", "location", "name", "startDateISO", "start_date", "title", "venue"]
+    },
+    {
+      "consumer": "display.html",
+      "ratified": true,
+      "source": "workers/oursharedevents/src/templates/display.html",
+      "endpoint": "GET /api/v2/events/:id",
+      "requires_envelope": ["ok", "item"],
+      "requires_fields": ["name", "startDateISO"]
+    },
+    {
+      "consumer": "poster.html",
+      "ratified": true,
+      "source": "workers/oursharedevents/src/templates/poster.html",
+      "endpoint": "GET /api/v2/events/:id",
+      "requires_envelope": ["ok", "item"],
+      "requires_fields": ["id", "name", "startDateISO", "venue"]
+    },
+    {
+      "consumer": "surface-listing",
+      "ratified": true,
+      "source": "web/shared/apiClient.js + listing views",
+      "endpoint": "GET /api/v2/events",
+      "requires_envelope": ["ok", "items"],
+      "requires_fields": ["id", "name", "startDateISO", "slug", "status"]
+    }
+  ]
+}
