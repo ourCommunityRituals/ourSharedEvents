@@ -20,7 +20,23 @@
 
 name = "oursharedevents"
 main = "src/index.ts"
-compatibility_date = "2024-01-01"
+# Compatibility date — bumped from "2024-01-01" (20 months stale).
+#
+# CEILING, NOT TODAY. The pinned toolchain (wrangler 4.84.1 / workerd
+# 1.20260421.1) supports dates up to 2026-04-28 only. Setting this to today
+# (2026-09-01) deploys fine to the edge but breaks EVERY local test:
+#   "This Worker requires compatibility date 2026-09-01, but the newest date
+#    supported by this server binary is 2026-04-28"  → 212 errors, 0 tests run.
+# Reaching today requires wrangler >=4.127, which peer-requires
+# @cloudflare/workers-types ^5 (major bump from our 4.x). Tracked separately —
+# do not raise this date without raising the toolchain in the same change.
+#
+# Inheritable key: this single top-level value covers env.staging and
+# env.production. (Contrast OSE-813 below: triggers/vars/d1/kv/r2 are NOT.)
+# Audited before bumping — no node: imports, no require(), no TransformStream,
+# no WebSocket, every TextDecoder is default UTF-8. None of the breaking flags
+# in the 2024-01→2026-04 window apply. Bundle measured byte-identical after.
+compatibility_date = "2026-04-28"
 account_id = "c4dee735e39737db94d7befeecf96e82"
 
 # ── HTML templates (S-1.2.1: extracted from pages.ts) ───────────
