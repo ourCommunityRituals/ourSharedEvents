@@ -275,3 +275,42 @@ test.describe('Invariant: Anonymous ID — Two-Database Separation', () => {
     expect(eventsStr).not.toContain('consent_given_at');
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// 5. SPONSOR SIGNAL — COOKIE NOT ON THE WIRE (OSE-1164)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+test.describe('Invariant: Sponsor Signal Never-Who — cookie not transmitted', () => {
+  test('impression request does not carry ose_anon even when the cookie is set (credentials:omit)', async ({
+    page,
+    baseURL,
+  }) => {
+    test.skip(!baseURL, 'no baseURL configured');
+    // Plant the anonymous-scan cookie for this origin, as a returning attendee
+    // (who already scanned) would carry. credentials:'omit' on the client fetch
+    // must still keep it off the sponsor-signal request → never-who is structural.
+    await page.context().addCookies([{ name: 'ose_anon', value: 'anon_e2e_probe', url: baseURL! }]);
+
+    const cookieHeadersSeen: string[] = [];
+    await page.route('**/impression', async (route) => {
+      const headers = await route.request().allHeaders();
+      cookieHeadersSeen.push(headers['cookie'] ?? '');
+      await route.continue();
+    });
+
+    await page.goto('/display', { waitUntil: 'domcontentloaded', timeout: TIMEOUT });
+    await page.waitForTimeout(3000); // let the impression fetch(es) fire
+
+    test.skip(
+      cookieHeadersSeen.length === 0,
+      'no sponsor impressions fired — no sponsored event on this environment'
+    );
+    for (const cookie of cookieHeadersSeen) {
+      expect(
+        cookie,
+        'sponsor impression request must not carry ose_anon — credentials:omit makes the ' +
+          '"no link back to you" guarantee structural, not behavioral (OSE-1164)'
+      ).not.toContain('ose_anon');
+    }
+  });
+});
