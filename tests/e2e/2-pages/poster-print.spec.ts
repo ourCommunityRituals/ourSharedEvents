@@ -450,6 +450,14 @@ test.describe('Poster Page — XSS Resilience', () => {
             {
               id: 'evt_xss',
               title: '<script>alert("xss")</script>',
+              // OSE-844 / ADR-016: enrichWithPhase() emits the canonical field
+              // `name` (mapped from `title`) and poster.html:556 reads it. This
+              // mock fulfills the route directly, bypassing the worker and its
+              // enrichment, so `name` must be supplied here or the poster title
+              // renders EMPTY — which makes the `not.toContain('<script>alert')`
+              // assertion above pass vacuously. The positive control below is
+              // what catches that.
+              name: '<script>alert("xss")</script>',
               slug: 'xss-event',
               status: 'active',
               brand_id: 'root',

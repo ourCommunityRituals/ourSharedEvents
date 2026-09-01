@@ -253,6 +253,77 @@ describe('npm audit resilience — @ocr/flags SBOM mutation guards', () => {
 // structural invariant spec that is NOT listed in the workflow fails here —
 // so the enforcement continuity cannot silently regress (the exact failure
 // mode PR #59's defects pointed at).
+// ─────────────────────────────────────────────────────────────────────────────
+// COMPONENT SHARD PLACEMENT GUARD (2026-09-01)
+//
+// Same class of guard as the invariants one below, for the same reason. The
+// component shard runs viewport/layout specs against a LOCAL worker
+// (playwright.component.config.ts, `wrangler dev --local`) — the first tier
+// that executes real FE flows on a PR. Before it existed, 55 surface specs
+// were named in zero workflows, so the failure mode is proven: a Playwright
+// spec that no workflow names runs nowhere and nobody notices.
+//
+// Without this guard the shard could be dropped from the matrix, or its batch
+// emptied, and every check would stay green while FE coverage silently went
+// back to zero.
+describe('component tier continuity — the component shard gates T0', () => {
+  const yaml = require('js-yaml');
+  const { existsSync } = require('fs');
+
+  const wf = yaml.load(readFile('.github/workflows/oursharedevents-ci.yml'));
+  const gate = (wf.jobs && wf.jobs.gate) || {};
+  const shards = (gate.strategy && gate.strategy.matrix && gate.strategy.matrix.shard) || [];
+  const step = (gate.steps || []).find(
+    (s) => s && s.name === 'Component: viewport specs vs local worker'
+  );
+  const run = (step && step.run) || '';
+  // Spec paths named on the command line — the batch this tier actually runs.
+  const named = run.match(/tests\/e2e\/[\w/-]+\.spec\.ts/g) || [];
+
+  test('T0 Gate matrix includes the component shard', () => {
+    expect(
+      shards,
+      'gate job matrix must include a "component" shard so FE viewport specs run on every PR/push'
+    ).toContain('component');
+  });
+
+  test('the component step exists', () => {
+    expect(
+      step,
+      'gate job must have the "Component: viewport specs vs local worker" step'
+    ).toBeDefined();
+  });
+
+  test('playwright.component.config.ts exists and starts a local worker', () => {
+    expect(existsSync(join(ROOT, 'playwright.component.config.ts'))).toBe(true);
+    const cfg = readFile('playwright.component.config.ts');
+    expect(
+      /webServer/.test(cfg),
+      'the component config must define a webServer — without it the tier points at a deployed URL and inherits the staging dependency it exists to avoid'
+    ).toBe(true);
+    expect(
+      /wrangler dev/.test(cfg),
+      'the component webServer must start a local worker (wrangler dev)'
+    ).toBe(true);
+  });
+
+  test('the component step names at least one spec (an empty batch must not pass)', () => {
+    expect(
+      named.length,
+      'the component step runs no specs — an empty batch would report green while testing nothing'
+    ).toBeGreaterThan(0);
+  });
+
+  test('every spec named in the component step exists on disk', () => {
+    for (const spec of named) {
+      expect(
+        existsSync(join(ROOT, spec)),
+        `component step names ${spec}, which does not exist — the batch would fail to discover it`
+      ).toBe(true);
+    }
+  });
+});
+
 describe('invariant enforcement continuity — structural specs gate T0 (OSE-350)', () => {
   const yaml = require('js-yaml');
   const { readdirSync } = require('fs');

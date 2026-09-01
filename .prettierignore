@@ -6,3 +6,10 @@ workers/oursharedevents/src/templates/
 # npm's canonical output and produces huge spurious diffs (OSE-790).
 package-lock.json
 **/package-lock.json
+
+# Generated test-id registry + its Newman bridge. Same reason as the lockfiles
+# above: scripts/gen-testids.mjs is the canonical formatter, and its `--check`
+# gate is a byte-compare against its own output. Letting prettier reformat them
+# makes that gate fail on every run, forever — verified before it reached CI.
+web/shared/testids.js
+postman/environments/testids.json
