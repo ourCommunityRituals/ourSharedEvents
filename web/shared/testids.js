@@ -426,9 +426,7 @@
   function t(id) {
     if (!INDEX.has(id)) {
       throw new Error(
-        'unknown test-id "' +
-          id +
-          '" — not emitted by any surface template. ' +
+        'unknown test-id "' + id + '" — not emitted by any surface template. ' +
           'Either the element was renamed (update the caller), or the id is ' +
           'aspirational (add it to the template, then regenerate the registry).'
       );
