@@ -1,0 +1,40 @@
+info:
+  name: OSE-R-003 | API | GET /api/v2/events/:id/shared-report (malformed bearer token) | 401 with body.code=UNAUTHORIZED
+  type: http
+  seq: 2
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/events/{{testEventId}}/shared-report"
+  headers:
+    - name: Accept
+      value: application/json
+    - name: Authorization
+      value: Bearer not-a-real-signed-link-token
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: "// OSE-R-003: invalid-token path. Same friendly copy bucket as the no-auth\r
+
+        // case ('This share link has expired or isn’t valid. Ask the sender for a\r
+
+        // fresh link.'). Server contract: 401 + code=UNAUTHORIZED, not 400 or 403.\r
+
+        test('Returns 401', function() { expect(res.getStatus()).to.equal(401); });\r
+
+        const json = res.getBody();\r
+
+        test('body.code is UNAUTHORIZED', function() {\r
+
+        \    expect(json.code).to.equal('UNAUTHORIZED');\r
+
+        });"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

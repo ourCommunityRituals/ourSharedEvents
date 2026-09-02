@@ -1,0 +1,38 @@
+info:
+  name: OSE-R-015 | API | GET /events (public listing) | sponsor img tags carry referrerpolicy=no-referrer
+  type: http
+  seq: 1
+
+http:
+  method: GET
+  url: "{{baseUrl}}/events"
+  headers:
+    - name: Accept
+      value: text/html
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: "test('Returns 200', function() { expect(res.getStatus()).to.equal(200); });\r
+
+        const body = (typeof res.getBody()==='string'?res.getBody():JSON.stringify(res.getBody()));\r
+
+        test('public listing HTML includes referrerpolicy=no-referrer', function() {\r
+
+        \    expect(body).to.match(/referrerpolicy=[\"']no-referrer[\"']/);\r
+
+        });\r
+
+        test('public listing HTML includes onerror handler', function() {\r
+
+        \    expect(body).to.match(/onerror=[\"']this\\.style\\.display=/);\r
+
+        });"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

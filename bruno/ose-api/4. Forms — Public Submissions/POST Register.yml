@@ -1,0 +1,82 @@
+info:
+  name: POST Register
+  type: http
+  seq: 1
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/events/{{testEventId}}/forms/register"
+  headers:
+    - name: Content-Type
+      value: application/json
+  body:
+    type: json
+    data: |-
+      {
+        "name": "Postman Test User",
+        "email": "postman-test@example.com",
+        "sourcePlacementId": "qr-poster-001"
+      }
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: "const ct = (res.getHeader('Content-Type') || ''); if (!ct.includes('application/json')) { test('CF Access blocked — admin route protected', function() { expect([200, 302, 403]).to.include(res.getStatus()); }); return; } const json = res.getBody();\r
+
+        \r
+
+        if (res.getStatus() === 200) {\r
+
+        \    test('ok is true', function() {\r
+
+        \        expect(json.ok).to.eql(true);\r
+
+        \    });\r
+
+        \r
+
+        \    test('Has registration id', function() {\r
+
+        \        expect(json.id).to.be.a('string');\r
+
+        \    });\r
+
+        \r
+
+        \    test('Has registrationBucket', function() {\r
+
+        \        expect(json.registrationBucket).to.be.a('string');\r
+
+        \    });\r
+
+        \r
+
+        \    bru.setEnvVar('testRegistrationId', json.id);\r
+
+        \    console.log('Captured testRegistrationId: ' + json.id);\r
+
+        } else if (res.getStatus() === 403) {\r
+
+        \    test('403 means form disabled', function() {\r
+
+        \        expect(json.code).to.eql('FORM_DISABLED');\r
+
+        \    });\r
+
+        } else if (res.getStatus() === 503) {\r
+
+        \    test('503 is DB error', function() {\r
+
+        \        expect(json.code).to.be.oneOf(['DB_NOT_CONFIGURED', 'DB_ERROR']);\r
+
+        \    });\r
+
+        }"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

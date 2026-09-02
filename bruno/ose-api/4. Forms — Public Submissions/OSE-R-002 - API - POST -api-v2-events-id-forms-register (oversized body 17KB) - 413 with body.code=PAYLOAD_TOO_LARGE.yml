@@ -1,0 +1,43 @@
+info:
+  name: OSE-R-002 | API | POST /api/v2/events/:id/forms/register (oversized body 17KB) | 413 with body.code=PAYLOAD_TOO_LARGE
+  type: http
+  seq: 9
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/events/{{testEventId}}/forms/register"
+  headers:
+    - name: Content-Type
+      value: application/json
+  body:
+    type: json
+    data: "{{oseR002OversizedBody}}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: before-request
+      code: "const big = 'x'.repeat(17000);\r
+
+        bru.setEnvVar('oseR002OversizedBody', JSON.stringify({ name: big }));"
+    - type: after-response
+      code: "// OSE-R-002: locks PAYLOAD_TOO_LARGE as client-mappable. Friendly-copy:\r
+
+        // 'Your message is too long. Please shorten it and try again.'\r
+
+        test('Returns 413', function() { expect(res.getStatus()).to.equal(413); });\r
+
+        const json = res.getBody();\r
+
+        test('body.code is PAYLOAD_TOO_LARGE (client-mappable)', function() {\r
+
+        \    expect(json.code).to.equal('PAYLOAD_TOO_LARGE');\r
+
+        });"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

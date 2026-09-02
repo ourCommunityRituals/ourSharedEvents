@@ -1,0 +1,49 @@
+info:
+  name: GET /nonexistent-path (404)
+  type: http
+  seq: 1
+
+http:
+  method: GET
+  url: "{{baseUrl}}/this/path/does/not/exist"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: "// CF WAF may return 403 before the Worker returns 404\r
+
+        test('Returns 404 or 403 (WAF block)', function() {\r
+
+        \    expect([403, 404]).to.include(res.getStatus());\r
+
+        });\r
+
+        \r
+
+        const ct = (res.getHeader('Content-Type') || '');\r
+
+        if (ct.includes('application/json')) {\r
+
+        \    const json = res.getBody();\r
+
+        \    test('ok is false', function() {\r
+
+        \        expect(json.ok).to.eql(false);\r
+
+        \    });\r
+
+        \    test('Has error message', function() {\r
+
+        \        expect(json.error).to.eql('Not found');\r
+
+        \    });\r
+
+        }"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

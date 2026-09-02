@@ -1,0 +1,51 @@
+info:
+  name: OSE-320 | API | GET /api/v2/uec/resolve (no code param) | 400 MISSING_CODE with valid_codes list
+  type: http
+  seq: 4
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/uec/resolve"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: "const json = res.getBody();\r
+
+        test('Status is 400', () => expect(res.getStatus()).to.equal(400));\r
+
+        test('ok is false', () => expect(json.ok).to.be.false);\r
+
+        test('error is MISSING_CODE', () => expect(json.error).to.eql('MISSING_CODE'));\r
+
+        test('valid_codes.ids includes all 11 canonical', () => {\r
+
+        \    expect(json.valid_codes.ids).to.have.lengthOf(11);\r
+
+        \    expect(json.valid_codes.ids).to.include('ENTER');\r
+
+        \    expect(json.valid_codes.ids).to.include('SHOP');\r
+
+        });\r
+
+        test('valid_codes.labels includes all 11', () => {\r
+
+        \    expect(json.valid_codes.labels).to.have.lengthOf(11);\r
+
+        });\r
+
+        test('message uses friendly voice (no raw stack trace)', () => {\r
+
+        \    expect(json.message).to.not.match(/TypeError|undefined|at .*\\.ts:/);\r
+
+        \    expect(json.message.toLowerCase()).to.match(/required|canonical|provide/);\r
+
+        });"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

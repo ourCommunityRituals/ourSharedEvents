@@ -1,0 +1,91 @@
+info:
+  name: GET /api/v2/admin/events
+  type: http
+  seq: 1
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/admin/events"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: "// CF Access may intercept this request before it reaches the Worker.\r
+
+        // Three valid outcomes: 200 JSON (auth passed), 401 (Worker auth), or CF Access block (302/200 HTML).\r
+
+        const ct = res.getHeader('Content-Type') || '';\r
+
+        const isCfAccessBlocked = !ct.includes('application/json');\r
+
+        \r
+
+        if (isCfAccessBlocked) {\r
+
+        \    test('CF Access blocked — admin route protected', function() {\r
+
+        \        expect([200, 302, 403]).to.include(res.getStatus());\r
+
+        \    });\r
+
+        \    console.warn('CF Access blocked admin API — set CF-Access-Client-Id/Secret to bypass');\r
+
+        } else if (res.getStatus() === 200) {\r
+
+        \    const json = res.getBody();\r
+
+        \    test('ok is true', function() {\r
+
+        \        expect(json.ok).to.eql(true);\r
+
+        \    });\r
+
+        \r
+
+        \    test('items is array', function() {\r
+
+        \        expect(json.items).to.be.an('array');\r
+
+        \    });\r
+
+        \r
+
+        \    test('Cache-Control is no-store (admin)', function() {\r
+
+        \        expect(res.getHeader('Cache-Control')).to.eql('no-store');\r
+
+        \    });\r
+
+        \r
+
+        \    test('Returns items sorted by updated_at DESC', function() {\r
+
+        \        if (json.items.length >= 2) {\r
+
+        \            expect(json.items[0].updated_at >= json.items[1].updated_at).to.be.true;\r
+
+        \        }\r
+
+        \    });\r
+
+        } else if (res.getStatus() === 401) {\r
+
+        \    const json = res.getBody();\r
+
+        \    test('401 has UNAUTH code', function() {\r
+
+        \        expect(json.code).to.eql('UNAUTH');\r
+
+        \    });\r
+
+        \    console.warn('AUTH FAILED — set adminKey in environment');\r
+
+        }"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

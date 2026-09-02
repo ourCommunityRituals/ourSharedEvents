@@ -1,0 +1,71 @@
+opencollection: 1.0.0
+
+info:
+  name: OSE Pages — Contract
+
+request:
+  scripts:
+    - type: before-request
+      code: bru.setVar('requestStartTime', Date.now());
+    - type: after-response
+      code: "const elapsed = Date.now() - bru.getVar('requestStartTime');\r
+
+        test(`Response time < 3000ms (actual: ${elapsed}ms)`, function() {\r
+
+        \    expect(elapsed).to.be.below(3000);\r
+
+        });\r
+
+        \r
+
+        // Invariant #6 — Inert Monetization Hooks: every Worker response (including HTML\r
+
+        // pages) must carry X-Monetization-Inert: true. Skip responses the worker never\r
+
+        // produced: CF Access redirects (302) AND the CF-Access-gated admin aliases\r
+
+        // /admin and /manage (Newman follows the 302 to the CF Access login page — a\r
+
+        // 200 with no worker header), AND CF WAF/managed-challenge EDGE BLOCKS (403 HTML\r
+
+        // served by Cloudflare BEFORE the worker runs — e.g. adversarial paths like\r
+
+        // evt_does_not_exist_r004; see OSE-348/OSE-939). Detected by the CF block-page\r
+
+        // signature so it never misfires on a worker response: worker JSON 401/403 are\r
+
+        // application/json (not text/html), and worker-branded HTML error pages carry\r
+
+        // none of the CF block markers — both are still asserted.\r
+
+        const __ct = res.getHeader('Content-Type') || '';\r
+
+        // Primary signal: CF sets cf-mitigated on WAF block/challenge actions. Fallback:\r
+
+        // the CF block-page body signature (403 HTML). Either way this fires ONLY on a\r
+
+        // non-worker edge response — a worker JSON/HTML 403 has neither.\r
+
+        const __cfMitigated = (res.getHeader('cf-mitigated') || '').length > 0;\r
+
+        const __isCfEdgeBlock = res.getStatus() === 403 && (__cfMitigated || (/text\\/html/i.test(__ct) && /Attention Required|have been blocked|cf-error-details|__cf_chl|Cloudflare Ray ID/i.test((typeof res.getBody()==='string'?res.getBody():JSON.stringify(res.getBody())))));\r
+
+        if (res.getStatus() !== 302 && !__isCfEdgeBlock && req.getUrl().toString().indexOf('/admin') === -1 && req.getUrl().toString().indexOf('/manage') === -1) {\r
+
+        \    test('Invariant #6: X-Monetization-Inert: true on every Worker response', function() {\r
+
+        \        expect(res.getHeader('X-Monetization-Inert')).to.eql('true');\r
+
+        \    });\r
+
+        }"
+
+docs:
+  content: |-
+    Frontend HTML surface collection for ourSharedEvents.
+    Separated from API. Covers all 5 MVP surfaces + form pages + aliases.
+
+    Requires: OSE - Staging environment.
+  type: text/markdown
+bundled: false
+extensions: {}

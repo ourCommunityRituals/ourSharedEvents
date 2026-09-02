@@ -37,12 +37,12 @@
 #
 # Fail-fast test chain after T1 deploy: T2 Contract → T3 E2E Smoke → T4
 # Functional. Each stage `needs:` the prior and gates on its success, so a red
-# stage SKIPS everything downstream — fix one layer at a time. Newman-first:
+# stage SKIPS everything downstream — fix one layer at a time. Contract-first:
 # nail the API contract, then perpetuate into the FE.
 #
-#   T2: Contract (Newman) — API + Pages spec compliance [runs first]
-#       - Newman API collection        → newman run postman/collections/ose-api.json
-#       - Newman Pages collection      → newman run postman/collections/ose-pages.json
+#   T2: Contract (Bruno) — API + Pages spec compliance [runs first]
+#       - Bruno API collection         → bru run bruno/ose-api (OSE-1191, ex-Newman)
+#       - Bruno Pages collection       → bru run bruno/ose-pages (OSE-1191, ex-Newman)
 #
 #   T3: E2E Smoke (Playwright) — XSS, auth boundaries, fail-fast gates, forms
 #       [runs only if T2 Contract passed]
@@ -101,6 +101,7 @@ on:
       - 'scripts/**'
       - 'schemas/**'
       - 'postman/**'
+      - 'bruno/**'
       - 'packages/**'
       - 'playwright.*.config.*'
       - '.github/workflows/**'
@@ -571,8 +572,8 @@ jobs:
 
       # Test-id registry drift (2026-09-01). web/shared/testids.js is DERIVED from
       # the surface templates, so a template that renames or adds a data-testid
-      # without regenerating leaves the registry — and the generated Postman
-      # environment Newman reads — silently wrong. Sits beside the manifest
+      # without regenerating leaves the registry — and the generated Bruno
+      # environment `bru run` reads — silently wrong. Sits beside the manifest
       # preflight above because it is the same class of check: template/artifact
       # drift, caught statically in a second, with no browser and no network.
       - name: 'Lint: test-id registry matches the templates'
@@ -990,7 +991,7 @@ jobs:
     # repo secrets) which is IP-independent, so an ephemeral runner authenticates
     # exactly as the box did — there is no source-IP allow-list to lose.
     runs-on: ubuntu-latest
-    # Fail-fast chain, stage 2 of 3: FE E2E smoke runs ONLY after the Newman
+    # Fail-fast chain, stage 2 of 3: FE E2E smoke runs ONLY after the Bruno
     # contract (T2) is green. A red here SKIPS functional (T4). Depends on
     # contract-staging so the API contract is proven before the FE E2E layer.
     needs: [security, gate, deploy-staging, contract-staging]
@@ -1104,18 +1105,18 @@ jobs:
           exit 1
 
   # ============================================================================
-  # TIER 3: CONTRACT — Newman API + Pages (post-deploy + nightly)
+  # TIER 3: CONTRACT — Bruno API + Pages (post-deploy + nightly) (OSE-1191)
   # ============================================================================
   contract-staging:
-    name: 'T2 Contract → Staging (Newman)'
-    # OSE-954: runs on ephemeral ubuntu-latest. Newman + wrangler-d1 seed only;
-    # no deploy. Staging auth is the header-based CF Access service token
-    # (CF_ACCESS_CLIENT_ID/SECRET + Bearer ADMIN_KEY) and the D1 seed uses
+    name: 'T2 Contract → Staging (Bruno)'
+    # OSE-954: runs on ephemeral ubuntu-latest. Bruno (`bru run`) + wrangler-d1
+    # seed only; no deploy. Staging auth is the header-based CF Access service
+    # token (CF_ACCESS_CLIENT_ID/SECRET + Bearer ADMIN_KEY) and the D1 seed uses
     # CLOUDFLARE_API_TOKEN — all repo secrets, all IP-independent, so the
     # ephemeral runner reaches staging exactly as the self-hosted box did.
     runs-on: ubuntu-latest
-    # Fail-fast chain, stage 1 of 3 (after T1 deploy): Newman API + Pages
-    # contract. Newman-first — nail the API contract, THEN perpetuate into the
+    # Fail-fast chain, stage 1 of 3 (after T1 deploy): Bruno API + Pages
+    # contract. Contract-first — nail the API contract, THEN perpetuate into the
     # FE. A red here SKIPS the downstream FE E2E smoke (T3) and functional (T4),
     # so a broken API contract is fixed before any FE layer runs.
     needs: [security, gate, deploy-staging]
@@ -1154,8 +1155,8 @@ jobs:
       # CF Access preflight probe (OSE-349) — diagnostic only, does not gate.
       # Delegates to the shared classifier so the in-CI probe and the scheduled
       # canary (.github/workflows/cf-access-canary.yml) can never drift into two
-      # copies of the anti-drift tool. Here it runs WITHOUT --gate: Newman stays
-      # the source of truth per the tests-surface-truth doctrine, and this step
+      # copies of the anti-drift tool. Here it runs WITHOUT --gate: the Bruno
+      # contract stays the source of truth per the tests-surface-truth doctrine, and this step
       # only auto-classifies the next failure into the step summary.
       - name: CF Access preflight probe
         id: preflight
@@ -1173,7 +1174,7 @@ jobs:
       # h3_res7 == event h3_res7); the event fixture ships without coordinates,
       # so without this its cell is NULL and every sponsor resolves non-local.
       # A standalone fixture (not a migration) on purpose — see the file header
-      # and postman/collections/ose-api.json §11 description. Idempotent UPDATE.
+      # (postman/fixtures/covenant-event-geo.sql). Idempotent UPDATE.
       - name: Seed covenant event geo (OSE-891 fixture)
         id: seed-covenant-geo
         continue-on-error: true
@@ -1198,8 +1199,19 @@ jobs:
           npx wrangler d1 execute DB --env staging --remote \
             --file ../../postman/fixtures/covenant-sponsors-reset.sql
 
-      - name: Newman API smoke
-        id: newman-api
+      # OSE-1191: migrated Postman/Newman → Bruno (offline/git-native `.bru`,
+      # collections live in-repo under bruno/). Bruno CLI `bru run` must execute
+      # from the collection root, so each step sets working-directory. Secrets are
+      # still injected via --env-var (same keys as the Postman env), never inlined.
+      #
+      # `bru run` writes --reporter-junit to $GITHUB_WORKSPACE/.test-results and
+      # EXITS 2 if that directory does not exist — even when every assertion passes
+      # (OSE-1191: masked the green result until created). Make the dir first.
+      - name: Prepare contract report dir
+        run: mkdir -p "$GITHUB_WORKSPACE/.test-results"
+      - name: Bruno API contract
+        id: bru-api
+        working-directory: bruno/ose-api
         env:
           ADMIN_KEY: ${{ secrets.ADMIN_KEY }}
           X_OCR_INTERNAL: ${{ secrets.X_OCR_INTERNAL }}
@@ -1213,26 +1225,21 @@ jobs:
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
         run: |
-          npx newman run postman/collections/ose-api.json \
-            -e postman/environments/ose-staging.json \
+          npx bru run . -r --env ose-staging \
             --env-var "adminKey=$ADMIN_KEY" \
             --env-var "ocrInternalSecret=$X_OCR_INTERNAL" \
             --env-var "cfAccessClientId=$CF_ACCESS_CLIENT_ID" \
             --env-var "cfAccessClientSecret=$CF_ACCESS_CLIENT_SECRET" \
-            --bail \
-            --reporters cli,junit \
-            --reporter-junit-export .test-results/newman-api-junit.xml
+            --reporter-junit "$GITHUB_WORKSPACE/.test-results/bru-api-junit.xml"
         timeout-minutes: 5
         continue-on-error: true
 
-      - name: Newman Pages smoke
-        id: newman-pages
+      - name: Bruno Pages contract
+        id: bru-pages
+        working-directory: bruno/ose-pages
         run: |
-          npx newman run postman/collections/ose-pages.json \
-            -e postman/environments/ose-staging.json \
-            --bail \
-            --reporters cli,junit \
-            --reporter-junit-export .test-results/newman-pages-junit.xml
+          npx bru run . -r --env ose-staging \
+            --reporter-junit "$GITHUB_WORKSPACE/.test-results/bru-pages-junit.xml"
         timeout-minutes: 5
         continue-on-error: true
 
@@ -1244,34 +1251,34 @@ jobs:
           path: .test-results/
           retention-days: 14
 
-      # Surface per-assertion Newman results as a GitHub Check (visible in the
+      # Surface per-assertion Bruno results as a GitHub Check (visible in the
       # PR/Checks tab), so a contract failure shows the failing request + message
       # by name instead of being buried in the CLI log.
-      - name: Report results (Newman contract)
+      - name: Report results (Bruno contract)
         if: always()
         uses: dorny/test-reporter@v3
         continue-on-error: true
         with:
-          name: 'T2 Contract Results (Newman)'
-          path: '.test-results/newman-*-junit.xml'
+          name: 'T2 Contract Results (Bruno)'
+          path: '.test-results/bru-*-junit.xml'
           reporter: java-junit
           fail-on-error: false
 
       - name: Summary
         if: always()
         run: |
-          echo "## T2 Contract → Staging (Newman)" >> $GITHUB_STEP_SUMMARY
+          echo "## T2 Contract → Staging (Bruno)" >> $GITHUB_STEP_SUMMARY
           echo "Stage 1 of the fail-fast chain — a red here skips T3 E2E smoke + T4 functional." >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Collection | Result |" >> $GITHUB_STEP_SUMMARY
           echo "|------------|--------|" >> $GITHUB_STEP_SUMMARY
-          echo "| API (ose-api.json) | \`${{ steps.newman-api.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| Pages (ose-pages.json) | \`${{ steps.newman-pages.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| API (bruno/ose-api) | \`${{ steps.bru-api.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Pages (bruno/ose-pages) | \`${{ steps.bru-pages.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
 
       - name: Fail check
-        if: steps.newman-api.outcome == 'failure' || steps.newman-pages.outcome == 'failure'
+        if: steps.bru-api.outcome == 'failure' || steps.bru-pages.outcome == 'failure'
         run: |
-          echo "::error::Contract failed — API: ${{ steps.newman-api.outcome }}, Pages: ${{ steps.newman-pages.outcome }}"
+          echo "::error::Contract failed — API: ${{ steps.bru-api.outcome }}, Pages: ${{ steps.bru-pages.outcome }}"
           exit 1
 
   # ============================================================================
@@ -1948,7 +1955,7 @@ jobs:
           echo "| S0 Security | security | \`${{ needs.security.result }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| T0 Gate | gate | \`${{ needs.gate.result }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| T1 Deploy STG | deploy-staging | \`${{ needs.deploy-staging.result }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| T2 Contract STG (Newman) | contract-staging | \`${{ needs.contract-staging.result }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| T2 Contract STG (Bruno) | contract-staging | \`${{ needs.contract-staging.result }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| T3 E2E Smoke STG (Playwright) | smoke-staging | \`${{ needs.smoke-staging.result }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| T4 Functional STG | functional-staging | \`${{ needs.functional-staging.result }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| T1 Deploy PROD | deploy-production | \`${{ needs.deploy-production.result }}\` |" >> $GITHUB_STEP_SUMMARY

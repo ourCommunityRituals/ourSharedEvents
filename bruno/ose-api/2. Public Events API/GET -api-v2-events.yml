@@ -1,0 +1,129 @@
+info:
+  name: GET /api/v2/events
+  type: http
+  seq: 1
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/events?brand={{brandId}}"
+  params:
+    - name: brand
+      value: "{{brandId}}"
+      type: query
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: before-request
+      code: "if (bru.getEnvVar('dbStatus') === 'not_configured') {\r
+
+        \    console.warn('DB not configured — expecting 503');\r
+
+        }"
+    - type: after-response
+      code: "const ct = (res.getHeader('Content-Type') || ''); if (!ct.includes('application/json')) { test('CF Access blocked — admin route protected', function() { expect([200, 302, 403]).to.include(res.getStatus()); }); return; } const json = res.getBody();\r
+
+        \r
+
+        if (res.getStatus() === 200) {\r
+
+        \    test('ok is true', function() {\r
+
+        \        expect(json.ok).to.eql(true);\r
+
+        \    });\r
+
+        \r
+
+        \    test('items is array', function() {\r
+
+        \        expect(json.items).to.be.an('array');\r
+
+        \    });\r
+
+        \r
+
+        \    test('status is 200', function() {\r
+
+        \        expect(json.status).to.eql(200);\r
+
+        \    });\r
+
+        \r
+
+        \    if (json.items.length > 0) {\r
+
+        \        const item = json.items[0];\r
+
+        \        test('Event has required fields', function() {\r
+
+        \            expect(item).to.have.property('id');\r
+
+        \            expect(item).to.have.property('brand_id');\r
+
+        \            expect(item).to.have.property('title');\r
+
+        \            expect(item).to.have.property('slug');\r
+
+        \            expect(item).to.have.property('status');\r
+
+        \            expect(item).to.have.property('start_date');\r
+
+        \        });\r
+
+        \r
+
+        \        // OSE-844 (X-10): the API emits the canonical field names the\r
+
+        \        // surface templates read (name/startDateISO/venue), mapped in\r
+
+        \        // enrichWithPhase. This is the live-response T3 restoration of the\r
+
+        \        // guard the archived events.spec.ts asserted before it was defanged.\r
+
+        \        test('OSE-844: emits canonical name/startDateISO/venue', function() {\r
+
+        \            expect(item).to.have.property('name');\r
+
+        \            expect(item.name, 'name must equal the title column').to.eql(item.title);\r
+
+        \            expect(item).to.have.property('startDateISO');\r
+
+        \            if (item.start_date) { expect(item.startDateISO).to.match(/^\\d{4}-\\d{2}-\\d{2}/); }\r
+
+        \            expect(item).to.have.property('venue');\r
+
+        \        });\r
+
+        \r
+
+        \        // Capture first event ID for downstream tests\r
+
+        \        bru.setEnvVar('testEventId', item.id);\r
+
+        \        console.log('Captured testEventId: ' + item.id);\r
+
+        \    }\r
+
+        } else if (res.getStatus() === 503) {\r
+
+        \    test('503 has error code', function() {\r
+
+        \        expect(json.code).to.be.oneOf(['DB_NOT_CONFIGURED', 'DB_ERROR']);\r
+
+        \    });\r
+
+        \    test('503 has requestId', function() {\r
+
+        \        expect(json.requestId).to.be.a('string');\r
+
+        \    });\r
+
+        }"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

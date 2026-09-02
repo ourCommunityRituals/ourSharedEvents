@@ -1,0 +1,109 @@
+info:
+  name: GET /health
+  type: http
+  seq: 1
+
+http:
+  method: GET
+  url: "{{baseUrl}}/health"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: "const ct = (res.getHeader('Content-Type') || ''); if (!ct.includes('application/json')) { test('CF Access blocked — admin route protected', function() { expect([200, 302, 403]).to.include(res.getStatus()); }); return; } const json = res.getBody();\r
+
+        \r
+
+        test('Status is 200 or 503', function() {\r
+
+        \    expect(res.getStatus()).to.be.oneOf([200, 503]);\r
+
+        });\r
+
+        \r
+
+        test('ok matches db state', function() {\r
+
+        \    if (json.db === 'error') {\r
+
+        \        expect(json.ok).to.eql(false);\r
+
+        \    } else {\r
+
+        \        expect(json.ok).to.eql(true);\r
+
+        \    }\r
+
+        });\r
+
+        \r
+
+        test('Has env field', function() {\r
+
+        \    expect(json.env).to.be.a('string');\r
+
+        });\r
+
+        \r
+
+        test('Has version field', function() {\r
+
+        \    expect(json.version).to.be.a('string');\r
+
+        });\r
+
+        \r
+
+        test('Has db field', function() {\r
+
+        \    expect(json.db).to.be.oneOf(['ok', 'not_configured', 'error']);\r
+
+        });\r
+
+        \r
+
+        test('Has timestamp (ISO 8601)', function() {\r
+
+        \    expect(json.timestamp).to.match(/^\\d{4}-\\d{2}-\\d{2}T/);\r
+
+        });\r
+
+        \r
+
+        // Capture environment info for other requests\r
+
+        bru.setEnvVar('dbStatus', json.db);\r
+
+        bru.setEnvVar('workerEnv', json.env);\r
+
+        bru.setEnvVar('workerVersion', json.version);\r
+
+        \r
+
+        // Flag if DB is not connected — abort Collection Runner to avoid cascade failures\r
+
+        // Set env var abortOnDbFailure=false to disable abort for manual exploration\r
+
+        if (json.db !== 'ok') {\r
+
+        \    console.warn('WARNING: D1 database status is \"' + json.db + '\" — events and forms endpoints will return 503');\r
+
+        \    const shouldAbort = bru.getEnvVar('abortOnDbFailure') !== 'false';\r
+
+        \    if (shouldAbort) {\r
+
+        \        console.warn('ABORTING collection run — set abortOnDbFailure=false to override');\r
+
+        \        bru.runner.stopExecution();\r
+
+        \    }\r
+
+        }"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

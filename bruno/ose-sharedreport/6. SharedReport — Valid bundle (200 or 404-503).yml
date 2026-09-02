@@ -1,0 +1,177 @@
+info:
+  name: 6. SharedReport — Valid bundle (200 or 404/503)
+  type: http
+  seq: 6
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/sharedreport?eventId={{testEventId}}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: "const validStatuses = [200, 404, 503];\r
+
+        \r
+
+        test('Returns valid status code', function () {\r
+
+        \  expect(validStatuses).to.include(res.getStatus());\r
+
+        });\r
+
+        \r
+
+        test('Contract version header is 1.0.0', function () {\r
+
+        \  if (res.getHeader('X-Contract-Version')) {\r
+
+        \    expect(res.getHeader('X-Contract-Version')).to.eql('1.0.0');\r
+
+        \  }\r
+
+        });\r
+
+        \r
+
+        test('X-Request-Id header present', function () {\r
+
+        \  expect(res.getHeaders()).to.have.property('X-Request-Id'.toLowerCase());\r
+
+        });\r
+
+        \r
+
+        if (res.getStatus() === 200) {\r
+
+        \  const json = res.getBody();\r
+
+        \r
+
+        \  test('Success response has ok=true', function () {\r
+
+        \    expect(json.ok).to.eql(true);\r
+
+        \    expect(json.status).to.eql(200);\r
+
+        \  });\r
+
+        \r
+
+        \  test('Bundle exists with required fields', function () {\r
+
+        \    expect(json.bundle).to.be.an('object');\r
+
+        \    expect(json.bundle.generatedAt).to.be.a('string');\r
+
+        \    expect(json.bundle.window).to.be.an('object');\r
+
+        \    expect(json.bundle.integrity).to.be.an('object');\r
+
+        \    expect(json.bundle.event).to.be.an('object');\r
+
+        \    expect(json.bundle.sponsor).to.be.an('object');\r
+
+        \    expect(json.bundle.customer).to.be.an('object');\r
+
+        \  });\r
+
+        \r
+
+        \  test('Integrity metadata is valid', function () {\r
+
+        \    const i = json.bundle.integrity;\r
+
+        \    expect(typeof i.complete).to.eql('boolean');\r
+
+        \    expect(typeof i.stale).to.eql('boolean');\r
+
+        \    expect(i.notes).to.be.an('array');\r
+
+        \  });\r
+
+        \r
+
+        \  test('Event section has required fields', function () {\r
+
+        \    const e = json.bundle.event;\r
+
+        \    expect(e.eventId).to.be.a('string');\r
+
+        \    expect(e.name).to.be.a('string');\r
+
+        \    expect(e.summary).to.be.an('object');\r
+
+        \    expect(e.traffic).to.be.an('object');\r
+
+        \    expect(e.qr).to.be.an('object');\r
+
+        \    expect(typeof e.qr.verifiedOnly).to.eql('boolean');\r
+
+        \  });\r
+
+        \r
+
+        \  test('Customer section has NO PII fields', function () {\r
+
+        \    const c = json.bundle.customer;\r
+
+        \    expect(c).to.not.have.property('email');\r
+
+        \    expect(c).to.not.have.property('name');\r
+
+        \    expect(c).to.not.have.property('deviceId');\r
+
+        \    expect(c).to.not.have.property('ip');\r
+
+        \    expect(c).to.not.have.property('userId');\r
+
+        \    expect(c.summary).to.not.have.property('email');\r
+
+        \    expect(c.notes).to.be.an('array');\r
+
+        \  });\r
+
+        \r
+
+        \  test('Customer geo uses zip3 only (3 digits)', function () {\r
+
+        \    const zips = json.bundle.customer.summary.geo.topZip3;\r
+
+        \    expect(zips).to.be.an('array');\r
+
+        \    zips.forEach(function(z) {\r
+
+        \      expect(z).to.match(/^\\d{3}$/);\r
+
+        \    });\r
+
+        \  });\r
+
+        \r
+
+        \  test('Cache-Control allows short caching on success', function () {\r
+
+        \    const cc = res.getHeader('Cache-Control');\r
+
+        \    expect(cc).to.include('max-age=');\r
+
+        \  });\r
+
+        \r
+
+        \  // Save bundle for downstream chaining\r
+
+        \  bru.setCollectionVar('lastBundle', JSON.stringify(json.bundle));\r
+
+        \  bru.setCollectionVar('lastRequestId', json.requestId);\r
+
+        }"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

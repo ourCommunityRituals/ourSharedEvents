@@ -6,7 +6,7 @@
  *
  * Companion to:
  *   - workers/oursharedevents/tests/form-error-friendly-copy.spec.ts (vitest API)
- *   - postman/collections/ose-api.json (Newman API)
+ *   - bruno/ose-api
  *
  * Tests share names byte-for-byte across runners where the scenario maps;
  * differ only by the API/FE qualifier where the layer differs.

@@ -25,7 +25,7 @@
  *   L1 UNIT/INTEGRATION       — tests/sponsor-signal-anonymity.spec.ts: POST with a
  *                               Cookie header present still persists a row with no
  *                               identity value (Worker + D1, miniflare).
- *   L2 CONTRACT               — Newman: endpoint 201 + response carries no identity.
+ *   L2 CONTRACT               — Bruno (bruno/ose-api): endpoint 201 + response carries no identity.
  *   E2E RUNTIME               — anonymous-id.invariant.spec.ts: real request carries
  *                               no Cookie; anchor rel has noreferrer.
  *

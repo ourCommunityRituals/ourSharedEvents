@@ -1,0 +1,30 @@
+info:
+  name: OSE-INV5 | T3 | cleanup | DELETE captured local-platinum id
+  type: http
+  seq: 7
+
+http:
+  method: DELETE
+  url: "{{baseUrl}}/api/v2/admin/sponsors/{{covId_localPlatinum}}"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: "const ct = res.getHeader('Content-Type') || '';\r
+
+        if (!ct.includes('application/json')) { return; }\r
+
+        test('Cleanup DELETE returned 200/204/404', function() { expect([200, 204, 404]).to.include(res.getStatus()); });"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

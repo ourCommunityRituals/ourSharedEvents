@@ -1,0 +1,29 @@
+info:
+  name: OSE-320 | API | GET /api/v2/uec/resolve?code=%20GREEN%20 (whitespace + uppercase) | 200 still resolves ENTER
+  type: http
+  seq: 3
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/uec/resolve?code=%20GREEN%20"
+  params:
+    - name: code
+      value: "%20GREEN%20"
+      type: query
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: "const json = res.getBody();\r
+
+        test('Status is 200', () => expect(res.getStatus()).to.equal(200));\r
+
+        test('code.id is ENTER (whitespace + case tolerated)', () => expect(json.code.id).to.eql('ENTER'));"
+
+settings:
+  encodeUrl: false
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

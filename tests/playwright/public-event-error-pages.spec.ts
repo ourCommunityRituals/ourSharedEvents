@@ -6,7 +6,7 @@
  *
  * Companion to:
  *   - workers/oursharedevents/tests/public-event-error-pages.spec.ts (vitest API)
- *   - postman/collections/ose-pages.json (Newman API — OSE-R-004 folder)
+ *   - bruno/ose-pages (OSE-R-004 folder)
  *
  * Test names share their shape byte-for-byte across runners where the
  * scenario maps; differ only by the API/FE qualifier where the layer

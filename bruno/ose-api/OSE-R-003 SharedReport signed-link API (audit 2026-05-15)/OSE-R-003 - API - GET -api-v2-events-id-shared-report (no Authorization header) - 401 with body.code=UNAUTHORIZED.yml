@@ -1,0 +1,50 @@
+info:
+  name: OSE-R-003 | API | GET /api/v2/events/:id/shared-report (no Authorization header) | 401 with body.code=UNAUTHORIZED
+  type: http
+  seq: 1
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/events/{{testEventId}}/shared-report"
+  headers:
+    - name: Accept
+      value: application/json
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: "// OSE-R-003 (2026-05-15): the /sharedReport page's signed-link mode reads\r
+
+        // body.code to choose friendly copy. This locks the wire contract for the\r
+
+        // no-auth path: 401 + code=UNAUTHORIZED. If the server stops emitting `code`\r
+
+        // the UI falls through to the HTTP-status map — degraded but not broken —\r
+
+        // and this test flags the regression.\r
+
+        test('Returns 401', function() { expect(res.getStatus()).to.equal(401); });\r
+
+        const json = res.getBody();\r
+
+        test('body.ok is false', function() { expect(json.ok).to.equal(false); });\r
+
+        test('body.code is UNAUTHORIZED (client-mappable)', function() {\r
+
+        \    expect(json.code).to.equal('UNAUTHORIZED');\r
+
+        });\r
+
+        test('WWW-Authenticate header advertises bearer realm', function() {\r
+
+        \    expect(res.getHeader('WWW-Authenticate') || '').to.include('Bearer');\r
+
+        });"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

@@ -1,0 +1,74 @@
+info:
+  name: OSE-R-001 | API | POST /api/v2/admin/events (unauthenticated) | blocked at edge OR 401 worker JSON (no HTML leak)
+  type: http
+  seq: 9
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/events"
+  headers:
+    - name: Accept
+      value: text/html
+    - name: Content-Type
+      value: application/json
+  body:
+    type: json
+    data: "{}"
+
+runtime:
+  scripts:
+    - type: after-response
+      code: "// Even with browser-style Accept header, API endpoints must NEVER return the admin\r
+
+        // dashboard or a writable admin surface. The HTML branch (worker) is for HTML *page*\r
+
+        // routes only.\r
+
+        //\r
+
+        // OSE-338 reality update: /api/v2/admin/* is also CF-Access-gated on staging/prod.\r
+
+        // POST requests get a 302 from CF Access to its login page, just like GET. Worker\r
+
+        // JSON-401 path only fires on non-CF-Access environments. The universal contract\r
+
+        // remains: unauthenticated request is blocked + body does not contain a successful\r
+
+        // admin response (no event id, no created status). Worker JSON shape asserted only\r
+
+        // when status === 401.\r
+
+        test('Unauthenticated admin POST is blocked (CF Access OR worker 401)', function() {\r
+
+        \    expect([200, 302, 401, 403]).to.include(res.getStatus());\r
+
+        });\r
+
+        test('Body does NOT contain a created-event success payload', function() {\r
+
+        \    const body = (typeof res.getBody()==='string'?res.getBody():JSON.stringify(res.getBody()));\r
+
+        \    expect(body).to.not.match(/\"ok\":\\s*true/);\r
+
+        \    expect(body).to.not.match(/\"id\":\\s*\"evt_/);\r
+
+        });\r
+
+        if (res.getStatus() === 401) {\r
+
+        \    test('Worker response is JSON, not HTML', function() {\r
+
+        \        expect(res.getHeader('Content-Type')).to.include('application/json');\r
+
+        \        expect((typeof res.getBody()==='string'?res.getBody():JSON.stringify(res.getBody()))).to.not.include('<!DOCTYPE html>');\r
+
+        \    });\r
+
+        }"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

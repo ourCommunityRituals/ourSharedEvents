@@ -1,0 +1,56 @@
+info:
+  name: "OSE-R-006 | API | GET /poster (any visitor) | print-color-adjust: exact applied to brand header and sponsor surfaces"
+  type: http
+  seq: 3
+
+http:
+  method: GET
+  url: "{{baseUrl}}/poster"
+  headers:
+    - name: Accept
+      value: text/html
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: "test('Returns 200', function() { expect(res.getStatus()).to.equal(200); });\r
+
+        const body = (typeof res.getBody()==='string'?res.getBody():JSON.stringify(res.getBody()));\r
+
+        const match = body.match(/@media\\s+print\\s*\\{([\\s\\S]*?)\\}\\s*<\\/style>/);\r
+
+        test('Print block extractable', function() { expect(match).to.not.be.null; });\r
+
+        const printBlock = match[1];\r
+
+        test('print-color-adjust: exact present', function() {\r
+
+        \    expect(printBlock).to.match(/print-color-adjust:\\s*exact/);\r
+
+        });\r
+
+        test('-webkit-print-color-adjust: exact present', function() {\r
+
+        \    expect(printBlock).to.match(/-webkit-print-color-adjust:\\s*exact/);\r
+
+        });\r
+
+        test('.poster-header is in the color-adjust rule set', function() {\r
+
+        \    expect(printBlock).to.match(/\\.poster-header[\\s\\S]*print-color-adjust:\\s*exact/);\r
+
+        });\r
+
+        test('.poster-sponsor is in the color-adjust rule set', function() {\r
+
+        \    expect(printBlock).to.match(/\\.poster-sponsor[\\s\\S]*print-color-adjust:\\s*exact/);\r
+
+        });"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

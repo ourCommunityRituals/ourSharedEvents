@@ -1,0 +1,30 @@
+opencollection: 1.0.0
+
+info:
+  name: OSE SharedReport — E2E Chain
+
+request:
+  variables:
+    - name: baseUrl
+      value: https://stg.oursharedevents.com
+    - name: testEventId
+      value: gate_test_event_f6
+
+docs:
+  content: |-
+    SharedReport deep dive: API contract validation, error handling, security, and performance E2E chain.
+
+    Covers:
+    - Valid bundle retrieval
+    - Missing eventId (400)
+    - Invalid eventId format (400)
+    - Non-existent event (404)
+    - Contract version header verification
+    - Request tracing (X-Request-Id)
+    - Cache header verification
+    - Rate limit awareness
+
+    Run with: newman run postman/collections/sharedreport-api.json -e postman/environments/mvp-event-toolkit-dev.json
+  type: text/markdown
+bundled: false
+extensions: {}

@@ -1,0 +1,87 @@
+info:
+  name: OSE-INV5 | T3 | seed | local-bronze sponsor
+  type: http
+  seq: 1
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/sponsors"
+  headers:
+    - name: Content-Type
+      value: application/json
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+  body:
+    type: json
+    data: '{"event_id":"test-event-001","name":"Covenant Local Bronze","tier":"bronze","lat":41.6903,"lon":-87.6768}'
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: "// Covenant cannot be proven if seed cannot land — fail loud, not silent.\r
+
+        // Classify the response so the next operator knows WHERE to fix, not just THAT it broke.\r
+
+        // See OSE-349 for the full diagnosis path the first time this fired.\r
+
+        const ct = res.getHeader('Content-Type') || '';\r
+
+        if (!ct.includes('application/json')) {\r
+
+        \    const code = res.getStatus();\r
+
+        \    let diag;\r
+
+        \    if (ct.includes('text/html')) {\r
+
+        \        diag = 'CF Access challenge HTML returned (cfAccessClientId/Secret request headers are wired in this collection; the most common cause is a STALE service token — rotated in Cloudflare without updating the CF_ACCESS_CLIENT_ID/CF_ACCESS_CLIENT_SECRET repo secrets, NOT missing wiring). See OSE-349 for the remediation runbook.';\r
+
+        \    } else {\r
+
+        \        diag = `Unexpected non-JSON response (Content-Type=${ct}, HTTP ${code}) — neither CF Access challenge nor worker JSON. Investigate response body manually.`;\r
+
+        \    }\r
+
+        \    test(`COVENANT TEST BLOCKED: seed POST did not reach the worker as JSON — ${diag}`, function() {\r
+
+        \        expect.fail(`Seed POST: HTTP ${code} / Content-Type=${ct}`);\r
+
+        \    });\r
+
+        \    return;\r
+
+        }\r
+
+        test('Seed POST status is 200 or 201', function() { expect([200, 201]).to.include(res.getStatus()); });\r
+
+        const json = res.getBody();\r
+
+        const sponsor = json.item || json.sponsor || json;\r
+
+        // OSE-891: the create endpoint GENERATES the id (sp_<uuid>) and GEO-DERIVES is_local\r
+
+        // from the sponsor's h3_res7 CORRIDOR cell vs the event's — body `id`/`is_local` are\r
+
+        // ignored. Capture the server id so the assert + cleanup steps reference this exact row.\r
+
+        test('Create returned a server-generated sp_ id', function() { expect(sponsor.id).to.be.a('string').and.to.match(/^sp_/); });\r
+
+        bru.setCollectionVar('covId_localBronze', sponsor.id);\r
+
+        // This sponsor's lat/lon sit in the SAME res7 cell as test-event-001 (geo-tagged by\r
+
+        // migration 0068) → is_local derives TRUE. Proves locality is geo-derived, not purchasable.\r
+
+        test('is_local is geo-derived TRUE (sponsor cell matches event corridor cell)', function() { expect(sponsor.is_local).to.eql(true); });\r
+
+        test('Seeded tier is bronze', function() { expect(sponsor.tier).to.eql('bronze'); });"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

@@ -1,0 +1,50 @@
+info:
+  name: OSE-R-006 | API | GET /poster (any visitor) | sponsor logos are NOT grayscaled in print rule
+  type: http
+  seq: 2
+
+http:
+  method: GET
+  url: "{{baseUrl}}/poster"
+  headers:
+    - name: Accept
+      value: text/html
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: "// OSE-R-006 (2026-05-15): pre-fix the print block applied\r
+
+        // filter: grayscale(1) to .poster-sponsor img. Sponsors paid for\r
+
+        // full color; this lock holds the contract.\r
+
+        test('Returns 200', function() { expect(res.getStatus()).to.equal(200); });\r
+
+        const body = (typeof res.getBody()==='string'?res.getBody():JSON.stringify(res.getBody()));\r
+
+        const match = body.match(/@media\\s+print\\s*\\{([\\s\\S]*?)\\}\\s*<\\/style>/);\r
+
+        test('Print block extractable', function() { expect(match).to.not.be.null; });\r
+
+        const printBlock = match[1];\r
+
+        test('No filter: grayscale on sponsor img inside print block', function() {\r
+
+        \    expect(printBlock).to.not.match(/\\.poster-sponsor\\s+img\\s*\\{[^}]*filter:\\s*grayscale/);\r
+
+        });\r
+
+        test('No bare grayscale filter anywhere in print block', function() {\r
+
+        \    expect(printBlock).to.not.match(/filter:\\s*grayscale/);\r
+
+        });"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

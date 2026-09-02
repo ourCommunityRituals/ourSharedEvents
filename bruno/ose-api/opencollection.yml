@@ -1,0 +1,93 @@
+opencollection: 1.0.0
+
+info:
+  name: OSE API — Contract
+
+request:
+  scripts:
+    - type: before-request
+      code: "// Collection-level pre-request: set timing for latency measurement\r
+
+        bru.setVar('requestStartTime', Date.now());\r
+
+        \r
+
+        // If ocrInternalSecret is set, prefer X-OCR-Internal header over Bearer.\r
+
+        // A request that declares X-Test-No-Auth opts OUT of this collection-wide\r
+
+        // injection so negative/unauthenticated tests are genuinely credential-less\r
+
+        // (OSE-1191: the blanket inject was silently authenticating the no-auth test).\r
+
+        var ocrSecret = bru.getEnvVar('ocrInternalSecret');\r
+
+        if (ocrSecret && !req.getHeader('X-Test-No-Auth')) {\r
+
+        \    req.setHeader('X-OCR-Internal', ocrSecret);\r
+
+        }"
+    - type: after-response
+      code: "// Collection-level test: measure latency on every request\r
+
+        const elapsed = Date.now() - bru.getVar('requestStartTime');\r
+
+        test(`Response time < 2000ms (actual: ${elapsed}ms)`, function() {\r
+
+        \    expect(elapsed).to.be.below(2000);\r
+
+        });\r
+
+        \r
+
+        // Verify JSON content-type on API responses\r
+
+        // Skip: CORS preflight (204 no body), CF Access blocks (HTML instead of JSON)\r
+
+        const isApiPath = req.getPath().startsWith('/api') || req.getPath() === '/health';\r
+
+        const isCorsOptions = req.getMethod() === 'OPTIONS';\r
+
+        const ct = (res.getHeader('Content-Type') || '');\r
+
+        const isCfAccessBlocked = ct.includes('text/html') && !ct.includes('application/json');\r
+
+        if (isApiPath && !isCorsOptions && !isCfAccessBlocked) {\r
+
+        \    test('Content-Type is application/json', function() {\r
+
+        \        expect(ct).to.include('application/json');\r
+
+        \    });\r
+
+        }\r
+
+        \r
+
+        // Invariant #6 — Inert Monetization Hooks: every Worker response must carry\r
+
+        // X-Monetization-Inert: true. The header is set in index.ts fetch() wrapper,\r
+
+        // so it appears on every route — success, error, and 404. Skipped only when\r
+
+        // Cloudflare Access intercepts the request (worker never ran).\r
+
+        if (!isCorsOptions && !isCfAccessBlocked) {\r
+
+        \    test('Invariant #6: X-Monetization-Inert: true on every Worker response', function() {\r
+
+        \        expect(res.getHeader('X-Monetization-Inert')).to.eql('true');\r
+
+        \    });\r
+
+        }"
+
+docs:
+  content: |-
+    Complete API collection for ourSharedEvents Worker.
+    Separated from frontend pages. Covers: Health, Public Events, Admin Events, Forms (4 types), Feature Flags (8 endpoints).
+
+    Requires: OSE - Staging environment.
+  type: text/markdown
+bundled: false
+extensions: {}

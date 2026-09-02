@@ -1,0 +1,44 @@
+info:
+  name: GET /admin (no auth â€” blocked by CF Access)
+  type: http
+  seq: 5
+
+http:
+  method: GET
+  url: "{{baseUrl}}/admin"
+
+runtime:
+  scripts:
+    - type: after-response
+      code: "// CF Access intercepts /admin without auth and redirects to login.\r
+
+        // Newman follows the redirect, landing on the CF Access login page (200 HTML).\r
+
+        // The key contract: unauthenticated users never see the admin dashboard.\r
+
+        test('Unauthenticated admin request is blocked', function() {\r
+
+        \    const status = res.getStatus();\r
+
+        \    expect([200, 302, 401, 403]).to.include(status);\r
+
+        });\r
+
+        \r
+
+        test('Does not serve admin dashboard HTML', function() {\r
+
+        \    const body = (typeof res.getBody()==='string'?res.getBody():JSON.stringify(res.getBody()));\r
+
+        \    expect(body).to.not.include('data-testid=\"admin-header\"');\r
+
+        \    expect(body).to.not.include('data-testid=\"admin-main\"');\r
+
+        });"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

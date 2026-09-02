@@ -1,0 +1,55 @@
+info:
+  name: POST Register — oversized body
+  type: http
+  seq: 6
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/events/{{testEventId}}/forms/register"
+  headers:
+    - name: Content-Type
+      value: application/json
+  body:
+    type: json
+    data: "{{oversizedBody}}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: before-request
+      code: "// Generate a body larger than 16KB\r
+
+        const bigString = 'x'.repeat(17000);\r
+
+        bru.setEnvVar('oversizedBody', JSON.stringify({ name: bigString }));"
+    - type: after-response
+      code: "const ct = (res.getHeader('Content-Type') || ''); if (!ct.includes('application/json')) { test('CF Access blocked — admin route protected', function() { expect([200, 302, 403]).to.include(res.getStatus()); }); return; } const json = res.getBody();\r
+
+        \r
+
+        // OSE-204 (2026-05-14): oversized payloads return 413 PAYLOAD_TOO_LARGE,\r
+
+        // not 400 INVALID_BODY. The form-validation container distinguishes the\r
+
+        // two so clients can give users the right error class.\r
+
+        test('Returns 413 (PAYLOAD_TOO_LARGE)', function() {\r
+
+        \    expect(res.getStatus()).to.equal(413);\r
+
+        });\r
+
+        \r
+
+        test('PAYLOAD_TOO_LARGE code', function() {\r
+
+        \    expect(json.code).to.eql('PAYLOAD_TOO_LARGE');\r
+
+        });"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

@@ -1,0 +1,51 @@
+info:
+  name: OSE-320 | API | GET /api/v2/uec/resolve?code=green (canonical label) | 200 with code metadata + QR
+  type: http
+  seq: 1
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/uec/resolve?code=green"
+  params:
+    - name: code
+      value: green
+      type: query
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: "const json = res.getBody();\r
+
+        test('Status is 200', () => expect(res.getStatus()).to.equal(200));\r
+
+        test('ok is true', () => expect(json.ok).to.be.true);\r
+
+        test('code.id is ENTER (matched by green label)', () => expect(json.code.id).to.eql('ENTER'));\r
+
+        test('code.scan_hex is canonical', () => expect(json.code.scan_hex).to.eql('#1A6B2F'));\r
+
+        test('code.display_hex is canonical', () => expect(json.code.display_hex).to.eql('#2D6A4F'));\r
+
+        test('code.wcag_grade is AA', () => expect(json.code.wcag_grade).to.eql('AA'));\r
+
+        test('qr.data_uri is PNG data URI', () => expect(json.qr.data_uri).to.match(/^data:image\\/png;base64,/));\r
+
+        test('qr.encoded_url uses request origin', () => expect(json.qr.encoded_url).to.match(/\\/enter$/));\r
+
+        test('uec_version is 1.1', () => expect(json.uec_version).to.eql('1.1'));\r
+
+        test('Cache-Control header set (edge-cacheable)', () => {\r
+
+        \    const cc = res.getHeader('Cache-Control');\r
+
+        \    expect(cc).to.match(/max-age=\\d+/);\r
+
+        });"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false
