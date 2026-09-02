@@ -1,0 +1,65 @@
+info:
+  name: 2. SharedReport — Missing eventId (400)
+  type: http
+  seq: 2
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/sharedreport"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: "test('Returns 400 for missing eventId', function () {\r
+
+        \  expect(res.getStatus()).to.equal(400);\r
+
+        });\r
+
+        \r
+
+        test('Error code is INVALID_EVENT_ID', function () {\r
+
+        \  const json = res.getBody();\r
+
+        \  expect(json.ok).to.eql(false);\r
+
+        \  expect(json.code).to.eql('INVALID_EVENT_ID');\r
+
+        });\r
+
+        \r
+
+        test('Error response includes requestId', function () {\r
+
+        \  const json = res.getBody();\r
+
+        \  expect(json.requestId).to.be.a('string');\r
+
+        \  expect(json.requestId.length).to.be.greaterThan(0);\r
+
+        });\r
+
+        \r
+
+        test('X-Request-Id header present', function () {\r
+
+        \  expect(res.getHeaders()).to.have.property('X-Request-Id'.toLowerCase());\r
+
+        });\r
+
+        \r
+
+        test('Cache-Control is no-cache for errors', function () {\r
+
+        \  expect(res.getHeader('Cache-Control')).to.include('no-cache');\r
+
+        });"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

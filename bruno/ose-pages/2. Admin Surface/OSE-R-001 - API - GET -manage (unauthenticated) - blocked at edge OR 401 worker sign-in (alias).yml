@@ -1,0 +1,51 @@
+info:
+  name: OSE-R-001 | API | GET /manage (unauthenticated) | blocked at edge OR 401 worker sign-in (alias)
+  type: http
+  seq: 8
+
+http:
+  method: GET
+  url: "{{baseUrl}}/manage"
+  headers:
+    - name: Accept
+      value: text/html
+
+runtime:
+  scripts:
+    - type: after-response
+      code: "// OSE-338 reality: /manage is also CF-Access-gated on staging/prod. Worker 401 only\r
+
+        // fires on non-CF-Access environments. Unified contract: request is blocked + no\r
+
+        // admin dashboard leak. Worker sign-in markup asserted only when status === 401.\r
+
+        test('Unauthenticated /manage request is blocked', function() {\r
+
+        \    expect([200, 302, 401, 403]).to.include(res.getStatus());\r
+
+        });\r
+
+        test('HTML response', function() { expect(res.getHeader('Content-Type')).to.include('text/html'); });\r
+
+        test('Does NOT serve admin dashboard HTML', function() {\r
+
+        \    const body = JSON.stringify(res.getBody());\r
+
+        \    expect(body).to.not.include('data-testid=\"admin-header\"');\r
+
+        \    expect(body).to.not.include('data-testid=\"admin-main\"');\r
+
+        });\r
+
+        if (res.getStatus() === 401) {\r
+
+        \    test('Worker sign-in page rendered', function() { expect(JSON.stringify(res.getBody())).to.include('Admin sign-in required'); });\r
+
+        }"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

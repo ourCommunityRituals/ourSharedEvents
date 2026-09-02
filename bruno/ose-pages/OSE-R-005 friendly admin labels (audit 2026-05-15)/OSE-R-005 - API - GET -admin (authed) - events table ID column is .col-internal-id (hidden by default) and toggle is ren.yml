@@ -1,0 +1,74 @@
+info:
+  name: OSE-R-005 | API | GET /admin (authed) | events table ID column is .col-internal-id (hidden by default) and toggle is rendered
+  type: http
+  seq: 2
+
+http:
+  method: GET
+  url: "{{baseUrl}}/admin"
+  headers:
+    - name: Accept
+      value: text/html
+    - name: Authorization
+      value: Bearer {{adminBearer}}
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: "// OSE-338 reality: same CF-Access shadowing as OSE-R-005#1. Worker assertions fire only\r
+
+        // when status === 200 + dashboard markup is present. Full vitest catch lives in\r
+
+        // admin-friendly-labels.spec.ts; this is contract smoke only.\r
+
+        test('Reached admin dashboard OR blocked at edge', function() {\r
+
+        \    expect([200, 302, 401, 403]).to.include(res.getStatus());\r
+
+        });\r
+
+        const body = JSON.stringify(res.getBody());\r
+
+        if (res.getStatus() === 200 && body.includes('data-testid=\"admin-main\"')) {\r
+
+        \    test('ID column header carries .col-internal-id class', function() {\r
+
+        \        expect(body).to.include('<th class=\\\"col-internal-id\\\">ID</th>');\r
+
+        \    });\r
+
+        \    test('ID cell template carries .col-internal-id class', function() {\r
+
+        \        expect(body).to.include('<td class=\\\"col-internal-id\\\" data-testid=\\\"event-id\\\">');\r
+
+        \    });\r
+
+        \    test('Show internal IDs toggle is rendered', function() {\r
+
+        \        expect(body).to.include('data-testid=\\\"show-internal-ids-toggle\\\"');\r
+
+        \    });\r
+
+        \    test('CSS hides .col-internal-id by default', function() {\r
+
+        \        expect(body).to.include('table.events-table .col-internal-id { display: none; }');\r
+
+        \    });\r
+
+        \    test('Events table header column reads \\\"Event type\\\" not \\\"Phase\\\"', function() {\r
+
+        \        expect(body).to.include('<th>Event type</th>');\r
+
+        \        expect(body).to.not.include('<th>Phase</th>');\r
+
+        \    });\r
+
+        }"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

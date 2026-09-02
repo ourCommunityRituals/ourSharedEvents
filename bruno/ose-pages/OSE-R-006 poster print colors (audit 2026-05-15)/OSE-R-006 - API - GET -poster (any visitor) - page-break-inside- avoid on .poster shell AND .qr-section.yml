@@ -1,0 +1,50 @@
+info:
+  name: "OSE-R-006 | API | GET /poster (any visitor) | page-break-inside: avoid on .poster shell AND .qr-section"
+  type: http
+  seq: 4
+
+http:
+  method: GET
+  url: "{{baseUrl}}/poster"
+  headers:
+    - name: Accept
+      value: text/html
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: "test('Returns 200', function() { expect(res.getStatus()).to.equal(200); });\r
+
+        const body = JSON.stringify(res.getBody());\r
+
+        const match = body.match(/@media\\s+print\\s*\\{([\\s\\S]*?)\\}\\s*<\\/style>/);\r
+
+        test('Print block extractable', function() { expect(match).to.not.be.null; });\r
+
+        const printBlock = match[1];\r
+
+        test('.poster shell has page-break-inside: avoid', function() {\r
+
+        \    expect(printBlock).to.match(/\\.poster\\s*\\{[^}]*page-break-inside:\\s*avoid/);\r
+
+        });\r
+
+        test('.qr-section has page-break-inside: avoid', function() {\r
+
+        \    expect(printBlock).to.match(/\\.qr-section\\s*\\{[^}]*page-break-inside:\\s*avoid/);\r
+
+        });\r
+
+        test('.poster-sponsors retains page-break-inside: avoid', function() {\r
+
+        \    expect(printBlock).to.match(/\\.poster-sponsors\\s*\\{[^}]*page-break-inside:\\s*avoid/);\r
+
+        });"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

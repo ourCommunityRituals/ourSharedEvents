@@ -1,0 +1,31 @@
+info:
+  name: GET /manage (alias)
+  type: http
+  seq: 2
+
+http:
+  method: GET
+  url: "{{baseUrl}}/manage"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: "test('Returns 200 or 401', function() {\r
+
+        \    expect(res.getStatus()).to.be.oneOf([200, 401]);\r
+
+        });\r
+
+        if (res.getStatus() === 200) {\r
+
+        \    test('Is HTML', function() { expect(res.getHeader('Content-Type')).to.include('text/html'); });\r
+
+        }"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

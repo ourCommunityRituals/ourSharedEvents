@@ -1,0 +1,48 @@
+info:
+  name: GET /api/v2/admin/events (no auth — blocked by CF Access)
+  type: http
+  seq: 2
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/admin/events"
+
+runtime:
+  scripts:
+    - type: after-response
+      code: "// CF Access intercepts unauthenticated admin requests before they reach the Worker.\r
+
+        // The response is either 302 (redirect to login) or 200 (login page HTML after redirect).\r
+
+        // The key contract: unauthenticated requests do NOT receive JSON event data.\r
+
+        test('Unauthenticated admin request is blocked', function() {\r
+
+        \    const status = res.getStatus();\r
+
+        \    expect([200, 302, 401, 403]).to.include(status);\r
+
+        });\r
+
+        \r
+
+        test('Does not return JSON event data', function() {\r
+
+        \    const ct = res.getHeader('Content-Type') || '';\r
+
+        \    if (ct.includes('application/json')) {\r
+
+        \        const json = res.getBody();\r
+
+        \        expect(json.ok).to.not.eql(true);\r
+
+        \    }\r
+
+        });"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

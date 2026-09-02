@@ -1,0 +1,46 @@
+info:
+  name: POST Register — invalid event ID (special chars)
+  type: http
+  seq: 5
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/events/ev%3Cscript%3E/forms/register"
+  headers:
+    - name: Content-Type
+      value: application/json
+  body:
+    type: json
+    data: |-
+      {
+        "name": "Bad ID Test"
+      }
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: "const ct = (res.getHeader('Content-Type') || ''); if (!ct.includes('application/json')) { test('CF Access blocked — admin route protected', function() { expect([200, 302, 403]).to.include(res.getStatus()); }); return; } const json = res.getBody();\r
+
+        \r
+
+        test('Returns 400', function() {\r
+
+        \    expect(res.getStatus()).to.equal(400);\r
+
+        });\r
+
+        \r
+
+        test('INVALID_EVENT_ID code', function() {\r
+
+        \    expect(json.code).to.eql('INVALID_EVENT_ID');\r
+
+        });"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

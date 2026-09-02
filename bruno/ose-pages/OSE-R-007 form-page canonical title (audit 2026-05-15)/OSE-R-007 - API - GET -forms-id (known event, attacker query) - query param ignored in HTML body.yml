@@ -1,0 +1,51 @@
+info:
+  name: OSE-R-007 | API | GET /forms/:id (known event, attacker query) | query param ignored in HTML body
+  type: http
+  seq: 1
+
+http:
+  method: GET
+  url: "{{baseUrl}}/forms/{{testEventId}}?event=Cheap%20Rolex%20Deals%21&type=register"
+  headers:
+    - name: Accept
+      value: text/html
+  params:
+    - name: event
+      value: Cheap%20Rolex%20Deals%21
+      type: query
+    - name: type
+      value: register
+      type: query
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: "test('Returns 200', function() { expect(res.getStatus()).to.equal(200); });\r
+
+        const body = JSON.stringify(res.getBody());\r
+
+        test('Phishing payload absent from rendered HTML', function() {\r
+
+        \    expect(body).to.not.include('Cheap Rolex Deals');\r
+
+        \    expect(body).to.not.include('Cheap%20Rolex');\r
+
+        });\r
+
+        test('Document title does NOT contain the phishing payload', function() {\r
+
+        \    const m = body.match(/<title>([^<]*)<\\/title>/);\r
+
+        \    expect(m).to.not.be.null;\r
+
+        \    expect(m[1]).to.not.match(/Cheap Rolex|PWNED/i);\r
+
+        });"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

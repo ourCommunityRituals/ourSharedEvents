@@ -1,0 +1,45 @@
+info:
+  name: OSE-R-002 | API | POST /api/v2/events/:id/forms/register (invalid JSON body) | 400 with body.code=INVALID_BODY
+  type: http
+  seq: 7
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/events/{{testEventId}}/forms/register"
+  headers:
+    - name: Content-Type
+      value: application/json
+  body:
+    type: json
+    data: not-valid-json
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: "// OSE-R-002 (2026-05-15): the client-side friendly-copy map in form-pages.ts\r
+
+        // keys off body.code. This locks the server contract: invalid JSON returns 400\r
+
+        // with code=INVALID_BODY. If this contract breaks, the friendly-copy map cannot\r
+
+        // translate the error and bar attendees see raw dev strings.\r
+
+        test('Returns 400', function() { expect(res.getStatus()).to.equal(400); });\r
+
+        const json = res.getBody();\r
+
+        test('body.ok is false', function() { expect(json.ok).to.equal(false); });\r
+
+        test('body.code is INVALID_BODY (client-mappable)', function() {\r
+
+        \    expect(json.code).to.equal('INVALID_BODY');\r
+
+        });"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

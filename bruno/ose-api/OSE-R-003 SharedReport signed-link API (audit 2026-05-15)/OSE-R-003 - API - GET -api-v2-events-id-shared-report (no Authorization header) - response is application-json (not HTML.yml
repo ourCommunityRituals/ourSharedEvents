@@ -1,0 +1,38 @@
+info:
+  name: OSE-R-003 | API | GET /api/v2/events/:id/shared-report (no Authorization header) | response is application/json (not HTML)
+  type: http
+  seq: 3
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/events/{{testEventId}}/shared-report"
+  headers:
+    - name: Accept
+      value: application/json
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: "// OSE-R-003: the signed-link UI parses the response with .json(). If the API\r
+
+        // ever returns HTML on this code path (proxy 502 unwrap, gateway page, etc.)\r
+
+        // the UI shows the NON_JSON_RESPONSE friendly copy. The contract under test\r
+
+        // here is that the server itself never serves HTML for this endpoint.\r
+
+        test('Returns 401', function() { expect(res.getStatus()).to.equal(401); });\r
+
+        test('Content-Type is JSON', function() {\r
+
+        \    expect(res.getHeader('Content-Type') || '').to.include('application/json');\r
+
+        });"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

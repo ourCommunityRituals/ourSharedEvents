@@ -1,0 +1,49 @@
+info:
+  name: GET / (landing)
+  type: http
+  seq: 1
+
+http:
+  method: GET
+  url: "{{baseUrl}}/"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: "test('Returns 200', function() {\r
+
+        \    expect(res.getStatus()).to.equal(200);\r
+
+        });\r
+
+        \r
+
+        test('Content-Type is HTML', function() {\r
+
+        \    expect(res.getHeader('Content-Type')).to.include('text/html');\r
+
+        });\r
+
+        \r
+
+        test('Has <!DOCTYPE html>', function() {\r
+
+        \    expect(JSON.stringify(res.getBody())).to.include('<!DOCTYPE html>');\r
+
+        });\r
+
+        \r
+
+        test('Has lang attribute', function() {\r
+
+        \    expect(JSON.stringify(res.getBody())).to.match(/lang=[\"']en/);\r
+
+        });"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

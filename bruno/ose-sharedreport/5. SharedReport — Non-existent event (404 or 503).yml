@@ -1,0 +1,59 @@
+info:
+  name: 5. SharedReport — Non-existent event (404 or 503)
+  type: http
+  seq: 5
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/sharedreport?eventId=nonexistent_event_xyz"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: "test('Returns 404 or 503 for non-existent event', function () {\r
+
+        \  expect([404, 503]).to.include(res.getStatus());\r
+
+        });\r
+
+        \r
+
+        test('Error response has ok=false', function () {\r
+
+        \  const json = res.getBody();\r
+
+        \  expect(json.ok).to.eql(false);\r
+
+        });\r
+
+        \r
+
+        test('Error response includes requestId', function () {\r
+
+        \  const json = res.getBody();\r
+
+        \  expect(json.requestId).to.be.a('string');\r
+
+        });\r
+
+        \r
+
+        test('404 error message does not echo eventId', function () {\r
+
+        \  if (res.getStatus() === 404) {\r
+
+        \    const json = res.getBody();\r
+
+        \    expect(json.message).to.not.include('nonexistent_event_xyz');\r
+
+        \  }\r
+
+        });"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

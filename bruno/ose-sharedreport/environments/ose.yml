@@ -1,0 +1,24 @@
+name: OSE(oursharedevents.com)
+variables:
+  - name: baseUrl
+    value: https://oursharedevents.com
+  - name: brandId
+    value: root
+  - secret: true
+    name: adminKey
+  - name: testEventId
+    value: test-event-001
+  - name: testEventSlug
+    value: test-event
+  - name: testFlagKey
+    value: forms.register
+  - name: testRegistrationId
+    value: ""
+  - name: testSurveyId
+    value: ""
+  - name: dbStatus
+    value: ""
+  - name: workerEnv
+    value: ""
+  - name: workerVersion
+    value: ""

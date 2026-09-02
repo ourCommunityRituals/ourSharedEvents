@@ -1,0 +1,54 @@
+info:
+  name: OSE-R-004 | API | GET /events/:id (malformed id) | 404 worker OR 403 WAF block
+  type: http
+  seq: 2
+
+http:
+  method: GET
+  url: "{{baseUrl}}/events/not%20a%20valid%20id!!"
+  headers:
+    - name: Accept
+      value: text/html
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: "// OSE-R-004: same branded shell for the input-validation branch.\r
+
+        // OSE-348: same WAF-shadowing applies to malformed IDs (the URL-encoded\r
+
+        // spaces + `!!` will almost certainly trip a WAF rule). Branded-shell\r
+
+        // assertions fire only when worker is reached (status === 404).\r
+
+        test('Malformed id blocked (404 worker OR 403 WAF)', function() {\r
+
+        \    expect([404, 403]).to.include(res.getStatus());\r
+
+        });\r
+
+        const body = JSON.stringify(res.getBody());\r
+
+        if (res.getStatus() === 404) {\r
+
+        \    test('Brand header present', function() {\r
+
+        \        expect(body).to.include('data-testid=\"error-header\"');\r
+
+        \    });\r
+
+        \    test('CTA back to /events present', function() {\r
+
+        \        expect(body).to.include('href=\"/events\"');\r
+
+        \    });\r
+
+        }"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

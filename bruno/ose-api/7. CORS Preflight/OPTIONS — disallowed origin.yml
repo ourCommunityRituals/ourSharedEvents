@@ -1,0 +1,40 @@
+info:
+  name: OPTIONS — disallowed origin
+  type: http
+  seq: 2
+
+http:
+  method: OPTIONS
+  url: "{{baseUrl}}/api/v2/events"
+  headers:
+    - name: Origin
+      value: https://evil.com
+    - name: Access-Control-Request-Method
+      value: GET
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: "test('Returns 204', function() {\r
+
+        \    expect(res.getStatus()).to.equal(204);\r
+
+        });\r
+
+        \r
+
+        test('No Access-Control-Allow-Origin for bad origin', function() {\r
+
+        \    const origin = res.getHeader('Access-Control-Allow-Origin');\r
+
+        \    expect(origin).to.be.oneOf([null, undefined]);\r
+
+        });"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

@@ -41,8 +41,8 @@
 # nail the API contract, then perpetuate into the FE.
 #
 #   T2: Contract (Newman) — API + Pages spec compliance [runs first]
-#       - Newman API collection        → newman run postman/collections/ose-api.json
-#       - Newman Pages collection      → newman run postman/collections/ose-pages.json
+#       - Bruno API collection         → bru run bruno/ose-api (OSE-1191, ex-Newman)
+#       - Bruno Pages collection       → bru run bruno/ose-pages (OSE-1191, ex-Newman)
 #
 #   T3: E2E Smoke (Playwright) — XSS, auth boundaries, fail-fast gates, forms
 #       [runs only if T2 Contract passed]
@@ -101,6 +101,7 @@ on:
       - 'scripts/**'
       - 'schemas/**'
       - 'postman/**'
+      - 'bruno/**'
       - 'packages/**'
       - 'playwright.*.config.*'
       - '.github/workflows/**'
@@ -1107,7 +1108,7 @@ jobs:
   # TIER 3: CONTRACT — Newman API + Pages (post-deploy + nightly)
   # ============================================================================
   contract-staging:
-    name: 'T2 Contract → Staging (Newman)'
+    name: 'T2 Contract → Staging (Bruno)'
     # OSE-954: runs on ephemeral ubuntu-latest. Newman + wrangler-d1 seed only;
     # no deploy. Staging auth is the header-based CF Access service token
     # (CF_ACCESS_CLIENT_ID/SECRET + Bearer ADMIN_KEY) and the D1 seed uses
@@ -1198,8 +1199,13 @@ jobs:
           npx wrangler d1 execute DB --env staging --remote \
             --file ../../postman/fixtures/covenant-sponsors-reset.sql
 
-      - name: Newman API smoke
-        id: newman-api
+      # OSE-1191: migrated Postman/Newman → Bruno (offline/git-native `.bru`,
+      # collections live in-repo under bruno/). Bruno CLI `bru run` must execute
+      # from the collection root, so each step sets working-directory. Secrets are
+      # still injected via --env-var (same keys as the Postman env), never inlined.
+      - name: Bruno API contract
+        id: bru-api
+        working-directory: bruno/ose-api
         env:
           ADMIN_KEY: ${{ secrets.ADMIN_KEY }}
           X_OCR_INTERNAL: ${{ secrets.X_OCR_INTERNAL }}
@@ -1213,26 +1219,21 @@ jobs:
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
         run: |
-          npx newman run postman/collections/ose-api.json \
-            -e postman/environments/ose-staging.json \
+          npx bru run . -r --env ose-staging \
             --env-var "adminKey=$ADMIN_KEY" \
             --env-var "ocrInternalSecret=$X_OCR_INTERNAL" \
             --env-var "cfAccessClientId=$CF_ACCESS_CLIENT_ID" \
             --env-var "cfAccessClientSecret=$CF_ACCESS_CLIENT_SECRET" \
-            --bail \
-            --reporters cli,junit \
-            --reporter-junit-export .test-results/newman-api-junit.xml
+            --reporter-junit "$GITHUB_WORKSPACE/.test-results/bru-api-junit.xml"
         timeout-minutes: 5
         continue-on-error: true
 
-      - name: Newman Pages smoke
-        id: newman-pages
+      - name: Bruno Pages contract
+        id: bru-pages
+        working-directory: bruno/ose-pages
         run: |
-          npx newman run postman/collections/ose-pages.json \
-            -e postman/environments/ose-staging.json \
-            --bail \
-            --reporters cli,junit \
-            --reporter-junit-export .test-results/newman-pages-junit.xml
+          npx bru run . -r --env ose-staging \
+            --reporter-junit "$GITHUB_WORKSPACE/.test-results/bru-pages-junit.xml"
         timeout-minutes: 5
         continue-on-error: true
 
@@ -1247,31 +1248,31 @@ jobs:
       # Surface per-assertion Newman results as a GitHub Check (visible in the
       # PR/Checks tab), so a contract failure shows the failing request + message
       # by name instead of being buried in the CLI log.
-      - name: Report results (Newman contract)
+      - name: Report results (Bruno contract)
         if: always()
         uses: dorny/test-reporter@v3
         continue-on-error: true
         with:
-          name: 'T2 Contract Results (Newman)'
-          path: '.test-results/newman-*-junit.xml'
+          name: 'T2 Contract Results (Bruno)'
+          path: '.test-results/bru-*-junit.xml'
           reporter: java-junit
           fail-on-error: false
 
       - name: Summary
         if: always()
         run: |
-          echo "## T2 Contract → Staging (Newman)" >> $GITHUB_STEP_SUMMARY
+          echo "## T2 Contract → Staging (Bruno)" >> $GITHUB_STEP_SUMMARY
           echo "Stage 1 of the fail-fast chain — a red here skips T3 E2E smoke + T4 functional." >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Collection | Result |" >> $GITHUB_STEP_SUMMARY
           echo "|------------|--------|" >> $GITHUB_STEP_SUMMARY
-          echo "| API (ose-api.json) | \`${{ steps.newman-api.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| Pages (ose-pages.json) | \`${{ steps.newman-pages.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| API (bruno/ose-api) | \`${{ steps.bru-api.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Pages (bruno/ose-pages) | \`${{ steps.bru-pages.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
 
       - name: Fail check
-        if: steps.newman-api.outcome == 'failure' || steps.newman-pages.outcome == 'failure'
+        if: steps.bru-api.outcome == 'failure' || steps.bru-pages.outcome == 'failure'
         run: |
-          echo "::error::Contract failed — API: ${{ steps.newman-api.outcome }}, Pages: ${{ steps.newman-pages.outcome }}"
+          echo "::error::Contract failed — API: ${{ steps.bru-api.outcome }}, Pages: ${{ steps.bru-pages.outcome }}"
           exit 1
 
   # ============================================================================

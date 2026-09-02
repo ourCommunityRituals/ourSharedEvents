@@ -1,0 +1,56 @@
+info:
+  name: OSE-R-004 | API | GET /events/:id (any non-existent branch) | no dev jargon leaks regardless of response source
+  type: http
+  seq: 3
+
+http:
+  method: GET
+  url: "{{baseUrl}}/events/evt_does_not_exist_r004"
+  headers:
+    - name: Accept
+      value: text/html
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: "// OSE-R-004: defensive — error pages must not leak D1 errors, stack\r
+
+        // traces, or 'undefined' to customers.\r
+
+        //\r
+
+        // OSE-348: this no-leak assertion is the most important one because it's\r
+
+        // the UNIVERSAL contract — true regardless of whether the response comes\r
+
+        // from worker (404) or WAF (403). A WAF block page would never contain\r
+
+        // D1 error messages (different infrastructure entirely), but checking it\r
+
+        // here ensures the contract holds end-to-end.\r
+
+        test('Response is blocked (404 worker OR 403 WAF)', function() {\r
+
+        \    expect([404, 403]).to.include(res.getStatus());\r
+
+        });\r
+
+        const body = JSON.stringify(res.getBody());\r
+
+        ['no such table', 'no such column', 'D1_ERROR', 'stack:', 'at async'].forEach(function(phrase) {\r
+
+        \    test('No dev jargon: ' + phrase, function() {\r
+
+        \        expect(body).to.not.include(phrase);\r
+
+        \    });\r
+
+        });"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

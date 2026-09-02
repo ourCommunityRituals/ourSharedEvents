@@ -1,0 +1,62 @@
+info:
+  name: OPTIONS /api/v2/events
+  type: http
+  seq: 1
+
+http:
+  method: OPTIONS
+  url: "{{baseUrl}}/api/v2/events"
+  headers:
+    - name: Origin
+      value: https://stg.oursharedevents.com
+    - name: Access-Control-Request-Method
+      value: GET
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: "test('Returns 204', function() {\r
+
+        \    expect(res.getStatus()).to.equal(204);\r
+
+        });\r
+
+        \r
+
+        test('Has Access-Control-Allow-Methods', function() {\r
+
+        \    const methods = res.getHeader('Access-Control-Allow-Methods');\r
+
+        \    expect(methods).to.include('GET');\r
+
+        \    expect(methods).to.include('POST');\r
+
+        });\r
+
+        \r
+
+        test('Has Access-Control-Allow-Headers', function() {\r
+
+        \    const headers = res.getHeader('Access-Control-Allow-Headers');\r
+
+        \    expect(headers).to.include('Authorization');\r
+
+        \    expect(headers).to.include('Content-Type');\r
+
+        });\r
+
+        \r
+
+        test('Max-Age is set', function() {\r
+
+        \    expect(res.getHeader('Access-Control-Max-Age')).to.eql('86400');\r
+
+        });"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

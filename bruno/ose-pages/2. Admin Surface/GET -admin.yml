@@ -1,0 +1,45 @@
+info:
+  name: GET /admin
+  type: http
+  seq: 1
+
+http:
+  method: GET
+  url: "{{baseUrl}}/admin"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: "if (res.getStatus() === 200) {\r
+
+        \    test('Returns HTML', function() {\r
+
+        \        expect(res.getHeader('Content-Type')).to.include('text/html');\r
+
+        \    });\r
+
+        \r
+
+        \    test('Has admin content', function() {\r
+
+        \        expect(JSON.stringify(res.getBody()).toLowerCase()).to.include('admin');\r
+
+        \    });\r
+
+        } else {\r
+
+        \    test('Returns 401 without valid token', function() {\r
+
+        \        expect(res.getStatus()).to.equal(401);\r
+
+        \    });\r
+
+        }"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

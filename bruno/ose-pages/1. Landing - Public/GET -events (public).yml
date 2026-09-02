@@ -1,0 +1,33 @@
+info:
+  name: GET /events (public)
+  type: http
+  seq: 5
+
+http:
+  method: GET
+  url: "{{baseUrl}}/events"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: "test('Returns 200 or 403 (feature flag)', function() { expect([200, 403]).to.include(res.getStatus()); });\r
+
+        if (res.getStatus() === 200) { test('Is HTML', function() { expect(res.getHeader('Content-Type')).to.include('text/html'); }); }\r
+
+        // OSE-871 (P-1): the public grid reads one canonical name per value now\r
+
+        // (name/startDateISO/venue) with no '|| Untitled Event' fallback. The drift\r
+
+        // literal must be absent from the shipped template — the assertion that\r
+
+        // matters most: 'Untitled Event' never renders for a seeded event.\r
+
+        if (res.getStatus() === 200) { test('OSE-871: no Untitled Event drift literal in shipped /events template', function() { expect(JSON.stringify(res.getBody())).to.not.include('Untitled Event'); }); }"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

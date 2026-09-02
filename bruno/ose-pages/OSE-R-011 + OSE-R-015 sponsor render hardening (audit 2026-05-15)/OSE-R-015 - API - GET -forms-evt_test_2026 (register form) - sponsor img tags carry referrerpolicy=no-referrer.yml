@@ -1,0 +1,38 @@
+info:
+  name: OSE-R-015 | API | GET /forms/evt_test_2026 (register form) | sponsor img tags carry referrerpolicy=no-referrer
+  type: http
+  seq: 2
+
+http:
+  method: GET
+  url: "{{baseUrl}}/forms/evt_test_2026?type=register"
+  headers:
+    - name: Accept
+      value: text/html
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: "test('Returns 200', function() { expect(res.getStatus()).to.equal(200); });\r
+
+        const body = JSON.stringify(res.getBody());\r
+
+        test('register form HTML includes referrerpolicy=no-referrer', function() {\r
+
+        \    expect(body).to.match(/referrerpolicy=[\"']no-referrer[\"']/);\r
+
+        });\r
+
+        test('register form HTML includes onerror handler', function() {\r
+
+        \    expect(body).to.match(/onerror=[\"']this\\.style\\.display=/);\r
+
+        });"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

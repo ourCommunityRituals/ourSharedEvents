@@ -1,0 +1,39 @@
+info:
+  name: OSE-R-002 | API | POST /api/v2/events/:id/forms/register (malformed email) | 400 with body.code=INVALID_EMAIL
+  type: http
+  seq: 8
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/events/{{testEventId}}/forms/register"
+  headers:
+    - name: Content-Type
+      value: application/json
+  body:
+    type: json
+    data: '{"email":"not-an-email"}'
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: "// OSE-R-002: locks INVALID_EMAIL as a client-mappable code. The friendly-copy\r
+
+        // map renders: 'That email doesn't look right. Please check and try again.'\r
+
+        test('Returns 400', function() { expect(res.getStatus()).to.equal(400); });\r
+
+        const json = res.getBody();\r
+
+        test('body.code is INVALID_EMAIL (client-mappable)', function() {\r
+
+        \    expect(json.code).to.equal('INVALID_EMAIL');\r
+
+        });"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

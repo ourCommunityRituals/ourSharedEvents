@@ -1,0 +1,51 @@
+info:
+  name: OSE-R-007 | API | GET /forms/:id (unknown event, attacker query) | generic Event fallback rendered
+  type: http
+  seq: 2
+
+http:
+  method: GET
+  url: "{{baseUrl}}/forms/evt_does_not_exist_r007?event=URGENT%3A%20Account%20suspended&type=register"
+  headers:
+    - name: Accept
+      value: text/html
+  params:
+    - name: event
+      value: URGENT%3A%20Account%20suspended
+      type: query
+    - name: type
+      value: register
+      type: query
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: "test('Returns 200 (backward compat for un-seeded events)', function() { expect(res.getStatus()).to.equal(200); });\r
+
+        const body = JSON.stringify(res.getBody());\r
+
+        test('event-name testid renders Event fallback, not phishing payload', function() {\r
+
+        \    const m = body.match(/data-testid=\\\"form-event-name\\\"[^>]*>([^<]*)</);\r
+
+        \    expect(m).to.not.be.null;\r
+
+        \    expect(m[1].trim()).to.equal('Event');\r
+
+        });\r
+
+        test('Phishing payload absent everywhere in body', function() {\r
+
+        \    expect(body).to.not.include('Account suspended');\r
+
+        \    expect(body).to.not.include('URGENT');\r
+
+        });"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

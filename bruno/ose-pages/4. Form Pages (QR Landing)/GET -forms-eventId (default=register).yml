@@ -1,0 +1,27 @@
+info:
+  name: GET /forms/:eventId (default=register)
+  type: http
+  seq: 1
+
+http:
+  method: GET
+  url: "{{baseUrl}}/forms/{{testEventId}}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: "test('Returns 200 or 403 (feature flag)', function() { expect([200, 403]).to.include(res.getStatus()); });\r
+
+        if (res.getStatus() === 200) { test('Is HTML', function() { expect(res.getHeader('Content-Type')).to.include('text/html'); }); }\r
+
+        test('Has form element', function() { expect(JSON.stringify(res.getBody()).toLowerCase()).to.include('<form'); });\r
+
+        test('Has data-testid attributes', function() { expect(JSON.stringify(res.getBody())).to.include('data-testid'); });"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false
