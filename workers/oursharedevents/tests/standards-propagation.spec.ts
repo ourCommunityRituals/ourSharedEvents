@@ -56,7 +56,9 @@ describe('OSE-588 G1/G2/G3 — TL-052: brain-contract-check.yml exists and runs 
 
     const src = sources[brainCheckKey]!;
 
-    expect(src, 'brain-contract-check.yml must have an on.push trigger').toMatch(/on:\s*\n\s+push/m);
+    expect(src, 'brain-contract-check.yml must have an on.push trigger').toMatch(
+      /on:\s*\n\s+push/m
+    );
     expect(src, 'brain-contract-check.yml must target main branch').toMatch(/branches.*main/);
   });
 
@@ -97,7 +99,8 @@ describe('OSE-588 G4 — Ledger coverage cross-check: no invariant referenced in
 
     const invariantsWithOnlyOpenThreats: number[] = [];
     for (const [num, statuses] of coverageByInvariant.entries()) {
-      const hasEnforcement = statuses.has('tested') || statuses.has('mitigated') || statuses.has('accepted');
+      const hasEnforcement =
+        statuses.has('tested') || statuses.has('mitigated') || statuses.has('accepted');
       if (!hasEnforcement) {
         invariantsWithOnlyOpenThreats.push(num);
       }
@@ -109,22 +112,18 @@ describe('OSE-588 G4 — Ledger coverage cross-check: no invariant referenced in
     ).toHaveLength(0);
   });
 
-  test('runner-env-validation.yml exists (validates #11 and #12 CI probes)', () => {
-    const sources = loadSources();
-    const runnerKey = Object.keys(sources).find((k) =>
-      normalizePath(k).includes('runner-env-validation')
-    );
-    expect(
-      runnerKey,
-      'runner-env-validation.yml must be in TEST_SOURCE_FILES_JSON'
-    ).toBeDefined();
-  });
+  // The former 'runner-env-validation.yml exists (validates #11 and #12 CI
+  // probes)' gate was removed in OSE-1194 (2026-09-02): the self-hosted runner
+  // pool is decommissioned, #11/#12 are `retired` in the brain and the workflow
+  // no longer exists. A retired invariant needs no CI probe.
 
   test('OSE-588 evidence', () => {
     const allInvariantsWithCoverage = new Set(
-      THREAT_LEDGER
-        .filter((e) => e.target_invariant && (e.status === 'tested' || e.status === 'mitigated' || e.status === 'accepted'))
-        .map((e) => e.target_invariant!.number)
+      THREAT_LEDGER.filter(
+        (e) =>
+          e.target_invariant &&
+          (e.status === 'tested' || e.status === 'mitigated' || e.status === 'accepted')
+      ).map((e) => e.target_invariant!.number)
     );
 
     const report = {

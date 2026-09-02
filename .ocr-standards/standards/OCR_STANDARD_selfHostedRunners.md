@@ -1,6 +1,12 @@
 # OCR_STANDARD_selfHostedRunners
 
-**Status:** ACTIVE · **Owner:** infra · **Last updated:** 2026-04-18
+**Status:** RETIRED (2026-09-02, OSE-1194) · **Owner:** infra · **Last updated:** 2026-09-02
+
+> **RETIRED.** The self-hosted runner fleet (BLOODRAVEN, -2, -3) was decommissioned on 2026-09-02.
+> Every OCR workflow now runs on GitHub-hosted `ubuntu-latest`. Brain invariants #11
+> (`self_hosted_runner_bash_resolution`) and #12 (`runner_pool_readiness_probe`) are `retired`, and
+> the OSE tooling this standard described (`tools/runner/`, `runner-env-validation.yml`) was deleted.
+> The text below is preserved as the historical record of the topology and is **not** to be followed.
 
 Canonical architecture for OCR's self-hosted GitHub Actions runners. Every OCR workflow runs here. No billed GitHub-hosted minutes are consumed — see `feedback_self_hosted_only.md` in Claude memory for the durable stance.
 
@@ -46,11 +52,11 @@ C:\Users\mzdan\dev\ourCommunityRituals\
 
 Each runner registers with these labels:
 
-| Label | Meaning | Applied to |
-|---|---|---|
-| `self-hosted` | Always present on self-hosted runners (implicit) | All |
-| `windows` | OS pin | All current runners |
-| `ocr-default` | Part of the default runner group | All |
+| Label         | Meaning                                          | Applied to          |
+| ------------- | ------------------------------------------------ | ------------------- |
+| `self-hosted` | Always present on self-hosted runners (implicit) | All                 |
+| `windows`     | OS pin                                           | All current runners |
+| `ocr-default` | Part of the default runner group                 | All                 |
 
 Workflow `runs-on:` should prefer the label-set form for fleet portability:
 
@@ -88,15 +94,15 @@ All runner lifecycle operations flow through a single tool at
 correctness permits, admin-elevation-aware, and safe for scripted
 automation. Every subcommand returns a proper exit code.
 
-| Subcommand | Purpose | Required args | Notes |
-|---|---|---|---|
-| `install`  | Fresh install — download + register + service + start | `-Number <N>`, `-RegistrationToken <token>` | Creates `actions-runner-<N>/`. N must be ≥ 2 (original BLOODRAVEN not managed here). |
-| `convert`  | Retrofit interactive runner to Windows service | `-Name <runner>` | Idempotent — safe re-run. Use to upgrade the original BLOODRAVEN from interactive to service. |
-| `start`    | Start an existing service | `-Name <runner>` | No-op if already Running. |
-| `stop`     | Stop an existing service | `-Name <runner>` | No-op if already Stopped. |
-| `restart`  | Stop + Start | `-Name <runner>` | |
-| `status`   | List all OCR runners + state (read-only) | none | Covers both services and orphaned interactive runners. `-Json` for machine-readable output. |
-| `retire`   | Stop + uninstall service + deregister from GitHub + delete dir | `-Name <runner>`, `-RemovalToken <token>` | Prompts for confirmation. Use `-Force` for automation. Destructive — no undo. |
+| Subcommand | Purpose                                                        | Required args                               | Notes                                                                                         |
+| ---------- | -------------------------------------------------------------- | ------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `install`  | Fresh install — download + register + service + start          | `-Number <N>`, `-RegistrationToken <token>` | Creates `actions-runner-<N>/`. N must be ≥ 2 (original BLOODRAVEN not managed here).          |
+| `convert`  | Retrofit interactive runner to Windows service                 | `-Name <runner>`                            | Idempotent — safe re-run. Use to upgrade the original BLOODRAVEN from interactive to service. |
+| `start`    | Start an existing service                                      | `-Name <runner>`                            | No-op if already Running.                                                                     |
+| `stop`     | Stop an existing service                                       | `-Name <runner>`                            | No-op if already Stopped.                                                                     |
+| `restart`  | Stop + Start                                                   | `-Name <runner>`                            |                                                                                               |
+| `status`   | List all OCR runners + state (read-only)                       | none                                        | Covers both services and orphaned interactive runners. `-Json` for machine-readable output.   |
+| `retire`   | Stop + uninstall service + deregister from GitHub + delete dir | `-Name <runner>`, `-RemovalToken <token>`   | Prompts for confirmation. Use `-Force` for automation. Destructive — no undo.                 |
 
 Minting short-lived tokens for `install` / `retire`:
 

@@ -693,8 +693,6 @@ jobs:
             tests/e2e/0-architecture/monetization-inert.invariant.spec.ts \
             tests/e2e/0-architecture/oer-emission-boundary.invariant.spec.ts \
             tests/e2e/0-architecture/pii-retention.invariant.spec.ts \
-            tests/e2e/0-architecture/runner-environment.invariant.spec.ts \
-            tests/e2e/0-architecture/runner-pool-readiness.invariant.spec.ts \
             tests/e2e/0-architecture/runtime-llm-free.invariant.spec.ts \
             tests/e2e/0-architecture/slug-permanence.invariant.spec.ts \
             tests/e2e/0-architecture/shared-report-schema.invariant.spec.ts \

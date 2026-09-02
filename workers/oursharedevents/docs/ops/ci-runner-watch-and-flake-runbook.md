@@ -1,5 +1,10 @@
 # CI Watch & Self-Hosted Runner Flake Runbook
 
+> **RETIRED 2026-09-02 (OSE-1194).** The self-hosted runner fleet (BLOODRAVEN, -2, -3) was
+> decommissioned; every OSE workflow runs on GitHub-hosted `ubuntu-latest`. The runner-restart and
+> janitor procedures below no longer apply — `tools/runner/` was deleted and brain invariants #11/#12
+> are `retired`. Kept as the incident record for the 2026-08-13 worst case (§8); do not follow §1–§7.
+
 **Audience:** whoever (human or Claude) is shepherding a PR through CI to merge.
 **Scope:** the OSE `oursharedevents-ci.yml` pipeline on the self-hosted runner fleet.
 **Why this exists:** ~1/3 of runs hit a **runner-2 flake** (a job dispatches to

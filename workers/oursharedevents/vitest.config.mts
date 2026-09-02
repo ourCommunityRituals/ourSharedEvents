@@ -162,8 +162,9 @@ const sourceFiles = {
   // OSE-591: spec files included so born-red harness can scan @born-red
   // annotations on Windows CI where paths use backslashes.
   ...collectSpecFiles(testsDir),
-  // OSE-589: .github/workflows/*.yml included so runner-env.spec.ts can
-  // assert runner-env-validation.yml exists and is wired to push events.
+  // .github/workflows/*.yml included so workflow-shape specs (gitleaks-ci-gate.spec.ts,
+  // TL-016) can assert CI gates are wired. Originally added for OSE-589
+  // runner-env.spec.ts, which was retired with the self-hosted pool (OSE-1194).
   ...collectYmlFiles(workflowsDir),
   // TL-017/TL-019: wrangler.toml included so born-red harness can scan for
   // hardcoded secrets and CF_API_KEY usage without a separate binding.

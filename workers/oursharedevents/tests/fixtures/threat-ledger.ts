@@ -742,8 +742,9 @@ const EXISTING_COVERAGE: ThreatEntry[] = [
     severity: 'MEDIUM',
     target_invariant: { number: 11, name: 'self_hosted_runner_bash_resolution' },
     mitigation_story: null,
-    test_ref: 'tests/runner-env.spec.ts > runner-env-validation.yml probes bash availability',
-    status: 'tested',
+    test_ref:
+      'RETIRED (OSE-1194, 2026-09-02): self-hosted runner pool decommissioned; CI runs on GitHub-hosted ubuntu-latest where bash resolution is owned by the runner image',
+    status: 'accepted',
     red_birth: {
       date: '2026-08-03',
       method: 'historical-ci-failure',
@@ -751,6 +752,8 @@ const EXISTING_COVERAGE: ThreatEntry[] = [
         'Runner bash resolution failure was observed during initial self-hosted runner setup. runner-env-validation.yml added as probe. OSE-589 added structural harness test.',
     },
     last_run_green: '2026-08-03',
+    notes:
+      'Retired with the self-hosted apparatus (OSE-1194): runner-env-validation.yml, tests/runner-env.spec.ts and tools/runner/ deleted; brain invariant #11 is status retired. The threat does not apply to GitHub-hosted runners.',
   },
   {
     id: 'TL-035',
@@ -761,8 +764,8 @@ const EXISTING_COVERAGE: ThreatEntry[] = [
     target_invariant: { number: 12, name: 'runner_pool_readiness_probe' },
     mitigation_story: null,
     test_ref:
-      'tests/runner-env.spec.ts > runner-env-validation.yml has at least one validation step',
-    status: 'tested',
+      'RETIRED (OSE-1194, 2026-09-02): self-hosted runner pool decommissioned; GitHub-hosted runner capacity is managed by GitHub, not by an OSE probe',
+    status: 'accepted',
     red_birth: {
       date: '2026-08-03',
       method: 'design-time-negative-assertion',
@@ -770,6 +773,8 @@ const EXISTING_COVERAGE: ThreatEntry[] = [
         'OSE-589 added structural gate: runner-env-validation.yml must exist, target main, and probe bash.',
     },
     last_run_green: '2026-08-03',
+    notes:
+      'Retired with the self-hosted apparatus (OSE-1194): janitor probe/watchdog (tools/runner/) deleted; brain invariant #12 is status retired. The threat does not apply to GitHub-hosted runners.',
   },
   {
     id: 'TL-036',
@@ -1228,11 +1233,12 @@ const GAP_CLOSURE: ThreatEntry[] = [
   },
 ];
 
-// ─── TL-034 / TL-035 upgraded to tested via OSE-589 ────────────────────────
-// Originally accepted (CI-level controls). OSE-589 adds a structural harness
-// test that validates the probe workflows exist and are wired to push to main.
-// The entries stay in EXISTING_COVERAGE; only status changes here are reflected
-// by patching the exported array after merge — do not duplicate IDs.
+// ─── TL-034 / TL-035: tested via OSE-589, retired via OSE-1194 ─────────────
+// Originally accepted (CI-level controls). OSE-589 upgraded them to tested with
+// a structural harness (tests/runner-env.spec.ts). OSE-1194 (2026-09-02) retired
+// the self-hosted runner pool entirely — CI runs on GitHub-hosted ubuntu-latest —
+// so the harness, the probe workflow and tools/runner/ were deleted and both
+// entries returned to accepted with a RETIRED test_ref. IDs are never reused.
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Layer: sponsor payment ops (OSE-743 / P0 — out-of-band Payment Links)
@@ -1495,7 +1501,7 @@ export const THREAT_LEDGER: ThreatEntry[] = [
 export const THREAT_LEDGER_META = {
   schema_version: '1.0.0',
   story: 'OSE-564',
-  last_updated: '2026-08-13',
+  last_updated: '2026-09-02',
   total_entries: THREAT_LEDGER.length,
   layers: 8,
 } as const;
