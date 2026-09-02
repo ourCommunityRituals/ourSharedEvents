@@ -9,11 +9,11 @@
  *
  * WHY THIS EXISTS
  *   Measured against the five surface templates on 2026-09-01:
- *     381 test-ids emitted · 101 used by Playwright · 2 used by Newman
+ *     381 test-ids emitted · 101 used by Playwright · 2 used by the contract suite
  *     280 (73%) used by NEITHER — instrumentation nobody consumes.
  *   Drift ran in both directions and only one was gated: the Playwright
- *   baseline carries 51 referenced-but-unemitted ids, and Newman referenced
- *   four (error-header, error-title, signin-cta, signin-request-access)
+ *   baseline carries 51 referenced-but-unemitted ids, and the contract suite
+ *   referenced four (error-header, error-title, signin-cta, signin-request-access)
  *   emitted nowhere, with nothing checking it.
  *
  *   A string literal in a spec cannot fail when the element it names is
@@ -25,17 +25,17 @@
  *     page.getByTestId('admin-header')        // before
  *     page.getByTestId(T.t('admin-header'))   // after — now fails on a typo
  *
- * NEWMAN CANNOT IMPORT THIS FILE.
- *   Postman scripts are sandboxed with no module resolution — verified: no
- *   require() appears anywhere in postman/collections/. The bridge is a
- *   generated environment, postman/environments/testids.json, so Newman reads
- *   the same registry as {{testid_admin_header}}.
+ * CONTRACT LAYER (Bruno).
+ *   The API/pages contract suite lives in bruno/ (OSE-1191, ex-Newman). Its
+ *   converted assertions reference test-ids as inlined string literals
+ *   (expect(body).to.include('data-testid="admin-header"')), so no generated
+ *   variable bridge is needed — Bruno reads no environment file from here.
  *
  * GENERATED, NOT AUTHORED — node scripts/gen-testids.mjs
  *   Derived from the templates, so it can never claim an id the app does not
  *   emit. Dynamically-built ids (`data-testid="row-' + id + '"`) are excluded
  *   on purpose: t() would accept one while nothing ever renders it.
- * Generated 2026-09-01 — 377 ids.
+ * Generated 2026-09-02 — 377 ids.
  */
 (function (root, factory) {
   const api = factory();

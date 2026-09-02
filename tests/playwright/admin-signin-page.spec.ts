@@ -3,11 +3,11 @@
  *
  * Companion to:
  *   - tests/admin-signin-page.spec.ts (vitest — Worker-internal)
- *   - postman/collections/ose-pages.json (Newman — API contract)
+ *   - bruno/ose-pages (API contract)
  *
  * Layer:
  *   • Vitest: unit + Worker-binding tests (fast, runs in CI)
- *   • Postman: response shape + headers (runs in Newman against staging)
+ *   • Bruno: response shape + headers (runs via `bru run` against staging)
  *   • Playwright (this file): real browser, DOM, accessibility, navigation
  *
  * Story: OSE-R-001 in REFINEMENT-BACKLOG-2026-05-15.md

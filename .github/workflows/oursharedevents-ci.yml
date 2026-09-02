@@ -37,10 +37,10 @@
 #
 # Fail-fast test chain after T1 deploy: T2 Contract → T3 E2E Smoke → T4
 # Functional. Each stage `needs:` the prior and gates on its success, so a red
-# stage SKIPS everything downstream — fix one layer at a time. Newman-first:
+# stage SKIPS everything downstream — fix one layer at a time. Contract-first:
 # nail the API contract, then perpetuate into the FE.
 #
-#   T2: Contract (Newman) — API + Pages spec compliance [runs first]
+#   T2: Contract (Bruno) — API + Pages spec compliance [runs first]
 #       - Bruno API collection         → bru run bruno/ose-api (OSE-1191, ex-Newman)
 #       - Bruno Pages collection       → bru run bruno/ose-pages (OSE-1191, ex-Newman)
 #
@@ -572,8 +572,8 @@ jobs:
 
       # Test-id registry drift (2026-09-01). web/shared/testids.js is DERIVED from
       # the surface templates, so a template that renames or adds a data-testid
-      # without regenerating leaves the registry — and the generated Postman
-      # environment Newman reads — silently wrong. Sits beside the manifest
+      # without regenerating leaves the registry — and the generated Bruno
+      # environment `bru run` reads — silently wrong. Sits beside the manifest
       # preflight above because it is the same class of check: template/artifact
       # drift, caught statically in a second, with no browser and no network.
       - name: 'Lint: test-id registry matches the templates'
@@ -991,7 +991,7 @@ jobs:
     # repo secrets) which is IP-independent, so an ephemeral runner authenticates
     # exactly as the box did — there is no source-IP allow-list to lose.
     runs-on: ubuntu-latest
-    # Fail-fast chain, stage 2 of 3: FE E2E smoke runs ONLY after the Newman
+    # Fail-fast chain, stage 2 of 3: FE E2E smoke runs ONLY after the Bruno
     # contract (T2) is green. A red here SKIPS functional (T4). Depends on
     # contract-staging so the API contract is proven before the FE E2E layer.
     needs: [security, gate, deploy-staging, contract-staging]
@@ -1105,18 +1105,18 @@ jobs:
           exit 1
 
   # ============================================================================
-  # TIER 3: CONTRACT — Newman API + Pages (post-deploy + nightly)
+  # TIER 3: CONTRACT — Bruno API + Pages (post-deploy + nightly) (OSE-1191)
   # ============================================================================
   contract-staging:
     name: 'T2 Contract → Staging (Bruno)'
-    # OSE-954: runs on ephemeral ubuntu-latest. Newman + wrangler-d1 seed only;
-    # no deploy. Staging auth is the header-based CF Access service token
-    # (CF_ACCESS_CLIENT_ID/SECRET + Bearer ADMIN_KEY) and the D1 seed uses
+    # OSE-954: runs on ephemeral ubuntu-latest. Bruno (`bru run`) + wrangler-d1
+    # seed only; no deploy. Staging auth is the header-based CF Access service
+    # token (CF_ACCESS_CLIENT_ID/SECRET + Bearer ADMIN_KEY) and the D1 seed uses
     # CLOUDFLARE_API_TOKEN — all repo secrets, all IP-independent, so the
     # ephemeral runner reaches staging exactly as the self-hosted box did.
     runs-on: ubuntu-latest
-    # Fail-fast chain, stage 1 of 3 (after T1 deploy): Newman API + Pages
-    # contract. Newman-first — nail the API contract, THEN perpetuate into the
+    # Fail-fast chain, stage 1 of 3 (after T1 deploy): Bruno API + Pages
+    # contract. Contract-first — nail the API contract, THEN perpetuate into the
     # FE. A red here SKIPS the downstream FE E2E smoke (T3) and functional (T4),
     # so a broken API contract is fixed before any FE layer runs.
     needs: [security, gate, deploy-staging]
@@ -1155,8 +1155,8 @@ jobs:
       # CF Access preflight probe (OSE-349) — diagnostic only, does not gate.
       # Delegates to the shared classifier so the in-CI probe and the scheduled
       # canary (.github/workflows/cf-access-canary.yml) can never drift into two
-      # copies of the anti-drift tool. Here it runs WITHOUT --gate: Newman stays
-      # the source of truth per the tests-surface-truth doctrine, and this step
+      # copies of the anti-drift tool. Here it runs WITHOUT --gate: the Bruno
+      # contract stays the source of truth per the tests-surface-truth doctrine, and this step
       # only auto-classifies the next failure into the step summary.
       - name: CF Access preflight probe
         id: preflight
@@ -1174,7 +1174,7 @@ jobs:
       # h3_res7 == event h3_res7); the event fixture ships without coordinates,
       # so without this its cell is NULL and every sponsor resolves non-local.
       # A standalone fixture (not a migration) on purpose — see the file header
-      # and postman/collections/ose-api.json §11 description. Idempotent UPDATE.
+      # (postman/fixtures/covenant-event-geo.sql). Idempotent UPDATE.
       - name: Seed covenant event geo (OSE-891 fixture)
         id: seed-covenant-geo
         continue-on-error: true
@@ -1245,7 +1245,7 @@ jobs:
           path: .test-results/
           retention-days: 14
 
-      # Surface per-assertion Newman results as a GitHub Check (visible in the
+      # Surface per-assertion Bruno results as a GitHub Check (visible in the
       # PR/Checks tab), so a contract failure shows the failing request + message
       # by name instead of being buried in the CLI log.
       - name: Report results (Bruno contract)
@@ -1949,7 +1949,7 @@ jobs:
           echo "| S0 Security | security | \`${{ needs.security.result }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| T0 Gate | gate | \`${{ needs.gate.result }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| T1 Deploy STG | deploy-staging | \`${{ needs.deploy-staging.result }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| T2 Contract STG (Newman) | contract-staging | \`${{ needs.contract-staging.result }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| T2 Contract STG (Bruno) | contract-staging | \`${{ needs.contract-staging.result }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| T3 E2E Smoke STG (Playwright) | smoke-staging | \`${{ needs.smoke-staging.result }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| T4 Functional STG | functional-staging | \`${{ needs.functional-staging.result }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| T1 Deploy PROD | deploy-production | \`${{ needs.deploy-production.result }}\` |" >> $GITHUB_STEP_SUMMARY

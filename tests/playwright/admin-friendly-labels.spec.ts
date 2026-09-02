@@ -6,7 +6,7 @@
  *
  * Companion to:
  *   - workers/oursharedevents/tests/admin-friendly-labels.spec.ts (vitest API)
- *   - postman/collections/ose-pages.json (Newman API — OSE-R-005 folder)
+ *   - bruno/ose-pages (OSE-R-005 folder)
  *
  * Test names share their shape byte-for-byte across runners where the
  * scenario maps; differ only by the API/FE qualifier where the layer

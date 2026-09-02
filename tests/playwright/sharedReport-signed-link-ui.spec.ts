@@ -7,7 +7,7 @@
  *
  * Companion to:
  *   - workers/oursharedevents/tests/sharedReport-signed-link-ui.spec.ts (vitest API)
- *   - postman/collections/ose-api.json (Newman API — OSE-R-003 folder)
+ *   - bruno/ose-api (OSE-R-003 folder)
  *
  * Test names share their shape byte-for-byte across runners where the
  * scenario maps; differ only by the API/FE qualifier where the layer

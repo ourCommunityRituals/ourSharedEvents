@@ -8,7 +8,7 @@
  *
  * Companion to:
  *   - workers/oursharedevents/tests/form-page-canonical-title.spec.ts (vitest API)
- *   - postman/collections/ose-api.json (Newman API — OSE-R-007 folder)
+ *   - bruno/ose-api (OSE-R-007 folder)
  *
  * Backstop: per audit OSE-R-007, the form renderer pre-fix trusted
  * ?event=... as the display name. An attacker crafting

@@ -7,7 +7,7 @@
  *
  * Companion to:
  *   - workers/oursharedevents/tests/sponsor-render-hardening.spec.ts (vitest API)
- *   - postman/collections/ose-pages.json (Newman API — OSE-R-011 folder)
+ *   - bruno/ose-pages (OSE-R-011 folder)
  *
  * Two audit rows in one spec because the fix is shared:
  *   OSE-R-015 — sponsor logo render must escape URL + carry referrerpolicy
