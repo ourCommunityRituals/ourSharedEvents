@@ -1203,6 +1203,12 @@ jobs:
       # collections live in-repo under bruno/). Bruno CLI `bru run` must execute
       # from the collection root, so each step sets working-directory. Secrets are
       # still injected via --env-var (same keys as the Postman env), never inlined.
+      #
+      # `bru run` writes --reporter-junit to $GITHUB_WORKSPACE/.test-results and
+      # EXITS 2 if that directory does not exist — even when every assertion passes
+      # (OSE-1191: masked the green result until created). Make the dir first.
+      - name: Prepare contract report dir
+        run: mkdir -p "$GITHUB_WORKSPACE/.test-results"
       - name: Bruno API contract
         id: bru-api
         working-directory: bruno/ose-api
