@@ -1437,14 +1437,18 @@ jobs:
             tests/e2e/4-negative/form-validation.spec.ts
         timeout-minutes: 10
 
-      # Survey + email SUBMISSION — continue-on-error until the Phase-2 fixture
-      # (OSE-1004) enables them event-scoped and real clearance (OSE-1007)
-      # lands. Reported in the summary, never blocks the gate. Flip to blocking
-      # (remove continue-on-error, fold back into the step above) when OSE-1004
-      # ships the evt_forms_phase2 fixture.
-      - name: 'T4c-phase2: Survey/Email E2E (continue-on-error — OSE-1004/1007)'
+      # Survey + email SUBMISSION — BLOCKING (OSE-1169). The mask is removed now
+      # that both blockers landed: OSE-1004 (#442) shipped the synthetic
+      # evt_forms_phase2 fixture so submission returns 201 instead of 403
+      # PHASE_REQUIRED, and OSE-1168 (#443) fixed the last failing spec
+      # (survey star-fill semantics). This gate asserts the submission CODE PATH
+      # works against an accurately-MODELED Phase-2 event (legal_clearance_tier=2,
+      # data_class='synthetic'). It does NOT assert real regulatory clearance —
+      # enabling survey/email on any REAL (non-synthetic) event stays gated behind
+      # OSE-1007. PHASE1_EVENT_ID (tier-1) still asserts PHASE_REQUIRED here, so the
+      # legal-clearance gate is exercised, not bypassed.
+      - name: 'T4c-phase2: Survey/Email E2E — synthetic Phase-2 fixture (blocking — OSE-1004/1169)'
         id: form-e2e-phase2
-        continue-on-error: true
         env:
           BASE_URL: ${{ env.STG_BASE_URL }}
           ADMIN_KEY: ${{ secrets.ADMIN_KEY }}
@@ -1590,7 +1594,7 @@ jobs:
           echo "| T4a Architecture Invariants | \`${{ steps.arch-tests.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| T4b Core Journeys | \`${{ steps.journey-tests.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| T4c Form E2E (register/checkin + validation, blocking) | \`${{ steps.form-e2e-tests.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| T4c Survey/Email submission (OSE-1004, non-blocking) | \`${{ steps.form-e2e-phase2.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| T4c Survey/Email submission (synthetic Phase-2, blocking) | \`${{ steps.form-e2e-phase2.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| T4d UI Smoke | \`${{ steps.ui-tests.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| T4e Attendee Arc Journey | \`${{ steps.attendee-arc-tests.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| T4f SharedReport Depth Gate | \`${{ steps.sharedreport-depth-tests.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
