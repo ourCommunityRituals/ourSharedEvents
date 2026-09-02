@@ -13,3 +13,9 @@ package-lock.json
 # makes that gate fail on every run, forever — verified before it reached CI.
 web/shared/testids.js
 postman/environments/testids.json
+
+# Propagated verbatim from OCR-docs (docs/standards/ -> .ocr-standards/) by the
+# propagate-standards workflow. Upstream does not run prettier, so a local reformat
+# breaks byte-parity and turns every propagation PR into table-alignment churn
+# (observed on OSE-1194). Format them in OCR-docs or not at all.
+.ocr-standards/

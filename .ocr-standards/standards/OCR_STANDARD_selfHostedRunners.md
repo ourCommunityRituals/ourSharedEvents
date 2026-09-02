@@ -52,11 +52,11 @@ C:\Users\mzdan\dev\ourCommunityRituals\
 
 Each runner registers with these labels:
 
-| Label         | Meaning                                          | Applied to          |
-| ------------- | ------------------------------------------------ | ------------------- |
-| `self-hosted` | Always present on self-hosted runners (implicit) | All                 |
-| `windows`     | OS pin                                           | All current runners |
-| `ocr-default` | Part of the default runner group                 | All                 |
+| Label | Meaning | Applied to |
+|---|---|---|
+| `self-hosted` | Always present on self-hosted runners (implicit) | All |
+| `windows` | OS pin | All current runners |
+| `ocr-default` | Part of the default runner group | All |
 
 Workflow `runs-on:` should prefer the label-set form for fleet portability:
 
@@ -94,15 +94,15 @@ All runner lifecycle operations flow through a single tool at
 correctness permits, admin-elevation-aware, and safe for scripted
 automation. Every subcommand returns a proper exit code.
 
-| Subcommand | Purpose                                                        | Required args                               | Notes                                                                                         |
-| ---------- | -------------------------------------------------------------- | ------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| `install`  | Fresh install — download + register + service + start          | `-Number <N>`, `-RegistrationToken <token>` | Creates `actions-runner-<N>/`. N must be ≥ 2 (original BLOODRAVEN not managed here).          |
-| `convert`  | Retrofit interactive runner to Windows service                 | `-Name <runner>`                            | Idempotent — safe re-run. Use to upgrade the original BLOODRAVEN from interactive to service. |
-| `start`    | Start an existing service                                      | `-Name <runner>`                            | No-op if already Running.                                                                     |
-| `stop`     | Stop an existing service                                       | `-Name <runner>`                            | No-op if already Stopped.                                                                     |
-| `restart`  | Stop + Start                                                   | `-Name <runner>`                            |                                                                                               |
-| `status`   | List all OCR runners + state (read-only)                       | none                                        | Covers both services and orphaned interactive runners. `-Json` for machine-readable output.   |
-| `retire`   | Stop + uninstall service + deregister from GitHub + delete dir | `-Name <runner>`, `-RemovalToken <token>`   | Prompts for confirmation. Use `-Force` for automation. Destructive — no undo.                 |
+| Subcommand | Purpose | Required args | Notes |
+|---|---|---|---|
+| `install`  | Fresh install — download + register + service + start | `-Number <N>`, `-RegistrationToken <token>` | Creates `actions-runner-<N>/`. N must be ≥ 2 (original BLOODRAVEN not managed here). |
+| `convert`  | Retrofit interactive runner to Windows service | `-Name <runner>` | Idempotent — safe re-run. Use to upgrade the original BLOODRAVEN from interactive to service. |
+| `start`    | Start an existing service | `-Name <runner>` | No-op if already Running. |
+| `stop`     | Stop an existing service | `-Name <runner>` | No-op if already Stopped. |
+| `restart`  | Stop + Start | `-Name <runner>` | |
+| `status`   | List all OCR runners + state (read-only) | none | Covers both services and orphaned interactive runners. `-Json` for machine-readable output. |
+| `retire`   | Stop + uninstall service + deregister from GitHub + delete dir | `-Name <runner>`, `-RemovalToken <token>` | Prompts for confirmation. Use `-Force` for automation. Destructive — no undo. |
 
 Minting short-lived tokens for `install` / `retire`:
 
