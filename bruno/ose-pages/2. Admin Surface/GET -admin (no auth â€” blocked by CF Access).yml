@@ -28,7 +28,7 @@ runtime:
 
         test('Does not serve admin dashboard HTML', function() {\r
 
-        \    const body = JSON.stringify(res.getBody());\r
+        \    const body = (typeof res.getBody()==='string'?res.getBody():JSON.stringify(res.getBody()));\r
 
         \    expect(body).to.not.include('data-testid=\"admin-header\"');\r
 

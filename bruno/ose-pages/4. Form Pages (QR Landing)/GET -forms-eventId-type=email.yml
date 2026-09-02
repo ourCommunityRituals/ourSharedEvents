@@ -19,7 +19,7 @@ runtime:
 
         if (res.getStatus() === 200) { test('Is HTML', function() { expect(res.getHeader('Content-Type')).to.include('text/html'); }); }\r
 
-        test('Has email content', function() { expect(JSON.stringify(res.getBody()).toLowerCase()).to.include('email'); });"
+        test('Has email content', function() { expect((typeof res.getBody()==='string'?res.getBody():JSON.stringify(res.getBody())).toLowerCase()).to.include('email'); });"
 
 settings:
   encodeUrl: true

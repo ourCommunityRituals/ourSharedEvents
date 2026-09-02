@@ -52,7 +52,7 @@ runtime:
 
         });\r
 
-        const body = JSON.stringify(res.getBody());\r
+        const body = (typeof res.getBody()==='string'?res.getBody():JSON.stringify(res.getBody()));\r
 
         test('Bare pre-fix HTML phrases NOT present (no 1996-style raw <h1>)', function() {\r
 

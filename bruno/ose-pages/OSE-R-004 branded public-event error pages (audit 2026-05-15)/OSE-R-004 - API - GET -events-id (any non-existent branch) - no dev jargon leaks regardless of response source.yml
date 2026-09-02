@@ -36,7 +36,7 @@ runtime:
 
         });\r
 
-        const body = JSON.stringify(res.getBody());\r
+        const body = (typeof res.getBody()==='string'?res.getBody():JSON.stringify(res.getBody()));\r
 
         ['no such table', 'no such column', 'D1_ERROR', 'stack:', 'at async'].forEach(function(phrase) {\r
 

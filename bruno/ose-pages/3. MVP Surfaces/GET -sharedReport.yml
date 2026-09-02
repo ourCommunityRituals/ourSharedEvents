@@ -33,7 +33,7 @@ runtime:
 
         \    test('Has DOCTYPE', function() {\r
 
-        \        expect(JSON.stringify(res.getBody())).to.include('<!DOCTYPE html>');\r
+        \        expect((typeof res.getBody()==='string'?res.getBody():JSON.stringify(res.getBody()))).to.include('<!DOCTYPE html>');\r
 
         \    });\r
 

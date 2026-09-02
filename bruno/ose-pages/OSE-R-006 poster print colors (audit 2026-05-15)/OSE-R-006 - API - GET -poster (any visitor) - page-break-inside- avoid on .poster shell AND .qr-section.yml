@@ -16,7 +16,7 @@ runtime:
     - type: after-response
       code: "test('Returns 200', function() { expect(res.getStatus()).to.equal(200); });\r
 
-        const body = JSON.stringify(res.getBody());\r
+        const body = (typeof res.getBody()==='string'?res.getBody():JSON.stringify(res.getBody()));\r
 
         const match = body.match(/@media\\s+print\\s*\\{([\\s\\S]*?)\\}\\s*<\\/style>/);\r
 

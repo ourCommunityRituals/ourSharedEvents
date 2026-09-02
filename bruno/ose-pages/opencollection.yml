@@ -48,7 +48,7 @@ request:
 
         const __cfMitigated = (res.getHeader('cf-mitigated') || '').length > 0;\r
 
-        const __isCfEdgeBlock = res.getStatus() === 403 && (__cfMitigated || (/text\\/html/i.test(__ct) && /Attention Required|have been blocked|cf-error-details|__cf_chl|Cloudflare Ray ID/i.test(JSON.stringify(res.getBody()))));\r
+        const __isCfEdgeBlock = res.getStatus() === 403 && (__cfMitigated || (/text\\/html/i.test(__ct) && /Attention Required|have been blocked|cf-error-details|__cf_chl|Cloudflare Ray ID/i.test((typeof res.getBody()==='string'?res.getBody():JSON.stringify(res.getBody())))));\r
 
         if (res.getStatus() !== 302 && !__isCfEdgeBlock && req.getUrl().toString().indexOf('/admin') === -1 && req.getUrl().toString().indexOf('/manage') === -1) {\r
 

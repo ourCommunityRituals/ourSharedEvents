@@ -15,9 +15,9 @@ runtime:
 
         if (res.getStatus() === 200) { test('Is HTML', function() { expect(res.getHeader('Content-Type')).to.include('text/html'); }); }\r
 
-        test('Has form element', function() { expect(JSON.stringify(res.getBody()).toLowerCase()).to.include('<form'); });\r
+        test('Has form element', function() { expect((typeof res.getBody()==='string'?res.getBody():JSON.stringify(res.getBody())).toLowerCase()).to.include('<form'); });\r
 
-        test('Has data-testid attributes', function() { expect(JSON.stringify(res.getBody())).to.include('data-testid'); });"
+        test('Has data-testid attributes', function() { expect((typeof res.getBody()==='string'?res.getBody():JSON.stringify(res.getBody()))).to.include('data-testid'); });"
 
 settings:
   encodeUrl: true

@@ -46,7 +46,7 @@ runtime:
 
         test('Body does NOT contain a created-event success payload', function() {\r
 
-        \    const body = JSON.stringify(res.getBody());\r
+        \    const body = (typeof res.getBody()==='string'?res.getBody():JSON.stringify(res.getBody()));\r
 
         \    expect(body).to.not.match(/\"ok\":\\s*true/);\r
 
@@ -60,7 +60,7 @@ runtime:
 
         \        expect(res.getHeader('Content-Type')).to.include('application/json');\r
 
-        \        expect(JSON.stringify(res.getBody())).to.not.include('<!DOCTYPE html>');\r
+        \        expect((typeof res.getBody()==='string'?res.getBody():JSON.stringify(res.getBody()))).to.not.include('<!DOCTYPE html>');\r
 
         \    });\r
 

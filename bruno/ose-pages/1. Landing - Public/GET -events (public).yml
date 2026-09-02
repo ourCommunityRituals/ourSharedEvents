@@ -23,7 +23,7 @@ runtime:
 
         // matters most: 'Untitled Event' never renders for a seeded event.\r
 
-        if (res.getStatus() === 200) { test('OSE-871: no Untitled Event drift literal in shipped /events template', function() { expect(JSON.stringify(res.getBody())).to.not.include('Untitled Event'); }); }"
+        if (res.getStatus() === 200) { test('OSE-871: no Untitled Event drift literal in shipped /events template', function() { expect((typeof res.getBody()==='string'?res.getBody():JSON.stringify(res.getBody()))).to.not.include('Untitled Event'); }); }"
 
 settings:
   encodeUrl: true

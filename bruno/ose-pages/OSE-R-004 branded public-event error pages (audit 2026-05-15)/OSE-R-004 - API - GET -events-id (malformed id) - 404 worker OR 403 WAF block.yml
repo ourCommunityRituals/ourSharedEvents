@@ -28,7 +28,7 @@ runtime:
 
         });\r
 
-        const body = JSON.stringify(res.getBody());\r
+        const body = (typeof res.getBody()==='string'?res.getBody():JSON.stringify(res.getBody()));\r
 
         if (res.getStatus() === 404) {\r
 
