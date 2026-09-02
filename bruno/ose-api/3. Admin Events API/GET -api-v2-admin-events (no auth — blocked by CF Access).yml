@@ -6,6 +6,10 @@ info:
 http:
   method: GET
   url: "{{baseUrl}}/api/v2/admin/events"
+  headers:
+    - name: X-Test-No-Auth
+      value: "true"
+      enabled: true
 
 runtime:
   scripts:

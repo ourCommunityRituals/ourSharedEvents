@@ -25,9 +25,25 @@ runtime:
 
         \r
 
-        \    test('Has count field', function() {\r
+        \    test('Has count field (number when >= K-anon floor, else suppressed to null)', function() {\r
 
-        \        expect(json.count).to.be.a('number');\r
+        \        // OSE-665 uniform count floor: below K=5 the exact count is\r
+
+        \        // suppressed to null (never-who / anti-composition). Certify the\r
+
+        \        // floor holds, do not contradict it by demanding a raw number.\r
+
+        \        if (json.suppressed) {\r
+
+        \            expect(json.count).to.equal(null);\r
+
+        \            expect(json.floor).to.be.a('number');\r
+
+        \        } else {\r
+
+        \            expect(json.count).to.be.a('number');\r
+
+        \        }\r
 
         \    });\r
 

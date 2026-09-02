@@ -22,7 +22,7 @@ runtime:
         test('code.id is ENTER (whitespace + case tolerated)', () => expect(json.code.id).to.eql('ENTER'));"
 
 settings:
-  encodeUrl: true
+  encodeUrl: false
   timeout: 0
   followRedirects: true
   maxRedirects: 5

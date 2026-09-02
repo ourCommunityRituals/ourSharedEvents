@@ -12,11 +12,17 @@ request:
 
         \r
 
-        // If ocrInternalSecret is set, prefer X-OCR-Internal header over Bearer\r
+        // If ocrInternalSecret is set, prefer X-OCR-Internal header over Bearer.\r
+
+        // A request that declares X-Test-No-Auth opts OUT of this collection-wide\r
+
+        // injection so negative/unauthenticated tests are genuinely credential-less\r
+
+        // (OSE-1191: the blanket inject was silently authenticating the no-auth test).\r
 
         var ocrSecret = bru.getEnvVar('ocrInternalSecret');\r
 
-        if (ocrSecret) {\r
+        if (ocrSecret && !req.getHeader('X-Test-No-Auth')) {\r
 
         \    req.setHeader('X-OCR-Internal', ocrSecret);\r
 

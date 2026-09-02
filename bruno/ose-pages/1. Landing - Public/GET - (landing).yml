@@ -37,7 +37,7 @@ runtime:
 
         test('Has lang attribute', function() {\r
 
-        \    expect(JSON.stringify(res.getBody())).to.match(/lang=[\"']en/);\r
+        \    expect(String(res.getBody())).to.match(/lang=[\"']en/);\r
 
         });"
 
