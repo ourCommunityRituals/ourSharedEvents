@@ -21,7 +21,7 @@ ADRs are **descriptive, not prescriptive**. They record decisions that have alre
 ADR series in progress (planned, in numerical order — none of these block any current work):
 
 - ADR-003 — Cursor pagination over offset (locked by PR #155 invariant gate)
-- ADR-004 — Self-hosted runner pool readiness probe + watchdog architecture (Brain invariant 12)
+- ~~ADR-004 — Self-hosted runner pool readiness probe + watchdog architecture (Brain invariant 12)~~ — withdrawn 2026-09-02 (OSE-1194): the self-hosted pool was retired and invariant 12 is `retired` in the brain; the number stays reserved, never reused
 - ADR-005 — Co-Architect decomposition pattern: Option-C deferral and the halt-criterion discipline
 
 ## When to write an ADR

@@ -348,17 +348,19 @@ existing_coverage:
     threat: "Runner bash resolution failure: self-hosted runner fails to resolve bash, breaking all shell-step CI jobs silently"
     severity: MEDIUM
     target_invariant: "11 — self_hosted_runner_bash_resolution"
-    test_ref: "CI gate: runner-env-validation.yml"
+    test_ref: "RETIRED (OSE-1194, 2026-09-02): self-hosted runner pool decommissioned; CI runs on GitHub-hosted ubuntu-latest"
     status: accepted
     red_birth: { date: "2026-08-03", method: historical-ci-failure }
+    notes: "Retired with the self-hosted apparatus (OSE-1194). Brain invariant #11 is status: retired."
 
   - id: TL-035
     threat: "Runner pool not ready: CI job queues indefinitely because no runner in the pool accepts the job label"
     severity: MEDIUM
     target_invariant: "12 — runner_pool_readiness_probe"
-    test_ref: "CI gate: runner-env-validation.yml (pool readiness probe)"
+    test_ref: "RETIRED (OSE-1194, 2026-09-02): self-hosted runner pool decommissioned; runner capacity is GitHub-managed"
     status: accepted
     red_birth: null
+    notes: "Retired with the self-hosted apparatus (OSE-1194). Brain invariant #12 is status: retired."
 
   - id: TL-036
     threat: "Brain enforcement drift: an architectural invariant claim exists in OCR-docs but no CI gate enforces it"

@@ -34,12 +34,13 @@ node scripts/apply-branch-protection.mjs --apply   # PUT the config (requires re
 
 `--check` is safe to wire into CI as a drift detector so silent removal of protection fails a build.
 
-## ⚠ Emergency escape hatch (runner outage only)
+## ⚠ Emergency escape hatch (CI outage only)
 
-`enforce_admins: true` + the single self-hosted runner pool (SPOF, OSE-699) means: if the runners are
-down, the required checks never report and **no PR can merge — even by an admin**. A 1-min readiness
-probe + 5-min watchdog (`tools/runner/janitor.ps1`, INVARIANT #12) auto-recovers a zombied runner, so
-**prefer bouncing the runner** over lifting protection.
+`enforce_admins: true` means: if the required checks never report (a GitHub Actions or GitHub-hosted
+runner outage), **no PR can merge — even by an admin**. The self-hosted runner pool, its readiness
+probe and watchdog (`tools/runner/`, INVARIANT #12) were retired in OSE-1194 (2026-09-02); CI runs on
+GitHub-hosted `ubuntu-latest`, so there is no runner to bounce — **prefer waiting out the upstream
+incident** (https://www.githubstatus.com) over lifting protection.
 
 If you are genuinely stuck and must merge during an outage you cannot fix quickly:
 

@@ -57,7 +57,7 @@ interface InvariantEntry {
   name: string;
   label: string;
   group: string;
-  status: 'live' | 'partial' | 'planned';
+  status: 'live' | 'partial' | 'planned' | 'retired';
   protective_statement?: string;
   enforcement_statement?: string;
   test_file?: string;
@@ -147,14 +147,14 @@ export const INLINE_INVARIANTS: InvariantEntry[] = [
     name: 'self_hosted_runner_bash_resolution',
     label: '#11 — Runner Bash Resolution',
     group: 'infrastructure_ci',
-    status: 'live',
+    status: 'retired',
   },
   {
     id: 12,
     name: 'runner_pool_readiness_probe',
     label: '#12 — Runner Pool Readiness Probe',
     group: 'infrastructure_ci',
-    status: 'live',
+    status: 'retired',
   },
   {
     id: 13,
@@ -321,7 +321,7 @@ export function parseInvariantsYaml(yamlContent: string): InvariantEntry[] {
     }
 
     const status = field('status');
-    if (status && ['live', 'partial', 'planned'].includes(status)) {
+    if (status && ['live', 'partial', 'planned', 'retired'].includes(status)) {
       current.status = status as InvariantEntry['status'];
       continue;
     }
@@ -473,7 +473,7 @@ interface ConformanceRow {
   // Brain-conformance test references (OSE-997) — signal-integrity evidence
   // mapped straight to this invariant, alongside (or instead of) threat tests.
   brain_conformance: string[];
-  enforcement_status: 'enforced' | 'partial' | 'gap';
+  enforcement_status: 'enforced' | 'partial' | 'gap' | 'retired';
   last_attacked: string | null;
   last_green: string | null;
 }
@@ -510,7 +510,7 @@ function buildMatrix(
     const brain_conformance = annotations.brainConformanceByInvariant.get(id) ?? [];
 
     // Determine enforcement status
-    let enforcement_status: 'enforced' | 'partial' | 'gap' = 'gap';
+    let enforcement_status: 'enforced' | 'partial' | 'gap' | 'retired' = 'gap';
     if (threatSummaries.length > 0) {
       const hasTestedOrMitigated = threatSummaries.some(
         (t) => t.status === 'tested' || t.status === 'mitigated'
@@ -530,6 +530,13 @@ function buildMatrix(
     // Also factor in the invariant's own status
     if (inv.status === 'partial' && enforcement_status === 'enforced') {
       enforcement_status = 'partial';
+    }
+
+    // A retired invariant (OSE-1194: #11/#12 self-hosted runner apparatus) has
+    // no enforcement by design — it is neither a gap nor evidence. Kept in the
+    // matrix so the numbering stays auditable; never counted against coverage.
+    if (inv.status === 'retired') {
+      enforcement_status = 'retired';
     }
 
     // Last dates
@@ -558,9 +565,10 @@ function buildMatrix(
 
 // ─── Markdown renderer ────────────────────────────────────────────────────────
 
-function statusBadge(status: 'enforced' | 'partial' | 'gap'): string {
+function statusBadge(status: 'enforced' | 'partial' | 'gap' | 'retired'): string {
   if (status === 'enforced') return '✅ Enforced';
   if (status === 'partial') return '⚠️ Partial';
+  if (status === 'retired') return '🗄️ Retired';
   return '❌ Gap';
 }
 
@@ -572,7 +580,7 @@ function severityBadge(s: string): string {
 }
 
 function renderMarkdown(rows: ConformanceRow[], meta: Record<string, string>): string {
-  const counts = { enforced: 0, partial: 0, gap: 0 };
+  const counts = { enforced: 0, partial: 0, gap: 0, retired: 0 };
   for (const r of rows) counts[r.enforcement_status]++;
 
   const shortSha = meta.commit === 'local' ? 'local' : meta.commit.slice(0, 8);
@@ -610,6 +618,12 @@ function renderMarkdown(rows: ConformanceRow[], meta: Record<string, string>): s
 | ❌ Gap | ${counts.gap} | ${
     rows
       .filter((r) => r.enforcement_status === 'gap')
+      .map((r) => `#${r.invariant.id}`)
+      .join(', ') || '—'
+  } |
+| 🗄️ Retired | ${counts.retired} | ${
+    rows
+      .filter((r) => r.enforcement_status === 'retired')
       .map((r) => `#${r.invariant.id}`)
       .join(', ') || '—'
   } |
@@ -705,6 +719,7 @@ function renderJson(rows: ConformanceRow[], meta: Record<string, string>): strin
       enforced: rows.filter((r) => r.enforcement_status === 'enforced').length,
       partial: rows.filter((r) => r.enforcement_status === 'partial').length,
       gap: rows.filter((r) => r.enforcement_status === 'gap').length,
+      retired: rows.filter((r) => r.enforcement_status === 'retired').length,
       threat_entries: THREAT_LEDGER.length,
       open_threats: THREAT_LEDGER.filter((t) => t.status === 'open').length,
     },
@@ -757,7 +772,7 @@ async function main() {
   // Build matrix
   const rows = buildMatrix(registry, annotations);
   console.log(
-    `  Matrix: ${rows.length} invariants — enforced: ${rows.filter((r) => r.enforcement_status === 'enforced').length}, partial: ${rows.filter((r) => r.enforcement_status === 'partial').length}, gap: ${rows.filter((r) => r.enforcement_status === 'gap').length}`
+    `  Matrix: ${rows.length} invariants — enforced: ${rows.filter((r) => r.enforcement_status === 'enforced').length}, partial: ${rows.filter((r) => r.enforcement_status === 'partial').length}, gap: ${rows.filter((r) => r.enforcement_status === 'gap').length}, retired: ${rows.filter((r) => r.enforcement_status === 'retired').length}`
   );
 
   const meta = {

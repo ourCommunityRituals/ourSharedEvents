@@ -66,8 +66,8 @@
 | # | Name | Status | Test file |
 |---|------|--------|-----------|
 | 10 | Deprecation Lock | live | `tests/e2e/0-architecture/deprecation-lock.invariant.spec.ts` |
-| 11 | Self-Hosted Runner Bash Resolution | live | `tests/e2e/0-architecture/runner-environment.invariant.spec.ts` |
-| 12 | Runner Pool Readiness Probe | live | `tests/e2e/0-architecture/runner-pool-readiness.invariant.spec.ts` |
+| 11 | Self-Hosted Runner Bash Resolution | retired | _retired 2026-09-02 (OSE-1194) — self-hosted pool decommissioned; spec deleted_ |
+| 12 | Runner Pool Readiness Probe | retired | _retired 2026-09-02 (OSE-1194) — self-hosted pool decommissioned; spec deleted_ |
 | 19 | Migration Monotonicity | live | `tests/e2e/0-architecture/migration-monotonicity.invariant.spec.ts` |
 
 ---

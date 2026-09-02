@@ -163,7 +163,7 @@ Every story is implemented from all six POVs simultaneously. CC reads all six an
 ### DevOps
 
 - DB provisioning, service config, CI/CD pipeline, secrets management
-- **Current state**: CI pipeline mature (security → gate → deploy-staging → smoke/contract/functional-staging → deploy-production → smoke-production). Secrets documented in `.github-secrets-required.json` + `CLOUDFLARE_SECRETS.md`. Environment parity verified. D1 provisioned with real IDs for staging + production (both DBs), KV provisioned 2026-08-18 (OSE-813), R2 buckets bound, CF zone active with routes on `stg.oursharedevents.com` and `oursharedevents.com`; `scripts/check-binding-placeholders.mjs` gates CI against placeholder IDs. Gitleaks config present (`.gitleaks.toml`). Remaining gaps: GCP SA (INFRA-3), FORMS_ENCRYPTION_KEY rotation doc (INFRA-4), first staging deploy sign-off (P1-7/P1-8).
+- **Current state**: CI pipeline mature (security → gate → deploy-staging → smoke/contract/functional-staging → deploy-production → smoke-production). Secrets documented in `.github-secrets-required.json` + `CLOUDFLARE_SECRETS.md`. Environment parity verified. D1 provisioned with real IDs for staging + production (both DBs), KV provisioned 2026-08-18 (OSE-813), R2 buckets bound, CF zone active with routes on `stg.oursharedevents.com` and `oursharedevents.com`; `scripts/check-binding-placeholders.mjs` gates CI against placeholder IDs. Gitleaks config present (`.gitleaks.toml`). Remaining gaps: GCP SA (INFRA-3), FORMS_ENCRYPTION_KEY rotation doc (INFRA-4), first staging deploy sign-off (P1-7/P1-8). Self-hosted runner pool (Bloodraven) retired 2026-09-02 (OSE-1194): all CI runs on GitHub-hosted ubuntu-latest, `tools/runner/` + `runner-env-validation.yml` deleted, brain invariants #11/#12 `retired`; `deploy-production`/`smoke-production` still declare `runs-on: self-hosted` pending their own rehearsed migration (OSE-1194 item 6).
 
 ---
 
@@ -333,4 +333,4 @@ Each story should include:
 
 ---
 
-*Doc status: role current-states last fully verified 2026-08-03 (STORIES.md); corrected for known drift 2026-08-28 (OCR-111 — routes, migrations, infra provisioning, closed BE gaps). The canonical route list is the header comment in `src/router.ts`; the canonical schema is `migrations/` + `migrations-forms/`.*
+_Doc status: role current-states last fully verified 2026-08-03 (STORIES.md); corrected for known drift 2026-08-28 (OCR-111 — routes, migrations, infra provisioning, closed BE gaps). The canonical route list is the header comment in `src/router.ts`; the canonical schema is `migrations/` + `migrations-forms/`._
