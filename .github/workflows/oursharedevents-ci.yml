@@ -1606,6 +1606,49 @@ jobs:
           echo "| T4e Attendee Arc Journey | \`${{ steps.attendee-arc-tests.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| T4f SharedReport Depth Gate | \`${{ steps.sharedreport-depth-tests.outcome }}\` |" >> $GITHUB_STEP_SUMMARY
 
+      # ── OSE-1171: split the T4 umbrella into per-gate NAMED CHECKS ───────────────
+      # This job stays ONE job (one setup, serialized D1 seeds — no new shared-staging
+      # contention, the constraint that rules out a matrix/per-gate-job split until the
+      # ephemeral-per-PR env lands, OSE-1186). It publishes a check-run per sub-gate so
+      # a red names ITS OWN gate instead of the opaque "T4 Functional → Staging" umbrella
+      # — the exact log-dive that OSE-1170's #450 forced three times.
+      #
+      # PURELY ADDITIVE: pass/fail semantics are unchanged. The blocking gates above
+      # still fail the job directly (fail-fast preserved, T4e's no-continue-on-error
+      # invariant from OSE-852 untouched); this step only SURFACES which gate. A gate
+      # that did not run because an earlier blocking gate halted the job posts as
+      # `neutral` — an honest "did not run", never a false green. Mirrors the gh-api
+      # check-run pattern in security-human-gate.yml.
+      #
+      # `if: always()` is load-bearing: without it, a halted job would skip this step
+      # and publish nothing — the failing gate would never name itself.
+      - name: 'Post T4 named checks'
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          post() {
+            local name="$1" outcome="$2" conclusion summary
+            case "$outcome" in
+              success) conclusion=success; summary="passed" ;;
+              failure) conclusion=failure; summary="failed" ;;
+              *)        conclusion=neutral; summary="did not run (an earlier blocking gate halted the job)" ;;
+            esac
+            gh api -X POST "repos/${{ github.repository }}/check-runs" \
+              -f name="$name" -f head_sha="$HEAD_SHA" \
+              -f status=completed -f conclusion="$conclusion" \
+              -f "output[title]=$name" -f "output[summary]=T4 sub-gate — ${summary}." \
+              >/dev/null && echo "posted: ${name} -> ${conclusion}"
+          }
+          post "T4a: Architecture Invariants"                     "${{ steps.arch-tests.outcome }}"
+          post "T4b: Core Journeys"                               "${{ steps.journey-tests.outcome }}"
+          post "T4c: Form E2E (register/checkin + validation)"    "${{ steps.form-e2e-tests.outcome }}"
+          post "T4c-phase2: Survey/Email E2E (synthetic Phase-2)" "${{ steps.form-e2e-phase2.outcome }}"
+          post "T4d: UI Smoke (Tier-1)"                           "${{ steps.ui-tests.outcome }}"
+          post "T4e: Attendee Arc Journey"                        "${{ steps.attendee-arc-tests.outcome }}"
+          post "T4f: SharedReport Depth Gate"                     "${{ steps.sharedreport-depth-tests.outcome }}"
+
       # ── S2 Post-execution integrity — the tamper tripwire, IN THE SAME VM that ran
       # the untrusted T4 execution (OSE-1056/1057). This is the migration-correct home
       # for the check the retired self-hosted `security-post` job used to attempt:
