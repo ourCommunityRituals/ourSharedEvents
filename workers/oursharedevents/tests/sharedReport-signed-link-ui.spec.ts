@@ -202,7 +202,7 @@ describe('OSE-R-003 SharedReport signed-link UI — API layer', () => {
     for (const testid of [
       'signed-link-event-title',
       'signed-link-event-date',
-      'signed-link-unique-gatherings',
+      'signed-link-distinct-gatherings',
       'signed-link-return-rate',
       'signed-link-corridor-density',
     ]) {

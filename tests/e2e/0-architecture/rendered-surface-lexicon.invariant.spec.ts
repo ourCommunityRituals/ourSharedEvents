@@ -21,10 +21,10 @@
  *
  * The banned list is read from schema-lexicon.ts so the vocabulary has ONE home.
  *
- * Ratchet, not a big-bang: shared-report.html carries pre-existing label debt
- * (Impressions / Unique Gatherings / Attendance columns — OSE-1204). Its
- * count may only go DOWN; any other rendered source must be at zero. When the
- * debt is paid, delete its KNOWN_DEBT row and this spec becomes a flat zero.
+ * Ratchet, not a big-bang: a file with pre-existing debt may be listed in
+ * KNOWN_DEBT and its count may only go DOWN; every other rendered source must
+ * be at zero. shared-report.html was the only row (11 labels, OSE-1204) and was
+ * paid down the same day — the map is empty and the spec is a flat zero.
  *
  * Structural: reads source from disk, no worker needed (T0 Gate invariants shard).
  */
@@ -38,9 +38,7 @@ const WORKER = join(REPO_ROOT, 'workers', 'oursharedevents', 'src');
 const LEXICON = join(WORKER, 'lib', 'schema-lexicon.ts');
 
 /** Pre-existing debt. File → maximum allowed hits. Only shrinks. */
-const KNOWN_DEBT: Record<string, { max: number; ticket: string }> = {
-  'templates/shared-report.html': { max: 11, ticket: 'OSE-1204' },
-};
+const KNOWN_DEBT: Record<string, { max: number; ticket: string }> = {};
 
 function renderedSources(): string[] {
   const templates = readdirSync(join(WORKER, 'templates'))

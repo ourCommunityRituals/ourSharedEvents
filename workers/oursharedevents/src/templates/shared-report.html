@@ -942,7 +942,7 @@
               '<td data-label="Surface">' +
               esc(s.surface) +
               '</td>' +
-              '<td data-label="Impressions">' +
+              '<td data-label="Displays">' +
               fmtInt(s.count) +
               '</td>' +
               '</tr>'
@@ -978,7 +978,7 @@
               '<td data-label="Date">' +
               esc(fmtDate(t.start_date)) +
               '</td>' +
-              '<td data-label="Unique gatherings">' +
+              '<td data-label="Distinct gatherings">' +
               fmtInt(t.unique_gatherings) +
               '</td>' +
               '</tr>'
@@ -996,8 +996,8 @@
           '</p>' +
           '</header>' +
           '<section class="stats-row" data-testid="signed-link-stats">' +
-          '<div class="stat-card" data-testid="signed-link-unique-gatherings">' +
-          '<dl class="stat-dl"><dt>Unique Gatherings</dt><dd>' +
+          '<div class="stat-card" data-testid="signed-link-distinct-gatherings">' +
+          '<dl class="stat-dl"><dt>Distinct Gatherings</dt><dd>' +
           fmtInt(report.unique_gatherings) +
           '</dd></dl>' +
           suppressionNote('unique_gatherings') +
@@ -1038,9 +1038,9 @@
               : '') +
           (sponsorRows
             ? '<section class="funnel-card" data-testid="signed-link-sponsor-section">' +
-              '<h3>Sponsor Impressions</h3>' +
-              '<table class="funnel-table" aria-label="Sponsor impressions">' +
-              '<thead><tr><th scope="col">Sponsor</th><th scope="col">Surface</th><th scope="col">Impressions</th></tr></thead>' +
+              '<h3>Sponsor Displays</h3>'  /* OSE-1204: a display is an ad rendered — the honesty lexicon's word; never 'impressions' */ +
+              '<table class="funnel-table" aria-label="Sponsor displays">' +
+              '<thead><tr><th scope="col">Sponsor</th><th scope="col">Surface</th><th scope="col">Displays</th></tr></thead>' +
               '<tbody>' +
               sponsorRows +
               '</tbody>' +
@@ -1064,17 +1064,17 @@
                   '<h3>Sponsor Competitive View</h3>' +
                   '<p class="report-note">Class-level totals — individual sponsor details are scoped to their own signed link.</p>' +
                   '<table class="funnel-table" aria-label="Sponsor class breakdown" data-testid="sponsor-class-table">' +
-                  '<thead><tr><th scope="col">Class</th><th scope="col">Sponsors</th><th scope="col">Impressions</th></tr></thead>' +
+                  '<thead><tr><th scope="col">Class</th><th scope="col">Sponsors</th><th scope="col">Displays</th></tr></thead>' +
                   '<tbody>' +
-                  '<tr data-testid="sponsor-class-row-local"><td>Local</td><td data-testid="local-sponsor-count">' + fmtInt(localSponsors) + '</td><td data-testid="local-impressions">' + fmtInt(localImpr) + '</td></tr>' +
-                  '<tr data-testid="sponsor-class-row-mid"><td>Mid</td><td data-testid="mid-sponsor-count">' + fmtInt(midSponsors) + '</td><td data-testid="mid-impressions">' + fmtInt(scb.mid ? scb.mid.total_impressions : 0) + '</td></tr>' +
-                  '<tr data-testid="sponsor-class-row-premium"><td>Premium</td><td data-testid="premium-sponsor-count">' + fmtInt(premiumSponsors) + '</td><td data-testid="premium-impressions">' + fmtInt(scb.premium ? scb.premium.total_impressions : 0) + '</td></tr>' +
+                  '<tr data-testid="sponsor-class-row-local"><td>Local</td><td data-testid="local-sponsor-count">' + fmtInt(localSponsors) + '</td><td data-testid="local-displays">' + fmtInt(localImpr) + '</td></tr>' +
+                  '<tr data-testid="sponsor-class-row-mid"><td>Mid</td><td data-testid="mid-sponsor-count">' + fmtInt(midSponsors) + '</td><td data-testid="mid-displays">' + fmtInt(scb.mid ? scb.mid.total_impressions : 0) + '</td></tr>' +
+                  '<tr data-testid="sponsor-class-row-premium"><td>Premium</td><td data-testid="premium-sponsor-count">' + fmtInt(premiumSponsors) + '</td><td data-testid="premium-displays">' + fmtInt(scb.premium ? scb.premium.total_impressions : 0) + '</td></tr>' +
                   '</tbody></table>' +
                   '<div class="local-vs-paid-bar" data-testid="local-vs-paid-bar" aria-label="Local ' + localPct + '% vs Paid ' + paidPct + '%">' +
                   '<div class="bar-local" data-testid="bar-local" style="width:' + localPct + '%" title="Local ' + localPct + '%"></div>' +
                   '<div class="bar-paid" data-testid="bar-paid" style="width:' + paidPct + '%" title="Paid ' + paidPct + '%"></div>' +
                   '</div>' +
-                  '<p class="report-note" data-testid="local-vs-paid-delta">Local: <strong data-testid="local-impressions-total">' + fmtInt(localImpr) + '</strong> impressions · Paid: <strong data-testid="paid-impressions-total">' + fmtInt(paidImpr) + '</strong> impressions</p>' +
+                  '<p class="report-note" data-testid="local-vs-paid-delta">Local: <strong data-testid="local-displays-total">' + fmtInt(localImpr) + '</strong> displays · Paid: <strong data-testid="paid-displays-total">' + fmtInt(paidImpr) + '</strong> displays</p>' +
                   '</section>'
                 );
               })()
@@ -1094,7 +1094,7 @@
             ? '<section class="funnel-card" data-testid="signed-link-trend-section">' +
               '<h3>Headcount Trend</h3>' +
               '<table class="funnel-table" aria-label="Headcount trend across the series">' +
-              '<thead><tr><th scope="col">Date</th><th scope="col">Unique Gatherings</th></tr></thead>' +
+              '<thead><tr><th scope="col">Date</th><th scope="col">Distinct Gatherings</th></tr></thead>' +
               '<tbody>' +
               trendRows +
               '</tbody>' +
@@ -1324,7 +1324,7 @@
           '<th scope="col">Registrations</th>' +
           '<th scope="col" class="bar-cell"></th>' +
           '<th scope="col">Check-ins</th>' +
-          '<th scope="col">Attendance</th>' +
+          '<th scope="col">Showed up</th>' +
           '</tr></thead><tbody>' +
           rows
             .map((r) => {
@@ -1344,7 +1344,7 @@
                 '<td data-label="Check-ins" data-testid="funnel-checkin-count">' +
                 r.checkin +
                 '</td>' +
-                '<td data-label="Attendance" class="rate-val" data-testid="funnel-rate">' +
+                '<td data-label="Showed up" class="rate-val" data-testid="funnel-rate">' +
                 pct +
                 '%</td>' +
                 '</tr>'

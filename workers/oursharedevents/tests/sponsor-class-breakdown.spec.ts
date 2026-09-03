@@ -48,14 +48,14 @@ describe('SR-25 | Sponsor Competitive View gate', () => {
     expect(src).toContain('data-testid="sponsor-class-row-premium"');
   });
 
-  test('sponsor count and impressions testids are present for each class', () => {
+  test('sponsor count and displays testids are present for each class', () => {
     const src = getSharedReportHtml();
     expect(src).toContain('data-testid="local-sponsor-count"');
-    expect(src).toContain('data-testid="local-impressions"');
+    expect(src).toContain('data-testid="local-displays"');
     expect(src).toContain('data-testid="mid-sponsor-count"');
-    expect(src).toContain('data-testid="mid-impressions"');
+    expect(src).toContain('data-testid="mid-displays"');
     expect(src).toContain('data-testid="premium-sponsor-count"');
-    expect(src).toContain('data-testid="premium-impressions"');
+    expect(src).toContain('data-testid="premium-displays"');
   });
 
   test('local-vs-paid bar section is present', () => {
@@ -68,8 +68,8 @@ describe('SR-25 | Sponsor Competitive View gate', () => {
   test('local-vs-paid delta summary is present', () => {
     const src = getSharedReportHtml();
     expect(src).toContain('data-testid="local-vs-paid-delta"');
-    expect(src).toContain('data-testid="local-impressions-total"');
-    expect(src).toContain('data-testid="paid-impressions-total"');
+    expect(src).toContain('data-testid="local-displays-total"');
+    expect(src).toContain('data-testid="paid-displays-total"');
   });
 
   test('competitive view is gated on report.sponsor_class_breakdown existence', () => {
