@@ -79,6 +79,24 @@
         transition: background 0.2s;
         flex-shrink: 0;
       }
+      .event-card .cta-secondary {
+        background: transparent;
+        color: var(--accent);
+        box-shadow: inset 0 0 0 2px var(--accent);
+      }
+      .tag-wrapped {
+        display: inline-block;
+        margin-left: 0.5rem;
+        padding: 0.1rem 0.5rem;
+        border-radius: 999px;
+        font-size: 0.7rem;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        vertical-align: middle;
+        background: var(--surface-muted, #e9eef5);
+        color: var(--text-muted, #4a6882);
+      }
       .event-card .cta:hover {
         background: var(--accent-hover);
       }
@@ -250,8 +268,12 @@
               '<p class="loading" data-testid="public-events-empty" role="status">No events scheduled.</p>';
             return;
           }
+          // OSE-1201 follow-on (staging walkthrough 2026-09-03): the list said
+          // "Upcoming" and offered Register on an event whose own page said it
+          // was a wrap. The API already emits `phase`; the list now reads it.
+          const upcoming = data.items.filter((e) => e.phase !== 'post_event').length;
           const countEl = document.getElementById('events-count');
-          if (countEl) countEl.textContent = data.items.length + ' upcoming event' + (data.items.length === 1 ? '' : 's');
+          if (countEl) countEl.textContent = upcoming + ' upcoming event' + (upcoming === 1 ? '' : 's');
           container.innerHTML = data.items
             .map((e) => {
               const safeId = esc(String(e.id || ''));
@@ -275,13 +297,20 @@
               const venueStr = e.venue ? esc(e.venue) : '';
               const datePart = dateStr ? '<span data-testid="public-event-date">' + dateStr + '</span>' : '';
               const venuePart = venueStr ? ' &middot; <span data-testid="public-event-venue">' + venueStr + '</span>' : '';
+              const phase = esc(String(e.phase || ''));
+              const wrapped = e.phase === 'post_event';
+              // A wrapped event links to its recap, never to a registration form.
+              const cta = wrapped
+                ? '<a class="cta cta-secondary" href="/events/' + safeId + '" data-testid="public-event-cta" data-cta="recap" aria-label="See how ' + safeName + ' went">See how it went</a>'
+                : '<a class="cta" href="/forms/' + safeId + '?type=register&event=' + encodedName + '" data-testid="public-event-cta" data-cta="register" aria-label="Register for ' + safeName + '">Register</a>';
+              const wrappedTag = wrapped ? ' <span class="tag-wrapped" data-testid="public-event-wrapped">Wrapped</span>' : '';
               return `
-          <div class="event-card" data-testid="public-event-card" data-event-id="${safeId}">
+          <div class="event-card" data-testid="public-event-card" data-event-id="${safeId}" data-phase="${phase}">
             <div class="event-info" data-testid="public-event-info">
-              <h3 data-testid="public-event-name">${safeName}</h3>
+              <h3 data-testid="public-event-name">${safeName}${wrappedTag}</h3>
               <p class="meta" data-testid="public-event-meta">${datePart}${venuePart}</p>
             </div>
-            <a class="cta" href="/forms/${safeId}?type=register&event=${encodedName}" data-testid="public-event-cta" aria-label="Register for ${safeName}">Register</a>
+            ${cta}
           </div>`;
             })
             .join('');

@@ -19,21 +19,23 @@ test.describe('Journey: Pre-Event — Customer Registration', () => {
   test('Step 1: /events loads with event cards + Register CTAs', async ({ page }) => {
     await page.goto('/events', { waitUntil: 'networkidle', timeout: 20_000 });
 
-    const cards = page.locator('[data-testid="public-event-card"]');
+    // The list is phase-aware (staging walkthrough 2026-09-03): a wrapped event
+    // links to its recap, not a registration form. This journey is the
+    // PRE-event one, so it selects cards that still take registrations.
+    const cards = page.locator('[data-testid="public-event-card"]:not([data-phase="post_event"])');
     const count = await cards.count();
-    test.skip(count === 0, 'No events on staging');
+    test.skip(count === 0, 'No pre-event events on staging');
 
     await expect(cards.first()).toBeVisible();
-    await expect(page.locator('[data-testid="public-event-cta"]').first()).toBeVisible();
-    await expect(page.locator('[data-testid="public-event-cta"]').first()).toContainText(
-      'Register'
-    );
+    const cta = cards.first().locator('[data-testid="public-event-cta"]');
+    await expect(cta).toBeVisible();
+    await expect(cta).toContainText('Register');
   });
 
   test('Step 2: Click Register → lands on registration form', async ({ page }) => {
     await page.goto('/events', { waitUntil: 'networkidle', timeout: 20_000 });
-    const ctas = page.locator('[data-testid="public-event-cta"]');
-    test.skip((await ctas.count()) === 0, 'No events');
+    const ctas = page.locator('[data-testid="public-event-cta"][data-cta="register"]');
+    test.skip((await ctas.count()) === 0, 'No pre-event events');
 
     await ctas.first().click();
     await page.waitForLoadState('networkidle');
@@ -44,8 +46,8 @@ test.describe('Journey: Pre-Event — Customer Registration', () => {
 
   test('Step 3: Form header shows event name', async ({ page }) => {
     await page.goto('/events', { waitUntil: 'networkidle', timeout: 20_000 });
-    const ctas = page.locator('[data-testid="public-event-cta"]');
-    test.skip((await ctas.count()) === 0, 'No events');
+    const ctas = page.locator('[data-testid="public-event-cta"][data-cta="register"]');
+    test.skip((await ctas.count()) === 0, 'No pre-event events');
 
     // Get event name from card
     const eventName = await page.locator('[data-testid="public-event-name"]').first().textContent();
@@ -58,8 +60,8 @@ test.describe('Journey: Pre-Event — Customer Registration', () => {
 
   test('Step 4: Fill name → submit → success', async ({ page }) => {
     await page.goto('/events', { waitUntil: 'networkidle', timeout: 20_000 });
-    const ctas = page.locator('[data-testid="public-event-cta"]');
-    test.skip((await ctas.count()) === 0, 'No events');
+    const ctas = page.locator('[data-testid="public-event-cta"][data-cta="register"]');
+    test.skip((await ctas.count()) === 0, 'No pre-event events');
 
     await ctas.first().click();
     await page.waitForLoadState('networkidle');
