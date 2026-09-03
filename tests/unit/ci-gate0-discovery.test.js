@@ -228,18 +228,40 @@ describe('OSE-1170 Gate 0b — the class cannot return', () => {
         .filter(Boolean)
     ),
   ];
-  const declaresJsonReporter = (cfg) =>
-    /\[\s*['"]json['"]/.test(readFileSync(path.join(REPO, cfg), 'utf8'));
+  const configText = (cfg) => readFileSync(path.join(REPO, cfg), 'utf8');
+  const declaresJsonReporter = (cfg) => /\[\s*['"]json['"]/.test(configText(cfg));
+  // Declaring a json reporter is necessary but NOT sufficient: Playwright takes
+  // the config `outputFile` over PLAYWRIGHT_JSON_OUTPUT_NAME, so a hardcoded
+  // outputFile makes the guard read the wrong (empty) temp file and false-red a
+  // green run — exactly the OSE-1170 CI regression on #450. The config must wire
+  // its json outputFile to honor the env var so the guard can redirect it.
+  const jsonHonorsGuardEnvVar = (cfg) => {
+    const txt = configText(cfg);
+    // Every json reporter block must reference PLAYWRIGHT_JSON_OUTPUT_NAME in its
+    // outputFile. Count json blocks vs env-var references to catch a config that
+    // wires one json branch but leaves another hardcoded.
+    const jsonBlocks = (txt.match(/\[\s*['"]json['"]/g) ?? []).length;
+    const envRefs = (txt.match(/PLAYWRIGHT_JSON_OUTPUT_NAME/g) ?? []).length;
+    return jsonBlocks > 0 && envRefs >= jsonBlocks;
+  };
 
   it('there is at least one guarded step (else this invariant is vacuous)', () => {
     expect(guardConfigs.length).toBeGreaterThan(0);
   });
 
-  it('every config pw-guarded.sh runs declares a json reporter (else Gate 0b false-reds a green run)', () => {
+  it('every config pw-guarded.sh runs declares a json reporter (else Gate 0b sees no result JSON)', () => {
     const missing = guardConfigs.filter((cfg) => !declaresJsonReporter(cfg));
     expect(
       missing,
       `these guarded configs emit no result JSON, so Gate 0b cannot confirm execution: ${missing.join(', ')}`
+    ).toEqual([]);
+  });
+
+  it('every guarded json reporter honors PLAYWRIGHT_JSON_OUTPUT_NAME (else Gate 0b false-reds a green run)', () => {
+    const unwired = guardConfigs.filter((cfg) => !jsonHonorsGuardEnvVar(cfg));
+    expect(
+      unwired,
+      `these guarded configs hardcode json outputFile, so the guard reads an empty temp file and false-reds: ${unwired.join(', ')}`
     ).toEqual([]);
   });
 });

@@ -21,9 +21,15 @@
 #   all-skipped step is not green. The executed/skipped split is published so a
 #   partial-skip is visible rather than silent.
 #
-# The post-run JSON is obtained via PLAYWRIGHT_JSON_OUTPUT_NAME, which each
-# config's `json` reporter honors (env var wins over the config `outputFile`),
-# so the config's own reporters — html, junit, line — are preserved untouched.
+# The post-run JSON is obtained via PLAYWRIGHT_JSON_OUTPUT_NAME. Playwright's
+# json reporter takes the config `outputFile` OVER this env var (env-var-wins
+# was wrong — CI proved it, OSE-1170), so the env var cannot override a config
+# from outside. Each guarded config therefore wires its json `outputFile` to
+# `process.env.PLAYWRIGHT_JSON_OUTPUT_NAME || '<default>'`, making the config
+# value BE this temp file when we set it while leaving html/junit/line intact.
+# A guarded config that does not honor the env var would write its result JSON
+# elsewhere and this guard would false-red a green run — the ci-gate0-discovery
+# class-invariant locks the wiring in.
 #
 # NOTE on the split: Playwright reports both an intentional `test.skip()` and a
 # precondition-unmet skip as status "skipped"; it does not distinguish them.
