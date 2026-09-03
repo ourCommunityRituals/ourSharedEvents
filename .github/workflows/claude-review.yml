@@ -36,12 +36,18 @@ jobs:
     defaults:
       run:
         shell: bash
-    # Run on PR events, or on issue comments that mention @claude on a PR
+    # Run on PR events, or on issue comments that mention @claude on a PR.
+    # The issue_comment path is TRUSTED-ACTOR-GATED (author_association ∈
+    # OWNER/MEMBER/COLLABORATOR) — comment bodies are fed to an LLM agent that runs
+    # with ANTHROPIC_API_KEY and pull-requests/issues write. Without the gate, any
+    # commenter could trigger it: prompt-injection + API-spend DoS. Mirrors the gate
+    # already in ourWKRP's claude.yml (best-of-both CI sync flowing WKRP→OSE).
     if: |
       github.event_name == 'pull_request' ||
       (github.event_name == 'issue_comment' &&
        github.event.issue.pull_request &&
-       contains(github.event.comment.body, '@claude'))
+       contains(github.event.comment.body, '@claude') &&
+       contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association))
     permissions:
       contents: read
       pull-requests: write
@@ -65,10 +71,16 @@ jobs:
       - uses: actions/checkout@v7
         if: steps.check-key.outputs.skip != 'true'
 
-      - uses: anthropics/claude-code-action@v1
+      # SHA-pinned (supply-chain): a mutable @v1 tag can be force-pushed to run
+      # attacker code with this job's ANTHROPIC_API_KEY + write scopes. Bump via Dependabot.
+      - uses: anthropics/claude-code-action@fa2b2666b747000bf42767d1f332065b375e3c8f # v1
         if: steps.check-key.outputs.skip != 'true'
         continue-on-error: true  # Advisory — API failures must not block PRs
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          model: "claude-sonnet-4-20250514"
+          # Current, non-dated alias. Was pinned to the dated "claude-sonnet-4-20250514",
+          # which retires 2026-06-15 — a dated id trades the rolling-default problem for a
+          # time-bomb that (with continue-on-error) would fail SILENTLY. Owner may bump to
+          # claude-opus-4-8 for higher review quality.
+          model: "claude-sonnet-4-6"
           timeout_minutes: 10
