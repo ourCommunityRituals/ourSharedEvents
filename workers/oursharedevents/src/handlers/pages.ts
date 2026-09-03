@@ -107,7 +107,12 @@ function securityHeaders(nonce: string): Record<string, string> {
     'X-Frame-Options': 'SAMEORIGIN',
     'Referrer-Policy': 'strict-origin-when-cross-origin',
     'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
-    'Content-Security-Policy': `default-src 'self'; script-src 'self' 'nonce-${nonce}'; style-src 'self' 'unsafe-inline'; connect-src 'self'; frame-ancestors 'self'`,
+    // OSE-1199: `img-src 'self' data:` is load-bearing — the poster's QR codes
+    // and the UEC resolver both hand the page data: PNGs, and without an explicit
+    // img-src they fall to default-src 'self' and the browser refuses them (the
+    // poster printed alt text on staging). Same directive form-pages.ts and
+    // demo.ts already carry. Guarded by tests/poster-page-csp.spec.ts.
+    'Content-Security-Policy': `default-src 'self'; script-src 'self' 'nonce-${nonce}'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'self'`,
   };
 }
 
