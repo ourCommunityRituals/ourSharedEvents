@@ -1,6 +1,6 @@
 {
   "$schema": "./schemas/deploy-manifest.schema.json",
-  "_comment": "Centralized Deployment Manifest - Single Source of Truth for Environment Configuration",
+  "_comment": "Deployment Manifest. The top-level environments block is the LEGACY zeventbooks configuration kept for scripts/read-manifest.js consumers; the OurSharedEvents block below and workers/oursharedevents/wrangler.toml are the live source of truth.",
   "_version": "2.0.0",
   "_lastUpdated": "2025-12-13",
   "_story": "Story 5.3: Decommission Apps Script Project",
@@ -155,7 +155,7 @@
   },
 
   "ourSharedEvents": {
-    "_comment": "OurSharedEvents – Phase 1 Cloudflare Worker (Google Sheets backend)",
+    "_comment": "OurSharedEvents – Cloudflare Worker + D1 (no Sheets/GAS backend; live deploy targets are workers/oursharedevents/wrangler.toml)",
     "_worker": "workers/oursharedevents",
 
     "staging": {

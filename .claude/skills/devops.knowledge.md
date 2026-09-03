@@ -1,5 +1,7 @@
 # DevOps — Knowledge Base
 
+> **Reconciliation note (2026-09-03, code wins):** runner facts below may be stale: the self-hosted fleet was retired 2026-09-02 (OSE-1194); all CI runs on GitHub-hosted `ubuntu-latest` except `deploy-production` / `smoke-production`. Secrets gate is detect-secrets (enforcing, `.secrets.baseline`); gitleaks is a non-blocking monitor. Trust root `CLAUDE.md` §3 DevOps over the text below until this file's truth pass.
+
 > **Role:** Owns environments, releases, pipelines, infrastructure provisioning, and org-wide product infrastructure
 > **Last Reconciled:** 2026-03-27
 

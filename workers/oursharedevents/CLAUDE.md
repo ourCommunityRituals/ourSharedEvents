@@ -22,9 +22,12 @@ any request path** (see the hot-path ban below).
 ```
 src/
 ├── index.ts        # fetch entry + scheduled PII-lifecycle job; cost-metric seam
-├── router.ts       # route table (30+ endpoints)
+├── router.ts       # route table (≈75 method+path pairs + surface aliases; header comment is canonical)
 ├── auth/           # admin guard (CF Access JWT + Bearer fallback)
-├── handlers/       # health, events, pages, forms, form-pages, feature-flags
+├── handlers/       # 30 files: health, events, pages, forms, form-pages, feature-flags,
+│                   #   sponsors*, poster-*, qr-*, uec-resolve, shortlink-resolve,
+│                   #   shared-report-*, event-stats, portfolio-rollup, upload, bigquery,
+│                   #   audit, data-subject, privacy, briefing, demo, subscribers, geocode
 ├── lib/            # forms-db (hash/encrypt/bucket), feature-flags, cors,
 │                   #   ai-sanitization.ts  ← the ONLY sanctioned AI seam
 ├── domain/ google/ cloud/ templates/   # domain logic, integrations, HTML

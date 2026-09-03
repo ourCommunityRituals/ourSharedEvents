@@ -1,7 +1,7 @@
 {
   "name": "mvp-event-toolkit",
   "version": "1.3.0",
-  "description": "Multi-brand event management system with sponsor tracking and analytics (Zeventbook)",
+  "description": "OurSharedEvents (OSE) — anonymous-ID event infrastructure platform on Cloudflare Workers + D1. Package name kept from the pre-migration toolkit for lockfile stability.",
   "main": "workers/oursharedevents/src/index.ts",
   "scripts": {
     "test": "vitest run",

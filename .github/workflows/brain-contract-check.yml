@@ -35,14 +35,6 @@ jobs:
         with:
           path: ose
 
-      - name: Checkout OCR-docs brain (read-only)
-        uses: actions/checkout@v7
-        with:
-          repository: ourCommunityRituals/OCR-docs
-          path: ocr-docs
-          ref: main
-          token: ${{ secrets.OCR_PROPAGATE_TOKEN }}
-
       - name: Set up Python
         uses: actions/setup-python@v7
         with:
@@ -66,6 +58,19 @@ jobs:
           python3 -m pip install pyyaml packaging "ruamel.yaml>=0.18"
           python3 -c 'import ruamel.yaml, yaml, packaging' \
             || { echo "::error::brain deps missing from the python3 env"; exit 1; }
+
+      # Checkout the brain AFTER the dependency install and never persist the
+      # credential: OCR_PROPAGATE_TOKEN is an org-write PAT, so it must not be in
+      # git config while third-party install hooks run, and it must not be left
+      # behind for later steps. Same hardening as conformance-report.yml (OSE-1031).
+      - name: Checkout OCR-docs brain (read-only)
+        uses: actions/checkout@v7
+        with:
+          repository: ourCommunityRituals/OCR-docs
+          path: ocr-docs
+          ref: main
+          token: ${{ secrets.OCR_PROPAGATE_TOKEN }}
+          persist-credentials: false
 
       - name: Run brain test pyramid
         id: brain-pyramid

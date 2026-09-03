@@ -18,20 +18,44 @@ not WHAT they are.
 ## Invariants in this suite
 
 The 0-architecture suite is the runtime mirror of the brain canonical at
-`OCR-docs/ocr-docs-brain/architectural-invariants.yaml`. Each row below is one
-brain-listed invariant whose enforcement mechanism has shipped + has a
-dedicated test file here. Brain invariants whose mechanisms are still
-unshipped (currently 6, 7, 9) do not yet have a row.
+`OCR-docs/ocr-docs-brain/architectural-invariants.yaml`. Every spec below is
+wired: `structural` specs are named in the T0 Gate `invariants` shard of
+`.github/workflows/oursharedevents-ci.yml` (every PR/push); `runtime` specs run
+in T4a against deployed staging. Rows marked **unregistered** are OSE gates that
+have no brain entry yet (spoke-ahead-of-brain — tracked in
+`OCR-docs/docs/OCR_VISION.md` §10). Brain entries whose OSE artifact lives
+outside this folder: #14 (`tests/playwright/mobile-workability.spec.ts`),
+#22 (`scripts/check-cross-repo-imports.sh`), #23 (`tests/red-team/`),
+#24 (`tests/audit-layer.spec.ts` — not yet written).
 
-| #   | Invariant                            | Test File                            | Kind       | Enforces                                                                                                                                                  |
-| --- | ------------------------------------ | ------------------------------------ | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | Anonymous ID                         | `anonymous-id.invariant.spec.ts`     | runtime    | Zero-PII scan system, two-database separation, cookie contract, no cross-linking                                                                          |
-| 2   | Hyper-local Geo-Resolution           | `geo-resolution.invariant.spec.ts`   | runtime    | sponsor_areas + sponsor_event_types, corridor-level resolution, zip+radius matching                                                                       |
-| 3   | UEC Encoding                         | `uec-codes.invariant.spec.ts`        | runtime    | 7 color-semantic QR codes, Blue=#1A3A8A for SPONSOR, URL path semantics                                                                                   |
-| 4   | NCR Data Accumulation                | `ncr-accumulation.invariant.spec.ts` | runtime    | poster_deployments lat/lng, scan_aggregates pipeline, permanent storage (no PII = no TTL)                                                                 |
-| 5   | Tier Equity / Local Sponsor Covenant | `tier-equity.invariant.spec.ts`      | structural | Local sponsors take display-priority over non-local at every tier. tierSort() compares is_local BEFORE TIER_PRIORITY. Migration 0036 + ADR-013.           |
-| 8   | Bounded PII Retention                | `pii-retention.invariant.spec.ts`    | structural | Daily lifecycle cron deletes/scrubs PII keyed by TTL columns. Every PII-bearing table has a phase; every phase writes pii_audit_log on success AND error. |
-| 10  | Deprecation Lock                     | `deprecation-lock.invariant.spec.ts` | structural | Once a runtime is removed (today: GAS), CI forbids reintroduction. `scripts/guard-no-gas.js` is wired into the lint shard of `oursharedevents-ci`.        |
+| Brain #        | Invariant                                       | Test file                                    | Kind       |
+| -------------- | ----------------------------------------------- | -------------------------------------------- | ---------- |
+| #7 (partial)   | Aggregate-Only Reporting                        | `aggregate-only.invariant.spec.ts`           | structural |
+| #1 (live)      | Anonymous ID                                    | `anonymous-id.invariant.spec.ts`             | runtime    |
+| #16 (live)     | API Response Schema Stability                   | `api-response-schema.invariant.spec.ts`      | structural |
+| #15 (live)     | CORS Allowlist Immutability                     | `cors-allowlist.invariant.spec.ts`           | structural |
+| — unregistered | Cost metric never-who (COST-301)                | `cost-metric-never-who.invariant.spec.ts`    | structural |
+| #10 (live)     | Deprecation Lock                                | `deprecation-lock.invariant.spec.ts`         | structural |
+| — unregistered | Edge token cryptographic verification (OSE-573) | `edge-token-verification.invariant.spec.ts`  | structural |
+| #2 (live)      | Hyperlocal Geo-Resolution                       | `geo-resolution.invariant.spec.ts`           | runtime    |
+| #19 (live)     | Migration Monotonicity                          | `migration-monotonicity.invariant.spec.ts`   | structural |
+| #6 (live)      | Inert Monetization Hooks                        | `monetization-inert.invariant.spec.ts`       | structural |
+| #4 (live)      | NCR Data Accumulation                           | `ncr-accumulation.invariant.spec.ts`         | runtime    |
+| #17 (live)     | OER Emission Boundary                           | `oer-emission-boundary.invariant.spec.ts`    | structural |
+| #8 (live)      | Bounded PII Retention                           | `pii-retention.invariant.spec.ts`            | structural |
+| — unregistered | Runtime stays LLM-free (COST-101)               | `runtime-llm-free.invariant.spec.ts`         | structural |
+| — unregistered | Split scan path — placement ⟂ session           | `scan-path-split.invariant.spec.ts`          | structural |
+| #21 (live)     | SharedReport Schema Stability                   | `shared-report-schema.invariant.spec.ts`     | structural |
+| #18 (live)     | QR Code URL / Slug Permanence                   | `slug-permanence.invariant.spec.ts`          | structural |
+| — unregistered | Split sponsor identity (OSE-799)                | `sponsor-identity-split.invariant.spec.ts`   | structural |
+| #25 (live)     | Sponsor Share Covenant                          | `sponsor-share-covenant.invariant.spec.ts`   | structural |
+| — unregistered | Sponsor signal never-who (OSE-1164)             | `sponsor-signal-never-who.invariant.spec.ts` | structural |
+| #9 (partial)   | Tenant Isolation                                | `tenant-isolation.invariant.spec.ts`         | structural |
+| #5 (partial)   | Local Sponsor Covenant                          | `tier-equity.invariant.spec.ts`              | structural |
+| #3 (live)      | Universal Event Code Standard                   | `uec-codes.invariant.spec.ts`                | runtime    |
+| — unregistered | Worker-scoped CLAUDE.md boundary (COST-403)     | `worker-claude-md.invariant.spec.ts`         | structural |
+
+_Generated 2026-09-03 from the registry (25 entries) and the CI file list: 24 specs, 20 structural / 4 runtime._
 
 ## Structural vs runtime — and where each runs in CI (OSE-350)
 
@@ -62,7 +86,9 @@ new structural invariant that isn't wired into the flow fails CI.
 # Full suite (needs staging up for the runtime specs):
 npx playwright test --config=playwright.e2e-smoke.config.ts tests/e2e/0-architecture/
 
-# Structural subset only (no worker needed — what T0 Gate runs):
+# Structural subset only (no worker needed — what T0 Gate runs). The
+# authoritative file list is the "Architecture: structural invariants" step
+# in .github/workflows/oursharedevents-ci.yml; e.g.:
 npx playwright test --config=playwright.e2e-smoke.config.ts \
   tests/e2e/0-architecture/deprecation-lock.invariant.spec.ts \
   tests/e2e/0-architecture/pii-retention.invariant.spec.ts \
@@ -82,10 +108,12 @@ The `structural` specs read source files from disk via `node:fs` (Playwright
 runs with Node-tier filesystem access) and assert:
 
 1. The mechanism's **files still exist** — deletion = failure.
-2. The mechanism's **load-bearing code shape** is intact — e.g., `tierSort()`
-   compares `is_local` before `TIER_PRIORITY`, the runner verifier still
-   detects `WindowsApps` paths as WSL bash, the janitor still emits
-   `RUNNER_POOL_DEGRADED` for circuit-breaker trips.
+2. The mechanism's **load-bearing code shape** is intact — e.g., the covenant
+   allocator keeps the local share-of-voice floor (#5/#25), no migration
+   mutates the `slug` column (#18), the cost-metric emitter only carries the
+   sealed allowlist of aggregate fields (never-who). (The runner-verifier and
+   janitor examples that used to sit here belonged to #11/#12, retired in
+   OSE-1194.)
 3. Wherever the mechanism depends on **CI wiring**, the workflow file actually
    invokes the script — a guard that lives in `scripts/` but is never invoked
    is theater. The deprecation-lock spec is the canonical example.

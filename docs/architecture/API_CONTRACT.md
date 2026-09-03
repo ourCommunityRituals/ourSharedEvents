@@ -1,3 +1,5 @@
+> **ARCHIVAL — describes the retired Google Apps Script (`Code.gs`) envelope and `?p=` routing.** Nothing under `workers/oursharedevents/src/` implements this contract. The live contract is the `{ ok, status, item | items }` shape documented in the header comment of `workers/oursharedevents/src/router.ts` and locked by brain invariants #16 / #21 (`tests/e2e/0-architecture/api-response-schema.invariant.spec.ts`, `shared-report-schema.invariant.spec.ts`). Kept here pending a move to `archive/` (reconciliation 2026-09-03).
+
 # API Contract – Envelope Boundaries
 
 > **Version:** 1.0

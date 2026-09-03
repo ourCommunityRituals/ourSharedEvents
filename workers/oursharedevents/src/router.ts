@@ -93,6 +93,31 @@
  *   GET /.well-known/openid-configuration  → OIDC discovery (WIF)
  *   GET /.well-known/jwks.json             → WIF public key
  *
+ *   Also dispatched (reconciled against the dispatch below, 2026-09-03):
+ *   GET  /q/<qr_token>                     → anonymous QR scan ingestion → 302 to form page (OSE-625)
+ *   GET  /s/<code>                         → shortlink resolve, counter-only (OSE-240)
+ *   GET  /demo, /demo/:site                → permanent demo reference installation (OSE-605)
+ *   GET  /events, /events/:slug            → public events list / event page (aliases: /public, /schedule, /calendar, /agenda, /lineup)
+ *   GET  /privacy, /privacy-policy         → privacy notice page
+ *   GET  /briefing (/overview, /summary)   → briefing page
+ *   Surface aliases: / (/home, /welcome, /landing, /about, /info) · /admin (/manage, /dashboard, /create)
+ *     · /display (/tv, /kiosk, /screen) · /poster (/posters, /flyers, /tabletop, /tent, /signage)
+ *     · /sharedReport (/report, /analytics, /reports, /insights, /stats) · POST /subscribe (/signup, /newsletter)
+ *   POST /api/v2/admin/events                          → create event (audited)
+ *   POST /api/v2/admin/events/backfill-h3-cells        → one-shot H3 backfill (OSE-489)
+ *   GET  /api/v2/admin/events/portfolio-rollup         → brand-scoped rollup strip (OSE-669)
+ *   GET  /api/v2/admin/events/:id/stats                → admin event stats
+ *   GET  /api/v2/admin/events/:id/forms/export         → CSV/JSON export (ADMIN-11)
+ *   POST /api/v2/admin/sponsors/promote                → promote onboarding draft → sponsor (OSE-736)
+ *   GET  /api/v2/admin/subscribers                     → subscriber list (admin)
+ *   POST /api/v2/admin/geocode                         → admin geocode helper
+ *   POST /api/v2/sponsors/draft                        → sponsor onboarding draft (public, rate-limited)
+ *   POST /api/v2/sponsors/draft/:id/asset/:kind        → draft asset upload
+ *   GET  /api/v2/sponsors/:id/asset/:kind              → sponsor asset (public)
+ *   GET  /api/v2/sponsors/:id/logo                     → sponsor logo (public)
+ *   GET  /api/v2/maps/venue-image?venue=               → Static Maps proxy (OSE-217)
+ *   DELETE /api/v2/events/:id/forms/register           → anonymous registration self-delete (OSE-659)
+ *
  *   *                            → 404
  */
 

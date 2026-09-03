@@ -634,6 +634,8 @@ jobs:
           # brain-contract-check.yml uses). Default GITHUB_TOKEN can't read
           # across private repos.
           token: ${{ secrets.OCR_PROPAGATE_TOKEN }}
+          # Org-write PAT: never leave it in git config for later steps (OSE-1031 hardening).
+          persist-credentials: false
 
       - name: 'Quality: Worker D1 schema'
         if: matrix.shard == 'tests'

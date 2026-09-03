@@ -12,10 +12,9 @@ Skills for working in the OurSharedEvents repo.
 | Full name         | OurSharedEvents                                          |
 | Type              | Core platform — event infrastructure, API, admin         |
 | Stack             | Cloudflare Workers, Wrangler, D1 (edge SQLite)           |
-| Hosting           | Firebase Hosting (Phase 3)                               |
-| CI/CD             | GitHub Actions (5-stage pipeline, staging + prod)        |
-| Observability     | Datadog (synthetic tests, dashboards — planned)          |
-| Working directory | `C:\Users\mzdan\dev\ourCommunityRituals\ourSharedEvents` |
+| Hosting           | Cloudflare Workers (Firebase Hosting is Phase 3 — not started) |
+| CI/CD             | GitHub Actions — S0 → T0 → T1 → T2/T3 → T4 (staging) + tag-gated prod |
+| Observability     | Cloudflare Workers Logs + `/health`; dashboards/alerting not built |
 | Domain            | oursharedevents.com                                      |
 | Data model        | Anonymous ID architecture — no PII in database           |
 
@@ -29,7 +28,7 @@ User says: "ccr", "ccr audit", "ccr mvp", "run ccr", "production readiness", "pr
 
 ### Steps
 
-1. Read `.claude/skills/ccr-mvp.md` for full CCR-gated sprint story protocol
+1. Read `.ocr-standards/skills/ccr-mvp.md` (propagated from OCR-docs) for the CCR-gated sprint story protocol
 2. Follow the 7-step process: Chunk → Batch → Chain → Cache → CCR Process Gate → CCR Impact Gate → Discipline Pass → Human Approval → Commit
 
 ---
@@ -62,7 +61,7 @@ User says: "frontend audit", "surface audit", "ui check", "admin audit", "kaizen
 
 ### Steps
 
-1. Read `CLAUDE.md` for the 5 MVP surfaces
+1. Read `CLAUDE.md` for the 6 surfaces
 2. For each surface (admin, public, display, poster, sharedReport, doc, config):
    - Check current state of HTML
    - Catalog inline styles, test-ID coverage, breakpoint direction

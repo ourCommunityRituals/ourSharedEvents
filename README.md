@@ -10,17 +10,19 @@ ourSharedEvents powers community event management — registration, check-in, sp
 
 ## The ourCommunityRituals Ecosystem
 
-| Product                           | Repo                                                                      | Role                                                             |
-| --------------------------------- | ------------------------------------------------------------------------- | ---------------------------------------------------------------- |
-| **ourSharedEvents** _(this repo)_ | [ourSharedEvents](https://github.com/ourCommunityRituals/ourSharedEvents) | Core platform — event infrastructure, API, admin, anonymous data |
-| **OurPulse**                      | —                                                                         | Engagement on-ramp — belt progression, playlists, playbooks      |
-| **OurSharedGames**                | —                                                                         | Recreational leagues — bocce, softball, cornhole                 |
-| **OurSharedRecords**              | —                                                                         | Community storytelling — 5-minute narratives, "tell me why"      |
-| **OurWKRP**                       | [ourWKRP](https://github.com/ourCommunityRituals/ourWKRP)                 | Music + culture media company (non-anonymous identity layer)     |
-| **OurAirwaves**                   | [ourAirwaves](https://github.com/ourCommunityRituals/ourAirwaves)         | White-label distribution — venues run branded instances          |
-| **OurSharedRings**                | [ourEventRings](https://github.com/ourCommunityRituals/ourEventRings)     | Research intelligence — NCR geographic analysis                  |
-| **OurSharedMagnets**              | —                                                                         | Developer toolkit — setup, testing, configuration                |
-| **OCR-docs**                      | [OCR-docs](https://github.com/ourCommunityRituals/OCR-docs)               | Org-level documentation and standards                            |
+Registry of record: `OCR-docs/ocr-docs-brain/product-registry.yaml` (mirrored in `OCR-docs/docs/OCR_VISION.md` §7).
+
+| Code | Product                           | Repo                                                                      | Role                                                              |
+| ---- | --------------------------------- | ------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| OCR  | OurCommunityRituals LLC           | [OCR-docs](https://github.com/ourCommunityRituals/OCR-docs)               | Holding company · org brain · governance                          |
+| OSE  | **ourSharedEvents** _(this repo)_ | [ourSharedEvents](https://github.com/ourCommunityRituals/ourSharedEvents) | The platform · anonymous ID · sponsor model                       |
+| OW   | OurWKRP                           | [ourWKRP](https://github.com/ourCommunityRituals/ourWKRP)                 | Community music curation · named identity (separate database)     |
+| OSG  | OurSharedGames                    | `ourSharedGames`                                                          | Founding activation format · anchor game nights (inherits OSE)    |
+| OSR  | OurSharedRecords                  | `ourSharedRecords`                                                        | Music, story, archive · oral history (inherits OSE)               |
+| OSP  | OurSharedPulse                    | `ourSharedPulse`                                                          | Pre-platform consulting · human-delivered                         |
+| OSM  | OurSharedMagnets                  | `ourSharedMagnets`                                                        | Developer and franchise layer · API + white label (flywheel back) |
+| OA   | OurAirwaves                       | `ourAirwaves`                                                             | Deployment and white label · client fork template (flywheel front)|
+| OER  | OurEventRings                     | —                                                                         | BigQuery RAG · cross-product intelligence                         |
 
 ---
 
@@ -33,7 +35,7 @@ User
  └── oursharedevents.com (Cloudflare Worker)
       ├── D1 Main DB (events, sponsors, scans, poster_deployments)
       ├── D1 Forms DB (registrations, surveys, email_signups, checkin_counts)
-      └── Feature Flags (18 flags, 3 tiers: Free/Pro/Enterprise)
+      └── Feature Flags (17 OSE-active flags, 3 tiers: Free/Mid/Enterprise — `@ocr/flags`)
 ```
 
 - **Runtime:** TypeScript Cloudflare Worker at `workers/oursharedevents/`
@@ -41,7 +43,7 @@ User
   - **MAIN_DB:** events, sponsors, poster_deployments, scans, scan_aggregates — zero PII
   - **FORMS_DB:** registrations (90-day TTL), email_signups (30-day TTL, AES-256-GCM encrypted), surveys, checkin_counts
 - **Auth:** CF Access JWT + Bearer token dual auth on admin endpoints
-- **CI/CD:** GitHub Actions — typecheck → lint → security scan (Semgrep + gitleaks) → D1 migrations → staging deploy → smoke tests
+- **CI/CD:** GitHub Actions on `ubuntu-latest` — S0 security (CodeQL, Semgrep, detect-secrets, npm audit, SBOM) → T0 gate (lint, typecheck, tests, a11y, structural invariants, component) → T1 staging deploy (D1 migrations) → T2 Bruno contract → T3 smoke → T4 functional; production deploy on `v*.*.*` tags
 - **Secrets:** Doppler (configured), Wrangler secrets (deployed)
 - **Monitoring:** Cloudflare Workers analytics, /health endpoint with D1 connectivity check
 
@@ -53,21 +55,24 @@ The platform runs two physically separate databases. MAIN_DB holds anonymous eve
 
 | Phase       | Stack                                 | Status                     |
 | ----------- | ------------------------------------- | -------------------------- |
-| ~~Phase 1~~ | ~~Cloudflare Worker + Google Sheets~~ | Skipped (ARCH-1 decision)  |
-| **Phase 2** | Cloudflare Worker + D1                | **Current — staging live** |
-| Phase 3     | + Firebase Auth + React/Tailwind UI   | Future                     |
+| ~~Phase 1~~ | ~~Cloudflare Worker + Google Sheets~~ | Retired — no Sheets/GAS code remains (Deprecation Lock, brain #10) |
+| **Phase 2** | Cloudflare Worker + D1                | **Current — staging deployed (OSE-548); production launch = OSE-15** |
+| Phase 3     | + Firebase Auth + React/Tailwind UI   | Not started                |
 
 ---
 
-## Five MVP Surfaces
+## Six Surfaces
 
-| Surface      | Route           | Purpose                                                     |
-| ------------ | --------------- | ----------------------------------------------------------- |
-| Admin        | `/admin`        | Event management, sponsor config, form setup, feature flags |
-| Public       | `/`             | Public event listing for attendees                          |
-| Display      | `/display`      | TV/kiosk at venue — sponsor rotation, live scan counts      |
-| Poster       | `/poster`       | Print-ready QR code displays with UEC color-semantic codes  |
-| SharedReport | `/sharedReport` | Sponsor analytics — tier-gated (Local/Mid/Premium)          |
+| Surface      | Route                      | Purpose                                                     |
+| ------------ | -------------------------- | ----------------------------------------------------------- |
+| Landing      | `/`                        | Marketing + email capture                                   |
+| Public       | `/events`, `/events/:slug` | Public event listing + event page for attendees             |
+| Admin        | `/admin`                   | Event management, sponsor config, form setup, feature flags |
+| Display      | `/display`                 | TV/kiosk at venue — sponsor rotation, live scan counts      |
+| Poster       | `/poster`                  | Print-ready QR code displays with UEC color-semantic codes  |
+| SharedReport | `/sharedReport`            | Sponsor analytics — depth enforced server-side (OSE-816)    |
+
+Alias paths (`/tv`, `/posters`, `/report`, …) are listed in the `router.ts` dispatch.
 
 ---
 
@@ -79,7 +84,8 @@ The platform runs two physically separate databases. MAIN_DB holds anonymous eve
 | ------ | -------------------- | ------------------------------- |
 | GET    | `/health`            | Worker health + D1 connectivity |
 | GET    | `/api/status`        | Alias for /health               |
-| GET    | `/`                  | Public events page (HTML)       |
+| GET    | `/`                  | Landing page (HTML)             |
+| GET    | `/events`            | Public events page (HTML)       |
 | GET    | `/display`           | TV/kiosk display surface (HTML) |
 | GET    | `/poster`            | Print poster surface (HTML)     |
 | GET    | `/sharedReport`      | Sponsor analytics report (HTML) |
@@ -88,36 +94,42 @@ The platform runs two physically separate databases. MAIN_DB holds anonymous eve
 
 ### Form Endpoints (Public)
 
-| Method | Path                         | Description                              |
-| ------ | ---------------------------- | ---------------------------------------- |
-| POST   | `/api/v2/forms/register`     | Event registration (90-day TTL)          |
-| POST   | `/api/v2/forms/checkin`      | Anonymous check-in (counter only)        |
-| POST   | `/api/v2/forms/survey`       | Post-event survey (PII scrubbed by cron) |
-| POST   | `/api/v2/forms/email-signup` | Email capture (AES-256-GCM, 30-day TTL)  |
+| Method | Path                                      | Description                              |
+| ------ | ----------------------------------------- | ---------------------------------------- |
+| POST   | `/api/v2/events/:id/forms/register`       | Event registration (90-day TTL)          |
+| POST   | `/api/v2/events/:id/forms/checkin`        | Anonymous check-in (counter only)        |
+| POST   | `/api/v2/events/:id/forms/survey`         | Post-event survey (PII scrubbed by cron) |
+| POST   | `/api/v2/events/:id/forms/email-signup`   | Email capture (AES-256-GCM, 30-day TTL)  |
+| GET    | `/forms/:eventId?type=…`                  | Mobile-first form landing page (QR)      |
+| GET    | `/q/<qr_token>`, `/s/<code>`              | QR scan ingestion / shortlink resolve    |
 
-### Admin Endpoints (Bearer token required)
+### Admin Endpoints (CF Access JWT; Bearer / X-OCR-Internal fallbacks are env-gated)
 
-| Method | Path                          | Description                           |
-| ------ | ----------------------------- | ------------------------------------- |
-| GET    | `/admin`                      | Admin dashboard (HTML)                |
-| GET    | `/api/v2/admin/events`        | Admin events list (includes archived) |
-| GET    | `/api/v2/admin/registrations` | Registration list for event           |
-| GET    | `/api/v2/admin/checkins`      | Check-in count for event              |
-| GET    | `/api/v2/admin/surveys`       | Surveys (PII-scrubbed)                |
-| GET    | `/api/v2/admin/email-signups` | Email signups for event               |
+| Method     | Path                                              | Description                                   |
+| ---------- | ------------------------------------------------- | --------------------------------------------- |
+| GET        | `/admin`                                          | Admin dashboard (HTML)                        |
+| GET/POST   | `/api/v2/admin/events`                            | Admin events list (includes archived) / create |
+| PUT/DELETE | `/api/v2/admin/events/:id`                        | Update / scan-guarded hard delete             |
+| GET        | `/api/v2/admin/events/:id/forms/registrations`    | Registration list for event                   |
+| GET        | `/api/v2/admin/events/:id/forms/checkin-count`    | Check-in count for event                      |
+| GET        | `/api/v2/admin/events/:id/forms/surveys`          | Surveys (PII-scrubbed)                        |
+| GET        | `/api/v2/admin/events/:id/forms/email-signups`    | Email signup count for event                  |
+| GET        | `/api/v2/admin/audit-log`                         | Admin mutation audit trail                    |
+
+Full table (sponsors, poster deployments, QR verify, uploads, data-subject erase, shared-report mint): header comment of `workers/oursharedevents/src/router.ts`.
 
 ### Feature Flag Endpoints (Admin)
 
-| Method | Path                             | Description                              |
-| ------ | -------------------------------- | ---------------------------------------- |
-| GET    | `/api/v2/admin/flags`            | List all 18 flags with current state     |
-| GET    | `/api/v2/admin/flags/presets`    | Free/Pro/Enterprise tier definitions     |
-| GET    | `/api/v2/admin/flags/tier`       | Detect current tier                      |
-| GET    | `/api/v2/admin/flags/resolve`    | Resolve flags for specific event         |
-| PUT    | `/api/v2/admin/flags/toggle`     | Toggle a global flag                     |
-| POST   | `/api/v2/admin/flags/apply-tier` | Apply tier preset (single API call)      |
-| PUT    | `/api/v2/admin/flags/event`      | Set per-event flag override (Enterprise) |
-| DELETE | `/api/v2/admin/flags/event`      | Remove per-event override                |
+| Method | Path                                    | Description                              |
+| ------ | --------------------------------------- | ---------------------------------------- |
+| GET    | `/api/v2/admin/flags`                   | List all 17 flags with current state     |
+| GET    | `/api/v2/admin/flags/tiers`             | Free/Mid/Enterprise tier presets         |
+| GET    | `/api/v2/admin/flags/current-tier`      | Detect current tier                      |
+| GET    | `/api/v2/admin/flags/resolve?eventId=`  | Resolve flags for specific event         |
+| PUT    | `/api/v2/admin/flags/:key`              | Toggle a global flag                     |
+| POST   | `/api/v2/admin/flags/apply-tier`        | Apply tier preset (single API call)      |
+| PUT    | `/api/v2/admin/events/:id/flags/:key`   | Set per-event flag override (Enterprise) |
+| DELETE | `/api/v2/admin/events/:id/flags/:key`   | Remove per-event override                |
 
 ### CORS
 
@@ -127,9 +139,9 @@ All endpoints enforce origin allowlist via `corsOrigin()`. OPTIONS preflight ret
 
 ## Feature Flag Tiers
 
-18 flags control three subscription tiers. Upgrading a customer is a single API call — `POST /api/v2/admin/flags/apply-tier`.
+17 OSE-active flags (shim over `@ocr/flags`) control three subscription tiers. Upgrading a customer is a single API call — `POST /api/v2/admin/flags/apply-tier`.
 
-| Flag                    | Free | Pro | Enterprise |
+| Flag                    | Free | Mid | Enterprise |
 | ----------------------- | :--: | :-: | :--------: |
 | forms.register          |  ✅  | ✅  |     ✅     |
 | forms.checkin           |  ✅  | ✅  |     ✅     |
@@ -160,24 +172,25 @@ workers/
 └── oursharedevents/          # Canonical Cloudflare Worker (TypeScript)
     ├── src/
     │   ├── index.ts          # Entry point
-    │   ├── router.ts         # Route table (30+ routes)
+    │   ├── router.ts         # Route table (≈75 routes — header comment is canonical)
     │   ├── auth/             # CF Access JWT + Bearer token auth
-    │   ├── handlers/         # health, events, pages, forms, flags, briefing
+    │   ├── handlers/         # 30 handlers — events, pages, forms, sponsors, poster, QR, shared-report, …
     │   └── lib/              # feature-flags, encryption, cors, utils
-    ├── migrations/           # D1 main database migrations (9+)
-    ├── migrations-forms/     # D1 forms database migrations (7+)
+    ├── migrations/           # D1 main database migrations (68)
+    ├── migrations-forms/     # D1 forms database migrations (13)
     ├── wrangler.toml         # Staging + production config with D1 bindings
     └── CLOUDFLARE-SETUP.md   # Zone + secrets setup guide
 
 .github/workflows/
-└── oursharedevents-ci.yml    # CI/CD: typecheck → lint → semgrep → gitleaks
-                              #        → D1 migrations → staging deploy → smoke
+└── oursharedevents-ci.yml    # CI/CD: S0 security → T0 gate → T1 staging deploy
+                              #        → T2 Bruno contract → T3 smoke → T4 functional
 
 docs/                         # Architecture, regulatory phases, methodology
 schemas/                      # JSON schema definitions
 specs/                        # Test specifications
 tests/                        # Vitest + Playwright test suites
-postman/                      # Newman/Postman collections + environments
+bruno/                        # Bruno API/pages/sharedReport contract collections (T2)
+postman/                      # SQL fixtures only — Newman collections retired (OSE-1191)
 archive/                      # Legacy GAS/NUSDK code (preserved, not deployed)
 
 STORIES.md                    # Story registry — synced with Linear

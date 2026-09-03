@@ -29,7 +29,8 @@ jobs:
 
       - name: Check required files exist
         env:
-          REQUIRED_FILES: 'CLAUDE.md,README.md,SKILL.md'
+          # The four governance files every OCR repo carries (OCR_VISION.md §6.3).
+          REQUIRED_FILES: 'CLAUDE.md,README.md,SKILL.md,docs/OCR_VISION.md'
         run: |
           IFS=',' read -ra FILES <<< "$REQUIRED_FILES"
           MISSING=0

@@ -4,7 +4,7 @@
 **Author:** Discovery / Story 1 & Story 2
 **Purpose:** Document Worker routing architecture and HTML template serving
 
-> **Historical Note:** This document describes the `cloudflare-proxy/worker.js` v2.0 architecture (archival). The current Worker is in `workers/oursharedevents/` and handles all routes directly — no upstream proxy.
+> **ARCHIVAL:** This document describes the `cloudflare-proxy/worker.js` v2.0 architecture, which no longer exists in this repo. The current Worker is `workers/oursharedevents/src/index.ts`; its canonical route table is the header comment of `workers/oursharedevents/src/router.ts`. Kept here pending a move to `archive/` (reconciliation 2026-09-03).
 
 ---
 

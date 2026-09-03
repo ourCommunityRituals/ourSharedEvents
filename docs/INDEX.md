@@ -32,7 +32,7 @@
 | [UEC-CODES.md](features/UEC-CODES.md)             | All                      | Universal Event Code — 7+4 color-coded QR standard                                     |
 | [SPONSORS.md](features/SPONSORS.md)               | Sponsor                  | Sponsor experience: attribution, analytics, scale tiers                                |
 | [TIERS.md](features/TIERS.md)                     | Admin, Sponsor           | 3-tier pricing: Free, Mid, Enterprise                                                  |
-| [SURFACES.md](features/SURFACES.md)               | Customer, Admin, Sponsor | 5 MVP surfaces + landing page                                                          |
+| [SURFACES.md](features/SURFACES.md)               | Customer, Admin, Sponsor | 6 surfaces — landing + 5 MVP (public, admin, display, poster, shared report)           |
 | [EVENTS.md](features/EVENTS.md)                   | All                      | Event data model, Triangle framework, APIs                                             |
 | [PRIVACY.md](features/PRIVACY.md)                 | Customer, Admin, Sponsor | PII handling, encryption, auto-deletion                                                |
 | [BRANDS.md](features/BRANDS.md)                   | Admin, Sponsor           | Multi-brand isolation, white-label, sponsor layering                                   |

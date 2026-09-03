@@ -1,5 +1,7 @@
 # Lead Frontend Integration — Knowledge Base
 
+> **Reconciliation note (2026-09-03, code wins):** the surface table below is stale: all six surfaces (landing `/`, public `/events`, admin, display `/display`, poster `/poster`, shared report `/sharedReport`) are served by the canonical Worker; friendly/alias URLs ARE implemented (see the `router.ts` header). Trust root `CLAUDE.md` §1 and `docs/features/SURFACES.md` over the tables below until this file's truth pass.
+
 > **Role:** Owns the 5 MVP surfaces, HTML/CSS/JS templates, client-side rendering, and Phase 3 React/Tailwind migration
 > **Last Reconciled:** 2026-03-27
 
@@ -9,17 +11,18 @@
 
 ### Active Surfaces (in `workers/oursharedevents/src/handlers/pages.ts`)
 
-| Surface | Lines | Description | Route |
-|---------|-------|-------------|-------|
-| `PUBLIC_HTML` | ~74 | Event listing — fetches `/api/v2/events`, renders cards | `GET /` |
-| `ADMIN_HTML` | ~65 | Admin dashboard — fetches `/api/v2/admin/events`, renders table | `GET /admin` |
+| Surface       | Lines | Description                                                     | Route        |
+| ------------- | ----- | --------------------------------------------------------------- | ------------ |
+| `PUBLIC_HTML` | ~74   | Event listing — fetches `/api/v2/events`, renders cards         | `GET /`      |
+| `ADMIN_HTML`  | ~65   | Admin dashboard — fetches `/api/v2/admin/events`, renders table | `GET /admin` |
 
 **Missing from clean Worker (exist in `worker/` or `web/`):**
-| Surface | Location | Status |
-|---------|----------|--------|
-| `display.html` | `web/display/` or `worker/src/handlers/displayBundle.ts` | Not in canonical Worker |
-| `poster.html` | `web/poster/` or `worker/src/handlers/posterBundle.ts` | Not in canonical Worker |
-| `sharedReport.html` | `worker/src/handlers/sharedReport.ts` | Not in canonical Worker |
+
+| Surface             | Location                                                 | Status                  |
+| ------------------- | -------------------------------------------------------- | ----------------------- |
+| `display.html`      | `web/display/` or `worker/src/handlers/displayBundle.ts` | Not in canonical Worker |
+| `poster.html`       | `web/poster/` or `worker/src/handlers/posterBundle.ts`   | Not in canonical Worker |
+| `sharedReport.html` | `worker/src/handlers/sharedReport.ts`                    | Not in canonical Worker |
 
 ### Architecture Pattern (Phase 1)
 
@@ -41,37 +44,39 @@ Worker serves HTML string
 ### Client-Side JavaScript Patterns
 
 **Public page:**
+
 ```javascript
 fetch('/api/v2/events')
-  .then(r => r.json())
-  .then(data => {
+  .then((r) => r.json())
+  .then((data) => {
     // Renders event cards with title, date, location
     // Handles empty state
     // Handles error state
-  })
+  });
 ```
 
 **Admin page:**
+
 ```javascript
 fetch('/api/v2/admin/events', {
-  headers: { 'Authorization': 'Bearer ' + token }
+  headers: { Authorization: 'Bearer ' + token },
 })
-  .then(r => r.json())
-  .then(data => {
+  .then((r) => r.json())
+  .then((data) => {
     // Renders table with id, title, status, brand
     // Token input field for auth
-  })
+  });
 ```
 
 ### Legacy Frontend Assets
 
-| Directory | Contents | Status |
-|-----------|----------|--------|
-| `web/` | admin.html, public.html, display.html, poster.html | Legacy standalone HTML files |
-| `public/` | Static assets (images, icons) | Available |
-| `display/` | Display-specific assets | Available |
-| `poster/` | Poster-specific assets | Available |
-| `src/` | Legacy GAS frontend source | Archived |
+| Directory  | Contents                                           | Status                       |
+| ---------- | -------------------------------------------------- | ---------------------------- |
+| `web/`     | admin.html, public.html, display.html, poster.html | Legacy standalone HTML files |
+| `public/`  | Static assets (images, icons)                      | Available                    |
+| `display/` | Display-specific assets                            | Available                    |
+| `poster/`  | Poster-specific assets                             | Available                    |
+| `src/`     | Legacy GAS frontend source                         | Archived                     |
 
 ### Multi-Brand Theming
 
@@ -133,10 +138,10 @@ Firebase Hosting CDN serves React SPA
 
 ## File Map
 
-| File | What It Controls |
-|------|-----------------|
-| `workers/oursharedevents/src/handlers/pages.ts` | Active HTML templates (public + admin) |
-| `workers/oursharedevents/src/handlers/events.ts` | JSON API consumed by frontend |
-| `web/` | Legacy standalone HTML surfaces |
-| `docs/FRIENDLY_URLS.md` | URL alias spec (not yet implemented) |
-| `docs/MVP_SCOPE.md` | Scope lock — 5 surfaces, no more |
+| File                                             | What It Controls                       |
+| ------------------------------------------------ | -------------------------------------- |
+| `workers/oursharedevents/src/handlers/pages.ts`  | Active HTML templates (public + admin) |
+| `workers/oursharedevents/src/handlers/events.ts` | JSON API consumed by frontend          |
+| `web/`                                           | Legacy standalone HTML surfaces        |
+| `docs/FRIENDLY_URLS.md`                          | URL alias spec (not yet implemented)   |
+| `docs/MVP_SCOPE.md`                              | Scope lock — 5 surfaces, no more       |

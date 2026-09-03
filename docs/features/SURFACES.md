@@ -7,14 +7,14 @@
 
 ## Surface Map
 
-| #   | Surface             | URL       | Purpose                        | Audience    |
-| --- | ------------------- | --------- | ------------------------------ | ----------- |
-| 1   | **Landing**         | `/`       | Marketing + email capture      | Visitors    |
-| 2   | **Public Events**   | `/events` | Browse upcoming events         | Attendees   |
-| 3   | **Admin Dashboard** | `/admin`  | Event management + form data   | Organizers  |
-| 4   | **Display**         | (Phase 2) | TV/kiosk live event view       | Venue staff |
-| 5   | **Poster**          | (Phase 2) | Printable poster with QR codes | Print       |
-| 6   | **Shared Report**   | (Phase 2) | Analytics for sponsors         | Sponsors    |
+| #   | Surface             | URL             | Purpose                        | Audience    |
+| --- | ------------------- | --------------- | ------------------------------ | ----------- |
+| 1   | **Landing**         | `/`             | Marketing + email capture      | Visitors    |
+| 2   | **Public Events**   | `/events`       | Browse upcoming events         | Attendees   |
+| 3   | **Admin Dashboard** | `/admin`        | Event management + form data   | Organizers  |
+| 4   | **Display**         | `/display`      | TV/kiosk live event view       | Venue staff |
+| 5   | **Poster**          | `/poster`       | Printable poster with QR codes | Print       |
+| 6   | **Shared Report**   | `/sharedReport` | Analytics for sponsors         | Sponsors    |
 
 ---
 
@@ -90,21 +90,21 @@ When an event is selected, the forms panel shows:
 
 ---
 
-## 4. Display Surface (Phase 2)
+## 4. Display Surface (`/display`)
 
-**Planned:** TV/kiosk-optimized view for live events. Large fonts, auto-refresh, designed for wall-mounted screens at venues.
-
----
-
-## 5. Poster Surface (Phase 2)
-
-**Planned:** Print-optimized page with QR codes for each form type. Designed for physical posters, table tents, and handouts.
+**Live** (aliases `/tv`, `/kiosk`, `/screen`; template `display.html`): TV/kiosk-optimized view for live events. Large fonts, auto-refresh, designed for wall-mounted screens at venues.
 
 ---
 
-## 6. Shared Report (Phase 2)
+## 5. Poster Surface (`/poster`)
 
-**Planned:** Analytics dashboard shareable with sponsors. Shows event metrics, form submission rates, and engagement data. Tier-gated: basic view (Mid), advanced metrics + PDF export (Mid), portfolio view (Enterprise).
+**Live** (aliases `/posters`, `/flyers`, `/tabletop`, `/tent`, `/signage`; template `poster.html`; data from `/api/v2/events/:id/poster-bundle`): Print-optimized page with QR codes for each form type. Designed for physical posters, table tents, and handouts.
+
+---
+
+## 6. Shared Report (`/sharedReport`)
+
+**Live** (aliases `/report`, `/analytics`, `/reports`, `/insights`, `/stats`; template `shared-report.html`; read API `GET /api/v2/events/:id/shared-report` with signed-link auth, depth enforced server-side per OSE-816): Analytics dashboard shareable with sponsors. Shows event metrics, form submission rates, and engagement data. Tier-gated: basic view (Mid), advanced metrics + PDF export (Mid), portfolio view (Enterprise).
 
 ---
 

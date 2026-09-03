@@ -1,5 +1,7 @@
 # Lead Backend Architect — Knowledge Base
 
+> **Reconciliation note (2026-09-03, code wins):** route table, migration count and Known Gaps are stale: 68 main + 13 forms migrations; ≈75 method+path pairs (see the `router.ts` header); OSE-1080 object-level brand scoping, anonymous ID, rate limiting, audit log and the SharedReport read API are all shipped. Trust root `CLAUDE.md` §3 and `router.ts` over the tables below until this file's truth pass (Linear: see OSE reconciliation story 2026-09-03).
+
 > **Role:** Owns Worker architecture, route design, data layer, auth, and API contracts
 > **Last Reconciled:** 2026-03-27
 

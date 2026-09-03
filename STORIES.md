@@ -17,7 +17,7 @@ Synced with Linear: fill in `Linear #` when issues are created.
 
 Stories are ordered by the sequence you work through them. Each row unlocks the next.
 
-**Last verified: 2026-08-03** — P1-6 infra complete (OSE-544/545/546/547 Done), P1-7 staging deploy in progress (OSE-548 Todo), DAC-1..5 cleared via OSE-553.
+**Last verified: 2026-09-03** — P1-6 infra complete (OSE-544/545/546/547 Done), P1-7 secrets + first staging deploy Done (OSE-12; OSE-548 closed 2026-08-25), P1-8 staging sign-off Done (OSE-13), P1-9 repo migration Done (this repo IS `ourCommunityRituals/ourSharedEvents`), P1-10 production launch open (OSE-15, gate OSE-540). DAC-1..5 cleared via OSE-553.
 
 | Story ID                                           | Linear # | Status         | Title                                                                 | Prerequisite     |
 | -------------------------------------------------- | -------- | -------------- | --------------------------------------------------------------------- | ---------------- |
@@ -31,10 +31,10 @@ Stories are ordered by the sequence you work through them. Each row unlocks the 
 | P1-5                                               | —        | ✅ DONE        | E2E launch checklist (this doc's guide)                               | P1-4             |
 | **Phase 1 — Operations (go live)**                 |          |                |                                                                       |                  |
 | P1-6                                               | —        | ✅ DONE        | Infra provisioning — Google Cloud + Cloudflare                        | P1-5             |
-| P1-7                                               | —        | 🔄 IN PROGRESS | Secrets + first staging deploy                                        | P1-6             |
-| P1-8                                               | —        | 📋 BACKLOG     | Staging sign-off — all checks pass                                    | P1-7             |
-| P1-9                                               | —        | 📋 BACKLOG     | Repo migration → ourCommunityRituals/ourSharedEvents                  | P1-8             |
-| P1-10                                              | —        | 📋 BACKLOG     | Production launch — v1.0.0 live                                       | P1-9             |
+| P1-7                                               | OSE-12   | ✅ DONE        | Secrets + first staging deploy                                        | P1-6             |
+| P1-8                                               | OSE-13   | ✅ DONE        | Staging sign-off — all checks pass                                    | P1-7             |
+| P1-9                                               | —        | ✅ DONE        | Repo migration → ourCommunityRituals/ourSharedEvents                  | P1-8             |
+| P1-10                                              | OSE-15   | 📋 BACKLOG     | Production launch — v1.0.0 live                                       | P1-9             |
 | **Phase 2 — D1 Database (replace Google Sheets)**  |          |                |                                                                       |                  |
 | P2-1                                               | OSE-16   | ✅ DONE        | D1 database creation + schema migrations                              | P1-10            |
 | P2-2                                               | —        | ✅ DONE        | Data migration script: Sheets → D1                                    | P2-1             |
@@ -113,7 +113,7 @@ Stories are ordered by the sequence you work through them. Each row unlocks the 
 | ADMIN-14                                           | —        | ✅ DONE        | Card 5 QR code + Card 7 QR visibility                                 | —                |
 | ADMIN-15                                           | —        | ✅ DONE        | Copy button feedback ("Copied!" 2s state)                             | —                |
 | ADMIN-16                                           | —        | ✅ DONE        | data-testid complete coverage (all interactive elements)              | —                |
-| ADMIN-17                                           | —        | 📋 BACKLOG     | File upload to R2 (logos, posters, custom QR)                         | ADMIN-1          |
+| ADMIN-17                                           | OSE-200  | ✅ DONE        | File upload to R2 (logos, posters, custom QR)                         | ADMIN-1          |
 | ADMIN-18                                           | —        | 📋 BACKLOG     | White-label branding (colors/logo/domain)                             | ADMIN-1          |
 | ADMIN-19                                           | —        | 📋 BACKLOG     | Newman E2E chain (create→config→submit→count→scrub)                   | ADMIN-3, ADMIN-7 |
 | ADMIN-20                                           | —        | 📋 BACKLOG     | Cross-surface sponsor integration test suite                          | —                |
@@ -257,7 +257,7 @@ _Work through P1-6 through P1-10 in order. Each story is a gate — don't start 
 
 ### P1-6: Infra provisioning — Cloudflare zone + D1 databases
 
-**Status:** 📋 BACKLOG
+**Status:** ✅ DONE (OSE-544/545/546/547)
 **Prerequisite:** P1-5 ✅
 **Unlocks:** P1-7 (secrets need somewhere to live — infra must exist first)
 **Description:** Activate the Cloudflare zone for oursharedevents.com and provision production D1 databases. Google Sheets dependency was removed in Phase 2 — the worker is D1-native. Staging D1 databases already exist (IDs in wrangler.toml).
@@ -277,7 +277,7 @@ _Work through P1-6 through P1-10 in order. Each story is a gate — don't start 
 
 ### P1-7: Secrets + first staging deploy
 
-**Status:** 🔄 IN PROGRESS
+**Status:** ✅ DONE (OSE-12; first deploy + health check OSE-548, 2026-08-25)
 **Prerequisite:** P1-6 ✅ (infra must exist before secrets can point to it)
 **Unlocks:** P1-8 (staging sign-off — nothing to verify until it's deployed)
 **Description:** Add all credentials to GitHub Actions and Cloudflare Worker, then trigger the first deploy to `stg.oursharedevents.com`. D1-native — no Google Sheets secrets needed.
@@ -296,7 +296,7 @@ _Work through P1-6 through P1-10 in order. Each story is a gate — don't start 
 
 ### P1-8: Staging sign-off
 
-**Status:** 📋 BACKLOG
+**Status:** ✅ DONE (OSE-13)
 **Prerequisite:** P1-7 ✅ (staging must be deployed before it can be verified)
 **Unlocks:** P1-9 (repo migration — only migrate a product that you know works)
 **Description:** Run all verification checks against staging. Every check must pass before moving to production.
@@ -315,7 +315,7 @@ _Work through P1-6 through P1-10 in order. Each story is a gate — don't start 
 
 ### P1-9: Repo migration → ourCommunityRituals/ourSharedEvents
 
-**Status:** 📋 BACKLOG
+**Status:** ✅ DONE — this repository is `ourCommunityRituals/ourSharedEvents`; the zeventbooks references below are historical
 **Prerequisite:** P1-8 ✅ (migrate a known-working product, not a work-in-progress)
 **Unlocks:** P1-10 (production launch happens from the new org's CI pipeline)
 **Description:** Create a clean-history repo under `ourCommunityRituals/ourSharedEvents`. Single orphan commit — no zeventbooks history. Re-add GitHub secrets. Archive the old repo.

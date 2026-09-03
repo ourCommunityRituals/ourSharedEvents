@@ -1,5 +1,7 @@
 # Lead SDET/SRE — Knowledge Base
 
+> **Reconciliation note (2026-09-03, code wins):** the pipeline description below is stale: the API-contract layer is Bruno (T2 `contract-staging`, OSE-1191 retired Postman/Newman); the pipeline is S0 → T0 (6 shards) → T1 → T2 → T3 → T4 on `ubuntu-latest`; production deploy/smoke still declare `self-hosted` (OSE-1194 item 6). Known open gaps as of this date: Conformance Report workflow red on `main` (403 on the refresh-PR push), red-team suite not wired to any workflow (brain #23), `tests/audit-layer.spec.ts` not written (#24). Trust root `CLAUDE.md` §3/§5 and `.github/workflows/oursharedevents-ci.yml` over the text below until this file's truth pass.
+
 > **Role:** Owns CI/CD pipeline, Postman/Newman API testing, Playwright automation infrastructure, Datadog Synthetics planning, site reliability
 > **Last Reconciled:** 2026-03-27
 
