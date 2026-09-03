@@ -23,15 +23,16 @@ brain-listed invariant whose enforcement mechanism has shipped + has a
 dedicated test file here. Brain invariants whose mechanisms are still
 unshipped (currently 6, 7, 9) do not yet have a row.
 
-| #   | Invariant                            | Test File                            | Kind       | Enforces                                                                                                                                                  |
-| --- | ------------------------------------ | ------------------------------------ | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | Anonymous ID                         | `anonymous-id.invariant.spec.ts`     | runtime    | Zero-PII scan system, two-database separation, cookie contract, no cross-linking                                                                          |
-| 2   | Hyper-local Geo-Resolution           | `geo-resolution.invariant.spec.ts`   | runtime    | sponsor_areas + sponsor_event_types, corridor-level resolution, zip+radius matching                                                                       |
-| 3   | UEC Encoding                         | `uec-codes.invariant.spec.ts`        | runtime    | 7 color-semantic QR codes, Blue=#1A3A8A for SPONSOR, URL path semantics                                                                                   |
-| 4   | NCR Data Accumulation                | `ncr-accumulation.invariant.spec.ts` | runtime    | poster_deployments lat/lng, scan_aggregates pipeline, permanent storage (no PII = no TTL)                                                                 |
-| 5   | Tier Equity / Local Sponsor Covenant | `tier-equity.invariant.spec.ts`      | structural | Local sponsors take display-priority over non-local at every tier. tierSort() compares is_local BEFORE TIER_PRIORITY. Migration 0036 + ADR-013.           |
-| 8   | Bounded PII Retention                | `pii-retention.invariant.spec.ts`    | structural | Daily lifecycle cron deletes/scrubs PII keyed by TTL columns. Every PII-bearing table has a phase; every phase writes pii_audit_log on success AND error. |
-| 10  | Deprecation Lock                     | `deprecation-lock.invariant.spec.ts` | structural | Once a runtime is removed (today: GAS), CI forbids reintroduction. `scripts/guard-no-gas.js` is wired into the lint shard of `oursharedevents-ci`.        |
+| #   | Invariant                            | Test File                                    | Kind       | Enforces                                                                                                                                                                                                                                                |
+| --- | ------------------------------------ | -------------------------------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Anonymous ID                         | `anonymous-id.invariant.spec.ts`             | runtime    | Zero-PII scan system, two-database separation, cookie contract, no cross-linking                                                                                                                                                                        |
+| 2   | Hyper-local Geo-Resolution           | `geo-resolution.invariant.spec.ts`           | runtime    | sponsor_areas + sponsor_event_types, corridor-level resolution, zip+radius matching                                                                                                                                                                     |
+| 3   | UEC Encoding                         | `uec-codes.invariant.spec.ts`                | runtime    | 7 color-semantic QR codes, Blue=#1A3A8A for SPONSOR, URL path semantics                                                                                                                                                                                 |
+| 4   | NCR Data Accumulation                | `ncr-accumulation.invariant.spec.ts`         | runtime    | poster_deployments lat/lng, scan_aggregates pipeline, permanent storage (no PII = no TTL)                                                                                                                                                               |
+| 5   | Tier Equity / Local Sponsor Covenant | `tier-equity.invariant.spec.ts`              | structural | Local sponsors take display-priority over non-local at every tier. tierSort() compares is_local BEFORE TIER_PRIORITY. Migration 0036 + ADR-013.                                                                                                         |
+| 8   | Bounded PII Retention                | `pii-retention.invariant.spec.ts`            | structural | Daily lifecycle cron deletes/scrubs PII keyed by TTL columns. Every PII-bearing table has a phase; every phase writes pii_audit_log on success AND error.                                                                                               |
+| 25  | Rendered-Surface Lexicon             | `rendered-surface-lexicon.invariant.spec.ts` | structural | No count-claim or metric label on any rendered template / page handler uses banned lexicon (attendance, impressions, reach, unique, people, views…). Vocabulary read from `schema-lexicon.ts`; shared-report.html ratcheted (OSE-1204). Added OSE-1201. |
+| 10  | Deprecation Lock                     | `deprecation-lock.invariant.spec.ts`         | structural | Once a runtime is removed (today: GAS), CI forbids reintroduction. `scripts/guard-no-gas.js` is wired into the lint shard of `oursharedevents-ci`.                                                                                                      |
 
 ## Structural vs runtime — and where each runs in CI (OSE-350)
 
@@ -66,6 +67,7 @@ npx playwright test --config=playwright.e2e-smoke.config.ts tests/e2e/0-architec
 npx playwright test --config=playwright.e2e-smoke.config.ts \
   tests/e2e/0-architecture/deprecation-lock.invariant.spec.ts \
   tests/e2e/0-architecture/pii-retention.invariant.spec.ts \
+  tests/e2e/0-architecture/rendered-surface-lexicon.invariant.spec.ts \
   tests/e2e/0-architecture/tier-equity.invariant.spec.ts
 ```
 

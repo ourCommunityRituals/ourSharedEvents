@@ -263,7 +263,8 @@ describe('OSE-ssp1: pre-event social proof count', () => {
     const res = await SELF.fetch(`https://t.test/events/${id}`);
     const html = await res.text();
     expect(html).toContain('data-testid="registration-count"');
-    expect(html).toContain('people have registered');
+    expect(html).toContain('registered so far');
+    expect(html).not.toContain('people have registered'); // OSE-1201: no bodies word
   });
 
   test('registration-count absent when no registrations', async () => {
@@ -282,8 +283,8 @@ describe('OSE-ssp1: pre-event social proof count', () => {
 
     const res = await SELF.fetch(`https://t.test/events/${id}`);
     const html = await res.text();
-    expect(html).toContain('person has registered');
-    expect(html).not.toContain('people have registered');
+    expect(html).toContain('1 registered so far');
+    expect(html).not.toContain('2 registered so far');
   });
 
   test('expired registrations are NOT counted in social proof', async () => {
@@ -312,7 +313,7 @@ describe('OSE-ssp1: pre-event social proof count', () => {
     const html = await res.text();
     // Only 1 live registration — singular copy
     expect(html).toContain('data-testid="registration-count"');
-    expect(html).toContain('person has registered');
+    expect(html).toContain('1 registered so far');
   });
 });
 
@@ -395,21 +396,23 @@ describe('OSE-ssp1: post-event stats card and sponsor thank-you', () => {
     const html = await res.text();
     expect(html).toContain('data-testid="stat-checkins"');
     expect(html).toContain('data-testid="stat-registrations"');
-    expect(html).toContain('data-testid="stat-attendance-rate"');
+    expect(html).toContain('data-testid="stat-showed-up-share"');
+    // OSE-1201: the ratio never wears the banned word.
+    expect(html).not.toMatch(/attendance/i);
     expect(html).toContain('data-testid="stat-surveys"');
     expect(html).toContain('data-testid="stat-email-signups"');
   });
 
-  test('attendance rate shown only when both registrations and checkins > 0', async () => {
+  test('showed-up share shown only when both registrations and checkins > 0', async () => {
     const id = 'evt_ssp1_post_rate_gate';
     await seedEvent(id, { startOffsetDays: -7, endOffsetDays: -6 });
-    // Only checkins, no registrations → no attendance rate
+    // Only checkins, no registrations → no showed-up share
     await seedCheckinCount(id, 5);
 
     const res = await SELF.fetch(`https://t.test/events/${id}`);
     const html = await res.text();
     expect(html).toContain('data-testid="stat-checkins"');
-    expect(html).not.toContain('data-testid="stat-attendance-rate"');
+    expect(html).not.toContain('data-testid="stat-showed-up-share"');
   });
 
   test('event-stats-card absent when all counts are zero', async () => {

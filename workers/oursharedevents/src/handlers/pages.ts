@@ -610,7 +610,7 @@ ${buildOgMeta({ title, description: whatShort, url: esc(shareUrl), twitterCard: 
 
     ${
       social && social.regCount > 0
-        ? `<p class="ose-reg-count" data-testid="registration-count">${social.regCount === 1 ? '1 person has registered' : `${social.regCount} people have registered`}</p>`
+        ? `<p class="ose-reg-count" data-testid="registration-count">${social.regCount === 1 ? '1 registered so far' : `${social.regCount} registered so far`}</p>`
         : ''
     }
 
@@ -951,10 +951,14 @@ ${buildOgMeta({ title, description: whatShort, url: esc(shareUrl), twitterCard: 
         ${whatShort ? `<p class="ose-recap-row" data-testid="recap-what">${whatShort}</p>` : ''}
         ${whoHost ? `<p class="ose-recap-row" data-testid="recap-who"><span class="ose-recap-label">Hosted by</span>${whoHost}</p>` : ''}
         ${whyPurpose ? `<p class="ose-recap-row" data-testid="recap-why"><span class="ose-recap-label">Why it exists</span>${whyPurpose}</p>` : ''}
+        ${!whatShort && !whoHost && !whyPurpose ? `<p class="ose-recap-row" data-testid="recap-empty">The host hasn't written this one up yet. The numbers below are the story.</p>` : ''}
       </section>
 
       ${(() => {
         if (!social) return '';
+        // OSE-1201: "attendance" is a banned lexicon word (it claims people; the
+        // platform counts signals). The ratio is labelled by what was measured —
+        // check-ins over registrations — never by a word that implies bodies.
         const { checkinCount, regCount, surveyCount, emailCount, sponsors } = social;
         const hasStats = checkinCount > 0 || regCount > 0 || surveyCount > 0 || emailCount > 0;
         const statsCard = hasStats
@@ -962,7 +966,7 @@ ${buildOgMeta({ title, description: whatShort, url: esc(shareUrl), twitterCard: 
               <h2 id="stats-heading">By the numbers</h2>
               ${checkinCount > 0 ? `<p data-testid="stat-checkins"><strong>${checkinCount}</strong> Checked in</p>` : ''}
               ${regCount > 0 ? `<p data-testid="stat-registrations"><strong>${regCount}</strong> Registered</p>` : ''}
-              ${checkinCount > 0 && regCount > 0 ? `<p data-testid="stat-attendance-rate">${Math.round((checkinCount / regCount) * 100)}% attendance rate</p>` : ''}
+              ${checkinCount > 0 && regCount > 0 ? `<p data-testid="stat-showed-up-share">${Math.round((checkinCount / regCount) * 100)}% of those registered showed up</p>` : ''}
               ${surveyCount > 0 ? `<p data-testid="stat-surveys"><strong>${surveyCount}</strong> Surveys submitted</p>` : ''}
               ${emailCount > 0 ? `<p data-testid="stat-email-signups"><strong>${emailCount}</strong> Email signups</p>` : ''}
             </section>`
