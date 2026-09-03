@@ -120,6 +120,7 @@ import {
   handleDisplayPage,
   handlePosterPage,
   handleSharedReportPage,
+  renderErrorPage,
   handleUiPreview,
   type PagesEnv,
 } from './handlers/pages';
@@ -1420,6 +1421,20 @@ export async function route(
   ) {
     const reportEnabled = await isFeatureEnabled(env.FORMS_DB, 'analytics.shared-report');
     if (!reportEnabled) {
+      // OSE-1206: a browser following a report link is a person, not a client.
+      // Give it the branded friendly-error page (guidelines §4.2: say what
+      // happened, offer a next step, no raw codes). API callers — anything not
+      // asking for text/html — keep the JSON envelope, unchanged.
+      const wantsHtml = (request.headers.get('Accept') || '').includes('text/html');
+      if (wantsHtml) {
+        return renderErrorPage(
+          403,
+          "Shared reports aren't switched on here yet",
+          "This event's plan doesn't include shared reports right now. If you host the event, you can turn them on from your admin page; if you were sent this link, ask the host for the latest recap.",
+          '/events',
+          'Browse upcoming events'
+        );
+      }
       return Response.json(
         {
           ok: false,
