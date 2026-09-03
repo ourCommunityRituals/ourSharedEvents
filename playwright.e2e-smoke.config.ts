@@ -26,8 +26,20 @@ export default defineConfig({
     timeout: 15000,
   },
 
+  // The `json` reporter is REQUIRED, not cosmetic: pw-guarded.sh's Gate 0b
+  // (OSE-1170) reads the emitted result JSON to prove tests actually EXECUTED
+  // rather than all-skipped. Without it, PLAYWRIGHT_JSON_OUTPUT_NAME has no
+  // reporter to honor, the guard sees no result file, and a healthy green run
+  // is misread as "cannot confirm any test executed" → false red. Every config
+  // pw-guarded.sh runs (this one for T4a/T4f, ui-smoke for T4d/T4e) MUST carry
+  // it; the ci-gate0-discovery test locks that in. The guard overrides the
+  // outputFile below via PLAYWRIGHT_JSON_OUTPUT_NAME per-run.
   reporter: process.env.CI
-    ? [['html', { outputFolder: 'playwright-report-e2e-smoke', open: 'never' }], ['line']]
+    ? [
+        ['html', { outputFolder: 'playwright-report-e2e-smoke', open: 'never' }],
+        ['json', { outputFile: '.test-results/e2e-smoke-results.json' }],
+        ['line'],
+      ]
     : [['list']],
 
   use: {
