@@ -84,13 +84,33 @@ export default defineConfig({
   reporter: process.env.CI
     ? [
         ['html', { outputFolder: 'playwright-report-ui-smoke', open: 'never' }],
-        ['json', { outputFile: '.test-results/ui-smoke-results.json' }],
+        // outputFile honors PLAYWRIGHT_JSON_OUTPUT_NAME so pw-guarded.sh's Gate
+        // 0b (OSE-1170) can point the result JSON at its own temp file; the
+        // config value wins over the env var in Playwright's json reporter, so
+        // the guard cannot override it from outside — it must be wired here.
+        [
+          'json',
+          {
+            outputFile:
+              process.env.PLAYWRIGHT_JSON_OUTPUT_NAME || '.test-results/ui-smoke-results.json',
+          },
+        ],
         ['junit', { outputFile: '.test-results/ui-smoke-junit.xml' }],
         ['line'],
       ]
     : [
         ['html', { outputFolder: 'playwright-report-ui-smoke', open: 'never' }],
-        ['json', { outputFile: '.test-results/ui-smoke-results.json' }],
+        // outputFile honors PLAYWRIGHT_JSON_OUTPUT_NAME so pw-guarded.sh's Gate
+        // 0b (OSE-1170) can point the result JSON at its own temp file; the
+        // config value wins over the env var in Playwright's json reporter, so
+        // the guard cannot override it from outside — it must be wired here.
+        [
+          'json',
+          {
+            outputFile:
+              process.env.PLAYWRIGHT_JSON_OUTPUT_NAME || '.test-results/ui-smoke-results.json',
+          },
+        ],
         ['list'],
       ],
 
