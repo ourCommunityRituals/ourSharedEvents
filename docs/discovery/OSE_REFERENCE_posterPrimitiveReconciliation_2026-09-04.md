@@ -833,6 +833,50 @@ which `template-clearance.ts` knows, and compensates for with the never-selectab
 rule and a synthetic tier-2 fixture. The gate is honest about being inert on today's data.
 The host axis is where the real variation lives, and it is the axis that cannot be joined.
 
+#### Empirical confirmation — works at OPEN nodes, breaks at the first RESTRICTED one
+
+**Founder, 2026-09-04:** _"Explains why my congressional is working right now for events, but
+when I get higher to a rec centre case, that part doesn't work."_
+
+That is the diagnosis confirmed against live use, and the mechanism is exact.
+
+0011 declares the WHERE axis with a **permissive default**:
+
+```sql
+ALTER TABLE node_hierarchy ADD COLUMN legal_clearance_tier TEXT
+  DEFAULT 'OPEN'
+  CHECK (legal_clearance_tier IN ('OPEN', 'RESTRICTED', 'REGULATED'));
+```
+
+So wherever the honest answer is "no special clearance," **the unread axis is invisible** —
+the query nobody runs would have returned `OPEN` anyway.
+
+| Case                | WHAT axis      | WHERE axis (unread)      | Outcome                                   |
+| ------------------- | -------------- | ------------------------ | ----------------------------------------- |
+| Congressional event | tier 1, passes | would be `OPEN`          | ✅ works — **right answer, wrong reason** |
+| Rec centre          | tier 1, passes | _should be_ `RESTRICTED` | ❌ returns the `OPEN` answer              |
+
+The rec centre is the first case where the two axes **disagree**. `RESTRICTED` is the one
+value meant to change what is offerable; nothing reads it, so the platform offers sponsor
+categories the host cannot accept and gives them no way to express the exclusion.
+
+**It fails silently, and only upward.** Every OPEN-node case works and will keep working.
+The failure is invisible until a governed entity is touched — which is precisely the
+direction the strategy grows (§14).
+
+This is a better problem statement than the abstract type collision, and it is the one to
+hand whoever picks up the fix.
+
+#### The sharp edge — a political event at a public facility
+
+The intersection of the two cases above is the one to know before someone books it: a
+**congressional or political event held at a rec centre or library**. Public facilities
+generally carry their own rules about political activity on the premises, and that is where
+a host regime should bite hardest — and where the platform currently computes nothing at
+all. Each half works alone; together is the gap.
+
+**That one belongs to counsel, not to the schema.**
+
 **Filed as drift, not as poster work.** This is a naming/type collision between two
 migrations twelve apart, and it silently blocks the governance model the platform is built
 on.
