@@ -1,55 +1,27 @@
 /**
- * E2E Tests: Poster Page — Deep Functional Coverage
+ * E2E Tests: Poster Page — LAYOUT / STRUCTURE (data-less)
  *
- * Tests /poster served by the Cloudflare Worker.
- * Covers: page structure, event picker, poster rendering, print layout,
- *         QR placeholders, empty/error states, accessibility.
+ * Tests /poster served by the Cloudflare Worker. This file holds ONLY the specs
+ * that need no seeded data — structure, empty-state, error-state, URL aliases,
+ * security headers, XSS resilience (mocked), response time. It runs in the
+ * COMPONENT tier (playwright.component.config.ts, local worker, every PR).
+ *
+ * The DATA-dependent specs (event picker with data, poster content with data,
+ * print layout) moved to poster-print.data.spec.ts (OSE-1228): they assert
+ * specific seeded rows and can only run honestly where real data exists (the
+ * staging E2E tier, testMatch **\/*.spec.ts). Keeping them here made the
+ * component tier skip 22/57 vacuously against an empty/erroring local D1 — a
+ * false green. Empty-State lives here on purpose: it is only meaningful with NO
+ * data, which is exactly the component tier's local (unseeded) worker.
  *
  * Source of truth: workers/oursharedevents/src/handlers/pages.ts (POSTER_HTML)
  *
- * Data-testids:
- *   poster-header          — page header (hidden on print)
- *   poster-print           — print link
- *   poster-container       — main container
- *   poster-event-select    — picker wrapper (hidden on print)
- *   poster-event-picker    — <select> dropdown
- *   poster-area            — rendered poster content (dynamic)
- *
- * Dynamic content (inside poster-area):
- *   .poster                — poster card
- *   .poster-header .org    — "OurSharedEvents" org line
- *   .poster-header h2      — event name
- *   .poster-body           — body content
- *   .poster-meta           — date and venue rows
- *   .meta-row              — individual meta row (icon + text)
- *   .qr-section            — QR placeholder section
- *   .qr-item               — individual QR item (placeholder + label)
- *   .qr-placeholder        — dashed placeholder box (120x120)
- *   .qr-label              — "Event Page" / "Registration"
- *   .poster-footer         — "oursharedevents.com"
+ * Data-testids: poster-header, poster-print, poster-container,
+ *   poster-event-select, poster-event-picker, poster-area
  */
 
-import { test, expect, Page } from '@playwright/test';
-
-// ── Helpers ──────────────────────────────────────────────────────────────────
-
-async function navigateToPoster(page: Page) {
-  await page.goto('/poster', { waitUntil: 'domcontentloaded', timeout: 20_000 });
-  await page.waitForLoadState('networkidle');
-}
-
-async function hasEvents(page: Page): Promise<boolean> {
-  const picker = page.locator('[data-testid="poster-event-picker"]');
-  const text = await picker.textContent();
-  return !text?.includes('No events') && !text?.includes('Loading');
-}
-
-async function selectEvent(page: Page, index: number) {
-  const picker = page.locator('[data-testid="poster-event-picker"]');
-  await picker.selectOption({ index });
-  // Wait for poster to re-render
-  await page.waitForTimeout(500);
-}
+import { test, expect } from '@playwright/test';
+import { navigateToPoster, hasEvents } from './poster-helpers';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // 1. PAGE STRUCTURE
@@ -117,160 +89,7 @@ test.describe('Poster Page — Structure', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// 2. EVENT PICKER — WITH DATA
-// ═══════════════════════════════════════════════════════════════════════════════
-
-test.describe('Poster Page — Event Picker (Data Present)', () => {
-  test.beforeEach(async ({ page }) => {
-    await navigateToPoster(page);
-    test.skip(!(await hasEvents(page)), 'No events on staging — skipping picker tests');
-  });
-
-  test('picker is populated with event options', async ({ page }) => {
-    const picker = page.locator('[data-testid="poster-event-picker"]');
-    const options = picker.locator('option');
-    expect(await options.count()).toBeGreaterThanOrEqual(1);
-  });
-
-  test('first option is selected by default', async ({ page }) => {
-    const picker = page.locator('[data-testid="poster-event-picker"]');
-    const value = await picker.inputValue();
-    expect(value).toBe('0');
-  });
-
-  test('each option has text content (event name)', async ({ page }) => {
-    const options = page.locator('[data-testid="poster-event-picker"] option');
-    const count = await options.count();
-    for (let i = 0; i < count; i++) {
-      const text = await options.nth(i).textContent();
-      expect(text?.trim().length, `Option ${i} is empty`).toBeGreaterThan(0);
-    }
-  });
-
-  test('selecting a different event re-renders the poster', async ({ page }) => {
-    const options = page.locator('[data-testid="poster-event-picker"] option');
-    const count = await options.count();
-    test.skip(count < 2, 'Need at least 2 events to test picker switch');
-
-    // Get first poster content
-    const firstPoster = await page.locator('[data-testid="poster-area"]').innerHTML();
-
-    // Select second event
-    await selectEvent(page, 1);
-
-    // Poster should have changed
-    const secondPoster = await page.locator('[data-testid="poster-area"]').innerHTML();
-    // Content may or may not differ (events could have same name) — at minimum it shouldn't error
-    expect(secondPoster.length).toBeGreaterThan(0);
-  });
-
-  test('switching back to first event restores its poster', async ({ page }) => {
-    const options = page.locator('[data-testid="poster-event-picker"] option');
-    const count = await options.count();
-    test.skip(count < 2, 'Need at least 2 events');
-
-    const firstPoster = await page.locator('[data-testid="poster-area"]').innerHTML();
-    await selectEvent(page, 1);
-    await selectEvent(page, 0);
-    const restoredPoster = await page.locator('[data-testid="poster-area"]').innerHTML();
-
-    expect(restoredPoster).toBe(firstPoster);
-  });
-});
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// 3. POSTER RENDERING — WITH DATA
-// ═══════════════════════════════════════════════════════════════════════════════
-
-test.describe('Poster Page — Poster Content (Data Present)', () => {
-  test.beforeEach(async ({ page }) => {
-    await navigateToPoster(page);
-    test.skip(!(await hasEvents(page)), 'No events on staging');
-  });
-
-  test('poster card renders', async ({ page }) => {
-    await expect(page.locator('[data-testid="poster-area"] .poster')).toBeVisible();
-  });
-
-  test('poster header shows org name', async ({ page }) => {
-    const org = page.locator('[data-testid="poster-area"] .poster-header .org');
-    await expect(org).toBeVisible();
-    await expect(org).toContainText('OurSharedEvents');
-  });
-
-  test('poster header shows event name in h2', async ({ page }) => {
-    const h2 = page.locator('[data-testid="poster-area"] .poster-header h2');
-    await expect(h2).toBeVisible();
-    const text = await h2.textContent();
-    expect(text?.trim().length, 'Event name should not be empty').toBeGreaterThan(0);
-  });
-
-  test('poster body is visible', async ({ page }) => {
-    await expect(page.locator('[data-testid="poster-area"] .poster-body')).toBeVisible();
-  });
-
-  test('poster has meta section', async ({ page }) => {
-    await expect(page.locator('[data-testid="poster-area"] .poster-meta')).toBeVisible();
-  });
-
-  test('meta rows have icon + text structure', async ({ page }) => {
-    const rows = page.locator('[data-testid="poster-area"] .meta-row');
-    const count = await rows.count();
-    // May have 0 meta rows if event has no date/venue — that's valid
-    if (count > 0) {
-      const firstRow = rows.first();
-      await expect(firstRow.locator('.meta-icon')).toBeVisible();
-      await expect(firstRow.locator('.meta-text')).toBeVisible();
-    }
-  });
-
-  test('QR section renders with 2 placeholder items', async ({ page }) => {
-    const qrSection = page.locator('[data-testid="poster-area"] .qr-section');
-    await expect(qrSection).toBeVisible();
-
-    const qrItems = qrSection.locator('.qr-item');
-    expect(await qrItems.count()).toBe(2);
-  });
-
-  test('QR placeholders are 120x120 dashed boxes', async ({ page }) => {
-    const placeholders = page.locator('[data-testid="poster-area"] .qr-placeholder');
-    expect(await placeholders.count()).toBe(2);
-
-    for (let i = 0; i < 2; i++) {
-      const box = await placeholders.nth(i).boundingBox();
-      expect(box, `QR placeholder ${i} should have a bounding box`).toBeTruthy();
-      if (box) {
-        expect(box.width).toBeGreaterThanOrEqual(100);
-        expect(box.height).toBeGreaterThanOrEqual(100);
-      }
-    }
-  });
-
-  test('QR labels show "Event Page" and "Registration"', async ({ page }) => {
-    const labels = page.locator('[data-testid="poster-area"] .qr-label');
-    expect(await labels.count()).toBe(2);
-
-    const texts = await labels.allTextContents();
-    expect(texts.some((t) => t.includes('Event Page'))).toBe(true);
-    expect(texts.some((t) => t.includes('Registration'))).toBe(true);
-  });
-
-  test('poster footer shows domain', async ({ page }) => {
-    const footer = page.locator('[data-testid="poster-area"] .poster-footer');
-    await expect(footer).toBeVisible();
-    await expect(footer).toContainText('oursharedevents.com');
-  });
-
-  test('no GAS HTML markers in poster content', async ({ page }) => {
-    const content = await page.locator('[data-testid="poster-area"]').innerHTML();
-    expect(content).not.toContain('userCodeAppPanel');
-    expect(content).not.toContain('Google Apps Script');
-    expect(content).not.toContain('script.google.com');
-  });
-});
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// 4. EMPTY STATE
+// 2. EMPTY STATE  (meaningful only with NO data → the component tier's local worker)
 // ═══════════════════════════════════════════════════════════════════════════════
 
 test.describe('Poster Page — Empty State', () => {
@@ -291,7 +110,7 @@ test.describe('Poster Page — Empty State', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// 5. ERROR STATE
+// 3. ERROR STATE
 // ═══════════════════════════════════════════════════════════════════════════════
 
 test.describe('Poster Page — Error State', () => {
@@ -324,64 +143,7 @@ test.describe('Poster Page — Error State', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// 6. PRINT LAYOUT
-// ═══════════════════════════════════════════════════════════════════════════════
-
-test.describe('Poster Page — Print Layout', () => {
-  test.beforeEach(async ({ page }) => {
-    await navigateToPoster(page);
-    test.skip(!(await hasEvents(page)), 'No events — skipping print tests');
-  });
-
-  test('page header has .no-print class', async ({ page }) => {
-    const header = page.locator('[data-testid="poster-header"]');
-    const classes = await header.getAttribute('class');
-    expect(classes).toContain('no-print');
-  });
-
-  test('event select has .no-print class', async ({ page }) => {
-    const eventSelect = page.locator('[data-testid="poster-event-select"]');
-    const classes = await eventSelect.getAttribute('class');
-    expect(classes).toContain('no-print');
-  });
-
-  test('@media print CSS hides .no-print elements', async ({ page }) => {
-    // Emulate print media
-    await page.emulateMedia({ media: 'print' });
-
-    const header = page.locator('[data-testid="poster-header"]');
-    await expect(header).toBeHidden();
-
-    const eventSelect = page.locator('[data-testid="poster-event-select"]');
-    await expect(eventSelect).toBeHidden();
-  });
-
-  test('@media print — poster card is still visible', async ({ page }) => {
-    await page.emulateMedia({ media: 'print' });
-    await expect(page.locator('[data-testid="poster-area"] .poster')).toBeVisible();
-  });
-
-  test('@media print — poster has no box-shadow', async ({ page }) => {
-    await page.emulateMedia({ media: 'print' });
-    const poster = page.locator('[data-testid="poster-area"] .poster');
-    const boxShadow = await poster.evaluate((el) => window.getComputedStyle(el).boxShadow);
-    expect(boxShadow === 'none' || boxShadow === '').toBe(true);
-  });
-
-  test('@media print — body background is white', async ({ page }) => {
-    await page.emulateMedia({ media: 'print' });
-    const bg = await page
-      .locator('body')
-      .evaluate((el) => window.getComputedStyle(el).backgroundColor);
-    // white = rgb(255, 255, 255) or transparent
-    expect(bg === 'rgb(255, 255, 255)' || bg === 'rgba(0, 0, 0, 0)' || bg === 'transparent').toBe(
-      true
-    );
-  });
-});
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// 7. FRIENDLY URL ALIASES
+// 4. FRIENDLY URL ALIASES
 // ═══════════════════════════════════════════════════════════════════════════════
 
 test.describe('Poster Page — URL Aliases', () => {
@@ -404,7 +166,7 @@ test.describe('Poster Page — URL Aliases', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// 8. SECURITY HEADERS
+// 5. SECURITY HEADERS
 // ═══════════════════════════════════════════════════════════════════════════════
 
 test.describe('Poster Page — Security Headers', () => {
@@ -433,7 +195,7 @@ test.describe('Poster Page — Security Headers', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// 9. XSS RESILIENCE
+// 6. XSS RESILIENCE  (data mocked inline — no seeded backend needed)
 // ═══════════════════════════════════════════════════════════════════════════════
 
 test.describe('Poster Page — XSS Resilience', () => {
@@ -455,7 +217,7 @@ test.describe('Poster Page — XSS Resilience', () => {
               // mock fulfills the route directly, bypassing the worker and its
               // enrichment, so `name` must be supplied here or the poster title
               // renders EMPTY — which makes the `not.toContain('<script>alert')`
-              // assertion above pass vacuously. The positive control below is
+              // assertion below pass vacuously. The positive control below is
               // what catches that.
               name: '<script>alert("xss")</script>',
               slug: 'xss-event',
@@ -504,7 +266,7 @@ test.describe('Poster Page — XSS Resilience', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// 10. RESPONSE TIME
+// 7. RESPONSE TIME
 // ═══════════════════════════════════════════════════════════════════════════════
 
 test.describe('Poster Page — Response Time', () => {
