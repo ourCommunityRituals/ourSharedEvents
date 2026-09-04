@@ -96,15 +96,32 @@ jobs:
             echo "$HASH" > "$STAMP"
           fi
 
-      - name: Install Playwright Chromium
-        # --with-deps pulls the chromium system libs (OSE-954). The self-hosted
-        # box had them pre-provisioned; a fresh ubuntu VM does not, and without
-        # them the browser fails to launch with a missing-shared-library error.
-        run: npx playwright install --with-deps chromium
+      - name: Install Playwright browsers (webkit + chromium)
+        # --with-deps pulls the system libs (OSE-954). The self-hosted box had
+        # them pre-provisioned; a fresh ubuntu VM does not, and without them the
+        # browser fails to launch with a missing-shared-library error.
+        #
+        # WEBKIT IS REQUIRED, NOT OPTIONAL (OSE-293). Three of the four projects
+        # in playwright.config.ts — iPhone SE, iPhone 14 Pro Max, iPad Air — are
+        # Playwright device descriptors whose defaultBrowserType is `webkit`;
+        # only "Desktop Safari" (a bare viewport + UA string) runs on chromium.
+        # Installing chromium alone made every device project abort at launch
+        # with "Executable doesn't exist … webkit-XXXX/pw_run.sh": the nightly
+        # reported 116 failures that were all one missing browser, so the real
+        # violations underneath could not be read and invariant #14 had no
+        # baseline at all.
+        run: npx playwright install --with-deps webkit chromium
 
+      # continue-on-error is UNCONDITIONAL (OSE-293), and the explicit fail step
+      # below decides the job's fate. It used to be `github.event_name ==
+      # 'pull_request'`, so on a scheduled run a violation halted the job HERE —
+      # and every later step that lacked always() was skipped, including the two
+      # steps that exist to report the finding. The audit blocked (correctly) but
+      # announced nothing, which is why a red nightly sat unnoticed. Blocking vs
+      # informational is still decided by event: see the two steps below.
       - name: Run mobile workability audit
         id: audit
-        continue-on-error: ${{ github.event_name == 'pull_request' }}
+        continue-on-error: true
         run: npx playwright test tests/playwright/mobile-workability.spec.ts --reporter=html,list
 
       - name: Upload Playwright report
@@ -116,7 +133,7 @@ jobs:
           retention-days: 30
 
       - name: Comment on PR with violation summary
-        if: steps.audit.outcome == 'failure' && github.event_name == 'pull_request'
+        if: always() && steps.audit.outcome == 'failure' && github.event_name == 'pull_request'
         uses: actions/github-script@v9
         with:
           script: |
@@ -142,8 +159,11 @@ jobs:
             });
 
       - name: Fail workflow on scheduled-run violation
-        if: steps.audit.outcome == 'failure' && github.event_name != 'pull_request'
+        if: always() && steps.audit.outcome == 'failure' && github.event_name != 'pull_request'
         run: |
           echo "::error::Mobile workability audit detected violations on a non-PR run."
           echo "::error::See the mobile-workability-report artifact for details."
+          echo "::error::Invariant #14 (mobile workability) — 375x812 contracts:"
+          echo "::error::  no horizontal scroll · tap targets >=44px · inputs >=16px"
+          echo "::error::  primary CTA above the fold · no pinch-zoom to submit"
           exit 1
