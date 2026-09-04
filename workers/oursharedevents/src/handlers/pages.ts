@@ -621,11 +621,11 @@ ${buildOgMeta({ title, description: whatShort, url: esc(shareUrl), twitterCard: 
 
     ${social ? renderSponsorStrip('pre-sponsor-strip', social.sponsors, 'Supported by') : ''}
 
-    ${
-      social && social.regCount > 0
-        ? `<p class="ose-reg-count" data-testid="registration-count">${social.regCount === 1 ? '1 registered so far' : `${social.regCount} registered so far`}</p>`
-        : ''
-    }
+    <!-- Counts are POST-EVENT only (founder decision 2026-09-04). An attendee
+       deciding whether to come is not shown how many others already did:
+       live tallies are social proof, a growth tactic, and the platform counts
+       the room for the host, sponsor and report — never to persuade the room.
+       The post-event recap card keeps its counts (OSE-657 keepsake). -->
 
     ${renderShareBlock(shareUrl, row.title, nonce, lang)}
 
@@ -740,8 +740,6 @@ ${buildOgMeta({ title, description: whatShort, url: esc(shareUrl), twitterCard: 
     ${renderShareBlock(shareUrl, row.title, nonce, lang)}
 
     <a class="ose-checkin-btn" data-testid="event-checkin" href="/forms/${esc(row.id)}?type=checkin">Check in at this event</a>
-
-    ${social && social.checkinCount > 0 ? `<p class="ose-checkin-count" data-testid="checkin-count">${social.checkinCount} checked in so far</p>` : ''}
 
     ${social ? renderSponsorStrip('live-sponsor-strip', social.sponsors, 'Supported by') : ''}
 

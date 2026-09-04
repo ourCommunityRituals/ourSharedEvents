@@ -24,7 +24,12 @@ async function applyMigrations(): Promise<void> {
       await tenv.DB.prepare(stmt).run();
     } catch (e) {
       const m = e instanceof Error ? e.message : String(e);
-      if (m.includes('duplicate column') || m.includes('already exists') || m.includes('no such column')) continue;
+      if (
+        m.includes('duplicate column') ||
+        m.includes('already exists') ||
+        m.includes('no such column')
+      )
+        continue;
       throw e;
     }
   }
@@ -62,21 +67,29 @@ describe('OSE-656 | in-event companion — never counts the viewer', () => {
     await seedLive(id);
     const html = (await (await SELF.fetch(`https://t.test/events/${id}`)).text()).toLowerCase();
     // no language that would imply counting the person viewing right now
-    for (const phrase of ['viewing now', 'watching now', 'people viewing', 'viewers', 'here now', 'online now', 'watching live']) {
+    for (const phrase of [
+      'viewing now',
+      'watching now',
+      'people viewing',
+      'viewers',
+      'here now',
+      'online now',
+      'watching live',
+    ]) {
       expect(html, `must not render viewer-presence count: "${phrase}"`).not.toContain(phrase);
     }
   });
 
-  test('any count shown is the server-rendered check-in aggregate, not an optimistic/viewer count', async () => {
+  test('the live page shows no count at all — not a viewer tally, not a check-in tally', async () => {
     const id = 'evt_live_now';
     await seedLive(id);
     const html = await (await SELF.fetch(`https://t.test/events/${id}`)).text();
-    // The only count affordance is checkin-count, and it reads "checked in" (an
-    // aggregate of form submissions), never a viewer tally. With 0 check-ins it
-    // is absent entirely (no zero-state count fabricated).
-    if (html.includes('data-testid="checkin-count"')) {
-      expect(html).toMatch(/checked in/i);
-    }
+    // Counts are post-event only (founder decision 2026-09-04). This assertion
+    // used to be conditional ("if a count is shown it must be the check-in
+    // aggregate"); it is now absolute, so a reintroduced live tally fails here
+    // rather than passing vacuously.
+    expect(html).not.toContain('data-testid="checkin-count"');
+    expect(html).not.toMatch(/checked in so far/i);
     // no client-side interval incrementing a count (no realtime viewer tally)
     expect(html).not.toMatch(/setInterval[\s\S]{0,200}(count|viewer|watching)/i);
   });
