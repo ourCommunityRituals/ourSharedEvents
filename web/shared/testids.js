@@ -35,7 +35,7 @@
  *   Derived from the templates, so it can never claim an id the app does not
  *   emit. Dynamically-built ids (`data-testid="row-' + id + '"`) are excluded
  *   on purpose: t() would accept one while nothing ever renders it.
- * Generated 2026-09-02 — 377 ids.
+ * Generated 2026-09-04 — 379 ids.
  */
 (function (root, factory) {
   const api = factory();
@@ -259,7 +259,7 @@
       'wizard-template-other',
       'wizard-template-trivia',
     ]),
-    // public.html — 31 ids
+    // public.html — 32 ids
     PUBLIC: Object.freeze([
       'anonymity-affordance',
       'public-error',
@@ -270,6 +270,7 @@
       'public-event-meta',
       'public-event-name',
       'public-event-venue',
+      'public-event-wrapped',
       'public-events',
       'public-events-count',
       'public-events-empty',
@@ -293,9 +294,10 @@
       'public-sponsor-section',
       'public-title',
     ]),
-    // display.html — 29 ids
+    // display.html — 30 ids
     DISPLAY: Object.freeze([
       'display-clock',
+      'display-consent',
       'display-empty',
       'display-featured-card',
       'display-featured-date',
@@ -383,16 +385,16 @@
       'funnel-reg-count',
       'funnel-row',
       'funnel-table',
-      'local-impressions',
-      'local-impressions-total',
+      'local-displays',
+      'local-displays-total',
       'local-sponsor-count',
       'local-vs-paid-bar',
       'local-vs-paid-delta',
-      'mid-impressions',
+      'mid-displays',
       'mid-sponsor-count',
-      'paid-impressions-total',
+      'paid-displays-total',
       'poster-row-h3-res9',
-      'premium-impressions',
+      'premium-displays',
       'premium-sponsor-count',
       'report-action-bar',
       'report-event-date',
@@ -412,6 +414,7 @@
       'signed-link-content',
       'signed-link-corridor-density',
       'signed-link-corridor-map',
+      'signed-link-distinct-gatherings',
       'signed-link-error',
       'signed-link-event-date',
       'signed-link-event-title',
@@ -427,7 +430,6 @@
       'signed-link-stats',
       'signed-link-trend-row',
       'signed-link-trend-section',
-      'signed-link-unique-gatherings',
       'sponsor-class-row-local',
       'sponsor-class-row-mid',
       'sponsor-class-row-premium',

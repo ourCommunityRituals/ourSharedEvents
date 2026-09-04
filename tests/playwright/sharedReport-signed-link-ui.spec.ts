@@ -160,7 +160,9 @@ test.describe('OSE-R-003 — signed-link SharedReport page in browser', () => {
     await expect(page.locator('[data-testid="signed-link-event-title"]')).toHaveText(
       /Empty Bottle/
     );
-    await expect(page.locator('[data-testid="signed-link-unique-gatherings"]')).toContainText('84');
+    await expect(page.locator('[data-testid="signed-link-distinct-gatherings"]')).toContainText(
+      '84'
+    );
     await expect(page.locator('[data-testid="signed-link-return-rate"]')).toContainText('31.4%');
   });
 

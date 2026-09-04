@@ -96,7 +96,7 @@ ratio is a starting point; the walls are the guarantee.**
 
 ### What each class gets
 
-**Local ($75 illustrative)**
+**Local (community use $0 forever · established business small flat fee · first-year business first placement free — decided 2026-09-03, see PRICING-PLAN §A)**
 
 - Appears on every eligible surface, at the same size as everyone else
 - Base rotation frequency, protected by the 30% collective local floor
@@ -117,9 +117,10 @@ ratio is a starting point; the walls are the guarantee.**
 - Deepest report tier
 
 > **Note:** Dollar amounts are illustrative and will vary by event type and phase.
-> `weights.base: 1` is defined in the brain as the _unpaid / free_ sponsor weight — the relationship
-> between the free tier and the illustrative $75 Local price point is a go-to-market decision, not a
-> mechanism decision. See [../positioning/PRICING-PLAN.md](../positioning/PRICING-PLAN.md).
+> `weights.base: 1` is defined in the brain as the _unpaid / free_ sponsor weight. Which Local placements
+> are free and which pay the flat fee is a go-to-market decision, not a mechanism decision — decided
+> 2026-09-03 (OSE-1198) and recorded in [../positioning/PRICING-PLAN.md](../positioning/PRICING-PLAN.md) §A.
+> Every Local class sits at the same 1× weight and the same floor; price never changes the mechanism.
 
 ---
 

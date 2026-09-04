@@ -129,7 +129,9 @@ const FORM_CSS = `
   .form-card { background: #fff; border-radius: 12px; padding: 1.5rem; box-shadow: 0 2px 8px rgba(0,0,0,.08); }
   .form-card h2 { font-size: 1.15rem; font-weight: 600; margin-bottom: 1rem; color: #1a1a2e; }
   label { display: block; font-size: .85rem; font-weight: 500; color: #495057; margin-bottom: .25rem; }
-  input, textarea, select { width: 100%; padding: .65rem .75rem; border: 1.5px solid #dee2e6; border-radius: 8px; font-size: 1rem; margin-bottom: .75rem; font-family: inherit; }
+  /* Walkthrough 2026-09-03: inputs measured 42px at 390px — under the 44px floor
+     (OCR_STANDARD_mobileWorkability #2). min-height holds the floor regardless of font metrics. */
+  input, textarea, select { width: 100%; min-height: 44px; padding: .65rem .75rem; border: 1.5px solid #dee2e6; border-radius: 8px; font-size: 1rem; margin-bottom: .75rem; font-family: inherit; }
   input:focus, textarea:focus { outline: none; border-color: #4361ee; box-shadow: 0 0 0 3px rgba(67,97,238,.15); }
   textarea { resize: vertical; min-height: 80px; }
   /* OSE-292 (2026-05-16): min-height 44px on every button to meet

@@ -128,7 +128,6 @@ function drawFinder(m: QrMatrix, res: QrReserved, r: number, c: number): void {
   }
 }
 
-
 /**
  * Alignment-pattern centres for a version. Returns [] for v1 (none).
  *
@@ -163,7 +162,6 @@ function drawAlignment(m: QrMatrix, res: QrReserved, r: number, c: number): void
     }
   }
 }
-
 
 /**
  * Version information — required for version 7 and above, absent entirely before.
@@ -487,26 +485,51 @@ function deflateStore(data: Uint8Array): Uint8Array {
   return out;
 }
 
-function matrixToPng(m: QrMatrix, scale: number, margin: number): string {
+function matrixToPng(
+  m: QrMatrix,
+  scale: number,
+  margin: number,
+  fg?: [number, number, number]
+): string {
   const sz = m.length;
   const imgSz = (sz + margin * 2) * scale;
-  const pixels = new Uint8Array(imgSz * imgSz);
+  const isDark = (x: number, y: number): boolean => {
+    const qy = Math.floor(y / scale) - margin;
+    const qx = Math.floor(x / scale) - margin;
+    return qy >= 0 && qy < sz && qx >= 0 && qx < sz && m[qy][qx] === true;
+  };
+
+  // Greyscale (colour type 0, 1 byte/px) when no fg; RGB (colour type 2,
+  // 3 bytes/px) when a UEC hue is requested. Filter byte 0 on every scanline.
+  const bpp = fg ? 3 : 1;
+  const colourType = fg ? 2 : 0;
+  const rawData = new Uint8Array(imgSz * (1 + imgSz * bpp));
   for (let y = 0; y < imgSz; y++) {
+    const row = y * (1 + imgSz * bpp);
+    rawData[row] = 0; // filter byte
     for (let x = 0; x < imgSz; x++) {
-      const qy = Math.floor(y / scale) - margin;
-      const qx = Math.floor(x / scale) - margin;
-      pixels[y * imgSz + x] = qy >= 0 && qy < sz && qx >= 0 && qx < sz && m[qy][qx] ? 0 : 255;
+      const dark = isDark(x, y);
+      const o = row + 1 + x * bpp;
+      if (fg) {
+        rawData[o] = dark ? fg[0] : 255;
+        rawData[o + 1] = dark ? fg[1] : 255;
+        rawData[o + 2] = dark ? fg[2] : 255;
+      } else {
+        rawData[o] = dark ? 0 : 255;
+      }
     }
   }
 
-  const rawData = new Uint8Array(imgSz * (1 + imgSz));
-  for (let y = 0; y < imgSz; y++) {
-    rawData[y * (1 + imgSz)] = 0; // filter byte
-    for (let x = 0; x < imgSz; x++) rawData[y * (1 + imgSz) + 1 + x] = pixels[y * imgSz + x];
-  }
-
   const sig = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
-  const ihdr = pngChunk('IHDR', [...intToBytes(imgSz, 4), ...intToBytes(imgSz, 4), 8, 0, 0, 0, 0]);
+  const ihdr = pngChunk('IHDR', [
+    ...intToBytes(imgSz, 4),
+    ...intToBytes(imgSz, 4),
+    8,
+    colourType,
+    0,
+    0,
+    0,
+  ]);
   const idat = pngChunk('IDAT', [...deflateStore(rawData)]);
   const iend = pngChunk('IEND', []);
 
@@ -558,6 +581,13 @@ export interface QrOptions {
   margin?: number;
   /** Error correction level (default 'M') */
   errorCorrection?: 'L' | 'M' | 'Q' | 'H';
+  /**
+   * Foreground (dark-module) color as `#RRGGBB`. OSE-1200: the poster prints
+   * each code in its UEC `scan_hex` — the color IS the instruction. When
+   * omitted the PNG stays 8-bit greyscale with #000000 modules; when set, the
+   * PNG is written as 8-bit RGB (colour type 2). Background stays white.
+   */
+  fgColor?: string;
 }
 
 export interface SvgQrOptions {
@@ -582,10 +612,18 @@ export interface SvgQrOptions {
  * @throws If data is too long for version 7 / chosen EC level
  */
 export function generateQrCode(data: string, opts: QrOptions = {}): string {
-  const { scale = 4, margin = 2, errorCorrection = 'M' } = opts;
+  const { scale = 4, margin = 2, errorCorrection = 'M', fgColor } = opts;
   const ecLevel = EC_LEVEL[errorCorrection] ?? EC_LEVEL.M;
   const matrix = buildMatrix(data, ecLevel);
-  return matrixToPng(matrix, scale, margin);
+  return matrixToPng(matrix, scale, margin, fgColor ? parseHexRgb(fgColor) : undefined);
+}
+
+/** `#RRGGBB` → [r, g, b]. Throws on anything else so a bad hue never prints. */
+export function parseHexRgb(hex: string): [number, number, number] {
+  const m = /^#([0-9a-fA-F]{6})$/.exec(hex.trim());
+  if (!m) throw new Error(`fgColor must be #RRGGBB, got "${hex}"`);
+  const n = parseInt(m[1], 16);
+  return [(n >> 16) & 0xff, (n >> 8) & 0xff, n & 0xff];
 }
 
 /**

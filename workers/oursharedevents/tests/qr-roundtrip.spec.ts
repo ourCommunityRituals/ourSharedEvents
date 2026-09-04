@@ -77,7 +77,8 @@ async function applyMigrations(): Promise<void> {
 
 // ── PNG decode ────────────────────────────────────────────────────────────────
 //
-// matrixToPng writes the simplest legal PNG: 8-bit greyscale (colour type 0),
+// matrixToPng writes the simplest legal PNG: 8-bit greyscale (colour type 0)
+// — or, since OSE-1200, 8-bit RGB (colour type 2) when a UEC fgColor is set —
 // filter byte 0 (None) per scanline, and DEFLATE *stored* (uncompressed) blocks.
 // Decoding it needs no library — and doing it by hand keeps this spec dependency
 // -light and, more importantly, keeps it honest: it reads the real file format
@@ -95,11 +96,17 @@ function readU32(b: Uint8Array, o: number): number {
 }
 
 /** Concatenate every IDAT payload and read IHDR width/height/colour type. */
-function parsePng(png: Uint8Array): { width: number; height: number; idat: Uint8Array } {
+function parsePng(png: Uint8Array): {
+  width: number;
+  height: number;
+  colourType: 0 | 2;
+  idat: Uint8Array;
+} {
   expect(Array.from(png.slice(0, 8)), 'PNG signature').toEqual([137, 80, 78, 71, 13, 10, 26, 10]);
   let off = 8;
   let width = 0;
   let height = 0;
+  let colourType: 0 | 2 = 0;
   const chunks: Uint8Array[] = [];
   while (off < png.length) {
     const len = readU32(png, off);
@@ -109,7 +116,8 @@ function parsePng(png: Uint8Array): { width: number; height: number; idat: Uint8
       width = readU32(data, 0);
       height = readU32(data, 4);
       expect(data[8], 'bit depth').toBe(8);
-      expect(data[9], 'colour type (0 = greyscale)').toBe(0);
+      expect([0, 2], 'colour type (0 = greyscale, 2 = RGB for UEC hues)').toContain(data[9]);
+      colourType = data[9] as 0 | 2;
     } else if (type === 'IDAT') {
       chunks.push(data);
     } else if (type === 'IEND') break;
@@ -122,7 +130,7 @@ function parsePng(png: Uint8Array): { width: number; height: number; idat: Uint8
     idat.set(c, p);
     p += c.length;
   }
-  return { width, height, idat };
+  return { width, height, colourType, idat };
 }
 
 /** Inflate DEFLATE *stored* blocks only — which is all deflateStore() emits. */
@@ -154,18 +162,19 @@ function inflateStored(z: Uint8Array): Uint8Array {
 /** Greyscale PNG -> RGBA, the shape jsQR expects from a camera frame. */
 function pngToRgba(dataUri: string): { data: Uint8ClampedArray; width: number; height: number } {
   const b64 = dataUri.replace(/^data:image\/png;base64,/, '');
-  const { width, height, idat } = parsePng(b64ToBytes(b64));
+  const { width, height, colourType, idat } = parsePng(b64ToBytes(b64));
   const raw = inflateStored(idat);
+  const bpp = colourType === 2 ? 3 : 1;
   const rgba = new Uint8ClampedArray(width * height * 4);
   for (let y = 0; y < height; y++) {
-    const rowStart = y * (1 + width);
+    const rowStart = y * (1 + width * bpp);
     expect(raw[rowStart], `scanline ${y} filter type`).toBe(0);
     for (let x = 0; x < width; x++) {
-      const v = raw[rowStart + 1 + x];
+      const i = rowStart + 1 + x * bpp;
       const o = (y * width + x) * 4;
-      rgba[o] = v;
-      rgba[o + 1] = v;
-      rgba[o + 2] = v;
+      rgba[o] = raw[i];
+      rgba[o + 1] = raw[i + (bpp === 3 ? 1 : 0)];
+      rgba[o + 2] = raw[i + (bpp === 3 ? 2 : 0)];
       rgba[o + 3] = 255;
     }
   }
@@ -248,18 +257,32 @@ describe('QR round-trip — poster bundle is scannable', () => {
    *   - the version-information block, mandatory from v7, was never emitted
    */
   test.each([
-    ['L', 13], ['L', 30], ['L', 50], ['L', 90], ['L', 130], ['L', 150],
-    ['M', 13], ['M', 30], ['M', 50], ['M', 70], ['M', 90], ['M', 110],
-    ['Q', 13], ['Q', 30], ['Q', 50], ['Q', 60], ['Q', 70],
-    ['H', 13], ['H', 30], ['H', 40], ['H', 55],
-  ] as Array<['L' | 'M' | 'Q' | 'H', number]>)(
-    'level %s at %i bytes round-trips',
-    (level, len) => {
-      const url = 'https://x.co/' + 'a'.repeat(Math.max(0, len - 13));
-      const uri = generateQrCode(url, { errorCorrection: level, margin: 4, scale: 6 });
-      expect(decodeQr(uri), `level ${level} at ${url.length} bytes did not decode`).toBe(url);
-    }
-  );
+    ['L', 13],
+    ['L', 30],
+    ['L', 50],
+    ['L', 90],
+    ['L', 130],
+    ['L', 150],
+    ['M', 13],
+    ['M', 30],
+    ['M', 50],
+    ['M', 70],
+    ['M', 90],
+    ['M', 110],
+    ['Q', 13],
+    ['Q', 30],
+    ['Q', 50],
+    ['Q', 60],
+    ['Q', 70],
+    ['H', 13],
+    ['H', 30],
+    ['H', 40],
+    ['H', 55],
+  ] as Array<['L' | 'M' | 'Q' | 'H', number]>)('level %s at %i bytes round-trips', (level, len) => {
+    const url = 'https://x.co/' + 'a'.repeat(Math.max(0, len - 13));
+    const uri = generateQrCode(url, { errorCorrection: level, margin: 4, scale: 6 });
+    expect(decodeQr(uri), `level ${level} at ${url.length} bytes did not decode`).toBe(url);
+  });
 
   test('the QR carries a quiet zone — the margin a scanner needs', () => {
     const qr = (bundle.qr ?? {}) as Record<string, string>;

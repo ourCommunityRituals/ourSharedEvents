@@ -45,6 +45,76 @@ const FORM_LABELS: Record<FormType, string> = {
   'email-signup': 'Email Signup',
 };
 
+/**
+ * OSE-1200 — each poster code prints in its UEC hue AND carries the non-color
+ * channel the hybrid design brief requires (color can never be the sole
+ * carrier: the palette is not CVD-separable, ΔE 9–13). Every card gets the
+ * plain WORD, the readable path, and the consent tier in words.
+ *
+ * Consent tiers (hybrid brief §5): untracked · anonymous (counts only) ·
+ * identified (you chose to leave a way back — and it expires).
+ */
+export type ConsentTier = 'anonymous' | 'identified';
+export interface PosterUec {
+  /** UEC code id, e.g. ENTER, CHECK-IN, FEEDBACK, UTILITY. */
+  id: string;
+  /** Plain word printed on the card. */
+  word: string;
+  /** Canonical scan hex — the dark-module color of the PNG. */
+  scan_hex: string;
+  /** Human-readable UEC path. */
+  url_path: string;
+  /** Color name from the registry (Green, Teal, Amber, Charcoal). */
+  color: string;
+  tier: ConsentTier;
+  /** One plain sentence stating what this scan keeps, in the brand voice. */
+  tier_label: string;
+}
+const FORM_UEC: Record<
+  FormType,
+  { code: string; word: string; tier: ConsentTier; tier_label: string }
+> = {
+  register: {
+    code: 'ENTER',
+    word: 'ENTER',
+    tier: 'identified',
+    tier_label: 'You choose to leave a way back. It expires 90 days after the event.',
+  },
+  checkin: {
+    code: 'CHECK-IN',
+    word: 'CHECK IN',
+    tier: 'anonymous',
+    tier_label: 'Anonymous count only. Nothing about you is stored.',
+  },
+  survey: {
+    code: 'FEEDBACK',
+    word: 'FEEDBACK',
+    tier: 'identified',
+    tier_label: 'Your words, your choice. Personal details are scrubbed on a timer.',
+  },
+  'email-signup': {
+    code: 'UTILITY',
+    word: 'UPDATES',
+    tier: 'identified',
+    tier_label: 'One email when something is coming up. Deleted after 30 days.',
+  },
+};
+
+export function posterUecFor(type: FormType): PosterUec {
+  const spec = FORM_UEC[type];
+  const code = getCode(spec.code);
+  if (!code) throw new Error(`UEC registry has no code ${spec.code} for poster form ${type}`);
+  return {
+    id: code.id,
+    word: spec.word,
+    scan_hex: code.scan_hex,
+    url_path: code.url_path,
+    color: code.label,
+    tier: spec.tier,
+    tier_label: spec.tier_label,
+  };
+}
+
 function formUrl(origin: string, eventId: string, type: FormType, deploymentId?: string): string {
   const base = `${origin}/forms/${encodeURIComponent(eventId)}?type=${type}`;
   return deploymentId ? `${base}&deployment=${encodeURIComponent(deploymentId)}` : base;
@@ -98,6 +168,7 @@ export async function handleGetPosterBundle(
   const qr: Record<string, string> = {};
   const links: Record<string, string> = {};
   const labels: Record<string, string> = {};
+  const uec: Record<string, PosterUec> = {};
 
   for (const type of FORM_TYPES) {
     let url: string;
@@ -110,8 +181,11 @@ export async function handleGetPosterBundle(
       url = formUrl(origin, eventId, type);
     }
     links[type] = url;
-    qr[type] = generateQrCode(url, { errorCorrection: 'M' });
+    const code = posterUecFor(type);
+    // OSE-1200: the dark modules ARE the UEC scan_hex. Black is a bug.
+    qr[type] = generateQrCode(url, { errorCorrection: 'M', fgColor: code.scan_hex });
     labels[type] = FORM_LABELS[type];
+    uec[type] = code;
   }
 
   // UEC ENTER QR — encodes the event public page using UEC color semantics (OSE-191).
@@ -138,6 +212,7 @@ export async function handleGetPosterBundle(
     qr,
     links,
     labels,
+    uec,
     uecQr,
     uecEnterHex: UEC_ENTER_HEX,
   });

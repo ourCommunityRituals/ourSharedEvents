@@ -94,7 +94,7 @@ describe('OSE-295 shared-report mobile workability — API layer', () => {
     expect(html).toContain('data-label="Event"');
     expect(html).toContain('data-label="Registrations"');
     expect(html).toContain('data-label="Check-ins"');
-    expect(html).toContain('data-label="Attendance"');
+    expect(html).toContain('data-label="Showed up"');
   });
 
   test('OSE-295 | API | GET /sharedReport (any) | signed-link sponsor / poster / trend tables carry data-label attributes', async () => {
@@ -105,12 +105,12 @@ describe('OSE-295 shared-report mobile workability — API layer', () => {
     // for bar owners opening the signed link on their phone.
     expect(html).toContain('data-label="Sponsor"');
     expect(html).toContain('data-label="Surface"');
-    expect(html).toContain('data-label="Impressions"');
+    expect(html).toContain('data-label="Displays"');
     expect(html).toContain('data-label="Location"');
     expect(html).toContain('data-label="Scans"');
     expect(html).toContain('data-label="First"');
     expect(html).toContain('data-label="Last"');
-    expect(html).toContain('data-label="Unique gatherings"');
+    expect(html).toContain('data-label="Distinct gatherings"');
   });
 
   test('OSE-295 | API | GET /sharedReport (mobile media query) | main padding tightens for narrow viewports', async () => {
