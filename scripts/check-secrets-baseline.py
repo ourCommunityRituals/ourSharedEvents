@@ -20,7 +20,7 @@ To accept a genuinely-new-but-false-positive detection, re-baseline:
 
     python -m detect_secrets scan \
       --exclude-files 'package-lock\\.json' --exclude-files '\\.gitleaks\\.toml' \
-      --exclude-files '.*\\.spec\\.ts' --exclude-files 'vitest\\.config.*' \
+      --exclude-files '.*\\.spec\\.ts' --exclude-files 'vitest\\..*config.*' \
       --exclude-files '\\.secrets\\.baseline' --exclude-files '^archive[\\\\/]' \
       > .secrets.baseline
 
@@ -43,7 +43,11 @@ EXCLUDES = [
     r"package-lock\.json",
     r"\.gitleaks\.toml",
     r".*\.spec\.ts",
-    r"vitest\.config.*",
+    # vitest config files hold test-only fake secrets. OSE-946 split the single
+    # vitest.config.mts into vitest.config.mts (projects root) +
+    # vitest.workers.config.mts + vitest.node.config.mts, so the pattern matches
+    # any `vitest.<...>config.*`, not just the literal `vitest.config.*`.
+    r"vitest\..*config.*",
     r"\.secrets\.baseline",
     r"^archive[\\/]",
 ]
