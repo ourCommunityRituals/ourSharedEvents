@@ -313,11 +313,20 @@ function buildOgMeta(opts: {
   url: string;
   type?: string;
   twitterCard?: 'summary' | 'summary_large_image';
+  imageUrl?: string | null;
   startTime?: string | null;
   endTime?: string | null;
 }): string {
   const type = opts.type ?? 'event';
-  const twitterCard = opts.twitterCard ?? 'summary_large_image';
+  const image = opts.imageUrl ? esc(opts.imageUrl) : '';
+  // A `summary_large_image` card with no image is an invalid declaration:
+  // X/Twitter drops the preview or silently degrades it, and Slack renders a
+  // thin text-only unfurl. The card size is therefore DERIVED from whether an
+  // image actually exists — a caller may ask for the small card, but may not
+  // promise a large one we cannot fill. (OSE-1213: nothing currently supplies
+  // an image, because cover_image_url is not on PublicEventRow, so today this
+  // always resolves to `summary` — which is the honest card for what we emit.)
+  const twitterCard = image ? (opts.twitterCard ?? 'summary_large_image') : 'summary';
   const lines: string[] = [
     `  <meta property="og:title" content="${opts.title}" />`,
     `  <meta property="og:description" content="${opts.description}" />`,
@@ -329,6 +338,10 @@ function buildOgMeta(opts: {
     `  <meta name="twitter:title" content="${opts.title}" />`,
     `  <meta name="twitter:description" content="${opts.description}" />`,
   ];
+  if (image) {
+    lines.push(`  <meta property="og:image" content="${image}" />`);
+    lines.push(`  <meta name="twitter:image" content="${image}" />`);
+  }
   if (opts.startTime)
     lines.push(`  <meta property="og:event:start_time" content="${esc(opts.startTime)}" />`);
   if (opts.endTime)
