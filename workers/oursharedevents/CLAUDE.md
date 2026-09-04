@@ -30,7 +30,11 @@ src/
 ├── domain/ google/ cloud/ templates/   # domain logic, integrations, HTML
 ```
 
-Config: `wrangler.toml`, `vitest.config.mts` (+ `vitest.config.a11y.mts`),
+Config: `wrangler.toml`; vitest is a **projects root** (`vitest.config.mts`, OSE-946)
+over two projects — the `workers` pool (`vitest.workers.config.mts`, miniflare/workerd)
+and a fast parallel `node` project (`vitest.node.config.mts`); the shared spec list
+`vitest.node-specs.mjs` is what the node project INCLUDES and the workers project
+EXCLUDES (one project per spec). a11y stays separate (`vitest.config.a11y.mts`).
 `migrations/` (main DB) and `migrations-forms/` (FORMS_DB).
 
 ## Hot-path import bans (load-bearing — do not break)
@@ -66,8 +70,14 @@ turns CI red — a ~0-token operation cannot silently become token-metered.
 
 ## Tests & "done"
 
-- Worker specs: `tests/**/*.spec.ts` (vitest, `cloudflare:test` / miniflare
-  pool — source files reach tests via bundled `env.*_JSON`, not node `fs`).
+- Worker specs: `tests/**/*.spec.ts`. Runtime-bound specs (`SELF.fetch`, `env.DB`,
+  DO/KV/R2) run in the **workers** pool (`cloudflare:test` / miniflare — source
+  reaches them via bundled `env.*_JSON`, not node `fs`). Pure-logic / static-source
+  specs run in the fast **node** project (listed in `vitest.node-specs.mjs`; the
+  node project loads `.html` as Text to match the worker bundle). Migration between
+  pools is explicit-list + assertion-reviewed + run-green, never a broad testMatch
+  (OSE-946); `scripts/vitest-projects-partition.mjs` asserts every spec runs in
+  exactly one project, `scripts/triage-vitest-pool.mjs --check` guards the manifest.
 - Structural architecture invariants live at repo-root
   `tests/e2e/0-architecture/*.invariant.spec.ts` and gate **every** PR/push via
   the T0 Gate `invariants` shard (OSE-350). A new structural invariant spec
