@@ -12,11 +12,49 @@ OurSharedEvents is **the platform that makes communities visible to themselves.*
 
 Hosts run events. Attendees show up. OSE is the layer that tracks "groups gathered, here, when" without ever tracking "who you are." The product makes anonymous community signal real and durable so neighborhoods can SEE themselves coalescing through the events they hold together.
 
-**One-line positioning:** Community events that bring people together — tracked anonymously so the patterns stay honest.
+**Product subtitle (RATIFIED 2026-09-04, founder):**
+
+> ## Never who, only how many.
+
+This is the standing subtitle for OurSharedEvents. It sits under the wordmark **wherever the
+surface has room** — see §1.2 for the surface matrix — and it replaces the previous one-line
+positioning, which was _"Community events that bring people together — tracked anonymously so
+the patterns stay honest."_ That line is retired: its first clause is the generic register
+the Voice Constant bans (§2, "We Are Not"), and its second clause buries the anti-promise in
+a subordinate phrase.
+
+**The word `only` is load-bearing and must not drift to `always`.** _Always_ is a frequency
+claim and reads as a boast about counting. _Only_ is a limit, and the limit is the entire
+promise: the count is all that is taken.
+
+The subtitle is the compressed form of the Core Promise below. Both stay — the promise is the
+full sentence a visitor reads once; the subtitle is what they see every time.
 
 **Core promise (kept explicit on every public surface):**
 
 > You're part of the group, anonymously. OurSharedEvents tracks when groups gather — never who you are.
+
+### 1.2 Subtitle surface matrix
+
+The wordmark renders bare in six templates today and there is **no subtitle element anywhere**.
+Where it should go, and where it should not:
+
+| Surface           | Template             | Subtitle?                    | Why                                                                                                                               |
+| ----------------- | -------------------- | ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| Public event page | `public.html`        | ✅ **yes**                   | The attendee is about to interact — highest value                                                                                 |
+| SharedReport      | `shared-report.html` | ✅ **yes**                   | The subtitle _is_ the methodology of the report                                                                                   |
+| Poster            | `poster.html`        | ✅ **yes**                   | Carries the anti-promise onto a physical object                                                                                   |
+| Admin sign-in     | `admin-signin.html`  | ✅ yes                       | Low value, no harm; keeps the wordmark consistent                                                                                 |
+| Landing           | `landing.html`       | ⚠️ **header only, not both** | The hero already _is_ this line. Header + hero on one screen is repetition                                                        |
+| Display / TV      | `display.html`       | ❌ **no**                    | Already carries `display-consent`, which does the same job **better** in context — it speaks about _this room_. Do not stack them |
+
+**"When available" is a real constraint, not a hedge.** At 390px the header already holds
+`OurSharedEvents | Events | Admin`. The subtitle hides below the breakpoint rather than
+wrapping or crowding the nav.
+
+**Do not put it in an event page's OG description.** That slot belongs to the event's own
+`what_short` — a share card should describe the gathering, not the platform. Site-level
+`<title>` and the landing OG description may carry it.
 
 This sentence is load-bearing. Every surface inherits its tone.
 
@@ -556,7 +594,7 @@ Two icon-only buttons sanctioned. `🖨 Print` is the lone-exception pattern (on
 
 | Icon             | Use                                                                | Surface scope                                                                                                                       |
 | ---------------- | ------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `🖨` (printer)   | Print action — universally recognized                              | Admin /poster preview header (single placement; don't proliferate)                                                                  |
+| `🖨` (printer)    | Print action — universally recognized                              | Admin /poster preview header (single placement; don't proliferate)                                                                  |
 | `ℹ` (i for info) | Inline explainer popover — guides users through technical concepts | UBIQUITOUS in technical surfaces — admin, sharedReport, advanced metrics, sponsor configuration, poster format selection. See §4.7. |
 
 **Rule for `🖨 Print`:** lone exception. Don't add it to other surfaces. If a future surface needs print, evaluate per-case.
@@ -703,7 +741,7 @@ The `/brand-voice:enforce-voice` skill uses these to weigh strict-vs-flexible en
 | Surface exceptions (§7)                   | HIGH (now 4 exceptions: §7.1 GDPR / §7.2 ticker / §7.3 admin placeholders / §7.4 icon-only buttons) | §7.4 added 2026-05-16 per Q5 confirmation                                                                              |
 | Event triangle mental model (§1.1)        | HIGH (founder-confirmed Q2 2026-05-16)                                                              | Replaces "flywheel" as the customer-facing mental model; `flywheel` reserved for behind-the-scenes / internal use only |
 | Privacy positioning (§7.1 strategic note) | HIGH (founder-confirmed Q4 2026-05-16)                                                              | OSE intends to lead privacy standard for community-events platforms — active stance, not compliance posture            |
-| Icon-only buttons (§7.4)                  | HIGH (founder-confirmed Q5 2026-05-16)                                                              | Two sanctioned: `🖨 Print` + `ℹ Info`; mobile space pressure may drive future additions                                |
+| Icon-only buttons (§7.4)                  | HIGH (founder-confirmed Q5 2026-05-16)                                                              | Two sanctioned: `🖨 Print` + `ℹ Info`; mobile space pressure may drive future additions                                 |
 | Neighborhood-rooted ubiquity (§1)         | HIGH (founder-confirmed Q1 2026-05-16)                                                              | Geography is a content variable, not a brand variable                                                                  |
 | Migration backlog (§8)                    | (deferred work — not a confidence claim)                                                            | —                                                                                                                      |
 | Open questions (§9)                       | 6 of 6 CONFIRMED 2026-05-16                                                                         | Q3 resolved via founder pick (a) — Bug: add `You're checked in!`                                                       |
