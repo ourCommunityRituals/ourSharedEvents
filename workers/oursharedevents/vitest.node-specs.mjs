@@ -36,4 +36,10 @@ export const NODE_SPECS = [
   'tests/demo-registry.spec.ts',
   'tests/demo-ci-gate.spec.ts',
   'tests/corridor-map.spec.ts',
+  // Batch 3 — template-render specs, unlocked by the .html-as-Text plugin above.
+  'tests/briefing.spec.ts',
+  'tests/poster-sponsor.spec.ts',
+  'tests/sponsor-logo.spec.ts',
+  'tests/pdf-export.spec.ts',
+  'tests/poster-tier-css-ose219.spec.ts',
 ];
