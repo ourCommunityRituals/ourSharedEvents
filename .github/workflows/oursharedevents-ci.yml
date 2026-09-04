@@ -699,6 +699,7 @@ jobs:
             tests/e2e/0-architecture/shared-report-schema.invariant.spec.ts \
             tests/e2e/0-architecture/tenant-isolation.invariant.spec.ts \
             tests/e2e/0-architecture/tier-equity.invariant.spec.ts \
+            tests/e2e/0-architecture/uec-poster-color.invariant.spec.ts \
             tests/e2e/0-architecture/sponsor-share-covenant.invariant.spec.ts \
             tests/e2e/0-architecture/scan-path-split.invariant.spec.ts \
             tests/e2e/0-architecture/sponsor-identity-split.invariant.spec.ts \
