@@ -28,14 +28,14 @@ decisions (org VISION §6.5).
 
 ## Where the detail lives
 
-| Topic                          | Home                                                                 |
-| ------------------------------ | -------------------------------------------------------------------- |
-| Platform philosophy (3 principles, NCR horizon) | `docs/features/VISION.md`                           |
-| Session protocol, role POVs, constraints        | `CLAUDE.md`                                         |
-| Invariants this repo enforces                    | `tests/e2e/0-architecture/README.md` (mirror of the brain registry) |
-| Route table                                      | header comment of `workers/oursharedevents/src/router.ts` |
-| Schema                                           | `workers/oursharedevents/migrations/` + `migrations-forms/` |
-| Org registry, corridors, NCR doctrine            | `OCR-docs/docs/OCR_VISION.md` §7–§9                 |
+| Topic                                           | Home                                                                |
+| ----------------------------------------------- | ------------------------------------------------------------------- |
+| Platform philosophy (3 principles, NCR horizon) | `docs/features/VISION.md`                                           |
+| Session protocol, role POVs, constraints        | `CLAUDE.md`                                                         |
+| Invariants this repo enforces                   | `tests/e2e/0-architecture/README.md` (mirror of the brain registry) |
+| Route table                                     | header comment of `workers/oursharedevents/src/router.ts`           |
+| Schema                                          | `workers/oursharedevents/migrations/` + `migrations-forms/`         |
+| Org registry, corridors, NCR doctrine           | `OCR-docs/docs/OCR_VISION.md` §7–§9                                 |
 
 ## Open decisions owned by OSE
 
