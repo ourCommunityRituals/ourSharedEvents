@@ -296,6 +296,9 @@ granularity of the deployment itself**:
 | **Physical** — QR on a wall       | **res9 (Node) + res7 (Corridor)** | The poster hangs at one registered place. You located _the wall_, and the wall consented. |
 | **Digital** — shortlink in a feed | **res7 (Corridor) only**          | It was published into a corridor. It hangs nowhere. **There is no node to name.**         |
 
+> **Scoped by §12.4.** This section governs deployments with a **fixed registered
+> location**. A mobile item — a belt, a library book — has none and must not inherit one.
+
 ### 9.1 The rule
 
 ```
@@ -461,7 +464,111 @@ templates exist; the door doesn't.**
 
 ---
 
-## 12. What this changes about season one
+## 12. Items, not people — the standard that makes anonymous collection portable
+
+**Founder, 2026-09-04.** The item destination is not a feature for trophies. It is the
+mechanism by which anonymous collection **generalises across institutions** — libraries,
+rec centres, schools — because in every one of them the thing being measured is an
+**item**, never a person.
+
+A librarian running a summer reading programme does not care whether the borrower is a
+child or an adult. They are measuring circulation. Anonymity is not a compromise there;
+it is the correct instrument for the question.
+
+### 12.1 The boundary, in the founder's words
+
+> "They will have to use their cards to take out the items. But the library cards are on
+> them. The items are on me."
+
+That is the two-database split, **externalised across an organisational boundary**:
+
+| Side                                              | Holds                                                | Governed by                                   |
+| ------------------------------------------------- | ---------------------------------------------------- | --------------------------------------------- |
+| **The institution** (ILS, SIS, membership system) | The person. The card, the enrolment, the membership. | Their existing legal mandate and duty of care |
+| **OCR**                                           | The item's travel. Item X, node Y, hour Z.           | Zero-PII by construction                      |
+
+**OCR never performs the join. The institution does** — on their side, in their system,
+under their own governance, because they are the party with both the authority and the
+obligation for identity data. OCR ships the item-side series; they correlate it against
+whatever they legitimately hold.
+
+This is ADR-004 §6's two-independent-time-series model generalised from one client to a
+whole class of counterparty. Series A is ours and anonymous; Series B is theirs and never
+ingested.
+
+### 12.2 Why this is the standard and not just a nice property
+
+**The sensitivity of the vertical does not increase OCR's exposure**, because OCR's side
+of the boundary is byte-identical in every vertical. A school is a far more dangerous data
+environment than a bocce league — but OCR holds the same thing in both: an item, a node, an
+hour. There is no student record to leak because there is no student record.
+
+That is what makes the standard portable. Each new vertical is a new _counterparty_, not a
+new privacy posture.
+
+It also means **PST-03 stops being a good idea and becomes the thing that makes the vertical
+possible.** "No table, view, query, or export joins scan data to any external booking,
+reservation, guest, or named record" is not hygiene here — it is the reason a library can
+adopt this at all. The temptation to join is enormous: _which patrons read the most_ is the
+first question anyone will ask. The answer has to be structurally unavailable, not
+declined by policy.
+
+### 12.3 Where the type belongs — a registry row, not a table
+
+Verified 2026-09-04: **no `destination_type` and no `'item'` exists anywhere** in the
+schema or source. But the _mechanism_ ships today, with zero migrations — a perpetual
+event (`end_date = NULL`, held in phase indefinitely by `event-phase.ts`) plus a
+`poster_deployments` row carrying the `qr_token`. The object is the destination; the QR is
+the deployment.
+
+And `event_type_registry` (0023) is the natural home for the type itself: it already
+carries `uec_code`, `phase`, `legal_clearance_tier` and `regulatory_notes`. A
+library-item type is a **registry row**, not a schema change — and `legal_clearance_tier`
+is exactly the right hook, because these verticals carry statutory obligations beyond the
+ones OSE was designed against.
+
+### 12.4 Correction to §9 — it governs FIXED deployments only
+
+§9 states that geographic resolution is a property of the deployment, because a poster
+hangs at one registered wall. **A mobile item breaks that.** A challenge belt travels
+between holders; a library book goes home with whoever borrowed it. There is no fixed
+wall, so there is no cell to inherit.
+
+§9 is therefore scoped, not universal:
+
+```
+§9 governs deployments with a fixed registered location.
+A mobile item has no such location, and MUST NOT inherit one.
+```
+
+Two honest options for an item scan, and this is a real design choice:
+
+1. **No cell at all** — we do not know where the item is, and recording nothing is the
+   accurate answer.
+2. **A cell only when the scan occurs at a registered node** — at the library, at the
+   tournament venue — and null everywhere else.
+
+Option 2 is richer and still honest, because the cell then describes a _place OCR
+registered_, not a place a person was inferred to be. Either way, an item must never
+inherit a res9 cell from a deployment that does not physically hang anywhere.
+
+### 12.5 Flagged for legal review — NOT asserted here
+
+These verticals carry statutes OSE has not been reviewed against. Recording the flag, not
+an opinion:
+
+- **Library circulation records** are separately protected in most US states, independent
+  of BIPA.
+- **Schools** bring FERPA, and minors bring COPPA.
+
+The architecture's answer in each case is the same — OCR holds no person, so there is no
+protected record on our side — but _"we believe there is nothing to protect"_ is a claim
+that needs counsel behind it before it is said to a school district. Route with the §7
+retention question.
+
+---
+
+## 13. What this changes about season one
 
 The draft recommends running season one manually on paper, with the platform
 built in parallel for season two. This reconciliation **strengthens that
