@@ -19,3 +19,22 @@ postman/environments/testids.json
 # breaks byte-parity and turns every propagation PR into table-alignment churn
 # (observed on OSE-1194). Format them in OCR-docs or not at all.
 .ocr-standards/
+
+# Markdown is NOT prettier-owned in this repo, and pretending otherwise is what
+# makes reformat noise (OSE-1219). Measured 2026-09-03: 187 of 421 tracked .md
+# files are not prettier-clean — 44% — because nothing has ever enforced it.
+# No CI job checks markdown formatting: docs-ci runs markdownlint with `|| true`,
+# and the lint shard is eslint over config/ scripts/ tests/.
+#
+# The cost of NOT ignoring these is concrete, not theoretical. Running
+# `prettier --write` over four governance files during the 2026-09-03
+# reconciliation reflowed 230+ lines that the edit never touched — 294 in
+# STORIES.md alone against ~10 real edits — because prettier re-aligns every
+# table in the file. That buries the actual change, and it collides with the
+# byte-parity the propagated .ocr-standards/ copies need (same failure mode
+# already recorded for that directory above).
+#
+# So: format markdown deliberately or not at all. If markdown formatting is ever
+# wanted, it is a one-time repo-wide commit plus a real CI check — not a silent
+# side effect of editing one file.
+*.md

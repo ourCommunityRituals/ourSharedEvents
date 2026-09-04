@@ -332,7 +332,7 @@
       "eslint --fix",
       "prettier --write"
     ],
-    "*.{json,md,html,css}": [
+    "*.{json,html,css}": [
       "prettier --write"
     ]
   },
