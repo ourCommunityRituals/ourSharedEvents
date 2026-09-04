@@ -772,8 +772,74 @@ friction the platform exists to remove.
 Framing it as a safety gate would have misdirected the work toward blocking the web. The
 actual work is enabling it correctly.
 
-Not poster work. This is the third item this reconciliation has surfaced that belongs to
-another epic — with the event-draft front door (§11) and wiring `phase_unlocked` (§13.4).
+### 14.7 Inclusion/exclusion DOES exist — and the two clearance axes are type-incompatible
+
+> **Founder, 2026-09-04:** _"We do have inclusion/exclusion tables at the large size."_
+> Correct. §14.5 was wrong to call this unbuilt. Verified, with a harder finding underneath.
+
+**Sponsor-side inclusion/exclusion ships.** `sponsor_business_draft.category_selections`
+(migration 0053):
+
+```
+JSON [{category, mode:'whole'|'custom', excluded:[template_id], consent_flags}]
+```
+
+Whole-or-custom scoping, a per-template `excluded` list, and per-category `consent_flags`.
+The mechanism is designed and seeded. **It is not read anywhere in `src/`** — same
+modelled-but-unwired pattern as `phase_unlocked` (§13.4).
+
+**Host-side clearance also ships**, and predates all of it —
+`node_hierarchy.legal_clearance_tier` (migration **0011**):
+
+```sql
+-- OPEN       = sports, dance, general community (no special clearance)
+-- RESTRICTED = school functions, youth events (COPPA compliance required)
+-- REGULATED  = healthcare-adjacent, museum partnerships (HIPAA/institutional)
+CHECK (legal_clearance_tier IN ('OPEN', 'RESTRICTED', 'REGULATED'))
+```
+
+That is the rec-centre / library / school case, written down in 0011.
+
+#### The drift — one name, two types, and it is why the lattice cannot close
+
+| Migration | Table                 | Type        | Domain                              | Axis      |
+| --------- | --------------------- | ----------- | ----------------------------------- | --------- |
+| **0011**  | `node_hierarchy`      | **TEXT**    | `OPEN` / `RESTRICTED` / `REGULATED` | **WHERE** |
+| **0023**  | `event_type_registry` | **INTEGER** | 1–5                                 | **WHAT**  |
+| **0023**  | `events`              | **INTEGER** | default 1                           | **WHAT**  |
+
+`legal_clearance_tier` carries **the same name and two incompatible types** across the two
+axes of the pyramid.
+
+This is the mechanical reason §14.3's gap exists, and it is more specific than "nobody wired
+it." **The intersection cannot be computed.** `MAX('RESTRICTED', 2)` is not a value. The
+load-bearing `MAX()` of 0057 (§14.2) is structurally unable to span WHERE and WHAT, so the
+lattice cannot close no matter who writes the query.
+
+The semantics do map, which makes it tractable rather than a redesign:
+
+| 0011 TEXT    | Meaning                                    | Plausible 0023 tier |
+| ------------ | ------------------------------------------ | ------------------- |
+| `OPEN`       | general community                          | 1                   |
+| `RESTRICTED` | school, youth — COPPA                      | higher              |
+| `REGULATED`  | healthcare-adjacent, institutional — HIPAA | higher still        |
+
+Reconciling the two into one scale is the prerequisite for every governance behaviour
+discussed in §14. Until then, the host-side tier is a label nothing can act on.
+
+**Also worth recording:** 0057 notes _"all 47 Phase-1 types are legal_clearance_tier = 1"_
+under a `CLEARANCE-GATE-INERT` heading. So the WHAT axis is uniformly tier 1 on real data —
+which `template-clearance.ts` knows, and compensates for with the never-selectable `NULL`
+rule and a synthetic tier-2 fixture. The gate is honest about being inert on today's data.
+The host axis is where the real variation lives, and it is the axis that cannot be joined.
+
+**Filed as drift, not as poster work.** This is a naming/type collision between two
+migrations twelve apart, and it silently blocks the governance model the platform is built
+on.
+
+Not poster work. This is the fourth item this reconciliation has surfaced that belongs to
+another epic — with the event-draft front door (§11), wiring `phase_unlocked` (§13.4), and
+the `legal_clearance_tier` type collision (§14.7).
 
 ---
 
