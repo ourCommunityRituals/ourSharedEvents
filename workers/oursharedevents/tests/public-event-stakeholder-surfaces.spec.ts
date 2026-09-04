@@ -251,99 +251,77 @@ describe('OSE-ssp1: pre-event sponsor strip', () => {
   });
 });
 
-// ── Pre-event: social proof count ────────────────────────────────────────────
+// ── Counts are POST-EVENT only (founder decision 2026-09-04) ─────────────────
+//
+// Live tallies were removed from the pre-event and event-live phases: an
+// attendee deciding whether to come, or standing in the room, is never shown
+// how many others did. The platform counts the room for the host, the sponsor
+// and the SharedReport — never to persuade the room. The post-event recap card
+// keeps its counts (OSE-657 keepsake); those assertions live further below.
+//
+// These tests are born-red against the previous behaviour: each seeds the exact
+// condition that used to render a count and asserts it is absent.
 
-describe('OSE-ssp1: pre-event social proof count', () => {
-  test('registration-count renders when live registrations > 0', async () => {
+describe('counts are post-event only: pre-event phase shows none', () => {
+  test('no registration count with live registrations present', async () => {
     const id = 'evt_ssp1_pre_reg_yes';
     await seedEvent(id, { startOffsetDays: 7, endOffsetDays: 8 });
     await seedRegistration(id, { id: 'reg_ssp1_a1', expiresAt: null });
     await seedRegistration(id, { id: 'reg_ssp1_a2', expiresAt: null });
 
-    const res = await SELF.fetch(`https://t.test/events/${id}`);
-    const html = await res.text();
-    expect(html).toContain('data-testid="registration-count"');
-    expect(html).toContain('registered so far');
-    expect(html).not.toContain('people have registered'); // OSE-1201: no bodies word
-  });
-
-  test('registration-count absent when no registrations', async () => {
-    const id = 'evt_ssp1_pre_reg_no';
-    await seedEvent(id, { startOffsetDays: 7, endOffsetDays: 8 });
-
-    const res = await SELF.fetch(`https://t.test/events/${id}`);
-    const html = await res.text();
+    const html = await (await SELF.fetch(`https://t.test/events/${id}`)).text();
     expect(html).not.toContain('data-testid="registration-count"');
+    expect(html).not.toMatch(/registered so far/i);
+    // The RSVP path itself is untouched — the ask stays, only the tally goes.
+    expect(html).toContain('data-testid="event-rsvp"');
   });
 
-  test('singular copy when exactly one person registered', async () => {
+  test('no registration count with exactly one registration', async () => {
     const id = 'evt_ssp1_pre_reg_one';
     await seedEvent(id, { startOffsetDays: 7, endOffsetDays: 8 });
     await seedRegistration(id, { id: 'reg_ssp1_one', expiresAt: null });
 
-    const res = await SELF.fetch(`https://t.test/events/${id}`);
-    const html = await res.text();
-    expect(html).toContain('1 registered so far');
-    expect(html).not.toContain('2 registered so far');
-  });
-
-  test('expired registrations are NOT counted in social proof', async () => {
-    const id = 'evt_ssp1_pre_reg_expired';
-    await seedEvent(id, { startOffsetDays: 7, endOffsetDays: 8 });
-    // All registrations expired yesterday
-    const yesterday = new Date(Date.now() - 86400000).toISOString();
-    await seedRegistration(id, { id: 'reg_ssp1_exp1', expiresAt: yesterday });
-    await seedRegistration(id, { id: 'reg_ssp1_exp2', expiresAt: yesterday });
-
-    const res = await SELF.fetch(`https://t.test/events/${id}`);
-    const html = await res.text();
-    // Zero live registrations → count element must not render
+    const html = await (await SELF.fetch(`https://t.test/events/${id}`)).text();
     expect(html).not.toContain('data-testid="registration-count"');
+    expect(html).not.toMatch(/\d+ registered so far/i);
   });
 
-  test('only live registrations counted when mix of live and expired', async () => {
-    const id = 'evt_ssp1_pre_reg_mixed';
+  test('no registration count when there are no registrations', async () => {
+    const id = 'evt_ssp1_pre_reg_no';
     await seedEvent(id, { startOffsetDays: 7, endOffsetDays: 8 });
-    const yesterday = new Date(Date.now() - 86400000).toISOString();
-    const tomorrow = new Date(Date.now() + 86400000).toISOString();
-    await seedRegistration(id, { id: 'reg_ssp1_mx_exp', expiresAt: yesterday });
-    await seedRegistration(id, { id: 'reg_ssp1_mx_live', expiresAt: tomorrow });
 
-    const res = await SELF.fetch(`https://t.test/events/${id}`);
-    const html = await res.text();
-    // Only 1 live registration — singular copy
-    expect(html).toContain('data-testid="registration-count"');
-    expect(html).toContain('1 registered so far');
+    const html = await (await SELF.fetch(`https://t.test/events/${id}`)).text();
+    expect(html).not.toContain('data-testid="registration-count"');
   });
 });
 
-// ── Event-live phase ──────────────────────────────────────────────────────────
-
-describe('OSE-ssp1: live-event check-in count and sponsor strip', () => {
-  test('checkin-count renders when total_count > 0', async () => {
+describe('counts are post-event only: event-live phase shows none', () => {
+  test('no check-in tally on the live page even with 42 check-ins', async () => {
     const id = 'evt_ssp1_live_cc_yes';
-    // Live now: started 1 hour ago, ends 1 hour from now
     await seedEvent(id, { startOffsetDays: -1 / 24, endOffsetDays: 1 / 24 });
     await seedCheckinCount(id, 42);
 
-    const res = await SELF.fetch(`https://t.test/events/${id}`);
-    const html = await res.text();
+    const html = await (await SELF.fetch(`https://t.test/events/${id}`)).text();
     expect(html).toContain('data-testid="event-main-live"');
-    expect(html).toContain('data-testid="checkin-count"');
-    expect(html).toContain('42');
-    expect(html).toContain('checked in so far');
+    expect(html).not.toContain('data-testid="checkin-count"');
+    expect(html).not.toMatch(/checked in so far/i);
+    expect(html).not.toMatch(/>\s*42\s*</);
+    // The check-in ACTION stays — attendees can still check in, they just
+    // aren't shown the running total.
+    expect(html).toContain('data-testid="event-checkin"');
   });
 
-  test('checkin-count absent when no checkin_counts row for event', async () => {
+  test('no check-in tally on the live page with no check-ins', async () => {
     const id = 'evt_ssp1_live_cc_no';
     await seedEvent(id, { startOffsetDays: -1 / 24, endOffsetDays: 1 / 24 });
 
-    const res = await SELF.fetch(`https://t.test/events/${id}`);
-    const html = await res.text();
+    const html = await (await SELF.fetch(`https://t.test/events/${id}`)).text();
     expect(html).toContain('data-testid="event-main-live"');
     expect(html).not.toContain('data-testid="checkin-count"');
   });
+});
 
+describe('OSE-ssp1: live-event sponsor strip', () => {
   test('live-sponsor-strip renders when active sponsors exist', async () => {
     const id = 'evt_ssp1_live_sponsor_yes';
     await seedEvent(id, { startOffsetDays: -1 / 24, endOffsetDays: 1 / 24 });

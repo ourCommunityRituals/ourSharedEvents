@@ -73,3 +73,52 @@ describe('scan-path consistency | walkthrough 2026-09-03', () => {
     expect(consentIdx, 'consent line precedes the decorative ticker').toBeLessThan(tickerIdx);
   });
 });
+
+/**
+ * Counts are POST-EVENT only (founder decision 2026-09-04).
+ *
+ * The attendee-facing surfaces never show an attendance tally: not the TV, not
+ * the public listing, not the event page before or during the night. The host
+ * (admin), the sponsor, and the SharedReport are where counts belong; the
+ * post-event recap card is the one attendee-facing exception, kept deliberately
+ * as the keepsake OSE-657 designed.
+ *
+ * Runtime, not source-shape: these fetch the real rendered surfaces, so a count
+ * reintroduced through a partial, a template include, or client-side JS is
+ * caught too.
+ */
+describe('counts are post-event only | attendee surfaces carry no tally', () => {
+  const COUNT_TESTIDS = [
+    'checkin-count',
+    'registration-count',
+    'stat-checkins',
+    'stat-registrations',
+    'stat-showed-up-share',
+    'event-stats-card',
+  ];
+  const COUNT_COPY = [/checked in so far/i, /registered so far/i, /% of those registered/i];
+
+  test('/display renders no attendance count', async () => {
+    const html = await (await SELF.fetch('https://t.test/display')).text();
+    for (const id of COUNT_TESTIDS) {
+      expect(html, `/display must not carry data-testid="${id}"`).not.toContain(
+        `data-testid="${id}"`
+      );
+    }
+    for (const re of COUNT_COPY) expect(html).not.toMatch(re);
+    // The sponsor ROTATION counter ("2 / 3") is not an attendance count and stays.
+    expect(html).toContain('display-sponsor-banner');
+  });
+
+  test('/events (public listing) renders no attendance count', async () => {
+    const html = await (await SELF.fetch('https://t.test/events')).text();
+    for (const id of COUNT_TESTIDS) {
+      expect(html, `/events must not carry data-testid="${id}"`).not.toContain(
+        `data-testid="${id}"`
+      );
+    }
+    for (const re of COUNT_COPY) expect(html).not.toMatch(re);
+    // The sr-only "N upcoming events" counts EVENTS, not people — it stays.
+    expect(html).toContain('data-testid="public-events-count"');
+  });
+});
