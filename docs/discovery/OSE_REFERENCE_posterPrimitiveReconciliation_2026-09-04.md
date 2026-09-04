@@ -785,8 +785,19 @@ JSON [{category, mode:'whole'|'custom', excluded:[template_id], consent_flags}]
 ```
 
 Whole-or-custom scoping, a per-template `excluded` list, and per-category `consent_flags`.
-The mechanism is designed and seeded. **It is not read anywhere in `src/`** — same
-modelled-but-unwired pattern as `phase_unlocked` (§13.4).
+
+> **Corrected 2026-09-04 (CCR security lens).** An earlier version of this paragraph said
+> `category_selections` "is not read anywhere in `src/`". **That is wrong.** It is read,
+> shape-validated against `category_registry`, and **fails closed** on malformed or
+> off-registry input (`handlers/sponsors-draft.ts:validateCategorySelections`), then
+> **re-validated at promotion** with no partial write (`lib/sponsor-promotion.ts`). So the
+> sponsor-side exclusion path is not merely modelled — it is wired, defensive and proven.
+>
+> Cause: the original grep combined `category_selections` with `excluded`, and the output
+> filled with SQLite `excluded.` upsert syntax, which was misread as "no real consumers."
+> **Grep each identifier alone before asserting it is unread.** The genuinely-unread set,
+> re-verified individually, is `node_hierarchy`, `corridor_regulatory_status.phase_unlocked`
+> and `business_type_category_map`.
 
 **Host-side clearance also ships**, and predates all of it —
 `node_hierarchy.legal_clearance_tier` (migration **0011**):
