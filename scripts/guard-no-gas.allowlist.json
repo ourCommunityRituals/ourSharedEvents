@@ -80,9 +80,6 @@
   "scripts/check-surfaces.js": ["*"],
   "scripts/check-events-gas-marker.js": ["*"],
 
-  "_section_legacy_gas_files": "Legacy GAS files (src/mvp) - still deployed via clasp",
-  "fetch-admin-keys.js": ["*"],
-
   "_section_test_fixtures": "Test fixtures and schemas with example data",
   "postman/environments/mvp-event-toolkit-dev.json": ["*"],
   "postman/environments/mvp-event-toolkit-local.json": ["*"],
@@ -97,7 +94,6 @@
   "scripts/validate-ci-secrets.js": ["*"],
   "scripts/verify-secrets.js": ["*"],
   "scripts/warmup-deployment.js": ["*"],
-  "test-deployment.js": ["*"],
 
   "_section_frontend_apiclient": "Frontend apiClient with JSDoc comments explaining NO-GAS",
   "src/frontend/apiClient/admin.ts": ["script.google.com"],
