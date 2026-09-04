@@ -54,19 +54,23 @@ _Provenance: 6-month draft produced by the grounded 2-brainstorm + 2-solution
 fleet (wf_65f9df48-4f5, 19 agents); 3-month reconciliation by the focused
 3-month fleet (wf_dbdce895-e40, 14 agents), seeded with the grounded plan._
 
+_2026-09-03 (OSE-1198, Matt): Local sponsor price split three ways — community use $0 forever · established business flat fee · first-year business first placement free. Recorded in §A; 3-month-clock position in §B; schema follow-up OSE-1207; front-door copy hand-off on OCR-116._
+
 ---
 
 ## (A) PRICING TABLE — confirmed, no change forced by 3 months
 
 The term-length change compresses _when the flip fires_, not _what is sold_. Table carries as settled:
 
-| Tier        | Event Managers                                                           | Sponsors (frequency SKU only; weights **1x/3x/7x**, `sponsor-allocation.ts:90`)                                     |
-| ----------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------- |
-| **Local**   | $0 forever [ATT — 30% floor + locals-first, `sponsor-allocation.ts:249`] | $0 forever (local-sponsor paid conversion ≈ 0 by design)                                                            |
-| **Mid**     | $49/mo target [HYP], value = `corridor_map` **live** + `return_rate`     | $25–75/event headline **or** $99/mo wrapper [HYP], under the one attested WTP point ($200/mo, COMPETITIVE-BRIEF:88) |
-| **Premium** | NOT priced until phase5 (visible-not-given)                              | $149–199/mo [HYP] ≈ 1.5–2x Mid, frequency SKU (7x vs 3x = 2.33x reach), 40% cap, never outranks a local             |
+| Tier                                                                                                | Event Managers                                                                                                    | Sponsors (frequency SKU only; weights **1x/3x/7x**, `sponsor-allocation.ts:90`)                                                                                                                                                                                                                                                                                                                 |
+| --------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Local · community use** (block party host, neighbor, community group, league, charity, faith org) | $0 forever [ATT — 30% floor + locals-first, `sponsor-allocation.ts:249`]; hosting stays free at every Local class | **$0 forever** [DECIDED 2026-09-03, OSE-1198]. Keyed on `sponsor_business.business_type` in the non-commercial set (community_org, charity, nonprofit, league_org, sports_club; faith_org already free by `tier-gates.yaml`). The class attaches to the **placement / activity**, not the letterhead: a church's own potluck is community; a church's for-profit night is a business placement. |
+| **Local · established business** (the barber, the tavern)                                           | —                                                                                                                 | **Small flat fee** [HYP: $10–25/mo flat, validated with the first five local businesses before written as fact]. Keyed on a commercial `business_type` (bar, brewery, retail, restaurant, professional_services, photographer, corporate). Same 1× weight, same 30% floor, never outbid for position.                                                                                           |
+| **Local · first-year business** (license issued within the last 12 months at activation)            | —                                                                                                                 | **First placement free, then the flat fee** [DECIDED 2026-09-03]. Unit of "first placement" [REC]: one event template + one area for one cycle (one month), matching two-sided acceptance. Eligibility: self-attested `license_issued_month` (OSE-1207), visible to the host at acceptance; no license number stored.                                                                           |
+| **Mid**                                                                                             | $49/mo target [HYP], value = `corridor_map` **live** + `return_rate`                                              | $25–75/event headline **or** $99/mo wrapper [HYP], under the one attested WTP point ($200/mo, COMPETITIVE-BRIEF:88)                                                                                                                                                                                                                                                                             |
+| **Premium**                                                                                         | NOT priced until phase5 (visible-not-given)                                                                       | $149–199/mo [HYP] ≈ 1.5–2x Mid, frequency SKU (7x vs 3x = 2.33x reach), 40% cap, never outranks a local                                                                                                                                                                                                                                                                                         |
 
-Constraints holding the table (verified this loop): `SPONSOR_MAX='mid'` (report-depth.ts:118) — sponsors never buy Premium depth. Revenue = event managers + **non-local** sponsors.
+Constraints holding the table (verified this loop): `SPONSOR_MAX='mid'` (report-depth.ts:118) — sponsors never buy Premium depth. Revenue = event managers + **non-local** sponsors + **local business** sponsors (community-use Local stays $0 forever by decision, not by leakage — see OSE-1198).
 
 **Doc corrections owed (independent of 3 months, now CI-load-bearing — Critic 3):**
 
@@ -84,6 +88,12 @@ Constraints holding the table (verified this loop): `SPONSOR_MAX='mid'` (report-
 ### Sponsors — hard flat 3-month flip from their own activation. YES, and it is honest.
 
 Sponsor paid value = frequency rotation (1x/3x/7x), which renders in Phase 3 **today** and needs no accrual. A sponsor's 7x-vs-3x weight is live from their first funded event. Gates would be dead weight. Flip fires per-sponsor at `activation + 90d` (own anniversary, never a corridor cohort). This is the founder's clean "3 months then pay" on the only side where it is honest.
+
+### Local business sponsors — NOT on the 3-month clock [REC — awaiting founder ratification]
+
+The 3-month flip above is a Mid/Premier mechanism. Local business sponsors pay the flat fee from day one (it is already the cheap tier; a trial on top of cheap is dead weight), and the **first-year credit is the only free window a Local business ever holds** — so the two rules never stack. Community-use Local never enters the clock at all. If ratified, the flip logic keys on `sponsor_class ∈ {mid, premier}` only.
+
+**Deferred on purpose (OSE-1198 year-one scope):** discount grammar (kind · amount · cadence · window · stacking · scope), coupons, rebates. They attach to the same pricing-plan object later; nothing in year one is built as a special case. Computing a rebate at runtime is where billing stops being inert (invariant #6) and needs an ADR.
 
 ### Event-managers — the manager clock must START at first LIVE-map render, not signup (Critic 1 & 2 converge here).
 
