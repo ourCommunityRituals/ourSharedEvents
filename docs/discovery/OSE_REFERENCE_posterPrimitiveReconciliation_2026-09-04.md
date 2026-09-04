@@ -662,7 +662,88 @@ aspirational. Library circulation statutes remain unaddressed either way.
 
 ---
 
-## 14. What this changes about season one
+## 14. The inverted pyramid — enablement at the bottom, MAX() when they combine
+
+**Founder, 2026-09-04.** Picture a reverse pyramid. It starts at the **niche, at the very
+bottom** — levels 0–3, the backyard, the block, the local sponsor. That is where the
+friction gets removed and where the whole strategy aims. As you climb, entities get bigger
+and better established, and **governance rightly gets heavier**.
+
+At the low levels, rules are looser and flexibility is higher. At the mid and high levels
+they mix into a **web** — and when levels combine, **the stricter regulation always wins.
+That is not a compromise; that is how it works.**
+
+The strategy follows from it: _"if you want that to happen, you have to enable. Public-private
+partnership starts by enabling webs at the lowest level and working up."_
+
+### 14.1 The pyramid is modelled
+
+`node_hierarchy` (0010) carries `level` (1–7) with a human `level_label` — _'Community',
+'District'_ — on a self-referential parent tree. Level 1 is the niche floor; level 7 the
+established top. `corridors.level` mirrors the same 1–7 scale.
+
+### 14.2 "Regulation wins" is already the right operator, and it is load-bearing
+
+Migration **0057** implements it, and marks it so:
+
+```sql
+-- (LOAD_BEARING). MAX() over the mapped types; unmapped templates get NULL
+SELECT MAX(r.legal_clearance_tier)
+```
+
+`MAX()` over everything a template maps to; unmapped yields `NULL`, which
+`template-clearance.ts` treats as never-selectable. **Stricter wins, and absence fails
+closed.** 0057 also notes this is the reusable statement the promotion path (OSE-736)
+invokes, so it was built to be applied more than once.
+
+The governance doctrine is therefore not aspirational. It is implemented, defensive, and
+named load-bearing.
+
+### 14.3 The gap — one axis of four
+
+| Axis                                  | Question                                                                         | `MAX()` applied?                   |
+| ------------------------------------- | -------------------------------------------------------------------------------- | ---------------------------------- |
+| Template → its mapped event types     | Which tier does this template inherit?                                           | ✅ **yes** (0057)                  |
+| Corridor readiness                    | Is this corridor unlocked for that tier?                                         | ❌ `phase_unlocked` unread (§13.4) |
+| Node level                            | Does pyramid position raise the requirement?                                     | ❌ `level` never read in `src/`    |
+| **Multi-party combination — the web** | **When a level-1 event partners with a level-5 institution, whose rules apply?** | ❌ **nothing computes this**       |
+
+`corridors` is never queried from `src/` at all.
+
+### 14.4 Why the fourth row is the one that matters
+
+The bottom of the pyramid is where the strategy starts, but **the web is where it pays
+off** — and the web is the axis with nothing behind it.
+
+Today, a level-1 backyard event partnering with a level-5 institution inherits **nothing**
+from that institution. It keeps its own tier. The failure mode is precise and it runs in
+the dangerous direction: a low-governance event pulls a high-governance partner into a
+context that partner's own rules do not permit — a school, a library, a municipality —
+and OCR computed no constraint at the join.
+
+That is the scenario that ends a public-private partnership on day one, and it is the exact
+scenario the strategy is built to produce.
+
+**The fix is not new machinery.** `MAX()` is proven, reusable and already load-bearing.
+What is missing is running it across _participants_ at the moment entities combine, the way
+0057 runs it across _mapped types_. Same operator, new axis.
+
+### 14.5 Sequencing consequence
+
+Enablement at levels 0–3 is safe today: loose is correct down there, and the global ceiling
+(§13.4) prevents an uncleared type shipping anywhere.
+
+**The web is not safe to open until MAX-across-participants exists.** Not because the
+principle is unsettled — it is settled, stated, and coded once — but because at the moment
+of combination nothing evaluates it. Enabling the spiderweb before that is the one move
+that could convert the platform's strongest claim into its first incident.
+
+Not poster work. This is the third item this reconciliation has surfaced that belongs to
+another epic — with the event-draft front door (§11) and wiring `phase_unlocked` (§13.4).
+
+---
+
+## 15. What this changes about season one
 
 The draft recommends running season one manually on paper, with the platform
 built in parallel for season two. This reconciliation **strengthens that
