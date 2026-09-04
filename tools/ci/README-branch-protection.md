@@ -11,11 +11,29 @@ Codifying it makes the gate reproducible and drift-detectable.
 
 Required status checks = the CI jobs that **always run to completion on a `pull_request`**:
 
-| Required check                                                           | Why                                            |
-| ------------------------------------------------------------------------ | ---------------------------------------------- |
-| `S0 Security`                                                            | Security bookend (Gate 1)                      |
-| `S2 Post-Execution Security`                                             | Security bookend (Gate 4)                      |
-| `T0 Gate (lint)` / `(typecheck)` / `(tests)` / `(a11y)` / `(invariants)` | Quality + the **invariant constitution** shard |
+| Required check                                                                           | Why                                            |
+| ---------------------------------------------------------------------------------------- | ---------------------------------------------- |
+| `S0 Security`                                                                            | Security bookend (Gate 1)                      |
+| `T0 Gate (lint)` / `(typecheck)` / `(tests)` / `(a11y)` / `(invariants)` / `(component)` | Quality + the **invariant constitution** shard |
+
+"Always runs to completion" is now a derived property, not a judgement call: a job
+qualifies when it has no `if:` **and** none of its transitive `needs:` has one. That
+rule is executed by `tests/unit/branch-protection-contract.test.js`, which compares the
+JSON against the workflow in both directions on every PR — a required check with no job
+behind it, or a newly-added always-run shard nobody required, fails T0.
+
+### `S2 Post-Execution Security` was removed (2026-09-03, OSE-1216)
+
+It was listed as required but **no workflow has posted a check by that name** since
+OSE-1056/1057 retired the `security-post` / `security-post-scan` jobs and re-homed the
+real tamper check into the tail of `functional-staging` — which `if:`-skips on PRs. A
+required check that nothing reports is not a gate: either it silently blocked every PR,
+or (the actual state, since PRs have been merging) live protection never matched this
+file. Listing it made the security posture read stronger than it was.
+
+**Residual, tracked on OSE-1216:** post-execution integrity is therefore exercised only
+on `main` (via `functional-staging`), not per-PR. Restoring a PR-time Gate 4 needs a job
+that actually runs on `pull_request`; until that exists, do not re-add the context here.
 
 `enforce_admins: true` — the gate binds admin/agent merges too (makes "green ships" enforced, not convention).
 `strict: false` — do **not** force branches up-to-date before merge (the single-runner pool can't afford serial re-runs of every open PR).
@@ -32,7 +50,12 @@ node scripts/apply-branch-protection.mjs --check   # read-only drift check (CI-s
 node scripts/apply-branch-protection.mjs --apply   # PUT the config (requires repo admin)
 ```
 
-`--check` is safe to wire into CI as a drift detector so silent removal of protection fails a build.
+`--check` runs nightly in [`branch-protection-drift.yml`](../../.github/workflows/branch-protection-drift.yml),
+so silent removal of protection — or drift between this file and the live settings — fails a
+build instead of waiting to be noticed. Reading protection needs repo-admin scope, which the
+default `GITHUB_TOKEN` does not have, so that workflow uses the `BRANCH_PROTECTION_TOKEN`
+secret and **fails loudly when it is absent**: "cannot verify" is the finding, not a reason
+to skip.
 
 ## ⚠ Emergency escape hatch (CI outage only)
 

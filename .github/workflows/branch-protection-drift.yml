@@ -1,0 +1,82 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# OSE-1216 — branch-protection drift detector.
+#
+# `tools/ci/main-branch-protection.json` calls itself the source of truth for
+# main's protection, but nothing ever compared it to the live settings. It drifted:
+# the file required "S2 Post-Execution Security", a check no job has posted since
+# OSE-1056/1057, while PRs kept merging — so the live rules and the file had not
+# agreed for weeks and no build went red about it.
+#
+# Two halves close that, and this is the second:
+#   • tests/unit/branch-protection-contract.test.js (runs in T0, no secrets) proves
+#     the JSON is internally honest — every required context is a check some job
+#     actually posts, and every always-run check is required.
+#   • THIS workflow proves the JSON matches GitHub. Only the live API can say that.
+#
+# Reading branch protection requires repo-admin scope, which the default
+# GITHUB_TOKEN does not have. It therefore uses BRANCH_PROTECTION_TOKEN and FAILS
+# when that secret is absent rather than skipping: "protection is unverifiable" is
+# the finding this workflow exists to surface, not a reason to report green.
+# ─────────────────────────────────────────────────────────────────────────────
+name: Branch protection drift
+
+on:
+  schedule:
+    - cron: '17 6 * * *' # nightly 06:17 UTC — offset from the other scheduled jobs
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'tools/ci/main-branch-protection.json'
+      - 'scripts/apply-branch-protection.mjs'
+      - '.github/workflows/branch-protection-drift.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: branch-protection-drift-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  drift:
+    name: 'Branch protection matches main-branch-protection.json'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+
+      - name: 'Preflight: the admin-scoped token must exist'
+        env:
+          TOKEN: ${{ secrets.BRANCH_PROTECTION_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${TOKEN:-}" ]; then
+            echo "::error::BRANCH_PROTECTION_TOKEN is not set, so main's protection cannot be read."
+            echo "::error::That is the finding, not a skip: an unverifiable gate is an unenforced gate."
+            echo "::error::Provision a repo-admin-scoped token as BRANCH_PROTECTION_TOKEN (OSE-1216)."
+            exit 1
+          fi
+          echo "✓ token present"
+
+      - name: 'Drift check (read-only)'
+        env:
+          GH_TOKEN: ${{ secrets.BRANCH_PROTECTION_TOKEN }}
+        run: node scripts/apply-branch-protection.mjs --check
+
+      - name: Explain a red run
+        if: failure()
+        run: |
+          echo "::notice::Either main's live protection drifted from tools/ci/main-branch-protection.json,"
+          echo "::notice::or the token cannot read it. Reconcile with:"
+          echo "::notice::  node scripts/apply-branch-protection.mjs --check   # see the diff"
+          echo "::notice::  node scripts/apply-branch-protection.mjs --apply   # push the file's config back"
+          echo "::notice::Never fix a red here by editing the JSON to match a weakened live setting."

@@ -1,15 +1,15 @@
 {
-  "_comment": "Source-of-truth for main branch protection (OSE-CI robustness). Apply/verify with scripts/apply-branch-protection.mjs. Required checks = the jobs that ALWAYS run to completion on a pull_request event (see .github/workflows/oursharedevents-ci.yml). Deliberately EXCLUDES: (a) the two known false-reds 'Claude PR Review' + 'Validate against OCR-docs brain' so they neither block nor need manual override; (b) the T1-T4 deploy/smoke/contract/functional jobs, which if:-skip on PRs and would deadlock every PR if required. strict=false because the single-runner pool cannot afford forced up-to-date re-runs of every open PR. See tools/ci/README-branch-protection.md.",
+  "_comment": "Source-of-truth for main branch protection (OSE-CI robustness). Apply/verify with scripts/apply-branch-protection.mjs; the contract is regression-locked by tests/unit/branch-protection-contract.test.js, which derives the list below from the workflow itself. Required checks = exactly the jobs that ALWAYS run to completion on a pull_request event: a job with no `if:` whose transitive `needs:` are also unconditional (see .github/workflows/oursharedevents-ci.yml). Deliberately EXCLUDES: (a) the two known false-reds 'Claude PR Review' + 'Validate against OCR-docs brain' so they neither block nor need manual override; (b) the T1-T4 deploy/smoke/contract/functional jobs and the release gate, which if:-skip on PRs and would deadlock every PR if required. strict=false because forced up-to-date re-runs of every open PR are not worth the queue. REMOVED 2026-09-03 (OSE-1216): 'S2 Post-Execution Security' — no job in any workflow has posted a check by that name since OSE-1056/1057 retired the security-post jobs and re-homed the integrity check into functional-staging, which skips on PRs. A required check that nothing reports is not a gate; see README-branch-protection.md. ADDED same date: 'T0 Gate (component)', which has always run on PRs but was never required.",
   "required_status_checks": {
     "strict": false,
     "checks": [
       { "context": "S0 Security" },
-      { "context": "S2 Post-Execution Security" },
       { "context": "T0 Gate (lint)" },
       { "context": "T0 Gate (typecheck)" },
       { "context": "T0 Gate (tests)" },
       { "context": "T0 Gate (a11y)" },
-      { "context": "T0 Gate (invariants)" }
+      { "context": "T0 Gate (invariants)" },
+      { "context": "T0 Gate (component)" }
     ]
   },
   "enforce_admins": true,
