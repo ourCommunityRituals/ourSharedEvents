@@ -392,7 +392,76 @@ read one as settling the other.
 
 ---
 
-## 11. What this changes about season one
+## 11. The attendee layer — the ladder, and the one rung that is missing
+
+**Founder, 2026-09-04.** The attendee side is not "a smooth UI." It is that **an
+attendee can become a host**, at any scale, starting in a backyard — and can attach a
+sponsor who is simply their friend with a local business.
+
+The layers are not a hierarchy of who gets served. They are a **ladder anyone can
+climb**, and the innovation is collapsing the friction to climb it. Event management
+was slow to stand up, slower to manage, and getting a sponsor was harder still. The
+product is removing that, _especially for the smallest actor_, economically.
+
+This is the Triangle's corner-agnosticism made literal — "any entity plugs into any
+corner… the Triangle enforces HOW entities participate, not WHAT they are." The
+attendee is a Customer who becomes an Event; their friend is a Customer who becomes a
+Sponsor. Every vertex benefits from the same transaction. And #5 Tier Equity already
+states the floor in invariant form: pricing governs display priority only, **never
+platform access** — same QR, forms, privacy and counts at every tier.
+
+### 11.1 What the code can do today
+
+| Rung                                      | Route                                         | Gate               | State                  |
+| ----------------------------------------- | --------------------------------------------- | ------------------ | ---------------------- |
+| Attach a sponsor (your friend's business) | `POST /api/v2/sponsors/draft`                 | **none** — public  | ✅ **built**           |
+| Promote that sponsor to live              | `POST /api/v2/admin/sponsors/promote`         | `requireAdmin`     | ✅ built (review gate) |
+| Upload a sponsor asset to a draft         | `POST /api/v2/sponsors/draft/:id/asset/:kind` | **none** — public  | ✅ built               |
+| **Create the event to attach it to**      | `POST /api/v2/admin/events`                   | **`requireAdmin`** | ❌ **admin only**      |
+
+**The ladder is half-built, and the missing rung is the first one.**
+
+The sponsor half of "backyard host brings their friend" already works, and works
+_well_ — a public draft, reviewed and promoted by a human. That is the right shape:
+open to submit, gated to publish.
+
+But there is **no self-serve event creation**. The only route that inserts an event is
+admin-gated behind a CF Access JWT and an email allowlist. The backyard host — the
+person the entire lowest-layer argument is about — cannot create the event they would
+attach that sponsor to. Today they would have to be added to the admin allowlist,
+which is not a ladder; it is a door with a list.
+
+### 11.2 The architecture already contains the answer
+
+The fix does not need inventing. **Mirror draft-then-promote from the sponsor path**:
+`sponsor_business_draft` / `sponsor_asset_draft` (migrations 0065–0066) establish the
+pattern — an unauthenticated submission lands in a draft table, a human promotes it.
+
+An `event_draft` on the same shape gives the backyard host a front door without
+handing anyone unauthenticated write access to the live events table. And the
+automation half is already shipped: `event_templates`, `event_type_registry` and
+`template_event_types` are what "automate creating the event types" means. **The
+templates exist; the door doesn't.**
+
+### 11.3 Consequences to record
+
+- This is the highest-leverage gap between the stated vision and the shipped code
+  found in this reconciliation. Everything else here is schema tidiness by comparison.
+- It is **not** poster-primitive work and must not be folded into that epic. It
+  belongs to whatever epic owns the front door.
+- **#5 Tier Equity is 📋 proposed, not gated.** The invariant that says the lowest
+  layer keeps full platform access has no mechanical enforcement. An `event_draft`
+  path is what would make it testable rather than aspirational — the gate would assert
+  that a tier-free, unauthenticated submitter can reach event creation at all.
+- **OCR-116 copy implication.** The relief section currently names three
+  beneficiaries — the host, the barber, the block. The fourth is **the attendee who
+  becomes the host**, and it is the strongest of the four because it is the only one
+  that is a _change in what the reader can do_ rather than a service performed for
+  them. It is currently absent from the copy draft.
+
+---
+
+## 12. What this changes about season one
 
 The draft recommends running season one manually on paper, with the platform
 built in parallel for season two. This reconciliation **strengthens that
