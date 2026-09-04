@@ -568,7 +568,101 @@ retention question.
 
 ---
 
-## 13. What this changes about season one
+## 13. The 47 event types — a clearance frontier, and the half-wired lattice
+
+**Founder, 2026-09-04:** _"The clearance review comes into the layers — where is it being
+placed, and how is it coming through. That's how it's been set up from the very beginning."_
+
+Verified. It is, and it is older than the poster work.
+
+### 13.1 There was never a technical ceiling
+
+`event_type_registry.uec_code` holds `'REC-BOCCE-001'` — a **namespaced semantic string**,
+not a slot in the 7-colour UEC enumeration. Nothing stops the 48th type or the 480th. The
+47 was never a capacity limit.
+
+**47 is a clearance frontier**: the count of types that have been legally reviewed and
+assigned a tier. Bocce is tier 1, `'LLC + ToS only'`.
+
+### 13.2 Clearance is a lattice, not a property
+
+Migration **0023** creates both halves in one file, on the same 1–5 scale, because they
+are one idea:
+
+| Dimension                 | Column                                               | Question                       |
+| ------------------------- | ---------------------------------------------------- | ------------------------------ |
+| **What kind of thing**    | `event_type_registry.phase` / `legal_clearance_tier` | Is this type cleared?          |
+| **Where it is happening** | `corridor_regulatory_status.phase_unlocked`          | Is this corridor ready for it? |
+
+Clearance is the **intersection**. The migration's own comment: _"legal_clearance_tier
+mirrors the phase ceiling for quick query filtering."_
+
+**This supersedes an earlier proposal in this session.** A "type proposal → human clearance
+review → registry row" pipeline was drafted as the answer to unlimited types. It is
+unnecessary — it reinvents as a workflow what already exists as a computed property. There
+is no review queue to build. A type carries a phase; a corridor unlocks a phase; the type
+surfaces where the corridor has caught up.
+
+### 13.3 So the list can grow safely — an uncleared type is inert, not dangerous
+
+A new type at a higher tier is not a free-text hole. It is **registered and inert** until a
+corridor earns it — the same "inert until earned" discipline as the monetisation hooks
+(#6). That answers the expansion question: add types freely; the layers decide where they
+appear.
+
+Two options considered and rejected, with their specific failure modes:
+
+- **Unlimited free-text types.** Types would exist that never carried a tier;
+  `legal_clearance_tier` degrades to an unset default and the regulatory posture silently
+  becomes "assume it's fine." Survivable for bocce, not for libraries or schools.
+- **A single custom bucket.** Worse. What tier is "custom"? And it collapses incompatible
+  things into one reporting cell, so a book club and a boxing match aggregate together —
+  counts that look robust and mean nothing, which is what the honesty lexicon exists to
+  prevent.
+
+### 13.4 Enforcement state — the WHAT axis is wired, the WHERE axis is not
+
+| Axis            | Mechanism                                   | State                       |
+| --------------- | ------------------------------------------- | --------------------------- |
+| **Type / tier** | `lib/template-clearance.ts`                 | ✅ **enforced**             |
+| **Corridor**    | `corridor_regulatory_status.phase_unlocked` | ❌ **zero reads in `src/`** |
+
+The enforced half is good work and worth not re-deriving:
+
+- **`NULL` is never selectable** — a template with no registry mapping cannot be chosen, and
+  that is deliberately distinct from tier 1. Fail-safe by default.
+- **The ceiling is config** (`ALLOWED_MAX_TIER`), never a literal inside the predicate, so
+  raising it is a config change rather than a code change.
+- **`LAUNCH_MAX_CLEARANCE_TIER = 1`**, with a tier-2 fixture proving the gate bites before
+  any tier-2 data exists.
+
+**The gap:** `phase_unlocked` is modelled since 0023 and consumed nowhere. The intersection
+is never computed. What ships instead is a **single global ceiling**.
+
+Consequence, stated precisely:
+
+- **The safety holds.** A tier-2 type added today is inert _everywhere_. You cannot
+  accidentally ship an uncleared type. It fails closed.
+- **The granularity does not.** A corridor ready for tier 2 cannot have it without raising
+  the ceiling for every corridor simultaneously. It fails closed **globally** rather than
+  opening **selectively** — which is the whole point of layers.
+
+Wiring `phase_unlocked` into the clearance predicate is the smallest change that makes the
+lattice real. It is not poster work.
+
+### 13.5 Partially answers §12.5's legal flag
+
+`template-clearance.ts` states: _"only Phase-1 (tier 1) event types are offered at launch;
+COPPA/HIPAA (higher tiers) are unavailable by construction."_
+
+So COPPA is **already named in code and locked out structurally** — §12.5 raised it as an
+open risk, and it is better covered than that implied. Counsel is still required to _raise_
+a tier for a school or library vertical, but the lockout is real, tested, and not
+aspirational. Library circulation statutes remain unaddressed either way.
+
+---
+
+## 14. What this changes about season one
 
 The draft recommends running season one manually on paper, with the platform
 built in parallel for season two. This reconciliation **strengthens that
