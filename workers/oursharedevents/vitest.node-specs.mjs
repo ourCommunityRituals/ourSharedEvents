@@ -17,9 +17,23 @@
 // Batch 1 — pure-logic units (import a src/ module, assert its output; no DOM,
 // no axe, no cloudflare:test, no fs). Proven green in the node project.
 export const NODE_SPECS = [
+  // Batch 1
   'tests/count-floor.spec.ts',
   'tests/event-price.spec.ts',
   'tests/event-phase.spec.ts',
   'tests/event-state.spec.ts',
   'tests/report-depth.spec.ts',
+  // Batch 2 — pure-logic units, proven green in the node project.
+  // NOTE: briefing.spec.ts was a candidate here but transitively imports
+  // src/templates/public.html — the workers pool bundles .html as a Text module,
+  // plain node/vite cannot. It (and the poster/sponsor/display/pdf template-render
+  // specs) can move only once the node project handles .html imports (a separate,
+  // verified child-3 step). The run caught it; do not re-add without that support.
+  'tests/geo.spec.ts',
+  'tests/phase-cache.spec.ts',
+  'tests/ncr-pipeline.spec.ts',
+  'tests/schema-guard.spec.ts',
+  'tests/demo-registry.spec.ts',
+  'tests/demo-ci-gate.spec.ts',
+  'tests/corridor-map.spec.ts',
 ];
