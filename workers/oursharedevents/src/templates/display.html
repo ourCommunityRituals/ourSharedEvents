@@ -118,6 +118,21 @@
         color: #475569;
         font-size: 1.1rem;
       }
+      .display-consent {
+        margin: 0;
+        padding: 0.75rem 2rem;
+        background: #1a1a2e;
+        color: rgba(255, 255, 255, 0.85);
+        font-size: 1.25rem;
+        text-align: center;
+        letter-spacing: 0.01em;
+      }
+      @media (min-width: 1600px) {
+        .display-consent {
+          font-size: 2rem;
+          padding: 1.25rem 3rem;
+        }
+      }
       .ticker {
         background: #1e3a5f;
         padding: 0.6rem 2rem;
@@ -348,9 +363,14 @@
       class="display-sponsor-banner"
       data-testid="display-sponsor-banner"
     ></div>
+    <!-- Walkthrough 2026-09-03: the TV is the one surface a whole room looks at,
+         and it carried no privacy line. The promise, in 10-foot type, in the voice. -->
+    <p class="display-consent" data-testid="display-consent" role="note">
+      We count the room, never the person. Nothing about you is collected to show this screen.
+    </p>
     <div class="ticker" aria-hidden="true" data-testid="display-ticker">
       <span class="ticker-inner" id="ticker" data-testid="display-ticker-text"
-        >OurSharedEvents &mdash; Community events on Chicago&rsquo;s Southside</span
+        >OurSharedEvents &mdash; Community events on Chicago&rsquo;s Southside &mdash; We count the room, never the person</span
       >
     </div>
     <script>
