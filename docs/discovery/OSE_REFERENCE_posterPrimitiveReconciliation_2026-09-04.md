@@ -710,33 +710,67 @@ named load-bearing.
 
 `corridors` is never queried from `src/` at all.
 
-### 14.4 Why the fourth row is the one that matters
+### 14.4 What combining actually constrains — category and disclosure, NOT the partnership
 
-The bottom of the pyramid is where the strategy starts, but **the web is where it pays
-off** — and the web is the axis with nothing behind it.
+> **Corrected 2026-09-04 (founder, same session).** An earlier draft of this section said a
+> low-governance event partnering with a high-governance institution was _"the scenario that
+> ends a public-private partnership on day one."_ **That is wrong and it is alarmist.**
 
-Today, a level-1 backyard event partnering with a level-5 institution inherits **nothing**
-from that institution. It keeps its own tier. The failure mode is precise and it runs in
-the dangerous direction: a low-governance event pulls a high-governance partner into a
-context that partner's own rules do not permit — a school, a library, a municipality —
-and OCR computed no constraint at the join.
+**There is no legal binding stopping public-private community promotion.** It is among the
+most ordinary things in civic life: sponsored Little League jerseys, "brought to you by"
+banners at the park district, a library summer reading programme backed by the grocery
+store, ice cream shop coupons for finishing the reading challenge. Rec centres do this
+constantly and have for decades.
 
-That is the scenario that ends a public-private partnership on day one, and it is the exact
-scenario the strategy is built to produce.
+The error was treating "higher governance" as **blocking the partnership**. It does not.
+What it constrains is narrower and entirely tractable:
 
-**The fix is not new machinery.** `MAX()` is proven, reusable and already load-bearing.
-What is missing is running it across _participants_ at the moment entities combine, the way
-0057 runs it across _mapped types_. Same operator, new axis.
+1. **Sponsor category.** A public entity typically cannot take alcohol, tobacco, cannabis,
+   gambling or political sponsorship — especially where minors are present. The rule is
+   about _which sponsor_, never _whether a private sponsor is allowed at all_.
+2. **Disclosure and endorsement language.** How the sponsorship is labelled, and that it is
+   not presented as a public endorsement. The entity already has this policy and already
+   discharges it for its banners.
+3. **Data.** Where OCR is already clean by construction — no PII, so no patron or student
+   record can cross anything.
 
-### 14.5 Sequencing consequence
+None of that stops the ice cream shop. All of it is category and wording.
 
-Enablement at levels 0–3 is safe today: loose is correct down there, and the global ceiling
-(§13.4) prevents an uncleared type shipping anywhere.
+**The determination is the entity's own policy and counsel, not OCR's to make.** OCR's job
+is to make the constraint expressible so the rec centre's existing policy can be honoured
+inside the product, not to adjudicate it.
 
-**The web is not safe to open until MAX-across-participants exists.** Not because the
-principle is unsettled — it is settled, stated, and coded once — but because at the moment
-of combination nothing evaluates it. Enabling the spiderweb before that is the one move
-that could convert the platform's strongest claim into its first incident.
+### 14.5 Which means the modelling need is much smaller — and half-built
+
+The right mechanism is not "compute MAX across participants and block the join." It is a
+**sponsor-category constraint carried by the higher-governance participant**.
+
+That machinery already exists in a neighbouring form:
+
+- `sponsor_business.business_type` (0065)
+- `business_type_category_map` (0059) — `business_type` x `category`, with `is_default`
+
+Today that map is a **matching aid**: which categories a business type naturally fits. The
+governance version is the same data read as an **exclusion**: at an event hosted by a
+public entity, these business types are not offerable.
+
+Same table, opposite direction. That is a far smaller change than the one §14.3 implied,
+and it fails in the right direction — a category that is not permitted is simply not
+offered, so the rec centre never has to decline it.
+
+### 14.6 The structural finding still stands
+
+The enforcement gap in §14.3 is real and unchanged: `MAX()` runs on one axis of four, and
+`corridors` is never queried from `src/`. Combination genuinely computes nothing today.
+
+What changed is the **characterisation of the risk**. It is not that partnerships are
+dangerous and must be gated. It is that the product currently has no way for a
+higher-governance participant to express _"not these sponsor categories at our events"_ —
+so the rec centre has to police it manually, outside the tool, which is exactly the
+friction the platform exists to remove.
+
+Framing it as a safety gate would have misdirected the work toward blocking the web. The
+actual work is enabling it correctly.
 
 Not poster work. This is the third item this reconciliation has surfaced that belongs to
 another epic — with the event-draft front door (§11) and wiring `phase_unlocked` (§13.4).
