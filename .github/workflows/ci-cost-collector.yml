@@ -32,7 +32,11 @@ jobs:
     name: Collect CI job durations
     runs-on: ubuntu-latest
     permissions:
-      contents: write # to commit the history file back to main
+      # contents: write is for the ci/cost-history branch, NOT main. `main` is a
+      # protected branch with enforce_admins:true, so a bot push to it is refused
+      # (GH006: "6 of 6 required status checks are expected") no matter what this
+      # token is allowed to do — observed on every scheduled run.
+      contents: write
       actions: read # to read workflow run + job durations
 
     steps:
@@ -40,6 +44,27 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 1
+
+      # The history lives on its own unprotected branch, not on main. Seed the
+      # working copy from it so the collector APPENDS to the accumulated record
+      # instead of rebuilding from empty every night — which is what it has been
+      # doing: main's copy of the file is 0 lines, and each run reported
+      # recordsAdded == recordsInHistory because its push never landed.
+      - name: Seed history from the cost-history branch
+        env:
+          HISTORY_BRANCH: ci/cost-history
+          HISTORY_FILE: docs/monitoring/ci-cost-history.jsonl
+        run: |
+          set -euo pipefail
+          mkdir -p "$(dirname "$HISTORY_FILE")"
+          if git ls-remote --exit-code --heads origin "$HISTORY_BRANCH" >/dev/null 2>&1; then
+            git fetch --depth 1 origin "$HISTORY_BRANCH"
+            git show "FETCH_HEAD:$HISTORY_FILE" > "$HISTORY_FILE" 2>/dev/null || true
+            echo "seeded $(wc -l < "$HISTORY_FILE") record(s) from $HISTORY_BRANCH"
+          else
+            echo "no $HISTORY_BRANCH yet — this run creates it"
+          fi
+          sha256sum "$HISTORY_FILE" | cut -d' ' -f1 > "$RUNNER_TEMP/history-before.sha"
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -55,18 +80,31 @@ jobs:
             --workflow oursharedevents-ci.yml \
             --limit "${{ github.event.inputs.limit || '20' }}"
 
-      - name: Commit updated history
+      # Publish to ci/cost-history — an unprotected branch that exists purely to
+      # carry this append-only file. Pushing to `main` is not an option (see the
+      # permissions note above), and an artifact alone expires, so a collector
+      # that only uploaded artifacts would accumulate nothing and quietly become
+      # theatre. Force-push is safe here: the branch has exactly one author and
+      # one file, and the content is rebuilt from the seed each run.
+      - name: Publish history to the cost-history branch
         if: ${{ github.event.inputs.dry_run != 'true' }}
+        env:
+          HISTORY_BRANCH: ci/cost-history
+          HISTORY_FILE: docs/monitoring/ci-cost-history.jsonl
         run: |
+          set -euo pipefail
+          AFTER="$(sha256sum "$HISTORY_FILE" | cut -d' ' -f1)"
+          if [ "$AFTER" = "$(cat "$RUNNER_TEMP/history-before.sha")" ]; then
+            echo "No new CI cost records."
+            exit 0
+          fi
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add docs/monitoring/ci-cost-history.jsonl
-          if git diff --cached --quiet; then
-            echo "No new CI cost records."
-          else
-            git commit -m "chore(cost): collect CI job durations [skip ci]"
-            git push
-          fi
+          git checkout -B "$HISTORY_BRANCH"
+          git add -f "$HISTORY_FILE"
+          git commit -m "chore(cost): collect CI job durations [skip ci]"
+          git push --force origin "$HISTORY_BRANCH"
+          echo "published $(wc -l < "$HISTORY_FILE") record(s) to $HISTORY_BRANCH"
 
       - name: Upload history as artifact
         uses: actions/upload-artifact@v4

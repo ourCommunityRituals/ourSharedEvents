@@ -29,6 +29,7 @@
     "axe-core": "^4.11.3",
     "eslint-plugin-security": "^4.0.0",
     "fast-check": "^4.9.0",
+    "js-yaml": "^4.3.2",
     "jsdom": "^29.0.2",
     "typescript": "^5.0.0",
     "vitest": "^4.1.3",
