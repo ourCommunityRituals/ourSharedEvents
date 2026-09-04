@@ -1,7 +1,7 @@
 # OurSharedEvents – CI/CD Pipeline
 #
 # S0 Security → T0 Gate → T1 Deploy → [T2 Smoke, T3 Contract]
-#                                   → T4 Functional (dispatch only)
+#                                   → T4 Functional (push-to-main after T3, or dispatch)
 #
 # Security runs unconditionally on every PR (no paths filter on pull_request trigger).
 # Gate and all downstream jobs are blocked behind security via needs: — security results
@@ -68,7 +68,8 @@
 #     Gate/Deploy/Smoke still skip on non-code PRs via their own paths conditions (see push trigger).
 #   † Nightly: runs against live staging without redeploying (environmental drift detection)
 #
-# Cost control: Functional (Tier 4) only runs when you check the box.
+# Cost control: Functional (Tier 4) runs on push-to-main once T1+T3 are green, and
+# on dispatch when you check the box. It never runs on an ordinary PR.
 # Move tests between Tier 2/3/4 as you settle on nightly vs on-demand.
 #
 # Required GitHub Secrets:
@@ -108,7 +109,7 @@ on:
     tags:
       - 'v*.*.*'
   schedule:
-    - cron: '7 3 * * *'  # Nightly 3:07 AM UTC — Gate + Smoke + Contract (no deploy)
+    - cron: '7 3 * * *' # Nightly 3:07 AM UTC — Gate + Smoke + Contract (no deploy)
   workflow_dispatch:
     inputs:
       deploy_staging:
@@ -152,7 +153,7 @@ jobs:
   # ============================================================================
   security:
     name: 'S0 Security'
-    runs-on: ubuntu-latest   # OSE-1017: managed runner (self-hosted Smart App Control blocks unsigned semgrep.exe)
+    runs-on: ubuntu-latest # OSE-1017: managed runner (self-hosted Smart App Control blocks unsigned semgrep.exe)
     permissions:
       security-events: write
       contents: read
@@ -1175,9 +1176,11 @@ jobs:
       # so without this its cell is NULL and every sponsor resolves non-local.
       # A standalone fixture (not a migration) on purpose — see the file header
       # (postman/fixtures/covenant-event-geo.sql). Idempotent UPDATE.
+      # NOT continue-on-error (OSE-1217): a silent seed failure leaves the
+      # covenant fixture ungeo-tagged, every sponsor resolves non-local, and the
+      # OSE-INV5 assertions pass vacuously. A seed that cannot run is a red run.
       - name: Seed covenant event geo (OSE-891 fixture)
         id: seed-covenant-geo
-        continue-on-error: true
         timeout-minutes: 2
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
@@ -1187,9 +1190,9 @@ jobs:
           npx wrangler d1 execute DB --env staging --remote \
             --file ../../postman/fixtures/covenant-event-geo.sql
 
+      # NOT continue-on-error (OSE-1217) — see the seed step above.
       - name: Reset covenant/journey sponsor fixtures (OSE-944 — prevent accumulation)
         id: reset-covenant-sponsors
-        continue-on-error: true
         timeout-minutes: 2
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
@@ -1342,9 +1345,10 @@ jobs:
         # it explicitly.
         run: npx playwright install --with-deps chromium webkit
 
+      # NOT continue-on-error (OSE-1217): an un-reset event accumulates sponsors
+      # across runs, so the journey asserts against a dirty fixture.
       - name: Reset synthetic sponsor fixtures (OSE-944 — journey runs on a clean event)
         id: reset-journey-sponsors
-        continue-on-error: true
         timeout-minutes: 2
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
@@ -1477,9 +1481,11 @@ jobs:
             tests/e2e/4-negative/form-validation.spec.ts
         timeout-minutes: 10
 
+      # NOT continue-on-error (OSE-1217): T4d/T4e read evt_smoke_{pre,live,post}.
+      # Without the seed those specs skip cleanly and the tier reports green
+      # having exercised nothing — the vacuous pass OSE-852 already fixed once.
       - name: Seed smoke fixtures
         id: seed-fixtures
-        continue-on-error: true
         timeout-minutes: 2
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
@@ -1587,8 +1593,8 @@ jobs:
         uses: dorny/test-reporter@v3
         continue-on-error: true
         with:
-          name: "Functional Results"
-          path: ".test-results/*-junit.xml"
+          name: 'Functional Results'
+          path: '.test-results/*-junit.xml'
           reporter: jest-junit
           fail-on-error: false
 
@@ -1666,18 +1672,85 @@ jobs:
         run: bash scripts/check-post-execution-integrity.sh
 
   # ============================================================================
+  # RELEASE GATE: the tagged SHA must already be green through staging
+  #
+  # A tag push does NOT run the staging chain: deploy-staging `if:`-skips unless
+  # the event is a push to main / a dispatch / a full-pipeline branch, so T2, T3
+  # and T4 skip with it. Naming those jobs in deploy-production's `needs:` would
+  # therefore deadlock every release (a skipped dependency skips the dependent),
+  # which is why the graph was `[security, gate]` and production was reachable on
+  # S0 + T0 alone -- the repo's own DONE gate forbids that ("no partial pyramids").
+  #
+  # This job closes it without re-deploying staging: it reads the check-runs GitHub
+  # already recorded for THIS COMMIT and requires the staging chain to have
+  # concluded `success` on it. Tag a SHA that is green on main and the gate is a
+  # few seconds; tag anything else and the release stops here instead of at the
+  # edge. `skipped` never satisfies the gate -- only a real success does.
+  # ============================================================================
+  release-gate:
+    name: 'T0P Release Gate (staging chain green on this SHA)'
+    runs-on: ubuntu-latest
+    needs: [security, gate]
+    if: |
+      (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_production == 'PRODUCTION')
+    permissions:
+      contents: read
+      checks: read
+    steps:
+      - name: 'Gate: staging chain succeeded on this commit'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          echo "Commit under release: $GITHUB_SHA"
+
+          # Every check-run recorded against this commit, across all workflow runs.
+          gh api --paginate \
+            "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/check-runs?per_page=100" \
+            --jq '.check_runs[] | [.name, (.conclusion // "pending")] | @tsv' > checks.tsv || {
+              echo "::error::Could not read check-runs for ${GITHUB_SHA}."; exit 1; }
+
+          echo "--- check-runs on this commit ---"; sort -u checks.tsv; echo "---------------------------------"
+
+          REQUIRED=(
+            'T1 Deploy → Staging'
+            'T2 Contract → Staging (Bruno)'
+            'T3 E2E Smoke → Staging (Playwright)'
+            'T4 Functional → Staging'
+          )
+          MISSING=0
+          for NAME in "${REQUIRED[@]}"; do
+            if awk -F'\t' -v n="$NAME" '$1==n && $2=="success"{found=1} END{exit !found}' checks.tsv; then
+              echo "ok    $NAME — success on this commit"
+            else
+              STATE="$(awk -F'\t' -v n="$NAME" '$1==n{print $2}' checks.tsv | sort -u | paste -sd, - )"
+              echo "FAIL  $NAME — ${STATE:-never ran on this commit}"
+              MISSING=1
+            fi
+          done
+
+          if [ "$MISSING" -ne 0 ]; then
+            echo "::error::Release blocked: the staging chain is not green on ${GITHUB_SHA}."
+            echo "::error::Merge to main, let T1→T4 go green on that commit, then tag THAT commit."
+            exit 1
+          fi
+          echo "✓ Staging chain verified green on this commit — release may proceed."
+
+  # ============================================================================
   # TIER 1P: DEPLOY → Production (tag vX.Y.Z only)
   # ============================================================================
   deploy-production:
     name: 'T1 Deploy → Production'
-    # Still self-hosted, deliberately and temporarily. Every other job moved to
-    # ubuntu-latest to kill the shared-workspace and shared-interpreter faults,
-    # but the production deploy path touches live D1 and production secrets, so
-    # moving it is its own change with its own rehearsal -- not a ride-along on a
-    # runner port. Note the workspace-leak warning on smoke-production below: it
-    # is a symptom of this runner, and it goes away when this job moves too.
-    runs-on: self-hosted
-    needs: [security, gate]
+    # Moved off self-hosted (OSE-1194 item 6 / OSE-1217). The fleet was
+    # decommissioned 2026-09-02, so this label no longer resolves to anything --
+    # a release tag would have queued forever. Production touches live D1 and
+    # production secrets, so the safety that used to come from "our own box" now
+    # comes from the gates in front of it: S0 + T0 + the release gate above, then
+    # the DB-isolation, binding, canonical-shape and unapplied-migration gates in
+    # this job's own steps.
+    runs-on: ubuntu-latest
+    needs: [security, gate, release-gate]
     if: |
       (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) ||
       (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_production == 'PRODUCTION')
@@ -1867,32 +1940,18 @@ jobs:
   # ============================================================================
   # TIER 2P: SMOKE → Production (tag only)
   #
-  # NOTE — stamp cache will ALWAYS miss here, and that is intentional.
-  #
-  # deploy-production (the job that precedes this one) uses the default
-  # clean: true checkout, which runs `git clean -ffdx` and wipes the entire
-  # workspace — including root node_modules/ and its .install-stamp.
-  # By the time smoke-production runs, the stamp file is gone, so the
-  # stamp check below falls through and npm ci always runs fresh.
-  #
-  # This is the correct behaviour for production smoke:
-  #   - deploy-production gets a guaranteed-clean workspace (SRE doctrine)
-  #   - smoke-production inherits that cleanliness — it never tests against
-  #     a stale cached node_modules from a prior unrelated run
-  #   - The "skipping npm ci" log line will never appear in this job
-  #
-  # If you see "skipping npm ci" here, investigate — it means deploy-production
-  # did NOT run before this job (e.g. needs: chain changed) and the previous
-  # run's workspace state leaked in, which would be a bug.
+  # Runs on an ephemeral hosted VM (OSE-1217), so every run starts from an empty
+  # workspace and `npm ci` always runs fresh. The long note that used to sit here
+  # — about the stamp cache always missing because deploy-production's clean
+  # checkout wiped the shared workspace — described the self-hosted box and no
+  # longer applies: there is no shared workspace to leak between jobs.
   # ============================================================================
   smoke-production:
     name: 'T2 Smoke → Production'
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     needs: [security, gate, deploy-production]
     steps:
       - uses: actions/checkout@v7
-        with:
-          clean: false
       - uses: actions/setup-node@v7
         with:
           node-version: '20'
@@ -1979,14 +2038,25 @@ jobs:
   # Both are RETIRED. The real post-execution value — "did untrusted execution tamper
   # the tree" — now runs as the TAIL STEP of `functional-staging`, in the same VM that
   # ran the tests (see that job). That placement needs no cross-job workspace
-  # persistence, so it is correct on self-hosted today and rides the OSE-954 migration
-  # to ephemeral GitHub-hosted runners unchanged. The retired-job invariant is
+  # persistence, so it rode the OSE-954 move to ephemeral GitHub-hosted runners
+  # unchanged and runs there today. The retired-job invariant is
   # regression-locked by tests/unit/security/post-execution-integrity.test.js.
   # ============================================================================
   summary:
     name: 'Pipeline Summary'
     runs-on: ubuntu-latest
-    needs: [security, gate, deploy-staging, smoke-staging, contract-staging, functional-staging, deploy-production, smoke-production]
+    needs:
+      [
+        security,
+        gate,
+        deploy-staging,
+        smoke-staging,
+        contract-staging,
+        functional-staging,
+        release-gate,
+        deploy-production,
+        smoke-production,
+      ]
     if: always()
     steps:
       - name: Summary
