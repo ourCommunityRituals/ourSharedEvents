@@ -1,0 +1,1545 @@
+{
+  "generatedBy": "scripts/triage-vitest-pool.mjs",
+  "summary": {
+    "total": 219,
+    "totalTests": 2661,
+    "workerd": 116,
+    "node": 103,
+    "needsReview": 55
+  },
+  "files": [
+    {
+      "file": "workers/oursharedevents/tests/a11y-axe.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 9
+    },
+    {
+      "file": "workers/oursharedevents/tests/admin-664-who-rich-content.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 11
+    },
+    {
+      "file": "workers/oursharedevents/tests/admin-allowlist.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 28
+    },
+    {
+      "file": "workers/oursharedevents/tests/admin-brand-membership.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): env.DB",
+      "testCount": 5
+    },
+    {
+      "file": "workers/oursharedevents/tests/admin-brand-scope.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 10
+    },
+    {
+      "file": "workers/oursharedevents/tests/admin-brand-tree.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 5
+    },
+    {
+      "file": "workers/oursharedevents/tests/admin-context-bar.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 4
+    },
+    {
+      "file": "workers/oursharedevents/tests/admin-count-honesty.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 6
+    },
+    {
+      "file": "workers/oursharedevents/tests/admin-event-5w.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 7
+    },
+    {
+      "file": "workers/oursharedevents/tests/admin-event-delete.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 4
+    },
+    {
+      "file": "workers/oursharedevents/tests/admin-event-templates.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 3
+    },
+    {
+      "file": "workers/oursharedevents/tests/admin-events-batching.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 5
+    },
+    {
+      "file": "workers/oursharedevents/tests/admin-events-pagination.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 6
+    },
+    {
+      "file": "workers/oursharedevents/tests/admin-events-scope.invariant.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): env.DB",
+      "testCount": 6
+    },
+    {
+      "file": "workers/oursharedevents/tests/admin-export.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 5
+    },
+    {
+      "file": "workers/oursharedevents/tests/admin-friendly-labels.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 11
+    },
+    {
+      "file": "workers/oursharedevents/tests/admin-mobile-workability.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 11
+    },
+    {
+      "file": "workers/oursharedevents/tests/admin-object-scope.invariant.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): env.DB, createExecutionContext, waitOnExecutionContext",
+      "testCount": 20
+    },
+    {
+      "file": "workers/oursharedevents/tests/admin-selection-spine.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 6
+    },
+    {
+      "file": "workers/oursharedevents/tests/admin-servicetoken-fallthrough.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 6
+    },
+    {
+      "file": "workers/oursharedevents/tests/admin-signin-page.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 7
+    },
+    {
+      "file": "workers/oursharedevents/tests/admin-ui.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 78
+    },
+    {
+      "file": "workers/oursharedevents/tests/advanced-metrics.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 22
+    },
+    {
+      "file": "workers/oursharedevents/tests/anonymity-gate.spec.ts",
+      "bucket": "node",
+      "needsReview": true,
+      "reason": "cloudflare:test imported for env only, no runtime marker",
+      "testCount": 3
+    },
+    {
+      "file": "workers/oursharedevents/tests/anti-logging-proof.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): env.DB",
+      "testCount": 34
+    },
+    {
+      "file": "workers/oursharedevents/tests/architecture.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): env.DB",
+      "testCount": 11
+    },
+    {
+      "file": "workers/oursharedevents/tests/as-display-public-admin.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 22
+    },
+    {
+      "file": "workers/oursharedevents/tests/as-keyboard-nav.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 22
+    },
+    {
+      "file": "workers/oursharedevents/tests/audit-log.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 20
+    },
+    {
+      "file": "workers/oursharedevents/tests/bigquery.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 13
+    },
+    {
+      "file": "workers/oursharedevents/tests/born-red-harness.spec.ts",
+      "bucket": "node",
+      "needsReview": true,
+      "reason": "cloudflare:test imported for env only, no runtime marker",
+      "testCount": 23
+    },
+    {
+      "file": "workers/oursharedevents/tests/brand-voice-surfaces.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 4
+    },
+    {
+      "file": "workers/oursharedevents/tests/briefing.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 6
+    },
+    {
+      "file": "workers/oursharedevents/tests/business-type-category-map.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): env.DB",
+      "testCount": 7
+    },
+    {
+      "file": "workers/oursharedevents/tests/category-registry.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): env.DB",
+      "testCount": 3
+    },
+    {
+      "file": "workers/oursharedevents/tests/color-contrast.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 21
+    },
+    {
+      "file": "workers/oursharedevents/tests/constraints.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): env.DB",
+      "testCount": 14
+    },
+    {
+      "file": "workers/oursharedevents/tests/corridor-density-ratios.spec.ts",
+      "bucket": "node",
+      "needsReview": true,
+      "reason": "cloudflare:test imported for env only, no runtime marker",
+      "testCount": 6
+    },
+    {
+      "file": "workers/oursharedevents/tests/corridor-density-snapshots.spec.ts",
+      "bucket": "node",
+      "needsReview": true,
+      "reason": "cloudflare:test imported for env only, no runtime marker",
+      "testCount": 10
+    },
+    {
+      "file": "workers/oursharedevents/tests/corridor-map-render.spec.ts",
+      "bucket": "node",
+      "needsReview": true,
+      "reason": "cloudflare:test imported for env only, no runtime marker",
+      "testCount": 6
+    },
+    {
+      "file": "workers/oursharedevents/tests/corridor-map.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 8
+    },
+    {
+      "file": "workers/oursharedevents/tests/cost-metric.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): env.DB",
+      "testCount": 10
+    },
+    {
+      "file": "workers/oursharedevents/tests/count-floor.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 5
+    },
+    {
+      "file": "workers/oursharedevents/tests/csp-nonce.spec.ts",
+      "bucket": "node",
+      "needsReview": true,
+      "reason": "cloudflare:test imported for env only, no runtime marker",
+      "testCount": 13
+    },
+    {
+      "file": "workers/oursharedevents/tests/dark-theme-ocr-ui.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 15
+    },
+    {
+      "file": "workers/oursharedevents/tests/data-class-schema.spec.ts",
+      "bucket": "node",
+      "needsReview": true,
+      "reason": "cloudflare:test imported for env only, no runtime marker",
+      "testCount": 4
+    },
+    {
+      "file": "workers/oursharedevents/tests/data-subject.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 11
+    },
+    {
+      "file": "workers/oursharedevents/tests/demo-banner.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 29
+    },
+    {
+      "file": "workers/oursharedevents/tests/demo-ci-gate.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 6
+    },
+    {
+      "file": "workers/oursharedevents/tests/demo-registry.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 5
+    },
+    {
+      "file": "workers/oursharedevents/tests/demo-site.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 6
+    },
+    {
+      "file": "workers/oursharedevents/tests/deprecation-lock.spec.ts",
+      "bucket": "node",
+      "needsReview": true,
+      "reason": "cloudflare:test imported for env only, no runtime marker",
+      "testCount": 7
+    },
+    {
+      "file": "workers/oursharedevents/tests/dev-open-admin-guard.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 6
+    },
+    {
+      "file": "workers/oursharedevents/tests/error-page-mobile-workability.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 4
+    },
+    {
+      "file": "workers/oursharedevents/tests/event-manager-audit.spec.ts",
+      "bucket": "node",
+      "needsReview": true,
+      "reason": "cloudflare:test imported for env only, no runtime marker",
+      "testCount": 19
+    },
+    {
+      "file": "workers/oursharedevents/tests/event-phase-coherence.spec.ts",
+      "bucket": "node",
+      "needsReview": true,
+      "reason": "cloudflare:test imported for env only, no runtime marker",
+      "testCount": 9
+    },
+    {
+      "file": "workers/oursharedevents/tests/event-phase.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 42
+    },
+    {
+      "file": "workers/oursharedevents/tests/event-price.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 7
+    },
+    {
+      "file": "workers/oursharedevents/tests/event-state.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 22
+    },
+    {
+      "file": "workers/oursharedevents/tests/event-stats.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch, env.DB, env.FORMS_DB",
+      "testCount": 9
+    },
+    {
+      "file": "workers/oursharedevents/tests/event-type-reachability.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): env.DB",
+      "testCount": 5
+    },
+    {
+      "file": "workers/oursharedevents/tests/events-5w-schema.spec.ts",
+      "bucket": "node",
+      "needsReview": true,
+      "reason": "cloudflare:test imported for env only, no runtime marker",
+      "testCount": 5
+    },
+    {
+      "file": "workers/oursharedevents/tests/events-field-name-contract.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 3
+    },
+    {
+      "file": "workers/oursharedevents/tests/events-h3-wiring.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 8
+    },
+    {
+      "file": "workers/oursharedevents/tests/fat-finger.property.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 12
+    },
+    {
+      "file": "workers/oursharedevents/tests/feature-flags.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 28
+    },
+    {
+      "file": "workers/oursharedevents/tests/fk-type-invariant.spec.ts",
+      "bucket": "node",
+      "needsReview": true,
+      "reason": "cloudflare:test imported for env only, no runtime marker",
+      "testCount": 4
+    },
+    {
+      "file": "workers/oursharedevents/tests/flag-seed-parity.spec.ts",
+      "bucket": "node",
+      "needsReview": true,
+      "reason": "cloudflare:test imported for env only, no runtime marker",
+      "testCount": 14
+    },
+    {
+      "file": "workers/oursharedevents/tests/forbidden-join-blindness.spec.ts",
+      "bucket": "node",
+      "needsReview": true,
+      "reason": "cloudflare:test imported for env only, no runtime marker",
+      "testCount": 3
+    },
+    {
+      "file": "workers/oursharedevents/tests/forbidden-join-boundary.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 4
+    },
+    {
+      "file": "workers/oursharedevents/tests/form-a11y.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 17
+    },
+    {
+      "file": "workers/oursharedevents/tests/form-error-friendly-copy.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 8
+    },
+    {
+      "file": "workers/oursharedevents/tests/form-page-canonical-title.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 12
+    },
+    {
+      "file": "workers/oursharedevents/tests/form-page-email-signup-dispatch.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 4
+    },
+    {
+      "file": "workers/oursharedevents/tests/form-rate-limit.spec.ts",
+      "bucket": "node",
+      "needsReview": true,
+      "reason": "cloudflare:test imported for env only, no runtime marker",
+      "testCount": 14
+    },
+    {
+      "file": "workers/oursharedevents/tests/form-sponsor-ui.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 15
+    },
+    {
+      "file": "workers/oursharedevents/tests/form-validation-invariant.spec.ts",
+      "bucket": "node",
+      "needsReview": true,
+      "reason": "cloudflare:test imported for env only, no runtime marker",
+      "testCount": 7
+    },
+    {
+      "file": "workers/oursharedevents/tests/form-validation.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 6
+    },
+    {
+      "file": "workers/oursharedevents/tests/forms-adversarial.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 36
+    },
+    {
+      "file": "workers/oursharedevents/tests/forms-constraints.spec.ts",
+      "bucket": "node",
+      "needsReview": true,
+      "reason": "cloudflare:test imported for env only, no runtime marker",
+      "testCount": 10
+    },
+    {
+      "file": "workers/oursharedevents/tests/forms-e2e.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 17
+    },
+    {
+      "file": "workers/oursharedevents/tests/forms-pepper-preflight.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 4
+    },
+    {
+      "file": "workers/oursharedevents/tests/forms-schema.spec.ts",
+      "bucket": "node",
+      "needsReview": true,
+      "reason": "cloudflare:test imported for env only, no runtime marker",
+      "testCount": 9
+    },
+    {
+      "file": "workers/oursharedevents/tests/forms-security.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): env.DB",
+      "testCount": 23
+    },
+    {
+      "file": "workers/oursharedevents/tests/geo-invariant.spec.ts",
+      "bucket": "node",
+      "needsReview": true,
+      "reason": "cloudflare:test imported for env only, no runtime marker",
+      "testCount": 14
+    },
+    {
+      "file": "workers/oursharedevents/tests/geo-link-maps-not-h3.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 6
+    },
+    {
+      "file": "workers/oursharedevents/tests/geo.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 17
+    },
+    {
+      "file": "workers/oursharedevents/tests/geocode-handler.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 6
+    },
+    {
+      "file": "workers/oursharedevents/tests/gitleaks-ci-gate.spec.ts",
+      "bucket": "node",
+      "needsReview": true,
+      "reason": "cloudflare:test imported for env only, no runtime marker",
+      "testCount": 7
+    },
+    {
+      "file": "workers/oursharedevents/tests/h3-tagging.spec.ts",
+      "bucket": "node",
+      "needsReview": true,
+      "reason": "cloudflare:test imported for env only, no runtime marker",
+      "testCount": 12
+    },
+    {
+      "file": "workers/oursharedevents/tests/in-event-companion.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 3
+    },
+    {
+      "file": "workers/oursharedevents/tests/key-rotation-age.spec.ts",
+      "bucket": "node",
+      "needsReview": true,
+      "reason": "cloudflare:test imported for env only, no runtime marker",
+      "testCount": 11
+    },
+    {
+      "file": "workers/oursharedevents/tests/keyboard-nav.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 21
+    },
+    {
+      "file": "workers/oursharedevents/tests/landing-colorblind-safe.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 5
+    },
+    {
+      "file": "workers/oursharedevents/tests/lifecycle.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): createExecutionContext, waitOnExecutionContext",
+      "testCount": 6
+    },
+    {
+      "file": "workers/oursharedevents/tests/migration-smoke.spec.ts",
+      "bucket": "node",
+      "needsReview": true,
+      "reason": "cloudflare:test imported for env only, no runtime marker",
+      "testCount": 6
+    },
+    {
+      "file": "workers/oursharedevents/tests/monetization-gate.spec.ts",
+      "bucket": "node",
+      "needsReview": true,
+      "reason": "cloudflare:test imported for env only, no runtime marker",
+      "testCount": 8
+    },
+    {
+      "file": "workers/oursharedevents/tests/ncr-pipeline.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 11
+    },
+    {
+      "file": "workers/oursharedevents/tests/no-blocking-dialogs.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 5
+    },
+    {
+      "file": "workers/oursharedevents/tests/no-sheets-dependency.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): env.DB",
+      "testCount": 9
+    },
+    {
+      "file": "workers/oursharedevents/tests/oer-boundary.spec.ts",
+      "bucket": "node",
+      "needsReview": true,
+      "reason": "cloudflare:test imported for env only, no runtime marker",
+      "testCount": 13
+    },
+    {
+      "file": "workers/oursharedevents/tests/og-meta.spec.ts",
+      "bucket": "node",
+      "needsReview": true,
+      "reason": "cloudflare:test imported for env only, no runtime marker",
+      "testCount": 12
+    },
+    {
+      "file": "workers/oursharedevents/tests/ops/payment-links-guard.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 10
+    },
+    {
+      "file": "workers/oursharedevents/tests/ose-191-display-rotation.spec.ts",
+      "bucket": "node",
+      "needsReview": true,
+      "reason": "cloudflare:test imported for env only, no runtime marker",
+      "testCount": 6
+    },
+    {
+      "file": "workers/oursharedevents/tests/ose-539-share-geo.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 14
+    },
+    {
+      "file": "workers/oursharedevents/tests/pagination-shape-invariant.spec.ts",
+      "bucket": "node",
+      "needsReview": true,
+      "reason": "cloudflare:test imported for env only, no runtime marker",
+      "testCount": 3
+    },
+    {
+      "file": "workers/oursharedevents/tests/pdf-export.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 14
+    },
+    {
+      "file": "workers/oursharedevents/tests/phase-cache.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 10
+    },
+    {
+      "file": "workers/oursharedevents/tests/pii-invariant.spec.ts",
+      "bucket": "node",
+      "needsReview": true,
+      "reason": "cloudflare:test imported for env only, no runtime marker",
+      "testCount": 2
+    },
+    {
+      "file": "workers/oursharedevents/tests/pii.spec.ts",
+      "bucket": "node",
+      "needsReview": true,
+      "reason": "cloudflare:test imported for env only, no runtime marker",
+      "testCount": 14
+    },
+    {
+      "file": "workers/oursharedevents/tests/portfolio-rollup.invariant.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 9
+    },
+    {
+      "file": "workers/oursharedevents/tests/post-event-recap-first.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 4
+    },
+    {
+      "file": "workers/oursharedevents/tests/poster-attribution-h3.spec.ts",
+      "bucket": "node",
+      "needsReview": true,
+      "reason": "cloudflare:test imported for env only, no runtime marker",
+      "testCount": 3
+    },
+    {
+      "file": "workers/oursharedevents/tests/poster-attribution-kanon-floor.spec.ts",
+      "bucket": "node",
+      "needsReview": true,
+      "reason": "cloudflare:test imported for env only, no runtime marker",
+      "testCount": 6
+    },
+    {
+      "file": "workers/oursharedevents/tests/poster-deployment-attribution-chain.spec.ts",
+      "bucket": "node",
+      "needsReview": true,
+      "reason": "cloudflare:test imported for env only, no runtime marker",
+      "testCount": 7
+    },
+    {
+      "file": "workers/oursharedevents/tests/poster-deployment-ui.spec.ts",
+      "bucket": "node",
+      "needsReview": true,
+      "reason": "cloudflare:test imported for env only, no runtime marker",
+      "testCount": 16
+    },
+    {
+      "file": "workers/oursharedevents/tests/poster-deployments-h3-tagging.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 16
+    },
+    {
+      "file": "workers/oursharedevents/tests/poster-family-foundation.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 7
+    },
+    {
+      "file": "workers/oursharedevents/tests/poster-mobile-workability.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 6
+    },
+    {
+      "file": "workers/oursharedevents/tests/poster-page-csp.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 1
+    },
+    {
+      "file": "workers/oursharedevents/tests/poster-print-colors.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 9
+    },
+    {
+      "file": "workers/oursharedevents/tests/poster-qr-uec-color.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 6
+    },
+    {
+      "file": "workers/oursharedevents/tests/poster-qr.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 21
+    },
+    {
+      "file": "workers/oursharedevents/tests/poster-spon4-as2-spon10.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 23
+    },
+    {
+      "file": "workers/oursharedevents/tests/poster-sponsor.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 5
+    },
+    {
+      "file": "workers/oursharedevents/tests/poster-tier-css-ose219.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 9
+    },
+    {
+      "file": "workers/oursharedevents/tests/pre-event-funnel-media.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 2
+    },
+    {
+      "file": "workers/oursharedevents/tests/pre-event-funnel-order.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 1
+    },
+    {
+      "file": "workers/oursharedevents/tests/public-event-error-pages.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 10
+    },
+    {
+      "file": "workers/oursharedevents/tests/public-event-mobile-workability.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 6
+    },
+    {
+      "file": "workers/oursharedevents/tests/public-event-og-card.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 6
+    },
+    {
+      "file": "workers/oursharedevents/tests/public-event-page.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 20
+    },
+    {
+      "file": "workers/oursharedevents/tests/public-event-stakeholder-surfaces.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 21
+    },
+    {
+      "file": "workers/oursharedevents/tests/public-readonly.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 30
+    },
+    {
+      "file": "workers/oursharedevents/tests/public-surface-swappable.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 1
+    },
+    {
+      "file": "workers/oursharedevents/tests/qa-edge-cases.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 16
+    },
+    {
+      "file": "workers/oursharedevents/tests/qa-flag-gating.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 10
+    },
+    {
+      "file": "workers/oursharedevents/tests/qr-roundtrip.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 4
+    },
+    {
+      "file": "workers/oursharedevents/tests/qr-scan-routed.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 4
+    },
+    {
+      "file": "workers/oursharedevents/tests/qr-scan.spec.ts",
+      "bucket": "node",
+      "needsReview": true,
+      "reason": "cloudflare:test imported for env only, no runtime marker",
+      "testCount": 16
+    },
+    {
+      "file": "workers/oursharedevents/tests/qr-staleness.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 9
+    },
+    {
+      "file": "workers/oursharedevents/tests/qr-verify.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 9
+    },
+    {
+      "file": "workers/oursharedevents/tests/rate-limit-bypass.spec.ts",
+      "bucket": "node",
+      "needsReview": true,
+      "reason": "cloudflare:test imported for env only, no runtime marker",
+      "testCount": 7
+    },
+    {
+      "file": "workers/oursharedevents/tests/rate-limit-privileged-endpoints.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 10
+    },
+    {
+      "file": "workers/oursharedevents/tests/rate-limit.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): env.RATE_LIMIT_KV",
+      "testCount": 18
+    },
+    {
+      "file": "workers/oursharedevents/tests/red-team/api-authz.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 32
+    },
+    {
+      "file": "workers/oursharedevents/tests/red-team/auth-boundary.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 32
+    },
+    {
+      "file": "workers/oursharedevents/tests/red-team/form-security-deep.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 32
+    },
+    {
+      "file": "workers/oursharedevents/tests/red-team/impression-privacy.spec.ts",
+      "bucket": "node",
+      "needsReview": true,
+      "reason": "cloudflare:test imported for env only, no runtime marker",
+      "testCount": 8
+    },
+    {
+      "file": "workers/oursharedevents/tests/red-team/rate-limit-adversarial.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 22
+    },
+    {
+      "file": "workers/oursharedevents/tests/red-team/shared-report-theft.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 28
+    },
+    {
+      "file": "workers/oursharedevents/tests/red-team/sponsor-eligibility-gate.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): env.DB",
+      "testCount": 14
+    },
+    {
+      "file": "workers/oursharedevents/tests/red-team/sponsor-promotion.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): env.DB",
+      "testCount": 9
+    },
+    {
+      "file": "workers/oursharedevents/tests/red-team/sponsor-scope-per-id.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): env.DB",
+      "testCount": 11
+    },
+    {
+      "file": "workers/oursharedevents/tests/red-team/sponsor-scope-sub-resources.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): env.DB",
+      "testCount": 8
+    },
+    {
+      "file": "workers/oursharedevents/tests/reg1-event-types.spec.ts",
+      "bucket": "node",
+      "needsReview": true,
+      "reason": "cloudflare:test imported for env only, no runtime marker",
+      "testCount": 11
+    },
+    {
+      "file": "workers/oursharedevents/tests/registration-self-delete.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch, env.DB, env.FORMS_DB",
+      "testCount": 4
+    },
+    {
+      "file": "workers/oursharedevents/tests/regulatory-label-unavailable.spec.ts",
+      "bucket": "node",
+      "needsReview": true,
+      "reason": "cloudflare:test imported for env only, no runtime marker",
+      "testCount": 2
+    },
+    {
+      "file": "workers/oursharedevents/tests/regulatory-schema.spec.ts",
+      "bucket": "node",
+      "needsReview": true,
+      "reason": "cloudflare:test imported for env only, no runtime marker",
+      "testCount": 21
+    },
+    {
+      "file": "workers/oursharedevents/tests/report-a11y.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 20
+    },
+    {
+      "file": "workers/oursharedevents/tests/report-depth.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 20
+    },
+    {
+      "file": "workers/oursharedevents/tests/riph-brain-conformance.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 12
+    },
+    {
+      "file": "workers/oursharedevents/tests/riph-demo-dataset.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 18
+    },
+    {
+      "file": "workers/oursharedevents/tests/scan-path-consistency.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 5
+    },
+    {
+      "file": "workers/oursharedevents/tests/schema-guard.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 9
+    },
+    {
+      "file": "workers/oursharedevents/tests/schema-lexicon.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): env.DB",
+      "testCount": 5
+    },
+    {
+      "file": "workers/oursharedevents/tests/schema.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): env.DB",
+      "testCount": 10
+    },
+    {
+      "file": "workers/oursharedevents/tests/screen-reader.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 17
+    },
+    {
+      "file": "workers/oursharedevents/tests/security-privacy.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 33
+    },
+    {
+      "file": "workers/oursharedevents/tests/shared-report-auth.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 28
+    },
+    {
+      "file": "workers/oursharedevents/tests/shared-report-bigquery-export.spec.ts",
+      "bucket": "node",
+      "needsReview": true,
+      "reason": "cloudflare:test imported for env only, no runtime marker",
+      "testCount": 19
+    },
+    {
+      "file": "workers/oursharedevents/tests/shared-report-disabled-page.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 3
+    },
+    {
+      "file": "workers/oursharedevents/tests/shared-report-export.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 13
+    },
+    {
+      "file": "workers/oursharedevents/tests/shared-report-kanon-floor.spec.ts",
+      "bucket": "node",
+      "needsReview": true,
+      "reason": "cloudflare:test imported for env only, no runtime marker",
+      "testCount": 15
+    },
+    {
+      "file": "workers/oursharedevents/tests/shared-report-materialize.spec.ts",
+      "bucket": "node",
+      "needsReview": true,
+      "reason": "cloudflare:test imported for env only, no runtime marker",
+      "testCount": 26
+    },
+    {
+      "file": "workers/oursharedevents/tests/shared-report-mobile-workability.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 9
+    },
+    {
+      "file": "workers/oursharedevents/tests/shared-report-pipeline-invariants.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): env.FORMS_DB",
+      "testCount": 41
+    },
+    {
+      "file": "workers/oursharedevents/tests/shared-report-read.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 52
+    },
+    {
+      "file": "workers/oursharedevents/tests/sharedReport-signed-link-ui.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 14
+    },
+    {
+      "file": "workers/oursharedevents/tests/shortlinks.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 18
+    },
+    {
+      "file": "workers/oursharedevents/tests/signed-link-token-forgery.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 15
+    },
+    {
+      "file": "workers/oursharedevents/tests/slug-permanence.spec.ts",
+      "bucket": "node",
+      "needsReview": true,
+      "reason": "cloudflare:test imported for env only, no runtime marker",
+      "testCount": 7
+    },
+    {
+      "file": "workers/oursharedevents/tests/sponsor-allocation-drift-check.spec.ts",
+      "bucket": "node",
+      "needsReview": true,
+      "reason": "cloudflare:test imported for env only, no runtime marker",
+      "testCount": 17
+    },
+    {
+      "file": "workers/oursharedevents/tests/sponsor-asset-columns.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): env.DB",
+      "testCount": 5
+    },
+    {
+      "file": "workers/oursharedevents/tests/sponsor-asset-route.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): env.DB",
+      "testCount": 6
+    },
+    {
+      "file": "workers/oursharedevents/tests/sponsor-asset-upload.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): env.DB",
+      "testCount": 10
+    },
+    {
+      "file": "workers/oursharedevents/tests/sponsor-asset.spec.ts",
+      "bucket": "node",
+      "needsReview": true,
+      "reason": "cloudflare:test imported for env only, no runtime marker",
+      "testCount": 9
+    },
+    {
+      "file": "workers/oursharedevents/tests/sponsor-audit.spec.ts",
+      "bucket": "node",
+      "needsReview": true,
+      "reason": "cloudflare:test imported for env only, no runtime marker",
+      "testCount": 14
+    },
+    {
+      "file": "workers/oursharedevents/tests/sponsor-class-breakdown.spec.ts",
+      "bucket": "node",
+      "needsReview": true,
+      "reason": "cloudflare:test imported for env only, no runtime marker",
+      "testCount": 9
+    },
+    {
+      "file": "workers/oursharedevents/tests/sponsor-covenant-authoring.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch, env.DB",
+      "testCount": 9
+    },
+    {
+      "file": "workers/oursharedevents/tests/sponsor-draft-capture.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): env.DB",
+      "testCount": 12
+    },
+    {
+      "file": "workers/oursharedevents/tests/sponsor-frequency-rotation.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 10
+    },
+    {
+      "file": "workers/oursharedevents/tests/sponsor-lifecycle-acceptance.spec.ts",
+      "bucket": "node",
+      "needsReview": true,
+      "reason": "cloudflare:test imported for env only, no runtime marker",
+      "testCount": 5
+    },
+    {
+      "file": "workers/oursharedevents/tests/sponsor-logo.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 18
+    },
+    {
+      "file": "workers/oursharedevents/tests/sponsor-render-hardening.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 8
+    },
+    {
+      "file": "workers/oursharedevents/tests/sponsor-resolver-invisibility.invariant.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): env.DB",
+      "testCount": 7
+    },
+    {
+      "file": "workers/oursharedevents/tests/sponsor-scope.invariant.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): env.DB",
+      "testCount": 13
+    },
+    {
+      "file": "workers/oursharedevents/tests/sponsor-share-covenant.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 12
+    },
+    {
+      "file": "workers/oursharedevents/tests/sponsor-share-rotation.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 12
+    },
+    {
+      "file": "workers/oursharedevents/tests/sponsor-signal-anonymity.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 1
+    },
+    {
+      "file": "workers/oursharedevents/tests/sponsors-h3-tagging.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 12
+    },
+    {
+      "file": "workers/oursharedevents/tests/sponsors.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): env.DB",
+      "testCount": 16
+    },
+    {
+      "file": "workers/oursharedevents/tests/standards-propagation.spec.ts",
+      "bucket": "node",
+      "needsReview": true,
+      "reason": "cloudflare:test imported for env only, no runtime marker",
+      "testCount": 6
+    },
+    {
+      "file": "workers/oursharedevents/tests/subscribers.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 10
+    },
+    {
+      "file": "workers/oursharedevents/tests/surface-deep-link.spec.ts",
+      "bucket": "node",
+      "needsReview": true,
+      "reason": "cloudflare:test imported for env only, no runtime marker",
+      "testCount": 25
+    },
+    {
+      "file": "workers/oursharedevents/tests/surface-deep-links.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 7
+    },
+    {
+      "file": "workers/oursharedevents/tests/template-clearance-gate.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): env.DB",
+      "testCount": 8
+    },
+    {
+      "file": "workers/oursharedevents/tests/template-clearance-schema.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): env.DB",
+      "testCount": 6
+    },
+    {
+      "file": "workers/oursharedevents/tests/tenant-isolation.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 4
+    },
+    {
+      "file": "workers/oursharedevents/tests/testid-pyramid.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 37
+    },
+    {
+      "file": "workers/oursharedevents/tests/tier-equity-sort.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 5
+    },
+    {
+      "file": "workers/oursharedevents/tests/tier-equity.invariant.spec.ts",
+      "bucket": "node",
+      "needsReview": true,
+      "reason": "cloudflare:test imported for env only, no runtime marker",
+      "testCount": 7
+    },
+    {
+      "file": "workers/oursharedevents/tests/token-contract.spec.ts",
+      "bucket": "node",
+      "needsReview": true,
+      "reason": "cloudflare:test imported for env only, no runtime marker",
+      "testCount": 5
+    },
+    {
+      "file": "workers/oursharedevents/tests/uec-drift-check.spec.ts",
+      "bucket": "node",
+      "needsReview": true,
+      "reason": "cloudflare:test imported for env only, no runtime marker",
+      "testCount": 12
+    },
+    {
+      "file": "workers/oursharedevents/tests/uec-fixtures-example.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 10
+    },
+    {
+      "file": "workers/oursharedevents/tests/uec-module.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 34
+    },
+    {
+      "file": "workers/oursharedevents/tests/uec-resolve-endpoint.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 17
+    },
+    {
+      "file": "workers/oursharedevents/tests/uec-substrate-static-gate.spec.ts",
+      "bucket": "node",
+      "needsReview": true,
+      "reason": "cloudflare:test imported for env only, no runtime marker",
+      "testCount": 12
+    },
+    {
+      "file": "workers/oursharedevents/tests/upload.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 10
+    }
+  ]
+}
