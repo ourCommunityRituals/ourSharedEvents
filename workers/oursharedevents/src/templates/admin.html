@@ -1450,6 +1450,27 @@
         grid-template-columns: 1fr 1fr;
         gap: 0.75rem;
       }
+      /* The third way out, deliberately quiet (OSE-1240). It is a destination
+         for someone who already knows where they are going, not a third
+         question. Full 44px target so "quiet" never means "hard to hit". */
+      .path-option-quiet {
+        display: block;
+        width: 100%;
+        min-height: 44px;
+        margin-top: 0.75rem;
+        padding: 0.5rem;
+        background: none;
+        border: none;
+        color: var(--text-muted, #6c757d);
+        font-family: inherit;
+        font-size: 0.85rem;
+        text-decoration: underline;
+        cursor: pointer;
+      }
+      .path-option-quiet:hover,
+      .path-option-quiet:focus-visible {
+        color: #4361ee;
+      }
       .path-option {
         display: flex;
         flex-direction: column;
@@ -1950,9 +1971,30 @@
            CSP note: the admin page ships a nonce-based script-src (pages.ts),
            which blocks inline onclick= attributes — all wizard wiring is
            addEventListener inside the nonce'd script block below. -->
+      <!-- ── Front door (OSE-1240) ────────────────────────────────────────────
+           Owner-specified 2026-09-05: the entry question is WHAT you came to
+           make, not HOW you want to be walked through it.
+
+           Before, the two choices were "Walk me through it" and "Show me
+           everything" — guided vs advanced. That asks the reader to pick a
+           UI mode before they have told anyone what they are doing, and it
+           made the sponsor path invisible: adding a sponsor meant landing on
+           the full dashboard and finding the card yourself.
+
+           Now: Create Event and Create Sponsor, side by side (they stack on a
+           phone at ≤480px, which is where the grid already collapses to one
+           column). The full dashboard stays one tap away as a quiet third
+           option — it is a destination for people who already know the way,
+           not a question to put to someone on arrival.
+
+           ORDER: event first. On THIS surface the reader is a signed-in host
+           who came to run their event; sponsors do not sign themselves up
+           here, they arrive by invite (the public front door where
+           sponsor-first is right is the pass-2 story). Swapping the two is a
+           one-block move if that reading turns out wrong. -->
       <div class="path-chooser" id="admin-path-chooser" data-testid="admin-path-chooser">
-        <h2>Set up your event</h2>
-        <p class="path-chooser-sub">Pick whichever feels right — both end in the same place.</p>
+        <h2>What are you making?</h2>
+        <p class="path-chooser-sub">Start either one — you can add the other any time.</p>
         <div class="path-chooser-options">
           <button
             type="button"
@@ -1960,19 +2002,27 @@
             id="admin-path-wizard"
             data-testid="admin-path-wizard"
           >
-            <span class="path-option-title">Walk me through it</span>
-            <span class="path-option-desc">A few short steps. Great for your first event.</span>
+            <span class="path-option-title">Create an event</span>
+            <span class="path-option-desc">A few short steps: name it, pick a night, get your links.</span>
           </button>
           <button
             type="button"
             class="path-option"
-            id="admin-path-advanced"
-            data-testid="admin-path-advanced"
+            id="admin-path-sponsor"
+            data-testid="admin-path-sponsor"
           >
-            <span class="path-option-title">Show me everything</span>
-            <span class="path-option-desc">The full dashboard, with every setting on one page.</span>
+            <span class="path-option-title">Create a sponsor</span>
+            <span class="path-option-desc">Add a local business so it can back the nights you run.</span>
           </button>
         </div>
+        <button
+          type="button"
+          class="path-option-quiet"
+          id="admin-path-advanced"
+          data-testid="admin-path-advanced"
+        >
+          Show me everything — the full dashboard
+        </button>
       </div>
 
       <section
@@ -2428,6 +2478,34 @@
             if (name) name.focus();
           }
 
+          /**
+           * Create-a-sponsor path (OSE-1240).
+           *
+           * There is no separate sponsor wizard — the sponsors card already
+           * holds the real form, and duplicating it would give us two forms to
+           * keep in step. So this clears the doorway, takes the reader to that
+           * card, and opens it, which is the same destination "+ Add Sponsor"
+           * reaches. The chooser's job is to make the path VISIBLE from the
+           * front door, not to build a second one.
+           */
+          function startSponsor() {
+            document.body.classList.remove('wizard-active');
+            document.getElementById('admin-path-chooser').hidden = true;
+            document.getElementById('launch-wizard').hidden = true;
+
+            var card = document.querySelector('[data-testid="sponsors-card"]');
+            if (card) card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+            // Reuse the card's own toggle so the open/close state, the button
+            // label and loadEventOptions() all stay in one place.
+            var toggle = document.getElementById('add-spon-toggle');
+            var wrap = document.getElementById('spon-form-wrap');
+            if (toggle && wrap && wrap.hasAttribute('hidden')) toggle.click();
+
+            var name = document.getElementById('spon-name');
+            if (name) name.focus();
+          }
+
           function chooseAdvanced() {
             // The dashboard is already on the page — just clear the doorway.
             document.body.classList.remove('wizard-active');
@@ -2484,6 +2562,7 @@
 
           // ── wiring (CSP-safe: no inline handlers) ───────────────────────────
           document.getElementById('admin-path-wizard').addEventListener('click', startWizard);
+          document.getElementById('admin-path-sponsor').addEventListener('click', startSponsor);
           document.getElementById('admin-path-advanced').addEventListener('click', chooseAdvanced);
           document.getElementById('wizard-next-btn').addEventListener('click', goNext);
           document.getElementById('wizardBackBtn').addEventListener('click', goBack);

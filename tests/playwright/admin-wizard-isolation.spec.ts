@@ -71,10 +71,72 @@ async function rendered(page: Page, testid: string): Promise<boolean> {
 test.describe('OSE-1237 admin launch wizard — owns the screen', () => {
   test.skip(!ADMIN_BEARER, 'needs OSE_ADMIN_BEARER; the blocking PR gate supplies a local one');
 
-  test('the path chooser is the entry view, and it offers both paths', async ({ page }) => {
+  // OSE-1240: the front door asks WHAT you came to make, not how you want to
+  // be walked through it. Two primary paths, plus the full dashboard as a
+  // quiet third option rather than a third question.
+  test('the front door offers Create Event and Create Sponsor, plus a way to the dashboard', async ({
+    page,
+  }) => {
     await openAdmin(page);
     await expect(page.locator('[data-testid="admin-path-wizard"]')).toBeVisible();
+    await expect(page.locator('[data-testid="admin-path-sponsor"]')).toBeVisible();
     await expect(page.locator('[data-testid="admin-path-advanced"]')).toBeVisible();
+  });
+
+  // The shape the owner described: side by side on a wide screen, stacked on a
+  // phone. Asserted as geometry, because "side by side" is a fact about
+  // rendered boxes and a CSS grid rule can be right while the result is not.
+  test('the two paths sit side by side on a wide screen', async ({ page }) => {
+    if (ADMIN_BEARER) await page.setExtraHTTPHeaders({ Authorization: `Bearer ${ADMIN_BEARER}` });
+    await page.setViewportSize({ width: 900, height: 900 });
+    await page.goto('/admin', { waitUntil: 'domcontentloaded' });
+    await page.waitForTimeout(1500);
+
+    const ev = await page.locator('[data-testid="admin-path-wizard"]').boundingBox();
+    const sp = await page.locator('[data-testid="admin-path-sponsor"]').boundingBox();
+    expect(ev && sp, 'both paths should render').toBeTruthy();
+    expect(Math.round(ev!.y), 'same row').toBe(Math.round(sp!.y));
+    expect(ev!.x, 'event on the left').toBeLessThan(sp!.x);
+    // Neither path is the small one: equal weight is the point of the choice.
+    expect(Math.abs(ev!.width - sp!.width)).toBeLessThanOrEqual(2);
+  });
+
+  test('the two paths stack on a phone, event first', async ({ page }) => {
+    await openAdmin(page); // 375x812
+    const ev = await page.locator('[data-testid="admin-path-wizard"]').boundingBox();
+    const sp = await page.locator('[data-testid="admin-path-sponsor"]').boundingBox();
+    expect(Math.round(ev!.x), 'same column').toBe(Math.round(sp!.x));
+    expect(ev!.y, 'event above sponsor on this surface — the reader is a host').toBeLessThan(sp!.y);
+  });
+
+  // Quiet is a visual weight, not a smaller tap target.
+  test('the dashboard link stays a 44px target despite being de-emphasised', async ({ page }) => {
+    await openAdmin(page);
+    const box = await page.locator('[data-testid="admin-path-advanced"]').boundingBox();
+    expect(Math.round(box!.height)).toBeGreaterThanOrEqual(44);
+  });
+
+  test('Create a sponsor lands on the sponsor form, open and focused', async ({ page }) => {
+    await openAdmin(page);
+    await page.click('[data-testid="admin-path-sponsor"]');
+    await page.waitForTimeout(900);
+
+    const state = await page.evaluate(() => ({
+      chooserHidden: document.getElementById('admin-path-chooser')!.hidden,
+      wizardHidden: document.getElementById('launch-wizard')!.hidden,
+      formOpen: !document.getElementById('spon-form-wrap')!.hasAttribute('hidden'),
+      focused: document.activeElement?.id,
+      cardRendered:
+        document.querySelector('[data-testid="sponsors-card"]')!.getBoundingClientRect().height > 0,
+    }));
+
+    expect(state.chooserHidden, 'doorway should clear').toBe(true);
+    expect(state.wizardHidden, 'the event wizard is not part of this path').toBe(true);
+    expect(state.formOpen, 'the sponsor form should be open, not just scrolled to').toBe(true);
+    expect(state.cardRendered).toBe(true);
+    // Landing someone on a form and making them hunt for the first field is
+    // the difference between a path and a signpost.
+    expect(state.focused, 'focus should be in the first field').toBe('spon-name');
   });
 
   test('choosing the wizard hides every advanced dashboard panel', async ({ page }) => {
