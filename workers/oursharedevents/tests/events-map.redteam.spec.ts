@@ -136,16 +136,30 @@ describe('RT-MAP-002 | the query cannot be narrowed below the corridor', () => {
 });
 
 describe('RT-MAP-003 | a request learns only about the corridor it named', () => {
-  test('the bound parameter is exactly the requested cell', async () => {
+  test('the bound parameters are exactly the requested brand and cell', async () => {
     const captured: unknown[][] = [];
     await call(`?cell=${CELL}`, [], captured);
-    expect(captured[0]).toEqual([CELL]);
+    // brand, cell, floor, horizon, limit — the cell appears once and no other
+    // corridor is reachable from this request.
+    expect(captured[0]?.[0]).toBe('root');
+    expect(captured[0]?.[1]).toBe(CELL);
+    expect(captured[0]!.filter((v) => typeof v === 'string' && v.length === CELL.length)).toEqual([
+      CELL,
+    ]);
+  });
+
+  test("a brand cannot be used to reach another brand's corridor rows", async () => {
+    // Brand and cell are independent binds; neither widens the other.
+    const captured: unknown[][] = [];
+    await call(`?cell=${CELL}&brand=bronzeville`, [], captured);
+    expect(captured[0]?.[0]).toBe('bronzeville');
+    expect(captured[0]?.[1]).toBe(CELL);
   });
 
   test('a second cell parameter does not widen the query', async () => {
     const captured: unknown[][] = [];
     await call(`?cell=${CELL}&cell=${OTHER_CELL}`, [], captured);
-    expect(captured[0]).toEqual([CELL]); // first wins; one cell is bound
+    expect(captured[0]?.[1]).toBe(CELL); // first wins; one cell is bound
     expect(captured[0]).not.toContain(OTHER_CELL);
   });
 

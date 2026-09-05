@@ -37,7 +37,7 @@
  */
 
 import { test, expect } from '@playwright/test';
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 
 const REPO_ROOT = join(__dirname, '..', '..', '..');
@@ -51,6 +51,40 @@ const EVENTS_HANDLER = join(
   'events.ts'
 );
 const ROUTER = join(REPO_ROOT, 'workers', 'oursharedevents', 'src', 'router.ts');
+const HANDLERS_DIR = join(REPO_ROOT, 'workers', 'oursharedevents', 'src', 'handlers');
+
+/**
+ * Multi-tenant tables. A SELECT against one of these from a handler must bind
+ * brand_id, whatever the handler is called.
+ */
+const TENANT_TABLES = ['events', 'sponsors', 'corridors', 'node_hierarchy'];
+
+/**
+ * Triaged exemptions. Every entry is a query that reads a multi-tenant table
+ * without a literal `brand_id = ?`, and a reason it is nonetheless correct.
+ * The gate fails on anything NOT in this list, so a new unscoped query is a
+ * failure rather than a silent addition — the same shape as the testid-drift
+ * baseline.
+ *
+ * Adding an entry is a decision. Write the reason for the next reader, not for
+ * the linter.
+ */
+const BRAND_SCOPE_EXEMPT: Record<string, string> = {
+  'events.ts:245':
+    'Admin list. Scoped by `brand_id IN (?, ?)` built dynamically from ' +
+    'resolveAdminBrandScopeAsync, so the literal `brand_id = ?` never appears.',
+  'portfolio-rollup.ts:148':
+    'Scoped by a dynamic `brandFilter` array assembled above the query; the ' +
+    'WHERE clause is interpolated, so the bind is invisible to a static scan.',
+  'bigquery.ts:72':
+    'OER emission cron. Cross-brand BY DESIGN — OER ingests every brand and ' +
+    'answers across them (VISION: products emit, OER ingests). Not reachable ' +
+    'from any request path.',
+  'sponsors.ts:671':
+    'Correlated sub-select keyed by `id = sponsor_placement.event_id` — a ' +
+    'join, not an enumeration. Keyed by a column rather than a bind, so the ' +
+    'id-key exemption does not match it.',
+};
 
 test.describe('Invariant 9: Tenant Isolation — structural code-shape lock', () => {
   test('OSE-INV9 | security | schema | migration 0001 defines brand_id TEXT NOT NULL on events', () => {
@@ -125,12 +159,76 @@ test.describe('Invariant 9: Tenant Isolation — structural code-shape lock', ()
     expect(existsSync(EVENTS_HANDLER), 'handlers/events.ts must exist').toBe(true);
     const src = readFileSync(EVENTS_HANDLER, 'utf8');
     // The canonical public list query scopes by both brand AND status.
-    // This is the primary cross-tenant isolation gate for public surfaces.
     expect(
       src,
       'handleListEvents must use WHERE brand_id = ? — ' +
         'the public list is the highest-traffic surface; without this filter every tenant sees every brand'
     ).toMatch(/WHERE\s+brand_id\s*=\s*\?\s+AND\s+status\s*=\s*'active'/i);
+  });
+
+  // ── OSE-1242 / CCR H2 ──────────────────────────────────────────────────────
+  //
+  // The assertion above names ONE function in ONE file. That is how
+  // `GET /api/v2/events/map` shipped as a public list query over `events` with
+  // no brand_id: it lives in handlers/events-map.ts, so the gate could not see
+  // it. The invariant says "public list queries", not "handleListEvents".
+  //
+  // This scans every handler instead. It is the property, not the subject, so a
+  // handler added next month is covered the day it is written rather than the
+  // day someone remembers to add it here.
+  test('OSE-INV9 | security | query | EVERY handler SELECT on a tenant table binds brand_id', () => {
+    const handlers = readdirSync(HANDLERS_DIR).filter((f) => f.endsWith('.ts'));
+    expect(handlers.length, 'handlers directory must not be empty').toBeGreaterThan(0);
+
+    const violations: string[] = [];
+
+    for (const file of handlers) {
+      const src = readFileSync(join(HANDLERS_DIR, file), 'utf8');
+
+      for (const table of TENANT_TABLES) {
+        const re = new RegExp('FROM\\s+' + table + '\\b', 'gi');
+        for (const m of src.matchAll(re)) {
+          // Read a bounded window after the FROM, the way a reviewer does.
+          // Matching to a delimiter does not work here: these statements are
+          // built from backtick literals, single-quoted strings AND string
+          // concatenation, so a non-greedy scan to the next backtick runs past
+          // the statement and swallows unrelated code. A window is approximate
+          // but it is approximate in a way that is easy to reason about.
+          const window = src.slice(m.index!, m.index! + 400);
+
+          // Skip comments. `DELETE FROM events` inside a prose block explaining
+          // a cascade is not a query, and a doc comment listing pipeline
+          // phases is not a query either — both were false positives on the
+          // first run of this gate.
+          const lineStart = src.lastIndexOf('\n', m.index!) + 1;
+          const linePrefix = src.slice(lineStart, m.index!);
+          if (/^\s*(\*|\/\/|\/\*)/.test(linePrefix)) continue;
+
+          // Keyed by a unique id is not enumeration — the risk this invariant
+          // addresses is reading a tenant's rows in bulk, not reading one row
+          // whose id the caller already holds. Accept a bind (`id = ?`) or a
+          // correlated column (`id = other.event_id`).
+          const keyedById = /\bid\s*=\s*(\?\d*|[A-Za-z_][\w.]*)/i.test(window);
+          const bindsBrand = /\bbrand_id\s*=\s*\?\d*/i.test(window);
+
+          if (!bindsBrand && !keyedById) {
+            const line = src.slice(0, m.index).split('\n').length;
+            const key = `${file}:${line}`;
+            if (BRAND_SCOPE_EXEMPT[key]) continue;
+            violations.push(`${key} — FROM ${table} with no brand_id and no id key`);
+          }
+        }
+      }
+    }
+
+    expect(
+      violations,
+      'Every handler SELECT that can enumerate a multi-tenant table must bind ' +
+        'brand_id. A corridor is a geography and white-label instances share ' +
+        'geographies by design, so an unscoped public query hands every ' +
+        "brand's rows to every other brand.\n" +
+        violations.join('\n')
+    ).toEqual([]);
   });
 
   test('OSE-INV9 | security | insert | CREATE event includes brand_id in column list', () => {

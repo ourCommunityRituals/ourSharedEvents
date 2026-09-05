@@ -39,7 +39,6 @@ import { CORRIDOR_RES } from '../lib/h3-tagging';
 import { enrichWithPhase } from '../lib/event-enrich.js';
 import {
   eventsInWindow,
-  isCorridorReady,
   CORRIDOR_WINDOW_DAYS,
   CORRIDOR_READY_MIN_EVENTS,
 } from '../lib/corridor-readiness.js';
@@ -54,6 +53,13 @@ export interface EventsMapEnv {
  * Parameter names that carry a position rather than a cell. Rejected outright.
  * Spelled out rather than pattern-matched so the list is auditable.
  */
+/**
+ * Hard cap on pins per request. A dense mature corridor must not hand an
+ * unbounded payload to a phone. If a corridor ever legitimately exceeds this,
+ * the answer is clustering on the surface, not a bigger number here.
+ */
+const MAX_MAP_EVENTS = 250;
+
 const COORDINATE_PARAMS = [
   'lat',
   'lon',
@@ -136,16 +142,39 @@ export async function handleEventsMap(request: Request, env: EventsMapEnv): Prom
   }
 
   try {
-    // Over-fetch by status only; the window and phase filtering happen in
-    // corridor-readiness so the gate and the map cannot diverge on what counts.
+    // BRAND SCOPING IS NOT OPTIONAL — Invariant #9. A corridor is a geography,
+    // and white-label instances share geographies BY DESIGN (that is the whole
+    // premise of OA, and of "Bronzeville's" and "Reckless Records'" instances
+    // in one city). Without this filter, each brand's map lists every other
+    // brand's events on an unauthenticated endpoint. Added by CCR H1 after the
+    // first cut shipped without it.
+    const brand = url.searchParams.get('brand') || 'root';
+
+    // Bounded in rows and in time.
+    //
+    // `status = 'active'` does not expire — an event stays active after it
+    // happens unless archived — so filtering on status alone returns every
+    // event that has EVER been in this corridor, growing forever, and hands an
+    // unbounded payload to a phone on cellular. The date floor is deliberately
+    // loose (a week back, not `now`) because the past edge is decided by
+    // `phase` downstream: a multi-day event that started days ago is still
+    // live, and a hard `start_date >= now` here would drop it from the map
+    // while it is happening. The floor exists to bound the scan, not to decide
+    // the window — corridor-readiness still owns that, so the gate and the map
+    // cannot diverge on what counts.
+    const floorIso = new Date(Date.now() - 7 * 86_400_000).toISOString();
+    const horizonIso = new Date(Date.now() + CORRIDOR_WINDOW_DAYS * 86_400_000).toISOString();
+
     const { results } = await env.DB.prepare(
       `SELECT id, title, slug, status, location, start_date, end_date, timezone,
               lat, lon, h3_res7
          FROM events
-        WHERE h3_res7 = ? AND status = 'active'
-        ORDER BY start_date ASC`
+        WHERE brand_id = ? AND h3_res7 = ? AND status = 'active'
+          AND start_date >= ? AND start_date <= ?
+        ORDER BY start_date ASC
+        LIMIT ?`
     )
-      .bind(cell)
+      .bind(brand, cell, floorIso, horizonIso, MAX_MAP_EVENTS)
       .all<Record<string, unknown>>();
 
     const enriched = (results ?? []).map(enrichWithPhase);
@@ -166,9 +195,26 @@ export async function handleEventsMap(request: Request, env: EventsMapEnv): Prom
         ok: true,
         status: 200,
         cell,
-        // The front-door verdict, computed from the SAME list that was just
-        // returned — the caller cannot be told "ready" alongside an empty map.
-        ready: isCorridorReady(inWindow),
+        brand,
+        // NO `ready` FIELD — deliberately, CCR H4 / Loop 2.1.
+        //
+        // The readiness verdict is computable here (`isCorridorReady(inWindow)`,
+        // and it would be honest: computed from the same list returned, so it
+        // could never claim ready beside an empty map). It is withheld because
+        // §6.2b requires readiness to LATCH — once cleared, stays cleared — and
+        // the latch is persistent state that does not exist yet.
+        //
+        // Shipping the field now would publish flapping semantics: a corridor
+        // at 5 events drops to 4 when one wraps, and a reader's front door
+        // reorders between visits. A field in a public response is a contract
+        // from its first deploy, not from its first intended use, so adding the
+        // latch later would be a behaviour change for anyone already reading
+        // it. Cheaper to add the field once the semantics are settled than to
+        // change it under a consumer.
+        //
+        // The window and threshold ARE published: a client can apply the rule
+        // itself against `items` if it wants an unlatched answer, and doing so
+        // is then visibly its own choice rather than our contract.
         windowDays: CORRIDOR_WINDOW_DAYS,
         minEvents: CORRIDOR_READY_MIN_EVENTS,
         items,

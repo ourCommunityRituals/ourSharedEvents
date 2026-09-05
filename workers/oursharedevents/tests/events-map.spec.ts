@@ -191,10 +191,39 @@ describe('SEC | the response carries no identity and no attendee data', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('the map shows only what a reader can still act on', () => {
-  test('the query is scoped to the requested cell', async () => {
+  test('the query is scoped to brand AND cell — Invariant #9', () => {
+    // CCR H1: the first cut bound only the cell. A corridor is a geography and
+    // white-label instances share geographies by design, so a brand-less
+    // public list query hands every brand's events to every other brand's map.
     const captured: unknown[][] = [];
-    await handleEventsMap(req(`?cell=${CORRIDOR_CELL}`), db([row(1, 'a')], captured));
-    expect(captured[0]).toEqual([CORRIDOR_CELL]);
+    return handleEventsMap(req(`?cell=${CORRIDOR_CELL}`), db([row(1, 'a')], captured)).then(() => {
+      expect(captured[0]?.[0], 'brand must be the first bound parameter').toBe('root');
+      expect(captured[0]).toContain(CORRIDOR_CELL);
+    });
+  });
+
+  test('an explicit brand is honoured and echoed back', async () => {
+    const captured: unknown[][] = [];
+    const res = await handleEventsMap(
+      req(`?cell=${CORRIDOR_CELL}&brand=bronzeville`),
+      db([row(1, 'a')], captured)
+    );
+    expect(captured[0]?.[0]).toBe('bronzeville');
+    expect((await json(res)).brand).toBe('bronzeville');
+  });
+
+  test('the query is bounded in rows and in time', async () => {
+    const captured: unknown[][] = [];
+    await handleEventsMap(req(`?cell=${CORRIDOR_CELL}`), db([], captured));
+    const bound = captured[0]!;
+    // brand, cell, floor, horizon, limit
+    expect(bound.length).toBe(5);
+    expect(typeof bound[4]).toBe('number');
+    expect(bound[4] as number).toBeGreaterThan(0);
+    // The floor is BEHIND now, so a live multi-day event that started days ago
+    // is still fetched; the phase filter decides the past edge, not this.
+    expect(new Date(bound[2] as string).getTime()).toBeLessThan(Date.now());
+    expect(new Date(bound[3] as string).getTime()).toBeGreaterThan(Date.now());
   });
 
   test('an event beyond the horizon is not pinned', async () => {
@@ -227,39 +256,22 @@ describe('the map shows only what a reader can still act on', () => {
   });
 });
 
-describe('the readiness verdict cannot contradict the map beside it', () => {
-  test('ready is false below the threshold', async () => {
-    const rows = Array.from({ length: CORRIDOR_READY_MIN_EVENTS - 1 }, (_, i) =>
+describe('readiness is deliberately NOT published yet', () => {
+  // CCR H4 / Loop 2.1. The verdict is computable here and would be honest —
+  // computed from the same list returned, so it could never claim ready beside
+  // an empty map. It is withheld because §6.2b requires readiness to LATCH and
+  // the latch does not exist. A field in a public response is a contract from
+  // its first deploy, so publishing flapping semantics now would make adding
+  // the latch a breaking change for whoever already reads it.
+  test('the response carries no `ready` field', async () => {
+    const rows = Array.from({ length: CORRIDOR_READY_MIN_EVENTS + 3 }, (_, i) =>
       row(i + 1, `e${i}`)
     );
     const body = await json(await handleEventsMap(req(`?cell=${CORRIDOR_CELL}`), db(rows)));
-    expect(body.ready).toBe(false);
-    expect((body.items as unknown[]).length).toBe(CORRIDOR_READY_MIN_EVENTS - 1);
+    expect(body).not.toHaveProperty('ready');
   });
 
-  test('ready is true at the threshold', async () => {
-    const rows = Array.from({ length: CORRIDOR_READY_MIN_EVENTS }, (_, i) => row(i + 1, `e${i}`));
-    expect((await json(await handleEventsMap(req(`?cell=${CORRIDOR_CELL}`), db(rows)))).ready).toBe(
-      true
-    );
-  });
-
-  test('ready can never be true alongside an empty map — the invariant', async () => {
-    // Rows that all fall outside the window. A gate reading a different window
-    // than the list would say ready here; that is the failure the instrument
-    // was chosen to make impossible.
-    const outside = Array.from({ length: 20 }, (_, i) =>
-      row(CORRIDOR_WINDOW_DAYS + i + 1, `f${i}`)
-    );
-    const past = Array.from({ length: 20 }, (_, i) => row(-(i + 1), `p${i}`));
-    for (const rows of [outside, past, [...outside, ...past]]) {
-      const body = await json(await handleEventsMap(req(`?cell=${CORRIDOR_CELL}`), db(rows)));
-      expect(body.ready).toBe(false);
-      expect((body.items as unknown[]).length).toBe(0);
-    }
-  });
-
-  test('the response states the window and threshold it used', async () => {
+  test('the rule is published instead, so a client applies it visibly itself', async () => {
     const body = await json(await handleEventsMap(req(`?cell=${CORRIDOR_CELL}`), db([])));
     expect(body.windowDays).toBe(CORRIDOR_WINDOW_DAYS);
     expect(body.minEvents).toBe(CORRIDOR_READY_MIN_EVENTS);
@@ -297,7 +309,6 @@ describe('failure modes', () => {
     const body = await json(res);
     expect(body.ok).toBe(true);
     expect(body.items).toEqual([]);
-    expect(body.ready).toBe(false);
   });
 });
 

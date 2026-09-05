@@ -1255,13 +1255,19 @@ export async function handlePublicEventPage(
     let nextEvents: NextEventRow[] = [];
     try {
       if (row.location) {
+        // OSE-1242 / CCR H1: brand-scoped. This is a PUBLIC surface listing
+        // other events at the same venue, and it had no brand filter — so a
+        // venue hosting two white-label instances would advertise each brand's
+        // events on the other's recap page. Invariant #9 applies to every
+        // public list, not only the one at /events. Found by the rewritten
+        // OSE-INV9 gate, which scans handlers instead of naming one.
         const rs = await env.DB.prepare(
           `SELECT id, title, start_date, location FROM events
-           WHERE status = 'active' AND location = ?1 AND id != ?2
+           WHERE brand_id = ?1 AND status = 'active' AND location = ?2 AND id != ?3
              AND start_date IS NOT NULL AND datetime(start_date) > datetime('now')
-           ORDER BY datetime(start_date) ASC LIMIT ?3`
+           ORDER BY datetime(start_date) ASC LIMIT ?4`
         )
-          .bind(row.location, row.id, MAX_POST_EVENT_SUGGESTIONS)
+          .bind(row.brand_id, row.location, row.id, MAX_POST_EVENT_SUGGESTIONS)
           .all<NextEventRow>();
         nextEvents = rs.results ?? [];
       }

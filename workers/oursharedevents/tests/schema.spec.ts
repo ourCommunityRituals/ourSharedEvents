@@ -294,7 +294,7 @@ describe('Gate 4: scan_aggregates write protection', () => {
 // ── Gate 5: Index verification ───────────────────────────────────────────────
 
 describe('Gate 5: Index verification', () => {
-  test('all 57 custom indexes exist', async () => {
+  test('all 58 custom indexes exist', async () => {
     // 35 (pre-OSE-272) + 4 (OSE-272 Session 2: idx_anon_id_returns_venue_visit,
     // idx_event_series_venue_state, idx_event_series_venue_dow_hour,
     // idx_events_series_start) + 1 (idx_sponsors_is_local, OSE-330 Phase 2
@@ -306,6 +306,7 @@ describe('Gate 5: Index verification', () => {
     // + 1 (idx_sponsor_impressions_h3_res7 — migration 0048, OSE-635) = 55
     // + 1 (idx_admin_brand_memberships_email — migration 0050, OSE-666/B2) = 56.
     // + 1 (idx_events_data_class — migration 0052, OSE-606/608) = 57.
+    // + 1 (idx_events_brand_h3res7_status_start — migration 0069, OSE-1242) = 58.
     // + 3 (idx_sponsor_business_draft_brand/_event/_status — migration 0053, OSE-724) = 60.
     // + 1 (idx_sponsor_asset_draft_token — migration 0054, OSE-725) = 61.
     // + 2 (idx_template_event_types_template/_uec — migration 0056, OSE-727) = 63.
@@ -324,7 +325,7 @@ describe('Gate 5: Index verification', () => {
     ).all();
 
     const names = indexes.results.map((r: Record<string, unknown>) => r.name);
-    expect(names.length).toBe(67); // 0068 adds idx_sponsor_business_active
+    expect(names.length).toBe(68); // 0069 adds idx_events_brand_h3res7_status_start (OSE-1242)
     EXPECTED_INDEXES.forEach((idx) => expect(names).toContain(idx));
   });
 });

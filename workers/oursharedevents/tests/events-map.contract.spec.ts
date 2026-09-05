@@ -53,7 +53,6 @@ async function mapBody(rows: Record<string, unknown>[]) {
   );
   return (await res.json()) as {
     ok: boolean;
-    ready: boolean;
     items: Record<string, unknown>[];
     windowDays: number;
     minEvents: number;
@@ -61,45 +60,34 @@ async function mapBody(rows: Record<string, unknown>[]) {
 }
 
 describe('CONTRACT | map ↔ readiness gate', () => {
-  test('the endpoint reports the same window and threshold the library holds', async () => {
+  test('the endpoint publishes the same window and threshold the library holds', async () => {
     const body = await mapBody([]);
     expect(body.windowDays).toBe(CORRIDOR_WINDOW_DAYS);
     expect(body.minEvents).toBe(CORRIDOR_READY_MIN_EVENTS);
   });
 
-  test('ready always equals the gate applied to the items returned', async () => {
-    // The property, not a sample: whatever the endpoint returns, its verdict
-    // must be the verdict the library would give for exactly that list.
-    const corpora = [
-      [],
-      [row(1, 'a')],
-      Array.from({ length: 4 }, (_, i) => row(i + 1, `a${i}`)),
-      Array.from({ length: 5 }, (_, i) => row(i + 1, `b${i}`)),
-      Array.from({ length: 9 }, (_, i) => row(i + 1, `c${i}`)),
-      [
-        ...Array.from({ length: 8 }, (_, i) => row(CORRIDOR_WINDOW_DAYS + i + 1, `d${i}`)),
-        row(2, 'in'),
-      ],
-      [...Array.from({ length: 8 }, (_, i) => row(-(i + 1), `e${i}`)), row(2, 'in')],
-    ];
-    for (const rows of corpora) {
-      const body = await mapBody(rows);
-      expect(body.ready).toBe(body.items.length >= CORRIDOR_READY_MIN_EVENTS);
-    }
+  test('the endpoint does not publish a verdict — only the rule (CCR H4)', async () => {
+    // `ready` was cut until the latch exists. The contract that remains is
+    // that the endpoint publishes the RULE, so a client applying it to `items`
+    // gets the same answer the library would — which is what makes the field's
+    // later addition a pure addition rather than a change.
+    const rows = Array.from({ length: CORRIDOR_READY_MIN_EVENTS + 2 }, (_, i) =>
+      row(i + 1, `r${i}`)
+    );
+    const body = await mapBody(rows);
+    expect(body).not.toHaveProperty('ready');
+    const clientVerdict = body.items.length >= body.minEvents;
+    expect(clientVerdict).toBe(body.items.length >= CORRIDOR_READY_MIN_EVENTS);
   });
 
-  test('the items are exactly the events the gate would have counted', async () => {
-    const rows = [row(1, 'a'), row(CORRIDOR_WINDOW_DAYS + 3, 'far'), row(-4, 'past'), row(20, 'b')];
+  test('items are never more than the window would admit', async () => {
+    const rows = [
+      row(1, 'a'),
+      row(CORRIDOR_WINDOW_DAYS + 3, 'far'),
+      row(-40, 'past'),
+      row(20, 'b'),
+    ];
     const body = await mapBody(rows);
-    // Independently apply the library to the same enriched input shape.
-    const expected = eventsInWindow(
-      rows.map((r) => ({ startDateISO: r.start_date, phase: undefined })) as never
-    );
-    // Phase is undefined above, so the library filters everything — which is
-    // the point: the endpoint must be enriching before it filters. If it were
-    // not, items would be empty too.
-    expect(expected).toEqual([]);
-    expect(body.items.length).toBeGreaterThan(0);
     expect(body.items.map((i) => i.id).sort()).toEqual(['a', 'b']);
   });
 });
