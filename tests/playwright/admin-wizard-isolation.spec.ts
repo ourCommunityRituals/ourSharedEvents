@@ -96,17 +96,19 @@ test.describe('OSE-1237 admin launch wizard — owns the screen', () => {
     const sp = await page.locator('[data-testid="admin-path-sponsor"]').boundingBox();
     expect(ev && sp, 'both paths should render').toBeTruthy();
     expect(Math.round(ev!.y), 'same row').toBe(Math.round(sp!.y));
-    expect(ev!.x, 'event on the left').toBeLessThan(sp!.x);
+    // Sponsor first (owner decision 2026-09-05) — the same order the public
+    // front door uses, so the two surfaces do not rank the choice differently.
+    expect(sp!.x, 'sponsor on the left').toBeLessThan(ev!.x);
     // Neither path is the small one: equal weight is the point of the choice.
     expect(Math.abs(ev!.width - sp!.width)).toBeLessThanOrEqual(2);
   });
 
-  test('the two paths stack on a phone, event first', async ({ page }) => {
+  test('the two paths stack on a phone, sponsor first', async ({ page }) => {
     await openAdmin(page); // 375x812
     const ev = await page.locator('[data-testid="admin-path-wizard"]').boundingBox();
     const sp = await page.locator('[data-testid="admin-path-sponsor"]').boundingBox();
     expect(Math.round(ev!.x), 'same column').toBe(Math.round(sp!.x));
-    expect(ev!.y, 'event above sponsor on this surface — the reader is a host').toBeLessThan(sp!.y);
+    expect(sp!.y, 'sponsor on top — "we always want the sponsors to sign up"').toBeLessThan(ev!.y);
   });
 
   // Quiet is a visual weight, not a smaller tap target.
