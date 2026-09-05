@@ -148,7 +148,7 @@ Every story is implemented from all six POVs simultaneously. CC reads all six an
 
 - Mobile-first form UX, Kaizen, uniform design, color palette
 - Dedication to test-ids and automation-friendly selectors
-- **Current state**: 34 design tokens defined (85% color adoption). Touch targets 44px+. A11Y foundation done. Gaps: **17** admin inline styles and **9** `max-width` breakpoints across all 7 templates (both drained since the 2026-08 figures of 345/58 — measured 2026-09-04); test-ID coverage 3-80% by surface (forms best at 80%, poster worst at 3%).
+- **Current state**: 34 design tokens defined (85% color adoption). **Touch targets 44px+ and input font-size 16px+ are now MEASURED and gated**, not asserted — the mobile-workability audit blocks on PR code across all 11 surfaces (OSE-1236, 2026-09-05). Getting there closed real violations this line had been claiming were absent: `@ocr/ui`'s `.input` was 41px at 13.6px (every form partial inherited it) and `admin.html`'s create form was 34px at 14.4px, with its two textareas on the UA default of 13.3px. They were unmeasurable because `/admin` was skipped on every run (OSE-302's bearer, unset since May) and the component showcase rendered nothing (a class collision with `@ocr/ui`'s file-upload family). `@ocr/ui` has **15** partials; `footer()` is adopted on 5 surfaces (OSE-1232), the rest are not. A11Y foundation done. Gaps: **17** admin inline styles and **9** `max-width` breakpoints across all 7 templates (both drained since the 2026-08 figures of 345/58 — measured 2026-09-04); test-ID coverage 3-80% by surface (forms best at 80%, poster worst at 3%).
 
 ### Sr Automation QA
 
@@ -158,7 +158,7 @@ Every story is implemented from all six POVs simultaneously. CC reads all six an
 ### SRE/SDET (Performance + Observability)
 
 - CI/CD gates, observability, form submission monitoring, destruction job monitoring
-- **Current state**: 8 CI gates working (typecheck, schema verify, migration apply, table verify, health check, API smoke, UI smoke, prod isolation). Structured logging in place (FORM_EVENT, FLAG_EVENT, LIFECYCLE). k6 scripts exist (5 scenarios). Gaps: zero dashboards, zero alerting, load tests not wired to CI, no performance baselines measured.
+- **Current state**: **9** CI gates working (typecheck, schema verify, migration apply, table verify, health check, API smoke, UI smoke, prod isolation, **mobile workability**). Mobile workability became the 9th on 2026-09-05 (OSE-1236): it now runs against **PR code** on a local worker and **blocks** — previously it audited deployed staging and was `continue-on-error`, so its verdict was uncorrelated with the diff under review, while the nightly failed every night since 2026-09-01 because three of four Playwright projects are WebKit and only chromium was installed. Structured logging in place (FORM_EVENT, FLAG_EVENT, LIFECYCLE). k6 scripts exist (5 scenarios). Gaps: zero dashboards, zero alerting, load tests not wired to CI, no performance baselines measured.
 
 ### DevOps
 

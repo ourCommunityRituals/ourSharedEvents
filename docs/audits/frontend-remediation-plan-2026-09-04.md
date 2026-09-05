@@ -2,7 +2,7 @@
 
 **Date:** 2026-09-04 · **Basis:** UX laws audit (pass 1) + synthesis (pass 2), measured against the code
 **Scope:** integration, rendering, performance, long-term maintenance
-**Execution log:** §7 (steps 1–3 landed 2026-09-05)
+**Execution log:** §7 (steps 1–4 landed 2026-09-05)
 
 ---
 
@@ -205,15 +205,23 @@ Per pass 2, the Director of Security's veto stands: no `localStorage`, no Indexe
 
 Pass 1's grade distribution had **zero A grades**, and both A− grades were withheld for the same reason: _correct in code, no gate against regression_. Front-end specifics:
 
-| Rule                     | Stated in                                 | Enforced?                                                              |
-| ------------------------ | ----------------------------------------- | ---------------------------------------------------------------------- |
-| 10-second comprehension  | `QR-ROUTING.md`                           | ❌ nothing measures it                                                 |
-| 480px max width          | `QR-ROUTING.md`                           | ❌                                                                     |
-| 44px touch targets       | mobile-workability Contract 2             | ⚠️ **informational**, and targets deployed staging rather than PR code |
-| ≤7 UEC codes per surface | `UEC-CODES.md`                            | ❌                                                                     |
-| Grayscale label fallback | `UEC-CODES.md` deployment checklist `[x]` | ❌ claimed, never asserted                                             |
+| Rule                     | Stated in                                 | Enforced?                                                                                               |
+| ------------------------ | ----------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| 10-second comprehension  | `QR-ROUTING.md`                           | ❌ nothing measures it                                                                                  |
+| 480px max width          | `QR-ROUTING.md`                           | ❌                                                                                                      |
+| 44px touch targets       | mobile-workability Contract 2             | ✅ **blocking on PR code** since 2026-09-05 (step 4) — was informational, and targeted deployed staging |
+| ≤7 UEC codes per surface | `UEC-CODES.md`                            | ❌                                                                                                      |
+| Grayscale label fallback | `UEC-CODES.md` deployment checklist `[x]` | ❌ claimed, never asserted                                                                              |
 
 **The single highest-leverage maintenance change is making the mobile-workability audit run against PR code and block.** That is pass 2's package 2a/2b and it protects five other laws from regressing.
+
+> **Done 2026-09-05 — and it paid for itself on the first run.** See §7, step 4.
+> The claim above was the right call for the wrong reason: the audit did not
+> merely _fail to block_, it was auditing the wrong artifact entirely. Pointed
+> at PR code it immediately found violations in `admin.html` and in `@ocr/ui`'s
+> own form controls — including a class collision that had been rendering the
+> component showcase invisible, and therefore unmeasurable, for as long as it
+> existed.
 
 ### 5.3 Keep the brain honest
 
@@ -230,17 +238,17 @@ Cheap to compute, and it would have prevented the §0 error.
 
 ## 6. Next steps, in order
 
-| #     | Step                                                                                                     | Size  | Blocked by                 | Moves                                                      |
-| ----- | -------------------------------------------------------------------------------------------------------- | ----- | -------------------------- | ---------------------------------------------------------- |
-| **1** | Correct `CLAUDE.md` §3 front-end current-state                                                           | **S** | —                          | Nothing ships, but it stops misdirecting effort            |
-| **2** | ~~Delete `web/` and `src/frontend/`~~ → **confirm and retire `src/frontend/apiClient/` only** (OSE-1235) | **S** | —                          | Retracted and rewritten — see §2.3. `web/` is load-bearing |
-| **3** | ~~Add `footer()` to `@ocr/ui`; adopt on 5 surfaces against `/privacy`~~ ✅ **DONE 2026-09-05**           | **S** | —                          | Laws 4, 10, 14 · OSE-1232                                  |
-| **4** | Mobile-workability audit → PR code, then blocking                                                        | **M** | OSE-1211 for full coverage | Laws 2, 8, 14 — **protects everything else**               |
-| **5** | Server-render `/events`                                                                                  | **M** | —                          | Law 6 on the discovery surface                             |
-| **6** | Wire `checkAll()` into the T0 invariants shard                                                           | **S** | —                          | Maintenance floor                                          |
-| **7** | Measure the bundle's cold-start cost, then split admin                                                   | **M** | step 7a is measurement     | Law 6                                                      |
-| **8** | Adopt `emptyState()` and `header()`                                                                      | **M** | step 3 proves the pattern  | Laws 10, 12 · OSE-1233                                     |
-| **9** | Consolidate `<style>` blocks into `/ui.css`, template by template                                        | **L** | steps 3 and 8              | Law 13 · the ΔE drift surface                              |
+| #     | Step                                                                                                     | Size  | Blocked by                | Moves                                                      |
+| ----- | -------------------------------------------------------------------------------------------------------- | ----- | ------------------------- | ---------------------------------------------------------- |
+| **1** | Correct `CLAUDE.md` §3 front-end current-state                                                           | **S** | —                         | Nothing ships, but it stops misdirecting effort            |
+| **2** | ~~Delete `web/` and `src/frontend/`~~ → **confirm and retire `src/frontend/apiClient/` only** (OSE-1235) | **S** | —                         | Retracted and rewritten — see §2.3. `web/` is load-bearing |
+| **3** | ~~Add `footer()` to `@ocr/ui`; adopt on 5 surfaces against `/privacy`~~ ✅ **DONE 2026-09-05**           | **S** | —                         | Laws 4, 10, 14 · OSE-1232                                  |
+| **4** | ~~Mobile-workability audit → PR code, then blocking~~ ✅ **DONE 2026-09-05**                             | **M** | —                         | Laws 2, 8, 14 — **protects everything else**               |
+| **5** | Server-render `/events`                                                                                  | **M** | —                         | Law 6 on the discovery surface                             |
+| **6** | Wire `checkAll()` into the T0 invariants shard                                                           | **S** | —                         | Maintenance floor                                          |
+| **7** | Measure the bundle's cold-start cost, then split admin                                                   | **M** | step 7a is measurement    | Law 6                                                      |
+| **8** | Adopt `emptyState()` and `header()`                                                                      | **M** | step 3 proves the pattern | Laws 10, 12 · OSE-1233                                     |
+| **9** | Consolidate `<style>` blocks into `/ui.css`, template by template                                        | **L** | steps 3 and 8             | Law 13 · the ΔE drift surface                              |
 
 **Steps 1–3 and 6 are all S-sized, block nothing, and need no sign-off beyond the front-end engineer.** They can land this week.
 
@@ -355,3 +363,145 @@ legal blocks." Three were footers and are now one. The fourth is the **~7 lines
 of GDPR prose beneath the survey's Submit button** (UX audit laws 4 and 10) —
 that is form-body copy in `form-pages.ts`, not a footer, and it is a separate
 fix. Naming it here so the ✅ above is not read as covering it.
+
+### Step 4 — Mobile-workability audit against PR code, blocking · ✅ 2026-09-05
+
+**What was actually broken — not what §5.2 said.** §5.2 called the audit
+"informational, and targets deployed staging rather than PR code," which reads
+as two settings to flip. It was one defect with a cause neither line names:
+
+```ts
+// tests/playwright/mobile-workability.spec.ts, before
+const BASE_URL = process.env.STAGING_URL || 'https://stg.oursharedevents.com';
+await page.goto(`${BASE_URL}${surface.path}`);
+```
+
+The spec built **absolute** URLs, so it ignored Playwright's `baseURL` and could
+not be pointed anywhere — the exact trap `playwright.component.config.ts`
+documents in its own header (_"navigates to the absolute URL
+`http://poster.test/poster`, so it ignores baseURL entirely and would NOT follow
+this config"_). No new config would have redirected it. **Navigation is relative
+now; the config decides the target.** That one-line change is what made the rest
+possible.
+
+**Two jobs, two questions.** They are different questions and both are worth
+asking; only one can gate a PR.
+
+| Job               | Target                                   | Browsers                | Blocks  |
+| ----------------- | ---------------------------------------- | ----------------------- | ------- |
+| `pr-code`         | local `wrangler dev` worker, this branch | Chromium                | **yes** |
+| `nightly-staging` | `STAGING_URL`                            | Chromium **and WebKit** | yes     |
+
+**The nightly was red every night, for a non-reason.** Runs 187, 188, 189 and
+192 — every `schedule` event since 2026-09-01 — failed on:
+
+```
+browserType.launch: Executable doesn't exist at .../webkit-2336/pw_run.sh
+```
+
+Three of `playwright.config.ts`'s four projects are WebKit device descriptors
+and the workflow installed `chromium` only. **A gate that is always red teaches
+people to ignore it exactly as fast as one that is always green**, and this repo
+had one of each: a PR check that could not fail and a nightly that could not
+pass.
+
+**The trigger paths could not see the files that break this.** The old `paths:`
+list named two handlers and the spec. Every violation found below lives in
+`src/templates/admin.html` or `packages/ui/src/styles.ts` — neither was listed.
+Widened to templates, handlers, and `packages/ui/src/**`.
+
+#### What the gate found the moment it looked at the right artifact
+
+**1. The component showcase rendered an `<h1>` and nothing else.**
+`@ocr/ui` hides `.preview-section` as part of its **file-upload** family — a CSV
+import preview revealed by adding `.visible`. The showcase reused that class
+name for "component preview section" and never adds `.visible`. 40KB of markup,
+every section `display:none`. The showcase is the newcomer, so the showcase
+renamed to `.ui-preview-section`.
+
+**2. That collision had been hiding real violations in the design system.**
+Nothing can measure a page that renders nothing:
+
+|                      | Was                   | Now                |
+| -------------------- | --------------------- | ------------------ |
+| `.input` font-size   | `.85rem` → **13.6px** | `16px`             |
+| `.input` height      | 41px                  | `min-height: 44px` |
+| `.search-bar` height | 40px                  | `min-height: 44px` |
+
+Below 16px, iOS Safari auto-zooms on focus **and does not zoom back out** — the
+person is left on a zoomed, horizontally-scrolling form mid-entry. Every form
+partial renders `.input`, so one rule was the library's entire form contract,
+and every partial inherited 13.6px.
+
+**3. `/admin` had never been audited. On any run. Ever.** Its skip is
+conditioned on `OSE_ADMIN_BEARER`, unset since May (OSE-302). The blocking job
+hands a local key to a local worker — `wrangler dev --local` with an empty D1,
+so this grants access nowhere — and the largest surface in the bundle
+(`admin.html`, 162.7KB, **55% of all template bytes**) rendered for the first
+time:
+
+| Control                       | Was                                              | Fix        |
+| ----------------------------- | ------------------------------------------------ | ---------- |
+| `.create-form input`/`select` | 34px, 14.4px                                     | 44px, 16px |
+| `.create-form textarea`       | **no font-size rule at all** → 13.3px UA default | 44px, 16px |
+| `.create-btn`                 | 35px                                             | 44px       |
+| `.add-spon-btn`               | 43px                                             | 44px       |
+| `.surface-card a`             | 72×15                                            | 44px tall  |
+| `.copy-btn`                   | 73×22                                            | 44px tall  |
+
+The textarea row is the one worth pausing on: **the smallest text on the surface
+was on its two longest fields** (`who-story`, `why-purpose`), because nobody had
+written a rule and the UA default won.
+
+> Getting `/admin` to render took two vars, not one. `ALLOW_ADMIN_KEY_FALLBACK`
+> lives under `[env.staging.vars]` in `wrangler.toml`, not top-level `[vars]`, so
+> `wrangler dev` with no `--env` leaves the Bearer path switched off entirely and
+> `/admin` answers 401 whatever key you send.
+
+#### Three defects in the audit itself, exposed by the same run
+
+- **Selector priority was inverted, on every surface.**
+  `page.locator('a, b').first()` returns the first match in **document order**,
+  not the first list entry that matches. Every surface declares its selector as
+  a priority list — "the real CTA, then progressively looser fallbacks" — and
+  that intent was silently reversed. On `/admin` the entry chooser sits _after_
+  the create wizard in the DOM, so `.first()` always resolved to a `[hidden]`
+  element and the contract failed no matter which CTA was named first.
+  Resolution is entry-by-entry now, preferring a rendered candidate.
+
+- **WCAG 2.5.5 sizes the _target_, not the painted control.** A 18×18 checkbox
+  inside a ≥44px `<label>` has a 44px target: tapping the row toggles it. That
+  is how every design system ships a checkbox, and `@ocr/ui`'s
+  `.checkbox-label` already carries `min-height:44px`. The audit reported four
+  already-compliant controls, and **the only way to satisfy it would have been
+  to paint a 44px checkbox — worse for everyone.** Added as a narrow exemption,
+  conditional on the label actually meeting the floor, in the same shape as the
+  existing inline-text one.
+
+- **`/admin`'s CTA selector named a button that the entry view deliberately does
+  not render.** `create-submit` lives on step 5 of the create wizard —
+  progressive disclosure working correctly — so the above-the-fold contract
+  could only ever fail. Measured at 375×812, the only things above the fold on
+  entry are the path chooser's two buttons (`admin-path-wizard` 300×72 at
+  y=223, `admin-path-advanced` 300×87 at y=307). That is the entry CTA.
+
+#### Verification
+
+**55/55 passing, zero skips, all 11 surfaces, ~48s** against this branch's code.
+Full worker suite **3134/3134** (219 files), root **1853**, `@ocr/ui` **90**,
+`gen-testids --check` clean, `tsc` clean, lint 0 errors.
+
+The regression guard in `tests/unit/post-ocr-42-refinement-state.test.ts` caught
+a real thing on the way through: a long comment I added pushed `/admin`'s
+`skipReason` declaration outside the 400-character window the guard checks. The
+guard was right and the comment moved — **a guard is not loosened to accommodate
+prose.**
+
+#### What step 4 does NOT cover
+
+The blocking job runs **Chromium only**. Engine-specific layout bugs are real,
+which is why the nightly keeps all four projects; but the spec forces 375×812 on
+every surface, so the viewport — the thing invariant 14 is actually about — is
+identical across projects, and quadrupling the cost of a gate that runs on every
+push does not pay for itself. If a WebKit-only regression ever reaches
+production, that trade is the thing to revisit.
