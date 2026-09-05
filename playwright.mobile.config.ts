@@ -94,7 +94,11 @@ process.env.OSE_ADMIN_BEARER = LOCAL_ADMIN_KEY;
 
 export default defineConfig({
   testDir: './tests/playwright',
-  testMatch: /mobile-workability\.spec\.ts/,
+  // Explicit list, not a directory sweep. tests/playwright/ holds specs written
+  // against deployed staging; one that reads seeded rows would go green here
+  // against an empty local D1 while no longer testing what it was written for.
+  // A spec joins this gate only by being named.
+  testMatch: /(mobile-workability|admin-wizard-isolation)\.spec\.ts/,
 
   fullyParallel: false,
   forbidOnly: !!process.env.CI,

@@ -1343,6 +1343,49 @@
          docs/plans/FE-DEV-PREP-2026-08-29.md. Styles adapted from the archived
          prototype (archive/experimental-frontends/AdminWizard.html), re-themed
          to today's admin palette. Inline-style cleanup + tokens = Phase C. */
+      /* While the launch wizard is open, the dashboard behind it is HIDDEN.
+         Reported from a phone, 2026-09-05: choosing the guided path showed the
+         wizard, but the advanced admin screen kept rendering underneath it —
+         so scrolling past the wizard landed the operator in a SECOND create
+         form, on a 4942px page. Measured: the advanced create card sat at
+         y=640 with the wizard open.
+
+         The chooser asks the operator to pick a path; showing both paths
+         afterwards makes the question pointless and the answer ambiguous.
+
+         Hide-all-then-exempt, rather than naming the panels to hide: any panel
+         added to #main-content later is hidden by default while the wizard is
+         open, which is the safe direction to fail. #admin-status is exempt
+         because it is the aria-live region that announces errors — hiding it
+         would silence the wizard's own messages to a screen reader. Script
+         children render nothing either way.
+
+         (Do not write a literal script tag in this comment: the inline-JS
+         validity gate, tests/unit/rendered-surface-integrity.test.js, finds
+         the opening tag by regex and starts parsing CSS prose as JavaScript.
+         It caught exactly that here.) */
+      body.wizard-active #main-content > *:not(#launch-wizard):not(#admin-status) {
+        display: none;
+      }
+
+      /* …and the four cards that are NOT inside <main>. Measured on the phone
+         report: Forms (Card 2, 560px), Poster Deployments (Card 3, 547px),
+         Sponsors (587px) and the surface cards (596px) are direct children of
+         <body>, sitting after </main> — 2,290px of advanced dashboard that a
+         rule scoped to #main-content does not touch. Scoping to <main> alone
+         fixed half the bug and would have read as fixed.
+
+         Kept visible: the skip link and <header> (wayfinding and sign-out),
+         <footer> (legal must stay reachable — OSE-1232), anything marked
+         role="dialog" or data-wizard-keep so a modal added later is not
+         swallowed by this rule. */
+      body.wizard-active
+        > *:not(#main-content):not(header):not(footer):not(.skip-link):not([role='dialog']):not(
+          [data-wizard-keep]
+        ) {
+        display: none;
+      }
+
       .path-chooser {
         background: #fff;
         border-radius: 8px;
@@ -2071,13 +2114,62 @@
             next.disabled = true;
             next.textContent = 'Creating…';
             setMsg('');
+            var res = null;
             try {
-              var res = await fetch('/api/v2/admin/events', {
+              // Reported from a phone, 2026-09-05: this step answered
+              // "Connection trouble — please try again." The old code put
+              // `await res.json()` inside the same try as the fetch, so THREE
+              // different failures collapsed into that one sentence:
+              //
+              //   1. fetch rejected            → a real connection problem;
+              //                                  "try again" is the right advice
+              //   2. a NON-JSON response body  → res.json() throws SyntaxError.
+              //                                  On staging the likeliest cause
+              //                                  is an expired Cloudflare Access
+              //                                  session: Access answers the
+              //                                  POST with its own HTML sign-in
+              //                                  page, fetch follows it, and the
+              //                                  parse fails. "Try again" is
+              //                                  useless here — the operator has
+              //                                  to sign in.
+              //   3. a JSON error envelope     → already handled below, but
+              //                                  requireAdmin's 401 carries
+              //                                  `code`, not `error`, so it fell
+              //                                  through to the generic message.
+              //
+              // Case 2 is the one that mattered: the operator was told to retry
+              // an action that could not succeed, and the message discarded the
+              // status code, so the report could not be diagnosed afterwards.
+              // The status is now always shown.
+              res = await fetch('/api/v2/admin/events', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(body),
               });
-              var data = await res.json();
+            } catch (err) {
+              setMsg('Can’t reach the server — check your connection and try again.', 'error');
+              next.disabled = false;
+              updateUI();
+              return;
+            }
+
+            var data = null;
+            try {
+              data = JSON.parse(await res.text());
+            } catch (parseErr) {
+              // Not JSON. Almost always the sign-in session, not the network.
+              setMsg(
+                'Your sign-in session looks like it expired (server said ' +
+                  res.status +
+                  '). Reload the page, sign in, and your answers so far will need re-entering.',
+                'error'
+              );
+              next.disabled = false;
+              updateUI();
+              return;
+            }
+
+            try {
               if (res.ok && data.ok) {
                 wiz.createdId = String(data.id);
                 // Remember the new event so leaving the wizard re-selects it
@@ -2093,10 +2185,20 @@
                 updateUI();
                 loadLinks();
               } else {
-                setMsg(data.error || 'Something went wrong — please try again.', 'error');
+                // Always name the status. requireAdmin's 401 envelope has no
+                // `error` field — only `code` — so without this an auth failure
+                // read as "Something went wrong" and told the operator nothing
+                // they could act on.
+                setMsg(
+                  (data.error || data.code || 'Something went wrong') +
+                    ' (server said ' + res.status + ')',
+                  'error'
+                );
               }
             } catch (err) {
-              setMsg('Connection trouble — please try again.', 'error');
+              // Reaching here means the SUCCESS path threw — a rendering bug,
+              // not a transport one. Say so rather than blaming the network.
+              setMsg('The event may have been created, but this page could not show it. Reload to check before trying again.', 'error');
             } finally {
               next.disabled = false;
               updateUI();
@@ -2105,6 +2207,8 @@
 
           function startWizard() {
             document.getElementById('admin-path-chooser').hidden = true;
+            // Hide the dashboard behind the wizard — see .wizard-active in CSS.
+            document.body.classList.add('wizard-active');
             var w = document.getElementById('launch-wizard');
             w.hidden = false;
             // Date pre-fills to today — most events are set up for "soon".
@@ -2126,6 +2230,7 @@
 
           function chooseAdvanced() {
             // The dashboard is already on the page — just clear the doorway.
+            document.body.classList.remove('wizard-active');
             document.getElementById('admin-path-chooser').hidden = true;
             document.getElementById('launch-wizard').hidden = true;
             var card = document.querySelector('[data-testid="create-event-card"]');
