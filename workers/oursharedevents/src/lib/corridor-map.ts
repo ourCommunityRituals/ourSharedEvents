@@ -8,6 +8,16 @@
  *     drops straight into SHARED_REPORT_HTML's premium section.
  *   – honest at any density: one venue lighting one cell on day one IS the
  *     product ("watch the corridor fill in" — saturation doctrine visible).
+ *
+ *     SCOPE OF THAT RULE (OSE-1242, VISION §6.2b): it holds for THIS surface
+ *     and does not generalise. This map is a product OF an event that
+ *     happened — retrospective proof, read by a sponsor or host who was part
+ *     of it, to whom one lit cell is meaningful evidence. The attendee
+ *     discovery map is the opposite direction in time: read by a stranger
+ *     deciding whether to go out, to whom one cell is not a product. That
+ *     surface is density-gated per corridor on CORRIDOR_BASELINE_MIN_SAMPLE.
+ *     Same rendering technique, different artifact — do not wire the attendee
+ *     surface to this module and inherit "honest at any density".
  *   – PRIVACY FLOOR ENFORCED AT RENDER: cells under `minCount` draw as
  *     suppressed (outlined, uncounted) and are reported in the return value
  *     for _meta.suppression_reasons. The resolution-floor rule (candidate
