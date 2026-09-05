@@ -9,14 +9,21 @@
  * Data-testids:
  *   public-header          — header with h1 "OurSharedEvents"
  *   public-main            — main content area
- *   public-events          — events container (loading → cards or empty)
+ *   public-events          — events container (cards, or the empty state)
  *   public-event-card      — individual event card (repeated per event)
  *   public-event-name      — h3 event name inside card
  *   public-event-meta      — p.meta with date + venue
- *   public-error           — error message on fetch failure
  *
- * Client-side: fetches GET /api/v2/events, renders cards or empty/error state.
- * Uses esc() helper for XSS protection on name, date, venue.
+ * SERVER-RENDERED as of OSE-1243. The Worker reads the events and puts them in
+ * the HTML it sends; there is no client fetch, no loading state, and no
+ * `esc()` helper in the template. Escaping happens in
+ * `workers/oursharedevents/src/lib/html-escape.ts`, and the markup is produced
+ * by `renderEventList()` in `src/lib/event-list.ts`.
+ *
+ * This file therefore tests the surface as a reader meets it — real data, real
+ * headers, real layout. Anything that needs specific event data to assert
+ * belongs in tests/unit/public-events-phase.test.ts instead, where the
+ * renderer can simply be called.
  */
 
 import { test, expect, Page } from '@playwright/test';
@@ -31,31 +38,6 @@ async function navigateToPublic(page: Page) {
 async function hasEventCards(page: Page): Promise<boolean> {
   const cards = page.locator('[data-testid="public-event-card"]');
   return (await cards.count()) > 0;
-}
-
-function mockEventsApi(page: Page, response: { status: number; body: unknown } | 'timeout') {
-  return page.route('**/api/v2/events', (route) => {
-    if (response === 'timeout') return route.abort('timedout');
-    return route.fulfill({
-      status: response.status,
-      contentType: 'application/json',
-      body: typeof response.body === 'string' ? response.body : JSON.stringify(response.body),
-    });
-  });
-}
-
-function sampleEvent(overrides: Record<string, unknown> = {}) {
-  return {
-    id: `evt_pub_${Date.now()}`,
-    title: 'Community BBQ',
-    name: 'Community BBQ',
-    slug: 'community-bbq',
-    status: 'active',
-    brand_id: 'root',
-    startDateISO: '2026-07-04T17:00:00Z',
-    venue: 'Evergreen Park',
-    ...overrides,
-  };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -199,263 +181,27 @@ test.describe('Public Events — Event Cards (Data Present)', () => {
 // 3. EMPTY STATE
 // ═══════════════════════════════════════════════════════════════════════════════
 
-test.describe('Public Events — Empty State', () => {
-  test('shows "No events scheduled" when API returns empty items', async ({ page }) => {
-    await mockEventsApi(page, { status: 200, body: { ok: true, status: 200, items: [] } });
-    await navigateToPublic(page);
-
-    const container = page.locator('[data-testid="public-events"]');
-    await expect(container).toContainText('No events scheduled');
-  });
-
-  test('no event cards rendered when empty', async ({ page }) => {
-    await mockEventsApi(page, { status: 200, body: { ok: true, status: 200, items: [] } });
-    await navigateToPublic(page);
-
-    const cards = page.locator('[data-testid="public-event-card"]');
-    expect(await cards.count()).toBe(0);
-  });
-
-  test('shows empty state when ok:false', async ({ page }) => {
-    await mockEventsApi(page, { status: 200, body: { ok: false, error: 'DB error' } });
-    await navigateToPublic(page);
-
-    const container = page.locator('[data-testid="public-events"]');
-    await expect(container).toContainText('No events scheduled');
-  });
-});
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// 4. ERROR STATE
-// ═══════════════════════════════════════════════════════════════════════════════
-
-test.describe('Public Events — Error State', () => {
-  test('shows error message on API 500', async ({ page }) => {
-    await mockEventsApi(page, { status: 500, body: 'Server Error' });
-    await navigateToPublic(page);
-
-    const error = page.locator('[data-testid="public-error"]');
-    await expect(error).toBeVisible();
-    await expect(error).toContainText('Could not load events');
-  });
-
-  test('error has .error CSS class', async ({ page }) => {
-    await mockEventsApi(page, { status: 500, body: 'fail' });
-    await navigateToPublic(page);
-
-    await expect(page.locator('[data-testid="public-events"] .error')).toBeVisible();
-  });
-
-  test('shows error on network timeout', async ({ page }) => {
-    await mockEventsApi(page, 'timeout');
-    await navigateToPublic(page);
-
-    await expect(page.locator('[data-testid="public-error"]')).toBeVisible();
-  });
-
-  test('shows error on malformed JSON', async ({ page }) => {
-    await mockEventsApi(page, { status: 200, body: 'not json' });
-    await navigateToPublic(page);
-
-    await expect(page.locator('[data-testid="public-error"]')).toBeVisible();
-  });
-});
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// 5. MOCK DATA RENDERING
-// ═══════════════════════════════════════════════════════════════════════════════
-
-test.describe('Public Events — Mock Data Rendering', () => {
-  test('renders correct number of cards for mocked events', async ({ page }) => {
-    const events = [sampleEvent(), sampleEvent({ name: 'Second Event', id: 'evt_2' })];
-    await mockEventsApi(page, { status: 200, body: { ok: true, status: 200, items: events } });
-    await navigateToPublic(page);
-
-    const cards = page.locator('[data-testid="public-event-card"]');
-    expect(await cards.count()).toBe(2);
-  });
-
-  test('renders event name in h3', async ({ page }) => {
-    await mockEventsApi(page, {
-      status: 200,
-      body: { ok: true, status: 200, items: [sampleEvent({ name: 'Test BBQ 2026' })] },
-    });
-    await navigateToPublic(page);
-
-    const name = page.locator('[data-testid="public-event-name"]').first();
-    await expect(name).toContainText('Test BBQ 2026');
-  });
-
-  test('renders date in meta when startDateISO provided', async ({ page }) => {
-    await mockEventsApi(page, {
-      status: 200,
-      body: {
-        ok: true,
-        status: 200,
-        items: [sampleEvent({ startDateISO: '2026-07-04T17:00:00Z' })],
-      },
-    });
-    await navigateToPublic(page);
-
-    const meta = page.locator('[data-testid="public-event-meta"]').first();
-    const text = await meta.textContent();
-    // Should contain formatted date (e.g. "Saturday, July 4, 2026")
-    expect(text).toContain('July');
-    expect(text).toContain('2026');
-  });
-
-  test('renders venue in meta when provided', async ({ page }) => {
-    await mockEventsApi(page, {
-      status: 200,
-      body: { ok: true, status: 200, items: [sampleEvent({ venue: 'Evergreen Park Pavilion' })] },
-    });
-    await navigateToPublic(page);
-
-    const meta = page.locator('[data-testid="public-event-meta"]').first();
-    await expect(meta).toContainText('Evergreen Park Pavilion');
-  });
-
-  test('no date in meta when startDateISO is null', async ({ page }) => {
-    await mockEventsApi(page, {
-      status: 200,
-      body: { ok: true, status: 200, items: [sampleEvent({ startDateISO: null })] },
-    });
-    await navigateToPublic(page);
-
-    const meta = page.locator('[data-testid="public-event-meta"]').first();
-    const text = await meta.textContent();
-    expect(text).not.toContain('2026');
-  });
-
-  test('no venue separator when venue is null', async ({ page }) => {
-    await mockEventsApi(page, {
-      status: 200,
-      body: { ok: true, status: 200, items: [sampleEvent({ venue: null })] },
-    });
-    await navigateToPublic(page);
-
-    const meta = page.locator('[data-testid="public-event-meta"]').first();
-    const html = await meta.innerHTML();
-    expect(html).not.toContain('&middot;');
-  });
-
-  test('shows "Untitled Event" when name is missing', async ({ page }) => {
-    await mockEventsApi(page, {
-      status: 200,
-      body: { ok: true, status: 200, items: [sampleEvent({ name: undefined, title: undefined })] },
-    });
-    await navigateToPublic(page);
-
-    const name = page.locator('[data-testid="public-event-name"]').first();
-    await expect(name).toContainText('Untitled Event');
-  });
-
-  test('renders 10 event cards without overflow', async ({ page }) => {
-    const events = Array.from({ length: 10 }, (_, i) =>
-      sampleEvent({ name: `Event ${i + 1}`, id: `evt_${i}` })
-    );
-    await mockEventsApi(page, { status: 200, body: { ok: true, status: 200, items: events } });
-    await navigateToPublic(page);
-
-    expect(await page.locator('[data-testid="public-event-card"]').count()).toBe(10);
-
-    const hasScroll = await page.evaluate(
-      () => document.documentElement.scrollWidth > document.documentElement.clientWidth
-    );
-    expect(hasScroll).toBe(false);
-  });
-});
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// 6. XSS RESILIENCE
-// ═══════════════════════════════════════════════════════════════════════════════
-
-test.describe('Public Events — XSS Resilience', () => {
-  test('script tag in event name is HTML-escaped', async ({ page }) => {
-    await mockEventsApi(page, {
-      status: 200,
-      body: {
-        ok: true,
-        status: 200,
-        items: [sampleEvent({ name: '<script>alert(1)</script>XSS' })],
-      },
-    });
-    await navigateToPublic(page);
-
-    const nameHtml = await page.locator('[data-testid="public-event-name"]').first().innerHTML();
-    expect(nameHtml).not.toContain('<script>');
-    expect(nameHtml).toContain('&lt;script&gt;');
-  });
-
-  test('img onerror in venue is HTML-escaped', async ({ page }) => {
-    await mockEventsApi(page, {
-      status: 200,
-      body: {
-        ok: true,
-        status: 200,
-        items: [sampleEvent({ venue: '<img src=x onerror=alert(1)>' })],
-      },
-    });
-    await navigateToPublic(page);
-
-    const metaHtml = await page.locator('[data-testid="public-event-meta"]').first().innerHTML();
-    expect(metaHtml).not.toContain('<img src=x');
-  });
-
-  test('no JS errors with XSS payloads', async ({ page }) => {
-    const errors: string[] = [];
-    page.on('pageerror', (err) => errors.push(err.message));
-
-    await mockEventsApi(page, {
-      status: 200,
-      body: {
-        ok: true,
-        status: 200,
-        items: [
-          sampleEvent({
-            name: '"><script>alert(1)</script>',
-            venue: "'; DROP TABLE events;--",
-          }),
-        ],
-      },
-    });
-    await navigateToPublic(page);
-    expect(errors).toHaveLength(0);
-  });
-
-  test('emoji in event name renders correctly', async ({ page }) => {
-    await mockEventsApi(page, {
-      status: 200,
-      body: { ok: true, status: 200, items: [sampleEvent({ name: '🎉 Block Party 🌭' })] },
-    });
-    await navigateToPublic(page);
-
-    const name = await page.locator('[data-testid="public-event-name"]').first().textContent();
-    expect(name).toContain('🎉');
-    expect(name).toContain('🌭');
-  });
-
-  test('CJK characters render correctly', async ({ page }) => {
-    await mockEventsApi(page, {
-      status: 200,
-      body: {
-        ok: true,
-        status: 200,
-        items: [sampleEvent({ name: 'コミュニティBBQ', venue: '東京都' })],
-      },
-    });
-    await navigateToPublic(page);
-
-    await expect(page.locator('[data-testid="public-event-name"]').first()).toContainText(
-      'コミュニティBBQ'
-    );
-    await expect(page.locator('[data-testid="public-event-meta"]').first()).toContainText('東京都');
-  });
-});
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// 7. URL ALIASES
-// ═══════════════════════════════════════════════════════════════════════════════
+// ─── Removed by OSE-1243: Empty State, Error State, Mock Data Rendering, and
+// XSS Resilience (20 tests) ───────────────────────────────────────────────────
+//
+// All twenty drove the page with `mockEventsApi(...)`, intercepting
+// `**/api/v2/events` to decide what rendered. The list is server-rendered now,
+// so that interception no longer reaches the code under test — the page shows
+// whatever the backend holds and the stub goes unused. These would not have
+// failed; they would have passed while proving nothing, which is the worse
+// outcome and the harder one to notice.
+//
+// Every case moved to tests/unit/public-events-phase.test.ts against
+// renderEventList(): empty items, ok:false, null items, HTTP 500, timeout,
+// malformed JSON, card counts, name/date/venue rendering, absent date, absent
+// venue, script-in-name, img-onerror-in-venue, emoji, and CJK. That file now
+// carries 27 tests where these were 20, runs without a browser, and is on the
+// path CI actually executes.
+//
+// One of the removed tests asserted that a missing name renders "Untitled
+// Event". OSE-871 deleted that fallback. It could only have stayed green by
+// never running — see the header of tests/e2e/4-negative/public-events-errors
+// .spec.ts and OSE-1244 for why none of these suites did.
 
 test.describe('Public Events — URL Aliases', () => {
   const ALIASES = ['/events', '/public', '/schedule', '/calendar', '/agenda', '/lineup'];

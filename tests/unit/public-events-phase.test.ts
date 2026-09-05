@@ -217,3 +217,116 @@ describe('OSE-1243 | injection is opt-in and total', () => {
     );
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// OSE-1243. The card → registration CTA contract, brought down from
+// tests/e2e/3-flows/public-to-registration.spec.ts. Those tests intercepted
+// **/api/v2/events to control the cards; server-rendering removed that seam,
+// and these are markup assertions that never needed a browser to begin with.
+// What stayed in the E2E file is the part that does: clicking through to a
+// real form, computed touch-target size, focus outlines, mobile layout.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('OSE-1243 | the card → registration CTA contract', () => {
+  const evt = (o: Record<string, unknown> = {}) => ({
+    id: 'evt_abc_123',
+    name: 'Community BBQ',
+    startDateISO: '2026-08-15T18:00:00Z',
+    venue: 'Beverly Arts Center',
+    phase: 'pre_event',
+    ...o,
+  });
+
+  test('every card gets exactly one CTA', () => {
+    const { el } = render([evt({ id: 'a' }), evt({ id: 'b' }), evt({ id: 'c' })]);
+    expect(el.querySelectorAll('[data-testid="public-event-card"]').length).toBe(3);
+    expect(el.querySelectorAll('[data-testid="public-event-cta"]').length).toBe(3);
+  });
+
+  test('the CTA is an anchor, not a button — it is navigation', () => {
+    const { el } = render([evt()]);
+    const cta = el.querySelector('[data-testid="public-event-cta"]') as HTMLElement;
+    expect(cta.tagName.toLowerCase()).toBe('a');
+  });
+
+  test('the href is /forms/{id}?type=register with the name as a query param', () => {
+    const { el } = render([evt()]);
+    const href = el.querySelector('[data-testid="public-event-cta"]')?.getAttribute('href') ?? '';
+    const url = new URL(href, 'https://x.test');
+    expect(url.pathname).toBe('/forms/evt_abc_123');
+    expect(url.searchParams.get('type')).toBe('register');
+    expect(url.searchParams.get('event')).toBe('Community BBQ');
+  });
+
+  test('the aria-label names the event, so a screen reader hears which one', () => {
+    const { el } = render([evt({ name: 'Jazz Night' })]);
+    expect(el.querySelector('[data-testid="public-event-cta"]')?.getAttribute('aria-label')).toBe(
+      'Register for Jazz Night'
+    );
+  });
+
+  test('each card carries its own id, so the second card is not the first', () => {
+    const { el } = render([evt({ id: 'evt_1' }), evt({ id: 'evt_2' })]);
+    const ids = [...el.querySelectorAll('[data-testid="public-event-card"]')].map((n) =>
+      n.getAttribute('data-event-id')
+    );
+    expect(ids).toEqual(['evt_1', 'evt_2']);
+    const hrefs = [...el.querySelectorAll('[data-testid="public-event-cta"]')].map((n) =>
+      n.getAttribute('href')
+    );
+    expect(hrefs[0]).toContain('/forms/evt_1');
+    expect(hrefs[1]).toContain('/forms/evt_2');
+  });
+
+  test('cards render in the order the provider returned them', () => {
+    const { el } = render([evt({ id: 'a', name: 'First' }), evt({ id: 'b', name: 'Second' })]);
+    const names = [...el.querySelectorAll('[data-testid="public-event-name"]')].map(
+      (n) => n.textContent
+    );
+    expect(names).toEqual(['First', 'Second']);
+  });
+});
+
+describe('OSE-1243 | non-ASCII content renders intact', () => {
+  // From tests/e2e/2-pages/public-events.spec.ts, where these needed a browser
+  // only because the renderer lived inside a template string.
+  test('emoji in the name and venue survive escaping', () => {
+    const { el } = render([
+      {
+        id: 'e',
+        name: '\u{1F3B5} Music Festival \u{1F3B8}',
+        venue: '\u{1F3DF} Stadium',
+        phase: 'pre_event',
+      },
+    ]);
+    expect(el.querySelector('[data-testid="public-event-name"]')?.textContent).toContain(
+      '\u{1F3B5}'
+    );
+    expect(el.querySelector('[data-testid="public-event-venue"]')?.textContent).toContain(
+      '\u{1F3DF}'
+    );
+  });
+
+  test('CJK characters survive escaping', () => {
+    const { el } = render([
+      {
+        id: 'e',
+        name: '\u30B3\u30DF\u30E5\u30CB\u30C6\u30A3\u30A4\u30D9\u30F3\u30C8',
+        venue: '\u6771\u4EAC',
+        phase: 'pre_event',
+      },
+    ]);
+    expect(el.querySelector('[data-testid="public-event-name"]')?.textContent).toBe(
+      '\u30B3\u30DF\u30E5\u30CB\u30C6\u30A3\u30A4\u30D9\u30F3\u30C8'
+    );
+    expect(el.querySelector('[data-testid="public-event-venue"]')?.textContent).toBe(
+      '\u6771\u4EAC'
+    );
+  });
+
+  test('the CTA query param round-trips non-ASCII names', () => {
+    const { el } = render([{ id: 'e', name: '\u{1F3B5} Fest', phase: 'pre_event' }]);
+    const href = el.querySelector('[data-testid="public-event-cta"]')?.getAttribute('href') ?? '';
+    expect(new URL(href, 'https://x.test').searchParams.get('event')).toBe('\u{1F3B5} Fest');
+  });
+});
