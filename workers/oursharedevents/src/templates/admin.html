@@ -2158,10 +2158,20 @@
               data = JSON.parse(await res.text());
             } catch (parseErr) {
               // Not JSON. Almost always the sign-in session, not the network.
+              //
+              // res.redirected sharpens this: fetch follows a 302 silently, so
+              // a Cloudflare Access sign-in page or a Bot Management challenge
+              // arrives looking like a normal 200 whose body happens to be
+              // HTML. When the response was redirected we can say WHICH of the
+              // two shapes it was, instead of guessing on the operator's behalf.
               setMsg(
-                'Your sign-in session looks like it expired (server said ' +
-                  res.status +
-                  '). Reload the page, sign in, and your answers so far will need re-entering.',
+                res.redirected
+                  ? 'You were redirected to a sign-in page instead of saving (server said ' +
+                      res.status +
+                      '). Reload this page, sign in, then re-enter your answers.'
+                  : 'The server sent something this page could not read (status ' +
+                      res.status +
+                      '). Usually an expired sign-in — reload the page, sign in, then try again.',
                 'error'
               );
               next.disabled = false;
