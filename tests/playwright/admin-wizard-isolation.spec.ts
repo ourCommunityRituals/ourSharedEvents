@@ -27,10 +27,14 @@
  * THE HALF-FIX THIS GUARDS AGAINST
  *   The first fix scoped the rule to `#main-content > *` and looked correct:
  *   the create card and events list disappeared. But FOUR cards — forms,
- *   poster deployments, sponsors, surface cards — are direct children of
+ *   poster deployments, sponsors, surface cards — were direct children of
  *   <body>, after </main>. 2,290px of dashboard survived, and the wizard state
  *   still measured 3117px. Asserting the page fits ONE viewport is what caught
  *   it; asserting "the create card is hidden" would not have.
+ *
+ *   OSE-1238 has since moved those four inside <main>, so that specific escape
+ *   is closed at the source. The one-viewport assertion stays: it is the check
+ *   that does not depend on knowing where the next panel will be added.
  *
  * @born-red OSE-1237 | method: dashboard rendered under the open wizard
  * | date: 2026-09-05
