@@ -98,7 +98,7 @@ export default defineConfig({
   // against deployed staging; one that reads seeded rows would go green here
   // against an empty local D1 while no longer testing what it was written for.
   // A spec joins this gate only by being named.
-  testMatch: /(mobile-workability|admin-wizard-isolation)\.spec\.ts/,
+  testMatch: /(mobile-workability|admin-wizard-isolation|admin-csp-controls)\.spec\.ts/,
 
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
@@ -142,10 +142,17 @@ export default defineConfig({
     // not top-level [vars], so `wrangler dev` with no --env leaves the Bearer
     // path (auth/admin.ts Method 3) switched off entirely and /admin answers
     // 401 no matter what key you send. Both vars are needed; one is not.
+    // ADMIN_SCOPE_ALL lets a `key:` actor list events unscoped. Without it the
+    // events table renders EMPTY for this worker — admin-brand-scope.ts scopes
+    // key actors to their brand membership, and a local key has none — so any
+    // test that needs to select an event has nothing to click. Same value CI's
+    // vitest bindings already set, and it never elevates a real (email)
+    // operator: that path resolves through the membership map, fail-closed.
     command:
       `npx wrangler dev --local --port ${PORT}` +
       ` --var ADMIN_KEY:${LOCAL_ADMIN_KEY}` +
-      ` --var ALLOW_ADMIN_KEY_FALLBACK:true`,
+      ` --var ALLOW_ADMIN_KEY_FALLBACK:true` +
+      ` --var ADMIN_SCOPE_ALL:true`,
     cwd: 'workers/oursharedevents',
     url: BASE + '/',
     reuseExistingServer: !process.env.CI,

@@ -64,7 +64,9 @@ describe('surface deep-links | template wiring', () => {
     // OSE-667: scoping is driven by the single ose:event-selected fan-out, not a
     // direct call in the row onclick.
     expect(html).toContain('window.scopeSurfaceCards(d.id, d.name)');
-    expect(html).toContain('onclick="window.selectEvent(');
+    // OSE-1239: data-action, not an inline onclick — the CSP refused the latter,
+    // so scoping never actually ran when a row was clicked.
+    expect(html).toContain('data-action="event-select"');
   });
 
   test('scoping helper never reads a cookie or anon id', async () => {

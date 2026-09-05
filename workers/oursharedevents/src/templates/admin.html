@@ -100,6 +100,21 @@
         font-size: 0.85rem;
         color: #6c757d;
       }
+      /* WCAG 2.5.5 sizes the TARGET, not the painted control: the 13x13
+         checkbox is fine so long as the label around it is tappable, which is
+         how the whole row toggles. Without this the label was ~19px and the
+         mobile audit was right to flag it (OSE-1239).
+
+         Only visible once events exist, which is why no run had ever seen it:
+         the events table renders empty for a key actor without ADMIN_SCOPE_ALL,
+         and the blocking gate only started setting that here. */
+      .events-toolbar label {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        min-height: 44px;
+        cursor: pointer;
+      }
       .events-toolbar input[type='checkbox'] {
         margin: 0;
       }
@@ -1706,6 +1721,156 @@
       <span>Admin</span>
     </header>
     <main id="main-content" data-testid="admin-main" aria-label="Admin dashboard">
+    <!-- ── CSP-safe event dispatcher (OSE-1239) ────────────────────────────
+         securityHeaders() serves script-src 'self' 'nonce-…'. A nonce
+         authorises script ELEMENTS; it does not authorise inline
+         event-handler ATTRIBUTES, which need 'unsafe-inline' or
+         'unsafe-hashes'. (No literal script tag in this comment: the
+         inline-JS validity gate finds the opening tag by regex and would
+         start parsing this prose as JavaScript. It did, once.) Neither is present, and neither should be — this is
+         the one authenticated surface that renders operator-supplied strings,
+         so the nonce is doing real work.
+
+         The consequence, measured 2026-09-05: every onclick= in this file was
+         refused at click time. Copy URL did nothing. "+ Add Deployment" never
+         opened its form. Clicking an event row never scoped the cards. Plain
+         <a href> links still navigated, which is why it stayed survivable
+         enough to go unnoticed.
+
+         DELEGATION, not per-element wiring. Most of this page's controls are
+         built as HTML STRINGS and dropped in with innerHTML whenever a panel
+         reloads, so anything bound to an element directly is lost on the next
+         refresh. One listener on document, resolving `data-action` at click
+         time, survives every rebuild and needs no re-binding.
+
+         Handlers are looked up LAZILY (at event time, not at definition time)
+         so this block can sit above every script that defines them. -->
+    <script>
+      (function () {
+        function argOf(el, name) {
+          return el.getAttribute('data-' + name);
+        }
+
+        var ACTIONS = {
+          'ecb-jump': function (el) {
+            if (window.ecbJump) window.ecbJump(argOf(el, 'target'));
+          },
+          'copy-url': function (el) {
+            var fn = window.copyUrl;
+            if (fn) fn(argOf(el, 'url'), el);
+          },
+          'pd-toggle': function (el) {
+            var w = document.getElementById('pd-form-wrap');
+            if (!w) return;
+            var open = w.hidden;
+            w.hidden = !open;
+            el.setAttribute('aria-expanded', String(open));
+          },
+          'sponsor-edit': function (el) {
+            if (window._editSponsor) window._editSponsor(argOf(el, 'id'));
+          },
+          'sponsor-deactivate': function (el) {
+            if (window._deactivateSponsor) window._deactivateSponsor(argOf(el, 'id'));
+          },
+          'sponsor-confirm-deactivate': function (el) {
+            if (window._confirmDeactivate) window._confirmDeactivate(argOf(el, 'id'));
+          },
+          'sponsors-reload': function () {
+            if (window._loadSponsors) window._loadSponsors();
+          },
+          'sponsor-close-form': function () {
+            if (window._doCloseForm) window._doCloseForm();
+          },
+          'sponsor-keep-editing': function () {
+            if (window._keepEditing) window._keepEditing();
+          },
+          'counts-retry': function () {
+            if (window.reloadForms) window.reloadForms();
+          },
+          'forms-reload': function (el) {
+            if (window.loadForms) window.loadForms(argOf(el, 'event-id'), argOf(el, 'event-name'));
+          },
+          'mint-link': function (el) {
+            if (window.mintReportLink) window.mintReportLink(argOf(el, 'event-id'), el);
+          },
+          'mint-copy': function (el) {
+            var token = argOf(el, 'token') || '';
+            if (!navigator.clipboard) return;
+            navigator.clipboard.writeText(token).then(function () {
+              el.textContent = 'Copied!';
+              setTimeout(function () {
+                el.textContent = 'Copy';
+              }, 1500);
+            });
+          },
+          'pd-download': function (el) {
+            if (window.downloadPosterQr) window.downloadPosterQr(argOf(el, 'pd-id'));
+          },
+          'pd-print': function (el) {
+            if (window.printPosterQr) window.printPosterQr(argOf(el, 'pd-id'));
+          },
+          'pd-delete': function (el) {
+            if (window.deletePosterDeployment) window.deletePosterDeployment(argOf(el, 'pd-id'));
+          },
+          'pd-confirm-delete': function (el) {
+            if (window._confirmDeletePd) window._confirmDeletePd(argOf(el, 'pd-id'));
+          },
+          'pd-cancel-delete': function () {
+            if (window.loadPosterDeployments) window.loadPosterDeployments(window._pdEventId);
+          },
+          'event-select': function (el) {
+            if (window.selectEvent) {
+              window.selectEvent(argOf(el, 'event-id'), argOf(el, 'event-name'), Number(argOf(el, 'event-phase')));
+            }
+            // The row highlight used to ride along in the same inline handler.
+            document.querySelectorAll('tr.selected').forEach(function (r) {
+              r.classList.remove('selected');
+            });
+            el.classList.add('selected');
+          },
+          'brand-toggle': function (el) {
+            if (window.toggleBrandGroup) window.toggleBrandGroup(argOf(el, 'brand-group'), el);
+          },
+          'reload-page': function () {
+            location.reload();
+          },
+        };
+
+        var CHANGES = {
+          'form-flag': function (el) {
+            if (window.toggleFormFlag) window.toggleFormFlag(el);
+          },
+          'mint-role': function () {
+            if (window._onMintRoleChange) window._onMintRoleChange();
+          },
+        };
+
+        document.addEventListener('click', function (ev) {
+          var el = ev.target.closest ? ev.target.closest('[data-action]') : null;
+          if (!el) return;
+          var fn = ACTIONS[el.getAttribute('data-action')];
+          if (fn) fn(el, ev);
+        });
+
+        document.addEventListener('change', function (ev) {
+          var el = ev.target.closest ? ev.target.closest('[data-change]') : null;
+          if (!el) return;
+          var fn = CHANGES[el.getAttribute('data-change')];
+          if (fn) fn(el, ev);
+        });
+
+        // Enter/Space on a role="button" row, matching the keyboard affordance
+        // the old inline onkeydown provided.
+        document.addEventListener('keydown', function (ev) {
+          if (ev.key !== 'Enter' && ev.key !== ' ') return;
+          var el = ev.target.closest ? ev.target.closest('[data-action][role="button"]') : null;
+          if (!el) return;
+          ev.preventDefault();
+          el.click();
+        });
+      })();
+    </script>
+
       <!-- Shared assertive status region — replaces the blocking browser
            dialogs. Screen readers announce immediately; writes are
            textContent-only. -->
@@ -1746,11 +1911,11 @@
       >
         <span class="ecb-caption" data-testid="ecb-caption" aria-live="polite"></span>
         <nav class="ecb-nav" aria-label="Jump to management card">
-          <button type="button" data-testid="ecb-nav-dashboard" onclick="window.ecbJump('dashboard-card')">Dashboard</button>
-          <button type="button" data-testid="ecb-nav-forms" onclick="window.ecbJump('forms-card')">Forms</button>
-          <button type="button" data-testid="ecb-nav-poster" onclick="window.ecbJump('poster-deployments-card')">Poster</button>
-          <button type="button" data-testid="ecb-nav-sponsors" onclick="window.ecbJump('sponsors-card')">Sponsors</button>
-          <button type="button" data-testid="ecb-nav-surfaces" onclick="window.ecbJump('surface-cards')">Surfaces</button>
+          <button type="button" data-testid="ecb-nav-dashboard" data-action="ecb-jump" data-target="dashboard-card">Dashboard</button>
+          <button type="button" data-testid="ecb-nav-forms" data-action="ecb-jump" data-target="forms-card">Forms</button>
+          <button type="button" data-testid="ecb-nav-poster" data-action="ecb-jump" data-target="poster-deployments-card">Poster</button>
+          <button type="button" data-testid="ecb-nav-sponsors" data-action="ecb-jump" data-target="sponsors-card">Sponsors</button>
+          <button type="button" data-testid="ecb-nav-surfaces" data-action="ecb-jump" data-target="surface-cards">Surfaces</button>
         </nav>
       </div>
       <script>
@@ -2771,8 +2936,8 @@
                 ? '<span class="badge active" data-testid="spon-status-' + esc(s.id) + '">Active</span>'
                 : '<span class="badge archived" data-testid="spon-status-' + esc(s.id) + '">Inactive</span>';
               const actions = s.is_active
-                ? '<button class="spon-action-btn" data-testid="edit-' + esc(s.id) + '" onclick="window._editSponsor(\'' + esc(s.id) + '\')">Edit</button> ' +
-                  '<button class="spon-action-btn deactivate" data-testid="deactivate-' + esc(s.id) + '" onclick="window._deactivateSponsor(\'' + esc(s.id) + '\')">Deactivate</button>'
+                ? '<button class="spon-action-btn" data-testid="edit-' + esc(s.id) + '" data-action="sponsor-edit" data-id="' + esc(s.id) + '">Edit</button> ' +
+                  '<button class="spon-action-btn deactivate" data-testid="deactivate-' + esc(s.id) + '" data-action="sponsor-deactivate" data-id="' + esc(s.id) + '">Deactivate</button>'
                 : '<span class="muted-sm">Deactivated</span>';
               const eventName = _eventNameById[String(s.event_id)] || s.event_id;
               return '<tr data-testid="sponsor-row-' + esc(s.id) + '"' + dimStyle + '>' +
@@ -2788,7 +2953,7 @@
               '<thead><tr><th scope="col" data-testid="sponsors-col-name">Name</th><th scope="col" data-testid="sponsors-col-tier">Tier</th><th scope="col" data-testid="sponsors-col-event">Event</th><th scope="col" data-testid="sponsors-col-placements">Placements</th><th scope="col" data-testid="sponsors-col-status">Status</th><th scope="col" data-testid="sponsors-col-actions">Actions</th></tr></thead>' +
               '<tbody data-testid="sponsors-tbody">' + rows + '</tbody></table>';
           } catch (err) {
-            wrap.innerHTML = '<div class="card-error" data-testid="sponsors-error"><div class="error-icon">&#9888;</div><div class="error-msg">Could not load sponsors.</div><button class="retry-btn" data-testid="sponsors-retry" onclick="window._loadSponsors()">Retry</button></div>';
+            wrap.innerHTML = '<div class="card-error" data-testid="sponsors-error"><div class="error-icon">&#9888;</div><div class="error-msg">Could not load sponsors.</div><button class="retry-btn" data-testid="sponsors-retry" data-action="sponsors-reload">Retry</button></div>';
           }
         }
         // Retry/cancel/post-mutation reloads keep the current scope (no arg).
@@ -2838,8 +3003,8 @@
             const msg = document.getElementById('spon-form-msg');
             msg.className = 'create-msg error';
             msg.innerHTML = 'Discard unsaved changes? ' +
-              '<button class="spon-action-btn spon-ml" onclick="window._doCloseForm()" data-testid="confirm-discard" aria-label="Yes, discard changes">Yes, discard</button>' +
-              ' <button class="spon-action-btn" onclick="window._keepEditing()" data-testid="keep-editing" aria-label="Keep editing">Keep editing</button>';
+              '<button class="spon-action-btn spon-ml" data-action="sponsor-close-form" data-testid="confirm-discard" aria-label="Yes, discard changes">Yes, discard</button>' +
+              ' <button class="spon-action-btn" data-action="sponsor-keep-editing" data-testid="keep-editing" aria-label="Keep editing">Keep editing</button>';
             const yesBtn = msg.querySelector("[data-testid='confirm-discard']");
             if (yesBtn) yesBtn.focus();
             return;
@@ -2897,8 +3062,8 @@
           const cell = btn.parentElement;
           cell.innerHTML =
             '<span class="muted-sm deact-confirm-lbl">Deactivate?</span> ' +
-            '<button class="spon-action-btn deactivate" data-testid="confirm-deactivate-' + esc(id) + '" onclick="window._confirmDeactivate(\'' + esc(id) + '\')" aria-label="Confirm deactivate sponsor">Yes</button>' +
-            ' <button class="spon-action-btn" data-testid="cancel-deactivate-' + esc(id) + '" onclick="window._loadSponsors()" aria-label="Cancel deactivate">No</button>';
+            '<button class="spon-action-btn deactivate" data-testid="confirm-deactivate-' + esc(id) + '" data-action="sponsor-confirm-deactivate" data-id="' + esc(id) + '" aria-label="Confirm deactivate sponsor">Yes</button>' +
+            ' <button class="spon-action-btn" data-testid="cancel-deactivate-' + esc(id) + '" data-action="sponsors-reload" aria-label="Cancel deactivate">No</button>';
           const yesBtn = cell.querySelector("[data-testid='confirm-deactivate-" + esc(id) + "']");
           if (yesBtn) yesBtn.focus();
         };
@@ -2947,7 +3112,7 @@
             if (!res.ok || !data.ok) throw new Error(data.error || 'Save failed');
             msg.className = 'create-msg success';
             msg.innerHTML = (editId ? 'Sponsor updated.' : 'Sponsor created — ' + esc(data.id)) +
-              ' <button class="spon-action-btn spon-ml" onclick="window._doCloseForm()" data-testid="close-after-save">Close</button>';
+              ' <button class="spon-action-btn spon-ml" data-action="sponsor-close-form" data-testid="close-after-save">Close</button>';
             loadSponsors();
           } catch (err) {
             msg.textContent = err.message || 'Could not save sponsor.';
@@ -3030,7 +3195,7 @@
           if (window._lastFormsArgs) window.loadForms.apply(null, window._lastFormsArgs);
         };
         const renderCount = (c) => {
-          if (c === 'error') return '<button type="button" class="count-retry" data-testid="count-retry" onclick="window.reloadForms()"'
+          if (c === 'error') return '<button type="button" class="count-retry" data-testid="count-retry" data-action="counts-retry"'
             + ' title="Could not load — tap to retry" aria-label="Count failed to load. Retry."'
             + ' style="background:none;border:none;color:inherit;cursor:pointer;font:inherit;padding:0;min-width:44px;min-height:44px">&#8635;</button>';
           if (c === 'suppressed') return '<span class="count-suppressed" data-testid="count-suppressed"'
@@ -3072,7 +3237,7 @@
             '</div>' +
             '<label class="toggle">' +
               '<input type="checkbox" data-testid="form-toggle-' + t.key + '" data-flag="' + t.flagKey + '" data-event="' + eventId + '"' + checked + disabled +
-              ' onchange="toggleFormFlag(this)" />' +
+              ' data-change="form-flag" />' +
               '<span class="slider"></span>' +
             '</label>' +
           '</div>';
@@ -3097,7 +3262,7 @@
             '<div class="mint-form-grid" data-testid="mint-form-grid">' +
               '<div class="mint-field">' +
                 '<label for="mint-role">Role</label>' +
-                '<select id="mint-role" data-testid="mint-role" onchange="window._onMintRoleChange()">' +
+                '<select id="mint-role" data-testid="mint-role" data-change="mint-role">' +
                   '<option value="bar_owner">Bar Owner</option>' +
                   '<option value="sponsor">Sponsor</option>' +
                   '<option value="admin">Admin</option>' +
@@ -3123,11 +3288,11 @@
                 '</select>' +
               '</div>' +
             '</div>' +
-            '<button class="copy-btn" data-testid="mint-link-btn" style="margin-top:8px" onclick="window.mintReportLink(window._mintEventId, this)">Generate Link</button>' +
+            '<button class="copy-btn" data-testid="mint-link-btn" style="margin-top:8px" data-action="mint-link" data-event-id="' + String(window._mintEventId == null ? '' : window._mintEventId).replace(/"/g, '&quot;') + '">Generate Link</button>' +
             '<div id="mint-result" class="mint-result" data-testid="mint-result" style="margin-top:10px"></div>' +
           '</div>';
         } catch (err) {
-          panel.innerHTML = '<div class="card-error" data-testid="forms-error"><div class="error-icon">&#9888;</div><div class="error-msg">Could not load forms.</div><button class="retry-btn" data-testid="forms-retry" onclick="window.loadForms(\'' + eventId + '\',\'' + eventName.replace(/'/g, "\\'") + '\')">Retry</button></div>';
+          panel.innerHTML = '<div class="card-error" data-testid="forms-error"><div class="error-icon">&#9888;</div><div class="error-msg">Could not load forms.</div><button class="retry-btn" data-testid="forms-retry" data-action="forms-reload" data-event-id="' + eventId + '" data-event-name="' + String(eventName == null ? '' : eventName).replace(/"/g, '&quot;') + '">Retry</button></div>';
         }
       };
 
@@ -3175,7 +3340,7 @@
             '<div style="font-size:12px;color:#5a5a5a;margin-bottom:4px">Bearer token · expires ' + expires + '</div>' +
             '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">' +
               '<code data-testid="mint-token" style="font-size:11px;word-break:break-all;flex:1;background:#f5f5f5;padding:4px 6px;border-radius:4px">' + esc(data.token) + '</code>' +
-              '<button class="copy-btn" data-testid="mint-copy-btn" style="flex-shrink:0" onclick="navigator.clipboard.writeText(\'' + tokenSafe + '\').then(()=>{ this.textContent=\'Copied!\'; setTimeout(()=>this.textContent=\'Copy\',2000); }).catch(()=>this.textContent=\'Failed\')">Copy</button>' +
+              '<button class="copy-btn" data-testid="mint-copy-btn" style="flex-shrink:0" data-action="mint-copy" data-token="' + tokenSafe + '">Copy</button>' +
             '</div>' +
             '<div style="font-size:11px;color:#5a5a5a;margin-top:4px">Endpoint: GET /api/v2/events/' + esc(eventId) + '/shared-report</div>';
           result.style.cssText = 'margin-top:10px;padding:8px;background:#f0faf0;border:1px solid #b6e2b6;border-radius:6px';
@@ -3230,12 +3395,7 @@
           data-testid="add-poster-deployment-toggle"
           aria-expanded="false"
           aria-controls="pd-form-wrap"
-          onclick="
-            const w = document.getElementById('pd-form-wrap');
-            const open = w.hidden;
-            w.hidden = !open;
-            this.setAttribute('aria-expanded', String(open));
-          "
+          data-action="pd-toggle"
         >+ Add Deployment</button>
       </div>
 
@@ -3413,9 +3573,9 @@
                     '</dl>' +
                   '</div>' +
                   '<div class="qr-card-footer">' +
-                    '<button class="copy-btn" style="font-size:12px;padding:4px 10px" data-testid="pd-download-btn" onclick="window.downloadPosterQr(\'' + esc(pd.id) + '\')" aria-label="Download poster QR">Download</button>' +
-                    '<button class="copy-btn" style="font-size:12px;padding:4px 10px" data-testid="pd-print-btn" onclick="window.printPosterQr(\'' + esc(pd.id) + '\')" aria-label="Print poster QR">Print</button>' +
-                    '<button class="copy-btn" style="font-size:12px;padding:4px 10px" data-testid="pd-delete-btn" data-pd-id="' + esc(pd.id) + '" onclick="window.deletePosterDeployment(\'' + esc(pd.id) + '\')">Delete</button>' +
+                    '<button class="copy-btn" style="font-size:12px;padding:4px 10px" data-testid="pd-download-btn" data-action="pd-download" data-pd-id="' + esc(pd.id) + '" aria-label="Download poster QR">Download</button>' +
+                    '<button class="copy-btn" style="font-size:12px;padding:4px 10px" data-testid="pd-print-btn" data-action="pd-print" data-pd-id="' + esc(pd.id) + '" aria-label="Print poster QR">Print</button>' +
+                    '<button class="copy-btn" style="font-size:12px;padding:4px 10px" data-testid="pd-delete-btn" data-pd-id="' + esc(pd.id) + '" data-action="pd-delete">Delete</button>' +
                   '</div>' +
                 '</div>'
               );
@@ -3435,8 +3595,8 @@
           const cell = btn.parentElement;
           cell.innerHTML =
             '<span class="muted-sm">Deactivate?</span> ' +
-            '<button class="copy-btn" style="font-size:12px;padding:4px 10px" data-testid="confirm-delete-pd-' + esc(pdId) + '" onclick="window._confirmDeletePd(\'' + esc(pdId) + '\')" aria-label="Confirm deactivate poster deployment">Yes</button> ' +
-            '<button class="copy-btn" style="font-size:12px;padding:4px 10px" data-testid="cancel-delete-pd-' + esc(pdId) + '" onclick="window.loadPosterDeployments(window._pdEventId)" aria-label="Cancel">No</button>';
+            '<button class="copy-btn" style="font-size:12px;padding:4px 10px" data-testid="confirm-delete-pd-' + esc(pdId) + '" data-action="pd-confirm-delete" data-pd-id="' + esc(pdId) + '" aria-label="Confirm deactivate poster deployment">Yes</button> ' +
+            '<button class="copy-btn" style="font-size:12px;padding:4px 10px" data-testid="cancel-delete-pd-' + esc(pdId) + '" data-action="pd-cancel-delete" aria-label="Cancel">No</button>';
           const yes = cell.querySelector('[data-testid="confirm-delete-pd-' + esc(pdId) + '"]');
           if (yes) yes.focus();
         };
@@ -3560,7 +3720,7 @@
         <h3>Poster Page</h3>
         <p>Print-ready event poster with QR codes</p>
         <a href="/poster" target="_blank" data-testid="link-poster">Open Poster</a>
-        <button class="copy-btn" data-testid="copy-poster" onclick="copyUrl('/poster', this)">
+        <button class="copy-btn" data-testid="copy-poster" data-action="copy-url" data-url="/poster">
           Copy URL
         </button>
         <div class="qr-hint" data-testid="qr-hint-poster">QR-ready: /poster</div>
@@ -3569,7 +3729,7 @@
         <h3>TV Display</h3>
         <p>Bar TV / kiosk live event display</p>
         <a href="/display" target="_blank" data-testid="link-display">Open Display</a>
-        <button class="copy-btn" data-testid="copy-display" onclick="copyUrl('/display', this)">
+        <button class="copy-btn" data-testid="copy-display" data-action="copy-url" data-url="/display">
           Copy URL
         </button>
         <div class="qr-hint" data-testid="qr-hint-display">QR-ready: /display</div>
@@ -3578,7 +3738,7 @@
         <h3>Public Page</h3>
         <p>Customer-facing events listing</p>
         <a href="/" target="_blank" data-testid="link-public">Open Public Page</a>
-        <button class="copy-btn" data-testid="copy-public" onclick="copyUrl('/', this)">
+        <button class="copy-btn" data-testid="copy-public" data-action="copy-url" data-url="/">
           Copy URL
         </button>
         <div class="qr-hint" data-testid="qr-hint-public">QR-ready: /</div>
@@ -3587,7 +3747,7 @@
         <h3>Shared Report</h3>
         <p>Post-event analytics dashboard</p>
         <a href="/sharedReport" target="_blank" data-testid="link-report">Open Report</a>
-        <button class="copy-btn" data-testid="copy-report" onclick="copyUrl('/sharedReport', this)">
+        <button class="copy-btn" data-testid="copy-report" data-action="copy-url" data-url="/sharedReport">
           Copy URL
         </button>
         <div class="qr-hint" data-testid="qr-hint-report">QR-ready: /sharedReport</div>
@@ -3633,7 +3793,10 @@
         if (wrap && eventName) wrap.setAttribute('data-scope-caption', eventName);
       };
 
-      function copyUrl(path, btn) {
+      // On window so the delegated dispatcher (OSE-1239) can resolve it; the
+      // four Copy URL buttons now carry data-action="copy-url" instead of an
+      // inline onclick the CSP refused.
+      window.copyUrl = function copyUrl(path, btn) {
         // A scoped card stashes its event-scoped path in data-copy-path.
         if (btn && btn.dataset && btn.dataset.copyPath) path = btn.dataset.copyPath;
         const url = location.origin + path;
@@ -3652,7 +3815,7 @@
               btn.textContent = 'Copy URL';
             }, 2000);
           });
-      }
+      };
     </script>
 
       <!-- OSE-886: Event Dashboard card. GAS frame (DashboardCard.html) + baseline
@@ -4025,7 +4188,7 @@
             const safePhase = Math.max(1, Math.min(5, Number(e.legal_clearance_tier) || 1));
             const phaseLabel = esc(window.friendlyPhase(safePhase));
             return `
-          <tr onclick="window.selectEvent('${safeId}', '${safeName.replace(/'/g, "\\'")}', ${safePhase}); document.querySelectorAll('tr.selected').forEach(r=>r.classList.remove('selected')); this.classList.add('selected');" onkeydown="if(event.key==='Enter'||event.key===' '){this.click();event.preventDefault();}" class="clickable-row" tabindex="0" data-testid="event-row-${safeId}" data-brand-row="${safeBrand}" data-phase="${safePhase}">
+          <tr data-action="event-select" data-event-id="${safeId}" data-event-name="${safeName.replace(/"/g, '&quot;')}" data-event-phase="${safePhase}" role="button" class="clickable-row" tabindex="0" data-testid="event-row-${safeId}" data-brand-row="${safeBrand}" data-phase="${safePhase}">
             <td class="col-internal-id" data-label="ID" data-testid="event-id">${safeId}</td>
             <td data-label="Name" data-testid="event-name">${safeName}</td>
             <td data-label="Date" data-testid="event-date">${e.startDateISO ? esc(new Date(e.startDateISO).toLocaleDateString()) : '—'}</td>
@@ -4053,7 +4216,7 @@
               const safeBrand = esc(b);
               const evs = byBrand[b];
               const header = multiBrand
-                ? `<tr class="brand-group-header" data-testid="brand-group-${safeBrand}" data-brand-group="${safeBrand}" tabindex="0" role="button" aria-expanded="true" onclick="window.toggleBrandGroup('${safeBrand.replace(/'/g, "\\'")}', this)" onkeydown="if(event.key==='Enter'||event.key===' '){this.click();event.preventDefault();}"><td colspan="6"><span class="brand-group-caret" aria-hidden="true">▾</span> <span class="brand-group-name">${safeBrand}</span> <span class="brand-count-pill" data-testid="brand-count-${safeBrand}">${evs.length}</span></td></tr>`
+                ? `<tr class="brand-group-header" data-testid="brand-group-${safeBrand}" data-brand-group="${safeBrand}" tabindex="0" role="button" aria-expanded="true" data-action="brand-toggle"><td colspan="6"><span class="brand-group-caret" aria-hidden="true">▾</span> <span class="brand-group-name">${safeBrand}</span> <span class="brand-count-pill" data-testid="brand-count-${safeBrand}">${evs.length}</span></td></tr>`
                 : '';
               return header + evs.map(rowFor).join('');
             })
@@ -4100,7 +4263,7 @@
           } catch (e) {}
         } catch (err) {
           container.innerHTML =
-            '<div class="card-error" data-testid="events-error"><div class="error-icon">&#9888;</div><div class="error-msg">Could not load events.</div><button class="retry-btn" data-testid="events-retry" onclick="location.reload()">Retry</button></div>';
+            '<div class="card-error" data-testid="events-error"><div class="error-icon">&#9888;</div><div class="error-msg">Could not load events.</div><button class="retry-btn" data-testid="events-retry" data-action="reload-page">Retry</button></div>';
         }
       })();
 

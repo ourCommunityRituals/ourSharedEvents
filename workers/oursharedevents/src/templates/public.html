@@ -344,7 +344,7 @@
           banner.innerHTML = sponsors
             .map((s) => {
               const logo = s.logo_url
-                ? '<img src="' + esc(s.logo_url) + '" alt="' + esc(s.name) + '" referrerpolicy="no-referrer" onerror="this.style.display=\'none\'" data-testid="public-sponsor-logo">'
+                ? '<img src="' + esc(s.logo_url) + '" alt="' + esc(s.name) + '" referrerpolicy="no-referrer" data-hide-on-error="1" data-testid="public-sponsor-logo">'
                 : '';
               const link = s.website_url
                 ? // OSE-1164: noreferrer (not just noopener) so clicking a sponsor sends NO
@@ -380,6 +380,24 @@
           if (banner) banner.innerHTML = '<span hidden data-testid="public-sponsor-error"></span>';
         }
       })();
+    </script>
+    <!-- Sponsor logos hide themselves when the image 404s (OSE-1239).
+         This replaced onerror="this.style.display='none'", which the nonce CSP
+         refused at fire time — so a dead logo URL left a broken-image icon on
+         this surface instead of disappearing quietly. The `error` event does
+         NOT bubble, so this listens in the CAPTURE phase; that is the whole
+         reason it cannot be folded into an ordinary delegated listener. -->
+    <script>
+      document.addEventListener(
+        'error',
+        function (ev) {
+          var el = ev.target;
+          if (el && el.tagName === 'IMG' && el.hasAttribute('data-hide-on-error')) {
+            el.style.display = 'none';
+          }
+        },
+        true
+      );
     </script>
   </body>
 </html>
