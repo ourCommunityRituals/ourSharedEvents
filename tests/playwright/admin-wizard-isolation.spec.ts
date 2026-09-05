@@ -119,6 +119,31 @@ test.describe('OSE-1237 admin launch wizard — owns the screen', () => {
     await expect(page.locator('#admin-status')).toHaveCount(1);
   });
 
+  // Reported from a phone: the date field rendered wider than the fields above
+  // and below it, breaking the right margin. iOS Safari sizes input[type=date]
+  // from its rendered value and centres the text; Chromium does not, so this
+  // assertion passes trivially in the blocking gate and exists to stop a future
+  // CSS change from re-introducing a per-field width. The Safari-specific
+  // remedy (-webkit-appearance:none, min-width:0, text-align:left) could not be
+  // verified in-engine here — this container cannot install WebKit.
+  test('step 1 fields share one right edge — no field sets its own width', async ({ page }) => {
+    await openAdmin(page);
+    await page.click('[data-testid="admin-path-wizard"]');
+    await page.waitForTimeout(400);
+
+    const edges = await page.evaluate(() =>
+      ['wizard-event-name', 'wizard-event-date', 'wizard-event-venue'].map((id) => {
+        const el = document.getElementById(id)!;
+        const r = el.getBoundingClientRect();
+        return { id, right: Math.round(r.right), width: Math.round(r.width) };
+      })
+    );
+    const rights = new Set(edges.map((e) => e.right));
+    expect(rights.size, `step-1 inputs do not share a right edge: ${JSON.stringify(edges)}`).toBe(
+      1
+    );
+  });
+
   test('choosing advanced leaves the dashboard intact', async ({ page }) => {
     await openAdmin(page);
     await page.click('[data-testid="admin-path-advanced"]');

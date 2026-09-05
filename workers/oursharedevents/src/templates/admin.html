@@ -552,6 +552,29 @@
         background: #fff;
         color: #1e293b;
       }
+      /* input[type=date] on iOS Safari (OSE-1237, reported from a phone).
+         Safari gives a date input an INTRINSIC width from its rendered value
+         and centres the text, so "Sep 4, 2026" rendered ~25px wider than the
+         name and venue fields beside it and broke the right margin. Chromium
+         does not do this — measured at 393px, all three inputs are 318px wide
+         with text-align:start — so it is invisible to the Chromium gate.
+
+         -webkit-appearance:none opts out of the native box so the width:100%
+         and box-sizing:border-box above actually apply; min-width:0 stops the
+         intrinsic width winning inside a flex/grid parent; text-align:left
+         matches the siblings. The native date picker still opens on tap — this
+         changes the box, not the control.
+
+         NOT VERIFIED IN WEBKIT: this container cannot install it (missing
+         system libraries), so the fix is applied from the documented Safari
+         behaviour and the screenshot, not from a local repro. */
+      .create-form input[type='date'] {
+        -webkit-appearance: none;
+        appearance: none;
+        min-width: 0;
+        text-align: left;
+      }
+
       .create-form input:focus,
       .create-form select:focus,
       .create-form textarea:focus {
