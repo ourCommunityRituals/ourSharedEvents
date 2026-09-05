@@ -148,3 +148,78 @@ describe('the flag is not a substitute for the other guarantees', () => {
     expect(await mapItems([past])).toEqual([]);
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The API contract for the flag. OSE-1245.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('the create API honours the answer', () => {
+  /** Capture what handleCreateEvent binds, without a real D1. */
+  function captureDb(bound: unknown[][]) {
+    return {
+      DB: {
+        prepare: (sql: string) => ({
+          bind: (...args: unknown[]) => {
+            if (/INSERT INTO events/i.test(sql)) bound.push(args);
+            return {
+              run: async () => ({}),
+              first: async () => null,
+              all: async () => ({ results: [] }),
+            };
+          },
+        }),
+      },
+    } as never;
+  }
+
+  async function create(body: Record<string, unknown>, bound: unknown[][]) {
+    const { handleCreateEvent } = await import('../src/handlers/events');
+    return handleCreateEvent(
+      new Request('https://t.test/api/v2/admin/events', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      }),
+      captureDb(bound)
+    );
+  }
+
+  test('is_published:false binds 0', async () => {
+    const bound: unknown[][] = [];
+    await create({ title: 'House concert', is_published: false }, bound);
+    expect(bound[0]).toContain(0);
+  });
+
+  test('is_published:true binds 1', async () => {
+    const bound: unknown[][] = [];
+    await create({ title: 'Bar trivia', is_published: true }, bound);
+    expect(bound[0]).toContain(1);
+  });
+
+  test('an absent value publishes — the documented, backward-compatible default', async () => {
+    // Asserted rather than assumed, because it is the reason the create flow
+    // has to ask: a client that says nothing gets published.
+    const bound: unknown[][] = [];
+    await create({ title: 'Legacy client event' }, bound);
+    expect(bound[0]).toContain(1);
+  });
+
+  test('a malformed value publishes rather than silently hiding the event', async () => {
+    // Fails toward existing behaviour. Hiding an organizer's event because a
+    // client sent "no" as a string would be a worse failure than the default.
+    for (const bad of ['false', 'no', null, {}, []]) {
+      const bound: unknown[][] = [];
+      await create({ title: 'Odd client', is_published: bad }, bound);
+      expect(bound[0], String(bad)).toContain(1);
+    }
+  });
+
+  test('0 and 1 are accepted, so a form post and a JSON client agree', async () => {
+    const zero: unknown[][] = [];
+    await create({ title: 'A', is_published: 0 }, zero);
+    expect(zero[0]).toContain(0);
+    const one: unknown[][] = [];
+    await create({ title: 'B', is_published: 1 }, one);
+    expect(one[0]).toContain(1);
+  });
+});

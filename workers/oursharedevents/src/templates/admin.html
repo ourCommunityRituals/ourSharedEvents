@@ -1586,6 +1586,38 @@
         margin-bottom: 1rem;
       }
       .wizard-template-grid,
+      .create-publish-label {
+        display: flex;
+        align-items: center;
+        gap: 0.625rem;
+        min-height: 44px;
+        font-size: 1rem;
+        cursor: pointer;
+      }
+      .create-publish-label input[type='checkbox'] {
+        width: 20px;
+        height: 20px;
+        min-height: 20px;
+        flex: 0 0 auto;
+        margin: 0;
+      }
+      .create-publish-hint {
+        margin: 0.25rem 0 0 1.875rem;
+        font-size: 0.875rem;
+        line-height: 1.5;
+        color: var(--text-muted, #64748b);
+      }
+      .wizard-publish {
+        margin-top: 1.25rem;
+        padding-top: 1.25rem;
+        border-top: 1px solid var(--border, #e2e8f0);
+      }
+      .wizard-publish-note {
+        margin: 0.75rem 0 0;
+        font-size: 0.875rem;
+        line-height: 1.5;
+        color: var(--text-muted, #64748b);
+      }
       .wizard-signup-grid {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
@@ -1593,7 +1625,8 @@
         margin-bottom: 1rem;
       }
       .wizard-template-card,
-      .wizard-signup-option {
+      .wizard-signup-option,
+      .wizard-publish-option {
         display: flex;
         flex-direction: column;
         gap: 0.25rem;
@@ -1607,13 +1640,16 @@
       }
       .wizard-template-card:hover,
       .wizard-signup-option:hover,
+      .wizard-publish-option:hover,
+      .wizard-publish-option:focus-visible,
       .wizard-template-card:focus-visible,
       .wizard-signup-option:focus-visible {
         border-color: #4361ee;
         outline: none;
       }
       .wizard-template-card.selected,
-      .wizard-signup-option.selected {
+      .wizard-signup-option.selected,
+      .wizard-publish-option.selected {
         border-color: #16a34a;
         background: #f0fdf4;
       }
@@ -2101,6 +2137,56 @@
               />
             </div>
           </div>
+
+          <!-- OSE-1245 — the publication question, asked HERE because this is
+               the moment the address exists and the question means something.
+               Doctrine: OCR_VISION.md §6.2c (the choice network).
+
+               It is asked, not defaulted. `events.is_published` defaults to 1
+               at the column and in the API for backward compatibility, so if
+               this is the only place a human is ever asked, this is where the
+               guarantee actually lives.
+
+               The copy names the address explicitly and says the part that is
+               easy to not think about: publishing cannot be fully undone. That
+               sentence is the whole reason this is two cards instead of a
+               checkbox — a checkbox invites you past the decision, and this
+               decision is not symmetric. -->
+          <div class="wizard-publish" data-testid="wizard-publish">
+            <p class="wizard-step-help">
+              Should this show up when neighbors look for something to do?
+            </p>
+            <div class="wizard-signup-grid">
+              <button
+                type="button"
+                class="wizard-publish-option selected"
+                data-option="published"
+                data-testid="wizard-publish-yes"
+              >
+                <span class="wizard-card-title">Yes — put it on the map</span>
+                <span class="wizard-card-desc">
+                  Anyone nearby can find it, and the address above is shown publicly.
+                </span>
+              </button>
+              <button
+                type="button"
+                class="wizard-publish-option"
+                data-option="unpublished"
+                data-testid="wizard-publish-no"
+              >
+                <span class="wizard-card-title">No — keep it off the map</span>
+                <span class="wizard-card-desc">
+                  Your links and printed codes still work, so the people you invite can
+                  still get in. It just won't be listed.
+                </span>
+              </button>
+            </div>
+            <p class="wizard-publish-note" data-testid="wizard-publish-note">
+              If it's your home, this is the choice that matters. You can change it
+              later &mdash; but anything already public may have been copied, so it's
+              worth getting right now.
+            </p>
+          </div>
         </div>
 
         <!-- Step 2 — template = a plain-language starting description. It
@@ -2239,6 +2325,11 @@
             createdId: null, // set once POST /api/v2/admin/events succeeds
             template: 'other',
             signup: 'create',
+            // OSE-1245 — matches the card marked `selected` in the markup.
+            // Kept in sync deliberately: a mismatch would mean the highlighted
+            // card and the value actually sent disagree, which on THIS question
+            // means publishing an address the organizer believes they declined.
+            published: true,
           };
 
           // Template → plain-language starting description. These feed the SAME
@@ -2364,6 +2455,11 @@
             if (dateVal) body.start_date = dateVal;
             var venueVal = document.getElementById('wizard-event-venue').value.trim();
             if (venueVal) body.location = venueVal;
+            // OSE-1245 — ALWAYS sent, never omitted. The API defaults an absent
+            // value to published, so leaving it out when the organizer chose
+            // "keep it off the map" would silently publish them. Sending it
+            // explicitly every time is what makes the question mean anything.
+            body.is_published = wiz.published;
             var prefill = TEMPLATE_PREFILL[wiz.template] || {};
             for (var k in prefill) body[k] = prefill[k];
 
@@ -2615,6 +2711,20 @@
               });
             });
           });
+          // OSE-1245 — its own class and its own handler, deliberately.
+          // These cards were first written reusing `.wizard-signup-option` to
+          // inherit the styling, which silently made them a THIRD sign-up
+          // option: the handler above would have set `wiz.signup` from them,
+          // and each grid's `.selected` sweep would have cleared the other's.
+          // The CSS is shared by selector; the behaviour is not.
+          document.querySelectorAll('.wizard-publish-option').forEach(function (el) {
+            el.addEventListener('click', function () {
+              wiz.published = el.getAttribute('data-option') !== 'unpublished';
+              document.querySelectorAll('.wizard-publish-option').forEach(function (c) {
+                c.classList.toggle('selected', c === el);
+              });
+            });
+          });
           document.querySelectorAll('.wizard-copy-btn').forEach(function (el) {
             el.addEventListener('click', function () {
               copyLink(el);
@@ -2665,6 +2775,29 @@
                 placeholder="Evergreen Park"
                 maxlength="500"
               />
+            </div>
+
+            <!-- OSE-1245 — the same question the wizard asks, in the form this
+                 surface uses. A checkbox rather than two cards is deliberate:
+                 this reader is a returning operator working a dense form, not
+                 someone meeting the decision for the first time. The wizard
+                 carries the long explanation; here the label states the
+                 consequence and the hint names the address. -->
+            <div class="full-width create-publish">
+              <label class="create-publish-label" for="create-published">
+                <input
+                  type="checkbox"
+                  id="create-published"
+                  name="is_published"
+                  data-testid="create-published"
+                  checked
+                />
+                <span>List this publicly &mdash; show it on the map and in search</span>
+              </label>
+              <p class="create-publish-hint" data-testid="create-published-hint">
+                Unchecked, it stays off every public listing and the venue above is not
+                shown. Your links and printed codes keep working either way.
+              </p>
             </div>
 
             <!-- OSE-239a: 5W content fields. WHAT/WHO/WHY/HOW/WHERE feed the
@@ -4404,6 +4537,12 @@
             const val = el && el.value ? el.value.trim() : '';
             if (val) body[apiField] = val;
           }
+
+          // OSE-1245 — sent on every create, never conditionally. The API
+          // defaults an absent value to published, so omitting it when the box
+          // is unchecked would publish an event the operator declined to list.
+          const publishedEl = document.getElementById('create-published');
+          body.is_published = publishedEl ? publishedEl.checked : true;
 
           const res = await fetch('/api/v2/admin/events', {
             method: 'POST',

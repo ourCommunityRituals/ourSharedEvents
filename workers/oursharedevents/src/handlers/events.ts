@@ -440,6 +440,26 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
   const lon = typeof body.lon === 'number' && Number.isFinite(body.lon) ? body.lon : null;
   const h3Tags = maybeTag(lat, lon);
 
+  // OSE-1245 — publication is an act (OCR_VISION.md §6.2c). The host decides
+  // whether this event appears on public discovery surfaces at all.
+  //
+  // ACCEPTED, NOT REQUIRED, and the distinction is deliberate. Requiring it
+  // would break every existing API client, and a 400 is a poor way to teach a
+  // policy. It defaults to published, which matches the column default and
+  // preserves current behaviour.
+  //
+  // The default is therefore NOT where the guarantee lives. The guarantee is
+  // that the human path always asks: `admin.html` sends an explicit value from
+  // both the wizard and the advanced form, and a test asserts it always does.
+  // A default nobody is asked about is how a home address ends up on a public
+  // map without anyone having decided that — which is the whole finding this
+  // work came from.
+  //
+  // Anything other than an explicit `false`/0 publishes, so a malformed or
+  // absent value fails toward the existing behaviour rather than silently
+  // hiding an organiser's event from the world.
+  const isPublished = body.is_published === false || body.is_published === 0 ? 0 : 1;
+
   const now = new Date().toISOString();
 
   try {
@@ -447,9 +467,9 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
       `INSERT INTO events (id, brand_id, title, slug, status, description, location, start_date, end_date, timezone, cover_image_url, template_id,
                            what_short, who_host, why_purpose, how_details, where_address,
                            who_story, who_image_url, what_video_url,
-                           lat, lon, h3_res9, h3_res7,
+                           lat, lon, h3_res9, h3_res7, is_published,
                            created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
       .bind(
         id,
@@ -476,6 +496,7 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
         lon,
         h3Tags?.h3_res9 ?? null,
         h3Tags?.h3_res7 ?? null,
+        isPublished,
         now,
         now
       )
@@ -630,6 +651,26 @@ export async function handleUpdateEvent(
         sets.push(`${field} = ?`);
         values.push(val.slice(0, max));
       }
+    }
+  }
+
+  // OSE-1245 — publication is reversible, and it must be.
+  //
+  // Handled here rather than in `allowedFields` for the same reason lat/lon
+  // are: that map holds string fields with length caps, and this is a boolean.
+  //
+  // A host who published and then thought better of it has to be able to take
+  // it back. That the take-back is imperfect — un-flipping does not un-send,
+  // and anything already scraped or cached stays out there (§6.2c) — is an
+  // argument for asking clearly BEFORE the first publish, not an argument for
+  // making the reversal unavailable.
+  //
+  // Accepts boolean or 0/1 so a form post and a JSON client agree.
+  if ('is_published' in body) {
+    const v = body.is_published;
+    if (typeof v === 'boolean' || v === 0 || v === 1) {
+      sets.push('is_published = ?');
+      values.push(v === true || v === 1 ? 1 : 0);
     }
   }
 
