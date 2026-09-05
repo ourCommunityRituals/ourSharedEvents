@@ -108,6 +108,22 @@ label{display:block;font-size:.875rem;color:var(--text-muted);margin-bottom:8px}
 .footer-cta{text-align:center;padding:24px 20px;border-top:1px solid var(--border);margin-top:20px}
 .footer-cta a{color:var(--accent);text-decoration:none;font-size:.85rem}
 
+/* Site footer — the legal surface (@ocr/ui footer(), OSE-1232).
+   Quiet by design: the audit's finding was that surfaces are busy on first
+   view, so this reads as furniture, not content. The one thing it does NOT
+   compromise on is the tap target — legal links are the links a person hunts
+   for on a phone, and a 12px link in a 20px row is not reachable. Each link
+   carries its own vertical padding so the row wraps to 44px on touch without
+   forcing 44px of dead space on a desktop line. */
+.ocr-footer{text-align:center;padding:24px 20px calc(24px + env(safe-area-inset-bottom,0px));border-top:1px solid var(--border);margin-top:32px;color:var(--text-muted);font-size:.8rem}
+.ocr-footer-legal{margin:0;display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:0 2px;line-height:1.5}
+.ocr-footer a{color:var(--accent);text-decoration:none;padding:11px 4px;display:inline-block;border-radius:var(--radius-sm)}
+.ocr-footer a:hover,.ocr-footer a:focus-visible{text-decoration:underline}
+.ocr-footer-sep{opacity:.5;padding:0 2px}
+.ocr-footer-sub{margin:4px 0 0;font-size:.75rem;opacity:.75}
+@media (pointer:coarse){.ocr-footer a{padding:14px 8px}}
+@media print{.ocr-footer{border-top:1px solid #999;color:#000;margin-top:16px}.ocr-footer a{color:#000;padding:0}}
+
 /* Track card family */
 .track-card{display:flex;align-items:center;gap:12px;padding:10px;border-radius:var(--radius-sm);transition:background .15s;cursor:pointer}
 .track-card:hover{background:var(--surface-hover)}

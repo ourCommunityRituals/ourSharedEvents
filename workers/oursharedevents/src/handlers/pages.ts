@@ -29,6 +29,7 @@ import {
   injectProvenanceBanner,
   resolveAndSignalProvenance,
 } from '../lib/demo-banner.js';
+import { injectLegalFooter } from '../lib/legal-footer';
 
 export interface PagesEnv {
   WORKER_ENV?: string;
@@ -212,7 +213,7 @@ export function renderErrorPage(
 }
 
 export async function handlePublicPage(env: PagesEnv): Promise<Response> {
-  return html(await withProvenanceBanner(PUBLIC_HTML, env, 'public'));
+  return html(injectLegalFooter(await withProvenanceBanner(PUBLIC_HTML, env, 'public'), 'public'));
 }
 
 // ─── Public event page — OSE-243a / BE-27 ─────────────────────────────────────
@@ -1240,7 +1241,7 @@ export async function handlePublicEventPage(
 }
 
 export function handleAdminPage(_env: PagesEnv): Response {
-  return html(ADMIN_HTML);
+  return html(injectLegalFooter(ADMIN_HTML, 'admin'));
 }
 
 /**
@@ -1274,7 +1275,7 @@ export function handleAdminPage(_env: PagesEnv): Response {
  * but the body is a real page a human can read.
  */
 export function handleAdminSignInPage(_env: PagesEnv): Response {
-  return html(ADMIN_SIGNIN_HTML, 401);
+  return html(injectLegalFooter(ADMIN_SIGNIN_HTML, 'admin-signin'), 401);
 }
 
 // ─── Rate limiter (per-isolate, in-memory sliding window) ────────────────────
@@ -1418,7 +1419,7 @@ export async function handleSubscribe(request: Request, env: PagesEnv): Promise<
 }
 
 export function handleLandingPage(_env: PagesEnv): Response {
-  return html(LANDING_HTML);
+  return html(injectLegalFooter(LANDING_HTML, 'landing'));
 }
 
 // ─── Display page (TV / kiosk) ──────────────────────────────────────────────────
@@ -1455,7 +1456,10 @@ export async function handleSharedReportPage(env: PagesEnv): Promise<Response> {
   // Inject data-maps-configured so client-side JS knows whether to render
   // map thumbnails via the /api/v2/maps/venue-image proxy endpoint.
   const mapsAttr = isGoogleMapsConfigured(env) ? ' data-maps-configured="1"' : '';
-  const content = SHARED_REPORT_HTML.replace('<body>', `<body${mapsAttr}>`);
+  const content = injectLegalFooter(
+    SHARED_REPORT_HTML.replace('<body>', `<body${mapsAttr}>`),
+    'shared-report'
+  );
   return html(
     injectProvenanceBanner(content, await resolveAndSignalProvenance(env, 'sharedReport'))
   );

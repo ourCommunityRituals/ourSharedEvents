@@ -19,6 +19,7 @@ export { esc, escUrl } from './esc';
 export { contrastRatio } from './contrast';
 export {
   header,
+  footer,
   bottomNav,
   button,
   card,
@@ -35,6 +36,8 @@ export {
   type NavItem,
   type ButtonOpts,
   type EmptyStateOpts,
+  type FooterOpts,
+  type FooterLink,
   type FormInputOpts,
   type TextareaOpts,
   type FormSelectOpts,

@@ -35,7 +35,7 @@
  *   Derived from the templates, so it can never claim an id the app does not
  *   emit. Dynamically-built ids (`data-testid="row-' + id + '"`) are excluded
  *   on purpose: t() would accept one while nothing ever renders it.
- * Generated 2026-09-04 — 379 ids.
+ * Generated 2026-09-05 — 376 ids.
  */
 (function (root, factory) {
   const api = factory();
@@ -259,7 +259,7 @@
       'wizard-template-other',
       'wizard-template-trivia',
     ]),
-    // public.html — 32 ids
+    // public.html — 29 ids
     PUBLIC: Object.freeze([
       'anonymity-affordance',
       'public-error',
@@ -276,9 +276,6 @@
       'public-events-empty',
       'public-events-heading',
       'public-events-section',
-      'public-footer',
-      'public-footer-browse',
-      'public-footer-copyright',
       'public-header',
       'public-loading',
       'public-main',

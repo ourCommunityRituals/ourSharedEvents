@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   page,
   header,
+  footer,
   bottomNav,
   button,
   emptyState,
@@ -233,5 +234,96 @@ describe('stylesheet — form field classes', () => {
   });
   it('contains .input-error class', () => {
     expect(ocrStylesheet).toContain('.input-error');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// footer() — the legal surface (OSE-1232)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('footer()', () => {
+  const links = [
+    { href: '/events', label: 'Browse Events', testid: 'landing-footer-browse' },
+    { href: '/privacy', label: 'Privacy', testid: 'landing-footer-privacy' },
+  ];
+
+  it('emits a <footer> carrying the surface-prefixed test-id', () => {
+    const html = footer({ surface: 'landing', links, year: 2026 });
+    expect(html).toContain('<footer class="ocr-footer" data-testid="landing-footer">');
+    expect(html).toContain('data-testid="landing-footer-copyright"');
+  });
+
+  it('renders the copyright with the injected year and product', () => {
+    const html = footer({ surface: 'public', links: [], year: 2031, product: 'OurWKRP' });
+    expect(html).toContain('© 2031 OurWKRP');
+  });
+
+  it('defaults the year to the current UTC year', () => {
+    const html = footer({ surface: 'public', links: [] });
+    expect(html).toContain(`© ${new Date().getUTCFullYear()} OurSharedEvents`);
+  });
+
+  it('renders links in the order given, first link first', () => {
+    const html = footer({ surface: 'landing', links, year: 2026 });
+    expect(html.indexOf('/events')).toBeLessThan(html.indexOf('/privacy'));
+  });
+
+  // The contract two E2E specs depend on: `[data-testid="landing-footer"] a`
+  // resolved to exactly one element, so adding Privacy would have broken them
+  // under Playwright strict mode. Per-link test-ids are the fix, and this test
+  // is what keeps them from being dropped as noise later.
+  it('gives every link its own test-id when one is supplied', () => {
+    const html = footer({ surface: 'landing', links, year: 2026 });
+    expect(html).toContain('data-testid="landing-footer-browse"');
+    expect(html).toContain('data-testid="landing-footer-privacy"');
+  });
+
+  it('omits the test-id attribute for a link that has none', () => {
+    const html = footer({ surface: 'x', links: [{ href: '/a', label: 'A' }] });
+    expect(html).toContain('<a href="/a">A</a>');
+  });
+
+  it('emits no separator and no links when the array is empty', () => {
+    const html = footer({ surface: 'admin', links: [], year: 2026 });
+    expect(html).not.toContain('<a ');
+    expect(html).not.toContain('ocr-footer-sep');
+  });
+
+  it('renders the standing subtitle only when asked', () => {
+    expect(footer({ surface: 'public', links: [] })).not.toContain('Never who');
+    const on = footer({ surface: 'public', links: [], subtitle: true });
+    expect(on).toContain('Never who, only how many.');
+    expect(on).toContain('data-testid="public-footer-subtitle"');
+  });
+
+  it('escapes the link label and the product name', () => {
+    const html = footer({
+      surface: 'x',
+      links: [{ href: '/a', label: '<script>alert(1)</script>' }],
+      product: '<b>Ours</b>',
+    });
+    expect(html).not.toContain('<script>');
+    expect(html).not.toContain('<b>Ours</b>');
+    expect(html).toContain('&lt;script&gt;');
+  });
+
+  it('neutralises a javascript: href through escUrl', () => {
+    const html = footer({ surface: 'x', links: [{ href: 'javascript:alert(1)', label: 'X' }] });
+    expect(html).not.toContain('href="javascript:alert(1)"');
+  });
+
+  it('marks separators aria-hidden so a screen reader does not read the dots', () => {
+    const html = footer({ surface: 'landing', links, year: 2026 });
+    expect(html).toContain('<span class="ocr-footer-sep" aria-hidden="true">');
+  });
+
+  it('carries no inline style — all styling comes from /ui.css', () => {
+    expect(footer({ surface: 'x', links, year: 2026 })).not.toContain('style=');
+  });
+
+  it('ships its classes in the shared stylesheet', () => {
+    for (const cls of ['.ocr-footer', '.ocr-footer-legal', '.ocr-footer-sep', '.ocr-footer-sub']) {
+      expect(ocrStylesheet).toContain(cls);
+    }
   });
 });
