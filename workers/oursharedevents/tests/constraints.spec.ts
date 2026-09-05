@@ -123,7 +123,7 @@ describe('QA-1: Migration idempotency', () => {
     const indexes = await env.DB.prepare(
       "SELECT name FROM sqlite_master WHERE type='index' AND name LIKE 'idx_%'"
     ).all();
-    expect(indexes.results).toHaveLength(68);
+    expect(indexes.results).toHaveLength(69);
   });
 });
 

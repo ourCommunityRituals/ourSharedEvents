@@ -219,6 +219,26 @@ export class DataProvider {
     return { data: fixture, source: 'mock', cacheAge: null };
   }
 
+  /**
+   * Fetch one event by id.
+   *
+   * DELIBERATELY NOT FILTERED BY `is_published` (OSE-1245). Unpublished means
+   * ABSENT FROM DISCOVERY — the map and the list — not unreachable. A host who
+   * keeps their home off the map still printed a QR poster and still handed a
+   * link to the twelve people they invited; breaking those would make
+   * unpublishing break the host's own event, which is the opposite of giving
+   * them control.
+   *
+   * The distinction is: `/events` and `/events/map` ANSWER "what is happening
+   * near me" and must only speak for hosts who said yes. `/events/:id` and
+   * `/forms/:id` ARE the event, reached by someone who already has its
+   * address — the flag was never about them.
+   *
+   * The consequence to be honest about: an unpublished event's id is still a
+   * bearer token. Ids are UUIDs, not enumerable, but this is a knows-the-link
+   * model rather than an access-control one, and it should be named as such
+   * rather than mistaken for privacy.
+   */
   private async fetchEvent(eventId: string): Promise<MockEvent | null> {
     return this.db!.prepare(
       `SELECT id, brand_id, title, slug, status, description, location,
@@ -250,7 +270,8 @@ export class DataProvider {
               legal_clearance_tier,
               what_short, who_host, why_purpose, how_details, where_address,
               lat, lon, corridor_id, h3_res9, h3_res7
-       FROM events WHERE brand_id = ? AND status = 'active'
+       FROM events
+       WHERE is_published = 1 AND brand_id = ? AND status = 'active'
        ORDER BY start_date ASC`
     )
       .bind(brand)

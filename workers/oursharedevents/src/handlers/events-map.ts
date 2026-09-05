@@ -150,6 +150,11 @@ export async function handleEventsMap(request: Request, env: EventsMapEnv): Prom
     // first cut shipped without it.
     const brand = url.searchParams.get('brand') || 'root';
 
+    // `is_published = 1` FIRST, because it is the strongest filter and the one
+    // whose absence is a harm rather than a bug. A host who has not published
+    // is not a row to be filtered late — they are not on this surface at all
+    // (OSE-1245, owner: "they control whether they appear on the map").
+    //
     // Bounded in rows and in time.
     //
     // `status = 'active'` does not expire — an event stays active after it
@@ -169,7 +174,8 @@ export async function handleEventsMap(request: Request, env: EventsMapEnv): Prom
       `SELECT id, title, slug, status, location, start_date, end_date, timezone,
               lat, lon, h3_res7
          FROM events
-        WHERE brand_id = ? AND h3_res7 = ? AND status = 'active'
+        WHERE is_published = 1
+          AND brand_id = ? AND h3_res7 = ? AND status = 'active'
           AND start_date >= ? AND start_date <= ?
         ORDER BY start_date ASC
         LIMIT ?`
