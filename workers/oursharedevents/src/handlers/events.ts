@@ -15,6 +15,7 @@
 import { corsHeaders } from '../lib/cors';
 import { assertRenderable, VALID_EVENT_STATES, parseEventState } from '../domain/event-state';
 import { enrichWithPhase } from '../lib/event-enrich.js';
+import { toPublicEvent } from '../lib/public-event-projection.js';
 import { createShortlink } from '../lib/shortlinks';
 import { maybeTag } from '../lib/h3-tagging';
 import { getDataProvider, type DataProviderEnv } from '../lib/data-provider.js';
@@ -78,7 +79,12 @@ export async function handleListEvents(
   try {
     const dp = getDataProvider(env, ctx);
     const result = await dp.listEvents(brand);
-    const items = result.data.map((e: unknown) => enrichWithPhase(e as Record<string, unknown>));
+    // OSE-1247 — enrich, then project. The projection is an allowlist, so a
+    // column added to the SELECT for an internal reason does not reach the
+    // public response by default.
+    const items = result.data.map((e: unknown) =>
+      toPublicEvent(enrichWithPhase(e as Record<string, unknown>))
+    );
     return Response.json(
       { ok: true, status: 200, items },
       {
@@ -139,7 +145,11 @@ export async function handleGetEvent(
     }
 
     return Response.json(
-      { ok: true, status: 200, item: enrichWithPhase(row) },
+      // OSE-1247 — same projection as the list. If the two endpoints described
+      // the same event with different field sets, the narrower one would be
+      // security theatre: a caller wanting the extra fields would just use the
+      // other route.
+      { ok: true, status: 200, item: toPublicEvent(enrichWithPhase(row)) },
       {
         headers: {
           ...corsHeaders(request),

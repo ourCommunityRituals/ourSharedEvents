@@ -111,7 +111,21 @@ describe('OSE-489: venue H3 column wiring', () => {
     expect(row?.h3_res7).toBeNull();
   });
 
-  test('4. GET /api/v2/events/:id response includes h3_res9 and h3_res7', async () => {
+  // OSE-1247 amended this test, and the amendment is a CONTRACT CHANGE worth
+  // reading rather than skimming.
+  //
+  // OSE-489 put both H3 cells on the public detail response. OSE-1247 removed
+  // `h3_res9` — the ~201 m NODE cell — from public responses, because
+  // `/api/v2/events/map` REFUSES to accept res-9 precision (a caller cannot
+  // narrow a map query below corridor) while the event endpoints were freely
+  // emitting it. The floor was enforced inbound and not outbound.
+  //
+  // Nothing OSE-489 was verifying is lost. Tests 1-3 above already probe the
+  // wiring at the DB with `getEventRow`, which is where "did the tagger run"
+  // actually lives; and `h3_res7` is still public, so the API assertion still
+  // proves the pipeline reaches the response. The res-9 assertion simply moves
+  // to the probe its siblings already use.
+  test('4. GET /api/v2/events/:id emits h3_res7; h3_res9 is stored but not published', async () => {
     // Create an event with Eagles Hall coords
     const createRes = await postEvent({
       title: 'OSE-489 GET Test',
@@ -128,8 +142,16 @@ describe('OSE-489: venue H3 column wiring', () => {
     expect(getRes.status).toBe(200);
     const getBody = (await getRes.json()) as { ok: boolean; item?: Record<string, unknown> };
     expect(getBody.ok).toBe(true);
-    expect(getBody.item?.h3_res9).toBe(EAGLES_RES9);
+    // The corridor cell is public — it is the resolution the map itself serves.
     expect(getBody.item?.h3_res7).toBe(EAGLES_RES7);
+    // The node cell is NOT public. Asserted as an absence, because this is the
+    // direction that can silently regress: a field reappearing in a response
+    // breaks nothing and looks like nothing.
+    expect(getBody.item).not.toHaveProperty('h3_res9');
+    // But it IS stored — the tagger ran, and the platform still has the cell it
+    // needs for NCR accumulation. Not published is not the same as not recorded.
+    const row = await getEventRow(createBody.id!);
+    expect(row?.h3_res9).toBe(EAGLES_RES9);
   });
 
   test('5. UPDATE lat/lon recomputes H3 cells (Eagles Hall → RIPH)', async () => {

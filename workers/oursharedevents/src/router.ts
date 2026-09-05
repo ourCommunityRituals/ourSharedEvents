@@ -101,6 +101,7 @@
 import { serveCss } from '@ocr/ui';
 import { handleHealth } from './handlers/health';
 import { handleEventsMap } from './handlers/events-map.js';
+import { publicReadLimited } from './lib/public-read-limit.js';
 import {
   handleListEvents,
   handleGetEvent,
@@ -1060,14 +1061,21 @@ export async function route(
 
   // ── Public API ─────────────────────────────────────────────────────────────
   if (pathname === '/api/v2/events') {
-    return handleListEvents(request, env);
+    // OSE-1247 — rate limited, own bucket: hammering the map must not throttle
+    // someone reading the list.
+    return publicReadLimited('events-list', handleListEvents)(request, env);
   }
 
   // OSE-1242 — attendee map data. Cell-scoped; the endpoint refuses
   // coordinates outright so Invariant #1 holds by construction (§6.2b).
   // Must be matched BEFORE '/api/v2/events/:id', or 'map' is read as an id.
+  //
+  // OSE-1247 — rate limited. The `cell` parameter is an index over geography
+  // and a metro is ~2,800 corridor cells, so unlimited this endpoint is a bulk
+  // export of every event with coordinates. The limit is a speed bump on
+  // enumeration, not an auth boundary; it fails open if KV is unavailable.
   if (pathname === '/api/v2/events/map') {
-    return handleEventsMap(request, env);
+    return publicReadLimited('events-map', handleEventsMap)(request, env);
   }
 
   // ── S-3.5.1: Admin mint endpoint ───────────────────────────────────────────
