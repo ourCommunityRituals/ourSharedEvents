@@ -11,6 +11,8 @@
  *   GET /api/status              → alias for /health
  *   GET /api/v2/events           → list active events
  *   GET /api/v2/events/:id       → single event
+ *   GET /api/v2/events/map       → attendee map, cell-scoped (OSE-1242).
+ *                                  Accepts ?cell=<h3 res7>; REFUSES lat/lon.
  *   GET /api/v2/events/:id/shared-report     → SharedReport (signed-link auth, OSE-272 S5)
  *   POST /api/v2/events/shared-reports/batch → SharedReport batch (WKRP service token, OSE-272 S5)
  *   POST /api/v2/admin/events/:id/shared-report/mint-link → mint signed token (admin, S-3.5.1)
@@ -98,6 +100,7 @@
 
 import { serveCss } from '@ocr/ui';
 import { handleHealth } from './handlers/health';
+import { handleEventsMap } from './handlers/events-map.js';
 import {
   handleListEvents,
   handleGetEvent,
@@ -1058,6 +1061,13 @@ export async function route(
   // ── Public API ─────────────────────────────────────────────────────────────
   if (pathname === '/api/v2/events') {
     return handleListEvents(request, env);
+  }
+
+  // OSE-1242 — attendee map data. Cell-scoped; the endpoint refuses
+  // coordinates outright so Invariant #1 holds by construction (§6.2b).
+  // Must be matched BEFORE '/api/v2/events/:id', or 'map' is read as an id.
+  if (pathname === '/api/v2/events/map') {
+    return handleEventsMap(request, env);
   }
 
   // ── S-3.5.1: Admin mint endpoint ───────────────────────────────────────────

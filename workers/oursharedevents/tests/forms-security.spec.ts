@@ -91,6 +91,13 @@ describe('S2: Scan/event handlers NEVER reference FORMS_DB', () => {
   // pages.ts may read COUNTs but must NEVER select an identity/PII column from a
   // FORMS_DB table. This enforces that precise boundary instead of a blanket ban
   // that drifted out of date once pages.ts gained the recap stats.
+  // OSE-1242: the `path.includes('handlers/events')` below is a PREFIX match and
+  // is deliberately left that way. Here it is an INCLUSION filter, so a new
+  // sibling (events-map.ts) is automatically pulled into the isolation check —
+  // which is what you want from a security gate. Two other suites used the same
+  // loose match inside `Object.keys().find()`, where the prefix made the WRONG
+  // file win; those were tightened to an exact filename. Do not "make these
+  // consistent" — a find() and a filter want opposite things from a loose match.
   test('events.ts + health.ts have zero references to FORMS_DB', () => {
     const sources: Record<string, string> = JSON.parse(tenv().TEST_SOURCE_FILES_JSON);
     for (const [path, content] of Object.entries(sources)) {
