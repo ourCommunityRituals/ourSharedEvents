@@ -2,6 +2,7 @@
 
 **Date:** 2026-09-04 · **Basis:** UX laws audit (pass 1) + synthesis (pass 2), measured against the code
 **Scope:** integration, rendering, performance, long-term maintenance
+**Execution log:** §7 (steps 1–3 landed 2026-09-05)
 
 ---
 
@@ -28,10 +29,10 @@ Measured today:
 
 **A component system already exists, is well-built, and is essentially unadopted.**
 
-`packages/ui` (`@ocr/ui`) exports **14 partials**:
+`packages/ui` (`@ocr/ui`) exports **15 partials** (14 when this was written; `footer()` landed as step 3):
 
 ```
-header()  bottomNav()  button()  card()  loading()  emptyState()
+header()  footer()  bottomNav()  button()  card()  loading()  emptyState()
 accessDenied()  formInput()  textarea()  formSelect()  checkbox()
 radioGroup()  formGroup()  page()
 ```
@@ -40,6 +41,18 @@ radioGroup()  formGroup()  page()
 
 **Adoption in production surfaces: near zero.** The only import of the partials is `pages.ts:1466`, and it feeds a _preview_ section (`data-testid="preview-section-form-partials"`, `<h2>Form partials — @ocr/ui</h2>`). `demo.ts` imports `esc`/`escUrl` only.
 
+> **Updated 2026-09-05.** `footer()` is now adopted on five served surfaces via
+> `src/lib/legal-footer.ts` — the first partial in the real render path. One
+> more thing this step turned up: **`packages/ui` had no vitest config**, so
+> `vitest` walked up to the root config, whose include
+> (`tests/{unit,contract,integration}/**`) cannot match `packages/ui/tests/`.
+> All four suites reported _"No test files found"_ and CI never ran them. The
+> package's `"test": "vitest run tests/"` script was correct and inert; config
+> resolution was the gap. **A component library nobody adopts is one problem; a
+> component library whose 90 tests do not execute is a different and worse
+> one** — and it is most of why "well-built" above was an inference from
+> reading the code rather than a fact anything checked.
+
 The seven served templates are **standalone HTML documents imported as strings**:
 
 ```ts
@@ -47,7 +60,7 @@ import PUBLIC_HTML from '../templates/public.html';
 import ADMIN_HTML from '../templates/admin.html';
 ```
 
-There is **no layout function, no partial composition, no shared footer or header** in the render path. Each template carries its own `<style>` block — **14 of them across 7 files**.
+There is **no layout function, no partial composition, and (until step 3) no shared footer or header** in the render path. Each template carries its own `<style>` block — **14 of them across 7 files**.
 
 **This is why the footer problem (OSE-1232) looks harder than it is.** The answer is not "build a footer." It is "adopt the composition layer that already exists, and the footer is its first partial."
 
@@ -95,11 +108,11 @@ Surfaces: `public`, `shared-report`, `admin`, `admin-signin`, `landing`. **Not `
 `CLAUDE.md` describes _"three parallel frontend copies (`src/templates/`, `web/`, `src/frontend/`)."_
 Only one of the three is a template copy. Measured:
 
-| Path                      | What it actually is                                                 | Status                                         |
-| ------------------------- | ------------------------------------------------------------------- | ---------------------------------------------- |
-| `src/templates/`          | 7 served HTML templates                                             | ✅ the real templates                          |
-| `web/shared/`             | `apiClient.js`, `assetState.js`, `errorStates.js`, **`testids.js`** | ❗ **live and load-bearing — do not touch**    |
-| `src/frontend/apiClient/` | 7 TS modules (base, admin, poster, public, display, env)            | ⚠️ no importers found; last touched 2026-08-25 |
+| Path                      | What it actually is                                                   | Status                                                  |
+| ------------------------- | --------------------------------------------------------------------- | ------------------------------------------------------- |
+| `src/templates/`          | 7 served HTML templates                                               | ✅ the real templates                                   |
+| `web/shared/`             | `apiClient.js`, `assetState.js`, `errorStates.js`, **`testids.js`**   | ❗ **live and load-bearing — do not touch**             |
+| `src/frontend/apiClient/` | 7 TS modules (base, admin, poster, public, display, env), 2,439 lines | ⚠️ **OSE-1235 filed 2026-09-05** — confirm, then retire |
 
 **`web/shared/` must not be deleted:**
 
@@ -110,7 +123,14 @@ Only one of the three is a template copy. Measured:
 - Last touched **today**.
 
 **`src/frontend/apiClient/` — investigate, do not assume.** No importer was found in the worker or
-tests, but "no importer found" is not "dead." File a story to confirm and retire it deliberately.
+tests, but "no importer found" is not "dead." **Filed as OSE-1235** (2026-09-05) to confirm, then
+retire deliberately.
+
+One thing the story turned up that strengthens the case: the only references to these files anywhere
+in the repo are **five entries in `scripts/guard-no-gas.allowlist.json`** (lines 103–107), and the
+`script.google.com` strings they allow are _comments saying the files do not call it_
+(`admin.ts:21`, `env.ts:114`). So retiring them also removes five rows from the Deprecation Lock's
+allowlist — a smaller allowlist is a tighter lock (Invariant #10).
 
 **Correct `CLAUDE.md`'s characterisation** — it is one template directory, one live shared-JS
 directory, and one candidate for retirement. Calling them "three parallel frontend copies" is what
@@ -210,17 +230,17 @@ Cheap to compute, and it would have prevented the §0 error.
 
 ## 6. Next steps, in order
 
-| #     | Step                                                                | Size  | Blocked by                                  | Moves                                           |
-| ----- | ------------------------------------------------------------------- | ----- | ------------------------------------------- | ----------------------------------------------- |
-| **1** | Correct `CLAUDE.md` §3 front-end current-state                      | **S** | —                                           | Nothing ships, but it stops misdirecting effort |
-| **2** | Delete `web/` and `src/frontend/`                                   | **S** | —                                           | Removes the wrong-file hazard permanently       |
-| **3** | Add `footer()` to `@ocr/ui`; adopt on 5 surfaces against `/privacy` | **S** | _(terms content is parallel, not blocking)_ | Laws 4, 10, 14 · OSE-1232                       |
-| **4** | Mobile-workability audit → PR code, then blocking                   | **M** | OSE-1211 for full coverage                  | Laws 2, 8, 14 — **protects everything else**    |
-| **5** | Server-render `/events`                                             | **M** | —                                           | Law 6 on the discovery surface                  |
-| **6** | Wire `checkAll()` into the T0 invariants shard                      | **S** | —                                           | Maintenance floor                               |
-| **7** | Measure the bundle's cold-start cost, then split admin              | **M** | step 7a is measurement                      | Law 6                                           |
-| **8** | Adopt `emptyState()` and `header()`                                 | **M** | step 3 proves the pattern                   | Laws 10, 12 · OSE-1233                          |
-| **9** | Consolidate `<style>` blocks into `/ui.css`, template by template   | **L** | steps 3 and 8                               | Law 13 · the ΔE drift surface                   |
+| #     | Step                                                                                                     | Size  | Blocked by                 | Moves                                                      |
+| ----- | -------------------------------------------------------------------------------------------------------- | ----- | -------------------------- | ---------------------------------------------------------- |
+| **1** | Correct `CLAUDE.md` §3 front-end current-state                                                           | **S** | —                          | Nothing ships, but it stops misdirecting effort            |
+| **2** | ~~Delete `web/` and `src/frontend/`~~ → **confirm and retire `src/frontend/apiClient/` only** (OSE-1235) | **S** | —                          | Retracted and rewritten — see §2.3. `web/` is load-bearing |
+| **3** | ~~Add `footer()` to `@ocr/ui`; adopt on 5 surfaces against `/privacy`~~ ✅ **DONE 2026-09-05**           | **S** | —                          | Laws 4, 10, 14 · OSE-1232                                  |
+| **4** | Mobile-workability audit → PR code, then blocking                                                        | **M** | OSE-1211 for full coverage | Laws 2, 8, 14 — **protects everything else**               |
+| **5** | Server-render `/events`                                                                                  | **M** | —                          | Law 6 on the discovery surface                             |
+| **6** | Wire `checkAll()` into the T0 invariants shard                                                           | **S** | —                          | Maintenance floor                                          |
+| **7** | Measure the bundle's cold-start cost, then split admin                                                   | **M** | step 7a is measurement     | Law 6                                                      |
+| **8** | Adopt `emptyState()` and `header()`                                                                      | **M** | step 3 proves the pattern  | Laws 10, 12 · OSE-1233                                     |
+| **9** | Consolidate `<style>` blocks into `/ui.css`, template by template                                        | **L** | steps 3 and 8              | Law 13 · the ΔE drift surface                              |
 
 **Steps 1–3 and 6 are all S-sized, block nothing, and need no sign-off beyond the front-end engineer.** They can land this week.
 
@@ -235,3 +255,103 @@ Cheap to compute, and it would have prevented the §0 error.
 - **No client-side caching.** Director's veto, stated in pass 2 with its cost.
 - **No tier-keyed CSS.** WALL-3b (OSE-835) is live and detonates on it.
 - **No new UEC hues.** OSE-322 is shipped and scoped to the QR surface; the ΔE rule is the complement for brand tokens, not a licence to add colours.
+
+---
+
+## 7. Execution log
+
+Written under the write-clearance rule
+([[OCR_STANDARD_reconciliationLoop]] §9.5): each entry is recorded **after**
+the change merged with tests named and passing and the §9.1 doc traversal
+closed — never as a plan, never as a placeholder. An entry here asserts
+something that was true when it was written and cites how to re-derive it.
+
+### Step 1 — Correct `CLAUDE.md` §3 front-end current-state · ✅ 2026-09-04
+
+`345 admin inline styles` → **17**. `58 wrong-direction breakpoints` → **9**.
+Both were true when written in 2026-08 and had been drained by work nobody
+recorded. Corrected at its home in `CLAUDE.md:151`, with the superseded figures
+kept inline so the next reader can see the delta rather than wonder whether the
+new number is a typo.
+
+### Step 2 — The "three parallel frontend copies" claim · ✅ 2026-09-05
+
+The claim was wrong, and it was wrong in a direction that produced **dangerous
+advice**: an earlier draft of this document recommended deleting `web/`, which
+would have broken CI. Caught by the §9.1 traversal, not by review. See §2.3.
+
+- `CLAUDE.md` §4 rewritten — one template directory, one live shared-JS
+  directory, one retirement candidate.
+- **OSE-1235** filed for the one genuine candidate, `src/frontend/apiClient/`.
+  It is a _confirm-then-retire_ story, not a delete: "no importer found" is not
+  "dead," and that distinction is precisely what the bad draft got wrong.
+
+### Step 3 — `footer()` in `@ocr/ui`, adopted on five surfaces · ✅ 2026-09-05
+
+**What was actually broken.** Not the markup — the _reachability_. The privacy
+policy was linked from exactly one surface, `admin-signin`, whose readers are
+staff. Two public surfaces linked it from nowhere; `admin` and `shared-report`
+had no footer at all. On a product whose promise is "Never who, only how many,"
+the page that explains that promise was unreachable from the pages that make it.
+
+**What shipped.**
+
+|             |                                                                                                                                  |
+| ----------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| Partial     | `packages/ui/src/partials.ts` → `footer()`, the 15th                                                                             |
+| Composition | `workers/oursharedevents/src/lib/legal-footer.ts`                                                                                |
+| Mechanism   | `<!--OCR_LEGAL_FOOTER-->` marker, replaced at serve time                                                                         |
+| Adopted     | `landing`, `public`, `admin`, `admin-signin`, `shared-report`                                                                    |
+| Not adopted | `display` (TV at ten feet), `poster` (print legal differs)                                                                       |
+| Styling     | `.ocr-footer` in `componentStyles`; all 7 templates already link `/ui.css`, so it reached every surface with no per-template CSS |
+
+**Three design decisions worth keeping.**
+
+1. **The opt-out is silence.** A template with no marker is returned
+   byte-identical. `display` and `poster` opt out by saying nothing rather than
+   by a negative check somebody has to remember to maintain.
+2. **Links are data.** `/terms`, `/legal` and `/accessibility` **do not exist** —
+   verified against `src/router.ts`, which routes `/privacy` and
+   `/privacy-policy` and nothing else. They are therefore not linked, and a test
+   asserts every href in `LEGAL_LINKS` is routable, so a link added ahead of its
+   page fails CI. **A dead link is at its worst in the one place people go
+   looking for their rights.** When Terms is written it is one array entry.
+3. **Position is not an identity.** Two E2E specs addressed the landing link as
+   `[data-testid="landing-footer"] a`, which resolved uniquely _only because_
+   that footer had exactly one link. Adding Privacy would have turned both into
+   Playwright strict-mode violations. Every link now carries its own test-id.
+   The copyright assertion moved off the literal `'2026'` for the same class of
+   reason: the year is derived at render time, so a literal would have passed
+   all year and failed at midnight on 1 January, for a reason nobody would
+   connect to this change.
+
+**Two things the step turned up that were not on the list.**
+
+- **`packages/ui` tests never ran.** No vitest config, so `vitest` walked up to
+  the root config whose include cannot match `packages/ui/tests/`. All four
+  suites reported _"No test files found, exiting with code 1."_ Fixed with
+  `packages/ui/vitest.config.ts`; **90 tests now execute.** `react.test.tsx` is
+  excluded rather than deleted — React is Phase 3 and is not installed at the
+  root, so it fails at resolve time, which is a red that says nothing about the
+  code.
+- **A registry coverage gap, recorded not papered over.** Footer test-ids are
+  now built from a surface prefix, so they are dynamic by `gen-testids.mjs`'s
+  existing rule and correctly drop out of `web/shared/testids.js`. The registry
+  stays **truthful** (it claims nothing the app does not emit) but is no longer
+  **complete** for composed markup — and completeness is what makes `t()`
+  useful. Closing it means deriving from rendered output rather than template
+  source, which needs a TS loader that plain-node script does not have.
+  Documented at the generator, where the next reader will be, and it gets more
+  valuable with every partial adopted (step 8).
+
+**Verification.** 13 partial unit tests + 19 in-process worker tests, born-red
+both ways: dropping per-link ids fails the id test; reverting the landing
+injection fails three, _including the marker-leak guard_. Full worker suite
+**3134/3134** (219 files), root suite **1853**, a11y **9/9**, `gen-testids
+--check` clean, `tsc` clean, lint 0 errors.
+
+**What step 3 does NOT cover.** §2.2's table called this "4 divergent inline
+legal blocks." Three were footers and are now one. The fourth is the **~7 lines
+of GDPR prose beneath the survey's Submit button** (UX audit laws 4 and 10) —
+that is form-body copy in `form-pages.ts`, not a footer, and it is a separate
+fix. Naming it here so the ✅ above is not read as covering it.
