@@ -9,6 +9,7 @@
 import { describe, test, expect } from 'vitest';
 import { handleAdminPage, handleDisplayPage } from '../src/handlers/pages';
 import { handleFormPage } from '../src/handlers/form-pages';
+import { renderEventList, renderEventListError } from '../src/lib/event-list.js';
 
 function adminHtml(): Promise<string> {
   return handleAdminPage({} as never).text();
@@ -94,29 +95,51 @@ describe('AS-7: ARIA attributes on Display page (OSE-52)', () => {
 // ─── AS-4: Public data-testid coverage ───────────────────────────────────────
 
 describe('AS-4: Public page has 15+ data-testid values (OSE-49)', () => {
-  const requiredIds = [
+  // OSE-1243 split this list in two. The public list is server-rendered now, so
+  // the page no longer carries every state's markup at once — it carries the
+  // state it is actually in. Asserting all of them against one response would
+  // mean re-adding dead markup to satisfy a test.
+  //
+  // `public-loading` is gone outright and is not listed anywhere below: there
+  // is no loading state, because nothing loads after the response.
+  const alwaysPresent = [
     'public-header',
     'public-main',
     'public-sponsor-banner',
     'public-events-heading',
     'public-events',
-    'public-loading',
+    'public-events-count',
+    'public-sponsor-card',
+    'public-sponsor-name',
+  ];
+
+  // Present when the page has events to show. `pubHtml()` passes an empty env,
+  // so the DataProvider falls through to its fixture and this is the state it
+  // renders — the populated one.
+  const whenPopulated = [
     'public-event-card',
     'public-event-info',
     'public-event-name',
     'public-event-meta',
     'public-event-cta',
-    'public-events-empty',
-    'public-error',
-    'public-sponsor-card',
-    'public-sponsor-name',
   ];
 
-  for (const id of requiredIds) {
+  for (const id of [...alwaysPresent, ...whenPopulated]) {
     test(`public page has data-testid="${id}"`, async () => {
       expect(await pubHtml()).toContain(`data-testid="${id}"`);
     });
   }
+
+  // The two state-dependent ids, asserted against the state that produces them.
+  // Reached through the renderer rather than the handler because that is where
+  // the state is decided; the handler's job is only to pick one.
+  test('the empty state carries data-testid="public-events-empty"', () => {
+    expect(renderEventList([]).html).toContain('data-testid="public-events-empty"');
+  });
+
+  test('the error state carries data-testid="public-error"', () => {
+    expect(renderEventListError().html).toContain('data-testid="public-error"');
+  });
 
   test('public page has 15+ distinct data-testid values', async () => {
     const body = await pubHtml();
@@ -158,7 +181,22 @@ describe('AS-6: ARIA attributes on Public page (OSE-51)', () => {
   });
 
   test('public CTA links have aria-label for screen readers', async () => {
-    expect(await pubHtml()).toContain('aria-label="Register for');
+    // OSE-1243: this used to assert the literal 'aria-label="Register for',
+    // which passed because that string sat in the template's client script —
+    // it was true of the SOURCE regardless of what the page rendered. The list
+    // is server-rendered now, so the CTA reflects the event's real phase: a
+    // past event gets a recap link, and asserting "Register" would fail
+    // whenever the fixture aged past its own date (which is exactly how this
+    // was found). What the a11y contract actually requires is that whichever
+    // CTA renders is labelled.
+    expect(await pubHtml()).toMatch(/data-testid="public-event-cta"[^>]*aria-label="[^"]+"/);
+  });
+
+  test('both CTA variants are labelled, not just the one the fixture renders', () => {
+    const pre = renderEventList([{ id: 'e1', name: 'Bocce Thursday', phase: 'pre_event' }]).html;
+    const post = renderEventList([{ id: 'e2', name: 'Game Night', phase: 'post_event' }]).html;
+    expect(pre).toContain('aria-label="Register for Bocce Thursday"');
+    expect(post).toContain('aria-label="See how Game Night went"');
   });
 });
 

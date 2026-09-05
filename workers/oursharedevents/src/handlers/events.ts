@@ -14,7 +14,7 @@
 
 import { corsHeaders } from '../lib/cors';
 import { assertRenderable, VALID_EVENT_STATES, parseEventState } from '../domain/event-state';
-import { computeEventPhase, type EventPhase } from '../domain/event-phase';
+import { enrichWithPhase } from '../lib/event-enrich.js';
 import { createShortlink } from '../lib/shortlinks';
 import { maybeTag } from '../lib/h3-tagging';
 import { getDataProvider, type DataProviderEnv } from '../lib/data-provider.js';
@@ -25,36 +25,9 @@ import { validateLogoUrl } from '../lib/sponsor-logo';
 
 // ─── Phase enrichment ──────────────────────────────────────────────────────────
 //
-// Per OSE-242 (rescoped 2026-04-26 to canonical matrix-wide resolver), every
-// event API response carries `phase` so that all 5 surfaces (Sponsor, Poster,
-// Display, Public, SharedReport, Admin event-list) consume the same canonical
-// phase computation. Wiring here = single point of injection; surfaces don't
-// re-derive phase locally. Brain contract:
-//   OCR-docs/ocr-docs-brain/event-phase-contract.yaml
-function enrichWithPhase(
-  row: Record<string, unknown>
-): Record<string, unknown> & { phase: EventPhase } {
-  return {
-    ...row,
-    // OSE-844 (X-10) — canonical field-name mapping. The DB SELECT projects the
-    // column names `title`/`start_date`/`location`; every surface template
-    // (display/poster/public) reads `name`/`startDateISO`/`venue`. Map ONCE here
-    // — the single enrichment seam feeding list, detail and admin-list — instead
-    // of four `||` fallbacks scattered across the templates (which taught every
-    // future surface author that two names per value is normal). The DB columns
-    // stay in the payload (additive; #16 is a floor, so this never breaks the
-    // snapshot). ADR-016. Decision: PO + backend lead chose Option A (map in the
-    // API, one name per value out).
-    name: typeof row.title === 'string' ? row.title : (row.name ?? null),
-    startDateISO: typeof row.start_date === 'string' ? row.start_date : (row.startDateISO ?? null),
-    venue: typeof row.location === 'string' ? row.location : (row.venue ?? null),
-    phase: computeEventPhase({
-      status: typeof row.status === 'string' ? row.status : '',
-      start_date: typeof row.start_date === 'string' ? row.start_date : null,
-      end_date: typeof row.end_date === 'string' ? row.end_date : null,
-    }),
-  };
-}
+// Moved to `lib/event-enrich.ts` by OSE-1243, when the server-rendered public
+// page became a second consumer that reads the DataProvider directly. It stays
+// one function so surfaces cannot re-derive phase or field names locally.
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 

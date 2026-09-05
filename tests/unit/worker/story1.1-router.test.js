@@ -293,7 +293,12 @@ describe('Route Coverage (Story 1.1)', () => {
     it('should route /events and /public to handlePublicPage', () => {
       expect(routerSource).toContain("pathname === '/events'");
       expect(routerSource).toContain("pathname === '/public'");
-      expect(routerSource).toContain('handlePublicPage(env)');
+      // OSE-1243: the public list is server-rendered, so the handler now also
+      // takes the ExecutionContext (it reads events through the DataProvider
+      // seam). Match the call, not the argument list — this assertion exists to
+      // prove the route dispatches here, and pinning it to an arity turns every
+      // future signature change into a false failure.
+      expect(routerSource).toMatch(/handlePublicPage\(env\b/);
     });
 
     it('should route /briefing to handleBriefingPage', () => {

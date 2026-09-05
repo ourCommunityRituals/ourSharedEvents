@@ -1351,7 +1351,7 @@ export async function route(
     pathname === '/agenda' ||
     pathname === '/lineup'
   ) {
-    return handlePublicPage(env);
+    return handlePublicPage(env, ctx);
   }
 
   // ── Admin aliases ─────────────────────────────────────────────────────────

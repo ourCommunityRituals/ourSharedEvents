@@ -30,6 +30,19 @@ import {
   resolveAndSignalProvenance,
 } from '../lib/demo-banner.js';
 import { injectLegalFooter } from '../lib/legal-footer';
+import {
+  renderEventList,
+  renderEventListError,
+  injectEventList,
+  type EventListItem,
+  type RenderedEventList,
+} from '../lib/event-list.js';
+import {
+  getDataProvider,
+  type DataProviderEnv,
+  type DataProviderCtx,
+} from '../lib/data-provider.js';
+import { enrichWithPhase } from '../lib/event-enrich.js';
 
 export interface PagesEnv {
   WORKER_ENV?: string;
@@ -212,8 +225,46 @@ export function renderErrorPage(
   return html(content, status);
 }
 
-export async function handlePublicPage(env: PagesEnv): Promise<Response> {
-  return html(injectLegalFooter(await withProvenanceBanner(PUBLIC_HTML, env, 'public'), 'public'));
+// ─── Public list page — OSE-1243 ──────────────────────────────────────────────
+//
+// Server-rendered. The Worker reads the events and puts them in the HTML it
+// serves, rather than serving a "Loading events…" paragraph and letting the
+// browser go get them (frontend remediation plan §3.1, step 5).
+//
+// It reads through the SAME DataProvider seam as `GET /api/v2/events`, so the
+// page and the JSON API cannot disagree about which events exist. Brand is
+// 'root', matching what the client script requested when it passed no `brand`
+// param — the public list has never been brand-parameterised and this change
+// does not make it so.
+//
+// FAILURE IS RENDERED, NOT DEFERRED. If the read throws, the page is served
+// with the error state already in it. The old shape could not do this: a
+// Worker that could not reach D1 still returned 200 with a loading paragraph,
+// and the reader only learned otherwise once their own fetch failed too.
+type PublicListEnv = PagesEnv & DataProviderEnv;
+
+export async function handlePublicPage(
+  env: PagesEnv,
+  ctx?: DataProviderCtx | null
+): Promise<Response> {
+  let list: RenderedEventList;
+  try {
+    const dp = getDataProvider(env as PublicListEnv, ctx ?? null);
+    const result = await dp.listEvents('root');
+    // enrichWithPhase is NOT optional here. `listEvents` returns raw D1 rows
+    // (`title` / `start_date` / `location`); every surface reads the canonical
+    // `name` / `startDateISO` / `venue`, and `phase` — which decides whether a
+    // card offers a registration form or a recap — is computed nowhere else.
+    // Reading the rows without it renders nameless, dateless cards that invite
+    // registration for events that already happened. Same seam the JSON API
+    // uses, so the two cannot disagree.
+    const items = (result.data as unknown as Record<string, unknown>[]).map(enrichWithPhase);
+    list = renderEventList(items as EventListItem[]);
+  } catch {
+    list = renderEventListError();
+  }
+  const shell = injectLegalFooter(await withProvenanceBanner(PUBLIC_HTML, env, 'public'), 'public');
+  return html(injectEventList(shell, list));
 }
 
 // ─── Public event page — OSE-243a / BE-27 ─────────────────────────────────────
