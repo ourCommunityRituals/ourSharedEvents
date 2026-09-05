@@ -244,7 +244,7 @@ Cheap to compute, and it would have prevented the §0 error.
 | **2** | ~~Delete `web/` and `src/frontend/`~~ → **confirm and retire `src/frontend/apiClient/` only** (OSE-1235) | **S** | —                         | Retracted and rewritten — see §2.3. `web/` is load-bearing |
 | **3** | ~~Add `footer()` to `@ocr/ui`; adopt on 5 surfaces against `/privacy`~~ ✅ **DONE 2026-09-05**           | **S** | —                         | Laws 4, 10, 14 · OSE-1232                                  |
 | **4** | ~~Mobile-workability audit → PR code, then blocking~~ ✅ **DONE 2026-09-05**                             | **M** | —                         | Laws 2, 8, 14 — **protects everything else**               |
-| **5** | Server-render `/events`                                                                                  | **M** | —                         | Law 6 on the discovery surface                             |
+| **5** | ~~Server-render `/events`~~ ✅ **DONE 2026-09-05**                                                       | **M** | —                         | Law 6 on the discovery surface · OSE-1243                  |
 | **6** | Wire `checkAll()` into the T0 invariants shard                                                           | **S** | —                         | Maintenance floor                                          |
 | **7** | Measure the bundle's cold-start cost, then split admin                                                   | **M** | step 7a is measurement    | Law 6                                                      |
 | **8** | Adopt `emptyState()` and `header()`                                                                      | **M** | step 3 proves the pattern | Laws 10, 12 · OSE-1233                                     |
@@ -505,3 +505,103 @@ every surface, so the viewport — the thing invariant 14 is actually about — 
 identical across projects, and quadrupling the cost of a gate that runs on every
 push does not pay for itself. If a WebKit-only regression ever reaches
 production, that trade is the thing to revisit.
+
+---
+
+### Step 5 — Server-render `/events` · ✅ 2026-09-05
+
+**What was actually broken.** §3.1 named the round trip; the cost was worse than
+the round trip. `/events` shipped a `Loading events…` paragraph and fetched its
+own list, so an attendee waited `HTML → parse → JS → fetch → render` to learn
+whether anything was happening near them — on the surface whose entire job is
+answering that question. The Worker had the rows in hand when it served the
+shell.
+
+**What shipped.**
+
+|            |                                                                                       |
+| ---------- | ------------------------------------------------------------------------------------- |
+| Renderer   | `workers/oursharedevents/src/lib/event-list.ts` → `renderEventList()`                 |
+| Escaping   | `src/lib/html-escape.ts` → `escapeHtml()`, replacing three near-copies and a fourth   |
+| Enrichment | `src/lib/event-enrich.ts` → `enrichWithPhase`, extracted from `handlers/events.ts`    |
+| Mechanism  | `<!--OCR_EVENT_LIST-->` / `<!--OCR_EVENT_COUNT-->`, replaced at serve time            |
+| Handler    | `handlePublicPage(env, ctx)` reads the same DataProvider seam as `GET /api/v2/events` |
+| Retired    | 68 lines of client script, the loading state, and the `public-loading` test-id        |
+
+**Three things the step fixed that were not on the list.**
+
+1. **The client escaper was weaker than the three server ones.** It used
+   `div.textContent → innerHTML`, which covers `& < >` but **not `"` or `'`** —
+   and it interpolated into attribute values (`data-event-id="${safeId}"`). A
+   quote in an id would have closed the attribute. There is now one escaper,
+   covering all five, with a test that feeds it `x" onmouseover="alert(1)` and
+   asserts the parser builds no handler from it.
+2. **Dates were rendered in the reader's timezone.** `toLocaleDateString` with
+   no `timeZone`, so a `02:00Z` start was the previous evening across most of
+   the Americas and the same gathering showed different dates to different
+   people. The list projection already carried `timezone`; an event's date is
+   now **the local date where it happens**, UTC when the row has no zone.
+3. **Failure was deferred, not reported.** A Worker that could not reach D1 still
+   returned `200` with a loading paragraph, and the reader only learned
+   otherwise once their own fetch also failed. The error state is now rendered
+   into the response.
+
+**The bug this step introduced, and why the tests that passed did not catch it.**
+
+The first cut read `dp.listEvents()` and rendered the rows straight, skipping
+`enrichWithPhase`. `listEvents` returns **raw D1 rows** — `title` /
+`start_date` / `location` — while the renderer reads `name` / `startDateISO` /
+`venue`. Every test-id was present, the markup was well-formed, the count said
+`1 upcoming event`, and **every assertion passed** while the cards said nothing
+at all and offered registration for events that had already happened.
+
+`enrichWithPhase` was private to `handlers/events.ts` despite its own comment
+promising that _"surfaces don't re-derive phase locally."_ That promise held
+only while the JSON API was the sole consumer. It is now a shared module.
+
+What found it was not a test — it was reading a stale test name. `public-to-
+registration.spec.ts` had a describe block called **"D1 Field Compatibility"**
+asserting that `title` renders when `name` is absent. That assertion described
+the exact mapping the new code path was skipping.
+
+**The lesson, stated as the gate that now enforces it.** Asserting an element
+**exists** is not asserting it **says something**. Three tests were added that
+fail without the enrichment while the five structural assertions stay green in
+both states — verified by reverting the fix and watching precisely those three
+go red.
+
+**What the step turned up about the test suite itself.**
+
+Four E2E suites covering the public discovery surface — **98 tests** — drove
+the page by intercepting `**/api/v2/events`. That interception _was_ their
+input. Server-rendering removed the seam, so every one of them would have
+**passed vacuously** rather than failed loudly.
+
+They were also already dead. CI runs an explicit allowlist through
+`playwright.e2e-smoke.config.ts`, and none of these four files is on it;
+`npm run test:e2e:negative` and `test:e2e:all` exist and **no workflow calls
+them**. The proof is in what they asserted: two tests demanded `"Untitled
+Event"` for a missing name and three demanded the `title`/`start_date`/
+`location` dual-reads — behaviour **OSE-871 deleted**. Those assertions could
+only stay green by never executing.
+
+| Suite                                    | Before | After | Disposition                            |
+| ---------------------------------------- | ------ | ----- | -------------------------------------- |
+| `4-negative/public-events-errors`        | 22     | 6     | cases → unit; browser-only remains     |
+| `3-flows/public-events-rendering`        | 7      | 4     | its first test asserted the round trip |
+| `3-flows/public-to-registration`         | 22     | 7     | markup → unit; journey stays           |
+| `2-pages/public-events`                  | 47     | 27    | 4 mocked describes removed             |
+| `tests/unit/public-events-phase.test.ts` | 4      | 27    | the cases, at 1/1000 the cost          |
+
+The unit file was itself a symptom: it read `public.html`, pulled the script out
+with a regex, ran it in jsdom against a stubbed `fetch`, and waited two
+microtask turns — the only way to reach logic that existed only inside a string
+inside a template. It now calls a function.
+
+**Filed:** OSE-1244 — wire these suites into CI, or delete them. A test that
+cannot run is not coverage; it is a claim of coverage, which is worse, because
+the claim is what stopped anyone looking.
+
+**Tests named and passing:** worker `3155`; root `1876` passed / `322` skipped;
+CSP static gate `11`; test-id drift gate green; all four E2E suites enumerate
+under `playwright.e2e.config.ts`.
