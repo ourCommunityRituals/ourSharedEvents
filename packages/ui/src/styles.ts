@@ -36,7 +36,20 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
 .card:hover{background:var(--surface-hover)}
 
 /* Inputs (generalised from .venue-input / .track-search) */
-.input{width:100%;padding:12px 14px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-size:.85rem;font-family:var(--font);outline:none}
+/* Every form partial (formInput, textarea, formSelect) renders .input, so this
+   one rule is the library's whole form-control contract.
+
+   font-size is 16px, NOT .85rem (OSE-1236). Below 16px iOS Safari auto-zooms
+   the page on focus and does not zoom back out — the person is left on a
+   zoomed, horizontally-scrolling form mid-entry. .85rem computed to 13.6px and
+   every partial inherited it. min-height 44px is WCAG 2.5.5 + Apple HIG; the
+   12px padding alone rendered 41px.
+
+   Both were invisible for as long as the component showcase was display:none
+   (see .ui-preview-section in pages.ts) — nothing could measure a page that
+   rendered nothing. Guarded by the mobile-workability audit's /ui-preview
+   surface, which now runs against PR code and blocks. */
+.input{width:100%;min-height:44px;padding:12px 14px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-size:16px;font-family:var(--font);outline:none}
 .input:focus{border-color:var(--accent)}
 .input::placeholder{color:var(--text-muted)}
 
@@ -217,7 +230,8 @@ label{display:block;font-size:.875rem;color:var(--text-muted);margin-bottom:8px}
 .grid-artist{font-size:.7rem;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
 /* Search bar + loading shimmer (catalog) */
-.search-bar{width:100%;padding:10px 14px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-size:16px;font-family:var(--font);outline:none}
+/* min-height 44px: 10px padding rendered 40px — font-size was already right. */
+.search-bar{width:100%;min-height:44px;padding:10px 14px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-size:16px;font-family:var(--font);outline:none}
 .search-bar:focus{border-color:var(--accent)}
 .search-bar::placeholder{color:var(--text-muted)}
 .search-bar.loading{background-image:linear-gradient(90deg,var(--surface) 0,var(--surface-hover) 50%,var(--surface) 100%);background-size:200% 100%;animation:shimmer 1.5s infinite}

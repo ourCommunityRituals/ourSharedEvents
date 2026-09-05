@@ -353,7 +353,14 @@
         color: #6c757d;
         margin-bottom: 0.5rem;
       }
+      /* These are the card's ACTION, not a link in a sentence, so the
+         inline-text exemption does not apply and 44px does (OSE-1236).
+         inline-flex + min-height gives the tap area without changing the
+         visual weight of the text. Measured at 72x15 before. */
       .surface-card a {
+        display: inline-flex;
+        align-items: center;
+        min-height: 44px;
         font-size: 0.8rem;
         color: #4361ee;
         text-decoration: none;
@@ -380,7 +387,9 @@
         margin-top: 0.25rem;
       }
       .copy-btn {
-        display: inline-block;
+        display: inline-flex;
+        align-items: center;
+        min-height: 44px; /* WCAG 2.5.5 — rendered 73x22 (OSE-1236) */
         padding: 0.2rem 0.5rem;
         background: #f1f3f5;
         border: 1px solid #dee2e6;
@@ -521,23 +530,37 @@
         color: #495057;
         margin-bottom: 0.25rem;
       }
+      /* Mobile floor (OSE-1236). font-size is 16px, not 0.9rem: below 16px iOS
+         Safari auto-zooms on focus and does not zoom back out, leaving the
+         operator on a zoomed, horizontally-scrolling form mid-entry. 0.9rem
+         computed to 14.4px on every field. min-height 44px is WCAG 2.5.5; the
+         0.5rem padding rendered 34px. textarea is included here because it had
+         no font-size rule at all and fell to the UA default, 13.3px — the
+         smallest text on the surface, on the two longest fields (who-story,
+         why-purpose). Measured on the mobile-workability gate's first run
+         against /admin, which had never been audited: OSE-302's staging bearer
+         has been unset since May, so the surface was skipped on every run. */
       .create-form input,
-      .create-form select {
+      .create-form select,
+      .create-form textarea {
         width: 100%;
+        min-height: 44px;
         padding: 0.5rem 0.75rem;
         border: 1px solid #dee2e6;
         border-radius: 6px;
-        font-size: 0.9rem;
+        font-size: 16px;
         background: #fff;
         color: #1e293b;
       }
       .create-form input:focus,
-      .create-form select:focus {
+      .create-form select:focus,
+      .create-form textarea:focus {
         border-color: #4361ee;
         outline: none;
         box-shadow: 0 0 0 3px rgba(67, 97, 238, 0.12);
       }
       .create-btn {
+        min-height: 44px; /* WCAG 2.5.5 — 0.6rem padding rendered 35px (OSE-1236) */
         padding: 0.6rem 1.5rem;
         background: #16a34a;
         color: #fff;
@@ -887,6 +910,7 @@
         margin-bottom: 0;
       }
       .add-spon-btn {
+        min-height: 44px; /* WCAG 2.5.5 — rendered 43px, one pixel short (OSE-1236) */
         padding: 0.4rem 1rem;
         background: #4361ee;
         color: #fff;

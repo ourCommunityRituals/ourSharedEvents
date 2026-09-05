@@ -10,21 +10,38 @@
 #   4. Primary CTA above the fold
 #   5. No pinch-zoom blocked or required
 #
-# Triggers:
-#   - schedule: nightly at 09:30 UTC (30 min offset from brain-location-audit)
-#   - pull_request: when the audit spec OR the standard doc changes
-#   - workflow_dispatch: manual investigator runs
+# TWO JOBS, TWO QUESTIONS (OSE-1236, 2026-09-05)
+# ----------------------------------------------
+#   pr-code   → "did THIS DIFF break mobile?"     local worker · BLOCKING
+#   nightly   → "is deployed staging workable?"   STAGING_URL  · blocking
 #
-# UX pattern (mirrors brain-location-audit per OCR-docs #46):
-#   - On `pull_request` triggers, the audit step is non-blocking
-#     (`continue-on-error: true`). PR check stays green; violations
-#     surface via test report artifact only. Reasoning: this audit
-#     ran on its own introducing PR + every drain story's PR will
-#     fail until that surface is fixed — informational reporting
-#     stops false-positive red CI on unrelated PRs.
-#   - On `schedule` + `workflow_dispatch`, the audit step blocks
-#     normally. Investigator manually triggering wants the failure
-#     signal.
+# Before this split there was one job, it pointed at STAGING_URL, and it was
+# `continue-on-error` on pull_request. Two consequences, both measured:
+#
+#   - On a PR it audited DEPLOYED STAGING — whatever was already merged — and
+#     reported that as a check on the PR. A PR that broke a touch target
+#     passed; a PR that fixed one still failed. The verdict was uncorrelated
+#     with the diff. (The root cause was in the spec, not here: it built
+#     ABSOLUTE urls from STAGING_URL, so it ignored Playwright's baseURL and
+#     could not be pointed anywhere. Navigation is relative now.)
+#   - It could not block anyway.
+#
+#   Meanwhile the SCHEDULED run — the one that COULD block — failed four
+#   nights running (runs 187, 188, 189, 192; every schedule event since
+#   2026-09-01). Its top failure mode was not a workability violation:
+#
+#       browserType.launch: Executable doesn't exist at .../webkit-2336/…
+#
+#   Three of the four projects in playwright.config.ts are WebKit device
+#   descriptors and this workflow installed `chromium` only. A gate that is
+#   always red teaches people to ignore it exactly as fast as one that is
+#   always green. The nightly now installs webkit too.
+#
+# The PR job runs Chromium against a local `wrangler dev` worker
+# (playwright.mobile.config.ts). It needs no deploy, no secrets and no
+# network, completes in ~50s, and covers all 11 surfaces with zero skips —
+# including /admin, which had NEVER been audited on any run because
+# OSE-302's staging bearer secret has been unset since May.
 
 name: Mobile workability audit
 
@@ -33,11 +50,21 @@ on:
     - cron: '30 9 * * *'
   pull_request:
     branches: [main]
+    # Widened for the blocking job (OSE-1236). The old list named two handlers
+    # and the spec. It could not see a change to a TEMPLATE, to the shared
+    # stylesheet, or to the design tokens — which is where mobile-workability
+    # regressions actually come from: the violations this gate found on its
+    # first PR-code run were in src/templates/admin.html and
+    # packages/ui/src/styles.ts, neither of which was listed here.
     paths:
       - 'tests/playwright/mobile-workability.spec.ts'
+      - 'playwright.mobile.config.ts'
+      - 'playwright.config.ts'
       - '.github/workflows/mobile-workability-audit.yml'
-      - 'workers/oursharedevents/src/handlers/pages.ts'
-      - 'workers/oursharedevents/src/handlers/form-pages.ts'
+      - 'workers/oursharedevents/src/handlers/**'
+      - 'workers/oursharedevents/src/templates/**'
+      - 'workers/oursharedevents/src/lib/legal-footer.ts'
+      - 'packages/ui/src/**'
   workflow_dispatch:
 
 concurrency:
@@ -54,10 +81,62 @@ defaults:
     shell: bash
 
 jobs:
-  audit:
-    name: Mobile workability audit (375×812)
+  # ── BLOCKING: this branch's code, on a local worker ────────────────────────
+  pr-code:
+    name: Mobile workability — PR code (375×812, blocking)
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 15
+
+    steps:
+      - name: Checkout OSE
+        uses: actions/checkout@v7
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: '20'
+
+      - name: Stage adjacent @ocr/flags package
+        shell: bash
+        continue-on-error: true
+        timeout-minutes: 2
+        env:
+          GIT_TERMINAL_PROMPT: '0'
+        run: bash scripts/ci-stage-ocr-workspace.sh
+
+      - name: Install root dependencies
+        run: npm ci --prefer-offline || npm ci
+
+      - name: Install Playwright Chromium
+        # Chromium only. The spec forces 375×812 on every surface, so the
+        # viewport — the thing invariant 14 is about — is identical across
+        # projects; only the engine and UA differ. Engine-specific layout bugs
+        # are real, which is why the nightly keeps all four. Quadrupling the
+        # cost of a gate that runs on every push does not pay for itself.
+        run: npx playwright install --with-deps chromium
+
+      - name: Audit this branch's code
+        # No continue-on-error. This is the whole point: the check's verdict is
+        # now about the diff under review, so it is allowed to mean something.
+        # playwright.mobile.config.ts starts `wrangler dev --local` itself — no
+        # deploy, no secrets, no network.
+        run: npx playwright test --config playwright.mobile.config.ts --reporter=html,list
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mobile-workability-pr-report
+          path: playwright-report/
+          retention-days: 30
+
+  # ── The deployed environment, nightly ─────────────────────────────────────
+  nightly-staging:
+    name: Mobile workability — deployed staging (375×812)
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     env:
       STAGING_URL: ${{ vars.STAGING_URL || 'https://stg.oursharedevents.com' }}
@@ -77,73 +156,29 @@ jobs:
         continue-on-error: true
         timeout-minutes: 2
         env:
-          # No ambient git credentials on a GitHub-hosted runner, so the hub
-          # clone cannot prompt; fail fast instead of hanging. Staging is
-          # best-effort (OSE-341 is the real fix) and npm ci tolerates its
-          # absence -- same guard the already-ported jobs in
-          # oursharedevents-ci.yml use.
           GIT_TERMINAL_PROMPT: '0'
         run: bash scripts/ci-stage-ocr-workspace.sh
 
       - name: Install root dependencies
-        run: |
-          HASH="$(node --version)-$(git hash-object package-lock.json)"
-          STAMP=node_modules/.install-stamp
-          if [ -f "$STAMP" ] && [ "$(cat $STAMP)" = "$HASH" ] && [ -f "node_modules/.package-lock.json" ]; then
-            echo "node_modules up-to-date, skipping npm ci"
-          else
-            npm ci --prefer-offline || npm ci
-            echo "$HASH" > "$STAMP"
-          fi
+        run: npm ci --prefer-offline || npm ci
 
-      - name: Install Playwright Chromium
-        # --with-deps pulls the chromium system libs (OSE-954). The self-hosted
-        # box had them pre-provisioned; a fresh ubuntu VM does not, and without
-        # them the browser fails to launch with a missing-shared-library error.
-        run: npx playwright install --with-deps chromium
+      - name: Install Playwright browsers
+        # chromium AND webkit. playwright.config.ts declares four projects and
+        # three of them (iPhone SE, iPhone 14 Pro Max, iPad Air) are WebKit
+        # device descriptors. Installing chromium alone is why this job failed
+        # every night since 2026-09-01 with "Executable doesn't exist at
+        # .../webkit-2336/pw_run.sh" — a red that said nothing about mobile
+        # workability, on the one run that could block.
+        run: npx playwright install --with-deps chromium webkit
 
-      - name: Run mobile workability audit
+      - name: Audit deployed staging
         id: audit
-        continue-on-error: ${{ github.event_name == 'pull_request' }}
         run: npx playwright test tests/playwright/mobile-workability.spec.ts --reporter=html,list
 
       - name: Upload Playwright report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: mobile-workability-report
+          name: mobile-workability-staging-report
           path: playwright-report/
           retention-days: 30
-
-      - name: Comment on PR with violation summary
-        if: steps.audit.outcome == 'failure' && github.event_name == 'pull_request'
-        uses: actions/github-script@v9
-        with:
-          script: |
-            const body = [
-              '### Mobile workability audit failed (informational)',
-              '',
-              'Invariant 14 (`OCR_STANDARD_mobileWorkability.md`) requires every customer-facing surface',
-              'to be fully usable on a 375×812 viewport. The audit Playwright suite detected at least one',
-              'violation on this PR.',
-              '',
-              'See the `mobile-workability-report` artifact attached to this run for the per-surface,',
-              'per-contract violation list.',
-              '',
-              '**This PR is NOT blocked** — PR-event audits are informational. The drain stories',
-              '(OSE-294 through OSE-300) will close the existing violations over time. New regressions',
-              'introduced by this PR should still be addressed before merge.',
-            ].join('\n');
-            await github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body,
-            });
-
-      - name: Fail workflow on scheduled-run violation
-        if: steps.audit.outcome == 'failure' && github.event_name != 'pull_request'
-        run: |
-          echo "::error::Mobile workability audit detected violations on a non-PR run."
-          echo "::error::See the mobile-workability-report artifact for details."
-          exit 1

@@ -1545,8 +1545,19 @@ export function handleUiPreview(): Response {
   ${css}
   <style>
     .preview-root { max-width: 960px; margin: 0 auto; padding: 2rem 1rem 6rem; }
-    .preview-section { margin-bottom: 3rem; }
-    .preview-section h2 { font-size: .7rem; text-transform: uppercase; letter-spacing: .12em; color: var(--text-muted); margin-bottom: 1rem; padding-bottom: .5rem; border-bottom: 1px solid var(--border); }
+    /* Renamed from .preview-section (OSE-1236).
+       @ocr/ui's stylesheet hides .preview-section, .progress-section and
+       .result-section by default as part of its FILE-UPLOAD family: a CSV
+       import preview revealed by adding .visible. This page reused the name
+       for "component preview section" and never adds .visible, so every
+       section on the showcase was display:none. The page served 40KB of
+       markup and rendered an h1 and nothing else.
+
+       The showcase is the newcomer, so the showcase renames. Caught by the
+       mobile-workability audit's above-the-fold contract once it ran against
+       PR code: btn-primary-demo had no bounding box. */
+    .ui-preview-section { margin-bottom: 3rem; }
+    .ui-preview-section h2 { font-size: .7rem; text-transform: uppercase; letter-spacing: .12em; color: var(--text-muted); margin-bottom: 1rem; padding-bottom: .5rem; border-bottom: 1px solid var(--border); }
     .preview-row { display: flex; flex-wrap: wrap; gap: .75rem; align-items: flex-start; margin-bottom: .75rem; }
     .preview-label { font-size: .65rem; color: var(--text-muted); margin-bottom: .25rem; }
     .theme-bar { position: sticky; top: 0; z-index: 100; background: var(--surface); border-bottom: 1px solid var(--border); padding: .75rem 1rem; display: flex; gap: .5rem; align-items: center; }
@@ -1567,7 +1578,7 @@ export function handleUiPreview(): Response {
   <div class="preview-root">
     <h1 style="margin-bottom:2rem">@ocr/ui Component Preview</h1>
 
-    <div class="preview-section" data-testid="preview-section-buttons">
+    <div class="ui-preview-section" data-testid="preview-section-buttons">
       <h2>Buttons</h2>
       <div class="preview-row">
         <div><div class="preview-label">.btn-primary</div><button class="btn btn-primary" data-testid="btn-primary-demo">Save</button></div>
@@ -1582,7 +1593,7 @@ export function handleUiPreview(): Response {
       </div>
     </div>
 
-    <div class="preview-section" data-testid="preview-section-cards">
+    <div class="ui-preview-section" data-testid="preview-section-cards">
       <h2>Cards</h2>
       <div class="preview-row">
         <div style="width:220px"><div class="preview-label">.card</div>
@@ -1600,7 +1611,7 @@ export function handleUiPreview(): Response {
       </div>
     </div>
 
-    <div class="preview-section" data-testid="preview-section-inputs">
+    <div class="ui-preview-section" data-testid="preview-section-inputs">
       <h2>Inputs</h2>
       <div class="preview-row">
         <div style="width:240px"><div class="preview-label">.input</div><input class="input" placeholder="Enter value…" data-testid="input-demo" /></div>
@@ -1611,7 +1622,7 @@ export function handleUiPreview(): Response {
       </div>
     </div>
 
-    <div class="preview-section" data-testid="preview-section-navigation">
+    <div class="ui-preview-section" data-testid="preview-section-navigation">
       <h2>Navigation</h2>
       <div class="preview-label">.bottom-nav (simulated — fixed in real use)</div>
       <nav style="position:relative;border-radius:var(--radius)" data-testid="nav-demo">
@@ -1624,7 +1635,7 @@ export function handleUiPreview(): Response {
       </nav>
     </div>
 
-    <div class="preview-section" data-testid="preview-section-feedback">
+    <div class="ui-preview-section" data-testid="preview-section-feedback">
       <h2>Status / Feedback</h2>
       <div class="preview-row">
         <div><div class="preview-label">.live-indicator.on</div><span class="live-indicator on" data-testid="live-indicator-on">Live</span></div>
@@ -1635,7 +1646,7 @@ export function handleUiPreview(): Response {
       </div>
     </div>
 
-    <div class="preview-section" data-testid="preview-section-lists">
+    <div class="ui-preview-section" data-testid="preview-section-lists">
       <h2>Lists</h2>
       <div style="max-width:360px" data-testid="list-demo">
         <div class="preview-label">.list-item</div>
@@ -1644,7 +1655,7 @@ export function handleUiPreview(): Response {
       </div>
     </div>
 
-    <div class="preview-section" data-testid="preview-section-chips">
+    <div class="ui-preview-section" data-testid="preview-section-chips">
       <h2>Chips / Tags</h2>
       <div class="preview-row">
         <div><div class="preview-label">.filter-chip</div><button class="filter-chip" data-testid="filter-chip-demo">All</button></div>
@@ -1657,7 +1668,7 @@ export function handleUiPreview(): Response {
       </div>
     </div>
 
-    <div class="preview-section" data-testid="preview-section-empty-state">
+    <div class="ui-preview-section" data-testid="preview-section-empty-state">
       <h2>Empty State</h2>
       <div class="empty-state" data-testid="empty-state-demo">
         <div class="es-icon">📭</div>
@@ -1667,7 +1678,7 @@ export function handleUiPreview(): Response {
       </div>
     </div>
 
-    <div class="preview-section" data-testid="preview-section-form-controls">
+    <div class="ui-preview-section" data-testid="preview-section-form-controls">
       <h2>Form controls</h2>
       <div class="preview-row" style="align-items:center">
         <div><div class="preview-label">.toggle-row</div>
@@ -1690,14 +1701,14 @@ export function handleUiPreview(): Response {
       </div>
     </div>
 
-    <div class="preview-section" data-testid="preview-section-form-partials">
+    <div class="ui-preview-section" data-testid="preview-section-form-partials">
       <h2>Form partials — @ocr/ui</h2>
       <div style="max-width:480px">
         ${FORM_PARTIALS_HTML}
       </div>
     </div>
 
-    <div class="preview-section" data-testid="preview-section-tokens">
+    <div class="ui-preview-section" data-testid="preview-section-tokens">
       <h2>Design tokens — Tier 2 semantic</h2>
       <div class="token-grid">
         ${TOKEN_SWATCHES}
