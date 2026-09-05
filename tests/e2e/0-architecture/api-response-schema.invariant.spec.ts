@@ -38,10 +38,39 @@
  */
 
 import { test, expect } from '@playwright/test';
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 
 const REPO_ROOT = join(__dirname, '..', '..', '..');
+
+const WORKER_SRC = join(REPO_ROOT, 'workers', 'oursharedevents', 'src');
+
+/**
+ * Locate `enrichWithPhase` by scanning the worker source.
+ *
+ * The canonical field mapping (OSE-844) is a property of the codebase, not of
+ * one file. Searching for it means the gate survives the function moving —
+ * which it did, in OSE-1243, and it moved for a good reason: making it a shared
+ * module is what stopped the server-rendered page from skipping the enrichment
+ * and serving nameless cards.
+ */
+function findEnrichWithPhase(): { src: string; where: string | null } {
+  const stack = [WORKER_SRC];
+  while (stack.length) {
+    const dir = stack.pop()!;
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const full = join(dir, entry.name);
+      if (entry.isDirectory()) {
+        stack.push(full);
+        continue;
+      }
+      if (!entry.name.endsWith('.ts')) continue;
+      const src = readFileSync(full, 'utf8');
+      if (src.includes('function enrichWithPhase')) return { src, where: full };
+    }
+  }
+  return { src: '', where: null };
+}
 const SNAPSHOT_PATH = join(
   REPO_ROOT,
   'workers',
@@ -230,11 +259,22 @@ test.describe('Invariant 16: API Response Schema Stability — structural code-s
   // the object whose job is to go red if that mapping is deleted and the drift
   // returns (which is what silently rendered "Untitled Event" on the TV before).
   test('OSE-INV16 | api | fieldmap | enrichWithPhase maps title→name, start_date→startDateISO, location→venue', () => {
-    const src = readFileSync(EVENTS_HANDLER, 'utf8');
+    // OSE-1246 — finds the function WHEREVER it lives, rather than naming a file.
+    //
+    // This gate previously read handlers/events.ts and asserted
+    // `enrichWithPhase must exist in events.ts`. When OSE-1243 extracted the
+    // function to lib/event-enrich.ts — so a second consumer could not skip it,
+    // which was the whole point — this went red for a refactor that strictly
+    // improved the thing it guards. The invariant is that THE MAPPING EXISTS
+    // somewhere in the worker's source, not that a particular file holds it.
+    //
+    // The failure was benign, but the shape is not: a gate that a correct
+    // refactor breaks is a gate people learn to route around.
+    const { src, where } = findEnrichWithPhase();
     const fnIdx = src.indexOf('function enrichWithPhase');
-    expect(fnIdx, 'enrichWithPhase must exist in events.ts').toBeGreaterThan(-1);
     // Bound the read to the function body (up to the next top-level declaration).
     const body = src.slice(fnIdx, fnIdx + 1200);
+    expect(where, 'enrichWithPhase must exist somewhere in the worker source').toBeTruthy();
     expect(
       body,
       'enrichWithPhase must emit `name` mapped from the `title` column — ' +

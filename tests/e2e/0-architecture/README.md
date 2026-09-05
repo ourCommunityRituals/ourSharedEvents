@@ -101,3 +101,70 @@ post-deploy rather than in T0 Gate.
 This is the brain-substrate alignment surface: brain says "the contract is X,"
 the substrate ships the mechanism, and these specs assert the mechanism's
 load-bearing shape so a future refactor can't silently break it.
+
+---
+
+## Gate shape: property or subject? (OSE-1246, audited 2026-09-05)
+
+An invariant gate can assert its rule two ways, and only one of them survives a
+refactor.
+
+- **Property-asserting** — derives its subject list (scans a directory, parses
+  the schema, reads `TEST_SOURCE_FILES_JSON`) and asserts the rule over
+  everything it finds. A file added next month is covered the day it is written.
+- **Subject-naming** — hardcodes a path or a function name. It enforces the rule
+  on that subject and is blind to every other. It does not fail when it stops
+  covering the invariant; it stays green.
+
+**Both are legitimate.** Which is correct depends on whether the invariant is
+about a _class_ of things or about _one specific artifact_.
+
+### The audit
+
+| Shape                                  | Gates                                                                                                                                                                             | Verdict |
+| -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
+| Derives its subjects                   | migration-monotonicity, slug-permanence, rendered-surface-lexicon, runtime-llm-free, monetization-inert, scan-path-split, sponsor-identity-split, tenant-isolation, pii-retention | correct |
+| Names one specific artifact, correctly | cost-metric-never-who, deprecation-lock, worker-claude-md, and others whose invariant IS about one module's shape                                                                 | correct |
+| Runtime checks, not source-shape gates | anonymous-id, geo-resolution, ncr-accumulation, uec-codes                                                                                                                         | n/a     |
+
+### Two findings, both fixed
+
+**`tenant-isolation`** asserted _"public list queries use `WHERE brand_id = ?`"_
+of exactly one function in one file. A second public list query shipped in a new
+file with no brand scoping and the gate never saw it. Rewritten to scan every
+handler — and on its first run it found a **pre-existing cross-brand leak** on
+the public post-event recap page (`pages.ts`), which the named-subject version
+had been green through for the whole life of that leak.
+
+**`pii-retention`** kept a hand-maintained registry of PII tables whose own
+instructions read _"to add a new PII table: 1. Add a row here"_ — a guarantee
+that only binds someone who already decided to open the file. The registry was
+complete; it simply could not notice if it stopped being. A completeness test
+now derives PII tables from the migrations (CREATE **and** `ALTER ADD COLUMN`,
+because that is how columns actually arrive here) and asserts the registry
+covers them.
+
+### `deprecation-lock` is the pattern to copy
+
+It names seven paths and is _correct_, because it is a **meta-gate**: it asserts
+that `scripts/guard-no-gas.js` exists, has self-tests, has an allowlist, has a
+runbook, is registered in `package.json`, and is invoked by CI. The scanning is
+done by that script, which walks the tree. The gate's subjects are the specific
+artifacts that make up the enforcement mechanism — exactly the things worth
+naming.
+
+When an invariant is about a class, assert the property. When it is about one
+artifact, name it. When it is about a _mechanism_, assert the mechanism exists
+and is wired — and let the mechanism do the scanning.
+
+### Two lessons from writing these
+
+1. **Give a derived gate a negative control.** A completeness check that finds
+   nothing is indistinguishable from one that looks at nothing. The first draft
+   of the pii-retention parser anchored its identity regex to line start,
+   matched **zero** columns in a schema full of them, and passed. There is now a
+   test asserting the parser sees the tables it is meant to see.
+2. **Give it a triaged exemption list with a reason per entry.** Legitimate
+   exceptions exist — dynamically-built `WHERE` clauses, correlated sub-selects,
+   cross-brand OER emission. A gate that cannot express them gets deleted
+   instead of fixed.
