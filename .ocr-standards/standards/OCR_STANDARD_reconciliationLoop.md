@@ -91,9 +91,16 @@ scheduled *read-only* drift report is allowed; status/brain writes are not autom
    cites a git fact, never a guess.** (Agents get this wrong; confirm SHAs are ancestors of `main`
    before any Done flip. On 2026-09-03 this caught two false "merged" verdicts.) **Citation schema:**
    any Done-flip comment MUST carry a parseable block — `sha: <7+hex> · ancestor_verified: true · pr: #NNN`
-   — so a wrong flip is *mechanically* detectable (a checker greps the block and re-runs
-   `git merge-base --is-ancestor`). Until that checker exists as a script/CI gate, a human verifies the
-   block by hand; a flip without the block is itself a drift finding.
+   — so a wrong flip is *mechanically* detectable. **The enforcing mechanism is
+   `ocr-docs-brain/scripts/verify_reconcile_comment.py`** (OCR-128): it parses the block for schema
+   *integrity* (each labeled field present, SHA is 7–40 hex) and **re-runs `git merge-base --is-ancestor`
+   itself — it never trusts the comment's own `ancestor_verified: true`**, because the failure mode is a
+   flip that *claims* a check it never ran (the 2026-09-03 run's two false "merged" verdicts). It exits
+   non-zero on any gap, so board-reconciler MUST run it against the target repo before proposing a Done
+   flip — e.g. `python3 ocr-docs-brain/scripts/verify_reconcile_comment.py --comment-file flip.md --repo
+   ../ourSharedEvents --base origin/main`. A flip whose comment does not pass this checker is itself a
+   drift finding. (Self-tested in `tests/test_verify_reconcile_comment.py`, run by `run_script_tests.py`
+   in `brain-validate.yml`.)
 3. **Reconcile code ⇄ brain/docs** (`drift-auditor`): report gaps both directions.
 4. **Write back to all three surfaces:**
    * Linear — flip merged-but-open → Done *with the citing evidence in a comment*; comment (don't
