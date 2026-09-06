@@ -126,7 +126,7 @@ const EXPECTED_COLUMN_COUNTS: Record<string, number> = {
   // 35 (pre-0051) + 3 (migration 0051: who_story, who_image_url,
   // what_video_url — OSE-664 rich WHO/WHAT authoring) = 38.
   // + 1 (migration 0052: data_class — OSE-606/608 demo data class) = 39.
-  events: 39,
+  events: 40, // 0070 adds is_published (OSE-1245)
   // OSE-799 A2 (0065-0067): `sponsors` (32) retired → split into three tables.
   // sponsor_business: id, brand_id, name, website_url, business_type, lat, lon,
   //   h3_res9, h3_res7, created_at, updated_at = 11.
@@ -294,7 +294,7 @@ describe('Gate 4: scan_aggregates write protection', () => {
 // ── Gate 5: Index verification ───────────────────────────────────────────────
 
 describe('Gate 5: Index verification', () => {
-  test('all 57 custom indexes exist', async () => {
+  test('all 59 custom indexes exist', async () => {
     // 35 (pre-OSE-272) + 4 (OSE-272 Session 2: idx_anon_id_returns_venue_visit,
     // idx_event_series_venue_state, idx_event_series_venue_dow_hour,
     // idx_events_series_start) + 1 (idx_sponsors_is_local, OSE-330 Phase 2
@@ -306,6 +306,7 @@ describe('Gate 5: Index verification', () => {
     // + 1 (idx_sponsor_impressions_h3_res7 — migration 0048, OSE-635) = 55
     // + 1 (idx_admin_brand_memberships_email — migration 0050, OSE-666/B2) = 56.
     // + 1 (idx_events_data_class — migration 0052, OSE-606/608) = 57.
+    // + 1 (idx_events_brand_h3res7_status_start — migration 0069, OSE-1242) = 58.
     // + 3 (idx_sponsor_business_draft_brand/_event/_status — migration 0053, OSE-724) = 60.
     // + 1 (idx_sponsor_asset_draft_token — migration 0054, OSE-725) = 61.
     // + 2 (idx_template_event_types_template/_uec — migration 0056, OSE-727) = 63.
@@ -317,14 +318,15 @@ describe('Gate 5: Index verification', () => {
     // − 3 + 6 (migration 0065-0067, OSE-799 A2 split sponsor identity): DROP TABLE
     //   sponsors removes idx_sponsors_event_id/_is_local/_campaign_id; add
     //   idx_sponsor_business_brand/_h3_res7, idx_sponsor_asset_business,
-    //   idx_sponsor_placement_event/_business/_locality = 66. (The recreated
+    //   idx_sponsor_placement_event/_business/_locality = 66.
+    // + 1 (idx_events_published_brand_h3res7_start — migration 0070, OSE-1245) = 67. (The recreated
     //   sponsor_event_types/areas/impressions indexes keep their names → net 0.)
     const indexes = await env.DB.prepare(
       "SELECT name FROM sqlite_master WHERE type='index' AND name LIKE 'idx_%' ORDER BY name"
     ).all();
 
     const names = indexes.results.map((r: Record<string, unknown>) => r.name);
-    expect(names.length).toBe(67); // 0068 adds idx_sponsor_business_active
+    expect(names.length).toBe(69); // 0070 adds idx_events_published_brand_h3res7_start (OSE-1245)
     EXPECTED_INDEXES.forEach((idx) => expect(names).toContain(idx));
   });
 });

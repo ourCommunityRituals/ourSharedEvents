@@ -36,7 +36,20 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
 .card:hover{background:var(--surface-hover)}
 
 /* Inputs (generalised from .venue-input / .track-search) */
-.input{width:100%;padding:12px 14px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-size:.85rem;font-family:var(--font);outline:none}
+/* Every form partial (formInput, textarea, formSelect) renders .input, so this
+   one rule is the library's whole form-control contract.
+
+   font-size is 16px, NOT .85rem (OSE-1236). Below 16px iOS Safari auto-zooms
+   the page on focus and does not zoom back out — the person is left on a
+   zoomed, horizontally-scrolling form mid-entry. .85rem computed to 13.6px and
+   every partial inherited it. min-height 44px is WCAG 2.5.5 + Apple HIG; the
+   12px padding alone rendered 41px.
+
+   Both were invisible for as long as the component showcase was display:none
+   (see .ui-preview-section in pages.ts) — nothing could measure a page that
+   rendered nothing. Guarded by the mobile-workability audit's /ui-preview
+   surface, which now runs against PR code and blocks. */
+.input{width:100%;min-height:44px;padding:12px 14px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-size:16px;font-family:var(--font);outline:none}
 .input:focus{border-color:var(--accent)}
 .input::placeholder{color:var(--text-muted)}
 
@@ -107,6 +120,22 @@ label{display:block;font-size:.875rem;color:var(--text-muted);margin-bottom:8px}
 .offline-msg p{color:var(--text-muted)}
 .footer-cta{text-align:center;padding:24px 20px;border-top:1px solid var(--border);margin-top:20px}
 .footer-cta a{color:var(--accent);text-decoration:none;font-size:.85rem}
+
+/* Site footer — the legal surface (@ocr/ui footer(), OSE-1232).
+   Quiet by design: the audit's finding was that surfaces are busy on first
+   view, so this reads as furniture, not content. The one thing it does NOT
+   compromise on is the tap target — legal links are the links a person hunts
+   for on a phone, and a 12px link in a 20px row is not reachable. Each link
+   carries its own vertical padding so the row wraps to 44px on touch without
+   forcing 44px of dead space on a desktop line. */
+.ocr-footer{text-align:center;padding:24px 20px calc(24px + env(safe-area-inset-bottom,0px));border-top:1px solid var(--border);margin-top:32px;color:var(--text-muted);font-size:.8rem}
+.ocr-footer-legal{margin:0;display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:0 2px;line-height:1.5}
+.ocr-footer a{color:var(--accent);text-decoration:none;padding:11px 4px;display:inline-block;border-radius:var(--radius-sm)}
+.ocr-footer a:hover,.ocr-footer a:focus-visible{text-decoration:underline}
+.ocr-footer-sep{opacity:.5;padding:0 2px}
+.ocr-footer-sub{margin:4px 0 0;font-size:.75rem;opacity:.75}
+@media (pointer:coarse){.ocr-footer a{padding:14px 8px}}
+@media print{.ocr-footer{border-top:1px solid #999;color:#000;margin-top:16px}.ocr-footer a{color:#000;padding:0}}
 
 /* Track card family */
 .track-card{display:flex;align-items:center;gap:12px;padding:10px;border-radius:var(--radius-sm);transition:background .15s;cursor:pointer}
@@ -201,7 +230,8 @@ label{display:block;font-size:.875rem;color:var(--text-muted);margin-bottom:8px}
 .grid-artist{font-size:.7rem;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
 /* Search bar + loading shimmer (catalog) */
-.search-bar{width:100%;padding:10px 14px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-size:16px;font-family:var(--font);outline:none}
+/* min-height 44px: 10px padding rendered 40px — font-size was already right. */
+.search-bar{width:100%;min-height:44px;padding:10px 14px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-size:16px;font-family:var(--font);outline:none}
 .search-bar:focus{border-color:var(--accent)}
 .search-bar::placeholder{color:var(--text-muted)}
 .search-bar.loading{background-image:linear-gradient(90deg,var(--surface) 0,var(--surface-hover) 50%,var(--surface) 100%);background-size:200% 100%;animation:shimmer 1.5s infinite}

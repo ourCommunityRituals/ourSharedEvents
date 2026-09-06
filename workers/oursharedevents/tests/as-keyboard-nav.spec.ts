@@ -5,6 +5,7 @@
 
 import { describe, test, expect } from 'vitest';
 import { handleAdminPage, handlePublicPage } from '../src/handlers/pages';
+import { renderEventList } from '../src/lib/event-list.js';
 
 function adminHtml(): Promise<string> {
   return handleAdminPage({} as never).text();
@@ -107,7 +108,22 @@ describe('AS-12: Keyboard nav on Public page (OSE-57)', () => {
   });
 
   test('public CTA links have aria-label for screen readers', async () => {
-    expect(await pubHtml()).toContain('aria-label="Register for');
+    // OSE-1243: this used to assert the literal 'aria-label="Register for',
+    // which passed because that string sat in the template's client script —
+    // it was true of the SOURCE regardless of what the page rendered. The list
+    // is server-rendered now, so the CTA reflects the event's real phase: a
+    // past event gets a recap link, and asserting "Register" would fail
+    // whenever the fixture aged past its own date (which is exactly how this
+    // was found). What the a11y contract actually requires is that whichever
+    // CTA renders is labelled.
+    expect(await pubHtml()).toMatch(/data-testid="public-event-cta"[^>]*aria-label="[^"]+"/);
+  });
+
+  test('both CTA variants are labelled, not just the one the fixture renders', () => {
+    const pre = renderEventList([{ id: 'e1', name: 'Bocce Thursday', phase: 'pre_event' }]).html;
+    const post = renderEventList([{ id: 'e2', name: 'Game Night', phase: 'post_event' }]).html;
+    expect(pre).toContain('aria-label="Register for Bocce Thursday"');
+    expect(post).toContain('aria-label="See how Game Night went"');
   });
 
   test('public events container has aria-live="polite" for screen reader announcements', async () => {

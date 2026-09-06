@@ -35,7 +35,7 @@
  *   Derived from the templates, so it can never claim an id the app does not
  *   emit. Dynamically-built ids (`data-testid="row-' + id + '"`) are excluded
  *   on purpose: t() would accept one while nothing ever renders it.
- * Generated 2026-09-04 — 379 ids.
+ * Generated 2026-09-06 — 372 ids.
  */
 (function (root, factory) {
   const api = factory();
@@ -43,7 +43,7 @@
   root.OCR_TESTID = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
   const TESTID = Object.freeze({
-    // admin.html — 213 ids
+    // admin.html — 220 ids
     ADMIN: Object.freeze([
       'add-poster-deployment-toggle',
       'add-sponsor-toggle',
@@ -53,6 +53,7 @@
       'admin-main',
       'admin-path-advanced',
       'admin-path-chooser',
+      'admin-path-sponsor',
       'admin-path-wizard',
       'admin-phase-day',
       'admin-phase-day-badge',
@@ -92,6 +93,8 @@
       'create-event-form',
       'create-how-details',
       'create-msg',
+      'create-published',
+      'create-published-hint',
       'create-submit',
       'create-title',
       'create-venue',
@@ -246,6 +249,10 @@
       'wizard-progress-3',
       'wizard-progress-4',
       'wizard-progress-5',
+      'wizard-publish',
+      'wizard-publish-no',
+      'wizard-publish-note',
+      'wizard-publish-yes',
       'wizard-signup-create',
       'wizard-signup-none',
       'wizard-skip-btn',
@@ -259,28 +266,14 @@
       'wizard-template-other',
       'wizard-template-trivia',
     ]),
-    // public.html — 32 ids
+    // public.html — 18 ids
     PUBLIC: Object.freeze([
       'anonymity-affordance',
-      'public-error',
-      'public-event-card',
-      'public-event-cta',
-      'public-event-date',
-      'public-event-info',
-      'public-event-meta',
-      'public-event-name',
-      'public-event-venue',
-      'public-event-wrapped',
       'public-events',
       'public-events-count',
-      'public-events-empty',
       'public-events-heading',
       'public-events-section',
-      'public-footer',
-      'public-footer-browse',
-      'public-footer-copyright',
       'public-header',
-      'public-loading',
       'public-main',
       'public-skip-link',
       'public-sponsor-banner',

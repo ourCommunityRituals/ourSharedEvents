@@ -167,7 +167,11 @@ describe('Route Coverage (Story 1.1)', () => {
   describe('Public API Routes', () => {
     it('should route /api/v2/events to handleListEvents', () => {
       expect(routerSource).toContain("pathname === '/api/v2/events'");
-      expect(routerSource).toContain('handleListEvents(request, env)');
+      // OSE-1247: the route is wrapped in publicReadLimited(), so the literal
+      // call shape changed. Match the dispatch, not the call expression — this
+      // assertion exists to prove /api/v2/events reaches handleListEvents, and
+      // pinning it to an exact string turns every wrapper into a false failure.
+      expect(routerSource).toMatch(/handleListEvents\b/);
     });
 
     it('should route /api/v2/events/:id to handleGetEvent', () => {
@@ -293,7 +297,12 @@ describe('Route Coverage (Story 1.1)', () => {
     it('should route /events and /public to handlePublicPage', () => {
       expect(routerSource).toContain("pathname === '/events'");
       expect(routerSource).toContain("pathname === '/public'");
-      expect(routerSource).toContain('handlePublicPage(env)');
+      // OSE-1243: the public list is server-rendered, so the handler now also
+      // takes the ExecutionContext (it reads events through the DataProvider
+      // seam). Match the call, not the argument list — this assertion exists to
+      // prove the route dispatches here, and pinning it to an arity turns every
+      // future signature change into a false failure.
+      expect(routerSource).toMatch(/handlePublicPage\(env\b/);
     });
 
     it('should route /briefing to handleBriefingPage', () => {

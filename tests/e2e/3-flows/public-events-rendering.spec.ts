@@ -1,198 +1,82 @@
 /**
- * E2E Flow Tests: Public Events — Data Rendering Journey
+ * E2E Flow: Public Events — render pipeline after OSE-1243
  *
- * Multi-step flows validating the complete render pipeline:
- *   1. Page loads → loading state → API fetch → cards render
- *   2. Cards display correct content from API response
- *   3. Multiple events render in correct order
- *   4. All URL aliases produce identical functional output
- *   5. Page works across viewport sizes (desktop + mobile)
+ * ─── WHY THIS FILE CHANGED SHAPE ──────────────────────────────────────────────
  *
- * Source of truth: workers/oursharedevents/src/handlers/pages.ts (PUBLIC_HTML)
+ * The pipeline this file was written to validate was:
+ *
+ *     page loads → loading state → API fetch → cards render
+ *
+ * There is no such pipeline any more. OSE-1243 server-rendered the list, so
+ * the sequence is: page loads, cards are already there. The first test in this
+ * file was literally named "loading → fetch → cards appear" and asserted the
+ * loading state was visible before the fetch resolved — it was testing the
+ * round trip that the change deleted.
+ *
+ * The content assertions (order, date + venue in meta, a card with only a name)
+ * were driven by intercepting `**\/api/v2/events`, which no longer feeds the
+ * page. They moved to `tests/unit/public-events-phase.test.ts`, where they run
+ * against `renderEventList()` — with more cases and without a browser.
+ *
+ * What stays here is what a browser is actually needed for: that every alias
+ * renders the same surface, and that it survives real viewports.
  */
 
 import { test, expect } from '@playwright/test';
 
-function sampleEvent(overrides: Record<string, unknown> = {}) {
-  return {
-    id: `evt_${Date.now()}`,
-    name: 'Flow Event',
-    slug: 'flow-event',
-    status: 'active',
-    brand_id: 'root',
-    startDateISO: '2026-08-15T18:00:00Z',
-    venue: 'Beverly Arts Center',
-    ...overrides,
-  };
-}
-
-test.describe('Public Events Flow — Render Pipeline', () => {
-  test('loading → fetch → cards appear', async ({ page }) => {
-    // Navigate without waiting for networkidle so we can catch loading state
-    const events = [
-      sampleEvent({ name: 'First Event', id: 'evt_1' }),
-      sampleEvent({ name: 'Second Event', id: 'evt_2' }),
-    ];
-
-    await page.route('**/api/v2/events', async (route) => {
-      // Small delay to let loading state render
-      await new Promise((r) => setTimeout(r, 200));
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ ok: true, status: 200, items: events }),
-      });
-    });
-
-    await page.goto('/events', { waitUntil: 'domcontentloaded', timeout: 20_000 });
-
-    // Wait for cards to render
-    await page.waitForSelector('[data-testid="public-event-card"]', { timeout: 10_000 });
-
-    // Cards rendered
-    const cards = page.locator('[data-testid="public-event-card"]');
-    expect(await cards.count()).toBe(2);
-
-    // No loading text visible
-    const container = page.locator('[data-testid="public-events"]');
-    expect(await container.textContent()).not.toContain('Loading');
-  });
-
-  test('cards display in API response order', async ({ page }) => {
-    const events = [
-      sampleEvent({ name: 'Alpha Event', id: 'evt_a' }),
-      sampleEvent({ name: 'Beta Event', id: 'evt_b' }),
-      sampleEvent({ name: 'Gamma Event', id: 'evt_c' }),
-    ];
-
-    await page.route('**/api/v2/events', (route) =>
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ ok: true, status: 200, items: events }),
-      })
-    );
-    await page.goto('/events', { waitUntil: 'networkidle', timeout: 20_000 });
-
-    const names = page.locator('[data-testid="public-event-name"]');
-    expect(await names.nth(0).textContent()).toContain('Alpha');
-    expect(await names.nth(1).textContent()).toContain('Beta');
-    expect(await names.nth(2).textContent()).toContain('Gamma');
-  });
-
-  test('date + venue render correctly in meta', async ({ page }) => {
-    await page.route('**/api/v2/events', (route) =>
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          ok: true,
-          status: 200,
-          items: [
-            sampleEvent({
-              name: 'Summer Fest',
-              startDateISO: '2026-07-04T17:00:00Z',
-              venue: 'Washington Park',
-            }),
-          ],
-        }),
-      })
-    );
-    await page.goto('/events', { waitUntil: 'networkidle', timeout: 20_000 });
-
-    const meta = page.locator('[data-testid="public-event-meta"]').first();
-    const text = await meta.textContent();
-    expect(text).toContain('July');
-    expect(text).toContain('Washington Park');
-  });
-
-  test('event with only name (no date, no venue) still renders card', async ({ page }) => {
-    await page.route('**/api/v2/events', (route) =>
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          ok: true,
-          status: 200,
-          items: [sampleEvent({ name: 'Name Only', startDateISO: null, venue: null })],
-        }),
-      })
-    );
-    await page.goto('/events', { waitUntil: 'networkidle', timeout: 20_000 });
-
-    await expect(page.locator('[data-testid="public-event-card"]')).toBeVisible();
-    await expect(page.locator('[data-testid="public-event-name"]')).toContainText('Name Only');
-  });
-});
+const ALIASES = ['/events', '/public', '/schedule', '/calendar', '/agenda', '/lineup'];
 
 test.describe('Public Events Flow — Alias Equivalence', () => {
-  const ALIASES = ['/events', '/public', '/schedule', '/calendar', '/agenda', '/lineup'];
-
-  test('all aliases render identical structure', async ({ page }) => {
+  test('all aliases render the same surface', async ({ page }) => {
+    const shapes: string[] = [];
     for (const path of ALIASES) {
-      await page.goto(path, { waitUntil: 'networkidle', timeout: 20_000 });
+      const res = await page.goto(path);
+      expect(res?.status(), `${path} should be 200`).toBe(200);
+      // Compare structure, not content: two aliases loaded a moment apart can
+      // legitimately differ in data, and asserting equal HTML would make this
+      // test fail for the wrong reason.
+      shapes.push(
+        (
+          await page.evaluate(() =>
+            [...document.querySelectorAll('[data-testid]')]
+              .map((n) => n.getAttribute('data-testid'))
+              .sort()
+              .join(',')
+          )
+        ).toString()
+      );
+    }
+    expect(new Set(shapes).size, `aliases diverged: ${ALIASES.join(', ')}`).toBe(1);
+  });
 
-      // Same structural elements
-      await expect(page.locator('[data-testid="public-header"]')).toBeVisible();
-      await expect(page.locator('[data-testid="public-main"]')).toBeVisible();
-      await expect(page.locator('[data-testid="public-events"]')).toBeVisible();
-
-      // Same h1
-      await expect(page.locator('h1')).toContainText('OurSharedEvents');
-
-      // Same h2
-      await expect(page.locator('h2')).toContainText('Upcoming Events');
+  test('every alias serves the list server-side, not as a redirect to one that does', async ({
+    page,
+  }) => {
+    for (const path of ALIASES) {
+      await page.goto(path);
+      const container = page.locator('[data-testid="public-events"]');
+      await expect(container, `${path} should render the events container`).toBeVisible();
+      expect(await page.content()).not.toContain('Loading events');
     }
   });
 });
 
 test.describe('Public Events Flow — Responsive', () => {
-  test('no horizontal overflow on mobile viewport', async ({ page }) => {
-    await page.setViewportSize({ width: 375, height: 667 });
-
-    await page.route('**/api/v2/events', (route) =>
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          ok: true,
-          status: 200,
-          items: [
-            sampleEvent({ name: 'Mobile Event One' }),
-            sampleEvent({ name: 'Mobile Event Two', id: 'evt_m2' }),
-          ],
-        }),
-      })
-    );
-    await page.goto('/events', { waitUntil: 'networkidle', timeout: 20_000 });
-
-    const hasScroll = await page.evaluate(
+  test('no horizontal overflow on a 375px viewport', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 812 });
+    await page.goto('/events', { waitUntil: 'networkidle' });
+    const overflows = await page.evaluate(
       () => document.documentElement.scrollWidth > document.documentElement.clientWidth
     );
-    expect(hasScroll).toBe(false);
+    expect(overflows).toBe(false);
   });
 
-  test('cards are readable on mobile', async ({ page }) => {
-    await page.setViewportSize({ width: 375, height: 667 });
-
-    await page.route('**/api/v2/events', (route) =>
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          ok: true,
-          status: 200,
-          items: [sampleEvent({ name: 'Mobile Card Test' })],
-        }),
-      })
-    );
-    await page.goto('/events', { waitUntil: 'networkidle', timeout: 20_000 });
-
-    const card = page.locator('[data-testid="public-event-card"]').first();
-    const box = await card.boundingBox();
-    expect(box).toBeTruthy();
-    // Card should fit within mobile viewport width
-    expect(box!.width).toBeLessThanOrEqual(375);
-    expect(box!.width).toBeGreaterThanOrEqual(200); // not too tiny
+  test('the events heading is readable on mobile', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 812 });
+    await page.goto('/events', { waitUntil: 'networkidle' });
+    const heading = page.locator('[data-testid="public-events-heading"]');
+    await expect(heading).toBeVisible();
+    const size = await heading.evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
+    expect(size).toBeGreaterThanOrEqual(16);
   });
 });

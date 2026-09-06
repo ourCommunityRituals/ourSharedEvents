@@ -54,7 +54,11 @@ describe('OSE-668 — events grouped into a brand tree', () => {
     const html = await fetchAdminHtml();
     expect(html).toContain('tr.brand-group-header');
     expect(html).toContain('.brand-count-pill');
-    // keyboard: Enter/Space activates the header
-    expect(html).toContain("onkeydown=\"if(event.key==='Enter'||event.key===' ')");
+    // keyboard: Enter/Space activates the header. OSE-1239 moved this from an
+    // inline onkeydown (refused by the nonce CSP, so it never fired) to the
+    // delegated dispatcher; the header opts in with role="button".
+    expect(html).toMatch(/data-brand-group="\$\{safeBrand\}"[\s\S]{0,200}?role="button"/);
+    expect(html).toContain('data-action="brand-toggle"');
+    expect(html).toContain("document.addEventListener('keydown'");
   });
 });

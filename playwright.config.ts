@@ -68,6 +68,15 @@ const UA = {
 
 export default defineConfig({
   testDir: 'tests/playwright',
+
+  // OSE-1236: specs navigate RELATIVE and let this resolve the target. Before
+  // this line, mobile-workability.spec.ts built absolute URLs from
+  // STAGING_URL, so it could not be pointed at anything — including a local
+  // worker serving the PR's own code. One resolution mechanism, here.
+  use: {
+    baseURL: process.env.STAGING_URL || 'https://stg.oursharedevents.com',
+  },
+
   expect: {
     toHaveScreenshot: {
       maxDiffPixelRatio: 0.02,

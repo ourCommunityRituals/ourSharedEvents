@@ -26,7 +26,25 @@
 
 import { test, expect, type Page, type Locator } from '@playwright/test';
 
-const BASE_URL = process.env.STAGING_URL || 'https://stg.oursharedevents.com';
+// TARGET RESOLUTION — via Playwright's baseURL, NOT an absolute URL (OSE-1236).
+//
+// This spec used to build absolute URLs from `process.env.STAGING_URL`:
+//
+//     const BASE_URL = process.env.STAGING_URL || 'https://stg.oursharedevents.com';
+//     await page.goto(`${BASE_URL}${surface.path}`);
+//
+// That is exactly the trap `playwright.component.config.ts` documents in its
+// header — a spec that navigates to an absolute URL "ignores baseURL entirely
+// and would NOT follow this config." So pointing a new config at a local
+// worker did nothing: the run still went to deployed staging, and reported the
+// result as a check on the PR. The gate's verdict was uncorrelated with the
+// diff under review, and no amount of config could change that while the
+// navigation was absolute.
+//
+// Navigation is now RELATIVE. The config decides the target:
+//   playwright.mobile.config.ts → local worker (this branch's code), blocking
+//   playwright.config.ts        → STAGING_URL, the nightly deployed audit
+
 const ADMIN_BEARER = process.env.OSE_ADMIN_BEARER || 'test-admin-key-e2e-2026';
 
 // OSE-305 / OSE-302 / ADR-006: when OSE_ADMIN_BEARER is unset OR equals the
@@ -72,6 +90,28 @@ type Surface = {
   skipReason?: string;
 };
 
+/**
+ * ADMIN_CTA_NOTE — why /admin's primaryCtaSelector starts with the path chooser
+ * (OSE-1236).
+ *
+ * It used to start with `[data-testid="create-submit"]`. That button lives on
+ * STEP 5 of the create wizard and is hidden until the operator reaches it —
+ * correct progressive disclosure, not a defect. But it meant the above-the-fold
+ * contract demanded a bounding box on an element the entry view deliberately
+ * does not render, so the contract could only ever fail.
+ *
+ * Measured at 375×812 on entry, the ONLY things rendered above the fold are the
+ * path chooser's two buttons: admin-path-wizard (300×72, y=223) and
+ * admin-path-advanced (300×87, y=307). Everything else — the create wizard and
+ * its Next button included — sits behind [hidden] until a path is chosen. So
+ * the guided-setup button IS this surface's entry CTA. The later entries stay
+ * as fallbacks in case the chooser is ever removed.
+ *
+ * None of this was visible until 2026-09-05, because /admin was skipped on
+ * every run this suite had ever made: OSE-302's staging bearer secret has been
+ * unset since May. The blocking PR job (playwright.mobile.config.ts) supplies a
+ * local key to a local worker, which is what finally rendered the surface.
+ */
 const SURFACES: Surface[] = [
   {
     path: '/',
@@ -121,7 +161,9 @@ const SURFACES: Surface[] = [
     path: '/admin',
     name: 'admin dashboard',
     authHeader: { Authorization: `Bearer ${ADMIN_BEARER}` },
-    primaryCtaSelector: '[data-testid="create-submit"], #admin-action-bar button, main button',
+    // Entry-view CTA is the path chooser — see ADMIN_CTA_NOTE above (OSE-1236).
+    primaryCtaSelector:
+      '[data-testid="admin-path-wizard"], [data-testid="wizard-next-btn"], [data-testid="create-submit"], #admin-action-bar button, main button',
     skipReason: ADMIN_SKIP_REASON,
   },
   {
@@ -161,7 +203,8 @@ async function loadSurface(page: Page, surface: Surface): Promise<void> {
     await page.setExtraHTTPHeaders(surface.authHeader);
   }
   await page.setViewportSize(MOBILE_VIEWPORT);
-  await page.goto(`${BASE_URL}${surface.path}`, { waitUntil: 'domcontentloaded' });
+  // Relative — resolved against the config's baseURL. See the header.
+  await page.goto(surface.path, { waitUntil: 'domcontentloaded' });
   // OCR-42 page-state model — contract (4) "primary CTA above the fold"
   // applies to the steady-state rendered page, not the initial DOM at
   // domcontentloaded. Surfaces with async data loading (e.g.,
@@ -241,6 +284,40 @@ async function getInteractiveLocators(page: Page): Promise<Locator[]> {
       })
       .catch(() => false);
     if (isInlineTextLink) continue;
+
+    // WCAG 2.5.5 label-target exemption (OSE-1236).
+    //
+    // 2.5.5 sizes the TARGET — "the region that will accept a pointer action"
+    // — not the painted control. A 18×18 checkbox inside a <label> that is
+    // itself >= 44px tall has a 44px target: tapping anywhere on that row
+    // toggles it. That is how every design system ships a checkbox, and
+    // @ocr/ui's .checkbox-label / .radio-option already carry min-height:44px.
+    //
+    // Without this the audit reported four 18×18 "violations" that were
+    // already compliant, and the only way to satisfy it would have been to
+    // paint a 44px checkbox — worse for everyone. Same shape as the
+    // inline-text exemption above: narrow, principled, and stated.
+    //
+    // The exemption is conditional on the label ACTUALLY meeting the floor, so
+    // a checkbox in a cramped label still fails.
+    const hasLabelSizedTarget = await loc
+      .evaluate((el, floor) => {
+        const t = (el as HTMLInputElement).type;
+        if (el.tagName.toLowerCase() !== 'input') return false;
+        if (t !== 'checkbox' && t !== 'radio') return false;
+        // Either a wrapping <label> or one bound by for=""
+        const wrapper = el.closest('label');
+        const bound = el.id ? document.querySelector(`label[for="${CSS.escape(el.id)}"]`) : null;
+        for (const l of [wrapper, bound]) {
+          if (!l) continue;
+          const r = l.getBoundingClientRect();
+          if (Math.round(r.height) >= floor && Math.round(r.width) >= floor) return true;
+        }
+        return false;
+      }, MIN_TOUCH_TARGET_PX)
+      .catch(() => false);
+    if (hasLabelSizedTarget) continue;
+
     real.push(loc);
   }
   return real;
@@ -344,8 +421,44 @@ for (const surface of SURFACES) {
         `${surface.name}: no primaryCtaSelector declared — surface either has no clear CTA OR the contract isn't applicable`
       );
       await loadSurface(page, surface);
-      const cta = page.locator(surface.primaryCtaSelector!).first();
-      const exists = await cta.count();
+      // Selector-priority resolution (OSE-1236).
+      //
+      // This was `page.locator(surface.primaryCtaSelector!).first()`. A
+      // comma-separated CSS list is ONE selector, and `.first()` returns the
+      // first match in DOCUMENT ORDER — not the first list entry that matches.
+      // Every surface here declares its selector as a priority list
+      // ("the real CTA, then progressively looser fallbacks"), and that
+      // intent was silently inverted: on /admin the entry-view chooser sits
+      // AFTER the create wizard in the DOM, so `.first()` always resolved to
+      // create-submit — an element behind [hidden] — and the contract failed
+      // with "no bounding box" no matter which CTA was named first.
+      //
+      // Resolving entry-by-entry restores the declared intent, and prefers a
+      // RENDERED candidate: a selector that matches only hidden elements falls
+      // through to the next, which is what a fallback list is for.
+      const candidates = surface
+        .primaryCtaSelector!.split(',')
+        .map((x) => x.trim())
+        .filter(Boolean);
+      let cta = page.locator(candidates[0]).first();
+      let exists = 0;
+      for (const sel of candidates) {
+        const loc = page.locator(sel).first();
+        const n = await loc.count();
+        if (n === 0) continue;
+        if (exists === 0) {
+          // Remember the first selector that matches ANYTHING, so a surface
+          // whose CTA exists but is hidden still reports the honest
+          // "no bounding box" rather than "matched 0 elements".
+          cta = loc;
+          exists = n;
+        }
+        if (await loc.boundingBox().catch(() => null)) {
+          cta = loc;
+          exists = n;
+          break;
+        }
+      }
       if (exists === 0) {
         // No primary CTA element found on the page at all. That's a
         // different failure class — surface a clear message rather than

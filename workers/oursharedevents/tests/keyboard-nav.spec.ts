@@ -144,11 +144,19 @@ describe('A11Y-6: .clickable-row is keyboard accessible', () => {
     expect(await adminHtml()).toContain('tabindex="0"');
   });
 
-  test('admin event rows have onkeydown handler for Enter/Space', async () => {
+  // OSE-1239: was `expect(body).toContain('onkeydown=')`. That inline handler
+  // was refused by the nonce CSP, so Enter/Space on a row did nothing — the
+  // test asserted an attribute, not an affordance, and passed while the
+  // keyboard path was broken. The dispatcher now handles Enter/Space in one
+  // delegated listener, and the rows opt in via role="button".
+  test('admin event rows are keyboard-operable via the delegated dispatcher', async () => {
     const body = await adminHtml();
-    expect(body).toContain('onkeydown=');
-    expect(body).toContain("event.key==='Enter'");
-    expect(body).toContain("event.key===' '");
+    expect(body).toContain("document.addEventListener('keydown'");
+    expect(body).toContain("ev.key !== 'Enter' && ev.key !== ' '");
+    expect(body).toContain('[data-action][role="button"]');
+    // the rows themselves carry the opt-in
+    expect(body).toContain('data-action="event-select"');
+    expect(body).toMatch(/data-action="event-select"[^>]*role="button"/);
   });
 
   test('admin page has .clickable-row:focus-visible CSS', async () => {

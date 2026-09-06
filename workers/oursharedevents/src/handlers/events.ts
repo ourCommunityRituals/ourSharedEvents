@@ -14,7 +14,8 @@
 
 import { corsHeaders } from '../lib/cors';
 import { assertRenderable, VALID_EVENT_STATES, parseEventState } from '../domain/event-state';
-import { computeEventPhase, type EventPhase } from '../domain/event-phase';
+import { enrichWithPhase } from '../lib/event-enrich.js';
+import { toPublicEvent } from '../lib/public-event-projection.js';
 import { createShortlink } from '../lib/shortlinks';
 import { maybeTag } from '../lib/h3-tagging';
 import { getDataProvider, type DataProviderEnv } from '../lib/data-provider.js';
@@ -25,36 +26,9 @@ import { validateLogoUrl } from '../lib/sponsor-logo';
 
 // ─── Phase enrichment ──────────────────────────────────────────────────────────
 //
-// Per OSE-242 (rescoped 2026-04-26 to canonical matrix-wide resolver), every
-// event API response carries `phase` so that all 5 surfaces (Sponsor, Poster,
-// Display, Public, SharedReport, Admin event-list) consume the same canonical
-// phase computation. Wiring here = single point of injection; surfaces don't
-// re-derive phase locally. Brain contract:
-//   OCR-docs/ocr-docs-brain/event-phase-contract.yaml
-function enrichWithPhase(
-  row: Record<string, unknown>
-): Record<string, unknown> & { phase: EventPhase } {
-  return {
-    ...row,
-    // OSE-844 (X-10) — canonical field-name mapping. The DB SELECT projects the
-    // column names `title`/`start_date`/`location`; every surface template
-    // (display/poster/public) reads `name`/`startDateISO`/`venue`. Map ONCE here
-    // — the single enrichment seam feeding list, detail and admin-list — instead
-    // of four `||` fallbacks scattered across the templates (which taught every
-    // future surface author that two names per value is normal). The DB columns
-    // stay in the payload (additive; #16 is a floor, so this never breaks the
-    // snapshot). ADR-016. Decision: PO + backend lead chose Option A (map in the
-    // API, one name per value out).
-    name: typeof row.title === 'string' ? row.title : (row.name ?? null),
-    startDateISO: typeof row.start_date === 'string' ? row.start_date : (row.startDateISO ?? null),
-    venue: typeof row.location === 'string' ? row.location : (row.venue ?? null),
-    phase: computeEventPhase({
-      status: typeof row.status === 'string' ? row.status : '',
-      start_date: typeof row.start_date === 'string' ? row.start_date : null,
-      end_date: typeof row.end_date === 'string' ? row.end_date : null,
-    }),
-  };
-}
+// Moved to `lib/event-enrich.ts` by OSE-1243, when the server-rendered public
+// page became a second consumer that reads the DataProvider directly. It stays
+// one function so surfaces cannot re-derive phase or field names locally.
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -105,7 +79,12 @@ export async function handleListEvents(
   try {
     const dp = getDataProvider(env, ctx);
     const result = await dp.listEvents(brand);
-    const items = result.data.map((e: unknown) => enrichWithPhase(e as Record<string, unknown>));
+    // OSE-1247 — enrich, then project. The projection is an allowlist, so a
+    // column added to the SELECT for an internal reason does not reach the
+    // public response by default.
+    const items = result.data.map((e: unknown) =>
+      toPublicEvent(enrichWithPhase(e as Record<string, unknown>))
+    );
     return Response.json(
       { ok: true, status: 200, items },
       {
@@ -166,7 +145,11 @@ export async function handleGetEvent(
     }
 
     return Response.json(
-      { ok: true, status: 200, item: enrichWithPhase(row) },
+      // OSE-1247 — same projection as the list. If the two endpoints described
+      // the same event with different field sets, the narrower one would be
+      // security theatre: a caller wanting the extra fields would just use the
+      // other route.
+      { ok: true, status: 200, item: toPublicEvent(enrichWithPhase(row)) },
       {
         headers: {
           ...corsHeaders(request),
@@ -467,6 +450,26 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
   const lon = typeof body.lon === 'number' && Number.isFinite(body.lon) ? body.lon : null;
   const h3Tags = maybeTag(lat, lon);
 
+  // OSE-1245 — publication is an act (OCR_VISION.md §6.2c). The host decides
+  // whether this event appears on public discovery surfaces at all.
+  //
+  // ACCEPTED, NOT REQUIRED, and the distinction is deliberate. Requiring it
+  // would break every existing API client, and a 400 is a poor way to teach a
+  // policy. It defaults to published, which matches the column default and
+  // preserves current behaviour.
+  //
+  // The default is therefore NOT where the guarantee lives. The guarantee is
+  // that the human path always asks: `admin.html` sends an explicit value from
+  // both the wizard and the advanced form, and a test asserts it always does.
+  // A default nobody is asked about is how a home address ends up on a public
+  // map without anyone having decided that — which is the whole finding this
+  // work came from.
+  //
+  // Anything other than an explicit `false`/0 publishes, so a malformed or
+  // absent value fails toward the existing behaviour rather than silently
+  // hiding an organiser's event from the world.
+  const isPublished = body.is_published === false || body.is_published === 0 ? 0 : 1;
+
   const now = new Date().toISOString();
 
   try {
@@ -474,9 +477,9 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
       `INSERT INTO events (id, brand_id, title, slug, status, description, location, start_date, end_date, timezone, cover_image_url, template_id,
                            what_short, who_host, why_purpose, how_details, where_address,
                            who_story, who_image_url, what_video_url,
-                           lat, lon, h3_res9, h3_res7,
+                           lat, lon, h3_res9, h3_res7, is_published,
                            created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
       .bind(
         id,
@@ -503,6 +506,7 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
         lon,
         h3Tags?.h3_res9 ?? null,
         h3Tags?.h3_res7 ?? null,
+        isPublished,
         now,
         now
       )
@@ -657,6 +661,26 @@ export async function handleUpdateEvent(
         sets.push(`${field} = ?`);
         values.push(val.slice(0, max));
       }
+    }
+  }
+
+  // OSE-1245 — publication is reversible, and it must be.
+  //
+  // Handled here rather than in `allowedFields` for the same reason lat/lon
+  // are: that map holds string fields with length caps, and this is a boolean.
+  //
+  // A host who published and then thought better of it has to be able to take
+  // it back. That the take-back is imperfect — un-flipping does not un-send,
+  // and anything already scraped or cached stays out there (§6.2c) — is an
+  // argument for asking clearly BEFORE the first publish, not an argument for
+  // making the reversal unavailable.
+  //
+  // Accepts boolean or 0/1 so a form post and a JSON client agree.
+  if ('is_published' in body) {
+    const v = body.is_published;
+    if (typeof v === 'boolean' || v === 0 || v === 1) {
+      sets.push('is_published = ?');
+      values.push(v === true || v === 1 ? 1 : 0);
     }
   }
 

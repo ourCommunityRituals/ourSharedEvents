@@ -83,6 +83,82 @@ export function emptyState(o: EmptyStateOpts): string {
   return `<div class="empty-state">${icon}<h3>${esc(o.title)}</h3><p>${esc(o.message)}</p>${action}</div>`;
 }
 
+export interface FooterLink {
+  href: string;
+  label: string;
+  /**
+   * Optional stable id for this link. Without one the link is addressable only
+   * by position, and position is exactly what changes when a legal page is
+   * added — which is how `[data-testid="landing-footer"] a` came to depend on
+   * the landing footer having precisely one link.
+   */
+  testid?: string;
+}
+
+export interface FooterOpts {
+  /**
+   * Surface name — prefixes the test-ids (`landing` → `landing-footer`).
+   * Existing surfaces already emit `landing-footer` / `public-footer` /
+   * `signin-footer`, and E2E specs address them, so the prefix is how this
+   * partial adopts a surface WITHOUT breaking its contract.
+   */
+  surface: string;
+  /** Links, rendered in order. The first one is the most reachable — order it deliberately. */
+  links: FooterLink[];
+  /** Defaults to the current year. Injectable so a snapshot test is not time-dependent. */
+  year?: number;
+  /** Product name in the copyright line. */
+  product?: string;
+  /**
+   * Render the standing product subtitle — "Never who, only how many."
+   * (OSE-1230). Off by default: the footer is legal furniture, and the promise
+   * belongs where a reader meets the product, not on every page twice.
+   */
+  subtitle?: boolean;
+}
+
+/**
+ * Site footer — the legal surface.
+ *
+ * WHY THIS IS A PARTIAL AND NOT MARKUP IN SEVEN TEMPLATES
+ *   Measured 2026-09-05: three of the seven templates carried a footer, they
+ *   had diverged (only `admin-signin` linked Privacy at all), and two surfaces
+ *   that need one — `admin`, `shared-report` — had none. Legal text that
+ *   differs per page is not a legal surface; it is four independent drafts.
+ *
+ * LINKS ARE DATA, NOT CODE
+ *   `/terms`, `/legal` and `/accessibility` do not exist yet — verified against
+ *   `src/router.ts`, which routes `/privacy` and `/privacy-policy` and nothing
+ *   else. When they ship, they are added to the link array. No surface changes,
+ *   no partial changes, no new markup.
+ *
+ * Every field is escaped; `escUrl` gates the hrefs.
+ */
+export function footer(o: FooterOpts): string {
+  const surface = o.surface;
+  const year = o.year ?? new Date().getUTCFullYear();
+  const product = o.product ?? 'OurSharedEvents';
+
+  const links = o.links
+    .map((l) => {
+      const id = l.testid ? ` data-testid="${esc(l.testid)}"` : '';
+      return `<a href="${escUrl(l.href)}"${id}>${esc(l.label)}</a>`;
+    })
+    .join('<span class="ocr-footer-sep" aria-hidden="true"> · </span>');
+
+  const sub = o.subtitle
+    ? `<p class="ocr-footer-sub" data-testid="${esc(surface)}-footer-subtitle">Never who, only how many.</p>`
+    : '';
+
+  return (
+    `<footer class="ocr-footer" data-testid="${esc(surface)}-footer">` +
+    `<p class="ocr-footer-legal" data-testid="${esc(surface)}-footer-copyright">` +
+    `© ${esc(String(year))} ${esc(product)}` +
+    (links ? `<span class="ocr-footer-sep" aria-hidden="true"> · </span>${links}` : '') +
+    `</p>${sub}</footer>`
+  );
+}
+
 /**
  * Access-denied built on emptyState — replaces the bare "access denied".
  * Defaults give a non-DJ visitor an on-ramp instead of a wall.

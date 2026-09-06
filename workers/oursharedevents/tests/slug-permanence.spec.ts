@@ -35,12 +35,19 @@ function normalizePath(p: string): string {
 // Fields that are immutable post-creation (must not appear in handleUpdateEvent allowedFields)
 const IMMUTABLE_FIELDS = ['slug', 'id', 'brand_id', 'created_at'] as const;
 
+// OSE-1242: these lookups used `.includes('handlers/events')`, a PREFIX match
+// that silently also matched `handlers/events-map.ts` the moment that file
+// existed. `Object.keys().find()` then returned the wrong source and five
+// assertions failed against a file they were never about. Matching the exact
+// filename removes the landmine for the next sibling — events-import.ts,
+// events-search.ts, whatever comes.
+
 describe('OSE-587 G1/G2 — TL-051: Immutable fields excluded from handleUpdateEvent', () => {
   // @born-red TL-051 | method: design-time-negative-assertion | date: 2026-08-03
   test('handleUpdateEvent allowedFields does not contain slug', () => {
     const sources = loadSources();
     const eventsKey = Object.keys(sources).find((k) =>
-      normalizePath(k).includes('handlers/events')
+      normalizePath(k).endsWith('handlers/events.ts')
     );
     expect(eventsKey, 'handlers/events.ts must be in TEST_SOURCE_FILES_JSON').toBeDefined();
     const src = sources[eventsKey!]!;
@@ -65,7 +72,7 @@ describe('OSE-587 G1/G2 — TL-051: Immutable fields excluded from handleUpdateE
   test('handleUpdateEvent allowedFields does not contain id or brand_id', () => {
     const sources = loadSources();
     const eventsKey = Object.keys(sources).find((k) =>
-      normalizePath(k).includes('handlers/events')
+      normalizePath(k).endsWith('handlers/events.ts')
     );
     const src = sources[eventsKey!]!;
 
@@ -81,7 +88,7 @@ describe('OSE-587 G1/G2 — TL-051: Immutable fields excluded from handleUpdateE
   test('allowedFields contains title and description (positive case — these ARE mutable)', () => {
     const sources = loadSources();
     const eventsKey = Object.keys(sources).find((k) =>
-      normalizePath(k).includes('handlers/events')
+      normalizePath(k).endsWith('handlers/events.ts')
     );
     const src = sources[eventsKey!]!;
 
@@ -100,7 +107,7 @@ describe('OSE-587 G3 — Static: no UPDATE SQL sets slug in the update handler',
   test('events.ts UPDATE SQL never references slug column assignment', () => {
     const sources = loadSources();
     const eventsKey = Object.keys(sources).find((k) =>
-      normalizePath(k).includes('handlers/events')
+      normalizePath(k).endsWith('handlers/events.ts')
     );
     const src = sources[eventsKey!]!;
 
@@ -108,10 +115,9 @@ describe('OSE-587 G3 — Static: no UPDATE SQL sets slug in the update handler',
     const updateMatches = src.match(/UPDATE\s+events\s+SET[^;]+/gi) ?? [];
 
     for (const stmt of updateMatches) {
-      expect(
-        stmt,
-        `UPDATE events SQL must not set slug: "${stmt.slice(0, 100)}..."`
-      ).not.toMatch(/\bslug\s*=/i);
+      expect(stmt, `UPDATE events SQL must not set slug: "${stmt.slice(0, 100)}..."`).not.toMatch(
+        /\bslug\s*=/i
+      );
     }
   });
 });
@@ -120,7 +126,7 @@ describe('OSE-587 G4 — handleCreateEvent sets slug (positive: slug is assignab
   test('events.ts INSERT into events includes a slug column', () => {
     const sources = loadSources();
     const eventsKey = Object.keys(sources).find((k) =>
-      normalizePath(k).includes('handlers/events')
+      normalizePath(k).endsWith('handlers/events.ts')
     );
     const src = sources[eventsKey!]!;
 

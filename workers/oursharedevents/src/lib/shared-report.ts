@@ -57,10 +57,28 @@ const SERIES_CLUSTER_MIN_EVENTS = 3;
 // Tolerance window for clustering events into a candidate series: ±1 hour.
 const SERIES_HOUR_TOLERANCE = 1;
 
-// Q4 ratified — corridor baseline minimum sample size: 10 events / 30d
-// (callers of the SharedReport read API enforce this at render time; here
-// we just materialize the count so the API can decide).
-// Stored for cross-reference; not used in this file directly.
+// Q4 ratified — corridor baseline minimum sample size.
+//
+// UNITS, GRAIN AND DIRECTION, because this comment used to get all three wrong
+// and a governance artifact was ratified on the strength of it (OSE-1242,
+// CCR Loop 9, 2026-09-05). It said "10 events / 30d". It is not events, it is
+// not corridor-wide, and it is not forward-looking:
+//
+//   unit       distinct anonymous attendees — COUNT(DISTINCT anon_id_hash),
+//              see refreshCorridorDensityBaseline below and migration 0032:44
+//              ("rolling 30-day distinct anon_id_hash count")
+//   grain      per (corridor_id, bucket_dow, bucket_hour) — a time-of-week
+//              cell, not a whole corridor
+//   direction  TRAILING — what already happened
+//   purpose    the floor below which a density RATIO is not publishable;
+//              it is not a readiness or eligibility gate for any surface
+//
+// Do not reuse this as a threshold for whether something should be SHOWN. A
+// trailing attendee count cannot answer a question about a forward window, and
+// a per-time-bucket floor cannot answer one about a corridor.
+//
+// Callers of the SharedReport read API enforce it at render time; here we just
+// materialize the count so the API can decide.
 export const CORRIDOR_BASELINE_MIN_SAMPLE = 10;
 
 // OSE-597 (rank-10 finding): single source of truth for the corridor-map

@@ -34,7 +34,7 @@ test.describe('Landing Flow — Navigation to Events', () => {
   test('click "Browse Events" in footer → lands on /events', async ({ page }) => {
     await page.goto('/', { waitUntil: 'networkidle', timeout: TIMEOUT });
 
-    await page.locator('[data-testid="landing-footer"] a').click();
+    await page.locator('[data-testid="landing-footer-browse"]').click();
     await page.waitForLoadState('networkidle');
 
     expect(page.url()).toContain('/events');

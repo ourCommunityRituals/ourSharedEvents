@@ -233,10 +233,15 @@
         ></div>
       </section>
       <section data-testid="public-events-section" aria-labelledby="events-heading">
-        <p id="events-count" class="sr-only" data-testid="public-events-count" role="status" aria-live="polite"></p>
+        <p id="events-count" class="sr-only" data-testid="public-events-count" role="status" aria-live="polite"><!--OCR_EVENT_COUNT--></p>
         <h2 id="events-heading" data-testid="public-events-heading" tabindex="-1">Upcoming Events</h2>
+        <!-- OSE-1243: server-rendered. The Worker replaces this marker with the
+             event cards before the page is sent, so the served HTML is the
+             truth and there is no second round trip to see an event. The
+             "Loading events…" paragraph that used to sit here is gone with the
+             script that resolved it. -->
         <div id="events" data-testid="public-events" aria-live="polite" aria-atomic="false">
-          <p class="loading" data-testid="public-loading" role="status">Loading events&hellip;</p>
+          <!--OCR_EVENT_LIST-->
         </div>
       </section>
       <section class="ose-anonymity" data-testid="anonymity-affordance" aria-labelledby="anon-heading">
@@ -249,77 +254,7 @@
         </p>
       </section>
     </main>
-    <footer data-testid="public-footer">
-      <p data-testid="public-footer-copyright">&copy; 2026 OurSharedEvents &middot; <a href="/events" data-testid="public-footer-browse">Browse Events</a></p>
-    </footer>
-    <script>
-      (async () => {
-        const esc = (s) => {
-          const d = document.createElement('div');
-          d.textContent = s;
-          return d.innerHTML;
-        };
-        const container = document.getElementById('events');
-        try {
-          const res = await fetch('/api/v2/events');
-          const data = await res.json();
-          if (!data.ok || !data.items.length) {
-            container.innerHTML =
-              '<p class="loading" data-testid="public-events-empty" role="status">No events scheduled.</p>';
-            return;
-          }
-          // OSE-1201 follow-on (staging walkthrough 2026-09-03): the list said
-          // "Upcoming" and offered Register on an event whose own page said it
-          // was a wrap. The API already emits `phase`; the list now reads it.
-          const upcoming = data.items.filter((e) => e.phase !== 'post_event').length;
-          const countEl = document.getElementById('events-count');
-          if (countEl) countEl.textContent = upcoming + ' upcoming event' + (upcoming === 1 ? '' : 's');
-          container.innerHTML = data.items
-            .map((e) => {
-              const safeId = esc(String(e.id || ''));
-              // OSE-871 (P-1): read ONE canonical name per value. The API emits
-              // name/startDateISO/venue (OSE-844, mapped in enrichWithPhase), so
-              // the `|| e.title` / `|| e.start_date` / `|| e.location` dual-reads
-              // are gone — public no longer teaches future surfaces that two
-              // names per value is normal. Empty renders its empty state.
-              const safeName = esc(e.name || '');
-              const encodedName = encodeURIComponent(e.name || '');
-              const dateStr = e.startDateISO
-                ? esc(
-                    new Date(e.startDateISO).toLocaleDateString('en-US', {
-                      weekday: 'long',
-                      year: 'numeric',
-                      month: 'long',
-                      day: 'numeric',
-                    })
-                  )
-                : '';
-              const venueStr = e.venue ? esc(e.venue) : '';
-              const datePart = dateStr ? '<span data-testid="public-event-date">' + dateStr + '</span>' : '';
-              const venuePart = venueStr ? ' &middot; <span data-testid="public-event-venue">' + venueStr + '</span>' : '';
-              const phase = esc(String(e.phase || ''));
-              const wrapped = e.phase === 'post_event';
-              // A wrapped event links to its recap, never to a registration form.
-              const cta = wrapped
-                ? '<a class="cta cta-secondary" href="/events/' + safeId + '" data-testid="public-event-cta" data-cta="recap" aria-label="See how ' + safeName + ' went">See how it went</a>'
-                : '<a class="cta" href="/forms/' + safeId + '?type=register&event=' + encodedName + '" data-testid="public-event-cta" data-cta="register" aria-label="Register for ' + safeName + '">Register</a>';
-              const wrappedTag = wrapped ? ' <span class="tag-wrapped" data-testid="public-event-wrapped">Wrapped</span>' : '';
-              return `
-          <div class="event-card" data-testid="public-event-card" data-event-id="${safeId}" data-phase="${phase}">
-            <div class="event-info" data-testid="public-event-info">
-              <h3 data-testid="public-event-name">${safeName}${wrappedTag}</h3>
-              <p class="meta" data-testid="public-event-meta">${datePart}${venuePart}</p>
-            </div>
-            ${cta}
-          </div>`;
-            })
-            .join('');
-        } catch (err) {
-          container.innerHTML =
-            '<p class="error" data-testid="public-error">Could not load events. Please try again.</p>';
-        }
-      })();
-    </script>
+    <!--OCR_LEGAL_FOOTER-->
     <script>
       (async () => {
         const banner = document.getElementById('sponsor-banner');
@@ -346,7 +281,7 @@
           banner.innerHTML = sponsors
             .map((s) => {
               const logo = s.logo_url
-                ? '<img src="' + esc(s.logo_url) + '" alt="' + esc(s.name) + '" referrerpolicy="no-referrer" onerror="this.style.display=\'none\'" data-testid="public-sponsor-logo">'
+                ? '<img src="' + esc(s.logo_url) + '" alt="' + esc(s.name) + '" referrerpolicy="no-referrer" data-hide-on-error="1" data-testid="public-sponsor-logo">'
                 : '';
               const link = s.website_url
                 ? // OSE-1164: noreferrer (not just noopener) so clicking a sponsor sends NO
@@ -382,6 +317,24 @@
           if (banner) banner.innerHTML = '<span hidden data-testid="public-sponsor-error"></span>';
         }
       })();
+    </script>
+    <!-- Sponsor logos hide themselves when the image 404s (OSE-1239).
+         This replaced onerror="this.style.display='none'", which the nonce CSP
+         refused at fire time — so a dead logo URL left a broken-image icon on
+         this surface instead of disappearing quietly. The `error` event does
+         NOT bubble, so this listens in the CAPTURE phase; that is the whole
+         reason it cannot be folded into an ordinary delegated listener. -->
+    <script>
+      document.addEventListener(
+        'error',
+        function (ev) {
+          var el = ev.target;
+          if (el && el.tagName === 'IMG' && el.hasAttribute('data-hide-on-error')) {
+            el.style.display = 'none';
+          }
+        },
+        true
+      );
     </script>
   </body>
 </html>

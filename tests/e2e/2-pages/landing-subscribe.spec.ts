@@ -412,14 +412,30 @@ test.describe('Landing — Footer', () => {
     await expect(page.locator('[data-testid="landing-footer"]')).toBeVisible();
   });
 
+  // The year is derived at render time (OSE-1232), not hard-coded in the
+  // template — so assert the CURRENT year. A literal '2026' here would have
+  // passed all year and then failed at midnight on 1 January for no reason
+  // anyone would connect to this change.
   test('footer has copyright', async ({ page }) => {
-    await expect(page.locator('[data-testid="landing-footer"]')).toContainText('2026');
+    await expect(page.locator('[data-testid="landing-footer-copyright"]')).toContainText(
+      String(new Date().getUTCFullYear())
+    );
   });
 
+  // Addressed by test-id, not by position. Until OSE-1232 the landing footer
+  // held exactly one link, so `[data-testid="landing-footer"] a` resolved
+  // uniquely — and the moment Privacy was added it became a strict-mode
+  // violation. Position is not an identity.
   test('footer has Browse Events link', async ({ page }) => {
-    const link = page.locator('[data-testid="landing-footer"] a');
+    const link = page.locator('[data-testid="landing-footer-browse"]');
     await expect(link).toContainText('Browse Events');
     expect(await link.getAttribute('href')).toBe('/events');
+  });
+
+  test('footer links the privacy policy', async ({ page }) => {
+    const link = page.locator('[data-testid="landing-footer-privacy"]');
+    await expect(link).toContainText('Privacy');
+    expect(await link.getAttribute('href')).toBe('/privacy');
   });
 });
 

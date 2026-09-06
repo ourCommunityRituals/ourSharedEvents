@@ -24,8 +24,8 @@
  * scripts/check-schema-guard.mjs.
  */
 
-/** Highest migration in migrations/ — currently 0068_sponsor_lifecycle_and_acceptance.sql */
-export const REQUIRED_DB_MIGRATION = 68;
+/** Highest migration in migrations/ — currently 0070_events_add_is_published.sql */
+export const REQUIRED_DB_MIGRATION = 70;
 
 /** Highest migration in migrations-forms/ — currently 0013_seed_mock_mode_flags.sql */
 export const REQUIRED_FORMS_MIGRATION = 13;

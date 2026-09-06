@@ -31,8 +31,14 @@ describe('OSE-667 — single selected-event store', () => {
 
   test('the row gesture selects via the store, not four imperative loader calls', async () => {
     const html = await fetchAdminHtml();
-    expect(html).toContain('onclick="window.selectEvent(');
-    // The old shape — four loaders inline in the row onclick — is gone.
+    // OSE-1239: the row's selection gesture is now a data-action the delegated
+    // dispatcher resolves. The previous assertion required an inline onclick —
+    // the exact shape the nonce CSP refuses — so it passed while clicking a
+    // row selected nothing at all.
+    expect(html).toContain('data-action="event-select"');
+    expect(html).toContain("'event-select': function (el)");
+    expect(html).toContain('window.selectEvent(');
+    // The old shape — four loaders inline in the row handler — is still gone.
     expect(html).not.toContain("onclick=\"window.loadForms('${safeId}'");
   });
 
@@ -49,14 +55,18 @@ describe('OSE-667 — single selected-event store', () => {
   test('only the opaque event id is persisted (#1 — no PII/anonymous_id)', async () => {
     const html = await fetchAdminHtml();
     // sessionStorage stores the id under the key — never a name/email/anon id.
-    expect(html).toContain('sessionStorage.setItem(window.SELECTED_EVENT_KEY, window.OSE_selection.id)');
-    expect(html).not.toContain('sessionStorage.setItem(window.SELECTED_EVENT_KEY, window.OSE_selection.name');
+    expect(html).toContain(
+      'sessionStorage.setItem(window.SELECTED_EVENT_KEY, window.OSE_selection.id)'
+    );
+    expect(html).not.toContain(
+      'sessionStorage.setItem(window.SELECTED_EVENT_KEY, window.OSE_selection.name'
+    );
   });
 
   test('selection is restored across reload (re-select + scrollIntoView), stale id cleared', async () => {
     const html = await fetchAdminHtml();
     expect(html).toContain('sessionStorage.getItem(window.SELECTED_EVENT_KEY)');
-    expect(html).toContain('scrollIntoView({ block: \'center\' })');
+    expect(html).toContain("scrollIntoView({ block: 'center' })");
     // A saved id that no longer matches a row is removed, not left dangling.
     expect(html).toContain('sessionStorage.removeItem(window.SELECTED_EVENT_KEY)');
   });

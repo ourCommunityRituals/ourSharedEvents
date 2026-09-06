@@ -32,7 +32,7 @@ const normalizePath = (p: string) => p.replace(/\\/g, '/');
 
 function eventsSource(): string {
   const sources = JSON.parse(tenv().TEST_SOURCE_FILES_JSON) as Record<string, string>;
-  const key = Object.keys(sources).find((k) => normalizePath(k).includes('handlers/events'));
+  const key = Object.keys(sources).find((k) => normalizePath(k).endsWith('handlers/events.ts'));
   expect(key, 'handlers/events.ts must be in TEST_SOURCE_FILES_JSON').toBeDefined();
   return sources[key!]!;
 }

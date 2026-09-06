@@ -77,8 +77,9 @@ describe('OSE-636 | INT-04+05 | Poster Deployment Management UI gate', () => {
     // context bar adds its own — so assert the poster wiring exists anywhere.)
     expect(src).toContain("addEventListener('ose:event-selected'");
     expect(src).toContain('window.loadPosterDeployments(d.id)');
-    // The row gesture selects via the store.
-    expect(src).toContain('onclick="window.selectEvent(');
+    // The row gesture selects via the store. OSE-1239: through a data-action
+    // the delegated dispatcher resolves, not an inline onclick the CSP refused.
+    expect(src).toContain('data-action="event-select"');
   });
 
   test('deletePosterDeployment function is defined', () => {

@@ -39,11 +39,21 @@ describe('OSE-673 — context bar', () => {
 
   test('a segmented nav jumps to each of the four management cards', async () => {
     const html = await fetchAdminHtml();
-    expect(html).toContain("window.ecbJump('forms-card')");
-    expect(html).toContain("window.ecbJump('poster-deployments-card')");
-    expect(html).toContain("window.ecbJump('sponsors-card')");
-    expect(html).toContain("window.ecbJump('surface-cards')");
-    expect(html).toContain('el.scrollIntoView({ behavior: \'smooth\', block: \'start\' })');
+    // OSE-1239: the targets moved from an inline ecbJump('…') call — refused
+    // by the nonce CSP, so the nav jumped nowhere — onto data-target, which
+    // the delegated dispatcher reads at click time.
+    for (const card of [
+      'forms-card',
+      'poster-deployments-card',
+      'sponsors-card',
+      'surface-cards',
+    ]) {
+      expect(html, `no nav button targets ${card}`).toMatch(
+        new RegExp(`data-action="ecb-jump"[^>]*data-target="${card}"`)
+      );
+    }
+    expect(html).toContain('window.ecbJump = function');
+    expect(html).toContain("el.scrollIntoView({ behavior: 'smooth', block: 'start' })");
   });
 
   test('nav buttons meet #14 (>=44px tap) and #3 (role tokens, no inline styles)', async () => {

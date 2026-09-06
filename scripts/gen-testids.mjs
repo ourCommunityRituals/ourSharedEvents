@@ -20,6 +20,25 @@
  * concatenated prefix is not one, and listing it would put an id in the registry
  * that t() would happily accept while nothing ever renders it.
  *
+ * KNOWN COVERAGE GAP — composed surfaces (OSE-1232, 2026-09-05)
+ *   The footer moved out of three templates and into the @ocr/ui footer()
+ *   partial, injected at serve time by src/lib/legal-footer.ts. Its ids are
+ *   built from a surface prefix (`${surface}-footer`), so they are dynamic by
+ *   the rule above and correctly dropped from this registry — which is why
+ *   `landing-footer`, `public-footer` and their children disappear from the
+ *   regenerated output even though the app still emits all of them, plus five
+ *   new ones the templates never carried.
+ *
+ *   The registry stays TRUTHFUL (it claims nothing unemitted) but is no longer
+ *   COMPLETE for composed markup, and completeness is what makes t() useful.
+ *   Closing it means deriving from rendered output rather than template source
+ *   — running the composition and scanning the result — which needs a TS
+ *   loader this plain-node script does not have. That is the follow-up, and it
+ *   gets more valuable with every partial adopted (footer, then emptyState,
+ *   then header). Until then, footer ids are addressed as string literals in
+ *   specs, exactly as they were before, and tests/legal-footer.spec.ts is what
+ *   actually guards them.
+ *
  * Usage:  node scripts/gen-testids.mjs [--check]
  *   --check  exit 1 if the committed files are stale (for CI)
  */

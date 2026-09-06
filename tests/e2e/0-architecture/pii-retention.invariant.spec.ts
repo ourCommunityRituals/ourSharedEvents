@@ -47,7 +47,7 @@
  */
 
 import { test, expect } from '@playwright/test';
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 
 const REPO_ROOT = join(__dirname, '..', '..', '..');
@@ -72,6 +72,12 @@ const LIFECYCLE_TEST_PATH = join(
  * If only step 1 is done, this test fails — surfacing the missing cron wiring.
  * If steps 1+2 done without step 3, lifecycle.spec.ts coverage is incomplete
  * (not caught by THIS file, but is the next discipline gap).
+ *
+ * OSE-1246 — and if step 1 is FORGOTTEN, the completeness test below catches
+ * it. That used to be the real hole: these instructions only bind someone who
+ * has already decided to open this file. A table added to the schema and never
+ * registered here left every test above green while the data over-retained.
+ * The registry is still hand-maintained; it is no longer self-attesting.
  */
 const PII_TABLES_DELETE = [
   { table: 'form_registrations', ttlColumn: 'expires_at' },
@@ -79,6 +85,94 @@ const PII_TABLES_DELETE = [
 ] as const;
 
 const PII_TABLES_SCRUB = [{ table: 'form_surveys', scrubFlag: 'pii_scrubbed' }] as const;
+
+// ─── OSE-1246 — the registry above must COVER the schema ─────────────────────
+//
+// The two lists are hand-maintained, and their own instructions say "to add a
+// new PII table: 1. Add a row here". That is backwards as a guarantee: the gate
+// only fires if someone remembers step 1. Add a table to the schema and never
+// touch this file, and every test above stays green while the data over-retains
+// — which is the exact failure this invariant's header names as "the
+// regulatory-liability invariant".
+//
+// The test below derives the PII tables FROM THE MIGRATIONS and asserts the
+// registry covers them. The per-table tests above keep doing what they do well
+// (asserting each phase is correctly SHAPED — a DELETE without its TTL WHERE
+// clause is data loss, not over-retention); this one asserts the registry is
+// COMPLETE. Shape and completeness are different properties and need different
+// tests.
+//
+// At the time of writing the registry was complete. Nothing was broken. What
+// was missing was the ability to notice if it stopped being.
+
+const FORMS_MIGRATIONS = join(REPO_ROOT, 'workers', 'oursharedevents', 'migrations-forms');
+
+/**
+ * Column-name fragments that mean a row is about a person.
+ *
+ * Matched as substrings because this schema prefixes: the columns are
+ * `attendee_name` and `attendee_email_hash`, not `name` and `email`. An
+ * anchored match finds neither, which is how a first draft of this test passed
+ * while detecting nothing at all.
+ *
+ * `_hash` and `_encrypted` variants are deliberately included. A hashed email
+ * is pseudonymous rather than anonymous — it still identifies a person given
+ * the input space, and it is still governed by a retention promise.
+ */
+const IDENTITY_FRAGMENTS =
+  /(email|phone|first_name|last_name|full_name|_name|attendee|ip_address|address)/i;
+
+/**
+ * A TTL or scrub column is a table SAYING it expects to be expired. If one
+ * exists and no lifecycle phase does, the schema is making a promise the cron
+ * does not keep.
+ */
+const TTL_FRAGMENTS = /(expires_at|retention_|_ttl|scrub)/i;
+
+/**
+ * Tables that carry identity-shaped columns but must NOT be expired, with the
+ * reason. Deleting from here would destroy something load-bearing.
+ *
+ * Empty today. It exists so that the honest answer to a future finding is a
+ * documented exemption rather than deleting the assertion.
+ */
+const RETENTION_EXEMPT: Record<string, string> = {};
+
+/** table -> column names, from CREATE TABLE bodies AND later ALTER ADD COLUMNs. */
+function formsSchemaColumns(): Map<string, string[]> {
+  const byTable = new Map<string, string[]>();
+  const add = (table: string, col: string) => {
+    const list = byTable.get(table) ?? [];
+    list.push(col);
+    byTable.set(table, list);
+  };
+
+  for (const file of readdirSync(FORMS_MIGRATIONS)
+    .filter((f) => f.endsWith('.sql'))
+    .sort()) {
+    const sql = readFileSync(join(FORMS_MIGRATIONS, file), 'utf8');
+
+    for (const m of sql.matchAll(/CREATE TABLE IF NOT EXISTS\s+(\w+)\s*\(([\s\S]*?)\n\s*\);/gi)) {
+      const table = m[1]!;
+      if (!byTable.has(table)) byTable.set(table, []);
+      for (const line of m[2]!.split('\n')) {
+        const t = line.trim();
+        if (!t || t.startsWith('--')) continue;
+        const col = t.split(/\s+/)[0]!.replace(/[(),]/g, '');
+        if (col) add(table, col);
+      }
+    }
+
+    // Columns are added by ALTER in this schema (anonymous_id, consent_given_at,
+    // consent_type all arrived that way), and "a NEW PII column added to the
+    // schema" is the failure mode this invariant names. A CREATE-only scan
+    // would miss the very path the drift travels on.
+    for (const m of sql.matchAll(/ALTER TABLE\s+(\w+)\s+ADD COLUMN\s+(\w+)/gi)) {
+      add(m[1]!, m[2]!);
+    }
+  }
+  return byTable;
+}
 
 test.describe('Invariant 8: Bounded PII Retention — cron mechanism', () => {
   test('OSE-INV8 | infra | cron | scheduled() handler exists in src/index.ts', () => {
@@ -192,6 +286,64 @@ test.describe('Invariant 8: Bounded PII Retention — cron mechanism', () => {
       src,
       'runFormDataLifecycle must emit a LIFECYCLE_COMPLETE log line on success — without it, the cron going silently absent is undetectable'
     ).toMatch(/LIFECYCLE_COMPLETE/);
+  });
+
+  // OSE-1246 — completeness, derived from the schema rather than declared.
+  test('OSE-INV8 | infra | registry | EVERY PII-bearing forms table has a lifecycle phase', () => {
+    const registered = new Set<string>([
+      ...PII_TABLES_DELETE.map((t) => t.table),
+      ...PII_TABLES_SCRUB.map((t) => t.table),
+    ]);
+
+    const columns = formsSchemaColumns();
+    expect(
+      columns.size,
+      'no tables parsed from migrations-forms — the parser is broken'
+    ).toBeGreaterThan(0);
+
+    const unwired: string[] = [];
+    for (const [table, cols] of columns) {
+      const identity = cols.filter((c) => IDENTITY_FRAGMENTS.test(c));
+      const ttl = cols.filter((c) => TTL_FRAGMENTS.test(c));
+      if (identity.length === 0 && ttl.length === 0) continue;
+      if (registered.has(table)) continue;
+      if (RETENTION_EXEMPT[table]) continue;
+      unwired.push(
+        `${table} — identity columns [${identity.join(', ')}], ttl columns [${ttl.join(', ')}]`
+      );
+    }
+
+    expect(
+      unwired,
+      'A forms table carries person-shaped or TTL columns and has no lifecycle phase. ' +
+        'Wire it into runFormDataLifecycle() and add it to PII_TABLES_DELETE/SCRUB above, ' +
+        'or add it to RETENTION_EXEMPT with the reason it must not be expired. ' +
+        'Missing wiring = silent over-retention of PII.\n' +
+        unwired.join('\n')
+    ).toEqual([]);
+  });
+
+  test('OSE-INV8 | infra | registry | the detector actually detects — negative control', () => {
+    // A completeness check that finds nothing is indistinguishable from a
+    // completeness check that looks at nothing. The first draft of the detector
+    // anchored its identity regex to line start and matched ZERO columns in a
+    // schema full of them, while passing. This asserts the parser sees the
+    // tables it is supposed to see.
+    const columns = formsSchemaColumns();
+    for (const table of ['form_registrations', 'email_signups', 'form_surveys']) {
+      expect(columns.has(table), `parser did not find ${table}`).toBe(true);
+    }
+    const reg = columns.get('form_registrations')!;
+    expect(
+      reg.some((c) => IDENTITY_FRAGMENTS.test(c)),
+      'identity columns not detected'
+    ).toBe(true);
+    expect(
+      reg.some((c) => TTL_FRAGMENTS.test(c)),
+      'ttl column not detected'
+    ).toBe(true);
+    // And that it reads ALTER-added columns, the path the drift travels on.
+    expect(reg, 'ALTER TABLE ADD COLUMN not parsed').toContain('anonymous_id');
   });
 
   test('OSE-INV8 | infra | companion | L1 lifecycle behavioral test exists', () => {

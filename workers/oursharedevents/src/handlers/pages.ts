@@ -29,6 +29,20 @@ import {
   injectProvenanceBanner,
   resolveAndSignalProvenance,
 } from '../lib/demo-banner.js';
+import { injectLegalFooter } from '../lib/legal-footer';
+import {
+  renderEventList,
+  renderEventListError,
+  injectEventList,
+  type EventListItem,
+  type RenderedEventList,
+} from '../lib/event-list.js';
+import {
+  getDataProvider,
+  type DataProviderEnv,
+  type DataProviderCtx,
+} from '../lib/data-provider.js';
+import { enrichWithPhase } from '../lib/event-enrich.js';
 
 export interface PagesEnv {
   WORKER_ENV?: string;
@@ -211,8 +225,46 @@ export function renderErrorPage(
   return html(content, status);
 }
 
-export async function handlePublicPage(env: PagesEnv): Promise<Response> {
-  return html(await withProvenanceBanner(PUBLIC_HTML, env, 'public'));
+// ─── Public list page — OSE-1243 ──────────────────────────────────────────────
+//
+// Server-rendered. The Worker reads the events and puts them in the HTML it
+// serves, rather than serving a "Loading events…" paragraph and letting the
+// browser go get them (frontend remediation plan §3.1, step 5).
+//
+// It reads through the SAME DataProvider seam as `GET /api/v2/events`, so the
+// page and the JSON API cannot disagree about which events exist. Brand is
+// 'root', matching what the client script requested when it passed no `brand`
+// param — the public list has never been brand-parameterised and this change
+// does not make it so.
+//
+// FAILURE IS RENDERED, NOT DEFERRED. If the read throws, the page is served
+// with the error state already in it. The old shape could not do this: a
+// Worker that could not reach D1 still returned 200 with a loading paragraph,
+// and the reader only learned otherwise once their own fetch failed too.
+type PublicListEnv = PagesEnv & DataProviderEnv;
+
+export async function handlePublicPage(
+  env: PagesEnv,
+  ctx?: DataProviderCtx | null
+): Promise<Response> {
+  let list: RenderedEventList;
+  try {
+    const dp = getDataProvider(env as PublicListEnv, ctx ?? null);
+    const result = await dp.listEvents('root');
+    // enrichWithPhase is NOT optional here. `listEvents` returns raw D1 rows
+    // (`title` / `start_date` / `location`); every surface reads the canonical
+    // `name` / `startDateISO` / `venue`, and `phase` — which decides whether a
+    // card offers a registration form or a recap — is computed nowhere else.
+    // Reading the rows without it renders nameless, dateless cards that invite
+    // registration for events that already happened. Same seam the JSON API
+    // uses, so the two cannot disagree.
+    const items = (result.data as unknown as Record<string, unknown>[]).map(enrichWithPhase);
+    list = renderEventList(items as EventListItem[]);
+  } catch {
+    list = renderEventListError();
+  }
+  const shell = injectLegalFooter(await withProvenanceBanner(PUBLIC_HTML, env, 'public'), 'public');
+  return html(injectEventList(shell, list));
 }
 
 // ─── Public event page — OSE-243a / BE-27 ─────────────────────────────────────
@@ -1203,13 +1255,19 @@ export async function handlePublicEventPage(
     let nextEvents: NextEventRow[] = [];
     try {
       if (row.location) {
+        // OSE-1242 / CCR H1: brand-scoped. This is a PUBLIC surface listing
+        // other events at the same venue, and it had no brand filter — so a
+        // venue hosting two white-label instances would advertise each brand's
+        // events on the other's recap page. Invariant #9 applies to every
+        // public list, not only the one at /events. Found by the rewritten
+        // OSE-INV9 gate, which scans handlers instead of naming one.
         const rs = await env.DB.prepare(
           `SELECT id, title, start_date, location FROM events
-           WHERE status = 'active' AND location = ?1 AND id != ?2
+           WHERE brand_id = ?1 AND status = 'active' AND location = ?2 AND id != ?3
              AND start_date IS NOT NULL AND datetime(start_date) > datetime('now')
-           ORDER BY datetime(start_date) ASC LIMIT ?3`
+           ORDER BY datetime(start_date) ASC LIMIT ?4`
         )
-          .bind(row.location, row.id, MAX_POST_EVENT_SUGGESTIONS)
+          .bind(row.brand_id, row.location, row.id, MAX_POST_EVENT_SUGGESTIONS)
           .all<NextEventRow>();
         nextEvents = rs.results ?? [];
       }
@@ -1240,7 +1298,7 @@ export async function handlePublicEventPage(
 }
 
 export function handleAdminPage(_env: PagesEnv): Response {
-  return html(ADMIN_HTML);
+  return html(injectLegalFooter(ADMIN_HTML, 'admin'));
 }
 
 /**
@@ -1274,7 +1332,7 @@ export function handleAdminPage(_env: PagesEnv): Response {
  * but the body is a real page a human can read.
  */
 export function handleAdminSignInPage(_env: PagesEnv): Response {
-  return html(ADMIN_SIGNIN_HTML, 401);
+  return html(injectLegalFooter(ADMIN_SIGNIN_HTML, 'admin-signin'), 401);
 }
 
 // ─── Rate limiter (per-isolate, in-memory sliding window) ────────────────────
@@ -1418,7 +1476,7 @@ export async function handleSubscribe(request: Request, env: PagesEnv): Promise<
 }
 
 export function handleLandingPage(_env: PagesEnv): Response {
-  return html(LANDING_HTML);
+  return html(injectLegalFooter(LANDING_HTML, 'landing'));
 }
 
 // ─── Display page (TV / kiosk) ──────────────────────────────────────────────────
@@ -1455,7 +1513,10 @@ export async function handleSharedReportPage(env: PagesEnv): Promise<Response> {
   // Inject data-maps-configured so client-side JS knows whether to render
   // map thumbnails via the /api/v2/maps/venue-image proxy endpoint.
   const mapsAttr = isGoogleMapsConfigured(env) ? ' data-maps-configured="1"' : '';
-  const content = SHARED_REPORT_HTML.replace('<body>', `<body${mapsAttr}>`);
+  const content = injectLegalFooter(
+    SHARED_REPORT_HTML.replace('<body>', `<body${mapsAttr}>`),
+    'shared-report'
+  );
   return html(
     injectProvenanceBanner(content, await resolveAndSignalProvenance(env, 'sharedReport'))
   );
@@ -1541,8 +1602,19 @@ export function handleUiPreview(): Response {
   ${css}
   <style>
     .preview-root { max-width: 960px; margin: 0 auto; padding: 2rem 1rem 6rem; }
-    .preview-section { margin-bottom: 3rem; }
-    .preview-section h2 { font-size: .7rem; text-transform: uppercase; letter-spacing: .12em; color: var(--text-muted); margin-bottom: 1rem; padding-bottom: .5rem; border-bottom: 1px solid var(--border); }
+    /* Renamed from .preview-section (OSE-1236).
+       @ocr/ui's stylesheet hides .preview-section, .progress-section and
+       .result-section by default as part of its FILE-UPLOAD family: a CSV
+       import preview revealed by adding .visible. This page reused the name
+       for "component preview section" and never adds .visible, so every
+       section on the showcase was display:none. The page served 40KB of
+       markup and rendered an h1 and nothing else.
+
+       The showcase is the newcomer, so the showcase renames. Caught by the
+       mobile-workability audit's above-the-fold contract once it ran against
+       PR code: btn-primary-demo had no bounding box. */
+    .ui-preview-section { margin-bottom: 3rem; }
+    .ui-preview-section h2 { font-size: .7rem; text-transform: uppercase; letter-spacing: .12em; color: var(--text-muted); margin-bottom: 1rem; padding-bottom: .5rem; border-bottom: 1px solid var(--border); }
     .preview-row { display: flex; flex-wrap: wrap; gap: .75rem; align-items: flex-start; margin-bottom: .75rem; }
     .preview-label { font-size: .65rem; color: var(--text-muted); margin-bottom: .25rem; }
     .theme-bar { position: sticky; top: 0; z-index: 100; background: var(--surface); border-bottom: 1px solid var(--border); padding: .75rem 1rem; display: flex; gap: .5rem; align-items: center; }
@@ -1563,7 +1635,7 @@ export function handleUiPreview(): Response {
   <div class="preview-root">
     <h1 style="margin-bottom:2rem">@ocr/ui Component Preview</h1>
 
-    <div class="preview-section" data-testid="preview-section-buttons">
+    <div class="ui-preview-section" data-testid="preview-section-buttons">
       <h2>Buttons</h2>
       <div class="preview-row">
         <div><div class="preview-label">.btn-primary</div><button class="btn btn-primary" data-testid="btn-primary-demo">Save</button></div>
@@ -1578,7 +1650,7 @@ export function handleUiPreview(): Response {
       </div>
     </div>
 
-    <div class="preview-section" data-testid="preview-section-cards">
+    <div class="ui-preview-section" data-testid="preview-section-cards">
       <h2>Cards</h2>
       <div class="preview-row">
         <div style="width:220px"><div class="preview-label">.card</div>
@@ -1596,7 +1668,7 @@ export function handleUiPreview(): Response {
       </div>
     </div>
 
-    <div class="preview-section" data-testid="preview-section-inputs">
+    <div class="ui-preview-section" data-testid="preview-section-inputs">
       <h2>Inputs</h2>
       <div class="preview-row">
         <div style="width:240px"><div class="preview-label">.input</div><input class="input" placeholder="Enter value…" data-testid="input-demo" /></div>
@@ -1607,7 +1679,7 @@ export function handleUiPreview(): Response {
       </div>
     </div>
 
-    <div class="preview-section" data-testid="preview-section-navigation">
+    <div class="ui-preview-section" data-testid="preview-section-navigation">
       <h2>Navigation</h2>
       <div class="preview-label">.bottom-nav (simulated — fixed in real use)</div>
       <nav style="position:relative;border-radius:var(--radius)" data-testid="nav-demo">
@@ -1620,7 +1692,7 @@ export function handleUiPreview(): Response {
       </nav>
     </div>
 
-    <div class="preview-section" data-testid="preview-section-feedback">
+    <div class="ui-preview-section" data-testid="preview-section-feedback">
       <h2>Status / Feedback</h2>
       <div class="preview-row">
         <div><div class="preview-label">.live-indicator.on</div><span class="live-indicator on" data-testid="live-indicator-on">Live</span></div>
@@ -1631,7 +1703,7 @@ export function handleUiPreview(): Response {
       </div>
     </div>
 
-    <div class="preview-section" data-testid="preview-section-lists">
+    <div class="ui-preview-section" data-testid="preview-section-lists">
       <h2>Lists</h2>
       <div style="max-width:360px" data-testid="list-demo">
         <div class="preview-label">.list-item</div>
@@ -1640,7 +1712,7 @@ export function handleUiPreview(): Response {
       </div>
     </div>
 
-    <div class="preview-section" data-testid="preview-section-chips">
+    <div class="ui-preview-section" data-testid="preview-section-chips">
       <h2>Chips / Tags</h2>
       <div class="preview-row">
         <div><div class="preview-label">.filter-chip</div><button class="filter-chip" data-testid="filter-chip-demo">All</button></div>
@@ -1653,7 +1725,7 @@ export function handleUiPreview(): Response {
       </div>
     </div>
 
-    <div class="preview-section" data-testid="preview-section-empty-state">
+    <div class="ui-preview-section" data-testid="preview-section-empty-state">
       <h2>Empty State</h2>
       <div class="empty-state" data-testid="empty-state-demo">
         <div class="es-icon">📭</div>
@@ -1663,7 +1735,7 @@ export function handleUiPreview(): Response {
       </div>
     </div>
 
-    <div class="preview-section" data-testid="preview-section-form-controls">
+    <div class="ui-preview-section" data-testid="preview-section-form-controls">
       <h2>Form controls</h2>
       <div class="preview-row" style="align-items:center">
         <div><div class="preview-label">.toggle-row</div>
@@ -1686,14 +1758,14 @@ export function handleUiPreview(): Response {
       </div>
     </div>
 
-    <div class="preview-section" data-testid="preview-section-form-partials">
+    <div class="ui-preview-section" data-testid="preview-section-form-partials">
       <h2>Form partials — @ocr/ui</h2>
       <div style="max-width:480px">
         ${FORM_PARTIALS_HTML}
       </div>
     </div>
 
-    <div class="preview-section" data-testid="preview-section-tokens">
+    <div class="ui-preview-section" data-testid="preview-section-tokens">
       <h2>Design tokens — Tier 2 semantic</h2>
       <div class="token-grid">
         ${TOKEN_SWATCHES}

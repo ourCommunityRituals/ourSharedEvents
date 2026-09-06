@@ -100,6 +100,21 @@
         font-size: 0.85rem;
         color: #6c757d;
       }
+      /* WCAG 2.5.5 sizes the TARGET, not the painted control: the 13x13
+         checkbox is fine so long as the label around it is tappable, which is
+         how the whole row toggles. Without this the label was ~19px and the
+         mobile audit was right to flag it (OSE-1239).
+
+         Only visible once events exist, which is why no run had ever seen it:
+         the events table renders empty for a key actor without ADMIN_SCOPE_ALL,
+         and the blocking gate only started setting that here. */
+      .events-toolbar label {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        min-height: 44px;
+        cursor: pointer;
+      }
       .events-toolbar input[type='checkbox'] {
         margin: 0;
       }
@@ -353,7 +368,14 @@
         color: #6c757d;
         margin-bottom: 0.5rem;
       }
+      /* These are the card's ACTION, not a link in a sentence, so the
+         inline-text exemption does not apply and 44px does (OSE-1236).
+         inline-flex + min-height gives the tap area without changing the
+         visual weight of the text. Measured at 72x15 before. */
       .surface-card a {
+        display: inline-flex;
+        align-items: center;
+        min-height: 44px;
         font-size: 0.8rem;
         color: #4361ee;
         text-decoration: none;
@@ -380,7 +402,9 @@
         margin-top: 0.25rem;
       }
       .copy-btn {
-        display: inline-block;
+        display: inline-flex;
+        align-items: center;
+        min-height: 44px; /* WCAG 2.5.5 — rendered 73x22 (OSE-1236) */
         padding: 0.2rem 0.5rem;
         background: #f1f3f5;
         border: 1px solid #dee2e6;
@@ -521,23 +545,60 @@
         color: #495057;
         margin-bottom: 0.25rem;
       }
+      /* Mobile floor (OSE-1236). font-size is 16px, not 0.9rem: below 16px iOS
+         Safari auto-zooms on focus and does not zoom back out, leaving the
+         operator on a zoomed, horizontally-scrolling form mid-entry. 0.9rem
+         computed to 14.4px on every field. min-height 44px is WCAG 2.5.5; the
+         0.5rem padding rendered 34px. textarea is included here because it had
+         no font-size rule at all and fell to the UA default, 13.3px — the
+         smallest text on the surface, on the two longest fields (who-story,
+         why-purpose). Measured on the mobile-workability gate's first run
+         against /admin, which had never been audited: OSE-302's staging bearer
+         has been unset since May, so the surface was skipped on every run. */
       .create-form input,
-      .create-form select {
+      .create-form select,
+      .create-form textarea {
         width: 100%;
+        min-height: 44px;
         padding: 0.5rem 0.75rem;
         border: 1px solid #dee2e6;
         border-radius: 6px;
-        font-size: 0.9rem;
+        font-size: 16px;
         background: #fff;
         color: #1e293b;
       }
+      /* input[type=date] on iOS Safari (OSE-1237, reported from a phone).
+         Safari gives a date input an INTRINSIC width from its rendered value
+         and centres the text, so "Sep 4, 2026" rendered ~25px wider than the
+         name and venue fields beside it and broke the right margin. Chromium
+         does not do this — measured at 393px, all three inputs are 318px wide
+         with text-align:start — so it is invisible to the Chromium gate.
+
+         -webkit-appearance:none opts out of the native box so the width:100%
+         and box-sizing:border-box above actually apply; min-width:0 stops the
+         intrinsic width winning inside a flex/grid parent; text-align:left
+         matches the siblings. The native date picker still opens on tap — this
+         changes the box, not the control.
+
+         NOT VERIFIED IN WEBKIT: this container cannot install it (missing
+         system libraries), so the fix is applied from the documented Safari
+         behaviour and the screenshot, not from a local repro. */
+      .create-form input[type='date'] {
+        -webkit-appearance: none;
+        appearance: none;
+        min-width: 0;
+        text-align: left;
+      }
+
       .create-form input:focus,
-      .create-form select:focus {
+      .create-form select:focus,
+      .create-form textarea:focus {
         border-color: #4361ee;
         outline: none;
         box-shadow: 0 0 0 3px rgba(67, 97, 238, 0.12);
       }
       .create-btn {
+        min-height: 44px; /* WCAG 2.5.5 — 0.6rem padding rendered 35px (OSE-1236) */
         padding: 0.6rem 1.5rem;
         background: #16a34a;
         color: #fff;
@@ -887,6 +948,7 @@
         margin-bottom: 0;
       }
       .add-spon-btn {
+        min-height: 44px; /* WCAG 2.5.5 — rendered 43px, one pixel short (OSE-1236) */
         padding: 0.4rem 1rem;
         background: #4361ee;
         color: #fff;
@@ -1319,6 +1381,51 @@
          docs/plans/FE-DEV-PREP-2026-08-29.md. Styles adapted from the archived
          prototype (archive/experimental-frontends/AdminWizard.html), re-themed
          to today's admin palette. Inline-style cleanup + tokens = Phase C. */
+      /* While the launch wizard is open, the dashboard behind it is HIDDEN.
+         Reported from a phone, 2026-09-05: choosing the guided path showed the
+         wizard, but the advanced admin screen kept rendering underneath it —
+         so scrolling past the wizard landed the operator in a SECOND create
+         form, on a 4942px page. Measured: the advanced create card sat at
+         y=640 with the wizard open.
+
+         The chooser asks the operator to pick a path; showing both paths
+         afterwards makes the question pointless and the answer ambiguous.
+
+         Hide-all-then-exempt, rather than naming the panels to hide: any panel
+         added to #main-content later is hidden by default while the wizard is
+         open, which is the safe direction to fail. #admin-status is exempt
+         because it is the aria-live region that announces errors — hiding it
+         would silence the wizard's own messages to a screen reader. Script
+         children render nothing either way.
+
+         (Do not write a literal script tag in this comment: the inline-JS
+         validity gate, tests/unit/rendered-surface-integrity.test.js, finds
+         the opening tag by regex and starts parsing CSS prose as JavaScript.
+         It caught exactly that here.) */
+      body.wizard-active #main-content > *:not(#launch-wizard):not(#admin-status) {
+        display: none;
+      }
+
+      /* Defensive second rule: anything that ends up OUTSIDE <main> is hidden
+         too. When this was written, four cards — forms, poster deployments,
+         sponsors and surface cards — really were direct children of <body>
+         after </main>, and 2,290px of dashboard survived a rule scoped to
+         #main-content alone. OSE-1238 moved them into <main>, so this rule
+         currently matches nothing. It stays because the failure it prevents is
+         silent: the next block added outside the landmark would reappear under
+         the wizard with nothing to catch it.
+
+         Kept visible: the skip link and <header> (wayfinding and sign-out),
+         <footer> (legal must stay reachable — OSE-1232), anything marked
+         role="dialog" or data-wizard-keep so a modal added later is not
+         swallowed by this rule. */
+      body.wizard-active
+        > *:not(#main-content):not(header):not(footer):not(.skip-link):not([role='dialog']):not(
+          [data-wizard-keep]
+        ) {
+        display: none;
+      }
+
       .path-chooser {
         background: #fff;
         border-radius: 8px;
@@ -1342,6 +1449,27 @@
         display: grid;
         grid-template-columns: 1fr 1fr;
         gap: 0.75rem;
+      }
+      /* The third way out, deliberately quiet (OSE-1240). It is a destination
+         for someone who already knows where they are going, not a third
+         question. Full 44px target so "quiet" never means "hard to hit". */
+      .path-option-quiet {
+        display: block;
+        width: 100%;
+        min-height: 44px;
+        margin-top: 0.75rem;
+        padding: 0.5rem;
+        background: none;
+        border: none;
+        color: var(--text-muted, #6c757d);
+        font-family: inherit;
+        font-size: 0.85rem;
+        text-decoration: underline;
+        cursor: pointer;
+      }
+      .path-option-quiet:hover,
+      .path-option-quiet:focus-visible {
+        color: #4361ee;
       }
       .path-option {
         display: flex;
@@ -1458,6 +1586,38 @@
         margin-bottom: 1rem;
       }
       .wizard-template-grid,
+      .create-publish-label {
+        display: flex;
+        align-items: center;
+        gap: 0.625rem;
+        min-height: 44px;
+        font-size: 1rem;
+        cursor: pointer;
+      }
+      .create-publish-label input[type='checkbox'] {
+        width: 20px;
+        height: 20px;
+        min-height: 20px;
+        flex: 0 0 auto;
+        margin: 0;
+      }
+      .create-publish-hint {
+        margin: 0.25rem 0 0 1.875rem;
+        font-size: 0.875rem;
+        line-height: 1.5;
+        color: var(--text-muted, #64748b);
+      }
+      .wizard-publish {
+        margin-top: 1.25rem;
+        padding-top: 1.25rem;
+        border-top: 1px solid var(--border, #e2e8f0);
+      }
+      .wizard-publish-note {
+        margin: 0.75rem 0 0;
+        font-size: 0.875rem;
+        line-height: 1.5;
+        color: var(--text-muted, #64748b);
+      }
       .wizard-signup-grid {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
@@ -1465,7 +1625,8 @@
         margin-bottom: 1rem;
       }
       .wizard-template-card,
-      .wizard-signup-option {
+      .wizard-signup-option,
+      .wizard-publish-option {
         display: flex;
         flex-direction: column;
         gap: 0.25rem;
@@ -1479,13 +1640,16 @@
       }
       .wizard-template-card:hover,
       .wizard-signup-option:hover,
+      .wizard-publish-option:hover,
+      .wizard-publish-option:focus-visible,
       .wizard-template-card:focus-visible,
       .wizard-signup-option:focus-visible {
         border-color: #4361ee;
         outline: none;
       }
       .wizard-template-card.selected,
-      .wizard-signup-option.selected {
+      .wizard-signup-option.selected,
+      .wizard-publish-option.selected {
         border-color: #16a34a;
         background: #f0fdf4;
       }
@@ -1614,6 +1778,156 @@
       <span>Admin</span>
     </header>
     <main id="main-content" data-testid="admin-main" aria-label="Admin dashboard">
+    <!-- ── CSP-safe event dispatcher (OSE-1239) ────────────────────────────
+         securityHeaders() serves script-src 'self' 'nonce-…'. A nonce
+         authorises script ELEMENTS; it does not authorise inline
+         event-handler ATTRIBUTES, which need 'unsafe-inline' or
+         'unsafe-hashes'. (No literal script tag in this comment: the
+         inline-JS validity gate finds the opening tag by regex and would
+         start parsing this prose as JavaScript. It did, once.) Neither is present, and neither should be — this is
+         the one authenticated surface that renders operator-supplied strings,
+         so the nonce is doing real work.
+
+         The consequence, measured 2026-09-05: every onclick= in this file was
+         refused at click time. Copy URL did nothing. "+ Add Deployment" never
+         opened its form. Clicking an event row never scoped the cards. Plain
+         <a href> links still navigated, which is why it stayed survivable
+         enough to go unnoticed.
+
+         DELEGATION, not per-element wiring. Most of this page's controls are
+         built as HTML STRINGS and dropped in with innerHTML whenever a panel
+         reloads, so anything bound to an element directly is lost on the next
+         refresh. One listener on document, resolving `data-action` at click
+         time, survives every rebuild and needs no re-binding.
+
+         Handlers are looked up LAZILY (at event time, not at definition time)
+         so this block can sit above every script that defines them. -->
+    <script>
+      (function () {
+        function argOf(el, name) {
+          return el.getAttribute('data-' + name);
+        }
+
+        var ACTIONS = {
+          'ecb-jump': function (el) {
+            if (window.ecbJump) window.ecbJump(argOf(el, 'target'));
+          },
+          'copy-url': function (el) {
+            var fn = window.copyUrl;
+            if (fn) fn(argOf(el, 'url'), el);
+          },
+          'pd-toggle': function (el) {
+            var w = document.getElementById('pd-form-wrap');
+            if (!w) return;
+            var open = w.hidden;
+            w.hidden = !open;
+            el.setAttribute('aria-expanded', String(open));
+          },
+          'sponsor-edit': function (el) {
+            if (window._editSponsor) window._editSponsor(argOf(el, 'id'));
+          },
+          'sponsor-deactivate': function (el) {
+            if (window._deactivateSponsor) window._deactivateSponsor(argOf(el, 'id'));
+          },
+          'sponsor-confirm-deactivate': function (el) {
+            if (window._confirmDeactivate) window._confirmDeactivate(argOf(el, 'id'));
+          },
+          'sponsors-reload': function () {
+            if (window._loadSponsors) window._loadSponsors();
+          },
+          'sponsor-close-form': function () {
+            if (window._doCloseForm) window._doCloseForm();
+          },
+          'sponsor-keep-editing': function () {
+            if (window._keepEditing) window._keepEditing();
+          },
+          'counts-retry': function () {
+            if (window.reloadForms) window.reloadForms();
+          },
+          'forms-reload': function (el) {
+            if (window.loadForms) window.loadForms(argOf(el, 'event-id'), argOf(el, 'event-name'));
+          },
+          'mint-link': function (el) {
+            if (window.mintReportLink) window.mintReportLink(argOf(el, 'event-id'), el);
+          },
+          'mint-copy': function (el) {
+            var token = argOf(el, 'token') || '';
+            if (!navigator.clipboard) return;
+            navigator.clipboard.writeText(token).then(function () {
+              el.textContent = 'Copied!';
+              setTimeout(function () {
+                el.textContent = 'Copy';
+              }, 1500);
+            });
+          },
+          'pd-download': function (el) {
+            if (window.downloadPosterQr) window.downloadPosterQr(argOf(el, 'pd-id'));
+          },
+          'pd-print': function (el) {
+            if (window.printPosterQr) window.printPosterQr(argOf(el, 'pd-id'));
+          },
+          'pd-delete': function (el) {
+            if (window.deletePosterDeployment) window.deletePosterDeployment(argOf(el, 'pd-id'));
+          },
+          'pd-confirm-delete': function (el) {
+            if (window._confirmDeletePd) window._confirmDeletePd(argOf(el, 'pd-id'));
+          },
+          'pd-cancel-delete': function () {
+            if (window.loadPosterDeployments) window.loadPosterDeployments(window._pdEventId);
+          },
+          'event-select': function (el) {
+            if (window.selectEvent) {
+              window.selectEvent(argOf(el, 'event-id'), argOf(el, 'event-name'), Number(argOf(el, 'event-phase')));
+            }
+            // The row highlight used to ride along in the same inline handler.
+            document.querySelectorAll('tr.selected').forEach(function (r) {
+              r.classList.remove('selected');
+            });
+            el.classList.add('selected');
+          },
+          'brand-toggle': function (el) {
+            if (window.toggleBrandGroup) window.toggleBrandGroup(argOf(el, 'brand-group'), el);
+          },
+          'reload-page': function () {
+            location.reload();
+          },
+        };
+
+        var CHANGES = {
+          'form-flag': function (el) {
+            if (window.toggleFormFlag) window.toggleFormFlag(el);
+          },
+          'mint-role': function () {
+            if (window._onMintRoleChange) window._onMintRoleChange();
+          },
+        };
+
+        document.addEventListener('click', function (ev) {
+          var el = ev.target.closest ? ev.target.closest('[data-action]') : null;
+          if (!el) return;
+          var fn = ACTIONS[el.getAttribute('data-action')];
+          if (fn) fn(el, ev);
+        });
+
+        document.addEventListener('change', function (ev) {
+          var el = ev.target.closest ? ev.target.closest('[data-change]') : null;
+          if (!el) return;
+          var fn = CHANGES[el.getAttribute('data-change')];
+          if (fn) fn(el, ev);
+        });
+
+        // Enter/Space on a role="button" row, matching the keyboard affordance
+        // the old inline onkeydown provided.
+        document.addEventListener('keydown', function (ev) {
+          if (ev.key !== 'Enter' && ev.key !== ' ') return;
+          var el = ev.target.closest ? ev.target.closest('[data-action][role="button"]') : null;
+          if (!el) return;
+          ev.preventDefault();
+          el.click();
+        });
+      })();
+    </script>
+
       <!-- Shared assertive status region — replaces the blocking browser
            dialogs. Screen readers announce immediately; writes are
            textContent-only. -->
@@ -1654,11 +1968,11 @@
       >
         <span class="ecb-caption" data-testid="ecb-caption" aria-live="polite"></span>
         <nav class="ecb-nav" aria-label="Jump to management card">
-          <button type="button" data-testid="ecb-nav-dashboard" onclick="window.ecbJump('dashboard-card')">Dashboard</button>
-          <button type="button" data-testid="ecb-nav-forms" onclick="window.ecbJump('forms-card')">Forms</button>
-          <button type="button" data-testid="ecb-nav-poster" onclick="window.ecbJump('poster-deployments-card')">Poster</button>
-          <button type="button" data-testid="ecb-nav-sponsors" onclick="window.ecbJump('sponsors-card')">Sponsors</button>
-          <button type="button" data-testid="ecb-nav-surfaces" onclick="window.ecbJump('surface-cards')">Surfaces</button>
+          <button type="button" data-testid="ecb-nav-dashboard" data-action="ecb-jump" data-target="dashboard-card">Dashboard</button>
+          <button type="button" data-testid="ecb-nav-forms" data-action="ecb-jump" data-target="forms-card">Forms</button>
+          <button type="button" data-testid="ecb-nav-poster" data-action="ecb-jump" data-target="poster-deployments-card">Poster</button>
+          <button type="button" data-testid="ecb-nav-sponsors" data-action="ecb-jump" data-target="sponsors-card">Sponsors</button>
+          <button type="button" data-testid="ecb-nav-surfaces" data-action="ecb-jump" data-target="surface-cards">Surfaces</button>
         </nav>
       </div>
       <script>
@@ -1693,29 +2007,74 @@
            CSP note: the admin page ships a nonce-based script-src (pages.ts),
            which blocks inline onclick= attributes — all wizard wiring is
            addEventListener inside the nonce'd script block below. -->
+      <!-- ── Front door (OSE-1240) ────────────────────────────────────────────
+           Owner-specified 2026-09-05: the entry question is WHAT you came to
+           make, not HOW you want to be walked through it.
+
+           Before, the two choices were "Walk me through it" and "Show me
+           everything" — guided vs advanced. That asks the reader to pick a
+           UI mode before they have told anyone what they are doing, and it
+           made the sponsor path invisible: adding a sponsor meant landing on
+           the full dashboard and finding the card yourself.
+
+           Now: Create Event and Create Sponsor, side by side (they stack on a
+           phone at ≤480px, which is where the grid already collapses to one
+           column). The full dashboard stays one tap away as a quiet third
+           option — it is a destination for people who already know the way,
+           not a question to put to someone on arrival.
+
+           ORDER: sponsor first, owner decision 2026-09-05. I argued for
+           event-first here, on the reasoning that this surface's reader is a
+           signed-in host who came to run their event and sponsors arrive by
+           invite rather than signing up. The owner overrode it, and the
+           reason is the stronger one: "we always want the sponsors to sign
+           up" is a standing priority, and the ask reads the same on every
+           surface where the choice appears. A front door that ranks the two
+           differently depending on which door you came through is a front
+           door that argues with itself.
+
+           Ratified 2026-09-05 in OCR_VISION.md §6.2b: the public front door
+           (OSE-1241) is sponsor-first below the corridor density threshold,
+           so the two agree.
+
+           DO NOT make this chooser invert with density. §6.2b's inversion
+           (sponsor · event · attendee below the threshold, attendee · event ·
+           sponsor above it) is a property of the PUBLIC door, which has a
+           third card and a reader whose area may or may not be served yet.
+           This surface has neither: /admin is behind CF Access, its reader
+           is a signed-in host, and there is no attendee card to promote.
+           Sponsor-first here is unconditional. -->
       <div class="path-chooser" id="admin-path-chooser" data-testid="admin-path-chooser">
-        <h2>Set up your event</h2>
-        <p class="path-chooser-sub">Pick whichever feels right — both end in the same place.</p>
+        <h2>What are you making?</h2>
+        <p class="path-chooser-sub">Start either one — you can add the other any time.</p>
         <div class="path-chooser-options">
+          <button
+            type="button"
+            class="path-option"
+            id="admin-path-sponsor"
+            data-testid="admin-path-sponsor"
+          >
+            <span class="path-option-title">Create a sponsor</span>
+            <span class="path-option-desc">Add a local business so it can back the nights you run.</span>
+          </button>
           <button
             type="button"
             class="path-option"
             id="admin-path-wizard"
             data-testid="admin-path-wizard"
           >
-            <span class="path-option-title">Walk me through it</span>
-            <span class="path-option-desc">A few short steps. Great for your first event.</span>
-          </button>
-          <button
-            type="button"
-            class="path-option"
-            id="admin-path-advanced"
-            data-testid="admin-path-advanced"
-          >
-            <span class="path-option-title">Show me everything</span>
-            <span class="path-option-desc">The full dashboard, with every setting on one page.</span>
+            <span class="path-option-title">Create an event</span>
+            <span class="path-option-desc">A few short steps: name it, pick a night, get your links.</span>
           </button>
         </div>
+        <button
+          type="button"
+          class="path-option-quiet"
+          id="admin-path-advanced"
+          data-testid="admin-path-advanced"
+        >
+          Show me everything — the full dashboard
+        </button>
       </div>
 
       <section
@@ -1777,6 +2136,56 @@
                 required
               />
             </div>
+          </div>
+
+          <!-- OSE-1245 — the publication question, asked HERE because this is
+               the moment the address exists and the question means something.
+               Doctrine: OCR_VISION.md §6.2c (the choice network).
+
+               It is asked, not defaulted. `events.is_published` defaults to 1
+               at the column and in the API for backward compatibility, so if
+               this is the only place a human is ever asked, this is where the
+               guarantee actually lives.
+
+               The copy names the address explicitly and says the part that is
+               easy to not think about: publishing cannot be fully undone. That
+               sentence is the whole reason this is two cards instead of a
+               checkbox — a checkbox invites you past the decision, and this
+               decision is not symmetric. -->
+          <div class="wizard-publish" data-testid="wizard-publish">
+            <p class="wizard-step-help">
+              Should this show up when neighbors look for something to do?
+            </p>
+            <div class="wizard-signup-grid">
+              <button
+                type="button"
+                class="wizard-publish-option selected"
+                data-option="published"
+                data-testid="wizard-publish-yes"
+              >
+                <span class="wizard-card-title">Yes — put it on the map</span>
+                <span class="wizard-card-desc">
+                  Anyone nearby can find it, and the address above is shown publicly.
+                </span>
+              </button>
+              <button
+                type="button"
+                class="wizard-publish-option"
+                data-option="unpublished"
+                data-testid="wizard-publish-no"
+              >
+                <span class="wizard-card-title">No — keep it off the map</span>
+                <span class="wizard-card-desc">
+                  Your links and printed codes still work, so the people you invite can
+                  still get in. It just won't be listed.
+                </span>
+              </button>
+            </div>
+            <p class="wizard-publish-note" data-testid="wizard-publish-note">
+              If it's your home, this is the choice that matters. You can change it
+              later &mdash; but anything already public may have been copied, so it's
+              worth getting right now.
+            </p>
           </div>
         </div>
 
@@ -1916,6 +2325,11 @@
             createdId: null, // set once POST /api/v2/admin/events succeeds
             template: 'other',
             signup: 'create',
+            // OSE-1245 — matches the card marked `selected` in the markup.
+            // Kept in sync deliberately: a mismatch would mean the highlighted
+            // card and the value actually sent disagree, which on THIS question
+            // means publishing an address the organizer believes they declined.
+            published: true,
           };
 
           // Template → plain-language starting description. These feed the SAME
@@ -2041,19 +2455,83 @@
             if (dateVal) body.start_date = dateVal;
             var venueVal = document.getElementById('wizard-event-venue').value.trim();
             if (venueVal) body.location = venueVal;
+            // OSE-1245 — ALWAYS sent, never omitted. The API defaults an absent
+            // value to published, so leaving it out when the organizer chose
+            // "keep it off the map" would silently publish them. Sending it
+            // explicitly every time is what makes the question mean anything.
+            body.is_published = wiz.published;
             var prefill = TEMPLATE_PREFILL[wiz.template] || {};
             for (var k in prefill) body[k] = prefill[k];
 
             next.disabled = true;
             next.textContent = 'Creating…';
             setMsg('');
+            var res = null;
             try {
-              var res = await fetch('/api/v2/admin/events', {
+              // Reported from a phone, 2026-09-05: this step answered
+              // "Connection trouble — please try again." The old code put
+              // `await res.json()` inside the same try as the fetch, so THREE
+              // different failures collapsed into that one sentence:
+              //
+              //   1. fetch rejected            → a real connection problem;
+              //                                  "try again" is the right advice
+              //   2. a NON-JSON response body  → res.json() throws SyntaxError.
+              //                                  On staging the likeliest cause
+              //                                  is an expired Cloudflare Access
+              //                                  session: Access answers the
+              //                                  POST with its own HTML sign-in
+              //                                  page, fetch follows it, and the
+              //                                  parse fails. "Try again" is
+              //                                  useless here — the operator has
+              //                                  to sign in.
+              //   3. a JSON error envelope     → already handled below, but
+              //                                  requireAdmin's 401 carries
+              //                                  `code`, not `error`, so it fell
+              //                                  through to the generic message.
+              //
+              // Case 2 is the one that mattered: the operator was told to retry
+              // an action that could not succeed, and the message discarded the
+              // status code, so the report could not be diagnosed afterwards.
+              // The status is now always shown.
+              res = await fetch('/api/v2/admin/events', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(body),
               });
-              var data = await res.json();
+            } catch (err) {
+              setMsg('Can’t reach the server — check your connection and try again.', 'error');
+              next.disabled = false;
+              updateUI();
+              return;
+            }
+
+            var data = null;
+            try {
+              data = JSON.parse(await res.text());
+            } catch (parseErr) {
+              // Not JSON. Almost always the sign-in session, not the network.
+              //
+              // res.redirected sharpens this: fetch follows a 302 silently, so
+              // a Cloudflare Access sign-in page or a Bot Management challenge
+              // arrives looking like a normal 200 whose body happens to be
+              // HTML. When the response was redirected we can say WHICH of the
+              // two shapes it was, instead of guessing on the operator's behalf.
+              setMsg(
+                res.redirected
+                  ? 'You were redirected to a sign-in page instead of saving (server said ' +
+                      res.status +
+                      '). Reload this page, sign in, then re-enter your answers.'
+                  : 'The server sent something this page could not read (status ' +
+                      res.status +
+                      '). Usually an expired sign-in — reload the page, sign in, then try again.',
+                'error'
+              );
+              next.disabled = false;
+              updateUI();
+              return;
+            }
+
+            try {
               if (res.ok && data.ok) {
                 wiz.createdId = String(data.id);
                 // Remember the new event so leaving the wizard re-selects it
@@ -2069,10 +2547,20 @@
                 updateUI();
                 loadLinks();
               } else {
-                setMsg(data.error || 'Something went wrong — please try again.', 'error');
+                // Always name the status. requireAdmin's 401 envelope has no
+                // `error` field — only `code` — so without this an auth failure
+                // read as "Something went wrong" and told the operator nothing
+                // they could act on.
+                setMsg(
+                  (data.error || data.code || 'Something went wrong') +
+                    ' (server said ' + res.status + ')',
+                  'error'
+                );
               }
             } catch (err) {
-              setMsg('Connection trouble — please try again.', 'error');
+              // Reaching here means the SUCCESS path threw — a rendering bug,
+              // not a transport one. Say so rather than blaming the network.
+              setMsg('The event may have been created, but this page could not show it. Reload to check before trying again.', 'error');
             } finally {
               next.disabled = false;
               updateUI();
@@ -2081,6 +2569,8 @@
 
           function startWizard() {
             document.getElementById('admin-path-chooser').hidden = true;
+            // Hide the dashboard behind the wizard — see .wizard-active in CSS.
+            document.body.classList.add('wizard-active');
             var w = document.getElementById('launch-wizard');
             w.hidden = false;
             // Date pre-fills to today — most events are set up for "soon".
@@ -2100,8 +2590,37 @@
             if (name) name.focus();
           }
 
+          /**
+           * Create-a-sponsor path (OSE-1240).
+           *
+           * There is no separate sponsor wizard — the sponsors card already
+           * holds the real form, and duplicating it would give us two forms to
+           * keep in step. So this clears the doorway, takes the reader to that
+           * card, and opens it, which is the same destination "+ Add Sponsor"
+           * reaches. The chooser's job is to make the path VISIBLE from the
+           * front door, not to build a second one.
+           */
+          function startSponsor() {
+            document.body.classList.remove('wizard-active');
+            document.getElementById('admin-path-chooser').hidden = true;
+            document.getElementById('launch-wizard').hidden = true;
+
+            var card = document.querySelector('[data-testid="sponsors-card"]');
+            if (card) card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+            // Reuse the card's own toggle so the open/close state, the button
+            // label and loadEventOptions() all stay in one place.
+            var toggle = document.getElementById('add-spon-toggle');
+            var wrap = document.getElementById('spon-form-wrap');
+            if (toggle && wrap && wrap.hasAttribute('hidden')) toggle.click();
+
+            var name = document.getElementById('spon-name');
+            if (name) name.focus();
+          }
+
           function chooseAdvanced() {
             // The dashboard is already on the page — just clear the doorway.
+            document.body.classList.remove('wizard-active');
             document.getElementById('admin-path-chooser').hidden = true;
             document.getElementById('launch-wizard').hidden = true;
             var card = document.querySelector('[data-testid="create-event-card"]');
@@ -2155,6 +2674,7 @@
 
           // ── wiring (CSP-safe: no inline handlers) ───────────────────────────
           document.getElementById('admin-path-wizard').addEventListener('click', startWizard);
+          document.getElementById('admin-path-sponsor').addEventListener('click', startSponsor);
           document.getElementById('admin-path-advanced').addEventListener('click', chooseAdvanced);
           document.getElementById('wizard-next-btn').addEventListener('click', goNext);
           document.getElementById('wizardBackBtn').addEventListener('click', goBack);
@@ -2187,6 +2707,20 @@
             el.addEventListener('click', function () {
               wiz.signup = el.getAttribute('data-option') || 'create';
               document.querySelectorAll('.wizard-signup-option').forEach(function (c) {
+                c.classList.toggle('selected', c === el);
+              });
+            });
+          });
+          // OSE-1245 — its own class and its own handler, deliberately.
+          // These cards were first written reusing `.wizard-signup-option` to
+          // inherit the styling, which silently made them a THIRD sign-up
+          // option: the handler above would have set `wiz.signup` from them,
+          // and each grid's `.selected` sweep would have cleared the other's.
+          // The CSS is shared by selector; the behaviour is not.
+          document.querySelectorAll('.wizard-publish-option').forEach(function (el) {
+            el.addEventListener('click', function () {
+              wiz.published = el.getAttribute('data-option') !== 'unpublished';
+              document.querySelectorAll('.wizard-publish-option').forEach(function (c) {
                 c.classList.toggle('selected', c === el);
               });
             });
@@ -2241,6 +2775,29 @@
                 placeholder="Evergreen Park"
                 maxlength="500"
               />
+            </div>
+
+            <!-- OSE-1245 — the same question the wizard asks, in the form this
+                 surface uses. A checkbox rather than two cards is deliberate:
+                 this reader is a returning operator working a dense form, not
+                 someone meeting the decision for the first time. The wizard
+                 carries the long explanation; here the label states the
+                 consequence and the hint names the address. -->
+            <div class="full-width create-publish">
+              <label class="create-publish-label" for="create-published">
+                <input
+                  type="checkbox"
+                  id="create-published"
+                  name="is_published"
+                  data-testid="create-published"
+                  checked
+                />
+                <span>List this publicly &mdash; show it on the map and in search</span>
+              </label>
+              <p class="create-publish-hint" data-testid="create-published-hint">
+                Unchecked, it stays off every public listing and the venue above is not
+                shown. Your links and printed codes keep working either way.
+              </p>
             </div>
 
             <!-- OSE-239a: 5W content fields. WHAT/WHO/WHY/HOW/WHERE feed the
@@ -2373,6 +2930,1121 @@
           </div>
         </form>
       </div>
+
+      <!-- ── Build sequence (OSE-1238) ──────────────────────────────────────
+           Create the event, then the things that hang off it, in the order a
+           host actually does them:
+
+             Create Event  ->  Sponsors (optional)  ->  Registration
+                           ->  Posters  ->  the links each surface produces
+
+           Owner-specified 2026-09-05. Previously the order was Forms, Posters,
+           Sponsors, Surfaces — and all four sat OUTSIDE <main>, after </main>,
+           with the dashboard / portfolio / All Events blocks in between. They
+           are inside <main> now: the sequence reads top to bottom, and the
+           wizard-isolation rule no longer needs a second selector for content
+           that escaped the landmark. -->
+    <!-- Sponsors — step 2, optional. (SPON-6) -->
+    <div class="sponsors-card" data-testid="sponsors-card">
+      <div class="sponsors-card-header">
+        <h2>Sponsors</h2>
+        <button
+          class="add-spon-btn"
+          id="add-spon-toggle"
+          data-testid="add-sponsor-toggle"
+          aria-expanded="false"
+          aria-controls="spon-form-wrap"
+        >
+          + Add Sponsor
+        </button>
+      </div>
+
+      <div id="spon-form-wrap" class="spon-form-wrap" hidden data-testid="sponsor-form-wrap">
+        <form id="spon-create-form" data-testid="sponsor-create-form" novalidate>
+          <input type="hidden" id="spon-edit-id" data-testid="spon-edit-id" value="" />
+          <div id="spon-edit-ctx" class="spon-edit-ctx" hidden data-testid="sponsor-edit-ctx"></div>
+          <div class="create-form">
+            <div>
+              <label for="spon-name"
+                >Name <span class="required-star" aria-hidden="true">*</span></label
+              >
+              <input
+                type="text"
+                id="spon-name"
+                name="name"
+                data-testid="spon-name"
+                placeholder="ACME Corp"
+                maxlength="200"
+                required
+                autocomplete="organization"
+                aria-required="true"
+              />
+            </div>
+            <div>
+              <label for="spon-event"
+                >Event <span class="required-star" aria-hidden="true">*</span></label
+              >
+              <select
+                id="spon-event"
+                name="event_id"
+                data-testid="spon-event"
+                required
+                aria-required="true"
+              ></select>
+            </div>
+            <div>
+              <label for="spon-tier">Tier</label>
+              <select id="spon-tier" name="tier" data-testid="spon-tier">
+                <option value="primary">Primary</option>
+                <option value="bronze">Bronze</option>
+                <option value="silver">Silver</option>
+                <option value="gold">Gold</option>
+                <option value="platinum">Platinum</option>
+                <option value="title">Title</option>
+              </select>
+            </div>
+            <div>
+              <label for="spon-logo">Logo URL</label>
+              <input
+                type="text"
+                id="spon-logo"
+                name="logo_url"
+                data-testid="spon-logo"
+                placeholder="https://acme.com/logo.png"
+                maxlength="500"
+              />
+            </div>
+            <div class="full-width">
+              <label for="spon-website">Website URL</label>
+              <input
+                type="text"
+                id="spon-website"
+                name="website_url"
+                data-testid="spon-website"
+                placeholder="https://acme.com"
+                maxlength="500"
+              />
+            </div>
+            <div class="full-width">
+              <label id="spon-placement-label">Placement &amp; share</label>
+              <!--
+                OSE-670 (#25 sponsor_share_covenant): placement is UNIFORM and
+                non-purchasable. Every sponsor renders at the same size/slot on
+                every surface; only rotation FREQUENCY varies, governed by the
+                Tier (above) + the covenant math (premium cap 40% / local floor
+                30%). There are deliberately NO size/slot/position toggles — a
+                sponsor cannot buy a bigger logo, a better slot, or a fixed
+                position. is_local is geo-derived and shown read-only.
+              -->
+              <p
+                class="spon-covenant-note"
+                role="note"
+                data-testid="spon-covenant-note"
+                aria-labelledby="spon-placement-label"
+              >
+                Uniform placement — same size &amp; slot on every surface. Tier sets a
+                <strong>capped, locally-floored share of rotation frequency</strong>
+                (never a bigger logo, better slot, or fixed position).
+              </p>
+              <span
+                class="is-local-pill"
+                id="spon-is-local-pill"
+                data-testid="spon-is-local-pill"
+                hidden
+                aria-live="polite"
+                >Local business — geo-derived</span
+              >
+            </div>
+            <div class="full-width form-actions">
+              <button
+                type="submit"
+                id="spon-submit-btn"
+                class="create-btn"
+                data-testid="sponsor-submit"
+              >
+                Save Sponsor
+              </button>
+              <button
+                type="button"
+                class="cancel-btn"
+                id="spon-cancel-btn"
+                data-testid="sponsor-cancel"
+              >
+                Cancel
+              </button>
+              <div
+                id="spon-form-msg"
+                class="create-msg"
+                role="status"
+                aria-live="polite"
+                data-testid="sponsor-form-msg"
+              ></div>
+            </div>
+          </div>
+        </form>
+      </div>
+
+      <div id="sponsors-list" data-testid="sponsors-list">
+        <div class="skeleton-table" data-testid="skeleton-sponsors">
+          <div class="skeleton skeleton-row"></div>
+          <div class="skeleton skeleton-row"></div>
+          <div class="skeleton skeleton-row"></div>
+        </div>
+      </div>
+    </div>
+    <script>
+      (function() {
+        const esc = s => { const d = document.createElement('div'); d.textContent = String(s); return d.innerHTML; };
+
+        function parsePlc(raw) {
+          try { const p = JSON.parse(raw || '{}'); return (p && typeof p === 'object') ? p : {}; } catch (e) { return {}; }
+        }
+
+        function pipHtml(raw) {
+          const p = parsePlc(raw);
+          const defs = [['posterTop','P'],['tvTop','TV'],['tvSide','S'],['mobileBanner','M']];
+          return '<span class="placement-pips">' + defs.map(function(d) {
+            return '<span class="pip' + (p[d[0]] ? ' active' : '') + '" title="' + d[0] + '">' + d[1] + '</span>';
+          }).join('') + '</span>';
+        }
+
+        async function loadEventOptions(selectedId) {
+          const sel = document.getElementById('spon-event');
+          sel.innerHTML = '<option value="" disabled selected>Loading events…</option>';
+          try {
+            const data = await window.OSE_events();
+            const items = (data.ok && data.items) ? data.items : [];
+            sel.innerHTML = items.length
+              ? items.map(function(e) {
+                  return '<option value="' + esc(e.id) + '"' + (e.id === selectedId ? ' selected' : '') + '>' + esc(e.name || e.id) + '</option>';
+                }).join('')
+              : '<option value="" disabled>No events found — create an event first</option>';
+          } catch (e) {
+            sel.innerHTML = '<option value="" disabled>Could not load events</option>';
+          }
+        }
+
+        // OSE — Sponsor card is scoped to the currently-selected event so an
+        // organizer only ever sees/edits their own event's sponsors. The scope
+        // is ALSO enforced server-side (SQL WHERE) — this is the UX half.
+        let _sponsorsEventId = null;
+        const _eventNameById = {};
+        async function refreshEventNames() {
+          if (Object.keys(_eventNameById).length) return; // one-shot cache
+          try {
+            const data = await window.OSE_events();
+            (data.items || []).forEach(function(e) {
+              _eventNameById[String(e.id)] = e.name || String(e.id);
+            });
+          } catch (e) { /* fall back to raw id below */ }
+        }
+        async function loadSponsors(eventId) {
+          const wrap = document.getElementById('sponsors-list');
+          if (eventId !== undefined && eventId !== null && eventId !== '') {
+            _sponsorsEventId = String(eventId);
+          }
+          const scopeId = _sponsorsEventId;
+          if (!scopeId) {
+            wrap.innerHTML = '<p class="loading" data-testid="sponsors-loading-initial">Select an event to manage its sponsors.</p>';
+            return;
+          }
+          wrap.innerHTML = '<div class="skeleton-table"><div class="skeleton skeleton-row"></div><div class="skeleton skeleton-row"></div><div class="skeleton skeleton-row"></div></div>';
+          try {
+            await refreshEventNames();
+            const data = await fetch('/api/v2/admin/sponsors?eventId=' + encodeURIComponent(scopeId)).then(function(r) { return r.json(); });
+            if (!data.ok) throw new Error(data.error || 'Load failed');
+            const items = data.items || [];
+            if (!items.length) {
+              wrap.innerHTML = '<p class="loading" data-testid="sponsors-empty">No sponsors for this event yet. Click &ldquo;+ Add Sponsor&rdquo; to add the first one.</p>';
+              return;
+            }
+            const rows = items.map(function(s) {
+              const dimStyle = s.is_active ? '' : ' class="spon-row-inactive"';
+              const statusBadge = s.is_active
+                ? '<span class="badge active" data-testid="spon-status-' + esc(s.id) + '">Active</span>'
+                : '<span class="badge archived" data-testid="spon-status-' + esc(s.id) + '">Inactive</span>';
+              const actions = s.is_active
+                ? '<button class="spon-action-btn" data-testid="edit-' + esc(s.id) + '" data-action="sponsor-edit" data-id="' + esc(s.id) + '">Edit</button> ' +
+                  '<button class="spon-action-btn deactivate" data-testid="deactivate-' + esc(s.id) + '" data-action="sponsor-deactivate" data-id="' + esc(s.id) + '">Deactivate</button>'
+                : '<span class="muted-sm">Deactivated</span>';
+              const eventName = _eventNameById[String(s.event_id)] || s.event_id;
+              return '<tr data-testid="sponsor-row-' + esc(s.id) + '"' + dimStyle + '>' +
+                '<td data-label="Name" data-testid="spon-name-' + esc(s.id) + '">' + esc(s.name) + '</td>' +
+                '<td data-label="Tier"><span class="spon-tier-pill ' + esc(s.tier) + '" data-testid="spon-tier-' + esc(s.id) + '">' + esc(s.tier) + '</span></td>' +
+                '<td data-label="Event" class="muted-sm" data-testid="spon-event-' + esc(s.id) + '">' + esc(eventName) + '</td>' +
+                '<td data-label="Placements" data-testid="spon-placements-' + esc(s.id) + '">' + pipHtml(s.placement_formats) + '</td>' +
+                '<td data-label="Status">' + statusBadge + '</td>' +
+                '<td data-label="Actions" class="flex-row">' + actions + '</td>' +
+              '</tr>';
+            }).join('');
+            wrap.innerHTML = '<table data-testid="sponsors-table">' +
+              '<thead><tr><th scope="col" data-testid="sponsors-col-name">Name</th><th scope="col" data-testid="sponsors-col-tier">Tier</th><th scope="col" data-testid="sponsors-col-event">Event</th><th scope="col" data-testid="sponsors-col-placements">Placements</th><th scope="col" data-testid="sponsors-col-status">Status</th><th scope="col" data-testid="sponsors-col-actions">Actions</th></tr></thead>' +
+              '<tbody data-testid="sponsors-tbody">' + rows + '</tbody></table>';
+          } catch (err) {
+            wrap.innerHTML = '<div class="card-error" data-testid="sponsors-error"><div class="error-icon">&#9888;</div><div class="error-msg">Could not load sponsors.</div><button class="retry-btn" data-testid="sponsors-retry" data-action="sponsors-reload">Retry</button></div>';
+          }
+        }
+        // Retry/cancel/post-mutation reloads keep the current scope (no arg).
+        window._loadSponsors = function() { return loadSponsors(); };
+        // Event-row selection drives the scope.
+        window._loadSponsorsForEvent = function(id) { return loadSponsors(id); };
+
+        function openForm() {
+          const wrap = document.getElementById('spon-form-wrap');
+          const btn = document.getElementById('add-spon-toggle');
+          wrap.removeAttribute('hidden');
+          btn.setAttribute('aria-expanded', 'true');
+          btn.textContent = '✕ Cancel';
+          document.getElementById('spon-name').focus();
+        }
+
+        function doCloseForm() {
+          document.getElementById('spon-form-wrap').setAttribute('hidden', '');
+          document.getElementById('add-spon-toggle').setAttribute('aria-expanded', 'false');
+          document.getElementById('add-spon-toggle').textContent = '+ Add Sponsor';
+          document.getElementById('spon-edit-id').value = '';
+          document.getElementById('spon-create-form').reset();
+          const msg = document.getElementById('spon-form-msg');
+          msg.textContent = '';
+          msg.className = 'create-msg';
+          document.getElementById('spon-submit-btn').textContent = 'Save Sponsor';
+          const ctx = document.getElementById('spon-edit-ctx');
+          ctx.hidden = true;
+          ctx.textContent = '';
+          document.getElementById('add-spon-toggle').focus();
+        }
+        window._doCloseForm = doCloseForm;
+
+        function formHasData() {
+          return !!(document.getElementById('spon-name').value.trim() ||
+                    document.getElementById('spon-edit-id').value.trim());
+        }
+
+        window._keepEditing = function() {
+          document.getElementById('spon-form-msg').textContent = '';
+          document.getElementById('spon-form-msg').className = 'create-msg';
+          document.getElementById('spon-name').focus();
+        };
+
+        function closeForm() {
+          if (formHasData()) {
+            const msg = document.getElementById('spon-form-msg');
+            msg.className = 'create-msg error';
+            msg.innerHTML = 'Discard unsaved changes? ' +
+              '<button class="spon-action-btn spon-ml" data-action="sponsor-close-form" data-testid="confirm-discard" aria-label="Yes, discard changes">Yes, discard</button>' +
+              ' <button class="spon-action-btn" data-action="sponsor-keep-editing" data-testid="keep-editing" aria-label="Keep editing">Keep editing</button>';
+            const yesBtn = msg.querySelector("[data-testid='confirm-discard']");
+            if (yesBtn) yesBtn.focus();
+            return;
+          }
+          doCloseForm();
+        }
+
+        document.getElementById('add-spon-toggle').addEventListener('click', function() {
+          const hidden = document.getElementById('spon-form-wrap').hasAttribute('hidden');
+          if (hidden) { openForm(); loadEventOptions(null); } else { closeForm(); }
+        });
+        document.getElementById('spon-cancel-btn').addEventListener('click', closeForm);
+
+        document.addEventListener('keydown', function(e) {
+          if (e.key === 'Escape' && !document.getElementById('spon-form-wrap').hasAttribute('hidden')) {
+            closeForm();
+          }
+        });
+
+        window._editSponsor = async function(id) {
+          openForm();
+          const msg = document.getElementById('spon-form-msg');
+          msg.textContent = '';
+          msg.className = 'create-msg';
+          try {
+            const data = await fetch('/api/v2/admin/sponsors/' + id).then(function(r) { return r.json(); });
+            if (!data.ok || !data.item) throw new Error('Not found');
+            const s = data.item;
+            await loadEventOptions(s.event_id);
+            document.getElementById('spon-edit-id').value = s.id;
+            document.getElementById('spon-name').value = s.name || '';
+            document.getElementById('spon-event').value = s.event_id || '';
+            document.getElementById('spon-tier').value = s.tier || 'primary';
+            document.getElementById('spon-logo').value = s.logo_url || '';
+            document.getElementById('spon-website').value = s.website_url || '';
+            // OSE-670 (#25): placement is uniform — no slot checkboxes. Show the
+            // geo-derived is_local classification read-only (non-purchasable).
+            const localPill = document.getElementById('spon-is-local-pill');
+            if (localPill) localPill.hidden = !(s.is_local === 1 || s.is_local === true);
+            document.getElementById('spon-submit-btn').textContent = 'Update Sponsor';
+            const ctx = document.getElementById('spon-edit-ctx');
+            ctx.textContent = 'Editing: ' + (s.name || s.id);
+            ctx.hidden = false;
+            document.getElementById('spon-form-wrap').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            document.getElementById('spon-name').focus();
+          } catch (e) {
+            msg.textContent = 'Could not load sponsor data.';
+            msg.className = 'create-msg error';
+          }
+        };
+
+        window._deactivateSponsor = function(id) {
+          const btn = document.querySelector('[data-testid="deactivate-' + id + '"]');
+          if (!btn) return;
+          const cell = btn.parentElement;
+          cell.innerHTML =
+            '<span class="muted-sm deact-confirm-lbl">Deactivate?</span> ' +
+            '<button class="spon-action-btn deactivate" data-testid="confirm-deactivate-' + esc(id) + '" data-action="sponsor-confirm-deactivate" data-id="' + esc(id) + '" aria-label="Confirm deactivate sponsor">Yes</button>' +
+            ' <button class="spon-action-btn" data-testid="cancel-deactivate-' + esc(id) + '" data-action="sponsors-reload" aria-label="Cancel deactivate">No</button>';
+          const yesBtn = cell.querySelector("[data-testid='confirm-deactivate-" + esc(id) + "']");
+          if (yesBtn) yesBtn.focus();
+        };
+
+        window._confirmDeactivate = async function(id) {
+          try {
+            const res = await fetch('/api/v2/admin/sponsors/' + id, { method: 'DELETE' });
+            const data = await res.json();
+            if (!res.ok || !data.ok) throw new Error(data.error || 'Failed');
+            loadSponsors();
+          } catch (err) {
+            window._adminAnnounce('Could not deactivate: ' + (err.message || 'Unknown error'), 'error');
+            loadSponsors();
+          }
+        };
+
+        document.getElementById('spon-create-form').addEventListener('submit', async function(e) {
+          e.preventDefault();
+          const btn = document.getElementById('spon-submit-btn');
+          const msg = document.getElementById('spon-form-msg');
+          const editId = document.getElementById('spon-edit-id').value.trim();
+          const name = document.getElementById('spon-name').value.trim();
+          const event_id = document.getElementById('spon-event').value.trim();
+
+          if (!name) { msg.textContent = 'Name is required.'; msg.className = 'create-msg error'; return; }
+          if (!event_id) { msg.textContent = 'Event is required.'; msg.className = 'create-msg error'; return; }
+
+          // OSE-670 (#25): the form never sends placement_formats — placement is
+          // uniform and non-purchasable; the server forces the uniform value and
+          // ignores any client-supplied slot. Tier is what governs share.
+          const body = { name: name, event_id: event_id, tier: document.getElementById('spon-tier').value };
+          const logoVal = document.getElementById('spon-logo').value.trim();
+          if (logoVal) body.logo_url = logoVal;
+          const siteVal = document.getElementById('spon-website').value.trim();
+          if (siteVal) body.website_url = siteVal;
+
+          btn.disabled = true;
+          btn.textContent = editId ? 'Updating…' : 'Saving…';
+          msg.textContent = '';
+          msg.className = 'create-msg';
+
+          try {
+            const url = editId ? '/api/v2/admin/sponsors/' + editId : '/api/v2/admin/sponsors';
+            const res = await fetch(url, { method: editId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+            const data = await res.json();
+            if (!res.ok || !data.ok) throw new Error(data.error || 'Save failed');
+            msg.className = 'create-msg success';
+            msg.innerHTML = (editId ? 'Sponsor updated.' : 'Sponsor created — ' + esc(data.id)) +
+              ' <button class="spon-action-btn spon-ml" data-action="sponsor-close-form" data-testid="close-after-save">Close</button>';
+            loadSponsors();
+          } catch (err) {
+            msg.textContent = err.message || 'Could not save sponsor.';
+            msg.className = 'create-msg error';
+          } finally {
+            btn.disabled = false;
+            btn.textContent = editId ? 'Update Sponsor' : 'Save Sponsor';
+          }
+        });
+
+        loadSponsors();
+      })();
+    </script>
+    <!-- Registration & Forms — step 3 of the build sequence.
+           The "(Card 2)" in the old heading contradicted both this position and
+           tests/e2e/1-smoke/admin-seven-cards.spec.js, which numbers Sponsors 2
+           and Forms 3. Two numbering schemes disagreeing is worse than none, so
+           the numbers are gone and the order carries the meaning (OSE-1238). -->
+    <div class="forms-card" data-testid="forms-card">
+      <h2>Registration &amp; Forms</h2>
+      <div id="forms-panel" data-testid="forms-panel">
+        <p class="loading" data-testid="forms-loading-initial">Select an event to manage forms&hellip;</p>
+      </div>
+    </div>
+    <script>
+      // Forms card — load counts and generate QR links for selected event
+      window.loadForms = async function(eventId, eventName, legalPhase) {
+        // Update phase badge to reflect selected event's regulatory clearance tier
+        const pb = document.getElementById('phaseBadge');
+        if (pb) {
+          const p = Math.max(1, Math.min(5, Number(legalPhase) || 1));
+          // OSE-R-005: friendly label visible; raw phase number stays in a
+          // tooltip + data attribute for admins who actually need it.
+          pb.textContent = window.friendlyPhase(p);
+          pb.title = 'Internal phase ' + p;
+          pb.setAttribute('data-phase', String(p));
+          pb.className = 'phase-badge phase-' + p;
+          pb.dataset.testid = 'phase-badge';
+        }
+        const panel = document.getElementById('forms-panel');
+        panel.innerHTML = '<div class="skeleton-table" data-testid="skeleton-forms"><div class="skeleton skeleton-row"></div><div class="skeleton skeleton-row"></div><div class="skeleton skeleton-row"></div></div>';
+        try {
+        // upgradeTier: payment tier required. upgradePhase: regulatory clearance tier required.
+        const types = [
+          { key: 'register', flagKey: 'forms.register', label: 'Registration', desc: 'Pre-event sign-up' },
+          { key: 'checkin', flagKey: 'forms.checkin', label: 'Check-in', desc: 'Walk-in door tally' },
+          { key: 'survey', flagKey: 'forms.survey', label: 'Survey', desc: 'Post-event feedback', upgradeTier: 'mid', upgradePhase: 2 },
+          { key: 'email', flagKey: 'forms.email-signup', label: 'Email List', desc: 'Voluntary opt-in', upgradeTier: 'mid', upgradePhase: 2 },
+        ];
+        const encodedName = encodeURIComponent(eventName);
+
+        // OSE-675: resolve flags + all four counts in ONE Promise.all so the
+        // card hydrates in a single round-trip generation instead of serial
+        // flag-then-counts.
+        // OSE-665 (2026-08-08): "0-5 consistency so everyone sees the same
+        // information". The server floors the aggregate count with the SAME K
+        // the SharedReport surface uses, so a sub-5 cohort is represented
+        // identically everywhere and no surface side-channels the exact number.
+        // Three states, all decided server-side: an exact count (>=5), a
+        // suppressed band (<5), or a failed fetch (retry — never a masked 0).
+        const adminPaths = ['registrations', 'checkin-count', 'surveys', 'email-signups'];
+        const [eventFlagsRes, ...counts] = await Promise.all([
+          fetch('/api/v2/admin/flags/resolve?eventId=' + eventId).then(r => r.json()).catch(() => null),
+          ...adminPaths.map(p =>
+            fetch('/api/v2/admin/events/' + eventId + '/forms/' + p)
+              .then(r => r.json())
+              .then(d => {
+                if (!d || !d.ok) return 'error';
+                if (d.suppressed) return 'suppressed';
+                return (typeof d.count === 'number') ? d.count : 'error';
+              })
+              .catch(() => 'error')
+          ),
+        ]);
+        const flags = (eventFlagsRes && eventFlagsRes.ok) ? eventFlagsRes.flags : (window._resolvedFlags || {});
+        const countLabels = ['Registrations', 'Check-ins', 'Surveys', 'Emails'];
+        // Retry re-runs the whole load for the currently-selected event.
+        window._lastFormsArgs = [eventId, eventName, legalPhase];
+        window.reloadForms = function () {
+          if (window._lastFormsArgs) window.loadForms.apply(null, window._lastFormsArgs);
+        };
+        const renderCount = (c) => {
+          if (c === 'error') return '<button type="button" class="count-retry" data-testid="count-retry" data-action="counts-retry"'
+            + ' title="Could not load — tap to retry" aria-label="Count failed to load. Retry."'
+            + ' style="background:none;border:none;color:inherit;cursor:pointer;font:inherit;padding:0;min-width:44px;min-height:44px">&#8635;</button>';
+          if (c === 'suppressed') return '<span class="count-suppressed" data-testid="count-suppressed"'
+            + ' title="Below the reporting floor of 5 — shown the same on every surface" aria-label="Fewer than 5">&lt;5</span>';
+          return String(c);
+        };
+
+        // Form links — locked if flag is off (payment tier) or regulatory phase insufficient
+        const eventPhase = Math.max(1, Math.min(5, Number(legalPhase) || 1));
+        const linksHtml = types.map(t => {
+          const tierEnabled = flags[t.flagKey] !== false;
+          const phaseEnabled = eventPhase >= (t.upgradePhase || 1);
+          const enabled = tierEnabled && phaseEnabled;
+          const lockedClass = enabled ? '' : ' feature-locked';
+          // OSE-R-005: friendly plan + event-type names in the lock overlay.
+          const upgradeTierLabel = window.friendlyTier(t.upgradeTier || 'mid');
+          const upgradePhaseLabel = window.friendlyPhase(t.upgradePhase || 2);
+          const lockMsg = enabled ? '' : !tierEnabled
+            ? '<div class="lock-overlay">Upgrade to ' + upgradeTierLabel + ' to unlock</div>'
+            : '<div class="lock-overlay">Available for ' + upgradePhaseLabel + '</div>';
+          return '<div class="' + lockedClass + '" data-testid="form-gate-' + t.key + '">' +
+            '<a class="form-link" href="/forms/' + eventId + '?type=' + t.key + '&event=' + encodedName + '" target="_blank" data-testid="form-link-' + t.key + '">' +
+              '<div class="form-type">' + t.label + '</div>' +
+              '<div class="form-desc" data-testid="form-desc-' + t.key + '">' + t.desc + '</div>' +
+            '</a>' + lockMsg + '</div>';
+        }).join('');
+
+        // Inline form config toggles
+        const configHtml = types.map((t, i) => {
+          const globalEnabled = (window._resolvedFlags || {})[t.flagKey] !== false;
+          const eventEnabled = flags[t.flagKey] !== false;
+          const tierLocked = !globalEnabled && !t.upgradeTier; // truly unavailable
+          const disabled = !globalEnabled ? ' disabled' : '';
+          const checked = eventEnabled ? ' checked' : '';
+          return '<div class="form-config" data-testid="form-config-' + t.key + '">' +
+            '<div>' +
+              '<div class="form-config-label">' + t.label + ' <span class="muted-sm">(' + renderCount(counts[i]) + ')</span></div>' +
+              '<div class="form-config-desc">' + t.desc + (disabled ? ' — requires ' + (t.upgradeTier || 'upgrade') : '') + '</div>' +
+            '</div>' +
+            '<label class="toggle">' +
+              '<input type="checkbox" data-testid="form-toggle-' + t.key + '" data-flag="' + t.flagKey + '" data-event="' + eventId + '"' + checked + disabled +
+              ' data-change="form-flag" />' +
+              '<span class="slider"></span>' +
+            '</label>' +
+          '</div>';
+        }).join('');
+
+        window._mintEventId = eventId;
+
+        panel.innerHTML =
+          '<div class="forms-grid" data-testid="forms-grid">' + linksHtml + '</div>' +
+          '<div class="form-counts" data-testid="form-counts">' +
+            counts.map((c, i) =>
+              '<div class="count-box" data-testid="count-' + countLabels[i].toLowerCase().replace(/s+/g, '-') + '"><div class="count-num" data-testid="count-num">' + renderCount(c) + '</div><div class="count-label" data-testid="count-label-' + countLabels[i].toLowerCase().replace(/\s+/g, '-') + '">' + countLabels[i] + '</div></div>'
+            ).join('') +
+          '</div>' +
+          '<div class="config-section" data-testid="config-section">' +
+            '<h3>Form Config</h3>' +
+            configHtml +
+          '</div>' +
+          '<div class="report-links-section" data-testid="report-links-section">' +
+            '<h3>Shared Report Links</h3>' +
+            '<p style="margin:0 0 12px;font-size:13px;color:#5a5a5a">Mint a signed bearer token scoped to this event. Share the token with bar owners or sponsors — they present it as <code>Authorization: Bearer &lt;token&gt;</code>.</p>' +
+            '<div class="mint-form-grid" data-testid="mint-form-grid">' +
+              '<div class="mint-field">' +
+                '<label for="mint-role">Role</label>' +
+                '<select id="mint-role" data-testid="mint-role" data-change="mint-role">' +
+                  '<option value="bar_owner">Bar Owner</option>' +
+                  '<option value="sponsor">Sponsor</option>' +
+                  '<option value="admin">Admin</option>' +
+                '</select>' +
+              '</div>' +
+              '<div class="mint-field" id="mint-depth-row" style="display:none">' +
+                '<label for="mint-depth">Depth</label>' +
+                '<select id="mint-depth" data-testid="mint-depth">' +
+                  '<option value="local">Local — proof of presence</option>' +
+                  '<option value="premium">Premium — full intelligence</option>' +
+                '</select>' +
+              '</div>' +
+              '<div class="mint-field" id="mint-sponsor-id-row" style="display:none">' +
+                '<label for="mint-sponsor-id">Sponsor ID</label>' +
+                '<input type="text" id="mint-sponsor-id" data-testid="mint-sponsor-id" placeholder="sp_…" style="width:100%;box-sizing:border-box" />' +
+              '</div>' +
+              '<div class="mint-field">' +
+                '<label for="mint-ttl">Expires in</label>' +
+                '<select id="mint-ttl" data-testid="mint-ttl">' +
+                  '<option value="7">7 days</option>' +
+                  '<option value="30">30 days</option>' +
+                  '<option value="90">90 days</option>' +
+                '</select>' +
+              '</div>' +
+            '</div>' +
+            '<button class="copy-btn" data-testid="mint-link-btn" style="margin-top:8px" data-action="mint-link" data-event-id="' + String(window._mintEventId == null ? '' : window._mintEventId).replace(/"/g, '&quot;') + '">Generate Link</button>' +
+            '<div id="mint-result" class="mint-result" data-testid="mint-result" style="margin-top:10px"></div>' +
+          '</div>';
+        } catch (err) {
+          panel.innerHTML = '<div class="card-error" data-testid="forms-error"><div class="error-icon">&#9888;</div><div class="error-msg">Could not load forms.</div><button class="retry-btn" data-testid="forms-retry" data-action="forms-reload" data-event-id="' + eventId + '" data-event-name="' + String(eventName == null ? '' : eventName).replace(/"/g, '&quot;') + '">Retry</button></div>';
+        }
+      };
+
+      // S-3.5.1 — mint-link depth/sponsor-id visibility toggle
+      window._onMintRoleChange = function() {
+        const role = document.getElementById('mint-role').value;
+        const isSponsor = role === 'sponsor';
+        document.getElementById('mint-depth-row').style.display = isSponsor ? '' : 'none';
+        document.getElementById('mint-sponsor-id-row').style.display = isSponsor ? '' : 'none';
+      };
+
+      // S-3.5.1 — generate a signed link token via the admin mint endpoint
+      window.mintReportLink = async function(eventId, btn) {
+        if (!eventId) { window._adminAnnounce('Select an event first.', 'error'); return; }
+        const role = document.getElementById('mint-role').value;
+        const isSponsor = role === 'sponsor';
+        const depthEl = document.getElementById('mint-depth');
+        const depth = isSponsor && depthEl ? depthEl.value : undefined;
+        const sponsorIdEl = document.getElementById('mint-sponsor-id');
+        const sponsorId = isSponsor && sponsorIdEl ? sponsorIdEl.value.trim() : undefined;
+        const ttlDays = parseInt(document.getElementById('mint-ttl').value, 10);
+        const result = document.getElementById('mint-result');
+
+        btn.disabled = true;
+        btn.textContent = 'Generating…';
+        result.textContent = '';
+        result.removeAttribute('class');
+
+        try {
+          const reqBody = { role, ttl_days: ttlDays };
+          if (depth !== undefined) reqBody.depth = depth;
+          if (sponsorId) reqBody.sponsor_id = sponsorId;
+
+          const res = await fetch('/api/v2/admin/events/' + eventId + '/shared-report/mint-link', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(reqBody),
+          });
+          const data = await res.json();
+          if (!res.ok || !data.ok) throw new Error(data.error || 'Mint failed');
+
+          const expires = new Date(data.expires_at).toLocaleDateString();
+          const tokenSafe = data.token.replace(/'/g, "\\'");
+          result.innerHTML =
+            '<div style="font-size:12px;color:#5a5a5a;margin-bottom:4px">Bearer token · expires ' + expires + '</div>' +
+            '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">' +
+              '<code data-testid="mint-token" style="font-size:11px;word-break:break-all;flex:1;background:#f5f5f5;padding:4px 6px;border-radius:4px">' + esc(data.token) + '</code>' +
+              '<button class="copy-btn" data-testid="mint-copy-btn" style="flex-shrink:0" data-action="mint-copy" data-token="' + tokenSafe + '">Copy</button>' +
+            '</div>' +
+            '<div style="font-size:11px;color:#5a5a5a;margin-top:4px">Endpoint: GET /api/v2/events/' + esc(eventId) + '/shared-report</div>';
+          result.style.cssText = 'margin-top:10px;padding:8px;background:#f0faf0;border:1px solid #b6e2b6;border-radius:6px';
+        } catch (err) {
+          result.textContent = err.message || 'Failed to generate link.';
+          result.style.cssText = 'margin-top:10px;padding:8px;background:#fff0f0;border:1px solid #e2b6b6;border-radius:6px;color:#c0392b';
+        } finally {
+          btn.disabled = false;
+          btn.textContent = 'Generate Link';
+        }
+      };
+
+      // Toggle a form flag for the selected event
+      window.toggleFormFlag = async function(el) {
+        const flagKey = el.dataset.flag;
+        const eventId = el.dataset.event;
+        // OSE-675: the checkbox flips instantly (native) — this is a UI INTENT
+        // on a boolean flag, display-only, NOT a count. The adjacent count span
+        // is never recomputed here (#7 — optimism must never reach an aggregate).
+        // Disable during the audited PUT, announce the outcome, revert on error.
+        const enabled = el.checked;
+        el.disabled = true;
+        try {
+          const res = await fetch('/api/v2/admin/events/' + eventId + '/flags/' + flagKey, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ enabled }),
+          });
+          const data = await res.json();
+          if (!data.ok) throw new Error(data.error || 'Failed');
+          if (typeof window._adminAnnounce === 'function')
+            window._adminAnnounce((enabled ? 'Enabled' : 'Disabled') + ' ' + flagKey + '.', 'ok');
+        } catch (err) {
+          el.checked = !enabled; // revert on failure
+          if (typeof window._adminAnnounce === 'function')
+            window._adminAnnounce('Could not update ' + flagKey + ' — reverted.', 'error');
+          console.error('Flag toggle failed:', err);
+        } finally {
+          el.disabled = false;
+        }
+      };
+    </script>
+    <!-- Posters — step 4. Each deployment is one physical placement and mints its
+           own unique qr_token (migrations/0003), so "how many posters" is "how
+           many deployments", and the QR is complete once a deployment exists. -->
+    <div class="poster-deployments-card" data-testid="poster-deployments-card">
+      <div class="sponsors-card-header">
+        <h2>Posters</h2>
+        <button
+          class="add-spon-btn"
+          id="add-pd-toggle"
+          data-testid="add-poster-deployment-toggle"
+          aria-expanded="false"
+          aria-controls="pd-form-wrap"
+          data-action="pd-toggle"
+        >+ Add Deployment</button>
+      </div>
+
+      <div id="pd-form-wrap" class="spon-form-wrap" hidden data-testid="poster-deployment-form-wrap">
+        <form id="pd-create-form" data-testid="poster-deployment-create-form" novalidate>
+          <div class="create-form">
+            <div>
+              <label for="pd-placement-label">Label <span class="required-star" aria-hidden="true">*</span></label>
+              <input
+                type="text"
+                id="pd-placement-label"
+                name="placement_label"
+                data-testid="pd-placement-label"
+                placeholder="Front door, sidewalk billboard…"
+                maxlength="200"
+                required
+                aria-required="true"
+              />
+            </div>
+            <div>
+              <label for="pd-location-desc">Location description</label>
+              <input
+                type="text"
+                id="pd-location-desc"
+                name="location_desc"
+                data-testid="pd-location-desc"
+                placeholder="Optional — e.g. corner of Main &amp; Oak"
+                maxlength="500"
+              />
+            </div>
+            <div>
+              <label for="pd-latitude">Latitude</label>
+              <input
+                type="number"
+                id="pd-latitude"
+                name="latitude"
+                data-testid="pd-latitude"
+                placeholder="41.8781"
+                step="any"
+                min="-90"
+                max="90"
+              />
+            </div>
+            <div>
+              <label for="pd-longitude">Longitude</label>
+              <input
+                type="number"
+                id="pd-longitude"
+                name="longitude"
+                data-testid="pd-longitude"
+                placeholder="-87.6298"
+                step="any"
+                min="-180"
+                max="180"
+              />
+            </div>
+          </div>
+          <div class="form-actions">
+            <button type="submit" data-testid="pd-create-btn" class="copy-btn">Create Deployment</button>
+            <span class="create-msg" id="pd-create-msg" data-testid="pd-create-msg"></span>
+          </div>
+        </form>
+      </div>
+
+      <div id="pd-panel" data-testid="poster-deployments-panel">
+        <p class="loading" data-testid="poster-deployments-loading-initial">Select an event to view poster deployments&hellip;</p>
+      </div>
+    </div>
+    <style>
+      /* OSE-895: GAS QRRegenerator .qr-card frame
+         (archive/v2-code/components/QRRegenerator.html) ported onto the admin
+         Poster Deployments card. Reuses the canonical .qr-card geometry
+         established for poster.html in OSE-887, dressed in admin baseline
+         tokens. Each deployment becomes a card carrying its scannable
+         /q/<qr_token> QR so an organizer can download or print a physical
+         poster — the artifact First Scan needs. */
+      .pd-qr-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+        gap: 16px;
+        margin-top: 12px;
+      }
+      .poster-deployments-card .qr-card {
+        display: flex;
+        flex-direction: column;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        overflow: hidden;
+        background: var(--surface);
+      }
+      .poster-deployments-card .qr-card-header {
+        padding: 10px 12px;
+        background: var(--surface-hover);
+        border-bottom: 1px solid var(--border);
+      }
+      .pd-card-title { font-weight: 600; color: var(--text); font-size: 14px; }
+      .pd-card-sub { color: var(--text-muted); font-size: 12px; margin-top: 2px; }
+      .poster-deployments-card .qr-card-body {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 10px;
+        padding: 14px 12px;
+      }
+      .poster-deployments-card .qr-img {
+        width: 160px;
+        height: 160px;
+        image-rendering: pixelated;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        background: #fff;
+      }
+      .pd-meta { width: 100%; margin: 0; font-size: 12px; color: var(--text-muted); }
+      .pd-meta-row { display: flex; justify-content: space-between; gap: 8px; padding: 2px 0; }
+      .pd-meta-row code { word-break: break-all; }
+      .poster-deployments-card .qr-card-footer {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        justify-content: center;
+        padding: 10px 12px;
+        background: var(--surface-hover);
+        border-top: 1px solid var(--border);
+      }
+      @media print {
+        .poster-deployments-card .qr-card { break-inside: avoid; }
+        .poster-deployments-card .qr-card-footer { display: none; }
+      }
+    </style>
+    <script>
+      (function () {
+        const esc = (s) => {
+          const d = document.createElement('div');
+          d.textContent = String(s ?? '');
+          return d.innerHTML;
+        };
+        window._pdItems = window._pdItems || {};
+
+        window.loadPosterDeployments = async function (eventId) {
+          window._pdEventId = eventId;
+          const panel = document.getElementById('pd-panel');
+          panel.innerHTML = '<div class="skeleton-table" data-testid="skeleton-poster-deployments"><div class="skeleton skeleton-row"></div><div class="skeleton skeleton-row"></div></div>';
+          try {
+            const res = await fetch('/api/v2/admin/events/' + encodeURIComponent(eventId) + '/poster-deployments');
+            const data = await res.json();
+            const items = (data.ok && data.items) ? data.items : [];
+            if (!items.length) {
+              panel.innerHTML = '<p class="loading" data-testid="poster-deployments-empty">No deployments yet. Use the form above to add one.</p>';
+              return;
+            }
+            window._pdItems = {};
+            const cards = items.map((pd) => {
+              window._pdItems[pd.id] = {
+                qr_data_uri: pd.qr_data_uri || '',
+                scan_url: pd.scan_url || '',
+                label: pd.placement_label || '',
+              };
+              // Prefer the scannable QR; degrade to the raw token if the
+              // server could not generate a data-URI (see poster-deployments.ts).
+              const qrCell = pd.qr_data_uri
+                ? '<img class="qr-img" src="' + esc(pd.qr_data_uri) + '" alt="Scan QR for ' + esc(pd.placement_label || 'poster deployment') + '" data-testid="pd-qr-img" width="160" height="160" />'
+                : '<code data-testid="pd-qr-fallback">' + esc(pd.qr_token) + '</code>';
+              return (
+                '<div class="qr-card pd-qr-card" data-testid="poster-deployment-row" data-id="' + esc(pd.id) + '">' +
+                  '<div class="qr-card-header">' +
+                    '<div class="pd-card-title" data-testid="pd-label">' + esc(pd.placement_label || '—') + '</div>' +
+                    '<div class="pd-card-sub" data-testid="pd-location">' + esc(pd.location_desc || '—') + '</div>' +
+                  '</div>' +
+                  '<div class="qr-card-body">' +
+                    qrCell +
+                    '<dl class="pd-meta">' +
+                      '<div class="pd-meta-row"><span>Cell (res9)</span><span data-testid="pd-h3-res9">' + esc(pd.h3_res9 || '—') + '</span></div>' +
+                      '<div class="pd-meta-row"><span>Active</span><span data-testid="pd-is-active">' + (pd.is_active ? 'Yes' : 'No') + '</span></div>' +
+                      '<div class="pd-meta-row"><span>QR Token</span><code data-testid="pd-qr-token">' + esc(pd.qr_token) + '</code></div>' +
+                    '</dl>' +
+                  '</div>' +
+                  '<div class="qr-card-footer">' +
+                    '<button class="copy-btn" style="font-size:12px;padding:4px 10px" data-testid="pd-download-btn" data-action="pd-download" data-pd-id="' + esc(pd.id) + '" aria-label="Download poster QR">Download</button>' +
+                    '<button class="copy-btn" style="font-size:12px;padding:4px 10px" data-testid="pd-print-btn" data-action="pd-print" data-pd-id="' + esc(pd.id) + '" aria-label="Print poster QR">Print</button>' +
+                    '<button class="copy-btn" style="font-size:12px;padding:4px 10px" data-testid="pd-delete-btn" data-pd-id="' + esc(pd.id) + '" data-action="pd-delete">Delete</button>' +
+                  '</div>' +
+                '</div>'
+              );
+            }).join('');
+            panel.innerHTML = '<div class="pd-qr-grid" data-testid="poster-deployments-table">' + cards + '</div>';
+          } catch (err) {
+            panel.innerHTML = '<div class="card-error" data-testid="poster-deployments-error"><div class="error-icon">&#9888;</div><div class="error-msg">Could not load poster deployments.</div></div>';
+          }
+        };
+
+        // Two-step inline confirm (mirrors window._deactivateSponsor) — replaces
+        // the blocking browser dialogs so venue organizers on mobile never
+        // hit a focus-stealing prompt on a destructive action.
+        window.deletePosterDeployment = function (pdId) {
+          const btn = document.querySelector('[data-testid="pd-delete-btn"][data-pd-id="' + pdId + '"]');
+          if (!btn) return;
+          const cell = btn.parentElement;
+          cell.innerHTML =
+            '<span class="muted-sm">Deactivate?</span> ' +
+            '<button class="copy-btn" style="font-size:12px;padding:4px 10px" data-testid="confirm-delete-pd-' + esc(pdId) + '" data-action="pd-confirm-delete" data-pd-id="' + esc(pdId) + '" aria-label="Confirm deactivate poster deployment">Yes</button> ' +
+            '<button class="copy-btn" style="font-size:12px;padding:4px 10px" data-testid="cancel-delete-pd-' + esc(pdId) + '" data-action="pd-cancel-delete" aria-label="Cancel">No</button>';
+          const yes = cell.querySelector('[data-testid="confirm-delete-pd-' + esc(pdId) + '"]');
+          if (yes) yes.focus();
+        };
+        window._confirmDeletePd = async function (pdId) {
+          try {
+            const res = await fetch('/api/v2/admin/poster-deployments/' + encodeURIComponent(pdId), { method: 'DELETE' });
+            const data = await res.json();
+            if (!res.ok || !data.ok) throw new Error(data.error || 'Delete failed.');
+            window._adminAnnounce('Poster deployment deactivated.', 'ok');
+            if (window._pdEventId) window.loadPosterDeployments(window._pdEventId);
+          } catch (err) {
+            window._adminAnnounce(err.message || 'Network error — could not delete.', 'error');
+          }
+        };
+
+        // Download the deployment's QR (the in-bundle data-URI) as a PNG so an
+        // organizer can drop it into a physical poster. No canvas/redraw — the
+        // server already produced the image (poster-deployments.ts / lib/qr).
+        window.downloadPosterQr = function (pdId) {
+          const item = window._pdItems[pdId];
+          if (!item || !item.qr_data_uri) {
+            window._adminAnnounce('QR not available for download.', 'error');
+            return;
+          }
+          const safeName =
+            (item.label || pdId).replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '').toLowerCase() || pdId;
+          const a = document.createElement('a');
+          a.href = item.qr_data_uri;
+          a.download = 'poster-qr-' + safeName + '.png';
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+        };
+
+        // Open a minimal print window for a single deployment QR. Mirrors the
+        // GAS QRRegenerator printQR frame, stripped of banned-lexicon copy.
+        window.printPosterQr = function (pdId) {
+          const item = window._pdItems[pdId];
+          if (!item || !item.qr_data_uri) {
+            window._adminAnnounce('QR not available to print.', 'error');
+            return;
+          }
+          const w = window.open('', '_blank');
+          if (!w) {
+            window._adminAnnounce('Pop-up blocked — allow pop-ups to print the QR.', 'error');
+            return;
+          }
+          const label = esc(item.label || 'Poster deployment');
+          const scanUrl = esc(item.scan_url || '');
+          w.document.write(
+            '<!DOCTYPE html><html><head><title>' + label + ' — QR</title>' +
+            '<style>body{font-family:system-ui,Arial,sans-serif;display:flex;flex-direction:column;' +
+            'align-items:center;justify-content:center;min-height:100vh;margin:0;padding:24px}' +
+            'img{width:320px;height:320px;image-rendering:pixelated;margin:16px 0}' +
+            'h1{font-size:18px;margin:0}p{font-size:12px;color:#555;word-break:break-all}' +
+            '@media print{@page{margin:0.5in}}</style></head><body>' +
+            '<h1>' + label + '</h1>' +
+            '<img src="' + item.qr_data_uri + '" alt="Scan QR" />' +
+            '<p>' + scanUrl + '</p></body></html>'
+          );
+          w.document.close();
+          w.focus();
+          setTimeout(function () { w.print(); }, 250);
+        };
+
+        const form = document.getElementById('pd-create-form');
+        if (form) {
+          form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const eventId = window._pdEventId;
+            const msg = document.getElementById('pd-create-msg');
+            const btn = form.querySelector('[data-testid="pd-create-btn"]');
+            if (!eventId) { msg.textContent = 'Select an event first.'; msg.className = 'create-msg error'; return; }
+            const label = document.getElementById('pd-placement-label').value.trim();
+            if (!label) { msg.textContent = 'Label is required.'; msg.className = 'create-msg error'; return; }
+            const locationDesc = document.getElementById('pd-location-desc').value.trim() || undefined;
+            const latRaw = document.getElementById('pd-latitude').value;
+            const lonRaw = document.getElementById('pd-longitude').value;
+            const body = { placement_label: label };
+            if (locationDesc) body.location_desc = locationDesc;
+            if (latRaw !== '' && lonRaw !== '') {
+              body.latitude = parseFloat(latRaw);
+              body.longitude = parseFloat(lonRaw);
+            }
+            btn.disabled = true;
+            btn.textContent = 'Creating…';
+            msg.textContent = '';
+            try {
+              const res = await fetch('/api/v2/admin/events/' + encodeURIComponent(eventId) + '/poster-deployments', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body),
+              });
+              const data = await res.json();
+              if (data.ok) {
+                msg.textContent = 'Deployment created.';
+                msg.className = 'create-msg success';
+                form.reset();
+                window.loadPosterDeployments(eventId);
+              } else {
+                msg.textContent = data.error || 'Create failed.';
+                msg.className = 'create-msg error';
+              }
+            } catch (err) {
+              msg.textContent = 'Network error.';
+              msg.className = 'create-msg error';
+            } finally {
+              btn.disabled = false;
+              btn.textContent = 'Create Deployment';
+            }
+          });
+        }
+      })();
+    </script>
+    <!-- Surface links — step 5, the payoff: every page this event now has. -->
+    <!-- Selecting an event row upgrades these cards to that event's scoped
+         surface (data-surface drives window.scopeSurfaceCards). Unscoped they
+         open the event-agnostic shell, so the cards are always functional. -->
+    <div class="surface-cards" data-testid="surface-cards" data-scope-caption="all events">
+      <div class="surface-card poster" data-surface="poster" data-scoped="0" data-testid="card-poster">
+        <h3>Poster Page</h3>
+        <p>Print-ready event poster with QR codes</p>
+        <a href="/poster" target="_blank" data-testid="link-poster">Open Poster</a>
+        <button class="copy-btn" data-testid="copy-poster" data-action="copy-url" data-url="/poster">
+          Copy URL
+        </button>
+        <div class="qr-hint" data-testid="qr-hint-poster">QR-ready: /poster</div>
+      </div>
+      <div class="surface-card display" data-surface="display" data-scoped="0" data-testid="card-display">
+        <h3>TV Display</h3>
+        <p>Bar TV / kiosk live event display</p>
+        <a href="/display" target="_blank" data-testid="link-display">Open Display</a>
+        <button class="copy-btn" data-testid="copy-display" data-action="copy-url" data-url="/display">
+          Copy URL
+        </button>
+        <div class="qr-hint" data-testid="qr-hint-display">QR-ready: /display</div>
+      </div>
+      <div class="surface-card public" data-surface="public" data-scoped="0" data-testid="card-public">
+        <h3>Public Page</h3>
+        <p>Customer-facing events listing</p>
+        <a href="/" target="_blank" data-testid="link-public">Open Public Page</a>
+        <button class="copy-btn" data-testid="copy-public" data-action="copy-url" data-url="/">
+          Copy URL
+        </button>
+        <div class="qr-hint" data-testid="qr-hint-public">QR-ready: /</div>
+      </div>
+      <div class="surface-card report" data-surface="report" data-scoped="0" data-testid="card-report">
+        <h3>Shared Report</h3>
+        <p>Post-event analytics dashboard</p>
+        <a href="/sharedReport" target="_blank" data-testid="link-report">Open Report</a>
+        <button class="copy-btn" data-testid="copy-report" data-action="copy-url" data-url="/sharedReport">
+          Copy URL
+        </button>
+        <div class="qr-hint" data-testid="qr-hint-report">QR-ready: /sharedReport</div>
+      </div>
+    </div>
+
+    <!-- Copy URL helper + event-scoped surface deep-links -->
+    <script>
+      // INVARIANT #1 guard: the ONLY dynamic segment in a scoped surface URL is
+      // the opaque, server-validated event id (^[A-Za-z0-9_-]{1,128}$). No
+      // anonymous_id, cookie, or PII is ever read when building these paths.
+      function scopedSurfaceUrl(surface, eventId) {
+        if (!eventId) return null;
+        const id = encodeURIComponent(eventId);
+        switch (surface) {
+          case 'poster':
+            return '/poster?event=' + id;
+          case 'display':
+            return '/display?event=' + id;
+          case 'public':
+            return '/events/' + id; // existing public-event route
+          case 'report':
+            return '/sharedReport?event=' + id; // aggregate proof surface only
+          default:
+            return null;
+        }
+      }
+      // Upgrade all four surface cards to the selected event's scoped surface.
+      window.scopeSurfaceCards = function (eventId, eventName) {
+        document.querySelectorAll('.surface-card').forEach(function (card) {
+          const url = scopedSurfaceUrl(card.dataset.surface, eventId);
+          if (!url) return;
+          const a = card.querySelector('a');
+          const copyBtn = card.querySelector('.copy-btn');
+          const hint = card.querySelector('.qr-hint');
+          if (a) a.setAttribute('href', url);
+          if (copyBtn) copyBtn.dataset.copyPath = url; // copyUrl prefers this
+          if (hint) hint.textContent = 'QR-ready: ' + url; // textContent — safe
+          card.setAttribute('data-scoped', '1');
+          card.setAttribute('data-event-id', eventId);
+        });
+        const wrap = document.querySelector('.surface-cards');
+        if (wrap && eventName) wrap.setAttribute('data-scope-caption', eventName);
+      };
+
+      // On window so the delegated dispatcher (OSE-1239) can resolve it; the
+      // four Copy URL buttons now carry data-action="copy-url" instead of an
+      // inline onclick the CSP refused.
+      window.copyUrl = function copyUrl(path, btn) {
+        // A scoped card stashes its event-scoped path in data-copy-path.
+        if (btn && btn.dataset && btn.dataset.copyPath) path = btn.dataset.copyPath;
+        const url = location.origin + path;
+        navigator.clipboard.writeText(url)
+          .then(() => {
+            btn.textContent = 'Copied!';
+            btn.classList.add('copied');
+            setTimeout(() => {
+              btn.textContent = 'Copy URL';
+              btn.classList.remove('copied');
+            }, 2000);
+          })
+          .catch(() => {
+            btn.textContent = 'Failed';
+            setTimeout(() => {
+              btn.textContent = 'Copy URL';
+            }, 2000);
+          });
+      };
+    </script>
 
       <!-- OSE-886: Event Dashboard card. GAS frame (DashboardCard.html) + baseline
            details. Hidden until an event is selected (ose:event-selected, OSE-667/673).
@@ -2744,7 +4416,7 @@
             const safePhase = Math.max(1, Math.min(5, Number(e.legal_clearance_tier) || 1));
             const phaseLabel = esc(window.friendlyPhase(safePhase));
             return `
-          <tr onclick="window.selectEvent('${safeId}', '${safeName.replace(/'/g, "\\'")}', ${safePhase}); document.querySelectorAll('tr.selected').forEach(r=>r.classList.remove('selected')); this.classList.add('selected');" onkeydown="if(event.key==='Enter'||event.key===' '){this.click();event.preventDefault();}" class="clickable-row" tabindex="0" data-testid="event-row-${safeId}" data-brand-row="${safeBrand}" data-phase="${safePhase}">
+          <tr data-action="event-select" data-event-id="${safeId}" data-event-name="${safeName.replace(/"/g, '&quot;')}" data-event-phase="${safePhase}" role="button" class="clickable-row" tabindex="0" data-testid="event-row-${safeId}" data-brand-row="${safeBrand}" data-phase="${safePhase}">
             <td class="col-internal-id" data-label="ID" data-testid="event-id">${safeId}</td>
             <td data-label="Name" data-testid="event-name">${safeName}</td>
             <td data-label="Date" data-testid="event-date">${e.startDateISO ? esc(new Date(e.startDateISO).toLocaleDateString()) : '—'}</td>
@@ -2772,7 +4444,7 @@
               const safeBrand = esc(b);
               const evs = byBrand[b];
               const header = multiBrand
-                ? `<tr class="brand-group-header" data-testid="brand-group-${safeBrand}" data-brand-group="${safeBrand}" tabindex="0" role="button" aria-expanded="true" onclick="window.toggleBrandGroup('${safeBrand.replace(/'/g, "\\'")}', this)" onkeydown="if(event.key==='Enter'||event.key===' '){this.click();event.preventDefault();}"><td colspan="6"><span class="brand-group-caret" aria-hidden="true">▾</span> <span class="brand-group-name">${safeBrand}</span> <span class="brand-count-pill" data-testid="brand-count-${safeBrand}">${evs.length}</span></td></tr>`
+                ? `<tr class="brand-group-header" data-testid="brand-group-${safeBrand}" data-brand-group="${safeBrand}" tabindex="0" role="button" aria-expanded="true" data-action="brand-toggle"><td colspan="6"><span class="brand-group-caret" aria-hidden="true">▾</span> <span class="brand-group-name">${safeBrand}</span> <span class="brand-count-pill" data-testid="brand-count-${safeBrand}">${evs.length}</span></td></tr>`
                 : '';
               return header + evs.map(rowFor).join('');
             })
@@ -2819,7 +4491,7 @@
           } catch (e) {}
         } catch (err) {
           container.innerHTML =
-            '<div class="card-error" data-testid="events-error"><div class="error-icon">&#9888;</div><div class="error-msg">Could not load events.</div><button class="retry-btn" data-testid="events-retry" onclick="location.reload()">Retry</button></div>';
+            '<div class="card-error" data-testid="events-error"><div class="error-icon">&#9888;</div><div class="error-msg">Could not load events.</div><button class="retry-btn" data-testid="events-retry" data-action="reload-page">Retry</button></div>';
         }
       })();
 
@@ -2865,6 +4537,12 @@
             const val = el && el.value ? el.value.trim() : '';
             if (val) body[apiField] = val;
           }
+
+          // OSE-1245 — sent on every create, never conditionally. The API
+          // defaults an absent value to published, so omitting it when the box
+          // is unchecked would publish an event the operator declined to list.
+          const publishedEl = document.getElementById('create-published');
+          body.is_published = publishedEl ? publishedEl.checked : true;
 
           const res = await fetch('/api/v2/admin/events', {
             method: 'POST',
@@ -2943,1106 +4621,9 @@
       });
     </script>
 
-    <!-- Card 2: Forms Management -->
-    <div class="forms-card" data-testid="forms-card">
-      <h2>Forms (Card 2)</h2>
-      <div id="forms-panel" data-testid="forms-panel">
-        <p class="loading" data-testid="forms-loading-initial">Select an event to manage forms&hellip;</p>
-      </div>
-    </div>
-    <script>
-      // Forms card — load counts and generate QR links for selected event
-      window.loadForms = async function(eventId, eventName, legalPhase) {
-        // Update phase badge to reflect selected event's regulatory clearance tier
-        const pb = document.getElementById('phaseBadge');
-        if (pb) {
-          const p = Math.max(1, Math.min(5, Number(legalPhase) || 1));
-          // OSE-R-005: friendly label visible; raw phase number stays in a
-          // tooltip + data attribute for admins who actually need it.
-          pb.textContent = window.friendlyPhase(p);
-          pb.title = 'Internal phase ' + p;
-          pb.setAttribute('data-phase', String(p));
-          pb.className = 'phase-badge phase-' + p;
-          pb.dataset.testid = 'phase-badge';
-        }
-        const panel = document.getElementById('forms-panel');
-        panel.innerHTML = '<div class="skeleton-table" data-testid="skeleton-forms"><div class="skeleton skeleton-row"></div><div class="skeleton skeleton-row"></div><div class="skeleton skeleton-row"></div></div>';
-        try {
-        // upgradeTier: payment tier required. upgradePhase: regulatory clearance tier required.
-        const types = [
-          { key: 'register', flagKey: 'forms.register', label: 'Registration', desc: 'Pre-event sign-up' },
-          { key: 'checkin', flagKey: 'forms.checkin', label: 'Check-in', desc: 'Walk-in door tally' },
-          { key: 'survey', flagKey: 'forms.survey', label: 'Survey', desc: 'Post-event feedback', upgradeTier: 'mid', upgradePhase: 2 },
-          { key: 'email', flagKey: 'forms.email-signup', label: 'Email List', desc: 'Voluntary opt-in', upgradeTier: 'mid', upgradePhase: 2 },
-        ];
-        const encodedName = encodeURIComponent(eventName);
 
-        // OSE-675: resolve flags + all four counts in ONE Promise.all so the
-        // card hydrates in a single round-trip generation instead of serial
-        // flag-then-counts.
-        // OSE-665 (2026-08-08): "0-5 consistency so everyone sees the same
-        // information". The server floors the aggregate count with the SAME K
-        // the SharedReport surface uses, so a sub-5 cohort is represented
-        // identically everywhere and no surface side-channels the exact number.
-        // Three states, all decided server-side: an exact count (>=5), a
-        // suppressed band (<5), or a failed fetch (retry — never a masked 0).
-        const adminPaths = ['registrations', 'checkin-count', 'surveys', 'email-signups'];
-        const [eventFlagsRes, ...counts] = await Promise.all([
-          fetch('/api/v2/admin/flags/resolve?eventId=' + eventId).then(r => r.json()).catch(() => null),
-          ...adminPaths.map(p =>
-            fetch('/api/v2/admin/events/' + eventId + '/forms/' + p)
-              .then(r => r.json())
-              .then(d => {
-                if (!d || !d.ok) return 'error';
-                if (d.suppressed) return 'suppressed';
-                return (typeof d.count === 'number') ? d.count : 'error';
-              })
-              .catch(() => 'error')
-          ),
-        ]);
-        const flags = (eventFlagsRes && eventFlagsRes.ok) ? eventFlagsRes.flags : (window._resolvedFlags || {});
-        const countLabels = ['Registrations', 'Check-ins', 'Surveys', 'Emails'];
-        // Retry re-runs the whole load for the currently-selected event.
-        window._lastFormsArgs = [eventId, eventName, legalPhase];
-        window.reloadForms = function () {
-          if (window._lastFormsArgs) window.loadForms.apply(null, window._lastFormsArgs);
-        };
-        const renderCount = (c) => {
-          if (c === 'error') return '<button type="button" class="count-retry" data-testid="count-retry" onclick="window.reloadForms()"'
-            + ' title="Could not load — tap to retry" aria-label="Count failed to load. Retry."'
-            + ' style="background:none;border:none;color:inherit;cursor:pointer;font:inherit;padding:0;min-width:44px;min-height:44px">&#8635;</button>';
-          if (c === 'suppressed') return '<span class="count-suppressed" data-testid="count-suppressed"'
-            + ' title="Below the reporting floor of 5 — shown the same on every surface" aria-label="Fewer than 5">&lt;5</span>';
-          return String(c);
-        };
 
-        // Form links — locked if flag is off (payment tier) or regulatory phase insufficient
-        const eventPhase = Math.max(1, Math.min(5, Number(legalPhase) || 1));
-        const linksHtml = types.map(t => {
-          const tierEnabled = flags[t.flagKey] !== false;
-          const phaseEnabled = eventPhase >= (t.upgradePhase || 1);
-          const enabled = tierEnabled && phaseEnabled;
-          const lockedClass = enabled ? '' : ' feature-locked';
-          // OSE-R-005: friendly plan + event-type names in the lock overlay.
-          const upgradeTierLabel = window.friendlyTier(t.upgradeTier || 'mid');
-          const upgradePhaseLabel = window.friendlyPhase(t.upgradePhase || 2);
-          const lockMsg = enabled ? '' : !tierEnabled
-            ? '<div class="lock-overlay">Upgrade to ' + upgradeTierLabel + ' to unlock</div>'
-            : '<div class="lock-overlay">Available for ' + upgradePhaseLabel + '</div>';
-          return '<div class="' + lockedClass + '" data-testid="form-gate-' + t.key + '">' +
-            '<a class="form-link" href="/forms/' + eventId + '?type=' + t.key + '&event=' + encodedName + '" target="_blank" data-testid="form-link-' + t.key + '">' +
-              '<div class="form-type">' + t.label + '</div>' +
-              '<div class="form-desc" data-testid="form-desc-' + t.key + '">' + t.desc + '</div>' +
-            '</a>' + lockMsg + '</div>';
-        }).join('');
 
-        // Inline form config toggles
-        const configHtml = types.map((t, i) => {
-          const globalEnabled = (window._resolvedFlags || {})[t.flagKey] !== false;
-          const eventEnabled = flags[t.flagKey] !== false;
-          const tierLocked = !globalEnabled && !t.upgradeTier; // truly unavailable
-          const disabled = !globalEnabled ? ' disabled' : '';
-          const checked = eventEnabled ? ' checked' : '';
-          return '<div class="form-config" data-testid="form-config-' + t.key + '">' +
-            '<div>' +
-              '<div class="form-config-label">' + t.label + ' <span class="muted-sm">(' + renderCount(counts[i]) + ')</span></div>' +
-              '<div class="form-config-desc">' + t.desc + (disabled ? ' — requires ' + (t.upgradeTier || 'upgrade') : '') + '</div>' +
-            '</div>' +
-            '<label class="toggle">' +
-              '<input type="checkbox" data-testid="form-toggle-' + t.key + '" data-flag="' + t.flagKey + '" data-event="' + eventId + '"' + checked + disabled +
-              ' onchange="toggleFormFlag(this)" />' +
-              '<span class="slider"></span>' +
-            '</label>' +
-          '</div>';
-        }).join('');
-
-        window._mintEventId = eventId;
-
-        panel.innerHTML =
-          '<div class="forms-grid" data-testid="forms-grid">' + linksHtml + '</div>' +
-          '<div class="form-counts" data-testid="form-counts">' +
-            counts.map((c, i) =>
-              '<div class="count-box" data-testid="count-' + countLabels[i].toLowerCase().replace(/s+/g, '-') + '"><div class="count-num" data-testid="count-num">' + renderCount(c) + '</div><div class="count-label" data-testid="count-label-' + countLabels[i].toLowerCase().replace(/\s+/g, '-') + '">' + countLabels[i] + '</div></div>'
-            ).join('') +
-          '</div>' +
-          '<div class="config-section" data-testid="config-section">' +
-            '<h3>Form Config</h3>' +
-            configHtml +
-          '</div>' +
-          '<div class="report-links-section" data-testid="report-links-section">' +
-            '<h3>Shared Report Links</h3>' +
-            '<p style="margin:0 0 12px;font-size:13px;color:#5a5a5a">Mint a signed bearer token scoped to this event. Share the token with bar owners or sponsors — they present it as <code>Authorization: Bearer &lt;token&gt;</code>.</p>' +
-            '<div class="mint-form-grid" data-testid="mint-form-grid">' +
-              '<div class="mint-field">' +
-                '<label for="mint-role">Role</label>' +
-                '<select id="mint-role" data-testid="mint-role" onchange="window._onMintRoleChange()">' +
-                  '<option value="bar_owner">Bar Owner</option>' +
-                  '<option value="sponsor">Sponsor</option>' +
-                  '<option value="admin">Admin</option>' +
-                '</select>' +
-              '</div>' +
-              '<div class="mint-field" id="mint-depth-row" style="display:none">' +
-                '<label for="mint-depth">Depth</label>' +
-                '<select id="mint-depth" data-testid="mint-depth">' +
-                  '<option value="local">Local — proof of presence</option>' +
-                  '<option value="premium">Premium — full intelligence</option>' +
-                '</select>' +
-              '</div>' +
-              '<div class="mint-field" id="mint-sponsor-id-row" style="display:none">' +
-                '<label for="mint-sponsor-id">Sponsor ID</label>' +
-                '<input type="text" id="mint-sponsor-id" data-testid="mint-sponsor-id" placeholder="sp_…" style="width:100%;box-sizing:border-box" />' +
-              '</div>' +
-              '<div class="mint-field">' +
-                '<label for="mint-ttl">Expires in</label>' +
-                '<select id="mint-ttl" data-testid="mint-ttl">' +
-                  '<option value="7">7 days</option>' +
-                  '<option value="30">30 days</option>' +
-                  '<option value="90">90 days</option>' +
-                '</select>' +
-              '</div>' +
-            '</div>' +
-            '<button class="copy-btn" data-testid="mint-link-btn" style="margin-top:8px" onclick="window.mintReportLink(window._mintEventId, this)">Generate Link</button>' +
-            '<div id="mint-result" class="mint-result" data-testid="mint-result" style="margin-top:10px"></div>' +
-          '</div>';
-        } catch (err) {
-          panel.innerHTML = '<div class="card-error" data-testid="forms-error"><div class="error-icon">&#9888;</div><div class="error-msg">Could not load forms.</div><button class="retry-btn" data-testid="forms-retry" onclick="window.loadForms(\'' + eventId + '\',\'' + eventName.replace(/'/g, "\\'") + '\')">Retry</button></div>';
-        }
-      };
-
-      // S-3.5.1 — mint-link depth/sponsor-id visibility toggle
-      window._onMintRoleChange = function() {
-        const role = document.getElementById('mint-role').value;
-        const isSponsor = role === 'sponsor';
-        document.getElementById('mint-depth-row').style.display = isSponsor ? '' : 'none';
-        document.getElementById('mint-sponsor-id-row').style.display = isSponsor ? '' : 'none';
-      };
-
-      // S-3.5.1 — generate a signed link token via the admin mint endpoint
-      window.mintReportLink = async function(eventId, btn) {
-        if (!eventId) { window._adminAnnounce('Select an event first.', 'error'); return; }
-        const role = document.getElementById('mint-role').value;
-        const isSponsor = role === 'sponsor';
-        const depthEl = document.getElementById('mint-depth');
-        const depth = isSponsor && depthEl ? depthEl.value : undefined;
-        const sponsorIdEl = document.getElementById('mint-sponsor-id');
-        const sponsorId = isSponsor && sponsorIdEl ? sponsorIdEl.value.trim() : undefined;
-        const ttlDays = parseInt(document.getElementById('mint-ttl').value, 10);
-        const result = document.getElementById('mint-result');
-
-        btn.disabled = true;
-        btn.textContent = 'Generating…';
-        result.textContent = '';
-        result.removeAttribute('class');
-
-        try {
-          const reqBody = { role, ttl_days: ttlDays };
-          if (depth !== undefined) reqBody.depth = depth;
-          if (sponsorId) reqBody.sponsor_id = sponsorId;
-
-          const res = await fetch('/api/v2/admin/events/' + eventId + '/shared-report/mint-link', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(reqBody),
-          });
-          const data = await res.json();
-          if (!res.ok || !data.ok) throw new Error(data.error || 'Mint failed');
-
-          const expires = new Date(data.expires_at).toLocaleDateString();
-          const tokenSafe = data.token.replace(/'/g, "\\'");
-          result.innerHTML =
-            '<div style="font-size:12px;color:#5a5a5a;margin-bottom:4px">Bearer token · expires ' + expires + '</div>' +
-            '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">' +
-              '<code data-testid="mint-token" style="font-size:11px;word-break:break-all;flex:1;background:#f5f5f5;padding:4px 6px;border-radius:4px">' + esc(data.token) + '</code>' +
-              '<button class="copy-btn" data-testid="mint-copy-btn" style="flex-shrink:0" onclick="navigator.clipboard.writeText(\'' + tokenSafe + '\').then(()=>{ this.textContent=\'Copied!\'; setTimeout(()=>this.textContent=\'Copy\',2000); }).catch(()=>this.textContent=\'Failed\')">Copy</button>' +
-            '</div>' +
-            '<div style="font-size:11px;color:#5a5a5a;margin-top:4px">Endpoint: GET /api/v2/events/' + esc(eventId) + '/shared-report</div>';
-          result.style.cssText = 'margin-top:10px;padding:8px;background:#f0faf0;border:1px solid #b6e2b6;border-radius:6px';
-        } catch (err) {
-          result.textContent = err.message || 'Failed to generate link.';
-          result.style.cssText = 'margin-top:10px;padding:8px;background:#fff0f0;border:1px solid #e2b6b6;border-radius:6px;color:#c0392b';
-        } finally {
-          btn.disabled = false;
-          btn.textContent = 'Generate Link';
-        }
-      };
-
-      // Toggle a form flag for the selected event
-      window.toggleFormFlag = async function(el) {
-        const flagKey = el.dataset.flag;
-        const eventId = el.dataset.event;
-        // OSE-675: the checkbox flips instantly (native) — this is a UI INTENT
-        // on a boolean flag, display-only, NOT a count. The adjacent count span
-        // is never recomputed here (#7 — optimism must never reach an aggregate).
-        // Disable during the audited PUT, announce the outcome, revert on error.
-        const enabled = el.checked;
-        el.disabled = true;
-        try {
-          const res = await fetch('/api/v2/admin/events/' + eventId + '/flags/' + flagKey, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ enabled }),
-          });
-          const data = await res.json();
-          if (!data.ok) throw new Error(data.error || 'Failed');
-          if (typeof window._adminAnnounce === 'function')
-            window._adminAnnounce((enabled ? 'Enabled' : 'Disabled') + ' ' + flagKey + '.', 'ok');
-        } catch (err) {
-          el.checked = !enabled; // revert on failure
-          if (typeof window._adminAnnounce === 'function')
-            window._adminAnnounce('Could not update ' + flagKey + ' — reverted.', 'error');
-          console.error('Flag toggle failed:', err);
-        } finally {
-          el.disabled = false;
-        }
-      };
-    </script>
-
-    <!-- Card 3: Poster Deployment Management (OSE-636) -->
-    <div class="poster-deployments-card" data-testid="poster-deployments-card">
-      <div class="sponsors-card-header">
-        <h2>Poster Deployments (Card 3)</h2>
-        <button
-          class="add-spon-btn"
-          id="add-pd-toggle"
-          data-testid="add-poster-deployment-toggle"
-          aria-expanded="false"
-          aria-controls="pd-form-wrap"
-          onclick="
-            const w = document.getElementById('pd-form-wrap');
-            const open = w.hidden;
-            w.hidden = !open;
-            this.setAttribute('aria-expanded', String(open));
-          "
-        >+ Add Deployment</button>
-      </div>
-
-      <div id="pd-form-wrap" class="spon-form-wrap" hidden data-testid="poster-deployment-form-wrap">
-        <form id="pd-create-form" data-testid="poster-deployment-create-form" novalidate>
-          <div class="create-form">
-            <div>
-              <label for="pd-placement-label">Label <span class="required-star" aria-hidden="true">*</span></label>
-              <input
-                type="text"
-                id="pd-placement-label"
-                name="placement_label"
-                data-testid="pd-placement-label"
-                placeholder="Front door, sidewalk billboard…"
-                maxlength="200"
-                required
-                aria-required="true"
-              />
-            </div>
-            <div>
-              <label for="pd-location-desc">Location description</label>
-              <input
-                type="text"
-                id="pd-location-desc"
-                name="location_desc"
-                data-testid="pd-location-desc"
-                placeholder="Optional — e.g. corner of Main &amp; Oak"
-                maxlength="500"
-              />
-            </div>
-            <div>
-              <label for="pd-latitude">Latitude</label>
-              <input
-                type="number"
-                id="pd-latitude"
-                name="latitude"
-                data-testid="pd-latitude"
-                placeholder="41.8781"
-                step="any"
-                min="-90"
-                max="90"
-              />
-            </div>
-            <div>
-              <label for="pd-longitude">Longitude</label>
-              <input
-                type="number"
-                id="pd-longitude"
-                name="longitude"
-                data-testid="pd-longitude"
-                placeholder="-87.6298"
-                step="any"
-                min="-180"
-                max="180"
-              />
-            </div>
-          </div>
-          <div class="form-actions">
-            <button type="submit" data-testid="pd-create-btn" class="copy-btn">Create Deployment</button>
-            <span class="create-msg" id="pd-create-msg" data-testid="pd-create-msg"></span>
-          </div>
-        </form>
-      </div>
-
-      <div id="pd-panel" data-testid="poster-deployments-panel">
-        <p class="loading" data-testid="poster-deployments-loading-initial">Select an event to view poster deployments&hellip;</p>
-      </div>
-    </div>
-    <style>
-      /* OSE-895: GAS QRRegenerator .qr-card frame
-         (archive/v2-code/components/QRRegenerator.html) ported onto the admin
-         Poster Deployments card. Reuses the canonical .qr-card geometry
-         established for poster.html in OSE-887, dressed in admin baseline
-         tokens. Each deployment becomes a card carrying its scannable
-         /q/<qr_token> QR so an organizer can download or print a physical
-         poster — the artifact First Scan needs. */
-      .pd-qr-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-        gap: 16px;
-        margin-top: 12px;
-      }
-      .poster-deployments-card .qr-card {
-        display: flex;
-        flex-direction: column;
-        border: 1px solid var(--border);
-        border-radius: 10px;
-        overflow: hidden;
-        background: var(--surface);
-      }
-      .poster-deployments-card .qr-card-header {
-        padding: 10px 12px;
-        background: var(--surface-hover);
-        border-bottom: 1px solid var(--border);
-      }
-      .pd-card-title { font-weight: 600; color: var(--text); font-size: 14px; }
-      .pd-card-sub { color: var(--text-muted); font-size: 12px; margin-top: 2px; }
-      .poster-deployments-card .qr-card-body {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 10px;
-        padding: 14px 12px;
-      }
-      .poster-deployments-card .qr-img {
-        width: 160px;
-        height: 160px;
-        image-rendering: pixelated;
-        border: 1px solid var(--border);
-        border-radius: 6px;
-        background: #fff;
-      }
-      .pd-meta { width: 100%; margin: 0; font-size: 12px; color: var(--text-muted); }
-      .pd-meta-row { display: flex; justify-content: space-between; gap: 8px; padding: 2px 0; }
-      .pd-meta-row code { word-break: break-all; }
-      .poster-deployments-card .qr-card-footer {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
-        justify-content: center;
-        padding: 10px 12px;
-        background: var(--surface-hover);
-        border-top: 1px solid var(--border);
-      }
-      @media print {
-        .poster-deployments-card .qr-card { break-inside: avoid; }
-        .poster-deployments-card .qr-card-footer { display: none; }
-      }
-    </style>
-    <script>
-      (function () {
-        const esc = (s) => {
-          const d = document.createElement('div');
-          d.textContent = String(s ?? '');
-          return d.innerHTML;
-        };
-        window._pdItems = window._pdItems || {};
-
-        window.loadPosterDeployments = async function (eventId) {
-          window._pdEventId = eventId;
-          const panel = document.getElementById('pd-panel');
-          panel.innerHTML = '<div class="skeleton-table" data-testid="skeleton-poster-deployments"><div class="skeleton skeleton-row"></div><div class="skeleton skeleton-row"></div></div>';
-          try {
-            const res = await fetch('/api/v2/admin/events/' + encodeURIComponent(eventId) + '/poster-deployments');
-            const data = await res.json();
-            const items = (data.ok && data.items) ? data.items : [];
-            if (!items.length) {
-              panel.innerHTML = '<p class="loading" data-testid="poster-deployments-empty">No deployments yet. Use the form above to add one.</p>';
-              return;
-            }
-            window._pdItems = {};
-            const cards = items.map((pd) => {
-              window._pdItems[pd.id] = {
-                qr_data_uri: pd.qr_data_uri || '',
-                scan_url: pd.scan_url || '',
-                label: pd.placement_label || '',
-              };
-              // Prefer the scannable QR; degrade to the raw token if the
-              // server could not generate a data-URI (see poster-deployments.ts).
-              const qrCell = pd.qr_data_uri
-                ? '<img class="qr-img" src="' + esc(pd.qr_data_uri) + '" alt="Scan QR for ' + esc(pd.placement_label || 'poster deployment') + '" data-testid="pd-qr-img" width="160" height="160" />'
-                : '<code data-testid="pd-qr-fallback">' + esc(pd.qr_token) + '</code>';
-              return (
-                '<div class="qr-card pd-qr-card" data-testid="poster-deployment-row" data-id="' + esc(pd.id) + '">' +
-                  '<div class="qr-card-header">' +
-                    '<div class="pd-card-title" data-testid="pd-label">' + esc(pd.placement_label || '—') + '</div>' +
-                    '<div class="pd-card-sub" data-testid="pd-location">' + esc(pd.location_desc || '—') + '</div>' +
-                  '</div>' +
-                  '<div class="qr-card-body">' +
-                    qrCell +
-                    '<dl class="pd-meta">' +
-                      '<div class="pd-meta-row"><span>Cell (res9)</span><span data-testid="pd-h3-res9">' + esc(pd.h3_res9 || '—') + '</span></div>' +
-                      '<div class="pd-meta-row"><span>Active</span><span data-testid="pd-is-active">' + (pd.is_active ? 'Yes' : 'No') + '</span></div>' +
-                      '<div class="pd-meta-row"><span>QR Token</span><code data-testid="pd-qr-token">' + esc(pd.qr_token) + '</code></div>' +
-                    '</dl>' +
-                  '</div>' +
-                  '<div class="qr-card-footer">' +
-                    '<button class="copy-btn" style="font-size:12px;padding:4px 10px" data-testid="pd-download-btn" onclick="window.downloadPosterQr(\'' + esc(pd.id) + '\')" aria-label="Download poster QR">Download</button>' +
-                    '<button class="copy-btn" style="font-size:12px;padding:4px 10px" data-testid="pd-print-btn" onclick="window.printPosterQr(\'' + esc(pd.id) + '\')" aria-label="Print poster QR">Print</button>' +
-                    '<button class="copy-btn" style="font-size:12px;padding:4px 10px" data-testid="pd-delete-btn" data-pd-id="' + esc(pd.id) + '" onclick="window.deletePosterDeployment(\'' + esc(pd.id) + '\')">Delete</button>' +
-                  '</div>' +
-                '</div>'
-              );
-            }).join('');
-            panel.innerHTML = '<div class="pd-qr-grid" data-testid="poster-deployments-table">' + cards + '</div>';
-          } catch (err) {
-            panel.innerHTML = '<div class="card-error" data-testid="poster-deployments-error"><div class="error-icon">&#9888;</div><div class="error-msg">Could not load poster deployments.</div></div>';
-          }
-        };
-
-        // Two-step inline confirm (mirrors window._deactivateSponsor) — replaces
-        // the blocking browser dialogs so venue organizers on mobile never
-        // hit a focus-stealing prompt on a destructive action.
-        window.deletePosterDeployment = function (pdId) {
-          const btn = document.querySelector('[data-testid="pd-delete-btn"][data-pd-id="' + pdId + '"]');
-          if (!btn) return;
-          const cell = btn.parentElement;
-          cell.innerHTML =
-            '<span class="muted-sm">Deactivate?</span> ' +
-            '<button class="copy-btn" style="font-size:12px;padding:4px 10px" data-testid="confirm-delete-pd-' + esc(pdId) + '" onclick="window._confirmDeletePd(\'' + esc(pdId) + '\')" aria-label="Confirm deactivate poster deployment">Yes</button> ' +
-            '<button class="copy-btn" style="font-size:12px;padding:4px 10px" data-testid="cancel-delete-pd-' + esc(pdId) + '" onclick="window.loadPosterDeployments(window._pdEventId)" aria-label="Cancel">No</button>';
-          const yes = cell.querySelector('[data-testid="confirm-delete-pd-' + esc(pdId) + '"]');
-          if (yes) yes.focus();
-        };
-        window._confirmDeletePd = async function (pdId) {
-          try {
-            const res = await fetch('/api/v2/admin/poster-deployments/' + encodeURIComponent(pdId), { method: 'DELETE' });
-            const data = await res.json();
-            if (!res.ok || !data.ok) throw new Error(data.error || 'Delete failed.');
-            window._adminAnnounce('Poster deployment deactivated.', 'ok');
-            if (window._pdEventId) window.loadPosterDeployments(window._pdEventId);
-          } catch (err) {
-            window._adminAnnounce(err.message || 'Network error — could not delete.', 'error');
-          }
-        };
-
-        // Download the deployment's QR (the in-bundle data-URI) as a PNG so an
-        // organizer can drop it into a physical poster. No canvas/redraw — the
-        // server already produced the image (poster-deployments.ts / lib/qr).
-        window.downloadPosterQr = function (pdId) {
-          const item = window._pdItems[pdId];
-          if (!item || !item.qr_data_uri) {
-            window._adminAnnounce('QR not available for download.', 'error');
-            return;
-          }
-          const safeName =
-            (item.label || pdId).replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '').toLowerCase() || pdId;
-          const a = document.createElement('a');
-          a.href = item.qr_data_uri;
-          a.download = 'poster-qr-' + safeName + '.png';
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
-        };
-
-        // Open a minimal print window for a single deployment QR. Mirrors the
-        // GAS QRRegenerator printQR frame, stripped of banned-lexicon copy.
-        window.printPosterQr = function (pdId) {
-          const item = window._pdItems[pdId];
-          if (!item || !item.qr_data_uri) {
-            window._adminAnnounce('QR not available to print.', 'error');
-            return;
-          }
-          const w = window.open('', '_blank');
-          if (!w) {
-            window._adminAnnounce('Pop-up blocked — allow pop-ups to print the QR.', 'error');
-            return;
-          }
-          const label = esc(item.label || 'Poster deployment');
-          const scanUrl = esc(item.scan_url || '');
-          w.document.write(
-            '<!DOCTYPE html><html><head><title>' + label + ' — QR</title>' +
-            '<style>body{font-family:system-ui,Arial,sans-serif;display:flex;flex-direction:column;' +
-            'align-items:center;justify-content:center;min-height:100vh;margin:0;padding:24px}' +
-            'img{width:320px;height:320px;image-rendering:pixelated;margin:16px 0}' +
-            'h1{font-size:18px;margin:0}p{font-size:12px;color:#555;word-break:break-all}' +
-            '@media print{@page{margin:0.5in}}</style></head><body>' +
-            '<h1>' + label + '</h1>' +
-            '<img src="' + item.qr_data_uri + '" alt="Scan QR" />' +
-            '<p>' + scanUrl + '</p></body></html>'
-          );
-          w.document.close();
-          w.focus();
-          setTimeout(function () { w.print(); }, 250);
-        };
-
-        const form = document.getElementById('pd-create-form');
-        if (form) {
-          form.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const eventId = window._pdEventId;
-            const msg = document.getElementById('pd-create-msg');
-            const btn = form.querySelector('[data-testid="pd-create-btn"]');
-            if (!eventId) { msg.textContent = 'Select an event first.'; msg.className = 'create-msg error'; return; }
-            const label = document.getElementById('pd-placement-label').value.trim();
-            if (!label) { msg.textContent = 'Label is required.'; msg.className = 'create-msg error'; return; }
-            const locationDesc = document.getElementById('pd-location-desc').value.trim() || undefined;
-            const latRaw = document.getElementById('pd-latitude').value;
-            const lonRaw = document.getElementById('pd-longitude').value;
-            const body = { placement_label: label };
-            if (locationDesc) body.location_desc = locationDesc;
-            if (latRaw !== '' && lonRaw !== '') {
-              body.latitude = parseFloat(latRaw);
-              body.longitude = parseFloat(lonRaw);
-            }
-            btn.disabled = true;
-            btn.textContent = 'Creating…';
-            msg.textContent = '';
-            try {
-              const res = await fetch('/api/v2/admin/events/' + encodeURIComponent(eventId) + '/poster-deployments', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(body),
-              });
-              const data = await res.json();
-              if (data.ok) {
-                msg.textContent = 'Deployment created.';
-                msg.className = 'create-msg success';
-                form.reset();
-                window.loadPosterDeployments(eventId);
-              } else {
-                msg.textContent = data.error || 'Create failed.';
-                msg.className = 'create-msg error';
-              }
-            } catch (err) {
-              msg.textContent = 'Network error.';
-              msg.className = 'create-msg error';
-            } finally {
-              btn.disabled = false;
-              btn.textContent = 'Create Deployment';
-            }
-          });
-        }
-      })();
-    </script>
-
-    <!-- Card 4: Sponsor Management (SPON-6) -->
-    <div class="sponsors-card" data-testid="sponsors-card">
-      <div class="sponsors-card-header">
-        <h2>Sponsors</h2>
-        <button
-          class="add-spon-btn"
-          id="add-spon-toggle"
-          data-testid="add-sponsor-toggle"
-          aria-expanded="false"
-          aria-controls="spon-form-wrap"
-        >
-          + Add Sponsor
-        </button>
-      </div>
-
-      <div id="spon-form-wrap" class="spon-form-wrap" hidden data-testid="sponsor-form-wrap">
-        <form id="spon-create-form" data-testid="sponsor-create-form" novalidate>
-          <input type="hidden" id="spon-edit-id" data-testid="spon-edit-id" value="" />
-          <div id="spon-edit-ctx" class="spon-edit-ctx" hidden data-testid="sponsor-edit-ctx"></div>
-          <div class="create-form">
-            <div>
-              <label for="spon-name"
-                >Name <span class="required-star" aria-hidden="true">*</span></label
-              >
-              <input
-                type="text"
-                id="spon-name"
-                name="name"
-                data-testid="spon-name"
-                placeholder="ACME Corp"
-                maxlength="200"
-                required
-                autocomplete="organization"
-                aria-required="true"
-              />
-            </div>
-            <div>
-              <label for="spon-event"
-                >Event <span class="required-star" aria-hidden="true">*</span></label
-              >
-              <select
-                id="spon-event"
-                name="event_id"
-                data-testid="spon-event"
-                required
-                aria-required="true"
-              ></select>
-            </div>
-            <div>
-              <label for="spon-tier">Tier</label>
-              <select id="spon-tier" name="tier" data-testid="spon-tier">
-                <option value="primary">Primary</option>
-                <option value="bronze">Bronze</option>
-                <option value="silver">Silver</option>
-                <option value="gold">Gold</option>
-                <option value="platinum">Platinum</option>
-                <option value="title">Title</option>
-              </select>
-            </div>
-            <div>
-              <label for="spon-logo">Logo URL</label>
-              <input
-                type="text"
-                id="spon-logo"
-                name="logo_url"
-                data-testid="spon-logo"
-                placeholder="https://acme.com/logo.png"
-                maxlength="500"
-              />
-            </div>
-            <div class="full-width">
-              <label for="spon-website">Website URL</label>
-              <input
-                type="text"
-                id="spon-website"
-                name="website_url"
-                data-testid="spon-website"
-                placeholder="https://acme.com"
-                maxlength="500"
-              />
-            </div>
-            <div class="full-width">
-              <label id="spon-placement-label">Placement &amp; share</label>
-              <!--
-                OSE-670 (#25 sponsor_share_covenant): placement is UNIFORM and
-                non-purchasable. Every sponsor renders at the same size/slot on
-                every surface; only rotation FREQUENCY varies, governed by the
-                Tier (above) + the covenant math (premium cap 40% / local floor
-                30%). There are deliberately NO size/slot/position toggles — a
-                sponsor cannot buy a bigger logo, a better slot, or a fixed
-                position. is_local is geo-derived and shown read-only.
-              -->
-              <p
-                class="spon-covenant-note"
-                role="note"
-                data-testid="spon-covenant-note"
-                aria-labelledby="spon-placement-label"
-              >
-                Uniform placement — same size &amp; slot on every surface. Tier sets a
-                <strong>capped, locally-floored share of rotation frequency</strong>
-                (never a bigger logo, better slot, or fixed position).
-              </p>
-              <span
-                class="is-local-pill"
-                id="spon-is-local-pill"
-                data-testid="spon-is-local-pill"
-                hidden
-                aria-live="polite"
-                >Local business — geo-derived</span
-              >
-            </div>
-            <div class="full-width form-actions">
-              <button
-                type="submit"
-                id="spon-submit-btn"
-                class="create-btn"
-                data-testid="sponsor-submit"
-              >
-                Save Sponsor
-              </button>
-              <button
-                type="button"
-                class="cancel-btn"
-                id="spon-cancel-btn"
-                data-testid="sponsor-cancel"
-              >
-                Cancel
-              </button>
-              <div
-                id="spon-form-msg"
-                class="create-msg"
-                role="status"
-                aria-live="polite"
-                data-testid="sponsor-form-msg"
-              ></div>
-            </div>
-          </div>
-        </form>
-      </div>
-
-      <div id="sponsors-list" data-testid="sponsors-list">
-        <div class="skeleton-table" data-testid="skeleton-sponsors">
-          <div class="skeleton skeleton-row"></div>
-          <div class="skeleton skeleton-row"></div>
-          <div class="skeleton skeleton-row"></div>
-        </div>
-      </div>
-    </div>
-    <script>
-      (function() {
-        const esc = s => { const d = document.createElement('div'); d.textContent = String(s); return d.innerHTML; };
-
-        function parsePlc(raw) {
-          try { const p = JSON.parse(raw || '{}'); return (p && typeof p === 'object') ? p : {}; } catch (e) { return {}; }
-        }
-
-        function pipHtml(raw) {
-          const p = parsePlc(raw);
-          const defs = [['posterTop','P'],['tvTop','TV'],['tvSide','S'],['mobileBanner','M']];
-          return '<span class="placement-pips">' + defs.map(function(d) {
-            return '<span class="pip' + (p[d[0]] ? ' active' : '') + '" title="' + d[0] + '">' + d[1] + '</span>';
-          }).join('') + '</span>';
-        }
-
-        async function loadEventOptions(selectedId) {
-          const sel = document.getElementById('spon-event');
-          sel.innerHTML = '<option value="" disabled selected>Loading events…</option>';
-          try {
-            const data = await window.OSE_events();
-            const items = (data.ok && data.items) ? data.items : [];
-            sel.innerHTML = items.length
-              ? items.map(function(e) {
-                  return '<option value="' + esc(e.id) + '"' + (e.id === selectedId ? ' selected' : '') + '>' + esc(e.name || e.id) + '</option>';
-                }).join('')
-              : '<option value="" disabled>No events found — create an event first</option>';
-          } catch (e) {
-            sel.innerHTML = '<option value="" disabled>Could not load events</option>';
-          }
-        }
-
-        // OSE — Sponsor card is scoped to the currently-selected event so an
-        // organizer only ever sees/edits their own event's sponsors. The scope
-        // is ALSO enforced server-side (SQL WHERE) — this is the UX half.
-        let _sponsorsEventId = null;
-        const _eventNameById = {};
-        async function refreshEventNames() {
-          if (Object.keys(_eventNameById).length) return; // one-shot cache
-          try {
-            const data = await window.OSE_events();
-            (data.items || []).forEach(function(e) {
-              _eventNameById[String(e.id)] = e.name || String(e.id);
-            });
-          } catch (e) { /* fall back to raw id below */ }
-        }
-        async function loadSponsors(eventId) {
-          const wrap = document.getElementById('sponsors-list');
-          if (eventId !== undefined && eventId !== null && eventId !== '') {
-            _sponsorsEventId = String(eventId);
-          }
-          const scopeId = _sponsorsEventId;
-          if (!scopeId) {
-            wrap.innerHTML = '<p class="loading" data-testid="sponsors-loading-initial">Select an event to manage its sponsors.</p>';
-            return;
-          }
-          wrap.innerHTML = '<div class="skeleton-table"><div class="skeleton skeleton-row"></div><div class="skeleton skeleton-row"></div><div class="skeleton skeleton-row"></div></div>';
-          try {
-            await refreshEventNames();
-            const data = await fetch('/api/v2/admin/sponsors?eventId=' + encodeURIComponent(scopeId)).then(function(r) { return r.json(); });
-            if (!data.ok) throw new Error(data.error || 'Load failed');
-            const items = data.items || [];
-            if (!items.length) {
-              wrap.innerHTML = '<p class="loading" data-testid="sponsors-empty">No sponsors for this event yet. Click &ldquo;+ Add Sponsor&rdquo; to add the first one.</p>';
-              return;
-            }
-            const rows = items.map(function(s) {
-              const dimStyle = s.is_active ? '' : ' class="spon-row-inactive"';
-              const statusBadge = s.is_active
-                ? '<span class="badge active" data-testid="spon-status-' + esc(s.id) + '">Active</span>'
-                : '<span class="badge archived" data-testid="spon-status-' + esc(s.id) + '">Inactive</span>';
-              const actions = s.is_active
-                ? '<button class="spon-action-btn" data-testid="edit-' + esc(s.id) + '" onclick="window._editSponsor(\'' + esc(s.id) + '\')">Edit</button> ' +
-                  '<button class="spon-action-btn deactivate" data-testid="deactivate-' + esc(s.id) + '" onclick="window._deactivateSponsor(\'' + esc(s.id) + '\')">Deactivate</button>'
-                : '<span class="muted-sm">Deactivated</span>';
-              const eventName = _eventNameById[String(s.event_id)] || s.event_id;
-              return '<tr data-testid="sponsor-row-' + esc(s.id) + '"' + dimStyle + '>' +
-                '<td data-label="Name" data-testid="spon-name-' + esc(s.id) + '">' + esc(s.name) + '</td>' +
-                '<td data-label="Tier"><span class="spon-tier-pill ' + esc(s.tier) + '" data-testid="spon-tier-' + esc(s.id) + '">' + esc(s.tier) + '</span></td>' +
-                '<td data-label="Event" class="muted-sm" data-testid="spon-event-' + esc(s.id) + '">' + esc(eventName) + '</td>' +
-                '<td data-label="Placements" data-testid="spon-placements-' + esc(s.id) + '">' + pipHtml(s.placement_formats) + '</td>' +
-                '<td data-label="Status">' + statusBadge + '</td>' +
-                '<td data-label="Actions" class="flex-row">' + actions + '</td>' +
-              '</tr>';
-            }).join('');
-            wrap.innerHTML = '<table data-testid="sponsors-table">' +
-              '<thead><tr><th scope="col" data-testid="sponsors-col-name">Name</th><th scope="col" data-testid="sponsors-col-tier">Tier</th><th scope="col" data-testid="sponsors-col-event">Event</th><th scope="col" data-testid="sponsors-col-placements">Placements</th><th scope="col" data-testid="sponsors-col-status">Status</th><th scope="col" data-testid="sponsors-col-actions">Actions</th></tr></thead>' +
-              '<tbody data-testid="sponsors-tbody">' + rows + '</tbody></table>';
-          } catch (err) {
-            wrap.innerHTML = '<div class="card-error" data-testid="sponsors-error"><div class="error-icon">&#9888;</div><div class="error-msg">Could not load sponsors.</div><button class="retry-btn" data-testid="sponsors-retry" onclick="window._loadSponsors()">Retry</button></div>';
-          }
-        }
-        // Retry/cancel/post-mutation reloads keep the current scope (no arg).
-        window._loadSponsors = function() { return loadSponsors(); };
-        // Event-row selection drives the scope.
-        window._loadSponsorsForEvent = function(id) { return loadSponsors(id); };
-
-        function openForm() {
-          const wrap = document.getElementById('spon-form-wrap');
-          const btn = document.getElementById('add-spon-toggle');
-          wrap.removeAttribute('hidden');
-          btn.setAttribute('aria-expanded', 'true');
-          btn.textContent = '✕ Cancel';
-          document.getElementById('spon-name').focus();
-        }
-
-        function doCloseForm() {
-          document.getElementById('spon-form-wrap').setAttribute('hidden', '');
-          document.getElementById('add-spon-toggle').setAttribute('aria-expanded', 'false');
-          document.getElementById('add-spon-toggle').textContent = '+ Add Sponsor';
-          document.getElementById('spon-edit-id').value = '';
-          document.getElementById('spon-create-form').reset();
-          const msg = document.getElementById('spon-form-msg');
-          msg.textContent = '';
-          msg.className = 'create-msg';
-          document.getElementById('spon-submit-btn').textContent = 'Save Sponsor';
-          const ctx = document.getElementById('spon-edit-ctx');
-          ctx.hidden = true;
-          ctx.textContent = '';
-          document.getElementById('add-spon-toggle').focus();
-        }
-        window._doCloseForm = doCloseForm;
-
-        function formHasData() {
-          return !!(document.getElementById('spon-name').value.trim() ||
-                    document.getElementById('spon-edit-id').value.trim());
-        }
-
-        window._keepEditing = function() {
-          document.getElementById('spon-form-msg').textContent = '';
-          document.getElementById('spon-form-msg').className = 'create-msg';
-          document.getElementById('spon-name').focus();
-        };
-
-        function closeForm() {
-          if (formHasData()) {
-            const msg = document.getElementById('spon-form-msg');
-            msg.className = 'create-msg error';
-            msg.innerHTML = 'Discard unsaved changes? ' +
-              '<button class="spon-action-btn spon-ml" onclick="window._doCloseForm()" data-testid="confirm-discard" aria-label="Yes, discard changes">Yes, discard</button>' +
-              ' <button class="spon-action-btn" onclick="window._keepEditing()" data-testid="keep-editing" aria-label="Keep editing">Keep editing</button>';
-            const yesBtn = msg.querySelector("[data-testid='confirm-discard']");
-            if (yesBtn) yesBtn.focus();
-            return;
-          }
-          doCloseForm();
-        }
-
-        document.getElementById('add-spon-toggle').addEventListener('click', function() {
-          const hidden = document.getElementById('spon-form-wrap').hasAttribute('hidden');
-          if (hidden) { openForm(); loadEventOptions(null); } else { closeForm(); }
-        });
-        document.getElementById('spon-cancel-btn').addEventListener('click', closeForm);
-
-        document.addEventListener('keydown', function(e) {
-          if (e.key === 'Escape' && !document.getElementById('spon-form-wrap').hasAttribute('hidden')) {
-            closeForm();
-          }
-        });
-
-        window._editSponsor = async function(id) {
-          openForm();
-          const msg = document.getElementById('spon-form-msg');
-          msg.textContent = '';
-          msg.className = 'create-msg';
-          try {
-            const data = await fetch('/api/v2/admin/sponsors/' + id).then(function(r) { return r.json(); });
-            if (!data.ok || !data.item) throw new Error('Not found');
-            const s = data.item;
-            await loadEventOptions(s.event_id);
-            document.getElementById('spon-edit-id').value = s.id;
-            document.getElementById('spon-name').value = s.name || '';
-            document.getElementById('spon-event').value = s.event_id || '';
-            document.getElementById('spon-tier').value = s.tier || 'primary';
-            document.getElementById('spon-logo').value = s.logo_url || '';
-            document.getElementById('spon-website').value = s.website_url || '';
-            // OSE-670 (#25): placement is uniform — no slot checkboxes. Show the
-            // geo-derived is_local classification read-only (non-purchasable).
-            const localPill = document.getElementById('spon-is-local-pill');
-            if (localPill) localPill.hidden = !(s.is_local === 1 || s.is_local === true);
-            document.getElementById('spon-submit-btn').textContent = 'Update Sponsor';
-            const ctx = document.getElementById('spon-edit-ctx');
-            ctx.textContent = 'Editing: ' + (s.name || s.id);
-            ctx.hidden = false;
-            document.getElementById('spon-form-wrap').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-            document.getElementById('spon-name').focus();
-          } catch (e) {
-            msg.textContent = 'Could not load sponsor data.';
-            msg.className = 'create-msg error';
-          }
-        };
-
-        window._deactivateSponsor = function(id) {
-          const btn = document.querySelector('[data-testid="deactivate-' + id + '"]');
-          if (!btn) return;
-          const cell = btn.parentElement;
-          cell.innerHTML =
-            '<span class="muted-sm deact-confirm-lbl">Deactivate?</span> ' +
-            '<button class="spon-action-btn deactivate" data-testid="confirm-deactivate-' + esc(id) + '" onclick="window._confirmDeactivate(\'' + esc(id) + '\')" aria-label="Confirm deactivate sponsor">Yes</button>' +
-            ' <button class="spon-action-btn" data-testid="cancel-deactivate-' + esc(id) + '" onclick="window._loadSponsors()" aria-label="Cancel deactivate">No</button>';
-          const yesBtn = cell.querySelector("[data-testid='confirm-deactivate-" + esc(id) + "']");
-          if (yesBtn) yesBtn.focus();
-        };
-
-        window._confirmDeactivate = async function(id) {
-          try {
-            const res = await fetch('/api/v2/admin/sponsors/' + id, { method: 'DELETE' });
-            const data = await res.json();
-            if (!res.ok || !data.ok) throw new Error(data.error || 'Failed');
-            loadSponsors();
-          } catch (err) {
-            window._adminAnnounce('Could not deactivate: ' + (err.message || 'Unknown error'), 'error');
-            loadSponsors();
-          }
-        };
-
-        document.getElementById('spon-create-form').addEventListener('submit', async function(e) {
-          e.preventDefault();
-          const btn = document.getElementById('spon-submit-btn');
-          const msg = document.getElementById('spon-form-msg');
-          const editId = document.getElementById('spon-edit-id').value.trim();
-          const name = document.getElementById('spon-name').value.trim();
-          const event_id = document.getElementById('spon-event').value.trim();
-
-          if (!name) { msg.textContent = 'Name is required.'; msg.className = 'create-msg error'; return; }
-          if (!event_id) { msg.textContent = 'Event is required.'; msg.className = 'create-msg error'; return; }
-
-          // OSE-670 (#25): the form never sends placement_formats — placement is
-          // uniform and non-purchasable; the server forces the uniform value and
-          // ignores any client-supplied slot. Tier is what governs share.
-          const body = { name: name, event_id: event_id, tier: document.getElementById('spon-tier').value };
-          const logoVal = document.getElementById('spon-logo').value.trim();
-          if (logoVal) body.logo_url = logoVal;
-          const siteVal = document.getElementById('spon-website').value.trim();
-          if (siteVal) body.website_url = siteVal;
-
-          btn.disabled = true;
-          btn.textContent = editId ? 'Updating…' : 'Saving…';
-          msg.textContent = '';
-          msg.className = 'create-msg';
-
-          try {
-            const url = editId ? '/api/v2/admin/sponsors/' + editId : '/api/v2/admin/sponsors';
-            const res = await fetch(url, { method: editId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-            const data = await res.json();
-            if (!res.ok || !data.ok) throw new Error(data.error || 'Save failed');
-            msg.className = 'create-msg success';
-            msg.innerHTML = (editId ? 'Sponsor updated.' : 'Sponsor created — ' + esc(data.id)) +
-              ' <button class="spon-action-btn spon-ml" onclick="window._doCloseForm()" data-testid="close-after-save">Close</button>';
-            loadSponsors();
-          } catch (err) {
-            msg.textContent = err.message || 'Could not save sponsor.';
-            msg.className = 'create-msg error';
-          } finally {
-            btn.disabled = false;
-            btn.textContent = editId ? 'Update Sponsor' : 'Save Sponsor';
-          }
-        });
-
-        loadSponsors();
-      })();
-    </script>
-
-    <!-- Cards 4-7: Surface Links -->
-    <!-- Selecting an event row upgrades these cards to that event's scoped
-         surface (data-surface drives window.scopeSurfaceCards). Unscoped they
-         open the event-agnostic shell, so the cards are always functional. -->
-    <div class="surface-cards" data-testid="surface-cards" data-scope-caption="all events">
-      <div class="surface-card poster" data-surface="poster" data-scoped="0" data-testid="card-poster">
-        <h3>Poster Page</h3>
-        <p>Print-ready event poster with QR codes</p>
-        <a href="/poster" target="_blank" data-testid="link-poster">Open Poster</a>
-        <button class="copy-btn" data-testid="copy-poster" onclick="copyUrl('/poster', this)">
-          Copy URL
-        </button>
-        <div class="qr-hint" data-testid="qr-hint-poster">QR-ready: /poster</div>
-      </div>
-      <div class="surface-card display" data-surface="display" data-scoped="0" data-testid="card-display">
-        <h3>TV Display</h3>
-        <p>Bar TV / kiosk live event display</p>
-        <a href="/display" target="_blank" data-testid="link-display">Open Display</a>
-        <button class="copy-btn" data-testid="copy-display" onclick="copyUrl('/display', this)">
-          Copy URL
-        </button>
-        <div class="qr-hint" data-testid="qr-hint-display">QR-ready: /display</div>
-      </div>
-      <div class="surface-card public" data-surface="public" data-scoped="0" data-testid="card-public">
-        <h3>Public Page</h3>
-        <p>Customer-facing events listing</p>
-        <a href="/" target="_blank" data-testid="link-public">Open Public Page</a>
-        <button class="copy-btn" data-testid="copy-public" onclick="copyUrl('/', this)">
-          Copy URL
-        </button>
-        <div class="qr-hint" data-testid="qr-hint-public">QR-ready: /</div>
-      </div>
-      <div class="surface-card report" data-surface="report" data-scoped="0" data-testid="card-report">
-        <h3>Shared Report</h3>
-        <p>Post-event analytics dashboard</p>
-        <a href="/sharedReport" target="_blank" data-testid="link-report">Open Report</a>
-        <button class="copy-btn" data-testid="copy-report" onclick="copyUrl('/sharedReport', this)">
-          Copy URL
-        </button>
-        <div class="qr-hint" data-testid="qr-hint-report">QR-ready: /sharedReport</div>
-      </div>
-    </div>
-
-    <!-- Copy URL helper + event-scoped surface deep-links -->
-    <script>
-      // INVARIANT #1 guard: the ONLY dynamic segment in a scoped surface URL is
-      // the opaque, server-validated event id (^[A-Za-z0-9_-]{1,128}$). No
-      // anonymous_id, cookie, or PII is ever read when building these paths.
-      function scopedSurfaceUrl(surface, eventId) {
-        if (!eventId) return null;
-        const id = encodeURIComponent(eventId);
-        switch (surface) {
-          case 'poster':
-            return '/poster?event=' + id;
-          case 'display':
-            return '/display?event=' + id;
-          case 'public':
-            return '/events/' + id; // existing public-event route
-          case 'report':
-            return '/sharedReport?event=' + id; // aggregate proof surface only
-          default:
-            return null;
-        }
-      }
-      // Upgrade all four surface cards to the selected event's scoped surface.
-      window.scopeSurfaceCards = function (eventId, eventName) {
-        document.querySelectorAll('.surface-card').forEach(function (card) {
-          const url = scopedSurfaceUrl(card.dataset.surface, eventId);
-          if (!url) return;
-          const a = card.querySelector('a');
-          const copyBtn = card.querySelector('.copy-btn');
-          const hint = card.querySelector('.qr-hint');
-          if (a) a.setAttribute('href', url);
-          if (copyBtn) copyBtn.dataset.copyPath = url; // copyUrl prefers this
-          if (hint) hint.textContent = 'QR-ready: ' + url; // textContent — safe
-          card.setAttribute('data-scoped', '1');
-          card.setAttribute('data-event-id', eventId);
-        });
-        const wrap = document.querySelector('.surface-cards');
-        if (wrap && eventName) wrap.setAttribute('data-scope-caption', eventName);
-      };
-
-      function copyUrl(path, btn) {
-        // A scoped card stashes its event-scoped path in data-copy-path.
-        if (btn && btn.dataset && btn.dataset.copyPath) path = btn.dataset.copyPath;
-        const url = location.origin + path;
-        navigator.clipboard.writeText(url)
-          .then(() => {
-            btn.textContent = 'Copied!';
-            btn.classList.add('copied');
-            setTimeout(() => {
-              btn.textContent = 'Copy URL';
-              btn.classList.remove('copied');
-            }, 2000);
-          })
-          .catch(() => {
-            btn.textContent = 'Failed';
-            setTimeout(() => {
-              btn.textContent = 'Copy URL';
-            }, 2000);
-          });
-      }
-    </script>
 
     <!-- Tier badge + feature gating -->
     <script>
@@ -4070,5 +4651,6 @@
         window._resolvedFlags = flagsRes && flagsRes.ok ? flagsRes.flags : {};
       })();
     </script>
+    <!--OCR_LEGAL_FOOTER-->
   </body>
 </html>

@@ -382,10 +382,18 @@ describe('ADMIN-15 Structure: Copy buttons', () => {
   const surfaces = ['poster', 'display', 'public', 'report'];
 
   for (const s of surfaces) {
-    test(`copy-${s} button has data-testid and onclick`, async () => {
+    // OSE-1239: was `onclick="copyUrl(`. That assertion passed for as long as
+    // the button was DEAD — a nonce CSP refuses inline handlers, so the
+    // attribute rendered and never fired. The shape it asserted WAS the bug.
+    // Now: the delegated dispatcher's contract, data-action + data-url.
+    test(`copy-${s} button is wired through the CSP-safe dispatcher`, async () => {
       const html = await fetchAdminHtml();
       expect(html).toContain(`data-testid="copy-${s}"`);
-      expect(html).toMatch(new RegExp(`data-testid="copy-${s}"[^>]*onclick="copyUrl\\(`));
+      expect(html).toMatch(new RegExp(`data-testid="copy-${s}"[^>]*data-action="copy-url"`));
+      expect(html).toMatch(new RegExp(`data-testid="copy-${s}"[^>]*data-url="`));
+      expect(html, 'inline handlers are refused by the CSP').not.toMatch(
+        new RegExp(`data-testid="copy-${s}"[^>]*onclick=`)
+      );
     });
   }
 
@@ -427,7 +435,8 @@ describe('ADMIN-15 CSS: Copy button visual states', () => {
 describe('ADMIN-15 JS: copyUrl function', () => {
   test('function defined and callable', async () => {
     const html = await fetchAdminHtml();
-    expect(html).toContain('function copyUrl(path, btn)');
+    // On window (OSE-1239) so the delegated dispatcher can resolve it.
+    expect(html).toContain('window.copyUrl = function copyUrl(path, btn)');
   });
 
   test('builds full URL from location.origin + path', async () => {
@@ -464,12 +473,20 @@ describe('ADMIN-15 JS: copyUrl function', () => {
     expect(html).toContain("btn.textContent = 'Failed'");
   });
 
-  test('each copy button passes the correct path to copyUrl', async () => {
+  // OSE-1239: the paths moved from an inline call argument to data-url, which
+  // the dispatcher reads at click time. Same four paths, a shape the CSP allows.
+  test('each copy button carries the correct path in data-url', async () => {
     const html = await fetchAdminHtml();
-    expect(html).toContain("copyUrl('/poster'");
-    expect(html).toContain("copyUrl('/display'");
-    expect(html).toContain("copyUrl('/'");
-    expect(html).toContain("copyUrl('/sharedReport'");
+    for (const [testid, path] of [
+      ['copy-poster', '/poster'],
+      ['copy-display', '/display'],
+      ['copy-public', '/'],
+      ['copy-report', '/sharedReport'],
+    ] as const) {
+      expect(html, `${testid} should carry data-url="${path}"`).toMatch(
+        new RegExp(`data-testid="${testid}"[^>]*data-url="${path.replace('/', '\\/')}"`)
+      );
+    }
   });
 });
 
@@ -587,8 +604,12 @@ describe('ADMIN-2: Events table phase column', () => {
     const html = await fetchAdminHtml();
     // OSE-667: the row selects via the single store; loadForms receives the
     // phase from the ose:event-selected event, not a direct imperative call.
-    expect(html).toContain("selectEvent('${safeId}',");
-    expect(html).toContain(', ${safePhase});');
+    // OSE-1239: the row no longer calls selectEvent from an inline onclick —
+    // the CSP refused that, so selection never happened at all. The id, name
+    // and phase ride on data-* and the dispatcher passes them through.
+    expect(html).toContain('data-action="event-select"');
+    expect(html).toContain('data-event-id="${safeId}"');
+    expect(html).toContain('data-event-phase="${safePhase}"');
     expect(html).toContain('window.loadForms(d.id, d.name, d.phase)');
   });
 
