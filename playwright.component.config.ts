@@ -59,8 +59,25 @@ export default defineConfig({
   timeout: 30_000,
   expect: { timeout: 10_000 },
 
+  // The `json` reporter is REQUIRED, not cosmetic (OSE-1228): once this config is
+  // run through scripts/pw-guarded.sh, Gate 0b parses the result JSON to prove
+  // `executed > 0` (an all-skipped or zero-discovery run is not green). outputFile
+  // honors PLAYWRIGHT_JSON_OUTPUT_NAME so the guard can point it at its own temp
+  // file — Playwright's json reporter takes the config `outputFile` OVER the env
+  // var, so the config must read the env var itself. Mirrors
+  // playwright.e2e-smoke.config.ts; enforced by tests/unit/ci-gate0-discovery.test.js.
   reporter: process.env.CI
-    ? [['list'], ['junit', { outputFile: '.test-results/component-junit.xml' }]]
+    ? [
+        ['list'],
+        ['junit', { outputFile: '.test-results/component-junit.xml' }],
+        [
+          'json',
+          {
+            outputFile:
+              process.env.PLAYWRIGHT_JSON_OUTPUT_NAME || '.test-results/component-results.json',
+          },
+        ],
+      ]
     : [['list']],
 
   use: {
