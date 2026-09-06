@@ -738,7 +738,8 @@ jobs:
           npx playwright install --with-deps chromium webkit
           PW_LABEL='T0: Component (viewport)' scripts/pw-guarded.sh \
             --config=playwright.component.config.ts \
-            tests/e2e/2-pages/poster-print.spec.ts
+            tests/e2e/2-pages/poster-print.spec.ts \
+            tests/e2e/2-pages/form-pages-responsive.spec.ts
 
       # Post-job cleanup: delete _diag/pages/ so the next run's runner agent
       # can create fresh log files without "file already exists" collisions.
