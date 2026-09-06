@@ -84,8 +84,27 @@ turns CI red — a ~0-token operation cannot silently become token-metered.
   must be listed in that step (enforced by `tests/integration/infra-consistency.test.js`).
 - **Done = merged to `main` AND exercised by a named CI job.** A green local
   `tsc`/vitest run is not done. If you can't name the CI job that goes red on
-  regression, it's written, not done. (See root `CLAUDE.md` §7.2–7.3;
-  every PR needs `Closes OSE-###` for the traceability gate.)
+  regression, it's written, not done. (See root `CLAUDE.md` §7.2–7.3.)
+
+### Branch & PR conventions — Linear close-guard (OSE-1250)
+
+Linear auto-transitions a story to **Done** on PR merge when the issue id is in
+the **branch name** or **PR title** (closing-link channels that fire regardless
+of the PR body). This silently closed multi-part stories 3× in one day
+(OSE-1071/946/1172) — see OSE-1250. The rule, enforced by
+`.github/workflows/pr-linear-close-guard.yml` (logic in
+`scripts/check-pr-linear-close.mjs`, self-tested in CI):
+
+- **Slice PR** (one part of a multi-part story): use a branch name and title with
+  **no** `OSE-###` id; reference the story via a **non-closing** magic word in the
+  body — `Part of OSE-###` (also: `Ref`, `Contributes to`, `Towards`). This links
+  for traceability WITHOUT auto-closing on merge.
+- **Completing PR** (finishes the story): put `Closes OSE-###` in the body. An id
+  in the branch/title is then fine — the auto-close is intentional and declared.
+- The guard **fails** any PR that has an `OSE-###` id in its branch/title but no
+  matching `Closes OSE-###` in the body (an undeclared auto-close). It is the real
+  traceability gate — earlier revisions of this file claimed one that did not
+  exist (drift now closed).
 
 ## Where the rest lives
 
