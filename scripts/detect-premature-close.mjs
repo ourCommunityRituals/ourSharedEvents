@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 /**
  * OSE-1250 (Tier 2) — premature-close detector (post-merge safety net).
  *

@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 /**
  * OSE-1250 (Tier 1) — PR Linear close-guard.
  *
