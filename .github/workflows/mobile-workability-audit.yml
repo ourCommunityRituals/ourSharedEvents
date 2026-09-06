@@ -108,6 +108,20 @@ jobs:
       - name: Install root dependencies
         run: npm ci --prefer-offline || npm ci
 
+      # The webServer boots `wrangler dev` with cwd workers/oursharedevents
+      # (playwright.mobile.config.ts), so the worker is bundled against ITS
+      # node_modules — where `@ocr/ui` and `@ocr/flags` live as file: links.
+      # Root `npm ci` above does not create them (root is not an npm
+      # workspace), so without this step wrangler dev fails to resolve
+      # `@ocr/ui` and the webServer never boots — every mobile test then
+      # fails on an env bug, not a workability violation (OSE-1249). The T0
+      # jobs already install here; this job simply did not. Born-red:
+      # delete this step and the audit goes red with
+      # `Could not resolve "@ocr/ui"`.
+      - name: Install worker dependencies
+        working-directory: workers/oursharedevents
+        run: npm ci --prefer-offline || npm ci
+
       - name: Install Playwright Chromium
         # Chromium only. The spec forces 375×812 on every surface, so the
         # viewport — the thing invariant 14 is about — is identical across

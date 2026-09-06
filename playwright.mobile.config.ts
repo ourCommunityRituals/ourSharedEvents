@@ -50,16 +50,20 @@ import { defineConfig, devices } from '@playwright/test';
  * also the one engine the workflow already installs, so this gate cannot fail
  * for a missing-browser reason.
  *
- * WHAT THIS GATE CANNOT SEE (stated, not discovered later)
- * --------------------------------------------------------
- * Local D1 has no migrations and no seed, so:
- *   - `/events/evt_test_2026` serves the branded 503 outage page, not an event
- *   - `/admin` serves the 401 sign-in page, not the dashboard
- * Both are real surfaces a person can reach and are worth auditing, but they
- * are NOT the pages the same paths serve on staging. The surface list below
- * is therefore explicit and annotated rather than inherited wholesale — a gate
- * that silently audits a different page than its name claims is worse than no
- * gate, because it reports confidence it has not earned.
+ * LOCAL D1 IS MIGRATED, NOT PRE-SEEDED (OSE-1249)
+ * -----------------------------------------------
+ * The webServer applies `wrangler d1 migrations apply --local` (DB + FORMS_DB)
+ * before `wrangler dev` starts, so the schema is present and /admin renders the
+ * dashboard rather than erroring on `no such table: events`. This is what lets
+ * the admin specs below actually exercise their controls at 375×812 — the
+ * whole point of auditing /admin (OSE-1236), the largest and previously
+ * never-mobile-audited surface.
+ *
+ * What is still NOT provided is an ambient seed. Content is created by the
+ * specs that need it — admin-csp-controls seeds its own event via
+ * POST /api/v2/admin/events. A spec that assumes pre-existing rows it did not
+ * create will not find them, by design: a gate that silently audits a
+ * different state than its name claims is worse than no gate.
  */
 const PORT = Number(process.env.MOBILE_PORT ?? 8789);
 const BASE = `http://127.0.0.1:${PORT}`;
@@ -119,6 +123,13 @@ export default defineConfig({
     baseURL: BASE,
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
+    // Grant clipboard so the Copy URL control's real navigator.clipboard.writeText
+    // resolves in headless CI (Chromium denies it without a permission grant, so
+    // the button's graceful `.catch` sets "Failed" and the OSE-1239 "the button
+    // is not dead" assertion never sees the real "Copied!" path). On a real phone
+    // tap the write is user-activated and works; this makes the audit match that.
+    // Chromium-only permission — this gate is Chromium-only by design.
+    permissions: ['clipboard-read', 'clipboard-write'],
   },
 
   projects: [
@@ -148,7 +159,13 @@ export default defineConfig({
     // test that needs to select an event has nothing to click. Same value CI's
     // vitest bindings already set, and it never elevates a real (email)
     // operator: that path resolves through the membership map, fail-closed.
+    // Apply migrations to the SAME local D1 wrangler dev serves (both default
+    // to .wrangler/state in this cwd) BEFORE the server boots, so /admin is a
+    // working dashboard rather than `no such table: events` (OSE-1249). Idempotent
+    // and non-interactive with --local; the specs seed their own content.
     command:
+      `npx wrangler d1 migrations apply DB --local && ` +
+      `npx wrangler d1 migrations apply FORMS_DB --local && ` +
       `npx wrangler dev --local --port ${PORT}` +
       ` --var ADMIN_KEY:${LOCAL_ADMIN_KEY}` +
       ` --var ALLOW_ADMIN_KEY_FALLBACK:true` +
