@@ -1,0 +1,58 @@
+# PR Linear Close-Guard (OSE-1250)
+#
+# Prevents the "premature auto-Done" class: Linear auto-transitions a story to
+# Done on PR merge when the issue id is in the BRANCH NAME or PR TITLE (closing
+# link channels that fire independently of the PR body). Slice PRs of multi-part
+# stories that named their branch after the parent silently closed it 3× in one
+# day (OSE-1071, OSE-946, OSE-1172/#466) — see Linear OSE-1250.
+#
+# This is the mechanical enforcement of the branch/PR convention documented in
+# workers/oursharedevents/CLAUDE.md. It is deliberately TRANSPARENT (a clear,
+# actionable failure message) and DRIFT-CATCHING AT TWO LEVELS:
+#   1. `self-test` re-proves the guard's own logic every run — the guard can't
+#      silently rot (born-red cases incl. the exact #466 reproduction).
+#   2. `guard` checks THIS PR's branch/title/body against the rule.
+#
+# Advisory until the owner makes it a required check in branch protection.
+name: PR Linear Close-Guard
+
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize, ready_for_review]
+
+# Only the latest push per PR needs guarding.
+concurrency:
+  group: pr-linear-close-guard-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  close-guard:
+    name: Linear close-guard
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: scripts/check-pr-linear-close.mjs
+          sparse-checkout-cone-mode: false
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # Level 1 drift-catch: the guard proves ITSELF before it judges the PR.
+      - name: Self-test the guard logic (born-red cases incl. #466)
+        run: node scripts/check-pr-linear-close.mjs --self-test
+
+      # Level 2: judge this PR. Fails if an OSE id in branch/title is not
+      # explicitly closed in the body (i.e. an undeclared auto-close on merge).
+      - name: Check PR branch/title/body for undeclared auto-close
+        env:
+          PR_BRANCH: ${{ github.event.pull_request.head.ref }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: node scripts/check-pr-linear-close.mjs
