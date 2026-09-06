@@ -70,7 +70,7 @@ const TENANT_TABLES = ['events', 'sponsors', 'corridors', 'node_hierarchy'];
  * the linter.
  */
 const BRAND_SCOPE_EXEMPT: Record<string, string> = {
-  'events.ts:245':
+  'events.ts:255':
     'Admin list. Scoped by `brand_id IN (?, ?)` built dynamically from ' +
     'resolveAdminBrandScopeAsync, so the literal `brand_id = ?` never appears.',
   'portfolio-rollup.ts:148':
