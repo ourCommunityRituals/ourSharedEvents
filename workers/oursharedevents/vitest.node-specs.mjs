@@ -24,11 +24,11 @@ export const NODE_SPECS = [
 
 // Batch 2 (OSE-946 c3) — manifest node-clean bucket, then GREEN-FILTERED in the
 // node project: added all 43 non-review node candidates, ran the node project,
-// kept only the 27 that passed. The 16 excluded need the workers pool or a DOM
-// env — transitive `cloudflare:test` (briefing, uec-fixtures-example → helpers/uec),
-// or jsdom/.html (a11y-axe, color-contrast, keyboard-nav, screen-reader, poster-*,
-// advanced-metrics, demo-banner, pdf-export) — the manifest missed them by keying
-// only on the spec file, not its import graph. Those stay in the workers pool.
+// kept the 27 that passed. Of the 16 then excluded, 11 were only blocked by the
+// `.html` transform and moved here in Batch 3 once the loader landed. The 5 that
+// remain in the workers pool: `uec-fixtures-example` (transitive `cloudflare:test`
+// via helpers/uec) and the four that need a real DOM — `a11y-axe`, `keyboard-nav`,
+// `as-keyboard-nav`, `screen-reader` (axe/document); a jsdom batch is a follow-up.
   'tests/admin-brand-scope.spec.ts',
   'tests/admin-servicetoken-fallthrough.spec.ts',
   'tests/corridor-map.spec.ts',
@@ -56,4 +56,21 @@ export const NODE_SPECS = [
   'tests/sponsor-share-covenant.spec.ts',
   'tests/sponsor-share-rotation.spec.ts',
   'tests/uec-module.spec.ts',
+
+  // Batch 3 (OSE-946 c3) — unlocked by the `.html`-as-Text loader added to
+  // vitest.node.config.mts. These transitively import src/handlers/pages.ts (via
+  // the router), which does `import PUBLIC_HTML from '../templates/public.html'`;
+  // they never touched the runtime, they just couldn't transform the template in
+  // node. Green-filtered in the node project like batch 2.
+  'tests/advanced-metrics.spec.ts',
+  'tests/as-display-public-admin.spec.ts',
+  'tests/briefing.spec.ts',
+  'tests/color-contrast.spec.ts',
+  'tests/demo-banner.spec.ts',
+  'tests/pdf-export.spec.ts',
+  'tests/poster-mobile-workability.spec.ts',
+  'tests/poster-spon4-as2-spon10.spec.ts',
+  'tests/poster-sponsor.spec.ts',
+  'tests/poster-tier-css-ose219.spec.ts',
+  'tests/shared-report-mobile-workability.spec.ts',
 ];
