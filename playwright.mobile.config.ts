@@ -123,6 +123,13 @@ export default defineConfig({
     baseURL: BASE,
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
+    // Grant clipboard so the Copy URL control's real navigator.clipboard.writeText
+    // resolves in headless CI (Chromium denies it without a permission grant, so
+    // the button's graceful `.catch` sets "Failed" and the OSE-1239 "the button
+    // is not dead" assertion never sees the real "Copied!" path). On a real phone
+    // tap the write is user-activated and works; this makes the audit match that.
+    // Chromium-only permission — this gate is Chromium-only by design.
+    permissions: ['clipboard-read', 'clipboard-write'],
   },
 
   projects: [
