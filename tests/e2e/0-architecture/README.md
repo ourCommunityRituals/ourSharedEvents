@@ -106,6 +106,12 @@ load-bearing shape so a future refactor can't silently break it.
 
 ## Gate shape: property or subject? (OSE-1246, audited 2026-09-05)
 
+> **Promoted to the org brain 2026-09-05.** The rule now lives at
+> `OCR-docs/docs/standards/OCR_STANDARD_invariantGateShape.md` and binds every
+> product repo, because ourWKRP was found carrying the same shape. What follows
+> is the OSE-specific audit; the standard is the authority. When they disagree,
+> the standard wins and this section is the drift.
+
 An invariant gate can assert its rule two ways, and only one of them survives a
 refactor.
 

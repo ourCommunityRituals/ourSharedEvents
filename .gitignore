@@ -93,3 +93,10 @@ postman/postman/
 # Python bytecode
 __pycache__/
 *.pyc
+
+# Brain conformance report — written into the PRODUCT repo by
+# OCR-docs/ocr-docs-brain/scripts/check_brain_contract.py (the L1 check the
+# /brain-check skill runs). OCR-docs already ignores it; this repo did not, so
+# running the documented check left the product repo dirty. Reconciliation
+# 2026-09-05.
+conformance-report.json
