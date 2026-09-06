@@ -1,0 +1,72 @@
+# Premature-Close Detector (OSE-1250 Tier 2)
+#
+# Post-merge safety net for the "story marked Done before its DoD is met" class.
+# The PR close-guard (Tier 1) prevents the common case at PR time; this bounds
+# MTTD for anything that slips through (manual Linear status change, a closing
+# keyword on a slice PR, future gaps). Runs daily and FAILS (an andon) when it
+# finds a Done issue that looks prematurely closed — so a false "Done" surfaces
+# in ≤1 day instead of whenever someone happens to look.
+#
+# Signals (see scripts/detect-premature-close.mjs — pure classifier, self-tested):
+#   A. Done issue with an open child (parent closed before its children).
+#   B. Done issue whose linked PR bodies never explicitly close its id
+#      (auto-closed via branch/title only — the OSE-1250 signature).
+#
+# No secrets → the script no-ops (exit 0). Non-mutating: it reports, it doesn't
+# change Linear state.
+name: Premature-Close Detector
+
+on:
+  schedule:
+    - cron: '17 13 * * *' # 13:17 UTC daily
+  workflow_dispatch:
+    inputs:
+      since_days:
+        description: 'Look back this many days of completed issues'
+        required: false
+        default: '7'
+  # Drift-catch: a PR that edits the detector re-proves its logic (self-test only;
+  # the live scan stays schedule/dispatch-only so it never blocks an unrelated PR).
+  pull_request:
+    paths:
+      - scripts/detect-premature-close.mjs
+      - .github/workflows/premature-close-detector.yml
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: premature-close-detector
+  cancel-in-progress: false
+
+jobs:
+  detect:
+    name: Detect premature closes
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: scripts/detect-premature-close.mjs
+          sparse-checkout-cone-mode: false
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # Drift-catch on the detector's own logic before it judges the board.
+      - name: Self-test the classifier
+        run: node scripts/detect-premature-close.mjs --self-test
+
+      - name: Scan Linear for prematurely-closed issues
+        if: github.event_name != 'pull_request'
+        env:
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+          LINEAR_TEAM_ID: ${{ secrets.LINEAR_TEAM_ID }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SINCE_DAYS: ${{ github.event.inputs.since_days || '7' }}
+        run: |
+          set -o pipefail
+          node scripts/detect-premature-close.mjs --since-days "$SINCE_DAYS" | tee -a "$GITHUB_STEP_SUMMARY"
