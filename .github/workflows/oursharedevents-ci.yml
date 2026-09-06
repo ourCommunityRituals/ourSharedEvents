@@ -719,15 +719,25 @@ jobs:
       # http://poster.test/poster, ignores baseURL, and would not follow this
       # config at all. Add the next batch only after an assertion-level read.
       #
-      # Chromium only for now. OSE-1070's destination names Chromium AND WebKit
-      # (layout regressions are routinely engine-specific); WebKit is a
-      # deliberate follow-up rather than an unvalidated addition here.
+      # Chromium AND WebKit (OSE-1228 / OSE-1070). Layout regressions are routinely
+      # engine-specific, so a Chromium-only pass understated coverage. Both projects
+      # are declared in playwright.component.config.ts; installing both browsers and
+      # NOT filtering --project runs both, and the config's WebKit-listed-second note
+      # holds — a runner missing WebKit deps now fails on the named project rather
+      # than silently reducing coverage.
+      #
+      # Routed through scripts/pw-guarded.sh (OSE-1228 fix 1): the bare invocation
+      # had no floor, so a zero-discovery (mistyped path) or all-skipped run would
+      # have reported green. The guard counts discovery BEFORE the run and fails if
+      # executed==0 while discovered>0, and publishes the executed/skipped split so
+      # partial skips are visible instead of silent (the old "35 passed / 22 skipped,
+      # nothing flagged" false green).
       - name: 'Component: viewport specs vs local worker'
         if: matrix.shard == 'component'
         run: |
-          npx playwright install --with-deps chromium
-          npx playwright test --config=playwright.component.config.ts \
-            --project=chromium \
+          npx playwright install --with-deps chromium webkit
+          PW_LABEL='T0: Component (viewport)' scripts/pw-guarded.sh \
+            --config=playwright.component.config.ts \
             tests/e2e/2-pages/poster-print.spec.ts
 
       # Post-job cleanup: delete _diag/pages/ so the next run's runner agent
