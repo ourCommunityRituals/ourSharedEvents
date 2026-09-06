@@ -69,22 +69,54 @@ const TENANT_TABLES = ['events', 'sponsors', 'corridors', 'node_hierarchy'];
  * Adding an entry is a decision. Write the reason for the next reader, not for
  * the linter.
  */
-const BRAND_SCOPE_EXEMPT: Record<string, string> = {
-  'events.ts:255':
-    'Admin list. Scoped by `brand_id IN (?, ?)` built dynamically from ' +
-    'resolveAdminBrandScopeAsync, so the literal `brand_id = ?` never appears.',
-  'portfolio-rollup.ts:148':
-    'Scoped by a dynamic `brandFilter` array assembled above the query; the ' +
-    'WHERE clause is interpolated, so the bind is invisible to a static scan.',
-  'bigquery.ts:72':
-    'OER emission cron. Cross-brand BY DESIGN — OER ingests every brand and ' +
-    'answers across them (VISION: products emit, OER ingests). Not reachable ' +
-    'from any request path.',
-  'sponsors.ts:671':
-    'Correlated sub-select keyed by `id = sponsor_placement.event_id` — a ' +
-    'join, not an enumeration. Keyed by a column rather than a bind, so the ' +
-    'id-key exemption does not match it.',
-};
+/**
+ * Triaged exemptions, keyed by FILE plus a stable fragment of the statement.
+ *
+ * These were first keyed `file:line`, which was wrong by construction: any edit
+ * ABOVE an exempt query shifts its line, the exemption silently stops matching,
+ * and CI goes red for a change that had nothing to do with tenant isolation.
+ * That happened on the first edit after this gate shipped — `events.ts:245`
+ * became `events.ts:255` when an unrelated field was added, and the number had
+ * to be hand-patched to restore green.
+ *
+ * A gate whose baseline needs hand-patching after routine edits trains people
+ * to hand-patch baselines. The key is now something that moves WITH the code.
+ */
+const BRAND_SCOPE_EXEMPT: Array<{ file: string; match: RegExp; reason: string }> = [
+  {
+    file: 'events.ts',
+    match: /brand_id IN \(/,
+    reason:
+      'Admin list. Scoped by `brand_id IN (?, ?)` built dynamically from ' +
+      'resolveAdminBrandScopeAsync, so the literal `brand_id = ?` never appears.',
+  },
+  {
+    file: 'portfolio-rollup.ts',
+    match: /brandFilter/,
+    reason:
+      'Scoped by a dynamic `brandFilter` array assembled above the query; the ' +
+      'WHERE clause is interpolated, so the bind is invisible to a static scan.',
+  },
+  {
+    file: 'bigquery.ts',
+    match: /updated_at\s*>/,
+    reason:
+      'OER emission cron. Cross-brand BY DESIGN — OER ingests every brand and ' +
+      'answers across them. Not reachable from any request path.',
+  },
+  {
+    file: 'sponsors.ts',
+    match: /sponsor_placement\.event_id/,
+    reason:
+      'Correlated sub-select keyed by `id = sponsor_placement.event_id` — a ' +
+      'join, not an enumeration.',
+  },
+];
+
+/** Is this occurrence covered by a triaged exemption? */
+function isExempt(file: string, window: string): boolean {
+  return BRAND_SCOPE_EXEMPT.some((e) => e.file === file && e.match.test(window));
+}
 
 test.describe('Invariant 9: Tenant Isolation — structural code-shape lock', () => {
   test('OSE-INV9 | security | schema | migration 0001 defines brand_id TEXT NOT NULL on events', () => {
@@ -212,10 +244,14 @@ test.describe('Invariant 9: Tenant Isolation — structural code-shape lock', ()
           const bindsBrand = /\bbrand_id\s*=\s*\?\d*/i.test(window);
 
           if (!bindsBrand && !keyedById) {
+            // Exemption match looks BACKWARD as well as forward: dynamic brand
+            // scoping is assembled ABOVE the query (`brand_id IN (...)` built
+            // from resolveAdminBrandScopeAsync, a `brandFilter` array), so a
+            // forward-only window cannot see the thing that makes it safe.
+            const exemptWindow = src.slice(Math.max(0, m.index! - 900), m.index! + 400);
+            if (isExempt(file, exemptWindow)) continue;
             const line = src.slice(0, m.index).split('\n').length;
-            const key = `${file}:${line}`;
-            if (BRAND_SCOPE_EXEMPT[key]) continue;
-            violations.push(`${key} — FROM ${table} with no brand_id and no id key`);
+            violations.push(`${file}:${line} — FROM ${table} with no brand_id and no id key`);
           }
         }
       }
