@@ -41,7 +41,7 @@ export interface SharedReportAuthEnv {
    * still Backlog. This is where the choice network gets enforced: consent is
    * not auto-extended to the named-identity side. So this token is classified
    * `cross_product` and FAILS CLOSED on the batch endpoint until those
-   * controls land (ADR-0001).
+   * controls land (ADR-017).
    */
   WKRP_SERVICE_TOKEN?: string;
   /**

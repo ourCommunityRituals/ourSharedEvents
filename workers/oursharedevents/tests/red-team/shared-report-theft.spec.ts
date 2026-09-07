@@ -447,7 +447,7 @@ describe('Service token scope — WKRP token misuse', () => {
   });
 
   test('WKRP (cross-product) token FAILS CLOSED on batch endpoint (OSE-577)', async () => {
-    // Reframed by OSE-577 / ADR-0001. WKRP is the non-anonymous cross-product
+    // Reframed by OSE-577 / ADR-017. WKRP is the non-anonymous cross-product
     // platform (invariant #14 explicit_identity). It used to receive the full
     // report on this endpoint (SR-25 keyed depth on the endpoint, not the token
     // class). It now fails closed: full-depth aggregates joined against a

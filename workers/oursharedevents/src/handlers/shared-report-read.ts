@@ -217,7 +217,7 @@ export async function handleBatchSharedReports(
     }
   }
 
-  // OSE-577 / ADR-0001: access is decided by token CLASS (who holds it), not by
+  // OSE-577 / ADR-017: access is decided by token CLASS (who holds it), not by
   // "this is the batch endpoint" (SR-25's defect, which handed EVERY service
   // token — including the cross-product one — the full report).
   const token = extractBearerToken(request.headers.get('Authorization'));

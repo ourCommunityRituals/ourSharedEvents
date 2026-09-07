@@ -57,6 +57,7 @@ Every feature serves at least one vertex of the Triangle. The live chat assistan
 | Own brand namespace               |  -   |  Y  |     Y      | [BRANDS.md](BRANDS.md)         |
 | Self-serve event config           |  -   |  Y  |     Y      | [TIERS.md](TIERS.md)           |
 | Shared analytics report           |  -   |  Y  |     Y      | [TIERS.md](TIERS.md)           |
+| SharedReport depth (sections/tier) |  -   |  Y  |     Y      | [REPORT-DEPTH.md](REPORT-DEPTH.md) |
 | Advanced metrics + PDF export     |  -   |  Y  |     Y      | [TIERS.md](TIERS.md)           |
 | Portfolio reports                 |  -   |  -  |     Y      | [TIERS.md](TIERS.md)           |
 | File upload (logos, posters)      |  -   |  -  |     Y      | [TIERS.md](TIERS.md)           |
@@ -87,6 +88,7 @@ Every feature serves at least one vertex of the Triangle. The live chat assistan
 | Document                                 | Description                                                             |
 | ---------------------------------------- | ----------------------------------------------------------------------- |
 | [SPONSORS.md](SPONSORS.md)               | Sponsor experience: attribution, analytics, tiers by scale              |
+| [REPORT-DEPTH.md](REPORT-DEPTH.md)       | What each report depth (local/mid/premium) shows a sponsor, and why      |
 | [SPONSOR-PRICING.md](SPONSOR-PRICING.md) | Pricing governance: weight classes, governor, pool dynamics             |
 | [GOVERNOR-DESIGN.md](GOVERNOR-DESIGN.md) | Deep dive: pool-based allocation — security, edge cases, error handling |
 | [BRANDS.md](BRANDS.md)                   | Multi-brand isolation, white-label, sponsor layering                    |
@@ -100,6 +102,7 @@ Every feature serves at least one vertex of the Triangle. The live chat assistan
 | Document                                 | Description                                           |
 | ---------------------------------------- | ----------------------------------------------------- |
 | [TIERS.md](TIERS.md)                     | How to enable features, manage flags, apply tiers     |
+| [REPORT-DEPTH.md](REPORT-DEPTH.md)       | How report depth is minted into share links + enforced |
 | [FORMS.md](FORMS.md)                     | Admin endpoints, registration counts, form management |
 | [QR-ROUTING.md](QR-ROUTING.md)           | Generating QR links, test-IDs for automation          |
 | [BRANDS.md](BRANDS.md)                   | Brand setup, isolation, sponsor management            |
