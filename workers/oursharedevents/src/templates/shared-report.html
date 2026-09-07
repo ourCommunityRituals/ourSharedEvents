@@ -932,6 +932,17 @@
           );
         };
 
+        // OSE-817 — present the server's locked-section keys/next_depth as human
+        // copy. Pure string transforms of whatever the wire carries — NO section
+        // list and NO tier literal (local/mid/premium) lives in the client, so the
+        // client never re-decides depth and AC#1 (no depth vocabulary in client)
+        // holds by construction.
+        const humanizeSection = (k) =>
+          String(k)
+            .replace(/_/g, ' ')
+            .replace(/\b\w/g, (c) => c.toUpperCase());
+        const titleDepth = (d) => (d ? String(d).charAt(0).toUpperCase() + String(d).slice(1) : '');
+
         const sponsorRows = (report.sponsor_impressions || [])
           .map(
             (s) =>
@@ -1099,6 +1110,50 @@
               trendRows +
               '</tbody>' +
               '</table>' +
+              '</section>'
+            : '') +
+          // OSE-817 — the printed refusal. The server-side depth filter is the ONE
+          // gate (ADR-0001 §3): it strips sections above the sponsor's depth and names
+          // the withheld-but-present ones in report.upgrade.locked_sections. This block
+          // RENDERS that server-decided list; it never decides entitlement. It reads
+          // ONLY report.upgrade — it must never inspect report[section] for presence as
+          // display input, or it becomes a second gate. Absent upgrade = premium/admin
+          // (full report, nothing locked) → render nothing. Section keys and next_depth
+          // are humanised from the wire values, so adding a section to the server-side
+          // section matrix lights a locked prompt with NO client change. Doctrine rule
+          // 12: a refusal must be printed, not promised.
+          // (The client is deliberately free of the depth-decision identifiers — the
+          //  OSE-817 signed-link-ui spec asserts their absence.)
+          (report.upgrade &&
+          Array.isArray(report.upgrade.locked_sections) &&
+          report.upgrade.locked_sections.length
+            ? '<section class="funnel-card" data-testid="signed-link-locked-sections"' +
+              (report.upgrade.next_depth
+                ? ' data-next-depth="' + esc(report.upgrade.next_depth) + '"'
+                : '') +
+              '>' +
+              '<h3 data-testid="signed-link-upgrade-next-depth" data-depth="' +
+              esc(report.upgrade.next_depth || '') +
+              '">More on the ' +
+              esc(titleDepth(report.upgrade.next_depth)) +
+              ' report</h3>' +
+              report.upgrade.locked_sections
+                .map(
+                  (name) =>
+                    '<div class="upgrade-prompt" data-testid="signed-link-locked-section" data-section-name="' +
+                    esc(name) +
+                    '">' +
+                    '<strong data-testid="upgrade-prompt-' +
+                    esc(name) +
+                    '">' +
+                    esc(humanizeSection(name)) +
+                    '</strong>' +
+                    '<p>Available on the ' +
+                    esc(titleDepth(report.upgrade.next_depth)) +
+                    ' report.</p>' +
+                    '</div>'
+                )
+                .join('') +
               '</section>'
             : '') +
           '</article>';

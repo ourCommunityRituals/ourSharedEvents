@@ -212,6 +212,51 @@ describe('OSE-R-003 SharedReport signed-link UI — API layer', () => {
     }
   });
 
+  // ── OSE-817 — the printed refusal renders SOLELY from report.upgrade ──────────
+  // The server (filterReportByDepth) is the one gate; the client prints the
+  // withheld sections it names. These lock the render wiring at the API layer
+  // (blocking `tests` shard): if a refactor drops the upgrade binding or the
+  // testids, the audit catches it here, not only in a slower FE run.
+  test('OSE-817 | API | GET /sharedReport (signed-link payload) | locked-section render binds to report.upgrade.locked_sections', async () => {
+    const html = await fetchSharedReportPage();
+    // The render must read the server-emitted upgrade list — the wire field is
+    // the contract. (Not report.locked_sections, not a client-side section list.)
+    expect(html).toMatch(/report\.upgrade\.locked_sections/);
+    // and it must guard on upgrade presence (absent upgrade = premium, no refusal)
+    expect(html).toMatch(/report\.upgrade\s*&&/);
+  });
+
+  test('OSE-817 | API | GET /sharedReport (signed-link payload) | locked-section render emits the required data-testids', async () => {
+    const html = await fetchSharedReportPage();
+    for (const testid of [
+      'signed-link-locked-sections',
+      'signed-link-locked-section',
+      'signed-link-upgrade-next-depth',
+    ]) {
+      expect(html, `locked-section render must emit data-testid="${testid}"`).toMatch(
+        new RegExp(`data-testid="${testid}"`)
+      );
+    }
+    // Per-section prompt testid is built from the server's section key — assert
+    // the template constructs `upgrade-prompt-<key>` and tags the section name.
+    expect(html).toMatch(/data-testid="upgrade-prompt-['"]\s*\+/);
+    expect(html).toMatch(/data-section-name="/);
+  });
+
+  test('OSE-817 | API | GET /sharedReport (client bundle) | no depth-DECISION logic in the client (one gate, server-side)', async () => {
+    const html = await fetchSharedReportPage();
+    // The client renders the server's decision; it must never re-derive it. None
+    // of the depth-resolution identifiers may appear in the shipped page — that
+    // would be a second gate (ADR-0001 §3). Display labels (Local/Mid/Premium in
+    // the sponsor-class table) are data, not these identifiers, so this stays
+    // precise: it forbids the decision machinery, not the words.
+    for (const forbidden of ['filterReportByDepth', 'DEPTH_SECTIONS', 'resolveDepth']) {
+      expect(html, `client must not contain depth-decision identifier "${forbidden}"`).not.toContain(
+        forbidden
+      );
+    }
+  });
+
   test('OSE-R-003 | API | GET /api/v2/events/:id/shared-report (no Authorization header) | body.code=UNAUTHORIZED (client-mappable contract)', async () => {
     // The signed-link UI's friendly-copy lookup is keyed on body.code from
     // the server. If the server stops emitting a `code` field, the UI
