@@ -1490,6 +1490,12 @@ jobs:
 
       - name: Seed smoke fixtures
         id: seed-fixtures
+        # continue-on-error retained (Part of OSE-834): removing it is the ARM step
+        # and is coupled to a fresh seeded staging deploy + the SMOKE_RPT_* tokens
+        # that let T4f actually execute — do NOT remove it until those land, or an
+        # unseedable run trades a false-green for a false-red. This slice only
+        # ENRICHES the seed (sponsors across the 3 report classes + one forms
+        # registration/check-in/survey), the prerequisite the arm step needs.
         continue-on-error: true
         timeout-minutes: 2
         env:
@@ -1497,8 +1503,15 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         working-directory: ${{ env.WORKER_DIR }}
         run: |
+          # Main DB (anonymous surface): bare smoke events + multi-tier sponsors.
           npx wrangler d1 execute DB --env staging --remote \
             --file ../../tests/ui/smoke/fixtures/smoke-events.sql
+          npx wrangler d1 execute DB --env staging --remote \
+            --file ../../tests/ui/smoke/fixtures/sponsors-tiers-smoke.sql
+          # FORMS_DB (identified-user surface, ADR-001 two-DB isolation): one
+          # registration / check-in / survey on the dedicated evt_smoke_tiers event.
+          npx wrangler d1 execute FORMS_DB --env staging --remote \
+            --file ../../tests/ui/smoke/fixtures/forms-smoke.sql
 
       - name: 'T4d: UI Smoke — Tier-1 page smoke'
         id: ui-tests
