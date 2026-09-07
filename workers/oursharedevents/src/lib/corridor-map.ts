@@ -26,7 +26,7 @@
  * DEPTH GATE (OSE-816, #411 — supersedes the SR-25 note): report-depth
  * field-stripping IS applied server-side in the read handler for the sponsor
  * role (filterReportByDepth in shared-report-read.ts). That is the ONE gate
- * (ADR-0001 §3). This module only RENDERS a map when the event has H3 cells;
+ * (ADR-017 §3). This module only RENDERS a map when the event has H3 cells;
  * it never gates on role/depth/tier, and the client never re-strips — under-
  * entitled callers simply never receive corridor_map in the payload, and the
  * client prints the withheld section from report.upgrade.locked_sections

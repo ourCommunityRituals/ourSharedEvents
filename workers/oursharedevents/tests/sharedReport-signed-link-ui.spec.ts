@@ -247,7 +247,7 @@ describe('OSE-R-003 SharedReport signed-link UI — API layer', () => {
     const html = await fetchSharedReportPage();
     // The client renders the server's decision; it must never re-derive it. None
     // of the depth-resolution identifiers may appear in the shipped page — that
-    // would be a second gate (ADR-0001 §3). Display labels (Local/Mid/Premium in
+    // would be a second gate (ADR-017 §3). Display labels (Local/Mid/Premium in
     // the sponsor-class table) are data, not these identifiers, so this stays
     // precise: it forbids the decision machinery, not the words.
     for (const forbidden of ['filterReportByDepth', 'DEPTH_SECTIONS', 'resolveDepth']) {
