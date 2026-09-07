@@ -503,7 +503,7 @@ describe('OSE-272 Session 5 — POST /api/v2/events/shared-reports/batch', () =>
 });
 
 // ── OSE-577: service-token CLASS split — cross-product fails closed ──────────
-// ADR-0001 + the "who holds the token matters" addendum. The batch endpoint no
+// ADR-017 + the "who holds the token matters" addendum. The batch endpoint no
 // longer keys full-payload access on the endpoint (SR-25's defect, which handed
 // EVERY service token — including the cross-product one — every field). It keys
 // on token CLASS: the internal in-fleet consumer gets the full report; the

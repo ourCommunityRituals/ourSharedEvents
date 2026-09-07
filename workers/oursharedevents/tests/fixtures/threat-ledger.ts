@@ -1151,7 +1151,7 @@ const GAP_CLOSURE: ThreatEntry[] = [
       date: '2026-08-03',
       method: 'deliberate-fixture-break',
       notes:
-        'Fleet sweep layer 5 (pipeline): batch endpoint returned raw report with no depth gate. OSE-593 applied field-stripping per depth; SR-25 superseded that by removing field-stripping entirely (sponsor_class_breakdown = class-level aggregate intelligence). OSE-577 (ADR-0001) then split the "service" role into token CLASSES: the internal in-fleet consumer receives the full report; the cross-product WKRP token FAILS CLOSED (403 CROSS_PRODUCT_ACCESS_PENDING) until the join-risk controls (OCR-61/62, OW-112) ship. Access is now keyed on who holds the token, not on the endpoint.',
+        'Fleet sweep layer 5 (pipeline): batch endpoint returned raw report with no depth gate. OSE-593 applied field-stripping per depth; SR-25 superseded that by removing field-stripping entirely (sponsor_class_breakdown = class-level aggregate intelligence). OSE-577 (ADR-017) then split the "service" role into token CLASSES: the internal in-fleet consumer receives the full report; the cross-product WKRP token FAILS CLOSED (403 CROSS_PRODUCT_ACCESS_PENDING) until the join-risk controls (OCR-61/62, OW-112) ship. Access is now keyed on who holds the token, not on the endpoint.',
     },
     last_run_green: '2026-08-22',
   },

@@ -206,7 +206,7 @@ _pane_, not of any sponsor. Default interval 5000ms. There is no per-sponsor dwe
 ### SharedReports
 
 **Report depth is the second purchasable dimension under #25.** Depth is scoped to the token and
-enforced server-side — see ADR-0001 and OSE-816.
+enforced server-side — see ADR-017 and OSE-816.
 
 All classes receive anonymous behavioural data; the class determines how much detail:
 
