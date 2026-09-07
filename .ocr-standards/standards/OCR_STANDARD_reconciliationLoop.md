@@ -1,6 +1,6 @@
 # OCR_STANDARD_reconciliationLoop
 
-**Status:** ACTIVE · **Owner:** platform · **Last updated:** 2026-09-03
+**Status:** ACTIVE · **Owner:** platform · **Last updated:** 2026-09-07 · **Everyday name:** sync (`/sync` — `/sync memory` · `/sync process`)
 
 > The **reconciliation loop** is the triggerable process that drives drift between the three
 > truth-surfaces — **Linear** (intent), **Code** (reality), **Brain + Memory** (doctrine) — to
@@ -105,7 +105,9 @@ scheduled *read-only* drift report is allowed; status/brain writes are not autom
 4. **Write back to all three surfaces:**
    * Linear — flip merged-but-open → Done *with the citing evidence in a comment*; comment (don't
      silently flip) on stalled/unclear tickets recommending the correct state.
-   * Brain/docs — file a story per code↔brain inconsistency ([[feedback-reconciliation-definition]]).
+   * Brain/docs — file a story per code↔brain inconsistency ([[feedback-reconciliation-definition]]),
+     **churn-bounded:** only `action`/`field`/`ops`/a live `spike` becomes a *tracked* story; `vision`,
+     decisions, and references become labels + brain-docs, not board items ([[OCR_STANDARD_storyClassification]] §6).
    * Memory — refresh stale pointers; log the run as a one-line note appended to `[[memory-reconcile-loop]]`
      (or a Linear project status update), never a new dated file.
 5. **Repeat** for the next repo in brain → base → named → spokes order.
@@ -129,6 +131,30 @@ scheduled *read-only* drift report is allowed; status/brain writes are not autom
 A run is done when every open ticket is backed by a git fact (or correctly re-stated) and no
 code↔brain gap is unfiled. Health is a **derivative, not a level** ([[kaizen-reconciliation-health-doctrine]]):
 recurrence → 0, MTTD ↓, coverage of surfaces ↗. A green board is not the goal; an *honest* board is.
+
+### 6.1 The per-run readout (the gauge — rung 7 Reporting, materialized)
+
+Every `/sync` run emits a fixed, light readout — the Reporting rung made concrete — and **appends it
+to the run log** so the *derivative* (not the snapshot) is what you read. One line per surface,
+**expected-vs-actual (found / did / skipped), never a bare pass/fail:**
+
+| Surface | Expected |
+|---|---|
+| Governance | invariants enforced |
+| Memory-sync | memory ⇄ brain ⇄ Linear = 0 drift |
+| Process-sync | chain green end-to-end |
+| Documentation | one source of truth, findable |
+| Tickets (queue) | classified, no mis-lane (gate: N violations) |
+
+Close with `Verdict: healthy-derivative | watch | ANDON` + a graded register (assess-first —
+surfaced, not applied).
+
+> ⚠️ **Currently NARRATED, not derived.** Only the Tickets row is machine-derived today (a Linear
+> query); the others are the running agent's judgement — a self-graded mirror that can't reliably say
+> *no*. Making every row **derived from a real signal + separate-measurer + born-red** is tracked as
+> **OCR-146**. Until that lands, the readout is a *lead to verify*, not a verdict — and no outcome
+> policy may grant it authority beyond "surface to a human." (The green-advances / red-punts
+> *outcome policy* is a separate proposal, INERT on OCR-146: `docs/proposals/PROPOSAL_workflowCadence.md`.)
 
 ## 7. Boundaries
 
