@@ -219,3 +219,44 @@ describe('TL-010 | Depth escalation guard — resolveDepth caps + filterReportBy
     expect(upgrade!.locked_sections.length).toBeGreaterThan(0);
   });
 });
+
+// OSE-817 — upgrade.locked_sections is the SOLE input the client renders the
+// "printed refusal" from (the client never inspects the payload for section
+// presence). That is only safe if locked_sections is a FAITHFUL, COMPLETE picture
+// of the next rung: every next-tier section that exists in the full report but is
+// withheld at the current depth must be named, and nothing named may actually be
+// present in the delivered payload (no phantom lock, no silently-stripped rung).
+// Proven at the lib level so it holds by construction — a section added to
+// DEPTH_SECTIONS re-runs this symmetry with no client change (AC#4).
+describe('OSE-817 | upgrade.locked_sections is a faithful next-rung picture (client renders solely from it)', () => {
+  for (const depth of ['local', 'mid'] as const) {
+    it(`${depth}: locked_sections === exactly the next-rung sections present-but-withheld`, () => {
+      const resolved = resolveDepth({ role: 'sponsor', depth, sponsor_id: 'sp_A' });
+      const { report, upgrade } = filterReportByDepth({ ...SAMPLE_REPORT }, resolved);
+      expect(upgrade).not.toBeNull();
+      const next = upgrade!.next_depth!;
+      expect(next).not.toBeNull();
+
+      // Independently derive what the NEXT rung newly unlocks and that exists in
+      // the full report — derived from DEPTH_SECTIONS + the fixture, NOT from the
+      // impl's internal allow-set, so a filtering-logic change is caught.
+      const allowedNow = new Set(DEPTH_SECTIONS[resolved.depth]);
+      const expectedLocked = DEPTH_SECTIONS[next].filter(
+        (s) => !allowedNow.has(s) && s in SAMPLE_REPORT
+      );
+      expect(new Set(upgrade!.locked_sections)).toEqual(new Set(expectedLocked));
+
+      // No phantom lock: everything named as locked is genuinely absent from the
+      // delivered payload — so the client can trust "named == withheld".
+      for (const s of upgrade!.locked_sections) {
+        expect(report[s], `locked section "${s}" must be absent from the payload`).toBeUndefined();
+      }
+    });
+  }
+
+  it('premium: no upgrade object at all (nothing locked → client renders no refusal)', () => {
+    const resolved = resolveDepth({ role: 'admin' }); // resolves premium
+    const { upgrade } = filterReportByDepth({ ...SAMPLE_REPORT }, resolved);
+    expect(upgrade).toBeNull();
+  });
+});

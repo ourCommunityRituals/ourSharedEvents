@@ -23,11 +23,14 @@
  *     for _meta.suppression_reasons. The resolution-floor rule (candidate
  *     invariant; Tom question outstanding) has its enforcement point here.
  *
- * DEPTH GATE: as of SR-25, report-depth field-stripping is NOT applied in
- * the read handler. This module is called for all token roles that have
- * H3 cells tagged on the event. The client enforces the sponsor exclusion
- * list (see screen design spec). If depth-stripping is reinstated (open
- * question #1), restore the gate in shared-report-read.ts, not here.
+ * DEPTH GATE (OSE-816, #411 — supersedes the SR-25 note): report-depth
+ * field-stripping IS applied server-side in the read handler for the sponsor
+ * role (filterReportByDepth in shared-report-read.ts). That is the ONE gate
+ * (ADR-017 §3). This module only RENDERS a map when the event has H3 cells;
+ * it never gates on role/depth/tier, and the client never re-strips — under-
+ * entitled callers simply never receive corridor_map in the payload, and the
+ * client prints the withheld section from report.upgrade.locked_sections
+ * (OSE-817). Do NOT add a depth check here or in the client: two gates drift.
  */
 import { cellToBoundary, isValidCell } from 'h3-js';
 import { CORRIDOR_MAP_MIN_COUNT } from './shared-report';
