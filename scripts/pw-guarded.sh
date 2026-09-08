@@ -81,15 +81,20 @@ echo "${LABEL}: discovered tests: ${COUNT}"
 
 # ── Run — config reporters preserved; json result captured for Gate 0b ──────
 RESULTS_JSON="$(mktemp)"
+SKIPPED_NAMES="$(mktemp)"
+trap 'rm -f "$RESULTS_JSON" "$SKIPPED_NAMES"' EXIT
 export PLAYWRIGHT_JSON_OUTPUT_NAME="$RESULTS_JSON"
 
 npx playwright test "$@"
 RUN_STATUS=$?
 
 # ── Gate 0b: executed count (post-run) ──────────────────────────────────────
-COUNTS="$(node -e '
+# Also collects the titles of skipped specs into SKIPPED_NAMES so Gate 0c can
+# print WHAT was skipped, not just how many (OSE-834 Fix step 3).
+COUNTS="$(SKIPPED_NAMES_FILE="$SKIPPED_NAMES" node -e '
 const fs = require("node:fs");
 let executed = 0, skipped = 0, ok = true;
+const names = [];
 try {
   const j = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
   (function walk(suites) {
@@ -97,19 +102,22 @@ try {
       for (const sp of su.specs || []) {
         for (const t of sp.tests || []) {
           const ran = (t.results || []).some(r => r.status && r.status !== "skipped");
-          if (ran) executed++; else skipped++;
+          if (ran) executed++;
+          else { skipped++; if (sp.title) names.push((sp.file ? sp.file + " > " : "") + sp.title); }
         }
       }
       walk(su.suites);
     }
   })(j.suites);
 } catch { ok = false; }
+if (ok && names.length && process.env.SKIPPED_NAMES_FILE) {
+  try { fs.writeFileSync(process.env.SKIPPED_NAMES_FILE, names.join("\n")); } catch {}
+}
 console.log(ok ? executed + " " + skipped : "-1 -1");
 ' "$RESULTS_JSON")"
 
 EXECUTED="${COUNTS%% *}"
 SKIPPED="${COUNTS##* }"
-rm -f "$RESULTS_JSON"
 
 if [ "$EXECUTED" = "-1" ]; then
   # The run produced no parseable result JSON. If the run itself already failed,
@@ -132,5 +140,38 @@ fi
 
 echo "${LABEL}: discovered ${COUNT}, executed ${EXECUTED}, skipped ${SKIPPED}"
 echo "- **${LABEL}** — discovered **${COUNT}**, executed **${EXECUTED}**, skipped **${SKIPPED}**" >> "$SUMMARY"
+
+# ── Gate 0c: skipped-ratio ceiling (OSE-834) ────────────────────────────────
+# Gate 0b already failed an ALL-skipped step; this catches a MOSTLY-skipped one.
+# When PW_MAX_SKIP_RATIO is set (e.g. 0.2), a step whose skipped share exceeds it
+# goes red even though ≥1 test executed — on a seeded environment a high skip
+# share is an unmet-precondition / fixture gap, not a pass. Unset = no ceiling
+# (backward compatible; the default guard behaviour is unchanged). A ratio outside
+# [0,1] fails closed: a misconfigured ceiling must never silently pass a run.
+if [ -n "${PW_MAX_SKIP_RATIO:-}" ]; then
+  VERDICT="$(EXECUTED="$EXECUTED" SKIPPED="$SKIPPED" MAX="$PW_MAX_SKIP_RATIO" node -e '
+    const e = +process.env.EXECUTED, s = +process.env.SKIPPED, m = Number(process.env.MAX);
+    if (!Number.isFinite(m) || m < 0 || m > 1) { console.log("BADMAX 0"); process.exit(0); }
+    const total = e + s, ratio = total ? s / total : 0;
+    console.log((ratio > m ? "OVER " : "OK ") + ratio.toFixed(3));
+  ')"
+  VERD="${VERDICT%% *}"
+  RATIO="${VERDICT##* }"
+  if [ "$VERD" = "BADMAX" ]; then
+    echo "::error::${LABEL}: PW_MAX_SKIP_RATIO='${PW_MAX_SKIP_RATIO}' is not a number in [0,1]. A misconfigured skip ceiling fails closed."
+    echo "- ❌ **${LABEL}** — PW_MAX_SKIP_RATIO='${PW_MAX_SKIP_RATIO}' not in [0,1] (fail-closed)" >> "$SUMMARY"
+    exit 1
+  fi
+  if [ "$VERD" = "OVER" ]; then
+    echo "::error::${LABEL}: skip ratio ${RATIO} (skipped ${SKIPPED} of $((EXECUTED + SKIPPED))) exceeds PW_MAX_SKIP_RATIO=${PW_MAX_SKIP_RATIO}. Too many preconditions unmet — not a pass."
+    echo "- ❌ **${LABEL}** — skip ratio **${RATIO}** > ${PW_MAX_SKIP_RATIO} (skipped **${SKIPPED}** of $((EXECUTED + SKIPPED)))" >> "$SUMMARY"
+    if [ -s "$SKIPPED_NAMES" ]; then
+      echo "${LABEL}: skipped specs:"
+      sed 's/^/  - /' "$SKIPPED_NAMES"
+    fi
+    exit 1
+  fi
+  echo "${LABEL}: skip ratio ${RATIO} within PW_MAX_SKIP_RATIO=${PW_MAX_SKIP_RATIO}"
+fi
 
 exit "$RUN_STATUS"
