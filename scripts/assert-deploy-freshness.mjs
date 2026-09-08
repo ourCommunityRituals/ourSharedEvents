@@ -69,7 +69,10 @@ function runSelfTest() {
     ['placeholder version (no sha) fails closed', 'stg-2026.03.22', 'abc1234', false],
     ['dev-local fails closed', 'dev-local', 'abc1234', false],
     ['unknown (env unset) fails closed', 'unknown', 'abc1234', false],
-    ['full 40-char merge sha matches short deployed sha (prefix)', 'stg-abc1234-20260908', 'abc1234ff00aa11bb22cc33dd44ee55ff6607788', true],
+    // Full-length merge sha (longer than the short deployed sha) → prefix match.
+    // Built at runtime so no 40-char hex literal sits in source (detect-secrets
+    // reads a committed high-entropy hex string as a secret — OCR-130 lesson).
+    ['full-length merge sha matches short deployed sha (prefix)', 'stg-abc1234-20260908', 'abc1234' + 'a'.repeat(33), true],
     ['empty merge sha fails closed', 'stg-abc1234-20260908', '', false],
     ['the date segment is NOT mistaken for the sha', 'stg-abc1234-20260908', '20260908', false],
     ['case-insensitive sha match', 'stg-ABC1234-20260908', 'abc1234', true],

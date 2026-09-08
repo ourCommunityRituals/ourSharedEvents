@@ -46,8 +46,11 @@ describe('OSE-834 2d — deploy-freshness isFresh', () => {
     expect(isFresh('stg-abc1234-20260908', 'def5678')).toBe(false);
   });
 
-  test('a full 40-char merge sha matches the short deployed sha (prefix, either direction)', () => {
-    expect(isFresh('stg-abc1234-20260908', 'abc1234ff00aa11bb22cc33dd44ee55ff6607788')).toBe(true);
+  test('a full-length merge sha matches the short deployed sha (prefix, either direction)', () => {
+    // Built at runtime (no committed 40-char hex literal — detect-secrets reads
+    // one as a secret; OCR-130 lesson). 'abc1234' + 33 chars = a 40-char sha
+    // whose short-sha prefix is what the deploy stamp carries.
+    expect(isFresh('stg-abc1234-20260908', 'abc1234' + 'a'.repeat(33))).toBe(true);
   });
 
   test('the date segment is never mistaken for the sha', () => {
