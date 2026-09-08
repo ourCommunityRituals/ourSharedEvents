@@ -21,6 +21,8 @@ export const NODE_SPECS = [
   'tests/event-phase.spec.ts',
   'tests/event-state.spec.ts',
   'tests/report-depth.spec.ts',
+  // OSE-1266 — outcome preview: pure composition over report-depth + sponsor-allocation.
+  'tests/sponsor-preview.spec.ts',
   // OSE-714 — read-handler enforcement-state guard for the depth filter. Mocks
   // the D1 builder + audit log and mints a real signed-link token, so it binds
   // no runtime (no cloudflare:test / SELF.fetch) and runs node-clean.
