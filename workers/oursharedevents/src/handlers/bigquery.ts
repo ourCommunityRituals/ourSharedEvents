@@ -13,8 +13,13 @@
 
 import { backupEvents, isBigQueryConfigured, type BigQueryEnv } from '../cloud/bigquery';
 import { logExportManifest } from '../lib/audit-log';
+import { extractAdminActor, type AdminEnv } from '../auth/admin';
 
-export type BigQueryHandlerEnv = BigQueryEnv & { DB: D1Database };
+// Intersect AdminEnv so the on-demand handler can resolve the operator identity
+// (CF Access email / key fallback) the same way the rest of the admin surface
+// does — the route caller already guards admin auth, so these fields are present
+// at runtime; the intersection just makes that available to the type checker.
+export type BigQueryHandlerEnv = BigQueryEnv & { DB: D1Database } & AdminEnv;
 
 export async function handleAdminBackupEvent(
   request: Request,
@@ -42,10 +47,16 @@ export async function handleAdminBackupEvent(
   const result = await backupEvents(env, [event]);
   const reqId = crypto.randomUUID ? crypto.randomUUID() : `bq-${Date.now()}`;
   // OSE-594: log OER emission manifest entry for on-demand backup (invariant #17)
+  // OSE-1259: attribute the human operator who triggered the export. The route
+  // is admin-guarded, so extractAdminActor resolves the CF Access email (or the
+  // key-fallback identity on staging). Without this the manifest recorded a
+  // null actor for every admin-triggered export — an unattributed D1->OER
+  // boundary crossing (invariant #24 auditability). The cron path records
+  // 'cron:scheduler' below.
   await logExportManifest(env, {
     export_type: 'BIGQUERY',
     event_id: eventId,
-    actor: null,
+    actor: extractAdminActor(request, env),
     request_id: reqId,
     rows_exported: result.rowCount ?? 1,
     outcome: 'success',
