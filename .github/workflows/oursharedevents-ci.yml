@@ -1422,8 +1422,15 @@ jobs:
           X_OCR_INTERNAL: ${{ secrets.X_OCR_INTERNAL }}
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+          # OSE-834 ARM: an unmet precondition (no admin key, a CF Access edge block)
+          # is a FAILURE here, not a green skip — "a tier that cannot fail is not a
+          # tier." The skipped-ratio ceiling (repo var T4_MAX_SKIP_RATIO, unset = no
+          # ceiling) reds a mostly-skipped run once a threshold is set.
+          PW_REQUIRE_PRECONDITIONS: '1'
+          PW_MAX_SKIP_RATIO: ${{ vars.T4_MAX_SKIP_RATIO }}
         run: |
-          npx playwright test --config=playwright.e2e-smoke.config.ts \
+          PW_LABEL='T4b: Core Journeys' scripts/pw-guarded.sh \
+            --config=playwright.e2e-smoke.config.ts \
             tests/e2e/3-flows/sponsor-journey.spec.ts \
             tests/e2e/3-flows/cross-brand-isolation.spec.ts
         timeout-minutes: 8
@@ -1490,13 +1497,10 @@ jobs:
 
       - name: Seed smoke fixtures
         id: seed-fixtures
-        # continue-on-error retained (Part of OSE-834): removing it is the ARM step
-        # and is coupled to a fresh seeded staging deploy + the SMOKE_RPT_* tokens
-        # that let T4f actually execute — do NOT remove it until those land, or an
-        # unseedable run trades a false-green for a false-red. This slice only
-        # ENRICHES the seed (sponsors across the 3 report classes + one forms
-        # registration/check-in/survey), the prerequisite the arm step needs.
-        continue-on-error: true
+        # OSE-834 ARM: continue-on-error removed — a failed seed now reds the tier
+        # instead of letting downstream skip green on absent fixtures. Requires the
+        # staging CF creds (present on the main pipeline) to succeed; a fork without
+        # them fails here, which is correct: an unseeded run has verified nothing.
         timeout-minutes: 2
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
@@ -1569,6 +1573,8 @@ jobs:
           SMOKE_EVENT_PRE: evt_smoke_pre
           SMOKE_EVENT_LIVE: evt_smoke_live
           SMOKE_EVENT_POST: evt_smoke_post
+          # OSE-834: skipped-ratio ceiling (repo var T4_MAX_SKIP_RATIO, unset = none).
+          PW_MAX_SKIP_RATIO: ${{ vars.T4_MAX_SKIP_RATIO }}
         run: |
           PW_LABEL='T4e: Attendee Arc Journey' scripts/pw-guarded.sh \
             --config=playwright.ui-smoke.config.ts \
@@ -1576,14 +1582,20 @@ jobs:
         timeout-minutes: 5
 
       # T4f: SharedReport depth gate — E2E contract tests (S-3.3.2 / Invariant #5).
-      # Tokens must be minted and stored as secrets before seeded run. Tests skip
-      # cleanly when tokens are absent (continue-on-error preserves CI green).
+      # OSE-834 ARM: continue-on-error removed. The SMOKE_RPT_* tokens must be minted
+      # on staging (P1) so the 18 cases execute — with them absent the run all-skips
+      # and Gate 0b reds it, which is the point: an unverified depth gate is not
+      # green (this is the half of #25 money buys). PW_MAX_SKIP_RATIO (repo var
+      # T4_MAX_SKIP_RATIO, unset = no ceiling) also reds a mostly-skipped run.
       - name: 'T4f: SharedReport Depth Gate'
         id: sharedreport-depth-tests
-        continue-on-error: true
         env:
           BASE_URL: ${{ env.STG_BASE_URL }}
-          SMOKE_EVENT_POST: evt_smoke_post
+          # OSE-834: the depth E2E targets the multi-tier event (slice 1) so its
+          # sponsor-scoped tokens resolve against real seeded sponsors. Mint the
+          # SMOKE_RPT_* tokens for evt_smoke_tiers to match this.
+          SMOKE_EVENT_POST: evt_smoke_tiers
+          PW_MAX_SKIP_RATIO: ${{ vars.T4_MAX_SKIP_RATIO }}
           SMOKE_RPT_ADMIN_TOKEN: ${{ secrets.SMOKE_RPT_ADMIN_TOKEN }}
           SMOKE_RPT_LOCAL_TOKEN: ${{ secrets.SMOKE_RPT_LOCAL_TOKEN }}
           SMOKE_RPT_MID_TOKEN: ${{ secrets.SMOKE_RPT_MID_TOKEN }}
