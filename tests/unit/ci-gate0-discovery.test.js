@@ -47,7 +47,7 @@ const WORKFLOW = path.join(REPO, '.github', 'workflows', 'oursharedevents-ci.yml
  * result file — which is exactly the false-red trap Gate 0b must handle: green
  * exit, but no proof any test ran.
  */
-function runGuardWithStub(listJson, { resultJson, runExit = 0 } = {}) {
+function runGuardWithStub(listJson, { resultJson, runExit = 0, env: extraEnv = {} } = {}) {
   const dir = mkdtempSync(path.join(tmpdir(), 'gate0-'));
   const stub = path.join(dir, 'npx');
   // Default: a healthy result JSON that mirrors the discovered specs as all
@@ -72,6 +72,7 @@ function runGuardWithStub(listJson, { resultJson, runExit = 0 } = {}) {
       PATH: `${dir}:${process.env.PATH}`,
       PW_LABEL: 'stub',
       GITHUB_STEP_SUMMARY: '',
+      ...extraEnv,
     },
     encoding: 'utf8',
   });
@@ -162,6 +163,56 @@ describe('OSE-1170 Gate 0b — all-skipped is not green', () => {
   it('surfaces the original run failure when the run itself failed and emitted no JSON', () => {
     const r = runGuardWithStub(suite(2), { resultJson: null, runExit: 4 });
     expect(r.status, 'a failing run must propagate its own exit code, not be masked').toBe(4);
+  });
+});
+
+describe('OSE-834 Gate 0c — skipped-ratio ceiling', () => {
+  it('no PW_MAX_SKIP_RATIO → a partial skip stays green (backward-compatible)', () => {
+    const r = runGuardWithStub(suite(3), { resultJson: resultSuite(1, 2) });
+    expect(r.status, 'an unset ceiling must not change the default guard behavior').toBe(0);
+  });
+
+  it('goes RED when the skipped ratio exceeds the ceiling (mostly-skipped is not a pass)', () => {
+    const r = runGuardWithStub(suite(10), {
+      resultJson: resultSuite(1, 9),
+      env: { PW_MAX_SKIP_RATIO: '0.2' },
+    });
+    expect(r.status, 'skip ratio 0.9 > 0.2 MUST fail').not.toBe(0);
+    expect(r.stdout + r.stderr).toMatch(/skip ratio/i);
+  });
+
+  it('stays GREEN when the skipped ratio is within the ceiling', () => {
+    const r = runGuardWithStub(suite(10), {
+      resultJson: resultSuite(9, 1),
+      env: { PW_MAX_SKIP_RATIO: '0.2' },
+    });
+    expect(r.status, 'skip ratio 0.1 <= 0.2 must pass').toBe(0);
+  });
+
+  it('stays GREEN with zero skips under a ceiling', () => {
+    const r = runGuardWithStub(suite(5), {
+      resultJson: resultSuite(5, 0),
+      env: { PW_MAX_SKIP_RATIO: '0.2' },
+    });
+    expect(r.status).toBe(0);
+  });
+
+  it('fails CLOSED when PW_MAX_SKIP_RATIO is not a number in [0,1]', () => {
+    const r = runGuardWithStub(suite(5), {
+      resultJson: resultSuite(5, 0),
+      env: { PW_MAX_SKIP_RATIO: 'banana' },
+    });
+    expect(r.status, 'a misconfigured ceiling must never silently pass a run').not.toBe(0);
+    expect(r.stdout + r.stderr).toMatch(/not a number|\[0,1\]|fail-closed/i);
+  });
+
+  it('an all-skipped run still fails at Gate 0b even with a ceiling set', () => {
+    const r = runGuardWithStub(suite(5), {
+      resultJson: resultSuite(0, 5),
+      env: { PW_MAX_SKIP_RATIO: '0.2' },
+    });
+    expect(r.status, 'Gate 0b (executed==0) fires before Gate 0c').not.toBe(0);
+    expect(r.stdout + r.stderr).toMatch(/executed 0|all-skipped/);
   });
 });
 
