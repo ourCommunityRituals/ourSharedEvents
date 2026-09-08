@@ -2053,6 +2053,12 @@ jobs:
       - smoke-production
     if: always()
     runs-on: ubuntu-latest
+    # `administration: read` (read-only) lets the GITHUB_TOKEN read main's branch
+    # protection for the OSE-1261 phantom-context audit. `contents: read` is kept
+    # for checkout (a job-level permissions block replaces the default set).
+    permissions:
+      contents: read
+      administration: read
     steps:
       - uses: actions/checkout@v7
         with:
@@ -2069,6 +2075,18 @@ jobs:
           INPUT_RUN_FUNCTIONAL: ${{ github.event.inputs.run_functional }}
           RESULTS_JSON: ${{ toJSON(needs) }}
         run: node scripts/assert-gate-execution.mjs
+
+      # OSE-1261: a required context nothing emits (app_id:null) blocks every PR
+      # invisibly (OSE-1260). This names the cause instead of leaving a mystery
+      # "Expected — Waiting" block. `if: always()` so it runs even if the reconcile
+      # step above failed. Read-only: it REPORTS + prints the de-require command,
+      # never mutates protection. Graceful on a fork/insufficient-scope token.
+      - name: Audit required checks (phantom app_id:null)
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: node scripts/audit-required-checks.mjs
 
   summary:
     name: 'Pipeline Summary'
