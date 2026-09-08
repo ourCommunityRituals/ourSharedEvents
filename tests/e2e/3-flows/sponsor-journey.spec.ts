@@ -32,6 +32,20 @@ const ADMIN_KEY = process.env.ADMIN_KEY || process.env.X_OCR_INTERNAL || '';
 const CF_ACCESS_CLIENT_ID = process.env.CF_ACCESS_CLIENT_ID || '';
 const CF_ACCESS_CLIENT_SECRET = process.env.CF_ACCESS_CLIENT_SECRET || '';
 
+// OSE-834: in a blocking CI tier (PW_REQUIRE_PRECONDITIONS=1) an unmet precondition
+// — no admin key, a CF Access edge block — is a FAILURE, not a green skip: "a tier
+// that cannot fail is not a tier." Locally / on forks (flag unset) it still skips so
+// the spec stays runnable without staging creds. This flag is set by the workflow
+// step that runs this tier, once the seed + tokens + fresh deploy make the
+// preconditions genuinely satisfiable (the arm — OSE-834 slice 2c).
+const REQUIRE_PRECONDITIONS = process.env.PW_REQUIRE_PRECONDITIONS === '1';
+function precondition(unmet: boolean, message: string): void {
+  if (unmet && REQUIRE_PRECONDITIONS) {
+    throw new Error(`precondition unmet in a blocking job: ${message}`);
+  }
+  test.skip(unmet, message);
+}
+
 // ─── Helpers ────────────────────────────────────────────────────────────────────
 
 /**
@@ -119,7 +133,7 @@ test.describe('Sponsor Journey — Full Lifecycle', () => {
   test.describe.configure({ mode: 'serial' });
 
   test.beforeAll(async () => {
-    test.skip(!ADMIN_KEY, 'ADMIN_KEY not set — skipping sponsor journey');
+    precondition(!ADMIN_KEY, 'ADMIN_KEY not set — required for the sponsor journey');
   });
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -162,7 +176,10 @@ test.describe('Sponsor Journey — Full Lifecycle', () => {
       }),
     });
 
-    test.skip(res.body?.code === 'CF_ACCESS_BLOCKED', 'CF Access blocked admin API');
+    precondition(
+      res.body?.code === 'CF_ACCESS_BLOCKED',
+      'CF Access blocked the admin API — an infra block is not a pass'
+    );
 
     expect([200, 201]).toContain(res.status);
     expect(res.body.ok).toBe(true);
@@ -458,7 +475,7 @@ test.describe('Sponsor Journey — Tier Upgrade', () => {
   test.describe.configure({ mode: 'serial' });
 
   test.beforeAll(async () => {
-    test.skip(!ADMIN_KEY, 'ADMIN_KEY not set');
+    precondition(!ADMIN_KEY, 'ADMIN_KEY not set');
   });
 
   test('Step 0: Find live event', async ({ page, request }) => {
@@ -547,7 +564,7 @@ test.describe('Sponsor Journey — Cross-Surface Rendering', () => {
   test.describe.configure({ mode: 'serial' });
 
   test.beforeAll(async () => {
-    test.skip(!ADMIN_KEY, 'ADMIN_KEY not set');
+    precondition(!ADMIN_KEY, 'ADMIN_KEY not set');
   });
 
   test('Setup: Create sponsor with all surfaces enabled', async ({ page, request }) => {
