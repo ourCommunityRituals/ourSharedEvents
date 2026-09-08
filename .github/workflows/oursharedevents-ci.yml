@@ -2032,6 +2032,44 @@ jobs:
   # to ephemeral GitHub-hosted runners unchanged. The retired-job invariant is
   # regression-locked by tests/unit/security/post-execution-integrity.test.js.
   # ============================================================================
+  gate-execution-reconciler:
+    name: 'Gate-execution reconciler'
+    # OSE-1255 (Detect model): assert every gate EXPECTED for THIS trigger actually
+    # executed (from needs.*.result). The arm (OSE-834) stops a gate lying when it
+    # runs; this stops a gate silently NOT running — a tier skipped/absent for no
+    # legitimate reason is the false-green hole. Expected set is trigger-aware
+    # (PR = S0+T0; main-push / full-pipeline PR / dispatch = the staging chain).
+    # An expected gate skipped as an honest cascade of an upstream FAILURE is not a
+    # violation (the failed gate is the real signal). Advisory for now; owner then
+    # requires this check in branch protection to make it the enforcement anchor.
+    needs:
+      - security
+      - gate
+      - deploy-staging
+      - contract-staging
+      - smoke-staging
+      - functional-staging
+      - deploy-production
+      - smoke-production
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          clean: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '20'
+      - name: Reconcile gate execution
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          HEAD_REF: ${{ github.head_ref }}
+          INPUT_DEPLOY_STAGING: ${{ github.event.inputs.deploy_staging }}
+          INPUT_RUN_FUNCTIONAL: ${{ github.event.inputs.run_functional }}
+          RESULTS_JSON: ${{ toJSON(needs) }}
+        run: node scripts/assert-gate-execution.mjs
+
   summary:
     name: 'Pipeline Summary'
     runs-on: ubuntu-latest
