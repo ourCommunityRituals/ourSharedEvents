@@ -76,7 +76,7 @@ const BRAND_SCOPE_EXEMPT: Record<string, string> = {
   'portfolio-rollup.ts:148':
     'Scoped by a dynamic `brandFilter` array assembled above the query; the ' +
     'WHERE clause is interpolated, so the bind is invisible to a static scan.',
-  'bigquery.ts:72':
+  'bigquery.ts:83':
     'OER emission cron. Cross-brand BY DESIGN — OER ingests every brand and ' +
     'answers across them (VISION: products emit, OER ingests). Not reachable ' +
     'from any request path.',
