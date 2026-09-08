@@ -1,6 +1,6 @@
 # SharedReport Depth
 
-> **What a report *viewer* sees, and why it's exactly that much.**
+> **What a report _viewer_ sees, and why it's exactly that much.**
 > Depth is the paid dimension of the SharedReport: same event, same numbers,
 > more sections as the tier rises. This doc pins the contract so a reader never
 > has to infer enforcement from a code comment again.
@@ -14,7 +14,7 @@
 ## The one rule
 
 **Depth is enforced server-side, in the read handler, at exactly one point, for
-the `sponsor` role only. Filtering is by *omission* — never by changing a value.**
+the `sponsor` role only. Filtering is by _omission_ — never by changing a value.**
 
 A `local` sponsor and a `premium` organizer looking at the same event see the
 **same numbers**; the sponsor just sees **fewer sections**. Nothing is rounded,
@@ -26,12 +26,12 @@ receives the section on the wire.
 
 ## Who sees what
 
-| Viewer (token role) | Depth | How it's decided |
-| --- | --- | --- |
-| **Organizer** (`bar_owner`) | `premium` (full) | Always full — organizers see their own event whole. A depth claim on the token is ignored, not honoured downward. |
-| **Platform** (`admin`) | `premium` (full) | Cross-event intelligence; sees all sponsor rows. |
-| **In-fleet batch** (`internal`) | `premium` (full) | Anonymity-respecting service class (OSE-577). |
-| **Sponsor** (`sponsor`) | `local` → capped at `mid` | Depth carried in the signed link the organizer mints. Sponsors **cannot self-grant `premium`** — the cap is `mid`, and any invalid/garbage claim **fails closed to `local`** (never to the nearest valid value). |
+| Viewer (token role)             | Depth                     | How it's decided                                                                                                                                                                                                 |
+| ------------------------------- | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Organizer** (`bar_owner`)     | `premium` (full)          | Always full — organizers see their own event whole. A depth claim on the token is ignored, not honoured downward.                                                                                                |
+| **Platform** (`admin`)          | `premium` (full)          | Cross-event intelligence; sees all sponsor rows.                                                                                                                                                                 |
+| **In-fleet batch** (`internal`) | `premium` (full)          | Anonymity-respecting service class (OSE-577).                                                                                                                                                                    |
+| **Sponsor** (`sponsor`)         | `local` → capped at `mid` | Depth carried in the signed link the organizer mints. Sponsors **cannot self-grant `premium`** — the cap is `mid`, and any invalid/garbage claim **fails closed to `local`** (never to the nearest valid value). |
 
 > The cross-product WKRP token is **not** a depth role — it fails closed at the
 > handler auth boundary and never reaches depth resolution.
@@ -44,21 +44,33 @@ Each tier is a superset of the one below. `sponsor_class_breakdown` is present a
 **every** depth (OSE-719): it is class-level aggregate — the tier-neutral
 competitive view — never per-competitor, so it is never a paid section.
 
-| Section | Local | Mid | Premium |
-| --- | :--: | :--: | :--: |
-| `event_id` / `event_title` / dates | ● | ● | ● |
-| `unique_gatherings` | ● | ● | ● |
-| `sponsor_impressions` (own rows only) | ● | ● | ● |
-| `sponsor_class_breakdown` | ● | ● | ● |
-| `campaign_summary` | | ● | ● |
-| `poster_attribution` | | ● | ● |
-| `return_rate` | | ● | ● |
-| `corridor_density` | | ● | ● |
-| `corridor_map` (the visible map — the paid value line, OSE-682) | | ● | ● |
-| `headcount_trend` (cross-event) | | | ● |
+| Section                                                         | Local | Mid | Premium |
+| --------------------------------------------------------------- | :---: | :-: | :-----: |
+| `event_id` / `event_title` / dates                              |   ●   |  ●  |    ●    |
+| `unique_gatherings`                                             |   ●   |  ●  |    ●    |
+| `sponsor_impressions` (own rows only)                           |   ●   |  ●  |    ●    |
+| `sponsor_class_breakdown`                                       |   ●   |  ●  |    ●    |
+| `campaign_summary`                                              |       |  ●  |    ●    |
+| `poster_attribution`                                            |       |  ●  |    ●    |
+| `return_rate`                                                   |       |  ●  |    ●    |
+| `corridor_density`                                              |       |  ●  |    ●    |
+| `corridor_map` (the visible map — the paid value line, OSE-682) |       |  ●  |    ●    |
+| `headcount_trend` (cross-event)                                 |       |     |    ●    |
 
 > **Free (local) stays honest, not crippled:** it keeps the smoke-test basics
 > ("I was there": headcount + own logo counts). The map is the first paid line.
+
+> **Name clash to know — the section is not the substrate.** `corridor_map`
+> names two different things: (1) the **delivered report section** in the table
+> above (Mid+, paid), and (2) the **h3 base-layer map** the whole report is
+> _built from_ (`shared-report-builder.ts`, built **unconditionally and
+> tier-blind** — it references every cell to derive `corridor_density`,
+> `unique_gatherings`, and the map itself). Depth gates only (1); (2) is never
+> tier-gated (Invariant #5). Reading a delivery-layer omission (no `corridor_map`
+> _section_ at Local) as a statement about the base layer is a mistake — a dead
+> E2E test once did exactly that and asserted the wrong contract (OSE-834).
+> Whether the base layer is ever surfaced to the _customer_ at use time is a
+> separate question (tracked as its own spike), not a depth decision.
 
 ---
 
@@ -102,11 +114,11 @@ prompt with **no client change**.
 OSE has three "tier" words. They mean different things and only one module may
 mix them:
 
-| Vocabulary | Values | Governs | Home |
-| --- | --- | --- | --- |
-| `sponsors.tier` | title…primary | **Display priority** (sort order) | never consulted for depth |
-| Flag tiers | free / mid / enterprise | **Feature presets** (which capabilities are on) | `@ocr/flags` |
-| **Report depth** | local / mid / premium | **What a report viewer sees** | `lib/report-depth.ts` — the only place >1 may appear |
+| Vocabulary       | Values                  | Governs                                         | Home                                                 |
+| ---------------- | ----------------------- | ----------------------------------------------- | ---------------------------------------------------- |
+| `sponsors.tier`  | title…primary           | **Display priority** (sort order)               | never consulted for depth                            |
+| Flag tiers       | free / mid / enterprise | **Feature presets** (which capabilities are on) | `@ocr/flags`                                         |
+| **Report depth** | local / mid / premium   | **What a report viewer sees**                   | `lib/report-depth.ts` — the only place >1 may appear |
 
 `handlers/demo.ts` is the only translator of a fourth (the demo slug →
 `/demo/free|mid|premium`).
@@ -126,12 +138,12 @@ mix them:
 
 ## Where it's enforced (all server-side, live)
 
-| Control | Where | Status |
-| --- | --- | --- |
-| Sponsor slice isolation | `resolveDepth()` + read handler | live |
-| Sponsor depth ceiling (cap `mid`, fail-closed `local`) | `resolveDepth()` | live |
-| Mint-time depth validation | mint handler | live |
-| Section field-stripping | `filterReportByDepth()` in the read handler, **sponsor role only** | live (OSE-816, ADR-017) |
+| Control                                                | Where                                                              | Status                  |
+| ------------------------------------------------------ | ------------------------------------------------------------------ | ----------------------- |
+| Sponsor slice isolation                                | `resolveDepth()` + read handler                                    | live                    |
+| Sponsor depth ceiling (cap `mid`, fail-closed `local`) | `resolveDepth()`                                                   | live                    |
+| Mint-time depth validation                             | mint handler                                                       | live                    |
+| Section field-stripping                                | `filterReportByDepth()` in the read handler, **sponsor role only** | live (OSE-816, ADR-017) |
 
 **Verified by:** `tests/shared-report-read.spec.ts` (enforcement-state test —
 "filterReportByDepth is WIRED in the single-read handler, sponsor-guarded", plus
