@@ -2070,6 +2070,25 @@ jobs:
           RESULTS_JSON: ${{ toJSON(needs) }}
         run: node scripts/assert-gate-execution.mjs
 
+      # OSE-1261: a required context nothing emits (app_id:null) blocks every PR
+      # invisibly (OSE-1260). This names the cause instead of a mystery "Expected —
+      # Waiting" block. `if: always()` so it runs even if the reconcile step failed.
+      # Read-only: REPORTS + prints the de-require command, never mutates protection.
+      #
+      # NOTE (OSE-1261): the default GITHUB_TOKEN CANNOT read branch protection —
+      # there is no `permissions:` scope for it — so with GITHUB_TOKEN the script
+      # 403s and gracefully skips (never a false-red). To activate the audit, the
+      # owner provisions an admin-read token as the secret BRANCH_PROTECTION_READ_TOKEN
+      # (a fine-grained PAT with Administration:read, or a GitHub App token).
+      # Provisioning that token is an owner/auth-boundary decision — the agent never
+      # handles it; the audit stays inert-but-safe until it exists.
+      - name: Audit required checks (phantom app_id:null)
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.BRANCH_PROTECTION_READ_TOKEN || secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: node scripts/audit-required-checks.mjs
+
   summary:
     name: 'Pipeline Summary'
     runs-on: ubuntu-latest
