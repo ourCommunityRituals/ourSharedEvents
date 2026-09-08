@@ -73,4 +73,9 @@ export const NODE_SPECS = [
   'tests/poster-sponsor.spec.ts',
   'tests/poster-tier-css-ose219.spec.ts',
   'tests/shared-report-mobile-workability.spec.ts',
+
+  // OSE-1263 (OSE-217 slice) — net-new L1 authored node-clean: maps.ts binds no
+  // D1/SELF (only fetch/Response/URLSearchParams), so it runs in the node project
+  // and stubs `fetch` for the upstream branches. Proven green in the node project.
+  'tests/maps.spec.ts',
 ];
