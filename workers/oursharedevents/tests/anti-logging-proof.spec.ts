@@ -512,9 +512,19 @@ describe('P6: Token linkability absent — ose_anon IDs cannot be correlated acr
         ).not.toMatch(/\banonCounter\b|\bid\+\+\b|\banonSeq\b/);
       }
     }
-    // If the function wasn't found as a definition, it might be defined inline — that's OK
-    // The test passes vacuously if the function isn't defined in source (might be inlined)
-    void found;
+    // OSE-1262 (CCR: Security + SDET) — fail-closed, not vacuous. The old
+    // `void found` let an inlined or renamed getOrCreateAnonId slip the randomUUID
+    // proof above: an agentic refactor to a counter/timestamp session id would
+    // pass unnoticed, defeating the covenant's core anonymity guarantee. The
+    // function IS a named export (src/lib/anonymous-id.ts), so require it to be
+    // found — if it is ever intentionally inlined, assert randomUUID at its inline
+    // definition here instead of restoring a silent pass.
+    expect(
+      found,
+      'getOrCreateAnonId definition not found in source — the randomUUID uniqueness ' +
+        'proof was skipped. It must exist as a named function (src/lib/anonymous-id.ts); ' +
+        'if it was intentionally inlined, add an inline-body randomUUID assertion here.'
+    ).toBe(true);
   });
 
   test('ose_anon cookie is UUID-shaped — not a timestamp or counter', () => {
