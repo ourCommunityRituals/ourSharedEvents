@@ -139,6 +139,12 @@ if (isMain) {
   if (process.argv.includes('--self-test')) {
     runSelfTest();
   } else {
-    await main();
+    // Not awaited at top level (the lint shard's parser disallows top-level
+    // await, matching the other scripts). main() drives process.exit on every
+    // path; .catch() turns an unexpected rejection into a fail-closed exit.
+    main().catch((err) => {
+      console.error(err);
+      process.exit(1);
+    });
   }
 }
