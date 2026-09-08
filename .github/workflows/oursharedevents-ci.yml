@@ -1591,7 +1591,10 @@ jobs:
         id: sharedreport-depth-tests
         env:
           BASE_URL: ${{ env.STG_BASE_URL }}
-          SMOKE_EVENT_POST: evt_smoke_post
+          # OSE-834: the depth E2E targets the multi-tier event (slice 1) so its
+          # sponsor-scoped tokens resolve against real seeded sponsors. Mint the
+          # SMOKE_RPT_* tokens for evt_smoke_tiers to match this.
+          SMOKE_EVENT_POST: evt_smoke_tiers
           PW_MAX_SKIP_RATIO: ${{ vars.T4_MAX_SKIP_RATIO }}
           SMOKE_RPT_ADMIN_TOKEN: ${{ secrets.SMOKE_RPT_ADMIN_TOKEN }}
           SMOKE_RPT_LOCAL_TOKEN: ${{ secrets.SMOKE_RPT_LOCAL_TOKEN }}
