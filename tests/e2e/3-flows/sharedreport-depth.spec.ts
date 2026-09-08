@@ -70,15 +70,19 @@ test.describe('SharedReport depth gate', () => {
     expect(res.status()).toBe(200);
     const body = await res.json();
     expect(body.ok).toBe(true);
-    expect(body.depth).toBe('premium');
-    // Premium sections must all be present (if materialized)
+    // Depth is expressed by section presence, not a top-level label — the wire
+    // contract (ADR-017 / REPORT-DEPTH.md) has no `body.depth`. Premium = every
+    // section present, including the two above Mid.
     const report = body.report as Record<string, unknown>;
     expect('event_id' in report).toBe(true);
     expect('unique_gatherings' in report).toBe(true);
-    // corridor_map key must be present at premium depth (value may be null if no h3 data)
+    // corridor_map key present at premium (value may be null if no h3 data).
     expect('corridor_map' in report).toBe(true);
-    // No upgrade hint at premium
-    expect('upgrade' in body).toBe(false);
+    // headcount_trend is the genuinely premium-only section — present here.
+    expect('headcount_trend' in report).toBe(true);
+    // No upgrade hint at premium: nothing is withheld (upgrade lives at
+    // report.upgrade and is omitted entirely for premium/admin/bar_owner).
+    expect('upgrade' in report).toBe(false);
   });
 
   test('LOCAL sponsor token → limited sections + upgrade hint', async ({ request }) => {
@@ -87,16 +91,19 @@ test.describe('SharedReport depth gate', () => {
     expect(res.status()).toBe(200);
     const body = await res.json();
     expect(body.ok).toBe(true);
-    expect(body.depth).toBe('local');
     const report = body.report as Record<string, unknown>;
-    // Mid-only sections must be absent
+    // Local depth = the Mid+ sections are omitted (depth by omission, not a label).
+    expect('campaign_summary' in report).toBe(false);
     expect('poster_attribution' in report).toBe(false);
     expect('return_rate' in report).toBe(false);
+    expect('corridor_map' in report).toBe(false);
     expect('headcount_trend' in report).toBe(false);
-    // Upgrade hint must point to 'mid'
-    expect(body.upgrade).toBeDefined();
-    expect(body.upgrade.next_depth).toBe('mid');
-    expect(Array.isArray(body.upgrade.locked_sections)).toBe(true);
+    // The refusal is printed on the wire at report.upgrade (ADR-017), pointing
+    // one rung up to 'mid'.
+    const upgrade = report.upgrade as { next_depth?: string; locked_sections?: unknown };
+    expect(upgrade).toBeDefined();
+    expect(upgrade.next_depth).toBe('mid');
+    expect(Array.isArray(upgrade.locked_sections)).toBe(true);
   });
 
   test('LOCAL sponsor token → sponsor slice isolated (no cross-contamination)', async ({
@@ -121,23 +128,30 @@ test.describe('SharedReport depth gate', () => {
     expect(res.status()).toBe(200);
     const body = await res.json();
     expect(body.ok).toBe(true);
-    expect(body.depth).toBe('mid');
     const report = body.report as Record<string, unknown>;
-    expect('poster_attribution' in report || 'return_rate' in report).toBe(true);
+    // Mid depth = the Mid sections are present (corridor_map is a MID section —
+    // the paid value line, OSE-682 — NOT premium-only), and the single
+    // premium-only section (headcount_trend) is omitted.
+    expect('corridor_map' in report).toBe(true);
+    expect('campaign_summary' in report).toBe(true);
     expect('headcount_trend' in report).toBe(false);
-    if (body.upgrade) {
-      expect(body.upgrade.next_depth).toBe('premium');
-    }
+    // Below premium → the refusal is printed at report.upgrade, next rung 'premium'.
+    const upgrade = report.upgrade as { next_depth?: string } | undefined;
+    expect(upgrade).toBeDefined();
+    expect(upgrade?.next_depth).toBe('premium');
   });
 
-  test('LOCAL sponsor token → no corridor_map in response (premium-only gate)', async ({
+  test('LOCAL sponsor token → no corridor_map section (Mid+ delivery gate)', async ({
     request,
   }) => {
     test.skip(!POST || !LOCAL_TOKEN, 'fixtures not seeded');
     const res = await fetchReport(request, POST!, LOCAL_TOKEN!);
     const body = await res.json();
     const report = body.report as Record<string, unknown>;
-    // corridor_map is premium-only — must be omitted entirely at local depth
+    // The corridor_map *section* is the paid value line — delivered at Mid+
+    // (OSE-682), so it is omitted at local depth (below mid). This gates the
+    // DELIVERED section only; the base h3 substrate the whole report is built
+    // from stays universal and tier-blind (ADR-017 / invariant #5).
     expect('corridor_map' in report).toBe(false);
     // Sanity: no SVG corridor map markup leaking in the JSON text
     const text = JSON.stringify(report);
@@ -145,17 +159,16 @@ test.describe('SharedReport depth gate', () => {
     expect(text).not.toMatch(/hex-cell/);
   });
 
-  test('MID sponsor token → no corridor_map in response (premium-only gate)', async ({
-    request,
-  }) => {
+  test('MID sponsor token → no headcount_trend (the premium-only section)', async ({ request }) => {
     test.skip(!POST || !MID_TOKEN, 'fixtures not seeded');
     const res = await fetchReport(request, POST!, MID_TOKEN!);
     const body = await res.json();
     const report = body.report as Record<string, unknown>;
-    expect('corridor_map' in report).toBe(false);
-    const text = JSON.stringify(report);
-    expect(text).not.toMatch(/corridor-map/);
-    expect(text).not.toMatch(/hex-cell/);
+    // headcount_trend (cross-event) is the ONLY genuinely premium-only section —
+    // withheld at mid. corridor_map is a Mid section and IS present here (asserted
+    // in the mid-sections test above); do not confuse the two.
+    expect('headcount_trend' in report).toBe(false);
+    expect('corridor_map' in report).toBe(true);
   });
 
   test('live equity check: response shape never exposes raw tier vocabulary', async ({
