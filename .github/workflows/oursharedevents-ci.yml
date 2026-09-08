@@ -1353,6 +1353,19 @@ jobs:
         # it explicitly.
         run: npx playwright install --with-deps chromium webkit
 
+      # OSE-834 slice 2d (Fix 7): the tiers below assert against staging — prove
+      # staging IS this merge before touching it. WORKER_BUILD_VERSION carries
+      # stg-<shortSHA>-<date> (deploy job's "Stamp build version") and /health
+      # echoes it; a stale target (or an unreachable/placeholder version) fails
+      # the whole T4 job HERE, before any seed or tier, rather than every tier
+      # silently passing against the wrong build. NOT continue-on-error.
+      - name: 'T4 preflight: deploy-freshness (OSE-834 2d)'
+        env:
+          HEALTH_URL: '${{ env.STG_BASE_URL }}/health'
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+        run: EXPECTED_SHA="$(git rev-parse --short HEAD)" node scripts/assert-deploy-freshness.mjs
+
       - name: Reset synthetic sponsor fixtures (OSE-944 — journey runs on a clean event)
         id: reset-journey-sponsors
         continue-on-error: true
