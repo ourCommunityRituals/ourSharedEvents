@@ -21,6 +21,10 @@ export const NODE_SPECS = [
   'tests/event-phase.spec.ts',
   'tests/event-state.spec.ts',
   'tests/report-depth.spec.ts',
+  // OSE-714 — read-handler enforcement-state guard for the depth filter. Mocks
+  // the D1 builder + audit log and mints a real signed-link token, so it binds
+  // no runtime (no cloudflare:test / SELF.fetch) and runs node-clean.
+  'tests/shared-report-read-depth-wiring.spec.ts',
 
 // Batch 2 (OSE-946 c3) — manifest node-clean bucket, then GREEN-FILTERED in the
 // node project: added all 43 non-review node candidates, ran the node project,
