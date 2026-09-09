@@ -63,7 +63,9 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          # StrykerJS 10 requires Node >= 22 (the rest of CI runs on 20; this job
+          # is isolated). A lower version fails fast in stryker-cli's engine guard.
+          node-version: 22
           cache: npm
           cache-dependency-path: workers/oursharedevents/package-lock.json
 
