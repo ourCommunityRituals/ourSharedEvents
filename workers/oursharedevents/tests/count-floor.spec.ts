@@ -33,6 +33,15 @@ describe('applyCountFloor — uniform K-anon floor', () => {
     expect(applyCountFloor(Number.NaN)).toEqual({ count: null, suppressed: true, floor: 5 });
     expect(applyCountFloor(4.9)).toEqual({ count: null, suppressed: true, floor: 5 });
     expect(applyCountFloor(5.9)).toEqual({ count: 5, suppressed: false, floor: 5 });
+    // Infinity is the ONLY input that distinguishes the finiteness guard from a
+    // bare `raw > 0`: without `Number.isFinite`, Math.floor(Infinity)=Infinity
+    // sails past the floor as a non-suppressed count. Must be suppressed.
+    // (OSE-1186 mutation kill — the finiteness guard had no teeth without this.)
+    expect(applyCountFloor(Number.POSITIVE_INFINITY)).toEqual({
+      count: null,
+      suppressed: true,
+      floor: 5,
+    });
   });
 
   test('a custom floor is honored and echoed', () => {

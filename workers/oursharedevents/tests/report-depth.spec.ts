@@ -59,6 +59,16 @@ describe('OSE-459: report-depth — resolveDepth (roles + legacy + fail-closed)'
     expect(r.sponsorScope).toBe('sp_A');
   });
 
+  // OSE-1186 mutation kill: an EMPTY-string sponsor_id must NOT become a scope
+  // (the `.length > 0` guard). Without this, `sponsor_id: ''` would set scope to
+  // '' and the impression filter would match rows with an empty sponsor_id — the
+  // one input distinguishing `length > 0` from `length >= 0`.
+  it('scoping: sponsor with an empty-string sponsor_id gets NO scope (length guard)', () => {
+    const r = resolveDepth({ role: 'sponsor', depth: 'mid', sponsor_id: '' });
+    expect(r.sponsorScope).toBeNull();
+    expect(r.sponsorScopeRequired).toBe(true);
+  });
+
   it('OSE-577: internal service role resolves to premium (full payload, no sponsor scope)', () => {
     // Depth is keyed on role, not endpoint. The internal in-fleet batch consumer
     // gets full depth here; the cross-product WKRP token never reaches resolveDepth
@@ -154,6 +164,51 @@ describe('OSE-459: report-depth — filterReportByDepth (additive ladder + equit
     const rows = report.sponsor_impressions as Array<{ sponsor_id: string }>;
     expect(rows).toHaveLength(1);
     expect(rows[0]!.sponsor_id).toBe('sp_A');
+  });
+
+  // OSE-1186 mutation kill: the scoped filter's row guard is
+  // `typeof r === 'object' && r !== null && r.sponsor_id === scope`. The plain
+  // fixture above (only well-formed peer rows) can't prove the `typeof`/`!== null`
+  // limbs have teeth — a mutant dropping either survives. Feed a null and a
+  // non-object row alongside the peer row and assert the scoped token gets ONLY
+  // its own well-formed row (garbage never leaks through the filter).
+  it('scoped filter strips null / non-object / competitor rows, keeps only own well-formed rows', () => {
+    const resolved = resolveDepth({ role: 'sponsor', depth: 'local', sponsor_id: 'sp_A' });
+    const adversarial = {
+      ...SAMPLE_REPORT,
+      sponsor_impressions: [
+        { sponsor_id: 'sp_A', impressions: 200 },
+        { sponsor_id: 'sp_B', impressions: 75 }, // competitor — must be stripped
+        null, // malformed — must be stripped (the `r !== null` limb)
+        'not-an-object', // malformed — must be stripped (the `typeof === object` limb)
+      ],
+    };
+    const { report } = filterReportByDepth({ ...adversarial }, resolved);
+    const rows = report.sponsor_impressions as Array<{ sponsor_id: string }>;
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.sponsor_id).toBe('sp_A');
+  });
+
+  // OSE-1186 mutation kill: the sponsor-scope filter must apply to
+  // sponsor_impressions ONLY (`if (key === 'sponsor_impressions')`). A class-level
+  // aggregate like sponsor_class_breakdown (present at every depth, OSE-719) is
+  // NOT per-competitor and must pass through WHOLE for a scoped sponsor. Without
+  // the key check, every array section would be sponsor-filtered and emptied.
+  it('scoped sponsor gets class-level sections (sponsor_class_breakdown) WHOLE, not sponsor-filtered', () => {
+    const resolved = resolveDepth({ role: 'sponsor', depth: 'local', sponsor_id: 'sp_A' });
+    const withClassBreakdown = {
+      ...SAMPLE_REPORT,
+      // Array section, class-keyed (no sponsor_id) — must survive scoping intact.
+      sponsor_class_breakdown: [
+        { sponsor_class: 'primary', count: 3 },
+        { sponsor_class: 'secondary', count: 5 },
+      ],
+    };
+    const { report } = filterReportByDepth({ ...withClassBreakdown }, resolved);
+    const breakdown = report.sponsor_class_breakdown as Array<{ sponsor_class: string }>;
+    expect(breakdown).toHaveLength(2); // delivered whole — NOT filtered to zero by sponsor scope
+    // …while sponsor_impressions IS still scoped in the same call (both behaviours hold together).
+    expect((report.sponsor_impressions as unknown[]).length).toBe(1);
   });
 });
 

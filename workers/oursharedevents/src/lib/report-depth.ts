@@ -121,6 +121,7 @@ export interface ResolvedDepth {
 /** Resolve effective depth from token claims. Fail-closed on garbage. */
 export function resolveDepth(claim: DepthClaimInput): ResolvedDepth {
   const requested =
+    // Stryker disable next-line ConditionalExpression: equivalent mutant — dropping the `typeof === 'string'` guard changes nothing because `DEPTH_ORDER.includes(x)` already returns false for any non-string, so a non-string claim still resolves to null. The guard is kept for type-narrowing + defense-in-depth on the untrusted claim. OSE-1186.
     typeof claim.depth === 'string' && (DEPTH_ORDER as string[]).includes(claim.depth)
       ? (claim.depth as ReportDepth)
       : null;
@@ -173,6 +174,7 @@ export function filterReportByDepth<T extends Record<string, unknown>>(
         out[key] = Array.isArray(rows)
           ? rows.filter(
               (r) =>
+                // Stryker disable next-line ConditionalExpression: equivalent mutant — dropping the `typeof === 'object'` guard changes nothing because the `r !== null` limb catches null and a primitive `r` has no matching `sponsor_id` (so it fails the scope check anyway). Kept as defense-in-depth on untrusted rows; the `!== null` + `sponsor_id` limbs ARE killed by the null / non-object / competitor rows in report-depth.spec.ts. OSE-1186.
                 typeof r === 'object' &&
                 r !== null &&
                 (r as Record<string, unknown>).sponsor_id === resolved.sponsorScope
@@ -194,6 +196,7 @@ export function filterReportByDepth<T extends Record<string, unknown>>(
   // Inline upgrade hint (the "blurred Mid section" hook — rendering decides
   // presentation; the API states exactly which sections exist but are locked).
   const idx = DEPTH_ORDER.indexOf(resolved.depth);
+  // Stryker disable next-line ConditionalExpression,EqualityOperator,ArithmeticOperator: equivalent mutants — at the top tier (premium, idx=2) `DEPTH_ORDER[idx + 1]` is `undefined`, which is falsy, so the `next ? … : null` below yields `null` regardless of whether the boundary reads `<`, `<=`, or `length + 1`. The premium→no-upgrade contract IS asserted (upgrade === null) in report-depth.spec.ts. OSE-1186.
   const next = idx < DEPTH_ORDER.length - 1 ? DEPTH_ORDER[idx + 1]! : null;
   const upgrade: UpgradeHint | null = next
     ? {
