@@ -1,0 +1,84 @@
+# Mutation testing (StrykerJS) — OSE-1186 G1, the "teeth-check" on the pyramid.
+#
+# WHY A SEPARATE NIGHTLY JOB (not a per-PR gate)
+# Mutation testing re-runs the covered specs once per mutant. Even on the fast
+# node vitest project (the covenant guards are pure logic — see stryker.conf.mjs)
+# that is minutes of work: it would tax every PR for a signal that changes slowly.
+# Idle hours are the right home. A drop below the break threshold (95%, mirroring
+# the CCR artifact standard) fails the run loudly for a human to read.
+#
+# WHAT IT PROVES
+# The integrity guards catch *skipped* tests; they cannot see a *hollow* one — a
+# green assertion with no teeth. A surviving mutant in count-floor.ts (Invariant
+# #8, K-anon floor) or report-depth.ts (Invariant #5, tier-equity depth omission)
+# means the pyramid defending that covenant invariant is hollow. Break below 95%
+# so a real hollow spot fails, not quietly.
+#
+# WHAT IT DOES NOT DO
+# Never merges, never pushes — rail R5, "merges stay human-gated." A failure
+# leaves the HTML report as an artifact and a red run.
+name: Mutation testing (covenant guards)
+
+on:
+  schedule:
+    # 08:40 UTC — clear of overnight-fuzz (07:00) and the 08:00 jobs.
+    - cron: '40 8 * * *'
+  workflow_dispatch:
+  # Per-PR gate, but ONLY for changes that can hollow a covenant guard. The run
+  # is ~10s (two pure-logic files on the node project), so gating the handful of
+  # PRs that touch these files closes the ~24h post-merge hollowing window
+  # without taxing every other PR. If you add a mutate target in stryker.conf.mjs,
+  # add its source + spec here too — a stale filter is a gate that never fires.
+  pull_request:
+    paths:
+      - 'workers/oursharedevents/src/lib/count-floor.ts'
+      - 'workers/oursharedevents/src/lib/report-depth.ts'
+      - 'workers/oursharedevents/tests/count-floor.spec.ts'
+      - 'workers/oursharedevents/tests/report-depth.spec.ts'
+      - 'workers/oursharedevents/stryker.conf.mjs'
+      - 'workers/oursharedevents/vitest.node.config.mts'
+      - 'workers/oursharedevents/package.json'
+      - 'workers/oursharedevents/package-lock.json'
+      - '.github/workflows/mutation-testing.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  # Per-ref + per-event so PR runs don't serialize against each other or the
+  # nightly. Cancel superseded PR runs (a newer push obsoletes the older); never
+  # cancel the nightly/dispatch.
+  group: mutation-testing-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  mutation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: workers/oursharedevents
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # StrykerJS 10 requires Node >= 22 (the rest of CI runs on 20; this job
+          # is isolated). A lower version fails fast in stryker-cli's engine guard.
+          node-version: 22
+          cache: npm
+          cache-dependency-path: workers/oursharedevents/package-lock.json
+
+      - run: npm ci
+
+      - name: Run Stryker mutation testing
+        run: npm run test:mutation
+
+      - name: Upload mutation report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mutation-report
+          path: workers/oursharedevents/reports/mutation/**
+          retention-days: 30
+          if-no-files-found: warn

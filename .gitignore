@@ -48,6 +48,8 @@ coverage/
 
 # Test reports
 newman-reports/
+**/reports/mutation/
+.stryker-tmp/
 playwright-report/
 playwright-report-*/
 test-results/
