@@ -1292,8 +1292,18 @@ export async function route(
       'email-signup': 2,
     };
     const requiredPhase = FORM_PHASE_REQUIREMENTS[formType];
-    if (requiredPhase && eventRow) {
-      const actualPhase = eventRow.legal_clearance_tier ?? 1;
+    if (requiredPhase) {
+      // Fail-closed (OSE-1270): a personal-data form (survey / email-signup) may be
+      // submitted ONLY against an EXISTING, Phase-2-cleared event. A missing event
+      // has no clearance, so it counts as Phase 0 and is blocked. The prior
+      // `&& eventRow` guard let an unknown event id pass straight through — and
+      // because form_surveys / email_signups carry no FK to events, the PII then
+      // persisted against a phantom, never-cleared event (a covenant-floor breach:
+      // PII collected outside a legally-cleared context). Non-phase forms
+      // (register / checkin) keep the un-seeded-fixture pass-through above; only the
+      // Phase-2 personal-data forms fail closed here. A missing event and an
+      // uncleared event both return PHASE_REQUIRED (no existence disclosure).
+      const actualPhase = eventRow ? (eventRow.legal_clearance_tier ?? 1) : 0;
       if (actualPhase < requiredPhase) {
         return Response.json(
           {
