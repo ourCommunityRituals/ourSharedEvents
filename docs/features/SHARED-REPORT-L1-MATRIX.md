@@ -112,9 +112,16 @@ composition endpoint lands):
 | `P-enterprise-config` | admin/config-owner | premium | all-rows | A+B+subgroups | post |
 | `P-league-rollup` | admin | premium | all-rows | roll-up over weeks×teams | recurring |
 
-**Event-state axis (dim-orthogonal, applied per profile):** `pre` · `live` ·
-`post` · `ended` × section availability. Today almost everything is asserted at
-`post` only — the pre/live/ended cells are a known gap (§7).
+**Data-maturity axis (dim-orthogonal, applied per profile) — NOT event lifecycle
+state.** Verify-first correction (2026-09-08): the SR read path is **event-status-
+blind** — `events.status` (`draft|ready|active|archived`) is never consulted by
+the handler, and the builder is state-blind by design (ADR-017 / Invariant #5).
+The section *set* is governed by **depth**, never by lifecycle. What actually
+varies across an event's life is **data volume through the K=5 floor**: empty/young
+→ sections present but `null`/suppressed (sub-K); mature (≥K) → published exact.
+So the axis is `empty · sub-K · ≥K` (+ `status`-invariance as a born-red guard),
+not `pre/live/post/ended`. Covered by
+`tests/shared-report-event-state-maturity.spec.ts` (this slice).
 
 ---
 
@@ -222,7 +229,7 @@ established; fan out from it.
 ### Net-new (the OSE-1172 remaining slices + siblings)
 | Build-list item | Weather focus | Ticket |
 |-----------------|---------------|--------|
-| **Event-state axis** (pre/live/post/ended × tier × section) | happy + edge | OSE-1172 slice (event-state) |
+| ~~Event-state axis~~ → **Data-maturity axis** (status-invariance + empty/sub-K/≥K on the read path) — ✅ `shared-report-event-state-maturity.spec.ts` | happy + edge | OSE-1172 slice (done) |
 | **Forms phase-gate × SharedReport** mutual enforcement | rainy + edge | OSE-1172 slice |
 | **Abuse cells** (429 / QR-dedup) as data-driven rows | rainy | OSE-1172 slice |
 | **Missing-signing-secret HTTP path** (mint 503 / read 401) | rainy | OSE-1172 slice (optional) |
