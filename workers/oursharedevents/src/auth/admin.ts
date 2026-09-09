@@ -67,6 +67,16 @@ async function _getJwks(teamDomain: string): Promise<CryptoKey[]> {
 }
 
 /**
+ * Test-only: clear the module-level JWKS cache so a test can force a fresh fetch
+ * (cache-miss / fetch-failure paths). Not used in production. Prefer this over
+ * vi.resetModules()+dynamic import, which is incompatible with StrykerJS per-test
+ * coverage (OSE-1278).
+ */
+export function __resetJwksCacheForTests(): void {
+  _jwksCache = null;
+}
+
+/**
  * Cryptographically verify a CF Access JWT against the team's public JWKS.
  * Returns the decoded payload on success, null on any failure (invalid sig,
  * expired, malformed). Call this ONCE per request before requireAdmin —

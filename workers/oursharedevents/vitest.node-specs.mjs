@@ -93,6 +93,12 @@ export const NODE_SPECS = [
   'tests/red-team/auth-env-gating.spec.ts',
   'tests/red-team/auth-jwt-fuzz.property.spec.ts',
 
+  // OSE-1278 (G1 follow-on) — node-clean coverage for the CF Access JWT signature
+  // path (verifyCfAccessJWT/_fetchJwks/_getJwks): generates an RSA keypair, signs
+  // a JWT, stubs fetch to serve the JWKS. Re-imports admin.ts per test to reset the
+  // module-level JWKS cache. No cloudflare:test/D1 — runs node-clean for Stryker.
+  'tests/red-team/auth-jwks-verify.spec.ts',
+
   // OSE-1273 (G1 follow-on) — node-clean L2 crypto coverage for src/lib/pii.ts
   // (hashEmail/encryptEmail/decryptEmail), so Stryker mutation runs on the PII
   // guard off the workerd pool. Uses only crypto.subtle + TextEncoder (both
