@@ -220,6 +220,10 @@ established; fan out from it.
   `shared-report-read-depth-wiring.spec.ts`
 - Sponsor slice isolation (OSE-1172 **slice 1, merged #466**) —
   `shared-report-sponsor-isolation.spec.ts`
+- **Depth × section gating on the wire** (the dim-1 "heart": local/mid/premium
+  section set + `upgrade.locked_sections`, L1 Vitest — the cheap version of the
+  E2E T4f) — `shared-report-depth-section-matrix.spec.ts` (this slice)
+- Data-maturity / status-invariance on the wire — `shared-report-event-state-maturity.spec.ts`
 - K-anon floor (report + poster) — `shared-report-kanon-floor.spec.ts`,
   `poster-attribution-kanon-floor.spec.ts`
 - Pipeline invariants (already `test.each`) — `shared-report-pipeline-invariants.spec.ts`
