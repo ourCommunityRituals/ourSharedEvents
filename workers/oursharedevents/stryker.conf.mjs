@@ -37,11 +37,13 @@ export default {
     'src/lib/count-floor.ts',
     'src/lib/report-depth.ts',
     // OSE-1273 (G1 follow-on) — the PII-scrub crypto (email hashing/encryption),
-    // covered by the node-project pii-crypto.spec.ts so mutation runs on the fast
-    // node runner alongside the covenant guards. (The authZ guard src/auth/admin.ts
-    // is deferred to OSE-1278: its verifyCfAccessJWT path needs an RSA/JWKS
-    // node harness and constantTimeEqual carries structurally-equivalent mutants.)
+    // covered by the node-project pii-crypto.spec.ts.
     'src/lib/pii.ts',
+    // OSE-1278: src/auth/admin.ts is NOT yet a mutate target. Slice 1 landed the
+    // JWKS/RSA harness (auth-jwks-verify.spec.ts) that makes verifyCfAccessJWT
+    // testable off the workerd pool — adding it here scored 56.65% (87 survivors
+    // + 27 no-cov: constantTimeEqual equivalents, JWKS-TTL timing, DEV_OPEN path,
+    // error-message strings). Slice 2 = the kill/document loop to break:95.
   ],
   coverageAnalysis: 'perTest',
   reporters: ['html', 'clear-text', 'progress'],
