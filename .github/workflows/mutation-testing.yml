@@ -24,13 +24,32 @@ on:
     # 08:40 UTC — clear of overnight-fuzz (07:00) and the 08:00 jobs.
     - cron: '40 8 * * *'
   workflow_dispatch:
+  # Per-PR gate, but ONLY for changes that can hollow a covenant guard. The run
+  # is ~10s (two pure-logic files on the node project), so gating the handful of
+  # PRs that touch these files closes the ~24h post-merge hollowing window
+  # without taxing every other PR. If you add a mutate target in stryker.conf.mjs,
+  # add its source + spec here too — a stale filter is a gate that never fires.
+  pull_request:
+    paths:
+      - 'workers/oursharedevents/src/lib/count-floor.ts'
+      - 'workers/oursharedevents/src/lib/report-depth.ts'
+      - 'workers/oursharedevents/tests/count-floor.spec.ts'
+      - 'workers/oursharedevents/tests/report-depth.spec.ts'
+      - 'workers/oursharedevents/stryker.conf.mjs'
+      - 'workers/oursharedevents/vitest.node.config.mts'
+      - 'workers/oursharedevents/package.json'
+      - 'workers/oursharedevents/package-lock.json'
+      - '.github/workflows/mutation-testing.yml'
 
 permissions:
   contents: read
 
 concurrency:
-  group: mutation-testing
-  cancel-in-progress: false
+  # Per-ref + per-event so PR runs don't serialize against each other or the
+  # nightly. Cancel superseded PR runs (a newer push obsoletes the older); never
+  # cancel the nightly/dispatch.
+  group: mutation-testing-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   mutation:
