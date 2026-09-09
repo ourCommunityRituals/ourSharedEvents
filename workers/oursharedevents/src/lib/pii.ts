@@ -32,6 +32,9 @@ export const ENCRYPTION_VERSION = 'v1';
 // existing records with reencrypt-pii.ts, then remove "v1" from the map.
 
 function parseKeyMap(formsEncKey: string): Record<string, string> {
+  // Stryker disable next-line ConditionalExpression: equivalent mutant — with a
+  // falsy key, the guard ({}) and the fall-through ({v1:''}) both end at the same
+  // "No encryption/decryption key" throw downstream; no observable difference.
   if (!formsEncKey) return {};
   try {
     const parsed: unknown = JSON.parse(formsEncKey);
@@ -65,12 +68,16 @@ function activeVersion(keyMap: Record<string, string>): string {
  */
 export function assertPepperConfigured(pepper?: string): asserts pepper is string {
   if (!pepper) {
+    // Stryker disable StringLiteral: the THROW is the behavioural contract (tested
+    // in pii-crypto.spec.ts); the exact operator-guidance wording is not a contract
+    // a test should pin, so blanking a message segment is an equivalent mutant.
     throw new Error(
       'FORMS_HASH_PEPPER is not configured. Email hashing requires the pepper to ' +
         'be provisioned; a missing pepper would silently produce a non-matching ' +
         'hash and cause GDPR/CCPA erasure lookups to no-op while reporting success. ' +
         'Set the FORMS_HASH_PEPPER secret (wrangler secret put FORMS_HASH_PEPPER).'
     );
+    // Stryker restore StringLiteral
   }
 }
 
@@ -117,6 +124,9 @@ export async function hashEmail(
       'raw',
       new TextEncoder().encode(pepper),
       { name: 'HMAC', hash: 'SHA-256' },
+      // Stryker disable next-line BooleanLiteral: extractable=false is a security
+      // property (the key can't be exported), not output-observable — a functional
+      // hash/roundtrip test cannot distinguish false from true.
       false,
       ['sign']
     );
@@ -152,6 +162,9 @@ async function deriveKey(secret: string, version: string): Promise<CryptoKey> {
     },
     keyMaterial,
     { name: 'AES-GCM', length: 256 },
+    // Stryker disable next-line BooleanLiteral: extractable=false is a security
+    // property (derived key can't be exported), not output-observable — an
+    // encrypt/decrypt roundtrip cannot distinguish false from true.
     false,
     ['encrypt', 'decrypt']
   );
@@ -168,6 +181,9 @@ export async function encryptEmail(email: string, secret: string): Promise<strin
   const keyMap = parseKeyMap(secret);
   const version = activeVersion(keyMap);
   const rawKey = keyMap[version];
+  // Stryker disable next-line StringLiteral: message wording is not a contract; the
+  // throw itself is tested (empty-secret → No encryption key). ConditionalExpression
+  // on this line stays live (killed by that test).
   if (!rawKey) throw new Error(`No encryption key found for version ${version}`);
 
   const key = await deriveKey(rawKey, version);
@@ -192,6 +208,11 @@ export async function encryptEmail(email: string, secret: string): Promise<strin
 export async function decryptEmail(encrypted: string, secret: string): Promise<string> {
   const colonIdx = encrypted.indexOf(':');
   const version = colonIdx !== -1 ? encrypted.slice(0, colonIdx) : ENCRYPTION_VERSION;
+  // Stryker disable next-line ConditionalExpression,UnaryOperator: equivalent —
+  // when colonIdx === -1, `slice(colonIdx + 1)` = `slice(0)` = the whole string =
+  // the else branch, so `true ?` and `!== +1` are indistinguishable for every real
+  // ciphertext (the only distinguishing input, colonIdx === 1, is an impossible
+  // single-char-version format). The version line above IS killed (unversioned test).
   const payload = colonIdx !== -1 ? encrypted.slice(colonIdx + 1) : encrypted;
 
   const keyMap = parseKeyMap(secret);

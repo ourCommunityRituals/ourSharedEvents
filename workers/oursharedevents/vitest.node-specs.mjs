@@ -92,4 +92,10 @@ export const NODE_SPECS = [
   // Green-filtered in the node project before landing.
   'tests/red-team/auth-env-gating.spec.ts',
   'tests/red-team/auth-jwt-fuzz.property.spec.ts',
+
+  // OSE-1273 (G1 follow-on) — node-clean L2 crypto coverage for src/lib/pii.ts
+  // (hashEmail/encryptEmail/decryptEmail), so Stryker mutation runs on the PII
+  // guard off the workerd pool. Uses only crypto.subtle + TextEncoder (both
+  // node-available); the workers-bound pii.spec.ts keeps its D1 L1 block.
+  'tests/pii-crypto.spec.ts',
 ];
