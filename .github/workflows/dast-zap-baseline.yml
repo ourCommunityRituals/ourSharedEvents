@@ -34,6 +34,14 @@ on:
     # 09:20 UTC — after the mutation job (08:40) and clear of the morning cluster.
     - cron: '20 9 * * *'
   workflow_dispatch:
+  # Self-scoped: the scan runs on any PR that changes the scan itself, so the
+  # mechanism (Worker boot, container→host networking, rule tuning) is proven
+  # on the PR that edits it — never a stale scanner merged unrun. Broadening to
+  # gate PRs that touch the page handlers/templates is a post-calibration step.
+  pull_request:
+    paths:
+      - '.github/workflows/dast-zap-baseline.yml'
+      - '.zap/rules.tsv'
 
 permissions:
   contents: read
