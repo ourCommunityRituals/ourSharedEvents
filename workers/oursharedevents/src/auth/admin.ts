@@ -213,9 +213,11 @@ export async function requireAdmin(
   // Method 1: Cloudflare Access JWT + RSA signature verification (OSE-590 / OSE-211)
   const cfJwt = request.headers.get('Cf-Access-Jwt-Assertion');
   if (cfJwt) {
+    const isDeployedEnv = env.WORKER_ENV === 'staging' || env.WORKER_ENV === 'production';
     // When CF_ACCESS_TEAM_DOMAIN is configured, the JWT signature MUST be
     // cryptographically verified against the JWKS before trusting any claims.
     // Skipping this check allows a forged JWT with any email to bypass auth.
+    let cfTrustable = true;
     if (env.CF_ACCESS_TEAM_DOMAIN) {
       const verification = await verifyCfAccessJWT(cfJwt, env.CF_ACCESS_TEAM_DOMAIN);
       if (!verification.valid) {
@@ -228,14 +230,34 @@ export async function requireAdmin(
           },
         });
       }
+    } else if (isDeployedEnv) {
+      // FAIL CLOSED (OSE-1186 G4): a deployed env with no CF_ACCESS_TEAM_DOMAIN
+      // cannot verify the signature, so trusting the payload would accept a
+      // forged JWT bearing any allowlisted email. Log the misconfiguration and
+      // do NOT trust the JWT path — fall through to the secret-bearing Methods
+      // 2/3 (→ final 401 if none authenticate). Local dev (no WORKER_ENV) keeps
+      // the unverified-extract convenience below.
+      console.log(
+        JSON.stringify({
+          level: 'error',
+          event: 'ADMIN_AUTH_MISCONFIG',
+          message:
+            'CF Access JWT present but CF_ACCESS_TEAM_DOMAIN unset in a deployed env — JWT not trusted (fail-closed)',
+          worker_env: env.WORKER_ENV ?? null,
+          request_id: requestId,
+        })
+      );
+      cfTrustable = false;
     }
 
-    const { valid, email } = extractCfAccessPayload(cfJwt);
-    if (valid && email) {
-      // A CF Access JWT carrying a HUMAN email must pass the admin allowlist.
-      const allowlistDeny = assertAdminEmailAllowed(email, env, requestId);
-      if (allowlistDeny) return allowlistDeny;
-      return null;
+    if (cfTrustable) {
+      const { valid, email } = extractCfAccessPayload(cfJwt);
+      if (valid && email) {
+        // A CF Access JWT carrying a HUMAN email must pass the admin allowlist.
+        const allowlistDeny = assertAdminEmailAllowed(email, env, requestId);
+        if (allowlistDeny) return allowlistDeny;
+        return null;
+      }
     }
     // OSE-889: a VALID CF Access JWT with NO email is a **service token**
     // (non-human identity — CF Access injects these when a service token

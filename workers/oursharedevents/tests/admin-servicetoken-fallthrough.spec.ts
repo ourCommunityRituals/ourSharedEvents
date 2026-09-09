@@ -97,9 +97,22 @@ describe('OSE-889 — service-token JWT (no email) falls through to ADMIN_KEY / 
     expect(res!.status).toBeGreaterThanOrEqual(401);
   });
 
+  // ── Allowlist behaviour on a TRUSTED JWT ──
+  // These two assert the email-allowlist logic against a JWT whose payload is
+  // trusted WITHOUT a JWKS signature check. After the OSE-1186 G4 fail-closed
+  // guard, a deployed env (staging/production) with no CF_ACCESS_TEAM_DOMAIN no
+  // longer trusts an unverified JWT — so the legitimate place to exercise
+  // "trusted-JWT → allowlist" without mocking JWKS is a LOCAL env (WORKER_ENV
+  // undefined), where the unverified-extract path is by-design. The deployed
+  // fail-closed behaviour itself is asserted in red-team/auth-env-gating.spec.ts.
+  const localEnv = {} as unknown as AdminEnv; // no WORKER_ENV, no team domain
+  function withLocalEnv(extra: Record<string, string>): AdminEnv {
+    return { ...(localEnv as object), ...extra } as unknown as AdminEnv;
+  }
+
   test('SECURITY: a human JWT with a NON-allowlisted email is still 403 (allowlist unaffected)', async () => {
     const req = adminReq({ 'Cf-Access-Jwt-Assertion': humanJwt('stranger@nowhere.test') });
-    const env = withEnv({ ALLOWED_ADMIN_EMAILS: 'admin@oursharedevents.com' });
+    const env = withLocalEnv({ ALLOWED_ADMIN_EMAILS: 'admin@oursharedevents.com' });
     const res = await requireAdmin(req, env, 'req-5');
     expect(res, 'non-allowlisted human must stay rejected').not.toBeNull();
     expect(res!.status).toBe(403);
@@ -107,7 +120,7 @@ describe('OSE-889 — service-token JWT (no email) falls through to ADMIN_KEY / 
 
   test('a human JWT with an ALLOWLISTED email still passes (unchanged)', async () => {
     const req = adminReq({ 'Cf-Access-Jwt-Assertion': humanJwt('admin@oursharedevents.com') });
-    const env = withEnv({ ALLOWED_ADMIN_EMAILS: 'admin@oursharedevents.com' });
+    const env = withLocalEnv({ ALLOWED_ADMIN_EMAILS: 'admin@oursharedevents.com' });
     const res = await requireAdmin(req, env, 'req-6');
     expect(res).toBeNull();
   });
