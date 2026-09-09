@@ -1,0 +1,180 @@
+# OWASP ZAP baseline DAST — OSE-1186 G2, the runtime security teeth.
+#
+# WHY THIS EXISTS
+# SAST/deps/secrets/property-fuzz already run in CI. What none of them prove is
+# how the *running* Worker behaves over HTTP: does it actually emit the CSP /
+# X-Frame-Options / nosniff / Referrer-Policy / HSTS headers the code claims, on
+# every public surface, and does a passive scan surface reflected-XSS or
+# info-disclosure signals on sharedReport/display/poster (Invariant surface
+# with no mechanical runtime enforcement today). DAST is the only layer that
+# reads the response as an attacker's browser would.
+#
+# SLICE 1 — PUBLIC SURFACES, LOCAL EPHEMERAL, NO SECRET.
+# The target is a local `wrangler dev --local` Worker (no live staging, no
+# token). Every scanned URL is a public GET that renders self-contained HTML in
+# mock mode — no auth, no DB seeding. The authenticated depth (admin surfaces +
+# stored-XSS via seeded data) is a follow-on slice that needs an owner-provided
+# credential; it is deliberately NOT here.
+#
+# WHY A NIGHTLY (not per-PR yet)
+# A brand-new scanner needs a calibration run before it can gate: the first run
+# enumerates the true WARN profile, which is then triaged into FAIL (real) or
+# IGNORE-with-reason (.zap/rules.tsv). Until calibrated, the job reports every
+# warning loudly but only FAILS on a FAIL-level alert — never continue-on-error,
+# never a silent skip. Promotion to a per-PR gate (path-filtered to the page
+# handlers/templates) follows once the profile is stable.
+#
+# WHAT IT DOES NOT DO
+# Never merges, never pushes (rail R5). A finding leaves the HTML/JSON report as
+# an artifact and a red run.
+name: DAST — ZAP baseline (public surfaces)
+
+on:
+  schedule:
+    # 09:20 UTC — after the mutation job (08:40) and clear of the morning cluster.
+    - cron: '20 9 * * *'
+  workflow_dispatch:
+  # Self-scoped: the scan runs on any PR that changes the scan itself, so the
+  # mechanism (Worker boot, container→host networking, rule tuning) is proven
+  # on the PR that edits it — never a stale scanner merged unrun. Broadening to
+  # gate PRs that touch the page handlers/templates is a post-calibration step.
+  pull_request:
+    paths:
+      - '.github/workflows/dast-zap-baseline.yml'
+      - '.zap/rules.tsv'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dast-zap-baseline
+  cancel-in-progress: false
+
+env:
+  PORT: '8789'
+  BASE: 'http://127.0.0.1:8789'
+  WRANGLER_SEND_METRICS: 'false'
+
+jobs:
+  zap-baseline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout OSE
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: workers/oursharedevents/package-lock.json
+
+      # @ocr/ui and @ocr/flags are file:-linked; wrangler dev cannot bundle the
+      # Worker without them (OSE-1249). Same staging the mobile-workability and
+      # T0 jobs use.
+      - name: Stage adjacent @ocr workspace packages
+        shell: bash
+        continue-on-error: true
+        timeout-minutes: 2
+        env:
+          GIT_TERMINAL_PROMPT: '0'
+        run: bash scripts/ci-stage-ocr-workspace.sh
+
+      - name: Install root dependencies
+        run: npm ci --prefer-offline || npm ci
+
+      - name: Install worker dependencies
+        working-directory: workers/oursharedevents
+        run: npm ci --prefer-offline || npm ci
+
+      - name: Apply D1 local migrations (DB + FORMS_DB)
+        working-directory: workers/oursharedevents
+        run: |
+          npx wrangler d1 migrations apply DB --local
+          npx wrangler d1 migrations apply FORMS_DB --local
+
+      - name: Boot Worker (wrangler dev --local) and wait for health
+        working-directory: workers/oursharedevents
+        run: |
+          nohup npx wrangler dev --local --port "$PORT" > "$GITHUB_WORKSPACE/wrangler.log" 2>&1 &
+          echo "Waiting for the Worker to answer on $BASE/health ..."
+          for i in $(seq 1 60); do
+            if curl -fsS "$BASE/health" | grep -q '"ok"'; then
+              echo "Worker ready after ${i}0 ds"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "::error::Worker never became healthy on $BASE/health"
+          echo "----- wrangler.log -----"
+          cat "$GITHUB_WORKSPACE/wrangler.log" || true
+          exit 1
+
+      - name: Prepare ZAP work dir
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/zap-work"
+          cp .zap/rules.tsv "$GITHUB_WORKSPACE/zap-work/rules.tsv"
+          # ZAP runs as the 'zap' user inside the container; the mounted volume
+          # must be writable by it or report writes fail.
+          chmod -R 777 "$GITHUB_WORKSPACE/zap-work"
+
+      - name: ZAP baseline scan (public surfaces)
+        run: |
+          set -u
+          # Public GET surfaces that render self-contained HTML in mock mode:
+          # no auth, no DB seeding. sharedReport/display/poster are the covenant-
+          # facing surfaces the ticket names; demo tiers exercise the depth ladder.
+          URLS="/ /events /display /poster /sharedReport /demo /demo/free /demo/mid /demo/premium /health"
+          IMAGE="ghcr.io/zaproxy/zaproxy:stable"
+          docker pull -q "$IMAGE"
+          worst=0   # 0 clean, 2 warnings only, 1 fail-level found
+          summary="$GITHUB_STEP_SUMMARY"
+          echo "## ZAP baseline — public surfaces" >> "$summary"
+          echo "" >> "$summary"
+          echo "| Surface | Result |" >> "$summary"
+          echo "|---|---|" >> "$summary"
+          for path in $URLS; do
+            name=$(echo "$path" | sed 's#[/]#_#g; s#^_##; s#^$#root#')
+            [ -z "$name" ] && name="root"
+            echo "::group::ZAP baseline $path"
+            set +e
+            docker run --network=host --rm \
+              -v "$GITHUB_WORKSPACE/zap-work:/zap/wrk/:rw" \
+              -t "$IMAGE" zap-baseline.py \
+              -t "$BASE$path" \
+              -c rules.tsv \
+              -m 1 -T 5 \
+              -r "report-$name.html" -J "report-$name.json"
+            code=$?
+            set -e
+            echo "::endgroup::"
+            case "$code" in
+              0) verdict="✅ clean" ;;
+              2) verdict="⚠️ warnings (reported, not gating — calibration slice)"; if [ "$worst" -eq 0 ]; then worst=2; fi ;;
+              1) verdict="❌ FAIL-level alert"; worst=1 ;;
+              *) verdict="🛑 scan error (exit $code)"; worst=1 ;;
+            esac
+            echo "| \`$path\` | $verdict |" >> "$summary"
+          done
+          echo "" >> "$summary"
+          if [ "$worst" -eq 1 ]; then
+            echo "::error::ZAP baseline found a FAIL-level alert (or a scan error). See the artifact."
+            exit 1
+          fi
+          if [ "$worst" -eq 2 ]; then
+            echo "ZAP baseline: warnings only — reported for calibration, not gating this slice."
+          fi
+          exit 0
+
+      - name: Upload ZAP reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: zap-baseline-reports
+          path: |
+            zap-work/report-*.html
+            zap-work/report-*.json
+            wrangler.log
+          retention-days: 30
+          if-no-files-found: warn
