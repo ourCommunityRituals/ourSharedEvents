@@ -32,6 +32,16 @@ describe('OSE-1186 G2: cross-cutting hardening headers on every public surface',
     });
   }
 
+  test('/health (JSON) carries nosniff and the hardening headers', async () => {
+    // The DAST scans /health; ZAP 10021 (nosniff) + 90004 (CORP) fire on JSON
+    // too, so this public endpoint must be hardened like the HTML surfaces.
+    const res = await SELF.fetch('https://t.test/health');
+    expect(res.headers.get('X-Content-Type-Options')).toBe('nosniff');
+    for (const [name, value] of Object.entries(HARDENING_HEADERS)) {
+      expect(res.headers.get(name), `/health missing ${name}`).toBe(value);
+    }
+  });
+
   test('/ui.css carries nosniff and the isolation headers (wrapped @ocr/ui response)', async () => {
     const res = await SELF.fetch('https://t.test/ui.css');
     expect(res.headers.get('X-Content-Type-Options')).toBe('nosniff');
