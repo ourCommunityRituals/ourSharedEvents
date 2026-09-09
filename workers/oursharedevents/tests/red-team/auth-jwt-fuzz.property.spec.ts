@@ -44,13 +44,23 @@ const forgedJwtArb = fc
     return `${header}.${payload}.forged-signature`;
   });
 
-/** Also throw pure garbage at it — wrong segment counts, non-base64, unicode. */
-const garbageJwtArb = fc.oneof(
-  fc.string(),
-  fc.string({ unit: 'binary' }),
-  fc.tuple(fc.string(), fc.string()).map(([a, b]) => `${a}.${b}`),
-  fc.tuple(fc.string(), fc.string(), fc.string(), fc.string()).map((p) => p.join('.'))
-);
+/**
+ * Also throw pure garbage at it — wrong segment counts, non-base64, junk.
+ * Constrained to printable ASCII (0x20–0x7E): an HTTP header VALUE cannot carry
+ * control chars (CR/LF/NUL), and Cloudflare rejects such requests at the edge
+ * before the Worker runs — so a request-construction throw here would test the
+ * Headers ctor, not the auth guard. Header-safe garbage keeps the fuzz on the
+ * guard. (fast-check surfaced this: binary strings threw in `new Request`.)
+ */
+const printable = (s: string) => s.replace(/[^\x20-\x7e]/g, '');
+const garbageJwtArb = fc
+  .oneof(
+    fc.string(),
+    fc.string({ unit: 'binary' }),
+    fc.tuple(fc.string(), fc.string()).map(([a, b]) => `${a}.${b}`),
+    fc.tuple(fc.string(), fc.string(), fc.string(), fc.string()).map((p) => p.join('.'))
+  )
+  .map(printable);
 
 function adminReq(jwt: string): Request {
   return new Request('https://x/api/v2/admin/sponsors', {

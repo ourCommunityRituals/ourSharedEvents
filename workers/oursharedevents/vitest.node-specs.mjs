@@ -84,4 +84,12 @@ export const NODE_SPECS = [
   // D1/SELF (only fetch/Response/URLSearchParams), so it runs in the node project
   // and stubs `fetch` for the upstream branches. Proven green in the node project.
   'tests/maps.spec.ts',
+
+  // OSE-1186 G4 — net-new negative-auth specs. Call requireAdmin() directly with
+  // hand-built Requests/env; no cloudflare:test, no SELF.fetch, no D1 (the
+  // fail-closed path takes no JWKS fetch), so they run node-clean like the
+  // sibling admin-servicetoken-fallthrough / signed-link-token-forgery specs.
+  // Green-filtered in the node project before landing.
+  'tests/red-team/auth-env-gating.spec.ts',
+  'tests/red-team/auth-jwt-fuzz.property.spec.ts',
 ];
