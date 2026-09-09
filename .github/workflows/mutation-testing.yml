@@ -33,8 +33,10 @@ on:
     paths:
       - 'workers/oursharedevents/src/lib/count-floor.ts'
       - 'workers/oursharedevents/src/lib/report-depth.ts'
+      - 'workers/oursharedevents/src/lib/pii.ts'
       - 'workers/oursharedevents/tests/count-floor.spec.ts'
       - 'workers/oursharedevents/tests/report-depth.spec.ts'
+      - 'workers/oursharedevents/tests/pii-crypto.spec.ts'
       - 'workers/oursharedevents/stryker.conf.mjs'
       - 'workers/oursharedevents/vitest.node.config.mts'
       - 'workers/oursharedevents/package.json'
