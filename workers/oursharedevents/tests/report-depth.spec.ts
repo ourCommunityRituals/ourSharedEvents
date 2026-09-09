@@ -188,6 +188,28 @@ describe('OSE-459: report-depth — filterReportByDepth (additive ladder + equit
     expect(rows).toHaveLength(1);
     expect(rows[0]!.sponsor_id).toBe('sp_A');
   });
+
+  // OSE-1186 mutation kill: the sponsor-scope filter must apply to
+  // sponsor_impressions ONLY (`if (key === 'sponsor_impressions')`). A class-level
+  // aggregate like sponsor_class_breakdown (present at every depth, OSE-719) is
+  // NOT per-competitor and must pass through WHOLE for a scoped sponsor. Without
+  // the key check, every array section would be sponsor-filtered and emptied.
+  it('scoped sponsor gets class-level sections (sponsor_class_breakdown) WHOLE, not sponsor-filtered', () => {
+    const resolved = resolveDepth({ role: 'sponsor', depth: 'local', sponsor_id: 'sp_A' });
+    const withClassBreakdown = {
+      ...SAMPLE_REPORT,
+      // Array section, class-keyed (no sponsor_id) — must survive scoping intact.
+      sponsor_class_breakdown: [
+        { sponsor_class: 'primary', count: 3 },
+        { sponsor_class: 'secondary', count: 5 },
+      ],
+    };
+    const { report } = filterReportByDepth({ ...withClassBreakdown }, resolved);
+    const breakdown = report.sponsor_class_breakdown as Array<{ sponsor_class: string }>;
+    expect(breakdown).toHaveLength(2); // delivered whole — NOT filtered to zero by sponsor scope
+    // …while sponsor_impressions IS still scoped in the same call (both behaviours hold together).
+    expect((report.sponsor_impressions as unknown[]).length).toBe(1);
+  });
 });
 
 // TL-010 | Depth escalation guard

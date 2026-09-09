@@ -33,10 +33,8 @@ export interface FlooredCount {
  * rule (`count < floor` → suppressed) so the admin tile and the SharedReport
  * show the same thing for the same cohort.
  */
-export function applyCountFloor(
-  raw: number,
-  floor: number = CORRIDOR_MAP_MIN_COUNT
-): FlooredCount {
+export function applyCountFloor(raw: number, floor: number = CORRIDOR_MAP_MIN_COUNT): FlooredCount {
+  // Stryker disable next-line EqualityOperator,ConditionalExpression: equivalent mutants — `raw > 0` vs `raw >= 0` are identical at raw=0 (both floor to 0), and `raw > 0`→`true` changes nothing because a negative raw floors below the K-floor and is suppressed either way. The finiteness guard, the `&&`, and Math.floor ARE covered (killed by the Infinity / NaN / 42 / 4.9 cases in count-floor.spec.ts). OSE-1186.
   const n = Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 0;
   if (n < floor) return { count: null, suppressed: true, floor };
   return { count: n, suppressed: false, floor };

@@ -37,8 +37,11 @@ export default {
   coverageAnalysis: 'perTest',
   reporters: ['html', 'clear-text', 'progress'],
   htmlReporter: { fileName: 'reports/mutation/index.html' },
-  // Covenant guards must be near-airtight. Break the run below 90% so a hollow
-  // spot in an invariant-enforcing module fails loudly, not quietly. (Tune once
-  // the first real baseline is measured.)
-  thresholds: { high: 95, low: 90, break: 90 },
+  // Covenant guards are held to the SAME bar as the CCR artifact standard (>=95%)
+  // so OCR's quality thresholds read as one coherent system. Residual survivors
+  // below a raw 100% are documented EQUIVALENT mutants (`// Stryker disable`
+  // annotations with written reasons in count-floor.ts / report-depth.ts) —
+  // excluded honestly, never faked. Break below 95% so a real hollow spot in an
+  // invariant-enforcing module fails loudly, not quietly.
+  thresholds: { high: 95, low: 95, break: 95 },
 };
