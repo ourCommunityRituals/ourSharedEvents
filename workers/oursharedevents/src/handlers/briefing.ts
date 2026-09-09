@@ -8,6 +8,8 @@
  * SyntaxError in the browser → blank screen.
  */
 
+import { HARDENING_HEADERS } from '../lib/security-headers';
+
 type Block = { h?: string; p?: string; q?: string; list?: string[] };
 type Section = {
   id: string;
@@ -506,6 +508,7 @@ export function handleBriefingPage(): Response {
   return new Response(BRIEFING_HTML, {
     status: 200,
     headers: {
+      ...HARDENING_HEADERS,
       'Content-Type': 'text/html; charset=utf-8',
       'X-Content-Type-Options': 'nosniff',
       'X-Frame-Options': 'SAMEORIGIN',

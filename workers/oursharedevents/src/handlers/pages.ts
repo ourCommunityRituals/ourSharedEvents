@@ -9,6 +9,7 @@
  */
 
 import { isGoogleMapsConfigured } from '../lib/maps';
+import { HARDENING_HEADERS } from '../lib/security-headers';
 import { computeEventPhase } from '../domain/event-phase';
 import { publicEventCacheControl } from '../lib/phase-cache';
 import { renderGeoLink } from '../lib/geo-link';
@@ -116,6 +117,7 @@ function generateNonce(): string {
 /** Build security headers with a per-request nonce. */
 function securityHeaders(nonce: string): Record<string, string> {
   return {
+    ...HARDENING_HEADERS,
     'Content-Type': 'text/html; charset=utf-8',
     'X-Content-Type-Options': 'nosniff',
     'X-Frame-Options': 'SAMEORIGIN',
@@ -126,7 +128,7 @@ function securityHeaders(nonce: string): Record<string, string> {
     // img-src they fall to default-src 'self' and the browser refuses them (the
     // poster printed alt text on staging). Same directive form-pages.ts and
     // demo.ts already carry. Guarded by tests/poster-page-csp.spec.ts.
-    'Content-Security-Policy': `default-src 'self'; script-src 'self' 'nonce-${nonce}'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'self'`,
+    'Content-Security-Policy': `default-src 'self'; script-src 'self' 'nonce-${nonce}'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'self'; base-uri 'self'; form-action 'self'`,
   };
 }
 

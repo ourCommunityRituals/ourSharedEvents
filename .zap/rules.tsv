@@ -36,13 +36,18 @@
 # markers (e.g. <!--OCR_EVENT_LIST-->) and framework comments, no secrets.
 10027	IGNORE	Information Disclosure - Suspicious Comments
 
-# ── REAL GAPS — LEFT AS WARN (default), tracked for a hardening follow-on ──
-# Deliberately NOT ignored and NOT yet promoted to FAIL. These are genuine
-# response-header hardening gaps to be fixed in product code (owner-gated,
-# separate concern from standing up the scanner), then promoted to FAIL here
-# so the DAST gates on them:
-#   [10021] X-Content-Type-Options missing on /ui.css (static asset lacks nosniff)
-#   [10063] Permissions-Policy header not set
-#   [90004] COOP / COEP / CORP site-isolation headers missing
-#   [10055] CSP: "no fallback" directives (add form-action, base-uri 'self')
-#           + CSP: style-src 'unsafe-inline' (bigger — needs inline-style refactor)
+# ── HARDENED + PROMOTED TO FAIL — these now GATE the DAST ──
+# The gaps below were fixed in product code (src/lib/security-headers.ts spread
+# into every HTML surface + the /ui.css wrapper in router.ts). Promoted from the
+# default WARN to FAIL so a regression that drops one of these headers reds the
+# scan — the DAST now has teeth on them, not just a warning.
+10021	FAIL	X-Content-Type-Options Header Missing
+10063	FAIL	Permissions Policy Header Not Set
+90004	FAIL	Insufficient Site Isolation Against Spectre Vulnerability (COOP/COEP/CORP)
+
+# ── STILL WARN — deferred, cannot gate yet ──
+# [10055] shares a plugin id between two findings: "no fallback" directives
+# (FIXED — base-uri + form-action now defined on every surface) AND
+# "style-src 'unsafe-inline'" (DEFERRED — needs an inline-style→nonce refactor,
+# tracked separately). Because both live under 10055, it stays WARN until the
+# unsafe-inline refactor lands; promoting it now would gate on the deferred item.

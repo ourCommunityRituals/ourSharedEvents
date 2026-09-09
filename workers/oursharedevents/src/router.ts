@@ -99,6 +99,7 @@
  */
 
 import { serveCss } from '@ocr/ui';
+import { HARDENING_HEADERS } from './lib/security-headers.js';
 import { handleHealth } from './handlers/health';
 import { handleEventsMap } from './handlers/events-map.js';
 import { publicReadLimited } from './lib/public-read-limit.js';
@@ -389,7 +390,15 @@ export async function route(
   }
 
   if (pathname === '/ui.css') {
-    return serveCss();
+    // serveCss() comes from @ocr/ui (cross-package), so harden its response
+    // here: add nosniff (DAST rule 10021) and the cross-cutting isolation
+    // headers so the stylesheet loads under the pages' COEP require-corp and
+    // the DAST can gate on 90004. CSP/content-type from @ocr/ui are preserved.
+    const cssRes = serveCss();
+    const cssHeaders = new Headers(cssRes.headers);
+    cssHeaders.set('X-Content-Type-Options', 'nosniff');
+    for (const [k, v] of Object.entries(HARDENING_HEADERS)) cssHeaders.set(k, v);
+    return new Response(cssRes.body, { status: cssRes.status, headers: cssHeaders });
   }
 
   if (pathname === '/ui-preview') {

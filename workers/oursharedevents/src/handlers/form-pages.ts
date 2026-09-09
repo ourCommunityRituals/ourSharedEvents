@@ -20,6 +20,7 @@
  */
 
 import { isStaleForPublicLanding, staleEventForward } from '../lib/event-staleness';
+import { HARDENING_HEADERS } from '../lib/security-headers';
 
 export interface FormPagesEnv {
   // OSE-R-007 (2026-05-15): event title must come from the canonical
@@ -42,12 +43,12 @@ function generateNonce(): string {
 // are not directives accepted by all browsers but are included for defence depth.
 function buildSecurityHeaders(nonce: string): Record<string, string> {
   return {
-    'Content-Security-Policy': `default-src 'self'; script-src 'self' 'nonce-${nonce}'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; font-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'`,
+    ...HARDENING_HEADERS,
+    'Content-Security-Policy': `default-src 'self'; script-src 'self' 'nonce-${nonce}'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'`,
     'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
     'X-Content-Type-Options': 'nosniff',
     'X-Frame-Options': 'DENY',
     'Referrer-Policy': 'strict-origin-when-cross-origin',
-    'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
   };
 }
 

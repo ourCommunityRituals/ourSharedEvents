@@ -38,6 +38,7 @@ import {
   type Tier as FlagTier,
 } from '../lib/mock-data.js';
 import { demoBannerMarkup } from '../lib/demo-banner.js';
+import { HARDENING_HEADERS } from '../lib/security-headers.js';
 import { DEPTH_SECTIONS, type ReportDepth } from '../lib/report-depth.js';
 import { DEMO_LINKS, DEMO_REGISTRY_VERSION, demoTierLinks } from '../lib/demo-registry.js';
 
@@ -206,12 +207,13 @@ ${demoBannerMarkup()}
   return new Response(doc, {
     status,
     headers: {
+      ...HARDENING_HEADERS,
       'Content-Type': 'text/html; charset=utf-8',
       'X-Content-Type-Options': 'nosniff',
       'X-Frame-Options': 'SAMEORIGIN',
       'Referrer-Policy': 'strict-origin-when-cross-origin',
       'Content-Security-Policy':
-        "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'self'",
+        "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'self'; base-uri 'self'; form-action 'self'",
     },
   });
 }
