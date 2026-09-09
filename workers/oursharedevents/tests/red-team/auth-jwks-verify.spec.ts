@@ -7,8 +7,9 @@
  * JWKS signature-verify branch never executes (105 no-coverage mutants at the
  * OSE-1278 baseline). This harness sets the domain, generates a real RSA keypair,
  * signs a CF-Access-shaped JWT, and stubs fetch to serve the matching JWKS — so
- * the crypto path runs for real. The module is re-imported per test to reset the
- * module-level JWKS cache deterministically.
+ * the crypto path runs for real. The module-level JWKS cache is reset per test via
+ * __resetJwksCacheForTests() (stryker-compatible — vi.resetModules breaks Stryker
+ * per-test coverage).
  */
 
 import { describe, test, expect, beforeAll, afterEach, vi } from 'vitest';
