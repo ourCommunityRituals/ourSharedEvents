@@ -33,7 +33,16 @@ export default {
     // workerd pool out of the per-mutant loop.
     configFile: 'vitest.node.config.mts',
   },
-  mutate: ['src/lib/count-floor.ts', 'src/lib/report-depth.ts'],
+  mutate: [
+    'src/lib/count-floor.ts',
+    'src/lib/report-depth.ts',
+    // OSE-1273 (G1 follow-on) — the PII-scrub crypto (email hashing/encryption),
+    // covered by the node-project pii-crypto.spec.ts so mutation runs on the fast
+    // node runner alongside the covenant guards. (The authZ guard src/auth/admin.ts
+    // is deferred to OSE-1278: its verifyCfAccessJWT path needs an RSA/JWKS
+    // node harness and constantTimeEqual carries structurally-equivalent mutants.)
+    'src/lib/pii.ts',
+  ],
   coverageAnalysis: 'perTest',
   reporters: ['html', 'clear-text', 'progress'],
   htmlReporter: { fileName: 'reports/mutation/index.html' },
