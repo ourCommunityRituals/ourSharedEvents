@@ -1,0 +1,20 @@
+# OWASP ZAP baseline — passive-scan rule tuning (OSE-1186 G2).
+#
+# Format (tab-separated):  <ruleId>	<WARN|FAIL|IGNORE|OUTOFSCOPE>	<optional comment>
+#
+# CALIBRATION CONTRACT. This file starts intentionally empty of IGNOREs. The
+# first run enumerates the TRUE alert profile against the local Worker; the
+# job reports every WARN loudly (artifact + job summary) but only *fails* on a
+# FAIL-level alert (see dast-zap-baseline.yml exit-code policy). Once the first
+# run's warnings are triaged, a real finding is promoted to FAIL here and a
+# genuine-false-positive (e.g. an http://localhost-only artifact that is
+# handled in prod over HTTPS) is set to IGNORE — each with a written reason.
+# Nothing is masked silently: an IGNORE without a reason comment is a review
+# smell, the same way a skipped test is.
+#
+# The Worker already emits CSP (nonce-based), X-Frame-Options, X-Content-Type-
+# Options, Referrer-Policy and HSTS (src/handlers/pages.ts securityHeaders()),
+# so those "header missing" passive rules should PASS, not warn — a warning on
+# any of them is a real regression, not noise.
+#
+# (no rule overrides yet — calibrate from the first run)
