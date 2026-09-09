@@ -34,14 +34,18 @@ on:
     # 09:20 UTC — after the mutation job (08:40) and clear of the morning cluster.
     - cron: '20 9 * * *'
   workflow_dispatch:
-  # Self-scoped: the scan runs on any PR that changes the scan itself, so the
-  # mechanism (Worker boot, container→host networking, rule tuning) is proven
-  # on the PR that edits it — never a stale scanner merged unrun. Broadening to
-  # gate PRs that touch the page handlers/templates is a post-calibration step.
+  # Now that rules 10021/10063/90004 gate (FAIL), the scan must run on the code
+  # that determines response headers — otherwise the gate has no teeth on the
+  # exact regression it guards. Scoped to the header-emission points (handlers,
+  # router, the shared security-headers lib) + the scan's own config, so a PR
+  # that drops a header reds here, without taxing PRs that can't affect headers.
   pull_request:
     paths:
       - '.github/workflows/dast-zap-baseline.yml'
       - '.zap/rules.tsv'
+      - 'workers/oursharedevents/src/handlers/**'
+      - 'workers/oursharedevents/src/router.ts'
+      - 'workers/oursharedevents/src/lib/security-headers.ts'
 
 permissions:
   contents: read

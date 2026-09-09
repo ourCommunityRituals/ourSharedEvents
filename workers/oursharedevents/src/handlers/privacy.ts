@@ -8,6 +8,8 @@
  * Data controller: OurSharedEvents (ourCommunityRituals)
  */
 
+import { HARDENING_HEADERS } from '../lib/security-headers';
+
 const PRIVACY_POLICY_HTML = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -126,12 +128,12 @@ const PRIVACY_POLICY_HTML = `<!DOCTYPE html>
 
 // Security headers — same policy as form pages (SEC-2)
 const PRIVACY_SECURITY_HEADERS: Record<string, string> = {
+  ...HARDENING_HEADERS,
   'Content-Security-Policy':
-    "default-src 'self'; script-src 'none'; style-src 'self' 'unsafe-inline'; connect-src 'none'; img-src 'none'; font-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'",
+    "default-src 'self'; script-src 'none'; style-src 'self' 'unsafe-inline'; connect-src 'none'; img-src 'none'; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'",
   'X-Content-Type-Options': 'nosniff',
   'X-Frame-Options': 'DENY',
   'Referrer-Policy': 'strict-origin-when-cross-origin',
-  'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
 };
 
 export function handlePrivacyPage(): Response {

@@ -8,6 +8,7 @@
  */
 
 import { getDataProvider, type DataProviderEnv } from '../lib/data-provider.js';
+import { HARDENING_HEADERS } from '../lib/security-headers.js';
 
 export interface HealthEnv extends DataProviderEnv {
   WORKER_BUILD_VERSION?: string;
@@ -54,6 +55,12 @@ export async function handleHealth(env: HealthEnv): Promise<Response> {
       _debug: { db_bound, mock_mode_forced },
       timestamp,
     },
-    { status: ok ? 200 : 503 }
+    {
+      status: ok ? 200 : 503,
+      // /health is a public JSON endpoint the DAST scans; carry nosniff + the
+      // cross-cutting hardening headers so it passes the same gate as the HTML
+      // surfaces (ZAP 10021 nosniff + 90004 CORP fire on JSON too).
+      headers: { 'X-Content-Type-Options': 'nosniff', ...HARDENING_HEADERS },
+    }
   );
 }
