@@ -61,6 +61,21 @@ async function j(res: Response): Promise<Record<string, unknown>> {
   return res.json() as Promise<Record<string, unknown>>;
 }
 
+// OSE-1270: survey/email-signup now require an EXISTING, Phase-2-cleared event
+// (a missing event fails closed — see router.ts phase gate). These tests exercise
+// FLAG gating, not the phase gate, so their events are seeded as cleared to
+// isolate that axis. Free-tier events keep unique un-seeded ids so FORM_DISABLED
+// still fires there.
+async function seedClearedEvent(id: string): Promise<void> {
+  await mainDb()
+    .prepare(
+      `INSERT OR REPLACE INTO events (id, brand_id, title, slug, status, legal_clearance_tier, created_at, updated_at)
+       VALUES (?, 'brand-qa2', ?, ?, 'active', 2, datetime('now'), datetime('now'))`
+    )
+    .bind(id, `Cleared ${id}`, id)
+    .run();
+}
+
 // ── Setup ─────────────────────────────────────────────────────────────────────
 
 beforeAll(async () => {
@@ -87,6 +102,20 @@ beforeAll(async () => {
   }
 
   await applyTier('free');
+
+  // OSE-1270: seed cleared events for the mid/enterprise phase-form tests so the
+  // PHASE gate passes and FLAG gating is what's under test.
+  for (const id of [
+    'qa2-mid-matrix',
+    'qa2-downgrade-survey',
+    'qa2-downgrade-email',
+    'qa2-ent-override-on',
+    'qa2-ent-remove-override',
+    'qa2-matrix-mid',
+    'qa2-matrix-enterprise',
+  ]) {
+    await seedClearedEvent(id);
+  }
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════

@@ -63,6 +63,20 @@ async function json(res: Response): Promise<Record<string, unknown>> {
   return res.json() as Promise<Record<string, unknown>>;
 }
 
+// OSE-1270: survey/email-signup now require an EXISTING, Phase-2-cleared event
+// (a missing event fails closed). The tier-gating scenarios below submit survey/
+// email on paid tiers to prove FLAG gating; seed those events as cleared so the
+// PHASE gate passes. Free-tier events keep unique un-seeded ids → FORM_DISABLED.
+async function seedClearedEvent(id: string): Promise<void> {
+  await mainDb()
+    .prepare(
+      `INSERT OR REPLACE INTO events (id, brand_id, title, slug, status, legal_clearance_tier, created_at, updated_at)
+       VALUES (?, 'ose', ?, ?, 'active', 2, datetime('now'), datetime('now'))`
+    )
+    .bind(id, `Cleared ${id}`, id)
+    .run();
+}
+
 // ── Setup ────────────────────────────────────────────────────────────────────
 
 beforeAll(async () => {
@@ -87,6 +101,11 @@ beforeAll(async () => {
       throw e;
     }
   }
+
+  // OSE-1270: seed cleared events for the paid-tier survey/email scenarios
+  // (Scenario 8 tier-gate + the enterprise override) so the phase gate passes.
+  await seedClearedEvent('evt-tier-gate');
+  await seedClearedEvent('evt-enterprise-e2e');
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════

@@ -44,6 +44,21 @@ async function j(res: Response): Promise<Record<string, unknown>> {
   return res.json() as Promise<Record<string, unknown>>;
 }
 
+// OSE-1270: survey/email-signup now require an EXISTING, Phase-2-cleared event
+// (a missing event fails closed). These edge/guard tests exercise dedup, tier
+// toggling, and body validation — not the phase gate — so seed their events as
+// cleared to isolate that axis. (Tests asserting FORM_DISABLED still pass: the
+// flag check precedes the phase gate.)
+async function seedClearedEvent(id: string): Promise<void> {
+  await mainDb()
+    .prepare(
+      `INSERT OR REPLACE INTO events (id, brand_id, title, slug, status, legal_clearance_tier, created_at, updated_at)
+       VALUES (?, 'brand-qa1', ?, ?, 'active', 2, datetime('now'), datetime('now'))`
+    )
+    .bind(id, `Cleared ${id}`, id)
+    .run();
+}
+
 // ── Setup ─────────────────────────────────────────────────────────────────────
 
 beforeAll(async () => {
@@ -71,6 +86,12 @@ beforeAll(async () => {
 
   // Ensure free tier baseline for all QA-1 tests
   await applyTier('free');
+
+  // OSE-1270: seed cleared events for the phase-form edge/guard tests so the PHASE
+  // gate passes and dedup / tier-toggle / body-validation is what's under test.
+  for (const id of ['qa1-email-dedup', 'qa1-email-unique', 'qa1-mid-session-survey', 'qa1-guard']) {
+    await seedClearedEvent(id);
+  }
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
