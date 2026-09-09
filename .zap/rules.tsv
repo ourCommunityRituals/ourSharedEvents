@@ -1,20 +1,46 @@
 # OWASP ZAP baseline — passive-scan rule tuning (OSE-1186 G2).
 #
-# Format (tab-separated):  <ruleId>	<WARN|FAIL|IGNORE|OUTOFSCOPE>	<optional comment>
+# Format (tab-separated):  <ruleId>	<WARN|FAIL|IGNORE|OUTOFSCOPE>	<optional URL regex>
+# Reasons live in the `#` comment directly above each override — an IGNORE
+# without a written reason is a review smell, the same way a skipped test is.
 #
-# CALIBRATION CONTRACT. This file starts intentionally empty of IGNOREs. The
-# first run enumerates the TRUE alert profile against the local Worker; the
-# job reports every WARN loudly (artifact + job summary) but only *fails* on a
-# FAIL-level alert (see dast-zap-baseline.yml exit-code policy). Once the first
-# run's warnings are triaged, a real finding is promoted to FAIL here and a
-# genuine-false-positive (e.g. an http://localhost-only artifact that is
-# handled in prod over HTTPS) is set to IGNORE — each with a written reason.
-# Nothing is masked silently: an IGNORE without a reason comment is a review
-# smell, the same way a skipped test is.
-#
-# The Worker already emits CSP (nonce-based), X-Frame-Options, X-Content-Type-
-# Options, Referrer-Policy and HSTS (src/handlers/pages.ts securityHeaders()),
-# so those "header missing" passive rules should PASS, not warn — a warning on
-# any of them is a real regression, not noise.
-#
-# (no rule overrides yet — calibrate from the first run)
+# ── Calibrated from run 34389938148 (2026-09-09, PR #501). ──
+# First run: 0 FAIL, 8 WARN categories across 10 public surfaces, 59 PASS.
+# The Worker's HTML pages correctly emit CSP (nonce), X-Frame-Options, nosniff,
+# Referrer-Policy and HSTS — all PASS. What remains splits into verified noise
+# (IGNORE below) and real hardening gaps (left as WARN — visible, tracked, not
+# yet gating; see the "REAL GAPS" note at the bottom).
+
+# ── VERIFIED NOISE — IGNORE (each checked, not blanket-suppressed) ──
+
+# [10031] "User Controllable HTML Element Attribute (Potential XSS)" on
+# /forms/:id?type=... — FALSE POSITIVE, verified in src/handlers/form-pages.ts:
+# the `type` param only selects a switch branch (line 530); it is never
+# interpolated into the output. The submitForm() calls use hardcoded literals
+# ('register','checkin','survey','email-signup'), not the raw param. Reflected
+# XSS is impossible-by-construction here.
+10031	IGNORE
+
+# [10024] "Information Disclosure - Sensitive Information in URL" — the evidence
+# (zaproxy@example.com) is a value ZAP *itself injected* as ?email=... on the
+# landing page; the page ignores the unknown param. Probe artifact, not a leak.
+10024	IGNORE
+
+# [10049] "Storable and Cacheable / Non-Storable Content" — informational
+# cache-control observations on dynamic HTML endpoints; not a vulnerability.
+10049	IGNORE
+
+# [10027] "Information Disclosure - Suspicious Comments" — matches template
+# markers (e.g. <!--OCR_EVENT_LIST-->) and framework comments, no secrets.
+10027	IGNORE
+
+# ── REAL GAPS — LEFT AS WARN (default), tracked for a hardening follow-on ──
+# Deliberately NOT ignored and NOT yet promoted to FAIL. These are genuine
+# response-header hardening gaps to be fixed in product code (owner-gated,
+# separate concern from standing up the scanner), then promoted to FAIL here
+# so the DAST gates on them:
+#   [10021] X-Content-Type-Options missing on /ui.css (static asset lacks nosniff)
+#   [10063] Permissions-Policy header not set
+#   [90004] COOP / COEP / CORP site-isolation headers missing
+#   [10055] CSP: "no fallback" directives (add form-action, base-uri 'self')
+#           + CSP: style-src 'unsafe-inline' (bigger — needs inline-style refactor)
