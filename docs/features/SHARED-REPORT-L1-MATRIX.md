@@ -234,7 +234,7 @@ established; fan out from it.
 | Build-list item | Weather focus | Ticket |
 |-----------------|---------------|--------|
 | ~~Event-state axis~~ → **Data-maturity axis** (status-invariance + empty/sub-K/≥K on the read path) — ✅ `shared-report-event-state-maturity.spec.ts` | happy + edge | OSE-1172 slice (done) |
-| **Forms phase-gate × SharedReport** mutual enforcement | rainy + edge | OSE-1172 slice |
+| **Forms PHASE_REQUIRED gate** (survey/email → 403 below clearance Phase 2; register ungated) — ✅ `forms-phase-required-gate.spec.ts`. *(No SharedReport intersection: forms=FORMS_DB, report=DB, severed — the earlier "× SharedReport" framing was spurious.)* | rainy + edge | OSE-1172 slice (done) |
 | **Abuse cells** (429 / QR-dedup) as data-driven rows | rainy | OSE-1172 slice |
 | **Missing-signing-secret HTTP path** (mint 503 / read 401) | rainy | OSE-1172 slice (optional) |
 | **Composition differential** `(A+B)−A` re-id proof | **edge (covenant)** | OSE-1149 + Feature G (OSE-1186) |
