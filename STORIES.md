@@ -19,6 +19,10 @@ Stories are ordered by the sequence you work through them. Each row unlocks the 
 
 **Last verified: 2026-08-03** — P1-6 infra complete (OSE-544/545/546/547 Done), P1-7 staging deploy in progress (OSE-548 Todo), DAC-1..5 cleared via OSE-553.
 
+**Reconciled: 2026-09-09** — evidence-based status pass over the epic sections (not the frozen table below): flipped to ✅ DONE — **P1-6** (zone+D1 provisioned), **P2-1..P2-4** (already done), **SR-14/15/16** (CSP + form-page CSP + form rate-limit), **AS-1** (design tokens), **DAC-1..5** (eventangle audit, `docs/`=0). Flagged as superseded: **SR-25** (conflicts with ratified ADR-017 depth model), **TP-3** (Newman→Bruno, OSE-1191). Still open: P1-7..P1-10, TP-2 (cross-surface E2E), TP-4 (k6→CI), AS-5..AS-13. New: **Epic SECGATE** (OSE-1186 G1–G4). Canonical next-story pointer is Linear + `CLAUDE.md` §3, not the table below.
+
+> **Reconciliation 2026-09-09 (HK-2).** The `P#/SR#/ADMIN#` master table below is a **point-in-time snapshot**, not a per-merge live tracker. Since 2026-08-03, ~60 `OSE-####` tickets have merged (see `git log` + PR history) that this table does not model — day-to-day work is tracked in **Linear (`OSE-####`)**, and the canonical record of what shipped is the commit history + `CLAUDE.md` §3 role states. **Do not trust the ordered "next story" pointer in this table** (it still reads P1-6/P1-7 infra, which contradicts CLAUDE.md's "infra is last, code now"). Verified-done since the snapshot, with citable evidence, are folded in below; the largest untracked body of work is the **OSE-1186 security-gate campaign (G1–G4)** — see the new Epic SECGATE section. Only status changes with a citable commit/file are made here (CCR evidence rule); the rest of the table is left as historical.
+
 | Story ID                                           | Linear # | Status         | Title                                                                 | Prerequisite     |
 | -------------------------------------------------- | -------- | -------------- | --------------------------------------------------------------------- | ---------------- |
 | **Phase 0 — Project Setup**                        |          |                |                                                                       |                  |
@@ -257,7 +261,7 @@ _Work through P1-6 through P1-10 in order. Each story is a gate — don't start 
 
 ### P1-6: Infra provisioning — Cloudflare zone + D1 databases
 
-**Status:** 📋 BACKLOG
+**Status:** ✅ DONE (2026-09-09 reconcile) — INFRA-1 (D1) + INFRA-2 (CF zone + DNS) done (CLAUDE.md §3 PO/DevOps). D1/KV/R2/zone provisioned for staging **and** production with real IDs in `wrangler.toml`; routes live on `stg.oursharedevents.com` + `oursharedevents.com`; `scripts/check-binding-placeholders.mjs` gates CI against placeholder IDs. (P1-7 secrets + first staging deploy remains 🔄; remaining infra is INFRA-3 GCP SA / INFRA-4 key-rotation doc.)
 **Prerequisite:** P1-5 ✅
 **Unlocks:** P1-7 (secrets need somewhere to live — infra must exist first)
 **Description:** Activate the Cloudflare zone for oursharedevents.com and provision production D1 databases. Google Sheets dependency was removed in Phase 2 — the worker is D1-native. Staging D1 databases already exist (IDs in wrangler.toml).
@@ -496,7 +500,7 @@ _Stories sourced from CCR audit (docs/CCR_SHARED_REPORT_AUDIT.md). SR-1 through 
 
 ### SR-14: CSP headers on all remaining surfaces
 
-**Status:** 📋 BACKLOG
+**Status:** ✅ DONE (2026-09-09 reconcile) — cross-cutting response-header hardening landed via `src/lib/security-headers.ts` (#502 `sec(headers)`), applied per-request with CSP nonces. Superseded/subsumed by the header-hardening work; DAST (#501) gates the public surfaces.
 **Rating:** MVP
 **Prerequisite:** —
 **Tier:** All
@@ -514,7 +518,7 @@ _Stories sourced from CCR audit (docs/CCR_SHARED_REPORT_AUDIT.md). SR-1 through 
 
 ### SR-15: Form page CSP (nonce-based)
 
-**Status:** 📋 BACKLOG
+**Status:** ✅ DONE (2026-09-09 reconcile) — `form-pages.ts` builds a per-request nonce-based CSP (`buildSecurityHeaders`, OSE-638): `script-src 'self' 'nonce-…'`, no `unsafe-inline` for scripts; inline `<script nonce="${nonce}">` tags carry the matching nonce. `img-src 'self' data:` admits QR codes (OSE-1199).
 **Rating:** MVP
 **Prerequisite:** —
 **Tier:** All
@@ -531,7 +535,7 @@ _Stories sourced from CCR audit (docs/CCR_SHARED_REPORT_AUDIT.md). SR-1 through 
 
 ### SR-16: Rate limiting on form endpoints
 
-**Status:** 📋 BACKLOG
+**Status:** ✅ DONE (2026-09-09 reconcile) — `forms.ts` enforces per-IP + per-eventId rate limiting (`isFormRateLimited`, sliding window) on register/checkin/survey/email paths; exceeding returns `429 RATE_LIMITED` with `Retry-After: 60`. Per-isolate today; distributed enforcement remains tracked separately as SR-23. (KV-backed limiter also exists — `lib/rate-limit.ts`, OSE-552.)
 **Rating:** MVP
 **Prerequisite:** —
 **Tier:** All
@@ -679,7 +683,7 @@ _Stories sourced from CCR audit (docs/CCR_SHARED_REPORT_AUDIT.md). SR-1 through 
 
 ### SR-25: SharedReport competitive intelligence — local-vs-paid sponsor frame
 
-**Status:** 📋 BACKLOG
+**Status:** 📋 BACKLOG — ⚠️ premise conflicts with ratified direction (2026-09-09 reconcile). This story proposes **removing** `filterReportByDepth` from the read paths; the project instead **ratified depth as the model** (ADR-017, #474) and hardened server-side depth enforcement (#411 OSE-816, #473 OSE-817, #489 OSE-714). Revisit/rewrite this story against ADR-017 before starting — do not implement as written.
 **Rating:** MVP-CORE
 **Prerequisite:** SR-12
 **Effort:** M
@@ -747,7 +751,7 @@ _Stories sourced from CCR audit FE uniformity matrix. Goal: consistent experienc
 
 ### AS-1: Uniform DesignTokens across all surfaces
 
-**Status:** 📋 BACKLOG
+**Status:** ✅ DONE (2026-09-09 reconcile) — `feat(OSE-46): AS-1 uniform design tokens — scope surface tokens + contract gate`; 34 design tokens defined with a contract gate enforcing them (CLAUDE.md §3, 85% color adoption). Note: the module system this story names (`DesignTokens.html`) predates the `@ocr/ui` migration; tokens now ship via `@ocr/ui`.
 **Rating:** MVP-UX
 **Prerequisite:** —
 **Effort:** S
@@ -947,7 +951,7 @@ _Source: CCR prod readiness audit 2026-04-09. DAC Backup Protocol rule: stale do
 
 ### DAC-1: Batch rename — Security docs (13 files, ~295 occurrences)
 
-**Status:** 📋 BACKLOG
+**Status:** ✅ DONE (2026-09-09 reconcile) — DAC domain audit completed via `b3dca95 fix(ose-550/553): DAC domain audit complete`. `grep -ric eventangle docs/` returns 0.
 **Prerequisite:** P1-8 ✅ (staging must be live to verify renamed URLs)
 **Effort:** M
 **Description:** Replace `eventangle.com` → `oursharedevents.com` across all `docs/security/` files. Verify any endpoint URLs against live staging after rename.
@@ -964,7 +968,7 @@ CANONICAL_HOST_SPEC.md (68), WORKER_ROUTE_COLLAPSE_RUNBOOK.md (70), ORIGIN_BYPAS
 
 ### DAC-2: Batch rename — Runbooks (12 files, ~386 occurrences)
 
-**Status:** 📋 BACKLOG
+**Status:** ✅ DONE (2026-09-09 reconcile) — cleared with the DAC domain audit (`b3dca95`, OSE-553). `grep -ric eventangle docs/` returns 0.
 **Prerequisite:** P1-8 ✅
 **Effort:** M
 **Description:** Replace `eventangle.com` → `oursharedevents.com` across all `docs/runbooks/` files (excluding RUNBOOK.md, ROLLBACK.md, RUNBOOK-SECRETS.md which are already corrected).
@@ -981,7 +985,7 @@ RUNBOOK-ROOT.md (56), RUNBOOK-SEC-4.2-SINGLE-WORKER-ROUTE.md (69), RUNBOOK-SEC-4
 
 ### DAC-3: Batch rename — Architecture docs (9 files, ~126 occurrences)
 
-**Status:** 📋 BACKLOG
+**Status:** ✅ DONE (2026-09-09 reconcile) — cleared with the DAC domain audit (`b3dca95`, OSE-553). `grep -ric eventangle docs/` returns 0.
 **Prerequisite:** P1-8 ✅
 **Effort:** S
 **Description:** Replace `eventangle.com` → `oursharedevents.com` across all `docs/architecture/` files.
@@ -997,7 +1001,7 @@ origins.md (44), FRIENDLY_URLS.md (29), BASELINE.md (17), api-version-check-samp
 
 ### DAC-4: Batch rename — Deployment + Monitoring + QA docs (16 files, ~161 occurrences)
 
-**Status:** 📋 BACKLOG
+**Status:** ✅ DONE (2026-09-09 reconcile) — cleared with the DAC domain audit (`b3dca95`, OSE-553). `grep -ric eventangle docs/` returns 0.
 **Prerequisite:** P1-8 ✅
 **Effort:** M
 **Description:** Replace `eventangle.com` → `oursharedevents.com` across deployment, monitoring, QA, verification, and stories docs.
@@ -1025,7 +1029,7 @@ STORY-A2-OBSERVABILITY.md (6)
 
 ### DAC-5: Final verification — zero active eventangle references
 
-**Status:** 📋 BACKLOG
+**Status:** ✅ DONE (2026-09-09 reconcile) — DAC domain audit signed off in `b3dca95` (OSE-553). `docs/` is 0. Residual `eventangle` strings survive only in historical audit records (`.claude/outputs/2026-04-06-eventangle-removal-audit.md`, `.claude/documents/RECONCILIATION.md`), in `archive/`/`docs/migration/`, and in this epic's own descriptive text — all expected/historical.
 **Prerequisite:** DAC-1, DAC-2, DAC-3, DAC-4
 **Effort:** XS
 **Description:** Confirm the only remaining `eventangle` references are in `archive/` and `docs/migration/` (historical context). Update RECONCILIATION.md with final traffic light.
@@ -1132,7 +1136,7 @@ Security Gate → Deploy Staging → Quality Smoke → Functional Smoke → E2E 
 
 ### TP-3: Newman collection audit — verify all 6 surfaces covered
 
-**Status:** 📋 BACKLOG
+**Status:** 📋 BACKLOG — ⚠️ framing superseded (2026-09-09 reconcile). Newman entry points were repointed at live OSE collections and the GAS-era ones archived (OSE-838), then the contract tier was migrated **Postman/Newman → Bruno** (offline/git-native, OSE-1191, #—). The `ose-api.json`/`ose-pages.json` Newman artifacts this story audits no longer drive CI. Rewrite the surface-coverage audit against the Bruno collections before starting; TP-2 (cross-surface E2E) and TP-4 (k6→CI) remain genuinely open.
 **Prerequisite:** P1-8 ✅
 **Effort:** S
 **Description:** Audit the existing Newman collections (`ose-api.json`, `ose-pages.json`) to confirm all 6 MVP surfaces and all form endpoints are covered. Add missing requests. Ensure latency assertions are present.
@@ -1214,3 +1218,23 @@ All stories completed before the TP epic was established. The E2E gate (TP-1) do
 | SRE-4                    | This session                     | Security + Worker D1        |
 
 **Conclusion:** No stories are reverted. The debt is acknowledged. Once TP-1 wires E2E into CI and P1-6/7/8 deliver a live staging site, all future stories will require the full 7-level pyramid to reach DONE.
+
+---
+
+## Epic SECGATE — OSE-1186 Security-Gate Campaign (G1–G4)
+
+_Added 2026-09-09 reconcile. The largest body of work merged since the 2026-08-03 snapshot that the Master Status Table above does not model. Day-to-day tracking is Linear (OSE-1186); this section is the STORIES.md record with citable PRs. All slices below are merged to `main`._
+
+### SECGATE-G1: Mutation-testing floor on covenant + authZ guards
+
+**Status:** ✅ DONE — Stryker config for the covenant guards (#498), 100% mutation + break threshold 95, CCR-consistent (#499), nightly + dispatch Stryker CI job (#500). AuthZ slice: JWKS/RSA harness covering `verifyCfAccessJWT` (#505), admin auth guard `admin.ts` at 100% mutation, break:95 (#506). PII-scrub crypto `pii.ts` at 100% mutation, 0 real survivors (#504).
+
+### SECGATE-G4: Fail-closed authentication + negative-auth fuzzing
+
+**Status:** ✅ DONE — fail-closed CF Access JWT + negative-auth fuzz (#503). Related fail-closed hardening: `PHASE_REQUIRED` on unknown event with red-team proof (#497).
+
+### SECGATE-DAST: OWASP ZAP baseline + response-header hardening
+
+**Status:** ✅ DONE — OWASP ZAP baseline over the public surfaces (#501, slice 1); cross-cutting response-header hardening applied per-request with CSP nonces + DAST gating (#502, `src/lib/security-headers.ts`). This is the same header work that closed SR-14 and confirmed SR-15.
+
+---
