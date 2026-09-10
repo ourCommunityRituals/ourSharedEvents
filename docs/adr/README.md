@@ -6,17 +6,21 @@ ADRs are **descriptive, not prescriptive**. They record decisions that have alre
 
 ## Status
 
-| #                                                             | Title                                                      | Status   | Date       |
-| ------------------------------------------------------------- | ---------------------------------------------------------- | -------- | ---------- |
-| [ADR-001](ADR-001-anonymous-identity-architecture.md)         | Anonymous-identity architecture (DB ↔ FORMS_DB separation) | Accepted | 2026-05-14 |
-| [ADR-002](ADR-002-static-invariant-gates.md)                  | Static-invariant gates as the load-bearing CI pattern      | Accepted | 2026-05-14 |
-| [ADR-006](ADR-006-audit-access-bearer-pattern.md)             | Audit access architecture — dedicated bearer pattern       | Accepted | 2026-05-16 |
-| [ADR-009](ADR-009-ncr-v2-geographic-hierarchy.md)             | NCR v2 geographic hierarchy                                | Accepted | 2026-04    |
-| [ADR-010](ADR-010-templates-breadth-tiers-depth.md)           | Templates breadth × tiers depth                            | Accepted | 2026-04    |
-| [ADR-011](ADR-011-shared-report-wkrp-consumer-boundary.md)    | SharedReport read API as the WKRP consumer boundary        | Accepted | 2026-05-15 |
-| [ADR-012](ADR-012-uec-build-time-consumption.md)              | UEC build-time consumption via manually-synced TS module   | Accepted | 2026-05-17 |
-| [ADR-013](ADR-013-local-sponsor-covenant-display-priority.md) | Local Sponsor Covenant via display-priority sort           | Accepted | 2026-05-18 |
-| [ADR-014](ADR-014-ai-sanitization-sanctioned-seam.md)         | `ai-sanitization.ts` as the single sanctioned AI seam      | Accepted | 2026-08-15 |
+| #                                                                | Title                                                      | Status   | Date       |
+| ---------------------------------------------------------------- | ---------------------------------------------------------- | -------- | ---------- |
+| [ADR-001](ADR-001-anonymous-identity-architecture.md)            | Anonymous-identity architecture (DB ↔ FORMS_DB separation) | Accepted | 2026-05-14 |
+| [ADR-002](ADR-002-static-invariant-gates.md)                     | Static-invariant gates as the load-bearing CI pattern      | Accepted | 2026-05-14 |
+| [ADR-006](ADR-006-audit-access-bearer-pattern.md)                | Audit access architecture — dedicated bearer pattern       | Accepted | 2026-05-16 |
+| [ADR-009](ADR-009-ncr-v2-geographic-hierarchy.md)                | NCR v2 geographic hierarchy                                | Accepted | 2026-04    |
+| [ADR-010](ADR-010-templates-breadth-tiers-depth.md)              | Templates breadth × tiers depth                            | Accepted | 2026-04    |
+| [ADR-011](ADR-011-shared-report-wkrp-consumer-boundary.md)       | SharedReport read API as the WKRP consumer boundary        | Accepted | 2026-05-15 |
+| [ADR-012](ADR-012-uec-build-time-consumption.md)                 | UEC build-time consumption via manually-synced TS module   | Accepted | 2026-05-17 |
+| [ADR-013](ADR-013-local-sponsor-covenant-display-priority.md)    | Local Sponsor Covenant via display-priority sort           | Accepted | 2026-05-18 |
+| [ADR-014](ADR-014-ai-sanitization-sanctioned-seam.md)            | `ai-sanitization.ts` as the single sanctioned AI seam      | Accepted | 2026-08-15 |
+| [ADR-015](ADR-015-invariant2-tier-sort-named-slot-retirement.md) | Invariant-2 tier-sort named-slot retirement                | Accepted | 2026-08    |
+| [ADR-016](ADR-016-api-v2-response-contract.md)                   | API v2 response contract                                   | Accepted | 2026-08    |
+| [ADR-017](ADR-017-sharedreport-depth-enforcement.md)             | Enforce SharedReport depth server-side, at one point       | Accepted | 2026-08-16 |
+| [ADR-018](ADR-018-declined-regulatory-regimes.md)                | Declined regulatory regimes (HIPAA/COPPA/SOPPA refuse)     | Accepted | 2026-09-10 |
 
 ADR series in progress (planned, in numerical order — none of these block any current work):
 

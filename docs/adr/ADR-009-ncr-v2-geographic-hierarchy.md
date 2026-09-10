@@ -4,6 +4,18 @@
 **Date:** 2026-03-30
 **Deciders:** Product Owner, Lead Backend Architect
 
+> **Supersession-of-routing note (2026-09-10, OSE-1285).** The **COPPA/HIPAA
+> growth-wave on-ramps** in this ADR — the "Growth Sequence (Event Verticals)"
+> table (Wave 2 "RESTRICTED (COPPA) — Next", Wave 3 "REGULATED (HIPAA) —
+> Post-legal") and the Consequences line "Legal clearance tiers gate event
+> verticals: OPEN → RESTRICTED (COPPA) → REGULATED (HIPAA)" — are **superseded by
+> [ADR-018](ADR-018-declined-regulatory-regimes.md)**. HIPAA and COPPA are _not_
+> future waves OSE activates; they are _declined regimes_ (refuse, not route).
+> Youth-/health-adjacent verticals are served in the `general` pool via
+> item-tracking, with the tier ceiling clamped to 3. **The NCR v2 hierarchy and
+> corridor model — the actual subject of this ADR — are unchanged and stand.**
+> Only the regulatory framing of the growth waves is superseded.
+
 ---
 
 ## Context
