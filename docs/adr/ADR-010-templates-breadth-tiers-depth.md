@@ -24,6 +24,15 @@ The question: how do event templates and feature tiers interact?
 
 **Templates never gate. Tiers gate.**
 
+> **Axis cross-reference (OSE-1293 / F5).** "Templates never gate" governs the
+> **template axis only** — it does not conflict with the **legal-clearance axis**
+> in [ADR-009](ADR-009-ncr-v2-geographic-hierarchy.md) / [ADR-018](ADR-018-declined-regulatory-regimes.md),
+> under which regulated verticals are gated (and declined regimes refused). Three
+> independent axes: **templates = breadth** (what an event looks like, never
+> gated), **feature-tiers = depth** (Free/Mid/Enterprise features, gated here),
+> **legal clearance = which verticals are served at all** (gated by ADR-009/018).
+> A template being ungated says nothing about clearance; they are orthogonal.
+
 ## Consequences
 
 1. The `event_templates` table stores cosmetic/structural defaults — no `tier` column, no access restrictions.
