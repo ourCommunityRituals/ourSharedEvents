@@ -24,6 +24,7 @@ import {
   isTemplateSelectable,
   resolveAllowedMaxTier,
   LAUNCH_MAX_CLEARANCE_TIER,
+  DECLINED_REGIME_MAX_TIER,
   SELECTABLE_TEMPLATE_SQL_PREDICATE,
 } from '../src/lib/template-clearance';
 
@@ -152,10 +153,23 @@ describe('OSE-728 — 0057 seed + recompute', () => {
     expect(isTemplateSelectable({ max_clearance_tier: 2 }, 1)).toBe(false);
     expect(isTemplateSelectable({ max_clearance_tier: 2 }, 2)).toBe(true);
 
-    // Env override is honoured by resolveAllowedMaxTier.
+    // Env override is honoured by resolveAllowedMaxTier — up to the declined
+    // ceiling.
     expect(resolveAllowedMaxTier({ ALLOWED_MAX_TIER: '2' })).toBe(2);
     expect(resolveAllowedMaxTier({})).toBe(LAUNCH_MAX_CLEARANCE_TIER);
     expect(resolveAllowedMaxTier({ ALLOWED_MAX_TIER: 'garbage' })).toBe(LAUNCH_MAX_CLEARANCE_TIER);
+  });
+
+  test('OSE-1220: resolveAllowedMaxTier clamps to the declined-regime ceiling (3)', () => {
+    // Tier 3 is the hard ceiling — tiers 4 (HIPAA) / 5 (COPPA) are declined
+    // regimes and must be structurally unreachable through config. Even an
+    // operator setting ALLOWED_MAX_TIER=4/5 resolves to 3 (born-red: without the
+    // clamp these would return 4 and 5, re-opening the declined regimes).
+    expect(DECLINED_REGIME_MAX_TIER).toBe(3);
+    expect(resolveAllowedMaxTier({ ALLOWED_MAX_TIER: '3' })).toBe(3);
+    expect(resolveAllowedMaxTier({ ALLOWED_MAX_TIER: '4' })).toBe(3);
+    expect(resolveAllowedMaxTier({ ALLOWED_MAX_TIER: '5' })).toBe(3);
+    expect(resolveAllowedMaxTier({ ALLOWED_MAX_TIER: '99' })).toBe(3);
   });
 
   test('#3 hygiene: 0057 derives tier via MAX(), never a hardcoded tier assignment', () => {

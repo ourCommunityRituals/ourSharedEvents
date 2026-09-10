@@ -280,10 +280,9 @@ export async function exportAnonIdReturns(env: SharedReportExportEnv): Promise<E
     }
 
     // Group rows by pool for per-dataset batching.
+    // Only the 'general' pool exists — HIPAA/COPPA are declined (OSE-1220).
     const byPool: Record<RegulatoryPool, Record<string, unknown>[]> = {
       general: [],
-      hipaa: [],
-      coppa: [],
     };
     let maxComputedAt = watermark;
     for (const r of sourceRows) {
@@ -529,10 +528,9 @@ export async function exportEventSeries(env: SharedReportExportEnv): Promise<Exp
       return result;
     }
 
+    // Only the 'general' pool exists — HIPAA/COPPA are declined (OSE-1220).
     const byPool: Record<RegulatoryPool, Record<string, unknown>[]> = {
       general: [],
-      hipaa: [],
-      coppa: [],
     };
     let maxUpdatedAt = watermark;
     for (const r of sourceRows) {

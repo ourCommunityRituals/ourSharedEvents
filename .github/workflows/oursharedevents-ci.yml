@@ -539,6 +539,19 @@ jobs:
         if: matrix.shard == 'lint'
         run: npm run test:guard-no-gas
 
+      # OSE-1220: declined-regimes gate. HIPAA (tier 4) / COPPA (tier 5) / SOPPA
+      # are declined regimes; this fails the build if wrangler sets
+      # ALLOWED_MAX_TIER above 3 or a migration seeds a tier-4/5 event type —
+      # the two ways a declined regime could receive writes. Self-tests run
+      # first so the guard cannot silently rot into a false green.
+      - name: 'Security: Declined regimes — self-tests'
+        if: matrix.shard == 'lint'
+        run: npm run test:guard-declined-regimes
+
+      - name: 'Security: Declined regimes (no HIPAA/COPPA/SOPPA re-entry)'
+        if: matrix.shard == 'lint'
+        run: npm run guard:declined-regimes
+
       # OSE-696: self-tests for the workerd-pool retry wrapper. Locks the
       # load-bearing property that it passes ONLY on a clean exit-0 run — a
       # teardown crash (which drops a whole spec file) or a real assertion

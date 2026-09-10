@@ -1,6 +1,33 @@
 # Regulatory Phases — ourSharedEvents (OSE)
 
-> **Purpose**: Define the 5-phase regulatory progression that governs which event types OSE can support at each stage of product maturity. This is a second axis alongside the payment tier model — two independent dimensions that together determine what an organizer can do on the platform.
+> **Purpose**: Define the regulatory progression that governs which event types OSE can support. This is a second axis alongside the payment tier model.
+
+> ## ⛔ Phases 4 (HIPAA) and 5 (COPPA/SOPPA) are DECLINED regimes — not rungs (OSE-1220)
+>
+> **Ratified `OCR_STANDARD_declinedRegimes.md` (2026-09-04; SOPPA added 2026-09-10).**
+> HIPAA, COPPA and SOPPA are **declined regimes** — regimes OSE refuses to enter,
+> not tiers it matures into. **There is no roadmap on which OSE acquires them.**
+> The "climb to Phase 5" framing in the sections below is **historical planning,
+> superseded** by the declined-regimes doctrine.
+>
+> **Why declining costs nothing — item-tracking.** A rec-centre youth league, a
+> library summer-reading programme, and a health-adjacent gathering are all
+> servable **without entering a declined regime**, because OSE tracks the **item**
+> (the event/venue/corridor by week), never the participant. The institution
+> holds the roster, the enrolment, and the consent; OSE holds anonymous scans.
+> A child-, student-, or health-adjacent context therefore produces
+> **`general`-pool** data — no age bracket, no consent batch, no student record,
+> no PHI. **Declining HIPAA is not declining hospital business**: OSE may serve
+> health-adjacent venues in the general pool, but handles no PHI and **signs no
+> BAA** — if an engagement requires HIPAA/BAA, there is no business.
+>
+> **Enforced structurally (OSE-1220):** `phaseToPool(4|5)` throws
+> (`src/lib/pool-contract.ts`); `resolveAllowedMaxTier` clamps to tier 3
+> (`src/lib/template-clearance.ts`); a CI gate
+> (`scripts/guard-declined-regimes.js`) fails the build if `ALLOWED_MAX_TIER`
+> exceeds 3 or a migration seeds a tier-4/5 event type; and `REGULATORY_POOLS`
+> for OSE is `['general']`. The Phase 4/5 sections are retained only as a record
+> of what is refused.
 
 ---
 
@@ -226,6 +253,8 @@ The existing anonymous architecture is already a strength here:
 
 ## Phase 4 — HIPAA Layer
 
+> ⛔ **DECLINED regime (OSE-1220)** — see the banner at the top. This section is a record of what OSE refuses, not a roadmap. `phaseToPool(4)` throws; health-adjacent events are served in the `general` pool via item-tracking, with no PHI and no BAA.
+
 **Target date**: TBD (BAA templates + legal review required)
 
 **Regulatory ceiling**: HIPAA/HITECH + State health privacy laws. Events where health information is reasonably expected to be present — either as the explicit topic or because the attendee population is health-defined.
@@ -271,6 +300,8 @@ The existing anonymous architecture is already a strength here:
 ---
 
 ## Phase 5 — COPPA Layer
+
+> ⛔ **DECLINED regime (OSE-1220)** — see the banner at the top, and SOPPA (student data) is declined too. This section is a record of what OSE refuses, not a roadmap. `phaseToPool(5)` throws; youth/school-adjacent events are served in the `general` pool via item-tracking (the institution holds enrolment and consent), with no child or student records.
 
 **Target date**: TBD (parental consent infrastructure required)
 
@@ -505,11 +536,12 @@ Stories will be filed in STORIES.md as regulatory phases approach. Rough sequenc
 
 ## Decision Log
 
-| Date       | Decision                                                   | Rationale                                                                                                     |
-| ---------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| 2026-03-30 | 47 types in Phase 1                                        | "No permit required" ceiling keeps OSE clean before any commerce infrastructure is in place                   |
-| 2026-03-30 | OSE is a platform, not a licensee                          | OSE attests that venue holds license; OSE does not hold liquor/food/gaming licenses itself                    |
-| 2026-03-30 | Phase 3 requires legal matrix before any type goes live    | Beverly ≠ Hammond on raffle law — corridor-by-corridor variance cannot be skipped                             |
-| 2026-03-30 | Phase 4 HIPAA via anonymization, not BAA-first             | Existing 15-min pooling + destroy jobs already approach Safe Harbor de-identification; BAA layer added on top |
-| 2026-03-30 | Phase 5 blocked until verifiable parental consent is built | FTC "verifiable" standard is not a checkbox — requires real engineering investment                            |
-| 2026-03-30 | Regulatory flags are platform-level, not per-account       | Phases unlock for all accounts when OSE operators are legally ready — not a customer self-serve upgrade       |
+| Date       | Decision                                                                    | Rationale                                                                                                                                                                                                                                             |
+| ---------- | --------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-03-30 | 47 types in Phase 1                                                         | "No permit required" ceiling keeps OSE clean before any commerce infrastructure is in place                                                                                                                                                           |
+| 2026-03-30 | OSE is a platform, not a licensee                                           | OSE attests that venue holds license; OSE does not hold liquor/food/gaming licenses itself                                                                                                                                                            |
+| 2026-03-30 | Phase 3 requires legal matrix before any type goes live                     | Beverly ≠ Hammond on raffle law — corridor-by-corridor variance cannot be skipped                                                                                                                                                                     |
+| 2026-03-30 | Phase 4 HIPAA via anonymization, not BAA-first                              | Existing 15-min pooling + destroy jobs already approach Safe Harbor de-identification; BAA layer added on top                                                                                                                                         |
+| 2026-03-30 | Phase 5 blocked until verifiable parental consent is built                  | FTC "verifiable" standard is not a checkbox — requires real engineering investment                                                                                                                                                                    |
+| 2026-03-30 | Regulatory flags are platform-level, not per-account                        | Phases unlock for all accounts when OSE operators are legally ready — not a customer self-serve upgrade                                                                                                                                               |
+| 2026-09-10 | **Phases 4 (HIPAA) / 5 (COPPA) + SOPPA are DECLINED, not rungs (OSE-1220)** | Item-tracking serves health-/child-/student-adjacent contexts in the `general` pool; the regimes are refused structurally (`phaseToPool` throws, tier clamped to 3, CI gate). No BAA, no PHI, no student data. See `OCR_STANDARD_declinedRegimes.md`. |
