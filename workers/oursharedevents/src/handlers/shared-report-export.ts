@@ -47,7 +47,7 @@ export async function runSharedReportBigQueryExport(
       rowsExported: 0,
       rowsSkipped: 0,
       errors: 1,
-      perPool: { general: 0, hipaa: 0, coppa: 0 },
+      perPool: { general: 0 }, // declined regimes removed (OSE-1220)
       durationMs: 0,
     });
     console.error(
@@ -69,7 +69,7 @@ export async function runSharedReportBigQueryExport(
       rowsExported: 0,
       rowsSkipped: 0,
       errors: 1,
-      perPool: { general: 0, hipaa: 0, coppa: 0 },
+      perPool: { general: 0 }, // declined regimes removed (OSE-1220)
       durationMs: 0,
     });
     console.error(
@@ -91,7 +91,7 @@ export async function runSharedReportBigQueryExport(
       rowsExported: 0,
       rowsSkipped: 0,
       errors: 1,
-      perPool: { general: 0, hipaa: 0, coppa: 0 },
+      perPool: { general: 0 }, // declined regimes removed (OSE-1220)
       durationMs: 0,
     });
     console.error(

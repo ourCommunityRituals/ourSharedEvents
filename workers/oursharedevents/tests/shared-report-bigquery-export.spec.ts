@@ -37,7 +37,13 @@ import {
   type SharedReportExportEnv,
 } from '../src/lib/shared-report-export';
 import { runSharedReportBigQueryExport } from '../src/handlers/shared-report-export';
-import { phaseToPool, PoolRoutingError } from '../src/lib/pool-contract';
+import {
+  phaseToPool,
+  PoolRoutingError,
+  REGULATORY_POOLS,
+  BIGQUERY_DATASETS,
+  DECLINED_REGIMES,
+} from '../src/lib/pool-contract';
 
 interface TestEnv {
   DB: D1Database;
@@ -252,11 +258,21 @@ describe('OSE-272 Session 4: phaseToPool() boundary mapping', () => {
     expect(phaseToPool(2)).toBe('general');
     expect(phaseToPool(3)).toBe('general');
   });
-  test('phase 4 → hipaa', () => {
-    expect(phaseToPool(4)).toBe('hipaa');
+  test('phase 4 (HIPAA) is REFUSED — declined regime, never routed (OSE-1220)', () => {
+    // Previously routed 4 → hipaa. HIPAA is now a declined regime: phaseToPool
+    // throws rather than producing a pool, so a declined regime cannot receive
+    // writes even if a tier-4 event type is somehow seeded.
+    expect(() => phaseToPool(4)).toThrow(PoolRoutingError);
   });
-  test('phase 5 → coppa', () => {
-    expect(phaseToPool(5)).toBe('coppa');
+  test('phase 5 (COPPA) is REFUSED — declined regime, never routed (OSE-1220)', () => {
+    expect(() => phaseToPool(5)).toThrow(PoolRoutingError);
+  });
+  test('no declined regime is ever a routable pool', () => {
+    // The governance layer must not carry hipaa/coppa/soppa as an active pool.
+    for (const regime of DECLINED_REGIMES) {
+      expect(REGULATORY_POOLS).not.toContain(regime);
+      expect(Object.keys(BIGQUERY_DATASETS)).not.toContain(regime);
+    }
   });
   test('null / undefined → general (documented Phase-1 default)', () => {
     // Unset tier means Phase 1 (community/recreational), matching the router's
@@ -316,7 +332,7 @@ describe('OSE-272 Session 4 Phase 1: exportAnonIdReturns', () => {
     expect(bqCalls[0].tableId).toBe('anon_id_returns_export');
   });
 
-  test('routes phase 4 events to oureventring_hipaa dataset', async () => {
+  test('phase 4 (HIPAA) row is QUARANTINED — never routed to hipaa OR leaked to general (OSE-1220)', async () => {
     await seedEventTypeRegistry('et-health', 'UEC-HEALTH', 4);
     await seedEvent({ id: 'test-evt-exp-h1', phase: 4, event_type_id: 'et-health' });
     await seedAnonIdReturn({
@@ -324,12 +340,14 @@ describe('OSE-272 Session 4 Phase 1: exportAnonIdReturns', () => {
       venueId: 'test-evt-exp-h1',
       computedAt: '2026-05-10T12:00:00.000Z',
     });
-    await exportAnonIdReturns(makeEnv());
-    expect(bqCalls.some((c) => c.dataset === 'oureventring_hipaa')).toBe(true);
+    const r = await exportAnonIdReturns(makeEnv());
+    // Declined regime: the row is fail-closed skipped, not written anywhere.
+    expect(bqCalls.some((c) => c.dataset === 'oureventring_hipaa')).toBe(false);
     expect(bqCalls.some((c) => c.dataset === 'oureventring_general')).toBe(false);
+    expect(r.rowsSkipped).toBeGreaterThanOrEqual(1);
   });
 
-  test('routes phase 5 events to oureventring_coppa dataset', async () => {
+  test('phase 5 (COPPA) row is QUARANTINED — never routed to coppa OR leaked to general (OSE-1220)', async () => {
     await seedEventTypeRegistry('et-youth', 'UEC-YOUTH', 5);
     await seedEvent({ id: 'test-evt-exp-c1', phase: 5, event_type_id: 'et-youth' });
     await seedAnonIdReturn({
@@ -337,8 +355,10 @@ describe('OSE-272 Session 4 Phase 1: exportAnonIdReturns', () => {
       venueId: 'test-evt-exp-c1',
       computedAt: '2026-05-10T13:00:00.000Z',
     });
-    await exportAnonIdReturns(makeEnv());
-    expect(bqCalls.some((c) => c.dataset === 'oureventring_coppa')).toBe(true);
+    const r = await exportAnonIdReturns(makeEnv());
+    expect(bqCalls.some((c) => c.dataset === 'oureventring_coppa')).toBe(false);
+    expect(bqCalls.some((c) => c.dataset === 'oureventring_general')).toBe(false);
+    expect(r.rowsSkipped).toBeGreaterThanOrEqual(1);
   });
 
   test('every exported row carries all 6 required tags', async () => {

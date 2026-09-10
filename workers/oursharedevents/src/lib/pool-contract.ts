@@ -32,19 +32,37 @@ export const IDENTITY_LAYER = 'anonymous' as const;
 /**
  * Regulatory pools this product routes writes to. Every entry must have a
  * corresponding dataset in `BIGQUERY_DATASETS`.
+ *
+ * OSE-1220 (OCR_STANDARD_declinedRegimes.md): OSE routes to `general` ONLY.
+ * HIPAA, COPPA and SOPPA are DECLINED regimes (see {@link DECLINED_REGIMES}) —
+ * not tiers OSE matures into. This list is a governance layer; it must never
+ * carry a declined regime as an active pool. Mirrored in the brain registry
+ * (`product-registry.yaml` → ose → regulatory_pools: [general]).
  */
-export const REGULATORY_POOLS = ['general', 'hipaa', 'coppa'] as const;
+export const REGULATORY_POOLS = ['general'] as const;
 export type RegulatoryPool = (typeof REGULATORY_POOLS)[number];
+
+/**
+ * Declined regimes — regimes OSE refuses to participate in, per the ratified
+ * `OCR_STANDARD_declinedRegimes.md`. NOT tiers on a roadmap; structurally
+ * absent from every active governance layer (pool list, dataset map, routing).
+ * `phaseToPool` refuses the clearance tiers that would enter them (4=HIPAA,
+ * 5=COPPA); SOPPA is never modeled at all. Health-adjacent business is served
+ * in `general` by item-tracking — declining HIPAA does not decline hospital
+ * business, but OSE handles no PHI and signs no BAA.
+ */
+export const DECLINED_REGIMES = ['hipaa', 'coppa', 'soppa'] as const;
+export type DeclinedRegime = (typeof DECLINED_REGIMES)[number];
 
 /**
  * BigQuery dataset routing per regulatory pool. Names are authoritative —
  * they are the actual GCP dataset identifiers. Brain conformance verifies
- * these strings appear in repo code.
+ * these strings appear in repo code. Declined-regime datasets
+ * (`oureventring_hipaa` / `oureventring_coppa`) are deliberately absent —
+ * OSE never writes to them (OSE-1220).
  */
 export const BIGQUERY_DATASETS: Record<RegulatoryPool, string> = {
   general: 'oureventring_general',
-  hipaa: 'oureventring_hipaa',
-  coppa: 'oureventring_coppa',
 } as const;
 
 /**
@@ -86,9 +104,9 @@ export class PoolRoutingError extends Error {
   readonly phase: unknown;
   constructor(phase: unknown) {
     super(
-      `[pool-contract] cannot resolve regulatory pool for legal_clearance_tier=${JSON.stringify(
+      `[pool-contract] refusing legal_clearance_tier=${JSON.stringify(
         phase
-      )} — refusing to default sensitive data to the 'general' pool (fail-closed, OSE-380 / Invariant #4)`
+      )} — tiers 4 (HIPAA) and 5 (COPPA) are DECLINED regimes and malformed tiers are fail-closed; OSE routes to 'general' only (OSE-1220 / OSE-380 / Invariant #4)`
     );
     this.name = 'PoolRoutingError';
     this.phase = phase;
@@ -96,22 +114,26 @@ export class PoolRoutingError extends Error {
 }
 
 /**
- * Map an event's `legal_clearance_tier` (Phase 1-5 per migration 0023) to
- * the regulatory pool it belongs to. Codifies the routing rule that until
- * Session 4 (OSE-272) lived only in migration comments:
+ * Map an event's `legal_clearance_tier` (Phase 1-3 per migration 0023) to the
+ * regulatory pool it belongs to:
  *
  *   Phase 1-3 → 'general' (community/recreational, commerce, licensed)
- *   Phase 4   → 'hipaa'   (health events, institutional)
- *   Phase 5   → 'coppa'   (youth events, school functions)
+ *   Phase 4   → REFUSED    (HIPAA — declined regime)
+ *   Phase 5   → REFUSED    (COPPA — declined regime)
+ *
+ * OSE-1220 (OCR_STANDARD_declinedRegimes.md): tiers 4 (HIPAA) and 5 (COPPA) are
+ * DECLINED regimes. `phaseToPool` REFUSES them — it throws `PoolRoutingError`
+ * rather than routing to `oureventring_hipaa` / `oureventring_coppa`. The
+ * previous behavior *routed* 4→hipaa / 5→coppa; that made a declined regime one
+ * seeded event type away from receiving writes. Refusal makes the decline
+ * structural: there is no pool to route to, so the function cannot produce one.
  *
  * FAIL-CLOSED (OSE-380 / Invariant #4). `null`/`undefined` is the documented
  * default meaning Phase 1 (matches the router's `legal_clearance_tier ?? 1`)
- * and maps to 'general'. But any *unrecognized* value — NaN, non-finite,
- * non-integer, or an out-of-range phase (< 1 or > 5) — now THROWS rather than
- * silently falling through to 'general'. The previous behavior was a
- * compliance fail-OPEN: a malformed HIPAA/COPPA phase could leak into the
- * general (least-protected) dataset. A value we cannot classify must never be
- * treated as least-sensitive.
+ * and maps to 'general'. Any other value — NaN, non-finite, non-integer, or a
+ * phase outside 1-3 (which now includes the declined 4 and 5) — THROWS rather
+ * than silently falling through to 'general'. A value we cannot classify, and a
+ * value that names a declined regime, must never be treated as least-sensitive.
  *
  * Brain conformance verifies the mapping appears in repo code.
  */
@@ -119,11 +141,11 @@ export function phaseToPool(phase: number | null | undefined): RegulatoryPool {
   // Documented default: an unset tier means Phase 1 (community/recreational),
   // matching the router's `legal_clearance_tier ?? 1`. Phases 1-3 → general.
   if (phase === null || phase === undefined) return 'general';
-  if (!Number.isInteger(phase) || phase < 1 || phase > 5) {
+  // Tiers 4 (HIPAA) and 5 (COPPA) are declined regimes — refuse, never route.
+  // Out-of-range / malformed values are refused for the same fail-closed reason.
+  if (!Number.isInteger(phase) || phase < 1 || phase > 3) {
     throw new PoolRoutingError(phase);
   }
-  if (phase === 5) return 'coppa';
-  if (phase === 4) return 'hipaa';
   return 'general'; // phases 1-3
 }
 

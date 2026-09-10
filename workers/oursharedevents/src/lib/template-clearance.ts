@@ -28,6 +28,16 @@
  */
 export const LAUNCH_MAX_CLEARANCE_TIER = 1;
 
+/**
+ * The HARD declined-regime ceiling (OSE-1220 / OCR_STANDARD_declinedRegimes.md).
+ * Tiers 4 (HIPAA) and 5 (COPPA) are declined regimes; OSE may never offer them.
+ * Unlike {@link LAUNCH_MAX_CLEARANCE_TIER} (a raisable launch default), this is
+ * a structural cap: {@link resolveAllowedMaxTier} clamps to it, so no
+ * `ALLOWED_MAX_TIER` config value can lift OSE above tier 3. The CCR found the
+ * exposure was "one env var away, not one PR away" — this closes the env var.
+ */
+export const DECLINED_REGIME_MAX_TIER = 3;
+
 /** Env shape carrying the optional operator override. */
 export interface ClearanceEnv {
   ALLOWED_MAX_TIER?: string;
@@ -38,11 +48,18 @@ export interface ClearanceEnv {
  * `env.ALLOWED_MAX_TIER` when present and valid (positive finite number),
  * else falls back to the launch default. Never throws — bad/absent config
  * fails safe to the most restrictive documented ceiling.
+ *
+ * OSE-1220: the result is CLAMPED to {@link DECLINED_REGIME_MAX_TIER}. Even a
+ * config of `ALLOWED_MAX_TIER=5` resolves to 3 — the declined regimes (HIPAA
+ * tier 4, COPPA tier 5) are structurally unreachable through config. A build
+ * that sets the value above 3 is additionally rejected by the CI gate
+ * (`scripts/guard-declined-regimes.mjs`) so the misconfiguration is loud.
  */
 export function resolveAllowedMaxTier(env?: ClearanceEnv): number {
   const raw = env?.ALLOWED_MAX_TIER;
   const n = raw == null || raw === '' ? NaN : Number(raw);
-  return Number.isFinite(n) && n > 0 ? n : LAUNCH_MAX_CLEARANCE_TIER;
+  const resolved = Number.isFinite(n) && n > 0 ? n : LAUNCH_MAX_CLEARANCE_TIER;
+  return Math.min(resolved, DECLINED_REGIME_MAX_TIER);
 }
 
 /** The single clearance field the gate reads. */

@@ -26,6 +26,8 @@
     "check:v2-files": "node scripts/check-v2-files.js",
     "guard:no-gas": "node scripts/guard-no-gas.js",
     "test:guard-no-gas": "node scripts/guard-no-gas.test.js",
+    "guard:declined-regimes": "node scripts/guard-declined-regimes.js",
+    "test:guard-declined-regimes": "node scripts/guard-declined-regimes.test.js",
     "test:vitest-retry": "node scripts/vitest-retry.test.js",
     "test:story3.2": "vitest run tests/contract/api-version-compatibility_MOCK.contract.test.js",
     "test:story3.2:verbose": "vitest run tests/contract/api-version-compatibility_MOCK.contract.test.js",
