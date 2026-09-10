@@ -35,7 +35,7 @@
  *   Derived from the templates, so it can never claim an id the app does not
  *   emit. Dynamically-built ids (`data-testid="row-' + id + '"`) are excluded
  *   on purpose: t() would accept one while nothing ever renders it.
- * Generated 2026-09-10 — 376 ids.
+ * Generated 2026-09-10 — 378 ids.
  */
 (function (root, factory) {
   const api = factory();
@@ -358,7 +358,7 @@
       'poster-sponsors-loading',
       'poster-title',
     ]),
-    // shared-report.html — 73 ids
+    // shared-report.html — 75 ids
     SHARED_REPORT: Object.freeze([
       'advanced-metrics-content',
       'advanced-metrics-section',
@@ -369,7 +369,10 @@
       'corridor-density-count',
       'corridor-density-ratio-30d',
       'corridor-density-ratio-90d',
+      'corridor-map-cell-count',
+      'corridor-map-section',
       'corridor-map-source-note',
+      'corridor-map-suppressed-note',
       'events-table',
       'export-json-btn',
       'export-pdf-btn',
@@ -407,7 +410,6 @@
       'shared-report-skip-link',
       'signed-link-content',
       'signed-link-corridor-density',
-      'signed-link-corridor-map',
       'signed-link-distinct-gatherings',
       'signed-link-error',
       'signed-link-event-date',
