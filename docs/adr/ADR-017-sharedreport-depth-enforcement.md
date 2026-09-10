@@ -120,6 +120,16 @@ materialization and guarantees identical values.
   `handlers/demo.ts` is the only translator of the fourth (demo slug). See
   `docs/features/REPORT-DEPTH.md`.
 
+## Enforced by invariants
+
+Back-reference added per OSE-1291 / CCR finding F3 (ADR↔invariant traceability),
+recorded in the OCR-docs brain `architectural-invariants.yaml`:
+
+- **Invariant #5 — tier_equity.** This ADR enforces SharedReport depth
+  server-side by tier; #5 is the invariant it names ("pricing governs *display
+  depth*, never data collection"). A depth change that varied a *value* per tier
+  would be an Invariant #5 change (see Revisit Criteria below).
+
 ## Implementation Notes
 
 - Code: `workers/oursharedevents/src/lib/report-depth.ts` (`resolveDepth`,

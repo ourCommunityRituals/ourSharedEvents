@@ -67,3 +67,16 @@ Reconciliation reason: `public.html` already dual-read these names, and the
 - **Untouched.** #21 locks the SharedReport top-level fields; this change does
   not move them (`status` would be added only as an envelope sibling of `report`,
   which is out of scope here and left to the OSE-842 residual).
+
+## Enforced by invariants
+
+Back-reference added per OSE-1291 / CCR finding F3 (ADR↔invariant traceability),
+recorded in the OCR-docs brain `architectural-invariants.yaml`:
+
+- **Invariant #16 — api_response_schema_stability.** This ADR *is* the `/api/v2`
+  response contract (envelope + canonical field names); #16 is the invariant
+  that locks it. (Header line above already declared "#16 … (live)".)
+- **#1 anonymous_id** and **#21 shared_report_schema_stability** are *touched*
+  by this seam but governed by their own ADRs — #1 by ADR-001, and #21 is
+  explicitly left **untouched** here (see Consequences), so neither gets a
+  governing back-link to ADR-016.
