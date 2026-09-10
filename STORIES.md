@@ -1240,3 +1240,33 @@ _Added 2026-09-09 reconcile. The largest body of work merged since the 2026-08-0
 **Status:** ✅ DONE — OWASP ZAP baseline over the public surfaces (#501, slice 1); cross-cutting response-header hardening applied per-request with CSP nonces + DAST gating (#502, `src/lib/security-headers.ts`). This is the same header work that closed SR-14 and confirmed SR-15.
 
 ---
+
+## Epic CONTINUITY — Doc→Code→Process Continuity Remediation (CCR 5-loop)
+
+_Added 2026-09-10. Output of a 5-loop CCR continuity audit across ADRs ↔ invariant constitution ↔ shared brain ↔ OCR-docs ↔ OSE ↔ OW ↔ test pyramids ↔ CI/CD. **Evidentiary rule (PO-set): Code authoritative → Linear corroborating → ADR/brain docs reconciled after human review.** Nothing auto-applied. Linear EPIC = project `Doc→Code→Process Continuity Remediation (CCR 5-loop)` under the "Self-Checking Infrastructure" initiative; sits in team OSE. Tier A is 📋 Todo (start next session); B/C 📋 Backlog._
+
+> **Reconciliation protocol (lean).** How to run one finding without it becoming cumbersome:
+>
+> 1. **Verify before editing.** Confirm the authoritative code/config first (grep the file, the CI shard, the merged PR). Cite that evidence in the PR body — evidence trail = code → Linear → doc. The PR review _is_ the human review.
+> 2. **One finding → one PR → `Closes OSE-###` + `Part of OSE-1282`.** Keeps the close-guard happy and the Feature open until its last child merges.
+> 3. **Batch only what is _the same edit_.** Fixing a table? Backfill its stale rows in the same PR (e.g. ADR-018 rode with the ADR-README row backfill). Different concern = different PR (F2 ADRs and F11 CLAUDE.md shipped separately). When in doubt, split.
+> 4. **Respect the append-only / immutable surfaces.** Brain `enrichment_history` is append-only (never renumber/delete). ADRs are immutable except `Status` — record supersession as a dated top-note, not a body rewrite. Verify with the doc's own gate (`run_all.py` for the brain) before pushing.
+> 5. **Cross-repo findings live where the file lives.** OCR-docs findings (e.g. F16) get a clean worktree off that repo's `origin/main`; don't entangle with in-progress branches there.
+
+| Story ID   | Linear # | Status          | Title                                                                                  | Parent     |
+| ---------- | -------- | --------------- | -------------------------------------------------------------------------------------- | ---------- |
+| **EPIC**   | —        | 📋              | Doc→Code→Process Continuity Remediation (CCR 5-loop)                                   | Initiative |
+| Feature A  | OSE-1282 | 🔄 IP           | Reconcile Docs to Authoritative Code                                                   | EPIC       |
+| F2         | OSE-1285 | ✅ #515         | Author ADR-018 (Declined Regulatory Regimes) + supersession notes ADR-001/009          | OSE-1282   |
+| F16        | OSE-1286 | 🔄 OCR-docs#125 | Reconcile invariant #21 activation_note (partial) with its live status (OCR-docs repo) | OSE-1282   |
+| F11        | OSE-1287 | ✅ #516         | Correct "self-hosted pool retired org-wide" claim (only OSE migrated)                  | OSE-1282   |
+| Feature B  | OSE-1283 | 📋              | Close Enforcement Gaps                                                                 | EPIC       |
+| F13        | OSE-1288 | 📋              | Enforce Invariant #22 (cross-repo import isolation) on the OW side                     | OSE-1283   |
+| F9         | OSE-1289 | 📋              | #2/#4 are `live` but only T4-gated — add PR-gating specs or correct status             | OSE-1283   |
+| F10        | OSE-1290 | 📋              | Wire or retire ~104 dead tests/e2e specs + unused test:e2e:* scripts                   | OSE-1283   |
+| Feature C  | OSE-1284 | 📋              | Traceability & Hygiene                                                                 | EPIC       |
+| F3         | OSE-1291 | 📋              | Add ADR↔invariant back-references (traceability at 12%)                                | OSE-1284   |
+| F14        | OSE-1292 | 📋              | Refresh OW CLAUDE.md (test counts ~10× stale, invariant mechanism, fuzz)               | OSE-1284   |
+| F12/F15/F5 | OSE-1293 | 📋              | Brain silent-pass hardening + label 3rd testing layer + ADR-009↔010 axis               | OSE-1284   |
+
+---
