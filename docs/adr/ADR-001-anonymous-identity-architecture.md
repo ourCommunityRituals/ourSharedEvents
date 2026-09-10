@@ -4,6 +4,19 @@
 **Date:** 2026-05-14
 **Deciders:** mzdan + Co-Architect
 
+> **Supersession-of-routing note (2026-09-10, OSE-1285).** The **regulatory-pool
+> routing** described in the [Decision](#decision) section — `REGULATORY_POOLS =
+['general', 'hipaa', 'coppa']` and the claim that "adding a fifth regulatory
+> pool … is a `pool-contract.ts` edit + a new BigQuery dataset" — is **superseded
+> by [ADR-018](ADR-018-declined-regulatory-regimes.md)**. HIPAA and COPPA are now
+> _declined regimes_ (refuse, not route): `REGULATORY_POOLS = ['general']`,
+> `phaseToPool(4|5)` throws, and the tier ceiling is clamped to 3. The revisit
+> line "GDPR / BIPA / HIPAA / COPPA are all satisfied or improved by the
+> separation" should be read as: HIPAA/COPPA are satisfied by being **declined**,
+> not by being routed. **The rest of this ADR still stands** — the two-DB
+> (`DB` ↔ `FORMS_DB`) separation, the anon_id contract, 15-minute bucketing, and
+> the static gates are unchanged and remain the architectural floor.
+
 ## Context
 
 OurSharedEvents (OSE) is an event-coordination platform whose value proposition to attendees is summarized in a single sentence rendered on every public event page:
