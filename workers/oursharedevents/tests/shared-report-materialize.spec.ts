@@ -630,6 +630,51 @@ describe('OSE-631: refreshCorridorBaselines — h3_res7 COALESCE path', () => {
     expect(row).not.toBeNull();
     expect(row!.corridor_id).toBe('test-corr-mat-legacy');
   });
+
+  // OSE-631 (mutation-hardening). The three tests above assert WHICH key a
+  // baseline row lands under, but none assert the window COUNTS — so a mutation
+  // that points the 30-day window at the 90-day floor (making the two counts
+  // identical), or otherwise corrupts the rolling-window arithmetic, survives
+  // the whole suite. The 30d-vs-90d split is the entire product of this table,
+  // so pin it: an event aged inside the 31–90 day band populates the 90-day
+  // window while leaving the 30-day window empty.
+  test('rolling windows split — 45-day-old event: window_30d_count=0, window_90d_count=2', async () => {
+    const db = tenv().DB;
+    await seedEvent({ id: 'test-evt-mat-window-split', start_offset_hours: -45 * 24 });
+    await db
+      .prepare(`UPDATE events SET h3_res7 = ? WHERE id = ?`)
+      .bind('872664540ffffff', 'test-evt-mat-window-split')
+      .run();
+    // Two DISTINCT anon hashes → the 90-day window must count exactly 2.
+    const nowIso = new Date().toISOString();
+    for (const h of ['d'.repeat(32), 'e'.repeat(32)]) {
+      await db
+        .prepare(
+          `INSERT INTO anon_id_returns
+             (anon_id_hash, venue_id, first_seen_at, last_seen_at, visit_count, computed_at)
+           VALUES (?, ?, ?, ?, 1, ?)`
+        )
+        .bind(h, 'test-evt-mat-window-split', nowIso, nowIso, nowIso)
+        .run();
+    }
+
+    const r = await refreshCorridorBaselines({ DB: db });
+    expect(r.errors).toBe(0);
+    // The row is still written — the 90-day window is non-empty even though the
+    // 30-day window is 0 (this also kills the skip-condition &&→|| mutant).
+    expect(r.rowsUpserted).toBeGreaterThanOrEqual(1);
+
+    const row = await db
+      .prepare(
+        `SELECT window_30d_count, window_90d_count
+           FROM corridor_density_baseline WHERE corridor_id = ?`
+      )
+      .bind('872664540ffffff')
+      .first<{ window_30d_count: number; window_90d_count: number }>();
+    expect(row).not.toBeNull();
+    expect(row!.window_30d_count).toBe(0);
+    expect(row!.window_90d_count).toBe(2);
+  });
 });
 
 // ─── OSE-634: SRE-OBS-01 — CORRIDOR_BASELINE_REFRESH_COMPLETE log ────────────
