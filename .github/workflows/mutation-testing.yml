@@ -12,7 +12,9 @@
 # green assertion with no teeth. A surviving mutant in count-floor.ts (Invariant
 # #8, K-anon floor) or report-depth.ts (Invariant #5, tier-equity depth omission)
 # means the pyramid defending that covenant invariant is hollow. Break below 95%
-# so a real hollow spot fails, not quietly.
+# so a real hollow spot fails, not quietly. OSE-1273 extended the targets to the
+# PII-scrub crypto (pii.ts); OSE-1278 to the admin auth guard (src/auth/admin.ts,
+# G1 authZ mutation) — a survived mutant there means the authZ boundary is hollow.
 #
 # WHAT IT DOES NOT DO
 # Never merges, never pushes — rail R5, "merges stay human-gated." A failure
@@ -34,11 +36,15 @@ on:
       - 'workers/oursharedevents/src/lib/count-floor.ts'
       - 'workers/oursharedevents/src/lib/report-depth.ts'
       - 'workers/oursharedevents/src/lib/pii.ts'
+      - 'workers/oursharedevents/src/auth/admin.ts'
       - 'workers/oursharedevents/tests/count-floor.spec.ts'
       - 'workers/oursharedevents/tests/report-depth.spec.ts'
       - 'workers/oursharedevents/tests/pii-crypto.spec.ts'
+      - 'workers/oursharedevents/tests/red-team/auth-jwks-verify.spec.ts'
+      - 'workers/oursharedevents/tests/red-team/auth-guard-mutation.spec.ts'
       - 'workers/oursharedevents/stryker.conf.mjs'
       - 'workers/oursharedevents/vitest.node.config.mts'
+      - 'workers/oursharedevents/vitest.node-specs.mjs'
       - 'workers/oursharedevents/package.json'
       - 'workers/oursharedevents/package-lock.json'
       - '.github/workflows/mutation-testing.yml'

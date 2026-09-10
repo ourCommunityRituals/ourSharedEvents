@@ -99,6 +99,12 @@ export const NODE_SPECS = [
   // module-level JWKS cache. No cloudflare:test/D1 — runs node-clean for Stryker.
   'tests/red-team/auth-jwks-verify.spec.ts',
 
+  // OSE-1278 slice 2 (G1 authZ mutation) — the behavioural kill loop over
+  // src/auth/admin.ts (requireAdmin/extractAdminActor + the private helpers).
+  // Node-clean: hand-built Requests/env + a stubbed fetch for the JWKS path;
+  // Date faked with toFake:['Date'] only. Drives admin.ts mutation to break:95.
+  'tests/red-team/auth-guard-mutation.spec.ts',
+
   // OSE-1273 (G1 follow-on) — node-clean L2 crypto coverage for src/lib/pii.ts
   // (hashEmail/encryptEmail/decryptEmail), so Stryker mutation runs on the PII
   // guard off the workerd pool. Uses only crypto.subtle + TextEncoder (both

@@ -39,11 +39,17 @@ export default {
     // OSE-1273 (G1 follow-on) — the PII-scrub crypto (email hashing/encryption),
     // covered by the node-project pii-crypto.spec.ts.
     'src/lib/pii.ts',
-    // OSE-1278: src/auth/admin.ts is NOT yet a mutate target. Slice 1 landed the
-    // JWKS/RSA harness (auth-jwks-verify.spec.ts) that makes verifyCfAccessJWT
-    // testable off the workerd pool — adding it here scored 56.65% (87 survivors
-    // + 27 no-cov: constantTimeEqual equivalents, JWKS-TTL timing, DEV_OPEN path,
-    // error-message strings). Slice 2 = the kill/document loop to break:95.
+    // OSE-1278 slice 2 (G1 authZ mutation) — the admin auth guard. Slice 1 landed
+    // the JWKS/RSA harness (auth-jwks-verify.spec.ts) that makes verifyCfAccessJWT
+    // testable off the workerd pool; at that point admin.ts scored 56.65% (87
+    // survivors + 27 no-cov). Slice 2 added auth-guard-mutation.spec.ts — the
+    // behavioural kill loop over every reachable branch (constantTimeEqual via
+    // Methods 2/3, extractAdminActor, extractBearer/getAdminKey trim + legacy
+    // alias, extractCfAccessPayload/verifyCfAccessJWT exp/iat/segment/some-vs-every
+    // branches, JWKS TTL + cache-age, the 401 response shape, and the two audit
+    // log lines via console spies). Residual survivors are documented EQUIVALENT
+    // mutants (`// Stryker disable` with written reasons in src/auth/admin.ts).
+    'src/auth/admin.ts',
   ],
   coverageAnalysis: 'perTest',
   reporters: ['html', 'clear-text', 'progress'],
