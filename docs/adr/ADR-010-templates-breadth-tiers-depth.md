@@ -42,6 +42,15 @@ The question: how do event templates and feature tiers interact?
 5. Brand-level template visibility (which brands see which templates) is preserved as a curation mechanism, not a paywall. A bocce-focused brand shows bocce first, not because other templates are locked, but because the UX is tailored.
 6. New templates can be added without touching the tier system. New tier features can be added without touching templates.
 
+## Enforced by invariants
+
+Back-reference added per OSE-1291 / CCR finding F3 (ADR↔invariant traceability),
+recorded in the OCR-docs brain `architectural-invariants.yaml`:
+
+- **Invariant #5 — tier_equity.** The tiers=depth axis this ADR establishes
+  ("templates never gate, tiers gate") is the axis #5's tier-equity guarantee
+  sits on. (#5 also cites ADR-013 covenant and ADR-017 depth enforcement.)
+
 ## Template Schema
 
 Each template defines:

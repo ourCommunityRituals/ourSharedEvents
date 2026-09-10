@@ -123,6 +123,21 @@ Wave 4 is where corridors span into countryside — where people actually live. 
 - ABC partnership strategy aligns with corridor-level (Level 5) engagement tracking
 - Legal clearance tiers gate event verticals: OPEN → RESTRICTED (COPPA) → REGULATED (HIPAA)
 
+## Enforced by invariants
+
+This decision is guarded by CI-enforced architectural invariants (OCR-docs brain
+`architectural-invariants.yaml`). Back-references added per OSE-1291 / CCR
+finding F3 (ADR↔invariant traceability):
+
+- **Invariant #2 — hyperlocal_geo_resolution.** Enforces geo-resolution over the
+  7-level node hierarchy this ADR defines.
+- **Invariant #4 — ncr_data_accumulation.** Enforces the corridor/signal
+  accumulation model (SIGNAL_PRESENCE → SIGNAL_BEHAVIORAL, reverb) this ADR
+  defines.
+- **Invariant #9 — tenant_isolation** (table-source link). This ADR introduced
+  `node_hierarchy` and `corridors` (migration 0010); #9 isolates those
+  multi-tenant tables per `brand_id`.
+
 ## References
 
 Confirmed as architectural foundation for SharedReport BI wing and ABC partnership strategy. See ABC-Partnership-Strategy.docx.
