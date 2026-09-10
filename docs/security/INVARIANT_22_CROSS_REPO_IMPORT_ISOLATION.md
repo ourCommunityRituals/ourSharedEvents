@@ -76,9 +76,9 @@ The shared OCR packages (`@ocr/flags`, `@ocr/ui`) are **not** a violation — th
 
 ## CI enforcement
 
-`scripts/check-cross-repo-imports.sh` runs in the `brain-contract-check.yml` workflow on every PR. It scans `workers/**` source and `package.json` files for any prohibited pattern and exits 1 on any match.
+The canonical, live-read brain guard `ocr-docs-brain/scripts/check_cross_repo_imports.py` (OCR-docs) runs in the `brain-contract-check.yml` workflow on every PR (`--repo ose --product-id ose`). It scans this repo's source and `package.json` files for any prohibited pattern and exits 1 on any match, deriving the prohibited sibling scopes from `product-registry.yaml` and its enforcement mode from `cross_repo_patterns.json` (read live from OCR-docs `main`). Invariant #22 declares `enforcement_kind: brain_script`, so brain conformance verifies this repo _wires_ that guard rather than that a local script exists. The former OSE-local `scripts/check-cross-repo-imports.sh` was retired once the brain guard became canonical (OSE-1288 / F13).
 
-To add this gate to a sibling repo (WKRP, OAW), copy the script with the prohibited patterns updated to reflect that repo's perspective (e.g., in WKRP: prohibit imports of `@oursharedevents/*`, `@ourairwaves/*`).
+To add this gate to a sibling repo (WKRP, OAW), wire the same brain guard into that repo's CI with `--product-id <wkrp|oaw>`; the prohibited sibling scopes are derived per-product from `product-registry.yaml`, and the repo's severity comes from the `enforcement_mode` plane (`warn` until its side of the seam is built, then `block`).
 
 ---
 
