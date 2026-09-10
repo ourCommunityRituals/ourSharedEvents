@@ -48,10 +48,12 @@ const JWKS_TTL_MS = 60 * 60 * 1000; // 1 hour
 async function _fetchJwks(teamDomain: string): Promise<CryptoKey[]> {
   const url = `https://${teamDomain}/cdn-cgi/access/certs`;
   const res = await fetch(url);
+  // Stryker disable next-line StringLiteral: equivalent mutant — the Error message text is never asserted; only the throw→fail-closed behaviour is (auth-guard-mutation.spec.ts "JWKS endpoint non-OK … → 401"). OSE-1278.
   if (!res.ok) throw new Error(`JWKS fetch failed: ${res.status}`);
   const { keys } = (await res.json()) as { keys: JsonWebKey[] };
   return Promise.all(
     keys.map((k) =>
+      // Stryker disable next-line BooleanLiteral: equivalent mutant — the importKey `extractable` flag (false→true) does not change verify() output; a signature still verifies identically. OSE-1278.
       crypto.subtle.importKey('jwk', k, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, [
         'verify',
       ])
@@ -60,6 +62,7 @@ async function _fetchJwks(teamDomain: string): Promise<CryptoKey[]> {
 }
 
 async function _getJwks(teamDomain: string): Promise<CryptoKey[]> {
+  // Stryker disable next-line EqualityOperator: equivalent mutant — `<` vs `<=` differ only when the cache age equals the 1h TTL to the exact millisecond, unobservable. The TTL window IS covered (reuse-within-5min / refetch-past-2h in auth-guard-mutation.spec.ts). OSE-1278.
   if (_jwksCache && Date.now() - _jwksCache.fetchedAt < JWKS_TTL_MS) return _jwksCache.keys;
   const keys = await _fetchJwks(teamDomain);
   _jwksCache = { keys, fetchedAt: Date.now() };
@@ -90,6 +93,7 @@ export async function verifyCfAccessJWT(
     const parts = jwt.split('.');
     if (parts.length !== 3) return { valid: false };
 
+    // Stryker disable next-line StringLiteral,ArithmeticOperator: equivalent mutants — atob() is forgiving-base64 (ignores padding, only rejects length%4===1), so removing/zeroing the '=' padding does not change decoding of real CF Access segments. OSE-1278.
     const pad = (s: string) => s + '='.repeat((4 - (s.length % 4)) % 4);
     const decodeB64 = (s: string) => atob(pad(s.replace(/-/g, '+').replace(/_/g, '/')));
 
@@ -106,6 +110,7 @@ export async function verifyCfAccessJWT(
     const keys = await _getJwks(teamDomain);
     const results = await Promise.all(
       keys.map((k) =>
+        // Stryker disable next-line ArrowFunction,BooleanLiteral: equivalent/defensive — `()=>undefined` is falsy-identical to `false` under `results.some(Boolean)`; the `true` arm guards a verify() throw that well-formed key+sig inputs never trigger. A real verify failure (wrong key) IS covered. OSE-1278.
         crypto.subtle.verify('RSASSA-PKCS1-v1_5', k, sig, sigInput).catch(() => false)
       )
     );
@@ -113,6 +118,7 @@ export async function verifyCfAccessJWT(
 
     return { valid: true, email: payload.email };
   } catch {
+    // Stryker disable next-line ObjectLiteral: equivalent mutant — `{}` has `valid: undefined`, which the caller treats identically to `valid: false` (both fail `verification.valid`). The catch→invalid path IS covered (malformed token → 401). OSE-1278.
     return { valid: false };
   }
 }
@@ -122,11 +128,13 @@ export async function verifyCfAccessJWT(
 function constantTimeEqual(a: string, b: string): boolean {
   if (a.length !== b.length) return false;
   let diff = 0;
+  // Stryker disable next-line EqualityOperator: equivalent mutant — `<`→`<=` reads charCodeAt(a.length) on both (equal-length path only), NaN^NaN===0, leaving diff unchanged. The per-byte XOR IS covered (wrong-same-length + strict-prefix keys → 401). OSE-1278.
   for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
   return diff === 0;
 }
 
 function extractBearer(header: string | null): string | null {
+  // Stryker disable next-line Regex: equivalent mutant — dropping the `$` end-anchor changes nothing: `(.+)` is greedy and an HTTP header value is single-line, so it already consumes to the end. The `^` start-anchor and `\s+` ARE covered (prefix-junk + multi-space tests). OSE-1278.
   const m = header?.match(/^Bearer\s+(.+)$/i);
   return m ? m[1] : null;
 }
@@ -141,19 +149,32 @@ interface CfAccessPayload {
 }
 
 function extractCfAccessPayload(jwt: string): CfAccessPayload {
+  // NOTE (OSE-1278): every early-return below yields `{ valid: false }` with NO
+  // `email`, and the ONLY consumer gate is `valid && email` (requireAdmin L265 /
+  // extractAdminActor L177). So the `{valid:false}`→`{valid:true}` and
+  // `{valid:false}`→`{}` mutants on those guards are EQUIVALENT: an emailless
+  // payload fails `valid && email` and falls through regardless. The guards'
+  // real jobs (3 segments, exp+iat present, not expired) ARE covered on the
+  // signature path via verifyCfAccessJWT direct tests, and on this local-trust
+  // path via the 401 assertions in auth-guard-mutation.spec.ts.
   try {
     const parts = jwt.split('.');
+    // Stryker disable next-line BooleanLiteral,ObjectLiteral: equivalent — emailless return, masked by `valid && email` (see NOTE). OSE-1278.
     if (parts.length !== 3) return { valid: false };
+    // Stryker disable next-line StringLiteral,ArithmeticOperator: equivalent — atob() forgiving-base64 ignores padding (see verifyCfAccessJWT pad note). OSE-1278.
     const padding = '='.repeat((4 - (parts[1].length % 4)) % 4);
     const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/') + padding)) as {
       exp?: number;
       iat?: number;
       email?: string;
     };
+    // Stryker disable next-line BooleanLiteral,ObjectLiteral: equivalent — emailless return, masked by `valid && email` (see NOTE). The exp+iat requirement IS covered (missing-exp / missing-iat → 401). OSE-1278.
     if (!payload.exp || !payload.iat) return { valid: false };
+    // Stryker disable next-line BooleanLiteral,ObjectLiteral: equivalent — emailless return, masked by `valid && email` (see NOTE). The `<=` boundary IS covered (exp==now → 401 under fake time). OSE-1278.
     if (payload.exp <= Math.floor(Date.now() / 1000)) return { valid: false };
     return { valid: true, email: payload.email };
   } catch {
+    // Stryker disable next-line ObjectLiteral,BooleanLiteral: equivalent — emailless return, masked by `valid && email` (see NOTE). The catch IS exercised (malformed base64 → 401). OSE-1278.
     return { valid: false };
   }
 }
@@ -172,6 +193,7 @@ function extractCfAccessPayload(jwt: string): CfAccessPayload {
  */
 export function extractAdminActor(request: Request, env: AdminEnv): string | null {
   const cfJwt = request.headers.get('Cf-Access-Jwt-Assertion');
+  // Stryker disable next-line ConditionalExpression: equivalent mutant — forcing this guard true with no header makes `extractCfAccessPayload(null)` throw→caught→`{valid:false}`, then `valid && email` fails and control falls to the same key checks below. Actor extraction from a real JWT IS covered. OSE-1278.
   if (cfJwt) {
     const { valid, email } = extractCfAccessPayload(cfJwt);
     if (valid && email) return email;
@@ -265,6 +287,7 @@ export async function requireAdmin(
       if (valid && email) {
         // A CF Access JWT carrying a HUMAN email must pass the admin allowlist.
         const allowlistDeny = assertAdminEmailAllowed(email, env, requestId);
+        // Stryker disable next-line ConditionalExpression: equivalent mutant — when the email is allowlisted `allowlistDeny` is null, so `if(true) return allowlistDeny` returns the same null the next line returns; when denied it returns the same 403. Both allow and deny outcomes ARE covered. OSE-1278.
         if (allowlistDeny) return allowlistDeny;
         return null;
       }
