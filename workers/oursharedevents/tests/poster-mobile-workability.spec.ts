@@ -38,14 +38,15 @@ describe('OSE-300 poster preview mobile workability — API layer', () => {
     expect(html).toMatch(/@media\s*\(\s*max-width:\s*768px\s*\)\s*\{/);
   });
 
-  test('OSE-300 | API | GET /poster (mobile media query) | Print anchor in page-header meets 44px touch-target floor', async () => {
+  test('OSE-300 | API | GET /poster (mobile media query) | Print button in page-header meets 44px touch-target floor', async () => {
     const html = await fetchPosterHtml();
     const mediaBlock = extractMediaBlock(html, 768);
-    // The page-header Print anchor (data-testid="poster-print") is the
-    // primary CTA on this surface. It defaults to bare inline anchor
-    // (~16px tall). Mobile rule must hit the 44px floor.
-    expect(mediaBlock).toMatch(/\.page-header\s+a\s*\{[^}]*min-height:\s*44px/);
-    expect(mediaBlock).toMatch(/\.page-header\s+a\s*\{[^}]*display:\s*inline-flex/);
+    // The page-header Print control (data-testid="poster-print") is the
+    // primary CTA on this surface. As of OSE-286 it is a <button class="print-btn">
+    // (was a bare anchor) so it can be disabled while QR codes load — the
+    // mobile rule must still hit the 44px floor on the button.
+    expect(mediaBlock).toMatch(/\.page-header\s+\.print-btn\s*\{[^}]*min-height:\s*44px/);
+    expect(mediaBlock).toMatch(/\.page-header\s+\.print-btn\s*\{[^}]*display:\s*inline-flex/);
   });
 
   test('OSE-300 | API | GET /poster (mobile media query) | event-select select hits the 16px iOS auto-zoom floor', async () => {

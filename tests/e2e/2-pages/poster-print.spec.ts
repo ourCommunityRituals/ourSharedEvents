@@ -57,11 +57,16 @@ test.describe('Poster Page — Structure', () => {
     await expect(page.locator('[data-testid="poster-header"]')).toBeVisible();
   });
 
-  test('print link is visible in header', async ({ page }) => {
-    const printLink = page.locator('[data-testid="poster-print"]');
-    await expect(printLink).toBeVisible();
-    const href = await printLink.getAttribute('href');
-    expect(href).toContain('print');
+  test('print control is a <button> in header (OSE-286)', async ({ page }) => {
+    // OSE-286 / OSE-R-020: the Print control is a real <button> (was a
+    // `javascript:window.print()` anchor) so it CAN be disabled while QR codes
+    // load. Whether it is disabled right now depends on seeded data (QR present
+    // → enabled), so the disabled→enabled gating is proven deterministically in
+    // the "Print Gate (OSE-286)" describe below with a mocked, delayed bundle —
+    // here we only lock that it is a real button element.
+    const printBtn = page.locator('[data-testid="poster-print"]');
+    await expect(printBtn).toBeVisible();
+    expect(await printBtn.evaluate((el) => el.tagName)).toBe('BUTTON');
   });
 
   test('container is visible', async ({ page }) => {
@@ -262,6 +267,110 @@ test.describe('Poster Page — XSS Resilience', () => {
 
     const posterHtml = await page.locator('[data-testid="poster-area"]').innerHTML();
     expect(posterHtml).not.toContain('<img src=x');
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// 6b. PRINT GATE  (OSE-286 — data mocked inline; QR payload deliberately delayed)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+test.describe('Poster Page — Print Gate (OSE-286)', () => {
+  // A 1x1 transparent PNG data-URI: a valid <img src> that loads instantly, so
+  // the only thing gating Print is the (delayed) poster-bundle fetch below.
+  const TINY_PNG =
+    'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M8AAAMBAQDJ/pLvAAAAAElFTkSuQmCC';
+  const ONE_EVENT = {
+    ok: true,
+    status: 200,
+    items: [
+      {
+        id: 'evt_gate',
+        title: 'Gate Test',
+        name: 'Gate Test',
+        slug: 'gate-test',
+        status: 'active',
+        brand_id: 'root',
+      },
+    ],
+  };
+  const BUNDLE = {
+    ok: true,
+    qr: { register: TINY_PNG, checkin: TINY_PNG, survey: TINY_PNG, 'email-signup': TINY_PNG },
+    links: {
+      register: 'https://x/r',
+      checkin: 'https://x/c',
+      survey: 'https://x/s',
+      'email-signup': 'https://x/e',
+    },
+    labels: {
+      register: 'Registration',
+      checkin: 'Check-in',
+      survey: 'Survey',
+      'email-signup': 'Email Signup',
+    },
+  };
+
+  test('Print stays disabled until QR codes finish loading, then works', async ({ page }) => {
+    await page.route('**/api/v2/events', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(ONE_EVENT),
+      })
+    );
+    // Hold the QR payload open until we release it — simulates the slow venue
+    // link where the bug bites hardest.
+    let releaseBundle: () => void = () => {};
+    const bundleGate = new Promise<void>((resolve) => {
+      releaseBundle = resolve;
+    });
+    await page.route('**/poster-bundle', async (route) => {
+      await bundleGate;
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(BUNDLE),
+      });
+    });
+    await page.route('**/sponsor-bundle*', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ ok: true, bundle: {} }),
+      })
+    );
+
+    // Stub window.print so we can prove it is NOT called while gated.
+    await page.addInitScript(() => {
+      (window as unknown as { __printCalls: number }).__printCalls = 0;
+      window.print = () => {
+        (window as unknown as { __printCalls: number }).__printCalls++;
+      };
+    });
+
+    await page.goto('/poster', { waitUntil: 'domcontentloaded', timeout: 20_000 });
+
+    const printBtn = page.locator('[data-testid="poster-print"]');
+    // Event rendered, but QR still in flight → Print disabled + status shown.
+    await expect(printBtn).toBeDisabled();
+    await expect(page.locator('[data-testid="poster-print-status"]')).toBeVisible();
+
+    // Force a click while gated (dispatchEvent bypasses actionability waits) and
+    // confirm nothing printed — the JS guard holds even if the DOM is poked.
+    await printBtn.dispatchEvent('click');
+    expect(
+      await page.evaluate(() => (window as unknown as { __printCalls: number }).__printCalls)
+    ).toBe(0);
+
+    // Release the QR payload → the gate opens.
+    releaseBundle();
+    await expect(printBtn).toBeEnabled();
+
+    // Now Print works.
+    await printBtn.click();
+    expect(
+      await page.evaluate(() => (window as unknown as { __printCalls: number }).__printCalls)
+    ).toBeGreaterThan(0);
   });
 });
 
