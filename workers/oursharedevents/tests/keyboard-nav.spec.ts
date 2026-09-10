@@ -171,8 +171,10 @@ describe('A11Y-6: focus-visible on links and form controls', () => {
     expect(await adminHtml()).toMatch(/\.form-link:focus-visible\s*\{[^}]*outline/);
   });
 
-  test('poster page has .page-header a:focus-visible CSS', async () => {
-    expect(await posterHtml()).toMatch(/\.page-header a:focus-visible\s*\{[^}]*outline/);
+  test('poster page has page-header focus-visible CSS on the Print control', async () => {
+    // OSE-286: the Print control is now a <button class="print-btn"> (was an
+    // anchor). Keyboard users must still get a visible focus ring on it.
+    expect(await posterHtml()).toMatch(/\.page-header \.print-btn:focus-visible\s*\{[^}]*outline/);
   });
 
   test('poster page has select:focus CSS for event picker', async () => {

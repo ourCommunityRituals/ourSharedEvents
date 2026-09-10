@@ -32,13 +32,38 @@
         font-size: 1.2rem;
         font-weight: 700;
       }
-      .page-header a {
+      .page-header a,
+      .page-header .print-btn {
         color: rgba(255, 255, 255, 0.7);
         font-size: 0.85rem;
         text-decoration: none;
       }
-      .page-header a:hover {
+      .page-header a:hover,
+      .page-header .print-btn:not(:disabled):hover {
         color: #fff;
+      }
+      /* OSE-286: the Print control became a <button>; reset native chrome so
+         it reads as the header link it replaced, and dim it while disabled. */
+      .print-controls {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.6rem;
+      }
+      .print-btn {
+        background: none;
+        border: none;
+        padding: 0;
+        cursor: pointer;
+        font-family: inherit;
+      }
+      .print-btn:disabled,
+      .print-btn[disabled] {
+        cursor: not-allowed;
+        opacity: 0.45;
+      }
+      .print-status {
+        font-size: 0.7rem;
+        color: rgba(255, 255, 255, 0.6);
       }
       .container {
         max-width: 680px;
@@ -296,7 +321,8 @@
          the one .poster-sponsor img box and the one .poster-sponsor-name style
          above, regardless of tier. `data-tier` remains on the element for
          frequency-share/rotation identity, but NO CSS keys off it (WALL-3b). */
-      .page-header a:focus-visible {
+      .page-header a:focus-visible,
+      .page-header .print-btn:focus-visible {
         outline: 2px solid #fff;
         outline-offset: 2px;
       }
@@ -347,7 +373,8 @@
         .page-header h1 {
           font-size: 1.05rem;
         }
-        .page-header a {
+        .page-header a,
+        .page-header .print-btn {
           display: inline-flex;
           align-items: center;
           min-height: 44px;
@@ -449,6 +476,12 @@
         .qr-loading {
           display: none !important;
         }
+        /* OSE-286: defensive move for Cmd+P bypassing the disabled button —
+           if ANY QR is still a loading placeholder, hide the whole section so
+           the poster never prints empty labeled boxes where codes belong. */
+        .qr-section:has(.qr-loading) {
+          display: none !important;
+        }
         .qr-link-url {
           display: none !important;
         }
@@ -478,10 +511,12 @@
         border-bottom: 1px solid var(--border);
         color: var(--text);
       }
-      .page-header a {
+      .page-header a,
+      .page-header .print-btn {
         color: var(--text-muted);
       }
-      .page-header a:hover {
+      .page-header a:hover,
+      .page-header .print-btn:not(:disabled):hover {
         color: var(--text);
       }
       .poster {
@@ -552,7 +587,15 @@
     <a href="#main-content" class="skip-link" data-testid="poster-skip-link">Skip to content</a>
     <div class="page-header no-print" data-testid="poster-header">
       <h1>OurSharedEvents — Poster</h1>
-      <a href="javascript:window.print()" data-testid="poster-print">&#x1F5A8; Print</a>
+      <!-- OSE-286 / OSE-R-020: Print is a real <button> that STARTS disabled and
+           is re-enabled by the gate script only once all QR codes settle, so a
+           poster is never printed with empty QR boxes. (It replaced a
+           `javascript:window.print()` anchor, which the nonce CSP blocks and
+           which cannot be disabled.) -->
+      <div class="print-controls">
+        <span id="poster-print-status" class="print-status" data-testid="poster-print-status" role="status" aria-live="polite">QR codes loading&hellip;</span>
+        <button type="button" id="poster-print-btn" class="print-btn" data-testid="poster-print" disabled aria-disabled="true">&#x1F5A8; Print</button>
+      </div>
     </div>
     <div id="main-content" class="container" data-testid="poster-container">
       <div class="event-select no-print" data-testid="poster-event-select">
@@ -569,6 +612,33 @@
       const esc = s => { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; };
       const fmt = iso => iso ? new Date(iso).toLocaleDateString('en-US', { weekday:'long', year:'numeric', month:'long', day:'numeric' }) : '';
       const fmtTime = iso => iso ? new Date(iso).toLocaleTimeString('en-US', { hour:'numeric', minute:'2-digit' }) : '';
+
+      // OSE-286: the Print button is gated on QR readiness. It starts disabled
+      // (in the markup) and toggles here as posters render and their codes
+      // settle, so a poster is never printed with empty QR boxes.
+      function setPrintReady(ready) {
+        const btn = document.querySelector('[data-testid="poster-print"]');
+        const status = document.getElementById('poster-print-status');
+        if (btn) {
+          btn.disabled = !ready;
+          btn.setAttribute('aria-disabled', ready ? 'false' : 'true');
+        }
+        if (status) status.style.display = ready ? 'none' : '';
+      }
+      // Resolve once every rendered QR <img> has loaded or errored. Data-URI
+      // codes settle almost immediately; a slow venue link is exactly the case
+      // this waits out. No images (all failed / none injected) → resolve now.
+      function awaitQrImages() {
+        const imgs = Array.prototype.slice.call(document.querySelectorAll('.qr-section .qr-img'));
+        if (!imgs.length) return Promise.resolve();
+        return Promise.all(imgs.map(function (img) {
+          if (img.complete) return Promise.resolve();
+          return new Promise(function (resolve) {
+            img.addEventListener('load', resolve, { once: true });
+            img.addEventListener('error', resolve, { once: true });
+          });
+        }));
+      }
 
       function renderPoster(event) {
         // OSE-844 (X-10): the API item now carries name/startDateISO/venue
@@ -688,6 +758,8 @@
       }
       async function loadPosterQR(eventId) {
         if (!eventId) return;
+        // Gate Print for this render cycle until the codes below settle.
+        setPrintReady(false);
         const types = [
           { type: 'register', id: 'qr-img-register' },
           { type: 'checkin', id: 'qr-img-checkin' },
@@ -729,7 +801,24 @@
               '</a>' + uecText;
           }
         } catch { /* QR loading is non-critical */ }
+        finally {
+          // AC (OSE-286): re-enable Print only after all QR images finish
+          // loading OR error-out. If any code failed, its .qr-loading
+          // placeholder stays and the @media print rule hides the whole
+          // section — so an incomplete poster still never prints empty boxes.
+          await awaitQrImages();
+          setPrintReady(true);
+        }
       }
+      // OSE-286 / OSE-R-020: Print via a nonced listener — the button carries
+      // no javascript: URI (which the nonce CSP blocks). The disabled attribute
+      // already blocks clicks; the guard is belt-and-suspenders for aria state.
+      (function wirePrintButton() {
+        const btn = document.querySelector('[data-testid="poster-print"]');
+        if (btn) btn.addEventListener('click', function () {
+          if (!btn.disabled) window.print();
+        });
+      })();
       init();
     </script>
     <!-- Sponsor logos hide themselves when the image 404s (OSE-1239).
