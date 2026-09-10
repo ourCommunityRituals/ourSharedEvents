@@ -407,6 +407,52 @@
       .no-venue {
         color: #adb5bd;
       }
+      /* OSE-628 INT-01 — corridor_map hex map section.
+         Mobile-first / scoped to this section only (per the ratified scope
+         decision): the base rules are the phone layout and the two min-width
+         blocks below progressively enhance for tablet and laptop. The wider
+         /sharedReport table breakpoints stay max-width (OSE-295 gate) — this
+         inversion is deliberately corridor_map-local, not surface-wide. */
+      .corridor-map svg {
+        display: block;
+        width: 100%;
+        height: auto;
+        border-radius: 6px;
+      }
+      .corridor-map-head {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+        margin-bottom: 0.75rem;
+      }
+      .cell-count-chip {
+        align-self: flex-start;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        padding: 0.25rem 0.6rem;
+        border-radius: 999px;
+        background: #eef1ff;
+        color: #1a1a2e;
+        font-size: 0.75rem;
+        font-weight: 700;
+        white-space: nowrap;
+      }
+      /* tablet — chip sits beside the heading rather than stacking under it */
+      @media (min-width: 700px) {
+        .corridor-map-head {
+          flex-direction: row;
+          align-items: center;
+          justify-content: space-between;
+        }
+      }
+      /* laptop — constrain + center the map so it doesn't sprawl on wide screens */
+      @media (min-width: 1024px) {
+        .corridor-map svg {
+          max-width: 600px;
+          margin-inline: auto;
+        }
+      }
       /* OSE-295 DRAIN 2/7: mobile workability for /sharedReport.
        Mirrors the admin pattern (OSE-294): tables collapse to a card
        layout below 768px so the 4-col events list and 5-col funnel
@@ -647,6 +693,10 @@
       .venue-text,
       .venue-plain {
         color: var(--text-muted);
+      }
+      .cell-count-chip {
+        background: var(--surface-hover);
+        color: var(--text);
       }
       .badge.active {
         background: rgba(22, 163, 74, 0.15);
@@ -1032,18 +1082,47 @@
           suppressionNote('corridor_density') +
           '</div>' +
           '</section>' +
+          // OSE-628 INT-01 — corridor_map hex map. The SVG is generated server-
+          // side by our own renderCorridorMap() (CSP-clean, no external requests,
+          // no script), so it is injected as innerHTML directly — NOT through
+          // esc() — which would double-escape the markup into visible text. The
+          // section only renders when report.corridor_map is present and non-empty
+          // (AC#4); a fully-suppressed map (source === 'suppressed', carrying no
+          // svg) shows suppression copy instead of the map (AC#2); cell_count is
+          // surfaced in a stat chip beside the heading (AC#3).
           (report.corridor_map
-            ? '<section class="funnel-card" data-testid="signed-link-corridor-map">' +
-              '<h3>' +
-              (report.corridor_map.source === 'fallback' ? 'Neighborhood Preview' : 'Corridor Scan Map') +
-              '</h3>' +
-              report.corridor_map.svg +
-              (report.corridor_map.source === 'fallback'
-                ? '<p class="report-note" data-testid="corridor-map-source-note">Neighborhood estimate — scan density fills in as events accumulate.</p>'
-                : '') +
-              '</section>'
+            ? (function () {
+                const cm = report.corridor_map;
+                const heading =
+                  cm.source === 'fallback' ? 'Neighborhood Preview' : 'Corridor Scan Map';
+                const chip =
+                  '<span class="cell-count-chip" data-testid="corridor-map-cell-count" aria-label="' +
+                  fmtInt(cm.cell_count) +
+                  ' cells mapped">' +
+                  fmtInt(cm.cell_count) +
+                  ' cells</span>';
+                const bodyHtml =
+                  cm.source === 'suppressed'
+                    ? '<p class="report-note" data-testid="corridor-map-suppressed-note">Map hidden to keep things anonymous — not enough scan density yet.</p>'
+                    : cm.svg +
+                      (cm.source === 'fallback'
+                        ? '<p class="report-note" data-testid="corridor-map-source-note">Neighborhood estimate — scan density fills in as events accumulate.</p>'
+                        : '');
+                return (
+                  '<section id="corridor-map-container" class="funnel-card corridor-map" data-testid="corridor-map-section" aria-labelledby="section-corridor-map">' +
+                  '<div class="corridor-map-head">' +
+                  '<h3 id="section-corridor-map">' +
+                  heading +
+                  '</h3>' +
+                  chip +
+                  '</div>' +
+                  bodyHtml +
+                  '</section>'
+                );
+              })()
             : suppressionByField['corridor_map']
-              ? '<section class="funnel-card" data-testid="signed-link-corridor-map">' +
+              ? '<section id="corridor-map-container" class="funnel-card corridor-map" data-testid="corridor-map-section" aria-labelledby="section-corridor-map">' +
+                '<h3 id="section-corridor-map">Corridor Scan Map</h3>' +
                 suppressionNote('corridor_map') +
                 '</section>'
               : '') +
