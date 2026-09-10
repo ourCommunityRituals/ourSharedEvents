@@ -129,6 +129,7 @@ Confirmed as architectural foundation for SharedReport BI wing and ABC partnersh
 
 ## Cross-References
 
+- [ADR-010](ADR-010-templates-breadth-tiers-depth.md) — **axis cross-reference (OSE-1293 / F5):** ADR-010's "templates never gate" and this ADR's "legal clearance gates verticals" are **different axes, not a contradiction**. Templates = breadth (never gated); feature-tiers = depth (gated in ADR-010); legal clearance = which verticals are served at all (gated here, and refined by [ADR-018](ADR-018-declined-regulatory-regimes.md) — declined regimes refuse, not route).
 - [NCR-METHODOLOGY.md](../features/NCR-METHODOLOGY.md) — NCR methodology and data pipeline
 - [VISION.md](../features/VISION.md) — Platform vision and NCR horizon
 - Migration: `workers/oursharedevents/migrations/0010_create_ncr_v2_hierarchy.sql` (base schema)
