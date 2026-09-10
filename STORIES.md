@@ -1256,9 +1256,9 @@ _Added 2026-09-10. Output of a 5-loop CCR continuity audit across ADRs ↔ invar
 | Story ID   | Linear # | Status          | Title                                                                                  | Parent     |
 | ---------- | -------- | --------------- | -------------------------------------------------------------------------------------- | ---------- |
 | **EPIC**   | —        | 📋              | Doc→Code→Process Continuity Remediation (CCR 5-loop)                                   | Initiative |
-| Feature A  | OSE-1282 | 🔄 IP           | Reconcile Docs to Authoritative Code                                                   | EPIC       |
+| Feature A  | OSE-1282 | ✅ DONE         | Reconcile Docs to Authoritative Code                                                   | EPIC       |
 | F2         | OSE-1285 | ✅ #515         | Author ADR-018 (Declined Regulatory Regimes) + supersession notes ADR-001/009          | OSE-1282   |
-| F16        | OSE-1286 | 🔄 OCR-docs#125 | Reconcile invariant #21 activation_note (partial) with its live status (OCR-docs repo) | OSE-1282   |
+| F16        | OSE-1286 | ✅ OCR-docs#125 | Reconcile invariant #21 activation_note (partial) with its live status (OCR-docs repo) | OSE-1282   |
 | F11        | OSE-1287 | ✅ #516         | Correct "self-hosted pool retired org-wide" claim (only OSE migrated)                  | OSE-1282   |
 | Feature B  | OSE-1283 | 📋              | Close Enforcement Gaps                                                                 | EPIC       |
 | F13        | OSE-1288 | 📋              | Enforce Invariant #22 (cross-repo import isolation) on the OW side                     | OSE-1283   |
