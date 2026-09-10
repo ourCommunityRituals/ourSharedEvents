@@ -76,15 +76,11 @@ jobs:
         working-directory: ocr-docs/ocr-docs-brain
         run: python3 scripts/invariant.py validate
 
-      - name: Invariant #22 — cross-repo import isolation gate (OCR-ENF-23)
-        working-directory: ${{ github.workspace }}/ose
-        run: bash scripts/check-cross-repo-imports.sh .
-
-      # OSE-1288 / F13 (Option B cutover): also run the canonical, live-read
-      # brain guard. Kept ALONGSIDE the legacy .sh so this repo is green under
-      # both the old brain (test_file: .sh) and the new brain (test_file: .py) —
-      # the two-repo change is order-independent once BOTH steps are present.
-      # Once the brain PR is on main, a follow-up drops the .sh step above.
+      # Invariant #22 (OCR-ENF-23) is enforced by the canonical, live-read brain
+      # guard (OCR-docs check_cross_repo_imports.py, #22 enforcement_kind:
+      # brain_script). One reviewed brain edit re-arms/disarms the fleet. The
+      # legacy OSE-local check-cross-repo-imports.sh was retired in this PR now
+      # that the brain PR is on main.
       - name: Invariant #22 — cross-repo isolation gate (live-read brain guard, OSE-1288)
         working-directory: ${{ github.workspace }}
         run: |
