@@ -89,7 +89,16 @@ jobs:
         with:
           python-version: '3.11'
 
-      # The canonical guard is stdlib-only (JSON patterns, os.walk) — no pip deps.
+      # The guard reads product-registry.yaml (prohibited sibling scopes) via
+      # pyyaml — install it into the same interpreter setup-python owns. Match
+      # brain-contract-check.yml's proven install; verify the import so a missing
+      # dep fails HERE with a clear message, not mid-guard.
+      - name: Install guard deps
+        if: github.actor != 'dependabot[bot]'
+        run: |
+          python3 -m pip install pyyaml
+          python3 -c 'import yaml' || { echo "::error::pyyaml missing from the python3 env"; exit 1; }
+
       # Fail-closed: exits non-zero on any cross-repo module coupling, on a
       # dynamic/unresolvable specifier, or on a missing patterns file.
       - name: 'Invariant #22 — cross-repo import isolation (canonical brain guard)'
