@@ -1,5 +1,5 @@
 {
-  "_comment": "Source-of-truth for main branch protection (OSE-CI robustness). Apply/verify with scripts/apply-branch-protection.mjs. Required checks = the jobs that ALWAYS run to completion on a pull_request event (see .github/workflows/oursharedevents-ci.yml). Deliberately EXCLUDES: (a) the two known false-reds 'Claude PR Review' + 'Validate against OCR-docs brain' so they neither block nor need manual override; (b) the T1-T4 deploy/smoke/contract/functional jobs, which if:-skip on PRs and would deadlock every PR if required. INCLUDES 'Gate-execution reconciler' (OSE-1255, Detect model): it runs if:always() on every trigger and asserts every gate EXPECTED for that trigger actually executed — on a PR it expects only S0+T0 (so it passes, no deadlock), on a main-push it reds if a staging tier silently didn't run. This is the enforcement anchor that makes 'runs on main-push' into 'can't silently not run' WITHOUT requiring T4a-T4f directly (which would be the rejected Prevent model). strict=false because the single-runner pool cannot afford forced up-to-date re-runs of every open PR. See tools/ci/README-branch-protection.md.",
+  "_comment": "Source-of-truth for main branch protection (OSE-CI robustness). Apply/verify with scripts/apply-branch-protection.mjs. Required checks = the jobs that ALWAYS run to completion on a pull_request event (see .github/workflows/oursharedevents-ci.yml). Deliberately EXCLUDES: (a) the two known false-reds 'Claude PR Review' + 'Validate against OCR-docs brain' so they neither block nor need manual override; (b) the T1-T4 deploy/smoke/contract/functional jobs, which if:-skip on PRs and would deadlock every PR if required. INCLUDES 'Gate-execution reconciler' (OSE-1255, Detect model): it runs if:always() on every trigger and asserts every gate EXPECTED for that trigger actually executed — on a PR it expects only S0+T0 (so it passes, no deadlock), on a main-push it reds if a staging tier silently didn't run. This is the enforcement anchor that makes 'runs on main-push' into 'can't silently not run' WITHOUT requiring T4a-T4f directly (which would be the rejected Prevent model). INCLUDES 'Invariant #22 cross-repo isolation gate' (OSE-1297): a dedicated, isolated, SHA-pinned guard-only job (.github/workflows/inv22-cross-repo-gate.yml) — it runs ONLY the canonical brain guard (check_cross_repo_imports.py), none of the heavy steps that made 'Validate against OCR-docs brain' a false-red, so it is safe to require. This is what makes OSE's own Invariant #22 enforcement BLOCKING (previously advisory). strict=false because the single-runner pool cannot afford forced up-to-date re-runs of every open PR. See tools/ci/README-branch-protection.md.",
   "required_status_checks": {
     "strict": false,
     "checks": [
@@ -10,7 +10,8 @@
       { "context": "T0 Gate (tests)" },
       { "context": "T0 Gate (a11y)" },
       { "context": "T0 Gate (invariants)" },
-      { "context": "Gate-execution reconciler" }
+      { "context": "Gate-execution reconciler" },
+      { "context": "Invariant #22 cross-repo isolation gate" }
     ]
   },
   "enforce_admins": true,

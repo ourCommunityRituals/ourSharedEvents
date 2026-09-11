@@ -1,0 +1,99 @@
+# Invariant #22 — Cross-Repo Import Isolation gate (OSE-1297)
+#
+# WHY a dedicated job (not the existing "Validate against OCR-docs brain" job):
+# main-branch-protection.json deliberately EXCLUDES that job from required checks
+# because its heavy steps (brain pyramid, contract conformance, Linear-ticket
+# opener) have historically false-red. So the #22 canonical guard ran there but
+# never BLOCKED a PR — OSE's own #22 enforcement was advisory (OSE-1297 gap #1).
+#
+# This job isolates ONLY the deterministic guard: checkout + setup-python + one
+# fail-closed script. No pyramid, no conformance, no ticket-opener — nothing that
+# false-reds — so it is safe to make REQUIRED (listed in main-branch-protection.json;
+# activate out-of-band with scripts/apply-branch-protection.mjs --apply).
+#
+# The brain guard is the SINGLE canonical source (Invariant #22 condemns per-repo
+# copies). It scans BOTH src/ and workers/ (OSE-1297 gap #2 — the retired
+# check-cross-repo-imports.sh was workers/-only and is already deleted, #521).
+#
+# PIN-CODE: the executable guard + patterns are read from a SHA-pinned brain
+# checkout (not ref: main) so a required gate cannot false-red on brain content
+# drift. Live-read of the enforcement_mode plane (warn/block) from brain main —
+# so one reviewed brain edit re-arms/disarms the fleet — is the OSE-1294 follow-up
+# that supersedes the pin; until then the pinned guard runs in its default block
+# mode, which is the safe direction.
+#
+# DEPENDABOT: the brain checkout needs OCR_PROPAGATE_TOKEN, which is not available
+# to dependabot-triggered runs. Rather than a job-level skip (which would leave a
+# REQUIRED context permanently unsatisfied and deadlock every dependabot PR), the
+# job always runs and reports success; only the guard STEPS are skipped for
+# dependabot. A dependency bump cannot introduce a cross-repo MODULE import, and
+# the guard runs in full on the resulting push to main and every human PR.
+name: Invariant 22 cross-repo gate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main, staging]
+  workflow_dispatch:
+
+concurrency:
+  group: inv22-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  inv22-gate:
+    name: 'Invariant #22 cross-repo isolation gate'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Dependabot notice (guard steps skipped — no cross-repo token)
+        if: github.actor == 'dependabot[bot]'
+        run: |
+          echo "Dependabot run: the brain guard needs OCR_PROPAGATE_TOKEN, which is"
+          echo "not available here. A dependency bump cannot introduce a cross-repo"
+          echo "module import; the guard runs in full on the push to main and on"
+          echo "every human PR. Reporting success so this required gate does not"
+          echo "deadlock dependabot PRs."
+
+      - name: Checkout OSE
+        if: github.actor != 'dependabot[bot]'
+        uses: actions/checkout@v7
+        with:
+          path: ose
+
+      # SHA-pinned (pin-code), NOT ref: main — a required gate must not false-red
+      # on brain content drift. Bump this SHA in a reviewed PR when the guard or
+      # patterns change. Points at ocr-docs-brain/scripts/check_cross_repo_imports.py
+      # + cross_repo_patterns.json as they stand on OCR-docs main today.
+      - name: Checkout OCR-docs brain guard (SHA-pinned)
+        if: github.actor != 'dependabot[bot]'
+        uses: actions/checkout@v7
+        with:
+          repository: ourCommunityRituals/OCR-docs
+          path: ocr-docs
+          ref: ca2befd89566a2163a17dd5c3dacec65b5a83a7e
+          token: ${{ secrets.OCR_PROPAGATE_TOKEN }}
+
+      - name: Set up Python
+        if: github.actor != 'dependabot[bot]'
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+
+      # The canonical guard is stdlib-only (JSON patterns, os.walk) — no pip deps.
+      # Fail-closed: exits non-zero on any cross-repo module coupling, on a
+      # dynamic/unresolvable specifier, or on a missing patterns file.
+      - name: 'Invariant #22 — cross-repo import isolation (canonical brain guard)'
+        if: github.actor != 'dependabot[bot]'
+        run: |
+          python3 ocr-docs/ocr-docs-brain/scripts/check_cross_repo_imports.py \
+            --repo ose --product-id ose --brain ocr-docs/ocr-docs-brain
