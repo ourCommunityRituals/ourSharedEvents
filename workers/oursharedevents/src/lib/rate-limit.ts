@@ -14,9 +14,9 @@ export const RATE_LIMIT_MAX = 60;
 export const RATE_LIMIT_WINDOW_MS = 60_000;
 
 /** Per-endpoint limits (OSE-576) */
-export const RATE_LIMIT_ADMIN_MAX = 60;  // admin mutations: 60 req/min by CF-Ray-ID
-export const RATE_LIMIT_BATCH_MAX = 30;  // SharedReport batch: 30 req/min by service token
-export const RATE_LIMIT_MINT_MAX = 10;   // mint endpoint: 10 req/min by actor+eventId
+export const RATE_LIMIT_ADMIN_MAX = 60; // admin mutations: 60 req/min by CF-Ray-ID
+export const RATE_LIMIT_BATCH_MAX = 30; // SharedReport batch: 30 req/min by service token
+export const RATE_LIMIT_MINT_MAX = 10; // mint endpoint: 10 req/min by actor+eventId
 
 export interface RateLimitEnv {
   RATE_LIMIT_KV: KVNamespace;
@@ -25,6 +25,27 @@ export interface RateLimitEnv {
 interface RateLimitEntry {
   count: number;
   resetAt: number;
+}
+
+/**
+ * Data-at-rest doctrine (A-5): the rate-limit KV key must NOT contain the raw
+ * client IP. Migration 0028 already hashes the same IP in D1; a KV key composed
+ * from the dotted-quad/v6 literal would re-introduce the raw network identifier
+ * at rest, in a second store, keyed for lookup.
+ *
+ * We hash the caller-supplied key (which may embed an IP) with SHA-256 before it
+ * becomes the KV key. The hash is deterministic, so the same IP always maps to
+ * the same bucket — rate-limit semantics are unchanged. Any route/scope prefix
+ * (`admin:`, `mint:`, `publicread:…`) is folded into the hashed input, so
+ * different scopes for the same IP still land in different buckets. This is a
+ * bucket key, not a security boundary, so a bare (unpeppered) SHA-256 — the same
+ * primitive used elsewhere for the IP abuse signal — is sufficient.
+ */
+async function hashKey(key: string): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(key));
+  return Array.from(new Uint8Array(digest))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
 }
 
 /**
@@ -51,7 +72,8 @@ export async function checkRateLimit(
   windowMs: number = RATE_LIMIT_WINDOW_MS
 ): Promise<boolean> {
   const now = Date.now();
-  const kvKey = `ratelimit:${key}`;
+  // A-5: hash the (possibly IP-bearing) key so no raw IP is stored as a KV key.
+  const kvKey = `ratelimit:${await hashKey(key)}`;
   const raw = await kv.get(kvKey);
   const entry = raw ? (JSON.parse(raw) as RateLimitEntry) : null;
 
@@ -106,5 +128,6 @@ export function rateLimitResponse(): Response {
 
 /** Delete the KV entry for a given key (test helper — never call from production paths). */
 export async function _deleteRateLimitKey(key: string, kv: KVNamespace): Promise<void> {
-  await kv.delete(`ratelimit:${key}`);
+  // Must hash identically to checkRateLimit so the delete targets the real key.
+  await kv.delete(`ratelimit:${await hashKey(key)}`);
 }

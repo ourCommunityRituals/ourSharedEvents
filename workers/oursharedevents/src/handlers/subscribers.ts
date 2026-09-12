@@ -16,10 +16,26 @@
 
 import { extractAdminActor, type AdminEnv } from '../auth/admin';
 import { logAdminAction, type AuditLogEnv } from '../lib/audit-log';
+import { decryptText } from '../lib/pii';
 
-export type SubscribersAdminEnv = AdminEnv & AuditLogEnv;
+export type SubscribersAdminEnv = AdminEnv &
+  AuditLogEnv & {
+    /**
+     * Data-at-rest doctrine (A-5) — AES-GCM key used to decrypt
+     * subscribers.email_encrypted for this admin read-back. Same secret the
+     * subscribe path (handleSubscribe) encrypts with.
+     */
+    FORMS_ENCRYPTION_KEY?: string;
+  };
 
 interface SubscriberRow {
+  email_encrypted: string;
+  source: string | null;
+  created_at: string;
+}
+
+/** Shape returned to the admin — email decrypted back to plaintext. */
+interface SubscriberItem {
   email: string;
   source: string | null;
   created_at: string;
@@ -40,8 +56,11 @@ export async function handleListSubscribers(
   const where = cursor ? 'WHERE created_at < ?' : '';
   const bindings: (string | number)[] = cursor ? [cursor, limit + 1] : [limit + 1];
 
+  // A-5: subscribers.email is stored encrypted (email_encrypted, migration
+  // 0071). Select the ciphertext and decrypt it below so the response `email`
+  // field is unchanged — the plaintext column no longer exists.
   const sql = `
-    SELECT email, source, created_at
+    SELECT email_encrypted, source, created_at
     FROM   subscribers
     ${where}
     ORDER  BY created_at DESC
@@ -81,8 +100,35 @@ export async function handleListSubscribers(
   }
 
   const hasMore = rows.length > limit;
-  const items = hasMore ? rows.slice(0, limit) : rows;
-  const nextCursor = hasMore ? items[items.length - 1].created_at : null;
+  const pageRows = hasMore ? rows.slice(0, limit) : rows;
+  const nextCursor = hasMore ? pageRows[pageRows.length - 1].created_at : null;
+
+  // A-5: decrypt email_encrypted back to the `email` field so the API shape is
+  // unchanged. A decrypt failure (e.g. key rotation mismatch) MUST surface as a
+  // non-null sentinel — never a silent null that hides key misconfiguration —
+  // and must not 500 the whole list (mirrors the forms admin export, OSE-713).
+  const encryptionKey = env.FORMS_ENCRYPTION_KEY;
+  const items: SubscriberItem[] = await Promise.all(
+    pageRows.map(async (row): Promise<SubscriberItem> => {
+      let email = '[decryption-failed]';
+      if (encryptionKey) {
+        try {
+          email = await decryptText(row.email_encrypted, encryptionKey);
+        } catch (err) {
+          console.error(
+            JSON.stringify({
+              type: 'LIST_SUBSCRIBERS_DECRYPT_ERROR',
+              requestId,
+              error: err instanceof Error ? err.message : String(err),
+            })
+          );
+        }
+      } else {
+        email = '[encryption-key-unavailable]';
+      }
+      return { email, source: row.source, created_at: row.created_at };
+    })
+  );
 
   // Fire-and-forget audit on success — never block the response
   ctx.waitUntil(

@@ -16,6 +16,7 @@ import { renderGeoLink } from '../lib/geo-link';
 import { formatEventPrice } from '../lib/event-price';
 import { validateLogoUrl } from '../lib/sponsor-logo';
 import { DEFAULT_POSTER_CODE, posterProductForPath } from '../lib/poster-products';
+import { hashEmail, encryptText } from '../lib/pii';
 
 // Page shells extracted to template files (Wrangler [[rules]] type="Text").
 import PUBLIC_HTML from '../templates/public.html';
@@ -59,6 +60,19 @@ export interface PagesEnv {
    * disabled. This is fail-safe — never store a raw IP as a fallback.
    */
   IP_HASH_PEPPER?: string;
+  /**
+   * Data-at-rest doctrine (A-5) — AES-GCM key for encrypting subscribers.email
+   * at rest so the admin subscribers list can read it back. Same secret used by
+   * the forms email-signup path. When unset, handleSubscribe returns 503 rather
+   * than storing a plaintext email (mirrors handleFormEmailSignup).
+   */
+  FORMS_ENCRYPTION_KEY?: string;
+  /**
+   * Data-at-rest doctrine (A-5) — peppered HMAC-SHA256 pepper for the
+   * subscribers.email_hash dedup/erasure key. Must match the value used by the
+   * data-subject erasure path so hashes line up.
+   */
+  FORMS_HASH_PEPPER?: string;
   /**
    * OSE-207 — subscribers TTL retention window in days. Optional.
    *
@@ -1437,6 +1451,10 @@ export async function handleSubscribe(request: Request, env: PagesEnv): Promise<
     }
 
     // Persist to D1 if available (graceful fallback if DB not provisioned).
+    // Data-at-rest doctrine (A-5): subscribers.email is NEVER stored plaintext
+    // (migration 0071). We store two derived columns, mirroring email_signups:
+    //   - email_hash: peppered HMAC-SHA256 (dedup UNIQUE + erasure lookup key)
+    //   - email_encrypted: AES-GCM ciphertext so admin can read it back
     // OSE-207: ip_hash replaces the raw ip_address column (migration 0028).
     //   - hashIpForSubscribe returns null if env.IP_HASH_PEPPER is unset;
     //     null is stored as NULL — never the raw IP.
@@ -1444,6 +1462,14 @@ export async function handleSubscribe(request: Request, env: PagesEnv): Promise<
     //     ops can detect the misconfiguration.
     let persisted = false;
     if (env.DB) {
+      // A-5: never fall back to plaintext. Without the encryption key we cannot
+      // store the email at rest safely — refuse (mirror the email-signup 503).
+      if (!env.FORMS_ENCRYPTION_KEY) {
+        return Response.json(
+          { success: false, error: 'Subscriptions are temporarily unavailable.' },
+          { status: 503 }
+        );
+      }
       try {
         const ipHash = await hashIpForSubscribe(clientIp, env.IP_HASH_PEPPER);
         if (!env.IP_HASH_PEPPER) {
@@ -1454,10 +1480,14 @@ export async function handleSubscribe(request: Request, env: PagesEnv): Promise<
             })
           );
         }
+        // WRITE path — never silently degrade to bare SHA-256 for the dedup key
+        // (requirePepper throws if FORMS_HASH_PEPPER is unset; caught below).
+        const emailHash = await hashEmail(email, env.FORMS_HASH_PEPPER, { requirePepper: true });
+        const emailEncrypted = await encryptText(email, env.FORMS_ENCRYPTION_KEY);
         await env.DB.prepare(
-          'INSERT INTO subscribers (email, ip_hash, source) VALUES (?, ?, ?) ON CONFLICT (email) DO NOTHING'
+          'INSERT INTO subscribers (email_hash, email_encrypted, ip_hash, source) VALUES (?, ?, ?, ?) ON CONFLICT (email_hash) DO NOTHING'
         )
-          .bind(email, ipHash, 'landing')
+          .bind(emailHash, emailEncrypted, ipHash, 'landing')
           .run();
         persisted = true;
       } catch (dbErr) {

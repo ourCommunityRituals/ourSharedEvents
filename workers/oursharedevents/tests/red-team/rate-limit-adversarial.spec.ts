@@ -185,17 +185,16 @@ describe('RL-002: "unknown" IP collision — shared anonymous rate-limit bucket 
 
   test('all headerless clients share the same rate-limit bucket', async () => {
     const kv = tenv().RATE_LIMIT_KV;
-    // Simulate multiple clients with no IP headers — they all share 'unknown'
-    let unknownCount = 0;
-    for (let i = 0; i < 5; i++) {
-      const limited = await isRateLimited('unknown', kv);
-      if (!limited) unknownCount++;
+    // A-5: the KV key is now a SHA-256 of the composed key, so we can no longer
+    // read the raw `ratelimit:unknown` key. Assert the SHARED-BUCKET behaviour
+    // instead: draining the 'unknown' bucket blocks the next 'unknown' caller.
+    await _deleteRateLimitKey('unknown', kv);
+    for (let i = 0; i < RATE_LIMIT_MAX; i++) {
+      expect(await isRateLimited('unknown', kv)).toBe(false);
     }
-    // They all count against the same bucket
-    const raw = await kv.get('ratelimit:unknown');
-    const entry = raw ? (JSON.parse(raw) as { count: number }) : null;
-    expect(entry?.count).toBe(5);
-    console.log('[RL-002] 5 headerless clients all incremented the same "unknown" bucket');
+    // All headerless callers share the same 'unknown' bucket → now blocked.
+    expect(await isRateLimited('unknown', kv)).toBe(true);
+    console.log('[RL-002] headerless clients all share the same "unknown" bucket');
   });
 
   test('collision DoS: exhausting "unknown" bucket blocks ALL headerless clients', async () => {
@@ -254,11 +253,13 @@ describe('RL-003: KV read-then-write race condition (HIGH)', () => {
 
   test('concurrent parallel requests at limit boundary can all succeed (race window)', async () => {
     const kv = tenv().RATE_LIMIT_KV;
-    // Set count to RATE_LIMIT_MAX - 1 manually so we're one below the threshold
-    const resetAt = Date.now() + RATE_LIMIT_WINDOW_MS;
-    await kv.put(`ratelimit:${RACE_IP}`, JSON.stringify({ count: RATE_LIMIT_MAX - 1, resetAt }), {
-      expirationTtl: 60,
-    });
+    // A-5: the KV key is now hashed, so we can no longer pre-seed the raw
+    // `ratelimit:${RACE_IP}` key. Drive the counter to RATE_LIMIT_MAX - 1 via
+    // real calls so we sit one below the threshold before the concurrent burst.
+    await _deleteRateLimitKey(RACE_IP, kv);
+    for (let i = 0; i < RATE_LIMIT_MAX - 1; i++) {
+      await isRateLimited(RACE_IP, kv);
+    }
 
     // Fire CONCURRENCY requests simultaneously — in a true race, multiple reads
     // all see count=59, all compute newCount=60 (allowed), all write count=60.
@@ -456,25 +457,33 @@ describe('PII-03: Distributed bypass — per-IP rate limit does not prevent form
     expect(RATE_LIMIT_WINDOW_MS).toBe(60_000);
   });
 
-  test('KV key includes IP address as namespace discriminator', async () => {
+  test('A-5: KV key is a hash of the IP, never the raw dotted-quad literal', async () => {
+    // Data-at-rest doctrine: the raw client IP must NOT appear as (or in) the KV
+    // key. Migration 0028 already hashes the same IP in D1; the rate limiter must
+    // not re-introduce it in KV. Same IP must still map to the same (hashed)
+    // bucket — deterministic hash — so per-IP semantics are unchanged.
     const kv = tenv().RATE_LIMIT_KV;
-    const ip1 = 'namespace-test-192.168.1.1';
-    const ip2 = 'namespace-test-192.168.1.2';
+    const ip1 = 'ns-192.168.1.1';
+    const ip2 = 'ns-192.168.1.2';
     await _deleteRateLimitKey(ip1, kv);
     await _deleteRateLimitKey(ip2, kv);
 
     await isRateLimited(ip1, kv);
     await isRateLimited(ip2, kv);
 
-    const raw1 = await kv.get(`ratelimit:${ip1}`);
-    const raw2 = await kv.get(`ratelimit:${ip2}`);
-    expect(raw1).not.toBeNull();
-    expect(raw2).not.toBeNull();
-    const entry1 = JSON.parse(raw1!) as { count: number };
-    const entry2 = JSON.parse(raw2!) as { count: number };
-    expect(entry1.count).toBe(1);
-    expect(entry2.count).toBe(1);
-    // Keys are independent — confirms per-IP isolation works (but see PII-03)
+    const keys = (await kv.list()).keys.map((k) => k.name);
+    // No stored key may contain the raw IP literal.
+    for (const name of keys) {
+      expect(name).not.toContain(ip1);
+      expect(name).not.toContain(ip2);
+      expect(name).not.toContain('192.168.1.1');
+      expect(name).not.toContain('192.168.1.2');
+    }
+    // Buckets are still present and distinct (per-IP isolation preserved).
+    const ip1Keys = keys.filter((n) => n.startsWith('ratelimit:'));
+    expect(ip1Keys.length).toBeGreaterThanOrEqual(2);
+    // The raw-IP key does not exist; the hashed one does.
+    expect(await kv.get(`ratelimit:${ip1}`)).toBeNull();
   });
 });
 

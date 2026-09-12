@@ -122,12 +122,15 @@ describe('the limiter does not become a place an address is kept', () => {
     expect(Object.keys(parsed).sort()).toEqual(['count', 'resetAt']);
   });
 
-  test('the address appears only in the key, which expires with the window', async () => {
-    // A bucket key is not a record: it is written to expire, holds no history,
-    // and is never read for anything but a count. Asserted so a future change
-    // that starts logging or persisting it has to break this test first.
+  test('the bucket key is a hash — the raw address never appears in it either', async () => {
+    // A-5: a bucket key is not a record, AND it must not carry the raw IP. The
+    // key is now `ratelimit:{sha256(scope+ip)}`, so it keeps the prefix but the
+    // dotted-quad literal is gone. Asserted so a future change that reverts to a
+    // raw-IP key (re-introducing PII at rest in KV) has to break this test first.
     const k = kv();
     await publicReadLimited('t', ok)(req('203.0.113.10'), { RATE_LIMIT_KV: k.RATE_LIMIT_KV });
-    expect([...k.store.keys()][0]).toContain('ratelimit:');
+    const key = [...k.store.keys()][0]!;
+    expect(key).toContain('ratelimit:');
+    expect(key).not.toContain('203.0.113.10');
   });
 });

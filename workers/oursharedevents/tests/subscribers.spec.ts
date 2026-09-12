@@ -15,6 +15,12 @@
 
 import { env, SELF } from 'cloudflare:test';
 import { describe, test, expect, beforeAll } from 'vitest';
+import { hashEmail, encryptText, decryptText } from '../src/lib/pii';
+
+// Must match the workers test env in vitest.workers.config.mts so in-test
+// hashes line up with what the subscribe handler writes.
+const FORMS_HASH_PEPPER = 'test-forms-hash-pepper-do-not-use-in-prod';
+const FORMS_ENCRYPTION_KEY = 'test-forms-encryption-secret-32ch';
 
 interface TestEnv {
   DB: D1Database;
@@ -25,6 +31,32 @@ interface TestEnv {
 }
 
 const tenv = () => env as unknown as TestEnv;
+
+/**
+ * Seed a subscriber row in the A-5 shape (email_hash + email_encrypted). Mirrors
+ * what handleSubscribe writes so seeded rows are indistinguishable from real
+ * ones. `createdAt` is optional (defaults to the column default).
+ */
+async function seedSubscriber(email: string, ipHash: string, createdAt?: string): Promise<string> {
+  const emailHash = await hashEmail(email, FORMS_HASH_PEPPER, { requirePepper: true });
+  const emailEncrypted = await encryptText(email, FORMS_ENCRYPTION_KEY);
+  if (createdAt) {
+    await tenv()
+      .DB.prepare(
+        'INSERT OR IGNORE INTO subscribers (email_hash, email_encrypted, ip_hash, source, created_at) VALUES (?, ?, ?, ?, ?)'
+      )
+      .bind(emailHash, emailEncrypted, ipHash, 'landing', createdAt)
+      .run();
+  } else {
+    await tenv()
+      .DB.prepare(
+        'INSERT OR IGNORE INTO subscribers (email_hash, email_encrypted, ip_hash, source) VALUES (?, ?, ?, ?)'
+      )
+      .bind(emailHash, emailEncrypted, ipHash, 'landing')
+      .run();
+  }
+  return emailHash;
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Setup — apply both DBs' migrations once
@@ -76,20 +108,33 @@ describe('L2: subscribers schema after migration 0028', () => {
     expect(col!.type.toUpperCase()).toContain('TEXT');
   });
 
-  test('email column is UNIQUE for idempotent INSERT OR IGNORE', async () => {
-    // sqlite_master CREATE INDEX entries reveal the UNIQUE constraint
+  test('plaintext email column does NOT exist (A-5: encrypted at rest)', async () => {
+    const info = await tenv().DB.prepare('PRAGMA table_info(subscribers)').all();
+    const cols = info.results.map((r) => (r as { name: string }).name);
+    expect(cols).not.toContain('email');
+  });
+
+  test('email_hash + email_encrypted columns exist (dedup key + read-back)', async () => {
+    const info = await tenv().DB.prepare('PRAGMA table_info(subscribers)').all<{
+      name: string;
+    }>();
+    const cols = info.results.map((r) => r.name);
+    expect(cols).toContain('email_hash');
+    expect(cols).toContain('email_encrypted');
+  });
+
+  test('email_hash carries the UNIQUE constraint for idempotent dedup', async () => {
+    // migration 0071: UNIQUE moved from plaintext email → peppered email_hash.
     const idx = await tenv()
       .DB.prepare("SELECT sql FROM sqlite_master WHERE type='index' AND tbl_name='subscribers'")
       .all<{ sql: string | null }>();
     const sqls = idx.results.map((r) => r.sql ?? '').join('\n');
-    // Either an explicit UNIQUE INDEX on (email) OR the column carries
-    // UNIQUE in the table DDL (auto-index sqlite_autoindex_subscribers_1).
     const tableDdl = await tenv()
       .DB.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='subscribers'")
       .first<{ sql: string }>();
     const allDdl = sqls + '\n' + (tableDdl?.sql ?? '');
     expect(allDdl.toUpperCase()).toContain('UNIQUE');
-    expect(allDdl).toContain('email');
+    expect(allDdl).toContain('email_hash');
   });
 });
 
@@ -111,9 +156,10 @@ describe('L2 behavioral: POST /subscribe writes ip_hash, never raw IP', () => {
     });
     expect(res.status).toBe(200);
 
+    const emailHash = await hashEmail(email, FORMS_HASH_PEPPER, { requirePepper: true });
     const row = await tenv()
-      .DB.prepare('SELECT ip_hash FROM subscribers WHERE email = ?')
-      .bind(email)
+      .DB.prepare('SELECT ip_hash FROM subscribers WHERE email_hash = ?')
+      .bind(emailHash)
       .first<{ ip_hash: string | null }>();
 
     expect(row).not.toBeNull();
@@ -150,9 +196,86 @@ describe('L2 behavioral: POST /subscribe writes ip_hash, never raw IP', () => {
     });
     expect(second.status).toBe(200);
 
+    const emailHash = await hashEmail(email, FORMS_HASH_PEPPER, { requirePepper: true });
     const count = await tenv()
-      .DB.prepare('SELECT COUNT(*) AS n FROM subscribers WHERE email = ?')
-      .bind(email)
+      .DB.prepare('SELECT COUNT(*) AS n FROM subscribers WHERE email_hash = ?')
+      .bind(emailHash)
+      .first<{ n: number }>();
+    expect(count!.n).toBe(1);
+  });
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// A-5 DATA-AT-REST — subscribers.email is encrypted + hashed, never plaintext
+// (FIX 1 born-red)
+// ═════════════════════════════════════════════════════════════════════════════
+
+describe('A-5: subscribe stores email_hash + email_encrypted, never plaintext', () => {
+  test('raw row has no plaintext email; email_encrypted is v1:, email_hash is 64-hex; admin list decrypts back', async () => {
+    const email = `atrest-${Date.now()}@example.com`;
+    const res = await SELF.fetch('https://test.local/subscribe', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': String(JSON.stringify({ email }).length),
+        'CF-Connecting-IP': '203.0.113.99',
+      },
+      body: JSON.stringify({ email }),
+    });
+    expect(res.status).toBe(200);
+
+    const emailHash = await hashEmail(email, FORMS_HASH_PEPPER, { requirePepper: true });
+    const row = await tenv()
+      .DB.prepare('SELECT * FROM subscribers WHERE email_hash = ?')
+      .bind(emailHash)
+      .first<Record<string, unknown>>();
+
+    expect(row).not.toBeNull();
+    // The plaintext column is dropped — there is no `email` value at all.
+    expect(row).not.toHaveProperty('email');
+    // email_hash is a 64-char hex HMAC-SHA256.
+    expect(String(row!.email_hash)).toMatch(/^[0-9a-f]{64}$/);
+    // email_encrypted is AES-GCM ciphertext with the versioned `v1:` prefix.
+    expect(String(row!.email_encrypted)).toMatch(/^v1:/);
+    // The stored ciphertext is NOT the plaintext email.
+    expect(String(row!.email_encrypted)).not.toContain(email);
+    // It decrypts back to the original email.
+    expect(await decryptText(String(row!.email_encrypted), FORMS_ENCRYPTION_KEY)).toBe(email);
+
+    // Admin list returns the decrypted email verbatim (shape unchanged).
+    const list = await SELF.fetch('https://test.local/api/v2/admin/subscribers?limit=100', {
+      headers: { Authorization: `Bearer ${tenv().ADMIN_KEY}` },
+    });
+    expect(list.status).toBe(200);
+    const body = (await list.json()) as { items: Array<{ email: string }> };
+    expect(body.items.some((i) => i.email === email)).toBe(true);
+  });
+
+  test('second subscribe with the same email is deduped by email_hash (ON CONFLICT)', async () => {
+    const email = `atrest-dedup-${Date.now()}@example.com`;
+    const payload = JSON.stringify({ email });
+    const headers = {
+      'Content-Type': 'application/json',
+      'Content-Length': String(payload.length),
+      'CF-Connecting-IP': '203.0.113.100',
+    };
+    const first = await SELF.fetch('https://test.local/subscribe', {
+      method: 'POST',
+      headers,
+      body: payload,
+    });
+    expect(first.status).toBe(200);
+    const second = await SELF.fetch('https://test.local/subscribe', {
+      method: 'POST',
+      headers,
+      body: payload,
+    });
+    expect(second.status).toBe(200);
+
+    const emailHash = await hashEmail(email, FORMS_HASH_PEPPER, { requirePepper: true });
+    const count = await tenv()
+      .DB.prepare('SELECT COUNT(*) AS n FROM subscribers WHERE email_hash = ?')
+      .bind(emailHash)
       .first<{ n: number }>();
     expect(count!.n).toBe(1);
   });
@@ -169,15 +292,9 @@ describe('L2 behavioral: admin enumerate writes audit log entry', () => {
   });
 
   test('GET /api/v2/admin/subscribers (authed) returns items + writes audit', async () => {
-    // Seed two subscribers
-    await tenv()
-      .DB.prepare('INSERT OR IGNORE INTO subscribers (email, ip_hash, source) VALUES (?, ?, ?)')
-      .bind('admin-list-1@example.com', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'landing')
-      .run();
-    await tenv()
-      .DB.prepare('INSERT OR IGNORE INTO subscribers (email, ip_hash, source) VALUES (?, ?, ?)')
-      .bind('admin-list-2@example.com', 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', 'landing')
-      .run();
+    // Seed two subscribers (A-5 encrypted+hashed shape)
+    await seedSubscriber('admin-list-1@example.com', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa');
+    await seedSubscriber('admin-list-2@example.com', 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb');
 
     const before = await tenv()
       .DB.prepare("SELECT COUNT(*) AS n FROM admin_audit_log WHERE action = 'LIST_SUBSCRIBERS'")
@@ -228,18 +345,8 @@ describe('L2 behavioral: subscribers retention SQL pattern matches the cron', ()
     const oldDate = new Date(Date.now() - 400 * 24 * 3600 * 1000).toISOString();
     const recentDate = new Date(Date.now() - 10 * 24 * 3600 * 1000).toISOString();
 
-    await tenv()
-      .DB.prepare(
-        'INSERT OR IGNORE INTO subscribers (email, ip_hash, source, created_at) VALUES (?, ?, ?, ?)'
-      )
-      .bind(oldEmail, 'a'.repeat(32), 'landing', oldDate)
-      .run();
-    await tenv()
-      .DB.prepare(
-        'INSERT OR IGNORE INTO subscribers (email, ip_hash, source, created_at) VALUES (?, ?, ?, ?)'
-      )
-      .bind(recentEmail, 'b'.repeat(32), 'landing', recentDate)
-      .run();
+    const oldHash = await seedSubscriber(oldEmail, 'a'.repeat(32), oldDate);
+    const recentHash = await seedSubscriber(recentEmail, 'b'.repeat(32), recentDate);
 
     // Apply the same SQL the cron uses, with a 365-day window.
     const res = await tenv()
@@ -249,14 +356,14 @@ describe('L2 behavioral: subscribers retention SQL pattern matches the cron', ()
     expect((res.meta?.changes ?? 0) >= 1).toBe(true);
 
     const oldStill = await tenv()
-      .DB.prepare('SELECT 1 AS x FROM subscribers WHERE email = ?')
-      .bind(oldEmail)
+      .DB.prepare('SELECT 1 AS x FROM subscribers WHERE email_hash = ?')
+      .bind(oldHash)
       .first();
     expect(oldStill).toBeNull();
 
     const recentStill = await tenv()
-      .DB.prepare('SELECT 1 AS x FROM subscribers WHERE email = ?')
-      .bind(recentEmail)
+      .DB.prepare('SELECT 1 AS x FROM subscribers WHERE email_hash = ?')
+      .bind(recentHash)
       .first();
     expect(recentStill).not.toBeNull();
   });
@@ -287,14 +394,11 @@ describe('L2 behavioral: data-subject erase removes subscribers row', () => {
   test('POST /api/v2/admin/data-subject/erase deletes from subscribers', async () => {
     const email = `erase-me-${Date.now()}@example.com`;
 
-    await tenv()
-      .DB.prepare('INSERT OR IGNORE INTO subscribers (email, ip_hash, source) VALUES (?, ?, ?)')
-      .bind(email, 'cccccccccccccccccccccccccccccccc', 'landing')
-      .run();
+    const emailHash = await seedSubscriber(email, 'cccccccccccccccccccccccccccccccc');
 
     const beforeRow = await tenv()
-      .DB.prepare('SELECT 1 AS x FROM subscribers WHERE email = ?')
-      .bind(email)
+      .DB.prepare('SELECT 1 AS x FROM subscribers WHERE email_hash = ?')
+      .bind(emailHash)
       .first();
     expect(beforeRow).not.toBeNull();
 
@@ -318,8 +422,8 @@ describe('L2 behavioral: data-subject erase removes subscribers row', () => {
     expect(body.emailHash).toMatch(/^[0-9a-f]{64}$/);
 
     const afterRow = await tenv()
-      .DB.prepare('SELECT 1 AS x FROM subscribers WHERE email = ?')
-      .bind(email)
+      .DB.prepare('SELECT 1 AS x FROM subscribers WHERE email_hash = ?')
+      .bind(emailHash)
       .first();
     expect(afterRow).toBeNull();
   });
