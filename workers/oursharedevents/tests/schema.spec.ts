@@ -150,7 +150,9 @@ const EXPECTED_COLUMN_COUNTS: Record<string, number> = {
   // scan_aggregates: 9 (pre-OSE-450) + 2 (migration 0038: h3_res9, h3_res7,
   // OSE-450 S-6.1.2 — denormalized NCR cells for density queries) = 11.
   scan_aggregates: 11,
-  subscribers: 5,
+  // subscribers: 5 (pre-0071) − plaintext email + email_hash + email_encrypted
+  // (migration 0071, A-5 data-at-rest doctrine) = 6.
+  subscribers: 6,
   node_hierarchy: 14,
   corridors: 22,
   sponsor_event_types: 5,

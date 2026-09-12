@@ -27,6 +27,10 @@
  *     sponsor_impressions to repoint their sponsor_id FK from sponsors → sponsor_business (SQLite
  *     cannot ALTER a FK). All tables = 0 rows in every environment, so no data loss; identity moves
  *     to sponsor_business, creative to sponsor_asset, per-event attachment to sponsor_placement.
+ *   0071_subscribers_encrypt_email.sql — A-5 data-at-rest doctrine: DROP TABLE subscribers to
+ *     recreate it without the plaintext `email` column (SQLite cannot drop a UNIQUE column in
+ *     place), replacing it with email_encrypted (AES-GCM) + email_hash (peppered, UNIQUE/dedup).
+ *     0 rows in every environment (pre-deploy), so no data loss.
  */
 
 import { describe, test, expect } from 'vitest';
@@ -51,6 +55,7 @@ const APPROVED_DROP_MIGRATIONS = [
   '0046_density_tables_drop_corridor_fk', // BE-24b: FK removal — h3_res7 as corridor identifier
   '0062_split_scan_path', // OSE-798 A1: DROP TABLE scans (0 rows) — doctrine rule 6 uncoupling
   '0067_split_sponsor_placement', // OSE-799 A2: DROP TABLE sponsors + recreate sponsor_event_types/areas/impressions (FK repoint to sponsor_business); all 0 rows — doctrine rule 7
+  '0071_subscribers_encrypt_email', // A-5: DROP TABLE subscribers to drop plaintext email (0 rows) — encrypt+hash rebuild
 ] as const;
 
 function normalizePath(p: string): string {
@@ -142,7 +147,7 @@ describe('OSE-584 — TL-048: No unapproved DROP COLUMN or DROP TABLE in migrati
       date: '2026-08-03',
     };
     console.log(`[OSE-584-EVIDENCE] ${JSON.stringify(report)}`);
-    expect(report.approved_drops).toBe(6);
+    expect(report.approved_drops).toBe(7);
   });
 });
 
