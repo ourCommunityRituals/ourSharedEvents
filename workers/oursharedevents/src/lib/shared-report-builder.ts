@@ -327,15 +327,37 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
       .bind(densityCorridorKey, dow, hour)
       .first<{ window_30d_count: number; window_90d_count: number }>();
 
-    thisEventCount = distinctAnonsHere;
+    // DS-01 (Critical): this_event_count = COUNT(DISTINCT anon_id_hash) is a raw
+    // small-cohort count (can be 1–4). Every other aggregate in this report routes
+    // through applyCountFloor (K = CORRIDOR_MAP_MIN_COUNT = 5); this one did not, so
+    // it published the exact sub-K numerator — and density_ratio = count / baseline
+    // re-exposed that exact numerator even had the count itself been hidden. Apply the
+    // SAME uniform floor: sub-K → null (suppressed), >= K → exact. Below the floor the
+    // ratios are NOT computed, so they cannot leak the raw numerator by division.
+    const flooredThisEvent = applyCountFloor(distinctAnonsHere);
+    thisEventCount = flooredThisEvent.count;
+    if (flooredThisEvent.suppressed && distinctAnonsHere > 0) {
+      suppression.push({
+        field: 'corridor_density.this_event_count',
+        reason: 'below_min_sample_size',
+        detail: `fewer than ${CORRIDOR_MAP_MIN_COUNT} distinct attendees`,
+      });
+    }
 
     if (baseline) {
       // Apply minimum-sample suppression per Q4 ratified (Session 1):
       // a corridor baseline below 10 events worth of signal is too sparse
       // to publish as a density ratio.
+      // DS-01: density_ratio is ALSO gated on thisEventCount clearing the K-anon
+      // floor. When this_event_count is suppressed (null), the ratio would re-expose
+      // the exact sub-K numerator (raw = ratio * baseline), so it is left null.
       if (baseline.window_30d_count >= CORRIDOR_BASELINE_MIN_SAMPLE) {
         baseline30d = baseline.window_30d_count;
-        densityRatio30d = thisEventCount / baseline.window_30d_count;
+        // DS-01: only compute the ratio when this_event_count cleared the K-anon
+        // floor. If it is suppressed (null), the ratio (= raw / baseline) would
+        // re-expose the exact sub-K numerator, so leave it null.
+        densityRatio30d =
+          thisEventCount !== null ? thisEventCount / baseline.window_30d_count : null;
       } else {
         suppression.push({
           field: 'corridor_density.baseline_30d',
@@ -345,7 +367,9 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
       }
       if (baseline.window_90d_count >= CORRIDOR_BASELINE_MIN_SAMPLE) {
         baseline90d = baseline.window_90d_count;
-        densityRatio90d = thisEventCount / baseline.window_90d_count;
+        // DS-01: same K-anon gate as the 30d ratio above.
+        densityRatio90d =
+          thisEventCount !== null ? thisEventCount / baseline.window_90d_count : null;
       } else {
         suppression.push({
           field: 'corridor_density.baseline_90d',

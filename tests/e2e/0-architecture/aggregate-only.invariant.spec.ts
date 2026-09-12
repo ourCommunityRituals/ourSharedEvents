@@ -209,6 +209,54 @@ test.describe('Invariant 7: Aggregate-Only Reporting — structural code-shape l
     ).toMatch(/suppression\.push\s*\(\s*\{[\s\S]*?corridor_map/);
   });
 
+  test('OSE-INV7 | privacy | suppression | corridor_density.this_event_count is K-anon floored, not raw (DS-01)', () => {
+    const src = readFileSync(BUILDER_PATH, 'utf8');
+    // DS-01 (Critical): corridor_density.this_event_count is derived from
+    // COUNT(DISTINCT anon_id_hash) at this event — a raw small-cohort count that
+    // can be 1–4. It MUST route through the same uniform K-anon floor
+    // (applyCountFloor, K = CORRIDOR_MAP_MIN_COUNT = 5) that every other aggregate
+    // in this report uses; otherwise the SharedReport publishes an exact sub-K
+    // count that the corridor map, return_rate, and count-floor doctrine all hide.
+    //
+    // The raw assignment `thisEventCount = distinctAnonsHere` (no floor) is the
+    // leak. This gate is born-red against that reversion: it asserts the RAW
+    // assignment is absent AND the floored assignment is present.
+    expect(
+      src,
+      'DS-01: this_event_count must NOT be assigned the raw distinctAnonsHere — ' +
+        'that publishes an exact sub-K distinct-anon count with no privacy floor. ' +
+        'Assign it from applyCountFloor(distinctAnonsHere).count instead.'
+    ).not.toMatch(/thisEventCount\s*=\s*distinctAnonsHere\s*;/);
+
+    // The floored assignment must be present: thisEventCount is set from an
+    // applyCountFloor result whose .count is null below K.
+    expect(
+      src,
+      'DS-01: this_event_count must be derived from applyCountFloor(distinctAnonsHere) — ' +
+        'sub-K counts must be suppressed (null), >= K counts exact.'
+    ).toMatch(/applyCountFloor\s*\(\s*distinctAnonsHere\s*\)/);
+
+    // density_ratio must not re-expose the raw numerator when the count is
+    // suppressed: the ratio computation must be guarded on thisEventCount being
+    // non-null (raw = ratio * baseline would otherwise recover the exact sub-K
+    // numerator). Reverting the guard to the unconditional
+    // `densityRatio3?d = thisEventCount / baseline.window_?d_count` makes this fail.
+    expect(
+      src,
+      'DS-01: density_ratio_30d must be null when this_event_count is suppressed — ' +
+        'guard the ratio on `thisEventCount !== null` so it cannot divide out the raw sub-K count.'
+    ).toMatch(
+      /densityRatio30d\s*=\s*\r?\n?\s*thisEventCount\s*!==\s*null\s*\?\s*thisEventCount\s*\/\s*baseline\.window_30d_count\s*:\s*null/
+    );
+    expect(
+      src,
+      'DS-01: density_ratio_90d must be null when this_event_count is suppressed — ' +
+        'guard the ratio on `thisEventCount !== null`.'
+    ).toMatch(
+      /densityRatio90d\s*=\s*\r?\n?\s*thisEventCount\s*!==\s*null\s*\?\s*thisEventCount\s*\/\s*baseline\.window_90d_count\s*:\s*null/
+    );
+  });
+
   test('OSE-INV7 | privacy | interface | report-depth.ts exists (tier-gated access control)', () => {
     // filterReportByDepth() gates which report sections are surfaced based
     // on the token's depth claim. This is a product-tier gate, not a privacy

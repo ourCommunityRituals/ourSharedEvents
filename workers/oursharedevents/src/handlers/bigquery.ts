@@ -11,15 +11,173 @@
  *   forms-security.spec.ts doesn't flag env.DB.prepare inside index.ts.
  */
 
-import { backupEvents, isBigQueryConfigured, type BigQueryEnv } from '../cloud/bigquery';
+import {
+  BACKUP_TABLES,
+  bigQueryInsertRowsToDataset,
+  isBigQueryConfigured,
+  type BigQueryEnv,
+} from '../cloud/bigquery';
 import { logExportManifest } from '../lib/audit-log';
 import { extractAdminActor, type AdminEnv } from '../auth/admin';
+import {
+  PRODUCT_ID,
+  REGULATORY_POOLS,
+  PoolRoutingError,
+  assertRequiredTags,
+  datasetForPool,
+  phaseToPool,
+  type RegulatoryPool,
+} from '../lib/pool-contract';
 
 // Intersect AdminEnv so the on-demand handler can resolve the operator identity
 // (CF Access email / key fallback) the same way the rest of the admin surface
 // does — the route caller already guards admin auth, so these fields are present
 // at runtime; the intersection just makes that available to the type checker.
 export type BigQueryHandlerEnv = BigQueryEnv & { DB: D1Database } & AdminEnv;
+
+/**
+ * The specific event columns the backup exports. We SELECT this explicit list
+ * (never `SELECT *`) so the raw geo-precision fields the map endpoint refuses to
+ * publish — exact `lat`/`lon`/`where_address`/`h3_res9` — are never spread into
+ * the OER export by accident. `legal_clearance_tier` drives pool routing;
+ * `corridor_id` / `event_type_id` supply required tags (uec_code is joined).
+ */
+const BACKUP_EVENT_COLUMNS = [
+  'id',
+  'brand_id',
+  'title',
+  'slug',
+  'status',
+  'start_date',
+  'end_date',
+  'timezone',
+  'created_at',
+  'updated_at',
+  'legal_clearance_tier',
+  'event_type_id',
+  'corridor_id',
+] as const;
+
+const BACKUP_SELECT_COLUMNS = BACKUP_EVENT_COLUMNS.map((c) => `e.${c}`).join(', ');
+
+interface BackupEventJoinRow {
+  id: string;
+  brand_id: string;
+  title: string;
+  slug: string;
+  status: string;
+  start_date: string | null;
+  end_date: string | null;
+  timezone: string | null;
+  created_at: string;
+  updated_at: string;
+  legal_clearance_tier: number | null;
+  event_type_id: string | null;
+  corridor_id: string | null;
+  uec_code: string | null;
+}
+
+export interface PooledBackupResult {
+  /** Rows actually streamed to a pool dataset (post-withholding). */
+  rowsExported: number;
+  /** Rows WITHHELD by the fail-closed pool contract (tier 4/5 / malformed). */
+  rowsWithheld: number;
+  /** Pool datasets that received at least one row this run. */
+  poolsTargeted: string[];
+}
+
+/**
+ * DS-02 fix — route event-backup rows through the SAME fail-closed regulatory-pool
+ * contract the SharedReport export path enforces (Invariant #4 / OSE-380 / OSE-1220).
+ *
+ * For each row: classify via `phaseToPool(legal_clearance_tier)`. Rows that
+ * `phaseToPool` REFUSES (tier 4 HIPAA / tier 5 COPPA / malformed / out-of-range)
+ * are WITHHELD — never exported to any pool, never leaked to the flat
+ * `oursharedevents_backup` default. Permitted rows are tagged (`assertRequiredTags`)
+ * and streamed to the correct POOL dataset via `datasetForPool(pool)`.
+ *
+ * Replaces the previous flat-dataset backup path, which spread the full raw row
+ * (`SELECT` star) into the non-pool default dataset — bypassing the contract entirely.
+ */
+async function backupEventsPooled(
+  env: BigQueryHandlerEnv,
+  rows: BackupEventJoinRow[]
+): Promise<PooledBackupResult> {
+  const exportedAt = new Date().toISOString();
+  let rowsWithheld = 0;
+
+  const byPool: Record<RegulatoryPool, Record<string, unknown>[]> = { general: [] };
+
+  for (const r of rows) {
+    let pool: RegulatoryPool;
+    try {
+      pool = phaseToPool(r.legal_clearance_tier);
+    } catch (e) {
+      if (!(e instanceof PoolRoutingError)) throw e;
+      // Fail closed: withhold the row from EVERY pool, emit an auditable warning.
+      rowsWithheld++;
+      console.warn(
+        JSON.stringify({
+          event: 'POOL_ROUTING_QUARANTINE',
+          product_id: PRODUCT_ID,
+          source: 'events_backup',
+          row_locator: r.id ?? null,
+          legal_clearance_tier: r.legal_clearance_tier ?? null,
+          reason: e.message,
+        })
+      );
+      continue;
+    }
+
+    const tags = {
+      corridor_id: r.corridor_id ?? 'unknown',
+      venue_id: r.id,
+      event_type: r.uec_code ?? 'unknown',
+      uec_code: r.uec_code ?? 'unknown',
+      regulatory_pool: pool,
+      product_id: PRODUCT_ID,
+    };
+    assertRequiredTags(tags); // throws if any required tag is missing
+
+    byPool[pool].push({
+      // tags spread first; explicit fields below win for overlap-free keys.
+      ...tags,
+      id: r.id,
+      brand_id: r.brand_id,
+      title: r.title,
+      slug: r.slug,
+      status: r.status,
+      start_date: r.start_date,
+      end_date: r.end_date,
+      timezone: r.timezone,
+      created_at: r.created_at,
+      updated_at: r.updated_at,
+      legal_clearance_tier: r.legal_clearance_tier,
+      backed_up_at: exportedAt,
+    });
+  }
+
+  let rowsExported = 0;
+  const poolsTargeted: string[] = [];
+  for (const pool of REGULATORY_POOLS) {
+    const batch = byPool[pool];
+    if (batch.length === 0) continue;
+    const dataset = datasetForPool(pool);
+    const insertIdFn = (row: Record<string, unknown>): string =>
+      `evt-backup-${String(row.id)}-${String(row.updated_at)}`;
+    const res = await bigQueryInsertRowsToDataset(
+      env,
+      dataset,
+      BACKUP_TABLES.events,
+      batch,
+      insertIdFn
+    );
+    rowsExported += res.rowCount;
+    if (res.rowCount > 0) poolsTargeted.push(dataset);
+  }
+
+  return { rowsExported, rowsWithheld, poolsTargeted };
+}
 
 export async function handleAdminBackupEvent(
   request: Request,
@@ -37,14 +195,25 @@ export async function handleAdminBackupEvent(
     );
   }
 
-  const event = await env.DB.prepare('SELECT * FROM events WHERE id = ?')
+  // DS-02: SELECT an explicit column list (never `SELECT *`) joined to the
+  // event-type registry for the required tags, and route through the fail-closed
+  // pool contract below — the raw geo-precision fields are never spread into OER.
+  const event = await env.DB.prepare(
+    `SELECT ${BACKUP_SELECT_COLUMNS}, etr.uec_code
+       FROM events e
+       LEFT JOIN event_type_registry etr ON etr.id = e.event_type_id
+      WHERE e.id = ?`
+  )
     .bind(eventId)
-    .first<Record<string, unknown>>();
+    .first<BackupEventJoinRow>();
   if (!event) {
     return Response.json({ ok: false, code: 'EVENT_NOT_FOUND' }, { status: 404 });
   }
 
-  const result = await backupEvents(env, [event]);
+  // DS-02: route through the same fail-closed pool contract as the export path.
+  // A tier 4/5 (or malformed-tier) event is WITHHELD — never exported to any
+  // pool, never leaked to the flat default dataset.
+  const result = await backupEventsPooled(env, [event]);
   const reqId = crypto.randomUUID ? crypto.randomUUID() : `bq-${Date.now()}`;
   // OSE-594: log OER emission manifest entry for on-demand backup (invariant #17)
   // OSE-1259: attribute the human operator who triggered the export. The route
@@ -58,10 +227,21 @@ export async function handleAdminBackupEvent(
     event_id: eventId,
     actor: extractAdminActor(request, env),
     request_id: reqId,
-    rows_exported: result.rowCount ?? 1,
+    // DS-02: post-withholding count — a withheld tier-4/5 row is NOT exported.
+    rows_exported: result.rowsExported,
     outcome: 'success',
+    details: {
+      pools_targeted: result.poolsTargeted,
+      rows_withheld: result.rowsWithheld,
+    },
   });
-  return Response.json({ ok: true, eventId, rowCount: result.rowCount });
+  return Response.json({
+    ok: true,
+    eventId,
+    rowCount: result.rowsExported,
+    rowsWithheld: result.rowsWithheld,
+    poolsTargeted: result.poolsTargeted,
+  });
 }
 
 /**
@@ -75,15 +255,27 @@ export async function runBigQueryBackup(env: BigQueryHandlerEnv): Promise<void> 
 
   const now = new Date().toISOString();
   let bqEventsBackedUp = 0;
+  let bqEventsWithheld = 0;
+  let bqPoolsTargeted: string[] = [];
   let bqBackupError: string | undefined;
 
   const cronReqId = crypto.randomUUID ? crypto.randomUUID() : `cron-bq-${Date.now()}`;
   try {
+    // DS-02: explicit column list (never `SELECT *`) joined to the event-type
+    // registry for required tags. The raw exact-geo fields are never selected.
     const recentEvents = await env.DB.prepare(
-      "SELECT * FROM events WHERE updated_at > datetime('now', '-24 hours')"
-    ).all();
-    const bqResult = await backupEvents(env, recentEvents.results as Record<string, unknown>[]);
-    bqEventsBackedUp = bqResult.rowCount ?? 0;
+      `SELECT ${BACKUP_SELECT_COLUMNS}, etr.uec_code
+         FROM events e
+         LEFT JOIN event_type_registry etr ON etr.id = e.event_type_id
+        WHERE e.updated_at > datetime('now', '-24 hours')`
+    ).all<BackupEventJoinRow>();
+    // DS-02: route every row through the fail-closed pool contract. Tier 4/5 /
+    // malformed rows are WITHHELD (never exported); permitted rows go to the
+    // correct POOL dataset (datasetForPool), not the flat default dataset.
+    const bqResult = await backupEventsPooled(env, recentEvents.results ?? []);
+    bqEventsBackedUp = bqResult.rowsExported;
+    bqEventsWithheld = bqResult.rowsWithheld;
+    bqPoolsTargeted = bqResult.poolsTargeted;
 
     // OSE-594: log OER emission manifest for cron backup (invariant #17).
     // No ctx.waitUntil in scheduled handlers — this is a direct await.
@@ -94,8 +286,13 @@ export async function runBigQueryBackup(env: BigQueryHandlerEnv): Promise<void> 
       event_id: 'cron:batch',
       actor: 'cron:scheduler',
       request_id: cronReqId,
+      // DS-02: post-withholding count — withheld tier-4/5 rows are NOT exported.
       rows_exported: bqEventsBackedUp,
       outcome: 'success',
+      details: {
+        pools_targeted: bqPoolsTargeted,
+        rows_withheld: bqEventsWithheld,
+      },
     });
   } catch (err) {
     bqBackupError = err instanceof Error ? err.message : String(err);
@@ -119,6 +316,13 @@ export async function runBigQueryBackup(env: BigQueryHandlerEnv): Promise<void> 
   }
 
   console.log(
-    JSON.stringify({ type: 'BQ_BACKUP_COMPLETE', bqEventsBackedUp, bqBackupError, timestamp: now })
+    JSON.stringify({
+      type: 'BQ_BACKUP_COMPLETE',
+      bqEventsBackedUp,
+      bqEventsWithheld,
+      bqPoolsTargeted,
+      bqBackupError,
+      timestamp: now,
+    })
   );
 }

@@ -14,6 +14,8 @@ import {
   hashEmail,
   encryptEmail,
   decryptEmail,
+  encryptText,
+  decryptText,
   assertPepperConfigured,
   ENCRYPTION_VERSION,
 } from '../src/lib/pii';
@@ -100,6 +102,37 @@ describe('OSE-1273 — encryptEmail / decryptEmail', () => {
     const flipped = b64[b64.length - 2] === 'A' ? 'B' : 'A';
     const tampered = `${ver}:${b64.slice(0, -2)}${flipped}${b64.slice(-1)}`;
     await expect(decryptEmail(tampered, KEY)).rejects.toThrow();
+  });
+});
+
+describe('DE-01 — encryptText / decryptText (non-normalizing, for names)', () => {
+  test('round-trips VERBATIM: case and whitespace are preserved (unlike encryptEmail)', async () => {
+    // The whole point of the DE-01 split: a human name keeps its exact form.
+    const NAME = '  Àlïce   VAN-der Berg  ';
+    const enc = await encryptText(NAME, KEY);
+    expect(await decryptText(enc, KEY)).toBe(NAME);
+  });
+
+  test('does NOT lowercase/trim (contrast: encryptEmail normalizes)', async () => {
+    const mixed = 'MixedCase Name';
+    const encName = await encryptText(mixed, KEY);
+    expect(await decryptText(encName, KEY)).toBe(mixed); // preserved
+
+    // encryptEmail normalizes the same input to lowercase (documents the contrast).
+    const encEmail = await encryptEmail(mixed, KEY);
+    expect(await decryptEmail(encEmail, KEY)).toBe(mixed.toLowerCase());
+  });
+
+  test('carries the active version prefix and empty secret throws (shared primitive path)', async () => {
+    const enc = await encryptText('Some Name', KEY);
+    expect(enc.startsWith(`${ENCRYPTION_VERSION}:`)).toBe(true);
+    await expect(encryptText('Some Name', '')).rejects.toThrow(/No encryption key/);
+  });
+
+  test('encryptEmail output is decryptable by decryptText (byte-compatible format)', async () => {
+    // Proves encryptEmail is now just encryptText(normalized) — same ciphertext format.
+    const enc = await encryptEmail('User@Example.Com', KEY);
+    expect(await decryptText(enc, KEY)).toBe('user@example.com');
   });
 });
 

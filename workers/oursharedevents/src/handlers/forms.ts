@@ -31,6 +31,8 @@ import {
   bucketTimestamp,
   encryptEmail,
   decryptEmail,
+  encryptText,
+  decryptText,
   generateId,
 } from '../lib/forms-db';
 import { corsHeaders } from '../lib/cors';
@@ -146,6 +148,52 @@ function logFormEvent(
   );
 }
 
+/**
+ * DE-01 / A-5: turn stored registration rows into the response shape where
+ * `attendee_name` is the DECRYPTED name. Decrypts `attendee_name_encrypted`
+ * (AES-GCM), falling back to the legacy cleartext `attendee_name` for
+ * pre-existing rows, and drops the encrypted column from the output. A
+ * decryption failure surfaces a non-null sentinel (never a silent null that
+ * would hide key-rotation data loss — mirrors the email-signup export policy).
+ */
+async function decryptAttendeeNames(
+  rows: Record<string, unknown>[],
+  env: FormsEnv,
+  eventId: string
+): Promise<Record<string, unknown>[]> {
+  const key = env.FORMS_ENCRYPTION_KEY;
+  return Promise.all(
+    rows.map(async (row) => {
+      const { attendee_name_encrypted, attendee_name, ...rest } = row;
+      if (typeof attendee_name_encrypted === 'string' && attendee_name_encrypted.length > 0) {
+        if (!key) {
+          logFormEvent('register', String(rest.event_id ?? eventId), 'error', {
+            decrypt_error: true,
+            reason: 'no_encryption_key',
+            row_id: typeof rest.id === 'string' ? rest.id : undefined,
+          });
+          return { ...rest, attendee_name: '[decryption-failed]' };
+        }
+        try {
+          return { ...rest, attendee_name: await decryptText(attendee_name_encrypted, key) };
+        } catch (err) {
+          logFormEvent('register', String(rest.event_id ?? eventId), 'error', {
+            decrypt_error: true,
+            row_id: typeof rest.id === 'string' ? rest.id : undefined,
+          });
+          return {
+            ...rest,
+            attendee_name: '[decryption-failed]',
+            attendee_name_error: err instanceof Error ? err.message : 'decryption failed',
+          };
+        }
+      }
+      // Legacy pre-encryption row (or no name): fall back to the cleartext column.
+      return { ...rest, attendee_name: attendee_name ?? null };
+    })
+  );
+}
+
 // ─── Public: Registration ───────────────────────────────────────────────────────
 
 export async function handleFormRegistration(
@@ -175,21 +223,48 @@ export async function handleFormRegistration(
   const sourcePlacementId =
     typeof body!.sourcePlacementId === 'string' ? body!.sourcePlacementId.slice(0, 128) : undefined;
 
-  const emailHash = email ? await hashEmail(email, env.FORMS_HASH_PEPPER) : undefined;
+  // DE-01 / A-5: a supplied attendee name is personal data and MUST be encrypted
+  // at rest. Require FORMS_ENCRYPTION_KEY when a name is present (mirror the
+  // email-signup 503 guard) and store AES-GCM ciphertext in
+  // attendee_name_encrypted; the legacy cleartext attendee_name column is left
+  // NULL on the write path. encryptText (NOT encryptEmail) preserves the name's
+  // exact case/whitespace.
+  if (name && !env.FORMS_ENCRYPTION_KEY) {
+    return errorResponse('CONFIG_ERROR', 'FORMS_ENCRYPTION_KEY not configured', 503, request);
+  }
+
+  let emailHash: string | undefined;
+  let nameEncrypted: string | undefined;
+  try {
+    // DE-06: WRITE paths must not silently degrade to bare (unpeppered) SHA-256.
+    // requirePepper:true makes a missing FORMS_HASH_PEPPER throw; caught below
+    // and surfaced as a clean 503 (never a raw 500 leak).
+    emailHash = email
+      ? await hashEmail(email, env.FORMS_HASH_PEPPER, { requirePepper: true })
+      : undefined;
+    nameEncrypted =
+      name && env.FORMS_ENCRYPTION_KEY
+        ? await encryptText(name, env.FORMS_ENCRYPTION_KEY)
+        : undefined;
+  } catch (err) {
+    return handleDbError('register', eventId, err, request);
+  }
+
   const bucket = bucketTimestamp();
   const id = generateId();
   const expiresAt = new Date(Date.now() + REGISTRATION_TTL_MS).toISOString();
 
   try {
     await env.FORMS_DB.prepare(
-      `INSERT INTO form_registrations (id, event_id, source_placement_id, attendee_name, attendee_email_hash, registration_bucket, status, expires_at, anonymous_id, consent_given_at)
-       VALUES (?, ?, ?, ?, ?, ?, 'confirmed', ?, ?, ?)`
+      `INSERT INTO form_registrations (id, event_id, source_placement_id, attendee_name, attendee_name_encrypted, attendee_email_hash, registration_bucket, status, expires_at, anonymous_id, consent_given_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 'confirmed', ?, ?, ?)`
     )
       .bind(
         id,
         eventId,
         sourcePlacementId ?? null,
-        name ?? null,
+        null, // legacy cleartext column — never populated on the write path (DE-01)
+        nameEncrypted ?? null,
         emailHash ?? null,
         bucket,
         expiresAt,
@@ -361,7 +436,9 @@ export async function handleFormEmailSignup(
     return errorResponse('CONFIG_ERROR', 'FORMS_ENCRYPTION_KEY not configured', 503, request);
 
   try {
-    const emailHash = await hashEmail(email, env.FORMS_HASH_PEPPER);
+    // DE-06: WRITE path — never silently degrade to bare SHA-256. A missing
+    // pepper throws here and is caught below → clean 503 (handleDbError).
+    const emailHash = await hashEmail(email, env.FORMS_HASH_PEPPER, { requirePepper: true });
 
     const existing = await env.FORMS_DB.prepare(
       'SELECT id FROM email_signups WHERE event_id = ? AND email_hash = ?'
@@ -422,21 +499,31 @@ export async function handleAdminRegistrations(
 ): Promise<Response> {
   try {
     const result = await env.FORMS_DB.prepare(
-      'SELECT id, event_id, source_placement_id, attendee_name, attendee_email_hash, registration_bucket, status, created_at FROM form_registrations WHERE event_id = ? ORDER BY created_at DESC'
+      'SELECT id, event_id, source_placement_id, attendee_name, attendee_name_encrypted, attendee_email_hash, registration_bucket, status, created_at FROM form_registrations WHERE event_id = ? ORDER BY created_at DESC'
     )
       .bind(eventId)
       .all();
 
-    logFormEvent('register', eventId, 'admin_read', { count: result.results.length });
+    // DE-01 / A-5: attendee_name is now stored encrypted. Decrypt for the
+    // organizer's first-party list (keep the response field named attendee_name),
+    // falling back to the legacy cleartext column for pre-existing rows. The
+    // encrypted column is never surfaced in the response.
+    const items = await decryptAttendeeNames(
+      result.results as Record<string, unknown>[],
+      env,
+      eventId
+    );
+
+    logFormEvent('register', eventId, 'admin_read', { count: items.length });
     // OSE-665: the aggregate `count` is floored uniformly (same K as the
     // SharedReport surface) so every viewer sees the same representation of a
     // sub-5 cohort. `items` remains the organizer's first-party operational
     // list (#1/#8), exact — running the event needs the actual attendees.
-    const floored = applyCountFloor(result.results.length);
+    const floored = applyCountFloor(items.length);
     return jsonResponse(
       {
         ok: true,
-        items: result.results,
+        items,
         count: floored.count,
         suppressed: floored.suppressed,
         floor: floored.floor,
@@ -569,8 +656,10 @@ export async function handleAdminExport(
   let query: string;
   switch (dataType) {
     case 'registrations':
+      // DE-01 / A-5: select the encrypted name column; decrypted below into the
+      // `attendee_name` output field (never expose raw ciphertext).
       query =
-        'SELECT id, event_id, attendee_name, registration_bucket, status, created_at FROM form_registrations WHERE event_id = ? ORDER BY created_at DESC';
+        'SELECT id, event_id, attendee_name, attendee_name_encrypted, registration_bucket, status, created_at FROM form_registrations WHERE event_id = ? ORDER BY created_at DESC';
       break;
     case 'surveys':
       query =
@@ -587,6 +676,13 @@ export async function handleAdminExport(
   try {
     const result = await env.FORMS_DB.prepare(query).bind(eventId).all();
     let rows = (result.results ?? []) as Record<string, unknown>[];
+
+    // DE-01 / A-5: decrypt attendee names for the export (CSV or JSON), never
+    // expose raw ciphertext. Reuses the same decrypt + legacy-fallback policy as
+    // the admin list; drops attendee_name_encrypted from the output.
+    if (dataType === 'registrations') {
+      rows = await decryptAttendeeNames(rows, env, eventId);
+    }
 
     // Decrypt email addresses for admin export — never expose raw ciphertext
     if (dataType === 'email-signups' && env.FORMS_ENCRYPTION_KEY) {
