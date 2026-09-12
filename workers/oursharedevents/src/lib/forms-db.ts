@@ -14,7 +14,17 @@ export interface FormsDbEnv {
 // Re-export PII utilities so existing callers keep working unchanged.
 // OSE-712: assertPepperConfigured is the loud-failure preflight for the
 // GDPR/CCPA erasure path (a missing pepper must never silently no-op a delete).
-export { hashEmail, assertPepperConfigured, encryptEmail, decryptEmail } from './pii';
+// encryptText/decryptText are the non-normalizing generic crypto primitives
+// (DE-01 / A-5): human names must keep their exact case/whitespace, unlike
+// email which is normalized by encryptEmail before encryption.
+export {
+  hashEmail,
+  assertPepperConfigured,
+  encryptEmail,
+  decryptEmail,
+  encryptText,
+  decryptText,
+} from './pii';
 export type { HashEmailOptions } from './pii';
 
 // ─── Time Bucketing ─────────────────────────────────────────────────────────────

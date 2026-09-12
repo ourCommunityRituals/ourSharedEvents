@@ -171,13 +171,18 @@ async function deriveKey(secret: string, version: string): Promise<CryptoKey> {
 }
 
 /**
- * Encrypt email with AES-GCM.
- * Returns `{version}:{base64(iv + ciphertext)}` using the active key version.
+ * Encrypt arbitrary plaintext with AES-GCM. Returns
+ * `{version}:{base64(iv + ciphertext)}` using the active key version.
+ *
+ * IMPORTANT: this does NOT normalize the input — the caller decides. Use it for
+ * data where case/whitespace is significant (e.g. a human name — DE-01 /
+ * Anonymous Contract A-5). `encryptEmail` wraps this and normalizes the email
+ * first so email ciphertext behaviour is unchanged.
  *
  * `secret` may be a plain string (legacy v1) or a JSON key map
  * `{"v1":"oldkey","v2":"newkey"}` — active version is the highest numbered key.
  */
-export async function encryptEmail(email: string, secret: string): Promise<string> {
+export async function encryptText(plaintext: string, secret: string): Promise<string> {
   const keyMap = parseKeyMap(secret);
   const version = activeVersion(keyMap);
   const rawKey = keyMap[version];
@@ -188,7 +193,7 @@ export async function encryptEmail(email: string, secret: string): Promise<strin
 
   const key = await deriveKey(rawKey, version);
   const iv = crypto.getRandomValues(new Uint8Array(12));
-  const data = new TextEncoder().encode(email.trim().toLowerCase());
+  const data = new TextEncoder().encode(plaintext);
   const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, data);
 
   const combined = new Uint8Array(iv.length + new Uint8Array(ciphertext).length);
@@ -199,13 +204,13 @@ export async function encryptEmail(email: string, secret: string): Promise<strin
 }
 
 /**
- * Decrypt email from AES-GCM ciphertext.
+ * Decrypt AES-GCM ciphertext to its original plaintext (no normalization).
  * Accepts versioned format (`v1:base64`) and legacy unversioned base64.
  *
  * `secret` may be a plain string (legacy v1) or a JSON key map — the version
  * prefix in the ciphertext selects which key to use.
  */
-export async function decryptEmail(encrypted: string, secret: string): Promise<string> {
+export async function decryptText(encrypted: string, secret: string): Promise<string> {
   const colonIdx = encrypted.indexOf(':');
   const version = colonIdx !== -1 ? encrypted.slice(0, colonIdx) : ENCRYPTION_VERSION;
   // Stryker disable next-line ConditionalExpression,UnaryOperator: equivalent —
@@ -225,4 +230,31 @@ export async function decryptEmail(encrypted: string, secret: string): Promise<s
   const ciphertext = combined.slice(12);
   const plaintext = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ciphertext);
   return new TextDecoder().decode(plaintext);
+}
+
+/**
+ * Encrypt email with AES-GCM.
+ * Returns `{version}:{base64(iv + ciphertext)}` using the active key version.
+ *
+ * Email is normalized (`.trim().toLowerCase()`) before encryption so ciphertext
+ * matches the peppered-hash normalization — this is intentional for email and is
+ * byte-for-byte identical to the pre-refactor behaviour. For non-email PII where
+ * case/whitespace must be preserved, use {@link encryptText} directly.
+ *
+ * `secret` may be a plain string (legacy v1) or a JSON key map
+ * `{"v1":"oldkey","v2":"newkey"}` — active version is the highest numbered key.
+ */
+export function encryptEmail(email: string, secret: string): Promise<string> {
+  return encryptText(email.trim().toLowerCase(), secret);
+}
+
+/**
+ * Decrypt email from AES-GCM ciphertext.
+ * Accepts versioned format (`v1:base64`) and legacy unversioned base64.
+ *
+ * `secret` may be a plain string (legacy v1) or a JSON key map — the version
+ * prefix in the ciphertext selects which key to use.
+ */
+export function decryptEmail(encrypted: string, secret: string): Promise<string> {
+  return decryptText(encrypted, secret);
 }

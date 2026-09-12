@@ -48,7 +48,7 @@ const EXPECTED_INDEXES = [
 ] as const;
 
 const EXPECTED_COLUMN_COUNTS: Record<string, number> = {
-  form_registrations: 12, // +consent_type (migration 0012)
+  form_registrations: 13, // +consent_type (0012); +attendee_name_encrypted (0014, DE-01/A-5)
   checkin_counts: 5,
   form_surveys: 9, // +consent_type (migration 0012)
   email_signups: 10, // +consent_type (migration 0012)
