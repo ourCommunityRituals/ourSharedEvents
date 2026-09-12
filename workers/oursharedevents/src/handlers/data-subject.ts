@@ -15,12 +15,12 @@ import { type FormsDbEnv, hashEmail, assertPepperConfigured } from '../lib/forms
 /**
  * OSE-207 — subscribers table erase support.
  *
- * subscribers.email is plaintext (the UNIQUE constraint requires a
- * deterministic identity for idempotent dedup; encrypting per OSE-202
- * would break that). Erase deletes by raw email — the raw value is used
- * only as a parameterised bind for the DELETE; it is never logged or
- * returned. The response continues to expose only the emailHash, per
- * the "raw email never written to any log or response" contract.
+ * Data-at-rest doctrine (A-5): subscribers.email is no longer plaintext
+ * (migration 0071). The row is keyed by a peppered HMAC-SHA256 `email_hash`
+ * (the UNIQUE dedup + lookup key) alongside an AES-GCM `email_encrypted`. Erase
+ * deletes by `email_hash` — computed with the SAME normalization the subscribe
+ * path uses, so the hashes line up. The raw email is never logged or returned;
+ * the response continues to expose only the emailHash.
  */
 export type DataSubjectEnv = FormsDbEnv & {
   /** Main DB binding — host of `subscribers` (OSE-207). */
@@ -87,12 +87,6 @@ export async function handleDataSubjectErase(
   let subscribersDeleted = 0;
   let errors = 0;
 
-  // Normalise the raw email for the subscribers DELETE: subscribers.email is
-  // plaintext, but hashEmail's normalisation is trim+lowercase. Apply the
-  // same normalisation so a user who subscribed as "ME@X.com" can erase as
-  // "me@x.com" and vice versa.
-  const normalisedEmail = rawEmail.trim().toLowerCase();
-
   // Phase A: delete email signups by hash (independent — failure does not abort B)
   try {
     const res = await env.FORMS_DB.prepare('DELETE FROM email_signups WHERE email_hash = ?')
@@ -115,12 +109,13 @@ export async function handleDataSubjectErase(
     errors++;
   }
 
-  // Phase C (OSE-207): delete subscribers by plaintext email.
-  // Lives in the main DB, not FORMS_DB. Raw email is used only as a bound
-  // parameter and never logged.
+  // Phase C (OSE-207): delete subscribers by peppered email_hash (A-5,
+  // migration 0071). Lives in the main DB, not FORMS_DB. The same emailHash
+  // computed above matches subscribers.email_hash because both derive from the
+  // identical trim+lowercase+HMAC normalization. Never touches raw email.
   try {
-    const res = await env.DB.prepare('DELETE FROM subscribers WHERE email = ?')
-      .bind(normalisedEmail)
+    const res = await env.DB.prepare('DELETE FROM subscribers WHERE email_hash = ?')
+      .bind(emailHash)
       .run();
     subscribersDeleted = res.meta?.changes ?? 0;
   } catch {

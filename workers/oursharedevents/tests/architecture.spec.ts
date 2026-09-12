@@ -151,7 +151,7 @@ describe('L1: handlers/feature-flags.ts never references env.DB', () => {
 describe('L1: handlers/data-subject.ts — cross-binding scope guard (invariant #1)', () => {
   // data-subject.ts is the ONLY authorised handler that touches BOTH databases:
   //   FORMS_DB — DELETE from email_signups, form_registrations; INSERT into pii_audit_log
-  //   DB       — DELETE from subscribers only (plaintext email; GDPR Art.17 / OSE-207)
+  //   DB       — DELETE from subscribers only (by peppered email_hash; GDPR Art.17 / OSE-207 / A-5)
   // This guard locks the scope to those operations. Any SELECT, JOIN, or new
   // table reference across the DB boundary would be an unreviewable cross-link.
   test('DB usage in data-subject.ts is DELETE-only on subscribers table', () => {
