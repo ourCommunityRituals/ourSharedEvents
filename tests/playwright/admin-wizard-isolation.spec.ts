@@ -155,16 +155,27 @@ test.describe('OSE-1237 admin launch wizard — owns the screen', () => {
   // The assertion that caught the half-fix. Panel-by-panel checks passed while
   // 2,290px of out-of-<main> cards were still scrollable.
   test('the wizard state fits one viewport — no dashboard left below it', async ({ page }) => {
+    // The full dashboard is taller than a viewport — that's the content the
+    // wizard must not leave scrollable below it. Since the admin now opens on
+    // the front-door chooser (dashboard hidden by default), reveal the
+    // dashboard first to establish that tall baseline.
     await openAdmin(page);
-    const before = await page.evaluate(() => document.documentElement.scrollHeight);
+    await page.click('[data-testid="admin-path-advanced"]');
+    await page.waitForTimeout(400);
+    const dashboard = await page.evaluate(() => document.documentElement.scrollHeight);
+    expect(dashboard, 'the full dashboard should exceed one viewport').toBeGreaterThan(
+      MOBILE.height
+    );
+
+    // Enter the wizard from a fresh front door; its state must fit ~one viewport
+    // with none of that tall dashboard scrollable underneath.
+    await openAdmin(page);
     await page.click('[data-testid="admin-path-wizard"]');
     await page.waitForTimeout(400);
     const after = await page.evaluate(() => document.documentElement.scrollHeight);
-
-    expect(before, 'entry view should be the tall one').toBeGreaterThan(MOBILE.height);
     expect(
       after,
-      `wizard state is ${after}px on a ${MOBILE.height}px screen (was ${before}px at entry) — ` +
+      `wizard state is ${after}px on a ${MOBILE.height}px screen (dashboard is ${dashboard}px) — ` +
         `dashboard content is still rendering below the wizard`
     ).toBeLessThanOrEqual(MOBILE.height * 2);
   });
