@@ -40,6 +40,14 @@ export interface SeedSponsorOpts {
   campaignId?: string | null;
   /** 'organizer' | 'corridor_covenant' | 'platform_seed' (default 'organizer'). */
   source?: string;
+  /**
+   * → sponsor_placement.sponsor_accepted (default 1 = CONFIRMED, so a seeded
+   * sponsor renders). OSE-1301: silence (NULL) is NOT consent — pass null to seed
+   * an unconfirmed placement that must NOT render, or 0 for a sponsor rejection.
+   */
+  sponsorAccepted?: number | null;
+  /** → sponsor_placement.organizer_accepted (default NULL = implied by creation). */
+  organizerAccepted?: number | null;
   createdAt?: string;
   updatedAt?: string;
   /** Per-format creative → sponsor_asset rows. */
@@ -98,8 +106,9 @@ export async function seedSplitSponsor(db: D1Database, opts: SeedSponsorOpts): P
       .prepare(
         `INSERT INTO sponsor_placement
            (id, sponsor_business_id, event_id, tier, campaign_id, source, polarity,
-            locality_band, click_token, display_token, is_active, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?)`
+            locality_band, click_token, display_token, is_active,
+            organizer_accepted, sponsor_accepted, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
       .bind(
         opts.placementId ?? `spl_${id}`,
@@ -112,6 +121,11 @@ export async function seedSplitSponsor(db: D1Database, opts: SeedSponsorOpts): P
         opts.clickToken ?? null,
         opts.displayToken ?? null,
         opts.isActive ?? 1,
+        // OSE-1301: default a CONFIRMED sponsor so seeded rows render; organizer
+        // stays implied (NULL → permissive COALESCE). `?? null` preserves an
+        // explicit 0/null a caller passes to test rejection / silence.
+        opts.organizerAccepted ?? null,
+        opts.sponsorAccepted === undefined ? 1 : opts.sponsorAccepted,
         createdAt,
         now
       ),

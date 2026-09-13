@@ -10,19 +10,28 @@
  * Every ACTIVE sponsor is eligible for every surface UNIFORMLY (no named-slot
  * filtering) and all qualifying sponsors accumulate (rotation, never replacement).
  *
- * ─── Two-sided acceptance (0068) ────────────────────────────────────────────────
+ * ─── Two-sided acceptance (0068) + consent-trace (OSE-1301) ─────────────────────
  * A placement is a relationship, so either party may start it and either party may
  * reject it. Path 1 is organizer-initiated; Path 2 is sponsor-initiated (they
- * subscribed to the template). Neither used to give the other party a say.
+ * subscribed to the template).
  *
- *   A placement is hidden only when a side has REJECTED it (accepted = 0).
- *   NULL means not answered yet and does NOT hide — so rejection is the
- *   operative action, and existing placements keep working with no backfill.
+ *   ORGANIZER side — creating the placement IS the organizer's pick (OSE-1301
+ *   leg 1), so organizer silence is permissive: COALESCE(organizer_accepted, 1) = 1.
+ *   Only an explicit organizer rejection (= 0) hides.
  *
- * A rejection is durable: Path 2 skips any business the organizer already
- * rejected for THIS event, so a declined match is not re-proposed on every
- * resolve. That is what lets Path 2 match generously — an unwanted sponsor costs
- * one tap, once.
+ *   SPONSOR side — OSE-1301 ("silence never becomes consent"): a sponsor must
+ *   CONFIRM its own appearance (leg 3). Silence is NOT consent, so Path 1 requires
+ *   sp.sponsor_accepted = 1 — an unconfirmed direct placement does NOT render.
+ *   This SUPERSEDES the earlier permissive rule (hidden only on explicit rejection);
+ *   OSE-1298's structural lock was rewritten in lockstep. Pre-launch the only
+ *   NULL-sponsor rows are test/demo data, which is exactly what should stop showing;
+ *   a genuinely-confirmed legacy sponsor is backfilled sponsor_accepted = 1.
+ *
+ * Path 2 (template/geo auto-match) stays on the permissive rule PENDING the
+ * OSE-1301 open question ("can a venue pre-authorise a standing rotation?") — it is
+ * a named exemption in sponsor-consent-trace.invariant.spec.ts, to be decided at CCR.
+ * A rejection is durable there: Path 2 skips any business the organizer already
+ * rejected for THIS event, so a declined match is not re-proposed on every resolve.
  *
  * ─── Business lifecycle (0068) ──────────────────────────────────────────────────
  * BOTH paths require sb.is_active = 1. Deleting a sponsor soft-deletes the
@@ -189,7 +198,7 @@ export async function resolveSponsorsForEvent(
        WHERE sp.event_id = ? AND sp.is_active = 1
          AND sb.is_active = 1
          AND COALESCE(sp.organizer_accepted, 1) = 1
-         AND COALESCE(sp.sponsor_accepted, 1) = 1
+         AND sp.sponsor_accepted = 1
        ORDER BY sb.id`
     )
     .bind(eventId)

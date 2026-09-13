@@ -186,6 +186,7 @@ import {
   handleSetSponsorAreas,
   handleGetSponsorAreas,
   handleGetSponsorsForEvent,
+  handleConfirmSponsorPlacement,
   handleGetSponsorBundle,
   handleLogImpression,
   handleLogClick,
@@ -806,6 +807,29 @@ export async function route(
       _audit(reqId, 'DELETE_SPONSOR', 'success', 'sponsor', adminSponsorMatch[1]);
       return response;
     }
+  }
+
+  // POST /api/v2/admin/events/:eventId/sponsors/:sponsorId/confirm (OSE-1301 leg 3)
+  // The sponsor-confirmation write (sets sponsor_accepted = 1). Admin-gated INTERIM;
+  // the sponsor-facing token auth is deferred to CCR (see handler docstring).
+  const sponsorConfirmMatch = pathname.match(
+    /^\/api\/v2\/admin\/events\/([^/]+)\/sponsors\/([^/]+)\/confirm$/
+  );
+  if (sponsorConfirmMatch && method === 'POST') {
+    const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
+    const deny = await requireAdmin(request, env, reqId);
+    if (deny) {
+      _audit(reqId, 'SPONSOR_CONFIRM', 'denied', 'sponsor', sponsorConfirmMatch[2]);
+      return deny;
+    }
+    const response = await handleConfirmSponsorPlacement(
+      request,
+      env,
+      sponsorConfirmMatch[1],
+      sponsorConfirmMatch[2]
+    );
+    _audit(reqId, 'SPONSOR_CONFIRM', 'success', 'sponsor', sponsorConfirmMatch[2]);
+    return response;
   }
 
   // ── Admin poster deployment routes (auth-gated) ────────────────────────────

@@ -1113,13 +1113,18 @@ async function fetchEventPageSocialData(
         ? env.DB.prepare(
             // OSE-799 A2: reconstruct the public sponsor list from the split model —
             // active placements on this event, joined to their business identity.
+            // OSE-1301 consent-trace: the SPONSOR must have confirmed
+            // (sp.sponsor_accepted = 1) — silence is not consent, so an unconfirmed
+            // placement does NOT render publicly. The ORGANIZER side stays permissive
+            // (creating the placement is the organizer's pick). Enforced by
+            // sponsor-consent-trace.invariant.spec.ts.
             `SELECT sb.id AS id, sb.name AS name, sb.website_url AS website_url
                FROM sponsor_placement sp
                JOIN sponsor_business sb ON sb.id = sp.sponsor_business_id
               WHERE sp.event_id = ? AND sp.is_active = 1
                 AND sb.is_active = 1
                 AND COALESCE(sp.organizer_accepted, 1) = 1
-                AND COALESCE(sp.sponsor_accepted, 1) = 1
+                AND sp.sponsor_accepted = 1
               ORDER BY sb.id ASC`
           )
             .bind(eventId)

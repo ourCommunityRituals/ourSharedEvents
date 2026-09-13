@@ -126,20 +126,29 @@ test.describe('Invariant 2: Hyper-Local Geo-Resolution — structural code-shape
     );
   });
 
-  test('OSE-INV2 | resolver | two-sided acceptance hides only REJECTED placements (0068)', () => {
+  test('OSE-INV2 | resolver | Path 1 consent-trace: organizer permissive, sponsor STRICT (OSE-1301 supersedes 0068)', () => {
     const src = readFileSync(RESOLVER, 'utf8');
-    // A placement is hidden only when a side has REJECTED it (accepted = 0);
-    // NULL (unanswered) does NOT hide — so the guard COALESCEs to 1. If this
-    // flips to `= 1` without the COALESCE, every legacy/unanswered placement
-    // silently disappears.
+    // OSE-1301 reconciliation (ratified 2026-09-13): "silence never becomes
+    // consent." The two acceptance columns encode two DIFFERENT acts, so the
+    // Path-1 (direct) query gives them different defaults:
+    //   ORGANIZER — creating the placement IS the pick (leg 1); silence is
+    //     permissive, so the guard COALESCEs to 1. Only an explicit reject (0) hides.
+    //   SPONSOR — must confirm its own appearance (leg 3); silence is NOT consent,
+    //     so the guard is a STRICT `= 1`. An unconfirmed (NULL) placement does NOT
+    //     render. This SUPERSEDES the old permissive COALESCE(sp.sponsor_accepted,1)=1
+    //     rule this test used to lock — that flip is the whole point of OSE-1301.
     expect(
       src,
-      'organizer acceptance must be COALESCE(sp.organizer_accepted, 1) = 1 — unanswered must not hide'
+      'organizer acceptance must stay COALESCE(sp.organizer_accepted, 1) = 1 — the organizer pick is implied by creation'
     ).toMatch(/COALESCE\s*\(\s*sp\.organizer_accepted\s*,\s*1\s*\)\s*=\s*1/i);
     expect(
       src,
-      'sponsor acceptance must be COALESCE(sp.sponsor_accepted, 1) = 1 — unanswered must not hide'
-    ).toMatch(/COALESCE\s*\(\s*sp\.sponsor_accepted\s*,\s*1\s*\)\s*=\s*1/i);
+      'sponsor acceptance must be STRICT `sp.sponsor_accepted = 1` (no COALESCE) — OSE-1301: silence is not consent'
+    ).toMatch(/(?<!COALESCE\s*\(\s*)\bsp\.sponsor_accepted\s*=\s*1/i);
+    expect(
+      src,
+      'the old permissive COALESCE(sp.sponsor_accepted, 1) must be GONE from Path 1 — it is the defect OSE-1301 corrects'
+    ).not.toMatch(/COALESCE\s*\(\s*sp\.sponsor_accepted\s*,\s*1\s*\)/i);
   });
 
   test('OSE-INV2 | resolver | Path 2 Template+Geo is gated on template_id and joins sponsor_event_types', () => {

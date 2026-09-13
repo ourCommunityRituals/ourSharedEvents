@@ -11,11 +11,17 @@
  *      it on Path 1. Now deletion is sponsor_business.is_active = 0, and
  *      BOTH resolver paths must honour it.
  *
- *   2. ACCEPTANCE IS TWO-SIDED AND NULL-PERMISSIVE. A placement is hidden
- *      only when a side has actively REJECTED it (accepted = 0). NULL means
- *      "not answered yet" and must NOT hide — that is what makes the
- *      migration backfill-free. Either side's rejection hides; a rejection
- *      is durable against Path 2 re-proposal.
+ *   2. ACCEPTANCE IS TWO-SIDED, WITH A SPLIT DEFAULT (OSE-1301, ratified
+ *      2026-09-13 — supersedes the original NULL-permissive rule):
+ *        • ORGANIZER side stays permissive — creating the placement IS the
+ *          organizer's pick (leg 1). NULL organizer does NOT hide; only an
+ *          explicit organizer rejection (0) hides.
+ *        • SPONSOR side is STRICT — the sponsor must confirm its own
+ *          appearance (leg 3). "Silence never becomes consent," so NULL
+ *          sponsor_accepted DOES hide; only an explicit 1 renders.
+ *      Either side's rejection hides; a rejection is durable against Path 2
+ *      re-proposal. (Path 2 auto-match keeps the old permissive rule pending
+ *      the OSE-1301 open question — see sponsor-consent-trace.invariant.spec.ts.)
  *
  * Harness mirrors poster-attribution-kanon-floor.spec.ts: apply migrations
  * exactly once per isolate, seed directly, run the real resolver.
@@ -24,6 +30,7 @@
 import { describe, test, expect, beforeAll, beforeEach } from 'vitest';
 import { env } from 'cloudflare:test';
 import { resolveSponsorsForEvent } from '../src/lib/sponsor-resolver';
+import { handleConfirmSponsorPlacement } from '../src/handlers/sponsors';
 
 interface TestEnv {
   DB: D1Database;
@@ -105,22 +112,24 @@ beforeEach(async () => {
 });
 
 describe('0068 — business lifecycle governs both resolver paths', () => {
-  test('an active business with an unanswered placement resolves (NULL does not hide)', async () => {
+  test('OSE-1301: an unconfirmed sponsor (NULL sponsor_accepted) does NOT resolve — silence is not consent', async () => {
     await seedBusiness('sb-live');
-    await seedPlacement('sp-live', 'sb-live');
+    await seedPlacement('sp-live', 'sb-live'); // both sides NULL (unanswered)
     const resolved = await resolveSponsorsForEvent(tenv().DB, EVENT_ID);
-    expect(resolved.map((s) => s.id)).toEqual(['sb-live']);
+    expect(resolved).toEqual([]);
   });
 
-  test('a soft-deleted business is gone from Path 1 even with an active placement', async () => {
+  test('a soft-deleted business is gone from Path 1 even with an active, confirmed placement', async () => {
     await seedBusiness('sb-dead', 0);
-    await seedPlacement('sp-dead', 'sb-dead');
+    // sponsor confirmed → isolate the business-lifecycle reason for hiding (so this
+    // test fails if the is_active gate breaks, not merely because silence hides).
+    await seedPlacement('sp-dead', 'sb-dead', { organizer: 1, sponsor: 1 });
     const resolved = await resolveSponsorsForEvent(tenv().DB, EVENT_ID);
     expect(resolved).toEqual([]);
   });
 });
 
-describe('0068 — two-sided acceptance', () => {
+describe('0068 + OSE-1301 — two-sided acceptance, split default (organizer permissive, sponsor strict)', () => {
   test('organizer rejection hides the placement', async () => {
     await seedBusiness('sb-orj');
     await seedPlacement('sp-orj', 'sb-orj', { organizer: 0, sponsor: 1 });
@@ -135,10 +144,88 @@ describe('0068 — two-sided acceptance', () => {
     expect(resolved).toEqual([]);
   });
 
+  test('OSE-1301: sponsor silence (NULL) hides even when the organizer accepted', async () => {
+    await seedBusiness('sb-sil');
+    await seedPlacement('sp-sil', 'sb-sil', { organizer: 1, sponsor: null });
+    const resolved = await resolveSponsorsForEvent(tenv().DB, EVENT_ID);
+    expect(resolved, 'an unconfirmed sponsor must not render').toEqual([]);
+  });
+
+  test('OSE-1301: organizer silence (NULL) is permissive — a confirmed sponsor still resolves', async () => {
+    await seedBusiness('sb-osil');
+    await seedPlacement('sp-osil', 'sb-osil', { organizer: null, sponsor: 1 });
+    const resolved = await resolveSponsorsForEvent(tenv().DB, EVENT_ID);
+    expect(
+      resolved.map((s) => s.id),
+      'organizer pick is implied by creation'
+    ).toEqual(['sb-osil']);
+  });
+
   test('both sides accepted resolves', async () => {
     await seedBusiness('sb-both');
     await seedPlacement('sp-both', 'sb-both', { organizer: 1, sponsor: 1 });
     const resolved = await resolveSponsorsForEvent(tenv().DB, EVENT_ID);
     expect(resolved.map((s) => s.id)).toEqual(['sb-both']);
+  });
+});
+
+describe('OSE-1301 — sponsor confirmation completes the loop (leg 3 write path)', () => {
+  // The full loop end-to-end at the data layer: organizer picks (creates the
+  // placement) → sponsor SILENT → hidden → sponsor CONFIRMS via the endpoint
+  // handler → renders. Revert the handler's UPDATE and the "then renders" step
+  // fails, so this is a live born-red for the write path, not just its presence.
+  const asEnv = (): Parameters<typeof handleConfirmSponsorPlacement>[1] =>
+    tenv() as unknown as Parameters<typeof handleConfirmSponsorPlacement>[1];
+
+  test('an unconfirmed placement is hidden until the sponsor confirms, then renders', async () => {
+    await seedBusiness('sb-confirm');
+    await seedPlacement('sp-confirm', 'sb-confirm', { organizer: 1, sponsor: null });
+    expect(await resolveSponsorsForEvent(tenv().DB, EVENT_ID), 'silence hides').toEqual([]);
+
+    const res = await handleConfirmSponsorPlacement(
+      new Request(`https://t.test/api/v2/admin/events/${EVENT_ID}/sponsors/sb-confirm/confirm`, {
+        method: 'POST',
+      }),
+      asEnv(),
+      EVENT_ID,
+      'sb-confirm'
+    );
+    expect(res.status, 'confirm returns 200').toBe(200);
+
+    const resolved = await resolveSponsorsForEvent(tenv().DB, EVENT_ID);
+    expect(
+      resolved.map((s) => s.id),
+      'confirmed sponsor now renders'
+    ).toEqual(['sb-confirm']);
+  });
+
+  test('confirming a placement that does not exist returns 404', async () => {
+    const res = await handleConfirmSponsorPlacement(
+      new Request('https://t.test/x', { method: 'POST' }),
+      asEnv(),
+      EVENT_ID,
+      'no-such-sponsor'
+    );
+    expect(res.status).toBe(404);
+  });
+
+  test('confirm does NOT override an explicit sponsor rejection into a silent yes', async () => {
+    // A rejected sponsor (0) that is then "confirmed" flips to 1 — confirmation is
+    // an affirmative act, so this is allowed; but it must be an explicit call, never
+    // a silent default. (Documents the intended semantics: 0 is durable until an
+    // explicit confirm, and NULL never auto-becomes 1.)
+    await seedBusiness('sb-rej');
+    await seedPlacement('sp-rej', 'sb-rej', { organizer: 1, sponsor: 0 });
+    expect(await resolveSponsorsForEvent(tenv().DB, EVENT_ID), 'rejected hidden').toEqual([]);
+    await handleConfirmSponsorPlacement(
+      new Request('https://t.test/x', { method: 'POST' }),
+      asEnv(),
+      EVENT_ID,
+      'sb-rej'
+    );
+    expect(
+      (await resolveSponsorsForEvent(tenv().DB, EVENT_ID)).map((s) => s.id),
+      'an explicit confirm after a rejection renders'
+    ).toEqual(['sb-rej']);
   });
 });

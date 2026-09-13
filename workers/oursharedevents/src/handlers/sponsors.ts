@@ -1069,6 +1069,73 @@ export async function handleGetSponsorsForEvent(
   }
 }
 
+/**
+ * POST /api/v2/admin/events/:eventId/sponsors/:sponsorId/confirm
+ *
+ * OSE-1301 leg 3 — the sponsor CONFIRMS its own appearance. This is the write that
+ * makes the strict render gate usable: it sets sponsor_accepted = 1 on the
+ * (sponsor × event) placement, so the sponsor renders (see resolveSponsorsForEvent
+ * Path 1 + sponsor-consent-trace.invariant.spec.ts). Silence is not consent, so
+ * until this fires the placement stays hidden. Idempotent (re-confirm is a no-op).
+ *
+ * Stateless + cookieless by design (never-who): no session, no Set-Cookie, no PII —
+ * the observability line carries ids only.
+ *
+ * AUTH — INTERIM, admin-gated: the route sits behind requireAdmin (a safe, non-open
+ * write). The SPONSOR-FACING authorization — a per-placement confirm token in a
+ * link, so the sponsor confirms without an OCR login — is DEFERRED TO CCR (the
+ * auth-model decision). Do NOT open this write publicly without that token.
+ */
+export async function handleConfirmSponsorPlacement(
+  request: Request,
+  env: SponsorsEnv,
+  eventId: string,
+  sponsorId: string
+): Promise<Response> {
+  const rid = requestId();
+  try {
+    if (!env.DB) return errorResponse('DB_UNAVAILABLE', 'No database binding', 503, rid);
+    const res = await env.DB.prepare(
+      `UPDATE sponsor_placement
+          SET sponsor_accepted = 1, updated_at = datetime('now')
+        WHERE sponsor_business_id = ? AND event_id = ?`
+    )
+      .bind(sponsorId, eventId)
+      .run();
+    const changed = res.meta?.changes ?? 0;
+    if (!changed) {
+      return errorResponse(
+        'PLACEMENT_NOT_FOUND',
+        'No placement for that sponsor + event',
+        404,
+        rid
+      );
+    }
+    // Observability — never-who: ids only, no PII.
+    console.log(
+      JSON.stringify({
+        type: 'SPONSOR_CONFIRM',
+        event_id: eventId,
+        sponsor_id: sponsorId,
+        request_id: rid,
+      })
+    );
+    return Response.json(
+      { ok: true, status: 200, confirmed: true },
+      { headers: { ...corsHeaders(request), 'X-Request-Id': rid } }
+    );
+  } catch (err) {
+    console.error(
+      JSON.stringify({
+        type: 'DB_ERROR',
+        handler: 'handleConfirmSponsorPlacement',
+        error: err instanceof Error ? err.message : String(err),
+      })
+    );
+    return errorResponse('DB_ERROR', 'Failed to confirm sponsor', 503, rid);
+  }
+}
+
 // ─── Public: Sponsor Bundle ─────────────────────────────────────────────────────
 
 /**
