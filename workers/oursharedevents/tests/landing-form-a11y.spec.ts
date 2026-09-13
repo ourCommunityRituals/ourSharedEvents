@@ -40,3 +40,13 @@ describe('landing | subscribe form accessibility (A11Y-2)', () => {
     expect(html).toMatch(/setAttribute\('aria-invalid',\s*'false'\)/);
   });
 });
+
+describe('landing | header (FE-12)', () => {
+  it('the logo is a keyboard-reachable link home, not a bare span', async () => {
+    const html = await landing();
+    // The .logo:focus-visible style was dead on a <span>; the logo is now an
+    // <a href="/"> so it's focusable and clickable (WCAG 2.1.1 / convention).
+    expect(html).toMatch(/<a[^>]*href="\/"[^>]*class="logo"|<a[^>]*class="logo"[^>]*href="\/"/);
+    expect(html).not.toMatch(/<span[^>]*class="logo"/);
+  });
+});

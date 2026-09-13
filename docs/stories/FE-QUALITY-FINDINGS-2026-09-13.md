@@ -24,14 +24,13 @@ born-red test.
 | FE-6  | infra   | `pii-crypto` tamper test flaked (base64-char flip could be a decode no-op), red-X'ing FE PRs                                                      | Med     | #535 (merged) |
 | FE-7  | survey  | rating buttons conveyed the chosen score by colour only — added `aria-pressed` toggled with the fill (WCAG 1.4.1 / 4.1.2)                         | Med     | #538          |
 | FE-10 | forms   | submit `fetch()` had no timeout — a stalled network left the button disabled forever; added a 15s `AbortController` cap                           | Low-Med | #539          |
+| FE-12 | landing | logo was a `<span>` (with a dead `.logo:focus-visible` rule) — made it `<a href="/">` so it's a keyboard-reachable link home                      | Low     | #541          |
 
 ---
 
-## 🟡 Open — remaining
+## 🟢 Open — remaining
 
-| #     | Surface / file                  | Item                                                                                                      | Sev |
-| ----- | ------------------------------- | --------------------------------------------------------------------------------------------------------- | --- |
-| FE-12 | `templates/landing.html` (~561) | logo is a `<span>`, not a link home (`<a href="/">`) — minor and debatable (landing IS `/`); PO to decide | Low |
+_None._ Every audited finding is resolved (fixed or verified-not-a-bug).
 
 ---
 
@@ -50,4 +49,4 @@ Recorded so they aren't re-flagged:
 
 ---
 
-_Owner: PO. FE-1…FE-11 resolved (fixed or verified-not-a-bug). Only FE-12 (minor, PO call) remains. Update statuses here as PRs merge; promote open items to Linear as needed._
+_Owner: PO. FE-1…FE-12 all resolved (8 fixed, 6 verified-not-a-bug). Backlog clear as of 2026-09-13. Keep this doc as the audit record; append new findings if a later surface pass turns any up._
