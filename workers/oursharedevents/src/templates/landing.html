@@ -33,12 +33,16 @@
         align-items: center;
         justify-content: space-between;
       }
+      /* OSE-292: logo is a link home — must be a 44px-tall tap target too. */
       .logo {
         font-size: 1.25rem;
         font-weight: 700;
         letter-spacing: -0.01em;
         text-decoration: none;
         color: #fff;
+        display: inline-flex;
+        align-items: center;
+        min-height: 44px;
       }
       nav {
         display: flex;
