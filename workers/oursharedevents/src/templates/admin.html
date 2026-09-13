@@ -1406,6 +1406,17 @@
         display: none;
       }
 
+      /* Front door (default). The page loads showing ONLY the path-chooser —
+         "What are you making?" — with the full dashboard hidden behind it. The
+         chooser's own copy ("Show me everything — the full dashboard") is the
+         promise this keeps: the dashboard is not there until you ask for it.
+         Picking a path removes .chooser-active (startSponsor / chooseAdvanced)
+         or starts the wizard, so the wizard/chooser and the dashboard are never
+         stacked on top of each other. Mirrors the .wizard-active scoping. */
+      body.chooser-active #main-content > *:not(#admin-path-chooser):not(#launch-wizard):not(#admin-status) {
+        display: none;
+      }
+
       /* Defensive second rule: anything that ends up OUTSIDE <main> is hidden
          too. When this was written, four cards — forms, poster deployments,
          sponsors and surface cards — really were direct children of <body>
@@ -1761,7 +1772,7 @@
       }
     </style>
   </head>
-  <body>
+  <body class="chooser-active">
     <a href="#main-content" class="skip-link" data-testid="admin-skip-link">Skip to content</a>
     <header data-testid="admin-header" aria-label="OurSharedEvents Admin">
       <h1>
@@ -2602,6 +2613,9 @@
            */
           function startSponsor() {
             document.body.classList.remove('wizard-active');
+            // Reveal the dashboard (the sponsors card lives in it) — the front
+            // door steps aside.
+            document.body.classList.remove('chooser-active');
             document.getElementById('admin-path-chooser').hidden = true;
             document.getElementById('launch-wizard').hidden = true;
 
@@ -2619,8 +2633,9 @@
           }
 
           function chooseAdvanced() {
-            // The dashboard is already on the page — just clear the doorway.
+            // Reveal the full dashboard and clear the doorway.
             document.body.classList.remove('wizard-active');
+            document.body.classList.remove('chooser-active');
             document.getElementById('admin-path-chooser').hidden = true;
             document.getElementById('launch-wizard').hidden = true;
             var card = document.querySelector('[data-testid="create-event-card"]');
@@ -4479,6 +4494,12 @@
               const savedRow = container.querySelector('[data-testid="event-row-' + savedId + '"]');
               const saved = data.items.find((e) => String(e.id) === savedId);
               if (savedRow && saved) {
+                // Returning to a selected event (e.g. just created via the
+                // wizard, which reloads) — show the dashboard, not the front
+                // door chooser.
+                document.body.classList.remove('chooser-active');
+                var chooser = document.getElementById('admin-path-chooser');
+                if (chooser) chooser.hidden = true;
                 savedRow.classList.add('selected');
                 savedRow.scrollIntoView({ block: 'center' });
                 const ph = Math.max(1, Math.min(5, Number(saved.legal_clearance_tier) || 1));

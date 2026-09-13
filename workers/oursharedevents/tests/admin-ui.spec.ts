@@ -125,7 +125,7 @@ describe('ADMIN-12: No inline styles in admin HTML', () => {
     // Extract body, then strip <script> blocks — JS template strings may contain
     // style= as part of dynamically injected HTML snippets; those are not real
     // HTML attributes and should not trigger this guard.
-    const bodyStart = html.indexOf('<body>');
+    const bodyStart = html.indexOf('<body'); // the <body> tag carries a class now
     const bodyHtml = html.slice(bodyStart);
     const bodyNoScripts = bodyHtml.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '');
     expect(bodyNoScripts).not.toMatch(/style="/);
