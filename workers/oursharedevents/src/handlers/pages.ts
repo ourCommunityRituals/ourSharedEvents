@@ -955,11 +955,24 @@ function renderPostEventHtml(
   const nonce = opts?.nonce ?? '';
   const lang = opts?.lang ?? 'en';
   const title = esc(row.title);
-  const whatShort = esc(row.what_short);
+  // OSE-1136: the recap is the THIRD phase of the canonical 5W table, past-tense —
+  // same fields + fallbacks as the pre-event render. WHAT falls back to description
+  // so the lead card is never empty when a real description exists.
+  const whatShort = esc(row.what_short) || esc(row.description);
   const whoHost = esc(row.who_host);
+  const whoStory = esc(row.who_story);
+  const whoImage = validateLogoUrl(row.who_image_url).url;
   const whyPurpose = esc(row.why_purpose);
+  const whereAddress = esc(row.where_address) || esc(row.location);
   const venueDisplay = esc(row.location) || esc(row.where_address);
   const whenHuman = formatHumanDate(row.start_date);
+  // HOW MUCH — the event's own price, display-only (#6 inert_monetization holds:
+  // it is a label, never a payment primitive). Same source the pre/live renders use.
+  const howMuch = formatEventPrice(row);
+  const venueParam = encodeURIComponent(row.location || row.where_address || '');
+  const mapImg = venueParam
+    ? `<img src="/api/v2/maps/venue-image?venue=${venueParam}" alt="Map of ${esc(row.location || row.where_address)}" class="ose-venue-map" loading="lazy" width="600" height="240" data-testid="venue-map-post" />`
+    : '';
 
   // OSE-657: curated, bounded suggestions — the subtle margin. Sliced defensively
   // to MAX_POST_EVENT_SUGGESTIONS so this can never become an exhaustive listing.
@@ -1027,27 +1040,66 @@ ${buildOgMeta({ title, description: whatShort, url: esc(shareUrl), twitterCard: 
     .ose-share-btn:focus { outline: 3px solid var(--ose-focus); outline-offset: 2px; }
     .ose-anonymity { margin-top: 2rem; padding: 1rem 1.25rem; background: var(--ose-accent-tint); border-left: 3px solid var(--ose-accent); border-radius: 4px; font-size: 0.9rem; color: var(--ose-muted); }
     .ose-anonymity h2 { margin-top: 0; font-size: 1rem; color: var(--ose-text); }
-    .ose-anonymity p { margin: 0; }${DARK_MODE_CSS}
+    .ose-anonymity p { margin: 0; }
+    /* OSE-1136: the recap's WHERE/WHO cards reuse the pre-event 5W styling. */
+    .ose-section p { margin: 0 0 0.5rem; }
+    .ose-venue-map { width: 100%; max-width: 100%; height: auto; border-radius: 6px; display: block; margin-bottom: 0.75rem; }
+    .ose-who-image { width: 120px; height: 120px; object-fit: cover; border-radius: 50%; display: block; margin-bottom: 0.75rem; background: var(--ose-accent-tint); }${DARK_MODE_CSS}
   </style>
 </head>
 <body>
   <main role="main" aria-labelledby="event-title-post" data-testid="event-main-post">
     <span class="ose-phase-chip" data-testid="event-phase-chip">This one's a wrap</span>
-    ${renderShareBlock(shareUrl, row.title, nonce, lang)}
     <h1 id="event-title-post" data-testid="event-title-post">${title}</h1>
     <p class="ose-when" data-testid="event-when-post">${whenHuman ? `Happened ${whenHuman}` : 'This event has ended.'}${venueDisplay ? ` &middot; ${venueDisplay}` : ''}</p>
 
-    <!-- OSE-657 PRIMARY: the recap is the keepsake and the hero. This region is
-       a HARD layout invariant — it MUST precede the suggestions margin below.
-       The recap-first-invariant test fails if this order is reversed. -->
+    <!-- OSE-1136 / OSE-657: the recap is the canonical 5W table in PAST TENSE and
+       the keepsake hero. Card order is the same facts-first sequence the pre/live
+       renders use — WHAT → WHERE → WHO → HOW MUCH — then the by-the-numbers
+       keepsake + sponsor thanks. HOW is intentionally dropped (nothing to "join"
+       once it is over); WHY moves below the ask. This region is a HARD layout
+       invariant: it MUST precede the suggestions margin below, or
+       post-event-recap-first.spec.ts fails. -->
     <div class="ose-recap-primary" data-testid="recap-primary" data-region="recap">
-      <section class="ose-card" data-testid="event-recap-card" aria-labelledby="recap-heading">
+      <!-- WHAT — keeps the event-recap-card testid the recap-first invariant asserts. -->
+      <section class="ose-card ose-section" data-testid="event-recap-card" aria-labelledby="recap-heading">
         <h2 id="recap-heading">What this was</h2>
-        ${whatShort ? `<p class="ose-recap-row" data-testid="recap-what">${whatShort}</p>` : ''}
-        ${whoHost ? `<p class="ose-recap-row" data-testid="recap-who"><span class="ose-recap-label">Hosted by</span>${whoHost}</p>` : ''}
-        ${whyPurpose ? `<p class="ose-recap-row" data-testid="recap-why"><span class="ose-recap-label">Why it exists</span>${whyPurpose}</p>` : ''}
-        ${!whatShort && !whoHost && !whyPurpose ? `<p class="ose-recap-row" data-testid="recap-empty">The host hasn't written this one up yet. The numbers below are the story.</p>` : ''}
+        ${whatShort ? `<p data-testid="recap-what">${whatShort}</p>` : ''}
+        ${!whatShort && !whoHost && !whyPurpose ? `<p data-testid="recap-empty">The host hasn't written this one up yet. The numbers below are the story.</p>` : ''}
       </section>
+
+      ${
+        venueDisplay || whereAddress
+          ? `<section class="ose-card ose-section" data-testid="event-where-post" aria-labelledby="where-heading-post">
+             <h2 id="where-heading-post">Where</h2>
+             ${mapImg}
+             ${venueDisplay ? `<p><strong>${venueDisplay}</strong></p>` : ''}
+             ${whereAddress && whereAddress !== venueDisplay ? `<p>${whereAddress}</p>` : ''}
+           </section>`
+          : ''
+      }
+
+      ${
+        whoHost || whoStory || whoImage
+          ? `<section class="ose-card ose-section" data-testid="event-who-post" aria-labelledby="who-heading-post">
+             <h2 id="who-heading-post">Who</h2>
+             ${whoImage ? `<img class="ose-who-image" data-testid="event-who-image-post" src="${esc(whoImage)}" alt="${whoHost ? `Photo of ${whoHost}` : 'Host'}" loading="lazy" width="120" height="120" />` : ''}
+             ${whoHost ? `<p data-testid="event-who-host-post">${whoHost}</p>` : ''}
+             ${whoStory ? `<p class="ose-who-story" data-testid="event-who-story-post">${whoStory}</p>` : ''}
+           </section>`
+          : ''
+      }
+
+      ${
+        // HOW MUCH — past-tense price label ("Was free" reads as the plain price
+        // string; #6 inert_monetization holds — display only, no charge logic).
+        howMuch === null
+          ? ''
+          : `<section class="ose-card ose-section" data-testid="event-how-much-post" aria-labelledby="how-much-heading-post">
+             <h2 id="how-much-heading-post">How much</h2>
+             <p>${esc(howMuch)}</p>
+           </section>`
+      }
 
       ${(() => {
         if (!social) return '';
@@ -1078,9 +1130,11 @@ ${buildOgMeta({ title, description: whatShort, url: esc(shareUrl), twitterCard: 
       })()}
     </div>
 
-    <!-- OSE-657 SUBORDINATE: curated, bounded margin. Secondary by layout (an
+    <!-- OSE-657 SUBORDINATE margin: the ask + return loop. Share sits here with
+       the return loop (share the recap, find the next one) — curated, bounded (an
        <aside>, visually demoted, always after the recap), never a full listing. -->
     <aside class="ose-suggestions" data-testid="suggestions-margin" data-region="suggestions" aria-labelledby="next-heading">
+      ${renderShareBlock(shareUrl, row.title, nonce, lang)}
       ${suggestionsInner}
       <section class="ose-suggestions-connect" data-testid="stay-connected-card" aria-labelledby="connect-heading">
         <h2 id="connect-heading" class="ose-suggestions-heading">Hear about the next one</h2>
@@ -1088,6 +1142,16 @@ ${buildOgMeta({ title, description: whatShort, url: esc(shareUrl), twitterCard: 
         <a class="ose-cta ose-cta-secondary" data-testid="email-signup-link" href="/forms/${esc(row.id)}?type=email">Keep me posted</a>
       </section>
     </aside>
+
+    <!-- WHY — deeper detail, below the ask (mirrors pre/live: facts → ask → detail). -->
+    ${
+      whyPurpose
+        ? `<section class="ose-card ose-section" data-testid="event-why-post" aria-labelledby="why-heading-post">
+           <h2 id="why-heading-post">Why</h2>
+           <p>${whyPurpose}</p>
+         </section>`
+        : ''
+    }
 
     ${ANONYMITY_AFFORDANCE}
   </main>
