@@ -959,6 +959,16 @@ function renderPostEventHtml(
   // same fields + fallbacks as the pre-event render. WHAT falls back to description
   // so the lead card is never empty when a real description exists.
   const whatShort = esc(row.what_short) || esc(row.description);
+  // OG/Twitter card computed up front (needs only title + whatShort + shareUrl):
+  // keeps buildOgMeta near the top now that the recap has a fuller 5W setup below.
+  const ogMeta = buildOgMeta({
+    title,
+    description: whatShort,
+    url: esc(shareUrl),
+    twitterCard: 'summary',
+    startTime: row.start_date,
+    endTime: row.end_date,
+  });
   const whoHost = esc(row.who_host);
   const whoStory = esc(row.who_story);
   const whoImage = validateLogoUrl(row.who_image_url).url;
@@ -1004,7 +1014,7 @@ function renderPostEventHtml(
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>${title} — recap</title>
-${buildOgMeta({ title, description: whatShort, url: esc(shareUrl), twitterCard: 'summary', startTime: row.start_date, endTime: row.end_date })}
+${ogMeta}
   <link rel="stylesheet" href="/ui.css" />
   <style>
     /* OSE-655 A2: palette driven by @ocr/ui role tokens (from /ui.css), so a
