@@ -230,11 +230,17 @@ const FORM_JS_SUBMIT = `
       errEl.removeAttribute('data-error-code');
     }
     if (btn) btn.disabled = true;
+    // FE-10: cap the request so a stalled network can't leave the button
+    // disabled forever. On timeout the fetch rejects (AbortError) and the catch
+    // below shows the friendly network error and re-enables the button.
+    var controller = new AbortController();
+    var timeoutId = setTimeout(function() { controller.abort(); }, 15000);
     try {
       var res = await fetch('/api/v2/events/' + eventId + '/forms/' + formType, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
+        signal: controller.signal,
       });
       var body;
       try {
@@ -272,6 +278,8 @@ const FORM_JS_SUBMIT = `
       }
       if (btn) btn.disabled = false;
       throw err;
+    } finally {
+      clearTimeout(timeoutId);
     }
   }
   function showSuccess(msg) {

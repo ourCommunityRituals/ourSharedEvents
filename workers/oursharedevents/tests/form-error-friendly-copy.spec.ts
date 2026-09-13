@@ -187,3 +187,16 @@ describe('OSE-R-002 form-page error rendering — API layer', () => {
     expect(body.code).toBe('INVALID_EMAIL');
   });
 });
+
+// FE-10: a stalled network must not leave the submit button disabled forever.
+describe('FE-10 form submit is time-bounded (AbortController)', () => {
+  for (const type of ['register', 'checkin', 'survey', 'email']) {
+    test(`${type} form caps the request and clears its timer`, async () => {
+      const html = await fetchFormPage(type);
+      expect(html).toContain('new AbortController()');
+      expect(html).toContain('signal: controller.signal');
+      expect(html).toMatch(/setTimeout\(function\s*\(\)\s*\{\s*controller\.abort\(\)/);
+      expect(html).toContain('clearTimeout(timeoutId)');
+    });
+  }
+});
