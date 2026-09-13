@@ -2119,6 +2119,7 @@
                 placeholder="Thursday Trivia Night"
                 maxlength="200"
                 required
+                aria-required="true"
               />
             </div>
             <div>
@@ -2134,6 +2135,7 @@
                 placeholder="Rock Island Public House"
                 maxlength="500"
                 required
+                aria-required="true"
               />
             </div>
           </div>
@@ -2590,6 +2592,21 @@
             if (name) name.focus();
           }
 
+          // Keyboard escape hatch out of the wizard (A11Y-6, WCAG 2.1.2 / 2.4.3).
+          // The wizard takes over the surface but offers no keyboard way out
+          // before step 2's Back button appears; Escape closes it back to the
+          // front-door chooser and returns focus to the control that opened it.
+          function closeWizard() {
+            var w = document.getElementById('launch-wizard');
+            if (!w || w.hidden) return;
+            document.body.classList.remove('wizard-active');
+            w.hidden = true;
+            var chooser = document.getElementById('admin-path-chooser');
+            if (chooser) chooser.hidden = false;
+            var trigger = document.getElementById('admin-path-wizard');
+            if (trigger) trigger.focus();
+          }
+
           /**
            * Create-a-sponsor path (OSE-1240).
            *
@@ -2673,6 +2690,14 @@
           }
 
           // ── wiring (CSP-safe: no inline handlers) ───────────────────────────
+          // Escape leaves the wizard (A11Y-6). Only acts while the wizard is
+          // open so it never steals Escape from other surfaces (e.g. the
+          // sponsor form's own Escape handler).
+          document.addEventListener('keydown', function (ev) {
+            if (ev.key === 'Escape' && !document.getElementById('launch-wizard').hidden) {
+              closeWizard();
+            }
+          });
           document.getElementById('admin-path-wizard').addEventListener('click', startWizard);
           document.getElementById('admin-path-sponsor').addEventListener('click', startSponsor);
           document.getElementById('admin-path-advanced').addEventListener('click', chooseAdvanced);
