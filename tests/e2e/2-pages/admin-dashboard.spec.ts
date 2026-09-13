@@ -20,6 +20,16 @@ const ADMIN_URL = `${BASE_URL}/admin`;
 async function navigateToAdmin(page: import('@playwright/test').Page) {
   await page.goto(ADMIN_URL, { waitUntil: 'domcontentloaded', timeout: 20_000 });
   await page.waitForLoadState('networkidle');
+  // Admin now opens on the front-door chooser with the dashboard hidden; these
+  // tests exercise the dashboard, so reveal it via "Show me everything".
+  const advanced = page.locator('[data-testid="admin-path-advanced"]');
+  if (await advanced.isVisible().catch(() => false)) {
+    await advanced.click();
+    await page
+      .locator('[data-testid="admin-path-chooser"]')
+      .waitFor({ state: 'hidden' })
+      .catch(() => {});
+  }
 }
 
 /**

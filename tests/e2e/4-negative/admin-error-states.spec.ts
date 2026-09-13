@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { revealAdminDashboard } from '../helpers/reveal-admin-dashboard';
 
 test.describe('Admin Error States', () => {
   test.describe('Events API Failure', () => {
@@ -12,6 +13,7 @@ test.describe('Admin Error States', () => {
       });
 
       await page.goto('/admin');
+      await revealAdminDashboard(page);
 
       const errorCard = page.locator('[data-testid="events-error"]');
       await expect(errorCard).toBeVisible({ timeout: 10000 });
@@ -27,6 +29,7 @@ test.describe('Admin Error States', () => {
       });
 
       await page.goto('/admin');
+      await revealAdminDashboard(page);
 
       const retryButton = page.locator('[data-testid="events-retry"]');
       await expect(retryButton).toBeVisible({ timeout: 10000 });
@@ -54,6 +57,7 @@ test.describe('Admin Error States', () => {
       });
 
       await page.goto('/admin');
+      await revealAdminDashboard(page);
 
       const retryButton = page.locator('[data-testid="events-retry"]');
       await expect(retryButton).toBeVisible({ timeout: 10000 });
@@ -78,6 +82,7 @@ test.describe('Admin Error States', () => {
       });
 
       await page.goto('/admin');
+      await revealAdminDashboard(page);
 
       await expect(page.getByText(/no events found/i)).toBeVisible({ timeout: 10000 });
     });
@@ -126,6 +131,7 @@ test.describe('Admin Error States', () => {
       });
 
       await page.goto('/admin');
+      await revealAdminDashboard(page);
 
       const eventsTable = page.locator('[data-testid="events-table"]');
       await expect(eventsTable).toBeVisible({ timeout: 10000 });
@@ -150,6 +156,7 @@ test.describe('Admin Error States', () => {
       });
 
       await page.goto('/admin');
+      await revealAdminDashboard(page);
       const eventsTable = page.locator('[data-testid="events-table"]');
       await expect(eventsTable).toBeVisible({ timeout: 10000 });
 
@@ -171,6 +178,7 @@ test.describe('Admin Error States', () => {
       });
 
       await page.goto('/admin');
+      await revealAdminDashboard(page);
 
       const eventsTable = page.locator('[data-testid="events-table"]');
       await expect(eventsTable).toBeVisible({ timeout: 10000 });
