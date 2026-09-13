@@ -182,6 +182,20 @@ describe('OSE-ssp1: pre-event sponsor strip', () => {
     expect(html).toContain('Supported by');
   });
 
+  test('pre-sponsor-strip renders above the event title (sponsor header at top)', async () => {
+    const id = 'evt_ssp1_pre_sponsor_top';
+    await seedEvent(id, { startOffsetDays: 7, endOffsetDays: 8 });
+    await seedSponsor(id, { name: 'Top Sponsor', websiteUrl: 'https://top.example.com' });
+
+    const html = await (await SELF.fetch(`https://t.test/events/${id}`)).text();
+    const strip = html.indexOf('data-testid="pre-sponsor-strip"');
+    const title = html.indexOf('data-testid="event-title"');
+    expect(strip, 'sponsor strip must render').toBeGreaterThan(-1);
+    expect(strip, 'sponsor strip precedes the event title (top-of-page header)').toBeLessThan(
+      title
+    );
+  });
+
   test('pre-sponsor-strip absent when no sponsors for event', async () => {
     const id = 'evt_ssp1_pre_sponsor_no';
     await seedEvent(id, { startOffsetDays: 7, endOffsetDays: 8 });
@@ -341,6 +355,69 @@ describe('OSE-ssp1: live-event sponsor strip', () => {
     const html = await res.text();
     expect(html).toContain('data-testid="event-main-live"');
     expect(html).not.toContain('data-testid="live-sponsor-strip"');
+  });
+
+  test('live-sponsor-strip renders above the live badge (sponsor header at top)', async () => {
+    const id = 'evt_ssp1_live_sponsor_top';
+    await seedEvent(id, { startOffsetDays: -1 / 24, endOffsetDays: 1 / 24 });
+    await seedSponsor(id, { name: 'Live Top Sponsor', websiteUrl: 'https://livetop.example.com' });
+
+    const html = await (await SELF.fetch(`https://t.test/events/${id}`)).text();
+    const strip = html.indexOf('data-testid="live-sponsor-strip"');
+    const badge = html.indexOf('data-testid="event-live-badge"');
+    expect(strip, 'live sponsor strip must render').toBeGreaterThan(-1);
+    expect(strip, 'live sponsor strip precedes the live badge (top-of-page header)').toBeLessThan(
+      badge
+    );
+  });
+});
+
+// ── Live-event 5W order (mirrors the pre-event order) ────────────────────────
+
+describe('live-event section order (WHAT → WHERE → WHO → HOW MUCH → CTA → WHY → HOW)', () => {
+  async function seedRichLive(id: string): Promise<void> {
+    const now = Date.now();
+    const start = new Date(now - 3600_000).toISOString();
+    const end = new Date(now + 3600_000).toISOString();
+    await tenv().DB.prepare(`DELETE FROM events WHERE id = ?`).bind(id).run();
+    await tenv()
+      .DB.prepare(
+        `INSERT INTO events (id, brand_id, title, slug, status, location, start_date, end_date,
+                             what_short, who_host, why_purpose, how_details, where_address,
+                             price_cents, price_model, price_note, created_at, updated_at)
+         VALUES (?, ?, ?, ?, 'active', 'The Venue', ?, ?,
+                 'What it is', 'The host', 'Why it matters', 'How to join', '1 Main St',
+                 1000, 'fixed', NULL, datetime('now'), datetime('now'))`
+      )
+      .bind(id, BRAND, `Event ${id}`, id, start, end)
+      .run();
+  }
+
+  test('the live section order matches pre-event — WHO before cost, CTA before WHY/HOW', async () => {
+    const id = 'evt_ssp1_live_order';
+    await seedRichLive(id);
+    const html = await (await SELF.fetch(`https://t.test/events/${id}`)).text();
+    const at = (t: string) => html.indexOf(`data-testid="${t}"`);
+
+    expect(html).toContain('data-testid="event-main-live"');
+    for (const t of [
+      'event-what-live',
+      'event-where-live',
+      'event-who-live',
+      'event-how-much-live',
+      'event-checkin',
+      'event-why-live',
+      'event-how-live',
+    ]) {
+      expect(at(t), `${t} must render`).toBeGreaterThan(-1);
+    }
+    // WHAT → WHERE → WHO → HOW MUCH → CTA(checkin) → WHY → HOW
+    expect(at('event-what-live'), 'WHAT leads').toBeLessThan(at('event-where-live'));
+    expect(at('event-where-live'), 'WHERE before WHO').toBeLessThan(at('event-who-live'));
+    expect(at('event-who-live'), 'WHO before HOW MUCH').toBeLessThan(at('event-how-much-live'));
+    expect(at('event-how-much-live'), 'HOW MUCH before the CTA').toBeLessThan(at('event-checkin'));
+    expect(at('event-checkin'), 'the CTA precedes WHY/HOW').toBeLessThan(at('event-why-live'));
+    expect(at('event-why-live'), 'WHY before HOW').toBeLessThan(at('event-how-live'));
   });
 });
 
