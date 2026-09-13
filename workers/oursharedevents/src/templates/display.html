@@ -527,15 +527,20 @@
             document.addEventListener('visibilitychange', function() { document.hidden ? stopRot() : startRot(); });
             startRot();
           }
-          // Log impressions
-          [...tvTop, ...tvSide].forEach(s => {
+          // Log impressions — placement is bound per SOURCE array (FE-14). The
+          // sponsor objects come from bundle.surface_sponsors.tvTop / .tvSide and
+          // carry NO `.tvTop` flag, so deriving placement from `s.tvTop` collapsed
+          // every impression to 'tvSide' and erased the top-banner vs sidebar split.
+          function logImpression(s, placement) {
             // OSE-1164: credentials:'omit' — the anon_id cookie is never sent to the
             // aggregate-only sponsor-signal endpoint (structural never-who).
             fetch('/api/v2/events/' + encodeURIComponent(eventId) + '/sponsors/' + encodeURIComponent(s.id) + '/impression', {
               method: 'POST', credentials: 'omit', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ surface: 'display', placement: s.tvTop ? 'tvTop' : 'tvSide' })
+              body: JSON.stringify({ surface: 'display', placement: placement })
             }).catch(() => {});
-          });
+          }
+          tvTop.forEach(s => logImpression(s, 'tvTop'));
+          tvSide.forEach(s => logImpression(s, 'tvSide'));
         } catch { /* sponsor loading is non-critical */ }
       }
       loadDisplaySponsors();
