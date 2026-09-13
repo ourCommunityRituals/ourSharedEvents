@@ -1,13 +1,14 @@
 /**
- * Public event 5W order lock (pre-event).
+ * Public event section order lock (pre-event).
  *
- * The pre-event page presents the event as a logical 5W invitation. Order:
- *   WHAT → WHERE → HOW MUCH → WHO → WHY → HOW
- * front-loading what/where/cost (the facts a recipient decides on), then the
- * host story / why / how. This SUPERSEDES the earlier OSE-655 funnel sequence
- * ("WHO leads WHERE — the conversion engine leads location"): the platform is a
- * discovery map, not a persuasion funnel, so the invitation leads with the
- * event's facts. See memory: project_report_not_your_data.
+ * The pre-event page presents the event as a logical invitation. Order:
+ *   WHAT → WHERE → WHO → HOW MUCH → CTA → WHY → HOW
+ * front-loading the facts a recipient decides on (what/where/who/cost), then
+ * the ask (share + RSVP), with WHY/HOW as the deeper detail below the CTA. This
+ * SUPERSEDES the earlier OSE-655 funnel sequence ("WHO leads WHERE — the
+ * conversion engine leads location"): the platform is a discovery map, not a
+ * persuasion funnel, so the invitation leads with the event's facts. See
+ * memory: project_report_not_your_data.
  *
  * Sponsor-strip-at-top position is asserted in
  * public-event-stakeholder-surfaces.spec.ts (that spec seeds active sponsors).
@@ -77,8 +78,8 @@ async function seedDescriptionOnly(id: string): Promise<void> {
 
 beforeAll(applyMigrations);
 
-describe('pre-event 5W order (WHAT → WHERE → HOW MUCH → WHO → WHY → HOW)', () => {
-  test('the full 5W sequence holds — WHERE precedes WHO, cost precedes the host', async () => {
+describe('pre-event section order (WHAT → WHERE → WHO → HOW MUCH → CTA → WHY → HOW)', () => {
+  test('facts then the ask — WHO before cost, CTA before WHY/HOW', async () => {
     const id = 'evt_funnel_order';
     await seedFull(id);
     const html = await (await SELF.fetch(`https://t.test/events/${id}`)).text();
@@ -87,21 +88,26 @@ describe('pre-event 5W order (WHAT → WHERE → HOW MUCH → WHO → WHY → HO
     for (const t of [
       'event-what',
       'event-where',
-      'event-how-much',
       'event-who',
+      'event-how-much',
+      'event-rsvp',
       'event-why',
       'event-how',
     ]) {
       expect(at(t), `${t} must render`).toBeGreaterThan(-1);
     }
-    // WHAT → WHERE → HOW MUCH → WHO → WHY → HOW
+    // WHAT → WHERE → WHO → HOW MUCH → CTA(rsvp) → WHY → HOW
     expect(at('event-what'), 'WHAT leads').toBeLessThan(at('event-where'));
-    expect(at('event-where'), 'WHERE before HOW MUCH').toBeLessThan(at('event-how-much'));
+    expect(at('event-where'), 'WHERE before WHO').toBeLessThan(at('event-who'));
+    expect(at('event-who'), 'WHO before HOW MUCH').toBeLessThan(at('event-how-much'));
     expect(
       at('event-how-much'),
-      'HOW MUCH before WHO — cost is a fact, decided before the host story'
-    ).toBeLessThan(at('event-who'));
-    expect(at('event-who'), 'WHO before WHY').toBeLessThan(at('event-why'));
+      'HOW MUCH before the CTA — cost is the last fact weighed before the ask'
+    ).toBeLessThan(at('event-rsvp'));
+    expect(
+      at('event-rsvp'),
+      'the CTA precedes WHY/HOW — deeper detail sits below the ask'
+    ).toBeLessThan(at('event-why'));
     expect(at('event-why'), 'WHY before HOW').toBeLessThan(at('event-how'));
     // fixed price renders as a compact dollar string
     expect(html).toContain('$10');

@@ -650,19 +650,6 @@ ${buildOgMeta({ title, description: whatShort, url: esc(shareUrl), twitterCard: 
         : ''
     }
 
-    ${(() => {
-      // HOW MUCH — the event's own price (display only; #6 inert_monetization
-      // holds — no charge logic). Positioned right after WHERE and before WHO:
-      // in the 5W invitation order, cost gates commitment before the host story.
-      const howMuch = formatEventPrice(row);
-      return howMuch === null
-        ? ''
-        : `<section class="ose-card ose-section" data-testid="event-how-much" aria-labelledby="how-much-heading">
-           <h2 id="how-much-heading">How much</h2>
-           <p>${esc(howMuch)}</p>
-         </section>`;
-    })()}
-
     ${
       whoHost || whoStory || whoImage
         ? `<section class="ose-card ose-section" data-testid="event-who" aria-labelledby="who-heading">
@@ -673,6 +660,29 @@ ${buildOgMeta({ title, description: whatShort, url: esc(shareUrl), twitterCard: 
          </section>`
         : ''
     }
+
+    ${(() => {
+      // HOW MUCH — the event's own price (display only; #6 inert_monetization
+      // holds — no charge logic). Sits right before the CTA: cost is the last
+      // fact a recipient weighs before the ask (order: What → Where → Who → How much → CTA).
+      const howMuch = formatEventPrice(row);
+      return howMuch === null
+        ? ''
+        : `<section class="ose-card ose-section" data-testid="event-how-much" aria-labelledby="how-much-heading">
+           <h2 id="how-much-heading">How much</h2>
+           <p>${esc(howMuch)}</p>
+         </section>`;
+    })()}
+
+    <!-- Counts are POST-EVENT only (founder decision 2026-09-04). An attendee
+       deciding whether to come is not shown how many others already did:
+       live tallies are social proof, a growth tactic, and the platform counts
+       the room for the host, sponsor and report — never to persuade the room.
+       The post-event recap card keeps its counts (OSE-657 keepsake). -->
+
+    ${renderShareBlock(shareUrl, row.title, nonce, lang)}
+
+    <a class="ose-rsvp-btn" data-testid="event-rsvp" href="/forms/${esc(row.id)}?type=register">RSVP for this event</a>
 
     ${
       whyPurpose
@@ -691,16 +701,6 @@ ${buildOgMeta({ title, description: whatShort, url: esc(shareUrl), twitterCard: 
          </section>`
         : ''
     }
-
-    <!-- Counts are POST-EVENT only (founder decision 2026-09-04). An attendee
-       deciding whether to come is not shown how many others already did:
-       live tallies are social proof, a growth tactic, and the platform counts
-       the room for the host, sponsor and report — never to persuade the room.
-       The post-event recap card keeps its counts (OSE-657 keepsake). -->
-
-    ${renderShareBlock(shareUrl, row.title, nonce, lang)}
-
-    <a class="ose-rsvp-btn" data-testid="event-rsvp" href="/forms/${esc(row.id)}?type=register">RSVP for this event</a>
 
     ${ANONYMITY_AFFORDANCE}
   </main>
@@ -810,10 +810,6 @@ ${buildOgMeta({ title, description: whatShort, url: esc(shareUrl), twitterCard: 
       <h1 id="event-title" data-testid="event-title-live">${title}</h1>
     </header>
 
-    ${renderShareBlock(shareUrl, row.title, nonce, lang)}
-
-    <a class="ose-checkin-btn" data-testid="event-checkin" href="/forms/${esc(row.id)}?type=checkin">Check in at this event</a>
-
     ${
       whatShort
         ? `<section class="ose-card ose-section" data-testid="event-what-live" aria-labelledby="what-heading-live">
@@ -835,10 +831,19 @@ ${buildOgMeta({ title, description: whatShort, url: esc(shareUrl), twitterCard: 
         : ''
     }
 
+    ${
+      whoHost
+        ? `<section class="ose-card ose-section" data-testid="event-who-live" aria-labelledby="who-heading-live">
+           <h2 id="who-heading-live">Who</h2>
+           <p>${whoHost}</p>
+         </section>`
+        : ''
+    }
+
     ${(() => {
-      // HOW MUCH — mirrors the pre-event render so the 5W order is identical
-      // across phases (What → Where → How much → Who → Why → How). Display only;
-      // #6 inert_monetization holds — no charge logic.
+      // HOW MUCH — mirrors the pre-event render so the order is identical across
+      // phases (What → Where → Who → How much → CTA). Display only; #6
+      // inert_monetization holds — no charge logic.
       const howMuch = formatEventPrice(row);
       return howMuch === null
         ? ''
@@ -848,14 +853,9 @@ ${buildOgMeta({ title, description: whatShort, url: esc(shareUrl), twitterCard: 
          </section>`;
     })()}
 
-    ${
-      whoHost
-        ? `<section class="ose-card ose-section" data-testid="event-who-live" aria-labelledby="who-heading-live">
-           <h2 id="who-heading-live">Who</h2>
-           <p>${whoHost}</p>
-         </section>`
-        : ''
-    }
+    ${renderShareBlock(shareUrl, row.title, nonce, lang)}
+
+    <a class="ose-checkin-btn" data-testid="event-checkin" href="/forms/${esc(row.id)}?type=checkin">Check in at this event</a>
 
     ${
       whyPurpose
