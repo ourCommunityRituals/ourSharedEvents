@@ -9,6 +9,7 @@
  *   - public event page      — src/handlers/pages.ts
  *   - poster/display rotation — src/lib/sponsor-resolver.ts (Path 1, Direct)
  *   - shared report           — src/lib/shared-report-builder.ts (the impressions→name join)
+ *   - public logo proxy       — src/handlers/sponsors.ts (GET /api/v2/sponsors/:id/logo)
  *
  * The shared report is the surface of the ORIGINAL incident (staging 2026-09-11:
  * "Free Test sponsor 1" surfaced on the report with nobody having agreed). handleLogImpression
@@ -42,6 +43,8 @@ const GUARDED = {
   'public event page': join(SRC, 'handlers', 'pages.ts'),
   'resolver Path 1': join(SRC, 'lib', 'sponsor-resolver.ts'),
   'shared report': join(SRC, 'lib', 'shared-report-builder.ts'),
+  // OSE-1301 (CCR loop-3 SEC-D1): the public logo proxy is a Path-1 render surface too.
+  'sponsor logo proxy': join(SRC, 'handlers', 'sponsors.ts'),
 } as const;
 const RESOLVER = GUARDED['resolver Path 1'];
 

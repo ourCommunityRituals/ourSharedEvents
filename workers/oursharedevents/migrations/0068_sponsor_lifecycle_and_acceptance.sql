@@ -21,12 +21,17 @@
 --    Acceptance is two-sided: either party may initiate, either party may
 --    reject.
 --
--- NULL-PERMISSIVE BY DESIGN — this is why there is no backfill.
--- A placement is hidden only when a side has actively REJECTED it
--- (accepted = 0). NULL means "not answered yet" and does NOT hide. Existing
--- placements therefore keep working untouched, and rejection is the operative
--- action rather than approval — matching the product rule: cleared for
--- addition, or rejected.
+-- ORIGINAL (0068) RULE — NULL-permissive: a placement was hidden only on an
+-- explicit REJECT (accepted = 0); NULL did not hide. SUPERSEDED for the SPONSOR
+-- side by OSE-1301 (2026-09-13, ADR-019): "silence never becomes consent."
+--   • organizer_accepted — still NULL-permissive (creating the placement is the
+--     organizer's pick); hidden only on an explicit 0. COALESCE(...,1)=1.
+--   • sponsor_accepted   — now STRICT on the render/choice boundary: NULL (silence)
+--     does NOT render; only an explicit 1 does. See ADR-019 + the Path-1 render
+--     queries (pages.ts, sponsor-resolver.ts Path 1, shared-report-builder.ts,
+--     sponsors.ts logo proxy) and sponsor-consent-trace.invariant.spec.ts.
+-- The column definition below is unchanged (no backfill migration); this header
+-- is reconciled to the current semantic so the schema site is not misleading.
 --
 -- Invariant compliance:
 --   #19 migration_monotonicity: > 0067, matches /^\d{4}_.*\.sql$/, append-only,

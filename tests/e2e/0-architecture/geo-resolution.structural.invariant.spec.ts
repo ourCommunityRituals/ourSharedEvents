@@ -20,7 +20,10 @@
  *   - Path 1 (Direct):     an active placement with sp.event_id = eventId resolves.
  *   - Path 2 (Template+Geo): a business subscribed to the event's template_id AND
  *                            in a matching area (zip OR radius) resolves.
- *   - Two-sided acceptance:  a REJECTED placement (accepted = 0) is hidden (0068).
+ *   - Consent-traced acceptance (0068 + OSE-1301): organizer permissive
+ *     (COALESCE(organizer_accepted,1)=1, hidden only on an explicit 0); sponsor STRICT
+ *     on Path 1 (sponsor_accepted = 1 — silence does not render). Path 2 stays
+ *     reject-only (a named exemption; see sponsor-consent-trace.invariant.spec.ts).
  *   - Business lifecycle:    both paths require the business itself is_active = 1.
  *   - Deduplication:         the same sponsor via both paths appears once.
  *

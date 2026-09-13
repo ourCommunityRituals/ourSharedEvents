@@ -1,8 +1,10 @@
 # ADR-019: Sponsor rendering is consent-traced — silence is not consent
 
-**Status:** Proposed (DRAFT — pending CCR verdict + human ratification; OSE-1301 is out of October scope per OSE-1312)
+**Status:** Proposed (DRAFT). The **reconciliation direction** (OSE-1301 supersedes OSE-1298 on the sponsor side; split default) was ratified by the PO on 2026-09-13; the ADR itself stays DRAFT pending CCR ≥95% + merge, and requires a **paired brain PR** (see below). OSE-1301 is out of October scope per OSE-1312.
 **Date:** 2026-09-13
-**Deciders:** mzdan (PO) + Claude (Co-Architect); reconciliation ratified by mzdan 2026-09-13
+**Deciders:** mzdan (PO) + Claude (Co-Architect)
+
+> **Brain-lockstep (do not merge without this):** the shared brain `OCR-docs/ocr-docs-brain/architectural-invariants.yaml` **invariant #2** already asserts the _permissive_ rule (`COALESCE(...accepted,1)=1`, merged in brain PR #134). Merging OSE-1301 into `main` without a paired brain PR updating invariant #2's sponsor-side clause to the split rule leaves the org brain asserting the permissive contract while the repo asserts strict. The two must land together.
 
 ## Context
 
@@ -23,7 +25,7 @@ The governing principle (OSE-1301, "the second principle the architecture rests 
 
 Realized as:
 
-1. **Render flip** on every public direct-placement query — the public event page (`pages.ts`), the resolver Path 1 (`sponsor-resolver.ts`), **and the shared-report impressions→name join (`shared-report-builder.ts`)**. The report is the surface of the original incident: `handleLogImpression` is an unauthenticated POST, so without a confirmed-placement `EXISTS` predicate any sponsor with a logged impression leaked its name. (Added in CCR reactive correction 2026-09-13 — the first draft flipped only the event page + resolver and _over-claimed_ report coverage.)
+1. **Render flip** on every public direct-placement query — the public event page (`pages.ts`), the resolver Path 1 (`sponsor-resolver.ts`), the shared-report impressions→name join (`shared-report-builder.ts`), **and the public logo proxy `GET /api/v2/sponsors/:id/logo` (`sponsors.ts`)** (the last added in CCR loop-3 — it was a fourth Path-1 render surface gated only on `is_active`). The report is the surface of the original incident: `handleLogImpression` is an unauthenticated POST, so without a confirmed-placement `EXISTS` predicate any sponsor with a logged impression leaked its name. (Added in CCR reactive correction 2026-09-13 — the first draft flipped only the event page + resolver and _over-claimed_ report coverage.)
 2. **OSE-1298 invariant rewritten** (not deleted) to lock the _split_; its docstring reconciled to cite OSE-1301.
 3. **New `sponsor-consent-trace.invariant.spec.ts`** — a property-asserting gate over all three public surfaces, run against **comment-stripped source** (so a "strict" assert cannot pass against docstring prose, and deleting the clause — not only reverting to COALESCE — turns it red), plus a negative control that **eradicates** `COALESCE(sponsor_accepted, 1)` from `src/`. Registered in the T0 `invariants` shard.
 4. **Leg-3 confirmation write** — `POST /api/v2/admin/events/:eventId/sponsors/:sponsorId/confirm` sets `sponsor_accepted = 1`, the loopback that makes the strict gate usable. **Hardened** (CCR): brand-scoped via `isSponsorReachable` (no cross-brand confirm), `is_active` guard, a durable-rejection guard (confirming an explicit `0` returns **409**, never a silent flip), and the router audits on `response.ok`. Stateless + cookieless (never-who). **Admin-gated interim**; the sponsor-facing anonymous per-placement confirm-token is deferred (see Revisit).

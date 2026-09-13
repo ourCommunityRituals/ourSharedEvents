@@ -1299,7 +1299,12 @@ export async function handleSponsorLogo(
   try {
     // OSE-799 A2: the logo lives in sponsor_asset(format='logo') on the durable
     // business; "active" is a placement fact — serve the logo iff the business
-    // holds at least one active placement (mirrors the old is_active=1 gate).
+    // holds at least one active placement.
+    // OSE-1301 (CCR loop-3 SEC-D1): the logo is a PUBLIC render surface too, so it is
+    // consent-traced like the event page / resolver Path 1 / report — the placement
+    // must be CONFIRMED (sponsor_accepted = 1), organizer permissive. Without this a
+    // directly-placed, unconfirmed sponsor's logo was fetchable by id while hidden
+    // everywhere else. This handler is in the invariant's GUARDED set.
     row = await env.DB.prepare(
       `SELECT la.url AS logo_url
          FROM sponsor_business sb
@@ -1308,6 +1313,8 @@ export async function handleSponsorLogo(
           AND EXISTS (
             SELECT 1 FROM sponsor_placement sp
              WHERE sp.sponsor_business_id = sb.id AND sp.is_active = 1
+               AND COALESCE(sp.organizer_accepted, 1) = 1
+               AND sp.sponsor_accepted = 1
           )`
     )
       .bind(sponsorId)
