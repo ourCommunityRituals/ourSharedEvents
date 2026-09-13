@@ -43,7 +43,7 @@ async function openAdvanced(page: Page): Promise<void> {
 
 /** Seed one event so the events table and the per-event cards have something real. */
 async function seedEvent(page: Page): Promise<void> {
-  await page.request.post('/api/v2/admin/events', {
+  const res = await page.request.post('/api/v2/admin/events', {
     headers: { Authorization: `Bearer ${ADMIN_BEARER}`, 'Content-Type': 'application/json' },
     data: {
       title: `CSP control check ${Date.now()}`,
@@ -51,6 +51,9 @@ async function seedEvent(page: Page): Promise<void> {
       location: 'Rock Island Public House',
     },
   });
+  // A silent non-2xx here would surface downstream as an empty table ("0 rows"),
+  // which reads as a flake — fail loudly at the real cause instead.
+  expect(res.ok(), `seed POST failed: ${res.status()} ${await res.text()}`).toBe(true);
 }
 
 test.describe('OSE-1239 admin controls fire under the nonce CSP', () => {
@@ -88,8 +91,12 @@ test.describe('OSE-1239 admin controls fire under the nonce CSP', () => {
     await page.click('[data-testid="admin-path-advanced"]');
     await page.waitForTimeout(1000);
 
+    // The events list loads via an async fetch after DOMContentLoaded, so a
+    // fixed wait + non-waiting count() races that fetch on a slow CI cold-start.
+    // Wait for the seeded row to attach, THEN snapshot the count deterministically.
     const rows = page.locator('[data-testid="events-tbody"] tr[data-action="event-select"]');
-    expect(await rows.count(), 'no selectable event rows rendered').toBeGreaterThan(0);
+    await expect(rows.first(), 'no selectable event rows rendered').toBeVisible({ timeout: 15000 });
+    expect(await rows.count()).toBeGreaterThan(0);
 
     const before = await page.getAttribute('[data-testid="link-poster"]', 'href');
     expect(before, 'poster link should start unscoped').toBe('/poster');
