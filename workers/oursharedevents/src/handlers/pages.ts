@@ -542,7 +542,10 @@ export function renderPreEventHtml(
   const nonce = opts?.nonce ?? '';
   const lang = opts?.lang ?? 'en';
   const title = esc(row.title);
-  const whatShort = esc(row.what_short);
+  // OSE: the What card leads with the host-authored short blurb (`what_short`),
+  // falling back to the general `description` so the card is never empty when a
+  // real description exists. og:description inherits the same fallback below.
+  const whatShort = esc(row.what_short) || esc(row.description);
   const whoHost = esc(row.who_host);
   const whoStory = esc(row.who_story);
   // OSE-655: rich media for the funnel (OSE-664 supplied the columns + authoring
@@ -619,6 +622,7 @@ ${buildOgMeta({ title, description: whatShort, url: esc(shareUrl), twitterCard: 
 <body>
   <a href="#main" class="ose-skip">Skip to event content</a>
   <main id="main" role="main" aria-labelledby="event-title" data-testid="event-main">
+    ${social ? renderSponsorStrip('pre-sponsor-strip', social.sponsors, 'Supported by') : ''}
     <header data-testid="event-header">
       <h1 id="event-title" data-testid="event-title">${title}</h1>
       ${startHuman ? `<p class="ose-meta" data-testid="event-when">${esc(startHuman)}${row.timezone ? ` &middot; ${esc(row.timezone)}` : ''}</p>` : ''}
@@ -633,6 +637,31 @@ ${buildOgMeta({ title, description: whatShort, url: esc(shareUrl), twitterCard: 
          </section>`
         : ''
     }
+
+    ${
+      venueDisplay || whereAddress
+        ? `<section class="ose-card ose-section" data-testid="event-where" aria-labelledby="where-heading">
+           <h2 id="where-heading">Where</h2>
+           ${mapImg}
+           ${venueDisplay ? `<p><strong>${venueDisplay}</strong></p>` : ''}
+           ${whereAddress && whereAddress !== venueDisplay ? `<p>${whereAddress}</p>` : ''}
+           ${geoLink}
+         </section>`
+        : ''
+    }
+
+    ${(() => {
+      // HOW MUCH — the event's own price (display only; #6 inert_monetization
+      // holds — no charge logic). Positioned right after WHERE and before WHO:
+      // in the 5W invitation order, cost gates commitment before the host story.
+      const howMuch = formatEventPrice(row);
+      return howMuch === null
+        ? ''
+        : `<section class="ose-card ose-section" data-testid="event-how-much" aria-labelledby="how-much-heading">
+           <h2 id="how-much-heading">How much</h2>
+           <p>${esc(howMuch)}</p>
+         </section>`;
+    })()}
 
     ${
       whoHost || whoStory || whoImage
@@ -655,30 +684,6 @@ ${buildOgMeta({ title, description: whatShort, url: esc(shareUrl), twitterCard: 
     }
 
     ${
-      venueDisplay || whereAddress
-        ? `<section class="ose-card ose-section" data-testid="event-where" aria-labelledby="where-heading">
-           <h2 id="where-heading">Where</h2>
-           ${mapImg}
-           ${venueDisplay ? `<p><strong>${venueDisplay}</strong></p>` : ''}
-           ${whereAddress && whereAddress !== venueDisplay ? `<p>${whereAddress}</p>` : ''}
-           ${geoLink}
-         </section>`
-        : ''
-    }
-
-    ${(() => {
-      // HOW MUCH — the event's own price (display only; #6 inert_monetization
-      // holds — no charge logic). Positioned before HOW: cost gates commitment.
-      const howMuch = formatEventPrice(row);
-      return howMuch === null
-        ? ''
-        : `<section class="ose-card ose-section" data-testid="event-how-much" aria-labelledby="how-much-heading">
-           <h2 id="how-much-heading">How much</h2>
-           <p>${esc(howMuch)}</p>
-         </section>`;
-    })()}
-
-    ${
       howDetails
         ? `<section class="ose-card ose-section" data-testid="event-how" aria-labelledby="how-heading">
            <h2 id="how-heading">How</h2>
@@ -686,8 +691,6 @@ ${buildOgMeta({ title, description: whatShort, url: esc(shareUrl), twitterCard: 
          </section>`
         : ''
     }
-
-    ${social ? renderSponsorStrip('pre-sponsor-strip', social.sponsors, 'Supported by') : ''}
 
     <!-- Counts are POST-EVENT only (founder decision 2026-09-04). An attendee
        deciding whether to come is not shown how many others already did:
@@ -730,7 +733,8 @@ export function renderEventLiveHtml(
   const nonce = opts?.nonce ?? '';
   const lang = opts?.lang ?? 'en';
   const title = esc(row.title);
-  const whatShort = esc(row.what_short);
+  // Same What fallback as the pre-event render: host blurb, else description.
+  const whatShort = esc(row.what_short) || esc(row.description);
   const whoHost = esc(row.who_host);
   const whyPurpose = esc(row.why_purpose);
   const howDetails = esc(row.how_details);
@@ -798,6 +802,7 @@ ${buildOgMeta({ title, description: whatShort, url: esc(shareUrl), twitterCard: 
 <body>
   <a href="#main" class="ose-skip">Skip to event content</a>
   <main id="main" role="main" aria-labelledby="event-title" data-testid="event-main-live">
+    ${social ? renderSponsorStrip('live-sponsor-strip', social.sponsors, 'Supported by') : ''}
     <header data-testid="event-header-live">
       <span class="ose-live-badge" data-testid="event-live-badge" aria-label="Event is live now">
         <span class="ose-live-dot" aria-hidden="true"></span>Live now
@@ -808,8 +813,6 @@ ${buildOgMeta({ title, description: whatShort, url: esc(shareUrl), twitterCard: 
     ${renderShareBlock(shareUrl, row.title, nonce, lang)}
 
     <a class="ose-checkin-btn" data-testid="event-checkin" href="/forms/${esc(row.id)}?type=checkin">Check in at this event</a>
-
-    ${social ? renderSponsorStrip('live-sponsor-strip', social.sponsors, 'Supported by') : ''}
 
     ${
       whatShort
@@ -831,6 +834,19 @@ ${buildOgMeta({ title, description: whatShort, url: esc(shareUrl), twitterCard: 
          </section>`
         : ''
     }
+
+    ${(() => {
+      // HOW MUCH — mirrors the pre-event render so the 5W order is identical
+      // across phases (What → Where → How much → Who → Why → How). Display only;
+      // #6 inert_monetization holds — no charge logic.
+      const howMuch = formatEventPrice(row);
+      return howMuch === null
+        ? ''
+        : `<section class="ose-card ose-section" data-testid="event-how-much-live" aria-labelledby="how-much-heading-live">
+           <h2 id="how-much-heading-live">How much</h2>
+           <p>${esc(howMuch)}</p>
+         </section>`;
+    })()}
 
     ${
       whoHost
