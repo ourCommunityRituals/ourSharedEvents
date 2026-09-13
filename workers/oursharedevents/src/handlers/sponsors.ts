@@ -1095,15 +1095,10 @@ export async function handleConfirmSponsorPlacement(
   const rid = requestId();
   try {
     if (!env.DB) return errorResponse('DB_UNAVAILABLE', 'No database binding', 503, rid);
-    const res = await env.DB.prepare(
-      `UPDATE sponsor_placement
-          SET sponsor_accepted = 1, updated_at = datetime('now')
-        WHERE sponsor_business_id = ? AND event_id = ?`
-    )
-      .bind(sponsorId, eventId)
-      .run();
-    const changed = res.meta?.changes ?? 0;
-    if (!changed) {
+    // #9 brand scope (mirrors the sponsor GET/PUT/DELETE handlers): a forged or
+    // cross-tenant sponsor id is unreachable → the same 404 as a missing one, so an
+    // admin can never confirm another brand's placement.
+    if (!(await isSponsorReachable(request, env, sponsorId))) {
       return errorResponse(
         'PLACEMENT_NOT_FOUND',
         'No placement for that sponsor + event',
@@ -1111,6 +1106,38 @@ export async function handleConfirmSponsorPlacement(
         rid
       );
     }
+    const existing = await env.DB.prepare(
+      `SELECT sponsor_accepted AS accepted, is_active AS active
+         FROM sponsor_placement WHERE sponsor_business_id = ? AND event_id = ?`
+    )
+      .bind(sponsorId, eventId)
+      .first<{ accepted: number | null; active: number }>();
+    if (!existing || existing.active !== 1) {
+      return errorResponse(
+        'PLACEMENT_NOT_FOUND',
+        'No active placement for that sponsor + event',
+        404,
+        rid
+      );
+    }
+    // A rejection (0) is DURABLE — confirmation cannot silently overturn an explicit
+    // no. Re-consent after a rejection must be a separate, explicit act, not this path.
+    if (existing.accepted === 0) {
+      return errorResponse(
+        'PLACEMENT_REJECTED',
+        'Placement was rejected; cannot confirm',
+        409,
+        rid
+      );
+    }
+    await env.DB.prepare(
+      `UPDATE sponsor_placement
+          SET sponsor_accepted = 1, updated_at = datetime('now')
+        WHERE sponsor_business_id = ? AND event_id = ? AND is_active = 1
+          AND (sponsor_accepted IS NULL OR sponsor_accepted = 1)`
+    )
+      .bind(sponsorId, eventId)
+      .run();
     // Observability — never-who: ids only, no PII.
     console.log(
       JSON.stringify({

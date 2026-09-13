@@ -828,7 +828,13 @@ export async function route(
       sponsorConfirmMatch[1],
       sponsorConfirmMatch[2]
     );
-    _audit(reqId, 'SPONSOR_CONFIRM', 'success', 'sponsor', sponsorConfirmMatch[2]);
+    _audit(
+      reqId,
+      'SPONSOR_CONFIRM',
+      response.ok ? 'success' : 'denied',
+      'sponsor',
+      sponsorConfirmMatch[2]
+    );
     return response;
   }
 

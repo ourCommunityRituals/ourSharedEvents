@@ -415,6 +415,14 @@ export async function buildSharedReport(db: D1Database, eventId: string): Promis
               ON sp.sponsor_business_id = si.sponsor_id AND sp.event_id = si.event_id
        LEFT JOIN campaigns c ON c.id = sp.campaign_id
        WHERE si.event_id = ?
+         AND EXISTS (
+           SELECT 1 FROM sponsor_placement spc
+            WHERE spc.sponsor_business_id = si.sponsor_id
+              AND spc.event_id = si.event_id
+              AND spc.is_active = 1
+              AND COALESCE(spc.organizer_accepted, 1) = 1
+              AND spc.sponsor_accepted = 1
+         )
        GROUP BY si.sponsor_id, sb.name, sp.campaign_id, c.title, sp.tier, sp.locality_band, si.surface
        ORDER BY count DESC`
     )

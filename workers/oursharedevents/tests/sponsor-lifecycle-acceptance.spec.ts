@@ -174,22 +174,28 @@ describe('OSE-1301 — sponsor confirmation completes the loop (leg 3 write path
   // placement) → sponsor SILENT → hidden → sponsor CONFIRMS via the endpoint
   // handler → renders. Revert the handler's UPDATE and the "then renders" step
   // fails, so this is a live born-red for the write path, not just its presence.
+  // The confirm handler is brand-scoped (isSponsorReachable), so the env opts into
+  // 'all' scope via the key-actor fallback and each request carries the bearer.
+  const KEY = 'test-confirm-key';
   const asEnv = (): Parameters<typeof handleConfirmSponsorPlacement>[1] =>
-    tenv() as unknown as Parameters<typeof handleConfirmSponsorPlacement>[1];
+    ({
+      ...tenv(),
+      ADMIN_KEY: KEY,
+      ALLOW_ADMIN_KEY_FALLBACK: 'true',
+      ADMIN_SCOPE_ALL: 'true',
+    }) as unknown as Parameters<typeof handleConfirmSponsorPlacement>[1];
+  const confirmReq = () =>
+    new Request(`https://t.test/api/v2/admin/events/${EVENT_ID}/sponsors/x/confirm`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${KEY}` },
+    });
 
   test('an unconfirmed placement is hidden until the sponsor confirms, then renders', async () => {
     await seedBusiness('sb-confirm');
     await seedPlacement('sp-confirm', 'sb-confirm', { organizer: 1, sponsor: null });
     expect(await resolveSponsorsForEvent(tenv().DB, EVENT_ID), 'silence hides').toEqual([]);
 
-    const res = await handleConfirmSponsorPlacement(
-      new Request(`https://t.test/api/v2/admin/events/${EVENT_ID}/sponsors/sb-confirm/confirm`, {
-        method: 'POST',
-      }),
-      asEnv(),
-      EVENT_ID,
-      'sb-confirm'
-    );
+    const res = await handleConfirmSponsorPlacement(confirmReq(), asEnv(), EVENT_ID, 'sb-confirm');
     expect(res.status, 'confirm returns 200').toBe(200);
 
     const resolved = await resolveSponsorsForEvent(tenv().DB, EVENT_ID);
@@ -201,7 +207,7 @@ describe('OSE-1301 — sponsor confirmation completes the loop (leg 3 write path
 
   test('confirming a placement that does not exist returns 404', async () => {
     const res = await handleConfirmSponsorPlacement(
-      new Request('https://t.test/x', { method: 'POST' }),
+      confirmReq(),
       asEnv(),
       EVENT_ID,
       'no-such-sponsor'
@@ -209,23 +215,37 @@ describe('OSE-1301 — sponsor confirmation completes the loop (leg 3 write path
     expect(res.status).toBe(404);
   });
 
-  test('confirm does NOT override an explicit sponsor rejection into a silent yes', async () => {
-    // A rejected sponsor (0) that is then "confirmed" flips to 1 — confirmation is
-    // an affirmative act, so this is allowed; but it must be an explicit call, never
-    // a silent default. (Documents the intended semantics: 0 is durable until an
-    // explicit confirm, and NULL never auto-becomes 1.)
+  test('OSE-1301: confirm does NOT override an explicit sponsor rejection (0 is durable) → 409, stays hidden', async () => {
     await seedBusiness('sb-rej');
     await seedPlacement('sp-rej', 'sb-rej', { organizer: 1, sponsor: 0 });
     expect(await resolveSponsorsForEvent(tenv().DB, EVENT_ID), 'rejected hidden').toEqual([]);
-    await handleConfirmSponsorPlacement(
-      new Request('https://t.test/x', { method: 'POST' }),
-      asEnv(),
-      EVENT_ID,
-      'sb-rej'
-    );
+
+    const res = await handleConfirmSponsorPlacement(confirmReq(), asEnv(), EVENT_ID, 'sb-rej');
+    expect(res.status, 'confirming a rejection is a 409, not a silent yes').toBe(409);
     expect(
-      (await resolveSponsorsForEvent(tenv().DB, EVENT_ID)).map((s) => s.id),
-      'an explicit confirm after a rejection renders'
-    ).toEqual(['sb-rej']);
+      await resolveSponsorsForEvent(tenv().DB, EVENT_ID),
+      'a rejected sponsor stays hidden after a confirm attempt'
+    ).toEqual([]);
+  });
+
+  test('brand scope: with no admin actor the confirm is denied (404, no mutation)', async () => {
+    await seedBusiness('sb-noauth');
+    await seedPlacement('sp-noauth', 'sb-noauth', { organizer: 1, sponsor: null });
+    // Bare env: no ADMIN_KEY / fallback → actor is null → scope 'deny' → unreachable.
+    const res = await handleConfirmSponsorPlacement(
+      new Request('https://t.test/x', { method: 'POST' }),
+      tenv() as unknown as Parameters<typeof handleConfirmSponsorPlacement>[1],
+      EVENT_ID,
+      'sb-noauth'
+    );
+    expect(res.status, 'no admin scope → 404').toBe(404);
+    // And the row was not silently flipped.
+    const row = await tenv()
+      .DB.prepare(
+        'SELECT sponsor_accepted AS a FROM sponsor_placement WHERE sponsor_business_id = ?'
+      )
+      .bind('sb-noauth')
+      .first<{ a: number | null }>();
+    expect(row?.a ?? null, 'no mutation on the denied path').toBe(null);
   });
 });

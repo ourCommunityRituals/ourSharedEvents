@@ -23,9 +23,14 @@
  *   CONFIRM its own appearance (leg 3). Silence is NOT consent, so Path 1 requires
  *   sp.sponsor_accepted = 1 — an unconfirmed direct placement does NOT render.
  *   This SUPERSEDES the earlier permissive rule (hidden only on explicit rejection);
- *   OSE-1298's structural lock was rewritten in lockstep. Pre-launch the only
- *   NULL-sponsor rows are test/demo data, which is exactly what should stop showing;
- *   a genuinely-confirmed legacy sponsor is backfilled sponsor_accepted = 1.
+ *   OSE-1298's structural lock was rewritten to match (brain propagation pending).
+ *   GO-FORWARD CONSEQUENCE (no backfill migration exists — do not claim one): every
+ *   NEW placement is born sponsor_accepted = NULL (0068 has no default; the create
+ *   paths omit the column), so a freshly-created sponsor does NOT render until it is
+ *   confirmed via the confirm endpoint. Pre-launch the only such rows are test/demo
+ *   data, which is exactly what should stop showing; if real confirmed sponsors exist
+ *   at cutover, a one-time UPDATE ... SET sponsor_accepted = 1 is required (tracked,
+ *   not shipped here).
  *
  * Path 2 (template/geo auto-match) stays on the permissive rule PENDING the
  * OSE-1301 open question ("can a venue pre-authorise a standing rotation?") — it is
