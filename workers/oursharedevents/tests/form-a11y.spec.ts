@@ -72,6 +72,22 @@ describe('A11Y-2 L1 Static: survey form rating group', () => {
   test('label has id="rating-label"', async () => {
     expect(await html()).toContain('id="rating-label"');
   });
+
+  // FE-7: the rating is a toggle-button fill (buttons 1..N "pressed"). Expose
+  // that state to assistive tech, not colour alone — aria-pressed defaults false
+  // in markup and setRating() flips it alongside the .selected class.
+  test('every rating button ships aria-pressed="false" by default', async () => {
+    const body = await html();
+    const pressed = (body.match(/data-testid="survey-rating-\d"[^>]*aria-pressed="false"/g) ?? [])
+      .length;
+    expect(pressed).toBe(5);
+  });
+
+  test('setRating toggles aria-pressed alongside the selected class', async () => {
+    expect(await html()).toMatch(
+      /setAttribute\('aria-pressed',\s*on\s*\?\s*'true'\s*:\s*'false'\)/
+    );
+  });
 });
 
 describe('A11Y-2 L1 Static: email signup form', () => {

@@ -442,11 +442,11 @@ function surveyForm(eventId: string, legalTier = 1, deploymentId?: string, nonce
         ${hiddenDeployment}
         <label id="rating-label">Overall rating</label>
         <div class="rating-row" id="rating-overall" data-testid="survey-rating-overall" role="group" aria-labelledby="rating-label">
-          <button type="button" data-testid="survey-rating-1" aria-label="Rate 1 out of 5">1</button>
-          <button type="button" data-testid="survey-rating-2" aria-label="Rate 2 out of 5">2</button>
-          <button type="button" data-testid="survey-rating-3" aria-label="Rate 3 out of 5">3</button>
-          <button type="button" data-testid="survey-rating-4" aria-label="Rate 4 out of 5">4</button>
-          <button type="button" data-testid="survey-rating-5" aria-label="Rate 5 out of 5">5</button>
+          <button type="button" data-testid="survey-rating-1" aria-label="Rate 1 out of 5" aria-pressed="false">1</button>
+          <button type="button" data-testid="survey-rating-2" aria-label="Rate 2 out of 5" aria-pressed="false">2</button>
+          <button type="button" data-testid="survey-rating-3" aria-label="Rate 3 out of 5" aria-pressed="false">3</button>
+          <button type="button" data-testid="survey-rating-4" aria-label="Rate 4 out of 5" aria-pressed="false">4</button>
+          <button type="button" data-testid="survey-rating-5" aria-label="Rate 5 out of 5" aria-pressed="false">5</button>
         </div>
         <label for="comments">Comments (optional)</label>
         <textarea id="comments" data-testid="survey-comments-input" placeholder="Tell us what you thought..." maxlength="1000" aria-describedby="error-msg"></textarea>
@@ -460,7 +460,10 @@ function surveyForm(eventId: string, legalTier = 1, deploymentId?: string, nonce
       function setRating(key, val) {
         ratings[key] = val;
         document.querySelectorAll('#rating-' + key + ' button').forEach((b, i) => {
-          b.classList.toggle('selected', i < val);
+          const on = i < val;
+          b.classList.toggle('selected', on);
+          // Expose the fill state to assistive tech, not colour alone (FE-7).
+          b.setAttribute('aria-pressed', on ? 'true' : 'false');
         });
       }
       async function handleSurvey(e) {
