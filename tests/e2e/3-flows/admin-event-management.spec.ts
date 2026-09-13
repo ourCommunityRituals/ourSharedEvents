@@ -1,8 +1,10 @@
 import { test, expect } from '@playwright/test';
+import { revealAdminDashboard } from '../helpers/reveal-admin-dashboard';
 
 test.describe('Admin Event Management Flow', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/admin');
+    await revealAdminDashboard(page);
   });
 
   test.describe('Events Table Loading', () => {
