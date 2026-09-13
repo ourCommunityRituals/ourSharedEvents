@@ -1766,6 +1766,13 @@
         .wizard-links-grid {
           grid-template-columns: 1fr;
         }
+        /* The four form-count boxes are a fixed 4-across grid; on a 375px phone
+           that squeezes each to ~80px and truncates the labels. 2x2 keeps the
+           number + label legible. (Every other admin grid already collapses on
+           mobile — this was the one that didn't.) */
+        .form-counts {
+          grid-template-columns: repeat(2, 1fr);
+        }
         .wizard-progress-step .step-label {
           display: none;
         }
