@@ -579,6 +579,9 @@
             name="email"
             placeholder="Enter your email"
             aria-label="Email address"
+            autocomplete="email"
+            inputmode="email"
+            aria-describedby="form-message"
             data-testid="subscribe-email"
             required
           />
@@ -670,6 +673,7 @@
 
         if (!email) {
           emailInput.setCustomValidity('Please enter your email address.');
+          emailInput.setAttribute('aria-invalid', 'true');
           emailInput.reportValidity();
           return;
         }
@@ -677,11 +681,13 @@
         const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         if (!emailPattern.test(email)) {
           emailInput.setCustomValidity('Please enter a valid email address.');
+          emailInput.setAttribute('aria-invalid', 'true');
           emailInput.reportValidity();
           return;
         }
 
         emailInput.setCustomValidity('');
+        emailInput.setAttribute('aria-invalid', 'false');
         const btn = form.querySelector('button[type="submit"]');
         btn.disabled = true;
         btn.textContent = 'Sending\u2026';
@@ -700,14 +706,17 @@
             messageEl.textContent =
               "Thank you \u2014 you're in! We'll reach out when something's ready.";
             messageEl.className = 'form-message success';
+            emailInput.setAttribute('aria-invalid', 'false');
             emailInput.value = '';
           } else {
             messageEl.textContent = data.error || 'Something went wrong. Please try again.';
             messageEl.className = 'form-message error';
+            emailInput.setAttribute('aria-invalid', 'true');
           }
         } catch {
           messageEl.textContent = 'Could not connect. Please try again later.';
           messageEl.className = 'form-message error';
+          emailInput.setAttribute('aria-invalid', 'true');
         } finally {
           btn.disabled = false;
           btn.textContent = 'Stay in the Loop';
@@ -716,6 +725,10 @@
 
       emailInput.addEventListener('input', () => {
         emailInput.setCustomValidity('');
+        // Clear the invalid state as the user corrects the field.
+        if (emailInput.getAttribute('aria-invalid') === 'true') {
+          emailInput.setAttribute('aria-invalid', 'false');
+        }
       });
     </script>
   </body>
