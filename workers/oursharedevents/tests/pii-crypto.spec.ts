@@ -99,8 +99,15 @@ describe('OSE-1273 — encryptEmail / decryptEmail', () => {
   test('tampered ciphertext throws (integrity)', async () => {
     const enc = await encryptEmail('user@example.com', KEY);
     const [ver, b64] = enc.split(':');
-    const flipped = b64[b64.length - 2] === 'A' ? 'B' : 'A';
-    const tampered = `${ver}:${b64.slice(0, -2)}${flipped}${b64.slice(-1)}`;
+    // Tamper a decoded BYTE, not a base64 char. A base64 char right before the
+    // padding contributes only partial bits, so flipping it can decode to the
+    // same bytes for some random ciphertexts — a real tamper that GCM would
+    // still accept — which made this test flake intermittently. Flipping a byte
+    // of iv||ciphertext||tag always changes the plaintext bytes, so GCM auth
+    // must reject every time.
+    const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+    bytes[Math.floor(bytes.length / 2)] ^= 0xff;
+    const tampered = `${ver}:${btoa(String.fromCharCode(...bytes))}`;
     await expect(decryptEmail(tampered, KEY)).rejects.toThrow();
   });
 });
