@@ -19,10 +19,13 @@
  *   - Asserts run against COMMENT-STRIPPED source, so a "strict" assert can NEVER pass
  *     against docstring prose that merely quotes `sp.sponsor_accepted = 1`. Deleting the
  *     clause entirely (not just reverting to COALESCE) turns the positive assert red.
- *   - EXEMPT (named, with reason): sponsor-resolver Path 2 (template/geo auto-match) still
- *     renders on sponsor silence via a reject-only exclusion. This is a KNOWN live gap on
- *     display/report, tracked as the OSE-1301 open "standing-rotation = default-on?" question.
- *     It is asserted-present-and-documented, NOT claimed closed.
+ *   - EXEMPT (named, with reason): sponsor-resolver Path 2 (template/geo auto-match)
+ *     stays reject-only to PRESERVE invariant #2 (geo-resolution) + the pool/pricing
+ *     model. It renders on sponsor silence — a KNOWN exposure on the unauthenticated
+ *     /sponsors + /sponsor-bundle endpoints (and thus display/report), expected DARK at
+ *     launch (no sponsor_event_types). Its consent design (a venue GRANT carrying
+ *     consent WITHOUT breaking geo-resolution) is a tracked follow-on. Asserted-present-
+ *     and-documented below, NOT claimed closed.
  *
  * @born-red OSE-1301 | method: (a) revert any guarded query to COALESCE(...sponsor_accepted,1)
  *   OR (b) delete its `sponsor_accepted = 1` clause → the strict/eradication asserts fail.
@@ -58,7 +61,15 @@ function stripCommentLines(src: string): string {
     .split('\n')
     .filter((line) => {
       const t = line.trim();
-      return !(t.startsWith('//') || t.startsWith('*') || t.startsWith('/*') || t.startsWith('*/'));
+      // JS line/block comments AND SQL line comments (--). A `-- AND sp.sponsor_accepted = 1`
+      // must not read as live code, or a reviewer could disable the gate with a comment.
+      return !(
+        t.startsWith('//') ||
+        t.startsWith('*') ||
+        t.startsWith('/*') ||
+        t.startsWith('*/') ||
+        t.startsWith('--')
+      );
     })
     .join('\n');
 }
@@ -114,16 +125,23 @@ test.describe('OSE-1301: consent-traced sponsorship — public render requires s
     ).toEqual([]);
   });
 
-  test('OSE-INV-CONSENT | exemption | Path 2 template/geo is a NAMED permissive gap (NOT claimed closed)', () => {
+  test('OSE-INV-CONSENT | exemption | Path 2 template/geo is a NAMED permissive gap (invariant #2 preserved; NOT claimed closed)', () => {
+    // Path 2 (template/geo auto-match) PRESERVES invariant #2 + the pool/pricing model,
+    // so it stays reject-only (renders on sponsor silence). That is a KNOWN exposure —
+    // reachable via the UNAUTHENTICATED /sponsors + /sponsor-bundle endpoints and thus
+    // display/report — tracked as the OSE-1301 open "standing-rotation = default-on?"
+    // question and expected DARK at launch (no sponsor_event_types). Asserted present +
+    // documented, NOT falsely claimed closed. Its consent design (a venue GRANT that
+    // carries consent without breaking geo-resolution) is the tracked follow-on.
     const src = readFileSync(RESOLVER, 'utf8');
     expect(
       src,
-      'Path 2 still uses the reject-only exclusion (spx.sponsor_accepted = 0) — the permissive gap'
+      'Path 2 stays reject-only (spx.sponsor_accepted = 0) to preserve invariant #2 geo-resolution'
     ).toMatch(/spx\.sponsor_accepted\s*=\s*0/i);
     expect(
       src,
-      'Path 2 permissiveness must be documented as the OSE-1301 open-question exemption'
-    ).toMatch(/OSE-1301[\s\S]{0,400}(open question|standing rotation|CCR)/i);
+      'Path 2 permissiveness must be documented as the OSE-1301 open-question exemption (dark at launch)'
+    ).toMatch(/OSE-1301[\s\S]{0,600}(standing rotation|dark at launch|tracked)/i);
   });
 });
 

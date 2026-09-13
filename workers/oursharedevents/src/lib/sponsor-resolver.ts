@@ -32,11 +32,16 @@
  *   at cutover, a one-time UPDATE ... SET sponsor_accepted = 1 is required (tracked,
  *   not shipped here).
  *
- * Path 2 (template/geo auto-match) stays on the permissive rule PENDING the
- * OSE-1301 open question ("can a venue pre-authorise a standing rotation?") — it is
- * a named exemption in sponsor-consent-trace.invariant.spec.ts, to be decided at CCR.
- * A rejection is durable there: Path 2 skips any business the organizer already
- * rejected for THIS event, so a declined match is not re-proposed on every resolve.
+ * Path 2 (template/geo auto-match) PRESERVES invariant #2 (hyper-local geo-resolution)
+ * and the pool/pricing model: a business subscribed to the event's template resolves,
+ * with the reject-only exclusion below (hidden only on an explicit accepted = 0). The
+ * OSE-1301 sponsor-strict gate applies to Path 1 (direct) only — closing the observed
+ * incident (an organizer-typed, unconfirmed DIRECT sponsor). Path 2's own consent
+ * design — a venue GRANT / pre-authorised standing rotation that carries consent
+ * WITHOUT breaking geo-resolution — is a TRACKED follow-on (the epic's open
+ * "standing rotation = default-on?" question). Until it lands, auto-match is expected
+ * DARK at launch (no sponsor_event_types subscriptions); this is a disclosed exposure
+ * on the unauthenticated /sponsors + /sponsor-bundle endpoints, NOT closed by this diff.
  *
  * ─── Business lifecycle (0068) ──────────────────────────────────────────────────
  * BOTH paths require sb.is_active = 1. Deleting a sponsor soft-deletes the

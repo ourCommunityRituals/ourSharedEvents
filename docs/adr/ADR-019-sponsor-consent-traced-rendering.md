@@ -28,9 +28,11 @@ Realized as:
 3. **New `sponsor-consent-trace.invariant.spec.ts`** — a property-asserting gate over all three public surfaces, run against **comment-stripped source** (so a "strict" assert cannot pass against docstring prose, and deleting the clause — not only reverting to COALESCE — turns it red), plus a negative control that **eradicates** `COALESCE(sponsor_accepted, 1)` from `src/`. Registered in the T0 `invariants` shard.
 4. **Leg-3 confirmation write** — `POST /api/v2/admin/events/:eventId/sponsors/:sponsorId/confirm` sets `sponsor_accepted = 1`, the loopback that makes the strict gate usable. **Hardened** (CCR): brand-scoped via `isSponsorReachable` (no cross-brand confirm), `is_active` guard, a durable-rejection guard (confirming an explicit `0` returns **409**, never a silent flip), and the router audits on `response.ok`. Stateless + cookieless (never-who). **Admin-gated interim**; the sponsor-facing anonymous per-placement confirm-token is deferred (see Revisit).
 
+Consent is intrinsic to one create path: a **`corridor_covenant` self-promotion** (`sponsor-promotion.ts`) — the sponsor promoting its OWN draft — materializes its Path-1 placement born `sponsor_accepted = 1`, so the strict gate does not hide a sponsor that just consented by the act of promoting.
+
 **Explicit non-decisions (open):**
 
-- **Path 2 (template/geo auto-match)** stays permissive for now — a _named exemption_ in the new invariant — pending the OSE-1301 open question "can a venue pre-authorise a standing rotation?".
+- **Path 2 (template/geo auto-match)** stays permissive (reject-only) to **PRESERVE invariant #2 (hyper-local geo-resolution) and the pool/pricing model** — the strict gate is Path-1-only. (An earlier CCR-loop attempt to make Path 2 strict was **reverted**: requiring a confirmed placement disabled the geo auto-match feature and broke invariant #2's acceptance suite. Consent for Path 2 must come from a design that carries consent _without_ breaking geo-resolution — a venue GRANT / pre-authorised standing rotation.) It renders on sponsor silence, a KNOWN exposure on the unauthenticated `/sponsors` + `/sponsor-bundle` endpoints, expected **dark at launch** (no `sponsor_event_types`), tracked as the OSE-1301 open question.
 - **Confirm auth model.** OSE side is anonymous token (no login/cookies); the login+profile variant is the OW (ourWKRP) follow-on. The token primitive means "authorize anonymously" on OSE and "resolve to a logged-in profile" on OW.
 
 ## Alternatives Considered

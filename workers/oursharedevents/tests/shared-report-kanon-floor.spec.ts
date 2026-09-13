@@ -199,6 +199,48 @@ beforeAll(async () => {
   await applyMigrations();
 });
 
+describe('OSE-1301 — report leg: a sponsor NAME surfaces only if that sponsor confirmed', () => {
+  beforeEach(async () => {
+    await applyMigrations();
+    await clearTables();
+  });
+
+  // Born-red for the shared-report-builder EXISTS gate. The report is the surface of
+  // the original incident (unauthenticated handleLogImpression → name on the report).
+  // Revert the EXISTS predicate and 'Silent Diner' leaks back in → this fails.
+  test('an unconfirmed sponsor with impressions is ABSENT; a confirmed one is present', async () => {
+    const evt = 'evt-consent-report';
+    await seedEvent(evt);
+    // Confirmed sponsor (seedSponsor → seedSplitSponsor defaults sponsor_accepted = 1).
+    await seedSponsor({ id: 'sb-confirmed-rep', event_id: evt, name: 'Confirmed Cafe' });
+    // Unconfirmed: NULL sponsor_accepted — its name must NOT reach the report.
+    await seedSplitSponsor(tenv().DB, {
+      id: 'sb-silent-rep',
+      eventId: evt,
+      name: 'Silent Diner',
+      sponsorAccepted: null,
+    });
+    // Both cleared the per-bucket K-anon floor (n >= 5) so the floor is not the reason.
+    await seedImpressions({
+      sponsor_id: 'sb-confirmed-rep',
+      event_id: evt,
+      surface: 'display',
+      n: 6,
+    });
+    await seedImpressions({ sponsor_id: 'sb-silent-rep', event_id: evt, surface: 'display', n: 6 });
+
+    const r = await buildSharedReport(tenv().DB, evt);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const json = JSON.stringify(r.report);
+    expect(json, 'a confirmed sponsor name is present').toContain('Confirmed Cafe');
+    expect(
+      json,
+      'OSE-1301: an unconfirmed sponsor name must NOT leak to the public report'
+    ).not.toContain('Silent Diner');
+  });
+});
+
 describe('OSE-683 — unique_gatherings applies the per-bucket K-anon floor before summation', () => {
   beforeEach(async () => {
     await applyMigrations();

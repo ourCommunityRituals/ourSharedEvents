@@ -262,10 +262,15 @@ export async function promoteSponsorDraft(
   );
   statements.push(
     env.DB.prepare(
+      // OSE-1301 (CCR loop-2): a covenant self-promotion IS the sponsor's own consent
+      // act — the sponsor promoted its OWN draft across the covenant crossing. So the
+      // materialized Path-1 placement is born sponsor_accepted = 1 (confirmed), not
+      // NULL; otherwise the strict render gate would hide a sponsor that just consented.
+      // (This is the one create path where consent is intrinsic to the action.)
       `INSERT INTO sponsor_placement
          (id, sponsor_business_id, event_id, tier, campaign_id, source, polarity,
-          locality_band, click_token, display_token, is_active, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, 'corridor_covenant', 1, ?, NULL, NULL, 1, ?, ?)`
+          locality_band, click_token, display_token, is_active, sponsor_accepted, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, 'corridor_covenant', 1, ?, NULL, NULL, 1, 1, ?, ?)`
     ).bind(
       placementId,
       sponsorId,
