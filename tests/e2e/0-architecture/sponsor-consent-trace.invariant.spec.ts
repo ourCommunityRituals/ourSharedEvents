@@ -10,6 +10,10 @@
  *   - poster/display rotation — src/lib/sponsor-resolver.ts (Path 1, Direct)
  *   - shared report           — src/lib/shared-report-builder.ts (the impressions→name join)
  *   - public logo proxy       — src/handlers/sponsors.ts (GET /api/v2/sponsors/:id/logo)
+ *   - public asset proxy      — src/handlers/sponsor-asset-route.ts (GET /api/v2/sponsors/:id/asset/:format; creative + name monogram)
+ * Plus a gate-ABSENCE property (below) over the CLASS of creative-serving files, so a
+ * NEW public sponsor-render surface that omits the gate entirely is caught, not just the
+ * permissive-COALESCE form — the subject-naming blind spot that hid the logo + asset routes.
  *
  * The shared report is the surface of the ORIGINAL incident (staging 2026-09-11:
  * "Free Test sponsor 1" surfaced on the report with nobody having agreed). handleLogImpression
@@ -45,6 +49,8 @@ const GUARDED = {
   'shared report': join(SRC, 'lib', 'shared-report-builder.ts'),
   // OSE-1301 (CCR loop-3 SEC-D1): the public logo proxy is a Path-1 render surface too.
   'sponsor logo proxy': join(SRC, 'handlers', 'sponsors.ts'),
+  // OSE-1301 (CCR loop-4): the /asset/:format route — logo/creative + name-bearing monogram.
+  'sponsor asset proxy': join(SRC, 'handlers', 'sponsor-asset-route.ts'),
 } as const;
 const RESOLVER = GUARDED['resolver Path 1'];
 
@@ -112,6 +118,31 @@ test.describe('OSE-1301: consent-traced sponsorship — public render requires s
         /COALESCE\s*\(\s*\w+\.organizer_accepted\s*,\s*1\s*\)\s*=\s*1/i
       );
     }
+  });
+
+  test('OSE-INV-CONSENT | property (gate-ABSENCE) | every file that SERVES sponsor creative carries the consent gate', () => {
+    // ROOT-CAUSE fix (CCR loop-4): a subject-naming GUARDED list is blind to a NEW public
+    // surface that omits the gate entirely (that is how the /logo and /asset routes were
+    // missed). This asserts over the CLASS: any src file that calls the sponsor-creative-
+    // serving primitives (fetchAndProxyLogo / resolveAssetSource) — i.e. renders a
+    // sponsor's logo/creative publicly — MUST also contain the strict consent gate. A new
+    // route that proxies a sponsor asset without the gate turns this red, present or future.
+    const SERVE_PRIMITIVES = /\b(fetchAndProxyLogo|resolveAssetSource)\s*\(/;
+    const QUERIES_SPONSOR = /sponsor_business|sponsor_placement/;
+    const offenders: string[] = [];
+    for (const f of listTsFiles(SRC)) {
+      const code = stripCommentLines(readFileSync(f, 'utf8'));
+      // A RENDER handler both resolves a sponsor (queries the tables) AND serves its
+      // creative. The pure proxy util (sponsor-logo.ts — defines the primitive, no
+      // sponsor query) is not a render surface and is correctly excluded.
+      if (SERVE_PRIMITIVES.test(code) && QUERIES_SPONSOR.test(code) && !STRICT_SPONSOR.test(code)) {
+        offenders.push(f.replace(SRC, 'src'));
+      }
+    }
+    expect(
+      offenders,
+      `every sponsor-creative-serving file must gate on strict sponsor_accepted = 1. Ungated: ${offenders.join(', ')}`
+    ).toEqual([]);
   });
 
   test('OSE-INV-CONSENT | property | the permissive COALESCE(sponsor_accepted, 1) is eradicated from src/', () => {

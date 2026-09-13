@@ -113,6 +113,17 @@ export async function handleSponsorAsset(
        FROM sponsor_business sb
        LEFT JOIN sponsor_asset la ON la.sponsor_business_id = sb.id
       WHERE sb.id = ?
+        -- OSE-1301 (CCR loop-4): this public, unauthenticated route serves a sponsor's
+        -- creative AND a name-bearing monogram fallback — a Path-1 render surface, so it
+        -- is consent-traced like /logo, the event page, resolver Path 1, and the report.
+        -- An unconfirmed sponsor returns 404 here (sponsor === null) before any render.
+        AND EXISTS (
+          SELECT 1 FROM sponsor_placement sp
+           WHERE sp.sponsor_business_id = sb.id
+             AND sp.is_active = 1
+             AND COALESCE(sp.organizer_accepted, 1) = 1
+             AND sp.sponsor_accepted = 1
+        )
       GROUP BY sb.id, sb.name`
   )
     .bind(sponsorId)
