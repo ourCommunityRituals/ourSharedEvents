@@ -3189,8 +3189,8 @@
                 ? '<span class="badge active" data-testid="spon-status-' + esc(s.id) + '">Active</span>'
                 : '<span class="badge archived" data-testid="spon-status-' + esc(s.id) + '">Inactive</span>';
               const actions = s.is_active
-                ? '<button class="spon-action-btn" data-testid="edit-' + esc(s.id) + '" data-action="sponsor-edit" data-id="' + esc(s.id) + '">Edit</button> ' +
-                  '<button class="spon-action-btn deactivate" data-testid="deactivate-' + esc(s.id) + '" data-action="sponsor-deactivate" data-id="' + esc(s.id) + '">Deactivate</button>'
+                ? '<button class="spon-action-btn" data-testid="edit-' + esc(s.id) + '" data-action="sponsor-edit" data-id="' + esc(s.id) + '" aria-label="Edit sponsor ' + esc(s.name || s.id) + '">Edit</button> ' +
+                  '<button class="spon-action-btn deactivate" data-testid="deactivate-' + esc(s.id) + '" data-action="sponsor-deactivate" data-id="' + esc(s.id) + '" aria-label="Deactivate sponsor ' + esc(s.name || s.id) + '">Deactivate</button>'
                 : '<span class="muted-sm">Deactivated</span>';
               const eventName = _eventNameById[String(s.event_id)] || s.event_id;
               return '<tr data-testid="sponsor-row-' + esc(s.id) + '"' + dimStyle + '>' +
@@ -3593,7 +3593,7 @@
             '<div style="font-size:12px;color:#5a5a5a;margin-bottom:4px">Bearer token · expires ' + expires + '</div>' +
             '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">' +
               '<code data-testid="mint-token" style="font-size:11px;word-break:break-all;flex:1;background:#f5f5f5;padding:4px 6px;border-radius:4px">' + esc(data.token) + '</code>' +
-              '<button class="copy-btn" data-testid="mint-copy-btn" style="flex-shrink:0" data-action="mint-copy" data-token="' + tokenSafe + '">Copy</button>' +
+              '<button class="copy-btn" data-testid="mint-copy-btn" style="flex-shrink:0" data-action="mint-copy" data-token="' + tokenSafe + '" aria-label="Copy bearer token">Copy</button>' +
             '</div>' +
             '<div style="font-size:11px;color:#5a5a5a;margin-top:4px">Endpoint: GET /api/v2/events/' + esc(eventId) + '/shared-report</div>';
           result.style.cssText = 'margin-top:10px;padding:8px;background:#f0faf0;border:1px solid #b6e2b6;border-radius:6px';
@@ -3828,7 +3828,7 @@
                   '<div class="qr-card-footer">' +
                     '<button class="copy-btn" style="font-size:12px;padding:4px 10px" data-testid="pd-download-btn" data-action="pd-download" data-pd-id="' + esc(pd.id) + '" aria-label="Download poster QR">Download</button>' +
                     '<button class="copy-btn" style="font-size:12px;padding:4px 10px" data-testid="pd-print-btn" data-action="pd-print" data-pd-id="' + esc(pd.id) + '" aria-label="Print poster QR">Print</button>' +
-                    '<button class="copy-btn" style="font-size:12px;padding:4px 10px" data-testid="pd-delete-btn" data-pd-id="' + esc(pd.id) + '" data-action="pd-delete">Delete</button>' +
+                    '<button class="copy-btn" style="font-size:12px;padding:4px 10px" data-testid="pd-delete-btn" data-pd-id="' + esc(pd.id) + '" data-action="pd-delete" aria-label="Delete poster QR">Delete</button>' +
                   '</div>' +
                 '</div>'
               );
