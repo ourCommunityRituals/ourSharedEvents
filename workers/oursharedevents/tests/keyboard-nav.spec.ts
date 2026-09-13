@@ -60,6 +60,14 @@ describe('A11Y-6: skip-to-content link present on all pages', () => {
     expect(body).toContain('id="main-content"');
   });
 
+  // AS-8: the skip-link target must be a real <main> landmark, not a
+  // <div id="main-content"> — otherwise screen-reader landmark navigation and
+  // the "skip to main" affordance land on a generic container.
+  test('poster main content is a <main> landmark element (AS-8)', async () => {
+    const body = await posterHtml();
+    expect(body).toMatch(/<main[^>]*id="main-content"/);
+  });
+
   test('register form has skip link targeting #main-content', async () => {
     const body = await formHtml('register');
     expect(body).toContain('href="#main-content"');

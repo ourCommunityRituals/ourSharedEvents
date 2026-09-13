@@ -597,7 +597,7 @@
         <button type="button" id="poster-print-btn" class="print-btn" data-testid="poster-print" disabled aria-disabled="true">&#x1F5A8; Print</button>
       </div>
     </div>
-    <div id="main-content" class="container" data-testid="poster-container">
+    <main id="main-content" class="container" data-testid="poster-container">
       <div class="event-select no-print" data-testid="poster-event-select">
         <label for="event-picker">Select Event</label>
         <select id="event-picker" data-testid="poster-event-picker">
@@ -607,7 +607,7 @@
       <div id="poster-area" data-testid="poster-area">
         <p class="loading" data-testid="poster-loading" role="status">Loading&hellip;</p>
       </div>
-    </div>
+    </main>
     <script>
       const esc = s => { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; };
       const fmt = iso => iso ? new Date(iso).toLocaleDateString('en-US', { weekday:'long', year:'numeric', month:'long', day:'numeric' }) : '';
