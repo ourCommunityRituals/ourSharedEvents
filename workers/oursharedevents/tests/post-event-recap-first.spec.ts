@@ -169,6 +169,57 @@ describe('OSE-657: recap-first is a hard layout invariant', () => {
     );
   });
 
+  test('canonical 5W order (past tense): WHAT → WHERE → WHO → HOW MUCH → numbers; HOW dropped, WHY below the ask', async () => {
+    // OSE-1136: the recap is the third phase of the canonical table, past-tense.
+    // Seed a full-5W past event WITH a price, so every canonical card can render.
+    const id = 'evt_ose1136_canonical';
+    const tenv = env as unknown as TestEnv;
+    const start = new Date(Date.now() - 7 * 86400000).toISOString();
+    const end = new Date(Date.now() - 6 * 86400000).toISOString();
+    await tenv.DB.prepare('DELETE FROM events WHERE id = ?').bind(id).run();
+    await tenv.DB.prepare(
+      `INSERT INTO events (id, brand_id, title, slug, status, location, where_address,
+                           start_date, end_date, what_short, who_host, why_purpose, how_details,
+                           price_cents, price_model, created_at, updated_at)
+       VALUES (?, ?, 'Canonical Recap', ?, 'active', 'The Venue', '1 Main St',
+               ?, ?, 'What it was', 'The Host', 'Why it mattered', 'How to join',
+               1000, 'fixed', datetime('now'), datetime('now'))`
+    )
+      .bind(id, BRAND, id, start, end)
+      .run();
+
+    const html = await (await SELF.fetch(`https://t.test/events/${id}`)).text();
+    const at = (t: string) => html.indexOf(`data-testid="${t}"`);
+
+    // Every canonical card renders (facts first), stats included.
+    for (const t of [
+      'event-recap-card',
+      'event-where-post',
+      'event-who-post',
+      'event-how-much-post',
+      'suggestions-margin',
+      'event-why-post',
+    ]) {
+      expect(at(t), `${t} must render`).toBeGreaterThan(-1);
+    }
+    // WHAT → WHERE → WHO → HOW MUCH (facts, in canonical order).
+    expect(at('event-recap-card'), 'WHAT leads').toBeLessThan(at('event-where-post'));
+    expect(at('event-where-post'), 'WHERE before WHO').toBeLessThan(at('event-who-post'));
+    expect(at('event-who-post'), 'WHO before HOW MUCH').toBeLessThan(at('event-how-much-post'));
+    // Facts (recap-primary) precede the ask/return-loop margin.
+    expect(at('event-how-much-post'), 'HOW MUCH sits in the recap, before the margin').toBeLessThan(
+      at('suggestions-margin')
+    );
+    // WHY is deeper detail BELOW the ask (mirrors pre/live facts → ask → detail).
+    expect(at('event-why-post'), 'WHY sits below the suggestions margin').toBeGreaterThan(
+      at('suggestions-margin')
+    );
+    // HOW is intentionally dropped — nothing to "join" once the event is over.
+    expect(at('event-how-post'), 'HOW must NOT render on a past event').toBe(-1);
+    // HOW MUCH is a past-tense display label, not a payment primitive.
+    expect(html, 'fixed price renders as a compact dollar string').toContain('$10');
+  });
+
   test('sponsor placement in the recap stays spend-blind (no tier/spend leak)', async () => {
     const eventId = 'evt_ose657_sponsor';
     await insertEvent({
