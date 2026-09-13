@@ -87,6 +87,29 @@ describe('AS-11: Keyboard nav on Admin page (OSE-56)', () => {
   });
 });
 
+// ─── A11Y-6: Launch wizard keyboard escape hatch ─────────────────────────────
+
+describe('A11Y-6: launch wizard is keyboard-escapable', () => {
+  test('a keydown handler closes the wizard on Escape only while it is open', async () => {
+    const body = await adminHtml();
+    // Escape acts guarded by launch-wizard visibility, then calls closeWizard.
+    expect(body).toMatch(/Escape[\s\S]{0,160}launch-wizard[\s\S]{0,80}closeWizard\(\)/);
+  });
+
+  test('closeWizard returns focus to the control that opened the wizard', async () => {
+    const body = await adminHtml();
+    expect(body).toMatch(
+      /function closeWizard\(\)[\s\S]{0,400}admin-path-wizard[\s\S]{0,60}\.focus\(\)/
+    );
+  });
+
+  test('required wizard inputs expose aria-required to assistive tech (A11Y-2)', async () => {
+    const body = await adminHtml();
+    expect(body).toMatch(/id="wizard-event-name"[\s\S]{0,160}aria-required="true"/);
+    expect(body).toMatch(/id="wizard-event-venue"[\s\S]{0,160}aria-required="true"/);
+  });
+});
+
 // ─── AS-12: Public keyboard navigation ───────────────────────────────────────
 
 describe('AS-12: Keyboard nav on Public page (OSE-57)', () => {
