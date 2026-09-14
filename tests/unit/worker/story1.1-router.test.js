@@ -291,7 +291,9 @@ describe('Route Coverage (Story 1.1)', () => {
   describe('Landing and Public Pages', () => {
     it('should route / to handleLandingPage', () => {
       expect(routerSource).toContain("pathname === '/'");
-      expect(routerSource).toContain('handleLandingPage(env)');
+      // OSE-1312 slice-2: handleLandingPage is now async + data-driven and takes
+      // the DataProvider ctx (mirrors handlePublicPage), so the call passes ctx.
+      expect(routerSource).toContain('handleLandingPage(env, ctx)');
     });
 
     it('should route /events and /public to handlePublicPage', () => {
