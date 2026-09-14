@@ -28,6 +28,16 @@ yarn.lock
 # IDE
 .vscode/
 .idea/
+
+# Local reference/test binaries dropped into .claude/inputs (poster art, screenshots,
+# etc.) — the tracked .md notes stay committable; never let a stray `git add .`
+# pull a multi-MB image into the repo.
+.claude/inputs/*.png
+.claude/inputs/*.PNG
+.claude/inputs/*.jpg
+.claude/inputs/*.jpeg
+.claude/inputs/*.webp
+.claude/inputs/*.gif
 *.swp
 *.swo
 *~
