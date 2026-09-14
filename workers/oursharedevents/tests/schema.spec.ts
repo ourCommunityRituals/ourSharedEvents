@@ -126,7 +126,7 @@ const EXPECTED_COLUMN_COUNTS: Record<string, number> = {
   // 35 (pre-0051) + 3 (migration 0051: who_story, who_image_url,
   // what_video_url — OSE-664 rich WHO/WHAT authoring) = 38.
   // + 1 (migration 0052: data_class — OSE-606/608 demo data class) = 39.
-  events: 40, // 0070 adds is_published (OSE-1245)
+  events: 41, // 0070 adds is_published (OSE-1245); 0072 adds what_url (WHAT external link)
   // OSE-799 A2 (0065-0067): `sponsors` (32) retired → split into three tables.
   // sponsor_business: id, brand_id, name, website_url, business_type, lat, lon,
   //   h3_res9, h3_res7, created_at, updated_at = 11.
