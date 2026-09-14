@@ -376,6 +376,9 @@ function statLine(raw: number, label: string, testid: string): string {
 /** True when a count clears the uniform floor (safe to publish exactly / use in a ratio). */
 function clearsFloor(raw: number): boolean {
   return !applyCountFloor(raw).suppressed;
+}
+
+/**
  * The WHAT card's optional external link, rendered on every phase (pre / live /
  * post) so a patron who cannot attend can still act on the event before, during
  * AND after. It is GENERIC by design — a fundraiser's donation site, a ticketing
