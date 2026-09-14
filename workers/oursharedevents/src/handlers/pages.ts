@@ -344,6 +344,8 @@ export interface PublicEventRow {
   // (fundraiser donation site, tickets, tournament/season signup, a client's own
   // Google Doc). Clients run their own admin off-platform; OSE just displays it.
   what_url: string | null;
+  what_url_enabled: number | null;
+  what_url_type: string | null;
   lat: number | null;
   lon: number | null;
   price_cents: number | null;
@@ -394,10 +396,32 @@ function clearsFloor(raw: number): boolean {
  * active). http(s)-only via validateLogoUrl (defense-in-depth XSS wall), and the
  * URL is attribute-escaped on output. Not donation-named anywhere: neutral label.
  */
-function renderWhatLink(rawUrl: string | null, lang: string, testid: string): string {
+// R3 — type-driven CTA labels for the WHAT external link. Neutral, action-first.
+// Same destination vocabulary the poster's typed QR slots use.
+const WHAT_LINK_LABELS: Record<string, { en: string; es: string }> = {
+  donation: { en: 'Donate →', es: 'Donar →' },
+  league: { en: 'View the league →', es: 'Ver la liga →' },
+  workshop: { en: 'Register →', es: 'Inscribirse →' },
+  substack: { en: 'Subscribe →', es: 'Suscribirse →' },
+  tickets: { en: 'Get tickets →', es: 'Comprar entradas →' },
+  menu: { en: 'Menu & reservations →', es: 'Menú y reservas →' },
+  website: { en: 'Visit the site →', es: 'Visitar el sitio →' },
+};
+
+function renderWhatLink(
+  rawUrl: string | null,
+  enabled: boolean | number | null,
+  type: string | null,
+  lang: string,
+  testid: string
+): string {
+  // R3 explicit ENABLE gate: the link renders only when the organizer turned it
+  // ON — not merely because a URL is present. A staged-but-off URL stays dark.
+  if (!enabled) return '';
   const url = validateLogoUrl(rawUrl).url;
   if (!url) return '';
-  const label = lang === 'es' ? 'Visitar el sitio →' : 'Visit the site →';
+  const key = typeof type === 'string' && type in WHAT_LINK_LABELS ? type : 'website';
+  const label = WHAT_LINK_LABELS[key][lang === 'es' ? 'es' : 'en'];
   return `<p><a class="ose-what-link" data-testid="${testid}" href="${esc(url)}" target="_blank" rel="noopener noreferrer nofollow">${label}</a></p>`;
 }
 
@@ -605,7 +629,13 @@ export function renderPreEventHtml(
   // src/href here. URL is attribute-escaped on output.
   const whoImage = validateLogoUrl(row.who_image_url).url;
   const whatVideo = validateLogoUrl(row.what_video_url).url;
-  const whatLink = renderWhatLink(row.what_url, lang, 'event-what-link');
+  const whatLink = renderWhatLink(
+    row.what_url,
+    row.what_url_enabled,
+    row.what_url_type,
+    lang,
+    'event-what-link'
+  );
   const whyPurpose = esc(row.why_purpose);
   const howDetails = esc(row.how_details);
   const whereAddress = esc(row.where_address) || esc(row.location);
@@ -788,7 +818,13 @@ export function renderEventLiveHtml(
   const title = esc(row.title);
   // Same What fallback as the pre-event render: host blurb, else description.
   const whatShort = esc(row.what_short) || esc(row.description);
-  const whatLink = renderWhatLink(row.what_url, lang, 'event-what-link-live');
+  const whatLink = renderWhatLink(
+    row.what_url,
+    row.what_url_enabled,
+    row.what_url_type,
+    lang,
+    'event-what-link-live'
+  );
   const whoHost = esc(row.who_host);
   const whyPurpose = esc(row.why_purpose);
   const howDetails = esc(row.how_details);
@@ -1017,7 +1053,13 @@ export function renderPostEventHtml(
   // The WHAT external link persists into the recap: a fundraiser's donation
   // window (and a client's own signup/doc) outlasts the gathering, so a patron
   // who missed it can still act after.
-  const whatLink = renderWhatLink(row.what_url, lang, 'event-what-link-post');
+  const whatLink = renderWhatLink(
+    row.what_url,
+    row.what_url_enabled,
+    row.what_url_type,
+    lang,
+    'event-what-link-post'
+  );
   // OG/Twitter card computed up front (needs only title + whatShort + shareUrl):
   // keeps buildOgMeta near the top now that the recap has a fuller 5W setup below.
   const ogMeta = buildOgMeta({
@@ -1352,6 +1394,7 @@ export async function handlePublicEventPage(
               start_date, end_date, timezone,
               what_short, who_host, why_purpose, how_details, where_address,
               who_story, who_image_url, what_video_url, what_url,
+              what_url_enabled, what_url_type,
               lat, lon, price_cents, price_model, price_note
        FROM events WHERE id = ?`
     )
