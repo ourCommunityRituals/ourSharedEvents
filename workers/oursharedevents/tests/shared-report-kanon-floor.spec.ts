@@ -90,6 +90,7 @@ async function clearTables(): Promise<void> {
   await db.prepare(`DELETE FROM campaigns WHERE id LIKE 'camp-kanon-%'`).run();
   await db.prepare(`UPDATE events SET series_id = NULL`).run();
   await db.prepare(`DELETE FROM event_series`).run();
+  await db.prepare(`DELETE FROM shortlinks WHERE event_id LIKE 'test-evt-kanon-%'`).run();
   await db.prepare(`DELETE FROM events WHERE id LIKE 'test-evt-kanon-%'`).run();
 }
 
@@ -220,6 +221,54 @@ describe('OSE-683 — unique_gatherings applies the per-bucket K-anon floor befo
     // Raw sum would be 13; floored-per-bucket keeps only the >=5 bucket → 10.
     expect(r.report.unique_gatherings).toBe(10);
     expect(r.report.unique_gatherings).not.toBe(13);
+  });
+
+  // Rc — click_outs (the /s/ digital signal, finally counted on the SharedReport).
+  // Same per-kind K-anon floor as unique_gatherings; floored per kind AND on the total.
+  test('click_outs: public 6 shows, donate 3 suppressed, total (9) clears the floor', async () => {
+    await seedEvent('test-evt-kanon-cko');
+    const db = tenv().DB;
+    await db
+      .prepare(
+        `INSERT INTO shortlinks (code, event_id, kind, clicks, created_at)
+         VALUES (?, ?, ?, ?, datetime('now'))`
+      )
+      .bind('ckoPUB', 'test-evt-kanon-cko', 'public', 6)
+      .run();
+    await db
+      .prepare(
+        `INSERT INTO shortlinks (code, event_id, kind, clicks, created_at)
+         VALUES (?, ?, ?, ?, datetime('now'))`
+      )
+      .bind('ckoDON', 'test-evt-kanon-cko', 'donate', 3)
+      .run();
+
+    const r = await buildSharedReport(tenv().DB, 'test-evt-kanon-cko');
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const co = r.report.click_outs;
+    expect(co).toBeDefined();
+    expect(co).not.toBeNull();
+    expect(co!.by_kind.public).toBe(6); // clears K → exact
+    expect(co!.by_kind.donate).toBeNull(); // sub-K → suppressed
+    expect(co!.total).toBe(9); // 6 + 3 clears K as its own aggregate
+  });
+
+  test('click_outs: an all-sub-K event suppresses each kind AND the total', async () => {
+    await seedEvent('test-evt-kanon-cko-sub');
+    await tenv()
+      .DB.prepare(
+        `INSERT INTO shortlinks (code, event_id, kind, clicks, created_at)
+         VALUES (?, ?, ?, ?, datetime('now'))`
+      )
+      .bind('ckoPB2', 'test-evt-kanon-cko-sub', 'public', 2)
+      .run();
+
+    const r = await buildSharedReport(tenv().DB, 'test-evt-kanon-cko-sub');
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.report.click_outs!.by_kind.public).toBeNull(); // 2 < 5 → suppressed
+    expect(r.report.click_outs!.total).toBeNull(); // total 2 < 5 → suppressed
   });
 
   test('multiple sub-K buckets never aggregate up past the floor (3 + 4 + 2 => suppressed, not 9)', async () => {

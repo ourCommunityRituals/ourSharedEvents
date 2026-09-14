@@ -28,6 +28,7 @@ import {
   type SignedLinkRole,
 } from '../lib/shared-report-auth';
 import { buildSharedReport, type SharedReport } from '../lib/shared-report-builder';
+import { applyCountFloor } from '../lib/count-floor';
 import { resolveDepth, filterReportByDepth } from '../lib/report-depth';
 import { logReportAccess } from '../lib/audit-log';
 import { checkRateLimit, RATE_LIMIT_BATCH_MAX, RATE_LIMIT_WINDOW_MS } from '../lib/rate-limit';
@@ -134,19 +135,26 @@ export async function handleGetSharedReport(
     >();
     for (const row of scopedImpressions) {
       if (!row.campaign_id) continue;
+      // OSE-676: apply the per-(sponsor×surface)-bucket K-anon floor BEFORE
+      // summation, mirroring the builder (shared-report-builder.ts) — a sub-K row
+      // is DROPPED, never summed raw, so the scoped re-derivation cannot leak a
+      // sub-K impression cohort that the unscoped builder floors.
+      const floored = applyCountFloor(row.count);
+      if (floored.count === null) continue;
+      const contribution = floored.count;
       const ex = campaignMap.get(row.campaign_id);
       if (ex) {
-        ex.total_impressions += row.count;
+        ex.total_impressions += contribution;
         ex.sponsor_count += 1;
         ex.impressions_by_surface[row.surface] =
-          (ex.impressions_by_surface[row.surface] ?? 0) + row.count;
+          (ex.impressions_by_surface[row.surface] ?? 0) + contribution;
       } else {
         campaignMap.set(row.campaign_id, {
           campaign_id: row.campaign_id,
           campaign_title: row.campaign_title ?? 'unknown',
-          total_impressions: row.count,
+          total_impressions: contribution,
           sponsor_count: 1,
-          impressions_by_surface: { [row.surface]: row.count },
+          impressions_by_surface: { [row.surface]: contribution },
         });
       }
     }
