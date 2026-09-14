@@ -2874,6 +2874,22 @@
                 inputmode="url"
               />
             </div>
+            <!-- WHAT external link. A general outbound destination the client runs
+                 off-platform: a fundraiser's donation site, tickets, a tournament/
+                 season signup, a Google Doc. Optional; shows on the event page
+                 (before/during/after) only when set. Link-out only, http(s) only. -->
+            <div class="full-width">
+              <label for="create-what-url">What (external link — optional)</label>
+              <input
+                type="url"
+                id="create-what-url"
+                name="what_url"
+                data-testid="create-what-url"
+                placeholder="https://… donation page, tickets, signup, a doc — anything"
+                maxlength="500"
+                inputmode="url"
+              />
+            </div>
             <div>
               <label for="create-who-host">Who (host / organizer)</label>
               <input
@@ -4578,6 +4594,7 @@
           const fivew = [
             ['create-what-short', 'what_short'],
             ['create-what-video-url', 'what_video_url'],
+            ['create-what-url', 'what_url'],
             ['create-who-host', 'who_host'],
             ['create-who-story', 'who_story'],
             ['create-who-image-url', 'who_image_url'],

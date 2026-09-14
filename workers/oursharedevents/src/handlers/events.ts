@@ -426,8 +426,16 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
       rid
     );
   }
+  // OSE what_url — the WHAT card's optional external link (fundraiser donation
+  // site, tickets, external RSVP, …). http(s)-only, same scheme wall as the
+  // other media URLs; null clears it.
+  const whatLink = validateLogoUrl(body.what_url);
+  if (!whatLink.valid) {
+    return errorResponse('INVALID_URL', 'what_url must be a http(s) URL under 500 chars', 400, rid);
+  }
   const whoImageUrl = whoImage.url;
   const whatVideoUrl = whatVideo.url;
+  const whatUrl = whatLink.url;
 
   // Date validation
   const startDate = typeof body.start_date === 'string' ? body.start_date.slice(0, 30) : null;
@@ -476,10 +484,10 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
     await env.DB.prepare(
       `INSERT INTO events (id, brand_id, title, slug, status, description, location, start_date, end_date, timezone, cover_image_url, template_id,
                            what_short, who_host, why_purpose, how_details, where_address,
-                           who_story, who_image_url, what_video_url,
+                           who_story, who_image_url, what_video_url, what_url,
                            lat, lon, h3_res9, h3_res7, is_published,
                            created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
       .bind(
         id,
@@ -502,6 +510,7 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
         whoStory,
         whoImageUrl,
         whatVideoUrl,
+        whatUrl,
         lat,
         lon,
         h3Tags?.h3_res9 ?? null,
@@ -706,7 +715,7 @@ export async function handleUpdateEvent(
   // OSE-664: media reference URLs — validated http(s)-only (born-red XSS wall)
   // rather than blind-sliced, so a javascript:/data: payload is rejected here
   // and never reaches the column. null clears the field.
-  for (const field of ['who_image_url', 'what_video_url'] as const) {
+  for (const field of ['who_image_url', 'what_video_url', 'what_url'] as const) {
     if (field in body) {
       const check = validateLogoUrl(body[field]);
       if (!check.valid) {
