@@ -35,7 +35,7 @@
  *   Derived from the templates, so it can never claim an id the app does not
  *   emit. Dynamically-built ids (`data-testid="row-' + id + '"`) are excluded
  *   on purpose: t() would accept one while nothing ever renders it.
- * Generated 2026-09-10 — 378 ids.
+ * Generated 2026-09-14 — 378 ids.
  */
 (function (root, factory) {
   const api = factory();

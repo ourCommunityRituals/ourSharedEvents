@@ -110,4 +110,9 @@ export const NODE_SPECS = [
   // guard off the workerd pool. Uses only crypto.subtle + TextEncoder (both
   // node-available); the workers-bound pii.spec.ts keeps its D1 L1 block.
   'tests/pii-crypto.spec.ts',
+
+  // OSE-1312 slice 2 — landing area renderer. Pure function over the enriched
+  // event shape; asserts the CSS-filter tags (window/type/product/modality) and
+  // the default-view rule. No DOM / cloudflare:test / D1 — node-clean.
+  'tests/landing-area.spec.ts',
 ];

@@ -40,6 +40,12 @@ import {
   type RenderedEventList,
 } from '../lib/event-list.js';
 import {
+  renderLandingArea,
+  renderEmptyLandingArea,
+  injectLandingArea,
+  type LandingAreaItem,
+} from '../lib/landing-area.js';
+import {
   getDataProvider,
   type DataProviderEnv,
   type DataProviderCtx,
@@ -1597,8 +1603,35 @@ export async function handleSubscribe(request: Request, env: PagesEnv): Promise<
   }
 }
 
-export function handleLandingPage(_env: PagesEnv): Response {
-  return html(injectLegalFooter(LANDING_HTML, 'landing'));
+// ─── Landing page (supply side) — OSE-1312 ────────────────────────────────────
+//
+// The landing page is the SUPPLY side: two doors + an area view of what's coming
+// together nearby + a never-who panel that is TRUE of this page (no cookies, no
+// analytics, no geolocation). The area view is server-rendered and filtered with
+// CSS-only radios (renderLandingArea), so nothing about the viewer is stored or
+// sent — the page keeps the promise it prints.
+//
+// Data-driven as of slice 2: reads events through the SAME DataProvider seam +
+// enrichWithPhase as `GET /api/v2/events` and handlePublicPage, so the landing
+// area and the JSON API cannot describe different events. A read failure renders
+// the empty area (facilitation surface: nothing to show is a normal state, not a
+// 500), never a broken page.
+type LandingEnv = PagesEnv & DataProviderEnv;
+
+export async function handleLandingPage(
+  env: PagesEnv,
+  ctx?: DataProviderCtx | null
+): Promise<Response> {
+  let area;
+  try {
+    const dp = getDataProvider(env as LandingEnv, ctx ?? null);
+    const result = await dp.listEvents('root');
+    const items = (result.data as unknown as Record<string, unknown>[]).map(enrichWithPhase);
+    area = renderLandingArea(items as LandingAreaItem[]);
+  } catch {
+    area = renderEmptyLandingArea();
+  }
+  return html(injectLandingArea(injectLegalFooter(LANDING_HTML, 'landing'), area));
 }
 
 // ─── Display page (TV / kiosk) ──────────────────────────────────────────────────

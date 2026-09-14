@@ -23,7 +23,8 @@
         --surface: var(--surface, #fff);
         --text: var(--text, #1a1a1a);
         --muted: var(--text-muted, #5a5a5a);
-        --accent: var(--accent, #2a5db0);
+        /* Platform accent (OSE-221): one scan path, one accent. NOT Tailwind blue. */
+        --accent: var(--accent, #4361ee);
         --on-accent: var(--on-accent, #fff);
         --line: rgba(42, 42, 42, 0.12);
       }
@@ -152,6 +153,10 @@
         border: 1px solid var(--line);
         border-radius: 8px;
         overflow: hidden;
+        /* reset UA <fieldset> chrome so the pill row renders flush */
+        margin: 0;
+        padding: 0;
+        min-inline-size: 0;
       }
       .toggle-group label {
         display: inline-flex;
@@ -178,12 +183,20 @@
         outline: 3px solid var(--accent);
         outline-offset: -3px;
       }
-      /* Selected pill */
+      /* Selected pill. Type pills are dynamic — their selected rule is emitted
+         inline by the renderer (one per type present). */
       #view-list:checked ~ .toggles label[for='view-list'],
       #view-map:checked ~ .toggles label[for='view-map'],
       #win-7:checked ~ .toggles label[for='win-7'],
       #win-30:checked ~ .toggles label[for='win-30'],
-      #win-90:checked ~ .toggles label[for='win-90'] {
+      #win-90:checked ~ .toggles label[for='win-90'],
+      #type-all:checked ~ .toggles label[for='type-all'],
+      #mod-all:checked ~ .toggles label[for='mod-all'],
+      #mod-online:checked ~ .toggles label[for='mod-online'],
+      #mod-inperson:checked ~ .toggles label[for='mod-inperson'],
+      #prod-all:checked ~ .toggles label[for='prod-all'],
+      #prod-ose:checked ~ .toggles label[for='prod-ose'],
+      #prod-hybrid:checked ~ .toggles label[for='prod-hybrid'] {
         background: var(--accent);
         color: var(--on-accent);
         font-weight: 600;
@@ -199,10 +212,17 @@
       #view-map:checked ~ .area .view-map {
         display: block;
       }
-      /* Window filter: hide cards outside the chosen window (server tags each card).
-         Cards carry within-7 / within-30 / within-90 classes; 90 shows all. */
+      /* Filters compose: each group contributes display:none for cards it
+         excludes, so a card is visible iff it survives EVERY active group.
+         "All" contributes no rule. Cards are server-tagged with
+         within-{7,30,90} · type-<slug> · product-ose · modality-{online,inperson}. */
       #win-7:checked ~ .area .event-card:not(.within-7),
-      #win-30:checked ~ .area .event-card:not(.within-30) {
+      #win-30:checked ~ .area .event-card:not(.within-30),
+      #win-90:checked ~ .area .event-card:not(.within-90),
+      #mod-online:checked ~ .area .event-card:not(.modality-online),
+      #mod-inperson:checked ~ .area .event-card:not(.modality-inperson),
+      #prod-ose:checked ~ .area .event-card:not(.product-ose),
+      #prod-hybrid:checked ~ .area .event-card:not(.product-hybrid) {
         display: none;
       }
       .event-card {
@@ -291,29 +311,21 @@
         </a>
       </section>
 
-      <!-- Area view. SLICE 1 (this WIP commit) points to the already-server-rendered
-           /events list — non-broken, shippable, and the supply-side essence (doors +
-           privacy) is above/below. SLICE 2 (tracked, OSE-1312) embeds the filterable
-           area here, driven by a landing renderer that tags each card + sets the default
-           view by per-region count (list < 10, map ≥ 10, evaluated once/widest window).
-           renderEventList does NOT tag cards, so the renderer is the real work.
-           FILTER SET (all CSS-only radios + :checked, no JS/cookies):
-             1. view     — list | map (default by count)
-             2. window   — 7 | 30 | 90 days (default 90, configured)
-             3. type     — event-type (one per type present; "All"); niche discovery
-             4. product  — OSE-only | OSE/OW hybrid (composition; brain hybrid plane)
-             5. modality — online | in-person ("in reality")
-           Each card server-tagged: within-{7,30,90} + type-<slug> + product-{ose,hybrid}
-           + modality-{online,inperson}. Default window 90d configured, not hardcoded. -->
+      <!-- Area view (OSE-1312 slice 2). The inner markup is server-rendered by
+           renderLandingArea and injected at the marker below: hidden radios +
+           `:checked ~` sibling rules give FIVE CSS-only filter dimensions with
+           NO JS and NO cookies —
+             1. view     — list | map (default by count: list < 10, else map)
+             2. window   — 7 | 30 | 90 days (default 90, configured in the renderer)
+             3. type     — one pill per event-type present, plus "All" (niche discovery)
+             4. product  — All | OSE | OSE+OW hybrid (anon / non-anon invariant pole)
+             5. modality — All | online | in-person ("in reality")
+           Each card is server-tagged within-{7,30,90} + type-<slug> +
+           product-{ose} + modality-{online,inperson}. The radios are emitted as
+           siblings before .toggles / .area so the head rules below resolve. -->
       <section aria-label="What's happening nearby" data-testid="landing-area">
         <h2 class="area-heading" data-testid="area-heading">Happening near you</h2>
-        <div class="empty-state" data-testid="area-pointer">
-          <p>
-            See gatherings coming together in the neighborhood &mdash; browse by list or map, time
-            window, and event type.
-          </p>
-          <p><a class="door" href="/events" data-testid="area-see-events">See what&#x2019;s happening &rarr;</a></p>
-        </div>
+        <!--OCR_LANDING_AREA-->
       </section>
 
       <!-- Never-who statement. Shares the wrap page's tone; TRUE of this page:
@@ -332,5 +344,6 @@
         </p>
       </section>
     </main>
+    <!--OCR_LEGAL_FOOTER-->
   </body>
 </html>

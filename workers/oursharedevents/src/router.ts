@@ -1362,7 +1362,7 @@ export async function route(
     pathname === '/about' ||
     pathname === '/info'
   ) {
-    return handleLandingPage(env);
+    return handleLandingPage(env, ctx);
   }
 
   // ── Public event landing page (OSE-243a) ──────────────────────────────────
