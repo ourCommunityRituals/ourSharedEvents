@@ -45,6 +45,7 @@ import {
   type DataProviderCtx,
 } from '../lib/data-provider.js';
 import { enrichWithPhase } from '../lib/event-enrich.js';
+import { applyCountFloor } from '../lib/count-floor.js';
 
 export interface PagesEnv {
   WORKER_ENV?: string;
@@ -352,6 +353,29 @@ function esc(s: string | null | undefined): string {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
+}
+
+/**
+ * D1 (CCR 2026-09-14) — the public post-event recap is the LEAST-trusted surface
+ * (unauthenticated) and must not become a side-channel that leaks an exact small
+ * count the admin tile + SharedReport hide. Every attendee-derived stat here
+ * routes through the SAME uniform floor the admin tile and corridor map use
+ * (applyCountFloor, K=5): a sub-K cohort renders "Fewer than 5", never the exact
+ * number. A 3-of-5 or "50% of 2" line back-derives an individual — the exact
+ * never-who break OSE-665 exists to close. Server-side, so the raw value never
+ * reaches the client.
+ */
+function statLine(raw: number, label: string, testid: string): string {
+  const f = applyCountFloor(raw);
+  const inner = f.suppressed
+    ? `Fewer than ${f.floor} ${label}`
+    : `<strong>${f.count}</strong> ${label}`;
+  return `<p data-testid="${testid}">${inner}</p>`;
+}
+
+/** True when a count clears the uniform floor (safe to publish exactly / use in a ratio). */
+function clearsFloor(raw: number): boolean {
+  return !applyCountFloor(raw).suppressed;
 }
 
 /**
@@ -1151,11 +1175,17 @@ ${ogMeta}
         const statsCard = hasStats
           ? `<section class="ose-card ose-stats-card" data-testid="event-stats-card" aria-labelledby="stats-heading">
               <h2 id="stats-heading">By the numbers</h2>
-              ${checkinCount > 0 ? `<p data-testid="stat-checkins"><strong>${checkinCount}</strong> Checked in</p>` : ''}
-              ${regCount > 0 ? `<p data-testid="stat-registrations"><strong>${regCount}</strong> Registered</p>` : ''}
-              ${checkinCount > 0 && regCount > 0 ? `<p data-testid="stat-showed-up-share">${Math.round((checkinCount / regCount) * 100)}% of those registered showed up</p>` : ''}
-              ${surveyCount > 0 ? `<p data-testid="stat-surveys"><strong>${surveyCount}</strong> Surveys submitted</p>` : ''}
-              ${emailCount > 0 ? `<p data-testid="stat-email-signups"><strong>${emailCount}</strong> Email signups</p>` : ''}
+              ${checkinCount > 0 ? statLine(checkinCount, 'Checked in', 'stat-checkins') : ''}
+              ${regCount > 0 ? statLine(regCount, 'Registered', 'stat-registrations') : ''}
+              ${
+                // Ratio only when BOTH operands clear the floor — a "% showed up"
+                // over a sub-K denominator (e.g. 50% of 2) back-derives a person.
+                clearsFloor(checkinCount) && clearsFloor(regCount)
+                  ? `<p data-testid="stat-showed-up-share">${Math.round((checkinCount / regCount) * 100)}% of those registered showed up</p>`
+                  : ''
+              }
+              ${surveyCount > 0 ? statLine(surveyCount, 'Surveys submitted', 'stat-surveys') : ''}
+              ${emailCount > 0 ? statLine(emailCount, 'Email signups', 'stat-email-signups') : ''}
             </section>`
           : '';
         // Sponsor rotation stays ambient + spend-blind here (names/links only,
