@@ -86,9 +86,9 @@ export interface SharedReport {
 
   /**
    * Rc — anonymous digital click-out counts from the /s/ routing layer, per
-   * destination kind (public/donate/signup/…). Group-level counter only (no
-   * IP / anon_id / cookie / Referer); each kind AND the total pass the same K=5
-   * floor as unique_gatherings, so a sub-K count never ships. This is the
+   * destination kind (public/donate/signup/…). Group-level counter only (no IP,
+   * no per-visitor id, no cookie, no referrer); each kind AND the total pass the
+   * same K=5 floor as unique_gatherings, so a sub-K count never ships. This is the
    * digital half of the flywheel — surfaced on the SharedReport / post-event
    * recap only (never pre/event/poster, OSE-509).
    */
