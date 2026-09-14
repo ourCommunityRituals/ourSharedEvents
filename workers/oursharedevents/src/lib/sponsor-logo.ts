@@ -57,6 +57,23 @@ export function validateLogoUrl(raw: unknown): LogoUrlValidation {
   return { valid: true, url: raw };
 }
 
+/**
+ * https-only variant for PUBLIC OUTBOUND links (events.what_url) — a link the
+ * page sends a visitor OUT to. validateLogoUrl accepts http(s) because logos are
+ * proxied server-side; an outbound link is followed by the visitor's own
+ * browser, so plain http:// is a mixed-content / downgrade risk and is rejected.
+ * Empty/null is still valid (the field is optional). Reuses validateLogoUrl for
+ * the length + parse + scheme-allowlist checks, then narrows to https.
+ */
+export function validateHttpsUrl(raw: unknown): LogoUrlValidation {
+  const base = validateLogoUrl(raw);
+  if (!base.valid || base.url === null) return base;
+  if (!/^https:\/\//i.test(base.url)) {
+    return { valid: false, url: null, error: 'INVALID_SCHEME' };
+  }
+  return base;
+}
+
 // ── Proxy path ────────────────────────────────────────────────────────────────
 
 export function sponsorLogoPath(sponsorId: string): string {

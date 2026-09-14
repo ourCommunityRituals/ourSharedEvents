@@ -1,0 +1,26 @@
+-- Migration 0072: events.what_url — the WHAT card's optional external link
+--
+-- A general outbound link that lives on the WHAT card of the published 5W event
+-- page. NOT donation-specific by design: it is the event's "go here for more"
+-- destination, whatever the event type needs it to be — a fundraiser's external
+-- donation site (GoFundMe / ActBlue / a parish page), a ticketing page, an
+-- external RSVP, a program PDF. The event type is pluggable; the mechanism is
+-- one field.
+--
+-- WHY THIS MATTERS FIRST (fundraiser launch): a patron who cannot attend can
+-- still act on the event — before, during, AND after — by clicking out to the
+-- organizer's own site. So the link renders on all three phase surfaces
+-- (pre / live / post), because the window a fundraiser cares about outlasts the
+-- gathering.
+--
+-- MONETIZATION-INERT (#6 holds): OSE stores only the destination URL and sends
+-- the patron there. No money and no donor identity ever touch OSE — those live
+-- entirely on the external site. A later slice counts the click-through as a
+-- res-7 aggregate (never-who), the same path a poster scan/click already uses.
+--
+-- Nullable, no default: the field is OPTIONAL and the link renders only when a
+-- host has set one. http(s)-only is enforced at the write path (validateLogoUrl)
+-- and re-guarded on render (defense-in-depth), so a javascript:/data: payload
+-- can never reach an href.
+
+ALTER TABLE events ADD COLUMN what_url TEXT;

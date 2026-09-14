@@ -29,6 +29,7 @@
 import { describe, test, expect, vi, afterEach } from 'vitest';
 import {
   validateLogoUrl,
+  validateHttpsUrl,
   sponsorLogoPath,
   fetchAndProxyLogo,
   LOGO_MAX_BYTES,
@@ -94,6 +95,43 @@ describe('validateLogoUrl', () => {
     const r = validateLogoUrl(url);
     expect(r.valid).toBe(true);
     expect(r.url).toBe(url);
+  });
+});
+
+// ── validateHttpsUrl (events.what_url — public OUTBOUND link, https-only) ───────
+
+describe('validateHttpsUrl', () => {
+  test.each([null, undefined, ''])('optional: valid + null url for empty-ish %s', (input) => {
+    const r = validateHttpsUrl(input);
+    expect(r.valid).toBe(true);
+    expect(r.url).toBeNull();
+  });
+
+  test('accepts https:// URL', () => {
+    const url = 'https://example.org/donate';
+    const r = validateHttpsUrl(url);
+    expect(r.valid).toBe(true);
+    expect(r.url).toBe(url);
+  });
+
+  test('REJECTS http:// (downgrade risk on a public outbound link)', () => {
+    const r = validateHttpsUrl('http://example.org/donate');
+    expect(r.valid).toBe(false);
+    expect(r.error).toBe('INVALID_SCHEME');
+    expect(r.url).toBeNull();
+  });
+
+  test.each(['javascript:alert(1)', 'data:text/html,<h1>x</h1>', 'ftp://x/y'])(
+    'rejects disallowed scheme: %s',
+    (url) => {
+      const r = validateHttpsUrl(url);
+      expect(r.valid).toBe(false);
+    }
+  );
+
+  test('rejects over-length + unparseable, like the base validator', () => {
+    expect(validateHttpsUrl('https://x.example/' + 'a'.repeat(500)).valid).toBe(false);
+    expect(validateHttpsUrl('not a url !!').valid).toBe(false);
   });
 });
 
