@@ -145,6 +145,80 @@ export async function createShortlink(
   );
 }
 
+export interface SlotShortlink {
+  /** Destination category: 'public' (share/event page) or the typed link kind. */
+  kind: string;
+  /** The 6-char /s/ code. */
+  code: string;
+  /** Admin-set external https target, or null → the event public page. */
+  target_url: string | null;
+}
+
+/**
+ * Reuse an existing shortlink for (event, kind), else mint one. The Public slot
+ * also matches the kind-less shortlink minted at event creation, so we never
+ * mint a duplicate public code.
+ */
+async function ensureKindShortlink(
+  env: ShortlinksEnv,
+  eventId: string,
+  kind: string,
+  target: string | null
+): Promise<string> {
+  if (!env.DB) throw new Error('[shortlinks] DB binding missing');
+  const existing = await env.DB.prepare(
+    `SELECT code FROM shortlinks
+       WHERE event_id = ? AND (kind = ? OR (? = 'public' AND kind IS NULL))
+       ORDER BY created_at ASC LIMIT 1`
+  )
+    .bind(eventId, kind, kind)
+    .first<{ code: string }>();
+  if (existing) return existing.code;
+  const { code } = await createShortlink(env, eventId, { targetUrl: target, kind });
+  return code;
+}
+
+/**
+ * Ensure the poster/share shortlinks for an event's destination slots exist,
+ * minting any that are missing — idempotent per (event, kind). Returns the slots
+ * in poster order: PUBLIC first (the share vector → the event page), then the
+ * event's typed outbound link (donate/signup/league/…) ONLY when it is enabled
+ * and a valid https target. Routing-layer only (`/s/`); tracking (`/q/`) is
+ * composed separately.
+ */
+export async function ensureSlotShortlinks(
+  env: ShortlinksEnv,
+  eventId: string,
+  opts: {
+    whatUrl?: string | null;
+    whatUrlType?: string | null;
+    whatUrlEnabled?: boolean | number | null;
+  } = {}
+): Promise<SlotShortlink[]> {
+  if (!env.DB) return [];
+  const slots: SlotShortlink[] = [];
+
+  // Public slot — always present; reuses the event's creation shortlink.
+  const publicCode = await ensureKindShortlink(env, eventId, 'public', null);
+  slots.push({ kind: 'public', code: publicCode, target_url: null });
+
+  // Typed slot — only when the organizer turned the link ON and it is https.
+  const target =
+    opts.whatUrlEnabled && typeof opts.whatUrl === 'string' && isValidHttpsTarget(opts.whatUrl)
+      ? opts.whatUrl
+      : null;
+  if (target) {
+    const kind =
+      typeof opts.whatUrlType === 'string' && opts.whatUrlType.trim().length > 0
+        ? opts.whatUrlType.trim().slice(0, 32)
+        : 'link';
+    const code = await ensureKindShortlink(env, eventId, kind, target);
+    slots.push({ kind, code, target_url: target });
+  }
+
+  return slots;
+}
+
 export interface ResolvedShortlink {
   code: string;
   event_id: string;
