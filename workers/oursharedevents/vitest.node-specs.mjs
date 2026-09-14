@@ -110,4 +110,9 @@ export const NODE_SPECS = [
   // guard off the workerd pool. Uses only crypto.subtle + TextEncoder (both
   // node-available); the workers-bound pii.spec.ts keeps its D1 L1 block.
   'tests/pii-crypto.spec.ts',
+
+  // WHAT external link — event-page render fns emit the optional outbound link
+  // on all three phases. Pure unit over renderPre/Live/PostEventHtml (no
+  // cloudflare:test / D1); node-clean like the other pages.ts render specs.
+  'tests/what-external-link.spec.ts',
 ];
