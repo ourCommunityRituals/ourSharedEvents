@@ -24,6 +24,7 @@ import { env, SELF } from 'cloudflare:test';
 import {
   generateCode,
   isValidCodeShape,
+  isValidHttpsTarget,
   createShortlink,
   resolveCode,
   incrementClick,
@@ -141,6 +142,71 @@ describe('OSE-240: createShortlink + resolveCode lib round-trip', () => {
     expect(resolved!.code).toBe(code);
   });
 
+  // ── Rb — external-target routing (open-redirect-safe; https validated at creation) ──
+  test('isValidHttpsTarget accepts https and rejects every unsafe/non-https form', () => {
+    expect(isValidHttpsTarget('https://give.example.org/donate')).toBe(true);
+    expect(isValidHttpsTarget('http://give.example.org')).toBe(false); // not https
+    expect(isValidHttpsTarget('javascript:alert(1)')).toBe(false); // scheme injection
+    expect(isValidHttpsTarget('data:text/html,<script>x</script>')).toBe(false);
+    expect(isValidHttpsTarget('/events/evt_x')).toBe(false); // not an absolute URL
+    expect(isValidHttpsTarget('')).toBe(false);
+    expect(isValidHttpsTarget('https://x/' + 'a'.repeat(3000))).toBe(false); // over length cap
+    // @ts-expect-error runtime safety
+    expect(isValidHttpsTarget(null)).toBe(false);
+  });
+
+  test('createShortlink REJECTS a non-https target at creation (fat-finger + open-redirect gate)', async () => {
+    const tenv = env as unknown as TestEnv;
+    const eventId = `evt_ose240_badtarget_${Date.now()}`;
+    await tenv.DB.prepare(
+      `INSERT INTO events (id, brand_id, title, slug, status, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))`
+    )
+      .bind(eventId, BRAND, 'Bad target', 'bad-target', 'active')
+      .run();
+    await expect(
+      createShortlink(tenv, eventId, { targetUrl: 'javascript:alert(1)' })
+    ).rejects.toThrow();
+    await expect(
+      createShortlink(tenv, eventId, { targetUrl: 'http://insecure.example' })
+    ).rejects.toThrow();
+  });
+
+  test('a shortlink with an https target_url 302-redirects to that external destination', async () => {
+    const tenv = env as unknown as TestEnv;
+    const eventId = `evt_ose240_donate_${Date.now()}`;
+    await tenv.DB.prepare(
+      `INSERT INTO events (id, brand_id, title, slug, status, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))`
+    )
+      .bind(eventId, BRAND, 'Donate slot', 'donate-slot', 'active')
+      .run();
+    const target = 'https://give.example.org/campaign/bocce';
+    const { code } = await createShortlink(tenv, eventId, { targetUrl: target, kind: 'donate' });
+
+    const resolved = await resolveCode(tenv, code);
+    expect(resolved!.target_url).toBe(target);
+
+    const res = await SELF.fetch(`https://t.test/s/${code}`, { redirect: 'manual' });
+    expect(res.status).toBe(302);
+    expect(res.headers.get('Location')).toBe(target);
+  });
+
+  test('a shortlink with NO target_url still routes to the event public page (backward-compatible)', async () => {
+    const tenv = env as unknown as TestEnv;
+    const eventId = `evt_ose240_public_${Date.now()}`;
+    await tenv.DB.prepare(
+      `INSERT INTO events (id, brand_id, title, slug, status, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))`
+    )
+      .bind(eventId, BRAND, 'Public slot', 'public-slot', 'active')
+      .run();
+    const { code } = await createShortlink(tenv, eventId, { kind: 'public' });
+    const res = await SELF.fetch(`https://t.test/s/${code}`, { redirect: 'manual' });
+    expect(res.status).toBe(302);
+    expect(res.headers.get('Location')).toContain(`/events/${eventId}`);
+  });
+
   test('resolveCode returns null for unknown but valid-shape codes', async () => {
     const tenv = env as unknown as TestEnv;
     const result = await resolveCode(tenv, 'ZzZzZz');
@@ -256,7 +322,19 @@ describe('OSE-240: anonymity-principle compliance', () => {
     const tenv = env as unknown as TestEnv;
     const info = await tenv.DB.prepare(`PRAGMA table_info('shortlinks')`).all<{ name: string }>();
     const cols = (info.results ?? []).map((r) => r.name);
-    expect(cols).toEqual(['code', 'event_id', 'created_at', 'clicks', 'last_clicked_at']);
+    expect(cols).toEqual([
+      'code',
+      'event_id',
+      'created_at',
+      'clicks',
+      'last_clicked_at',
+      // Rb (migration 0073): admin-set ROUTING config — NOT per-attendee data.
+      // target_url = the fixed external destination (https, validated at
+      // creation); kind = destination category (public/donate/signup). Neither
+      // can carry identity — the forbidden-PII check below still guards that.
+      'target_url',
+      'kind',
+    ]);
 
     // Sanity: every forbidden PII-bearing column name from the
     // pii-invariant gate MUST be absent from the new table.

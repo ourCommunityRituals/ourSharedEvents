@@ -75,7 +75,14 @@ export async function handleShortlinkResolve(
   // returned JSON — sending a recipient's browser to that was the gap
   // that this two-PR sequence closed.
   const url = new URL(request.url);
-  const target = `${url.origin}/events/${encodeURIComponent(row.event_id)}`;
+  // Rb: route to the admin-set external destination when present. The target
+  // was validated https:// at creation; re-check the scheme here defensively so
+  // a bad row can never turn the resolver into an open redirect. Anything that
+  // fails the check falls back to the event's own public page.
+  const target =
+    row.target_url && row.target_url.startsWith('https://')
+      ? row.target_url
+      : `${url.origin}/events/${encodeURIComponent(row.event_id)}`;
 
   return new Response(null, {
     status: 302,
