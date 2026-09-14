@@ -195,13 +195,20 @@ describe('OSE-1200 L2 | /poster-bundle prints UEC hues', () => {
   });
 });
 
-describe('OSE-1200 L1 | poster.html carries the non-color channel', () => {
-  test('poster renders word, path and tier text per card and stamps data-uec on the frame', () => {
+describe('OSE-1200 L1 | poster slots carry a text (non-color) channel', () => {
+  // The form-QR UEC consent-tier coloring (word/path/tier text + a data-uec
+  // colored frame) left the poster WITH the forms themselves in P2 (OSE-1319):
+  // the poster now carries only anonymous /q+/s destination slots, which have no
+  // consent tier to color-code. OSE-1200's principle survives against the slots —
+  // every code is identified by TEXT (a visible label + the printed shortlink),
+  // never by color alone. (The bundle still emits per-form UEC colors for other
+  // consumers; that RGB-PNG behavior is covered by the L2 block above.)
+  test('each rendered slot carries a text label and a printed shortlink', () => {
     const html = sourceFile('src/templates/poster.html');
-    expect(html).toContain('data-testid="qr-uec-word-');
-    expect(html).toContain('data-testid="qr-uec-path-');
-    expect(html).toContain('data-testid="qr-uec-tier-');
-    expect(html).toContain("card.setAttribute('data-uec'");
-    expect(html).toContain('borderTopColor = uec.scan_hex');
+    expect(html).toContain('data-testid="poster-qr-slot-label-');
+    expect(html).toContain('data-testid="qr-slot-code-');
+    expect(html).toContain('class="qr-slot-code"');
+    // the color-only consent-tier framing is gone from the poster
+    expect(html).not.toContain("card.setAttribute('data-uec'");
   });
 });

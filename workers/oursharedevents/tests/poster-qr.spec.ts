@@ -103,12 +103,18 @@ describe('DESIGN-9 L1: static source file checks', () => {
     expect(pages).toContain('poster-bundle');
   });
 
-  test('poster page renderPoster() has all 4 QR loading item IDs', () => {
+  test('poster renderPoster() emits the slot container; loadPosterQR fills it from bundle.slots', () => {
     const pages = sourceFile('templates/poster.html');
-    expect(pages).toContain('qr-img-register');
-    expect(pages).toContain('qr-img-checkin');
-    expect(pages).toContain('qr-img-survey');
-    expect(pages).toContain('qr-img-email-signup');
+    // renderPoster emits one empty, print-gated slot container...
+    expect(pages).toContain('id="poster-qr-slots"');
+    expect(pages).toContain('data-testid="poster-qr-slots"');
+    // ...and loadPosterQR fills it from the bundle's typed /q+/s destination
+    // slots (Public / Donate / Sign Up), each with a scannable QR and a printed
+    // shortlink. The forms (register/checkin/survey/email) are NOT on the poster.
+    expect(pages).toContain('data.slots');
+    expect(pages).toContain('data-testid="qr-img-slot-');
+    expect(pages).toContain('data-testid="qr-slot-code-');
+    expect(pages).not.toContain('qr-img-register');
   });
 
   test('poster page calls loadPosterQR in both init() and picker change handler', () => {
