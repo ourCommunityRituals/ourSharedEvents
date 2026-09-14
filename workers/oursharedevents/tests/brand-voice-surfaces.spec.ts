@@ -23,7 +23,12 @@ async function page(path: string): Promise<string> {
   return res.text();
 }
 
-describe('landing | brand voice (flywheel rewrite + anonymity affordance)', () => {
+describe('landing | brand voice (supply-side rewrite + never-who panel)', () => {
+  // OSE-1312 rewrote the landing as the SUPPLY side (two doors + area view +
+  // never-who panel). The old "flywheel" guard still holds; the old ring
+  // subtitle and generic anonymity-affordance testid were removed with the hero.
+  // The Voice Constant's core promise now lives in the landing-privacy panel,
+  // which is TRUE of this page (no cookies / analytics / geolocation).
   it('customer copy no longer says "flywheel" (internal-only term)', async () => {
     const html = await page('/landing');
     expect(html.toLowerCase(), 'flywheel is internal-only vocabulary (Q2)').not.toContain(
@@ -31,15 +36,17 @@ describe('landing | brand voice (flywheel rewrite + anonymity affordance)', () =
     );
   });
 
-  it('the ring subtitle uses the event-cycle framing', async () => {
+  it('leads with the supply-side ask (two doors)', async () => {
     const html = await page('/landing');
-    expect(html).toContain('Six Southside communities. One connected event cycle.');
+    expect(html).toContain('data-testid="landing-doors"');
+    expect(html).toContain('data-testid="door-create-event"');
+    expect(html).toContain('data-testid="door-create-sponsor"');
   });
 
-  it('carries the anonymity affordance with the core promise', async () => {
+  it('carries the never-who core promise in the privacy panel', async () => {
     const html = await page('/landing');
-    expect(html).toContain('data-testid="anonymity-affordance"');
-    expect(html).toContain('never who you are');
+    expect(html).toContain('data-testid="landing-privacy"');
+    expect(html).toContain('without gathering who you are');
   });
 });
 

@@ -1,14 +1,27 @@
 /**
- * E2E Flow Tests: Landing → Events + Subscribe Journey
+ * E2E Flow Tests: Landing (supply side) → Events / Admin journeys.
  *
- * Customer journeys from the landing page:
- *   1. Land on / → click "Events" nav → see event cards
- *   2. Land on / → subscribe with email → success message
- *   3. Subscribe → POST /subscribe → API response reflected in UI
- *   4. Footer "Browse Events" link → /events
- *   5. All 6 landing aliases → same functional page
+ * OSE-1312 rewrote the landing as the SUPPLY side: two doors (create event /
+ * create sponsor), an area view of what's happening nearby, and a never-who
+ * privacy panel. The old hero / subscribe / ring / feature-card journeys are
+ * gone — the email-signup entry point was deliberately removed (the landing is
+ * pure facilitation, never contact capture; email is collected only at
+ * event/tournament signup and destroyed by the retention jobs).
  *
- * Source: workers/oursharedevents/src/handlers/pages.ts (LANDING_HTML)
+ * Customer journeys covered here:
+ *   1. Land on / → click "Events" nav → see the event listing
+ *   2. Land on / → "Create an event" door → /admin
+ *   3. Land on / → "Create a sponsor" door → /admin
+ *   4. Land on / → area / privacy "See what's happening" → /events
+ *   5. All 6 landing aliases → the same supply-side page
+ *
+ * WIRING: this spec lives in tests/e2e/ and is NOT yet named in a CI workflow
+ * allowlist (tracked in OSE-1244). It is kept in sync with the surface so it is
+ * ready to wire, but it is not a CI coverage claim today — the CI-real coverage
+ * for the landing area is the worker-suite renderer spec
+ * (workers/oursharedevents/tests/landing-area.spec.ts, node project).
+ *
+ * Source: workers/oursharedevents/src/handlers/pages.ts (handleLandingPage)
  */
 
 import { test, expect } from '@playwright/test';
@@ -16,11 +29,11 @@ import { test, expect } from '@playwright/test';
 const TIMEOUT = 20_000;
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// 1. LANDING → EVENTS NAVIGATION
+// 1. LANDING → EVENTS / ADMIN NAVIGATION
 // ═══════════════════════════════════════════════════════════════════════════════
 
-test.describe('Landing Flow — Navigation to Events', () => {
-  test('click "Events" in nav → lands on /events with event listing', async ({ page }) => {
+test.describe('Landing Flow — Navigation', () => {
+  test('click "Events" in nav → lands on /events with the event listing', async ({ page }) => {
     await page.goto('/', { waitUntil: 'networkidle', timeout: TIMEOUT });
 
     await page.locator('[data-testid="nav-events"]').click();
@@ -31,10 +44,28 @@ test.describe('Landing Flow — Navigation to Events', () => {
     await expect(page.locator('[data-testid="public-events"]')).toBeVisible();
   });
 
-  test('click "Browse Events" in footer → lands on /events', async ({ page }) => {
+  test('"Create an event" door → /admin', async ({ page }) => {
     await page.goto('/', { waitUntil: 'networkidle', timeout: TIMEOUT });
 
-    await page.locator('[data-testid="landing-footer-browse"]').click();
+    await expect(page.locator('[data-testid="door-create-event"]')).toHaveAttribute(
+      'href',
+      '/admin'
+    );
+  });
+
+  test('"Create a sponsor" door → /admin', async ({ page }) => {
+    await page.goto('/', { waitUntil: 'networkidle', timeout: TIMEOUT });
+
+    await expect(page.locator('[data-testid="door-create-sponsor"]')).toHaveAttribute(
+      'href',
+      '/admin'
+    );
+  });
+
+  test('privacy panel "See what\'s happening" → /events', async ({ page }) => {
+    await page.goto('/', { waitUntil: 'networkidle', timeout: TIMEOUT });
+
+    await page.locator('[data-testid="privacy-more"]').click();
     await page.waitForLoadState('networkidle');
 
     expect(page.url()).toContain('/events');
@@ -42,82 +73,23 @@ test.describe('Landing Flow — Navigation to Events', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// 2. SUBSCRIBE JOURNEY — FULL FLOW
+// 2. NEVER-WHO PROMISE — TRUE OF THIS PAGE (no cookies)
 // ═══════════════════════════════════════════════════════════════════════════════
 
-test.describe('Landing Flow — Subscribe Journey', () => {
-  test('complete flow: enter email → submit → success message → input cleared', async ({
-    page,
-  }) => {
-    await page.route('**/subscribe', (route) =>
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ success: true, persisted: true }),
-      })
+test.describe('Landing Flow — never-who', () => {
+  test('the landing sets no cookies', async ({ page, context }) => {
+    await page.goto('/', { waitUntil: 'networkidle', timeout: TIMEOUT });
+    const cookies = await context.cookies();
+    expect(cookies, 'the landing page must set no cookies — it says so on the page').toHaveLength(
+      0
     );
-    await page.goto('/', { waitUntil: 'networkidle', timeout: TIMEOUT });
-
-    // Step 1: Form is visible
-    await expect(page.locator('[data-testid="subscribe-form"]')).toBeVisible();
-
-    // Step 2: Enter email
-    const emailInput = page.locator('[data-testid="subscribe-email"]');
-    await emailInput.fill('journey@example.com');
-    expect(await emailInput.inputValue()).toBe('journey@example.com');
-
-    // Step 3: Click submit
-    await page.locator('[data-testid="subscribe-submit"]').click();
-
-    // Step 4: Success message appears
-    const msg = page.locator('#form-message');
-    await expect(msg).toContainText("you're in", { timeout: 5000 });
-
-    // Step 5: Input cleared
-    expect(await emailInput.inputValue()).toBe('');
-
-    // Step 6: Button re-enabled
-    await expect(page.locator('[data-testid="subscribe-submit"]')).toBeEnabled();
   });
 
-  test('subscribe fires POST /subscribe with correct payload', async ({ page }) => {
-    let capturedBody: string | null = null;
-    await page.route('**/subscribe', async (route) => {
-      capturedBody = route.request().postData();
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ success: true }),
-      });
-    });
-
+  test('carries the supply-side doors + never-who panel', async ({ page }) => {
     await page.goto('/', { waitUntil: 'networkidle', timeout: TIMEOUT });
-    await page.locator('[data-testid="subscribe-email"]').fill('payload@test.com');
-    await page.locator('[data-testid="subscribe-submit"]').click();
-    await page.waitForTimeout(1000);
-
-    expect(capturedBody).toBeTruthy();
-    const parsed = JSON.parse(capturedBody!);
-    expect(parsed.email).toBe('payload@test.com');
-  });
-
-  test('subscribe request has Content-Type: application/json', async ({ page }) => {
-    let contentType: string | null = null;
-    await page.route('**/subscribe', async (route) => {
-      contentType = route.request().headers()['content-type'];
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ success: true }),
-      });
-    });
-
-    await page.goto('/', { waitUntil: 'networkidle', timeout: TIMEOUT });
-    await page.locator('[data-testid="subscribe-email"]').fill('ct@test.com');
-    await page.locator('[data-testid="subscribe-submit"]').click();
-    await page.waitForTimeout(1000);
-
-    expect(contentType).toContain('application/json');
+    await expect(page.locator('[data-testid="landing-doors"]')).toBeVisible();
+    await expect(page.locator('[data-testid="landing-privacy"]')).toBeVisible();
+    await expect(page.locator('[data-testid="landing-area"]')).toBeVisible();
   });
 });
 
@@ -136,28 +108,19 @@ test.describe('Landing Flow — Mobile', () => {
     expect(hasScroll).toBe(false);
   });
 
-  test('subscribe form stacks vertically on mobile', async ({ page }) => {
+  test('the two doors stack (single column) on mobile', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 667 });
     await page.goto('/', { waitUntil: 'networkidle', timeout: TIMEOUT });
 
-    const input = page.locator('[data-testid="subscribe-email"]');
-    const btn = page.locator('[data-testid="subscribe-submit"]');
-    const inputBox = await input.boundingBox();
-    const btnBox = await btn.boundingBox();
+    const create = page.locator('[data-testid="door-create-event"]');
+    const sponsor = page.locator('[data-testid="door-create-sponsor"]');
+    const createBox = await create.boundingBox();
+    const sponsorBox = await sponsor.boundingBox();
 
-    expect(inputBox).toBeTruthy();
-    expect(btnBox).toBeTruthy();
-    // On mobile (≤480px), flex-direction: column → button below input
-    expect(btnBox!.y).toBeGreaterThanOrEqual(inputBox!.y + inputBox!.height - 5);
-  });
-
-  test('ring nodes visible on mobile', async ({ page }) => {
-    await page.setViewportSize({ width: 375, height: 667 });
-    await page.goto('/', { waitUntil: 'networkidle', timeout: TIMEOUT });
-
-    // At least the ring section is visible (nodes may overlap on small screens)
-    await expect(page.locator('[data-testid="ring-section"]')).toBeVisible();
-    await expect(page.locator('[data-testid="ring-node-ep"]')).toBeVisible();
+    expect(createBox).toBeTruthy();
+    expect(sponsorBox).toBeTruthy();
+    // single-column grid below 640px → sponsor door sits below the create door
+    expect(sponsorBox!.y).toBeGreaterThanOrEqual(createBox!.y + createBox!.height - 5);
   });
 });
 
@@ -166,16 +129,15 @@ test.describe('Landing Flow — Mobile', () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 test.describe('Landing Flow — Alias Equivalence', () => {
-  test('all aliases show hero + subscribe + ring + features', async ({ page }) => {
+  test('all aliases show the doors + area + never-who panel', async ({ page }) => {
     const ALIASES = ['/', '/home', '/welcome', '/landing', '/about', '/info'];
 
     for (const path of ALIASES) {
       await page.goto(path, { waitUntil: 'networkidle', timeout: TIMEOUT });
 
-      await expect(page.locator('[data-testid="hero-section"]')).toBeVisible();
-      await expect(page.locator('[data-testid="subscribe-form"]')).toBeVisible();
-      await expect(page.locator('[data-testid="ring-section"]')).toBeVisible();
-      await expect(page.locator('[data-testid="features-section"]')).toBeVisible();
+      await expect(page.locator('[data-testid="landing-doors"]')).toBeVisible();
+      await expect(page.locator('[data-testid="landing-area"]')).toBeVisible();
+      await expect(page.locator('[data-testid="landing-privacy"]')).toBeVisible();
     }
   });
 });

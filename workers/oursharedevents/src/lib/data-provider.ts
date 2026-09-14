@@ -265,9 +265,12 @@ export class DataProvider {
 
   private async fetchEvents(brand: string): Promise<MockEvent[] | null> {
     const { results } = await this.db!.prepare(
+      // template_id / event_type_id feed the landing area's event-type filter
+      // (OSE-1312). Additive to the list projection; the JSON API drops both via
+      // its allowlist projection (public-event-projection), so this cannot leak.
       `SELECT id, brand_id, title, slug, status, description, location,
               start_date, end_date, timezone, cover_image_url, created_at, updated_at,
-              legal_clearance_tier,
+              legal_clearance_tier, template_id, event_type_id,
               what_short, who_host, why_purpose, how_details, where_address,
               lat, lon, corridor_id, h3_res9, h3_res7
        FROM events
