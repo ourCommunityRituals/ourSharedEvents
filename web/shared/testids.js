@@ -35,7 +35,7 @@
  *   Derived from the templates, so it can never claim an id the app does not
  *   emit. Dynamically-built ids (`data-testid="row-' + id + '"`) are excluded
  *   on purpose: t() would accept one while nothing ever renders it.
- * Generated 2026-09-14 — 379 ids.
+ * Generated 2026-09-14 — 382 ids.
  */
 (function (root, factory) {
   const api = factory();
@@ -321,9 +321,12 @@
       'display-upcoming-heading',
       'display-upcoming-name',
     ]),
-    // poster.html — 35 ids
+    // poster.html — 38 ids
     POSTER: Object.freeze([
       'poster-area',
+      'poster-art-empty',
+      'poster-art-img',
+      'poster-art-viewport',
       'poster-body',
       'poster-card',
       'poster-card-header',
