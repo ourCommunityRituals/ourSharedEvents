@@ -1127,6 +1127,39 @@ export async function handleGetSponsorBundle(
 // ─── Public: Impression / Click Logging ─────────────────────────────────────────
 
 /**
+ * D3 (CCR 2026-09-14): an impression/click may be logged ONLY for a sponsor that
+ * is actually placed on this event, brand-matched, and renderable. Returns the
+ * event's h3_res7 when the (event, sponsor) pair is a resolved active placement,
+ * or `{ ok:false }` when it is not — the caller then rejects with 404 and writes
+ * nothing, so a fabricated (event, sponsor) pair can't pollute the proof layer
+ * (sponsor_impressions feeds the SharedReport). res7 (~5km²) only; res9 stays out
+ * (a digital click is not a physical poster location). Shared by both handlers so
+ * the placement gate can't drift between impression and click.
+ */
+async function resolvePlacementGeo(
+  db: D1Database,
+  eventId: string,
+  sponsorId: string
+): Promise<{ ok: boolean; h3Res7: string | null }> {
+  const row = await db
+    .prepare(
+      `SELECT e.h3_res7 AS h3_res7
+       FROM events e
+       JOIN sponsor_placement sp ON sp.event_id = e.id
+       JOIN sponsor_business sb ON sb.id = sp.sponsor_business_id
+       WHERE e.id = ?1 AND sb.id = ?2
+         AND sp.is_active = 1 AND sb.is_active = 1
+         AND sb.brand_id = e.brand_id
+         AND COALESCE(sp.organizer_accepted, 1) = 1
+         AND COALESCE(sp.sponsor_accepted, 1) = 1
+       LIMIT 1`
+    )
+    .bind(eventId, sponsorId)
+    .first<{ h3_res7: string | null }>();
+  return row ? { ok: true, h3Res7: row.h3_res7 ?? null } : { ok: false, h3Res7: null };
+}
+
+/**
  * POST /api/v2/events/:id/sponsors/:sid/impression
  */
 export async function handleLogImpression(
@@ -1145,12 +1178,17 @@ export async function handleLogImpression(
   const surface = typeof body.surface === 'string' ? body.surface.slice(0, 50) : 'unknown';
   const placement = typeof body.placement === 'string' ? body.placement.slice(0, 50) : 'unknown';
 
-  // OSE-635: read h3_res7 from event at write-time. res7 (~5km²) only —
-  // res9 is deliberately omitted here (digital click ≠ physical poster location).
-  const eventGeo = await env.DB.prepare(`SELECT h3_res7 FROM events WHERE id = ? LIMIT 1`)
-    .bind(eventId)
-    .first<{ h3_res7: string | null }>();
-  const h3Res7 = eventGeo?.h3_res7 ?? null;
+  // D3: only log for a sponsor actually placed + brand-matched on this event.
+  const resolved = await resolvePlacementGeo(env.DB, eventId, sponsorId);
+  if (!resolved.ok) {
+    return errorResponse(
+      'NOT_FOUND',
+      'No active placement for this sponsor on this event',
+      404,
+      rid
+    );
+  }
+  const h3Res7 = resolved.h3Res7;
 
   try {
     const id = generateId('si');
@@ -1263,12 +1301,17 @@ export async function handleLogClick(
   const surface = typeof body.surface === 'string' ? body.surface.slice(0, 50) : 'unknown';
   const placement = typeof body.placement === 'string' ? body.placement.slice(0, 50) : 'unknown';
 
-  // OSE-635: read h3_res7 from event at write-time. res7 (~5km²) only —
-  // res9 is deliberately omitted here (digital click ≠ physical poster location).
-  const eventGeo = await env.DB.prepare(`SELECT h3_res7 FROM events WHERE id = ? LIMIT 1`)
-    .bind(eventId)
-    .first<{ h3_res7: string | null }>();
-  const h3Res7 = eventGeo?.h3_res7 ?? null;
+  // D3: only log for a sponsor actually placed + brand-matched on this event.
+  const resolved = await resolvePlacementGeo(env.DB, eventId, sponsorId);
+  if (!resolved.ok) {
+    return errorResponse(
+      'NOT_FOUND',
+      'No active placement for this sponsor on this event',
+      404,
+      rid
+    );
+  }
+  const h3Res7 = resolved.h3Res7;
 
   try {
     const id = generateId('sc');
