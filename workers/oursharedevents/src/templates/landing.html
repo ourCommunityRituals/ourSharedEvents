@@ -1,739 +1,362 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-surface="ose-landing">
   <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>OurSharedEvents</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>OurSharedEvents — host or sponsor a neighborhood gathering</title>
     <meta
       name="description"
-      content="Community events bringing Chicago's Southside together. Gather with your neighborhood."
+      content="Create an event or sponsor one in your neighborhood. Attendance is measured without gathering who you are."
     />
+    <link rel="stylesheet" href="/ui.css" />
+    <!--
+      OSE-1312: the landing page is the SUPPLY side (someone thinking about hosting or
+      sponsoring). A scanner never lands here — a poster scan resolves straight to the
+      event page. Two doors + what's already happening nearby + a plain never-who
+      statement. NO cookies, NO analytics, NO geolocation prompt: the list/map and
+      7/30/90 toggles are CSS-only (hidden radios + :checked), so nothing about the
+      viewer is stored or sent. The page must live up to the statement it prints.
+    -->
     <style>
-      *,
-      *::before,
-      *::after {
+      [data-surface='ose-landing'] {
+        --bg: var(--bg, #faf9f7);
+        --surface: var(--surface, #fff);
+        --text: var(--text, #1a1a1a);
+        --muted: var(--text-muted, #5a5a5a);
+        /* Platform accent (OSE-221): one scan path, one accent. NOT Tailwind blue. */
+        --accent: var(--accent, #4361ee);
+        --on-accent: var(--on-accent, #fff);
+        --line: rgba(42, 42, 42, 0.12);
+      }
+      * {
         box-sizing: border-box;
+      }
+      html,
+      body {
         margin: 0;
         padding: 0;
-      }
-      body {
-        font-family:
-          -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell,
-          sans-serif;
-        background: #f8fafc;
-        color: #1e293b;
-        line-height: 1.6;
-        -webkit-font-smoothing: antialiased;
-      }
-      header {
-        background: #1a1a2e;
-        color: #fff;
-        padding: 1rem 2rem;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-      }
-      /* OSE-292: logo is a link home — must be a 44px-tall tap target too. */
-      .logo {
-        font-size: 1.25rem;
-        font-weight: 700;
-        letter-spacing: -0.01em;
-        text-decoration: none;
-        color: #fff;
-        display: inline-flex;
-        align-items: center;
-        min-height: 44px;
-      }
-      nav {
-        display: flex;
-        gap: 1.5rem;
-      }
-      /* OSE-292 (2026-05-16): landing nav links must be 44x44 tap targets. */
-      nav a {
-        color: rgba(255, 255, 255, 0.8);
-        text-decoration: none;
-        font-size: 0.875rem;
-        font-weight: 500;
-        transition: color 0.2s;
-        display: inline-flex;
-        align-items: center;
-        min-height: 44px;
-        padding: 0 0.5rem;
-      }
-      nav a:hover {
-        color: #fff;
-      }
-      nav a:focus-visible {
-        outline: 2px solid #fff;
-        outline-offset: 2px;
-      }
-      .logo:focus-visible {
-        outline: 2px solid #fff;
-        outline-offset: 2px;
-      }
-      .hero {
-        text-align: center;
-        padding: 5rem 1.5rem 4rem;
-        max-width: 700px;
-        margin: 0 auto;
-      }
-      .hero h1 {
-        font-size: clamp(2rem, 5vw, 3rem);
-        font-weight: 800;
-        color: #0f172a;
-        line-height: 1.15;
-        margin-bottom: 1.25rem;
-      }
-      .hero p {
-        font-size: 1.125rem;
-        color: #475569;
-        max-width: 540px;
-        margin: 0 auto 2.5rem;
-      }
-      .subscribe-form {
-        display: flex;
-        gap: 0.5rem;
-        max-width: 440px;
-        margin: 0 auto;
-        flex-wrap: wrap;
-        justify-content: center;
-      }
-      .subscribe-form input[type='email'] {
-        flex: 1 1 240px;
-        padding: 0.75rem 1rem;
-        border: 2px solid #e2e8f0;
-        border-radius: 8px;
-        font-size: 1rem;
-        outline: none;
-        transition: border-color 0.2s;
-        background: #fff;
-        color: #1e293b;
-      }
-      .subscribe-form input[type='email']:focus {
-        border-color: #4361ee;
-      }
-      /* OSE-292: subscribe button must clear 44px touch-target floor. */
-      .subscribe-form button[type='submit'] {
-        padding: 0.75rem 1.5rem;
-        min-height: 44px;
-        background: #4361ee; /* OSE-221 platform accent (indigo) — walkthrough 2026-09-03 aligned the landing off Tailwind blue */
-        color: #fff;
-        border: none;
-        border-radius: 8px;
-        font-size: 1rem;
-        font-weight: 600;
-        cursor: pointer;
-        transition: background 0.2s;
-        white-space: nowrap;
-      }
-      .subscribe-form button[type='submit']:hover {
-        background: #3451d1;
-      }
-      .subscribe-form button[type='submit']:focus-visible {
-        outline: 2px solid #3451d1;
-        outline-offset: 2px;
-      }
-      .subscribe-form button[type='submit']:disabled {
-        background: #64748b;
-        cursor: not-allowed;
-      }
-      .form-message {
-        width: 100%;
-        text-align: center;
-        font-size: 0.875rem;
-        margin-top: 0.75rem;
-        min-height: 1.25rem;
-      }
-      .form-message.success {
-        color: #059669;
-      }
-      .form-message.error {
-        color: #dc2626;
-      }
-      .ring-section {
-        text-align: center;
-        padding: 3rem 1.5rem 2rem;
-        max-width: 700px;
-        margin: 0 auto;
-      }
-      .ring-section h2 {
-        font-size: 1.5rem;
-        font-weight: 800;
-        color: #0f172a;
-        margin-bottom: 0.5rem;
-      }
-      .ring-section p.ring-subtitle {
-        font-size: 0.95rem;
-        color: #64748b;
-        margin-bottom: 2.5rem;
-      }
-      .ring-container {
-        position: relative;
-        width: 340px;
-        height: 340px;
-        margin: 0 auto;
-        overflow: visible;
-      }
-      .ring-path {
-        position: absolute;
-        inset: 0;
-        border: 2.5px dashed #cbd5e1;
-        border-radius: 50%;
-        pointer-events: none;
-      }
-      .ring-node {
-        position: absolute;
-        width: 100px;
-        height: 100px;
-        border-radius: 50%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        text-align: center;
-        font-size: 0.78rem;
-        font-weight: 700;
-        color: #fff;
-        line-height: 1.2;
-        padding: 0.5rem;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
-        transition:
-          transform 0.25s ease,
-          box-shadow 0.25s ease;
-        z-index: 1;
-      }
-      .ring-node:hover {
-        transform: scale(1.08);
-        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
-      }
-      .ring-node.n-ep {
-        background: #4361ee;
-        top: 8px;
-        left: 18px;
-      }
-      .ring-node.n-br {
-        background: #6d28d9;
-        top: 8px;
-        right: 18px;
-      }
-      .ring-node.n-bv {
-        background: #059669;
-        top: 50%;
-        right: -12px;
-        transform: translateY(-50%);
-      }
-      .ring-node.n-bv:hover {
-        transform: translateY(-50%) scale(1.08);
-      }
-      .ring-node.n-bi {
-        background: #b45309;
-        bottom: 8px;
-        right: 18px;
-      }
-      .ring-node.n-mg {
-        background: #b91c1c;
-        bottom: 8px;
-        left: 18px;
-      }
-      .ring-node.n-ol {
-        background: #0891b2;
-        top: 50%;
-        left: -12px;
-        transform: translateY(-50%);
-      }
-      .ring-node.n-ol:hover {
-        transform: translateY(-50%) scale(1.08);
-      }
-      @media (min-width: 600px) {
-        .ring-container {
-          width: 440px;
-          height: 440px;
-        }
-        .ring-node {
-          width: 120px;
-          height: 120px;
-          font-size: 0.85rem;
-        }
-        .ring-node.n-ep {
-          top: 6px;
-          left: 24px;
-        }
-        .ring-node.n-br {
-          top: 6px;
-          right: 24px;
-        }
-        .ring-node.n-bv {
-          right: -18px;
-        }
-        .ring-node.n-bi {
-          bottom: 6px;
-          right: 24px;
-        }
-        .ring-node.n-mg {
-          bottom: 6px;
-          left: 24px;
-        }
-        .ring-node.n-ol {
-          left: -18px;
-        }
-      }
-      @media (max-width: 380px) {
-        .ring-section {
-          padding-left: 2rem;
-          padding-right: 2rem;
-        }
-        .ring-container {
-          width: 280px;
-          height: 280px;
-        }
-        .ring-node {
-          width: 82px;
-          height: 82px;
-          font-size: 0.7rem;
-          padding: 0.35rem;
-        }
-        .ring-node.n-ep {
-          top: 4px;
-          left: 10px;
-        }
-        .ring-node.n-br {
-          top: 4px;
-          right: 10px;
-        }
-        .ring-node.n-bv {
-          right: -8px;
-        }
-        .ring-node.n-bi {
-          bottom: 4px;
-          right: 10px;
-        }
-        .ring-node.n-mg {
-          bottom: 4px;
-          left: 10px;
-        }
-        .ring-node.n-ol {
-          left: -8px;
-        }
-      }
-      .features {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-        gap: 1.5rem;
-        max-width: 960px;
-        margin: 0 auto;
-        padding: 3rem 1.5rem 4rem;
-      }
-      .feature-card {
-        background: #fff;
-        border-radius: 12px;
-        padding: 2rem;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
-        border: 1px solid #e2e8f0;
-      }
-      .feature-icon {
-        width: 48px;
-        height: 48px;
-        border-radius: 10px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 1.5rem;
-        margin-bottom: 1rem;
-      }
-      .feature-icon.events {
-        background: #eff6ff;
-        color: #4361ee;
-      }
-      .feature-icon.sponsors {
-        background: #fef3c7;
-        color: #d97706;
-      }
-      .feature-icon.community {
-        background: #dcfce7;
-        color: #059669;
-      }
-      .feature-card h3 {
-        font-size: 1.1rem;
-        font-weight: 700;
-        color: #0f172a;
-        margin-bottom: 0.5rem;
-      }
-      .feature-card p {
-        font-size: 0.9rem;
-        color: #64748b;
+        background: var(--bg);
+        color: var(--text);
+        font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
         line-height: 1.5;
-      }
-      footer {
-        background: #1a1a2e;
-        color: rgba(255, 255, 255, 0.6);
-        text-align: center;
-        padding: 2rem 1.5rem;
-        font-size: 0.8rem;
-      }
-      footer a {
-        color: rgba(255, 255, 255, 0.8);
-        text-decoration: none;
-      }
-      footer a:hover {
-        color: #fff;
-      }
-      footer a:focus-visible {
-        outline: 2px solid rgba(255, 255, 255, 0.8);
-        outline-offset: 2px;
+        overflow-wrap: anywhere;
       }
       .skip-link {
         position: absolute;
         left: -9999px;
-        top: auto;
-        width: 1px;
-        height: 1px;
-        overflow: hidden;
       }
       .skip-link:focus {
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: auto;
-        height: auto;
+        left: 1rem;
+        top: 1rem;
+        background: var(--accent);
+        color: var(--on-accent);
         padding: 0.5rem 1rem;
-        background: #1a1a2e;
-        color: #fff;
-        font-size: 1rem;
-        z-index: 9999;
-        text-decoration: none;
-        border-bottom: 2px solid #4361ee;
-      }
-      @media (max-width: 480px) {
-        header {
-          padding: 0.75rem 1rem;
-        }
-        nav {
-          gap: 1rem;
-        }
-        .hero {
-          padding: 3rem 1rem 2.5rem;
-        }
-        .subscribe-form {
-          flex-direction: column;
-        }
-        .subscribe-form input[type='email'],
-        .subscribe-form button[type='submit'] {
-          width: 100%;
-          flex: none;
-        }
-        .features {
-          padding: 2rem 1rem 3rem;
-        }
-      }
-      .ose-anonymity {
-        max-width: 720px;
-        margin: 2rem auto 0;
-        padding: 1rem 1.25rem;
-        background: var(--surface);
-        border: 1px solid var(--border);
-        border-left: 3px solid var(--accent);
-        border-radius: 4px;
-        font-size: 0.9rem;
-        color: var(--text-muted);
-      }
-      .ose-anonymity h2 {
-        margin: 0 0 0.5rem;
-        font-size: 1rem;
-        color: var(--text);
-      }
-      .ose-anonymity p {
-        margin: 0;
-      }
-    </style>
-    <link rel="stylesheet" href="/ui.css" />
-    <style>
-      body {
-        background: var(--bg);
-        color: var(--text);
+        border-radius: 6px;
+        z-index: 10;
       }
       header {
-        background: var(--surface);
-        border-bottom: 1px solid var(--border);
-      }
-      footer {
-        background: var(--surface);
-        border-top: 1px solid var(--border);
-        color: var(--text-muted);
-      }
-      nav a {
-        color: var(--text-muted);
-      }
-      nav a:hover,
-      nav a:focus-visible {
-        color: var(--text);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        padding: 0.75rem 1.25rem;
+        border-bottom: 1px solid var(--line);
       }
       .logo {
+        display: inline-flex;
+        align-items: center;
+        min-height: 44px;
+        font-size: 1.15rem;
+        font-weight: 700;
+        letter-spacing: -0.01em;
+        text-decoration: none;
         color: var(--text);
       }
-      .logo:focus-visible,
-      nav a:focus-visible {
-        outline-color: var(--accent);
+      nav {
+        display: flex;
+        gap: 0.5rem;
       }
-      .hero h1 {
+      nav a {
+        display: inline-flex;
+        align-items: center;
+        min-height: 44px;
+        padding: 0 0.75rem;
+        color: var(--muted);
+        text-decoration: none;
+        font-size: 0.95rem;
+        font-weight: 500;
+      }
+      nav a:hover {
         color: var(--text);
       }
-      .hero p {
-        color: var(--text-muted);
+      main {
+        max-width: 760px;
+        margin: 0 auto;
+        padding: 1.5rem 1.25rem 3rem;
       }
-      .subscribe-form input[type='email'] {
+      /* ── Two doors ─────────────────────────────────────────────────────────── */
+      .doors {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 1rem;
+        margin: 0.5rem 0 2rem;
+      }
+      @media (min-width: 640px) {
+        .doors {
+          grid-template-columns: 1fr 1fr;
+        }
+      }
+      .door {
+        display: block;
+        min-height: 44px;
+        padding: 1.5rem 1.25rem;
+        border: 1px solid var(--line);
+        border-radius: 12px;
         background: var(--surface);
-        border-color: var(--border);
+        text-decoration: none;
+        color: var(--text);
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+      }
+      .door:hover,
+      .door:focus-visible {
+        border-color: var(--accent);
+        outline: none;
+      }
+      .door:focus-visible {
+        outline: 3px solid var(--accent);
+        outline-offset: 2px;
+      }
+      .door-title {
+        font-size: 1.25rem;
+        font-weight: 700;
+        margin: 0 0 0.25rem;
+      }
+      .door-sub {
+        margin: 0;
+        color: var(--muted);
+        font-size: 0.95rem;
+      }
+      /* ── Area view ─────────────────────────────────────────────────────────── */
+      .area-heading {
+        font-size: 1.15rem;
+        margin: 0 0 0.75rem;
+      }
+      .toggles {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem 1.25rem;
+        align-items: center;
+        margin: 0 0 1rem;
+      }
+      .toggle-group {
+        display: inline-flex;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        overflow: hidden;
+        /* reset UA <fieldset> chrome so the pill row renders flush */
+        margin: 0;
+        padding: 0;
+        min-inline-size: 0;
+      }
+      .toggle-group label {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 44px;
+        padding: 0 0.85rem;
+        font-size: 0.9rem;
+        color: var(--muted);
+        cursor: pointer;
+        background: var(--surface);
+      }
+      .toggle-group legend {
+        position: absolute;
+        left: -9999px;
+      }
+      /* CSS-only toggles: hidden radios drive the view + window with no JS/cookies. */
+      .toggle-radio {
+        position: absolute;
+        opacity: 0;
+        pointer-events: none;
+      }
+      .toggle-radio:focus-visible + label {
+        outline: 3px solid var(--accent);
+        outline-offset: -3px;
+      }
+      /* Selected pill. Type pills are dynamic — their selected rule is emitted
+         inline by the renderer (one per type present). */
+      #view-list:checked ~ .toggles label[for='view-list'],
+      #view-map:checked ~ .toggles label[for='view-map'],
+      #win-7:checked ~ .toggles label[for='win-7'],
+      #win-30:checked ~ .toggles label[for='win-30'],
+      #win-90:checked ~ .toggles label[for='win-90'],
+      #type-all:checked ~ .toggles label[for='type-all'],
+      #mod-all:checked ~ .toggles label[for='mod-all'],
+      #mod-online:checked ~ .toggles label[for='mod-online'],
+      #mod-inperson:checked ~ .toggles label[for='mod-inperson'],
+      #prod-all:checked ~ .toggles label[for='prod-all'],
+      #prod-ose:checked ~ .toggles label[for='prod-ose'],
+      #prod-hybrid:checked ~ .toggles label[for='prod-hybrid'] {
+        background: var(--accent);
+        color: var(--on-accent);
+        font-weight: 600;
+      }
+      /* View switch: show list OR map */
+      .view-list,
+      .view-map {
+        display: none;
+      }
+      #view-list:checked ~ .area .view-list {
+        display: block;
+      }
+      #view-map:checked ~ .area .view-map {
+        display: block;
+      }
+      /* Filters compose: each group contributes display:none for cards it
+         excludes, so a card is visible iff it survives EVERY active group.
+         "All" contributes no rule. Cards are server-tagged with
+         within-{7,30,90} · type-<slug> · product-ose · modality-{online,inperson}. */
+      #win-7:checked ~ .area .event-card:not(.within-7),
+      #win-30:checked ~ .area .event-card:not(.within-30),
+      #win-90:checked ~ .area .event-card:not(.within-90),
+      #mod-online:checked ~ .area .event-card:not(.modality-online),
+      #mod-inperson:checked ~ .area .event-card:not(.modality-inperson),
+      #prod-ose:checked ~ .area .event-card:not(.product-ose),
+      #prod-hybrid:checked ~ .area .event-card:not(.product-hybrid) {
+        display: none;
+      }
+      .event-card {
+        display: block;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: var(--surface);
+        padding: 1rem 1.15rem;
+        margin: 0 0 0.75rem;
+        text-decoration: none;
         color: var(--text);
       }
-      .subscribe-form input[type='email']:focus {
+      .event-card:hover {
         border-color: var(--accent);
       }
-      .subscribe-form button[type='submit'] {
-        background: var(--accent);
-        /* --on-accent: AA-safe label on any accent, brand-swappable (OSE-654). */
-        color: var(--on-accent);
+      .event-name {
+        font-weight: 700;
+        margin: 0 0 0.2rem;
       }
-      .subscribe-form button[type='submit']:hover {
-        background: var(--accent-hover);
+      .event-meta {
+        color: var(--muted);
+        font-size: 0.9rem;
       }
-      .subscribe-form button[type='submit']:focus-visible {
-        outline-color: var(--accent);
+      .empty-state {
+        border: 1px dashed var(--line);
+        border-radius: 10px;
+        padding: 1.5rem 1.25rem;
+        text-align: center;
+        color: var(--muted);
       }
-      .subscribe-form button[type='submit']:disabled {
-        background: var(--text-muted);
-      }
-      .form-message.success {
-        color: var(--success);
-      }
-      .form-message.error {
-        color: var(--danger);
-      }
-      /* OSE-655 A2/A4: non-color cue so success/error survive colorblindness
-         (deuteranopia) and any palette swap — meaning is never color-only.
-         success = teal --success (not green), paired with a check; error =
-         --danger paired with a cross. The message text (aria-live) carries the
-         full meaning for screen readers; these glyphs are the visual valence. */
-      .form-message.success::before { content: "\2713\00a0"; }
-      .form-message.error::before { content: "\2717\00a0"; }
-      .ring-path {
-        border-color: var(--border);
-      }
-      .ring-section h2 {
+      .empty-state strong {
         color: var(--text);
       }
-      .ring-section p.ring-subtitle {
-        color: var(--text-muted);
-      }
-      .feature-card {
+      .map-placeholder {
+        border: 1px solid var(--line);
+        border-radius: 10px;
         background: var(--surface);
-        border-color: var(--border);
-        box-shadow: none;
+        padding: 2rem 1.25rem;
+        text-align: center;
+        color: var(--muted);
       }
-      .feature-card h3 {
+      /* ── Never-who privacy panel ───────────────────────────────────────────── */
+      .privacy {
+        margin: 2.25rem 0 0;
+        padding: 1.15rem 1.25rem;
+        background: color-mix(in srgb, var(--accent) 7%, transparent);
+        border-left: 3px solid var(--accent);
+        border-radius: 8px;
+        font-size: 0.92rem;
+        color: var(--muted);
+      }
+      .privacy h2 {
+        margin: 0 0 0.4rem;
+        font-size: 1rem;
         color: var(--text);
       }
-      .feature-card p {
-        color: var(--text-muted);
+      .privacy p {
+        margin: 0 0 0.5rem;
       }
-      .feature-icon.events {
-        background: color-mix(in srgb, var(--accent) 15%, transparent);
+      .privacy a {
         color: var(--accent);
       }
-      .feature-icon.sponsors {
-        background: color-mix(in srgb, var(--accent) 10%, transparent);
-        color: var(--accent-hover);
-      }
-      .feature-icon.community {
-        background: color-mix(in srgb, var(--success) 15%, transparent);
-        color: var(--success);
-      }
-      footer a {
-        color: var(--text-muted);
-      }
-      footer a:hover {
+      /* Page-level heading — the one <h1>. Visible text = accessible name (WCAG
+         2.4.6 / 1.3.1 heading hierarchy: h1 → the section h2s below). */
+      .lead {
+        font-size: clamp(1.5rem, 4vw, 2rem);
+        font-weight: 800;
+        line-height: 1.15;
+        letter-spacing: -0.01em;
+        margin: 0.25rem 0 1.25rem;
         color: var(--text);
-      }
-      .skip-link:focus {
-        background: var(--surface);
-        color: var(--text);
-        border-bottom-color: var(--accent);
       }
     </style>
   </head>
   <body>
     <a href="#main-content" class="skip-link" data-testid="landing-skip-link">Skip to content</a>
     <header data-testid="landing-header">
-      <a href="/" class="logo" data-testid="landing-logo" aria-label="OurSharedEvents home">OurSharedEvents</a>
-      <nav data-testid="landing-nav">
+      <a href="/" class="logo" data-testid="landing-logo" aria-label="OurSharedEvents home"
+        >OurSharedEvents</a
+      >
+      <nav data-testid="landing-nav" aria-label="Primary">
         <a href="/events" data-testid="nav-events">Events</a>
-        <a href="/admin" data-testid="nav-admin">Admin</a>
       </nav>
     </header>
+
     <main id="main-content" data-testid="landing-main">
-      <section class="hero" data-testid="hero-section">
-        <h1 data-testid="hero-headline">Gather with your neighborhood on Chicago&#x2019;s Southside</h1>
-        <p data-testid="hero-description">
-          Community events that bring people together. Stay in the loop and be the first to know
-          when something&#x2019;s happening near you.
-        </p>
-        <form class="subscribe-form" id="subscribe-form" data-testid="subscribe-form" novalidate>
-          <label for="email-input" class="sr-only">Email address</label>
-          <input
-            type="email"
-            id="email-input"
-            name="email"
-            placeholder="Enter your email"
-            aria-label="Email address"
-            autocomplete="email"
-            inputmode="email"
-            aria-describedby="form-message"
-            data-testid="subscribe-email"
-            required
-          />
-          <button type="submit" data-testid="subscribe-submit">Stay in the Loop</button>
-          <div class="form-message" id="form-message" role="status" aria-live="polite" data-testid="subscribe-message"></div>
-        </form>
+      <!-- The page's single <h1>. Frames the supply-side ask (the two doors
+           below) and gives screen readers + search engines a page-level heading. -->
+      <h1 class="lead" data-testid="landing-h1">Host or sponsor a gathering in your neighborhood</h1>
+      <!-- Two doors: always present. This is the supply-side ask. -->
+      <section class="doors" data-testid="landing-doors" aria-label="Get started">
+        <a class="door" href="/admin" data-testid="door-create-event">
+          <p class="door-title">Create an event</p>
+          <p class="door-sub">Host a gathering and get a poster, QR codes, and a shareable page.</p>
+        </a>
+        <a class="door" href="/admin" data-testid="door-create-sponsor">
+          <p class="door-title">Create a sponsor</p>
+          <p class="door-sub">Support events in your area. You choose which events you appear on.</p>
+        </a>
       </section>
-      <section class="ring-section" aria-label="Focus neighborhoods" data-testid="ring-section">
-        <h2 data-testid="ring-title">Our Neighborhood Ring</h2>
-        <p class="ring-subtitle">Six Southside communities. One connected event cycle.</p>
-        <div class="ring-container" data-testid="ring-layout">
-          <div class="ring-path" aria-hidden="true" data-testid="ring-path"></div>
-          <div
-            class="ring-node n-ep"
-            data-testid="ring-node-ep"
-            aria-label="Evergreen Park neighborhood"
-          >
-            Evergreen Park
-          </div>
-          <div class="ring-node n-br" data-testid="ring-node-br" aria-label="Brainard neighborhood">
-            Brainard
-          </div>
-          <div class="ring-node n-bv" data-testid="ring-node-bv" aria-label="Beverly neighborhood">
-            Beverly
-          </div>
-          <div
-            class="ring-node n-bi"
-            data-testid="ring-node-bi"
-            aria-label="Blue Island neighborhood"
-          >
-            Blue Island
-          </div>
-          <div
-            class="ring-node n-mg"
-            data-testid="ring-node-mg"
-            aria-label="Mt Greenwood neighborhood"
-          >
-            Mt Greenwood
-          </div>
-          <div class="ring-node n-ol" data-testid="ring-node-ol" aria-label="Oak Lawn neighborhood">
-            Oak Lawn
-          </div>
-        </div>
+
+      <!-- Area view (OSE-1312 slice 2). The inner markup is server-rendered by
+           renderLandingArea and injected at the marker below: hidden radios +
+           `:checked ~` sibling rules give FIVE CSS-only filter dimensions with
+           NO JS and NO cookies —
+             1. view     — list | map (default by count: list < 10, else map)
+             2. window   — 7 | 30 | 90 days (default 90, configured in the renderer)
+             3. type     — one pill per event-type present, plus "All" (niche discovery)
+             4. product  — All | OSE | OSE+OW hybrid (anon / non-anon invariant pole)
+             5. modality — All | online | in-person ("in reality")
+           Each card is server-tagged within-{7,30,90} + type-<slug> +
+           product-{ose} + modality-{online,inperson}. The radios are emitted as
+           siblings before .toggles / .area so the head rules below resolve. -->
+      <section aria-label="What's happening nearby" data-testid="landing-area">
+        <h2 class="area-heading" data-testid="area-heading">Happening near you</h2>
+        <!--OCR_LANDING_AREA-->
       </section>
-      <section class="features" data-testid="features-section">
-        <div class="feature-card" data-testid="feature-events">
-          <div class="feature-icon events" role="img" aria-hidden="true">&#x1F4C5;</div>
-          <h3 data-testid="feature-events-title">Shared Events</h3>
-          <p data-testid="feature-events-desc">
-            Browse upcoming gatherings, leagues, and community nights happening across the
-            neighborhood.
-          </p>
-        </div>
-        <div class="feature-card" data-testid="feature-sponsors">
-          <div class="feature-icon sponsors" role="img" aria-hidden="true">&#x1F91D;</div>
-          <h3 data-testid="feature-sponsors-title">Local Sponsors</h3>
-          <p data-testid="feature-sponsors-desc">
-            Neighborhood businesses supporting the events you love. Real partnerships, real impact.
-          </p>
-        </div>
-        <div class="feature-card" data-testid="feature-community">
-          <div class="feature-icon community" role="img" aria-hidden="true">&#x1F3D8;</div>
-          <h3 data-testid="feature-community-title">Community First</h3>
-          <p data-testid="feature-community-desc">
-            Built for the Southside, by the Southside. Every event strengthens the bonds that
-            matter.
-          </p>
-        </div>
-      </section>
-      <section class="ose-anonymity" data-testid="anonymity-affordance" aria-labelledby="anon-heading">
-        <h2 id="anon-heading">How this works</h2>
+
+      <!-- Never-who statement. Shares the wrap page's tone; TRUE of this page:
+           no cookies, no analytics, no geolocation prompt run here. -->
+      <section class="privacy" data-testid="landing-privacy" aria-labelledby="privacy-heading">
+        <h2 id="privacy-heading">How this works</h2>
         <p>
-          You're part of the group, anonymously. OurSharedEvents tracks when
-          groups gather &mdash; never who you are. Event hosts and sponsors see
-          corridors and venues, not people. Nothing about your device, location,
-          or identity was collected to display this page.
+          Attendance is measured <strong>without gathering who you are</strong>, by default. We
+          count that people came — where and when — never who they are. This page sets no cookies,
+          runs no analytics, and never asks for your location; it only shows you what&#x2019;s
+          around.
+        </p>
+        <p>
+          Choosing to be named is a feature, not the norm &mdash; nothing names you unless you pick
+          it. <a href="/events" data-testid="privacy-more">See what&#x2019;s happening &rarr;</a>
         </p>
       </section>
     </main>
     <!--OCR_LEGAL_FOOTER-->
-    <script type="module">
-      const form = document.getElementById('subscribe-form');
-      const emailInput = document.getElementById('email-input');
-      const messageEl = document.getElementById('form-message');
-
-      form.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const email = emailInput.value.trim();
-
-        if (!email) {
-          emailInput.setCustomValidity('Please enter your email address.');
-          emailInput.setAttribute('aria-invalid', 'true');
-          emailInput.reportValidity();
-          return;
-        }
-
-        const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (!emailPattern.test(email)) {
-          emailInput.setCustomValidity('Please enter a valid email address.');
-          emailInput.setAttribute('aria-invalid', 'true');
-          emailInput.reportValidity();
-          return;
-        }
-
-        emailInput.setCustomValidity('');
-        emailInput.setAttribute('aria-invalid', 'false');
-        const btn = form.querySelector('button[type="submit"]');
-        btn.disabled = true;
-        btn.textContent = 'Sending\u2026';
-        messageEl.textContent = '';
-        messageEl.className = 'form-message';
-
-        try {
-          const res = await fetch('/subscribe', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email }),
-          });
-          const data = await res.json();
-
-          if (res.ok && data.success) {
-            messageEl.textContent =
-              "Thank you \u2014 you're in! We'll reach out when something's ready.";
-            messageEl.className = 'form-message success';
-            emailInput.setAttribute('aria-invalid', 'false');
-            emailInput.value = '';
-          } else {
-            messageEl.textContent = data.error || 'Something went wrong. Please try again.';
-            messageEl.className = 'form-message error';
-            emailInput.setAttribute('aria-invalid', 'true');
-          }
-        } catch {
-          messageEl.textContent = 'Could not connect. Please try again later.';
-          messageEl.className = 'form-message error';
-          emailInput.setAttribute('aria-invalid', 'true');
-        } finally {
-          btn.disabled = false;
-          btn.textContent = 'Stay in the Loop';
-        }
-      });
-
-      emailInput.addEventListener('input', () => {
-        emailInput.setCustomValidity('');
-        // Clear the invalid state as the user corrects the field.
-        if (emailInput.getAttribute('aria-invalid') === 'true') {
-          emailInput.setAttribute('aria-invalid', 'false');
-        }
-      });
-    </script>
   </body>
 </html>

@@ -33,6 +33,7 @@ export interface MockEvent {
   cover_image_url: string | null;
   timezone: string;
   template_id: string | null;
+  event_type_id: string | null;
   what_short: string | null;
   who_host: string | null;
   why_purpose: string | null;
@@ -167,6 +168,7 @@ export function getEventFixture(): MockEvent {
     cover_image_url: null,
     timezone: 'America/Chicago',
     template_id: null,
+    event_type_id: null,
 
     what_short: 'Summer bocce championship for the Blue Island / Western Ave corridor.',
     who_host: 'Rock Island Public House (RIPH)',

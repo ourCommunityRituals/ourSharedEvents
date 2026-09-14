@@ -111,6 +111,10 @@ export const NODE_SPECS = [
   // node-available); the workers-bound pii.spec.ts keeps its D1 L1 block.
   'tests/pii-crypto.spec.ts',
 
+  // OSE-1312 slice 2 — landing area renderer. Pure function over the enriched
+  // event shape; asserts the CSS-filter tags (window/type/product/modality) and
+  // the default-view rule. No DOM / cloudflare:test / D1 — node-clean.
+  'tests/landing-area.spec.ts',
   // WHAT external link — event-page render fns emit the optional outbound link
   // on all three phases. Pure unit over renderPre/Live/PostEventHtml (no
   // cloudflare:test / D1); node-clean like the other pages.ts render specs.
